@@ -62,8 +62,10 @@ typedef GuardedEdit = {
  *    one. A grammar declaring neither gets today's raw splice, unchanged.
  *  - **An illegal pair is self-limiting.** A metavariable bound to a NAME
  *    (`final $x = 1`) cannot take parentheses at all; the probe simply fails to
- *    parse and the site is left bare. Nothing has to know which positions are
- *    name positions.
+ *    parse and the site is left bare. Nothing has to know which positions are name positions —
+ *    except where a pair around a name parses as SOMETHING ELSE: `new (A)()`
+ *    reads as a call of an identifier `new`, so `Rewrite` never hands a NAME
+ *    capture to this class as a hole in the first place.
  *  - **A pair that parses but re-reads is refused too.** A type annotation
  *    accepts `final x:(Int) = 1`, and its content still spans `Int` without the
  *    pair, so the site is faithful bare and stays bare.

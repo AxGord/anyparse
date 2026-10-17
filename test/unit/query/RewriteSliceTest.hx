@@ -25,6 +25,43 @@ class RewriteSliceTest extends Test {
 		Assert.isFalse(text.contains('foo('));
 	}
 
+	/**
+	 * A metavariable in a NAME slot splices bare. `new (A)()` parses — as a call of an
+	 * identifier `new` — so the paren guard read the type name after `new` as a hole it could
+	 * and had to wrap, and `new $C()` came back as `new(A)()`; the braced spelling gave
+	 * `new Zz(A)()`. A name capture is one identifier or a dotted path, and nothing an
+	 * operator around it can re-read.
+	 */
+	@:pin('control')
+	@:killer('M-REWRITE-NAME-CAPTURE-HOLE')
+	public function testANameSlotCaptureSplicesBare(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal a:A = new A();\n\t\trun(new pkg.B(), 1);\n\t}\n}';
+		final made: String = okText(Rewrite.rewrite(src, "new $C()", "make(new $C())", true, new HaxeQueryPlugin()));
+		Assert.isTrue(made.contains('final a:A = make(new A());'), made);
+		Assert.isTrue(made.contains('run(make(new pkg.B()), 1);'), made);
+		final braced: String = okText(Rewrite.rewrite(src, "new $C()", "new Zz${C}()", true, new HaxeQueryPlugin()));
+		Assert.isTrue(braced.contains('final a:A = new ZzA();'), braced);
+		Assert.isFalse(braced.contains('(A)'), braced);
+	}
+
+	/**
+	 * One `try` pattern now matches a statement and a value, and their spans end differently:
+	 * the statement owns its `;`, the value does not. Each expansion is aligned to its own site,
+	 * whichever form the template was written for — without it a `;`-terminated template left
+	 * `final r = parseOrNull(p, s);;` (Haxe: `Expected }`) and a bare one cost the statement its `;`.
+	 */
+	@:pin('control')
+	@:killer('M-REWRITE-TRAILER-UNALIGNED')
+	public function testATemplateIsAlignedToEachSitesTerminator(): Void {
+		final src: String = 'class C {\n\tfunction f(p:P, s:String) {\n\t\ttry p.parseFile(s) catch (exception:Exception) null;\n'
+			+ '\t\tfinal r = try p.parseFile(s) catch (exception:Exception) null;\n\t\treturn r;\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f(p:P, s:String) {\n\t\tparseOrNull(p, s);\n\t\tfinal r = parseOrNull(p, s);\n'
+			+ '\t\treturn r;\n\t}\n}\n';
+		final pattern: String = "try $p.parseFile($s) catch (exception: Exception) null";
+		Assert.equals(expected, okText(Rewrite.rewrite(src, pattern, "parseOrNull($p, $s)", true, new HaxeQueryPlugin())));
+		Assert.equals(expected, okText(Rewrite.rewrite(src, pattern, "parseOrNull($p, $s);", true, new HaxeQueryPlugin())));
+	}
+
 	/** `${c+1}` shifts an integer-literal metavar up (the col-bump). */
 	public function testIntShiftUp(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tg(3, 12);\n\t}\n}';

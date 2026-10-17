@@ -88,16 +88,36 @@ final class Patch {
 				return Err(discarded('${label}the old fragment is empty — copy it verbatim from `apq source --select`', multi));
 			if (oldText == pairs[i].newText)
 				return Err(discarded('${label}the old and new fragments are identical — nothing to change', multi));
-			final located: LocateResult = locate(slice, oldText, node.kind, label, all);
+			var located: LocateResult = locate(slice, oldText, node.kind, label, all);
 			final failure: Null<String> = located.error;
-			if (failure != null) return Err(discarded(sequencingRefusal(label, failure, slice, placed, oldText, node.kind, all), multi));
+			// A fragment absent from the declaration may still be in its OWN doc block, which is
+			// trivia before the node: retried over the doc-extended region, so the remedy the
+			// doc-orphan refusal names — widen the fragment over the doc — works through the very
+			// address that was refused, and a type's doc is reachable through `ClassDecl:<T>`.
+			// Asked only for a fragment that does not occur at all, so a fragment the declaration
+			// already holds once never turns ambiguous by also appearing in its doc.
+			var base: Int = groupSpan.from;
+			if (failure != null && occurrences(slice, oldText, node.kind) == 0) {
+				final docFrom: Int = ElementSpan.docExtendedSpan(source, groupSpan, plugin.lexicalRegions(source), true).from;
+				final widened: Null<LocateResult> = docFrom < groupSpan.from
+					? locate(source.substring(docFrom, groupSpan.to), oldText, node.kind, label, all)
+					: null;
+				if (widened != null && widened.error == null) {
+					located = widened;
+					base = docFrom;
+				}
+			}
+			final refusal: Null<String> = located.error;
+			if (refusal != null) return Err(discarded(sequencingRefusal(label, refusal, slice, placed, oldText, node.kind, all), multi));
 			for (r in located.ranges) {
 				final edit: { span: Span, text: String } = {
-					span: new Span(groupSpan.from + r.from, groupSpan.from + r.to),
+					span: new Span(base + r.from, base + r.to),
 					text: r.dedented ? rebased(pairs[i].newText, r.indent) : pairs[i].newText
 				};
 				edits.push(edit);
-				placed.push({ span: new Span(r.from, r.to), text: edit.text });
+				// `placed` is in the DECLARATION slice's coordinates; a range found in the doc above
+				// it has none there, and only the wording of a later pair's refusal reads `placed`.
+				if (base == groupSpan.from) placed.push({ span: new Span(r.from, r.to), text: edit.text });
 				if (r.dedented) synthesised.push(edit);
 			}
 		}
@@ -184,7 +204,7 @@ final class Patch {
 			if (end < 0 || seen.contains(end)) continue;
 			seen.push(end);
 			final node: Null<QueryNode> = docOwnerNode(source, tree, comments, end);
-			final owner: Null<String> = node?.name;
+			final owner: Null<String> = node == null ? null : declName(node);
 			final ownerSpan: Null<Span> = node?.span;
 			if (node == null || owner == null || ownerSpan == null) continue;
 			watched.push({
@@ -203,7 +223,7 @@ final class Patch {
 			final ownerNode: Null<QueryNode> = docOwnerNode(spliced, after, splicedComments, w.region.from);
 			if (ownerNode == null) continue;
 			final owner: QueryNode = ownerNode;
-			final now: Null<String> = owner.name;
+			final now: Null<String> = declName(owner);
 			if (now == null || now == w.owner) continue;
 			// A RENAME of the documented declaration reaches this point by construction —
 			// the doc's owner name changed because the declaration was renamed, not because
@@ -394,7 +414,7 @@ final class Patch {
 	 */
 	private static function siblingDeclares(tree: QueryNode, node: QueryNode, name: String): Bool {
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
-		return parent != null && parent.children.exists(c -> c != node && c.name == name);
+		return parent != null && parent.children.exists(c -> c != node && declName(c) == name);
 	}
 
 	/**
@@ -436,9 +456,9 @@ final class Patch {
 			: '`$was` is no longer declared there, so the replacement either renamed it, leaving the doc where it belongs, or '
 				+ 'pushed `$now` in under the doc ahead of it; nothing in the text tells those apart';
 		return 'the edit moves the `/**` block above `$was` onto `$now` — $why. Widen the old fragment upward to include the '
-			+ 'doc block and repeat it in the replacement, so the doc travels with the declaration it documents; a '
-			+ 'declaration\'s doc is trivia OUTSIDE its node, so that widening needs an address that contains it — the '
-			+ 'enclosing `--select \'ClassDecl:<Type>\'`, not the member itself';
+			+ 'doc block and repeat it in the replacement, so the doc travels with the declaration it documents; a fragment '
+			+ 'that is not in the addressed declaration is also looked for in that declaration\'s own doc, so the same '
+			+ 'address reaches it';
 	}
 
 	/**
@@ -770,6 +790,16 @@ final class Patch {
 			if (tail.length > wanted[last].length && tail.substring(0, wanted[last].length) == wanted[last]) return tail;
 		}
 		return null;
+	}
+
+	/**
+	 * The name a declaration goes by, read through a nameless folding WRAPPER: `final class C`
+	 * projects as `FinalDecl(ClassForm C)`, and its wrapper — the node a doc block sits above —
+	 * carries no name of its own. Reading `node.name` alone skipped every watch on such a
+	 * declaration, so a `typedef` inserted ahead of a documented `final class` took its doc at rc 0.
+	 */
+	private static function declName(node: QueryNode): Null<String> {
+		return node.name ?? RefactorSupport.typeDeclOf(node)?.name;
 	}
 
 }

@@ -3096,6 +3096,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-AMBIENT-IMPORT-MAP',
 			'unit.query.AmbientImportResolutionTest#testTheNearestAmbientSourceWinsAndTheParentStillBinds :: control :: '
 				+ 'M-AMBIENT-IMPORT-BAND',
+			'unit.query.ApqMatcherTest#testTryPatternMatchesEveryPosition :: control :: M-SEARCH-TRY-EXPR-UNRELATED',
 			'unit.query.ApqUsesTest#testQualifiedIsOptInSoRewritersKeepTheExactAnswer :: control :: M-USES-QUALIFIED-DEFAULT',
 			'unit.query.ApqUsesTest#testQualifiedSpellingsAcrossTypePositions :: control :: M-USES-EXACT-ONLY',
 			'unit.query.ApqUsesTest#testQualifiedSubModuleTypeIsFoundBySimpleName :: control :: M-USES-EXACT-ONLY',
@@ -4110,10 +4111,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.OrphanContinuationTest#testSeamShapesAreJustified :: control :: M-ORPHAN-BRANCH-OPEN-NEVER,M-ORPHAN-SEAM-END-NEVER,M-ORPHAN-SEAM-END-SELF-ONLY,M-ORPHAN-SEAM-END-UNTRIMMED,M-ORPHAN-NO-CASE-ARMS',
 			'unit.query.PatchSliceTest#testATransferUnderADocRewrittenByTheSamePayloadRefused :: control :: '
 				+ 'M-PATCH-STRADDLED-DOC-UNWATCHED',
+			'unit.query.PatchSliceTest#testATypeDocIsReachableThroughItsOwnAddress :: control :: M-PATCH-OWN-DOC-UNSEARCHED',
 			'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testFinalClassHeaderIsInTheSearchRegion :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.PatchSliceTest#testGrowingPairsUnderOneClassDocAcceptedAtEveryDelta :: control :: M-PATCH-DOCEND-SHIFTS-EVERY-EDIT',
+			'unit.query.PatchSliceTest#testInsertAheadOfADocumentedFinalClassRefused :: control :: M-PATCH-DOC-OWNER-WRAPPER-BLIND',
+			'unit.query.PatchSliceTest#testInsertAheadOfTheDocBlockThroughTheMemberAccepted :: control :: M-PATCH-OWN-DOC-UNSEARCHED',
 			'unit.query.PatchSliceTest#testRenamePlusAnUnrelatedInsertElsewhereApplies :: control :: '
 				+ 'M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE',
 			'unit.query.PatchSliceTest#testStringLiteralPerLineIndentStillRefused :: control :: M-PATCH-SHAPE-ALWAYS-SURVIVES',
@@ -4132,6 +4136,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RenameSliceTest#testModelledSpliceConditionOccurrenceRenames :: control :: M-COND-GAP-KEEPS-DIRECTIVES',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
+			'unit.query.RewriteSliceTest#testANameSlotCaptureSplicesBare :: control :: M-REWRITE-NAME-CAPTURE-HOLE',
+			'unit.query.RewriteSliceTest#testATemplateIsAlignedToEachSitesTerminator :: control :: M-REWRITE-TRAILER-UNALIGNED',
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
 				+ 'M-SETMOD-GUARDED-ANY-VISIBILITY',
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
@@ -7018,7 +7024,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-DRIVER-UNBOUNDED',
 			'M-DRIVER-BOUND-IGNORES-ROUNDS',
 			'M-PENDING-UNBOUNDED',
-			'M-REMOVE-ELEMENT-KIND-IGNORED'
+			'M-REMOVE-ELEMENT-KIND-IGNORED',
+			'M-REWRITE-NAME-CAPTURE-HOLE',
+			'M-SEARCH-TRY-EXPR-UNRELATED',
+			'M-REWRITE-TRAILER-UNALIGNED',
+			'M-PATCH-OWN-DOC-UNSEARCHED',
+			'M-PATCH-DOC-OWNER-WRAPPER-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -7244,6 +7255,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-JSON-KEY-UNWRITABLE :: anyparse.macro.MetaInspect#wireKey',
 			'M-JSON-KEY-DUPLICATES :: anyparse.macro.MetaInspect#checkWireKeys',
 			'M-JSON-KEY-DUP-AT-FIELD :: anyparse.macro.MetaInspect#checkWireKeys',
+			'M-SEARCH-TRY-EXPR-UNRELATED :: anyparse.grammar.haxe.HaxeQueryPlugin#FinalMember:SEARCH_KIND_EQUIVALENCE',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

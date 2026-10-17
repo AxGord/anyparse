@@ -301,7 +301,18 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * consumer. The residual gap — no pattern reaches a `final function` or a local `inline
 	 * function` — is left open on purpose: closing it needs a rewrite-safe split, not a wider
 	 * constant. The groups also stay per-keyword (`var $v = 0` must not match a `final` binding),
-	 * and expression-position forms are outside the criterion.
+	 * and an expression-position form joins a group only
+	 * when its children have the statement form's shape: `try` is a statement (`TryCatchStmt` /
+	 * `TryCatchStmtBare`) or a value (`TryExpr`), and a pattern parses through the Stmt attempt
+	 * first, so `try $p.parseFile($s) catch (exception: Exception) null` matched no
+	 * `final r = try …` at all. The value form's children are the bare form's, and a braced body
+	 * is `BlockStmt` in one and `BlockExpr` in the other, hence that pair. `if` is NOT here: its
+	 * statement branches are `ExprStmt`-wrapped and its value branches bare, so one kind would not
+	 * make the shapes unify. A statement-position `try` spans its terminating `;` and a value
+	 * does not, so one rewrite template
+	 * cannot fit both; `Rewrite.alignTrailer` fits each expansion to its own site's terminator
+	 * (a `;;` after a value is a Haxe syntax error, `Expected }`). An empty `catch (e) {}` VALUE
+	 * body is an object literal, not a block.
 	 *
 	 * One asymmetry is kept because the alternative is worse: a module-level `final` matches AS
 	 * the `VarForm`, whose span starts after the `final` keyword, so a rewrite through it
@@ -312,7 +323,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	private static final SEARCH_KIND_EQUIVALENCE: KindEquivalence = new KindEquivalence([
 		['VarDecl', 'VarMember', 'VarStmt'],
 		['FnDecl', 'FnMember', 'LocalFnStmt'],
-		['VarForm', 'FinalMember', 'FinalStmt']
+		['VarForm', 'FinalMember', 'FinalStmt'],
+		['TryCatchStmt', 'TryCatchStmtBare', 'TryExpr'],
+		['BlockStmt', 'BlockExpr']
 	]);
 
 	/**

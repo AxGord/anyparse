@@ -22108,6 +22108,44 @@
 			"find": "if (liftKind != null) {",
 			"replace": "if (false) {",
 			"note": "remove-element ignores --kind and re-reads the address by its first token, so a match that starts no statement removes the call ARGUMENT instead of the statement the kind names"
+		},
+		{
+			"name": "M-REWRITE-NAME-CAPTURE-HOLE",
+			"type": "anyparse.query.Rewrite",
+			"method": "isNameCapture",
+			"force": "false",
+			"note": "a NAME-slot capture is handed to the paren guard as a hole again, and since `new (A)()` parses as a call of an identifier `new`, `new $C()` comes back as `new(A)()`"
+		},
+		{
+			"name": "M-SEARCH-TRY-EXPR-UNRELATED",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "SEARCH_KIND_EQUIVALENCE",
+			"kind": "FinalMember",
+			"find": "\t\t['TryCatchStmt', 'TryCatchStmtBare', 'TryExpr'],\n\t\t['BlockStmt', 'BlockExpr']\n",
+			"replace": "\t\t['TryCatchStmt', 'TryCatchStmtBare']\n",
+			"note": "a `try` pattern parses through the Stmt attempt and no longer matches a `try` used as a value (an initializer, an argument, a return value), nor a braced value body - the shape a parse-or-null sweep exists to find, reported as 0 hits"
+		},
+		{
+			"name": "M-REWRITE-TRAILER-UNALIGNED",
+			"type": "anyparse.query.Rewrite",
+			"method": "alignTrailer",
+			"force": "expansion",
+			"note": "one template is spliced unchanged over a statement and a value match of the same `try` pattern, so a `;`-terminated template leaves `;;` after every value site (Haxe: Expected }) and a bare one costs the statement its `;`"
+		},
+		{
+			"name": "M-PATCH-OWN-DOC-UNSEARCHED",
+			"type": "anyparse.query.Patch",
+			"method": "patchNodeMany",
+			"find": "if (failure != null && occurrences(slice, oldText, node.kind) == 0) {",
+			"replace": "if (false) {",
+			"note": "a fragment widened over the addressed declaration's own doc block is \"not found\" again, so the doc-orphan refusal's remedy works only through the enclosing type and a type's doc needs comment-rewrite"
+		},
+		{
+			"name": "M-PATCH-DOC-OWNER-WRAPPER-BLIND",
+			"type": "anyparse.query.Patch",
+			"method": "declName",
+			"force": "node.name",
+			"note": "the doc-orphan guard reads a declaration's name off its nameless FinalDecl wrapper, drops the watch, and a typedef inserted ahead of a documented `final class` takes its doc at rc 0"
 		}
 	]
 }

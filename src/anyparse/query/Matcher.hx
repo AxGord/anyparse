@@ -55,7 +55,7 @@ final class Matcher {
 			final bindings: Map<String, QueryNode> = [];
 			if (unify(pattern, input, eq, bindings)) {
 				final span: Null<Span> = input.span;
-				if (span != null) out.push(new Match(span, bindings));
+				if (span != null) out.push(new Match(span, bindings, input));
 			}
 		}
 		for (c in input.children) walk(pattern, c, eq, out, kindFilter);
@@ -183,9 +183,17 @@ final class Match {
 	public final span: Span;
 	public final bindings: Map<String, QueryNode>;
 
-	public function new(span: Span, bindings: Map<String, QueryNode>) {
+	/**
+	 * The input node the pattern unified with — its kind can differ from the pattern root's
+	 * under a plugin's kind-equivalence, which is what a consumer splicing over `span` needs
+	 * to know (`Rewrite` aligns a statement's terminator across such a mix).
+	 */
+	public final node: QueryNode;
+
+	public function new(span: Span, bindings: Map<String, QueryNode>, node: QueryNode) {
 		this.span = span;
 		this.bindings = bindings;
+		this.node = node;
 	}
 
 }
