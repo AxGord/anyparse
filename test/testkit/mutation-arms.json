@@ -21474,7 +21474,7 @@
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
 			"find": "final moduleFn: Null<String> = CallGraphKeys.declaredOn(g, moduleType, name);",
-			"replace": "final moduleFn: Null<String> = memberOnChain(moduleType, name);",
+			"replace": "final moduleFn: Null<String> = g.memberOnChain(moduleType, name);",
 			"note": "a supertype's static function is taken for a module function of the class's own module"
 		},
 		{
@@ -21925,7 +21925,7 @@
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
 			"find": "final written: Null<String> = targetReturnSource(recv, call, currentType, nullableWrappers);",
-			"replace": "final written: Null<String> = [for (w in [targetReturnSource(recv, call, currentType)]) if (w != null && !nullableWrappers.contains(NominalTypes.outerNominalOf(w.trim(), _plugin.typeSyntax) ?? '')) w][0];",
+			"replace": "final written: Null<String> = [for (w in [targetReturnSource(recv, call, currentType)]) if (w != null && !nullableWrappers.contains(NominalTypes.outerNominalOf(w.trim(), g._plugin.typeSyntax) ?? '')) w][0];",
 			"note": "the wrapper refusal reads the return after its type parameters are bound, so a T bound to Null<X> names nothing"
 		},
 		{
