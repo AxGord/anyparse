@@ -3280,3 +3280,10 @@ decided the question; it may not become a record of runs.
   argument scan, `argumentSlot`, the expected type of a constructor argument) skips them too; there it was a pure
   move (a `Named` child is neither a lambda, a call nor a value read), and the expected-type slice no longer re-derives
   the count through `NominalTypes.writtenConstruction` — branch `feat/infra-N10`
+- `apq rewrite 'final $x = $v' 'var $x = $v'` over `final f:Float = 1` wrote `var f = 1` — re-parseable, and an `Int`
+  where there was a `Float`: a pattern with no type slot constrains none (kept — `search` still finds an annotated
+  declaration with the plain spelling), and nothing recorded that the input HAD one. `Matcher.unifyType` records the
+  input's type in `Match.unwritten` as it records unwritten type arguments, now an enum (`TypeArguments` /
+  `TypeAnnotation`), and `rewrite` refuses the match naming the type and the spelling that carries it
+  (`final $x:$T = $v`). Refusal rather than carry: the template is text, and which slot of it would take the type is
+  not something the op can know — branch `feat/infra-N10`

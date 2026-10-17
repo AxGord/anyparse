@@ -4173,6 +4173,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RewriteSliceTest#testATemplateIsAlignedToEachSitesTerminator :: control :: M-REWRITE-TRAILER-UNALIGNED',
 			'unit.query.RewriteSliceTest#testAValueCaptureNeverTakesATypeArgument :: control :: '
 				+ 'M-MATCH-ONE-FLAT-RUN,M-MATCH-UNWRITTEN-DROPPED,M-REWRITE-UNWRITTEN-IGNORED',
+			'unit.query.RewriteSliceTest#testAnUnwrittenTypeAnnotationIsNeverDropped :: control :: '
+				+ 'M-MATCH-TYPE-SLOT-UNRECORDED,M-REWRITE-UNWRITTEN-IGNORED',
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
 				+ 'M-SETMOD-GUARDED-ANY-VISIBILITY',
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
@@ -7098,7 +7100,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-WALK-TYPE-ARGS-UNCOUNTED',
 			'M-STAR-ONE-PER-LIST',
 			'M-CONDBRANCH-TYPE-ARGS-DROPPED',
-			'M-LANDING-TYPE-ARGS-AS-VALUES'
+			'M-LANDING-TYPE-ARGS-AS-VALUES',
+			'M-MATCH-TYPE-SLOT-UNRECORDED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

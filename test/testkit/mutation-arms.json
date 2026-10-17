@@ -22351,16 +22351,16 @@
 			"name": "M-MATCH-UNWRITTEN-DROPPED",
 			"type": "anyparse.query.Matcher",
 			"method": "unifyChildren",
-			"find": "if (at != null) unwritten.push(at);",
-			"replace": "if (at != null) unwritten.remove(at);",
+			"find": "if (at != null) unwritten.push(TypeArguments(at));",
+			"replace": "if (at != null) unwritten.remove(TypeArguments(at));",
 			"note": "a match on type arguments the pattern did not write is not recorded, so `rewrite` drops `<Int>` from `new Box<Int>(1)`"
 		},
 		{
 			"name": "M-REWRITE-UNWRITTEN-IGNORED",
 			"type": "anyparse.query.Rewrite",
 			"method": "rewrite",
-			"find": "for (m in accepted) for (at in m.unwritten) {",
-			"replace": "for (m in accepted) for (at in m.unwritten.slice(0, 0)) {",
+			"find": "for (m in accepted) for (part in m.unwritten) return Err(unwrittenRefusal(source, part));",
+			"replace": "for (m in accepted) for (part in m.unwritten.slice(0, 0)) return Err(unwrittenRefusal(source, part));",
 			"note": "`rewrite` splices over a construction whose type arguments no metavariable holds, dropping them"
 		},
 		{
@@ -22394,6 +22394,14 @@
 			"find": "for (k in node.typeArgCount ... node.children.length) land(node.children[k], null);",
 			"replace": "for (k in 0 ... node.children.length) land(node.children[k], null);",
 			"note": "a construction's type arguments land as values of no known type: a string conversion of any object at every `new Box<Int>(…)`"
+		},
+		{
+			"name": "M-MATCH-TYPE-SLOT-UNRECORDED",
+			"type": "anyparse.query.Matcher",
+			"method": "unifyType",
+			"find": "if (at != null) unwritten.push(TypeAnnotation(at));",
+			"replace": "if (at != null) unwritten.remove(TypeAnnotation(at));",
+			"note": "a match on a type the pattern did not write is not recorded, so `rewrite 'final $x = $v' 'var $x = $v'` drops `:Float` from `final f:Float = 1`"
 		}
 	]
 }
