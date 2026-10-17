@@ -25,9 +25,12 @@ import anyparse.runtime.Span;
  *    constraints across reuses apply to the bound NAME string.
  *  - Child matching is ordered and adjacent — positional one-to-one
  *    between pattern children and input children, no skip-ahead and
- *    no length mismatch.
+ *    no length mismatch — per RUN: a node's leading `typeArgCount`
+ *    children (the type arguments it writes) and the rest are two runs
+ *    unified apart, and a pattern writing no type arguments constrains
+ *    none.
  *  - The one exception is the `...` ellipsis (`PatternStar`): at most
- *    ONE per child list, it anchors the pattern children before it as
+ *    ONE per run, it anchors the pattern children before it as
  *    a prefix and those after it as a suffix, and absorbs the run
  *    between. It does not bind.
  *  - Whitespace and comments in patterns are ignored (handled by the
@@ -53,9 +56,10 @@ final class Matcher {
 	): Void {
 		if (kindFilter == null || input.kind == kindFilter) {
 			final bindings: Map<String, QueryNode> = [];
-			if (unify(pattern, input, eq, bindings)) {
+			final unwritten: Array<Span> = [];
+			if (unify(pattern, input, eq, bindings, unwritten)) {
 				final span: Null<Span> = input.span;
-				if (span != null) out.push(new Match(span, bindings, input));
+				if (span != null) out.push(new Match(span, bindings, input, unwritten));
 			}
 		}
 		for (c in input.children) walk(pattern, c, eq, out, kindFilter);
@@ -69,7 +73,9 @@ final class Matcher {
 	 * share the same map so cross-position constraints (e.g. `$x = $x +
 	 * 1`) are enforced.
 	 */
-	private static function unify(pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>): Bool {
+	private static function unify(
+		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>, unwritten: Array<Span>
+	): Bool {
 		// A star is consumed by its PARENT's child loop below and never reaches
 		// here as a whole-subtree pattern — `PatternStar.validate` refuses a
 		// star root at parse time. Fail closed rather than match everything if
@@ -112,7 +118,7 @@ final class Matcher {
 			}
 		} else if (pname != iname)
 			return false;
-		return unifyType(pattern.type, input.type, eq, bindings) && unifyChildren(pattern.children, input.children, eq, bindings);
+		return unifyType(pattern.type, input.type, eq, bindings, unwritten) && unifyChildren(pattern, input, eq, bindings, unwritten);
 	}
 
 	/**
@@ -127,48 +133,68 @@ final class Matcher {
 	 * binds exactly as it does anywhere else.
 	 */
 	private static function unifyType(
-		pType: Null<QueryNode>, iType: Null<QueryNode>, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>
+		pType: Null<QueryNode>, iType: Null<QueryNode>, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>, unwritten: Array<Span>
 	): Bool {
-		return pType == null || iType != null && unify(pType, iType, eq, bindings);
+		return pType == null || iType != null && unify(pType, iType, eq, bindings, unwritten);
 	}
 
 	/**
-	 * Children: ordered + adjacent. Without an ellipsis the length must match
-	 * exactly; with one, the pattern's children split into a PREFIX (matched
-	 * left-to-right from the start) and a SUFFIX (matched right-to-left from
-	 * the end), and the star absorbs the — possibly empty — run between them.
-	 * One star per child list is a parse-time invariant
-	 * (`PatternStar.validate`), which is what keeps this single-pass and
-	 * backtracking-free.
+	 * Children are TWO runs, unified apart: the type arguments a node writes (its leading
+	 * `typeArgCount` children — `new Map<String, Int>(x)`) and the rest. Flattened into one run,
+	 * `new $C($a, $b)` bound `$a`/`$b` to the TYPE arguments of `new Map<String, Int>()` and a
+	 * template moving them wrote `new Map(Int, String)`. A pattern that writes no type arguments
+	 * constrains none — the rule the type slot follows — and the input's node is recorded in
+	 * `unwritten`, because nothing in the pattern can carry those arguments into a replacement.
 	 */
 	private static function unifyChildren(
-		pChildren: Array<QueryNode>, iChildren: Array<QueryNode>, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>
+		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>, unwritten: Array<Span>
 	): Bool {
-		final star: Int = starIndex(pChildren);
+		final pTypes: Int = pattern.typeArgCount;
+		final iTypes: Int = input.typeArgCount;
+		final pc: Array<QueryNode> = pattern.children;
+		final ic: Array<QueryNode> = input.children;
+		if (pTypes == 0 && iTypes > 0) {
+			final at: Null<Span> = input.span;
+			if (at != null) unwritten.push(at);
+		} else if (!unifyRun(pc, 0, pTypes, ic, 0, iTypes, eq, bindings, unwritten))
+			return false;
+		return unifyRun(pc, pTypes, pc.length, ic, iTypes, ic.length, eq, bindings, unwritten);
+	}
+
+	/**
+	 * One child run, `p[pFrom, pTo)` against `i[iFrom, iTo)`: ordered + adjacent. Without an
+	 * ellipsis the length must match exactly; with one, the pattern's run splits into a PREFIX
+	 * (matched left-to-right from the start) and a SUFFIX (matched right-to-left from the end),
+	 * and the star absorbs the — possibly empty — run between them. One star per run is a
+	 * parse-time invariant (`PatternStar.validate`), which is what keeps this single-pass and
+	 * backtracking-free.
+	 */
+	private static function unifyRun(
+		p: Array<QueryNode>, pFrom: Int, pTo: Int, i: Array<QueryNode>, iFrom: Int, iTo: Int, eq: Null<KindEquivalence>,
+		bindings: Map<String, QueryNode>, unwritten: Array<Span>
+	): Bool {
+		final star: Int = starIndex(p, pFrom, pTo);
+		final pLen: Int = pTo - pFrom;
+		final iLen: Int = iTo - iFrom;
 		if (star < 0) {
-			if (pChildren.length != iChildren.length) return false;
-			for (k in 0...pChildren.length) {
-				if (!unify(pChildren[k], iChildren[k], eq, bindings)) return false;
-			}
+			if (pLen != iLen) return false;
+			for (k in 0...pLen) if (!unify(p[pFrom + k], i[iFrom + k], eq, bindings, unwritten)) return false;
 			return true;
 		}
-		final suffix: Int = pChildren.length - star - 1;
+		final prefix: Int = star - pFrom;
+		final suffix: Int = pTo - star - 1;
 		// Prefix and suffix must both FIT: a star spans zero or more children,
 		// never a negative run, so an input shorter than the anchors is a miss
 		// rather than an overlap (`h(1, ..., 1)` does not match `h(1)`).
-		if (iChildren.length < star + suffix) return false;
-		for (k in 0...star) {
-			if (!unify(pChildren[k], iChildren[k], eq, bindings)) return false;
-		}
-		for (k in 0...suffix) {
-			if (!unify(pChildren[pChildren.length - 1 - k], iChildren[iChildren.length - 1 - k], eq, bindings)) return false;
-		}
+		if (iLen < prefix + suffix) return false;
+		for (k in 0...prefix) if (!unify(p[pFrom + k], i[iFrom + k], eq, bindings, unwritten)) return false;
+		for (k in 0...suffix) if (!unify(p[pTo - 1 - k], i[iTo - 1 - k], eq, bindings, unwritten)) return false;
 		return true;
 	}
 
-	/** Position of the single `...` in a pattern's child list, or `-1` when there is none. */
-	private static function starIndex(children: Array<QueryNode>): Int {
-		for (k in 0...children.length) if (children[k].kind == PatternStar.KIND) return k;
+	/** Position of the single `...` in `children[from, to)`, or `-1` when there is none. */
+	private static function starIndex(children: Array<QueryNode>, from: Int, to: Int): Int {
+		for (k in from ... to) if (children[k].kind == PatternStar.KIND) return k;
 		return -1;
 	}
 
@@ -190,10 +216,18 @@ final class Match {
 	 */
 	public final node: QueryNode;
 
-	public function new(span: Span, bindings: Map<String, QueryNode>, node: QueryNode) {
+	/**
+	 * The spans of the matched nodes whose TYPE ARGUMENTS the pattern did not write (`new $C($a)`
+	 * over `new Box<Int>(1)`): the match is sound, but no metavariable holds those arguments, so a
+	 * replacement spliced over `span` would drop them — `Rewrite` refuses such a match.
+	 */
+	public final unwritten: Array<Span>;
+
+	public function new(span: Span, bindings: Map<String, QueryNode>, node: QueryNode, ?unwritten: Array<Span>) {
 		this.span = span;
 		this.bindings = bindings;
 		this.node = node;
+		this.unwritten = unwritten ?? [];
 	}
 
 }

@@ -3111,6 +3111,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.AmbientImportResolutionTest#testTheNearestAmbientSourceWinsAndTheParentStillBinds :: control :: '
 				+ 'M-AMBIENT-IMPORT-BAND',
 			'unit.query.ApqMatcherTest#testTryPatternMatchesEveryPosition :: control :: M-SEARCH-TRY-EXPR-UNRELATED',
+			'unit.query.ApqMatcherTest#testTypeArgumentsAndValueArgumentsAreSeparateRuns :: control :: '
+				+ 'M-MATCH-ONE-FLAT-RUN,M-WALK-TYPE-ARGS-UNCOUNTED',
 			'unit.query.ApqUsesTest#testQualifiedIsOptInSoRewritersKeepTheExactAnswer :: control :: M-USES-QUALIFIED-DEFAULT',
 			'unit.query.ApqUsesTest#testQualifiedSpellingsAcrossTypePositions :: control :: M-USES-EXACT-ONLY',
 			'unit.query.ApqUsesTest#testQualifiedSubModuleTypeIsFoundBySimpleName :: control :: M-USES-EXACT-ONLY',
@@ -3290,6 +3292,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CompilerFactsTest#testASplicedFactRunsAtTheSitesOfTheCallThatSplicedItIn :: control :: '
 				+ 'M-FACTS-SPLICE-SITES-MET,M-FACTS-SPLICE-UNATTRIBUTED,M-FACTS-SPLICE-HARMLESS,M-FACTS-SPLICE-INNERMOST,'
 				+ 'M-FACTS-SPLICE-SECOND-SITE',
+			'unit.query.CondBranchSplitTest#testARebuiltNodeKeepsItsTypeArgumentCount :: control :: M-CONDBRANCH-TYPE-ARGS-DROPPED',
 			'unit.query.CondQueryTest#testABranchBodyNeverCarriesADirective :: control :: M-COND-BODY-SWALLOWS-DIRECTIVES',
 			'unit.query.CondQueryTest#testAMetadataNameIsASymbolRowAndKeepsItsSigil :: control :: M-COND-NAMES-DROP-META-NAME',
 			'unit.query.CondQueryTest#testANestedRegionRunsInsideItsParentBranch :: control :: M-COND-INNERMOST-FRAME',
@@ -4144,6 +4147,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE',
 			'unit.query.PatchSliceTest#testStringLiteralPerLineIndentStillRefused :: control :: M-PATCH-SHAPE-ALWAYS-SURVIVES',
 			'unit.query.PatchSliceTest#testTransferUnderADocMovedByAnEarlierGrowingPairRefused :: control :: M-PATCH-DOCEND-NEVER-SHIFTS',
+			'unit.query.PatternParseProbe#testTwoEllipsesInOneChildListAreRefused :: control :: M-STAR-ONE-PER-LIST',
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredKindNameIsOneTheGrammarProjects :: control :: '
 				+ 'M-PROJECTED-KINDS-ALT-ONLY,M-DECL-HOST-KIND-STALE',
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredTokenIsOneTheParserCaptures :: control :: '
@@ -4165,6 +4169,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
 			'unit.query.RewriteSliceTest#testANameSlotCaptureSplicesBare :: control :: M-REWRITE-NAME-CAPTURE-HOLE',
 			'unit.query.RewriteSliceTest#testATemplateIsAlignedToEachSitesTerminator :: control :: M-REWRITE-TRAILER-UNALIGNED',
+			'unit.query.RewriteSliceTest#testAValueCaptureNeverTakesATypeArgument :: control :: '
+				+ 'M-MATCH-ONE-FLAT-RUN,M-MATCH-UNWRITTEN-DROPPED,M-REWRITE-UNWRITTEN-IGNORED',
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
 				+ 'M-SETMOD-GUARDED-ANY-VISIBILITY',
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
@@ -7083,7 +7089,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-NAMED-FN-STMT-NO-ARM',
 			'M-NAMED-FN-NOT-BRACE-ENDED',
 			'M-NAMED-FN-EXPR-BODY-RELAXED',
-			'M-VOCAB-WHILE-EXPR-NOT-BRANCH'
+			'M-VOCAB-WHILE-EXPR-NOT-BRANCH',
+			'M-MATCH-ONE-FLAT-RUN',
+			'M-MATCH-UNWRITTEN-DROPPED',
+			'M-REWRITE-UNWRITTEN-IGNORED',
+			'M-WALK-TYPE-ARGS-UNCOUNTED',
+			'M-STAR-ONE-PER-LIST',
+			'M-CONDBRANCH-TYPE-ARGS-DROPPED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -7314,6 +7326,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-NAMED-FN-STMT-NO-ARM :: anyparse.grammar.haxe.HxAstPredLowering#stmtExprNoSemiAtField',
 			'M-NAMED-FN-NOT-BRACE-ENDED :: anyparse.grammar.haxe.HxAstPredLowering#endsWithCloseBraceField',
 			'M-NAMED-FN-EXPR-BODY-RELAXED :: anyparse.grammar.haxe.HxAstPredLowering#stmtExprNoSemiAtField',
+			'M-WALK-TYPE-ARGS-UNCOUNTED :: anyparse.macro.QueryWalkerLowering#seqTypeArgCount',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

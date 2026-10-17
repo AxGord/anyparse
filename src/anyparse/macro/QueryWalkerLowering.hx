@@ -124,6 +124,19 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	private static inline final QUERY_TYPE_SLOT_META: String = ':queryTypeSlot';
 
 	/**
+	 * Grammar opt-in on a `Star` field holding TYPE ARGUMENTS beside value children (Haxe
+	 * `HxNewExpr.params`, the `<String, Int>` of `new Map<String, Int>(x)`): the node the field's
+	 * nodes land in records how many it contributed (`QueryNode.typeArgCount`).
+	 *
+	 * The children stay one run on purpose — `uses` reads those `Named` nodes as type references
+	 * and the graph's argument expectation skips them by count — so the tag adds a fact rather than
+	 * moving nodes. Each element is one `HxType` value, and an `Alt` value always walks to exactly
+	 * one node, so the element count IS the node count, and the nodes lead the span-ordered children
+	 * because the type arguments are written before the value ones.
+	 */
+	private static inline final QUERY_TYPE_ARGS_META: String = ':queryTypeArgs';
+
+	/**
 	 * Name of the `_walk` parameter carrying the enclosing node's type
 	 * slot, and of the local a node-forming rule allocates for its own.
 	 */
@@ -367,9 +380,10 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final nameExpr: Expr = firstNonNullName([
 			for (i in 0...branch.children.length) nameOfValue(branch.children[i], ident(argNames[i]))
 		]);
+		final typeArgs: Expr = ctorTypeArgCount(branch, argNames);
 		body.push(macro into.push(new anyparse.query.QueryNode(
 			$v{ctor}, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), _span,
-			anyparse.query.QueryWalkSupport.first(_typeSlot)
+			anyparse.query.QueryWalkSupport.first(_typeSlot), $typeArgs
 		)));
 		return { values: [pattern], expr: block(body) };
 	}
@@ -403,9 +417,10 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		for (child in node.children)
 			for (e in seqFieldDescent(child, '_children', TYPE_SLOT_LOCAL, field(ident('v'), PairedShapeLowering.SPAN_FIELD))) body.push(e);
 		final nameExpr: Expr = call(nameFnName(rule), [ident('v')]);
+		final typeArgs: Expr = seqTypeArgCount(node, ident('v')) ?? macro 0;
 		body.push(macro into.push(new anyparse.query.QueryNode(
 			v._kind, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), v._span,
-			anyparse.query.QueryWalkSupport.first(_typeSlot)
+			anyparse.query.QueryWalkSupport.first(_typeSlot), $typeArgs
 		)));
 		return block(body);
 	}
@@ -873,6 +888,29 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	/** Generated type-ref projection function name for a rule type path. */
 	public static inline function typeRefsFnName(typePath: String): String {
 		return '_typeRefs${simpleName(typePath)}S';
+	}
+
+	/**
+	 * The `typeArgCount` of the node a ctor arm forms: the `@:queryTypeArgs` field of a TRANSPARENT
+	 * `Seq` argument — whose fields' nodes are this node's children — or 0.
+	 */
+	private function ctorTypeArgCount(branch: ShapeNode, argNames: Array<String>): Expr {
+		for (i in 0...branch.children.length) {
+			final ref: Null<String> = refOf(branch.children[i]);
+			final rule: Null<ShapeNode> = ref == null ? null : _shape.rules.get(ref);
+			if (rule == null || rule.kind != Seq || isSpanned(rule) || seqField(rule, PairedShapeLowering.ENVELOPE_FIELD) != null) continue;
+			final count: Null<Expr> = seqTypeArgCount(rule, ident(argNames[i]));
+			if (count != null) return count;
+		}
+		return macro 0;
+	}
+
+	/** The element count of `rule`'s `@:queryTypeArgs` field read off `owner`, or null when it has none. */
+	private function seqTypeArgCount(rule: ShapeNode, owner: Expr): Null<Expr> {
+		final tagged: Null<ShapeNode> = rule.children.find(f -> f.hasMeta(QUERY_TYPE_ARGS_META));
+		if (tagged == null) return null;
+		final access: Expr = field(owner, fieldNameOf(tagged));
+		return isOptional(tagged) ? macro ($access == null ? 0 : $access.length) : macro $access.length;
 	}
 
 }

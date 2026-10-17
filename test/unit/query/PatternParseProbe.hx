@@ -213,16 +213,18 @@ class PatternParseProbe extends Test {
 	}
 
 	/**
-	 * Two stars in ONE child list is refused. The matcher anchors a prefix from
+	 * Two stars in ONE child run is refused. The matcher anchors a prefix from
 	 * the left and a suffix from the right around exactly one star; a second one
-	 * needs backtracking, and for the position that motivates it
-	 * (`new $T<...>(...)`) it would be a lie anyway - `NewExpr` flattens type
-	 * args and value args into one list, so the two stars could not be told
-	 * apart and the pattern would mean exactly the same as `new $T(...)`.
+	 * needs backtracking. A constructor's type arguments are a run of their own
+	 * (`QueryNode.typeArgCount`), so `new $T<...>(...)` carries one per run and is
+	 * accepted, while two stars among the type arguments are not.
 	 */
+	@:pin('control')
+	@:killer('M-STAR-ONE-PER-LIST')
 	public function testTwoEllipsesInOneChildListAreRefused(): Void {
 		Assert.isTrue(refused('h(..., 1, ...)'), 'two stars in one argument list must be refused');
-		Assert.isTrue(refused("new $T<...>(...)"), 'type-arg star + value-arg star land in ONE NewExpr child list');
+		Assert.isTrue(refused("new $T<..., Int, ...>()"), 'two stars among the type arguments must be refused');
+		Assert.isFalse(refused("new $T<...>(...)"), 'a type-argument star and a value-argument star are two runs');
 	}
 
 	/** Two stars in DIFFERENT child lists are fine - each list anchors independently. */

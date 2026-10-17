@@ -54,14 +54,26 @@ final class QueryNode {
 	 */
 	public final type: Null<QueryNode>;
 
+	/**
+	 * How many LEADING `children` are the TYPE ARGUMENTS the node writes (Haxe `new Map<String, Int>(x)`:
+	 * the two `Named` children before `x`); 0 for every node that writes none. The grammar declares the
+	 * field (`@:queryTypeArgs`), so the split is the parser's, not a reading of the separators.
+	 *
+	 * A count rather than a separate list keeps `children` exactly what every consumer already reads
+	 * (`uses` walks those `Named` nodes as type references), while the pattern matcher can unify the two
+	 * runs apart: a value metavariable must never bind a type argument.
+	 */
+	public final typeArgCount: Int;
+
 	public function new(
-		kind: String, name: Null<String>, children: Array<QueryNode>, ?span: Null<Span>, ?type: Null<QueryNode>
+		kind: String, name: Null<String>, children: Array<QueryNode>, ?span: Null<Span>, ?type: Null<QueryNode>, typeArgCount: Int = 0
 	) {
 		this.kind = kind;
 		this.name = name;
 		this.children = children;
 		this.span = span;
 		this.type = type;
+		this.typeArgCount = typeArgCount;
 	}
 
 }

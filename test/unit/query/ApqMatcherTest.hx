@@ -499,14 +499,11 @@ class Y {
 	}
 
 	/**
-	 * PINNED CONFLATION. `NewExpr` flattens type arguments and value arguments
-	 * into one child list (see the `ast` dump in the slice handoff), and the
-	 * matcher is language-agnostic by construction - it compares kinds and
-	 * positions, never grammar vocabulary. So `new $T(...)` DELIBERATELY matches
-	 * `new Foo<Int>()` as well as `new Foo(x)`: both are constructions, which is
-	 * the question `new $T(...)` asks. The count is "constructions", not
-	 * "constructions carrying arguments". This is not new with the star - the
-	 * pre-existing `new $T($a, $b)` already matches `new Map<String,Int>()`.
+	 * A pattern that writes no type arguments constrains none, so `new $T(...)` DELIBERATELY matches
+	 * `new Foo<Int>()` as well as `new Foo(x)`: both are constructions, which is the question
+	 * `new $T(...)` asks. The value arguments are a run of their own (`QueryNode.typeArgCount`), so
+	 * `new $T($a)` is "one VALUE argument": `new Foo(x)` and `new Foo<Int>(x)`, never `new Foo<Int>()`
+	 * with `$a` bound to the type `Int`, which is what the flat child list used to answer.
 	 */
 	public function testEllipsisDoesNotSeparateTypeArgumentsFromValueArguments(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -514,11 +511,8 @@ class Y {
 			'class X {\n\tfunction f() {\n\t\tvar a = new Foo<Int>();\n\t\tvar b = new Foo(x);\n\t\tvar c = new Foo<Int>(x);\n\t}\n}'
 		);
 		Assert.equals(3, Matcher.search(plugin.parsePattern("new $T(...)"), tree).length, 'all three are constructions');
-		// The pre-existing conflation, pinned so a future type-aware fix has to move THIS number too.
-		Assert.equals(
-			2, Matcher.search(plugin.parsePattern("new $T($a)"), tree).length,
-			'`new Foo<Int>()` already reads as one-argument today, star or no star'
-		);
+		final one: Array<Match> = Matcher.search(plugin.parsePattern("new $T($a)"), tree);
+		Assert.equals('x,x', boundNames(one, 'a').join(','), '`new Foo<Int>()` has no value argument to bind');
 	}
 
 	/** A star does not bind: nothing lands in `Match.bindings` for it, so no template can name it. */
@@ -552,19 +546,13 @@ class Y {
 	}
 
 	/**
-	 * THE TYPE-PARAMETER GATE. A BARE star cannot separate type arguments from
-	 * value arguments (the test above pins that). Writing the type arguments
-	 * out CAN, and the gate is the matcher's ordinary kind check: a metavar in
-	 * a type-argument slot projects as `Named`, and no expression argument is
-	 * ever `Named` — the plugin already declares that partition as
-	 * `GrammarPluginShape.typeAnnotationKinds` (`Named` / `Anon` / the
-	 * function-type forms), which is what makes the disjointness a property of
-	 * the grammar rather than a coincidence of this fixture.
+	 * THE TYPE-PARAMETER GATE. Writing the type arguments out constrains them:
+	 * they are a child run of their own (`QueryNode.typeArgCount`), unified
+	 * apart from the value arguments, each run with at most one star.
 	 *
-	 * So `new $T<$K>(...)` is "a construction carrying at least one type
-	 * argument, any arity" — a question that needed one pattern per TOTAL child
-	 * count before the star, and that must NOT collect `new Foo(x)`. Delete the
-	 * kind comparison in `Matcher.unify` and this test goes from 2 to 4.
+	 * So `new $T<$K, ...>(...)` is "a construction carrying at least one type
+	 * argument, any arity", and it must NOT collect `new Foo(x)`, while
+	 * `new $T(...)`, which writes none, constrains none.
 	 */
 	public function testWrittenOutTypeArgumentsSeparateFromValueArguments(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -572,7 +560,7 @@ class Y {
 			'class X {\n\tfunction f() {\n\t\tnew Foo(x);\n\t\tnew Foo(x, y);\n'
 			+ '\t\tnew Map<String, Int>();\n\t\tnew Map<String, Int>(x);\n\t}\n}'
 		);
-		final typed: Array<Match> = Matcher.search(plugin.parsePattern("new $T<$K>(...)"), tree);
+		final typed: Array<Match> = Matcher.search(plugin.parsePattern("new $T<$K, ...>(...)"), tree);
 		Assert.equals(2, typed.length, 'only the two `new Map<..>` sites carry a type argument - got ${typed.length}');
 		Assert.equals('Map,Map', boundNames(typed, 'T').join(','));
 		Assert.equals('String,String', boundNames(typed, 'K').join(','), '$$K must bind the TYPE argument, not the value one');
@@ -651,6 +639,29 @@ class Y {
 				n == null ? '<none>' : (n.name ?? '<noname>');
 			}
 		];
+	}
+
+	/**
+	 * Type arguments and value arguments are two child RUNS of a construction, unified separately: a value
+	 * metavariable binds value arguments only, a run the pattern writes must agree in arity (each run may
+	 * carry its own `...`), and a pattern that writes no type arguments constrains none — the rule the type
+	 * slot follows.
+	 */
+	@:pin('control')
+	@:killer('M-MATCH-ONE-FLAT-RUN') @:killer('M-WALK-TYPE-ARGS-UNCOUNTED')
+	public function testTypeArgumentsAndValueArgumentsAreSeparateRuns(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(
+			'class X {\n\tfunction f() {\n\t\tnew Foo(x);\n\t\tnew Foo(x, y);\n\t\tnew Map<String, Int>();\n\t\tnew Map<String, Int>(z);\n\t}\n}'
+		);
+		final two: Array<Match> = Matcher.search(plugin.parsePattern("new $T($a, $b)"), tree);
+		Assert.equals('Foo', boundNames(two, 'T').join(','), 'only `new Foo(x, y)` has two value arguments');
+		Assert.equals('x,z', boundNames(Matcher.search(plugin.parsePattern("new $T($a)"), tree), 'a').join(','));
+		Assert.equals(0, Matcher.search(plugin.parsePattern("new $T<$K>(...)"), tree).length, 'both maps write TWO type arguments');
+		Assert.equals(2, Matcher.search(plugin.parsePattern("new $T<$K, $V>(...)"), tree).length);
+		Assert.equals(2, Matcher.search(plugin.parsePattern("new $T<$K, ...>(...)"), tree).length, 'one star per run');
+		Assert.equals(4, Matcher.search(plugin.parsePattern("new $T<...>(...)"), tree).length);
+		Assert.equals('Map', boundNames(Matcher.search(plugin.parsePattern("new $T()"), tree), 'T').join(','));
 	}
 
 }
