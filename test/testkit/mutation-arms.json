@@ -22277,8 +22277,8 @@
 		},
 		{
 			"name": "M-VOCAB-DOWHILE-EXPR-NOT-LOOP",
-			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
-			"method": "refShape",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
 			"find": "doWhileLoopKinds: ['DoWhileStmt', 'DoWhileExpr'],",
 			"replace": "doWhileLoopKinds: ['DoWhileStmt'],",
 			"note": "a do-while in expression position (`() -> do x while (c)`) is no loop to any reader of the loop vocabulary"
