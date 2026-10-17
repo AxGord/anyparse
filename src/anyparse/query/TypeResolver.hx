@@ -100,6 +100,23 @@ final class TypeResolver {
 	];
 
 	/**
+	 * The `String` INSTANCE methods whose call is pure on every target: a Haxe `String` is immutable, so each only reads
+	 * its receiver and answers a new value. Intrinsic knowledge, hand-maintained for the reason `PURE_STDLIB_STATIC_FUNCS` is.
+	 */
+	private static final PURE_STRING_METHODS: Array<String> = [
+		'charAt',
+		'charCodeAt',
+		'indexOf',
+		'lastIndexOf',
+		'split',
+		'substr',
+		'substring',
+		'toLowerCase',
+		'toUpperCase',
+		'toString'
+	];
+
+	/**
 	 * The innermost type declaration whose span contains `faSpan` — the whole match, for a consumer
 	 * that needs the declaration's KIND or its node rather than the name `enclosingTypeName` answers
 	 * with: what a bare `this` denotes at a position depends on which kind of type hosts it.
@@ -182,7 +199,7 @@ final class TypeResolver {
 	 * predicate conservatively rejects are added here: an array literal whose
 	 * elements are each deletion-pure, a plain (non-getter) field read
 	 * (`isPlainFieldRead`), a provably-pure stdlib static call
-	 * (`isPureStdlibCall`), and two TRANSPARENT single-child wrappers — a
+	 * (`isPureStdlibCall`) or `String` method call (`isPureStringMethodCall`), and two TRANSPARENT single-child wrappers — a
 	 * parenthesized expression (`shape.parenKind`) and the UNCHECKED cast
 	 * `cast expr` (`shape.uncheckedCastKind`) — each pure iff its one child is.
 	 * The runtime-CHECKED `cast(expr, T)` (`shape.checkedCastKind`) is
@@ -208,7 +225,9 @@ final class TypeResolver {
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
 		if (fieldAccessKind != null && node.kind == fieldAccessKind) return isPlainFieldRead(node, tree, shape, declaredTypes, index);
 		final callKind: Null<String> = shape.callKind;
-		if (callKind != null && node.kind == callKind) return isPureStdlibCall(node, tree, shape, declaredTypes, index);
+		if (callKind != null && node.kind == callKind)
+			return isPureStdlibCall(node, tree, shape, declaredTypes, index)
+				|| isPureStringMethodCall(node, tree, shape, declaredTypes, index);
 		return false;
 	}
 
@@ -236,6 +255,27 @@ final class TypeResolver {
 		if (method == null || typeName == null || !PURE_STDLIB_STATIC_FUNCS.contains('$typeName.$method')) return false;
 		if (!receiverRootIsUnboundType(receiver, tree, shape)) return false;
 		if (index.refs.declaringFiles(typeName).length != 0) return false;
+		for (i in 1...callNode.children.length) if (!isDeletionPure(callNode.children[i], tree, shape, declaredTypes, index)) return false;
+		return true;
+	}
+
+	/**
+	 * Whether `callNode` is `recv.m(args)` with `m` a `PURE_STRING_METHODS` entry, `recv` an identifier DECLARED `String`
+	 * (`declaredTypes` at its binding — a `Null<String>` reads `Null` and is refused), no project type shadowing `String`
+	 * (a std file declaring it does not), and every argument `isDeletionPure`. An instance field wins over a `using`
+	 * extension of the same name, so `m` IS the std method. A null receiver would throw, and dropping the call drops that
+	 * throw — the exposure `isPlainFieldRead` already accepts for a field read.
+	 */
+	public static function isPureStringMethodCall(
+		callNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
+	): Bool {
+		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
+		if (fieldAccessKind == null || callNode.children.length == 0) return false;
+		final callee: QueryNode = callNode.children[0];
+		final method: String = callee.name ?? '';
+		if (callee.kind != fieldAccessKind || callee.children.length != 1 || !PURE_STRING_METHODS.contains(method)) return false;
+		final from: Null<Int> = identBindingFrom(callee.children[0], tree, shape);
+		if (from == null || declaredTypes[from] != 'String' || NominalTypes.shadowedByNonStdType(index, 'String')) return false;
 		for (i in 1...callNode.children.length) if (!isDeletionPure(callNode.children[i], tree, shape, declaredTypes, index)) return false;
 		return true;
 	}

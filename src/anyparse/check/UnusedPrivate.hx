@@ -9,6 +9,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
+import anyparse.query.MemberLookup.SupertypeProof;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
@@ -134,6 +135,11 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	/** The decline of a member of an `extends` class the compiler's facts cannot clear (`supertypeDecline`). */
 	private static inline final DECLINE_ABSTRACT_IMPL: String = 'the member may implement an ABSTRACT method of the `extends` '
 		+ 'class — a Haxe impl carries no `override`, so the call in the base is invisible from here';
+
+	/** The decline of a member whose `extends` chain neither the facts nor the resolution scope resolve (`supertypeDecline`). */
+	private static inline final DECLINE_UNRESOLVED_CHAIN: String = 'a supertype of the `extends` chain is outside the resolution '
+		+ 'scope or under a build macro, so whether it declares this name (as an ABSTRACT method a Haxe impl implements '
+		+ 'without `override`) is unproven';
 
 	/**
 	 * RESOLUTION-scope string-literal contents gathered by the last `run` — `ReflectionScan.reflectionSurface`,
@@ -338,8 +344,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 				continue;
 			}
 			final decline: Null<String> = memberDeclineReason(
-				node, owner, hit.inExtends, supertypeDecline.bind(plugin, v.file, source, owner, node.name), index, classMeta, reflected,
-				pure, stringsUnreachable.bind(node, hit.parent, owner, v.file, plugin, scopeIndex ?? index)
+				node, owner, hit.inExtends, supertypeDecline.bind(plugin, v.file, source, owner, node.name, scopeIndex), index, classMeta,
+				reflected, pure, stringsUnreachable.bind(node, hit.parent, owner, v.file, plugin, scopeIndex ?? index)
 			);
 			if (decline == null)
 				attempt();
@@ -423,24 +429,35 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	}
 
 	/**
-	 * Why the `extends` chain of `owner` (declared in `file`) may still reach its member `name`, or null when the
-	 * compiler's facts rule that out: no supertype any configuration typed declares the name, so the member implements
-	 * nothing (a private member redeclaring an inherited one needs `override` unless the inherited one is abstract), and
-	 * none carries `@:autoBuild`, whose macro runs over this type as its own `@:build`. A chain a type of which no
-	 * configuration typed, an owner the facts do not place in `file`, and a run with no complete facts keep the
-	 * abstract-method decline: the base's call is invisible from here.
+	 * Why the `extends` chain of `owner` (declared in `file`) may still reach its member `name`, or null when it provably
+	 * does not: no supertype declares the name, so the member implements nothing (a private member redeclaring an
+	 * inherited one needs `override` unless the inherited one is abstract), and none carries `@:autoBuild`, whose macro
+	 * runs over this type as its own `@:build`. The compiler's facts answer first; where they cannot (no complete facts,
+	 * a supertype no configuration typed, an owner the facts do not place in `file`) the resolution scope does
+	 * (`MemberLookup.supertypeMemberProof` over `scopeIndex`, which holds the configured libraries): every link resolved,
+	 * none declaring the name, none under a build macro. Anything else keeps the abstract-method decline: the base's call
+	 * is invisible from here.
 	 */
 	private static function supertypeDecline(
-		plugin: GrammarPlugin, file: String, source: String, owner: Null<String>, name: Null<String>
+		plugin: GrammarPlugin, file: String, source: String, owner: Null<String>, name: Null<String>, scopeIndex: Null<SymbolIndex>
 	): Null<String> {
+		if (owner == null || name == null) return DECLINE_ABSTRACT_IMPL;
 		final oracle: Null<FactsTypeOracle> = FactsTypeOracle.forFix(plugin, file, source);
-		if (oracle == null || owner == null || name == null) return DECLINE_ABSTRACT_IMPL;
-		return switch oracle.inheritedMember(file, owner, name) {
+		final facts: InheritedMember = oracle == null ? Untyped : oracle.inheritedMember(file, owner, name);
+		return switch facts {
 			case Undeclared: null;
 			case AutoBuilt(sup):
 				'the supertype `$sup` is `@:autoBuild`, whose macro builds this type as its own `@:build` and reads the '
 					+ 'field list this deletion would change';
-			case Untyped, Declared(_): DECLINE_ABSTRACT_IMPL;
+			case Declared(_): DECLINE_ABSTRACT_IMPL;
+			case Untyped:
+				scopeIndex == null
+					? DECLINE_ABSTRACT_IMPL
+					: switch scopeIndex.members.supertypeMemberProof(owner, name, file) {
+						case Absent: null;
+						case Declares: DECLINE_ABSTRACT_IMPL;
+						case Unreachable: DECLINE_UNRESOLVED_CHAIN;
+					};
 		};
 	}
 

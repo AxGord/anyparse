@@ -23883,6 +23883,29 @@
 			"find": " && !NominalTypes.shadowedByNonStdType(index, call.typeName)",
 			"replace": "",
 			"note": "a project's own `Context.error` counts as the Dynamic macro-API one, so a return of whatever it answers is taken for an Expr companion"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-NOT-RESOLVED",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "supertypeDecline",
+			"find": "case Absent: null;",
+			"replace": "case Absent: DECLINE_UNRESOLVED_CHAIN;",
+			"note": "a resolution-scope proof that no supertype declares the name is not taken, so every private method of a subclass stays undeletable without compiler facts (TM Form / PlayerBase / ProfileButton …)"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-BUILD-IGNORED",
+			"type": "anyparse.query.MemberLookup",
+			"method": "hostProof",
+			"find": " || t.hasBuild || t.hasAutoBuild",
+			"replace": "",
+			"note": "an ancestor under @:build / @:autoBuild counts as fully indexed, so a member its macro may add or read is proven absent and the subclass's private method is deleted"
+		},
+		{
+			"name": "M-PURE-STRING-METHOD-OFF",
+			"type": "anyparse.query.TypeResolver",
+			"method": "isPureStringMethodCall",
+			"force": "false",
+			"note": "a String method on a String final is not pure, so the dead `CHARSET.toUpperCase()` constant stays undeletable"
 		}
 	]
 }

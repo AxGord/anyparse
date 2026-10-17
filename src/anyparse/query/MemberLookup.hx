@@ -261,11 +261,17 @@ final class MemberLookup {
 	 * `true` for it, while this one resolves each written reference against the declaring file and
 	 * calls an unresolvable link `Unreachable` — each is the conservative direction for its own
 	 * consumer, and neither is a safe substitute for the other.
+	 *
+	 * An ancestor carrying `@:build` or `@:autoBuild` is `Unreachable` too: its macro may add the
+	 * member to the ancestor (or, `@:autoBuild`, run over `typeName` itself), which no index sees.
+	 * `file` pins the start to the declaration in that file; without it the simple name must name
+	 * exactly one declaration.
 	 */
-	public function supertypeMemberProof(typeName: String, field: String): SupertypeProof {
+	public function supertypeMemberProof(typeName: String, field: String, ?file: String): SupertypeProof {
 		final starts: Array<ResolvedType> = _refs.resolvedDeclsNamed(typeName);
-		if (starts.length != 1) return SupertypeProof.Unreachable;
-		final start: ResolvedType = starts[0];
+		final pinned: Null<ResolvedType> = file == null ? (starts.length == 1 ? starts[0] : null) : _refs.findDeclaredType(file, typeName);
+		if (pinned == null) return SupertypeProof.Unreachable;
+		final start: ResolvedType = pinned;
 		// Seeded with the OWNER so a cycle back to it stops there: its own declaration of `field` is
 		// the thing being asked about, never a proof that something above it declares one too.
 		final seen: Array<String> = [_refs.seenKey(start)];
@@ -643,7 +649,7 @@ final class MemberLookup {
 		if (!_refs.markSeen(cur, seen)) return SupertypeProof.Absent;
 		final t: TypeDeclInfo = cur.type;
 		if (t.members.exists(m -> m.name == field)) return SupertypeProof.Declares;
-		if (t.abstractForwardUnderlying != null) return SupertypeProof.Unreachable;
+		if (t.abstractForwardUnderlying != null || t.hasBuild || t.hasAutoBuild) return SupertypeProof.Unreachable;
 		if (t.kind != SymbolIndex.TYPEDEF_DECL_KIND) return ancestorsProof(cur, field, seen);
 		final target: Null<String> = t.isAnonStruct ? null : t.aliasTargetRaw;
 		final next: Null<ResolvedType> = target == null ? null : _refs.resolveTypeRef(target, cur.file, cur.type.span.from);
