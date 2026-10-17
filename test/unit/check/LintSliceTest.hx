@@ -326,8 +326,8 @@ class LintSliceTest extends Test {
 
 	/**
 	 * The autofix refuses to delete an unused local with a side-effecting
-	 * initializer (a call) — the binding is reported but the side effect is
-	 * preserved.
+	 * initializer (a call) — the binding is reported, the side effect is
+	 * preserved, and the finding carries the reason.
 	 */
 	public function testFixSkipsSideEffectingInit(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x:Int = compute();\n\t\ttrace(1);\n\t}\n}';
@@ -336,6 +336,8 @@ class LintSliceTest extends Test {
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin());
 		Assert.equals(0, edits.length);
+		// The refusal says why, so `--fix` names it in its ledger instead of a bare "returned no edit".
+		Assert.notNull(vs[0].declineReason);
 	}
 
 	/**
@@ -359,6 +361,8 @@ class LintSliceTest extends Test {
 		final check: UnusedLocal = new UnusedLocal();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(0, CheckFixture.fixOf(check, src, vs, plugin()).length);
+		// The refusal says why, so `--fix` names it in its ledger instead of a bare "returned no edit".
+		Assert.notNull(vs[0].declineReason);
 	}
 
 	/**
