@@ -417,19 +417,19 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 
 	private function testDoBodyPolicySame(): Void {
 		final out: String = writeWithDoBody('class F { function f() { do doA(); while (x); } }', BodyPolicy.Same, 120);
-		Assert.isTrue(out.indexOf('do doA(); while (x);') != -1, 'expected `do doA(); while (x);` (same line) in: <$out>');
+		Assert.isTrue(out.indexOf('do doA() while (x);') != -1, 'expected `do doA() while (x);` (same line) in: <$out>');
 	}
 
 	private function testDoBodyPolicyNextAlwaysBreaks(): Void {
 		final out: String = writeWithDoBody('class F { function f() { do doA(); while (x); } }', BodyPolicy.Next, 120);
 		Assert.isTrue(
-			out.indexOf('do\n\t\t\tdoA(); while (x);') != -1, 'expected `do\\n\\t\\t\\tdoA(); while (x);` (next line + indent) in: <$out>'
+			out.indexOf('do\n\t\t\tdoA() while (x);') != -1, 'expected `do\\n\\t\\t\\tdoA() while (x);` (next line + indent) in: <$out>'
 		);
 	}
 
 	private function testDoBodyPolicyFitLineBreaksWhenTooLong(): Void {
 		final out: String = writeWithDoBody('class F { function f() { do doSomethingVeryLong(); while (x); } }', BodyPolicy.FitLine, 20);
-		Assert.isTrue(out.indexOf('do\n\t\t\tdoSomethingVeryLong(); while (x);') != -1, 'expected broken do-body in: <$out>');
+		Assert.isTrue(out.indexOf('do\n\t\t\tdoSomethingVeryLong() while (x);') != -1, 'expected broken do-body in: <$out>');
 	}
 
 	private function writeWithOpts(

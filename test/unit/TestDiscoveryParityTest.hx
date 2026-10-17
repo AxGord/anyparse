@@ -2841,6 +2841,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testReturnTypeToBlockBodyKeepsTheComment :: control :: M-FNBODY-GAP-COMMENT-NONE',
 			'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testReturnTypeToExpressionBodyKeepsTheComment :: control :: '
 				+ 'M-FNBODY-GAP-COMMENT-NONE',
+			'unit.grammar.haxe.HxDoWhileThrowTryCatchSliceTest#testPlainWriterDropsTheSemicolonBeforeWhile :: control :: '
+				+ 'M-DOWHILE-PLAIN-SEMI',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBareBodyElseIfTrailsCommentAfterCondition :: control :: '
 				+ 'M-EICR-AFTERCOND-RESET',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBracedElseIfGluesAndTrailsCommentAfterOpenCurly :: control :: '
@@ -7071,7 +7073,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-SITES-EXPR-RETURN-NO-LANDING',
 			'M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
 			'M-RLW-NAMED-FN-NOT-BINDER',
-			'M-RLW-LOCAL-FN-AS-BINDER'
+			'M-RLW-LOCAL-FN-AS-BINDER',
+			'M-DOWHILE-PLAIN-SEMI'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -7298,6 +7301,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-JSON-KEY-DUPLICATES :: anyparse.macro.MetaInspect#checkWireKeys',
 			'M-JSON-KEY-DUP-AT-FIELD :: anyparse.macro.MetaInspect#checkWireKeys',
 			'M-SEARCH-TRY-EXPR-UNRELATED :: anyparse.grammar.haxe.HaxeQueryPlugin#FinalMember:SEARCH_KIND_EQUIVALENCE',
+			'M-DOWHILE-PLAIN-SEMI :: anyparse.macro.WriterKwRefLowering#kwRefParts',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

@@ -754,6 +754,11 @@ final class WriterKwRefLowering {
 			final trailExpr: Expr = if (isTriviaTrailOpt) {
 				final flagAccess: Expr = macro $i{argNames[1]};
 				optionalSemicolonWrap(kw, branch, trailEmit, argNames[0], flagAccess) ?? macro $flagAccess ? _dt($v{trailEmit}) : _de();
+			} else if (branch.fmtHasFlag('trailOptParseOnly')) {
+				// `@:fmt(trailOptParseOnly)`: the optional trail is parse leniency for a spelling the
+				// language rejects (Haxe `do foo(); while (c)` is `Expected while`), so the PLAIN writer
+				// never emits it; trivia mode above still reproduces what the source wrote.
+				macro _de();
 			} else {
 				trailOptShapeGateWrap(kw, branch, trailEmit, argNames[0]) ?? macro _dt($v{trailEmit});
 			};

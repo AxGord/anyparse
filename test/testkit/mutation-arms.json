@@ -22298,6 +22298,14 @@
 			"find": "for (k in BinderScan.binderKinds(shape)) if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k",
 			"replace": "for (k in BinderScan.binderKinds(shape)) k",
 			"note": "a local function counts as a shadowing binder rather than as the callee it is, so `p -> ok(p)` over a local `function ok` is never reduced"
+		},
+		{
+			"name": "M-DOWHILE-PLAIN-SEMI",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefParts",
+			"find": "} else if (branch.fmtHasFlag('trailOptParseOnly')) {",
+			"replace": "} else if (false) {",
+			"note": "the plain writer emits `do i++; while (c)` again, which Haxe rejects (`Expected while`)"
 		}
 	]
 }

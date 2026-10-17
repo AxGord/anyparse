@@ -3250,3 +3250,7 @@ decided the question; it may not become a record of runs.
   signature answered for it and `foreach(ok)` was proposed for a `(v:Int, ?w:Int) -> Bool` literal Haxe 4.3.7
   rejects. `LoopScan.capturedByClosure` takes the two kind sets it reads instead of a whole `LoopSeams`, so
   `prefer-range-loop`'s bundle passes as it is — branch `feat/infra-N8`
+- the PLAIN writer wrote `do i++; while (c)` for a do-while with an expression body, statement and expression form
+  alike, which Haxe 4.3.7 rejects (`Expected while`; the trivia writer reproduced the source). `HxDoWhileBody.ExprBody`'s
+  `@:trailOpt(';')` is parse leniency for the legacy spelling only, so it carries `@:fmt(trailOptParseOnly)`: the plain
+  Case-3 writer emits nothing for it, the trivia writer still writes what the source wrote — branch `feat/infra-N9`
