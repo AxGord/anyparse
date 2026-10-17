@@ -7,6 +7,7 @@ import anyparse.query.CompilerFacts.CallFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldDeclFact;
+import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
@@ -303,6 +304,16 @@ final class FunctionValueTypes {
 		// an object that left the type system may have the field written by its name too
 		final left: Bool = escaped.exists(e -> hierarchy.contains(e));
 		if (left && !untypedStores(name, hierarchy, out)) return null;
+		return typedStores(name, related, left, out) ? out : null;
+	}
+
+	/**
+	 * Add to `out` where the function values every write of the field `name` the facts type names stores are written (`readStored`),
+	 * of the classes `related` names. False when one may store anything else, and when a write naming another class may
+	 * write an object of the hierarchy that `left` the type system.
+	 */
+	private function typedStores(name: String, related: Array<String>, left: Bool, out: Array<FactPos>): Bool {
+		final table: CompilerFacts = _view._table;
 		for (id in table.nodeIds()) {
 			final n: Null<FactNode> = table.node(id);
 			if (n != null) for (f in n.fields) {
@@ -310,14 +321,14 @@ final class FunctionValueTypes {
 				if (!f.write || f.field != name) continue;
 				// a write naming another class writes an instance of it, unless an unchecked conversion put one of the hierarchy that
 				// left the type system where that class is written (`UncheckedConversions.holdsForeign`)
-				if (!related.contains(declaring) && left && f.owner != null && _view.unchecked().holdsForeign(declaring)) return null;
+				if (!related.contains(declaring) && left && f.owner != null && _view.unchecked().holdsForeign(declaring)) return false;
 				if (!related.contains(declaring)) continue;
 				final values: Null<Array<FactPos>> = storedBy(n, f.at);
-				if (values == null) return null;
+				if (values == null) return false;
 				for (v in values) out.push(v);
 			}
 		}
-		return out;
+		return true;
 	}
 
 	/**
@@ -370,33 +381,47 @@ final class FunctionValueTypes {
 			final made: Null<FactNode> = table.node(id);
 			if (made == null) return false;
 			final n: FactNode = made;
-			final lost: Bool = FactMarkers.carries(
-				n, m -> switch m {
-					// a reflective writer spliced in lost the name it was handed
-					case ReflectionInlined:
-						final spliced: Null<Array<String>> = FactsView.splicedReflection(n);
-						spliced == null || spliced.exists(s -> REFLECTIVE_WRITERS.contains(s));
-					// a marker no reader knows may say a write's name was lost
-					case Unknown(_): true;
-					case StaleForeign | InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): false;
-				}
-			);
-			if (lost) return false;
+			if (writeNameLost(n)) return false;
 			for (f in n.fields) if (f.write && f.field == name && UNTYPED_ACCESSES.contains(f.access)) {
 				final values: Null<Array<FactPos>> = storedBy(n, f.at);
 				if (values == null) return false;
 				for (v in values) out.push(v);
 			}
-			for (r in n.reflection) if (r.target == REFLECT || REFLECTIVE_WRITERS.contains(r.target)) {
-				// the literal at the call's NAME argument; another argument's (the value written) names nothing
-				final literal: Null<String> = r.memberName;
-				final computed: Bool = r.target == REFLECT || r.isValue || literal == null;
-				if (computed && computedNames) return false;
-				if (computed || literal != name) continue;
-				final values: Null<Array<FactPos>> = reflectiveStore(n, r.at);
-				if (values == null) return false;
-				for (v in values) out.push(v);
+			if (!reflectiveStores(n, name, computedNames, out)) return false;
+		}
+		return true;
+	}
+
+	/** Whether `n` may hold a write whose field name is lost: a reflective writer spliced in, or a marker no reader knows. */
+	private static function writeNameLost(n: FactNode): Bool {
+		return FactMarkers.carries(
+			n, m -> switch m {
+				// a reflective writer spliced in lost the name it was handed
+				case ReflectionInlined:
+					final spliced: Null<Array<String>> = FactsView.splicedReflection(n);
+					spliced == null || spliced.exists(s -> REFLECTIVE_WRITERS.contains(s));
+				// a marker no reader knows may say a write's name was lost
+				case Unknown(_): true;
+				case StaleForeign | InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): false;
 			}
+		);
+	}
+
+	/**
+	 * Add to `out` where the function values `n`'s reflective writes of the field `name` store are written (`untypedStores`):
+	 * each naming it by a literal. False when one may store anything else, and when one's name is computed while the project
+	 * declares the classes such a name may name a method of (`computedNames`).
+	 */
+	private function reflectiveStores(n: FactNode, name: String, computedNames: Bool, out: Array<FactPos>): Bool {
+		for (r in n.reflection) if (r.target == REFLECT || REFLECTIVE_WRITERS.contains(r.target)) {
+			// the literal at the call's NAME argument; another argument's (the value written) names nothing
+			final literal: Null<String> = r.memberName;
+			final computed: Bool = r.target == REFLECT || r.isValue || literal == null;
+			if (computed && computedNames) return false;
+			if (computed || literal != name) continue;
+			final values: Null<Array<FactPos>> = reflectiveStore(n, r.at);
+			if (values == null) return false;
+			for (v in values) out.push(v);
 		}
 		return true;
 	}
@@ -503,15 +528,8 @@ final class FunctionValueTypes {
 		final read: Null<ParsedFile> = parsed(at.file);
 		final shape: RefShape = _scope.shape;
 		if (read == null) return null;
-		final name: String = StringTools.trim(read.source.substring(at.span.from, at.span.to));
-		final hits: Array<RefHit> = Refs.find(name, read.tree, shape);
-		final hit: Null<RefHit> = hits.find(h -> h.kind == Read && h.span.from == at.span.from && h.span.to == at.span.to);
-		final declared: Null<QueryNode> = hit?.bindingNode;
-		final binding: Null<Span> = hit?.bindingSpan;
-		if (declared == null || binding == null) return null;
-		if (!(shape.paramKinds ?? []).contains(declared.kind)) return null;
-		// a parameter the function writes holds what it is assigned as well
-		if (hits.exists(h -> h.kind == Write && h.bindingSpan?.from == binding.from && h.bindingSpan?.to == binding.to)) return null;
+		final declared: Null<QueryNode> = unwrittenParameter(read, at);
+		if (declared == null) return null;
 		final method: Null<{ fn: QueryNode, index: Int, count: Int }> = declaringFunction(read.tree, declared);
 		final fnSpan: Null<Span> = method?.fn.span;
 		final fnName: Null<String> = method?.fn.name;
@@ -522,6 +540,21 @@ final class FunctionValueTypes {
 		return fnName == (shape.constructorName ?? 'new')
 			? constructedWith(typed[0], method.index, method.count, declared)
 			: invokedWith(typed[0], fnName, method.index, method.count);
+	}
+
+	/** The parameter the identifier at `at` in `read` reads, when it is one its function never writes (`Refs`); null otherwise. */
+	private function unwrittenParameter(read: ParsedFile, at: FactPos): Null<QueryNode> {
+		final shape: RefShape = _scope.shape;
+		final name: String = StringTools.trim(read.source.substring(at.span.from, at.span.to));
+		final hits: Array<RefHit> = Refs.find(name, read.tree, shape);
+		final hit: Null<RefHit> = hits.find(h -> h.kind == Read && h.span.from == at.span.from && h.span.to == at.span.to);
+		final declared: Null<QueryNode> = hit?.bindingNode;
+		final binding: Null<Span> = hit?.bindingSpan;
+		if (declared == null || binding == null) return null;
+		if (!(shape.paramKinds ?? []).contains(declared.kind)) return null;
+		// a parameter the function writes holds what it is assigned as well
+		if (hits.exists(h -> h.kind == Write && h.bindingSpan?.from == binding.from && h.bindingSpan?.to == binding.to)) return null;
+		return declared;
 	}
 
 	/**
@@ -576,14 +609,26 @@ final class FunctionValueTypes {
 		if (skipped < 0) return null;
 		final out: Array<FactPos> = [];
 		for (j in 0...args.length) if (j <= index && index <= j + skipped) {
-			final value: QueryNode = BoolExprShape.unwrapParens(args[j], shape.parenKind);
-			final span: Null<Span> = value.span;
-			final where: Null<FactPos> = span == null ? null : { file: at.file, span: span };
-			if (value.kind == shape.nullLiteralKind || (shape.literalTypeNames ?? []).exists(value.kind)) continue;
-			if (where == null || !(shape.lambdaKinds ?? []).contains(value.kind)) return null;
-			if (arity == null || parameterCount(value) == arity) out.push(where);
+			final held: Null<Array<FactPos>> = argumentFunction(args[j], at.file, arity);
+			if (held == null) return null;
+			for (where in held) out.push(where);
 		}
 		return skipped == 0 || omissible ? out : null;
+	}
+
+	/**
+	 * Where the function value the argument `arg`, in `file`, hands a parameter taking functions of `arity` arguments (when
+	 * known) is written: none for `null` or another literal, or for a function expression of another arity, which no function
+	 * type of the parameter unifies with; a function expression's own range. Null for any other argument.
+	 */
+	private function argumentFunction(arg: QueryNode, file: String, arity: Null<Int>): Null<Array<FactPos>> {
+		final shape: RefShape = _scope.shape;
+		final value: QueryNode = BoolExprShape.unwrapParens(arg, shape.parenKind);
+		final span: Null<Span> = value.span;
+		final where: Null<FactPos> = span == null ? null : { file: file, span: span };
+		if (value.kind == shape.nullLiteralKind || (shape.literalTypeNames ?? []).exists(value.kind)) return [];
+		if (where == null || !(shape.lambdaKinds ?? []).contains(value.kind)) return null;
+		return arity == null || parameterCount(value) == arity ? [where] : [];
 	}
 
 	/**
@@ -597,52 +642,61 @@ final class FunctionValueTypes {
 	 */
 	private function reflectiveConstructions(owner: String, index: Int, arity: Null<Int>, out: Array<FactPos>): Void {
 		final table: CompilerFacts = _view._table;
-		final shape: RefShape = _scope.shape;
-		inline function escaped(): Void {
-			if (!out.contains(ESCAPED_VALUES)) out.push(ESCAPED_VALUES);
-		}
 		for (id in table.nodeIds()) {
 			final made: Null<FactNode> = table.node(id);
 			if (made == null) continue;
 			final n: FactNode = made;
-			final lost: Bool = FactMarkers.carries(
-				n, m -> switch m {
-					// a construction spliced in lost the arguments it was handed
-					case ReflectionInlined:
-						final spliced: Null<Array<String>> = FactsView.splicedReflection(n);
-						spliced == null || spliced.contains(CONSTRUCTING);
-					// a marker no reader knows may say a construction's arguments were lost
-					case Unknown(_): true;
-					case StaleForeign | InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): false;
-				}
-			);
-			if (lost) escaped();
-			for (r in n.reflection) if (r.target == TYPE || r.target == CONSTRUCTING) {
-				if (r.target == TYPE || r.isValue) {
-					escaped();
-					continue;
-				}
-				if (!mayConstruct(r.receiver, owner, 0)) continue;
-				final read: Null<ParsedFile> = parsed(r.at.file);
-				final call: Null<QueryNode> = read == null ? null : nodeAt(read.tree, r.at.span, shape.callKind, false);
-				final args: Null<QueryNode> = call == null || call.children.length != 3
-					? null
-					: BoolExprShape.unwrapParens(call.children[2], shape.parenKind);
-				if (args == null || args.kind != shape.arrayLiteralKind) {
-					escaped();
-					continue;
-				}
-				if (index >= args.children.length) continue;
-				final value: QueryNode = BoolExprShape.unwrapParens(args.children[index], shape.parenKind);
-				final span: Null<Span> = value.span;
-				final where: Null<FactPos> = span == null ? null : { file: r.at.file, span: span };
-				if (value.kind == shape.nullLiteralKind || (shape.literalTypeNames ?? []).exists(value.kind)) continue;
-				if (where == null || !(shape.lambdaKinds ?? []).contains(value.kind))
-					escaped()
-				else if (arity == null || parameterCount(value) == arity)
-					out.push(where);
-			}
+			if (constructionLost(n)) escapedValues(out);
+			for (r in n.reflection) if (r.target == TYPE || r.target == CONSTRUCTING) reflectiveConstruction(r, owner, index, arity, out);
 		}
+	}
+
+	/** Whether `n` may hold a construction whose arguments are lost: one spliced in, or a marker no reader knows. */
+	private static function constructionLost(n: FactNode): Bool {
+		return FactMarkers.carries(
+			n, m -> switch m {
+				// a construction spliced in lost the arguments it was handed
+				case ReflectionInlined:
+					final spliced: Null<Array<String>> = FactsView.splicedReflection(n);
+					spliced == null || spliced.contains(CONSTRUCTING);
+				// a marker no reader knows may say a construction's arguments were lost
+				case Unknown(_): true;
+				case StaleForeign | InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): false;
+			}
+		);
+	}
+
+	/**
+	 * Add to `out` where the function value the reflective construction `r` hands the `index`-th constructor parameter of
+	 * `owner` is written (`reflectiveConstructions`), or `ESCAPED_VALUES` when what it hands is not known.
+	 */
+	private function reflectiveConstruction(r: ReflectionFact, owner: String, index: Int, arity: Null<Int>, out: Array<FactPos>): Void {
+		final shape: RefShape = _scope.shape;
+		if (r.target == TYPE || r.isValue) {
+			escapedValues(out);
+			return;
+		}
+		if (!mayConstruct(r.receiver, owner, 0)) return;
+		final read: Null<ParsedFile> = parsed(r.at.file);
+		final call: Null<QueryNode> = read == null ? null : nodeAt(read.tree, r.at.span, shape.callKind, false);
+		final args: Null<QueryNode> = call == null || call.children.length != 3
+			? null
+			: BoolExprShape.unwrapParens(call.children[2], shape.parenKind);
+		if (args == null || args.kind != shape.arrayLiteralKind) {
+			escapedValues(out);
+			return;
+		}
+		if (index >= args.children.length) return;
+		final held: Null<Array<FactPos>> = argumentFunction(args.children[index], r.at.file, arity);
+		if (held == null)
+			escapedValues(out)
+		else
+			for (where in held) out.push(where);
+	}
+
+	/** Mark `out` as holding function values that left the type system (`ESCAPED_VALUES`), once. */
+	private static inline function escapedValues(out: Array<FactPos>): Void {
+		if (!out.contains(ESCAPED_VALUES)) out.push(ESCAPED_VALUES);
 	}
 
 	/**
@@ -713,13 +767,7 @@ final class FunctionValueTypes {
 	 */
 	private function invokedWith(owner: String, name: String, index: Int, count: Int): Null<Array<FactPos>> {
 		final table: CompilerFacts = _view._table;
-		final fact: Null<TypeFact> = table.type(owner);
-		final field: Null<FieldDeclFact> = fact?.fields.find(f -> f.name == name);
-		if (fact == null || field == null) return null;
-		if (fact.kind != CLASS_KIND || !fact.alike || field.isStatic) return null;
-		// a `dynamic` method's field holds whatever is assigned to it: a call of the field runs that
-		if (!field.kinds.foreach(k -> k == METHOD_KIND)) return null;
-		if (!field.types.foreach(t -> arity(t) == count)) return null;
+		if (!plainMethod(owner, name, count)) return null;
 		final hierarchy: Array<String> = [owner].concat(table.subtypesOf(owner));
 		final escaped: Null<Array<String>> = _escapedTypes();
 		if (escaped == null) return null;
@@ -744,6 +792,20 @@ final class FunctionValueTypes {
 			out.push(value);
 		}
 		return out;
+	}
+
+	/**
+	 * Whether the typed class `owner` declares `name` as an instance method every build types alike, with `count`
+	 * parameters in each type it has — not a `dynamic` one, whose field holds whatever is assigned to it.
+	 */
+	private function plainMethod(owner: String, name: String, count: Int): Bool {
+		final fact: Null<TypeFact> = _view._table.type(owner);
+		final field: Null<FieldDeclFact> = fact?.fields.find(f -> f.name == name);
+		if (fact == null || field == null) return false;
+		if (fact.kind != CLASS_KIND || !fact.alike || field.isStatic) return false;
+		// a `dynamic` method's field holds whatever is assigned to it: a call of the field runs that
+		if (!field.kinds.foreach(k -> k == METHOD_KIND)) return false;
+		return field.types.foreach(t -> arity(t) == count);
 	}
 
 	/**

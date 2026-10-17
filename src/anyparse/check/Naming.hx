@@ -965,24 +965,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final family: Array<Span> = familySpans ?? [];
 		final covered: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
 		if (covered.length == 0) return null;
-		// A body-scoped binding (local / param / catch variable) is visible from its DECLARATION on -
-		// no language here hoists one - so an occurrence resolved BEFORE `declFrom` is the scope
-		// resolver over-reaching: it binds a whole block to the declaration, while the compiler binds
-		// the earlier read to whatever it shadows (a member, a static, an import). Rewriting that read
-		// emits an unknown identifier, so the whole rename is refused. Never true for a MEMBER, whose
-		// references legitimately precede its declaration - hence the caller-supplied flag. Asked
-		// first of the two refusals: it walks `covered`, while the interpolation one below re-walks
-		// the whole tree.
-		if (bodyScoped) for (occ in covered) if (occ.from < declFrom) return null;
-		// A `$name` read whose identifier token is not in the raw bytes — an escape-spelled `$`
-		// or name — is DROPPED by `renameOccurrences`, not rewritten, so the rename would strand
-		// it on a name the fix has removed. `rename` refuses the same shape; the completeness
-		// scan below cannot see it, since the occurrence sits inside a string literal.
-		if (OccurrenceScan.unrewrittenInterpRead(Refs.find(name, tree, shape), declFrom, covered) != null) return null;
-		// An unparsed conditional-compilation region is the same drop one level lower: its interior
-		// projects no nodes at all, so neither `renameOccurrences` nor the completeness scan below can
-		// see a read of `name` written inside it, and the fix would strand it on the old spelling.
-		if (CondRegionScan.opaqueCondRegionMentioning(tree, source, name, shape) != null) return null;
+		if (strandsOccurrence(source, tree, declFrom, name, shape, covered, bodyScoped)) return null;
 		// Attribute every OTHER same-name occurrence to its binding: one provably bound to a DIFFERENT
 		// binding (a param / loop var / sibling local sharing the name) is neither a rename target nor a
 		// blocker for THIS binding, so it joins the resolved set as an excluded span. An occurrence whose
@@ -1048,7 +1031,45 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		);
 		final renamed: Array<Span> = mergeUniqueSpans(mergeUniqueSpans(covered.concat(ownerBound), twins), family);
 		if (classified == null) return OccurrenceScan.referencedInRange(source, name, 0, source.length, excluded) ? null : renamed;
-		final spans: Array<Span> = renamed;
+		return withMentions(renamed, classified, tree, declFrom, shape, distinctive);
+	}
+
+	/**
+	 * Whether renaming the binding declared at `declFrom` would strand an occurrence of `name` that the rewrite of its
+	 * `covered` occurrences cannot reach (`declaringFileRenameSpans`): a resolution reaching past a shadowed member, a
+	 * `$name` read spelled by escapes, or a read inside an unparsed conditional region.
+	 */
+	private static function strandsOccurrence(
+		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, covered: Array<Span>, bodyScoped: Bool
+	): Bool {
+		// A body-scoped binding (local / param / catch variable) is visible from its DECLARATION on -
+		// no language here hoists one - so an occurrence resolved BEFORE `declFrom` is the scope
+		// resolver over-reaching: it binds a whole block to the declaration, while the compiler binds
+		// the earlier read to whatever it shadows (a member, a static, an import). Rewriting that read
+		// emits an unknown identifier, so the whole rename is refused. Never true for a MEMBER, whose
+		// references legitimately precede its declaration - hence the caller-supplied flag. Asked
+		// first of the two refusals: it walks `covered`, while the interpolation one below re-walks
+		// the whole tree.
+		if (bodyScoped) for (occ in covered) if (occ.from < declFrom) return true;
+		// A `$name` read whose identifier token is not in the raw bytes — an escape-spelled `$`
+		// or name — is DROPPED by `renameOccurrences`, not rewritten, so the rename would strand
+		// it on a name the fix has removed. `rename` refuses the same shape; the completeness
+		// scan below cannot see it, since the occurrence sits inside a string literal.
+		if (OccurrenceScan.unrewrittenInterpRead(Refs.find(name, tree, shape), declFrom, covered) != null) return true;
+		// An unparsed conditional-compilation region is the same drop one level lower: its interior
+		// projects no nodes at all, so neither `renameOccurrences` nor the completeness scan below can
+		// see a read of `name` written inside it, and the fix would strand it on the old spelling.
+		return CondRegionScan.opaqueCondRegionMentioning(tree, source, name, shape) != null;
+	}
+
+	/**
+	 * The spans `declaringFileRenameSpans` renames: `spans`, with each distinctive comment mention of the binding in its
+	 * own lexical container among the `classified` occurrences nothing resolved. Null when one of those is a mention that
+	 * refuses the rename.
+	 */
+	private static function withMentions(
+		spans: Array<Span>, classified: Array<ClassifiedOccurrence>, tree: QueryNode, declFrom: Int, shape: RefShape, distinctive: Bool
+	): Null<Array<Span>> {
 		// A distinctive comment mention renames along, but only within the binding's own lexical container:
 		// the same distinctive name can name an UNRELATED binding elsewhere in the file, and a comment about
 		// THAT one must not be rewritten (nor block this rename). A field's container is its type, so its

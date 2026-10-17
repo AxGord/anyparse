@@ -1044,35 +1044,55 @@ final class CompilerFacts {
 	): Null<Array<F>> {
 		final key: String = _key(file);
 		final dropped: (callee:String) -> Bool = harmless ?? callee -> false;
-		function inside(where: FactPos): Bool return where.file == key && span.from <= where.span.from && where.span.to <= span.to;
-		function meets(sites: Array<Span>): Bool return sites.exists(s -> s.from < span.to && span.from < s.to);
-		function runsIn(n: FactNode, where: FactPos): Bool {
-			final splice: Null<SpliceFact> = spliceOf(n, where);
-			if (splice != null) return !dropped(splice.callee) && meets(splice.sites);
-			final expansion: Null<ExpansionFact> = expansionOf(n, where);
-			final sites: Null<Array<Span>> = expansion == null ? null : expansionSites(n, expansion);
-			return sites == null || meets(sites);
-		}
 		final out: Array<F> = [];
 		for (n in nodesAround(file, span, true)) {
-			// a fact lost with its file runs where no position says, and a marker no reader knows may say the same
-			final lost: Bool = FactMarkers.carries(
-				n, m -> switch m {
-					case StaleForeign | Unknown(_): true;
-					case InlineSite | MacroExpansion | ReflectionInlined | ReflectionUnattributed | ReflectionFrom(_): false;
-				}
-			);
-			if (lost) return null;
-			final whole: Bool = inside(n.at);
+			if (lostWhere(n)) return null;
+			final whole: Bool = inside(key, span, n.at);
 			final splice: Bool = FactMarkers.carries(n, m -> m.match(InlineSite));
 			final expanded: Bool = FactMarkers.carries(n, m -> m.match(MacroExpansion));
 			if (!whole && !spliced && (expanded || splice)) return null;
 			for (fact in pick(n)) {
 				final where: FactPos = at(fact);
-				if (splice && spliced && !placed(n, where) ? runsIn(n, where) : whole || inside(where)) out.push(fact);
+				if (splice && spliced && !placed(n, where) ? runsIn(n, where, span, dropped) : whole || inside(key, span, where))
+					out.push(fact);
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * Whether `n` holds a fact lost with its file, which runs where no position says, or a marker no reader knows,
+	 * which may say the same.
+	 */
+	private static function lostWhere(n: FactNode): Bool {
+		return FactMarkers.carries(
+			n, m -> switch m {
+				case StaleForeign | Unknown(_): true;
+				case InlineSite | MacroExpansion | ReflectionInlined | ReflectionUnattributed | ReflectionFrom(_): false;
+			}
+		);
+	}
+
+	/** Whether `where` lies in the file keyed `key`, inside `span`. */
+	private static inline function inside(key: String, span: Span, where: FactPos): Bool {
+		return where.file == key && span.from <= where.span.from && where.span.to <= span.to;
+	}
+
+	/** Whether one of `sites` meets `span`. */
+	private static inline function meets(sites: Array<Span>, span: Span): Bool {
+		return sites.exists(s -> s.from < span.to && span.from < s.to);
+	}
+
+	/**
+	 * Whether the fact `n` holds at `where`, outside its own range, may run in `span` (`within`): a splice's when a site of
+	 * it meets `span` and its method is not `dropped`, an expansion's when a site it runs at does, any other's always.
+	 */
+	private static function runsIn(n: FactNode, where: FactPos, span: Span, dropped: (callee:String) -> Bool): Bool {
+		final splice: Null<SpliceFact> = spliceOf(n, where);
+		if (splice != null) return !dropped(splice.callee) && meets(splice.sites, span);
+		final expansion: Null<ExpansionFact> = expansionOf(n, where);
+		final sites: Null<Array<Span>> = expansion == null ? null : expansionSites(n, expansion);
+		return sites == null || meets(sites, span);
 	}
 
 	private function indexOf(file: String): Null<CodepointIndex> {
@@ -1171,157 +1191,187 @@ final class CompilerFacts {
 			final at: Null<FactPos> = position(home, record.p, files.paths);
 			if (at == null) continue;
 			final node: FactNode = made ?? emptyNode(id, record, at);
-			// a parameter is kept only where every configuration keeps it
-			if (made != null) for (i in node.keptParams.copy()) if (!(record.pk ?? []).contains(i)) node.keptParams.remove(i);
-			if (made != null) node.paramUses = joinedParamUses(node.paramUses, paramUsesOf(record));
+			if (made != null) joinConfiguration(node, record);
 			made = node;
-			FactMerge.variant(node.variants, record.t, [for (p in record.params ?? []) { name: p.n, type: p.t }]);
-			for (channel in record.inc ?? []) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
-
-			// a fact whose file the table cannot read any more — rewritten, or of another text — is lost to the node: say so. A
-			// position the record leaves out is none
-			function place(p: Null<Array<Int>>): Null<FactPos> {
-				if (p == null) return null;
-				final where: Null<FactPos> = position(home, p, files.paths);
-				if (where == null && !node.incomplete.contains('stale-foreign')) node.incomplete.push('stale-foreign');
-				return where;
-			}
-			// a fact is identified by its resolved text, so the same site from two configurations is one fact
-			function fresh(category: String, fact: Any, where: FactPos): Bool {
-				final identity: String = category + ' ' + where.file + ' ' + where.span.from + ' ' + where.span.to + ' '
-					+ Json.stringify(fact);
-				if (seen.exists(identity)) return false;
-				seen[identity] = true;
-				return true;
-			}
-			FactMerge.collect(
-				record.calls, c -> place(c.p), fresh.bind('call'), (c, where) -> ({
-					target: c.t,
-					access: c.a,
-					receiver: c.r,
-					receiverAt: place(c.rp),
-					result: c.rt,
-					at: where,
-					signature: c.sig,
-					site: place(c.s),
-					body: place(c.d),
-					operand: c.o,
-					operandExact: c.x == true
-				}: CallFact),
-				node.calls
-			);
-			FactMerge.collect(
-				record.news, x -> place(x.p), fresh.bind('new'), (x, where) -> ({
-					type: x.t,
-					instance: x.ty,
-					at: where,
-					generic: x.gb
-				}: NewFact),
-				node.news
-			);
-			FactMerge.collect(
-				record.fields, f -> place(f.p), fresh.bind('field'), (f, where) -> ({
-					owner: f.o,
-					field: f.f,
-					access: f.a,
-					receiver: f.r,
-					type: f.t,
-					write: f.w ?? false,
-					at: where,
-					use: f.u,
-					method: f.m,
-					fresh: f.fresh ?? false,
-					held: f.h ?? false,
-					argument: argumentOf(f)
-				}: FieldFact),
-				node.fields
-			);
-			FactMerge.collect(
-				record.elems, x -> place(x.p), fresh.bind('elem'),
-				(x, where) -> ({receiver: x.r, receiverAt: place(x.rp), at: where }: ElementWriteFact), node.elementWrites
-			);
-			FactMerge.collect(
-				record.flows, f -> place(f.p), fresh.bind('flow'), (f, where) -> ({
-					from: f.s,
-					to: f.d,
-					via: f.c,
-					at: where,
-					exact: f.x == true
-				}: FlowFact),
-				node.flows
-			);
-			FactMerge.collect(
-				record.hands, h -> place(h.p), fresh.bind('hand'), (h, where) -> ({
-					target: h.t,
-					from: h.s,
-					to: h.d,
-					at: where
-				}: HandFact),
-				node.handed
-			);
-			FactMerge.collect(
-				record.gens, x -> place(x.p), fresh.bind('gen'),
-				(x, where) -> ({declared: x.d, applied: x.s, at: where }: InstantiationFact), node.instantiations
-			);
-			FactMerge.collect(
-				record.strs, s -> place(s.p), fresh.bind('str'),
-				(s, where) -> ({operand: s.o, at: where, exact: s.x == true }: StringFact), node.strings
-			);
-			FactMerge.collect(
-				record.iters, i -> place(i.p), fresh.bind('iter'), (i, where) -> ({binder: i.v, iterated: i.i, at: where }: IterationFact),
-				node.iterations
-			);
-			FactMerge.collect(
-				record.refl, r -> place(r.p), fresh.bind('refl'), (r, where) -> ({
-					target: r.t,
-					name: r.n,
-					memberName: r.m,
-					typeArgument: r.c,
-					isValue: r.v ?? false,
-					at: where,
-					receiver: r.r,
-					receiverExact: r.x == true,
-					receiverSelf: r.h == true,
-					receiverFresh: r.o == true,
-					holder: id
-				}: ReflectionFact),
-				node.reflection
-			);
-			FactMerge.collect(
-				record.native, n -> place(n.p), fresh.bind('native'), (n, where) -> ({
-					kind: n.w,
-					name: n.n,
-					at: where,
-					code: n.c,
-					computed: n.cc == true,
-					handed: n.h ?? [],
-					holder: id
-				}: NativeFact),
-				node.natives
-			);
-			FactMerge.collect(
-				record.vars, v -> place(v.p), fresh.bind('var'), (v, where) -> ({name: v.n, type: v.t, at: where }: VarFact), node.vars
-			);
-			FactMerge.collect(
-				record.reads, r -> place([for (i in 0...r.length - 1) (r[i]: Int)]), fresh.bind('read'), (r, where) -> ({
-					type: (r[r.length - 1]: String),
-					at: where
-				}: LocalReadFact),
-				node.reads
-			);
-			for (x in record.exps ?? []) {
-				final root: Null<FactPos> = place(x.p);
-				final anchor: Null<FactPos> = place(x.a);
-				final declared: Null<FactPos> = place(x.d);
-				if (root == null || anchor == null || (x.d != null && declared == null)) continue;
-				final written: FactPos = anchor;
-				// the root tells one expansion from another, and no question asks it
-				if (fresh('exp', x, root)) node.expansions.push({ expander: x.t, anchor: written, declared: declared });
-			}
-			for (f in record.fns ?? []) if (!node.fns.contains(f)) node.fns.push(f);
+			mergeRecord(id, node, record, home, files.paths, seen);
 		}
 		collectSplices(made);
 		return made;
+	}
+
+	/**
+	 * Join a further configuration's `record` into the node an earlier one made: a parameter is kept only where
+	 * every configuration keeps it.
+	 */
+	private static function joinConfiguration(node: FactNode, record: NodeRecord): Void {
+		for (i in node.keptParams.copy()) if (!(record.pk ?? []).contains(i)) node.keptParams.remove(i);
+		node.paramUses = joinedParamUses(node.paramUses, paramUsesOf(record));
+	}
+
+	/**
+	 * Merge one configuration's `record` of the node into `node`: its signature variant, the channels it leaves incomplete,
+	 * its facts and expansions — each placed in `home` and kept once across configurations (`seen`) — and its local functions.
+	 */
+	private function mergeRecord(
+		id: String, node: FactNode, record: NodeRecord, home: String, paths: Array<Null<String>>, seen: Map<String, Bool>
+	): Void {
+		FactMerge.variant(node.variants, record.t, [for (p in record.params ?? []) { name: p.n, type: p.t }]);
+		for (channel in record.inc ?? []) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
+
+		// a fact whose file the table cannot read any more — rewritten, or of another text — is lost to the node: say so. A
+		// position the record leaves out is none
+		function place(p: Null<Array<Int>>): Null<FactPos> {
+			if (p == null) return null;
+			final where: Null<FactPos> = position(home, p, paths);
+			if (where == null && !node.incomplete.contains('stale-foreign')) node.incomplete.push('stale-foreign');
+			return where;
+		}
+		// a fact is identified by its resolved text, so the same site from two configurations is one fact
+		function fresh(category: String, fact: Any, where: FactPos): Bool {
+			final identity: String = category + ' ' + where.file + ' ' + where.span.from + ' ' + where.span.to + ' ' + Json.stringify(fact);
+			if (seen.exists(identity)) return false;
+			seen[identity] = true;
+			return true;
+		}
+		collectFacts(id, node, record, place, fresh);
+		collectExpansions(node, record, place, fresh);
+		for (f in record.fns ?? []) if (!node.fns.contains(f)) node.fns.push(f);
+	}
+
+	/** Add the facts of every family `record` holds to `node`, each at the position `place` reads and only when `fresh`. */
+	private static function collectFacts(
+		id: String, node: FactNode, record: NodeRecord, place: (Null<Array<Int>>) -> Null<FactPos>, fresh: (String, Any, FactPos) -> Bool
+	): Void {
+		FactMerge.collect(
+			record.calls, c -> place(c.p), fresh.bind('call'), (c, where) -> ({
+				target: c.t,
+				access: c.a,
+				receiver: c.r,
+				receiverAt: place(c.rp),
+				result: c.rt,
+				at: where,
+				signature: c.sig,
+				site: place(c.s),
+				body: place(c.d),
+				operand: c.o,
+				operandExact: c.x == true
+			}: CallFact),
+			node.calls
+		);
+		FactMerge.collect(
+			record.news, x -> place(x.p), fresh.bind('new'), (x, where) -> ({
+				type: x.t,
+				instance: x.ty,
+				at: where,
+				generic: x.gb
+			}: NewFact),
+			node.news
+		);
+		FactMerge.collect(
+			record.fields, f -> place(f.p), fresh.bind('field'), (f, where) -> ({
+				owner: f.o,
+				field: f.f,
+				access: f.a,
+				receiver: f.r,
+				type: f.t,
+				write: f.w ?? false,
+				at: where,
+				use: f.u,
+				method: f.m,
+				fresh: f.fresh ?? false,
+				held: f.h ?? false,
+				argument: argumentOf(f)
+			}: FieldFact),
+			node.fields
+		);
+		FactMerge.collect(
+			record.elems, x -> place(x.p), fresh.bind('elem'),
+			(x, where) -> ({receiver: x.r, receiverAt: place(x.rp), at: where }: ElementWriteFact), node.elementWrites
+		);
+		FactMerge.collect(
+			record.flows, f -> place(f.p), fresh.bind('flow'), (f, where) -> ({
+				from: f.s,
+				to: f.d,
+				via: f.c,
+				at: where,
+				exact: f.x == true
+			}: FlowFact),
+			node.flows
+		);
+		FactMerge.collect(
+			record.hands, h -> place(h.p), fresh.bind('hand'), (h, where) -> ({
+				target: h.t,
+				from: h.s,
+				to: h.d,
+				at: where
+			}: HandFact),
+			node.handed
+		);
+		FactMerge.collect(
+			record.gens, x -> place(x.p), fresh.bind('gen'), (x, where) -> ({declared: x.d, applied: x.s, at: where }: InstantiationFact),
+			node.instantiations
+		);
+		FactMerge.collect(
+			record.strs, s -> place(s.p), fresh.bind('str'), (s, where) -> ({operand: s.o, at: where, exact: s.x == true }: StringFact),
+			node.strings
+		);
+		FactMerge.collect(
+			record.iters, i -> place(i.p), fresh.bind('iter'), (i, where) -> ({binder: i.v, iterated: i.i, at: where }: IterationFact),
+			node.iterations
+		);
+		FactMerge.collect(
+			record.refl, r -> place(r.p), fresh.bind('refl'), (r, where) -> ({
+				target: r.t,
+				name: r.n,
+				memberName: r.m,
+				typeArgument: r.c,
+				isValue: r.v ?? false,
+				at: where,
+				receiver: r.r,
+				receiverExact: r.x == true,
+				receiverSelf: r.h == true,
+				receiverFresh: r.o == true,
+				holder: id
+			}: ReflectionFact),
+			node.reflection
+		);
+		FactMerge.collect(
+			record.native, n -> place(n.p), fresh.bind('native'), (n, where) -> ({
+				kind: n.w,
+				name: n.n,
+				at: where,
+				code: n.c,
+				computed: n.cc == true,
+				handed: n.h ?? [],
+				holder: id
+			}: NativeFact),
+			node.natives
+		);
+		FactMerge.collect(
+			record.vars, v -> place(v.p), fresh.bind('var'), (v, where) -> ({name: v.n, type: v.t, at: where }: VarFact), node.vars
+		);
+		FactMerge.collect(
+			record.reads, r -> place([for (i in 0...r.length - 1) (r[i]: Int)]), fresh.bind('read'), (r, where) -> ({
+				type: (r[r.length - 1]: String),
+				at: where
+			}: LocalReadFact),
+			node.reads
+		);
+	}
+
+	/** Add the macro expansions `record` holds to `node`: each whose root, anchor and declaration all place, once per root. */
+	private static function collectExpansions(
+		node: FactNode, record: NodeRecord, place: (Null<Array<Int>>) -> Null<FactPos>, fresh: (String, Any, FactPos) -> Bool
+	): Void {
+		for (x in record.exps ?? []) {
+			final root: Null<FactPos> = place(x.p);
+			final anchor: Null<FactPos> = place(x.a);
+			final declared: Null<FactPos> = place(x.d);
+			if (root == null || anchor == null || (x.d != null && declared == null)) continue;
+			final written: FactPos = anchor;
+			// the root tells one expansion from another, and no question asks it
+			if (fresh('exp', x, root)) node.expansions.push({ expander: x.t, anchor: written, declared: declared });
+		}
 	}
 
 	/** The parameter `use` hands its value to (`FieldFact.argument`), or null for any other use. */

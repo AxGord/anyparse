@@ -126,39 +126,19 @@ final class SetModifier {
 			case Parsed(parsed): parsed;
 		};
 
-		final cursor: Int = Span.offsetOf(source, line, col);
-		final hitNode: Null<QueryNode> = Engine.at(tree, cursor);
-		if (hitNode == null) return Err('position $line:$col is not on a node');
-		final hitParent: Null<QueryNode> = TreePath.parentOf(tree, hitNode);
-		if (hitParent == null) return Err('the node at $line:$col has no parent (not a member / declaration)');
-		// A `final class` addressed through its inner form: the run sits beside the wrapper, so the
-		// wrapper is the declaration (`validate` already refuses `final` itself, which wraps it).
-		final wrapper: Null<QueryNode> = ElementSpan.foldingWrapperOf(hitNode, hitParent);
-		final wrapperParent: Null<QueryNode> = wrapper == null ? null : TreePath.parentOf(tree, wrapper);
-		final node: QueryNode = wrapper ?? hitNode;
-		final parent: QueryNode = wrapperParent ?? hitParent;
-
-		final siblings: Array<QueryNode> = parent.children;
-		final cursorIndex: Int = siblings.indexOf(node);
-		if (cursorIndex < 0) return Err('could not locate the declaration at $line:$col');
-
-		// The core declaration: the cursor node, or — when the cursor is on a prefix sibling — the
-		// first following sibling that is not one. `RefactorSupport.isDeclPrefixSibling` is the
-		// SHARED predicate `declGroupSpan` folds with, so the run this op rewrites is the run
-		// `remove-element` / `replace-node` cut: a keyword one of them crosses and the other stops
-		// at is how a second visibility keyword got emitted in front of the first.
-		var declIndex: Int = cursorIndex;
-		while (declIndex < siblings.length && ElementSpan.isDeclPrefixSibling(siblings[declIndex])) declIndex++;
-		if (declIndex >= siblings.length) return Err('no declaration follows the modifiers at $line:$col');
-		final coreSpan: Null<Span> = siblings[declIndex].span;
-		if (coreSpan == null) return Err('the ${siblings[declIndex].kind} declaration has no source span');
+		final at: DeclarationAt = switch declarationAt(source, tree, line, col) {
+			case Refused(message): return Err(message);
+			case Located(found): found;
+		};
+		final siblings: Array<QueryNode> = at.siblings;
+		final declIndex: Int = at.index;
 
 		// The splice ends at the LAST keyword of the run, not at the declaration: an `@:meta`, a
 		// `#if … #end` modifier region and a keyword such a region merely contributes may sit
 		// between the two, and running the span on to the declaration deleted them. When there is
 		// no keyword at all the splice is an empty insertion point in front of the declaration, and
 		// only then does the emitted run need its own trailing space.
-		final run: ModifierRun = modifierRun(source, siblings, declIndex, shape, modifierKinds, coreSpan.from);
+		final run: ModifierRun = modifierRun(source, siblings, declIndex, shape, modifierKinds, at.coreFrom);
 		// A modifier the declaration carries INSIDE a conditional region is not in the run this op
 		// rewrites, so a change naming it is applied beside it rather than to it: `+static` on
 		// `private #if cpp static #end function f` emitted a second `static` that only the guarded
@@ -188,6 +168,37 @@ final class SetModifier {
 			text: run.names.length == 0 ? rendered : rendered.rtrim()
 		};
 		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
+	}
+
+	/** The declaration whose modifiers the position `line:col` of `tree` (the text `source`) addresses (`setModifier`). */
+	private static function declarationAt(source: String, tree: QueryNode, line: Int, col: Int): DeclarationSite {
+		final cursor: Int = Span.offsetOf(source, line, col);
+		final hitNode: Null<QueryNode> = Engine.at(tree, cursor);
+		if (hitNode == null) return Refused('position $line:$col is not on a node');
+		final hitParent: Null<QueryNode> = TreePath.parentOf(tree, hitNode);
+		if (hitParent == null) return Refused('the node at $line:$col has no parent (not a member / declaration)');
+		// A `final class` addressed through its inner form: the run sits beside the wrapper, so the
+		// wrapper is the declaration (`validate` already refuses `final` itself, which wraps it).
+		final wrapper: Null<QueryNode> = ElementSpan.foldingWrapperOf(hitNode, hitParent);
+		final wrapperParent: Null<QueryNode> = wrapper == null ? null : TreePath.parentOf(tree, wrapper);
+		final node: QueryNode = wrapper ?? hitNode;
+		final parent: QueryNode = wrapperParent ?? hitParent;
+
+		final siblings: Array<QueryNode> = parent.children;
+		final cursorIndex: Int = siblings.indexOf(node);
+		if (cursorIndex < 0) return Refused('could not locate the declaration at $line:$col');
+
+		// The core declaration: the cursor node, or — when the cursor is on a prefix sibling — the
+		// first following sibling that is not one. `RefactorSupport.isDeclPrefixSibling` is the
+		// SHARED predicate `declGroupSpan` folds with, so the run this op rewrites is the run
+		// `remove-element` / `replace-node` cut: a keyword one of them crosses and the other stops
+		// at is how a second visibility keyword got emitted in front of the first.
+		var declIndex: Int = cursorIndex;
+		while (declIndex < siblings.length && ElementSpan.isDeclPrefixSibling(siblings[declIndex])) declIndex++;
+		if (declIndex >= siblings.length) return Refused('no declaration follows the modifiers at $line:$col');
+		final coreSpan: Null<Span> = siblings[declIndex].span;
+		if (coreSpan == null) return Refused('the ${siblings[declIndex].kind} declaration has no source span');
+		return Located({ siblings: siblings, index: declIndex, coreFrom: coreSpan.from });
 	}
 
 	/**
@@ -395,3 +406,16 @@ private typedef ModifierRun = {
 	final split: Bool;
 	final guarded: Array<String>;
 };
+
+/** Where `SetModifier.declarationAt` found the addressed declaration, or why it found none. */
+private enum DeclarationSite {
+	Located(at: DeclarationAt);
+	Refused(message: String);
+}
+
+/** A declaration `SetModifier` rewrites the modifiers of: `siblings[index]`, whose own text starts at `coreFrom`. */
+private typedef DeclarationAt = {
+	final siblings: Array<QueryNode>;
+	final index: Int;
+	final coreFrom: Int;
+}

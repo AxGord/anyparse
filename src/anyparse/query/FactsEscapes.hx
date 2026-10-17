@@ -5,6 +5,8 @@ import anyparse.check.FactsTypeTree.FactsField;
 import anyparse.check.FactsTypeTree.FactsType;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FieldDeclFact;
+import anyparse.query.CompilerFacts.FlowFact;
+import anyparse.query.CompilerFacts.InstantiationFact;
 import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.FactsNativeReach.NativeHand;
@@ -202,23 +204,17 @@ final class FactsEscapes {
 		final made: Null<FactNode> = _table.node(id);
 		if (made == null) return refuse('the facts of `$id` lie in a file whose text the table no longer has');
 		final n: FactNode = made;
-		final lost: Null<String> = FactMarkers.first(
-			n, m -> switch m {
-				case StaleForeign: 'a fact of `$id` lies in a file whose text the table no longer has';
-				case ReflectionInlined: harmlessReflection(n) ? null : 'a reflective body spliced into `$id` lost the name it was handed';
-				case Unknown(text):
-					FactMarkers.unknownReason(id, text);
-				// a splice's and an expansion's facts are the node's own, wherever they sit
-				case InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): null;
-			}
-		);
+		final lost: Null<String> = FactMarkers.lossReason(id, n, harmlessReflection);
 		if (lost != null) return refuse(lost);
-		if (!_native.nodeEscapes(id, n, _hand)) return false;
-		// a function value placed where a function type types it stays typed: its own type unifies with the place's
-		for (f in n.flows) if (
-			(f.via == CAST || !keepsNominal(f.to)) && !(f.via != CAST && functionTyped(f.from) && functionTyped(f.to)) && !escape(f.from)
-		)
-			return false;
+		return _native.nodeEscapes(id, n, _hand) && handEscapes(n);
+	}
+
+	/**
+	 * Hand every value `n`'s flows, hand-offs, by-name field accesses and calls let go to `escape`, and check every
+	 * reflective production; false at the first that says nothing of what it holds.
+	 */
+	private function handEscapes(n: FactNode): Bool {
+		for (f in n.flows) if (flowLeaves(f) && !escape(f.from)) return false;
 		for (h in n.handed) if (!typeParameter(h.to) && !escape(h.from)) return false;
 		for (f in n.fields) if (byName(f.access) && !escape(f.receiver)) return false;
 		for (c in n.calls) {
@@ -227,6 +223,15 @@ final class FactsEscapes {
 		}
 		for (r in n.reflection) if (!produced(r)) return false;
 		return true;
+	}
+
+	/**
+	 * Whether the flow `f` may carry its value out of the type system: through a cast, or into a place whose type keeps no
+	 * nominal type — unless it is a function value placed where a function type types it, whose own type unifies with the
+	 * place's.
+	 */
+	private function flowLeaves(f: FlowFact): Bool {
+		return (f.via == CAST || !keepsNominal(f.to)) && !(f.via != CAST && functionTyped(f.from) && functionTyped(f.to));
 	}
 
 	/**
@@ -497,126 +502,155 @@ final class FactsEscapes {
 		if (held != null) return held;
 		final out: Map<String, Map<String, FactsType>> = [];
 		final scanned: Map<String, Bool> = [];
-		function bind(path: String, t: FactsType): Void {
-			final types: Map<String, FactsType> = out[path] ?? [];
-			out[path] = types;
-			types[Std.string(t)] = t;
-		}
-		function scan(t: FactsType): Void {
-			switch t {
-				case Named(id, args):
-					final fact: Null<TypeFact> = _table.type(id);
-					if (fact != null && fact.params.length == args.length) for (i => name in fact.params) bind('$id.$name', args[i]);
-					for (a in args) scan(a);
-				case Function(args, result):
-					for (a in args) scan(a.type);
-					scan(result);
-				case Structure(fields):
-					for (f in fields) scan(f.type);
-				case Parameter(_) | Unknown:
-			}
-		}
-		function text(type: Null<String>): Void {
-			if (type == null || scanned.exists(type)) return;
-			scanned[type] = true;
-			final read: Null<FactsType> = FactsTypeTree.read(type);
-			if (read == null)
-				_unread = true
-			else
-				scan(read);
-		}
-		function unknownIn(declared: FactsType): Void {
-			switch declared {
-				case Parameter(path):
-					_unresolved[path] = true;
-				case Named(_, args):
-					for (a in args) unknownIn(a);
-				case Function(args, result):
-					for (a in args) unknownIn(a.type);
-					unknownIn(result);
-				case Structure(fields):
-					for (f in fields) unknownIn(f.type);
-				case Unknown:
-			}
-		}
-		function unify(declared: FactsType, applied: FactsType): Void {
-			switch [declared, applied] {
-				case [Parameter(path), _]:
-					bind(path, applied);
-				case [Named(a, xs), Named(b, ys)] if (a == b && xs.length == ys.length):
-					for (i in 0...xs.length) unify(xs[i], ys[i]);
-				case [Function(xs, x), Function(ys, y)] if (xs.length == ys.length):
-					for (i in 0...xs.length) unify(xs[i].type, ys[i].type);
-					unify(x, y);
-				case [Structure(xs), Structure(ys)]:
-					for (f in xs) {
-						final other: Null<FactsField> = ys.find(g -> g.name == f.name);
-						if (other == null)
-							unknownIn(f.type)
-						else
-							unify(f.type, other.type);
-					}
-				case _:
-					unknownIn(declared);
-			}
-		}
 		for (id in _table.nodeIds()) {
 			final n: Null<FactNode> = _table.node(id);
 			if (n == null) continue;
-			text(n.signature);
-			for (p in n.params) text(p.type);
-			for (v in n.variants) {
-				text(v.signature);
-				for (p in v.params) text(p.type);
-			}
-			for (c in n.calls) {
-				text(c.receiver);
-				text(c.result);
-				text(c.signature);
-			}
-			for (x in n.news) text(x.instance);
-			for (f in n.fields) {
-				text(f.receiver);
-				text(f.type);
-			}
-			for (e in n.elementWrites) text(e.receiver);
-			for (f in n.flows) {
-				text(f.from);
-				text(f.to);
-			}
-			for (h in n.handed) {
-				text(h.from);
-				text(h.to);
-			}
-			for (s in n.strings) text(s.operand);
-			for (i in n.iterations) {
-				text(i.binder);
-				text(i.iterated);
-			}
-			for (v in n.vars) text(v.type);
-			for (r in n.reads) text(r.type);
-			for (g in n.instantiations) {
-				final declared: Null<FactsType> = FactsTypeTree.read(g.declared);
-				final applied: Null<FactsType> = FactsTypeTree.read(g.applied);
-				if (declared == null || applied == null)
-					_unread = true
-				else
-					unify(declared, applied);
-			}
+			for (type in nodeTypeTexts(n)) readInstances(out, scanned, type);
+			for (g in n.instantiations) unifyInstantiation(out, g);
 		}
 		for (id in _table.typeIds()) {
 			final fact: Null<TypeFact> = _table.type(id);
-			if (fact == null) continue;
-			for (f in fact.fields) for (t in f.types) text(t);
-			text(fact.superClass);
-			for (i in fact.interfaces) text(i);
-			for (t in fact.targets) text(t);
-			for (t in fact.underlying) text(t);
-			for (c in fact.constructors) text(c.type);
-			text(fact.genericOf);
+			if (fact != null) for (type in typeFactTexts(fact)) readInstances(out, scanned, type);
 		}
 		_instances = out;
 		return out;
+	}
+
+	/** Every type text `n`'s facts spell, in the order `instances` reads them. */
+	private static function nodeTypeTexts(n: FactNode): Array<Null<String>> {
+		final texts: Array<Null<String>> = [n.signature];
+		for (p in n.params) texts.push(p.type);
+		for (v in n.variants) {
+			texts.push(v.signature);
+			for (p in v.params) texts.push(p.type);
+		}
+		for (c in n.calls) {
+			texts.push(c.receiver);
+			texts.push(c.result);
+			texts.push(c.signature);
+		}
+		for (x in n.news) texts.push(x.instance);
+		for (f in n.fields) {
+			texts.push(f.receiver);
+			texts.push(f.type);
+		}
+		for (e in n.elementWrites) texts.push(e.receiver);
+		for (f in n.flows) {
+			texts.push(f.from);
+			texts.push(f.to);
+		}
+		for (h in n.handed) {
+			texts.push(h.from);
+			texts.push(h.to);
+		}
+		for (s in n.strings) texts.push(s.operand);
+		for (i in n.iterations) {
+			texts.push(i.binder);
+			texts.push(i.iterated);
+		}
+		for (v in n.vars) texts.push(v.type);
+		for (r in n.reads) texts.push(r.type);
+		return texts;
+	}
+
+	/** Every type text a type's own facts spell: its fields, supertypes, targets, underlying types, constructors. */
+	private static function typeFactTexts(fact: TypeFact): Array<Null<String>> {
+		final texts: Array<Null<String>> = [];
+		for (f in fact.fields) for (t in f.types) texts.push(t);
+		texts.push(fact.superClass);
+		for (i in fact.interfaces) texts.push(i);
+		for (t in fact.targets) texts.push(t);
+		for (t in fact.underlying) texts.push(t);
+		for (c in fact.constructors) texts.push(c.type);
+		texts.push(fact.genericOf);
+		return texts;
+	}
+
+	/** Read one type text once, binding every type argument it applies; a text that does not read marks the table unread. */
+	private function readInstances(out: Map<String, Map<String, FactsType>>, scanned: Map<String, Bool>, type: Null<String>): Void {
+		if (type == null || scanned.exists(type)) return;
+		scanned[type] = true;
+		final read: Null<FactsType> = FactsTypeTree.read(type);
+		if (read == null)
+			_unread = true
+		else
+			scanInstances(out, read);
+	}
+
+	/** Bind each argument a `Named` type applies to its declaring type's parameter, through every nested type. */
+	private function scanInstances(out: Map<String, Map<String, FactsType>>, t: FactsType): Void {
+		switch t {
+			case Named(id, args):
+				final fact: Null<TypeFact> = _table.type(id);
+				if (fact != null && fact.params.length == args.length) for (i => name in fact.params)
+					bindInstance(out, '$id.$name', args[i]);
+				for (a in args) scanInstances(out, a);
+			case Function(args, result):
+				for (a in args) scanInstances(out, a.type);
+				scanInstances(out, result);
+			case Structure(fields):
+				for (f in fields) scanInstances(out, f.type);
+			case Parameter(_) | Unknown:
+		}
+	}
+
+	/** Record `t` as one instance of the type parameter `path`. */
+	private static function bindInstance(out: Map<String, Map<String, FactsType>>, path: String, t: FactsType): Void {
+		final types: Map<String, FactsType> = out[path] ?? [];
+		out[path] = types;
+		types[Std.string(t)] = t;
+	}
+
+	/** Unify a generic instantiation's declared type with the applied one; either text failing to read marks the table unread. */
+	private function unifyInstantiation(out: Map<String, Map<String, FactsType>>, g: InstantiationFact): Void {
+		final declared: Null<FactsType> = FactsTypeTree.read(g.declared);
+		final applied: Null<FactsType> = FactsTypeTree.read(g.applied);
+		if (declared == null || applied == null)
+			_unread = true
+		else
+			unifyInstance(out, declared, applied);
+	}
+
+	/**
+	 * Bind each type parameter of `declared` to the part of `applied` in its place; a shape that does not line up
+	 * leaves its parameters unresolved.
+	 */
+	private function unifyInstance(out: Map<String, Map<String, FactsType>>, declared: FactsType, applied: FactsType): Void {
+		switch [declared, applied] {
+			case [Parameter(path), _]:
+				bindInstance(out, path, applied);
+			case [Named(a, xs), Named(b, ys)] if (a == b && xs.length == ys.length):
+				for (i in 0...xs.length) unifyInstance(out, xs[i], ys[i]);
+			case [Function(xs, x), Function(ys, y)] if (xs.length == ys.length):
+				for (i in 0...xs.length) unifyInstance(out, xs[i].type, ys[i].type);
+				unifyInstance(out, x, y);
+			case [Structure(xs), Structure(ys)]:
+				for (f in xs) {
+					final other: Null<FactsField> = ys.find(g -> g.name == f.name);
+					if (other == null)
+						unresolveParameters(f.type)
+					else
+						unifyInstance(out, f.type, other.type);
+				}
+			case _:
+				unresolveParameters(declared);
+		}
+	}
+
+	/** Mark every type parameter `declared` mentions as unresolved. */
+	private function unresolveParameters(declared: FactsType): Void {
+		switch declared {
+			case Parameter(path):
+				_unresolved[path] = true;
+			case Named(_, args):
+				for (a in args) unresolveParameters(a);
+			case Function(args, result):
+				for (a in args) unresolveParameters(a.type);
+				unresolveParameters(result);
+			case Structure(fields):
+				for (f in fields) unresolveParameters(f.type);
+			case Unknown:
+		}
 	}
 
 	/** `escapeType` of every type string of `types`, its type parameters bound by `bound`. */

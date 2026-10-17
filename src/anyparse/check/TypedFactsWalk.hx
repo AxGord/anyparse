@@ -332,6 +332,27 @@ final class TypedFactsWalk {
 		final splice: Null<InlineMethod> = _splice;
 		final spliceSite: { min: Int, max: Int } = _spliceSite;
 		final expansion: Null<InlineMethod> = _expansion;
+		enterRange(e, info, inside, straddles, saved, splice, expansion);
+		// back inside, as the call site's own arguments are: a further splice there is a call of its own
+		_inBody = inside || straddles;
+		_substituted = inside && !saved ? splice : null;
+		visit(e);
+		_inBody = saved;
+		_site = site;
+		_splice = splice;
+		_spliceSite = spliceSite;
+		_expansion = expansion;
+	}
+
+	/**
+	 * Place `e`, at `info`, for `walk`: inside the body or straddling it, the innermost site it runs at, and no splice; outside
+	 * it, from the body (`saved`), the root of a spliced body, or, inside the spliced body `splice` (or the `expansion`
+	 * holding it), the root of one that body spliced in turn. Then the site of the current splice.
+	 */
+	private function enterRange(
+		e: TypedExpr, info: { min: Int, max: Int, file: String }, inside: Bool, straddles: Bool, saved: Bool, splice: Null<InlineMethod>,
+		expansion: Null<InlineMethod>
+	): Void {
 		final code: Bool = !e.expr.match(TConst(_) | TTypeExpr(_));
 		if (inside)
 			_site = { min: info.min, max: info.max }
@@ -346,15 +367,6 @@ final class TypedFactsWalk {
 			nestedSplice(e, info);
 		final current: Null<InlineMethod> = _splice;
 		if (current != null && holds(current, info)) _spliceSite = { min: info.min, max: info.max };
-		// back inside, as the call site's own arguments are: a further splice there is a call of its own
-		_inBody = inside || straddles;
-		_substituted = inside && !saved ? splice : null;
-		visit(e);
-		_inBody = saved;
-		_site = site;
-		_splice = splice;
-		_spliceSite = spliceSite;
-		_expansion = expansion;
 	}
 
 	/**
@@ -959,34 +971,10 @@ final class TypedFactsWalk {
 		var handedVia: String = '';
 		final fact: String = switch callee.expr {
 			case TField(receiver, fa):
-				final access: FieldRef = TypedFactsShapes.describe(fa);
-				final declaring: Null<String> = access.owner;
-				final targetName: String = declaring == null ? access.field : '$declaring.${access.field}';
-				if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.REFLECTION_CLASSES.contains(declaring))
-					reflection(targetName, args, where);
-				if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.SYNTAX_CLASSES.contains(declaring)) {
-					final code: String = TypedFactsShapes.nativeCode(args, TypedFactsShapes.SYNTAX_CODE_MEMBERS.contains(access.field));
-					add('native', '{"w":"syntax","n":${q(targetName)},"p":$where$code${handedText(args)}}');
-				}
-				final chained: Bool = nativeChain(callee, args);
-				walkReceiver(receiver, Call(access.field));
-				if (chained) _nativeChain = null;
-				instantiated(fa, callee.t, callee.pos);
-				switch fa {
-					case FInstance(c, _, cf) | FStatic(c, cf):
-						handed(c.get(), cf.get(), targetName, args);
-					case _:
-				}
-				final kind: String = calledKind(fa, targetName, access.kind);
-				if (
-					declaring != null && kind == access.kind && DECLARED_CALLS.contains(kind)
-					&& !TypedFactsShapes.REFLECTION_CLASSES.contains(declaring) && !TypedFactsShapes.SYNTAX_CLASSES.contains(declaring)
-				) {
-					handedTo = targetName;
-					handedVia = kind;
-				}
-				final chosen: String = _host.overloaded(targetName) ? ',"sig":${q(str(callee.t))}' : '';
-				'{"t":${q(targetName)},"a":"$kind"$chosen,"r":${q(str(receiver.t))},"rp":${at(receiver.pos)},$head}';
+				final called: FieldCall = fieldCall(callee, receiver, fa, args, where, head);
+				handedTo = called.to;
+				handedVia = called.via;
+				called.fact;
 			case TConst(TSuper):
 				final sup: String = switch TypeTools.follow(callee.t) {
 					case TInst(c, _):
@@ -1007,7 +995,50 @@ final class TypedFactsWalk {
 				'{"a":"value","r":${q(str(callee.t))},"rp":${at(callee.pos)},$head}';
 		};
 		add('calls', fact);
-		final to: Null<String> = handedTo;
+		walkArguments(callee, args, handedTo, handedVia);
+	}
+
+	/**
+	 * The fact of a call of the field `fa` of `receiver` (`call`), the reflective or target-code call it is recorded too,
+	 * and — a call of a field a type declares — the method whose parameters take the arguments, with how it was called.
+	 */
+	private function fieldCall(
+		callee: TypedExpr, receiver: TypedExpr, fa: FieldAccess, args: Array<TypedExpr>, where: String, head: String
+	): FieldCall {
+		final access: FieldRef = TypedFactsShapes.describe(fa);
+		final declaring: Null<String> = access.owner;
+		final targetName: String = declaring == null ? access.field : '$declaring.${access.field}';
+		if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.REFLECTION_CLASSES.contains(declaring))
+			reflection(targetName, args, where);
+		if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.SYNTAX_CLASSES.contains(declaring)) {
+			final code: String = TypedFactsShapes.nativeCode(args, TypedFactsShapes.SYNTAX_CODE_MEMBERS.contains(access.field));
+			add('native', '{"w":"syntax","n":${q(targetName)},"p":$where$code${handedText(args)}}');
+		}
+		final chained: Bool = nativeChain(callee, args);
+		walkReceiver(receiver, Call(access.field));
+		if (chained) _nativeChain = null;
+		instantiated(fa, callee.t, callee.pos);
+		switch fa {
+			case FInstance(c, _, cf) | FStatic(c, cf):
+				handed(c.get(), cf.get(), targetName, args);
+			case _:
+		}
+		final kind: String = calledKind(fa, targetName, access.kind);
+		final declared: Bool = declaring != null && kind == access.kind && DECLARED_CALLS.contains(kind)
+			&& !TypedFactsShapes.REFLECTION_CLASSES.contains(declaring) && !TypedFactsShapes.SYNTAX_CLASSES.contains(declaring);
+		final chosen: String = _host.overloaded(targetName) ? ',"sig":${q(str(callee.t))}' : '';
+		return {
+			fact: '{"t":${q(targetName)},"a":"$kind"$chosen,"r":${q(str(receiver.t))},"rp":${at(receiver.pos)},$head}',
+			to: declared ? targetName : null,
+			via: declared ? kind : ''
+		};
+	}
+
+	/**
+	 * Walk the arguments of the call of `callee`: each one the parameters of the method `to` declares take, until a rest
+	 * parameter, as an argument that method's facts follow (`Argument`, called `handedVia`).
+	 */
+	private function walkArguments(callee: TypedExpr, args: Array<TypedExpr>, to: Null<String>, handedVia: String): Void {
 		final declared: Null<Array<{ name: String, opt: Bool, t: Type }>> = parametersOf(callee.t);
 		var handed: Bool = to != null && declared != null;
 		for (i in 0...args.length) {
@@ -1264,5 +1295,11 @@ private typedef NativeChain = {
 	final root: TypedExpr;
 	final text: String;
 	final handed: Array<TypedExpr>;
+}
+/** A call of a field as `TypedFactsWalk.fieldCall` records it: its fact, and the method `to` taking its arguments, called `via`. */
+private typedef FieldCall = {
+	final fact: String;
+	final to: Null<String>;
+	final via: String;
 }
 #end

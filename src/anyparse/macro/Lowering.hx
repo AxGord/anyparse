@@ -1043,53 +1043,7 @@ class Lowering {
 		final children: Array<ShapeNode> = branch.children;
 		final leadText: Null<String> = branch.annotations[AnnotationKeys.LIT_LEAD_TEXT];
 		final trailText: Null<String> = branch.annotations[AnnotationKeys.LIT_TRAIL_TEXT];
-		final refName: String = children[0].annotations.get(AnnotationKeys.BASE_REF);
-		// ω-cast-bind-tightness: `@:fmt(atomOperand)` on a
-		// single-Ref kw branch routes the operand parse to the
-		// `${parseFn}Atom` variant of the sub-rule instead of the
-		// full Pratt entry. The operand binds at atom level (atom
-		// wrapper — includes postfix loop and prefix, excludes infix
-		// Pratt), so a trailing binary operator stays for the outer
-		// Pratt loop instead of being swallowed into the operand.
-		// Mirrors `@:prefix` semantics for word-keyword unary operators
-		// without requiring the prefix-extension work. No kw branch
-		// carries it today: `HxExpr.CastExpr` did until Haxe 4.3.7 was
-		// probed — the compiler gives `cast` a whole expression
-		// (`cast (x) is Bool` is `CastExpr(Is(ParenExpr(x), Bool))`). The atom fn name pattern
-		// `${baseFn}Atom` matches all three pipeline-mode fn-name
-		// conventions (`parseHxExpr` / `parseHxExprS` / `parseHxExprT`
-		// → `parseHxExprAtom` / `parseHxExprSAtom` / `parseHxExprTAtom`).
-		final atomOperand: Bool = branch.fmtHasFlag(ATOM_OPERAND_FLAG);
-		final subFnName: String = atomOperand ? '${parseFnName(refName)}Atom' : parseFnName(refName);
-		final wholeCall: Expr = {
-			expr: ECall(macro $i{subFnName}, [macro ctx]),
-			pos: Context.currentPos()
-		};
-		// `@:fmt(atomOperandWhen('A', …))`: the operand is ONE atom (no postfix — the enclosing atom
-		// wrapper applies those to this ctor) when that atom is one of the listed ctors, and a whole
-		// expression otherwise. `HxExpr.CastExpr` lists `ECheckTypeExpr`: Haxe 4.3.7 ends a cast at
-		// a leading `(e : T)` (`cast (x : Int) is Bool` is `(cast (x : Int)) is Bool`) while giving
-		// it everything else (`cast (x) is Bool` is `cast ((x) is Bool)`).
-		final atomWhen: Null<Array<String>> = branch.fmtReadStringArgs('atomOperandWhen');
-		final callSub: Expr = if (atomWhen == null)
-			wholeCall
-		else {
-			final coreCall: Expr = { expr: ECall(macro $i{'${parseFnName(refName)}AtomCore'}, [macro ctx]), pos: Context.currentPos() };
-			final listed: Expr = { expr: EArrayDecl([for (n in atomWhen) macro $v{n}]), pos: Context.currentPos() };
-			macro {
-				final _atomStart: Int = ctx.pos;
-				var _operand = null;
-				try {
-					final _atom = $coreCall;
-					if ($listed.contains(Type.enumConstructor(_atom))) _operand = _atom;
-				} catch (_e: anyparse.runtime.ParseError) {}
-				if (_operand == null) {
-					ctx.pos = _atomStart;
-					_operand = $wholeCall;
-				}
-				_operand;
-			};
-		};
+		final callSub: Expr = kwRefOperandCall(branch, children[0].annotations.get(AnnotationKeys.BASE_REF));
 		final trailOptional: Bool = branch.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true;
 		// ω-trailopt-source-track: in trivia mode, paired Alt ctors
 		// of `@:trailOpt(...)` branches carry an extra positional
@@ -1215,6 +1169,57 @@ class Lowering {
 		appendRejectFollowKwStep(steps, branch);
 		steps.push(macro return $ctorCall);
 		return macro $b{steps};
+	}
+
+	/**
+	 * The parse of the operand of the single-Ref kw branch `branch`, a `refName` (`lowerKwRefBranch`): the sub-rule's full
+	 * entry, its atom entry under `@:fmt(atomOperand)`, or under `@:fmt(atomOperandWhen(…))` one atom when it is one of
+	 * the listed ctors and a whole expression otherwise.
+	 */
+	private function kwRefOperandCall(branch: ShapeNode, refName: String): Expr {
+		// ω-cast-bind-tightness: `@:fmt(atomOperand)` on a
+		// single-Ref kw branch routes the operand parse to the
+		// `${parseFn}Atom` variant of the sub-rule instead of the
+		// full Pratt entry. The operand binds at atom level (atom
+		// wrapper — includes postfix loop and prefix, excludes infix
+		// Pratt), so a trailing binary operator stays for the outer
+		// Pratt loop instead of being swallowed into the operand.
+		// Mirrors `@:prefix` semantics for word-keyword unary operators
+		// without requiring the prefix-extension work. No kw branch
+		// carries it today: `HxExpr.CastExpr` did until Haxe 4.3.7 was
+		// probed — the compiler gives `cast` a whole expression
+		// (`cast (x) is Bool` is `CastExpr(Is(ParenExpr(x), Bool))`). The atom fn name pattern
+		// `${baseFn}Atom` matches all three pipeline-mode fn-name
+		// conventions (`parseHxExpr` / `parseHxExprS` / `parseHxExprT`
+		// → `parseHxExprAtom` / `parseHxExprSAtom` / `parseHxExprTAtom`).
+		final atomOperand: Bool = branch.fmtHasFlag(ATOM_OPERAND_FLAG);
+		final subFnName: String = atomOperand ? '${parseFnName(refName)}Atom' : parseFnName(refName);
+		final wholeCall: Expr = {
+			expr: ECall(macro $i{subFnName}, [macro ctx]),
+			pos: Context.currentPos()
+		};
+		// `@:fmt(atomOperandWhen('A', …))`: the operand is ONE atom (no postfix — the enclosing atom
+		// wrapper applies those to this ctor) when that atom is one of the listed ctors, and a whole
+		// expression otherwise. `HxExpr.CastExpr` lists `ECheckTypeExpr`: Haxe 4.3.7 ends a cast at
+		// a leading `(e : T)` (`cast (x : Int) is Bool` is `(cast (x : Int)) is Bool`) while giving
+		// it everything else (`cast (x) is Bool` is `cast ((x) is Bool)`).
+		final atomWhen: Null<Array<String>> = branch.fmtReadStringArgs('atomOperandWhen');
+		if (atomWhen == null) return wholeCall;
+		final coreCall: Expr = { expr: ECall(macro $i{'${parseFnName(refName)}AtomCore'}, [macro ctx]), pos: Context.currentPos() };
+		final listed: Expr = { expr: EArrayDecl([for (n in atomWhen) macro $v{n}]), pos: Context.currentPos() };
+		return macro {
+			final _atomStart: Int = ctx.pos;
+			var _operand = null;
+			try {
+				final _atom = $coreCall;
+				if ($listed.contains(Type.enumConstructor(_atom))) _operand = _atom;
+			} catch (_e: anyparse.runtime.ParseError) {}
+			if (_operand == null) {
+				ctx.pos = _atomStart;
+				_operand = $wholeCall;
+			}
+			_operand;
+		};
 	}
 
 	/**

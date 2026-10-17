@@ -284,9 +284,17 @@ final class NullGuardedCode {
 		if (namedByTargetCode(name) || namesInNode(node, param)) return false;
 		final hierarchy: Array<String> = [owner].concat(_view.subtypesOf(owner));
 		if (_methods().obtainedUntyped(name, hierarchy, _escapedTypes(), _bindings, true)) return false;
+		return invocationsHandNull(id, index, count);
+	}
+
+	/**
+	 * Whether every typed call of the static method whose facts node is `id` hands its `index`-th of `count` parameters the
+	 * literal `null`, and every read of the method as a value hands it to a call that never calls it (`neverCalled`).
+	 */
+	private function invocationsHandNull(id: String, index: Int, count: Int): Bool {
 		final facts: FactsIndex = gathered();
 		for (call in facts.calls[id] ?? []) if (call.access != STATIC_ACCESS || !handsNull(call.at, index, count)) return false;
-		for (read in facts.fields['$owner.$name'] ?? []) {
+		for (read in facts.fields[id] ?? []) {
 			if (read.fact.write || read.fact.use == COMPARE) continue;
 			if (read.fact.use != VALUE || read.fact.held || !neverCalled(read.node, read.fact.at, 0)) return false;
 		}
@@ -330,22 +338,32 @@ final class NullGuardedCode {
 		final dot: Int = target.lastIndexOf('.');
 		final owner: String = target.substr(0, dot);
 		final name: String = target.substr(dot + 1);
+		final runs: Null<Array<String>> = callableRuns(owner, name, call.access);
+		if (runs == null) return false;
+		final count: Int = argument.call.children.length - 1;
+		for (o in runs) if (!parameterNeverCalls('$o.$name', argument.index, count, depth + 1)) return false;
+		return true;
+	}
+
+	/**
+	 * The classes whose method `name` a call of `owner`'s by `access` may run (`neverCalled`): `owner`, and — a dispatch on an
+	 * instance — each subtype overriding it. Null when one of them may run otherwise than its code reads (`callable`).
+	 */
+	private function callableRuns(owner: String, name: String, access: String): Null<Array<String>> {
 		final declaring: Null<TypeFact> = _view.type(owner);
 		final field: Null<FieldDeclFact> = declaring?.fields.find(f -> f.name == name);
-		if (declaring == null || field == null) return false;
-		if (!callable(declaring, field)) return false;
-		final count: Int = argument.call.children.length - 1;
+		if (declaring == null || field == null) return null;
+		if (!callable(declaring, field)) return null;
 		// a dispatch on an instance may run each override of the method
 		final runs: Array<String> = [owner];
-		if (call.access != STATIC_ACCESS) for (sub in _view.subtypesOf(owner)) {
+		if (access != STATIC_ACCESS) for (sub in _view.subtypesOf(owner)) {
 			final declared: Null<TypeFact> = _view.type(sub);
 			final own: Null<FieldDeclFact> = declared?.fields.find(f -> f.name == name && !f.isStatic);
 			if (declared == null || own == null) continue;
-			if (!callable(declared, own)) return false;
+			if (!callable(declared, own)) return null;
 			runs.push(sub);
 		}
-		for (o in runs) if (!parameterNeverCalls('$o.$name', argument.index, count, depth + 1)) return false;
-		return true;
+		return runs;
 	}
 
 	/**
@@ -364,17 +382,24 @@ final class NullGuardedCode {
 		final fnSpan: Null<Span> = fn?.span;
 		if (fn == null || fnSpan == null) return false;
 		final params: Array<QueryNode> = [for (c in fn.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
-		if (params.length != count || params[index].name != name) return false;
-		final binding: QueryNode = params[index];
+		return params.length == count && params[index].name == name && readsNeverCall(node, read.tree, fn, params[index], name, depth);
+	}
+
+	/**
+	 * Whether no use of the parameter `binding`, named `name`, of the function `fn` in `tree`, the code of `node`,
+	 * calls the value it holds: each is a read in `fn`'s own body — one from a function nested in it captures the value —
+	 * whose value is stored nowhere it is read (`storedNowhereRead`).
+	 */
+	private function readsNeverCall(node: FactNode, tree: QueryNode, fn: QueryNode, binding: QueryNode, name: String, depth: Int): Bool {
 		final functions: Array<String> = ShapeVocab.functionOrLambdaKinds(_shape);
-		for (hit in Refs.find(name, read.tree, _shape)) if (hit.bindingNode == binding && hit.kind != Decl) {
+		for (hit in Refs.find(name, tree, _shape)) if (hit.bindingNode == binding && hit.kind != Decl) {
 			if (hit.kind != Read) return false;
-			final chain: Null<Array<QueryNode>> = ancestors(read.tree, hit.span);
+			final chain: Null<Array<QueryNode>> = ancestors(tree, hit.span);
 			if (chain == null) return false;
 			// a read from a function nested in the method captures the value
 			final inner: Array<QueryNode> = chain.slice(chain.indexOf(fn) + 1);
 			if (!chain.contains(fn) || inner.exists(a -> functions.contains(a.kind))) return false;
-			if (!storedNowhereRead(node, read.tree, chain, { file: node.at.file, span: hit.span }, depth)) return false;
+			if (!storedNowhereRead(node, tree, chain, { file: node.at.file, span: hit.span }, depth)) return false;
 		}
 		return true;
 	}
@@ -640,55 +665,61 @@ final class NullGuardedCode {
 			computedTargetCode: false
 		};
 		_index = out;
-		function words(code: Null<String>): Void {
-			if (code == null) {
-				out.computedTargetCode = true;
-				return;
-			}
-			for (w in wordsOf(code)) out.targetWords[w] = true;
-		}
 		for (id in _view.nodeIds()) {
 			final n: Null<FactNode> = _view.node(id);
-			if (n == null) {
-				out.computedTargetCode = true;
-				continue;
-			}
-			for (c in n.calls) {
-				final target: Null<String> = c.target;
-				if (target == null) continue;
-				final list: Array<CallFact> = out.calls[target] ?? [];
-				list.push(c);
-				out.calls[target] = list;
-			}
-			for (r in n.reflection) out.reflection.push(r);
-			for (f in n.fields) {
-				final owner: Null<String> = f.owner;
-				if (owner == null) {
-					final list: Array<FieldFact> = out.byName[f.field] ?? [];
-					list.push(f);
-					out.byName[f.field] = list;
-					continue;
-				}
-				final key: String = '$owner.${f.field}';
-				final list: Array<{ node: FactNode, fact: FieldFact }> = out.fields[key] ?? [];
-				list.push({ node: n, fact: f });
-				out.fields[key] = list;
-			}
-			for (x in n.natives) {
-				// a site whose text is no literal names its own identifier, and what it is handed
-				if (x.computed)
-					out.computedTargetCode = true
-				else
-					words(x.code ?? x.name);
-			}
+			if (n == null)
+				out.computedTargetCode = true
+			else
+				gatherNode(out, n);
 		}
 		for (id in _view.typeIds()) {
 			final t: Null<TypeFact> = _view.type(id);
 			if (t == null) continue;
-			for (c in t.code) words(c);
-			for (f in t.fields) for (c in f.code) words(c);
+			for (c in t.code) gatherWords(out, c);
+			for (f in t.fields) for (c in f.code) gatherWords(out, c);
 		}
 		return out;
+	}
+
+	/** Index into `out` the calls, reflection, field accesses and target code of the node `n` (`gathered`). */
+	private static function gatherNode(out: FactsIndex, n: FactNode): Void {
+		for (c in n.calls) {
+			final target: Null<String> = c.target;
+			if (target == null) continue;
+			final list: Array<CallFact> = out.calls[target] ?? [];
+			list.push(c);
+			out.calls[target] = list;
+		}
+		for (r in n.reflection) out.reflection.push(r);
+		for (f in n.fields) {
+			final owner: Null<String> = f.owner;
+			if (owner == null) {
+				final list: Array<FieldFact> = out.byName[f.field] ?? [];
+				list.push(f);
+				out.byName[f.field] = list;
+				continue;
+			}
+			final key: String = '$owner.${f.field}';
+			final list: Array<{ node: FactNode, fact: FieldFact }> = out.fields[key] ?? [];
+			list.push({ node: n, fact: f });
+			out.fields[key] = list;
+		}
+		for (x in n.natives) {
+			// a site whose text is no literal names its own identifier, and what it is handed
+			if (x.computed)
+				out.computedTargetCode = true
+			else
+				gatherWords(out, x.code ?? x.name);
+		}
+	}
+
+	/** Index into `out` the words of the target code `code`; a code of computed text (null) names any word. */
+	private static function gatherWords(out: FactsIndex, code: Null<String>): Void {
+		if (code == null) {
+			out.computedTargetCode = true;
+			return;
+		}
+		for (w in wordsOf(code)) out.targetWords[w] = true;
 	}
 
 	/** The function node of `tree` of a function-declaration kind whose range holds `span`, innermost. */
