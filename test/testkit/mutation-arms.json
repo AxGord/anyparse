@@ -10519,9 +10519,9 @@
 		{
 			"name": "M-OPERAND-MEMBER-SCOPE-LOST",
 			"type": "anyparse.check.OperandBinder",
-			"method": "memberTier",
-			"find": "DeclaredNullity.headTierIn(written, owner.file, m.declFrom, _index,",
-			"replace": "DeclaredNullity.headTierIn(written, _index.fileInfo(_file) ?? owner.file, m.declFrom, _index,",
+			"method": "boundMembers",
+			"find": "DeclaredNullity.headTierIn(written, host.file, m.declFrom, _index,",
+			"replace": "DeclaredNullity.headTierIn(written, _index.fileInfo(_file) ?? host.file, m.declFrom, _index,",
 			"note": "a member's written type is bound in the READING file instead of the declaring one"
 		},
 		{
@@ -10534,7 +10534,7 @@
 		{
 			"name": "M-OPERAND-METHOD-PARAMS-IGNORED",
 			"type": "anyparse.check.OperandBinder",
-			"method": "memberTier",
+			"method": "boundMembers",
 			"find": "ownParams.concat(m.typeParamNames)",
 			"replace": "ownParams",
 			"note": "a method's own type parameters do not shadow a type of the same name in its return type"

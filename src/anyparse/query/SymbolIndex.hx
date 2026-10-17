@@ -608,6 +608,7 @@ typedef ResolvedType = {
 @:allow(anyparse.query.SubtypeGraph)
 @:allow(anyparse.query.MemberLookup)
 @:allow(anyparse.query.StructuralTypes)
+@:allow(anyparse.query.ValueNameBinding)
 final class SymbolIndex {
 
 	/** The grammar kind a `class` declaration projects as. */

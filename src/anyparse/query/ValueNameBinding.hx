@@ -185,6 +185,31 @@ final class ValueNameBinding {
 	}
 
 	/**
+	 * The types `using <path>` brings, as declarations: the whole module's public types, or the one type a sub-type path
+	 * names — 4.3.7 binds an extension declared on ANY type of a used module. Null when the index does not hold the module,
+	 * when the path names nothing, and when a type it brings is an alias, whose statics live on a type it does not name.
+	 */
+	public function usingHosts(path: String): Null<Array<ResolvedType>> {
+		final types: Null<Array<ResolvedType>> = _refs.names.importedTypes(path);
+		return types == null || types.length == 0 || types.exists(t -> t.type.kind == SymbolIndex.TYPEDEF_DECL_KIND) ? null : types;
+	}
+
+	/**
+	 * Every type a `using` in scope of `fi` brings — its own statements and the ambient `import.hx` chain's — as declarations
+	 * (`usingHosts`), in no particular order; null when one of them cannot be read, so a caller proving that NO static
+	 * extension of a name applies is never answered by a module the index does not hold.
+	 */
+	public function usingDeclarations(fi: FileInfo): Null<Array<ResolvedType>> {
+		final out: Array<ResolvedType> = [];
+		for (imp in importsOf(fi)) if (imp.kind == ImportKind.Using) {
+			final hosts: Null<Array<ResolvedType>> = usingHosts(imp.raw);
+			if (hosts == null) return null;
+			for (h in hosts) out.push(h);
+		}
+		return out;
+	}
+
+	/**
 	 * Whether the one statement `imp` may bring a constructor, a value or a module-level field named `name` into unqualified
 	 * scope (`mayImportValue`); a `using` brings none, a package wildcard none, an alias only what the one
 	 * type it names carries (4.3.7: `import p.Mod as M;` brings neither `modX` nor a sub-type's constructor).
