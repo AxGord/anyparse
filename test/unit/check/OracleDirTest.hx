@@ -27,7 +27,10 @@ import utest.Test;
 final class OracleDirTest extends Test {
 
 	#if (sys || nodejs)
-	private static final MAIN: String = 'class Main {\n\n\tpublic static function main() {\n\t\ttrace(1);\n\t}\n\n}\n';
+	private static final MAIN: String = 'class Main {\n\n\tpublic static function main() {\n\t\ttrace(Helper.value);\n\t}\n\n}\n';
+
+	/** A module `Main` reads, which only the classpath under `sub/` holds. */
+	private static final HELPER: String = 'class Helper {\n\tpublic static var value:Int = 1;\n}\n';
 	private static final HXML: String = '-cp src\n-main Main\n';
 	#end
 
@@ -114,9 +117,11 @@ final class OracleDirTest extends Test {
 		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(
 			new HaxeQueryPlugin().typeSyntax, config.hxml, config.dir, config.defines
 		);
-		final type: Null<String> = display?.typeAt('$root/sub/src/Main.hx', MAIN.indexOf('trace(1)') + 'trace('.length);
+		// a field of `Helper`: the compiler displays a file outside its classpath all the same (`trace(1)` typed `Int` from any
+		// cwd), but it finds `Helper` only on the classpath under dir
+		final type: Null<String> = display?.typeAt('$root/sub/src/Main.hx', MAIN.indexOf('Helper.value') + 'Helper.'.length);
 		display?.stop();
-		Assert.equals('Int', type, 'the server compiled the build from dir, so it can type a module there');
+		Assert.equals('Int', type, 'the server compiled the build from dir, so it resolves a module there');
 		CliFixture.removeDir(root);
 		#else
 		Assert.pass('non-node target');
@@ -127,7 +132,8 @@ final class OracleDirTest extends Test {
 	private static function fixture(): String {
 		return CliFixture.writeTree('oracledir', [
 			{ name: 'sub/check.hxml', source: HXML },
-			{ name: 'sub/src/Main.hx', source: MAIN }
+			{ name: 'sub/src/Main.hx', source: MAIN },
+			{ name: 'sub/src/Helper.hx', source: HELPER }
 		]);
 	}
 
