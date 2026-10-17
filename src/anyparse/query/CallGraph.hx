@@ -458,7 +458,10 @@ final class CallGraph {
 		return _declarations[id] ?? [];
 	}
 
-	/** The files whose field initializers the pseudo-node `id` (`INIT_NAME` / `STATIC_INIT_NAME`) runs, in the order the graph read them. */
+	/**
+	 * The files whose field initializers the pseudo-node `id` (`INIT_NAME`
+	 * / `STATIC_INIT_NAME`) runs, in the order the graph read them.
+	 */
 	public inline function initializerFiles(id: String): Array<String> {
 		return _initFiles[id] ?? [];
 	}

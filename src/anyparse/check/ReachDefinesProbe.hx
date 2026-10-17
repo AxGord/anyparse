@@ -35,7 +35,8 @@ typedef AheadBuilds = {
  * value as well: a define of the first set whose value the second still gives it held that value for every file
  * (`ReachConfiguration.values`), which decides a comparison such as `haxe_ver >= 4.2` (`CondValues`) — save a value a
  * macro changed and changed back in between, which no probe can see. It also names every type the
- * build typed and its file: the index the analysis reads must declare each, or a type it cannot see may exist. `-v` counts the compile's arms:
+ * build typed and its file: the index the analysis reads must declare
+ * each, or a type it cannot see may exist. `-v` counts the compile's arms:
  * the macros join the last arm only, so an hxml of several arms answers nothing, and so does any probe that fails. An
  * answer must hold in every configuration, so one unanswered configuration leaves the analysis with none (`probeAll`).
  */

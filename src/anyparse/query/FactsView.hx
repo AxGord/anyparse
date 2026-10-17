@@ -374,7 +374,8 @@ final class FactsView {
 	}
 
 	/**
-	 * Whether the reflective member `target` hands the program no member's value read off an object, in the builds the table holds (`FactsMethodValues.memberless`).
+	 * Whether the reflective member `target` hands the program no member's value read
+	 * off an object, in the builds the table holds (`FactsMethodValues.memberless`).
 	 */
 	public inline function memberless(target: String): Bool {
 		return FactsMethodValues.memberless(_table, target);

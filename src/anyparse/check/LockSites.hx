@@ -378,7 +378,8 @@ final class LockSites {
 	/**
 	 * Whether the hold is its owner's constructor taking an INSTANCE lock of the object under construction, which never
 	 * leaves it: nowhere in the constructor a function value made, a method of its own type dispatched (on `this`,
-	 * written or implicit), the superclass constructor run, or `this` handed to anything — so no other thread can reach the lock while the constructor runs.
+	 * written or implicit), the superclass constructor run, or `this` handed to
+	 * anything — so no other thread can reach the lock while the constructor runs.
 	 */
 	private function ownConstructorHold(edge: CallEdge, lock: String, body: QueryNode): Bool {
 		final fn: Null<FnNode> = _graph.node(edge.from);
@@ -778,7 +779,10 @@ private class WrapperOps {
 		};
 	}
 
-	/** Whether every invocation of the function `id` is a plain call, and there is one: a dispatch may run another override, taking nothing. */
+	/**
+	 * Whether every invocation of the function `id` is a plain call, and
+	 * there is one: a dispatch may run another override, taking nothing.
+	 */
 	public static function plainCallsOnly(graph: CallGraph, id: String): Bool {
 		final into: Array<CallEdge> = [for (e in graph.inEdges(id)) if (e.kind.isInvocation()) e];
 		return into.length > 0 && into.foreach(e -> e.kind == Call);

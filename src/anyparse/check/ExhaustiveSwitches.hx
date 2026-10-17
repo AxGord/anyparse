@@ -562,7 +562,10 @@ final class ExhaustiveSwitches {
 		return w.node.kind == _shape.assignKind && w.node.children.length == 2 && valueExpr(w.node.children[1], w.at, closed);
 	}
 
-	/** Whether `expr`, a return of the accessor `getter`, reads the member `member` itself: bare where the getter binds nothing of its name, or off `this`. */
+	/**
+	 * Whether `expr`, a return of the accessor `getter`, reads the member `member`
+	 * itself: bare where the getter binds nothing of its name, or off `this`.
+	 */
 	private function readsOwnField(expr: QueryNode, getter: QueryNode, member: String): Bool {
 		final read: QueryNode = expr.kind == _shape.parenKind && expr.children.length == 1 ? expr.children[0] : expr;
 		return read.name == member && (read.kind == _shape.identKind && BareNames.bindsNothing(getter, member, _shape) || isSelf(read));

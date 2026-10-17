@@ -1170,7 +1170,8 @@ final class CallGraphEdges {
 						} else {
 							final field: Null<String> = receiverField(callee.children[0], currentType);
 							for (recv in each) {
-								// each type the receiver may be — a name this file or one whose declaration typed it wrote (`readFrom`) may be
+								// each type the receiver may be — a name this file or one
+								// whose declaration typed it wrote (`readFrom`) may be
 								// another type there — resolves the call on its own, whatever the others declare
 								final alternates: Array<String> = g.types.imports.alternateTypesIn([file].concat(readFrom), recv.typeName);
 								for (t in CallGraphKeys.apartFrom(g.types.imports, keyedApart, recv.typeName)) if (!alternates.contains(t))
@@ -1266,7 +1267,10 @@ final class CallGraphEdges {
 			return CallGraphNames.functionReturnSource(g._plugin.typeSyntax(expected(at - 1, currentType) ?? ''));
 		}
 
-		/** The written type of field `field` of a value written `outer`: an inline anonymous structure's, or a typedef's or class's member. */
+		/**
+		 * The written type of field `field` of a value written `outer`: an
+		 * inline anonymous structure's, or a typedef's or class's member.
+		 */
 		function fieldTypeSource(outer: String, field: String, currentType: Null<String>): Null<String> {
 			final peeled: String = NominalTypes.unwrapNullable(outer.trim(), transparentWrappers, g._plugin.typeSyntax);
 			final written: Null<String> = CallGraphNames.anonFieldTypeSource(g._plugin.typeSyntax(peeled), field);

@@ -118,7 +118,8 @@ final class TypeResolver {
 	}
 
 	/**
-	 * The innermost type declaration whose text holds the offset `at` — or, given `to`, the whole range `at`...`to` — or null outside every one. The walk enters only the nodes that hold it.
+	 * The innermost type declaration whose text holds the offset `at` — or, given `to`, the whole
+	 * range `at`...`to` — or null outside every one. The walk enters only the nodes that hold it.
 	 */
 	public static function enclosingTypeDeclAt(tree: QueryNode, at: Int, ?to: Int): Null<TypeDeclMatch> {
 		final end: Int = to ?? at + 1;

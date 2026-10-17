@@ -404,7 +404,10 @@ final class DynamicBag {
 			null;
 	}
 
-	/** `name` unless it is a transparent wrapper (`RefShape.memberTransparentWrapperTypeNames`), which names no type without its argument. */
+	/**
+	 * `name` unless it is a transparent wrapper
+	 * (`RefShape.memberTransparentWrapperTypeNames`), which names no type without its argument.
+	 */
 	private static function nominalOrNull(name: Null<String>, shape: RefShape): Null<String> {
 		return name == null || (shape.memberTransparentWrapperTypeNames ?? []).contains(name) ? null : name;
 	}

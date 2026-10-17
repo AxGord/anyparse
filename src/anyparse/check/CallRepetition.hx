@@ -78,7 +78,10 @@ final class CallRepetition {
 		loops = new Loops(graph, shape, listsOf);
 	}
 
-	/** Whether `edge` may run more than once per run of its function: in a loop, handing its value to a call that may repeat it, or recursive. */
+	/**
+	 * Whether `edge` may run more than once per run of its function: in a
+	 * loop, handing its value to a call that may repeat it, or recursive.
+	 */
 	public function repeated(edge: CallEdge): Bool {
 		if (initializerRun(edge)) return false;
 		final loops: Null<Array<Span>> = loopsAround(edge);
@@ -357,7 +360,10 @@ final class CallRepetition {
 			&& (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
 	}
 
-	/** Whether the `Ref` edge `edge` hands its value to a call `ids` names by the graph's target, or `names` by the name the call is written with. */
+	/**
+	 * Whether the `Ref` edge `edge` hands its value to a call `ids` names by
+	 * the graph's target, or `names` by the name the call is written with.
+	 */
 	private static function listed(edge: CallEdge, ids: Array<String>, names: Array<String>): Bool {
 		return edge.kind == Ref && (ids.contains(edge.via ?? '') || names.contains(edge.viaMember ?? ''));
 	}

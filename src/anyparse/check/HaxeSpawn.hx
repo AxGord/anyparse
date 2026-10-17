@@ -273,7 +273,8 @@ final class HaxeSpawn {
 	 *
 	 * The jobs reach the driver through a file (`writeJobs`), never through its stdin: an `input` piped to `spawnSync`
 	 * can stall for good on macOS, about once in seven hundred calls at 200 KB (`docs/decisions.md`, "F1"), and the
-	 * driver then waits on a read that never ends. A driver still running `bound` ms in (`driverBound` unless given) is wedged and is killed,
+	 * driver then waits on a read that never ends. A driver still running
+	 * `bound` ms in (`driverBound` unless given) is wedged and is killed,
 	 * and every job answers that it produced no verdict; nothing is retried, since a killed driver may have run any of
 	 * its jobs.
 	 */

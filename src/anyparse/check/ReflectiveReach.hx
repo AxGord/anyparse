@@ -194,7 +194,8 @@ final class ReflectiveReach {
 
 	/**
 	 * What a value of the type parameter `name` of the class or interface `type` may be an object of, bounded by every
-	 * instantiation of it — null, any type's, unless the run sees every type and every write of the project (`complete`, as `FieldWrites` has it):
+	 * instantiation of it — null, any type's, unless the run sees every type
+	 * and every write of the project (`complete`, as `FieldWrites` has it):
 	 * an unseen subtype may bind the parameter to anything.
 	 */
 	private function instantiated(type: String, name: String): Null<Array<String>> {

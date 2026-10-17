@@ -3219,8 +3219,10 @@ private enum ImplicitTarget {
 
 }
 
-/** What the entry runs, as graph facts. `region` is set for a `Region` entry, whose own touches count too. */
-/** What `MemberTouchScan.scan` was asked of the member: the walk asks it again of a node it makes (`MemberReach.qualifiedNode`). */
+/**
+ * What the entry runs, as graph facts. `region` is set for a `Region` entry, whose own touches count too.
+ * What `MemberTouchScan.scan` was asked of the member: the walk asks it again of a node it makes (`MemberReach.qualifiedNode`).
+ */
 private typedef TouchQuestion = {
 	final name: String;
 	final declaring: String;

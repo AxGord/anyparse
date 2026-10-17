@@ -24,7 +24,10 @@ final class Loops {
 	/** The loop kinds of the grammar (`ShapeVocab.loopKinds`); empty for a grammar naming none. */
 	public final kinds: Array<String>;
 
-	/** The functions a call of which may block: one calling a sink its call's chain names, and every one calling or handing on such a one. */
+	/**
+	 * The functions a call of which may block: one calling a sink its
+	 * call's chain names, and every one calling or handing on such a one.
+	 */
 	private var _sinkward: Null<Map<String, Bool>> = null;
 
 	private final _graph: CallGraph;
@@ -44,7 +47,10 @@ final class Loops {
 		_functionKinds = ShapeVocab.functionLikeKinds(shape);
 	}
 
-	/** A loop header as a label spells it (`label`, a `boundedRepeats` entry's `loop`): each run of whitespace one space, none at the ends. */
+	/**
+	 * A loop header as a label spells it (`label`, a `boundedRepeats`
+	 * entry's `loop`): each run of whitespace one space, none at the ends.
+	 */
 	public static function spelled(text: String): String {
 		return StringTools.trim(~/\s+/g.replace(text, ' '));
 	}

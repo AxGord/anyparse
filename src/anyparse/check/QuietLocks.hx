@@ -31,7 +31,10 @@ final class QuietLocks {
 		_listsOf = listsOf;
 	}
 
-	/** Whether the lock take `edge` never waits: its lock is taken only shared (`sharedOnly`), or it is a constructor's take before publication. */
+	/**
+	 * Whether the lock take `edge` never waits: its lock is taken only shared
+	 * (`sharedOnly`), or it is a constructor's take before publication.
+	 */
 	public function never(edge: CallEdge): Bool {
 		final lock: String = _sites.lockOf(edge) ?? '';
 		return lock != '' && sharedOnly(lock) || uncontended(edge);

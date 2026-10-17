@@ -257,7 +257,8 @@ final class FactsProvenance {
 	/**
 	 * Where the initializer `n` is wholly the inlined call of a method the declaration's text `body` calls, the test of a
 	 * position being in the body of such a method — called by name, through the property it is an accessor of, by the
-	 * construct the compiler calls it for (`implicitlyCalled`), or, an abstract's constructor, by a construction of it: the compiler types such an initializer as the callee's
+	 * construct the compiler calls it for (`implicitlyCalled`), or, an abstract's constructor,
+	 * by a construction of it: the compiler types such an initializer as the callee's
 	 * spliced code, at the callee's positions, and records no call; a build of another initializer — a `#if` operand
 	 * more — splices the body of another such method. Null for any other node.
 	 */
@@ -509,7 +510,8 @@ final class FactsProvenance {
 	/**
 	 * Whether the call `c` sits on `body`'s text as its own: a call of a value or of a local or native function where the
 	 * text holds it, a super constructor's where it spells `super`, and a field's where it spells the field — the property,
-	 * for an accessor, or the accessor itself, `new` for an abstract's constructor (`memberOf`) — or is a lowered loop running an iteration call (`iterationCalls`), the
+	 * for an accessor, or the accessor itself, `new` for an abstract's constructor
+	 * (`memberOf`) — or is a lowered loop running an iteration call (`iterationCalls`), the
 	 * construct the compiler calls an abstract's field for (`implicitlyCalled`), or a call of a function that runs no project
 	 * code (`runsNoCode`).
 	 */

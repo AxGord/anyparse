@@ -1160,7 +1160,10 @@ final class DependencyCarry {
 		for (c in node.children) collectBareMentions(c, declSpan, identKind, candidates, out);
 	}
 
-	/** Every member name of every type the scope's module `module` declares — a `using`'s method set — or null when the scope holds no such module. */
+	/**
+	 * Every member name of every type the scope's module `module` declares —
+	 * a `using`'s method set — or null when the scope holds no such module.
+	 */
 	private static function moduleMemberNames(files: Array<FileInfo>, module: String): Null<Array<String>> {
 		final info: Null<FileInfo> = files.find(f -> f.module == module);
 		return info == null ? null : [for (t in info.types) for (m in t.members) m.name];

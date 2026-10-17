@@ -72,7 +72,8 @@ typedef FieldWriteSite = {
  * or handed on as a function value, `DynamicAccess.set` / `remove`, or an index write into a value not proven an array, a
  * map or a buffer (`ELEMENT_INDEXED_TYPES`) — names its field at run time and is not stopped by a `final`: a literal name
  * files it under that name, a computed one under every name (`of`), each bounded by the types its target may be an object of
- * (`ReflectiveReach.placeOf`: its declared class and the chains of its subtypes, else what a positive exclusion proves — a `final` local bound
+ * (`ReflectiveReach.placeOf`: its declared class and the chains of its
+ * subtypes, else what a positive exclusion proves — a `final` local bound
  * to a fresh structure or object, a type parameter its constraint or every instantiation of its type bounds, a `case` capture
  * typed by its enum constructor; any type for anything else: `Dynamic`, `Any`, an unbounded type parameter, a structure). A
  * value of such a type may be an instance of any class, and nothing here tracks which reach it — the cost is paid only by the

@@ -628,8 +628,6 @@ final class NominalTypes {
 	 * `seen` rides along rather than being re-created per receiver only for tidiness: the call-tail
 	 * recursion is structurally decreasing, and the cycle the guard actually exists for lives entirely
 	 * inside `typeWalk` (a `for` binder whose iterable reads it), which never comes back through here.
-	 */
-	/**
 	 * The type of an IDENT that names no value binding: a member of the ENCLOSING type, read
 	 * through an implicit `this` (`MS`, `l_usedLibs`). Null for anything else, including a name
 	 * that IS a binding — that one the path walk already answered.

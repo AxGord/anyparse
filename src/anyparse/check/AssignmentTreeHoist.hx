@@ -668,7 +668,10 @@ typedef LvalueRef = {
 	var lvalue: Null<QueryNode>;
 }
 
-/** A chain's non-terminal branches as `branchValues` builds them: the `(cond, value)` texts, the copied spans, the comment slots, one seat per branch, and the leaf-assignment count. */
+/**
+ * A chain's non-terminal branches as `branchValues` builds them: the `(cond, value)` texts,
+ * the copied spans, the comment slots, one seat per branch, and the leaf-assignment count.
+ */
 private typedef BranchValues = {
 	var built: Array<{ cond: String, value: String }>;
 	var kept: Array<Span>;

@@ -22,7 +22,10 @@ private typedef OwnedFinding = {
 	final path: Array<String>;
 }
 
-/** How the main thread repeats calls: where (`repetition`), which of its states may run more than once (`main`), and the edges it runs (`runs`). */
+/**
+ * How the main thread repeats calls: where (`repetition`), which of its
+ * states may run more than once (`main`), and the edges it runs (`runs`).
+ */
 typedef MainRepetition = {
 	final repetition: CallRepetition;
 	final main: MainRepeats;
@@ -116,7 +119,10 @@ final class MainSinkReport {
 		return reportedBy;
 	}
 
-	/** Drops from `reportedBy` each warning a directive silences (`suppressed`): it reports no sink call, so a hold long only by one stays. */
+	/**
+	 * Drops from `reportedBy` each warning a directive silences (`suppressed`):
+	 * it reports no sink call, so a hold long only by one stays.
+	 */
 	private static function dropSilenced(reportedBy: Map<String, Violation>, suppressed: (Violation) -> Bool): Void {
 		for (k in [for (k => v in reportedBy) if (suppressed(v)) k]) reportedBy.remove(k);
 	}

@@ -186,7 +186,10 @@ final class MainRepeats {
 			Reflect.compare(a.edge.to, b.edge.to);
 	}
 
-	/** Whether `id` is code the runtime runs once per program: the entry point, or a type's static initializers (`CallGraph.STATIC_INIT_NAME`). */
+	/**
+	 * Whether `id` is code the runtime runs once per program: the entry
+	 * point, or a type's static initializers (`CallGraph.STATIC_INIT_NAME`).
+	 */
 	private function runsOnceAtStart(id: String): Bool {
 		final name: Null<String> = _graph.node(id)?.name;
 		return name == ThreadSafety.ENTRY_POINT || name == CallGraph.STATIC_INIT_NAME;

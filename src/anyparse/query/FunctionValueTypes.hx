@@ -727,7 +727,10 @@ final class FunctionValueTypes {
 		};
 	}
 
-	/** Whether the parameter `param` holds no function when its argument is left out: it has no default value, or a `null` or other literal one. */
+	/**
+	 * Whether the parameter `param` holds no function when its argument is
+	 * left out: it has no default value, or a `null` or other literal one.
+	 */
 	private function defaultHoldsNoFunction(param: QueryNode): Bool {
 		final shape: RefShape = _scope.shape;
 		if (param.children.length == 0) return true;

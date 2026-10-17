@@ -56,7 +56,10 @@ typedef ChainLists = {
 	 */
 	final runsOnceIds: Array<String>;
 
-	/** The member names whose every call runs a function value handed to it at most once so (`runsOnceIds`), by the name the call is written with. */
+	/**
+	 * The member names whose every call runs a function value handed to it
+	 * at most once so (`runsOnceIds`), by the name the call is written with.
+	 */
 	final runsOnceNames: Array<String>;
 
 	/** The `lockPairs` take members that take their lock shared (`sharedLocks`): such takes never wait for each other. */

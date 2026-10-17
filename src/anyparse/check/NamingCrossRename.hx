@@ -258,7 +258,10 @@ final class NamingCrossRename {
 		return ctx.index.fileInfo(file)?.types.find(t -> t.name == name);
 	}
 
-	/** Whether `type` carries metadata outside the grammar's name-inert list (`RefShape.nameInertTypeMetaNames`), or one the projection could not attribute. */
+	/**
+	 * Whether `type` carries metadata outside the grammar's name-inert list
+	 * (`RefShape.nameInertTypeMetaNames`), or one the projection could not attribute.
+	 */
 	private static function unsafeTypeMeta(tree: QueryNode, source: String, type: TypeDeclInfo, plugin: GrammarPlugin): Bool {
 		if (type.hasBuild || type.hasAutoBuild || type.hasKeep || type.hasRtti || type.isExtern || type.bringsExtensions) return true;
 		final inert: Array<String> = plugin.refShape().nameInertTypeMetaNames ?? [];
@@ -317,7 +320,10 @@ final class NamingCrossRename {
 		return false;
 	}
 
-	/** Whether a project file holds a string that NAMES `name` (`OccurrenceClass.StringLiteral`), or a `noqa` naming it, or cannot be read. */
+	/**
+	 * Whether a project file holds a string that NAMES `name`
+	 * (`OccurrenceClass.StringLiteral`), or a `noqa` naming it, or cannot be read.
+	 */
 	private static function stringNamesIt(name: String, ctx: Context): Bool {
 		for (entry in ctx.project) if (entry.source.indexOf(name) >= 0) {
 			final found: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(

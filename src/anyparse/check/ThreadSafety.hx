@@ -704,7 +704,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * Finding (b): on some path of one function body a lock is held across calls that block — one finding per hold,
 	 * anchored at its first blocking call and naming the lock object (the pair's take member for a lock no member
 	 * names). Reported for a lock the main thread takes somewhere — for one no sealed member names, a take of the pair
-	 * on the main thread at all — since only then does the hold stall main; a hold in the owner's constructor before the object escapes stalls no one. The main thread
+	 * on the main thread at all — since only then does the hold stall main; a hold in
+	 * the owner's constructor before the object escapes stalls no one. The main thread
 	 * never waits for its own hold, so a hold of a named lock that only the main thread runs — on no background thread,
 	 * and not in a function the walk only assumes runs there (`ThreadStates.assumed`) — stays only when the main thread
 	 * itself works long under it (`LockTaint.ownWork`), and says so. Graded by cost: a hold whose blocking calls are all

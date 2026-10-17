@@ -318,7 +318,8 @@ final class TypedFactsWalk {
 	 * spliced code. A constant or a type expression is left out: the compiler places a default argument's value, or an
 	 * inlined constant, at its declaration — save a constant inside a spliced body lying in the declared range of another
 	 * inline method (`splicedCode`): that method's code wrote it as an argument of the inline call it made, so its body
-	 * was spliced as well, although the constants are all of it the compiler kept (`return limit(v, 0, 1)`). So is a range that meets the body without lying inside it: the compiler's
+	 * was spliced as well, although the constants are all of it the compiler kept (`return
+	 * limit(v, 0, 1)`). So is a range that meets the body without lying inside it: the compiler's
 	 * union of the body's own code with a range around it — an abstract method's `this` stands at the whole abstract, an
 	 * operand shares a range with an inlined sibling — whose parts are asked one by one. Inside a spliced body, code of
 	 * another method is a body that one spliced in turn (`nestedSplice`).
@@ -450,7 +451,8 @@ final class TypedFactsWalk {
 	}
 
 	/**
-	 * Record the spliced body rooted at `e`: the call of the method it came from — `inline`, or inlined by its call site — found at the root or, when
+	 * Record the spliced body rooted at `e`: the call of the method it came
+	 * from — `inline`, or inlined by its call site — found at the root or, when
 	 * the root carries a position of its own — an abstract's `this` stands at the whole abstract — at the first
 	 * expression under it that lies in one; `macro-expansion` when none does, and then, where a macro method's declared
 	 * range holds the root, the expansion of that macro (`expanded`) at the innermost expression of the body around it.

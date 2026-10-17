@@ -754,7 +754,10 @@ typedef PreparedOracles = {
 	var notes: Array<String>;
 }
 
-/** A stale generation about to run: its group, why, and its explicit and previously-recorded implicit inputs as hashed before the command. */
+/**
+ * A stale generation about to run: its group, why, and its explicit
+ * and previously-recorded implicit inputs as hashed before the command.
+ */
 typedef StaleGroup = {
 	var group: GenerationGroup;
 	var why: String;

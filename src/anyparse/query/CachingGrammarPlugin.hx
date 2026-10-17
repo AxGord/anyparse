@@ -81,9 +81,11 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private final _layoutMetricsCache: Map<String, Null<LayoutMetrics>> = [];
 	private final _memberGapPolicyCache: Map<String, Null<MemberGapPolicy>> = [];
 
-	// The inner grammar's `typeSyntax` answers per type text. A pure function of the text, so
-	// nothing ever expires it; the same annotation is asked about by every check that reads it.
-	// Values may be null (text that is not one type), so reads go through `exists`.
+	/**
+	 * The inner grammar's `typeSyntax` answers per type text. A pure function of the text, so
+	 * nothing ever expires it; the same annotation is asked about by every check that reads it.
+	 * Values may be null (text that is not one type), so reads go through `exists`.
+	 */
 	private final _typeSyntaxCache: Map<String, Null<TypeSyntax>> = [];
 
 	/**
@@ -141,10 +143,12 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 */
 	private final _reflectionMemo: ReflectionMemo = new ReflectionMemo();
 
-	// Run-scoped, same lifecycle as the other caches on this class — a fresh
-	// RefsCache per wrapper instance, shared with every RefShape this plugin hands
-	// out so `Refs.find` resolves against ONE memoized index per tree instead of
-	// re-walking per query.
+	/**
+	 * Run-scoped, same lifecycle as the other caches on this class — a fresh
+	 * RefsCache per wrapper instance, shared with every RefShape this plugin hands
+	 * out so `Refs.find` resolves against ONE memoized index per tree instead of
+	 * re-walking per query.
+	 */
 	private final _refsCache: RefsCache = new RefsCache();
 
 	/**
@@ -159,15 +163,19 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 
 	private final _inner: GrammarPlugin;
 
-	// The wrapped grammar's OPTIONAL root-sharing capability, resolved once — the same
-	// `_inner is X ? cast _inner : null` seam as `SpanTypeInfoProvider`, one level lower.
-	// Null for a grammar without it, and every entry point below then falls back to its
-	// source-taking `_inner` call, byte-identically.
+	/**
+	 * The wrapped grammar's OPTIONAL root-sharing capability, resolved once — the same
+	 * `_inner is X ? cast _inner : null` seam as `SpanTypeInfoProvider`, one level lower.
+	 * Null for a grammar without it, and every entry point below then falls back to its
+	 * source-taking `_inner` call, byte-identically.
+	 */
 	private final _rootProvider: Null<ParsedRootProvider>;
 
-	// The PROCESS-scoped tier behind the run-scoped caches below: this wrapper's language slice
-	// of it, resolved once in the constructor. Only RESOLUTION-LIBRARY sources ever enter it —
-	// `SharedParseTier` documents why that bound is what makes a process-scoped tier safe here.
+	/**
+	 * The PROCESS-scoped tier behind the run-scoped caches below: this wrapper's language slice
+	 * of it, resolved once in the constructor. Only RESOLUTION-LIBRARY sources ever enter it —
+	 * `SharedParseTier` documents why that bound is what makes a process-scoped tier safe here.
+	 */
 	private final _shared: SharedParseTier;
 
 	// Resolution scope (SymbolIndexHost): a thunk yielding the report files and the
@@ -921,7 +929,10 @@ typedef ResolutionSources = {
 	 */
 	@:optional final rootsMatched: Bool;
 
-	/** Whether EVERY declared root matched at least one `.hx` — a root that matched nothing may be where project files live. Absent reads as false. */
+	/**
+	 * Whether EVERY declared root matched at least one `.hx` — a root that
+	 * matched nothing may be where project files live. Absent reads as false.
+	 */
 	@:optional final rootsAllMatched: Bool;
 };
 
