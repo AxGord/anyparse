@@ -139,6 +139,8 @@ class PreferForeachCheckTest extends Test {
 	}
 
 	/** Haxe resolves static extensions in REVERSE declaration order — the LATER `using` wins. */
+	@:pin('control')
+	@:killer('M-BINDER-EXTENSION-LAST-USING')
 	public function testLaterUsingWinsOverEarlierOne(): Void {
 		Assert.equals(0, extViolations('using ExtArray;\nusing ExtIter;', '').length);
 		Assert.equals(1, extViolations('using ExtIter;\nusing ExtArray;', '').length);
@@ -276,6 +278,117 @@ class PreferForeachCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
+	/**
+	 * `using <module>` brings the statics of EVERY type the module declares (4.3.7), so an `items` declared on a SUB-type of
+	 * the used module supplies the call exactly as one on its main type does.
+	 */
+	public function testUsedModuleSubTypeSuppliesTheExtension(): Void {
+		Assert.equals(1, extViolations('using ModArr;', '', extensionModules()).length);
+		Assert.equals(1, extViolations('using ModArr.Inner;', '', extensionModules()).length);
+	}
+
+	/**
+	 * A LATER `using` whose module declares `items` on a sub-type binds the call (4.3.7), so the earlier `ExtArray` must not
+	 * answer for it: the sub-type's `Iterator` return is the one the rule refuses.
+	 */
+	public function testUsedModuleSubTypeShadowsAnEarlierUsing(): Void {
+		Assert.equals(0, extViolations('using ExtArray;\nusing ModIter;', '', extensionModules()).length);
+	}
+
+	/**
+	 * Two types of one used module both declaring `items`: 4.3.7 binds the LAST-declared one that accepts the receiver, which
+	 * a nominal index cannot always prove, so the module answers nothing rather than its main type's `Array`.
+	 */
+	@:pin('control')
+	@:killer('M-EXT-DECL-TWO-HOSTS')
+	public function testTwoTypesOfOneModuleDeclaringTheNameRefuse(): Void {
+		Assert.equals(0, extViolations('using ModTwo;', '', extensionModules()).length);
+	}
+
+	/**
+	 * A type's own `@:using` — on the receiver's type or on a supertype — binds ahead of every `using` of the file (4.3.7:
+	 * `@:using(SupExt) class Sup` beats `using Sup.Plain` on a `Sub extends Sup`), so the file's `ExtArray` must not answer.
+	 */
+	@:pin('control')
+	@:killer('M-EXT-NOMINAL-ATUSING')
+	public function testReceiverUsingMetaBeatsTheFileUsing(): Void {
+		Assert.equals(0, extViolations('using ExtArray;', '', [], '@:using(ExtIter) class S').length);
+		Assert.equals(
+			0,
+			extViolations('using ExtArray;', '', [
+				{
+					file: 'Base.hx',
+					source: '@:using(ExtIter) class Base {}'
+				}
+			], 'class S extends Base').length
+		);
+	}
+
+	/**
+	 * A later `using` that declares `items` with a first parameter this layer cannot PROVE accepts the receiver — a method type
+	 * parameter, `Dynamic` — may still bind it (4.3.7: `C.tag<T>(s:T)` and `C.tag(s:Dynamic)` both beat an earlier
+	 * `A.tag(s:String)`), so the walk stops there instead of falling back to the earlier `ExtArray`.
+	 */
+	public function testUnprovenFirstParameterStopsTheWalk(): Void {
+		Assert.equals(0, extViolations('using ExtArray;\nusing ExtGen;', '', extensionModules()).length);
+		Assert.equals(0, extViolations('using ExtArray;\nusing ExtDyn;', '', extensionModules()).length);
+	}
+
+	/**
+	 * A later `using` the index cannot read may declare `items` itself, so the earlier `ExtArray` proves nothing: a module the
+	 * index does not hold, and one whose type is an ALIAS — 4.3.7 binds `using AliasHost;` (`typedef AliasHost = B`) to `B`'s
+	 * statics, which live on a type the `using` does not name.
+	 */
+	@:pin('control')
+	@:killer('M-BINDER-EXTENSION-UNINDEXED')
+	public function testUnindexedLaterUsingStopsTheWalk(): Void {
+		Assert.equals(0, extViolations('using ExtArray;\nusing Missing;', '').length);
+		Assert.equals(
+			0,
+			extViolations('using ExtArray;\nusing AliasHost;', '', [
+				{
+					file: 'AliasHost.hx',
+					source: 'typedef AliasHost = ExtIter;'
+				}
+			]).length
+		);
+	}
+
+	/**
+	 * A `using` under a `#if` is in scope in some builds only, where — declared later — it binds the call, so a file carrying
+	 * one answers no extension at all; and a module whose `items` sits under a `#if` supplies it in some builds only, where
+	 * the earlier `using` binds instead.
+	 */
+	@:pin('control')
+	@:killer('M-EXT-DECL-GUARDED-MEMBER', 'M-BINDER-EXTENSION-GUARDED-USING')
+	public function testGuardedUsingOrDeclarationRefuses(): Void {
+		Assert.equals(0, extViolations('using ExtArray;\n#if x\nusing ExtIter;\n#end', '').length);
+		Assert.equals(0, extViolations('using ExtIter;\nusing ExtGuard;', '', extensionModules()).length);
+	}
+
+	/**
+	 * The walk passes over a later `using` only for a module offering no extension `items` (4.3.7): one declaring none, one
+	 * whose `items` is an instance method, and one whose static is `@:noUsing` all leave the call to the earlier `ExtArray`.
+	 */
+	@:pin('control')
+	@:killer('M-EXT-DECL-PASS-OVER', 'M-EXT-DECL-STATIC', 'M-EXT-DECL-NOUSING')
+	public function testALaterUsingOfferingNoExtensionIsPassedOver(): Void {
+		Assert.equals(1, extViolations('using ExtArray;\nusing Empty;', '', extensionModules()).length);
+		Assert.equals(1, extViolations('using ExtArray;\nusing InstItems;', '', extensionModules()).length);
+		Assert.equals(1, extViolations('using ExtArray;\nusing NoUse;', '', extensionModules()).length);
+	}
+
+	/**
+	 * A later `using` that may offer `items` in some build stops the walk: a module whose `@:build` macro may add the static,
+	 * and one whose type declaring it sits under a `#if` (4.3.7 binds `Inner.items` under `-D x`, the earlier `using` without).
+	 */
+	@:pin('control')
+	@:killer('M-EXT-DECL-BUILT', 'M-EXT-DECL-GUARDED-HOST')
+	public function testALaterUsingThatMayOfferTheExtensionStopsTheWalk(): Void {
+		Assert.equals(0, extViolations('using ExtArray;\nusing Built;', '', extensionModules()).length);
+		Assert.equals(0, extViolations('using ExtIter;\nusing GuardHost;', '', extensionModules()).length);
+	}
+
 	/** A receiver whose OWN type declares `foreach` — the name this direction rewrites to. */
 	private function memberFn(body: String): String {
 		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function foreach(key:Int):Bool {\n'
@@ -316,21 +429,23 @@ class PreferForeachCheckTest extends Test {
 	 * `ExtInt` an `Array<Int>` off an `Int` receiver (not applicable to an `S` at all). Which
 	 * candidate won is therefore legible from the finding COUNT alone.
 	 */
-	private function extViolations(usings: String, sBody: String): Array<Violation> {
-		return CheckFixture.violationsIn(new PreferForeach(), [
+	private function extViolations(
+		usings: String, sBody: String, ?extra: Array<{ file: String, source: String }>, sHead: String = 'class S'
+	): Array<Violation> {
+		return CheckFixture.violationsIn(new PreferForeach(), (extra ?? []).concat([
 			{
 				file: 'C.hx',
 				source: '$usings\nclass C {\n\tfunction f(s:S):Bool {\n'
 				+ '\t\tfor (x in s.items()) if (x > 2) return false;\n\t\treturn true;\n\t}\n}'
 			},
-			{ file: 'S.hx', source: 'class S {$sBody}' },
+			{ file: 'S.hx', source: '$sHead {$sBody}' },
 			{ file: 'ExtArray.hx', source: 'class ExtArray {\n\tpublic static function items(s:S):Array<Int> {\n\t\treturn [];\n\t}\n}' },
 			{
 				file: 'ExtIter.hx',
 				source: 'class ExtIter {\n\tpublic static function items(s:S):Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
 			},
 			{ file: 'ExtInt.hx', source: 'class ExtInt {\n\tpublic static function items(n:Int):Array<Int> {\n\t\treturn [];\n\t}\n}' }
-		]);
+		]));
 	}
 
 	private function violations(source: String): Array<Violation> {
@@ -351,6 +466,56 @@ class PreferForeachCheckTest extends Test {
 				Assert.fail('canonicalize Err: $message');
 		}
 		return '';
+	}
+
+	/**
+	 * The extra static-extension modules: `items` on a SUB-type (`ModArr.Inner` an `Array`, `ModIter.Other` an `Iterator`), on
+	 * two types of one module (`ModTwo`), behind a first parameter no nominal proof accepts (`ExtGen`, `ExtDyn`), and under a
+	 * `#if` (`ExtGuard`).
+	 */
+	private function extensionModules(): Array<{ file: String, source: String }> {
+		return [
+			{
+				file: 'ModArr.hx',
+				source: 'class ModArr {}\n\nclass Inner {\n\tpublic static function items(s:S):Array<Int> {\n\t\treturn [];\n\t}\n}'
+			},
+			{
+				file: 'ModIter.hx',
+				source: 'class ModIter {}\n\nclass Other {\n\tpublic static function items(s:S):Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+			},
+			{
+				file: 'ModTwo.hx',
+				source: 'class ModTwo {\n\tpublic static function items(s:S):Array<Int> {\n\t\treturn [];\n\t}\n}\n\n'
+					+ 'class Second {\n\tpublic static function items(s:S):Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+			},
+			{
+				file: 'ExtGen.hx',
+				source: 'class ExtGen {\n\tpublic static function items<T>(s:T):Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+			},
+			{
+				file: 'ExtDyn.hx',
+				source: 'class ExtDyn {\n\tpublic static function items(s:Dynamic):Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+			},
+			{
+				file: 'ExtGuard.hx',
+				source: 'class ExtGuard {\n\t#if x\n\tpublic static function items(s:S):Array<Int> {\n\t\treturn [];\n\t}\n\t#end\n}'
+			},
+			{
+				file: 'GuardHost.hx',
+				source: 'class GuardHost {}\n\n#if x\nclass Inner {\n\tpublic static function items(s:S):Array<Int> {\n\t\treturn [];\n\t}\n}\n#end'
+			},
+			{ file: 'Empty.hx', source: 'class Empty {}' },
+			{
+				file: 'InstItems.hx',
+				source: 'class InstItems {\n\tpublic function new() {}\n\n'
+					+ '\tpublic function items(s:S):Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+			},
+			{
+				file: 'NoUse.hx',
+				source: 'class NoUse {\n\t@:noUsing public static function items(s:S):Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+			},
+			{ file: 'Built.hx', source: '@:build(Macro.build())\nclass Built {}' }
+		];
 	}
 
 }

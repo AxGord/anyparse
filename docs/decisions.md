@@ -3718,3 +3718,17 @@ decided the question; it may not become a record of runs.
   scopes per tree), `FunctionTrees` (node per file + span), `SubtypeGraph` (member-name -> declaring types),
   `TypeNameBinding` (import path splits); and `lint` asks rule enablement per distinct config
   (`LintDocuments.distinctConfigs`) instead of per file — branch `feat/infra-N1`
+- the static-extension arc of the deep type walk (`NominalTypes.staticExtensionNominal` → `StructuralTypes.extensionReturnNominal`)
+  answered FAIL-OPEN in six shapes (each a 4.3.7 probe): it read only the MAIN type of a used module (an extension on a
+  sub-type was missed), ignored a `@:using` on the receiver's type chain (which binds first), fell back to an EARLIER
+  `using` past a later one whose first parameter it merely could not prove accepting (`<T>(s:T)` and `(s:Dynamic)` both
+  bind there), past a `using` it could not read (unindexed, alias), counted no `#if`-guarded `using`, and took a
+  `@:noUsing` static. → the walk over the `using`s is ONE shared door, `ValueNameBinding.extensionDeclaration` (POSITIVE:
+  last `using` offering a static of the name — `@:noUsing` and instance members are not offered — on exactly one type of
+  its module; null for an unreadable `using`, a build-macro type, two declaring types, a `#if`-guarded type or
+  declaration), used by both `OperandBinder.extensionTier` (its own copy deleted) and the deep walk; a first parameter
+  not proven to accept now ENDS the walk; the deep walk also requires `closureFreeOfExtensionTypes`, and a file with a
+  guarded `using` gets no extension arc (`UsingScan.extensionUsings`, shared with the binder). Not followed: an alias
+  `using` (`typedef AliasHost = B` binds `B`'s statics) stays a refusal like the binder's; `import.hx` usings are not
+  read by the deep walk (a file's own `using` outranks them, 4.3.7, so the walk can only miss, never mis-answer) —
+  branch `feat/infra-N31`

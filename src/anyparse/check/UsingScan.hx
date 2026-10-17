@@ -559,6 +559,15 @@ final class UsingScan {
 		return anchor;
 	}
 
+	/**
+	 * The `using` paths a static-extension call is resolved against (`ValueNameBinding.extensionDeclaration`), in declaration
+	 * order — or null when one sits under a `#if` region other than an accepted whole-body guard: in a build defining it that
+	 * `using` is in scope, and declared later it would bind the call instead.
+	 */
+	public static function extensionUsings(header: UsingHeader): Null<Array<String>> {
+		return header.guardedUsings.length > 0 ? null : usingModules(header);
+	}
+
 }
 
 /**
