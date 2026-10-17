@@ -306,7 +306,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		final tree: Null<QueryNode> = unproven.keys().hasNext() ? ParseGate.parseOrNull(plugin, source) : null;
 		final operators: Null<OperatorGate> = tree == null
 			? null
-			: new OperatorGate(OperatorSelection.of(plugin, [{ file: file, source: source }]), seams, file, source, tree);
+			: new OperatorGate(OperatorSelection.of(plugin, [{ file: file, source: source }], index), seams, file, source, tree);
 		return CheckScan.applyBySpan(plugin, source, fixable, seams.candidateKinds, (node, span) -> {
 			final doubted: Null<Violation> = unproven['${span.from}:${span.to}'];
 			if (

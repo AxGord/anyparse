@@ -249,8 +249,11 @@ final class PreferIfExpressionChain implements Check {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final resolveIndex: () -> Null<SymbolIndex> = SwitchChain.lazyIndexOf(files, plugin);
+		// ONE operator table for the run, as the switch rule it defers to builds it: a per-file one saw no overload a
+		// sibling module declares, and read a chain the switch refuses as claimed.
+		final selection: Null<OperatorSelection> = OperatorSelection.of(plugin, files);
 		return [
-			for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex))
+			for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, selection))
 				{
 					file: entry.file,
 					span: m.span,
@@ -269,7 +272,8 @@ final class PreferIfExpressionChain implements Check {
 		final file: String = violations.length == 0 ? '' : violations[0].file;
 		final resolveIndex: () -> Null<SymbolIndex> = SwitchChain.lazyIndexOf([{ file: file, source: source }], plugin, index);
 		final byKey: Map<String, Match> = [];
-		for (m in collect(plugin, file, source, seams, resolveIndex, index)) byKey['${m.span.from}:${m.span.to}'] = m;
+		final selection: Null<OperatorSelection> = OperatorSelection.of(plugin, [{ file: file, source: source }], index);
+		for (m in collect(plugin, file, source, seams, resolveIndex, selection, index)) byKey['${m.span.from}:${m.span.to}'] = m;
 		return CanonicalEdit.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
 		);
@@ -295,14 +299,15 @@ final class PreferIfExpressionChain implements Check {
 	 * both go through it, so neither can encode a gate the other misses.
 	 */
 	private static function collect(
-		plugin: GrammarPlugin, file: String, source: String, s: Seams, resolveIndex: () -> Null<SymbolIndex>, ?index: SymbolIndex
+		plugin: GrammarPlugin, file: String, source: String, s: Seams, resolveIndex: () -> Null<SymbolIndex>,
+		selection: Null<OperatorSelection>, ?index: SymbolIndex
 	): Array<Match> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final out: Array<Match> = [];
 		walk(
 			tree, source, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), s, plugin,
-			lazyOf(plugin, file, source, tree, resolveIndex, index), out, null, false
+			lazyOf(plugin, file, source, tree, resolveIndex, selection, index), out, null, false
 		);
 		return out;
 	}
@@ -316,7 +321,8 @@ final class PreferIfExpressionChain implements Check {
 	 * neither.
 	 */
 	private static function lazyOf(
-		plugin: GrammarPlugin, file: String, source: String, root: QueryNode, resolveIndex: () -> Null<SymbolIndex>, ?index: SymbolIndex
+		plugin: GrammarPlugin, file: String, source: String, root: QueryNode, resolveIndex: () -> Null<SymbolIndex>,
+		selection: Null<OperatorSelection>, ?index: SymbolIndex
 	): Lazy {
 		var cached: Null<(QueryNode) -> Null<String>> = null;
 		var asked: Bool = false;
@@ -331,9 +337,7 @@ final class PreferIfExpressionChain implements Check {
 			return boolClaims ?? [];
 		}
 		return {
-			switchScope: SwitchChain.scopeOf(
-				plugin, file, source, root, resolveIndex, OperatorSelection.of(plugin, [{ file: file, source: source }])
-			),
+			switchScope: SwitchChain.scopeOf(plugin, file, source, root, resolveIndex, selection),
 			types: types,
 			boolTernaryClaims: boolTernaryClaims
 		};

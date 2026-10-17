@@ -48,7 +48,7 @@ final class OperandBinder {
 		self: (node, b) -> b.selfTier(node),
 		binding: (ident, b) -> b.hitOf(ident)?.bindingSpan?.from,
 		bound: (from, b) -> b._annotations.exists(from) ? b._declared.writtenHeadTier(from, b._wrappers, b._builtins) : null,
-		initializer: (_, use, b) -> NominalTypes.localInitializer(use, b._tree, b._shape, b._annotations),
+		initializer: (_, use, b) -> b.initializerOf(use),
 		loopElement: (_, _) -> null,
 		unbound: (ident, b) -> b.inheritedTier(ident, false),
 		access: (node, b) -> b.accessTier(node),
@@ -131,6 +131,11 @@ final class OperandBinder {
 		return name == null || callee.kind != _shape.fieldAccessKind || callee.children.length != 1
 			? Unknown
 			: memberTier(callee.children[0], name, true);
+	}
+
+	/** The expression initialising the local `use` reads, written with no type: the local holds ITS type (`NominalTypes.localInitializer`). */
+	private function initializerOf(use: QueryNode): Null<QueryNode> {
+		return NominalTypes.localInitializer(use, _tree, _shape, _annotations);
 	}
 
 	/**
