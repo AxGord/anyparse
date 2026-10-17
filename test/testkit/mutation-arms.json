@@ -23327,7 +23327,7 @@
 		{
 			"name": "M-NEGCOND-OVERLOAD-BLIND",
 			"type": "anyparse.check.NegatedCondition",
-			"method": "builtinNot",
+			"method": "builtin",
 			"force": "true",
 			"note": "an `@:op(!A)` overload is ignored, so a `!` that need not be the complement is dropped and the branches swapped"
 		},
@@ -23398,16 +23398,16 @@
 			"name": "M-INVERT-VALUE-NO-DESCEND",
 			"type": "anyparse.check.InvertNegatedIfElse",
 			"method": "walk",
-			"find": "\t\t\t\t\t\tout.push(finding(scan, span, message + COMMENT_BLOCKS));\n",
-			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, message + COMMENT_BLOCKS));\n\t\t\t\t\t\treturn;\n",
+			"find": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams) + COMMENT_BLOCKS));\n",
+			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams) + COMMENT_BLOCKS));\n\t\t\t\t\t\treturn;\n",
 			"note": "a report-only value form stops the walk, so an invertible conditional inside it is never fixed"
 		},
 		{
 			"name": "M-INVERT-VALUE-DESCEND-FIXED",
 			"type": "anyparse.check.InvertNegatedIfElse",
 			"method": "walk",
-			"find": "\t\t\t\t\t\tout.push(finding(scan, span, message));\n\t\t\t\t\t\treturn;\n",
-			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, message));\n",
+			"find": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams)));\n\t\t\t\t\t\treturn;\n",
+			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, valueMessage(node, swap, seams)));\n",
 			"note": "a fixable value form does not stop the walk, so a nested one is rewritten in the same pass (overlapping edits)"
 		},
 		{
@@ -24305,7 +24305,7 @@
 		{
 			"name": "M-NEGCOND-KEEP-DEFAULT-NO-RETURN",
 			"type": "anyparse.check.NegatedCondition",
-			"method": "keepsDefaultElse",
+			"method": "armValue",
 			"find": "value.kind == d.returnKind",
 			"replace": "false",
 			"note": "a statement else branch `return null;` is not read through to its value, so `if (!a) return x; else return null;` is inverted"
@@ -24313,7 +24313,7 @@
 		{
 			"name": "M-NEGCOND-KEEP-DEFAULT-NO-BLOCK",
 			"type": "anyparse.check.NegatedCondition",
-			"method": "keepsDefaultElse",
+			"method": "armValue",
 			"find": "value.kind == d.blockKind",
 			"replace": "false",
 			"note": "a braced else branch `{ return false; }` is not read through, so it is inverted while the bare one is kept"
@@ -24321,16 +24321,16 @@
 		{
 			"name": "M-NEGCOND-KEEP-DEFAULT-NO-PAREN",
 			"type": "anyparse.check.NegatedCondition",
-			"method": "keepsDefaultElse",
-			"find": "BoolExprShape.unwrapParens(value, site.seams.parenKind)",
-			"replace": "value",
+			"method": "armValue",
+			"find": "BoolExprShape.unwrapParens(returned ? value.children[0] : value, site.seams.parenKind)",
+			"replace": "returned ? value.children[0] : value",
 			"note": "a parenthesised default `!a ? x : (null)` is no default arm and is inverted"
 		},
 		{
 			"name": "M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL",
 			"type": "anyparse.check.NegatedCondition",
-			"method": "keepsDefaultElse",
-			"find": "CaseValueKey.isDefaultLiteral(literal.kind, site.source.substring(span.from, span.to), d.values)",
+			"method": "isDefault",
+			"find": "CaseValueKey.isDefaultLiteral(value.kind, site.source.substring(span.from, span.to), site.seams.defaults.values)",
 			"replace": "true",
 			"note": "every else arm counts as a default, so `!a ? x : 1` is no longer inverted under the option"
 		},
@@ -24353,34 +24353,18 @@
 		{
 			"name": "M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM",
 			"type": "anyparse.check.InvertNegatedIfElse",
-			"method": "statementInvertible",
-			"find": "NegatedCondition.positive(ifNode.children[0], elseBranch, scan.site)",
-			"replace": "NegatedCondition.positive(ifNode.children[0], ifNode.children[1], scan.site)",
+			"method": "statementSwap",
+			"find": "NegatedCondition.swapOf(ifNode.children[0], ifNode.children[1], elseBranch, scan.site)",
+			"replace": "NegatedCondition.swapOf(ifNode.children[0], elseBranch, ifNode.children[1], scan.site)",
 			"note": "an if statement is gated on its THEN branch: `if (!a) return null; else return x;` is no longer inverted under the option"
-		},
-		{
-			"name": "M-INVERT-KEEP-DEFAULT-STATEMENT-EDIT-THEN-ARM",
-			"type": "anyparse.check.InvertNegatedIfElse",
-			"method": "statementEdits",
-			"find": "NegatedCondition.positive(cond, elseBranch, scan.site)",
-			"replace": "NegatedCondition.positive(cond, thenBranch, scan.site)",
-			"note": "the statement fix re-validates against the THEN branch: a reported `if (!a) return null; else return x;` gets no edit"
 		},
 		{
 			"name": "M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM",
 			"type": "anyparse.check.InvertNegatedIfElse",
 			"method": "valueVerdict",
-			"find": "invertibleOperand(cond, elseBranch, scan.site)",
-			"replace": "invertibleOperand(cond, thenBranch, scan.site)",
+			"find": "NegatedCondition.swapOf(cond, thenBranch, elseBranch, scan.site)",
+			"replace": "NegatedCondition.swapOf(cond, elseBranch, thenBranch, scan.site)",
 			"note": "a value form is gated on its THEN arm: `!a ? null : x` is no longer reported under the option"
-		},
-		{
-			"name": "M-INVERT-KEEP-DEFAULT-VALUE-EDIT-THEN-ARM",
-			"type": "anyparse.check.InvertNegatedIfElse",
-			"method": "valueEdits",
-			"find": "invertibleOperand(cond, node.children[2], scan.site)",
-			"replace": "invertibleOperand(cond, node.children[1], scan.site)",
-			"note": "the value fix re-validates against the THEN arm: a reported `!a ? null : x` gets no edit"
 		},
 		{
 			"name": "M-DEFLIT-NULL-DROPPED",
@@ -24413,6 +24397,329 @@
 			"find": " || key == STRING_PREFIX",
 			"replace": "",
 			"note": "an empty string is no default literal, so `!a ? x : \"\"` is inverted under `keepDefaultElse`"
+		},
+		{
+			"name": "M-NEGCOND-SWAP-DEFAULT-LAST-DROPPED",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "swapOf",
+			"find": "final turned: Null<String> = defaultLastCondition(cond, thenArm, elseArm, site);",
+			"replace": "final turned: Null<String> = null;",
+			"note": "the swap never asks the `defaultLast` turn: `a ? null : x` stays default-first under the option"
+		},
+		{
+			"name": "M-NEGCOND-SWAP-DEFAULT-LAST-ARMS-SWAPPED",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "swapOf",
+			"find": "defaultLastCondition(cond, thenArm, elseArm, site)",
+			"replace": "defaultLastCondition(cond, elseArm, thenArm, site)",
+			"note": "the turn reads the arms the wrong way round: `a ? null : x` is left and `a ? x : null` is turned default-first"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-ANY-COND",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "defaultLastCondition",
+			"find": "\t\tif (!d.turnableKinds.contains(written.kind)) return null;\n",
+			"replace": "",
+			"note": "any condition is turned: a compound or an ordered comparison is wrapped `!( … )` instead of being left"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-BOTH-LITERALS",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "defaultLastCondition",
+			"find": " || isLiteral(last.value, site)",
+			"replace": "",
+			"note": "two literals are turned too: `a ? 0.0 : 1.0` becomes `!a ? 1.0 : 0.0`"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-THEN-ANY",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "defaultLastCondition",
+			"find": " || !isDefault(first.value, site)",
+			"replace": "",
+			"note": "a non-default then arm is turned: `a ? x : y` becomes `!a ? y : x`"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-RETURN-MISMATCH",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "defaultLastCondition",
+			"find": "first.returned != last.returned || ",
+			"replace": "",
+			"note": "a returning then arm is turned against a non-returning else statement: `if (a) return null; else g();`"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "defaultLastCondition",
+			"find": "\n\t\t\t|| !builtin(written, d.negationKinds, site)",
+			"replace": "",
+			"note": "the `!` added and the `==` flipped are never asked of the operator table: an `@:op(!A)` / `@:op(A == B)` abstract is turned"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-EQ-UNASKED",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "readSeams",
+			"find": "negationKinds: [notKind].concat(equality)",
+			"replace": "negationKinds: [notKind]",
+			"note": "only the not is asked: an `@:op(A == B)` without its `!=` twin is flipped"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-BOOL-COND",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "readSeams",
+			"find": "if (k != shape.boolLitKind && k != shape.parenKind) k",
+			"replace": "if (k != shape.parenKind) k",
+			"note": "a bool-literal condition is turned: `true ? null : x` becomes `!true ? x : null`"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-ON",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "site",
+			"find": "DEFAULT_LAST) ?? false",
+			"replace": "DEFAULT_LAST) ?? true",
+			"note": "`defaultLast` is read as on when no config sets it, so every project silently turns `a ? null : x`"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-NO-KEEP",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "site",
+			"find": "keep: last || ",
+			"replace": "keep: ",
+			"note": "`defaultLast` no longer implies `keepDefaultElse`: `!a ? x : null` is inverted back to `a ? null : x` and the two directions ping-pong"
+		},
+		{
+			"name": "M-INVERT-DEFAULT-LAST-VALUE-MESSAGE",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "valueMessage",
+			"find": "swap.defaultLast ? MSG_DEFAULT_TERNARY : MSG_TERNARY",
+			"replace": "MSG_TERNARY",
+			"note": "a default-last turn of a ternary is worded as a dropped negation"
+		},
+		{
+			"name": "M-INVERT-DEFAULT-LAST-STATEMENT-MESSAGE",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "walk",
+			"find": "swap.defaultLast ? MSG_DEFAULT_STATEMENT : MSG_STATEMENT",
+			"replace": "MSG_STATEMENT",
+			"note": "a default-last turn of an if statement is worded as a dropped negation"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-INTERPOLATION-AS-LITERAL",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "isLiteral",
+			"find": "\n\t\t\t&& !value.children.exists(c -> d.interpolationKinds.contains(c.kind))",
+			"replace": "",
+			"note": "an interpolating string reads as a literal, so `folder ? null : '${item.id}'` is left default-first"
+		},
+		{
+			"name": "M-XRENAME-NOT-CANDIDATE",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "isCandidate",
+			"find": "(decl.category == NamingCategory.Type || decl.category == NamingCategory.EnumValue)",
+			"replace": "false",
+			"note": "no type or enum value reaches the cross-file rename arm"
+		},
+		{
+			"name": "M-XRENAME-FINDINGS-NONE",
+			"type": "anyparse.check.Naming",
+			"method": "riskyCrossFileFindings",
+			"force": "[]",
+			"note": "the verifier is handed no finding of the cross-file arm"
+		},
+		{
+			"name": "M-XRENAME-EDITS-DROPPED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "slicesOf",
+			"find": "edits: change.edits",
+			"replace": "edits: []",
+			"note": "the engine's edits never reach the edit set"
+		},
+		{
+			"name": "M-XRENAME-INDEXED-UNDERLYING",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "!indexed.contains(type.underlyingRaw ?? '')",
+			"replace": "true",
+			"note": "an implicit Int value is refused as if it were its name"
+		},
+		{
+			"name": "M-XRENAME-RUNTIME-TYPE",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "!kinds.contains(type.kind)",
+			"replace": "false",
+			"note": "a class is renamed although its name exists at run time"
+		},
+		{
+			"name": "M-XRENAME-MAIN-TYPE",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "type.isMain",
+			"replace": "false",
+			"note": "a module main type is renamed without its file"
+		},
+		{
+			"name": "M-XRENAME-TYPE-META",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "unsafeTypeMeta",
+			"force": "false",
+			"note": "a type carrying @:native / @:keep is renamed"
+		},
+		{
+			"name": "M-XRENAME-SAFE-META",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "unsafeTypeMeta",
+			"find": "!inert.contains(hit.annotation)",
+			"replace": "true",
+			"note": "an inert @:forward refuses the rename"
+		},
+		{
+			"name": "M-XRENAME-GUARDED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "type.guarded",
+			"replace": "false",
+			"note": "a type only one build sees is renamed"
+		},
+		{
+			"name": "M-XRENAME-ENUM-CTOR",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "type.kind != ctx.shape.enumAbstractDeclKind",
+			"replace": "false",
+			"note": "a plain enum constructor is treated as an enum-abstract value"
+		},
+		{
+			"name": "M-XRENAME-STRING",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "stringNamesIt",
+			"force": "false",
+			"note": "a literal naming the declaration does not refuse"
+		},
+		{
+			"name": "M-XRENAME-TYPE-PATH",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "ReflectionScan.runtimeTypePath(ctx.surface.whole, decl.name)",
+			"replace": "false",
+			"note": "a Type.resolveClass path literal does not refuse"
+		},
+		{
+			"name": "M-XRENAME-OLD-SHARED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "ctx.index.refs.declaringFiles(decl.name).length != 1",
+			"replace": "false",
+			"note": "a second declaration of the old type name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-NEW-DECLARED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "ctx.index.refs.declaringFiles(newName).length > 0",
+			"replace": "false",
+			"note": "a library type of the new name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-NEW-SPELLED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "spelledInProject",
+			"force": "false",
+			"note": "a project reference already spelling the new name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-VALUE-OLD-SHARED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "valueDeclaredElsewhere(decl.name, type, ctx)",
+			"replace": "false",
+			"note": "another enum value of the old name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-VALUE-NEW-SHARED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "valueDeclaredElsewhere(newName, type, ctx)",
+			"replace": "false",
+			"note": "another enum value of the new name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-VALUE-PROPERTY",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueDeclaredElsewhere",
+			"find": "!m.hasGetter && !m.hasSetter",
+			"replace": "true",
+			"note": "an enum abstract property of the old name refuses as if it were a value"
+		},
+		{
+			"name": "M-XRENAME-VALUE-BOUND",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "boundWhereRenamed",
+			"force": "false",
+			"note": "a binding of the new name in a file the rename edits does not refuse"
+		},
+		{
+			"name": "M-XRENAME-OUTSIDE",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "slicesOf",
+			"find": "!ctx.files.exists(f -> f.file == change.file)",
+			"replace": "false",
+			"note": "a narrowed run edits a project file outside its scope"
+		},
+		{
+			"name": "M-XRENAME-VALUE-META",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "member.metaNames.length > 0",
+			"replace": "false",
+			"note": "a value carrying metadata is renamed"
+		},
+		{
+			"name": "M-XRENAME-NO-PROJECT",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "edits",
+			"find": "RefactorSupport.completeProjectSourcesOf(plugin);",
+			"replace": "RefactorSupport.completeProjectSourcesOf(plugin) ?? files;",
+			"note": "the arm runs without the whole project indexed"
+		},
+		{
+			"name": "M-XVERIFY-NO-MERGE",
+			"type": "anyparse.check.FixVerifierCrossFile",
+			"method": "componentsOf",
+			"find": "group.files.exists(f -> touched.contains(f))",
+			"replace": "false",
+			"note": "edit sets sharing a file are judged apart, over spans the other one moved"
+		},
+		{
+			"name": "M-RISKYARM-CROSS-NOT-VERIFIED",
+			"type": "anyparse.check.FixVerifierCrossFile",
+			"method": "extend",
+			"find": "if (cross.length == 0) continue;",
+			"replace": "continue;",
+			"note": "the verifier never runs the cross-file arm"
+		},
+		{
+			"name": "M-XVERIFY-NO-BISECT",
+			"type": "anyparse.check.FixVerifierCrossFile",
+			"method": "judgeComponent",
+			"find": "safe.length > 0 && ",
+			"replace": "false && ",
+			"note": "one failing rename reverts every rename of its component"
+		},
+		{
+			"name": "M-CONFINED-NO-OWNER-FILE",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "isPrivateMemberConfined",
+			"find": "hasSubtype(owner, ownerFile)",
+			"replace": "hasSubtype(owner)",
+			"note": "a namesake type's subtypes unconfine a private member"
+		},
+		{
+			"name": "M-XRENAME-STRING-TYPES-ONLY",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "renameFor",
+			"find": "isType && stringNamesIt(decl.name, ctx)",
+			"replace": "stringNamesIt(decl.name, ctx)",
+			"note": "a literal spelling an enum-abstract value's name (data) refuses its rename"
 		}
 	]
 }

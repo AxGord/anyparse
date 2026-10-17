@@ -250,6 +250,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.NamingCheckLocalFixTest',
 		'unit.check.NamingCheckMemberFixTest',
 		'unit.check.NamingCheckTest',
+		'unit.check.NamingCrossRenameTest',
 		'unit.check.NamingPrivatizeTest',
 		'unit.check.NarrowLocalScopeCheckTest',
 		'unit.check.NoUnderscorePrefixCheckTest',
@@ -1491,11 +1492,18 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ImportOutsideGuardCheckTest#testAMoveThatRebindsAConstructorIsRefused :: control :: M-GUARD-REBIND-BLIND',
 			'unit.check.ImpossibleCastTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.ImpossibleIsCheckTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
+			'unit.check.InvertNegatedIfElseCheckTest#testDefaultLastImpliesKeepDefaultElse :: control :: M-NEGCOND-DEFAULT-LAST-NO-KEEP',
+			'unit.check.InvertNegatedIfElseCheckTest#testDefaultLastIsOffByDefault :: control :: M-NEGCOND-DEFAULT-LAST-ON',
+			'unit.check.InvertNegatedIfElseCheckTest#testDefaultLastLeavesWhatItCannotTurn :: control :: '
+				+ 'M-NEGCOND-DEFAULT-LAST-BOTH-LITERALS,M-NEGCOND-DEFAULT-LAST-THEN-ANY,M-NEGCOND-DEFAULT-LAST-ANY-COND,'
+				+ 'M-NEGCOND-DEFAULT-LAST-BOOL-COND,M-NEGCOND-DEFAULT-LAST-RETURN-MISMATCH',
+			'unit.check.InvertNegatedIfElseCheckTest#testDefaultLastMessages :: control :: '
+				+ 'M-INVERT-DEFAULT-LAST-VALUE-MESSAGE,M-INVERT-DEFAULT-LAST-STATEMENT-MESSAGE',
+			'unit.check.InvertNegatedIfElseCheckTest#testDefaultLastTurnsADefaultFirstChoice :: control :: '
+				+ 'M-NEGCOND-SWAP-DEFAULT-LAST-DROPPED,M-NEGCOND-SWAP-DEFAULT-LAST-ARMS-SWAPPED,M-NEGCOND-DEFAULT-LAST-INTERPOLATION-AS-LITERAL',
 			'unit.check.InvertNegatedIfElseCheckTest#testIfExpressionElseIfChainNotFlagged :: control :: M-INVERT-VALUE-CHAIN-SWAPPED',
 			'unit.check.InvertNegatedIfElseCheckTest#testKeepDefaultElseInvertsANonDefaultElse :: control :: '
-				+ 'M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL,M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM,'
-				+ 'M-INVERT-KEEP-DEFAULT-STATEMENT-EDIT-THEN-ARM,M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM,'
-				+ 'M-INVERT-KEEP-DEFAULT-VALUE-EDIT-THEN-ARM',
+				+ 'M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL,M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM,M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM',
 			'unit.check.InvertNegatedIfElseCheckTest#testKeepDefaultElseIsOffByDefault :: control :: M-NEGCOND-KEEP-DEFAULT-ON',
 			'unit.check.InvertNegatedIfElseCheckTest#testKeepDefaultElseKeepsADefaultIfExpressionElse :: control :: '
 				+ 'M-NEGCOND-KEEP-DEFAULT-BLIND',
@@ -1648,6 +1656,21 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REFLECTION-REPORT-INDEX-RENAME',
 			'unit.check.NamingCheckTest#testEnumAbstractPropertyAndStaticTakeTheMemberPolicy :: control :: '
 				+ 'M-NAMING-ENUMVALUE-PROPERTY,M-NAMING-ENUMVALUE-STATIC,M-NAMING-PROPERTY-FACTS-NULL',
+			'unit.check.NamingCrossRenameTest#testANamesakesSubtypesDoNotUnconfineAPrivate :: control :: M-CONFINED-NO-OWNER-FILE',
+			'unit.check.NamingCrossRenameTest#testATypedefRenamesInEveryFileThatNamesIt :: control :: '
+				+ 'M-XRENAME-NOT-CANDIDATE,M-XRENAME-FINDINGS-NONE,M-XRENAME-EDITS-DROPPED',
+			'unit.check.NamingCrossRenameTest#testAnEnumAbstractAndItsValuesRename :: control :: M-XRENAME-INDEXED-UNDERLYING',
+			'unit.check.NamingCrossRenameTest#testEachGateRefusesWithItsReason :: control :: '
+				+ 'M-XRENAME-RUNTIME-TYPE,M-XRENAME-MAIN-TYPE,M-XRENAME-TYPE-META,M-XRENAME-GUARDED,'
+				+ 'M-XRENAME-ENUM-CTOR,M-XRENAME-STRING,M-XRENAME-TYPE-PATH,M-XRENAME-OLD-SHARED,M-XRENAME-NEW-DECLARED,'
+				+ 'M-XRENAME-NEW-SPELLED,M-XRENAME-VALUE-OLD-SHARED,M-XRENAME-VALUE-NEW-SHARED,M-XRENAME-VALUE-BOUND,'
+				+ 'M-XRENAME-OUTSIDE,M-XRENAME-VALUE-META',
+			'unit.check.NamingCrossRenameTest#testInertNeighboursDoNotRefuse :: control :: '
+				+ 'M-XRENAME-SAFE-META,M-XRENAME-VALUE-PROPERTY,M-XRENAME-STRING-TYPES-ONLY',
+			'unit.check.NamingCrossRenameTest#testSetsSharingAFileFormOneComponent :: control :: M-XVERIFY-NO-MERGE',
+			'unit.check.NamingCrossRenameTest#testTheArmNeedsTheWholeProject :: control :: M-XRENAME-NO-PROJECT',
+			'unit.check.NamingCrossRenameTest#testTheOracleRunRenamesAndRevertsTheMiss :: control :: '
+				+ 'M-RISKYARM-CROSS-NOT-VERIFIED,M-XVERIFY-NO-BISECT',
 			'unit.check.NamingPrivatizeTest#testANameThePrivateRuleRejectsIsNotACandidate :: control :: M-PRIVATIZE-RULE-UNCHECKED',
 			'unit.check.NamingPrivatizeTest#testANarrowedRunSeesAReaderOutsideItsScope :: control :: M-PRIVATIZE-TOKENS-UNCHECKED',
 			'unit.check.NamingPrivatizeTest#testAPublicUnderscoreFieldReadOnlyInsideIsPrivatized :: control :: '
@@ -1715,6 +1738,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OperandTypingTest#testEveryTypeOfAUsedModuleBringsItsExtensions :: control :: M-USING-HOSTS-MODULE',
 			'unit.check.OperandTypingTest#testTheLastUsingDeclaringTheExtensionWins :: control :: M-BINDER-EXTENSION-LAST-USING',
 			'unit.check.OperandTypingTest#testTheReceiversOwnUsingOutranksTheFiles :: control :: M-BINDER-EXTENSION-ATUSING',
+			'unit.check.OperatorOverloadGateTest#testDefaultLastAsksTheOperatorItWrites :: control :: '
+				+ 'M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND,M-NEGCOND-DEFAULT-LAST-EQ-UNASKED',
 			'unit.check.OperatorOverloadGateTest#testInvertTernarySkipsOverloadedNot :: control :: M-NEGCOND-OVERLOAD-BLIND',
 			'unit.check.OperatorOverloadGateTest#testTernaryReturnKeepsOverloadedNot :: control :: M-NEGCOND-OVERLOAD-BLIND,M-OPSEL-REPORT-DROPPED',
 			'unit.check.OptionalParamShorthandCheckTest#testCommentInsideTheWrapperIsKept :: control :: M-OPTPARAM-COMMENT-DROPPED',
@@ -7612,13 +7637,52 @@ class TestDiscoveryParityTest extends Test {
 			'M-NEGCOND-KEEP-DEFAULT-THEN-ARM',
 			'M-PTR-KEEP-DEFAULT-THEN-ARM',
 			'M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM',
-			'M-INVERT-KEEP-DEFAULT-STATEMENT-EDIT-THEN-ARM',
 			'M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM',
-			'M-INVERT-KEEP-DEFAULT-VALUE-EDIT-THEN-ARM',
 			'M-DEFLIT-NULL-DROPPED',
 			'M-DEFLIT-FALSE-DROPPED',
 			'M-DEFLIT-ZERO-DROPPED',
-			'M-DEFLIT-EMPTY-STRING-DROPPED'
+			'M-DEFLIT-EMPTY-STRING-DROPPED',
+			'M-NEGCOND-SWAP-DEFAULT-LAST-DROPPED',
+			'M-NEGCOND-SWAP-DEFAULT-LAST-ARMS-SWAPPED',
+			'M-NEGCOND-DEFAULT-LAST-ANY-COND',
+			'M-NEGCOND-DEFAULT-LAST-BOTH-LITERALS',
+			'M-NEGCOND-DEFAULT-LAST-THEN-ANY',
+			'M-NEGCOND-DEFAULT-LAST-RETURN-MISMATCH',
+			'M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND',
+			'M-NEGCOND-DEFAULT-LAST-EQ-UNASKED',
+			'M-NEGCOND-DEFAULT-LAST-BOOL-COND',
+			'M-NEGCOND-DEFAULT-LAST-ON',
+			'M-NEGCOND-DEFAULT-LAST-NO-KEEP',
+			'M-INVERT-DEFAULT-LAST-VALUE-MESSAGE',
+			'M-INVERT-DEFAULT-LAST-STATEMENT-MESSAGE',
+			'M-NEGCOND-DEFAULT-LAST-INTERPOLATION-AS-LITERAL',
+			'M-XRENAME-NOT-CANDIDATE',
+			'M-XRENAME-FINDINGS-NONE',
+			'M-XRENAME-EDITS-DROPPED',
+			'M-XRENAME-INDEXED-UNDERLYING',
+			'M-XRENAME-RUNTIME-TYPE',
+			'M-XRENAME-MAIN-TYPE',
+			'M-XRENAME-TYPE-META',
+			'M-XRENAME-SAFE-META',
+			'M-XRENAME-GUARDED',
+			'M-XRENAME-ENUM-CTOR',
+			'M-XRENAME-STRING',
+			'M-XRENAME-TYPE-PATH',
+			'M-XRENAME-OLD-SHARED',
+			'M-XRENAME-NEW-DECLARED',
+			'M-XRENAME-NEW-SPELLED',
+			'M-XRENAME-VALUE-OLD-SHARED',
+			'M-XRENAME-VALUE-NEW-SHARED',
+			'M-XRENAME-VALUE-PROPERTY',
+			'M-XRENAME-VALUE-BOUND',
+			'M-XRENAME-OUTSIDE',
+			'M-XRENAME-VALUE-META',
+			'M-XRENAME-NO-PROJECT',
+			'M-XVERIFY-NO-MERGE',
+			'M-RISKYARM-CROSS-NOT-VERIFIED',
+			'M-XVERIFY-NO-BISECT',
+			'M-CONFINED-NO-OWNER-FILE',
+			'M-XRENAME-STRING-TYPES-ONLY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

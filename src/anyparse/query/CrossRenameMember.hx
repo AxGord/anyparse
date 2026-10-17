@@ -404,7 +404,12 @@ final class CrossRenameMember {
 			);
 			if (capture != null) return Err('${entry.file}: $capture');
 
-			changes.push({ file: entry.file, newSource: newSource, count: offsets.length });
+			changes.push({
+				file: entry.file,
+				newSource: newSource,
+				count: offsets.length,
+				edits: edits
+			});
 		}
 		return changes.length == 0 ? Err('rename "${target.memberName}" -> "$newName" changed nothing') : Ok(changes, ADVISORY);
 	}

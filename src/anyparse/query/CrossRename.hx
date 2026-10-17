@@ -35,6 +35,13 @@ typedef FileChange = {
 	var file: String;
 	var newSource: String;
 	var count: Int;
+
+	/**
+	 * The splices that turn the file's source into `newSource`, as original-source spans. A caller
+	 * that must combine several renames over one file, or verify a subset of them (the `naming` rule's
+	 * compiler-verified rename arm), needs the edits rather than the finished text.
+	 */
+	var edits: Array<{ span: Span, text: String }>;
 }
 
 /**
@@ -281,7 +288,12 @@ final class CrossRename {
 			final refusal: Null<String> = ParseGate.refusal(plugin, newSource, 'rewritten ${entry.file}');
 			if (refusal != null) return Err(refusal);
 
-			changes.push({ file: entry.file, newSource: newSource, count: occurrences.length });
+			changes.push({
+				file: entry.file,
+				newSource: newSource,
+				count: occurrences.length,
+				edits: edits
+			});
 		}
 		return changes.length == 0 ? Err('rename "$typeName" -> "$newName" changed nothing') : Ok(changes, ADVISORY);
 	}

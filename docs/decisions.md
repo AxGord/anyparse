@@ -3855,3 +3855,48 @@ decided the question; it may not become a record of runs.
   a generic enum's constructor shares. The facts' `macro` / `enum` kind spellings moved to `CompilerFacts`
   (`MACRO_FIELD_KIND`, `ENUM_TYPE_KIND`; the private copies in `StaticExtensionFacts` and `CallGraphFacts` deleted) —
   branch `feat/infra-N24`
+- N34 — `keepDefaultElse` stopped the swap from CREATING `hasNext ? null : _changeEvent`, but earlier `--fix` runs had
+  already written six such sites into TM, and no rule turned them back. → option `defaultLast` (default OFF) under
+  `invert-negated-if-else`: a choice whose THEN arm is a default literal and whose else arm is no literal is turned so
+  the default goes last (`c ? null : v` -> `!c ? v : null`, `a != b ? null : v` -> `a == b ? v : null`; a value `if`;
+  an `if` statement `if (c) return <default>; else return v;`). Decisions: (1) `defaultLast` IMPLIES `keepDefaultElse`
+  (read together in `NegatedCondition.site`): with only the new option on, the swap would invert `!c ? v : null` back to
+  `c ? null : v` and the two directions would ping-pong across `--fix` passes; a project asking for "default last" wants
+  both halves. (2) ONE door for both directions, `NegatedCondition.swapOf(cond, thenArm, elseArm, site)`: the strip
+  (`invertibleOperand`) first, then `defaultLastCondition`; `invert-negated-if-else`'s three forms ask only it, so a
+  swapped choice can never qualify again (a turned `!c ? v : null` is a kept negation, a flipped `a == b ? v : null` has a
+  non-default then arm). (3) Positive whitelist of turnable conditions: an atom that takes a bare `!`
+  (`NegationSeams.atomicKinds` minus the paren and the bool literal) or an `==` / `!=`, which flips NaN-safely; the text
+  is the shared engine's (`NegationScan.negateConditionText`). A compound, an ordered comparison (the engine would keep
+  `!(a < b)` wrapped without a type proof), an `is` or a `?:` would need a wrap or a De Morgan rewrite, which reads worse
+  than the order it fixes — untouched. A not the strip refuses (an overloaded `!`, a kept default else) is not turned
+  either: no `!!`. (4) The operator gate is `OperatorSelection` over the operators the turn WRITES — the not it adds and
+  the `==` / `!=` it flips (`NegatedCondition.builtin`, which the strip's not check now shares). (5) "Literal" for the
+  else arm is `CaseValueKey.isLiteral` (any number, bool, `null`, string, a negated number) minus an interpolating
+  string, which computes its value (TM `folder ? null : '${incrementalCloudAction.cloudId}'`), so two literals
+  (`_targetSelected ? 0.0 : 1.0`) are a mapping and stay; arms are read the way `keepDefaultElse` reads them
+  (`armValue`), and both or neither must be a `return`. (6) The four ternary builders keep the orientation of the guard
+  they collapse (`PreferTernaryReturn` quotes its condition byte for byte, so it cannot carry a rebuilt one); a
+  default-first ternary one of them writes from a default-first guard is turned by the swap on the next pass, and
+  nothing turns it back — the fixed point is pinned over all five rules (`testDefaultLastFixReachesAFixedPoint`) —
+  branch `feat/infra-N34`
+- N27 A5 — a type / enum-value finding had no fix (`NOT_A_MEMBER`) although `rename --scope` performs the cross-file
+  rename. → `NamingCrossRename`, the CROSS-FILE half of `RiskyArm` (`riskyCrossFileFindings` / `riskyCrossFileFix`,
+  edit sets of `RiskyCrossFileEdit`), driving `CrossRename.crossRenameType` / `CrossRenameMember.crossRenameMember` —
+  no second engine; `FileChange.edits` hands their span edits out so several renames combine over one file.
+  RISKY, because the engines' contract is "every miss is a compile error": `FixVerifierCrossFile.extend` (after every
+  per-file arm) judges each edit set as a whole — components by shared file, coverage asked per component (an edited file
+  no judging configuration compiles declines it), bisect over sets with `FixVerifier.isolateFailers`, the complement
+  confirmed before anything is kept. Fail-closed POSITIVE gates for what a typecheck cannot see: whole project indexed;
+  type kinds whose name the compiler erases (`compileTimeTypeDeclKinds` typedef / abstract / enum abstract — a class keeps
+  its name at run time: `Type.getClassName`, `resolveClass`, serialization, so it is refused rather than proven unread);
+  enum-abstract values only (a plain enum constructor's name is runtime-visible), valued by an initializer or an
+  `indexValuedEnumAbstractUnderlyings` underlying (Haxe: an implicit `String` value is the name, an implicit `Int` one the
+  previous plus one); not a main / guarded / metadata-carrying type; for a TYPE no `StringLiteral` naming it and no runtime type path
+  (`ReflectionScan.runtimeTypePath`) — not for a value, which has no runtime name (TM `'vertical'` literals are data); the old name declared once (a leftover would bind elsewhere — CrossRenameMember's own
+  documented silent case is an imported homonym value); the new name declared nowhere (resolution index, std included) and
+  spelled in no project file but a comment; an enum abstract's PROPERTY is no value for those homonym tests; every edited
+  file in the run. Type / EnumValue rules carry `pascalCase` (the arm is their only consumer). Separately (A5's "5 private
+  members" in a WHOLE-scope run: 1 renamed by N26, 2 correct refusals, 2 owner-name ambiguities):
+  `isPrivateMemberConfined(?ownerFile)` passes the declaring file to `hasSubtype`, so only edges resolving to the owner's
+  own declaration count (both naming paths pass it; other callers unchanged) — branch `feat/infra-N27`

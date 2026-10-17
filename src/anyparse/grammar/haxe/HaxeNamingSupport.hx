@@ -243,14 +243,22 @@ final class HaxeNamingSupport implements NamingSupport {
 				requireMods: [],
 				forbidMods: [],
 				format: new EReg("^[A-Z][a-zA-Z0-9]*$", ''),
-				label: 'PascalCase type'
+				label: 'PascalCase type',
+				// A type's rename reaches every file that names it, so only `naming`'s compiler-verified
+				// cross-file arm (`NamingCrossRename`) asks for this correction; every other path declines
+				// the category before it gets here.
+				normalize: HaxeIdentifierCase.pascalCase
 			},
 			{
 				category: NamingCategory.EnumValue,
 				requireMods: [],
 				forbidMods: [],
 				format: new EReg("^[A-Z][a-zA-Z0-9_]*$", ''),
-				label: 'PascalCase or UPPER_SNAKE enum value'
+				label: 'PascalCase or UPPER_SNAKE enum value',
+				// The PascalCase branch: the smaller edit for a lower-case value (`goals` -> `Goals`), and the
+				// spelling an `enum abstract` beside it most often uses. Asked only by the cross-file arm, as
+				// for a type.
+				normalize: HaxeIdentifierCase.pascalCase
 			},
 			{
 				category: NamingCategory.Constant,
@@ -337,8 +345,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * report-only BY CONSTRUCTION — the SAME regex fixed its findings the moment the identical policy
 	 * came from the built-in default instead. The corrections are the grammar's, not the config's, so they are taken from
 	 * `defaults()`: the candidate set for a category is exactly the `normalize` functions the built-in
-	 * policy attaches to THAT category, and a category the built-in leaves report-only — a type, an
-	 * enum value, whose rename reaches every file that names it — gets none here either.
+	 * policy attaches to THAT category. A type and an enum value take theirs too, whose rename reaches
+	 * every file that names it: only `naming`'s compiler-verified cross-file arm asks for it.
 	 *
 	 * The candidates are tried against `format`, the config's OWN regex, and a name is corrected only
 	 * when EXACTLY ONE of them conforms. Two conforming candidates is a question the config did not
