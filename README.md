@@ -195,7 +195,9 @@ A second family — `add-member`, `add-import`, `add-element`, `replace-node` �
 new code: the snippet is placed at an AST-resolved position, then the file is re-emitted
 through the writer so the new code is formatted by the grammar's own rules and
 re-parse-validated in one step. Their inverses `remove-element` / `remove-import` /
-`remove-member` delete a node (with its doc-comment) the same way. `set-doc` adds or
+`remove-member` delete a node (with its doc-comment) the same way; `remove-element --kind <Kind>`
+removes the enclosing node of that kind an address names (`--match 'g($a)' --kind ExprStmt` takes the
+statement the call sits in), the lift `replace-node` / `patch` already had. `set-doc` adds or
 replaces a declaration's doc-comment, and `set-modifier` flips its visibility / adds or
 removes modifiers (`public`, `+static`, `-inline`, …) — both at a cursor, without
 retyping the declaration (the safe replacement for editing a modifier via `replace-node`).

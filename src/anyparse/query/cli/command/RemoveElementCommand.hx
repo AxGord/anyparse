@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
@@ -53,6 +54,7 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 		var selectExpr: Null<String> = null;
 		var matchExpr: Null<String> = null;
 		var nth: Null<Int> = null;
+		var kind: Null<String> = null;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -66,6 +68,8 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
 					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
+				case '--kind':
+					kind = CliArgs.expectValue(args, ++i, '--kind');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -121,9 +125,24 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 			);
 			return EXIT_RUNTIME;
 		}
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		// `--kind` names the node to cut rather than its first token, so it goes through the
+		// address layer `replace-node` / `patch` share — a position narrows to the innermost node
+		// of the kind at the cursor, a selector or pattern lifts to its innermost enclosing one —
+		// and the op removes exactly that node.
+		final liftKind: Null<String> = kind;
+		if (liftKind != null) {
+			final target: Null<ReplaceTarget> = CliEdit.resolveEditTarget(
+				'remove-element', source, filePath, plugin, selectExpr, matchExpr, posSpec, nth, liftKind
+			);
+			if (target == null) return EXIT_RUNTIME;
+			return CliEdit.finishEdit(
+				'remove-element', filePath, write, RemoveElement.removeTarget(source, target, reformat, plugin, withDoc, optsJson), fix,
+				RemoveElement.describeTarget(source, target, plugin, withDoc)
+			);
+		}
 		final pos: Null<Position> = CliEdit.resolveAddressPos('remove-element', source, plugin, posSpec, selectExpr, matchExpr, nth);
 		if (pos == null) return EXIT_RUNTIME;
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		// The address is unambiguous — `FnMember:f` and `MetaCall:@:pin` each remove exactly
 		// what they name — and the op still reported both as `wrote <file>`. That line is what
 		// made an address resolving one declaration outward indistinguishable from the edit
@@ -148,6 +167,9 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 		CliIo.sysPrint('                      (descendant); must resolve to exactly one node\n');
 		CliIo.sysPrint("  --match '<pattern>' apq-search structural pattern ($x metavars); exactly one\n");
 		CliIo.sysPrint('  --nth <k>           Pick the k-th (1-based) of several --select/--match matches\n');
+		CliIo.sysPrint('  --kind <Kind>       Remove the node of that kind the address names: with --select /\n');
+		CliIo.sysPrint('                      --match the innermost enclosing <Kind> (`--match \'trace($$x)\'\n');
+		CliIo.sysPrint('                      --kind ExprStmt`), with a position the innermost <Kind> at it\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --keep-doc      Leave the element\'s leading doc comment behind\n');

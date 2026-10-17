@@ -22100,6 +22100,14 @@
 			"find": "if (Date.now().getTime() - _started > _bound) {",
 			"replace": "if (false) {",
 			"note": "await polls a wedged background driver forever: a stopped driver still answers the liveness probe, so the run never ends"
+		},
+		{
+			"name": "M-REMOVE-ELEMENT-KIND-IGNORED",
+			"type": "anyparse.query.cli.command.RemoveElementCommand",
+			"method": "runRemoveElement",
+			"find": "if (liftKind != null) {",
+			"replace": "if (false) {",
+			"note": "remove-element ignores --kind and re-reads the address by its first token, so a match that starts no statement removes the call ARGUMENT instead of the statement the kind names"
 		}
 	]
 }

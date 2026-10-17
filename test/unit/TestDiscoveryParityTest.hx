@@ -2658,6 +2658,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UsingInsertRefusalTest#testStaticExtensionCoveredAnchorRefuses :: control :: M-PSE-USING-INSERT-SILENT',
 			'unit.check.UsingInsertRefusalTest#testStaticExtensionUncoveredAnchorAppendsOneEdit :: guard :: ',
 			'unit.check.UsingInsertRefusalTest#testUncoveredAnchorStillInserts :: guard :: ',
+			'unit.cli.AddressCliTest#testRemoveElementKindLift :: control :: M-REMOVE-ELEMENT-KIND-IGNORED',
 			'unit.cli.AddressCliTest#testRemoveElementReportFollowsKeepDoc :: control :: M-REMOVE-CUT-ANNOTATIONS-NONE',
 			'unit.cli.AddressCliTest#testRemoveElementReportNamesWhatTheCutTook :: control :: M-REMOVE-CUT-ANNOTATIONS-NONE',
 			'unit.cli.AddressCliTest#testRemoveElementReportOnAModifierPositionNamesTheDeclaration :: control :: M-REMOVE-CUT-SUBJECT-RAW',
@@ -7016,7 +7017,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-DRIVER-READS-STDIN',
 			'M-DRIVER-UNBOUNDED',
 			'M-DRIVER-BOUND-IGNORES-ROUNDS',
-			'M-PENDING-UNBOUNDED'
+			'M-PENDING-UNBOUNDED',
+			'M-REMOVE-ELEMENT-KIND-IGNORED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
