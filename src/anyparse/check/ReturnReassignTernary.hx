@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.check.NegatedCondition.InversionSeams;
+import anyparse.check.NegatedCondition.InversionSite;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
@@ -83,7 +85,9 @@ using Lambda;
  * copying the condition, the r-value and the returned identifier verbatim from their
  * spans. The condition is a `ParenGuard` hole: it gains parentheses exactly where it would bind
  * across `?` bare (a ternary, an assignment, an arrow lambda, `in`), so precedence is preserved;
- * every other condition is emitted bare, per the no-redundant-parens preference. The replacement is
+ * every other condition is emitted bare, per the no-redundant-parens preference. A condition whose
+ * top-level node is a built-in `!` is emitted POSITIVE, the two values swapped and both made holes
+ * too (`NegatedCondition.ternaryEdit`, the read `invert-negated-if-else` makes). The replacement is
  * emitted on ONE line and the WRITER lays it out -- an over-long merge wraps into the
  * project's ternary layout through the same `RefactorSupport.canonicalize` every fix
  * goes through, so this check owns no wrapping policy.
@@ -145,9 +149,9 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
+		final seams: Null<Seams> = readSeams(plugin, files);
 		return seams == null ? [] : [
-			for (entry in files) for (m in matchesIn(entry.source, plugin, seams))
+			for (entry in files) for (m in matchesIn(entry.file, entry.source, plugin, seams))
 				{
 					file: entry.file,
 					span: m.ifSpan,
@@ -161,10 +165,11 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
+		final file: String = violations.length == 0 ? '' : violations[0].file;
+		final seams: Null<Seams> = readSeams(plugin, [{ file: file, source: source }], index);
 		if (seams == null) return [];
 		final byKey: Map<String, Match> = [];
-		for (m in matchesIn(source, plugin, seams)) byKey['${m.ifSpan.from}:${m.ifSpan.to}'] = m;
+		for (m in matchesIn(file, source, plugin, seams)) byKey['${m.ifSpan.from}:${m.ifSpan.to}'] = m;
 
 		final guarded: Array<GuardedEdit> = [];
 		final plain: Array<{ span: Span, text: String }> = CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
@@ -179,20 +184,26 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		], plugin);
 	}
 
-	/** Every collapsible pair in `source` -- the one traversal `run` and `fix` share. */
-	private static function matchesIn(source: String, plugin: GrammarPlugin, s: Seams): Array<Match> {
+	/** Every collapsible pair in `file`'s `source` -- the one traversal `run` and `fix` share. */
+	private static function matchesIn(file: String, source: String, plugin: GrammarPlugin, s: Seams): Array<Match> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
+		final site: Null<InversionSite> = NegatedCondition.siteOf(s.negation, file, source, tree);
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final nestedFnSpans: Array<Span> = [];
 		collectNestedFnSpans(tree, s.nestedFnKinds, nestedFnSpans);
 		final out: Array<Match> = [];
-		collectMatches(tree, source, comments, s, tree, nestedFnSpans, false, out);
+		collectMatches(tree, source, comments, s, tree, nestedFnSpans, false, out, site);
 		return out;
 	}
 
-	/** Bundle the required `RefShape` / control-flow kinds, or null when a required one is unset (the check is then a no-op). */
-	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+	/**
+	 * Bundle the required `RefShape` / control-flow kinds, or null when a required one is unset (the check is then a no-op).
+	 * `files` / `report` scope the negation read's operator table (`NegatedCondition.readSeams`).
+	 */
+	private static function readSeams(
+		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, ?report: SymbolIndex
+	): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
 		if (ifKinds.length == 0) return null;
@@ -222,6 +233,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 			// plus the method / module-level declarations, which are not function VALUES.
 			fnKinds: (shape.functionKinds ?? []).concat(nestedFnKinds),
 			blockKinds: support.blockKinds(),
+			negation: NegatedCondition.readSeams(plugin, files, report),
 			shape: shape
 		};
 	}
@@ -229,19 +241,19 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 	/** Walk `node`; at each statement list collect the collapsible `if`/`return` pairs. */
 	private static function collectMatches(
 		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, tree: QueryNode,
-		nestedFnSpans: Array<Span>, retTyped: Bool, out: Array<Match>
+		nestedFnSpans: Array<Span>, retTyped: Bool, out: Array<Match>, site: Null<InversionSite>
 	): Void {
 		if (retTyped && s.blockKinds.contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length - 1) {
-				final m: Null<Match> = matchPair(kids[i], kids[i + 1], source, comments, s, tree, nestedFnSpans);
+				final m: Null<Match> = matchPair(kids[i], kids[i + 1], source, comments, s, tree, nestedFnSpans, site);
 				if (m != null) out.push(m);
 			}
 		}
 		final childRetTyped: Bool = s.fnKinds.contains(node.kind)
 			? TypeResolver.functionReturnTypeSource(node, source, s.bodyKinds, s.paramKinds) != null
 			: retTyped;
-		for (c in node.children) collectMatches(c, source, comments, s, tree, nestedFnSpans, childRetTyped, out);
+		for (c in node.children) collectMatches(c, source, comments, s, tree, nestedFnSpans, childRetTyped, out, site);
 	}
 
 	/**
@@ -251,7 +263,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 	 */
 	private static function matchPair(
 		ifNode: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams,
-		tree: QueryNode, lambdaSpans: Array<Span>
+		tree: QueryNode, lambdaSpans: Array<Span>, site: Null<InversionSite>
 	): Null<Match> {
 		if (!s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
 		final assign: Null<QueryNode> = assignmentIn(ifNode.children[1], s);
@@ -285,9 +297,9 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 			ifSpan: ifSpan,
 			edit: blocked
 				? null
-				: ParenGuard.ternaryEdit(
-					new Span(ifSpan.from, retSpan.to), 'return ', source.substring(condSpan.from, condSpan.to),
-					source.substring(rhsSpan.from, rhsSpan.to), source.substring(retIdentSpan.from, retIdentSpan.to), ';'
+				: NegatedCondition.ternaryEdit(
+					new Span(ifSpan.from, retSpan.to), 'return ', condition, source.substring(rhsSpan.from, rhsSpan.to),
+					source.substring(retIdentSpan.from, retIdentSpan.to), ';', source, site
 				)
 		};
 	}
@@ -396,6 +408,9 @@ private typedef Seams = {
 	var nestedFnKinds: Array<String>;
 	var fnKinds: Array<String>;
 	var blockKinds: Array<String>;
+
+	/** The negation read the emitted ternary is oriented by; null when the grammar has no not kind. */
+	var negation: Null<InversionSeams>;
 	var shape: RefShape;
 }
 

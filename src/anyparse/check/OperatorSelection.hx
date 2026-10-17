@@ -146,6 +146,9 @@ final class OperatorSelection {
 	/** The files to index when the plugin carries no resolution scope of its own. */
 	private final _files: Array<{ file: String, source: String }>;
 
+	/** The report index over `_files` when the caller already holds one (a fix is handed it); null builds it on demand. */
+	private final _report: Null<SymbolIndex>;
+
 	private final _shape: RefShape;
 
 	/** Literal kinds whose value's type is built in, so such an operand can never carry an overload. */
@@ -169,9 +172,12 @@ final class OperatorSelection {
 	/** Operator node KIND -> the names of the types that overload it; null until first demand. */
 	private var _declarers: Null<Map<String, Array<String>>> = null;
 
-	private function new(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, shape: RefShape) {
+	private function new(
+		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, shape: RefShape, report: Null<SymbolIndex>
+	) {
 		_plugin = plugin;
 		_files = files;
+		_report = report;
 		_shape = shape;
 		final literalTypeNames: Map<String, String> = shape.literalTypeNames ?? [];
 		_literalKinds = [for (kind in literalTypeNames.keys()) kind];
@@ -357,9 +363,8 @@ final class OperatorSelection {
 		final built: Null<Array<SymbolIndex>> = _indexes;
 		if (built != null) return built;
 		final resolution: Null<SymbolIndex> = IndexScope.resolutionIndexOf(_plugin);
-		final resolved: Array<SymbolIndex> = resolution == null
-			? [IndexScope.report(_files, _plugin)]
-			: [resolution, IndexScope.report(_files, _plugin)];
+		final report: SymbolIndex = _report ?? IndexScope.report(_files, _plugin);
+		final resolved: Array<SymbolIndex> = resolution == null ? [report] : [resolution, report];
 		_indexes = resolved;
 		return resolved;
 	}
@@ -368,10 +373,17 @@ final class OperatorSelection {
 	 * The selection for `plugin` over `files`, or null when the grammar declares no
 	 * operator-overload annotation. A null answer is the caller's signal to assume the built-in
 	 * operator, which is what every rule did before this seam existed.
+	 *
+	 * `report`, when given, is the report index a `fix` is handed (`Check.fix`'s `index`): it spans
+	 * every file of the run, where `files` there is the one file being fixed, so an overload declared
+	 * in a sibling module stays visible to a fix that DECIDES something by it rather than only
+	 * re-checking a finding the run already gated.
 	 */
-	public static function of(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>): Null<OperatorSelection> {
+	public static function of(
+		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, ?report: SymbolIndex
+	): Null<OperatorSelection> {
 		final shape: RefShape = plugin.refShape();
-		return shape.operatorOverloadMetaName == null ? null : new OperatorSelection(plugin, files, shape);
+		return shape.operatorOverloadMetaName == null ? null : new OperatorSelection(plugin, files, shape, report);
 	}
 
 	/** The more conservative of two verdicts — `Overloaded` beats `Unproven` beats `Builtin`. */

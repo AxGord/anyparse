@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.DeclFallbackChain.DeclSeams;
+import anyparse.check.NegatedCondition.InversionSeams;
+import anyparse.check.NegatedCondition.InversionSite;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
@@ -74,8 +76,10 @@ import anyparse.runtime.Span;
  * r-values and the condition verbatim from their spans, so the one surviving
  * l-value evaluation (down from two textual occurrences -- the safe direction)
  * matches the original exactly. The condition is a `ParenGuard` hole: it gains parentheses exactly where it
- * would bind across `?` bare (a ternary, an assignment, an arrow lambda, `in`); every other condition is emitted
- * bare, per the no-redundant-parens preference. A comment inside a DROPPED region of the collapsed `if` (the
+ * would bind across `?` bare (a ternary, an assignment, an arrow lambda, `in`); every other condition is
+ * emitted bare, per the no-redundant-parens preference. A condition whose top-level node is a built-in `!`
+ * is emitted POSITIVE, the two values swapped and both made holes too (`NegatedCondition.ternaryEdit`, the
+ * read `invert-negated-if-else` makes). A comment inside a DROPPED region of the collapsed `if` (the
  * header, the else l-value, the braces) would be lost, so such an `if` is left
  * unflagged -- following `prefer-safe-nav`'s comment guard. Needs
  * `ifStatementKinds`, `exprStatementKind`, `blockStmtKind` (any unset makes the
@@ -110,7 +114,7 @@ final class PreferTernaryAssignment implements Check {
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
 				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			walk(tree, violations, entry.file, entry.source, comments, seams);
-			if (decl != null) for (e in declEdits(tree, entry.source, comments, decl)) violations.push({
+			if (decl != null) for (e in declEdits(tree, entry.source, comments, decl, null)) violations.push({
 				file: entry.file,
 				span: e.key,
 				rule: 'prefer-ternary-assignment',
@@ -126,19 +130,22 @@ final class PreferTernaryAssignment implements Check {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+		final file: String = violations.length == 0 ? '' : violations[0].file;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, [{ file: file, source: source }], index);
+		final site: Null<InversionSite> = NegatedCondition.siteOf(negation, file, source, tree);
 		final guarded: Array<GuardedEdit> = [];
 		final plain: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {
 				final m: Null<Match> = match(node, source, comments, seams);
-				final edit: Null<GuardedEdit> = m == null ? null : buildEdit(m, source, span, seams.shape);
+				final edit: Null<GuardedEdit> = m == null ? null : buildEdit(m, source, span, seams.shape, site);
 				if (edit != null) guarded.push(edit);
 				return edit;
 			});
 		final decl: Null<DeclSeams> = DeclFallbackChain.readSeams(plugin, AssignmentTreeHoist.readTreeSeams(plugin.refShape()));
-		final tree: Null<QueryNode> = decl == null ? null : ParseGate.parseOrNull(plugin, source);
 		if (decl != null && tree != null) {
 			final byKey: Map<String, GuardedEdit> = [];
-			for (e in declEdits(tree, source, comments, decl)) byKey['${e.key.from}:${e.key.to}'] = e.edit;
+			for (e in declEdits(tree, source, comments, decl, site)) byKey['${e.key.from}:${e.key.to}'] = e.edit;
 			for (v in violations) {
 				final edit: Null<GuardedEdit> = v.span == null ? null : byKey['${v.span.from}:${v.span.to}'];
 				if (edit == null) continue;
@@ -267,10 +274,11 @@ final class PreferTernaryAssignment implements Check {
 	}
 
 	/**
-	 * Build the `lhs op cond ? thenRhs : elseRhs;` edit replacing the whole `if`/`else` span, the condition a `ParenGuard` hole.
+	 * Build the `lhs op cond ? thenRhs : elseRhs;` edit replacing the whole `if`/`else` span, the condition a `ParenGuard` hole,
+	 * oriented positive by `NegatedCondition.ternaryEdit` (`if (!c) x = a; else x = b;` writes `x = c ? b : a;`).
 	 * A ternary that only passes a nullable value through (`x != null ? x : null`) is written as that value.
 	 */
-	private static function buildEdit(m: Match, source: String, span: Span, shape: RefShape): Null<GuardedEdit> {
+	private static function buildEdit(m: Match, source: String, span: Span, shape: RefShape, site: Null<InversionSite>): Null<GuardedEdit> {
 		final thenSpan: Null<Span> = m.thenAssign.span;
 		final thenRhsSpan: Null<Span> = m.thenRhs.span;
 		final condSpan: Null<Span> = m.condition.span;
@@ -280,7 +288,7 @@ final class PreferTernaryAssignment implements Check {
 		final thenRhs: String = source.substring(thenRhsSpan.from, thenRhsSpan.to);
 		final elseRhs: String = source.substring(elseRhsSpan.from, elseRhsSpan.to);
 		final passed: Null<GuardedEdit> = passThroughEdit(span, prefix, m.condition, m.thenRhs, m.elseRhs, source, shape);
-		return passed ?? ParenGuard.ternaryEdit(span, prefix, source.substring(condSpan.from, condSpan.to), thenRhs, elseRhs, ';');
+		return passed ?? NegatedCondition.ternaryEdit(span, prefix, m.condition, thenRhs, elseRhs, ';', source, site);
 	}
 
 	/**
@@ -289,10 +297,11 @@ final class PreferTernaryAssignment implements Check {
 	 * branch), rebuilt as `var x:T = c ? a : init;` with the condition a `ParenGuard` hole. The same two
 	 * refusals as the ordinary arm: a null-narrowing condition when a value is a bool literal, and a
 	 * comment anywhere in the replaced region outside the copied prefix, condition, value and
-	 * initializer.
+	 * initializer. `site` orients the ternary positive (`NegatedCondition.ternaryEdit`); `run` hands
+	 * none, since the orientation decides no finding.
 	 */
 	private static function declEdits(
-		tree: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, d: DeclSeams
+		tree: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, d: DeclSeams, site: Null<InversionSite>
 	): Array<{ key: Span, edit: GuardedEdit }> {
 		final out: Array<{ key: Span, edit: GuardedEdit }> = [];
 		for (m in DeclFallbackChain.collect(tree, source, comments, d)) if (DeclFallbackChain.ownedByTernary(m, d)) {
@@ -309,9 +318,9 @@ final class PreferTernaryAssignment implements Check {
 			final head: String = '${m.prefix.text} = ';
 			out.push({
 				key: m.declSpan,
-				edit: passThroughEdit(m.region, head, cond, value, m.init, source, d.shape) ?? ParenGuard.ternaryEdit(
-					m.region, head, source.substring(condSpan.from, condSpan.to), source.substring(valueSpan.from, valueSpan.to),
-					source.substring(initSpan.from, initSpan.to), ';'
+				edit: passThroughEdit(m.region, head, cond, value, m.init, source, d.shape) ?? NegatedCondition.ternaryEdit(
+					m.region, head, cond, source.substring(valueSpan.from, valueSpan.to), source.substring(initSpan.from, initSpan.to),
+					';', source, site
 				)
 			});
 		}

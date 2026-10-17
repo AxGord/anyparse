@@ -302,6 +302,23 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		Assert.equals('var k:String = s != null ? s : \'d\';', es[0].text);
 	}
 
+	/** A negated condition collapses to the POSITIVE ternary, the two r-values swapped. */
+	@:pin('control') @:killer('M-PTA-NO-ORIENT', 'M-NEGCOND-SWAP-OFF')
+	public function testNegatedConditionEmitsPositiveTernary(): Void {
+		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f() {\n\t\tif (!a) x = 1;\n\t\telse x = 2;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('x = a ? 2 : 1;', es[0].text);
+	}
+
+	/** The decl arm too: the initializer becomes the `?` value. */
+	@:pin('control') @:killer('M-PTA-NO-ORIENT')
+	public function testDeclNegatedConditionEmitsPositiveTernary(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f() {\n\t\tvar k:Int = -1;\n\t\tif (!(id == 1)) k = 5;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('var k:Int = id == 1 ? -1 : 5;', es[0].text);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferTernaryAssignment(), src);
 	}

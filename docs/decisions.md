@@ -3521,3 +3521,24 @@ decided the question; it may not become a record of runs.
   option-independent and the `movableArglessNew` argument for them still holds (the report path reads no ORDER option).
   `fixWalk` / `emitReorder` now take the two options as one `FixOptions` record instead of a growing parameter list —
   branch `feat/infra-N16`
+- a negated ternary (`!c ? a : b`) and a negated value `if` were left as written, and the four rules that BUILD a
+  ternary out of a guard (`prefer-ternary-return`, `return-reassign-ternary`, `prefer-ternary-assignment`,
+  `prefer-ternary-expression`) wrote one themselves (`if (!x) return null; return f();` became
+  `return !x ? null : f();`, TM `ThumbnailReader`). One owner now, `NegatedCondition`: the condition's top-level node
+  (outer parens unwrapped) is a built-in `!` (`OperatorSelection`, the gate `invert-negated-if-else` already had), the
+  positive form is the operand with one redundant paren dropped, and a comment the rebuild would drop (between the
+  `!` and the kept operand) refuses. `invert-negated-if-else` gained the value forms in place of a sibling rule: the
+  swap is the same exact complement and the same three edits, so a second rule would have been a second copy of the
+  gate. Decisions inside it: a branch that is the same construct bare (a ternary chain `!c ? a : d ? e : f`, an
+  else-if) is skipped — the swap would re-nest the chain, not invert it; a comment the positive condition drops, or
+  one in the glue between condition and branches (it stays put while the branches move and would describe the other
+  one), leaves a value form REPORT-ONLY (the statement form keeps its old "unreported"), and the walk descends into a
+  report-only node since nothing of it is rewritten; each of the three value splices is a `ParenGuard` hole, so the
+  parse round-trip — not a precedence table — decides `!(a = b) ? x : y` -> `(a = b) ? y : x` against
+  `!(a || b) ? x : y` -> `a || b ? y : x`. The statement form now refuses only a DROPPED comment: one inside the kept
+  operand travels verbatim (`if (!(a /* k */ && b))` used to be skipped). The builders swap the two values and make
+  both of them holes too; `prefer-ternary-return` keeps the negated form when the guard carries its own trailing
+  comment (it rides the `?` value, and moved to the `:` slot a `//` glued before the `;` would swallow it).
+  `OperatorSelection.of` takes the fix's report index (`?report`): a builder DECIDES the orientation in `fix`, where
+  `files` is the one file being fixed, so an `@:op(!A)` declared in a sibling module would otherwise go unseen —
+  branch `feat/infra-N18`
