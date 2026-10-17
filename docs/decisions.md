@@ -3274,6 +3274,21 @@ decided the question; it may not become a record of runs.
   arguments constrains none, as the type slot does, so `new $T(...)` still counts every construction; `apq rewrite`
   refuses such a match on a construction that writes some (`Match.unwritten`): no metavariable holds them, so the
   splice would drop them — branch `feat/infra-N9`
+- a module-level value inside `#if` hid the imported static of its name in EVERY build and was never typed → it is
+  what a bare name means only in the builds compiling it (Haxe 4.3.7 `--interp`: `#if never final lock:Int #end` +
+  `import A.*` prints `A.lock`; two module-level fields of one name in one build: `Duplicate module field
+  declaration`). `ValueNameBinding.moduleValuesAt(fi, name, at)` answers it from the `#if` branches
+  (`TypeNameBinding.branchPathAt`, `CondBranchPath.within` / `comparable`, as guarded imports are read): the one
+  declaration every build compiling the use compiles, else each one some such build may compile plus what the imports
+  supply in the builds compiling none. Coverage (`#if a … #else … #end` declaring the name in both branches) is not
+  read, so the imports stay a candidate there — a build that may not exist, never a missed one. `importedStatics`
+  takes the use's offset (no offset: only an unguarded declaration hides the import); `FileInfo.moduleFields` carries
+  each declaration's span. In the call graph a member of the enclosing type's chain comes first (4.3.7: an inherited
+  instance member beats a module-level field; a supertype's static is not in scope bare — `CallGraphKeys.memberMayBind`,
+  extracted from `importedStatic`), then the module-level value — now typed by its annotation — and a call on a value
+  only some builds declare dispatches on each build's type; one untyped build, or imports that may bind more than one
+  static, leave the receiver unresolved. Refs is unchanged: it binds a module-level value to nothing (-1), the lexical
+  answer `rename` and the unused checks read — branch `feat/infra-N7`
 - the two `stripAnsi` copies disagreed: `LintFixSafePass` removed every CSI sequence, `TestTranscript` only an SGR
   colour code (`ESC[<digits;>m`) → one `SourceText.stripAnsi`, the CSI-wide reading. A transcript row behind an
   erase-line (`ESC[2K`, what a progress printer redraws with) kept its escape, failed the indent-anchored row

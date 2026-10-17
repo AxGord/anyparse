@@ -541,11 +541,19 @@ typedef FileInfo = {
 	var accessGrants: Array<String>;
 
 	/**
-	 * The names of the module's module-level value declarations (`RefShape.moduleValueDeclKinds`: a function, a `var`, a
-	 * `final`), a conditional region's included — what a bare name in the module means before any static an import brings
-	 * in under it (`ValueNameBinding.importedStatics`).
+	 * The module's module-level value declarations (`RefShape.moduleValueDeclKinds`: a function, a `var`, a `final`), each
+	 * one in source order, a conditional region's included — what a bare name in the module means, in the builds that compile
+	 * it, before any static an import brings in under it (`ValueNameBinding.moduleValuesAt`).
 	 */
-	var moduleFields: Array<String>;
+	var moduleFields: Array<ModuleField>;
+}
+
+/** One module-level value declaration of a file (`FileInfo.moduleFields`): its name, and the span of the node declaring it. */
+typedef ModuleField = {
+	final name: String;
+
+	/** The declaring node's span — where a reference's binding to it starts, and where its `#if` branch is read. */
+	final span: Span;
 }
 
 /**

@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.ValueNameBinding.FieldAlias;
 import anyparse.query.ValueNameBinding.ImportedStatic;
 import anyparse.query.ValueNameBinding.ImportedStatics;
+import anyparse.query.ValueNameBinding.ModuleValues;
 import haxe.Exception;
 import unit.CheckFixture;
 import utest.Assert;
@@ -26,11 +27,53 @@ class ValueNameBindingTest extends Test {
 			+ '\tpublic static function g():Void {}\n}\n',
 			'Main.hx' => 'import a.A.*;\nimport a.A.g as held;\n\nvar x:Int = 1;\nfinal y = 2;\n#if foo\nfunction f() {}\n#end\n\nclass Main {}\n'
 		]);
-		Assert.equals('x,y,f', fileOf(index, 'Main.hx').moduleFields.join(','), 'module-level values only: no type, import or alias');
+		Assert.equals('x,y,f', [for (f in fileOf(index, 'Main.hx').moduleFields) f.name].join(
+			','
+		), 'module-level values only: no type, import or alias');
 		Assert.equals('', statics(index, 'Main.hx', 'x'), 'a module-level var hides the imported static');
-		Assert.equals('', statics(index, 'Main.hx', 'f'), 'a module-level function inside a conditional region too');
+		Assert.equals('A.f[a/A.hx]', statics(index, 'Main.hx', 'f'), 'one inside a conditional region hides it in its builds only');
 		Assert.equals('A.g[a/A.hx]', statics(index, 'Main.hx', 'g'), 'a name only the import binds is the imported static');
 		Assert.equals('A.g[a/A.hx]', statics(index, 'Main.hx', 'held'), 'an alias names no module-level value');
+	}
+
+	/**
+	 * A module-level value inside `#if` is what a bare name means in the builds compiling it only (`moduleValuesAt`, Haxe 4.3.7
+	 * `hx/p1`): a use every such build compiles binds it alone; a use of a branch it is an alternative of never does; any
+	 * other use may bind it or, in the builds without it, what the imports bind.
+	 */
+	@:pin('control')
+	@:killer('M-VALUES-MODULE-WITHIN') @:killer('M-VALUES-MODULE-ALTERNATIVE') @:killer('M-VALUES-IMPORTS-WITHIN')
+	@:killer('M-VALUES-IMPORTS-POSITION')
+	public function testAModuleValueUnderIfBindsInTheBuildsCompilingIt(): Void {
+		final source: String = 'import a.A.*;\n\n#if foo\nfinal x:Int = 1;\n#else\nvar x:String = "";\n#end\nfinal y:Int = 2;\n\n'
+			+ '#if foo\nclass InFoo {}\n#else\nclass InElse {}\n#end\n#if bar\nclass InBar {}\n#end\nclass Out {}\n'
+			+ '#if foo\nfinal z:Int = 1;\nclass ZFoo {}\n#else\nclass ZElse {}\n#end\n';
+		final index: SymbolIndex = indexOf([
+			'a/A.hx' => 'package a;\n\nclass A {\n\tpublic static var x:Int = 0;\n\tpublic static var y:Int = 0;\n\tpublic static var z:Int = 0;\n}\n',
+			'Main.hx' => source
+		]);
+		function at(type: String, name: String): String {
+			final values: Null<ModuleValues> = index.values.moduleValuesAt(fileOf(index, 'Main.hx'), name, source.indexOf('class $type'));
+			if (values == null) return 'none';
+			final imported: Null<ImportedStatics> = values.imported;
+			final decls: String = [
+				for (d in values.decls) d.name + '@' + source.substr(0, d.span.from).split('\n').length
+			].join(',');
+			return '$decls|${imported == null ? '-' : [for (s in imported.statics) render(s)].join(' ')}';
+		}
+		Assert.equals('x@4|-', at('InFoo', 'x'), 'the branch the use sits in');
+		Assert.equals('x@6|-', at('InElse', 'x'), 'a sibling region\'s #else is the same builds');
+		Assert.equals('x@4,x@6|A.x[a/A.hx]', at('InBar', 'x'), 'another region decides nothing: each branch, and the import');
+		Assert.equals('x@4,x@6|A.x[a/A.hx]', at('Out', 'x'), 'outside every region');
+		Assert.equals('y@8|-', at('InBar', 'y'), 'a declaration no #if guards binds everywhere');
+		Assert.equals('none', at('Out', 'w'), 'a name the module declares no value of');
+		Assert.equals('', statics(index, 'Main.hx', 'y'), 'and hides the import with no position too');
+		Assert.equals('A.x[a/A.hx]', statics(index, 'Main.hx', 'x'), 'a guarded one does not');
+		Assert.equals('|A.z[a/A.hx]', at('ZElse', 'z'), 'a use in a branch the value is an alternative of never binds it');
+		Assert.equals(
+			'', statics(index, 'Main.hx', 'x', source.indexOf('class InFoo')),
+			'at a use every build of which declares it, it hides the import'
+		);
 	}
 
 	@:pin('control')
@@ -173,8 +216,8 @@ class ValueNameBindingTest extends Test {
 	}
 
 	/** The statics `name` binds in `file`, as `Owner.member[declaring files]`, then `?` when one may be unlisted. */
-	private static function statics(index: SymbolIndex, file: String, name: String): String {
-		final found: ImportedStatics = index.values.importedStatics(fileOf(index, file), name);
+	private static function statics(index: SymbolIndex, file: String, name: String, ?at: Int): String {
+		final found: ImportedStatics = index.values.importedStatics(fileOf(index, file), name, at);
 		final out: Array<String> = [for (s in found.statics) render(s)];
 		if (found.unknown) out.push('?');
 		return out.join(' ');
