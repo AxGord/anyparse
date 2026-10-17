@@ -967,6 +967,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.GlobExpandTest',
 		'unit.query.GreedyDeclSpanEditBoundarySliceTest',
 		'unit.query.HaxelibResolverTest',
+		'unit.query.ImplicitSitesTest',
 		'unit.query.ImplicitStdScopeTest',
 		'unit.query.IndexScopeTest',
 		'unit.query.InheritanceMoveSliceTest',
@@ -995,6 +996,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.MoveFamilyCaptureTest',
 		'unit.query.MoveGuardedImportCarryTest',
 		'unit.query.MoveMemberSliceTest',
+		'unit.query.MoveMemberSplitSliceTest',
 		'unit.query.MoveSymbolSliceTest',
 		'unit.query.MutationSchemaTest',
 		'unit.query.MutationVerdictTest',
@@ -3404,6 +3406,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.GreedyDeclSpanEditBoundarySliceTest#testAGreedyModuleDeclSpanIsTrimmedToItsOwnLastToken :: control :: '
 				+ 'M-DECL-EDIT-SPAN-UNTRIMMED',
 			'unit.query.HaxelibResolverTest#testAMultiLibraryAnswerSplitsOneRootPerLibrary :: control :: M-HAXELIB-BATCH-COUNT-IGNORED',
+			'unit.query.ImplicitSitesTest#testAConstructionLandsItsValueArgumentsOnly :: control :: M-LANDING-TYPE-ARGS-AS-VALUES',
 			'unit.query.IndexScopeTest#testAChangedSourceIsRebuilt :: control :: M-INDEX-MEMO-UNVALIDATED',
 			'unit.query.IndexScopeTest#testTheKeyTellsEveryFileSetApart :: control :: M-INDEX-KEY-UNPREFIXED,M-INDEX-MEMO-TAG-IGNORED',
 			'unit.query.IndexScopeTest#testTheMemoDiesWithTheAmbientChain :: control :: M-INDEX-MEMO-OUTLIVES-AMBIENT',
@@ -4090,6 +4093,21 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-WILDCARD-RIVAL-ORDER-BLIND',
 			'unit.query.MoveFamilyCaptureTest#testASubModuleMoveRepointsNoWildcardCallerByteIdentically :: control :: '
 				+ 'M-WILDCARD-BINDS-BLIND',
+			'unit.query.MoveMemberSplitSliceTest#testAFieldSomethingElseReachesStaysAndRefuses :: control :: '
+				+ 'M-OWNED-FIELD-ANY-READER,M-OWNED-FIELD-ACCESS-BLIND,M-OWNED-FIELD-PROPERTY,M-OWNED-READERS-UNNAMED',
+			'unit.query.MoveMemberSplitSliceTest#testAReceiverTheOpCannotProveRefusesTheMove :: control :: '
+				+ 'M-RECEIVER-UNKNOWN-ROUTED,M-RECEIVER-UNRELATED-ROUTED,M-VIA-PRIVATE-REACHED',
+			'unit.query.MoveMemberSplitSliceTest#testASourceSubModuleTypeIsImportedAtTheDestination :: control :: '
+				+ 'M-CARRY-OWN-SUB-UNCARRIED',
+			'unit.query.MoveMemberSplitSliceTest#testFieldsOnlyTheMovedGroupUsesMoveAlong :: control :: M-OWNED-FIELDS-OFF',
+			'unit.query.MoveMemberSplitSliceTest#testKeepBareImportsTheDestinationStaticsInsteadOfQualifying :: control :: '
+				+ 'M-KEEP-BARE-IGNORED',
+			'unit.query.MoveMemberSplitSliceTest#testKeepBareRefusesWhatTheWildcardCouldRebind :: control :: '
+				+ 'M-KEEP-BARE-CLASH-BLIND,M-KEEP-BARE-NOT-MAIN',
+			'unit.query.MoveMemberSplitSliceTest#testReceiverQualifiedCallersRouteThroughTheHoldingField :: control :: '
+				+ 'M-RECEIVER-ROUTING-OFF',
+			'unit.query.MoveMemberSplitSliceTest#testTwoMembersNeedingPrivateAccessShareOneTypeGrant :: control :: '
+				+ 'M-ACCESS-GRANT-PER-MEMBER',
 			'unit.query.MoveSymbolSliceTest#testACommentOnlyFullyQualifiedMentionDoesNotRefuseTheMove :: control :: '
 				+ 'M-MOVE-FQN-COMMENT-MASK-NONE',
 			'unit.query.MoveSymbolSliceTest#testACommentOnlyMentionIsNotAReference :: control :: M-MOVE-NAMESCAN-COMMENT-COUNTED',
@@ -4097,7 +4115,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-MOVE-NAMESCAN-FULLSTOP-BLIND',
 			'unit.query.MoveSymbolSliceTest#testACutBeforeATrailingCommentKeepsOneSeparator :: control :: M-MOVE-CUT-TAKES-BOTH-RUNS',
 			'unit.query.MoveSymbolSliceTest#testAMiddleDeclarationWithOneBlankSideKeepsIt :: control :: M-MOVE-SIBLINGS-FALSE',
+			'unit.query.MoveSymbolSliceTest#testAModuleImportTheLadderDoesNotAgreeWithIsNotCarried :: control :: M-CARRY-OWN-SUB-UNCARRIED',
 			'unit.query.MoveSymbolSliceTest#testASiblingPackageIsNotAnAncestorSoItIsLeftAlone :: control :: M-MOVE-PACKAGE-CHAIN-ANY',
+			'unit.query.MoveSymbolSliceTest#testAStaticReceiverOnASiblingSubTypeIsCarried :: control :: '
+				+ 'M-CARRY-OWN-SUB-UNCARRIED,M-CARRY-OWN-SUB-PRIVATE',
 			'unit.query.MoveSymbolSliceTest#testAValuePositionIsStillNotPriced :: control :: M-MOVE-RECEIVER-ANY-IDENT',
 			'unit.query.MoveSymbolSliceTest#testAliasDependencyIsCarriedIntoTheDestination :: control :: M-MOVE-ALIAS-SUFFIX-DROPPED',
 			'unit.query.MoveSymbolSliceTest#testAliasImporterRepointedKeepingItsBinding :: control :: M-MOVE-ALIAS-SUFFIX-DROPPED',
@@ -4186,6 +4207,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RewriteSliceTest#testATemplateIsAlignedToEachSitesTerminator :: control :: M-REWRITE-TRAILER-UNALIGNED',
 			'unit.query.RewriteSliceTest#testAValueCaptureNeverTakesATypeArgument :: control :: '
 				+ 'M-MATCH-ONE-FLAT-RUN,M-MATCH-UNWRITTEN-DROPPED,M-REWRITE-UNWRITTEN-IGNORED',
+			'unit.query.RewriteSliceTest#testAnUnwrittenTypeAnnotationIsNeverDropped :: control :: '
+				+ 'M-MATCH-TYPE-SLOT-UNRECORDED,M-REWRITE-UNWRITTEN-IGNORED',
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
 				+ 'M-SETMOD-GUARDED-ANY-VISIBILITY',
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
@@ -7131,6 +7154,23 @@ class TestDiscoveryParityTest extends Test {
 			'M-SUBTYPE-ARGS-ARITY',
 			'M-OPERAND-NEW-CUT',
 			'M-MEMBER-KIND-IGNORED',
+			'M-LANDING-TYPE-ARGS-AS-VALUES',
+			'M-MATCH-TYPE-SLOT-UNRECORDED',
+			'M-CARRY-OWN-SUB-UNCARRIED',
+			'M-CARRY-OWN-SUB-PRIVATE',
+			'M-ACCESS-GRANT-PER-MEMBER',
+			'M-KEEP-BARE-IGNORED',
+			'M-KEEP-BARE-CLASH-BLIND',
+			'M-KEEP-BARE-NOT-MAIN',
+			'M-OWNED-FIELDS-OFF',
+			'M-OWNED-FIELD-ANY-READER',
+			'M-OWNED-FIELD-ACCESS-BLIND',
+			'M-OWNED-FIELD-PROPERTY',
+			'M-OWNED-READERS-UNNAMED',
+			'M-RECEIVER-ROUTING-OFF',
+			'M-RECEIVER-UNKNOWN-ROUTED',
+			'M-RECEIVER-UNRELATED-ROUTED',
+			'M-VIA-PRIVATE-REACHED',
 			'M-COND-ALTERNATIVE-REGIONS',
 			'M-COND-ALTERNATIVE-SPLIT',
 			'M-GRAPH-BODY-SPLIT',

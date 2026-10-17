@@ -171,6 +171,23 @@ class RewriteSliceTest extends Test {
 		Assert.isTrue(kept.contains('var b = new Box<Int>(1, 0);'), kept);
 	}
 
+	/**
+	 * A type the pattern does not write is no metavariable's either. `final $x = $v` over `final f:Float = 1` matched, and the
+	 * template `var $x = $v` wrote `var f = 1` — re-parseable, and an `Int` where there was a `Float`. Such a match is refused,
+	 * an unannotated declaration is still rewritten, and writing the type in the pattern (`final $x:$T = $v`) carries it.
+	 */
+	@:pin('control')
+	@:killer('M-MATCH-TYPE-SLOT-UNRECORDED') @:killer('M-REWRITE-UNWRITTEN-IGNORED')
+	public function testAnUnwrittenTypeAnnotationIsNeverDropped(): Void {
+		final typed: String = 'class C {\n\tfunction f() {\n\t\tfinal f:Float = 1;\n\t\ttrace(f);\n\t}\n}';
+		Assert.isTrue(isErr(Rewrite.rewrite(typed, "final $x = $v", "var $x = $v", true, new HaxeQueryPlugin())));
+		final kept: String = okText(Rewrite.rewrite(typed, "final $x:$T = $v", "var $x:$T = $v", true, new HaxeQueryPlugin()));
+		Assert.isTrue(kept.contains('var f:Float = 1;'), kept);
+		final plain: String = 'class C {\n\tfunction f() {\n\t\tfinal g = 2;\n\t\ttrace(g);\n\t}\n}';
+		final bare: String = okText(Rewrite.rewrite(plain, "final $x = $v", "var $x = $v", true, new HaxeQueryPlugin()));
+		Assert.isTrue(bare.contains('var g = 2;'), bare);
+	}
+
 	private function okText(res: EditResult): String {
 		return switch res {
 			case Ok(text): text;

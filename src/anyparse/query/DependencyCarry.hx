@@ -119,15 +119,22 @@ final class DependencyCarry {
 			// `dep` need not spell it. The rung is PRICED by `bindingOf`, so it must be CARRIED too —
 			// otherwise the move refuses with "no import to carry" over a statement that is right there.
 			final provider: Null<ImportInfo> = direct ?? moduleStatementBinding(dep, wanted, cursorInfo);
+			// A sub-module type of the source module itself is reached with no statement at all, and is the one such
+			// binding a statement CAN be written for — see `ownSubModuleImport`.
+			final ownSub: Null<String> = ownSubModuleImport(dep, wanted, provider, cursorInfo);
 			// A binding the destination has and the moved code does not share is the one thing carrying
 			// cannot repair: whichever of the two wins, code that compiled before means a different
 			// type, with no diagnostic anywhere. `wanted == null` is NOT a licence to skip the gate —
 			// the source binding is then merely unnameable, and it is exactly the case the base engine
 			// fell through on for a stdlib name, a package wildcard and a `#if`-guarded import alike.
 			final collision: Null<String> = carryCollision(
-				dep, wanted, cursorInfo, destInfo, destSource, files, provider != null, destRegions
+				dep, wanted, cursorInfo, destInfo, destSource, files, provider != null || ownSub != null, destRegions
 			);
 			if (collision != null) return CarryErr(collision);
+			if (ownSub != null) {
+				carryOwnSub(ownSub, dep, wanted, destInfo, files, carried);
+				continue;
+			}
 			if (provider == null) {
 				// The unguarded ladder has nothing to bring, which is the silent answer for every
 				// dependency reached through the stdlib, a wildcard or the ambient top level — and was also
@@ -166,7 +173,7 @@ final class DependencyCarry {
 		if (wildRefusal != null) return CarryErr(wildRefusal);
 		for (group in guarded) carried.push(GuardedImportCarry.blockText(group.condition, group.lines, shape));
 		return CarryOk(usingLinesToCarry(
-			source, tree, memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried,
+			source, tree, ShapeVocab.memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried,
 			plugin.lexicalRegions(destSource)
 		));
 	}
@@ -249,6 +256,28 @@ final class DependencyCarry {
 	}
 
 	/**
+	 * The simple names an `import <holder's module>.*;` binds (`staticNamesOf`: its MAIN type's statics, `enum abstract`
+	 * values and enum constructors) — what `move-member --keep-bare` must prove no other reference of the file it adds that
+	 * wildcard to spells.
+	 */
+	public static inline function wildcardBoundNames(holder: FileInfo, shape: RefShape): Array<String> {
+		return staticNamesOf(holder, shape);
+	}
+
+	/** Whether `info`'s file already declares the unguarded module-static wildcard `import <module>.*;`. */
+	public static function hasModuleStaticWildcard(info: FileInfo, module: String): Bool {
+		return info.imports.exists(imp -> !imp.guarded && imp.kind == ImportKind.Wild && imp.raw == '$module.*');
+	}
+
+	/**
+	 * Whether an import / using / alias statement of `info`'s file binds the simple name `name` itself — a field import
+	 * `import p.M.name;`, an alias `… as name` — which outranks any module-static wildcard (`keepBareRefusal`).
+	 */
+	public static function importsSimpleName(info: FileInfo, name: String): Bool {
+		return info.imports.exists(imp -> imp.kind != ImportKind.Wild && SourceText.lastSegment(imp.raw) == name);
+	}
+
+	/**
 	 * The source's explicit TOP-LEVEL statement that BINDS `dep`, or null when it has none.
 	 *
 	 * For a plain import / using that is a path whose last segment is `dep`, for an alias it is the
@@ -264,6 +293,32 @@ final class DependencyCarry {
 				!imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using || imp.kind == ImportKind.Alias)
 				&& SymbolIndex.pathImportedBy(imp) != null && SourceText.lastSegment(imp.raw) == dep
 		);
+	}
+
+	/**
+	 * The path to import at the destination for `dep` when the source reaches it as a SUB-module type of its own module
+	 * (`wanted`, from `bindingOf`'s module-own rung) and holds no `provider` statement for it, or null for any other binding.
+	 * Such a type is visible bare only inside the module that declares it — not even from a sibling file of the same package
+	 * — and the source holds no statement the carry could copy, so the move refused with "no import to carry" over a type
+	 * `import <module>.<Sub>;` names exactly. The module's MAIN type is not one: the package rung already reaches it from the
+	 * same package. A `private` sub-type is not importable by any spelling.
+	 */
+	private static function ownSubModuleImport(
+		dep: String, wanted: Null<String>, provider: Null<ImportInfo>, cursorInfo: FileInfo
+	): Null<String> {
+		final path: String = '${cursorInfo.module}.$dep';
+		return provider == null && wanted == path && cursorInfo.types.exists(t -> t.name == dep && !t.isMain && !t.isPrivate) ? path : null;
+	}
+
+	/**
+	 * Carry `import <ownSub>;` (`ownSubModuleImport`) unless the destination already reaches `dep` as `wanted` — the same
+	 * module, or an import of its own — or an earlier dependency carried the line.
+	 */
+	private static function carryOwnSub(
+		ownSub: String, dep: String, wanted: Null<String>, destInfo: FileInfo, files: Array<FileInfo>, carried: Array<String>
+	): Void {
+		final line: String = 'import $ownSub;';
+		if (bindingOf(dep, destInfo, files)?.path != wanted && !carried.contains(line)) carried.push(line);
 	}
 
 	/**
@@ -699,18 +754,6 @@ final class DependencyCarry {
 	}
 
 	/**
-	 * The kinds a MEMBER ACCESS projects as — the node whose receiver child is the head of a
-	 * `Helper.go()`. Read off the shape rather than spelled here, so a second grammar's own spellings
-	 * arrive with it; a shape that declares none contributes no receiver names at all.
-	 */
-	private static function memberAccessKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = [];
-		for (kind in [shape.fieldAccessKind, shape.nullSafeAccessKind, shape.forceFieldAccessKind]) if (kind != null && !out.contains(kind))
-			out.push(kind);
-		return out;
-	}
-
-	/**
 	 * Every UPPER-INITIAL name written as the RECEIVER of a member access inside `declSpan` —
 	 * the `Helper` of `Helper.go()`, of `Helper.CONST` and of `@:build(Helper.make())`.
 	 *
@@ -840,7 +883,7 @@ final class DependencyCarry {
 	): Array<String> {
 		final refs: Array<NameSpan> = [];
 		collectDependencyNames(tree, declSpan, typeRefShape, typeName, refs);
-		collectReceiverNames(tree, declSpan, shape.identKind, memberAccessKinds(shape), typeName, refs);
+		collectReceiverNames(tree, declSpan, shape.identKind, ShapeVocab.memberAccessKinds(shape), typeName, refs);
 		final shadows: Array<NameSpan> = functionTypeParamNames(plugin, source, declSpan);
 		for (t in cursorInfo.types)
 			if (t.span.from <= declSpan.from && t.span.to >= declSpan.to)

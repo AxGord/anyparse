@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.Matcher.Match;
+import anyparse.query.Matcher.Unwritten;
 import anyparse.query.ParenGuard.GuardedEdit;
 import anyparse.query.Pattern.PatternStar;
 import anyparse.runtime.Span;
@@ -73,17 +74,11 @@ final class Rewrite {
 		// END differently: a statement `try … catch (e) null;` owns its `;`, the same `try` as a
 		// value does not. One template cannot be right for both, so when the matches disagree each
 		// expansion is aligned to its own site's terminator. Matches of one shape are left alone.
-		// A pattern that writes no type arguments matches a construction that has some, and no
-		// metavariable holds them: splicing the template over the match would drop `<Int>` from
-		// `new Box<Int>(1)`, re-parseably. Refuse, naming the site, rather than guess.
-		for (m in accepted) for (at in m.unwritten) {
-			final lc: Position = at.lineCol(source);
-			return Err(
-				'rewrite: the match at ${lc.line}:${lc.col} writes type arguments the pattern does not '
-				+ '(`${source.substring(at.from, at.to)}`) — no metavariable holds them, so the replacement would drop them; '
-				+ 'write them in the pattern (`new $$C<$$T>(…)`)'
-			);
-		}
+		// A pattern that writes no type arguments matches a construction that has some, and one that
+		// writes no type matches a declaration that has one; no metavariable holds either, so splicing
+		// the template over the match would drop `<Int>` from `new Box<Int>(1)` or `:Float` from
+		// `final f:Float = 1`, re-parseably. Refuse, naming the site, rather than guess.
+		for (m in accepted) for (part in m.unwritten) return Err(unwrittenRefusal(source, part));
 		final trailers: Array<String> = [for (m in accepted) trailer(source, m.node)];
 		final mixed: Bool = trailers.exists(t -> t != trailers[0]);
 		final edits: Array<GuardedEdit> = [];
@@ -250,6 +245,21 @@ final class Rewrite {
 			if (!expansion.holes.exists(h -> h.to > cut)) return { text: text.substring(0, cut).rtrim(), holes: expansion.holes };
 		}
 		return expansion;
+	}
+
+	/** The refusal for a match whose `part` no metavariable holds (`Match.unwritten`), naming the site and the spelling that keeps it. */
+	private static function unwrittenRefusal(source: String, part: Unwritten): String {
+		return switch part {
+			case TypeArguments(at):
+				final lc: Position = at.lineCol(source);
+				'rewrite: the match at ${lc.line}:${lc.col} writes type arguments the pattern does not '
+					+ '(`${source.substring(at.from, at.to)}`) — no metavariable holds them, so the replacement would drop them; '
+					+ 'write them in the pattern (`new $$C<$$T>(…)`)';
+			case TypeAnnotation(at):
+				final lc: Position = at.lineCol(source);
+				'rewrite: the match at ${lc.line}:${lc.col} writes the type `${source.substring(at.from, at.to)}` the pattern does '
+					+ 'not — no metavariable holds it, so the replacement would drop it; write it in the pattern (`final $$x:$$T = $$v`)';
+		};
 	}
 
 }

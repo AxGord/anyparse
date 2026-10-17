@@ -151,7 +151,7 @@ final class PreferReadOnlyField implements Check {
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
 		final nameEnd: Int = nameEndOffset(source, span);
-		if (nameEnd < 0 || isProperty(source, nameEnd)) return;
+		if (nameEnd < 0 || SourceText.isProperty(source, nameEnd)) return;
 		// A file the grammar could not read can hold any write, so no internal-only proof
 		// survives it — but only when it can reach this MEMBER, which it can only do by
 		// spelling the name. A whole-project veto here silenced the rule for every file in a
@@ -219,14 +219,6 @@ final class PreferReadOnlyField implements Check {
 		final start: Int = i;
 		while (i < n && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
 		return i > start ? i : -1;
-	}
-
-	/** Whether the first non-whitespace byte at or after `nameEnd` is `(` — a property accessor head. */
-	private static function isProperty(source: String, nameEnd: Int): Bool {
-		final n: Int = source.length;
-		var i: Int = nameEnd;
-		while (i < n && SourceText.isSpace(source.fastCodeAt(i))) i++;
-		return i < n && source.fastCodeAt(i) == '('.code;
 	}
 
 	/** Whether `c` is an identifier character. */

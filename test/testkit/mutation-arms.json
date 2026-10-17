@@ -1348,9 +1348,9 @@
 		{
 			"name": "M-ADDMETA-ZERO-WIDTH-INSERT",
 			"type": "anyparse.query.AddMeta",
-			"method": "addMeta",
-			"find": "span: new Span(atNN, atNN + 1),\ntext: '$text\\n${lineIndentAt(source, atNN)}${source.charAt(atNN)}'",
-			"replace": "span: new Span(atNN, atNN),\ntext: '$text\\n${lineIndentAt(source, atNN)}'",
+			"method": "runEdit",
+			"find": "span: new Span(at, at + 1),\ntext: '$text\\n${lineIndentAt(source, at)}${source.charAt(at)}'",
+			"replace": "span: new Span(at, at),\ntext: '$text\\n${lineIndentAt(source, at)}'",
 			"note": "the entry is spliced as a zero-width insert again, so the doc-splitting guard refuses every annotation on a documented declaration"
 		},
 		{
@@ -5928,7 +5928,7 @@
 			"name": "M-GRAPH-NEW-ARGS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "scanArgs(node.children, 0, target, null, currentType);",
+			"find": "scanArgs(node.children, node.typeArgCount, target, null, currentType);",
 			"replace": "",
 			"note": "constructor arguments hand on no function value"
 		},
@@ -21217,8 +21217,8 @@
 			"name": "M-TS-SKIP-NEW-ARGS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": ": holder.children.slice(NominalTypes.writtenConstruction(holder, shape, source)?.args.length ?? holder.children.length);",
-			"replace": ": holder.children;",
+			"find": "kind == callKind ? holder.children.slice(1) : holder.children.slice(holder.typeArgCount);",
+			"replace": "kind == callKind ? holder.children.slice(1) : holder.children;",
 			"note": "a `new` counts the type arguments it names among its arguments"
 		},
 		{
@@ -22351,16 +22351,16 @@
 			"name": "M-MATCH-UNWRITTEN-DROPPED",
 			"type": "anyparse.query.Matcher",
 			"method": "unifyChildren",
-			"find": "if (at != null) unwritten.push(at);",
-			"replace": "if (at != null) unwritten.remove(at);",
+			"find": "if (at != null) unwritten.push(TypeArguments(at));",
+			"replace": "if (at != null) unwritten.remove(TypeArguments(at));",
 			"note": "a match on type arguments the pattern did not write is not recorded, so `rewrite` drops `<Int>` from `new Box<Int>(1)`"
 		},
 		{
 			"name": "M-REWRITE-UNWRITTEN-IGNORED",
 			"type": "anyparse.query.Rewrite",
 			"method": "rewrite",
-			"find": "for (m in accepted) for (at in m.unwritten) {",
-			"replace": "for (m in accepted) for (at in m.unwritten.slice(0, 0)) {",
+			"find": "for (m in accepted) for (part in m.unwritten) return Err(unwrittenRefusal(source, part));",
+			"replace": "for (m in accepted) for (part in m.unwritten.slice(0, 0)) return Err(unwrittenRefusal(source, part));",
 			"note": "`rewrite` splices over a construction whose type arguments no metavariable holds, dropping them"
 		},
 		{
@@ -22514,6 +22514,142 @@
 			"find": "return (table[member] ?? []).exists(k -> kinds.contains(k));",
 			"replace": "return table.exists(member);",
 			"note": "a member of any kind counts as one of the kinds asked, so a field reads as an enum constructor a bare call may build"
+		},
+		{
+			"name": "M-LANDING-TYPE-ARGS-AS-VALUES",
+			"type": "anyparse.query.ImplicitSites",
+			"method": "landings",
+			"find": "for (k in node.typeArgCount ... node.children.length) land(node.children[k], null);",
+			"replace": "for (k in 0 ... node.children.length) land(node.children[k], null);",
+			"note": "a construction's type arguments land as values of no known type: a string conversion of any object at every `new Box<Int>(…)`"
+		},
+		{
+			"name": "M-MATCH-TYPE-SLOT-UNRECORDED",
+			"type": "anyparse.query.Matcher",
+			"method": "unifyType",
+			"find": "if (at != null) unwritten.push(TypeAnnotation(at));",
+			"replace": "if (at != null) unwritten.remove(TypeAnnotation(at));",
+			"note": "a match on a type the pattern did not write is not recorded, so `rewrite 'final $x = $v' 'var $x = $v'` drops `:Float` from `final f:Float = 1`"
+		},
+		{
+			"name": "M-CARRY-OWN-SUB-UNCARRIED",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "dependencyImportLinesToCarry",
+			"find": "final ownSub: Null<String> = ownSubModuleImport(dep, wanted, provider, cursorInfo);",
+			"replace": "final ownSub: Null<String> = null;",
+			"note": "a sub-module type of the source module is carried by no statement, and the move refuses with \"no import to carry\" over a type `import <module>.<Sub>;` names"
+		},
+		{
+			"name": "M-CARRY-OWN-SUB-PRIVATE",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "ownSubModuleImport",
+			"find": "t.name == dep && !t.isMain && !t.isPrivate",
+			"replace": "t.name == dep && !t.isMain",
+			"note": "a `private` sub-module type, which no spelling imports, is carried as `import <module>.<Sub>;`"
+		},
+		{
+			"name": "M-ACCESS-GRANT-PER-MEMBER",
+			"type": "anyparse.query.MoveMember",
+			"method": "applySiblingOutcome",
+			"find": "if (granted.length > 1)",
+			"replace": "if (false)",
+			"note": "two moved members needing private access each carry their own copy of the same `@:access` line"
+		},
+		{
+			"name": "M-KEEP-BARE-IGNORED",
+			"type": "anyparse.query.MoveMember",
+			"method": "rewireStaticCallers",
+			"find": "if (keepBare && hits.length > 0) {",
+			"replace": "if (false) {",
+			"note": "`--keep-bare` leaves the callers bare with no `import Dest.*;` to bind them"
+		},
+		{
+			"name": "M-KEEP-BARE-CLASH-BLIND",
+			"type": "anyparse.query.MoveMember",
+			"method": "keepBareClash",
+			"find": "return node;",
+			"replace": "return null;",
+			"note": "an identifier of the source spelling another destination static is not seen, and the wildcard may rebind it"
+		},
+		{
+			"name": "M-KEEP-BARE-NOT-MAIN",
+			"type": "anyparse.query.MoveMember",
+			"method": "keepBareRefusal",
+			"find": "if (prep.destDecl.kind != 'ClassDecl' || !destMain)",
+			"replace": "if (prep.destDecl.kind != 'ClassDecl')",
+			"note": "a destination that is a sub-module type takes `import <module>.*;`, which imports the main class's statics, not its own"
+		},
+		{
+			"name": "M-OWNED-FIELDS-OFF",
+			"type": "anyparse.query.MoveMember",
+			"method": "resolveMove",
+			"find": "final fieldsAdded: Array<String> = ownedFieldClosure(srcDecl, srcTree, srcSource, called, destHit.decl, destSource, trees, plugin);",
+			"replace": "final fieldsAdded: Array<String> = [];",
+			"note": "the fields only the moved group reads stay behind, and the move refuses as \"shared mutable state\""
+		},
+		{
+			"name": "M-OWNED-FIELD-ANY-READER",
+			"type": "anyparse.query.MoveMemberFields",
+			"method": "ownedBy",
+			"find": "bound.foreach(h -> inside(h.span.from))",
+			"replace": "bound.exists(h -> inside(h.span.from))",
+			"note": "a field a staying member also reads moves with the group, and the staying reader routes through the via field unasked"
+		},
+		{
+			"name": "M-OWNED-FIELD-ACCESS-BLIND",
+			"type": "anyparse.query.MoveMemberFields",
+			"method": "ownedBy",
+			"find": " && !accessedOutside(nm, trees, srcTree, inside)",
+			"replace": "",
+			"note": "a field reached as `this.x` outside the group moves anyway, and that access no longer compiles"
+		},
+		{
+			"name": "M-OWNED-FIELD-PROPERTY",
+			"type": "anyparse.query.MoveMemberFields",
+			"method": "ownableField",
+			"find": "at >= 0 && !SourceText.isProperty(srcSource, at + name.length);",
+			"replace": "at >= 0;",
+			"note": "a property moves with the group while its accessors stay behind"
+		},
+		{
+			"name": "M-OWNED-READERS-UNNAMED",
+			"type": "anyparse.query.MoveMemberFields",
+			"method": "stayingReadersNote",
+			"find": "return readers.length == 0 ? '' :",
+			"replace": "return true ? '' :",
+			"note": "the mutable-field refusal no longer names the staying members that keep the field"
+		},
+		{
+			"name": "M-RECEIVER-ROUTING-OFF",
+			"type": "anyparse.query.MoveMember",
+			"method": "collectCallerRewires",
+			"find": "= MoveMemberReceivers.collectReceiverHits(prep, plugin);",
+			"replace": "= { error: null, hits: [] };",
+			"note": "receiver-qualified callers of a moved instance member are left unrewritten, and the next compile reports `has no field`"
+		},
+		{
+			"name": "M-RECEIVER-UNKNOWN-ROUTED",
+			"type": "anyparse.query.MoveMemberReceivers",
+			"method": "receiverVerdict",
+			"find": "if (type == null) return 'its receiver\\'s type is not known';",
+			"replace": "if (type == null) return LEAVE;",
+			"note": "a receiver of no known type is read as someone else's, so a `Dynamic` holding the source keeps calling a member that left"
+		},
+		{
+			"name": "M-RECEIVER-UNRELATED-ROUTED",
+			"type": "anyparse.query.MoveMemberReceivers",
+			"method": "receiverVerdict",
+			"find": "if (prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return LEAVE;",
+			"replace": "if (prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return 'unrelated';",
+			"note": "a receiver of an unrelated type declaring a same-named member refuses the move instead of being left alone"
+		},
+		{
+			"name": "M-VIA-PRIVATE-REACHED",
+			"type": "anyparse.query.MoveMember",
+			"method": "viaReachError",
+			"find": "return viaPublic",
+			"replace": "return true",
+			"note": "a caller in another class is routed through a private holding field it cannot reach"
 		},
 		{
 			"name": "M-COND-ALTERNATIVE-REGIONS",
