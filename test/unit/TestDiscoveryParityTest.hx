@@ -1568,6 +1568,14 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-LOOPGUARD-EXPR-BODY-KEPT,M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY,M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY',
 			'unit.check.MagicNumberCheckTest#testADirectArgumentOfAnIgnoredCallIsExempt :: control :: M-MAGIC-CALLARG-BLIND',
 			'unit.check.MagicNumberCheckTest#testADottedEntryMatchesTheCalleeTail :: control :: M-MAGIC-CALLARG-SUFFIX-LOOSE',
+			'unit.check.MagicNumberCheckTest#testANamedCollectionOfLiteralsIsATable :: control :: '
+				+ 'M-MAGIC-TABLE-COLLECTION-BLIND,M-MAGIC-TABLE-COLLECTION-UNNAMED',
+			'unit.check.MagicNumberCheckTest#testANegatedArgumentOfAnIgnoredCallIsExempt :: control :: M-MAGIC-CALLARG-NEG-BLIND',
+			'unit.check.MagicNumberCheckTest#testASwitchOfLiteralArmsIsATable :: control :: '
+				+ 'M-MAGIC-TABLE-SWITCH-BLIND,M-MAGIC-TABLE-SWITCH-ARM-LOOSE',
+			'unit.check.MagicNumberCheckTest#testAValueObjectBuiltInAListedArgumentIsExempt :: control :: M-MAGIC-CALLARG-NESTED-NEW',
+			'unit.check.MagicNumberCheckTest#testAnIgnoredConstructorIsSpelledDotNew :: control :: M-MAGIC-CALLARG-NEW-BLIND',
+			'unit.check.MagicNumberCheckTest#testLiteralTablesAreOffByDefault :: control :: M-MAGIC-TABLES-DEFAULT-ON',
 			'unit.check.MemberOrderCheckTest#testInlineSubgroupBlankInConditionalRebuildUnderOption :: control :: '
 				+ 'M-MO-INLINE-BOUNDARY-OFF,M-MO-INLINE-SEPARATOR-DROPPED,M-MO-INLINE-CONDITIONAL-REBUILD-UNREAD',
 			'unit.check.MemberOrderCheckTest#testInlineSubgroupBlankInsertedBySpacingOnlyFallback :: control :: '
@@ -2210,6 +2218,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StaticReflectionReachTest#testTheCliDeletesADistinctiveStaticOnlyATableSpells :: control :: M-STATICREACH-NEVER',
 			'unit.check.StaticReflectionReachTest#testTheOwnerInAnOpaqueRegionKeepsTheGate :: control :: M-STATICREACH-OPAQUE-CHAIN-BLIND',
 			'unit.check.StringLiteralDupCheckTest#testMapOfOnlyStringLiteralsIsATable :: control :: M-STRING-LITERAL-DUP-MAP-ENTRY-BLIND',
+			'unit.check.StringLiteralDupCheckTest#testMapWithNegativeValuesIsATable :: control :: M-LITERAL-TABLE-NEG-ENTRY-BLIND',
 			'unit.check.StringLiteralDupCheckTest#testMapWithNonStringValuesIsATable :: control :: '
 				+ 'M-STRING-LITERAL-DUP-STRING-ONLY-ENTRIES',
 			'unit.check.StringLiteralDupCheckTest#testMixedArrayIsNotATable :: control :: M-STRING-LITERAL-DUP-TABLE-ANY',
@@ -5989,6 +5998,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-LINT-SUMMARY-THRESHOLD-UNREAD',
 			'M-MAGIC-CALLARG-BLIND',
 			'M-MAGIC-CALLARG-SUFFIX-LOOSE',
+			'M-MAGIC-CALLARG-NEG-BLIND',
+			'M-MAGIC-CALLARG-NEW-BLIND',
+			'M-MAGIC-CALLARG-NESTED-NEW',
+			'M-MAGIC-TABLE-SWITCH-BLIND',
+			'M-MAGIC-TABLE-SWITCH-ARM-LOOSE',
+			'M-MAGIC-TABLE-COLLECTION-BLIND',
+			'M-MAGIC-TABLE-COLLECTION-UNNAMED',
+			'M-MAGIC-TABLES-DEFAULT-ON',
+			'M-LITERAL-TABLE-NEG-ENTRY-BLIND',
 			'M-INTERP-CONSTANT-BLOCK-IGNORED',
 			'M-FOLD-CONSTANT-AS-EXPRESSION',
 			'M-CONSTANT-NEGATIVE-ZERO-SIGNED',
