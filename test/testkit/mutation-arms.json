@@ -850,7 +850,7 @@
 		},
 		{
 			"name": "M-STRUCT-ANON-VAR-KEY",
-			"type": "anyparse.query.SymbolIndexBuilder",
+			"type": "anyparse.query.SymbolIndexMembers",
 			"method": "typeInfoKeyOf",
 			"force": "own.from",
 			"note": "the type maps are keyed on the member node again, so every anon-structure `var x:T;` / `final x:T;` field reads as unannotated and the conformance refutation cannot fire on one"
@@ -943,8 +943,8 @@
 		},
 		{
 			"name": "M-OPAQUE-REGION-HAND-LIST",
-			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
-			"method": "refShape",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
 			"find": "opaqueCondRegionKinds: HaxeQueryWalker.opaqueCondRegionKinds(),",
 			"replace": "opaqueCondRegionKinds: ['CondSpliceExpr', 'CondSpliceOpExpr', 'CondSpliceTail', 'CondSpliceStmt', 'CondSpliceBlockOpen', 'CondSpliceBlockTail', 'CondSpliceSwitchOpen', 'CondSpliceBlockClose', 'CondSpliceCase', 'CondSpliceMember', 'CondSharedBodyDecl'],",
 			"note": "the fallback-ctor family is enumerated by hand again, exactly as it stood on 2026-08-18 instead of being derived from the grammar's `@:condRegionRaw` terminals - the three raw-capture ctors the grammar gained two days later (both `return` splices and the metadata-prefixed `MetaCondStmt`) fall out of the gate and every name-driven op rewrites around such a region in silence"
@@ -2178,7 +2178,7 @@
 		},
 		{
 			"name": "M-NAMING-SKIPSCAN-REPORT-INDEX",
-			"type": "anyparse.check.Naming",
+			"type": "anyparse.check.NamingRenames",
 			"method": "crossFileCandidate",
 			"find": "final unreadable: Array<String> = resolutionIndex.text.skippedFilesMentioning([decl.name, ownerName, targetName], declFile);",
 			"replace": "final unreadable: Array<String> = index.text.skippedFilesMentioning([decl.name, ownerName, targetName]);",
@@ -2828,7 +2828,7 @@
 		},
 		{
 			"name": "M-REFLECTION-REPORT-INDEX-RENAME",
-			"type": "anyparse.check.Naming",
+			"type": "anyparse.check.NamingRenames",
 			"method": "reflectionNamesInOtherFiles",
 			"find": "for (entry in ReflectionScan.scopeFiles(index == null ? [] : indexSources(index), plugin)) if (entry.file != currentFile) {",
 			"replace": "for (entry in (index == null ? [] : indexSources(index))) if (entry.file != currentFile) {",
@@ -2891,7 +2891,7 @@
 		},
 		{
 			"name": "M-DECL-HOST-KIND-STALE",
-			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
 			"method": "DECL_HOST_KINDS",
 			"kind": "FinalMember",
 			"find": "\t\t'Rest',\n",
@@ -3125,16 +3125,16 @@
 		},
 		{
 			"name": "M-AND-OPERATOR-TEXT-STALE",
-			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
-			"method": "refShape",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
 			"find": "andOperatorText: '&&',",
 			"replace": "andOperatorText: '&',",
 			"note": "the declared logical-and token is respelled as the bitwise one, which still parses and still is an operator, so nothing in the tree breaks and the shape simply names text the parser reads as a different node"
 		},
 		{
 			"name": "M-CONSTRUCTOR-NAME-PADDED",
-			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
-			"method": "refShape",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
 			"find": "constructorName: 'new',",
 			"replace": "constructorName: 'new ',",
 			"note": "the declared constructor name gains a trailing space, so the probe source is `function new () {}` - it still parses, the FnMember still SPANS text holding `new `, and only the projected NAME stops being the declared token. The span-containment reading this arm was written against is green on it; the name-slot reading is what goes red"
@@ -5621,14 +5621,14 @@
 		},
 		{
 			"name": "M-GRAPH-IMPLICIT-META",
-			"type": "anyparse.query.SymbolIndexBuilder",
+			"type": "anyparse.query.SymbolIndexMembers",
 			"method": "isImplicitCallMeta",
 			"note": "an @:arrayAccess / @:from / @:to / @:resolve member is not recorded as called implicitly, so a conversion reaches nothing",
 			"force": "false"
 		},
 		{
 			"name": "M-GRAPH-OPERATOR-KIND",
-			"type": "anyparse.query.SymbolIndexBuilder",
+			"type": "anyparse.query.SymbolIndexMembers",
 			"method": "operatorKindOf",
 			"note": "an @:op member records no operator it overloads, so `a + b` runs nothing",
 			"force": "null"
@@ -6070,7 +6070,7 @@
 			"name": "M-REACH-EXTERN-BODYLESS",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "else if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, name))\n",
+			"find": "else if (g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, name))\n",
 			"replace": "else if (false)\n",
 			"note": "a body-less extern member admits no function value, so a callback it is handed runs unseen"
 		},
@@ -6078,7 +6078,7 @@
 			"name": "M-REACH-INTERFACE-DISPATCH",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "else if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, name))\n",
+			"find": "else if (g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, name))\n",
 			"replace": "else if (true)\n",
 			"note": "a body-less interface or abstract declaration admits every function value, though only dispatch reaches past it"
 		},
@@ -6086,7 +6086,7 @@
 			"name": "M-REACH-BENIGN-CALLBACK",
 			"type": "anyparse.query.MemberReach",
 			"method": "benignCall",
-			"find": "|| _g.callsItsArgument(g, type, name)) return false;",
+			"find": "|| _g.library.callsItsArgument(g, type, name)) return false;",
 			"replace": ") return false;",
 			"note": "an array method that calls its argument counts as benign in a parameter's region"
 		},
@@ -6100,7 +6100,7 @@
 		},
 		{
 			"name": "M-REACH-CALLBACK-PURE",
-			"type": "anyparse.query.ReachGraph",
+			"type": "anyparse.query.LibraryCalls",
 			"method": "runsNoUserCode",
 			"find": "|| callsItsArgument(g, type, name)) return false;",
 			"replace": ") return false;",
@@ -6110,7 +6110,7 @@
 			"name": "M-REACH-IMPLICIT-BODYLESS",
 			"type": "anyparse.query.MemberReach",
 			"method": "reachedChangeIn",
-			"find": "if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, member))\n\t\t\t\treturn { file: node.file, span: node.span ?? new Span(0, 0) };",
+			"find": "if (g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, member))\n\t\t\t\treturn { file: node.file, span: node.span ?? new Span(0, 0) };",
 			"replace": "",
 			"note": "a body-less extern an implicitly-called function reaches is taken to change nothing"
 		},
@@ -6148,8 +6148,8 @@
 		},
 		{
 			"name": "M-REACH-STRINGBUF-PURE",
-			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
-			"method": "refShape",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
 			"find": "\t\t\t\t\t'Std.isOfType',\n\t\t\t\t\t'StringBuf.add',\n",
 			"replace": "\t\t\t\t\t'Std.isOfType',\n",
 			"note": "a string buffer write counts as code that may change the caller's array"
@@ -6294,7 +6294,7 @@
 			"name": "M-REACH-FORWARDING-OP",
 			"type": "anyparse.query.MemberReach",
 			"method": "reachedChangeIn",
-			"find": "if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, member))",
+			"find": "if (g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, member))",
 			"replace": "if (type.length >= 0)",
 			"note": "an abstract's body-less forwarding operator counts as target code that may change any array"
 		},
@@ -6332,7 +6332,7 @@
 		},
 		{
 			"name": "M-REACH-PURE-PARAMS",
-			"type": "anyparse.query.ReachGraph",
+			"type": "anyparse.query.LibraryCalls",
 			"method": "isPureLibrary",
 			"find": "if (!(param != null && inertType(param)) && !(arg != null && literals.contains(arg.kind))) return false;",
 			"replace": "",
@@ -6420,7 +6420,7 @@
 		},
 		{
 			"name": "M-REACH-EXTERN-CLOSED",
-			"type": "anyparse.query.ReachGraph",
+			"type": "anyparse.query.LibraryCalls",
 			"method": "externClosed",
 			"find": "\t\t\t\tfor (w in written) if (w != null && !own(w)) closed = false;\n",
 			"replace": "",
@@ -6428,7 +6428,7 @@
 		},
 		{
 			"name": "M-REACH-EXTERN-INERT",
-			"type": "anyparse.query.ReachGraph",
+			"type": "anyparse.query.LibraryCalls",
 			"method": "externClosed",
 			"find": "inertType(written) || nominal == current",
 			"replace": "nominal == current",
@@ -6444,7 +6444,7 @@
 		},
 		{
 			"name": "M-REACH-EXTERN-IMPLICIT-QUIET",
-			"type": "anyparse.query.ReachGraph",
+			"type": "anyparse.query.LibraryCalls",
 			"method": "externQuiet",
 			"find": "return info != null && (info.isImplicitCall || byName) && !callsItsArgument(g, type, name);",
 			"replace": "return false;",
@@ -6500,7 +6500,7 @@
 		},
 		{
 			"name": "M-REACH-CALLS-ARGUMENT",
-			"type": "anyparse.query.ReachGraph",
+			"type": "anyparse.query.LibraryCalls",
 			"method": "callsItsArgument",
 			"find": "if (nominal == null || catchAll.contains(nominal)) return true;",
 			"replace": "if (nominal == null) continue;",
@@ -6540,7 +6540,7 @@
 		},
 		{
 			"name": "M-REACH-JOIN-CONVERTS",
-			"type": "anyparse.query.ReachGraph",
+			"type": "anyparse.query.LibraryCalls",
 			"method": "runsNoUserCode",
 			"find": "\t\tif (g.types.memberOnChain(type, name)?.returnNominal == stringTypeName()) return false;\n",
 			"replace": "",
@@ -6550,7 +6550,7 @@
 			"name": "M-REACH-JOIN-CULPRIT",
 			"type": "anyparse.query.MemberReach",
 			"method": "benignCall",
-			"find": "\t\tif (g.types.memberOnChain(type, name)?.returnNominal == _g.stringTypeName()) return false;\n",
+			"find": "\t\tif (g.types.memberOnChain(type, name)?.returnNominal == _g.library.stringTypeName()) return false;\n",
 			"replace": "",
 			"note": "`join` in a region over a shared array is benign, so an element's `toString` changes the array unseen"
 		},
@@ -7742,7 +7742,7 @@
 		},
 		{
 			"name": "M-FACTS-TYPE-PARAMETER",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.TypedFactsTypeStrings",
 			"method": "instString",
 			"find": "return isParam ? '$' + path : path + paramString(params, depth);",
 			"replace": "return path + paramString(params, depth);",
@@ -8106,7 +8106,7 @@
 			"name": "M-FACTS-SPLICED-WITHIN-UNPLACED",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": "splice && spliced && !placed(n, where) ? runsIn(n, where, span, dropped) : whole || inside(key, span, where)",
+			"find": "splice && spliced && !FactSites.placed(n, where) ? runsIn(n, where, span, dropped) : whole || inside(key, span, where)",
 			"replace": "whole || inside(key, span, where)",
 			"note": "a range question in a body an inlined function was spliced into drops the spliced facts, which sit at the callee yet run in the body"
 		},
@@ -8146,7 +8146,7 @@
 			"name": "M-GRAPH-FACTS-SPLICED-SITE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "siteOf",
-			"find": "at.file == view._table.keyOf(node.file) && CompilerFacts.placed(n, at) ? at.span : null",
+			"find": "at.file == view._table.keyOf(node.file) && FactSites.placed(n, at) ? at.span : null",
 			"replace": "at.span",
 			"note": "a spliced fact files its edge under its caller's file at the callee's range, which a region or a dead branch there then claims"
 		},
@@ -8216,7 +8216,7 @@
 		},
 		{
 			"name": "M-FACTS-SPLICE-INNERMOST",
-			"type": "anyparse.query.CompilerFacts",
+			"type": "anyparse.query.FactSites",
 			"method": "spliceOf",
 			"find": "(best == null || body.to - body.from < best.body.span.to - best.body.span.from)",
 			"replace": "best == null",
@@ -8224,7 +8224,7 @@
 		},
 		{
 			"name": "M-FACTS-SPLICE-SECOND-SITE",
-			"type": "anyparse.query.CompilerFacts",
+			"type": "anyparse.query.FactNodeRecords",
 			"method": "collectSplices",
 			"find": "known.sites.push(ran);",
 			"replace": "{}",
@@ -8942,7 +8942,7 @@
 		},
 		{
 			"name": "M-FACTS-STATICS-TYPEDEF",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.TypedFactsTypeStrings",
 			"method": "typeString",
 			"find": "StringTools.endsWith(name, '>') ? name : name + paramString(params, depth);",
 			"replace": "name + paramString(params, depth);",
@@ -9004,7 +9004,7 @@
 		},
 		{
 			"name": "M-ESCAPES-FACTS-INSTANCES",
-			"type": "anyparse.query.FactsEscapes",
+			"type": "anyparse.query.FactsInstances",
 			"method": "scanInstances",
 			"find": "if (fact != null && fact.params.length == args.length) for (i => name in fact.params)\n\t\t\t\tbindInstance(out, '$id.$name', args[i]);",
 			"replace": "",
@@ -9020,7 +9020,7 @@
 		},
 		{
 			"name": "M-ESCAPES-FACTS-GENERIC-METHOD",
-			"type": "anyparse.query.FactsEscapes",
+			"type": "anyparse.query.FactsInstances",
 			"method": "unifyInstantiation",
 			"find": "unifyInstance(out, declared, applied);",
 			"replace": "{}",
@@ -9416,7 +9416,7 @@
 			"name": "M-DSN-HXML-INCLUDE-SKIPPED",
 			"type": "anyparse.check.DeadSafeNav",
 			"method": "buildMayEnableNullSafety",
-			"find": "mayEnable(LintConfig.resolveAgainstConfigDir(base, line), base, depth + 1)",
+			"find": "mayEnable(LintDocuments.resolveAgainstConfigDir(base, line), base, depth + 1)",
 			"replace": "false",
 			"note": "an included hxml is never read, so a `nullSafety` macro in it goes unseen and the build-breaking fix lands"
 		},
@@ -10438,7 +10438,7 @@
 		},
 		{
 			"name": "M-PSE-CHANNEL-NO-USING",
-			"type": "anyparse.query.SymbolIndexBuilder",
+			"type": "anyparse.query.SymbolIndexMembers",
 			"method": "collectMembers",
 			"find": "runNoExtension = true;",
 			"replace": "runNoExtension = false;",
@@ -10595,7 +10595,7 @@
 		},
 		{
 			"name": "M-INDEX-OVERLOAD-META",
-			"type": "anyparse.query.SymbolIndexBuilder",
+			"type": "anyparse.query.SymbolIndexMembers",
 			"method": "collectMembers",
 			"find": "runOverloadMeta = true;",
 			"replace": "runOverloadMeta = false;",
@@ -12946,7 +12946,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-HOLDER",
-			"type": "anyparse.query.CompilerFacts",
+			"type": "anyparse.query.FactNodeRecords",
 			"method": "collectFacts",
 			"find": "receiverFresh: r.o == true,\n\t\t\t\tholder: id",
 			"replace": "receiverFresh: r.o == true,\n\t\t\t\tholder: ''",
@@ -12980,7 +12980,7 @@
 			"name": "M-REACH-ARRAY-VALUES",
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
-			"find": "if (arrayOwn) site.values = _g.callsItsArgument(g, type, name);",
+			"find": "if (arrayOwn) site.values = _g.library.callsItsArgument(g, type, name);",
 			"replace": "",
 			"note": "(precision) the built-in array's own methods may call any function value handed to target code before"
 		},
@@ -13207,7 +13207,7 @@
 		},
 		{
 			"name": "M-REFLECTIVE-MERGE",
-			"type": "anyparse.check.LintConfig",
+			"type": "anyparse.check.LintDocuments",
 			"method": "mergeDocuments",
 			"find": "reflectiveClasses: near.reflectiveClasses ?? far.reflectiveClasses,",
 			"replace": "reflectiveClasses: near.reflectiveClasses,",
@@ -13423,13 +13423,13 @@
 			"name": "M-GRAPH-FACTS-EXPANSION-SITE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "splicedSite",
-			"find": "sites: expansion == null ? null : CompilerFacts.expansionSites(n, expansion)",
+			"find": "sites: expansion == null ? null : FactSites.expansionSites(n, expansion)",
 			"replace": "sites: null",
 			"note": "an edge an expansion's facts make runs anywhere in its function"
 		},
 		{
 			"name": "M-FACTS-EXPANSION-SPLICE-SITES",
-			"type": "anyparse.query.CompilerFacts",
+			"type": "anyparse.query.FactSites",
 			"method": "expansionSites",
 			"find": "if (splice != null) return splice.sites;",
 			"replace": "if (splice != null) return null;",
@@ -13837,7 +13837,7 @@
 		},
 		{
 			"name": "M-HOLDERS-MERGE",
-			"type": "anyparse.check.LintConfig",
+			"type": "anyparse.check.LintDocuments",
 			"method": "mergeDocuments",
 			"find": "reflectiveMethodHolders: near.reflectiveMethodHolders ?? far.reflectiveMethodHolders,",
 			"replace": "reflectiveMethodHolders: near.reflectiveMethodHolders,",
@@ -13845,7 +13845,7 @@
 		},
 		{
 			"name": "M-HOLDERS-PARSE",
-			"type": "anyparse.check.LintConfig",
+			"type": "anyparse.check.LintDocuments",
 			"method": "parseDocument",
 			"find": "reflectiveMethodHolders: config.reflectiveMethodHolders,",
 			"replace": "",
@@ -14365,7 +14365,7 @@
 			"name": "M-FACTS-SUBSTITUTED-OWNER",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "substitutedReceiver",
-			"find": "case TInst(c, _) if (TypedFactsMacro.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;",
+			"find": "case TInst(c, _) if (TypedFactsTypeStrings.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;",
 			"replace": "case TInst(c, _): name;",
 			"note": "a local spliced into an inline method of another class than its own is taken for that method's receiver"
 		},
@@ -14659,7 +14659,7 @@
 		},
 		{
 			"name": "M-FACTS-KEPT-BUILDS",
-			"type": "anyparse.query.CompilerFacts",
+			"type": "anyparse.query.FactNodeRecords",
 			"method": "joinConfiguration",
 			"find": "for (i in node.keptParams.copy()) if (!(record.pk ?? []).contains(i)) node.keptParams.remove(i);",
 			"replace": "// cut",
@@ -15070,7 +15070,7 @@
 		},
 		{
 			"name": "M-GRAPH-MAP-USER-CODE",
-			"type": "anyparse.query.ReachGraph",
+			"type": "anyparse.query.LibraryCalls",
 			"method": "runsNoUserCode",
 			"find": "final map: Bool = !array && (execution?.mapTypeNames ?? []).contains(type) && !projectSubtype(type);",
 			"replace": "final map: Bool = false;",
@@ -15787,7 +15787,7 @@
 			"name": "M-REACH-RUN-QUIET",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "(found.isExternal || found.isBodyless) && _g.runsNoUserCode(g, type, name, true)",
+			"find": "(found.isExternal || found.isBodyless) && _g.library.runsNoUserCode(g, type, name, true)",
 			"replace": "false",
 			"note": "(precision) a pure library call a value call runs leaves its code unknown"
 		},
@@ -15840,8 +15840,8 @@
 		},
 		{
 			"name": "M-SHAPE-PURE-GETENV",
-			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
-			"method": "refShape",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
 			"find": "'StringBuf.toString',\n\t\t\t\t\t// reads the process environment: no callback, on every target\n\t\t\t\t\t'Sys.getEnv'\n",
 			"replace": "'StringBuf.toString'\n",
 			"note": "(precision) an environment read may run project code"
@@ -16042,7 +16042,7 @@
 			"name": "M-EXTERN-BLIND-NAMES-NO-MEMBER",
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
-			"find": "final namesNoMember: Bool = arrayOwn || _g.runsNoUserCode(g, type, name, true) || reflective.exists('$type.$name');",
+			"find": "final namesNoMember: Bool = arrayOwn || _g.library.runsNoUserCode(g, type, name, true) || reflective.exists('$type.$name');",
 			"replace": "final namesNoMember: Bool = reflective.exists('$type.$name');",
 			"note": "(precision) the built-in array's own methods are taken to write a member of what they hold by its name"
 		},
@@ -16080,7 +16080,7 @@
 		},
 		{
 			"name": "M-REACH-CLOSED-EXTERN-OVERRIDE",
-			"type": "anyparse.query.ReachGraph",
+			"type": "anyparse.query.LibraryCalls",
 			"method": "externQuiet",
 			"find": "if (info != null && !info.isStatic && overriddenBelow(type)) return false;",
 			"replace": "",
@@ -20206,8 +20206,8 @@
 		},
 		{
 			"name": "M-TS-BUILTIN-EVENTS",
-			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
-			"method": "refShape",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
 			"find": [
 				"'sys.net.UdpSocket.readFrom',\n",
 				"'sys.db.ResultSet.get_length',\n",
@@ -21637,7 +21637,7 @@
 		},
 		{
 			"name": "M-OWNED-MERGE",
-			"type": "anyparse.check.LintConfig",
+			"type": "anyparse.check.LintDocuments",
 			"method": "mergeDocuments",
 			"find": "ownedTypes: near.ownedTypes ?? far.ownedTypes,",
 			"replace": "ownedTypes: near.ownedTypes,",
@@ -21645,7 +21645,7 @@
 		},
 		{
 			"name": "M-OWNED-PARSE",
-			"type": "anyparse.check.LintConfig",
+			"type": "anyparse.check.LintDocuments",
 			"method": "parseDocument",
 			"find": "ownedTypes: ownedTypes,",
 			"replace": "",

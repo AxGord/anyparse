@@ -126,13 +126,13 @@ final class OracleDeclaration {
 				generate = v;
 			case ['generateInputs', JArray(values)]:
 				final declared: Array<String> = [];
-				LintConfig.collectStrings(values, declared);
+				LintDocuments.collectStrings(values, declared);
 				final skipped: Int = values.length - declared.length;
 				if (skipped > 0) drops.push('compilerOracle[$index] "generateInputs" ignored $skipped value(s) that are not strings');
 				inputs = declared;
 			case ['defines', JArray(values)]:
 				final before: Int = defines.length;
-				LintConfig.collectStrings(values, defines);
+				LintDocuments.collectStrings(values, defines);
 				final skipped: Int = values.length - (defines.length - before);
 				if (skipped > 0) drops.push('compilerOracle[$index] "defines" ignored $skipped value(s) that are not strings');
 			case ['hxml', _], ['dir', _], ['generate', _]:
@@ -166,10 +166,10 @@ final class OracleDeclaration {
 	private static function at(
 		hxml: String, declared: OracleFields, baseDir: Null<String>, drops: Array<String>, index: Int
 	): OracleConfig {
-		final resolved: String = LintConfig.resolveAgainstConfigDir(baseDir, hxml);
+		final resolved: String = LintDocuments.resolveAgainstConfigDir(baseDir, hxml);
 		final dir: Null<String> = declared.dir;
 		final probed: Null<String> = if (dir != null)
-			LintConfig.resolveAgainstConfigDir(baseDir, dir)
+			LintDocuments.resolveAgainstConfigDir(baseDir, dir)
 		else if (baseDir == null)
 			null
 		else
@@ -231,7 +231,7 @@ final class OracleDeclaration {
 		for (input in inputs) {
 			final path: String = input.startsWith('~/') && home != ''
 				? Path.join([home, input.substr(2)])
-				: LintConfig.resolveAgainstConfigDir(baseDir, input);
+				: LintDocuments.resolveAgainstConfigDir(baseDir, input);
 			if (!pathExists(path))
 				drops.push('compilerOracle[$index] "generateInputs" names $input, which does not exist — kept, it counts once created');
 			out.push(path);

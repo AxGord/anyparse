@@ -12,6 +12,7 @@ import haxe.macro.Type;
 import haxe.macro.TypeTools;
 import sys.io.File;
 import sys.io.FileOutput;
+import anyparse.check.TypedFactsTypeStrings.*;
 
 /**
  * The compile-time half of `TypedFactsProbe`: an `onAfterTyping` hook that writes what the compiler typed as JSON Lines
@@ -25,9 +26,6 @@ final class TypedFactsMacro {
 	/** The facts format version the header line carries. */
 	private static inline final VERSION: Int = 1;
 
-	/** Deeper type nesting prints as unknown, so a recursive structure cannot grow a line without bound. */
-	private static inline final TYPE_DEPTH: Int = 8;
-
 	/** This module: the probe itself is not the build's code. */
 	private static inline final OWN_MODULE: String = 'anyparse.check.TypedFactsMacro';
 
@@ -37,20 +35,10 @@ final class TypedFactsMacro {
 	 */
 	public static inline final INLINED_RECEIVER: String = '_this';
 
-	/** Whether each class path names a type parameter, decided once per path: reading a `Ref` decodes the whole class. */
-	private static final typeParams: Map<String, Bool> = [];
-
 	private static var installed: Bool = false;
 
 	/** The writer of the compile's facts once the hook first ran (`run`), which every later round of it continues. */
 	private static var current: Null<TypedFactsMacro> = null;
-
-	/**
-	 * Every typedef a type string printed, by id and declaration: an import alias (`import pack.T as U`) is one no module
-	 * lists, so the compile's records are closed over them once the module types are written (`run`). Two aliases of one
-	 * name of one module share an id, and each gets a record: the table holds every target an id names.
-	 */
-	private static final printedTypedefs: Map<String, Ref<DefType>> = [];
 
 	/** The ids of the types a record was written for (`typeLine`), and the typedefs printed that got one (`printedAliases`). */
 	private final _written: Map<String, Bool> = [];
@@ -531,76 +519,6 @@ final class TypedFactsMacro {
 	/** The file `p` lies in. */
 	public static function fileOf(p: Position): String {
 		return Context.getPosInfos(p).file;
-	}
-
-	/** `s` as a JSON string. Names, paths and type strings carry no control character, so only a quote or a backslash needs the printer. */
-	public static function q(s: String): String {
-		return s.indexOf('"') < 0 && s.indexOf('\\') < 0 ? '"$s"' : Json.stringify(s);
-	}
-
-	/** `items`, each already JSON, as a JSON array. */
-	public static function arr(items: Array<String>): String {
-		return '[' + items.join(',') + ']';
-	}
-
-	/** The id of a type: its package, then its name, which is how the compiler names it — a private type's package ends in its module. */
-	public static function typeId(pack: Array<String>, name: String): String {
-		return pack.length == 0 ? name : pack.join('.') + '.' + name;
-	}
-
-	/** `t` in the facts type grammar (`TypedFactsProbe`). */
-	public static function typeString(t: Null<Type>, depth: Int): String {
-		if (t == null || depth > TYPE_DEPTH) return '?';
-		return switch t {
-			case TMono(r):
-				final bound: Null<Type> = r.get();
-				bound == null ? '?' : typeString(bound, depth);
-			case TLazy(f): typeString(f(), depth);
-			case TInst(c, params): instString(c, params, depth);
-			case TEnum(e, params): e.toString() + paramString(params, depth);
-			case TType(d, params):
-				// the compiler names the typedef of a type's statics after it (`Enum<pack.E>`), which carries no arguments of its own
-				final name: String = d.toString();
-				if (!StringTools.endsWith(name, '>')) printedTypedefs[name + '@' + Std.string(d.get().pos)] = d;
-				StringTools.endsWith(name, '>') ? name : name + paramString(params, depth);
-			case TAbstract(a, params): a.toString() + paramString(params, depth);
-			case TDynamic(null): 'Dynamic';
-			case TDynamic(inner): 'Dynamic<' + typeString(inner, depth + 1) + '>';
-			case TFun(args, ret):
-				'(' + [for (a in args) (a.opt ? '?' : '') + typeString(a.t, depth + 1)].join(',') + ')->' + typeString(ret, depth + 1);
-			case TAnonymous(a):
-				final anon: AnonType = a.get();
-				switch anon.status {
-					case AClassStatics(c): 'Class<' + c.toString() + '>';
-					case AEnumStatics(e): 'Enum<' + e.toString() + '>';
-					case AAbstractStatics(ab): 'Abstract<' + ab.toString() + '>';
-					case _:
-						final fields: Array<ClassField> = anon.fields.copy();
-						fields.sort((x, y) -> x.name < y.name ? -1 : x.name > y.name ? 1 : 0);
-						'{'
-							+ [
-								for (f in fields) (f.meta.has(':optional') ? '?' : '') + f.name + ':' + typeString(f.type, depth + 1)
-							].join(',') + '}';
-				}
-		};
-	}
-
-	private static function instString(c: Ref<ClassType>, params: Array<Type>, depth: Int): String {
-		final path: String = c.toString();
-		var isParam: Null<Bool> = typeParams[path];
-		if (isParam == null) {
-			isParam = c.get().kind.match(KTypeParameter(_));
-			typeParams[path] = isParam;
-		}
-		return isParam ? '$' + path : path + paramString(params, depth);
-	}
-
-	private static function paramString(params: Array<Type>, depth: Int): String {
-		return params.length == 0 ? '' : '<' + [for (p in params) typeString(p, depth + 1)].join(',') + '>';
-	}
-
-	private static function typeList(list: Array<Type>): String {
-		return arr([for (t in list) q(typeString(t, 0))]);
 	}
 
 	/**

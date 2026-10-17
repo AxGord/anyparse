@@ -181,7 +181,7 @@ final class FactsView {
 
 	/**
 	 * Whether a call of `type.name` runs no project code, as the analysis owning the view classifies one
-	 * (`ReachGraph.runsNoUserCode`): what an inlined call of such a method spliced in is none of the body's own code
+	 * (`LibraryCalls.runsNoUserCode`): what an inlined call of such a method spliced in is none of the body's own code
 	 * (`harmlessSplice`). None does until the analysis says so.
 	 */
 	public var runsNoUserCode: (g:CallGraph, type:String, name:String) -> Bool = (g, type, name) -> false;
@@ -651,7 +651,7 @@ final class FactsView {
 	 * body was spliced in and none reaches a member (`splicedReachesNoMember`). A macro's expansion is none either, under the
 	 * truth, to a reader `g` hands its graph for — one reading a faceted body through its facts alone, its touches, edges,
 	 * hazards and implicit calls — when the graph node holding the expansion's body is faceted (`faceted`): the facts hold the
-	 * expanded code every build compiled, which runs where the call of the macro was (`CompilerFacts.expansionSites`). A
+	 * expanded code every build compiled, which runs where the call of the macro was (`FactSites.expansionSites`). A
 	 * reader of the syntax gets no graph: a macro's code may name a local of the code calling it, which no fact relates.
 	 */
 	public function blindIn(file: String, span: Span, ?g: CallGraph): Null<ReachUnknown> {
@@ -809,7 +809,7 @@ final class FactsView {
 	 * itself, or for an abstract its implementation class — a method of such a call: one named as `members` names (an
 	 * instance method, but for an abstract, whose methods are its implementation's statics) or carrying a metadata it names.
 	 * An interface declares no code (each type implementing it is a type of its own); an extern type's body-less method runs
-	 * target code alone (`ReachGraph.externQuiet`), and its inline one only where `members` says the call is the compiler's
+	 * target code alone (`LibraryCalls.externQuiet`), and its inline one only where `members` says the call is the compiler's
 	 * (`ImplicitMembers.externInline`) — a conversion the target runs calls the target's own method.
 	 */
 	public function implicitUnheld(owner: String, members: ImplicitMembers): Bool {
@@ -1709,9 +1709,9 @@ final class FactsView {
 		return IMPL_NAME.replace(PACKAGE_PREFIX.replace(type, ''), '$1');
 	}
 
-	/** Whether the fact at `at` lies in the range of its node `n`, not spliced in from elsewhere (`CompilerFacts.placed`). */
+	/** Whether the fact at `at` lies in the range of its node `n`, not spliced in from elsewhere (`FactSites.placed`). */
 	public static inline function placed(n: FactNode, at: FactPos): Bool {
-		return CompilerFacts.placed(n, at);
+		return FactSites.placed(n, at);
 	}
 
 	/** Whether `inner` lies within `outer`. */
@@ -1735,7 +1735,7 @@ final class FactsView {
 	}
 
 	/**
-	 * The id the compiler gives the type `t` the indexed file `fi` declares (`TypedFactsMacro.typeId`): its package, then its
+	 * The id the compiler gives the type `t` the indexed file `fi` declares (`TypedFactsTypeStrings.typeId`): its package, then its
 	 * name — a private type's package ends in its module's name, prefixed `_`.
 	 */
 	private static function declaredId(fi: FileInfo, t: TypeDeclInfo): String {
@@ -1825,19 +1825,19 @@ final class FactsView {
 		];
 	}
 
-	/** The splice an inlined call made in `n`'s body that holds the position `at` (`CompilerFacts.spliceOf`), or null. */
+	/** The splice an inlined call made in `n`'s body that holds the position `at` (`FactSites.spliceOf`), or null. */
 	public inline function spliceOf(n: FactNode, at: FactPos): Null<SpliceFact> {
-		return CompilerFacts.spliceOf(n, at);
+		return FactSites.spliceOf(n, at);
 	}
 
-	/** The expression macro's expansion in `n`'s body that holds the position `at` (`CompilerFacts.expansionOf`), or null. */
+	/** The expression macro's expansion in `n`'s body that holds the position `at` (`FactSites.expansionOf`), or null. */
 	public inline function expansionOf(n: FactNode, at: FactPos): Null<ExpansionFact> {
-		return CompilerFacts.expansionOf(n, at);
+		return FactSites.expansionOf(n, at);
 	}
 
-	/** The sites the expansion `x` in `n`'s body runs at (`CompilerFacts.expansionSites`), or null when none is known. */
+	/** The sites the expansion `x` in `n`'s body runs at (`FactSites.expansionSites`), or null when none is known. */
 	public inline function expansionSites(n: FactNode, x: ExpansionFact): Null<Array<Span>> {
-		return CompilerFacts.expansionSites(n, x);
+		return FactSites.expansionSites(n, x);
 	}
 
 }

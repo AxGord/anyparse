@@ -449,7 +449,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 * into an "Unknown identifier" on Haxe 4.3.7 while still compiling everywhere else.
 	 * Neither fact is visible from the field node — the modifier is a preceding SIBLING,
 	 * and the enum-abstract-ness belongs to the declaration — so the running modifier
-	 * state is kept here, exactly as `SymbolIndexBuilder.collectMembers` keeps its own.
+	 * state is kept here, exactly as `SymbolIndexMembers.collectMembers` keeps its own.
 	 *
 	 * The run ends at every child that is neither a modifier nor an annotation — not only
 	 * at a MEMBER, which is what a first attempt did and what let `@:enum abstract E {…}`

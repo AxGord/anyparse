@@ -14,7 +14,6 @@ import anyparse.query.ImplicitSites.ImplicitSite;
 import anyparse.query.ImplicitSites.SiteFamily;
 import anyparse.query.MemberReach.ReachUnknown;
 import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
@@ -45,6 +44,9 @@ final class ReachGraph {
 	/** Whether a value of one type may carry another type's member, and the types it may be at run time. */
 	public final carriers: ValueCarriers;
 
+	/** What a call into library code may run, read off the library's declarations (`LibraryCalls`). */
+	public final library: LibraryCalls;
+
 	/** Set once the current question met a blind spot: the graph then stops growing, since `Proven` is out of reach anyway. */
 	public var stopGrowing: Bool = false;
 
@@ -53,12 +55,6 @@ final class ReachGraph {
 	 * already had: the budget counts these, so an answer does not depend on which questions came first.
 	 */
 	private final _questionFiles: Map<String, Bool> = [];
-
-	/** Extern type -> whether it is closed over inert values (`externClosed`). */
-	private final _externClosed: Map<String, Bool> = [];
-
-	/** Type -> whether a program type extending it overrides a method (`overriddenBelow`), settled on first need. */
-	private final _overriddenBelow: Map<String, Bool> = [];
 
 	/** Library class -> whether an instance of it may exist while the program runs (`constructible`), settled on first demand. */
 	private final _inPlay: Map<String, Bool> = [];
@@ -117,6 +113,7 @@ final class ReachGraph {
 		this.carriers = carriers;
 		_maxLibraryFiles = maxLibraryFiles;
 		sites = new ImplicitSites(scope.plugin, scope.index);
+		library = new LibraryCalls(scope);
 	}
 
 	/** The text of `file` when the graph is built and holds it; never builds the graph. */
@@ -165,162 +162,6 @@ final class ReachGraph {
 	}
 
 	/**
-	 * Whether `type.name` is a library call known to run no user code (`ExecutionShape.pureLibraryCalls`): listed,
-	 * declared by the indexed library type itself (not a type the project declares), and — read off that
-	 * declaration — taking only parameters of a type whose values run nothing when the call converts or calls
-	 * them (`inertType`). A parameter of a type parameter, `Dynamic` or an object type may be handed a value
-	 * whose `toString` the call runs; `args`, when the call site is known, excuses one that is handed a string
-	 * literal.
-	 */
-	public function isPureLibrary(g: CallGraph, type: String, name: String, ?args: Array<QueryNode>): Bool {
-		if (
-			!(
-				(_scope.shape.execution?.pureLibraryCalls ?? []).contains('$type.$name')
-				|| (_scope.shape.execution?.pureLibraryTypes ?? []).contains(type)
-			)
-		)
-			return false;
-		final site: Null<{ file: String, span: Span }> = _scope.siteOf(type);
-		final info: Null<MemberInfo> = g.types.memberOnChain(type, name);
-		if (site == null || _scope.sources.exists(site.file) || info == null) return false;
-		final params: Array<Null<String>> = info.paramTypeSources;
-		final literals: Array<String> = _scope.shape.stringLiteralKinds ?? [];
-		for (i => param in params) {
-			final arg: Null<QueryNode> = args == null || i >= args.length ? null : args[i];
-			if (!(param != null && inertType(param)) && !(arg != null && literals.contains(arg.kind))) return false;
-		}
-		return true;
-	}
-
-	/**
-	 * Whether a call of the library member `type.name` runs no project code: a pure library call, or a method
-	 * of the built-in array type that calls no argument and returns no string — any of them, or with `mutatorsToo`
-	 * false only the non-mutating ones. A built-in map's own methods (`ExecutionShape.mapTypeNames`) answer the same way,
-	 * while no project type extends the map type: a subclass may override what the method calls (`BalancedTree.compare`).
-	 */
-	public function runsNoUserCode(g: CallGraph, type: String, name: String, mutatorsToo: Bool): Bool {
-		if (isPureLibrary(g, type, name)) return true;
-		final execution: Null<ExecutionShape> = _scope.shape.execution;
-		final array: Bool = (_scope.shape.arrayTypeNames ?? []).contains(type);
-		final map: Bool = !array && (execution?.mapTypeNames ?? []).contains(type) && !projectSubtype(type);
-		if (!(array || map) || callsItsArgument(g, type, name)) return false;
-		// a method returning a string converts the elements to one (`join`): an element's `toString` runs
-		if (g.types.memberOnChain(type, name)?.returnNominal == stringTypeName()) return false;
-		final reads: Null<Array<String>> = array ? execution?.nonMutatingArrayMethods : execution?.nonMutatingMapMethods;
-		final changes: Null<Array<String>> = array ? execution?.mutatingArrayMethods : execution?.mutatingMapMethods;
-		return (reads ?? []).contains(name) || (mutatorsToo && (changes ?? []).contains(name));
-	}
-
-	/** Whether a type declared outside the standard library extends or implements `type`. */
-	private function projectSubtype(type: String): Bool {
-		return _scope.index.subtypes.subtypeFiles(type).exists(f -> !StdResolver.isStdFile(f));
-	}
-
-	/**
-	 * Whether a call of `type.name` may CALL a value it is handed, read off the indexed declaration: a parameter
-	 * whose written type is not a nominal (a function type `T->S`), a catch-all (`Dynamic`, `Any`), or a type
-	 * that may alias a function (a typedef or abstract, or one the index does not declare — `holdsNoFunction`)
-	 * can be called. A parameter typed by one of the declaring type's own type parameters cannot: nothing is
-	 * known to be callable about it. True when the declaration is not indexed or a parameter is untyped.
-	 */
-	public function callsItsArgument(g: CallGraph, type: String, name: String): Bool {
-		final info: Null<MemberInfo> = g.types.memberOnChain(type, name);
-		if (info == null) return true;
-		final catchAll: Array<String> = _scope.shape.catchAllTypeNames ?? [];
-		final ownParams: Array<String> = g.types.generics.typeParamsOf(type);
-		for (param in info.paramTypeSources) {
-			final nominal: Null<String> = param == null
-				? null
-				: NominalTypes.outerNominalOf(
-					NominalTypes.unwrapNullable(
-						StringTools.trim(param), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
-					),
-					_scope.plugin.typeSyntax
-				);
-			if (nominal == null || catchAll.contains(nominal)) return true;
-			if (!ownParams.contains(nominal) && !g.types.holdsNoFunction(nominal)) return true;
-		}
-		return false;
-	}
-
-	/**
-	 * Whether the extern `type` is CLOSED over inert values: every member its declarations on the chain carry —
-	 * field, parameter, return — is typed with an inert type (`inertType`), `Void`, or the type itself. Target
-	 * code behind such a type can only have been handed numbers, strings and its own instances, so it holds no
-	 * array or function value of the program to change or call. False when a declaration is not indexed.
-	 */
-	public function externClosed(g: CallGraph, type: String): Bool {
-		final cached: Null<Bool> = _externClosed[type];
-		if (cached != null) return cached;
-		var closed: Bool = g.types.meta.isExtern(type);
-		var t: Null<String> = type;
-		final seen: Array<String> = [];
-		while (closed && t != null && !seen.contains(t)) {
-			final current: String = t;
-			seen.push(current);
-			final decl: Null<TypeDeclInfo> = declarationOf(current);
-			if (decl == null) {
-				closed = false;
-				break;
-			}
-			final own: String -> Bool = written -> {
-				final nominal: Null<String> = NominalTypes.outerNominalOf(StringTools.trim(written), _scope.plugin.typeSyntax);
-				inertType(written) || nominal == current || nominal == type || nominal == _scope.shape.voidTypeName;
-			};
-			for (m in decl.members) {
-				final written: Array<Null<String>> = m.paramTypeSources.concat([m.typeSource, m.returnNominal]);
-				for (w in written) if (w != null && !own(w)) closed = false;
-			}
-			t = g.types.superclassOf(current);
-		}
-		_externClosed[type] = closed;
-		return closed;
-	}
-
-	/**
-	 * Whether the body-less extern member `type.name` runs no program code and changes no program value: its
-	 * type is closed over inert values (`externClosed`), or it is a method the language calls IMPLICITLY — a
-	 * conversion, an iteration step, an operator — that takes no value it could call (`callsItsArgument`). The
-	 * second rests on a stated assumption: target code the language runs implicitly converts or steps its own
-	 * receiver and calls back into the program only through a function value it is handed. Neither holds for an
-	 * instance member whose receiver may be an instance of a program class overriding a method (`overriddenBelow`):
-	 * target code running on it may call that method, as a virtual dispatch does.
-	 */
-	public function externQuiet(g: CallGraph, type: String, name: String): Bool {
-		final info: Null<MemberInfo> = g.types.memberOnChain(type, name);
-		if (info != null && !info.isStatic && overriddenBelow(type)) return false;
-		if (externClosed(g, type)) return true;
-		final byName: Bool = info != null && !info.isStatic && (_scope.shape.execution?.implicitCallNames ?? []).contains(name);
-		return info != null && (info.isImplicitCall || byName) && !callsItsArgument(g, type, name);
-	}
-
-	/**
-	 * Whether a type extending `type` that is no extern overrides a method — an instance of it is one of `type`, whose target
-	 * code may call the override — or a type extending it is not declared once, so nothing here says.
-	 */
-	private function overriddenBelow(type: String): Bool {
-		final cached: Null<Bool> = _overriddenBelow[type];
-		if (cached != null) return cached;
-		final found: Bool = _scope.index.subtypes.subtypeNames(type).exists(s -> {
-			final decl: Null<TypeDeclInfo> = declarationOf(s);
-			decl == null || (!decl.isExtern && decl.members.exists(m -> m.isOverride));
-		});
-		_overriddenBelow[type] = found;
-		return found;
-	}
-
-	/**
-	 * Whether the body-less extern member `type.name` may be HANDED a program object: a parameter written with a type
-	 * that is neither inert (`inertType`) nor a function type, or with none. Target code reaches such an object's
-	 * members by name — a `toJSON`, a `toString`, a `then` — without any call the graph can see.
-	 */
-	public function externTakesObject(g: CallGraph, type: String, name: String): Bool {
-		final info: Null<MemberInfo> = g.types.memberOnChain(type, name);
-		return info == null
-			|| info.paramTypeSources.exists(p -> p == null || (_scope.plugin.typeSyntax(p)?.holdsFunction() != true && !inertType(p)));
-	}
-
-	/**
 	 * The graph ids of every function member target code may reach BY NAME in a value of static type `type` it is
 	 * handed — the members of each type the value may carry at run time (`runtimeTypes`), a placeholder for one of a
 	 * library file not read yet — closed over what the value's instance fields
@@ -349,17 +190,17 @@ final class ReachGraph {
 				if (typeSyntax(source)?.holdsFunction() == true) continue;
 				return null;
 			}
-			if (inertType(source)) continue;
+			if (library.inertType(source)) continue;
 			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source, typeSyntax);
 			for (arg in args ?? []) written.push(arg);
 			if (seen.exists(nominal)) continue;
 			seen[nominal] = true;
-			final decl: Null<TypeDeclInfo> = declarationOf(nominal);
+			final decl: Null<TypeDeclInfo> = _scope.declarationOf(nominal);
 			if (decl == null || (_scope.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return null;
 			final types: Null<Array<String>> = runtimeTypes(g, nominal, Text);
 			if (types == null) return null;
 			for (t in types) {
-				final d: Null<TypeDeclInfo> = declarationOf(t);
+				final d: Null<TypeDeclInfo> = _scope.declarationOf(t);
 				if (d == null) return null;
 				final ownParams: Array<String> = g.types.generics.typeParamsOf(t);
 				for (m in d.members) {
@@ -397,7 +238,7 @@ final class ReachGraph {
 	 * constructor among them), and the generated constructor of a class that declares none. Null when that set is not known.
 	 */
 	public function namedClassIds(g: CallGraph, type: String): Null<Array<String>> {
-		final decl: Null<TypeDeclInfo> = declarationOf(type);
+		final decl: Null<TypeDeclInfo> = _scope.declarationOf(type);
 		final members: Null<Array<String>> = decl == null ? null : handedMemberIds(g, type);
 		if (decl == null || members == null) return null;
 		if (decl.members.exists(m -> m.name == (_scope.shape.constructorName ?? 'new'))) return members;
@@ -405,24 +246,6 @@ final class ReachGraph {
 		final out: Array<String> = members.copy();
 		for (id in generatedConstructor(g, type)) if (!out.contains(id)) out.push(id);
 		return out;
-	}
-
-	/** The language's string type: what a string literal is (`RefShape.literalTypeNames`). */
-	public function stringTypeName(): Null<String> {
-		return (_scope.shape.literalTypeNames ?? [])[(_scope.shape.stringLiteralKinds ?? [])[0] ?? ''];
-	}
-
-	/** Whether a value written `typeSource` runs no code when a call converts it to a string: a string, number or boolean. */
-	public function inertType(typeSource: String): Bool {
-		final nominal: Null<String> = NominalTypes.outerNominalOf(
-			NominalTypes.unwrapNullable(
-				StringTools.trim(typeSource), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
-			),
-			_scope.plugin.typeSyntax
-		);
-		final values: Array<String> =
-			[for (t in (_scope.shape.literalTypeNames ?? []).iterator()) t].concat(_scope.shape.nonNullableTypeNames ?? []);
-		return _scope.plugin.typeSyntax(typeSource)?.holdsFunction() != true && nominal != null && values.contains(nominal);
 	}
 
 	/**
@@ -913,14 +736,8 @@ final class ReachGraph {
 
 	/** Whether `type` is declared once, as an abstract: a value of it is its underlying one at run time. */
 	public function isAbstract(type: String): Bool {
-		final decl: Null<TypeDeclInfo> = declarationOf(type);
+		final decl: Null<TypeDeclInfo> = _scope.declarationOf(type);
 		return decl != null && (_scope.shape.underlyingThisTypeKinds ?? []).contains(decl.kind);
-	}
-
-	/** The single indexed declaration of `type`, or null. */
-	private function declarationOf(type: String): Null<TypeDeclInfo> {
-		final site: Null<{ file: String, span: Span }> = _scope.siteOf(type);
-		return site == null ? null : _scope.index.fileInfo(site.file)?.types.find(d -> d.name == type);
 	}
 
 	/** The graph ids of `candidates`, deduped: the declared node, the initializer pseudo-node, or a placeholder the walk reads. */
@@ -974,7 +791,7 @@ final class ReachGraph {
 		final out: Array<String> = [];
 		for (t in at.types) {
 			if (t == null) return null;
-			if (at.family == Text && inertType(t)) continue;
+			if (at.family == Text && library.inertType(t)) continue;
 			final types: Null<Array<String>> = at.exact ? exactTypes(g, t) : runtimeTypes(g, t, at.family);
 			if (types == null) return null;
 			for (x in types) if (!out.contains(x)) out.push(x);
@@ -1035,7 +852,7 @@ final class ReachGraph {
 		for (i in 0...at.types.length) {
 			final t: Null<String> = at.types[i];
 			if (t == null) return null;
-			if (at.family == Text && inertType(t)) continue;
+			if (at.family == Text && library.inertType(t)) continue;
 			final owner: Null<String> = i < owners.length ? owners[i] : null;
 			final kind: Null<String> = owner == null ? null : view.type(owner)?.kind;
 			if (owner == null || !NOMINAL_KINDS.contains(kind ?? '')) return null;
@@ -1069,7 +886,7 @@ final class ReachGraph {
 	 */
 	private function exactTypes(g: CallGraph, type: String): Null<Array<String>> {
 		final nominal: Null<String> = NominalTypes.outerNominalOf(StringTools.trim(type), _scope.plugin.typeSyntax);
-		final decl: Null<TypeDeclInfo> = nominal == null ? null : declarationOf(nominal);
+		final decl: Null<TypeDeclInfo> = nominal == null ? null : _scope.declarationOf(nominal);
 		if (nominal == null || decl == null) return null;
 		final declared: TypeDeclInfo = decl;
 		if (declared.isAnonStruct || (_scope.shape.aliasingDeclKinds ?? []).contains(declared.kind)) return null;
@@ -1191,7 +1008,7 @@ final class ReachGraph {
 	 * not declared exactly once. When the static type's own chain declares no `name`, only that chain is answered.
 	 */
 	private function readOwners(g: CallGraph, type: String, name: String): Null<Array<String>> {
-		final decl: Null<TypeDeclInfo> = declarationOf(g.types.resolveAlias(type));
+		final decl: Null<TypeDeclInfo> = _scope.declarationOf(g.types.resolveAlias(type));
 		if (decl == null || (_scope.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return null;
 		// whether the name is declared at all is the static type's question: an instance that left the type system and
 		// declares it does not make a static extension, or a member a build macro generated, one the index describes

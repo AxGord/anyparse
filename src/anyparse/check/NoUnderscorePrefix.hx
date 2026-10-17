@@ -54,7 +54,7 @@ using StringTools;
  *
  * Haxe does not hoist a local function, so an occurrence resolved BEFORE the declaration is
  * the resolver over-reaching - it binds the whole block, while the compiler binds that read
- * to whatever the local function shadows. `Naming.declaringFileRenameSpans` refuses the
+ * to whatever the local function shadows. `NamingRenames.declaringFileRenameSpans` refuses the
  * rename rather than rewrite a read that belongs to a member (`bodyScoped`).
  *
  * A local `inline function` projects as its own kind, `LocalInlineFnStmt` - the grammar folds the
@@ -70,8 +70,8 @@ using StringTools;
  *
  * `fix` strips EVERY leading underscore (`_event` -> `event`, `__selectedIndex` ->
  * `selectedIndex`) and rewrites every occurrence of the binding, reusing the
- * `naming` check's rename machinery rather than restating it: `Naming.collidesInScope`
- * for the scope-aware target-name collision proof, `Naming.declaringFileRenameSpans`
+ * `naming` check's rename machinery rather than restating it: `NamingRenames.collidesInScope`
+ * for the scope-aware target-name collision proof, `NamingRenames.declaringFileRenameSpans`
  * for the scope-correct occurrence set plus its completeness gate (a `#if` region, a
  * string literal, a `noqa` line or a resolver-missed active-code occurrence bails; a
  * distinctive comment mention renames along). Every gate fails CLOSED — an
@@ -312,9 +312,9 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 
 	/**
 	 * The spans to rewrite to `target` for one flagged binding, or null when a gate refuses the rename: `target` collides with
-	 * something reachable from the binding's scope (`Naming.collidesInScope` - a sibling parameter, an overlapping local, an
+	 * something reachable from the binding's scope (`NamingRenames.collidesInScope` - a sibling parameter, an overlapping local, an
 	 * own member, a static, an import), it names a member INHERITED from a supertype, it names a declared top-level type, or
-	 * the occurrence set cannot be proven complete (`Naming.declaringFileRenameSpans`). The same-target conflict between two
+	 * the occurrence set cannot be proven complete (`NamingRenames.declaringFileRenameSpans`). The same-target conflict between two
 	 * flagged bindings is settled by the caller (`claimedByAnother`); the derived `target` itself comes from `strippedName`.
 	 */
 	private static function renameSpansFor(
@@ -324,14 +324,14 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		final span: Null<Span> = decl.span;
 		return if (span == null)
 			null
-		else if (Naming.collidesInScope(decl, source, tree, target, shape, resolutionIndex, plugin))
+		else if (NamingRenames.collidesInScope(decl, source, tree, target, shape, resolutionIndex, plugin))
 			null
 		else if (collidesWithProjectSymbol(decl, target, resolutionIndex, allowInheritedShadow))
 			null
 		else
-			Naming.declaringFileRenameSpans(
-				source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name),
-				Naming.isBodyScopedCategory(decl.category)
+			NamingRenames.declaringFileRenameSpans(
+				source, tree, span.from, decl.name, shape, plugin, NamingRenames.isDistinctiveName(decl.name),
+				NamingRenames.isBodyScopedCategory(decl.category)
 			);
 	}
 

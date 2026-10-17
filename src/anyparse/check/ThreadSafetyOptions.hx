@@ -63,7 +63,7 @@ final class ThreadSafetyOptions {
 	/** The keys holding `true` or `false`. */
 	public static final FLAG_KEYS: Array<String> = ['closedWorld', 'compilerFacts'];
 
-	/** The keys every rule takes, which the linter reads itself when well-formed (`LintConfig.parseRule`). */
+	/** The keys every rule takes, which the linter reads itself when well-formed (`LintDocuments.parseRule`). */
 	private static final LIFTED_KEYS: Array<String> = ['enabled', 'severity'];
 
 	private static inline final BUDGET_KEY: String = 'repeatBudgetMs';
@@ -166,7 +166,7 @@ final class ThreadSafetyOptions {
 		final out: Array<String> = [];
 		switch value {
 			case JArray(items):
-				LintConfig.collectStrings(items, out);
+				LintDocuments.collectStrings(items, out);
 				final skipped: Int = items.length - out.length;
 				if (skipped > 0) problems.push('option "$key" ignored $skipped value(s) that are not strings');
 			case _:

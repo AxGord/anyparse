@@ -4,6 +4,7 @@ import anyparse.check.FactsTypeTree;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.TypedFactsProbe;
 import anyparse.query.CompilerFacts;
+import anyparse.query.FactSites;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 import sys.io.File;
@@ -507,7 +508,7 @@ class TypedFactsProbeTest extends Test {
 		Assert.equals(libFile, declared?.file);
 		Assert.isTrue(declared != null && declared.span.to >= lib.indexOf('* 2;'), 'body: $declared');
 		final hook: Null<CallFact> = node?.calls.find(c -> c.target == 'Main.hook' && c.at.file == libFile);
-		final splice: Null<SpliceFact> = node == null || hook == null ? null : CompilerFacts.spliceOf(node, hook.at);
+		final splice: Null<SpliceFact> = node == null || hook == null ? null : FactSites.spliceOf(node, hook.at);
 		Assert.equals('Lib.one', splice?.callee);
 		Assert.equals(site?.from, splice?.sites[0]?.from);
 		scratch.remove();

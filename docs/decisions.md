@@ -3161,3 +3161,18 @@ decided the question; it may not become a record of runs.
   parse in this grammar, Haxe accepts it); `ScratchField`'s `loopKinds` / `doWhileKinds` are two arms of one union (a
   do-while body all-conditional because a `continue` skips its rest); `FactsProvenance` reads the LOWERED loops (`for`
   and comprehensions), and no `do … while` is lowered — branch `feat/infra-N2`
+- the 15 types over the oversized-type thresholds (C2) are split only where `hxq clusters` and the field census show a
+  seam with state of its own or a natural home, never by member count: `LintConfig`'s document pipeline →
+  `LintDocuments`; `HaxeQueryPlugin`'s 1229-line kind table → `HaxeRefShape` (answered the way `namingSupport` is);
+  `SymbolIndexBuilder`'s type-body walk → `SymbolIndexMembers`; `Naming`'s rename proofs → `NamingRenames`, which
+  `no-underscore-prefix` already drove through `@:access(Naming)`; `WriterLowering`'s `<writeFn>OpenRight` generator →
+  `WriterPrattLowering`, beside `OPEN_NONE` and `guardOpenLeft`; `CompilerFacts`' node-record decoding →
+  `FactNodeRecords` and its node-site queries → `FactSites`; `FactsEscapes`' type-parameter instances → `FactsInstances`;
+  `ReachGraph`'s library-call predicates → `LibraryCalls` (and `declarationOf` → `ReachProject`, beside `siteOf`);
+  `TypedFactsMacro`'s type-string printer → `TypedFactsTypeStrings`. Declined, each re-measured: `FactsView` (the
+  owned-types door: 75 public questions, so no split reaches the threshold without forwarders, and every member shares
+  `_table` / `_scope` / `truth`); `CallGraph` (as B9: 86 files read its public surface, `collectEdges` is one 1436-line
+  member); `MemberReach`, `TypedFactsWalk`, `FunctionValueTypes`, `NullGuardedCode` (one component holds 85-90% of the
+  non-hub members at every hub count tried, and that component holds every mutable field); the rest of
+  `CompilerFacts`, `ReachGraph`, `FactsEscapes`, `TypedFactsMacro` (one table's caches, the graph's growth state, the
+  escape walk, the record writer: every remaining member reads the same fields) — branch `feat/infra-C2`

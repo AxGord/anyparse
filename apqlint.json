@@ -48,6 +48,7 @@
 				"anyparse.query.CallGraphFacts",
 				"anyparse.query.FactsProvenance",
 				"anyparse.query.FactsEscapes",
+				"anyparse.query.FactsInstances",
 				"anyparse.query.FactsMethodValues",
 				"anyparse.query.FactText",
 				"anyparse.query.FactsNativeReach",

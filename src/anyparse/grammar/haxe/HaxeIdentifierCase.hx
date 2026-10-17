@@ -100,7 +100,7 @@ final class HaxeIdentifierCase {
 	 * strip the leading underscore(s), keeping the result whenever it is a
 	 * syntactically valid identifier (`_forceBuild` → `forceBuild`, `_FORCE_BUILD` →
 	 * `FORCE_BUILD`). Whether the stripped name actually conforms to the Constant
-	 * rule's format is decided by the caller (`Naming.renameEditsFor` gates on
+	 * rule's format is decided by the caller (`NamingRenames.renameEditsFor` gates on
 	 * `rule.format.match`), so both camelCase and UPPER_SNAKE pass here while a name
 	 * matching neither (`_FORCE_build` → `FORCE_build`) is filtered there. A strip that
 	 * leaves an invalid identifier, or one that lands on a Haxe keyword (`_new` → `new`, the

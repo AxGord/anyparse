@@ -2,7 +2,10 @@ package anyparse.query;
 
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+
+using Lambda;
 
 /**
  * What every part of a `MemberReach` analysis reads the project through: the plugin and its shape seams, the
@@ -120,6 +123,12 @@ final class ReachProject {
 	/** Whether the index declares a type of the simple name `type` anywhere, a typedef aliasing a namesake aside. */
 	public function declaresAnywhere(type: String): Bool {
 		return declarationsByName().exists(type);
+	}
+
+	/** The declaration of `type` at its one site (`siteOf`), or null when none or several declare it. */
+	public function declarationOf(type: String): Null<TypeDeclInfo> {
+		final site: Null<{ file: String, span: Span }> = siteOf(type);
+		return site == null ? null : index.fileInfo(site.file)?.types.find(d -> d.name == type);
 	}
 
 	/**

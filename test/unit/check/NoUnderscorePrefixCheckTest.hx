@@ -569,7 +569,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 	/**
 	 * Two sibling inline local functions' SAME-NAMED parameters live in disjoint scopes, so `_n` in the
 	 * first strips to `n` without colliding with the second's `n`. The gate is
-	 * `Naming.collidesInScope`, whose enclosing-scope lookup takes `functionKinds` UNION
+	 * `NamingRenames.collidesInScope`, whose enclosing-scope lookup takes `functionKinds` UNION
 	 * `inlineFunctionKinds`; with `functionKinds` alone the innermost function containing `_n` was
 	 * the enclosing METHOD, the sibling helper was not disjoint from it, and its `n` vetoed the
 	 * strip. (The resolver's `scopeKinds` frame is a separate gate - reverting it alone leaves this
