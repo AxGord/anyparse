@@ -2422,33 +2422,33 @@
 		},
 		{
 			"name": "M-STRING-LITERAL-DUP-TABLE-ARITY",
-			"type": "anyparse.check.StringLiteralDup",
-			"method": "isTable",
-			"find": "return !inPattern && node.kind == ctx.arrayLiteralKind && node.children.foreach(kid -> isDataEntry(kid, source, ctx));",
-			"replace": "return !inPattern && node.kind == ctx.arrayLiteralKind && node.children.length >= 3\n\t\t\t&& node.children.foreach(kid -> isDataEntry(kid, source, ctx));",
+			"type": "anyparse.check.LiteralTables",
+			"method": "isCollectionTable",
+			"find": "return node.kind == t.arrayLiteralKind && node.children.foreach(kid -> isDataEntry(kid, source, t));",
+			"replace": "return node.kind == t.arrayLiteralKind && node.children.length >= 3\n\t\t\t&& node.children.foreach(kid -> isDataEntry(kid, source, t));",
 			"note": "the arity floor is back, so a one- or two-name vocabulary array (`arrayTypeNames: ['Array']`) is read as logic again and its entries count toward the repetition"
 		},
 		{
 			"name": "M-STRING-LITERAL-DUP-TABLE-ANY",
-			"type": "anyparse.check.StringLiteralDup",
-			"method": "isTable",
-			"find": " && node.children.foreach(kid -> isDataEntry(kid, source, ctx))",
+			"type": "anyparse.check.LiteralTables",
+			"method": "isCollectionTable",
+			"find": " && node.children.foreach(kid -> isDataEntry(kid, source, t))",
 			"replace": "",
 			"note": "homogeneity is dropped and every collection literal is a table, so an expression list mixing identifiers with literals exempts its literals"
 		},
 		{
 			"name": "M-STRING-LITERAL-DUP-MAP-ENTRY-BLIND",
-			"type": "anyparse.check.StringLiteralDup",
+			"type": "anyparse.check.LiteralTables",
 			"method": "isDataEntry",
-			"find": "node.kind == ctx.mapEntryKind",
+			"find": "node.kind == t.mapEntryKind",
 			"replace": "false",
 			"note": "a map ENTRY is no longer a data entry, so a `kind => type` table has no bare-literal child and every key of it counts as a repetition again"
 		},
 		{
 			"name": "M-STRING-LITERAL-DUP-STRING-ONLY-ENTRIES",
-			"type": "anyparse.check.StringLiteralDup",
-			"method": "isDataEntry",
-			"find": " || (node.children.length == 0 && ctx.literalKinds.contains(node.kind))",
+			"type": "anyparse.check.LiteralTables",
+			"method": "isScalarData",
+			"find": " || (node.children.length == 0 && t.literalKinds.contains(node.kind))",
 			"replace": "",
 			"note": "only a string literal is a data entry, so a map storing numbers (`['Map' => 1, 'Array' => 0]`) stops being a table and its keys count again"
 		},
@@ -12083,7 +12083,7 @@
 		{
 			"name": "M-MAGIC-CALLARG-BLIND",
 			"type": "anyparse.check.MagicNumber",
-			"method": "isIgnoredCallArgument",
+			"method": "isIgnoredCall",
 			"force": "false",
 			"note": "a direct argument of a call ignoreCallArguments names is flagged as a magic number"
 		},
@@ -12094,6 +12094,76 @@
 			"find": ["suffix.length > path.length", "for (i in 0...suffix.length)"],
 			"replace": ["false", "for (i in suffix.length - 1...suffix.length)"],
 			"note": "an ignoreCallArguments entry matches any callee sharing its last segment, so Lang.t exempts a bare t()"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-NEG-BLIND",
+			"type": "anyparse.check.MagicNumber",
+			"method": "childKeyCtx",
+			"find": "currentCtx && node.kind == cfg.negationKind",
+			"replace": "false",
+			"note": "a negation does not hand the argument context to its literal, so f(-18) is flagged while f(18) is exempt"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-NEW-BLIND",
+			"type": "anyparse.check.MagicNumber",
+			"method": "calledPath",
+			"find": "node.kind == cfg.newExprKind",
+			"replace": "false",
+			"note": "a constructor never matches an ignoreCallArguments entry, so `SpriteDefinition.new` exempts nothing"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-NESTED-NEW",
+			"type": "anyparse.check.MagicNumber",
+			"method": "walk",
+			"find": " || keyCtx && node.kind == cfg.newExprKind",
+			"replace": "",
+			"note": "a value object built in place as a listed argument (`new SpriteDefinition(id, new Point(-18, -83))`) no longer carries the callee's context, so its literals are flagged"
+		},
+		{
+			"name": "M-MAGIC-TABLE-SWITCH-BLIND",
+			"type": "anyparse.check.LiteralTables",
+			"method": "isSwitchTable",
+			"force": "false",
+			"note": "no switch is a lookup table, so `case 0x410300: 0xC0;` is flagged under literalTables"
+		},
+		{
+			"name": "M-MAGIC-TABLE-SWITCH-ARM-LOOSE",
+			"type": "anyparse.check.LiteralTables",
+			"method": "isTableArm",
+			"find": "for (i in 0...last) if (!isTablePattern(arm.children[i], source, t)) return false;",
+			"replace": "",
+			"note": "an arm is judged by its value alone, so a guarded or capturing switch reads as a table and its literals are exempt"
+		},
+		{
+			"name": "M-MAGIC-TABLE-COLLECTION-BLIND",
+			"type": "anyparse.check.MagicNumber",
+			"method": "isNamedTable",
+			"force": "false",
+			"note": "no named collection of literals is a table, so `final widths = [30, 45]` is flagged under literalTables"
+		},
+		{
+			"name": "M-MAGIC-TABLE-COLLECTION-UNNAMED",
+			"type": "anyparse.check.MagicNumber",
+			"method": "isNamedTable",
+			"find": "parent != null && cfg.localDeclKinds.contains(parent.kind)",
+			"replace": "true",
+			"note": "every all-literal collection is a table, so an inline `draw([3, 4])` is exempt though nothing names it"
+		},
+		{
+			"name": "M-MAGIC-TABLES-DEFAULT-ON",
+			"type": "anyparse.check.MagicNumber",
+			"method": "run",
+			"find": "boolOption(RULE_ID, 'literalTables') ?? false",
+			"replace": "boolOption(RULE_ID, 'literalTables') ?? true",
+			"note": "literalTables is on when no project sets it, so every existing configuration silently loses its switch-table findings"
+		},
+		{
+			"name": "M-LITERAL-TABLE-NEG-ENTRY-BLIND",
+			"type": "anyparse.check.LiteralTables",
+			"method": "isScalarData",
+			"find": "node.kind == t.negationKind",
+			"replace": "false",
+			"note": "a negative number is no data entry, so a table holding -1 is logic again (Base64 decode table, a map of negative values)"
 		},
 		{
 			"name": "M-INTERP-CONSTANT-BLOCK-IGNORED",

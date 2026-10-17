@@ -228,6 +228,19 @@ class StringLiteralDupCheckTest extends Test {
 		Assert.equals(0, violations(body('var m = ["aaaa" => 1, "aaaa" => 2, "aaaa" => 3];')).length);
 	}
 
+	/**
+	 * A NEGATIVE number is data as much as a positive one. Haxe has no negative literal — `-1` is a
+	 * negation over `1` — so the entry test admits a negation whose operand is a numeric literal
+	 * (`RefShape.negationKind` over `numericLiteralKinds`), and nothing else under a negation. Killed by
+	 * arm `M-LITERAL-TABLE-NEG-ENTRY-BLIND`.
+	 */
+	@:pin('control')
+	@:killer('M-LITERAL-TABLE-NEG-ENTRY-BLIND')
+	public function testMapWithNegativeValuesIsATable(): Void {
+		Assert.equals(0, violations(body('var m = ["aaaa" => -1, "aaaa" => -2.5, "aaaa" => -3];')).length);
+		Assert.equals(1, violations(body('var m = ["aaaa" => -k, "aaaa" => -2, "aaaa" => -3];')).length);
+	}
+
 	public function testInterpolatedEntryKeepsTheCollectionLogic(): Void {
 		// The entry test admits a non-string literal by KIND, so it has to refuse an interpolated
 		// string, whose kind IS a literal kind: it carries its captured expressions as children,

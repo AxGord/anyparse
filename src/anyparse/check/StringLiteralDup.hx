@@ -4,14 +4,13 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
+import anyparse.check.LiteralTables.LiteralTableShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-
-using Lambda;
 
 /**
  * Flags a plain string literal that appears three or more times (configurable)
@@ -50,10 +49,10 @@ using Lambda;
  *     `@:native` name, a `@:build` macro path) bound to that annotation, not a
  *     value duplicated across logic; extracting it would break the annotation's
  *     meaning. Such a literal neither counts toward a group nor is reported.
- *  4. it is NOT an entry of a DATA TABLE — a node of the grammar's OWN
+ *  4. it is NOT an entry of a DATA TABLE (`LiteralTables.isCollectionTable`) — a node of the grammar's OWN
  *     `RefShape.arrayLiteralKind`, outside a case PATTERN, EVERY child of which is a literal: a
  *     plain string literal, a childless leaf of a kind the grammar declares to BE one
- *     (`RefShape.literalTypeNames` keys — a number, a bool), or a map ENTRY
+ *     (`RefShape.literalTypeNames` keys — a number, a bool), a negated numeric literal (`-1`), or a map ENTRY
  *     (`RefShape.mapLiteralEntryKind`) whose every side is again one of those. ARITY IS NOT
  *     PART OF THE TEST, and was never the concept: a grammar kind-name vocabulary
  *     (`['ClassDecl', 'FnMember', …]`), a keyword list, a MIME table, a ONE-name array
@@ -185,20 +184,16 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 		// `minLen` below is genuinely per-file, since it comes from the discovered config.
 		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
 		final shape: RefShape = plugin.refShape();
-		// The grammar's own literal vocabulary, read off the KEYS of the kind -> type map: what
-		// a data table may hold besides a plain string (a number, a bool). Null when the grammar
-		// declares none, which simply leaves a table string-only.
-		final literals: Null<Map<String, String>> = shape.literalTypeNames;
-		final literalKinds: Array<String> = literals == null ? [] : [for (kind in literals.keys()) kind];
-		return RunScan.collectWith(files, plugin, plugin.stringFoldSupport(), (entry, tree, folds, violations) -> {
+		final support: Null<StringFoldSupport> = plugin.stringFoldSupport();
+		// The data-table vocabulary (`LiteralTables`), resolved once per run like the shape it reads.
+		final tables: LiteralTableShape = LiteralTables.shapeOf(shape, support);
+		return RunScan.collectWith(files, plugin, support, (entry, tree, folds, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final minOcc: Int = positiveOr(config.intOption(RULE_ID, 'minOccurrences'), DEFAULT_MIN_OCCURRENCES);
 			final ctx: ScanCtx = {
 				support: folds,
 				metaKinds: metaKinds,
-				arrayLiteralKind: shape.arrayLiteralKind,
-				mapEntryKind: shape.mapLiteralEntryKind,
-				literalKinds: literalKinds,
+				tables: tables,
 				casePatternKind: shape.plainCasePatternKind,
 				minLen: positiveOr(config.intOption(RULE_ID, 'minLength'), DEFAULT_MIN_LENGTH)
 			};
@@ -287,63 +282,16 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 	}
 
 	/**
-	 * Whether `node` IS a data TABLE: a COLLECTION LITERAL the grammar itself names
-	 * (`RefShape.arrayLiteralKind`) whose every child is a DATA ENTRY (`isDataEntry`) — of ANY
-	 * arity, map entries included.
-	 *
-	 * Both halves are load-bearing. The kind gate makes the carve-out POSITIVE — only a construct
-	 * the grammar declares to be a collection literal can ever be a table — which is what keeps it
-	 * from leaking into shapes nobody enumerated. A test of the SHAPE alone ("every child is a
-	 * plain literal") leaks into two whole classes: `new Foo("a", "b", "c")` carries its type as the
-	 * node's NAME rather than as a child, and a conditional-compilation expression
-	 * (`#if js "a" #else "b" #end`) is a run of sibling branch values — both all-literal, neither
-	 * a table. The tighter gate removes exactly the findings the shape-only one did, so closing
-	 * the leak costs nothing.
-	 *
-	 * The homogeneity half then keeps LOGIC out of the collection kind itself, and it is what the
-	 * ARITY floor used to approximate — badly. A floor of three read `arrayTypeNames: ['Array']`
-	 * as logic and a 34-name vocabulary as data, though both are a field's stored value and
-	 * neither is an expression; the floor also could not see the MAP literal at all, which Haxe
-	 * spells with the SAME collection kind, pairing key and value under an `Arrow`. Homogeneity
-	 * alone decides both now, through `isDataEntry`.
-	 *
-	 * One shape the KIND gate cannot reach, because the grammar spells it with the same kind: an
-	 * array destructuring PATTERN (`case ["aaaa", "bbbb"]:`) is a collection literal by kind and
-	 * logic by meaning. `collect` therefore carries a sticky `inPattern`, set from the grammar's
-	 * `plainCasePatternKind`, and `isTable` refuses beneath it — the literals still COUNT there,
-	 * only the table gate is off. A grammar naming no case-pattern kind simply never sets the
-	 * flag.
-	 *
-	 * A grammar that declares no `arrayLiteralKind` gets NO carve-out at all and the rule behaves
-	 * exactly as it did before — a missing seam disables the exemption, never the rule.
+	 * Whether `node` IS a data TABLE whose entries are no candidates: a collection table
+	 * (`LiteralTables.isCollectionTable`, which holds the whole criterion and why it is positive) that is
+	 * not under a case PATTERN. The kind gate cannot tell an array destructuring pattern
+	 * (`case ["aaaa", "bbbb"]:`) from a vocabulary — the grammar spells both with the same kind — so
+	 * `collect` carries a sticky `inPattern`, set from the grammar's `plainCasePatternKind`, and the table
+	 * gate is off beneath it; the literals still COUNT there. A grammar naming no case-pattern kind simply
+	 * never sets the flag.
 	 */
 	private static function isTable(node: QueryNode, source: String, ctx: ScanCtx, inPattern: Bool): Bool {
-		return !inPattern && node.kind == ctx.arrayLiteralKind && node.children.foreach(kid -> isDataEntry(kid, source, ctx));
-	}
-
-	/**
-	 * Whether `node` is a DATA entry of a collection literal — the POSITIVE half of the table
-	 * criterion, and the only thing the old arity floor stood in for.
-	 *
-	 * Three shapes qualify, each named by the GRAMMAR rather than by this check: a plain string
-	 * literal (`StringFoldSupport.literalOf`), a childless leaf of a kind the grammar declares to
-	 * BE a literal (`RefShape.literalTypeNames` keys — a number, a bool), and a map ENTRY
-	 * (`RefShape.mapLiteralEntryKind`) every side of which is again one of these. The childless
-	 * test on the second is what keeps an INTERPOLATED string out: it carries its captured
-	 * expressions as children, and `literalOf` has already refused it.
-	 *
-	 * The map arm requires BOTH sides, not the key alone, because a positive answer makes
-	 * `collect` skip the whole subtree — a `'kkkk' => f(x)` pair would take an arbitrary value
-	 * expression down with it. The price is small and in the safe direction: a map whose values
-	 * are calls keeps its keys as candidates.
-	 *
-	 * A grammar naming neither a map-entry kind nor a literal vocabulary still gets the
-	 * string-only table it had; a missing seam narrows the exemption, never the rule.
-	 */
-	private static function isDataEntry(node: QueryNode, source: String, ctx: ScanCtx): Bool {
-		return node.kind == ctx.mapEntryKind
-			? node.children.foreach(part -> isDataEntry(part, source, ctx))
-			: ctx.support.literalOf(node, source) != null || (node.children.length == 0 && ctx.literalKinds.contains(node.kind));
+		return !inPattern && LiteralTables.isCollectionTable(node, source, ctx.tables);
 	}
 
 	/** `content` quoted for a message, elided to `MESSAGE_PREVIEW` characters so a long literal does not bloat the report. */
@@ -371,9 +319,7 @@ private typedef Finding = {
 private typedef ScanCtx = {
 	final support: StringFoldSupport;
 	final metaKinds: Array<String>;
-	final arrayLiteralKind: Null<String>;
-	final mapEntryKind: Null<String>;
-	final literalKinds: Array<String>;
+	final tables: LiteralTableShape;
 	final casePatternKind: Null<String>;
 	final minLen: Int;
 };
