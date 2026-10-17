@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.OverrideFamilyMember;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -78,6 +79,13 @@ final class SubtypeGraph {
 	 * `supertypeNameUnion`.
 	 */
 	private var _supertypeNames: Null<Map<String, Array<String>>>;
+
+	/**
+	 * Lazily-built written supertypes by SIMPLE name (`argumentsPassed`): each declaration's `supertypesWritten`, type arguments
+	 * included, with its file, and the type parameters the declarations of the name declare — the union `supertypeNameUnion`
+	 * is, read with what each link passes. Built once per instance for the reason `_adjacency` is.
+	 */
+	private var _written: Null<WrittenSupertypes>;
 
 	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
 	public function new(files: Array<FileInfo>, sources: Map<String, String>, refs: TypeRefIndex) {
@@ -409,6 +417,18 @@ final class SubtypeGraph {
 	}
 
 	/**
+	 * The type arguments `sub`'s `extends` / `implements` chain passes to `owner`'s type parameters, written in `sub`'s own
+	 * terms (`class D extends B<W>` passes `W`, `class M<X> extends B<X>` passes `X`, `class E extends M<Y>` passes `Y` through
+	 * `M`), or null when `owner` is not on the chain or a link on the way writes fewer arguments than the parameters it fills.
+	 * By SIMPLE name, as `supertypeNameUnion`: every declaration of a name contributes its written supertypes and its type
+	 * parameters, in index order, and the first link that reaches `owner` answers (`chainArguments`).
+	 */
+	public function argumentsPassed(owner: String, sub: String, typeSyntax: TypeSyntaxReader): Null<Array<String>> {
+		final written: WrittenSupertypes = writtenSupertypes();
+		return chainArguments(owner, sub, t -> written.links[t] ?? [], t -> written.params[t] ?? [], typeSyntax);
+	}
+
+	/**
 	 * Whether EVERY supertype reference of `typeName`, transitively, names a declaration this
 	 * index holds. `supertypeDeclaresMember` answers `false` both when no ancestor declares the
 	 * member and when an ancestor is not indexed at all, and only the FIRST reading is a proof —
@@ -717,6 +737,26 @@ final class SubtypeGraph {
 		return adjacency;
 	}
 
+	/** The written supertypes and type parameters by simple name (`_written`), built on first need. */
+	private function writtenSupertypes(): WrittenSupertypes {
+		final known: Null<WrittenSupertypes> = _written;
+		if (known != null) return known;
+		final links: Map<String, Array<WrittenSupertype>> = [];
+		final params: Map<String, Array<String>> = [];
+		for (f in _files) for (t in f.types) {
+			final declared: Array<String> = params[t.name] ?? [];
+			for (p in t.typeParamNames) if (!declared.contains(p)) declared.push(p);
+			params[t.name] = declared;
+			final each: Array<WrittenSupertype> = links[t.name] ?? [];
+			for (s in t.supertypesWritten) if (!each.exists(w -> w.written == s && w.file == f.file))
+				each.push({ written: s, file: f.file });
+			links[t.name] = each;
+		}
+		final built: WrittenSupertypes = { links: links, params: params };
+		_written = built;
+		return built;
+	}
+
 	/**
 	 * Typedef ALIAS edges across the whole index: an alias declaration's simple name -> every
 	 * simple name it re-points at, its target's own IMPORT alias in the declaring file included
@@ -883,6 +923,20 @@ final class SubtypeGraph {
 		return true;
 	}
 
+	/**
+	 * The walk behind `argumentsPassed`, over any keying of the written supertypes: `linksOf` lists what a type's declarations
+	 * write, each with its file, `paramsOf` the type parameters they declare — the index's by simple name, or the call graph's,
+	 * which keys a type the way its nodes do (`CallGraphGenerics.argumentsFor`). Each argument a link writes is substituted
+	 * for the parameters of the type it names on the way down (`CallGraphNames.substituteTypeParams`); with `keyIn` handed it
+	 * is first read through it with the file that wrote it and the type writing the link. Cycle-safe.
+	 */
+	public static function chainArguments(
+		owner: String, viewType: String, linksOf: String -> Array<WrittenSupertype>, paramsOf: String -> Array<String>,
+		typeSyntax: TypeSyntaxReader, ?keyIn: (String, String, String) -> String
+	): Null<Array<String>> {
+		return chainVia(owner, viewType, [], linksOf, paramsOf, typeSyntax, keyIn);
+	}
+
 	/** Append the `(file, type)` pair to `map`s `key` bucket, creating the bucket on first use. */
 	private static inline function fileSubtype(map: Map<String, Array<ResolvedType>>, key: String, fi: FileInfo, t: TypeDeclInfo): Void {
 		final bucket: Array<ResolvedType> = map[key] ?? [];
@@ -897,6 +951,28 @@ final class SubtypeGraph {
 		if (filed.contains(key)) return;
 		filed.push(key);
 		fileSubtype(map, key, fi, t);
+	}
+
+	/** `chainArguments` from `typeName` up, `seen` the types already walked. */
+	private static function chainVia(
+		owner: String, typeName: String, seen: Array<String>, linksOf: String -> Array<WrittenSupertype>,
+		paramsOf: String -> Array<String>, typeSyntax: TypeSyntaxReader, keyIn: Null<(String, String, String) -> String>
+	): Null<Array<String>> {
+		if (seen.contains(typeName)) return null;
+		seen.push(typeName);
+		for (link in linksOf(typeName)) {
+			final written: String = link.written;
+			final outer: Null<String> = NominalTypes.outerNominalOf(written, typeSyntax);
+			final args: Array<String> = [
+				for (a in NominalTypes.typeArgumentSourcesOf(written, typeSyntax) ?? []) keyIn == null ? a : keyIn(link.file, a, typeName)
+			];
+			if (outer == owner) return args;
+			final up: Null<Array<String>> = outer == null ? null : chainVia(owner, outer, seen, linksOf, paramsOf, typeSyntax, keyIn);
+			final params: Array<String> = outer == null ? [] : paramsOf(outer);
+			if (up != null && args.length >= params.length)
+				return [for (a in up) CallGraphNames.substituteTypeParams(a, params, args, typeSyntax)];
+		}
+		return null;
 	}
 
 }
@@ -917,5 +993,27 @@ typedef SubtypeAdjacency = {
 
 	/** A denotation NOT pinned to one declaration -> the subtypes that named it, keyed simply. */
 	var unresolved: Map<String, Array<ResolvedType>>;
+
+}
+
+/** A supertype as one declaration writes it, type arguments included, with the file writing it (`SubtypeGraph.chainArguments`). */
+typedef WrittenSupertype = {
+
+	/** The `extends` / `implements` target as written (`B<W>`). */
+	final written: String;
+
+	/** The file the declaration writing it is in, where its names are read. */
+	final file: String;
+
+}
+
+/** The written supertypes and the type parameters by SIMPLE name (`SubtypeGraph.argumentsPassed`), built together. */
+typedef WrittenSupertypes = {
+
+	/** A type's simple name -> what each of its declarations writes in `extends` / `implements`, in index order. */
+	final links: Map<String, Array<WrittenSupertype>>;
+
+	/** A type's simple name -> the type parameters its declarations declare. */
+	final params: Map<String, Array<String>>;
 
 }

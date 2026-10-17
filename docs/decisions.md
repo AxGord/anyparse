@@ -3255,3 +3255,11 @@ decided the question; it may not become a record of runs.
   erase-line (`ESC[2K`, what a progress printer redraws with) kept its escape, failed the indent-anchored row
   regexes and was not counted (`ApqDxTier3CliTest#testTestSummaryReadsRowsBehindAnEraseLine`, RED on `b5a5bccac`)
   — branch `feat/infra-N6`
+- the arguments a subtype's `extends` / `implements` chain passes to a supertype's parameters had one reading, the
+  call graph's (`CallGraphGenerics`), which `ReflectiveReach.bindingsOf` borrowed though every other question it
+  asks there goes to the index → the walk is `SubtypeGraph.chainArguments` over any keying of the written
+  supertypes; the index answers it by simple name (`SubtypeGraph.argumentsPassed`, every declaration of a name
+  folding in index order, as `supertypeNameUnion`) and the graph over its own tables, which read each argument
+  through the writing file's imports (`keyIn`). Simple-name keying is kept, not narrowed to one declaration: the
+  owner is already required to be ONE declaration (`onlyDeclaration`), and the subtypes come from the index's own
+  simple-name closure — branch `feat/infra-N6`

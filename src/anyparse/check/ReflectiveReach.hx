@@ -220,8 +220,8 @@ final class ReflectiveReach {
 		final out: Array<String> = [];
 		final free: Array<String> = [type];
 		for (sub in index.subtypes.subtypeNamesClosure(type)) if (sub != type) {
-			// the arguments a subtype's chain passes is the graph's reading of the written supertypes (`CallGraphGenerics`)
-			final args: Null<Array<String>> = _graph.types.generics.argumentsFor(type, sub, _plugin.typeSyntax);
+			// the arguments a subtype's chain passes, read off the index's written supertypes as its subtypes are
+			final args: Null<Array<String>> = index.subtypes.argumentsPassed(type, sub, _plugin.typeSyntax);
 			final arg: Null<String> = args == null || at >= args.length ? null : args[at];
 			if (arg == null) return null;
 			final forwarded: Null<Array<String>> = _graph.typeParamBoundsOf(sub, arg);

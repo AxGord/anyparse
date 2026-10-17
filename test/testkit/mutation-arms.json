@@ -6284,8 +6284,8 @@
 		},
 		{
 			"name": "M-GRAPH-INHERITED-ARGS",
-			"type": "anyparse.query.CallGraphGenerics",
-			"method": "argumentsVia",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "chainVia",
 			"find": "if (outer == owner) return args;",
 			"replace": "if (outer == owner) return null;",
 			"note": "a member a supertype declares with its parameter never takes the argument the `extends` clause passes"
@@ -20720,8 +20720,8 @@
 		},
 		{
 			"name": "M-TS-DECL-SUPER-ARGS",
-			"type": "anyparse.query.CallGraphGenerics",
-			"method": "argumentsVia",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "chainVia",
 			"find": "keyIn == null ? a : keyIn(link.file, a, typeName)",
 			"replace": "a",
 			"note": "a type argument a subclass passes is read through the imports of the file reading the value"
@@ -22298,6 +22298,22 @@
 			"find": "for (k in BinderScan.binderKinds(shape)) if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k",
 			"replace": "for (k in BinderScan.binderKinds(shape)) k",
 			"note": "a local function counts as a shadowing binder rather than as the callee it is, so `p -> ok(p)` over a local `function ok` is never reduced"
+		},
+		{
+			"name": "M-SUBTYPE-ARGS-SUBSTITUTED",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "chainVia",
+			"find": "return [for (a in up) CallGraphNames.substituteTypeParams(a, params, args, typeSyntax)];",
+			"replace": "return up;",
+			"note": "a chain climbing a generic type passes the argument in that type's terms, not the subtype's"
+		},
+		{
+			"name": "M-SUBTYPE-ARGS-ARITY",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "chainVia",
+			"find": "if (up != null && args.length >= params.length)",
+			"replace": "if (up != null)",
+			"note": "a link filling fewer parameters than the type it names has still answers"
 		}
 	]
 }

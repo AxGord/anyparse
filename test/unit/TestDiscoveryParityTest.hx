@@ -3311,6 +3311,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CreatingFixContractTest#testAPassSeesTheChainAPreviousPassWrote :: control :: M-AMBIENT-CHAIN-STALE',
 			'unit.query.CreatingFixContractTest#testDeletingACreatedFileToleratesOneAlreadyGone :: guard :: ',
 			'unit.query.DeclarationQueriesTest#testAMemberIsHostedWhereItsDeclarationIs :: control :: M-HOST-UNIQUE',
+			'unit.query.DeclarationQueriesTest#testASubtypeChainPassesItsArgumentsInItsOwnTerms :: control :: '
+				+ 'M-SUBTYPE-ARGS-SUBSTITUTED,M-SUBTYPE-ARGS-ARITY,M-GRAPH-INHERITED-ARGS',
 			'unit.query.DeclarationQueriesTest#testASupertypeThatMayDeclareTheMemberIsNamed :: control :: '
 				+ 'M-SEAL-AMBIGUOUS,M-SEAL-UNRESOLVED-IFACE,M-SEAL-DECLARING-SUPER',
 			'unit.query.DeclarationQueriesTest#testAnAliasIsFollowedThroughOneDeclarationAHop :: control :: M-ALIAS-SINGLE-DECL',
@@ -7071,7 +7073,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-SITES-EXPR-RETURN-NO-LANDING',
 			'M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
 			'M-RLW-NAMED-FN-NOT-BINDER',
-			'M-RLW-LOCAL-FN-AS-BINDER'
+			'M-RLW-LOCAL-FN-AS-BINDER',
+			'M-SUBTYPE-ARGS-SUBSTITUTED',
+			'M-SUBTYPE-ARGS-ARITY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
