@@ -256,10 +256,10 @@ class MoveMemberSplitSliceTest extends Test {
 
 	private static function move(
 		srcFile: String, srcType: String, members: String, destType: String, scopeFiles: Array<{ file: String, source: String }>,
-		?via: String, ?keepBare: Bool
+		?via: String, ?keepBare: Bool, ?scaffold: Bool
 	): MoveResult {
 		return MoveMember.move(
-			srcFile, srcType, members.split(','), destType, via, false, false, scopeFiles, new HaxeQueryPlugin(),
+			srcFile, srcType, members.split(','), destType, via, false, scaffold == true, scopeFiles, new HaxeQueryPlugin(),
 			new HaxeQueryPlugin().typeRefShape(), keepBare == true
 		);
 	}
@@ -283,6 +283,142 @@ class MoveMemberSplitSliceTest extends Test {
 				Assert.fail('expected Ok, got Err: $message');
 		}
 		return '';
+	}
+
+	/**
+	 * A receiver whose type is not PROVEN a class or interface unrelated to the source refuses the move. A forwarding
+	 * `enum abstract` over the source (`@:forward enum abstract A(G)`) reaches `G.isPure` through `a.isPure`, and a value
+	 * of a structure declaring `isPure` may be a `G` (structural unification): both were read as unrelated and left alone,
+	 * and the move then failed to compile on 4.3.7 (`p.A has no field isPure`; `p.G should be p.S`).
+	 */
+	@:pin('control')
+	@:killer('M-RECEIVER-STRUCTURE-LEFT')
+	public function testAReceiverNotProvenAnUnrelatedClassRefusesTheMove(): Void {
+		final forward: String = errMessage(move(
+			'p/G.hx', 'G', 'isPure', 'Lib', holderScope('public', '').concat([
+				{ file: 'p/A.hx', source: 'package p;\n\n@:forward\nenum abstract A(G) {\n\tpublic inline function new(g:G) this = g;\n}' },
+				{ file: 'p/Use.hx', source: 'package p;\n\nclass Use {\n\tpublic static function f(a:A):Bool return a.isPure(1);\n}' }
+			])
+		));
+		Assert.isTrue(forward.contains('cannot route `a.isPure`'), forward);
+		final structure: String = errMessage(move(
+			'p/G.hx', 'G', 'isPure', 'Lib', holderScope('public', '').concat([
+				{ file: 'p/S.hx', source: 'package p;\n\ntypedef S = {\n\tfunction isPure(x:Int):Bool;\n}' },
+				{ file: 'p/Use.hx', source: 'package p;\n\nclass Use {\n\tpublic static function f(s:S):Bool return s.isPure(1);\n}' }
+			])
+		));
+		Assert.isTrue(structure.contains('cannot route `s.isPure`'), structure);
+	}
+
+	/**
+	 * A member the source's inheritance family declares stays where it is: moving an `override` leaves an override of
+	 * nothing in the destination (its base outside the scope, so only the modifier tells), moving an interface method's
+	 * implementation leaves the source short of it, and so may moving one of an interface the scope does not hold; moving
+	 * a method a subclass overrides leaves that override overriding nothing. Each wrote a tree 4.3.7 rejects (`Field
+	 * isPure is declared 'override' but doesn't override any field`; `Field isPure needed by p.I is missing`).
+	 */
+	@:pin('control')
+	@:killer('M-MOVE-OVERRIDE-MEMBER') @:killer('M-MOVE-IMPLEMENTATION') @:killer('M-MOVE-OVERRIDDEN-MEMBER')
+	@:killer('M-MOVE-UNRESOLVED-INTERFACE')
+	public function testAMemberOfAnInheritanceFamilyRefusesTheMove(): Void {
+		final lib: { file: String, source: String } = {
+			file: 'p/Lib.hx',
+			source: 'package p;\n\nclass Lib {\n\tpublic function new() {}\n}'
+		};
+		final g: (String, String) -> { file: String, source: String } = (head, modifier) -> {
+			file: 'p/G.hx',
+			source: 'package p;\n\nclass G$head {\n\tpublic final library:Lib;\n\n\tpublic function new() {\n\t\tlibrary = new Lib();\n\t}\n\n'
+				+ '\t${modifier}public function isPure(x:Int):Bool return x > 0;\n}'
+		};
+		final overriding: String = errMessage(move('p/G.hx', 'G', 'isPure', 'Lib', [g(' extends q.Base', 'override '), lib]));
+		Assert.isTrue(overriding.contains('"isPure"') && overriding.contains('overrides'), overriding);
+		final implementing: String = errMessage(move('p/G.hx', 'G', 'isPure', 'Lib', [
+			g(' implements I', ''),
+			lib,
+			{ file: 'p/I.hx', source: 'package p;\n\ninterface I {\n\tfunction isPure(x:Int):Bool;\n}' }
+		]));
+		Assert.isTrue(implementing.contains('"isPure"') && implementing.contains('"I"'), implementing);
+		final unseen: String = errMessage(move('p/G.hx', 'G', 'isPure', 'Lib', [g(' implements q.Unseen', ''), lib]));
+		Assert.isTrue(unseen.contains('"isPure"') && unseen.contains('does not resolve'), unseen);
+		final overridden: String = errMessage(move('p/G.hx', 'G', 'isPure', 'Lib', [
+			g('', ''),
+			lib,
+			{
+				file: 'p/Sub.hx',
+				source: 'package p;\n\nclass Sub extends G {\n\toverride public function isPure(x:Int):Bool return false;\n}'
+			}
+		]));
+		Assert.isTrue(overridden.contains('"isPure"') && overridden.contains('overrid'), overridden);
+	}
+
+	/**
+	 * `--scaffold` wires the via field where the constructor has assigned every field the new destination is built from —
+	 * not at its end. Under `@:nullSafety(Strict)` a constructor may bind a method (`_hand = { run: run }`) only once every
+	 * field is initialized, so a via assignment appended after that statement no longer compiled ("Cannot use method run
+	 * until all instance fields are initialized", the C2 `FactsEscapes` -> `FactsInstances` split). Compile-proved on
+	 * 4.3.7: the scaffolded `Big` prints 6 as the original did.
+	 */
+	@:pin('control')
+	@:killer('M-SCAFFOLD-VIA-AT-END')
+	public function testScaffoldWiresTheViaFieldBeforeTheConstructorBindsAMethod(): Void {
+		final big: String = okSource(move('p/Big.hx', 'Big', 'twice', 'Half', [
+			{
+				file: 'p/Big.hx',
+				source: 'package p;\n\n@:nullSafety(Strict)\nclass Big {\n\tprivate final _k:Int;\n\tprivate final _hand:{ run:() -> Int };\n\n'
+				+ '\tpublic function new(k:Int) {\n\t\t_k = k;\n\t\t_hand = { run: run };\n\t}\n\n'
+				+ '\tpublic function run():Int return twice();\n\n\tfunction twice():Int return _k * 2;\n}'
+			},
+			{ file: 'p/Half.hx', source: 'package p;\n\nclass Half {}' }
+		], null, false, true), 'p/Big.hx');
+		final wired: Int = big.indexOf('_half = new Half(_k);');
+		Assert.isTrue(wired > big.indexOf('_k = k;') && wired < big.indexOf('_hand = { run: run };'), big);
+	}
+
+	/**
+	 * The statements a move carries land in canonical order: every import, sorted, then the `using` lines, in the source's
+	 * own order — a destination with no import of its own got them in the order the moved members met them, `using` lines
+	 * between imports (the import block split, `import-order`), or every import below its own `using` run. And a `using`
+	 * whose extensions the moved code calls none of (`using Lambda;` beside a body calling only `trim`) is not carried; one
+	 * whose extensions cannot be listed still is. Compile-proved on 4.3.7: both results print 4.
+	 */
+	@:pin('control')
+	@:killer('M-CARRY-ORDER-MET') @:killer('M-CARRY-USING-UNUSED') @:killer('M-CARRY-IMPORTLESS-BELOW')
+	@:killer('M-CARRY-USING-ORDER-MET')
+	public function testCarriedStatementsLandImportsFirstAndOnlyUsedUsings(): Void {
+		final scope: (String) -> Array<{ file: String, source: String }> = dest -> [
+			{
+				file: 'q/Box.hx',
+				source: 'package q;\n\nclass Box {\n\tpublic final v:Int;\n\n\tpublic function new(v:Int) {\n\t\tthis.v = v;\n\t}\n}'
+			},
+			{ file: 'q/Pair.hx', source: 'package q;\n\nclass Pair {\n\tpublic static function of(a:Int):Int return a * 2;\n}' },
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nimport q.Pair;\nimport q.Box;\n\nusing StringTools;\nusing Lambda;\n\nclass Src {\n'
+					+ '\tpublic static function size(s:String):Int return s.trim().length;\n\n'
+					+ '\tpublic static function box(s:String):Box return new Box(Pair.of(size(s)));\n}'
+			},
+			{ file: 'p/Dest.hx', source: dest }
+		];
+		final bare: String = okSource(move('p/Src.hx', 'Src', 'size,box', 'Dest', scope('package p;\n\nclass Dest {}')), 'p/Dest.hx');
+		Assert.isTrue(bare.contains('package p;\n\nimport q.Box;\nimport q.Pair;\n\nusing StringTools;\n\nclass Dest {'), bare);
+		final ranked: String = okSource(
+			move('p/Src.hx', 'Src', 'size,box', 'Dest', scope('package p;\n\nusing haxe.EnumTools;\n\nclass Dest {}')), 'p/Dest.hx'
+		);
+		Assert.isTrue(
+			ranked.contains('package p;\n\nimport q.Box;\nimport q.Pair;\n\nusing StringTools;\nusing haxe.EnumTools;\n\nclass Dest {'),
+			ranked
+		);
+		// Two members carry `[using Lambda]` and `[using StringTools, using Lambda]`: their union must keep the source's order.
+		final both: String = okSource(move('p/Src.hx', 'Src', 'tally,both', 'Dest', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nusing StringTools;\nusing Lambda;\n\nclass Src {\n'
+				+ '\tpublic static function tally(a:Array<Int>):Int return a.count(x -> x > 0);\n\n'
+				+ '\tpublic static function both(s:String, a:Array<Int>):Int return s.trim().length + a.count(x -> x > 1);\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
+		]), 'p/Dest.hx');
+		Assert.isTrue(both.contains('package p;\n\nusing StringTools;\nusing Lambda;\n\nclass Dest {'), both);
 	}
 
 }

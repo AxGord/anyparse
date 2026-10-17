@@ -51,7 +51,7 @@ enum HxType {
 	Named(ref: HxTypeRef);
 
 	@:lead("$")
-	DollarType(name: HxIdentLit);
+	DollarType(name: HxWordLit);
 
 	/**
 	 * Optional-argument marker in a curried (Haxe-3) function type:

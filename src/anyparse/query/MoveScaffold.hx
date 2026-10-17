@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MoveMember.MemberGroup;
 import anyparse.query.MoveMember.MovePrep;
@@ -135,7 +136,7 @@ final class MoveScaffold {
 
 	/**
 	 * Adds the via field to the source type and wires
-	 * `<via> = new <Dest>(<fields>);` at the end of its constructor. Refuses
+	 * `<via> = new <Dest>(<fields>);` into its constructor where `viaWiringOffset` says. Refuses
 	 * when the source type has no constructor to wire into.
 	 */
 	public static function scaffoldViaField(
@@ -149,14 +150,12 @@ final class MoveScaffold {
 			span: new Span(fieldFrom, fieldFrom),
 			text: '\tprivate final $viaName: ${prep.destTypeName};\n\n'
 		});
-		final bodyClose: Null<Int> = ctorBodyClose(prep.srcSource, ctor.member);
-		if (bodyClose == null) return 'cannot --scaffold via field "$viaName": could not locate the "${prep.srcTypeName}" constructor body';
-		var wsStart: Int = bodyClose;
-		while (wsStart > 0 && SourceText.isSpace(StringTools.fastCodeAt(prep.srcSource, wsStart - 1))) wsStart--;
+		final at: Null<Int> = viaWiringOffset(prep, ctor.member, fields);
+		if (at == null) return 'cannot --scaffold via field "$viaName": could not locate the "${prep.srcTypeName}" constructor body';
 		final args: String = [for (f in fields) f.name].join(', ');
 		ScopeFiles.editsFor(editsByFile, prep.srcFile).push({
-			span: new Span(wsStart, bodyClose),
-			text: '\n\t\t$viaName = new ${prep.destTypeName}($args);\n\t'
+			span: new Span(at, at),
+			text: '\n\t\t$viaName = new ${prep.destTypeName}($args);'
 		});
 		return null;
 	}
@@ -184,15 +183,6 @@ final class MoveScaffold {
 		// between the braces — a comment is trivia (not a child) and must
 		// not be silently clobbered.
 		return bodySpan != null && MoveMember.isAllWhitespace(source.substring(bodySpan.from + 1, bodySpan.to - 1));
-	}
-
-	private static function ctorBodyClose(source: String, ctorMember: QueryNode): Null<Int> {
-		final span: Null<Span> = ctorMember.span;
-		if (span == null) return null;
-		var close: Int = span.to - 1;
-		if (close >= source.length) close = source.length - 1;
-		while (close >= span.from && SourceText.isSpace(source.fastCodeAt(close))) close--;
-		return close < span.from || source.fastCodeAt(close) != '}'.code ? null : close;
 	}
 
 	/**
@@ -223,6 +213,42 @@ final class MoveScaffold {
 				+ '— pass a different --via'
 			)
 			: VScaffold(name);
+	}
+
+	/**
+	 * Where the via assignment goes in the source constructor `ctorMember`: right after the last top-level statement that
+	 * writes one of `fields` — the destination's constructor reads them — and after a `super(…)` call, else at the top of
+	 * the body; null when the body is not found. Not at the end: under `@:nullSafety(Strict)` a constructor may use a method
+	 * (`_hand = { run: run }`, a call) only once every field is initialized, so an assignment appended after such a
+	 * statement no longer compiles ("Cannot use method run until all instance fields are initialized"), and without null
+	 * safety a method the constructor calls would meet the via field still null. A constructor that compiles under Strict
+	 * has written every field before its first method use, so the statement after the last write is before it.
+	 */
+	private static function viaWiringOffset(prep: MovePrep, ctorMember: QueryNode, fields: Array<ScaffoldField>): Null<Int> {
+		final body: Null<QueryNode> = ctorMember.children.find(c -> c.kind == 'BlockBody');
+		final bodySpan: Null<Span> = body?.span;
+		if (body == null || bodySpan == null) return null;
+		final names: Array<String> = [for (f in fields) f.name];
+		final shape: RefShape = prep.shape;
+		function writes(node: QueryNode): Bool {
+			final target: Null<QueryNode> = node.children[0];
+			if (shape.writeParentKinds.contains(node.kind) && target != null) {
+				final field: Null<QueryNode> = target.kind == shape.fieldAccessKind && target.children[0]?.name == 'this' ? target : null;
+				if ((target.kind == shape.identKind || field != null) && names.contains(target.name ?? '')) return true;
+			}
+			return node.children.exists(writes);
+		}
+		function superCall(node: QueryNode): Bool {
+			return node.children.exists(c ->
+				c.children.length > 0 && c.children[0].kind == shape.identKind && c.children[0].name == 'super'
+			);
+		}
+		var at: Int = bodySpan.from + 1;
+		for (stmt in body.children) {
+			final span: Null<Span> = stmt.span;
+			if (span != null && (writes(stmt) || superCall(stmt))) at = span.to;
+		}
+		return at;
 	}
 
 }

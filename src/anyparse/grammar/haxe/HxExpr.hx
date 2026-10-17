@@ -72,7 +72,7 @@ enum HxExpr {
 	DollarReifExpr(v: HxDollarReif);
 
 	@:lead("$")
-	DollarIdentExpr(name: HxIdentLit);
+	DollarIdentExpr(name: HxWordLit);
 
 	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), trailingCommaRemovable,
 		wrapRules('arrayLiteralWrap'), mapWrapRules('mapLiteralWrap'), reflowSourceMultiline, bracketKindPad, arrayMatrixWrap,

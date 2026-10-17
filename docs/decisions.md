@@ -3417,3 +3417,50 @@ decided the question; it may not become a record of runs.
   declaration of the module in another file (another class path) still folds into its node. Not done: a member declared in
   several branches of its class stays one folded node (`CallGraphBindingTest#testEachBodyOfAModuleLevelFunctionUnderIfIsANodeOfItsOwn`,
   RED on `d0f12ab9e`) — branch `feat/infra-N11`
+- a receiver-qualified caller of a moved instance member was LEFT alone whenever `SubtypeGraph.provablyNotSubtype`
+  cleared its receiver's type, and that proof's root refusal was a NEGATIVE list (`typedef` alias, plain `abstract`):
+  a `@:forward enum abstract A(G)` read as unrelated to `G`, and so did a structure declaring `isPure`, which a `G`
+  value unifies with — both moves wrote a tree 4.3.7 rejects (`p.A has no field isPure`, `p.G should be p.S`). Two
+  positive lists now: the proof starts only from a kind whose supertype list is complete (`COMPLETE_SUPERTYPE_KINDS`:
+  class, abstract class, interface, enum, or an anonymous structure), which also corrects `naming`'s receiver
+  attribution for a forwarding enum abstract; and `MoveMemberReceivers` leaves a receiver alone only when it names ONE
+  class or interface of the scope (`classOrInterface`) — a structure's provable non-subtyping says nothing about the
+  `G` it may hold. Everything else refuses — branch `feat/infra-N12`
+- `move-member` moved an instance member of the source's inheritance family: an `override` (the destination declared
+  an override of nothing), the implementation of an interface method (the source no longer implemented it), a member
+  a subclass overrides. `MoveMember.inheritanceRefusal` refuses all three, and — positive — a member an `implements`
+  target or super-interface outside the scope may declare. An unresolved SUPERCLASS is not refused: a plain class
+  ancestor's member could only be redeclared with `override`, which the modifier check sees; the residual is an
+  `abstract class` outside the scope whose `abstract` method the member implements without the keyword (the same
+  residual `CrossRenameMember` carries) — branch `feat/infra-N12`
+- `--scaffold` appended `<via> = new Dest(...)` at the END of the source constructor. Under `@:nullSafety(Strict)` a
+  constructor may use a method only once every field is initialized, so the C2 `FactsEscapes` -> `FactsInstances`
+  replay no longer compiled ("Cannot use method escape until all instance fields are initialized"), and without null
+  safety a method the constructor calls met a null via field. `MoveScaffold.viaWiringOffset` places it right after the
+  last top-level statement writing one of the fields the destination is built from (and after a `super(...)` call):
+  a constructor that compiles under Strict has written every field before its first method use, so that point
+  precedes it. The replay now typechecks the whole engine (`haxe bin/apq-js.hxml --no-output`) — branch
+  `feat/infra-N12`
+- a move's carried statements landed in the order the moved members met them (`MoveMember` carries per member): with
+  no ordered seat in the destination that put `using` lines between imports, and a destination with only `using` lines
+  got the imports BELOW its run (`ImportOrder.lastHeaderEnd` answers the last statement of any kind there).
+  `MoveSymbol.canonicalCarry` writes every import sorted (ascii), a blank line, then the `using` lines, then guarded
+  regions; `importLessSeat` gives an import-less destination's `using` seat the imports too, ahead of the `using`
+  lines; and `MoveMember` orders the union of the members' `using` lines by the source's own declaration order — that
+  order decides which extension wins a method name. A `using` whose extension methods are KNOWN (the std probe, or a
+  module the scope declares) and that the moved code calls none of is no longer carried: the same test `unused-import`
+  deletes one by, now ONE function (`OccurrenceScan.usingExtensionCalled`) both call. Fixture consequence: four
+  `MoveSymbolSliceTest` fixtures modelled `using q.Ext;` supplying `s.go()` with an EMPTY `class Ext {}` (no such
+  extension exists); `Ext` now declares `go` — branch `feat/infra-N12`
+- the name terminals took any identifier-shaped word: `final dynamic = 1;`, `var default:Int;`, `function f(macro:Int)`,
+  `catch (null:Dynamic)` and 39 more reserved words parsed, so an op writing such a name passed its own re-parse gate
+  with a tree Haxe rejects (each of the 45 words of the 4.3 keyword table refused as a local's name, verified on 4.3.7). `operator` (reserved since 4.0) and `overload` (4.2) are NOT refused: every branch of a `#if` region is parsed, and code gated on an older compiler declares them — lime's `Cairo` has `public var operator(get, set)` under `#if (haxe_ver < "4.0.0")`; refusing it made that module skip-parse and, through the library index, dropped 6 `prefer-api-idiom` findings on `tm-bd943dac` (found by the all-rules gate).
+  `HxIdentLit` (every declaration name: parameter, binder, type, enum constructor, structure field, type parameter),
+  `HxVarNameLit` and `HxFnNameLit` (minus `new`, the constructor) now refuse all of them; the slots that DO take a
+  keyword moved to `HxWordLit` (a property accessor `(default, null)` / `dynamic`, an interpolated `'$this'`, a `$name`
+  reification). `HxExprIdentLit` additionally refuses the declaration words no expression is (`class`, `dynamic`,
+  `static`, `using`, …) — `abstract` stays, it is the abstract's own value in `switch abstract { … }`. Not refused: an
+  arrow over a check-type expression, `(null:Int) -> 1`, which reaches the general `ThinArrow` fallback rather than a
+  name slot; `super`, which Haxe does not reserve. Refused although Haxe takes it: `this` as a `for` variable or a lambda parameter (`for (this in a)`, `(this) -> 1`: Haxe reads those heads as expressions, where `this` is an identifier), and `new` as the name of a function inside a `#if` name splice (`HxConditionalFnName`) — none is code an op writes or a project holds (both corpora parse unchanged), and a refusal is the loud direction. Writer and formatter are untouched: `fmt --write` over TM src (876
+  files) and anyparse src (1140) is byte-identical. Fixture consequence: a `CallGraphTest` fixture named a function
+  `untyped` — branch `feat/infra-N12`

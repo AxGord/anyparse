@@ -1924,7 +1924,7 @@ class CallGraphTest extends Test {
 			'package app; class D {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n#else\npublic static var lock = null;\n#end\n}',
 			'package app; class C { static function field():Void A.lock.wait(); static function call():Void A.make().wait();'
 			+ ' static function named():Void A.gate().wait(); static function apart():Void B.lock.wait();'
-			+ ' static function untyped():Void D.lock.wait(); }'
+			+ ' static function noType():Void D.lock.wait(); }'
 		]);
 		function waits(from: String): Array<String> {
 			final out: Array<String> = [
@@ -1937,7 +1937,7 @@ class CallGraphTest extends Test {
 		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.call'), 'a return');
 		Assert.same(['Gate.wait', 'sys.thread.Lock.wait'], waits('C.named'), 'a return whose types differ in name');
 		Assert.same([], waits('C.apart'), 'types that do not line up');
-		Assert.same([], waits('C.untyped'), 'a branch writing no type');
+		Assert.same([], waits('C.noType'), 'a branch writing no type');
 		#else
 		Assert.pass('non-sys target');
 		#end

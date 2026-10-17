@@ -48,7 +48,7 @@ enum HxStringSegment {
 	Block(expr: HxExpr);
 
 	@:lead("$")
-	Ident(name: HxIdentLit);
+	Ident(name: HxWordLit);
 
 	@:lit("$")
 	LoneDollar;
