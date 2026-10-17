@@ -22182,6 +22182,14 @@
 			"note": "a continuation declarator (`var a = 1, v = 2`) is no declaration in effect, so renaming `v` past which an arm declares `v` too is not refused"
 		},
 		{
+			"name": "M-SITES-EXPR-RETURN-NO-LANDING",
+			"type": "anyparse.query.ImplicitSites",
+			"method": "landings",
+			"find": "(_shape.valueReturnKinds ?? []).contains(kind)",
+			"replace": "kind == _shape.returnStatementKind",
+			"note": "only the `return` STATEMENT lands its value, so an expression-bodied `function f():String return d;` converts nothing and the `toString` it runs is never reached"
+		},
+		{
 			"name": "M-VOCAB-DOWHILE-EXPR-NOT-LOOP",
 			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
 			"method": "refShape",

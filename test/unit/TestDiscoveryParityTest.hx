@@ -3730,6 +3730,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-SHAPE-PURE-GETENV,M-REACH-RUN-QUIET',
 			'unit.query.MemberReachFactsTest#testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily :: control :: M-FACTS-REACH-ESCAPE-TYPED',
 			'unit.query.MemberReachFactsTest#testAnEscapedValueMayBeAnyOfItsSubtypesUnderTheTruth :: control :: M-ESCAPES-FACTS-SUBTYPES',
+			'unit.query.MemberReachFactsTest#testAnExpressionBodiedReturnLandsAtItsFunctionsReturnType :: control :: '
+				+ 'M-SITES-EXPR-RETURN-NO-LANDING',
 			'unit.query.MemberReachFactsTest#testAnExpressionMacroAnInlinedMethodCallsLeavesItsCallerItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-EXPANSION,M-FACTS-TEXT-EXPANSION-SPLICED,M-FACTS-EXPANSION-NESTED',
 			'unit.query.MemberReachFactsTest#testAnExpressionMacroAnInlinedSetterIsHandedIsItsTextUnderTheTruth :: control :: '
@@ -7040,6 +7042,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-VOCAB-NESTED-NO-NAMED-FN',
 			'M-COND-NAMED-FN-NOT-IN-EFFECT',
 			'M-COND-CONTINUATION-NOT-IN-EFFECT',
+			'M-SITES-EXPR-RETURN-NO-LANDING',
 			'M-VOCAB-DOWHILE-EXPR-NOT-LOOP'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];

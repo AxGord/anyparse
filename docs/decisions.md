@@ -3182,3 +3182,5 @@ decided the question; it may not become a record of runs.
   `BinderScan.statementDeclaredNames` answers all of them and replaces the single-name function; it over-counts a
   name nested in a block or a branch of the statement (a ternary branch scopes a named literal), which only refuses
   — branch `feat/infra-N8`
+- `ImplicitSites.landings` asked `returnStatementKind` → an expression-bodied `function f():String return d;` is a
+  `ReturnExpr` and landed nowhere; every `return` carrying a value is `valueReturnKinds` — branch `feat/infra-N8`
