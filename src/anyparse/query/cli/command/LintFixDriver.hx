@@ -231,7 +231,7 @@ final class LintFixDriver {
 				active = list;
 				converge(maxPasses);
 				return fixedCount - before;
-			}, coupled, changedFiles, oracles, created)
+			}, coupled, changedFiles, oracles, created, safeEditsOf)
 		);
 		nameExclusions(named, followUp.excluded);
 		fixedCount -= settleRevert(followUp, safeEditsOf, changedFiles, files, originalOf, false);
@@ -1124,7 +1124,7 @@ final class LintFixDriver {
 	private static function followUpRound(
 		files: Array<{ file: String, source: String }>, settledOf: Map<String, String>,
 		converge: (Array<{ file: String, source: String }>) -> Int, coupled: Array<Array<String>>, changedFiles: Array<String>,
-		oracles: Array<OracleConfig>, created: Array<String>
+		oracles: Array<OracleConfig>, created: Array<String>, editsOf: Map<String, Int>
 	): SafePassOutcome {
 		final quiet: SafePassOutcome = {
 			reverted: false,
@@ -1143,10 +1143,14 @@ final class LintFixDriver {
 		if (rewritten.length == 0) return quiet;
 		for (f in rewritten) if (!changedFiles.contains(f)) changedFiles.push(f);
 		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracles, created);
+		// What the round KEPT: a file its net reverted is back at the verified bytes, so neither it nor its edits are counted.
+		var kept: Int = fixed;
+		for (file in pass.revertedFiles) kept -= editsOf[file] ?? 0;
+		final keptFiles: Int = changedSince(files, verifiedOf).length;
 		return {
 			reverted: pass.reverted,
 			revertedFiles: pass.revertedFiles,
-			tail: '${pass.tail}, follow-up: $fixed edit(s) in ${rewritten.length} file(s) exposed by the verified phases',
+			tail: '${pass.tail}, follow-up: $kept edit(s) in $keptFiles file(s) exposed by the verified phases',
 			notice: pass.notice,
 			excluded: pass.excluded
 		};
