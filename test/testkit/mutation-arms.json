@@ -23903,8 +23903,9 @@
 		{
 			"name": "M-PURE-STRING-METHOD-OFF",
 			"type": "anyparse.query.TypeResolver",
-			"method": "isPureStringMethodCall",
-			"force": "false",
+			"method": "isPureStdlibCall",
+			"find": "if (!pureStatic && !(stringMethods.contains(method) && onStringBinding())) return false;",
+			"replace": "if (!pureStatic) return false;",
 			"note": "a String method on a String final is not pure, so the dead `CHARSET.toUpperCase()` constant stays undeletable"
 		},
 		{

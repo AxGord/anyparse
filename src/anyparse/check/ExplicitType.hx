@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
@@ -471,11 +472,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		final stop: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.lambdaKinds ?? []);
 		final throwKinds: Array<String> = shape.throwKinds ?? [];
 		final macroKind: Null<String> = shape.macroModifierKind;
-		final flagged: Map<String, Violation> = [];
-		for (v in violations) {
-			final vspan: Null<Span> = v.span;
-			if (vspan != null) flagged['${vspan.from}:${vspan.to}'] = v;
-		}
+		final flagged: Map<String, Violation> = RunScan.findingsBySpan(violations);
 		final boundary: QueryNode -> Bool = c -> members.contains(c.kind);
 
 		function editVoid(fn: QueryNode): Void {
@@ -519,69 +516,72 @@ final class ExplicitType implements Check implements OracleAssisted {
 		final shape: RefShape = plugin.refShape();
 		final macroKind: Null<String> = shape.macroModifierKind;
 		if (macroKind == null || violations.length == 0) return;
-		final flagged: Map<String, Violation> = [];
-		for (v in violations) {
-			final vspan: Null<Span> = v.span;
-			if (vspan != null) flagged['${vspan.from}:${vspan.to}'] = v;
-		}
-		final params: Array<String> = shape.paramKinds ?? [];
-		final bodies: Array<String> = shape.functionBodyKinds ?? [];
+		final seams: MacroSeams = {
+			source: source,
+			tree: tree,
+			plugin: plugin,
+			index: index,
+			shape: shape,
+			flagged: RunScan.findingsBySpan(violations),
+			file: violations[0].file,
+			printer: null
+		};
 		final boundary: QueryNode -> Bool = c -> members.contains(c.kind);
-		final file: String = violations[0].file;
-		var printer: Null<TypeRefPrinter> = null;
-		final own: Array<{ span: Span, text: String }> = [];
-
-		function findingOf(node: QueryNode): Null<Violation> {
-			final span: Null<Span> = node.span;
-			return span == null ? null : flagged['${span.from}:${span.to}'];
-		}
-
-		function annotate(fn: QueryNode): Void {
-			for (c in fn.children) if (params.contains(c.kind)) {
-				final pv: Null<Violation> = findingOf(c);
-				if (pv != null) pv.declineReason = DECLINE_MACRO_PARAM;
-			}
-			final v: Null<Violation> = findingOf(fn);
-			final span: Null<Span> = fn.span;
-			if (v == null || span == null) return;
-			final body: Null<QueryNode> = fn.children.find(c -> bodies.contains(c.kind));
-			if (body == null || !macroReturnsExpr(body, shape, tree, index)) {
-				v.declineReason = DECLINE_MACRO_RETURN;
-				return;
-			}
-			final at: Int = voidInsertPoint(span.from, body, source);
-			if (at < 0) {
-				v.declineReason = DECLINE_NO_RETURN_SLOT;
-				return;
-			}
-			final site: AnnotationSite = { file: file, methodName: null };
-			final fileprinter: TypeRefPrinter = printer ?? LiteralInfer.printerFor(source, tree, plugin, file);
-			printer = fileprinter;
-			final type: Null<String> = LiteralInfer.normalizeWith(MACRO_RETURN_TYPE, fileprinter, MAX_ANON_LEN, site, at);
-			if (type == null)
-				v.declineReason = LiteralInfer.unwritableReason(MACRO_RETURN_TYPE, MAX_ANON_LEN, site, false);
-			else
-				own.push({ span: new Span(at, at), text: ':$type' });
-		}
-
+		final own: Array<FixEdit> = [];
 		function walk(node: QueryNode): Void {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
 				final child: QueryNode = kids[i];
-				if (functions.contains(child.kind) && MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary)) annotate(child);
+				if (functions.contains(child.kind) && MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary))
+					pushEdit(own, macroReturnEdit(seams, child));
 				walk(child);
 			}
 		}
 		walk(tree);
 		if (own.length == 0) return;
 		for (edit in own) edits.push(edit);
+		final printer: Null<TypeRefPrinter> = seams.printer;
 		if (printer != null) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
+	}
+
+	/**
+	 * The `:Expr` edit for the flagged return type of the `macro` function `fn`, or null with the finding's
+	 * `declineReason` set; each flagged parameter of `fn` declines with `DECLINE_MACRO_PARAM`. The file's printer is made
+	 * on the first edit and kept in `s`, so every annotation shares one pending import.
+	 */
+	private static function macroReturnEdit(s: MacroSeams, fn: QueryNode): Null<FixEdit> {
+		final params: Array<String> = s.shape.paramKinds ?? [];
+		for (c in fn.children) if (params.contains(c.kind)) {
+			final pv: Null<Violation> = findingAt(s.flagged, c);
+			if (pv != null) pv.declineReason = DECLINE_MACRO_PARAM;
+		}
+		final v: Null<Violation> = findingAt(s.flagged, fn);
+		final span: Null<Span> = fn.span;
+		if (v == null || span == null) return null;
+		final bodies: Array<String> = s.shape.functionBodyKinds ?? [];
+		final body: Null<QueryNode> = fn.children.find(c -> bodies.contains(c.kind));
+		if (body == null || !macroReturnsExpr(body, s.shape, s.tree, s.index)) return decline(v, DECLINE_MACRO_RETURN);
+		final at: Int = voidInsertPoint(span.from, body, s.source);
+		if (at < 0) return decline(v, DECLINE_NO_RETURN_SLOT);
+		final site: AnnotationSite = { file: s.file, methodName: null };
+		final printer: TypeRefPrinter = s.printer ?? LiteralInfer.printerFor(s.source, s.tree, s.plugin, s.file);
+		s.printer = printer;
+		final type: Null<String> = LiteralInfer.normalizeWith(MACRO_RETURN_TYPE, printer, MAX_ANON_LEN, site, at);
+		return type == null
+			? decline(v, LiteralInfer.unwritableReason(MACRO_RETURN_TYPE, MAX_ANON_LEN, site, false))
+			: { span: new Span(at, at), text: ':$type' };
+	}
+
+	/** The finding `flagged` keys at `node`'s span, or null. */
+	private static inline function findingAt(flagged: Map<String, Violation>, node: QueryNode): Null<Violation> {
+		final span: Null<Span> = node.span;
+		return span == null ? null : flagged['${span.from}:${span.to}'];
 	}
 
 	/**
 	 * Whether every value `body` returns in its own scope — nested functions and quotations aside, whose `return`s are not
 	 * this function's — has a `returnProof`, and at least one is a quotation. The compiler unifies exactly those returns to
-	 * `haxe.macro.Expr`, the `Dynamic` companion in either order (measured, Haxe 4.3.7); a bare `return;`, any other value,
+	 * `haxe.macro.Expr`, the `Dynamic` companion in either order (as Haxe 4.3.7 types them); a bare `return;`, any other value,
 	 * or no return at all is no proof.
 	 */
 	private static function macroReturnsExpr(body: QueryNode, shape: RefShape, tree: QueryNode, index: Null<SymbolIndex>): Bool {
@@ -620,8 +620,8 @@ final class ExplicitType implements Check implements OracleAssisted {
 			returnProof(kids[1], shape, tree, index),
 			returnProof(kids[2], shape, tree, index)
 		] {
-			case [Unproven, _] | [_, Unproven]: Unproven;
-			case [Quoted, _] | [_, Quoted]: Quoted;
+			case [Unproven, _], [_, Unproven]: Unproven;
+			case [Quoted, _], [_, Quoted]: Quoted;
 			case _: Companion;
 		};
 		final call: Null<{ typeName: String, returnSource: String }> = NominalTypes.tabledStaticCall(value, tree, shape);
@@ -923,6 +923,18 @@ private enum ReturnProof {
 	/** Anything else. */
 	Unproven;
 
+}
+
+/** What `ExplicitType`'s `macro`-function pass reads per file; `printer` is made on the first annotation. */
+private typedef MacroSeams = {
+	final source: String;
+	final tree: QueryNode;
+	final plugin: GrammarPlugin;
+	final index: Null<SymbolIndex>;
+	final shape: RefShape;
+	final flagged: Map<String, Violation>;
+	final file: String;
+	var printer: Null<TypeRefPrinter>;
 }
 
 /**

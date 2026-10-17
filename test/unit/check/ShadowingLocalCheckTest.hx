@@ -292,18 +292,18 @@ class ShadowingLocalCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-SHADOWING-LOCAL-OUTER-READ-IGNORED')
 	public function testFixKeepsAShadowWhoseHiddenBindingIsReadAfter(): Void {
-		final src: String = 'class C {\n\tfunction h(event:Event):Void {\n\t\tif (c) {\n\t\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n'
-			+ '\t\t\tdispatch(event);\n\t\t}\n\t\ttrace(event);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction h(event:Event):Void {\n\t\tif (c) {\n\t\t\tfinal event:RightPanelEvent = new '
+			+ 'RightPanelEvent(1);\n\t\t\tdispatch(event);\n\t\t}\n\t\ttrace(event);\n\t}\n}';
 		Assert.equals(src, CheckFixture.fixedSource(new ShadowingLocal(), src));
-		Assert.isTrue(declineOf(src).indexOf('read after this declaration') != -1, 'got: ${declineOf(src)}');
+		Assert.isTrue((declineOf(src) ?? '').indexOf('read after this declaration') != -1, 'got: ${declineOf(src)}');
 	}
 
 	/** TM `DatePicker`: a same-block `var` redeclared with the same written type becomes an assignment. */
 	@:pin('control')
 	@:killer('M-SHADOWING-LOCAL-NO-ASSIGNMENT')
 	public function testFixTurnsASameBlockRedeclarationIntoAnAssignment(): Void {
-		final src: String = 'class C {\n\tfunction h():Void {\n\t\tvar dayIdx:Int = 0;\n\t\tdayIdx++;\n\t\tvar dayIdx:Int = g();\n'
-			+ '\t\tf(dayIdx);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction h():Void {\n\t\tvar dayIdx:Int = 0;\n\t\tdayIdx++;\n\t\tvar dayIdx:Int = g();\n\t\tf(dayIdx);\n\t}\n}';
 		Assert.equals(
 			'class C {\n\tfunction h():Void {\n\t\tvar dayIdx:Int = 0;\n\t\tdayIdx++;\n\t\tdayIdx = g();\n\t\tf(dayIdx);\n\t}\n}',
 			CheckFixture.fixedSource(new ShadowingLocal(), src)
@@ -332,8 +332,8 @@ class ShadowingLocalCheckTest extends Test {
 			+ '\t\txs.map(event -> event);\n\t\tdispatch(event);\n\t}\n}',
 			'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n'
 			+ '\t\tjs.Syntax.code("event.x");\n\t\tdispatch(event);\n\t}\n}',
-			'class C {\n\tfunction h(event:Event):Void {\n\t\tvar rightPanelEvent = 0;\n\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n'
-			+ '\t\tdispatch(event, rightPanelEvent);\n\t}\n}'
+			'class C {\n\tfunction h(event:Event):Void {\n\t\tvar rightPanelEvent = 0;\n'
+			+ '\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n\t\tdispatch(event, rightPanelEvent);\n\t}\n}'
 		]) {
 			Assert.equals(src, CheckFixture.fixedSource(new ShadowingLocal(), src));
 			Assert.notNull(declineOf(src));

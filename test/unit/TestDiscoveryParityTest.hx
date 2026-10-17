@@ -440,6 +440,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.UnusedParameterCheckTest',
 		'unit.check.UnusedPrivateCheckTest',
 		'unit.check.UnusedPrivateDeclineReasonTest',
+		'unit.check.UnusedPrivateSupertypeChainTest',
 		'unit.check.UnusedPublicMemberCheckTest',
 		'unit.check.UnusedReturnValueTest',
 		'unit.check.UsingDeclineAttributionTest',
@@ -1290,7 +1291,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.EffectiveRulesTest#testTheChainStopsAtTheProjectRoot :: control :: M-CHAIN-UNBOUNDED',
 			'unit.check.EffectiveRulesTest#testTheListingOpensWithTheHeaderToolingDetects :: control :: M-EFFECTIVE-RENDER-HEADER',
 			'unit.check.EffectiveRulesTest#testTheRunSkipsWhatTheListingReportsOff :: control :: M-GATE-COLLECT-BYPASS',
+			'unit.check.EmptyBlockCheckTest#testDeclinedSitesSayWhy :: control :: M-EMPTY-BLOCK-NO-DECLINE',
+			'unit.check.EmptyBlockCheckTest#testDrainLoopNotFlagged :: control :: M-EMPTY-BLOCK-DRAIN-LOOP',
 			'unit.check.ExplicitLocalTypeOracleE2ETest#testTheDisplayServerDiesWithItsDriver :: control :: M-DISPLAY-SERVER-UNTETHERED',
+			'unit.check.ExplicitTypeCheckTest#testFixMacroFunctionReturningQuotationIsExpr :: control :: M-EXPLICIT-TYPE-MACRO-NO-PROOF',
+			'unit.check.ExplicitTypeCheckTest#testFixMacroFunctionTernaryAndContextError :: control :: M-EXPLICIT-TYPE-MACRO-NO-COMPANION',
+			'unit.check.ExplicitTypeCheckTest#testMacroFunctionShadowedContextDeclines :: control :: M-EXPLICIT-TYPE-MACRO-SHADOW',
+			'unit.check.ExplicitTypeCheckTest#testMacroFunctionWithUnprovenReturnDeclines :: control :: M-EXPLICIT-TYPE-MACRO-ANY-RETURN',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FactsFixGateE2ETest#testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-REFLECTIVE-BUILDS,M-REFLECTIVE-REACH,M-REFLECTIVE-WARN,M-ESCAPES-FACTS-UNMATCHED',
@@ -2159,6 +2166,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ScratchFieldCheckTest#testSeveralWritesDeclareAVar :: control :: M-SCRATCH-SILENT',
 			'unit.check.ScratchFieldCheckTest#testWritesInBothArmsHaveNoDeclarationSlot :: control :: M-SCRATCH-SLOT-ANYWHERE',
 			'unit.check.ShadowingCaseBinderCheckTest#testUnprovenSubjectRefused :: control :: M-SHADOWING-BINDER-UNPROVEN',
+			'unit.check.ShadowingLocalCheckTest#testFixKeepsAShadowWhoseHiddenBindingIsReadAfter :: control :: M-SHADOWING-LOCAL-OUTER-READ-IGNORED',
+			'unit.check.ShadowingLocalCheckTest#testFixRefusesAnAssignmentThatChangesWhatSomethingReads :: control :: M-SHADOWING-LOCAL-CAPTURE-IGNORED',
+			'unit.check.ShadowingLocalCheckTest#testFixRenamesTheInnerAfterItsWrittenType :: control :: M-SHADOWING-LOCAL-NO-RENAME',
+			'unit.check.ShadowingLocalCheckTest#testFixTurnsASameBlockRedeclarationIntoAnAssignment :: control :: M-SHADOWING-LOCAL-NO-ASSIGNMENT',
 			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
 			'unit.check.SimplifyBooleanReturnChainCheckTest#testCommentInAFlatChainIsNotDropped :: control :: M-RETURN-CHAIN-COMMENT-ADMITTED',
 			'unit.check.SimplifyBooleanReturnChainCheckTest#testNegatedConjunctionGuardRegroups :: control :: '
@@ -2776,6 +2787,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnusedPrivateCheckTest#testStaticReceiverIsNoClassValue :: control :: M-CTOR-RECEIVER-AS-VALUE',
 			'unit.check.UnusedPrivateDeclineReasonTest#testEachGateNamesItself :: control :: '
 				+ 'M-UNUSED-PRIVATE-DECLINE-SILENT,M-UNUSED-PRIVATE-REGION-DECLINE-SILENT',
+			'unit.check.UnusedPrivateSupertypeChainTest#testFixDeletesADeadFinalOfAPureStringMethod :: control :: M-PURE-STRING-METHOD-OFF',
+			'unit.check.UnusedPrivateSupertypeChainTest#testFixDeletesTheMethodWhenTheChainProvesNothingDeclaresIt :: control :: M-UNUSED-PRIVATE-CHAIN-NOT-RESOLVED',
+			'unit.check.UnusedPrivateSupertypeChainTest#testFixKeepsTheMethodTheChainMayReach :: control :: M-UNUSED-PRIVATE-CHAIN-BUILD-IGNORED',
 			'unit.check.UnusedPublicMemberCheckTest#testAutoBuildAncestorNotFlagged :: control :: M-REACH-AUTOBUILD-IGNORED',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
 			'unit.check.UsingDeclineAttributionTest#testCounterLoopConflictNamesTheSkippedSiteAndKeepsTheOther :: control :: '
@@ -4354,6 +4368,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SetModifierSliceTest#testPrivateOnAFinalClassPrecedesTheFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.ShapeVocabTest#testAKindTwoSeamsNameIsAnsweredOnce :: control :: M-VOCAB-UNION-DUPLICATES',
 			'unit.query.ShapeVocabTest#testAnUnsetSeamAddsNothing :: control :: M-VOCAB-UNSET-SEAM-ADDED',
+			'unit.query.ShapeVocabTest#testConditionLoopsDropTheIteratingOnes :: control :: M-VOCAB-CONDITION-LOOP-KEEPS-FOR',
 			'unit.query.ShapeVocabTest#testEveryHaxeLoopAndConditionalIsABranch :: control :: M-VOCAB-WHILE-EXPR-NOT-BRANCH',
 			'unit.query.ShapeVocabTest#testHaxeLoopAndFunctionVocabulary :: control :: '
 				+ 'M-VOCAB-NESTED-NO-NAMED-FN,M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
@@ -4364,6 +4379,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ShardPlanTest#testSlicesAreBoundedByTheTestCount :: control :: M-SHARD-SPLIT-NO-TEST-CAP,M-SHARD-SPLIT-UNKNOWN-COUNT',
 			'unit.query.ShardPlanTest#testTheSlicesOfAClassCoverItsTestsExactlyOnce :: control :: M-SHARD-FILTER-SLICE-ALL,M-SHARD-FILTER-SLICE-UNSORTED',
 			'unit.query.ShardPlanTest#testTimingRowsOfOneClassAreSummed :: control :: M-SHARD-WEIGHTS-LAST-ROW',
+			'unit.query.SourceTextTest#testLowerCamelLowersTheLeadingCapitalRun :: control :: M-LOWER-CAMEL-FIRST-ONLY',
 			'unit.query.SpanTypeInfoPinTest#testTypeParamConstraintsAreKeyedByDeclarationAndName :: control :: M-SPANINFO-BOUND-MORE',
 			'unit.query.StdResolverTest#testAWrapperFirstOnPathYieldsToTheCompilerAfterIt :: control :: M-STD-FIRST-HAXE-ONLY',
 			'unit.query.StdResolverTest#testHomebrewIsProbedBeforeUsrLocal :: guard :: ',
@@ -7460,7 +7476,22 @@ class TestDiscoveryParityTest extends Test {
 			'M-FOLD-FIX-REPORT-INDEX',
 			'M-FOLD-STATEMENT-UNPROVEN',
 			'M-PIEC-FIX-REPORT-INDEX',
-			'M-PIEC-RUN-SELECTION'
+			'M-PIEC-RUN-SELECTION',
+			'M-EMPTY-BLOCK-DRAIN-LOOP',
+			'M-EMPTY-BLOCK-NO-DECLINE',
+			'M-VOCAB-CONDITION-LOOP-KEEPS-FOR',
+			'M-EXPLICIT-TYPE-MACRO-NO-PROOF',
+			'M-EXPLICIT-TYPE-MACRO-NO-COMPANION',
+			'M-EXPLICIT-TYPE-MACRO-ANY-RETURN',
+			'M-EXPLICIT-TYPE-MACRO-SHADOW',
+			'M-UNUSED-PRIVATE-CHAIN-NOT-RESOLVED',
+			'M-UNUSED-PRIVATE-CHAIN-BUILD-IGNORED',
+			'M-PURE-STRING-METHOD-OFF',
+			'M-SHADOWING-LOCAL-NO-RENAME',
+			'M-SHADOWING-LOCAL-OUTER-READ-IGNORED',
+			'M-SHADOWING-LOCAL-NO-ASSIGNMENT',
+			'M-SHADOWING-LOCAL-CAPTURE-IGNORED',
+			'M-LOWER-CAMEL-FIRST-ONLY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

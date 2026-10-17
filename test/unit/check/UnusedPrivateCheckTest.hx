@@ -429,63 +429,6 @@ class UnusedPrivateCheckTest extends Test {
 	}
 
 	/**
-	 * TM `Form.onFormRemovedFromStage` over `Box -> openfl Sprite -> …`: with no compiler facts the resolution scope
-	 * answers — every supertype resolved, none declaring the name, none under a build macro — so the subclass's
-	 * private method implements nothing and `--fix` deletes it.
-	 */
-	@:pin('control')
-	@:killer('M-UNUSED-PRIVATE-CHAIN-NOT-RESOLVED')
-	public function testFixDeletesExtendsClassMethodWhenTheChainProvesNothingDeclaresIt(): Void {
-		final edits: Array<{ span: Span, text: String }> = extendsFix(
-			'class Base extends Root {\n\tpublic function new() {}\n}', 'class Root {}'
-		);
-		Assert.equals(1, edits.length);
-	}
-
-	/**
-	 * The chain keeps the member whenever an ancestor is under a build macro or leaves the scope. (One that DECLARES the
-	 * name is not reported at all — `run` asks the same question first.)
-	 */
-	@:pin('control')
-	@:killer('M-UNUSED-PRIVATE-CHAIN-BUILD-IGNORED')
-	public function testFixKeepsExtendsClassMethodTheChainMayReach(): Void {
-
-		Assert.equals(0, extendsFix('@:autoBuild(M.b()) class Base extends Root {}', 'class Root {}').length);
-		Assert.equals(0, extendsFix('class Base extends Root {}', '@:build(M.b()) class Root {}').length);
-		Assert.equals(0, extendsFix('class Base extends Missing {}', 'class Root {}').length);
-	}
-
-	/** The decline names the macro-built supertype (TM: openfl's `Sprite` is `@:autoBuild`), and tells it from a missing one. */
-	public function testChainDeclineNamesItsGate(): Void {
-		final c: { file: String, source: String } = {
-			file: 'C.hx',
-			source: 'class C extends Base {\n\tprivate function impl():Int {\n\t\treturn 1;\n\t}\n}'
-		};
-		final built: FixRun = CheckFixture.fixRun(
-			new UnusedPrivate(), [c, { file: 'Base.hx', source: '@:autoBuild(M.b()) class Base {}' }]
-		);
-		Assert.isTrue(
-			(built.violations[0].declineReason ?? '').indexOf('`Base` is under a build macro') != -1, built.violations[0].declineReason
-		);
-		final missing: FixRun = CheckFixture.fixRun(new UnusedPrivate(), [c, { file: 'Base.hx', source: 'class Base extends Gone {}' }]);
-		Assert.isTrue(
-			(missing.violations[0].declineReason ?? '').indexOf('outside the resolution scope') != -1, missing.violations[0].declineReason
-		);
-	}
-
-	/** TM `StringUtil.CHARSET_UPPER`: a `String` method on a `String` final is pure, so the dead constant goes. */
-	@:pin('control')
-	@:killer('M-PURE-STRING-METHOD-OFF')
-	public function testFixDeletesDeadFinalOfAPureStringMethod(): Void {
-		final src: String = 'class C {\n\tprivate static final A:String = \'abc\';\n\tprivate static final B:String = A.toUpperCase();\n\n'
-			+ '\tpublic static function f():String {\n\t\treturn A;\n\t}\n}';
-		Assert.equals(1, fixEdits(src).length);
-		// A nullable receiver reads `Null`, and a method off the list is no proof.
-		Assert.equals(0, fixEdits(src.replace('A:String', 'A:Null<String>')).length);
-		Assert.equals(0, fixEdits(src.replace('A.toUpperCase()', 'A.mutate()')).length);
-	}
-
-	/**
 	 * The real regression: a private method inside a member-level `#if … #end`
 	 * region of a subclass. Conditional-compilation projects the method as a child
 	 * of a `Conditional` node, so the enclosing class's `ExtendsClause` is a sibling
@@ -1197,22 +1140,6 @@ class UnusedPrivateCheckTest extends Test {
 	/** The private-constructor findings of a run over `files`. */
 	private function ctorFindings(files: Array<{ file: String, source: String }>): Array<Violation> {
 		return [for (v in violations(files)) if (v.message.contains('constructor')) v];
-	}
-
-	/**
-	 * `--fix` over `class C extends Base` holding one unreferenced private method `impl`, with `Base.hx` and `Root.hx` in
-	 * the report scope — the resolution answer a run without compiler facts reads.
-	 */
-	private function extendsFix(base: String, root: String): Array<{ span: Span, text: String }> {
-		final check: UnusedPrivate = new UnusedPrivate();
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'C.hx', source: 'class C extends Base {\n\tprivate function impl():Int {\n\t\treturn 1;\n\t}\n}' },
-			{ file: 'Base.hx', source: base },
-			{ file: 'Root.hx', source: root }
-		];
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'C.hx');
-		Assert.equals(1, vs.length);
-		return CheckFixture.fixIn(check, files, vs);
 	}
 
 }

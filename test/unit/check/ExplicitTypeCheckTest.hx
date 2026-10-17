@@ -253,9 +253,9 @@ class ExplicitTypeCheckTest extends Test {
 	@:killer('M-EXPLICIT-TYPE-MACRO-NO-PROOF')
 	public function testFixMacroFunctionReturningQuotationIsExpr(): Void {
 		// TM macros/Lang.hx `t`: the oracle is blind in a macro function, and a quotation's type is `Expr` by construction.
-		final src: String = "import haxe.macro.Expr;\nclass C {\n\tmacro static function t(e:Expr) {\n\t\treturn macro f($e);\n\t}\n}";
+		final src: String = 'import haxe.macro.Expr;\nclass C {\n\tmacro static function t(e:Expr) {\n\t\treturn macro f($$e);\n\t}\n}';
 		Assert.equals(
-			"import haxe.macro.Expr;\nclass C {\n\tmacro static function t(e:Expr):Expr {\n\t\treturn macro f($e);\n\t}\n}", applyFix(src)
+			'import haxe.macro.Expr;\nclass C {\n\tmacro static function t(e:Expr):Expr {\n\t\treturn macro f($$e);\n\t}\n}', applyFix(src)
 		);
 	}
 

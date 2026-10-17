@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
@@ -67,10 +68,10 @@ final class EmptyBlock implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (support == null) return [];
 		final shape: RefShape = plugin.refShape();
 		final conditionLoops: Array<String> = ShapeVocab.conditionLoopKinds(shape);
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		if (support == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			// A project checkstyle `EmptyBlock.option` of `empty` (allow empty blocks) disables this check.
@@ -107,12 +108,8 @@ final class EmptyBlock implements Check {
 		return RunScan.edits(plugin, source, tree -> {
 			final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 			final blockKinds: Array<String> = support != null ? support.blockKinds() : [];
-			final flagged: Map<String, Violation> = [];
-			for (v in violations) {
-				final span: Null<Span> = v.span;
-				if (span != null) flagged['${span.from}:${span.to}'] = v;
-			}
-			final edits: Array<{ span: Span, text: String }> = [];
+			final flagged: Map<String, Violation> = RunScan.findingsBySpan(violations);
+			final edits: Array<FixEdit> = [];
 			collectEmptyFixes(tree, null, null, source, blockKinds, flagged, edits, plugin.refShape());
 			return CanonicalEdit.dropContainedEdits(edits);
 		});
@@ -197,9 +194,12 @@ final class EmptyBlock implements Check {
 
 	/** Why an empty block that is not an `if` branch is kept: a loop body, a `try` / `catch` body, or neither. */
 	private static function keptBodyReason(parent: QueryNode, shape: RefShape): String {
-		if (ShapeVocab.loopKinds(shape).contains(parent.kind)) return DECLINE_LOOP;
-		if (ShapeVocab.tryKinds(shape).contains(parent.kind) || parent.kind == shape.catchClauseKind) return DECLINE_TRY;
-		return DECLINE_OTHER;
+		return if (ShapeVocab.loopKinds(shape).contains(parent.kind))
+			DECLINE_LOOP
+		else if (ShapeVocab.tryKinds(shape).contains(parent.kind) || parent.kind == shape.catchClauseKind)
+			DECLINE_TRY
+		else
+			DECLINE_OTHER;
 	}
 
 }
@@ -216,6 +216,6 @@ private typedef EmptyScan = {
 
 /** What the fix does with one flagged empty block: the deletion, or the gate that kept it. */
 private enum EmptyFix {
-	Remove(edit: { span: Span, text: String });
+	Remove(edit: FixEdit);
 	Keep(reason: String);
 }

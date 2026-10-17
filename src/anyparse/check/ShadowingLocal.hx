@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -9,8 +10,6 @@ import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefHit;
-import anyparse.query.Refs.RefKind;
 import anyparse.query.Rename;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
@@ -147,7 +146,7 @@ final class ShadowingLocal implements Check {
 			typeSources: RunScan.typeInfoOf(plugin)?.declaredTypeSources(source) ?? [],
 			claimed: []
 		};
-		final edits: Array<{ span: Span, text: String }> = [];
+		final edits: Array<FixEdit> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			final decl: Null<QueryNode> = span == null ? null : declAt(tree, span, seams.localDeclKinds);
@@ -160,189 +159,6 @@ final class ShadowingLocal implements Check {
 			}
 		}
 		return edits;
-	}
-
-	/** The local declaration of one of `kinds` spanning exactly `span` — where a finding of this rule sits. */
-	private static function declAt(tree: QueryNode, span: Span, kinds: Array<String>): Null<QueryNode> {
-		return TreePath.firstAround(tree, span, n -> TreePath.spansExactly(n, span) && kinds.contains(n.kind));
-	}
-
-	/**
-	 * `fix`'s answer for the flagged declaration `decl`. Gates in order: the hidden binding is read after `decl` within
-	 * the frame declaring it (then the shadow may be the defect itself, and resolving it would bury the finding); `decl`
-	 * continues another declarator; then the assignment and, failing it, the rename are asked.
-	 */
-	private static function shadowFix(site: FixFile, decl: QueryNode): ShadowFix {
-		final path: Null<Array<QueryNode>> = TreePath.pathTo(site.tree, decl);
-		final name: Null<String> = decl.name;
-		final span: Null<Span> = decl.span;
-		if (path == null || name == null || span == null) return Declined(DECLINE_UNPLACED);
-		final ancestors: Array<QueryNode> = path.slice(0, path.length - 1);
-		final hidden: Null<Hidden> = shadowedBinding(decl, ancestors, site.seams);
-		if (hidden == null) return Declined(DECLINE_UNPLACED);
-		final hits: Array<RefHit> = Refs.find(name, site.tree, site.seams.shape);
-		if (readAfter(hits, hidden.frame, span))
-			return Declined('the hidden ${hidden.label} is read after this declaration, so the shadow may be the defect itself');
-		if ((site.seams.shape.localDeclContinuationKinds ?? []).contains(decl.kind))
-			return Declined('a continuation declarator: renaming one name of a `var a, b` chain is left to the author');
-		final assignment: Null<{ span: Span, text: String }> = assignmentEdit(site, decl, name, span, hidden, ancestors, hits);
-		return assignment != null ? Applied([assignment]) : renameEdits(site, decl, name, span, hidden);
-	}
-
-	/**
-	 * Whether a read of the name after `declSpan`, inside `frame`, binds to anything but the declaration at `declSpan` —
-	 * the hidden binding, or a binding the resolver cannot name. Inside the declaration's scope every read is its own, so
-	 * a hit here is a read of the hidden binding past the scope's end, which is the defect shape.
-	 */
-	private static function readAfter(hits: Array<RefHit>, frame: QueryNode, declSpan: Span): Bool {
-		final frameSpan: Null<Span> = frame.span;
-		return frameSpan == null
-			|| hits.exists(
-				hit ->
-					hit.kind == RefKind.Read && hit.span.from >= declSpan.to && within(hit.span, frameSpan)
-					&& !bindsWithin(hit.bindingSpan, declSpan)
-			);
-	}
-
-	/**
-	 * The edit turning a same-block redeclaration into an assignment — `var i:Int = 0; … var i:Int = f();` becomes
-	 * `… i = f();` — or null when it does not apply: the hidden binding must be a single-declarator mutable local of the
-	 * SAME statement list, both must write the same type, `decl` must have an initializer and nothing but its keyword,
-	 * name and annotation before it, and no nested function may capture the hidden binding (a closure would then read the
-	 * new value). Verified by re-resolution: every read of `decl` must bind to the hidden declaration afterwards.
-	 */
-	private static function assignmentEdit(
-		site: FixFile, decl: QueryNode, name: String, span: Span, hidden: Hidden, ancestors: Array<QueryNode>, hits: Array<RefHit>
-	): Null<{ span: Span, text: String }> {
-		final shape: RefShape = site.seams.shape;
-		final outer: QueryNode = hidden.node;
-		final outerSpan: Null<Span> = outer.span;
-		final continuation: Array<String> = shape.localDeclContinuationKinds ?? [];
-		final outerType: Null<String> = outerSpan == null ? null : site.typeSources[outerSpan.from];
-		final innerType: Null<String> = site.typeSources[span.from];
-		final init: Null<QueryNode> = decl.children.length == 1 ? decl.children[0] : null;
-		final initSpan: Null<Span> = init?.span;
-		if (outerSpan == null || init == null || initSpan == null || innerType == null || outerType == null) return null;
-		if (
-			outerType.trim() != innerType.trim() || hidden.label != LOCAL_LABEL || hidden.frame != ancestors[ancestors.length - 1]
-			|| !(shape.mutableLocalDeclKinds ?? []).contains(outer.kind) || SourceText.isMultiDeclarator(outer, continuation)
-			|| continuation.contains(init.kind) || capturedInNestedFunction(hits, outerSpan, hidden.frame, site.seams)
-			|| !declaratorPrefixOnly(site, span, initSpan, name, innerType)
-		)
-			return null;
-		final edit: { span: Span, text: String } = { span: new Span(span.from, initSpan.from), text: '$name = ' };
-		return rebindsToHidden(site, edit, name, span, outerSpan, hits) ? edit : null;
-	}
-
-	/**
-	 * Whether the source from `span.from` to `initFrom` is exactly a keyword, `name`, `:` + the written `type` and `=`,
-	 * with no comment anywhere in it — the run the assignment replaces with `name = `.
-	 */
-	private static function declaratorPrefixOnly(site: FixFile, span: Span, initSpan: Span, name: String, type: String): Bool {
-		final prefix: String = site.source.substring(span.from, initSpan.from);
-		if (site.plugin.lexicalRegions(site.source).exists(r -> r.from < initSpan.from && r.to > span.from)) return false;
-		final head: EReg = new EReg('^[A-Za-z_]+\\s+' + EReg.escape(name) + '\\s*:\\s*' + EReg.escape(type.trim()) + '\\s*=\\s*$', '');
-		return head.match(prefix);
-	}
-
-	/**
-	 * Whether a reference bound to the declaration at `outerSpan` sits inside a nested function within `frame` — a
-	 * closure capturing the hidden binding, which an assignment would hand the new value.
-	 */
-	private static function capturedInNestedFunction(hits: Array<RefHit>, outerSpan: Span, frame: QueryNode, seams: ScopeSeams): Bool {
-		final nested: Array<Span> = [];
-		collectNestedFnSpans(frame, nested, seams);
-		return hits.exists(hit -> bindsWithin(hit.bindingSpan, outerSpan) && nested.exists(fn -> within(hit.span, fn)));
-	}
-
-	/**
-	 * The binder's verdict on the assignment `edit`: re-resolved on the rewritten source, every read that bound to the
-	 * declaration at `span` binds to the hidden one at `outerSpan`, and nothing else moves onto it.
-	 */
-	private static function rebindsToHidden(
-		site: FixFile, edit: { span: Span, text: String }, name: String, span: Span, outerSpan: Span, hits: Array<RefHit>
-	): Bool {
-		final rewritten: String = site.source.substring(0, edit.span.from) + edit.text + site.source.substring(edit.span.to);
-		final tree: Null<QueryNode> = ParseGate.parseOrNull(site.plugin, rewritten);
-		if (tree == null) return false;
-		final delta: Int = edit.text.length - (edit.span.to - edit.span.from);
-		final moved: Array<Int> = [
-			for (hit in hits) if (
-				hit.kind == RefKind.Read && (bindsWithin(hit.bindingSpan, span) || bindsWithin(hit.bindingSpan, outerSpan))
-			)
-				hit.span.from >= span.to ? hit.span.from + delta : hit.span.from
-		];
-		final bound: Array<Int> = [
-			for (hit in Refs.find(
-				name, tree, site.seams.shape
-			)) if (hit.kind == RefKind.Read && bindsWithin(hit.bindingSpan, outerSpan)) hit.span.from
-		];
-		return moved.length == bound.length && moved.foreach(m -> bound.contains(m));
-	}
-
-	/**
-	 * The rename of `decl` to its written type's lower-camel name (`final event:RightPanelEvent` → `rightPanelEvent`),
-	 * or the gate that refused it: no written nominal type, a name already handed out by this call, a nested function
-	 * in the scope rebinding the name, the name in a string of the scope (code text no resolver reads), and finally
-	 * `Rename.rename` — the scope-correct rename `hxq rename` runs, which refuses a capture and every resolution blind spot.
-	 */
-	private static function renameEdits(site: FixFile, decl: QueryNode, name: String, span: Span, hidden: Hidden): ShadowFix {
-		final shape: RefShape = site.seams.shape;
-		final written: Null<String> = site.typeSources[span.from];
-		final candidate: Null<String> = written == null ? null : typeNamedLocal(written);
-		if (candidate == null || candidate == name || (shape.reservedWords ?? []).contains(candidate))
-			return Declined('no written nominal type names a replacement for "$name"');
-		final newName: String = candidate;
-		final frame: QueryNode = hidden.frame;
-		if (nestedFunctionRebinds(frame, name, site.seams))
-			return Declined('a nested function in its scope declares a parameter "$name", which the rename would have to tell apart');
-		final frameSpan: Null<Span> = frame.span;
-		final regions: Array<LexRegion> = site.plugin.lexicalRegions(site.source);
-		if (frameSpan == null || regions.exists(
-			r ->
-				r.kind == LexRegionKind.StringLit && r.from >= frameSpan.from && r.to <= frameSpan.to
-				&& SourceText.mentionsIdent(site.source, new Span(r.from, r.to), name)
-		))
-			return Declined('"$name" occurs in a string in its scope, which no resolver reads');
-		if (site.claimed.exists(c -> c.name == newName && c.scope.from < frameSpan.to && frameSpan.from < c.scope.to))
-			return Declined('another declaration of this pass takes "$newName" in an overlapping scope — the next pass renames this one');
-		final at: Int = OccurrenceScan.activeCodeIdentTokenOffset(site.source, span, name, regions);
-		if (at < 0) return Declined(DECLINE_UNPLACED);
-		final pos: Position = new Span(at, at).lineCol(site.source);
-		return switch Rename.rename(site.source, pos.line, pos.col, newName, site.plugin, shape) {
-			case Err(message):
-				Declined('renaming it to "$newName" is refused: $message');
-			case Ok(_):
-				site.claimed.push({ name: newName, scope: frameSpan });
-				Applied([
-					for (occ in Rename.renameOccurrences(site.source, site.tree, at, shape)) { span: occ, text: newName }
-				]);
-		};
-	}
-
-	/** Whether a nested function inside `frame` declares a parameter named `name`. */
-	private static function nestedFunctionRebinds(frame: QueryNode, name: String, seams: ScopeSeams): Bool {
-		for (child in frame.children) {
-			if (seams.nestedFnKinds.contains(child.kind) && child.children.exists(p -> seams.paramKinds.contains(p.kind) && p.name == name))
-				return true;
-			if (nestedFunctionRebinds(child, name, seams)) return true;
-		}
-		return false;
-	}
-
-	/**
-	 * The local name a declaration written with type `written` takes: the lower-camel of its simple nominal
-	 * (`events.RightPanelEvent` → `rightPanelEvent`), or null for anything else — a type argument, a function or
-	 * structure type, a name not starting upper-case, and a std root type (`TypeNameBinding.AMBIENT_TYPE_NAMES`:
-	 * `int` / `string` would name a type, not the value).
-	 */
-	private static function typeNamedLocal(written: String): Null<String> {
-		final path: String = written.trim();
-		final simple: String = path.substr(path.lastIndexOf('.') + 1);
-		return SourceText.isIdentifier(path.replace('.', '')) && simple.length > 0 && simple.charAt(0) != simple.charAt(0).toLowerCase()
-			&& !TypeNameBinding.AMBIENT_TYPE_NAMES.contains(simple)
-			? SourceText.lowerCamel(simple)
-			: null;
 	}
 
 	/**
@@ -646,6 +462,194 @@ final class ShadowingLocal implements Check {
 		return name != null && !name.startsWith('_') && seams.nestedFnKinds.contains(ancestors[ancestors.length - 1].kind);
 	}
 
+	/** The local declaration of one of `kinds` spanning exactly `span` — where a finding of this rule sits. */
+	private static function declAt(tree: QueryNode, span: Span, kinds: Array<String>): Null<QueryNode> {
+		return TreePath.firstAround(tree, span, n -> TreePath.spansExactly(n, span) && kinds.contains(n.kind));
+	}
+
+	/**
+	 * `fix`'s answer for the flagged declaration `decl`. Gates in order: the hidden binding is read after `decl` within
+	 * the frame declaring it (then the shadow may be the defect itself, and resolving it would bury the finding); `decl`
+	 * continues another declarator; then the assignment and, failing it, the rename are asked.
+	 */
+	private static function shadowFix(site: FixFile, decl: QueryNode): ShadowFix {
+		final path: Null<Array<QueryNode>> = TreePath.pathTo(site.tree, decl);
+		final name: Null<String> = decl.name;
+		final span: Null<Span> = decl.span;
+		if (path == null || name == null || span == null) return Declined(DECLINE_UNPLACED);
+		final ancestors: Array<QueryNode> = path.slice(0, path.length - 1);
+		final hidden: Null<Hidden> = shadowedBinding(decl, ancestors, site.seams);
+		if (hidden == null) return Declined(DECLINE_UNPLACED);
+		final hits: Array<RefHit> = Refs.find(name, site.tree, site.seams.shape);
+		if (readAfter(hits, hidden.frame, span))
+			return Declined('the hidden ${hidden.label} is read after this declaration, so the shadow may be the defect itself');
+		if ((site.seams.shape.localDeclContinuationKinds ?? []).contains(decl.kind))
+			return Declined('a continuation declarator: renaming one name of a `var a, b` chain is left to the author');
+		final assignment: Null<FixEdit> = assignmentEdit(site, decl, name, span, hidden, ancestors, hits);
+		return assignment != null ? Applied([assignment]) : renameEdits(site, decl, name, span, hidden);
+	}
+
+	/**
+	 * Whether a read of the name after `declSpan`, inside `frame`, binds to anything but the declaration at `declSpan` —
+	 * the hidden binding, or a binding the resolver cannot name. Inside the declaration's scope every read is its own, so
+	 * a hit here is a read of the hidden binding past the scope's end, which is the defect shape.
+	 */
+	private static function readAfter(hits: Array<RefHit>, frame: QueryNode, declSpan: Span): Bool {
+		final frameSpan: Null<Span> = frame.span;
+		return frameSpan == null
+			|| hits.exists(
+				hit ->
+					hit.kind == RefKind.Read && hit.span.from >= declSpan.to && within(hit.span, frameSpan)
+					&& !bindsWithin(hit.bindingSpan, declSpan)
+			);
+	}
+
+	/**
+	 * The edit turning a same-block redeclaration into an assignment — `var i:Int = 0; … var i:Int = f();` becomes
+	 * `… i = f();` — or null when it does not apply: the hidden binding must be a single-declarator mutable local of the
+	 * SAME statement list, both must write the same type, `decl` must have an initializer and nothing but its keyword,
+	 * name and annotation before it, and no nested function may capture the hidden binding (a closure would then read the
+	 * new value). Verified by re-resolution: every read of `decl` must bind to the hidden declaration afterwards.
+	 */
+	private static function assignmentEdit(
+		site: FixFile, decl: QueryNode, name: String, span: Span, hidden: Hidden, ancestors: Array<QueryNode>, hits: Array<RefHit>
+	): Null<FixEdit> {
+		final shape: RefShape = site.seams.shape;
+		final outer: QueryNode = hidden.node;
+		final outerSpan: Null<Span> = outer.span;
+		final continuation: Array<String> = shape.localDeclContinuationKinds ?? [];
+		final outerType: Null<String> = outerSpan == null ? null : site.typeSources[outerSpan.from];
+		final innerType: Null<String> = site.typeSources[span.from];
+		final init: Null<QueryNode> = decl.children.length == 1 ? decl.children[0] : null;
+		final initSpan: Null<Span> = init?.span;
+		if (outerSpan == null || init == null || initSpan == null || innerType == null || outerType == null) return null;
+		if (
+			outerType.trim() != innerType.trim() || hidden.label != LOCAL_LABEL || hidden.frame != ancestors[ancestors.length - 1]
+			|| !(shape.mutableLocalDeclKinds ?? []).contains(outer.kind) || SourceText.isMultiDeclarator(outer, continuation)
+			|| continuation.contains(init.kind) || capturedInNestedFunction(hits, outerSpan, hidden.frame, site.seams)
+			|| !declaratorPrefixOnly(site, span, initSpan, name, innerType)
+		)
+			return null;
+		final edit: FixEdit = { span: new Span(span.from, initSpan.from), text: '$name = ' };
+		return rebindsToHidden(site, edit, name, span, outerSpan, hits) ? edit : null;
+	}
+
+	/**
+	 * Whether the source from `span.from` to `initFrom` is exactly a keyword, `name`, `:` + the written `type` and `=`,
+	 * with no comment anywhere in it — the run the assignment replaces with `name = `.
+	 */
+	private static function declaratorPrefixOnly(site: FixFile, span: Span, initSpan: Span, name: String, type: String): Bool {
+		final prefix: String = site.source.substring(span.from, initSpan.from);
+		if (site.plugin.lexicalRegions(site.source).exists(r -> r.from < initSpan.from && r.to > span.from)) return false;
+		final head: EReg = new EReg('^[A-Za-z_]+\\s+${EReg.escape(name)}\\s*:\\s*${EReg.escape(type.trim())}\\s*=\\s*$$', '');
+		return head.match(prefix);
+	}
+
+	/**
+	 * Whether a reference bound to the declaration at `outerSpan` sits inside a nested function within `frame` — a
+	 * closure capturing the hidden binding, which an assignment would hand the new value.
+	 */
+	private static function capturedInNestedFunction(hits: Array<RefHit>, outerSpan: Span, frame: QueryNode, seams: ScopeSeams): Bool {
+		final nested: Array<Span> = [];
+		collectNestedFnSpans(frame, nested, seams);
+		return hits.exists(hit -> bindsWithin(hit.bindingSpan, outerSpan) && nested.exists(fn -> within(hit.span, fn)));
+	}
+
+	/**
+	 * The binder's verdict on the assignment `edit`: re-resolved on the rewritten source, every read that bound to the
+	 * declaration at `span` binds to the hidden one at `outerSpan`, and nothing else moves onto it.
+	 */
+	private static function rebindsToHidden(
+		site: FixFile, edit: FixEdit, name: String, span: Span, outerSpan: Span, hits: Array<RefHit>
+	): Bool {
+		final rewritten: String = site.source.substring(0, edit.span.from) + edit.text + site.source.substring(edit.span.to);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(site.plugin, rewritten);
+		if (tree == null) return false;
+		final delta: Int = edit.text.length - (edit.span.to - edit.span.from);
+		final moved: Array<Int> = [
+			for (hit in hits) if (
+				hit.kind == RefKind.Read && (bindsWithin(hit.bindingSpan, span) || bindsWithin(hit.bindingSpan, outerSpan))
+			)
+				shifted(hit.span.from, span.to, delta)
+		];
+		final bound: Array<Int> = [
+			for (hit in Refs.find(
+				name, tree, site.seams.shape
+			)) if (hit.kind == RefKind.Read && bindsWithin(hit.bindingSpan, outerSpan)) hit.span.from
+		];
+		return moved.length == bound.length && moved.foreach(m -> bound.contains(m));
+	}
+
+	/**
+	 * The rename of `decl` to its written type's lower-camel name (`final event:RightPanelEvent` → `rightPanelEvent`),
+	 * or the gate that refused it: no written nominal type, a name already handed out by this call, a nested function
+	 * in the scope rebinding the name, the name in a string of the scope (code text no resolver reads), and finally
+	 * `Rename.rename` — the scope-correct rename `hxq rename` runs, which refuses a capture and every resolution blind spot.
+	 */
+	private static function renameEdits(site: FixFile, decl: QueryNode, name: String, span: Span, hidden: Hidden): ShadowFix {
+		final shape: RefShape = site.seams.shape;
+		final written: Null<String> = site.typeSources[span.from];
+		final candidate: Null<String> = written == null ? null : typeNamedLocal(written);
+		if (candidate == null || candidate == name || (shape.reservedWords ?? []).contains(candidate))
+			return Declined('no written nominal type names a replacement for "$name"');
+		final newName: String = candidate;
+		final frame: QueryNode = hidden.frame;
+		if (nestedFunctionRebinds(frame, name, site.seams))
+			return Declined('a nested function in its scope declares a parameter "$name", which the rename would have to tell apart');
+		final frameSpan: Null<Span> = frame.span;
+		final regions: Array<LexRegion> = site.plugin.lexicalRegions(site.source);
+		if (frameSpan == null || regions.exists(
+			r ->
+				r.kind == LexRegionKind.StringLit && r.from >= frameSpan.from && r.to <= frameSpan.to
+				&& SourceText.mentionsIdent(site.source, new Span(r.from, r.to), name)
+		))
+			return Declined('"$name" occurs in a string in its scope, which no resolver reads');
+		if (site.claimed.exists(c -> c.name == newName && c.scope.from < frameSpan.to && frameSpan.from < c.scope.to))
+			return Declined('another declaration of this pass takes "$newName" in an overlapping scope — the next pass renames this one');
+		final at: Int = OccurrenceScan.activeCodeIdentTokenOffset(site.source, span, name, regions);
+		if (at < 0) return Declined(DECLINE_UNPLACED);
+		final pos: Position = new Span(at, at).lineCol(site.source);
+		return switch Rename.rename(site.source, pos.line, pos.col, newName, site.plugin, shape) {
+			case Err(message):
+				Declined('renaming it to "$newName" is refused: $message');
+			case Ok(_):
+				site.claimed.push({ name: newName, scope: frameSpan });
+				Applied([
+					for (occ in Rename.renameOccurrences(site.source, site.tree, at, shape)) { span: occ, text: newName }
+				]);
+		};
+	}
+
+	/** Whether a nested function inside `frame` declares a parameter named `name`. */
+	private static function nestedFunctionRebinds(frame: QueryNode, name: String, seams: ScopeSeams): Bool {
+		for (child in frame.children) {
+			if (seams.nestedFnKinds.contains(child.kind) && child.children.exists(p -> seams.paramKinds.contains(p.kind) && p.name == name))
+				return true;
+			if (nestedFunctionRebinds(child, name, seams)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * The local name a declaration written with type `written` takes: the lower-camel of its simple nominal
+	 * (`events.RightPanelEvent` → `rightPanelEvent`), or null for anything else — a type argument, a function or
+	 * structure type, a name not starting upper-case, and a std root type (`TypeNameBinding.AMBIENT_TYPE_NAMES`:
+	 * `int` / `string` would name a type, not the value).
+	 */
+	private static function typeNamedLocal(written: String): Null<String> {
+		final path: String = written.trim();
+		final simple: String = path.substr(path.lastIndexOf('.') + 1);
+		return SourceText.isIdentifier(path.replace('.', '')) && simple.length > 0 && simple.charAt(0) != simple.charAt(0).toLowerCase()
+			&& !TypeNameBinding.AMBIENT_TYPE_NAMES.contains(simple)
+			? SourceText.lowerCamel(simple)
+			: null;
+	}
+
+	/** `offset` in a source whose run ending at `end` changed length by `delta`. */
+	private static inline function shifted(offset: Int, end: Int, delta: Int): Int {
+		return offset >= end ? offset + delta : offset;
+	}
+
 }
 
 /** The scope vocabulary `ShadowingLocal` walks with — resolved once per run, never per node. */
@@ -690,7 +694,7 @@ private typedef Hidden = {
 
 /** What `fix` does with one finding: its edits, or the gate that kept it report-only. */
 private enum ShadowFix {
-	Applied(edits: Array<{ span: Span, text: String }>);
+	Applied(edits: Array<FixEdit>);
 	Declined(reason: String);
 }
 
