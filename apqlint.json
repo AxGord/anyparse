@@ -151,7 +151,8 @@
 				"CompilerFacts <= 80 members: C2 moved its node-record decoding out (`FactNodeRecords`) and its node-site queries (`FactSites`); every member left serves the one fact table and its caches and reads the same fields.",
 				"ReachGraph <= 98 members: C2 moved its library-call predicates out (`LibraryCalls`, `ReachProject.declarationOf`); every member left reads the graph growth state.",
 				"FactsEscapes <= 62 members: C2 moved its type-parameter instances out (`FactsInstances`); what is left is the escape walk, every member of it reading the same fields.",
-				"TypedFactsMacro <= 61 members: C2 moved its type-string printer out (`TypedFactsTypeStrings`); what is left is the fact-record writer, every member of it reading the same fields."
+				"TypedFactsMacro <= 61 members: C2 moved its type-string printer out (`TypedFactsTypeStrings`); what is left is the fact-record writer, every member of it reading the same fields.",
+				"CallGraph <= 71 members: its members are the public question surface 86 files read (C2 and B9 measured it); N13 moved `collectEdges` out (`CallGraphEdges.collect`) and kept that surface unchanged on purpose."
 			]
 		},
 		"prefer-doc-comment": {

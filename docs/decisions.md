@@ -3504,4 +3504,5 @@ decided the question; it may not become a record of runs.
   = current size + 5% rounded up (lines to the next 50) — `Renderer`, `WrapList`, `NullFlow`, the test tree's
   `TestDiscoveryParityTest`, and the types C2 measured and declined (`FactsView`, `MemberReach`, `TypedFactsWalk`,
   `FunctionValueTypes`, `NullGuardedCode`, `CompilerFacts`, `ReachGraph`, `FactsEscapes`, `TypedFactsMacro`), each
-  with C2's reason. `CallGraph` is left ungranted: N13 is splitting it — branch `feat/infra-N14`
+  with C2's reason; and `CallGraph`, still 67 members after N13 moved its edge collection out (its public question
+  surface, which 86 files read) — branch `feat/infra-N14`
