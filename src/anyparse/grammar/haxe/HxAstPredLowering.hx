@@ -277,8 +277,8 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * `varDeclTailEndsWithCloseBrace`, of the LAST binding (drop the `;` iff true).
 	 *
 	 * True (brace-terminated): `SwitchExpr` / `SwitchExprBare` /
-	 * `BlockExpr` / `ObjectLit` / `MacroClassExpr` outright; `FnExpr`
-	 * with a `BlockBody`; and recursion through the value-position
+	 * `BlockExpr` / `ObjectLit` / `MacroClassExpr` outright; `FnExpr` /
+	 * `NamedFnExpr` with a `BlockBody`; and recursion through the value-position
 	 * wrappers — `MacroExpr` / `MetaExpr` operands, `Ternary`'s else
 	 * branch, `for` / `while` bodies, `IfExpr`'s last evaluated branch
 	 * (`elseBranch` when present, else `thenBranch`), `TryExpr`'s last
@@ -314,6 +314,9 @@ final class HxAstPredLowering extends AstPredLowering {
 				}
 			),
 			caseBind(HX_EXPR, 'FnExpr', [0 => '_f'], fnBodySwitch),
+			// `function name() { … }` ends at its body's `}` exactly as the anonymous spelling
+			// does (`x = function n() { return 1; } trace(x());` runs on Haxe 4.3.7).
+			caseBind(HX_EXPR, 'NamedFnExpr', [0 => '_f'], fnBodySwitch),
 			caseBind(
 				HX_EXPR, 'TryExpr', [0 => '_t'], macro {
 					final _cs = _t.catches;
@@ -527,6 +530,13 @@ final class HxAstPredLowering extends AstPredLowering {
 			caseOf(HX_FN_EXPR_BODY, ['BlockBody'], macro true),
 			caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], macro nested || ${at(ident('_e'), macro true)})
 		], macro false);
+		// A NAMED function expression has no byte-parity history to keep: its `HxFnExprBody` owns
+		// no trail slot, so an expression body's answer is the body's own at every depth
+		// (`x = function n() return 1 trace(x());` is `Missing ;`).
+		final namedFnBodySwitch: Expr = nullSwitch(field(ident('_f'), 'body'), macro false, [
+			caseOf(HX_FN_EXPR_BODY, ['BlockBody'], macro true),
+			caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], at(ident('_e'), macro true))
+		], macro false);
 		final ifArm: Expr = {
 			final recElse: Expr = at(ident('_el'), macro true);
 			final recThen: Expr = at(field(ident('_s'), 'thenBranch'), macro true);
@@ -560,6 +570,7 @@ final class HxAstPredLowering extends AstPredLowering {
 			// `function (…) body` — HxFnExprBody dispatch incl. the
 			// ExprBody `@:trailOpt(';')` swallow.
 			caseBind(HX_EXPR, 'FnExpr', [0 => '_f'], fnBodySwitch),
+			caseBind(HX_EXPR, 'NamedFnExpr', [0 => '_f'], namedFnBodySwitch),
 			// `for (…) body` — HxForExpr.body carries `@:trailOpt(';')`,
 			// same swallow as HxIfExpr.thenBranch.
 			caseBind(HX_EXPR, 'ForExpr', [0 => '_s'], macro nested || ${at(field(ident('_s'), 'body'), macro true)}),

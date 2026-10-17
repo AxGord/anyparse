@@ -3254,3 +3254,9 @@ decided the question; it may not become a record of runs.
   alike, which Haxe 4.3.7 rejects (`Expected while`; the trivia writer reproduced the source). `HxDoWhileBody.ExprBody`'s
   `@:trailOpt(';')` is parse leniency for the legacy spelling only, so it carries `@:fmt(trailOptParseOnly)`: the plain
   Case-3 writer emits nothing for it, the trivia writer still writes what the source wrote — branch `feat/infra-N9`
+- `x = function n() { return 1; } trace(x());` and the `var` form did not parse, though Haxe 4.3.7 runs both:
+  `endsWithCloseBrace` and `_stmtExprNoSemiAt` had the anonymous `FnExpr` arm and no `NamedFnExpr` one. Both now read a
+  named literal's BLOCK body as `}`-terminated; its EXPRESSION body answers the body's own verdict at every depth,
+  without the anonymous arm's byte-parity `nested ||` relaxation (`x = function n() return 1 trace(x());` is `Missing ;`).
+  The plain writer therefore drops the optional `;` after `var g = function n() { … }` exactly as it does after the
+  anonymous spelling — branch `feat/infra-N9`

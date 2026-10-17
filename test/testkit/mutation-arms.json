@@ -22306,6 +22306,30 @@
 			"find": "} else if (branch.fmtHasFlag('trailOptParseOnly')) {",
 			"replace": "} else if (false) {",
 			"note": "the plain writer emits `do i++; while (c)` again, which Haxe rejects (`Expected while`)"
+		},
+		{
+			"name": "M-NAMED-FN-STMT-NO-ARM",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "stmtExprNoSemiAtField",
+			"find": "\t\t\tcaseBind(HX_EXPR, 'NamedFnExpr', [0 => '_f'], namedFnBodySwitch),\n",
+			"replace": "",
+			"note": "`x = function n() { return 1; } trace(x());` no longer parses: the named literal's `}` does not end the statement"
+		},
+		{
+			"name": "M-NAMED-FN-NOT-BRACE-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "endsWithCloseBraceField",
+			"find": "\t\t\tcaseBind(HX_EXPR, 'NamedFnExpr', [0 => '_f'], fnBodySwitch),\n",
+			"replace": "",
+			"note": "`var g = function n() { … }` keeps a `;` the anonymous spelling drops: the var-rhs gate reads the named literal as not brace-ended"
+		},
+		{
+			"name": "M-NAMED-FN-EXPR-BODY-RELAXED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "stmtExprNoSemiAtField",
+			"find": "caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], at(ident('_e'), macro true))",
+			"replace": "caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], macro true)",
+			"note": "a named literal's EXPRESSION body ends its statement with no `;`, so `x = function n() return 1 trace(x());` (Haxe: `Missing ;`) parses"
 		}
 	]
 }

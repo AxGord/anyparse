@@ -2935,6 +2935,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testReportedConfigGuardStaysGlued :: control :: M-LOOPIF-ALWAYS',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testReportedSiteBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testWhileIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
+			'unit.grammar.haxe.HxNamedFnExprSliceTest#testNamedFnExprBlockBodyEndsItsStatement :: control :: '
+				+ 'M-NAMED-FN-STMT-NO-ARM,M-NAMED-FN-NOT-BRACE-ENDED,M-NAMED-FN-EXPR-BODY-RELAXED',
 			'unit.grammar.haxe.HxNestingCostTest#testCollapsePassComputesEachSharedNodeOnce :: control :: '
 				+ 'M-COLLAPSE-REWRITE-MEMO-OFF,M-COLLAPSE-SUBTREE-MEMO-OFF,M-COLLAPSE-COMMIT-MEMO-OFF',
 			'unit.grammar.haxe.HxNestingCostTest#testEachBodyIsWrittenOnce :: control :: M-FOR-BODY-PROBE-EAGER,M-CHAIN-WALK-EAGER',
@@ -7074,7 +7076,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
 			'M-RLW-NAMED-FN-NOT-BINDER',
 			'M-RLW-LOCAL-FN-AS-BINDER',
-			'M-DOWHILE-PLAIN-SEMI'
+			'M-DOWHILE-PLAIN-SEMI',
+			'M-NAMED-FN-STMT-NO-ARM',
+			'M-NAMED-FN-NOT-BRACE-ENDED',
+			'M-NAMED-FN-EXPR-BODY-RELAXED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -7302,6 +7307,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-JSON-KEY-DUP-AT-FIELD :: anyparse.macro.MetaInspect#checkWireKeys',
 			'M-SEARCH-TRY-EXPR-UNRELATED :: anyparse.grammar.haxe.HaxeQueryPlugin#FinalMember:SEARCH_KIND_EQUIVALENCE',
 			'M-DOWHILE-PLAIN-SEMI :: anyparse.macro.WriterKwRefLowering#kwRefParts',
+			'M-NAMED-FN-STMT-NO-ARM :: anyparse.grammar.haxe.HxAstPredLowering#stmtExprNoSemiAtField',
+			'M-NAMED-FN-NOT-BRACE-ENDED :: anyparse.grammar.haxe.HxAstPredLowering#endsWithCloseBraceField',
+			'M-NAMED-FN-EXPR-BODY-RELAXED :: anyparse.grammar.haxe.HxAstPredLowering#stmtExprNoSemiAtField',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
