@@ -3502,3 +3502,11 @@ decided the question; it may not become a record of runs.
   null test past the first operand narrows a later one, and REFUSED (null — no finding) when a null comparison buried
   in a compound operand does (`!(a != null && b != null) || b.length > 0` does not compile and no grouping fixes it;
   the positive whitelist: only the bare-test shape is known to carry a fact) — branch `feat/infra-N15`
+- `unused-local` declined its two refusals (a side-effecting initializer, a binding sharing its line) with no
+  `Violation.declineReason`, so `--fix` printed "returned no edit … will not say which it is" for TM's six remaining
+  findings (all call initializers). Each gate now writes its sentence — branch `feat/infra-N15`
+- `unused-private` judged a FIELD initializer by the kind-only `MemberKinds.isSideEffectFree` while `unused-local`
+  judges a local's by the type-aware `TypeResolver.isDeletionPure` (a pure array / map literal, a plain field read, a
+  provably pure stdlib call): two answers to one question, and TM's `bitmapDataCollection: Map<String, Any> = []` was
+  declined as "not provably side-effect-free". The field gate now asks `isDeletionPure` when the fix has an index
+  (the kind-only answer without one) — branch `feat/infra-N15`
