@@ -23058,8 +23058,8 @@
 			"name": "M-MO-INLINE-BOUNDARY-BEFORE-EXEMPTIONS",
 			"type": "anyparse.check.MemberSpacing",
 			"method": "ownWant",
-			"find": "else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull\n\telse if (inlineSubgroupBoundary(a, b, separateInline))\n\t\t{ count: 1, rule: InlineBoundary }",
-			"replace": "else if (inlineSubgroupBoundary(a, b, separateInline))\n\t\t{ count: 1, rule: InlineBoundary }\n\telse if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull",
+			"find": "else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull\n\telse if (inlineSubgroupBoundary(a, b, separateInline))\n\t\t{ count: 1, atLeast: false, rule: InlineBoundary }",
+			"replace": "else if (inlineSubgroupBoundary(a, b, separateInline))\n\t\t{ count: 1, atLeast: false, rule: InlineBoundary }\n\telse if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull",
 			"note": "the boundary is asked before the non-field and comment-led exemptions, so a same-rank method pair and a line-comment-led field are demanded a blank they never were"
 		},
 		{
