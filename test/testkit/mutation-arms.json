@@ -10242,11 +10242,11 @@
 		},
 		{
 			"name": "M-FOLD-FACTS-OPERAND",
-			"type": "anyparse.check.FoldStringLiterals",
-			"method": "fix",
-			"find": "final oracle: Null<FactsTypeOracle> = tree == null ? null : FactsTypeOracle.forFix(plugin, file, source);",
-			"replace": "final oracle: Null<FactsTypeOracle> = null;",
-			"note": "a construct the run left Unproven is never asked of the compiler's facts, so an operand only they type keeps the fix off"
+			"type": "anyparse.check.OperatorSelection",
+			"method": "factsProof",
+			"find": "oracle = FactsTypeOracle.forFixRun(_plugin, file, source);",
+			"replace": "oracle = null;",
+			"note": "an operand the binding leaves unproven is never asked of the compiler's facts, so a construct only they type stays report-only (fold) or unreported (the negation family)"
 		},
 		{
 			"name": "M-FACTS-VALUE-TYPE-FLOWS",
@@ -10519,9 +10519,9 @@
 		{
 			"name": "M-OPERAND-MEMBER-SCOPE-LOST",
 			"type": "anyparse.check.OperandBinder",
-			"method": "memberTier",
-			"find": "DeclaredNullity.headTierIn(written, owner.file, m.declFrom, _index,",
-			"replace": "DeclaredNullity.headTierIn(written, _index.fileInfo(_file) ?? owner.file, m.declFrom, _index,",
+			"method": "boundMembers",
+			"find": "DeclaredNullity.headTierIn(written, host.file, m.declFrom, _index,",
+			"replace": "DeclaredNullity.headTierIn(written, _index.fileInfo(_file) ?? host.file, m.declFrom, _index,",
 			"note": "a member's written type is bound in the READING file instead of the declaring one"
 		},
 		{
@@ -10534,7 +10534,7 @@
 		{
 			"name": "M-OPERAND-METHOD-PARAMS-IGNORED",
 			"type": "anyparse.check.OperandBinder",
-			"method": "memberTier",
+			"method": "boundMembers",
 			"find": "ownParams.concat(m.typeParamNames)",
 			"replace": "ownParams",
 			"note": "a method's own type parameters do not shadow a type of the same name in its return type"
@@ -22502,8 +22502,8 @@
 		{
 			"name": "M-OPERAND-NEW-CUT",
 			"type": "anyparse.check.OperandBinder",
-			"method": "tierOf",
-			"find": "return at == null ? Unknown : writtenTier(operand.name, at.from);",
+			"method": "constructionTier",
+			"find": "return at == null ? Unknown : writtenTier(node.name, at.from);",
 			"replace": "return Unknown;",
 			"note": "a construction is no longer of the type it writes, so its operator and its toString go unproven"
 		},
@@ -23676,6 +23676,153 @@
 			"find": "if (SourceComments.hasCommentMarker(source, span.from, span.to)) {",
 			"replace": "if (false) {",
 			"note": "the flat guard-chain rewrite drops a comment inside the chain"
+		},
+		{
+			"name": "M-BINDER-INITIALIZER-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "initializerOf",
+			"force": "null",
+			"note": "an unannotated local is no longer typed by its initializer, so an operand it holds goes unproven"
+		},
+		{
+			"name": "M-BINDER-SELF-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "selfTier",
+			"force": "Unknown",
+			"note": "the self reference is no longer its enclosing type, so `this.f` goes unproven"
+		},
+		{
+			"name": "M-BINDER-INHERITED-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "inheritedTier",
+			"force": "Unknown",
+			"note": "a member the enclosing type inherits, read or called bare, goes unproven"
+		},
+		{
+			"name": "M-BINDER-EXTENSION-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "extensionTier",
+			"force": "Unknown",
+			"note": "a static extension call goes unproven"
+		},
+		{
+			"name": "M-BINDER-RESOLVE-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "resolveTier",
+			"force": "Unknown",
+			"note": "an abstract's @:op(a.b) field goes unproven"
+		},
+		{
+			"name": "M-BINDER-INHERITED-STATIC",
+			"type": "anyparse.check.OperandBinder",
+			"method": "inheritedTier",
+			"find": "declared == null || declared.members.exists(m -> m.isStatic)",
+			"replace": "declared == null",
+			"note": "a supertype's static, which is not in scope bare, types the bare name an import binds"
+		},
+		{
+			"name": "M-BINDER-CLOSURE-UNRESOLVED",
+			"type": "anyparse.check.OperandBinder",
+			"method": "declarationOf",
+			"find": "else if (_index.members.declarationFreeOfExtensionTypes(owner))",
+			"replace": "else if (true)",
+			"note": "an inherited member is read past a supertype link the index cannot resolve, where a covariant override may sit"
+		},
+		{
+			"name": "M-BINDER-EXTENSION-ATUSING",
+			"type": "anyparse.check.OperandBinder",
+			"method": "extensionTier",
+			"find": "if (usings == null || !_index.members.declarationFreeOfExtensionTypes(owner)) return Unknown;",
+			"replace": "if (usings == null) return Unknown;",
+			"note": "a file's using is taken over the extension the receiver type's own @:using brings, which 4.3.7 binds first"
+		},
+		{
+			"name": "M-BINDER-EXTENSION-LAST-USING",
+			"type": "anyparse.check.OperandBinder",
+			"method": "extensionTier",
+			"find": "_index.values.usingHosts(usings[k])",
+			"replace": "_index.values.usingHosts(usings[usings.length - 1 - k])",
+			"note": "the FIRST using declaring the extension wins instead of the last"
+		},
+		{
+			"name": "M-BINDER-EXTENSION-FIRST-PARAM",
+			"type": "anyparse.check.OperandBinder",
+			"method": "extensionTier",
+			"find": "case Bound(decls) if (decls.length == 1 && sameDeclaration(decls[0], owner)):",
+			"replace": "case Bound(_):",
+			"note": "an extension whose first parameter is another type is taken although the compiler skips it"
+		},
+		{
+			"name": "M-BINDER-EXTENSION-UNINDEXED",
+			"type": "anyparse.check.OperandBinder",
+			"method": "extensionTier",
+			"find": "if (hosts == null) return Unknown;",
+			"replace": "if (hosts == null) continue;",
+			"note": "a later using the index does not hold is passed over, though it may declare the extension"
+		},
+		{
+			"name": "M-BINDER-EXTENSION-GUARDED-USING",
+			"type": "anyparse.check.OperandBinder",
+			"method": "forFile",
+			"find": "usings = header.guardedUsings.length > 0 ? null : UsingScan.usingModules(header);",
+			"replace": "usings = UsingScan.usingModules(header);",
+			"note": "a #if-guarded using no longer refuses the extension, though a build defining it binds another"
+		},
+		{
+			"name": "M-BINDER-RESOLVE-USING-SHADOW",
+			"type": "anyparse.check.OperandBinder",
+			"method": "resolveTier",
+			"find": "scope == null || scope.exists(h -> h.type.members.exists(m -> m.name == name))",
+			"replace": "scope == null",
+			"note": "the @:op(a.b) resolver is taken although a using in scope declares a static of the field's name, which 4.3.7 binds first"
+		},
+		{
+			"name": "M-USING-HOSTS-MODULE",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "usingHosts",
+			"find": "? null : types;",
+			"replace": "? null : types.filter(t -> t.type.isMain);",
+			"note": "a used module brings only its main type's statics, not every type's"
+		},
+		{
+			"name": "M-USING-HOSTS-ALIAS",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "usingHosts",
+			"find": " || types.exists(t -> t.type.kind == SymbolIndex.TYPEDEF_DECL_KIND)",
+			"replace": "",
+			"note": "a used alias reads as bringing no statics, though the type it names brings them"
+		},
+		{
+			"name": "M-USING-DECLS-AMBIENT",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "usingDeclarations",
+			"find": "for (imp in importsOf(fi))",
+			"replace": "for (imp in fi.imports)",
+			"note": "the ambient import.hx usings are not in scope of the resolver's shadow check"
+		},
+		{
+			"name": "M-FOLD-FIX-REPORT-INDEX",
+			"type": "anyparse.check.FoldStringLiterals",
+			"method": "fix",
+			"find": "OperatorSelection.of(plugin, [{ file: file, source: source }], index)",
+			"replace": "OperatorSelection.of(plugin, [{ file: file, source: source }])",
+			"note": "the fold's fix judges a construct the run left report-only against its own file's overloads alone, and merges past a sibling module's"
+		},
+		{
+			"name": "M-PIEC-FIX-REPORT-INDEX",
+			"type": "anyparse.check.PreferIfExpressionChain",
+			"method": "fix",
+			"find": "OperatorSelection.of(plugin, [{ file: file, source: source }], index)",
+			"replace": "OperatorSelection.of(plugin, [{ file: file, source: source }])",
+			"note": "the chain rule's fix reads a chain over a sibling module's overloading type as one the switch rule claims, and drops the edit its run reported"
+		},
+		{
+			"name": "M-PIEC-RUN-SELECTION",
+			"type": "anyparse.check.PreferIfExpressionChain",
+			"method": "run",
+			"find": "for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, selection))",
+			"replace": "for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, OperatorSelection.of(plugin, [entry])))",
+			"note": "the chain rule asks a per-file operator table, which sees no overload a sibling module declares, and leaves a chain the switch rule refuses to nobody"
 		}
 	]
 }

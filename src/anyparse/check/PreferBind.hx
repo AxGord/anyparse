@@ -111,7 +111,7 @@ final class PreferBind implements Check {
 			root: tree,
 			file: file,
 			source: source,
-			provider: provider,
+			plugin: plugin,
 			index: index.bind(file),
 			declaredTypes: provider?.declaredTypes(source) ?? [],
 			binder: null
@@ -240,12 +240,7 @@ final class PreferBind implements Check {
 		final built: Null<OperandBinder> = ctx.binder;
 		if (built != null) return built;
 		final index: Null<SymbolIndex> = ctx.index();
-		final provider: Null<TypeInfoProvider> = ctx.provider;
-		if (index == null || provider == null) return null;
-		final shape: RefShape = ctx.seams.shape;
-		final binder: OperandBinder = new OperandBinder(
-			ctx.file, ctx.source, ctx.root, shape, index, provider, OperandBinder.builtinNamesOf(shape)
-		);
+		final binder: Null<OperandBinder> = index == null ? null : OperandBinder.forFile(ctx.plugin, ctx.file, ctx.source, ctx.root, index);
 		ctx.binder = binder;
 		return binder;
 	}
@@ -357,7 +352,7 @@ private typedef Ctx = {
 	final root: QueryNode;
 	final file: String;
 	final source: String;
-	final provider: Null<TypeInfoProvider>;
+	final plugin: GrammarPlugin;
 	final index: () -> Null<SymbolIndex>;
 	final declaredTypes: Map<Int, String>;
 	var binder: Null<OperandBinder>;

@@ -5,7 +5,6 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeNameBinding.Tier;
 
 using Lambda;
@@ -62,12 +61,17 @@ enum OperatorVerdict {
  *    is a map lookup. In a tree where the answer is no — which is most trees, and every tree
  *    before someone writes the first `@:op` — every occurrence is `Builtin` and no operand type
  *    is ever resolved. That is what keeps the gate free.
- * 2. **Could an operand of THIS occurrence be one of those types?** Each operand's declared type
- *    is BOUND in the file that writes it, tier by tier in the compiler's order (`typingFor`), and
- *    the answer is `Overloaded` for a declaration that declares the pattern, `Builtin` for one
- *    that provably cannot, and `Unproven` for everything else — an operand no binding types
- *    included, since the whole point is that an overloading type does not look different from
- *    any other.
+ * 2. **Could an operand of THIS occurrence be one of those types?** Each operand is typed by the
+ *    ONE structural walk every typer shares (`NominalTypes.typeWalk`), over its BINDING host
+ *    (`OperandBinder`): its declared type is BOUND in the file that writes it, tier by tier in the
+ *    compiler's order (`typingFor`), and the answer is `Overloaded` for a declaration that declares
+ *    the pattern, `Builtin` for one that provably cannot, and `Unproven` for everything else — an
+ *    operand no binding types included, since the whole point is that an overloading type does not
+ *    look different from any other. An operand the binding leaves unproven is asked of the
+ *    compiler's facts next, the second proof source, inside a `--fix` run that compiles them anyway
+ *    (`FactsTypeOracle.forFixRun`): the facts vouch only for a type no overload can be declared on
+ *    (`FactsTypeOracle.nonOverloadingName`), so they can turn `Unproven` into `Builtin` and nothing
+ *    else. Every rule that asks gets both sources from here — none types an operand on its own.
  *
  * ## Two subtleties, both load-bearing
  *
@@ -121,8 +125,9 @@ enum OperatorVerdict {
  *  - a verdict is per BINDING, never per simple name: `import far.Tag` beside an indexed class
  *    `other.Tag` names the import, so a tier that could bind the name to something the index
  *    does not hold answers `Unproven` rather than falling through to the class. Worth knowing
- *    before writing a fixture: a member reached only through a supertype, or through a receiver
- *    no binding types, has no written type here, and only the compiler's facts can vouch for it.
+ *    before writing a fixture: a member inherited past a supertype link the index cannot resolve,
+ *    an untyped lambda parameter, or a receiver no binding types has no written type here, and
+ *    only the compiler's facts can vouch for it — inside a `--fix` run.
  *
  * ## Grammar-agnostic
  *
@@ -137,8 +142,8 @@ enum OperatorVerdict {
 @:nullSafety(Strict)
 final class OperatorSelection {
 
-	/** Per-file operand binders, built on first demand — see `typingFor`. */
-	private final _typingByFile: Map<String, (QueryNode) -> Tier> = [];
+	/** Per-file operand typings, built on first demand — see `typingFor`. */
+	private final _typingByFile: Map<String, OperandTyping> = [];
 
 	/** The plugin whose resolution scope the overload table is read from. */
 	private final _plugin: GrammarPlugin;
@@ -149,13 +154,8 @@ final class OperatorSelection {
 	/** The report index over `_files` when the caller already holds one (a fix is handed it); null builds it on demand. */
 	private final _report: Null<SymbolIndex>;
 
-	private final _shape: RefShape;
-
 	/** Literal kinds whose value's type is built in, so such an operand can never carry an overload. */
 	private final _literalKinds: Array<String>;
-
-	/** The type names the grammar declares built in — a scalar or the string type. */
-	private final _builtinTypeNames: Array<String>;
 
 	/** The declaration kinds that may carry an operator overload at all (`RefShape.underlyingThisTypeKinds`). */
 	private final _abstractKinds: Array<String>;
@@ -178,10 +178,8 @@ final class OperatorSelection {
 		_plugin = plugin;
 		_files = files;
 		_report = report;
-		_shape = shape;
 		final literalTypeNames: Map<String, String> = shape.literalTypeNames ?? [];
 		_literalKinds = [for (kind in literalTypeNames.keys()) kind];
-		_builtinTypeNames = OperandBinder.builtinNamesOf(shape);
 		_abstractKinds = shape.underlyingThisTypeKinds ?? [];
 		_plainKinds = (shape.classDeclKinds ?? []).concat(shape.interfaceDeclKinds ?? []).concat(shape.runtimeTaggedTypeKinds ?? []);
 		_parenKind = shape.parenKind;
@@ -206,14 +204,10 @@ final class OperatorSelection {
 	 *
 	 * Every same-kind child is flattened first, so a `+` CHAIN is judged as a whole and one
 	 * operand carrying an overload condemns all of it — see the type doc on why the pair alone
-	 * is the wrong unit. `written` binds an operand's declared type in its file (`typingFor`);
-	 * `proven`, when given, is a second source that may vouch for an operand `written` leaves
-	 * unproven — the compiler's facts.
+	 * is the wrong unit. `typing` is the file's operand typing (`typingFor`).
 	 */
-	public function verdictFor(
-		node: QueryNode, kinds: Array<String>, written: (QueryNode) -> Tier, ?proven: (QueryNode) -> Bool
-	): OperatorVerdict {
-		return verdictOfOperands(operandsOf(node), kinds, written, proven);
+	public function verdictFor(node: QueryNode, kinds: Array<String>, typing: OperandTyping): OperatorVerdict {
+		return verdictOfOperands(operandsOf(node), kinds, typing);
 	}
 
 	/**
@@ -225,38 +219,38 @@ final class OperatorSelection {
 	 * interpolated literal are the expressions inside its interpolation blocks — neither of which
 	 * is a child of a node whose kind names the operator.
 	 */
-	public function verdictOfOperands(
-		operands: Array<QueryNode>, kinds: Array<String>, written: (QueryNode) -> Tier, ?proven: (QueryNode) -> Bool
-	): OperatorVerdict {
+	public function verdictOfOperands(operands: Array<QueryNode>, kinds: Array<String>, typing: OperandTyping): OperatorVerdict {
 		if (!declared(kinds)) return Builtin;
 		var verdict: OperatorVerdict = Builtin;
 		for (operand in operands) {
-			verdict = worse(verdict, operandVerdict(BoolExprShape.unwrapParens(operand, _parenKind), kinds, written, proven));
+			verdict = worse(verdict, operandVerdict(BoolExprShape.unwrapParens(operand, _parenKind), kinds, typing));
 			if (verdict.match(Overloaded(_))) return verdict;
 		}
 		return verdict;
 	}
 
 	/**
-	 * The operand binder for ONE file, built on first demand and memoised for the run: what the
-	 * type an operand is DECLARED with binds to, resolved in that file's scope in the compiler's
-	 * own order (`DeclaredNullity.writtenHeadTier` over `TypeNameBinding`).
+	 * The operand typing for ONE file, built on first demand and memoised for the run: what the type an
+	 * operand is DECLARED with binds to, resolved in that file's scope in the compiler's own order — the
+	 * shared walk over its binding host (`OperandBinder.forFile`) — and, for an operand that leaves
+	 * unproven, whether the compiler's facts type it with a type no overload can be declared on.
 	 *
 	 * A simple type name proves nothing by itself: `final t: Tag` under `import far.Tag` names the
 	 * imported abstract even when the index holds only some other `Tag`, so judging the name would
-	 * vouch for the wrong declaration. So every type is bound where it is WRITTEN (`OperandBinder`):
-	 * a binding this file declares in this file, a member's declared type in the file that declares
-	 * the member. It is built lazily for the same reason the overload table is: a tree where
-	 * nothing overloads the operator never asks.
+	 * vouch for the wrong declaration. So every type is bound where it is WRITTEN: a binding this file
+	 * declares in this file, a member's declared type in the file that declares the member. It is built
+	 * lazily for the same reason the overload table is: a tree where nothing overloads the operator
+	 * never asks.
 	 */
-	public function typingFor(file: String, source: String, tree: QueryNode): (QueryNode) -> Tier {
-		final cached: Null<(QueryNode) -> Tier> = _typingByFile[file];
+	public function typingFor(file: String, source: String, tree: QueryNode): OperandTyping {
+		final cached: Null<OperandTyping> = _typingByFile[file];
 		if (cached != null) return cached;
-		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(_plugin);
 		final index: Null<SymbolIndex> = indexHolding(file);
-		final typing: (QueryNode) -> Tier = provider == null || index == null
-			? _ -> Unknown
-			: new OperandBinder(file, source, tree, _shape, index, provider, _builtinTypeNames).tierOf;
+		final binder: Null<OperandBinder> = index == null ? null : OperandBinder.forFile(_plugin, file, source, tree, index);
+		final typing: OperandTyping = {
+			written: binder == null ? _ -> Unknown : binder.tierOf,
+			proven: factsProof(file, source)
+		};
 		_typingByFile[file] = typing;
 		return typing;
 	}
@@ -283,7 +277,7 @@ final class OperatorSelection {
 
 	/**
 	 * The verdict `operand` contributes: what its declared type binds to, asked of the table, or
-	 * `Unproven` when no binding is proven and `proven` does not vouch for it either.
+	 * `Unproven` when no binding is proven and the compiler's facts do not vouch for it either.
 	 *
 	 * An operand that is ITSELF one of the operators in question is judged RECURSIVELY instead of
 	 * typed. That is what walks the SPINE of a rebuilt boolean expression — `!(a == b && c)` is
@@ -292,17 +286,15 @@ final class OperatorSelection {
 	 * deliberately stops at everything else: an operator buried inside a CALL argument is copied
 	 * verbatim by every rewrite that reaches this class, never re-selected.
 	 */
-	private function operandVerdict(
-		operand: QueryNode, kinds: Array<String>, written: (QueryNode) -> Tier, proven: Null<(QueryNode) -> Bool>
-	): OperatorVerdict {
-		if (kinds.contains(operand.kind)) return verdictFor(operand, kinds, written, proven);
+	private function operandVerdict(operand: QueryNode, kinds: Array<String>, typing: OperandTyping): OperatorVerdict {
+		if (kinds.contains(operand.kind)) return verdictFor(operand, kinds, typing);
 		if (_literalKinds.contains(operand.kind)) return Builtin;
-		final verdict: OperatorVerdict = switch written(operand) {
+		final verdict: OperatorVerdict = switch typing.written(operand) {
 			case Free: Builtin;
 			case Bound(decls): declsVerdict(decls, kinds);
 			case Unknown: Unproven;
 		};
-		return verdict.match(Unproven) && proven != null && proven(operand) ? Builtin : verdict;
+		return verdict.match(Unproven) && typing.proven(operand) ? Builtin : verdict;
 	}
 
 	/**
@@ -370,6 +362,25 @@ final class OperatorSelection {
 	}
 
 	/**
+	 * The compiler's facts as the second proof for `file`: whether every configuration typed an operand with
+	 * a type no operator overload can be declared on (`FactsTypeOracle.nonOverloadingName`). Read only inside a
+	 * `--fix` run, which compiles them anyway (`FactsTypeOracle.forFixRun`), and asked of the table on the first
+	 * operand the binding leaves unproven, so a run whose operands all bind never waits on the compile.
+	 */
+	private function factsProof(file: String, source: String): (QueryNode) -> Bool {
+		var asked: Bool = false;
+		var oracle: Null<FactsTypeOracle> = null;
+		return operand -> {
+			if (!asked) {
+				asked = true;
+				oracle = FactsTypeOracle.forFixRun(_plugin, file, source);
+			}
+			final facts: Null<FactsTypeOracle> = oracle;
+			return facts?.nonOverloadingName(file, source, operand.span) != null;
+		};
+	}
+
+	/**
 	 * The selection for `plugin` over `files`, or null when the grammar declares no
 	 * operator-overload annotation. A null answer is the caller's signal to assume the built-in
 	 * operator, which is what every rule did before this seam existed.
@@ -397,3 +408,12 @@ final class OperatorSelection {
 	}
 
 }
+
+/** One file's operand typing (`OperatorSelection.typingFor`): the two proof sources every asking rule shares. */
+typedef OperandTyping = {
+	/** What an operand's declared type binds to where it is written: the shared walk over its binding host (`OperandBinder`). */
+	final written: (QueryNode) -> Tier;
+
+	/** Whether the compiler's facts type an operand with a type no operator overload can be declared on; false outside a `--fix` run. */
+	final proven: (QueryNode) -> Bool;
+};

@@ -32,6 +32,22 @@ class FactsFixGateE2ETest extends Test {
 		+ '\tstatic function main() {\n' + '\t\tfinal out:Array<String> = [];\n' + '\t\tfinal xs:Array<Int> = [1, 2];\n'
 		+ '\t\tfor (i in xs) {\n' + '\t\t\tout.push(\'h\' + (i - 1) + \'_p1\');\n' + '\t\t\tout.push(i + 1 + \' \' + (i * 2));\n'
 		+ '\t\t}\n' + '\t\tout.push((name() : Dir) + \'x\' + \'y\');\n' + '\t\tSys.println(out.join(\',\'));\n' + '\t}\n' + '}\n';
+	private static final NEGATED_MAIN: String = 'import haxe.xml.Access;\n\nusing StringTools;\n\n'
+		+ 'abstract Flag(Bool) from Bool to Bool {\n\t@:op(!A) public inline function inv():Bool\n\t\treturn this;\n}\n\n'
+		+ 'class Item {\n\tpublic final folder:Bool;\n\tpublic final name:String;\n\n'
+		+ '\tpublic function new(folder:Bool, name:String) {\n\t\tthis.folder = folder;\n\t\tthis.name = name;\n\t}\n}\n\n'
+		+ 'class Main {\n\tstatic function each(items:Array<Item>, f:(Item) -> Void):Void {\n\t\tfor (i in items) f(i);\n\t}\n\n'
+		+ '\tstatic function thumb(xml:String):String {\n\t\tfinal drill:Access = new Access(Xml.parse(xml).firstElement());\n'
+		+ '\t\treturn !drill.hasNode.thumbnail ? \'none\' : drill.node.thumbnail.innerData;\n\t}\n\n'
+		+ '\tstatic function named(fileName:String, ext:String):String {\n'
+		+ '\t\treturn fileName + (!fileName.toLowerCase().endsWith(ext) ? ext : \'\');\n\t}\n\n'
+		+ '\tstatic function flag(f:Flag):String {\n\t\treturn !f ? \'n\' : \'y\';\n\t}\n\n'
+		+ '\tstatic function main() {\n\t\tfinal out:Array<String> = [];\n'
+		+ '\t\teach([new Item(true, \'a\'), new Item(false, \'b\')], child -> {\n'
+		+ '\t\t\tout.push(!child.folder ? child.name + \'.drl\' : child.name);\n\t\t});\n'
+		+ '\t\tout.push(thumb(\'<d><thumbnail>T</thumbnail></d>\'));\n\t\tout.push(thumb(\'<d/>\'));\n'
+		+ '\t\tout.push(named(\'x.DRL\', \'.drl\'));\n\t\tout.push(named(\'y\', \'.drl\'));\n\t\tout.push(flag(true));\n'
+		+ '\t\tSys.println(out.join(\',\'));\n\t}\n}\n';
 	private static final CHAIN_MAIN: String = 'class Impl extends Base {\n' + '\tprivate function hook():Void {\n'
 		+ '\t\tSys.println(\'hook\');\n' + '\t}\n' + '\n' + '\tprivate function spare():Void {\n' + '\t\tSys.println(\'s\');\n' + '\t}\n'
 		+ '\n' + '\tprivate function gone():Void {\n' + '\t\tSys.println(\'g\');\n' + '\t}\n' + '}\n' + '\n'
@@ -213,6 +229,35 @@ class FactsFixGateE2ETest extends Test {
 		Assert.isTrue(after.indexOf('out.push(\'h$${(i - 1)}_p1\');') >= 0, after);
 		Assert.isTrue(after.indexOf('out.push(\'$${i + 1} $${(i * 2)}\');') >= 0, after);
 		Assert.isTrue(after.indexOf('out.push((name() : Dir) + \'x\' + \'y\');') >= 0, after);
+		Assert.equals(before, run(dir), 'the program prints what it printed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * With an `@:op(!A)` in scope (TM's resolution libraries carry two: `tink.core.Pair`, `tink.testrunner.Assertion`) a
+	 * negated ternary is inverted only once its operand is proven not to select it. The TM shapes no annotation types: an
+	 * untyped lambda parameter's field is proven by the compiler's facts, which the operator gate reads inside the `--fix`
+	 * run; an abstract's `@:op(a.b)` field (`haxe.xml.Access.hasNode`, whose facts site names `resolve`, which the text never
+	 * spells) and a static extension's result by the shared walk's binding host. The operand that IS the overloading
+	 * abstract stays negated, and the program prints what it printed.
+	 */
+	@:pin('control') @:killer('M-FOLD-FACTS-OPERAND')
+	public function testANegationOnlyTheFactsTypeIsInverted(): Void {
+		#if (sys || nodejs)
+		final dir: Null<String> = tree('negfacts', [{ name: 'Main.hx', source: NEGATED_MAIN }], HXML);
+		if (dir == null) return;
+		final before: String = run(dir);
+		CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'invert-negated-if-else', dir]));
+		final after: String = File.getContent('$dir/Main.hx');
+		for (inverted in [
+			'return drill.hasNode.thumbnail ? drill.node.thumbnail.innerData : \'none\';',
+			'return fileName + (fileName.toLowerCase().endsWith(ext) ? \'\' : ext);',
+			'out.push(child.folder ? child.name : child.name + \'.drl\');',
+			'return !f ? \'n\' : \'y\';'
+		]) Assert.isTrue(after.indexOf(inverted) >= 0, '$inverted\n$after');
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 		#else

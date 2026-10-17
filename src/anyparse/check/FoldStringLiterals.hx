@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.MacroGate.CallRef;
 import anyparse.check.MacroGate.MacroIndex;
+import anyparse.check.OperatorSelection.OperandTyping;
 import anyparse.check.OperatorSelection.OperatorVerdict;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
@@ -14,7 +15,6 @@ import anyparse.query.SourceText;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeNameBinding.Tier;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -295,7 +295,8 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		final fixable: Array<Violation> = violations.filter(v ->
 			v.message.indexOf(MACRO_REFUSAL) == -1 && v.message.indexOf(MacroGate.INTRINSIC_REFUSAL) == -1
 		);
-		// An operand `run` could not type is asked of the compiler's facts: such a construct is fixed only once every operand
+		// A construct `run` left report-only for an operand it could not type is asked again — inside a `--fix` run the
+		// selection reads the compiler's facts as its second proof (`OperatorSelection`) — and fixed only once every operand
 		// is proven to select the built-in operator.
 		final unproven: Map<String, Violation> = [];
 		for (v in fixable) {
@@ -303,16 +304,9 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			if (at != null && v.message.indexOf(OperatorGate.REFUSAL) != -1) unproven['${at.from}:${at.to}'] = v;
 		}
 		final tree: Null<QueryNode> = unproven.keys().hasNext() ? ParseGate.parseOrNull(plugin, source) : null;
-		final oracle: Null<FactsTypeOracle> = tree == null ? null : FactsTypeOracle.forFix(plugin, file, source);
-		final proven: Null<(QueryNode) -> Bool> = if (oracle == null)
-			null
-		else {
-			final facts: FactsTypeOracle = oracle;
-			operand -> facts.nonOverloadingName(file, source, operand.span) != null;
-		};
 		final operators: Null<OperatorGate> = tree == null
 			? null
-			: new OperatorGate(OperatorSelection.of(plugin, [{ file: file, source: source }]), seams, file, source, tree, proven);
+			: new OperatorGate(OperatorSelection.of(plugin, [{ file: file, source: source }], index), seams, file, source, tree);
 		return CheckScan.applyBySpan(plugin, source, fixable, seams.candidateKinds, (node, span) -> {
 			final doubted: Null<Violation> = unproven['${span.from}:${span.to}'];
 			if (
@@ -1940,18 +1934,12 @@ private class OperatorGate {
 	private final _source: String;
 	private final _tree: QueryNode;
 
-	/** Whether the compiler's facts type an operand the binding leaves unproven with a type that cannot overload. */
-	private final _facts: Null<(QueryNode) -> Bool>;
-
-	public function new(
-		selection: Null<OperatorSelection>, seams: Seams, file: String, source: String, tree: QueryNode, ?facts: (QueryNode) -> Bool
-	) {
+	public function new(selection: Null<OperatorSelection>, seams: Seams, file: String, source: String, tree: QueryNode) {
 		_selection = selection;
 		_seams = seams;
 		_file = file;
 		_source = source;
 		_tree = tree;
-		_facts = facts;
 	}
 
 	/**
@@ -1968,10 +1956,8 @@ private class OperatorGate {
 		if (selection == null) return Builtin;
 		final kinds: Array<String> = [_seams.concatKind];
 		if (!selection.declared(kinds)) return Builtin;
-		final written: (QueryNode) -> Tier = selection.typingFor(_file, _source, _tree);
-		return literal
-			? selection.verdictOfOperands(interpolated(node), kinds, written, _facts)
-			: selection.verdictFor(node, kinds, written, _facts);
+		final typing: OperandTyping = selection.typingFor(_file, _source, _tree);
+		return literal ? selection.verdictOfOperands(interpolated(node), kinds, typing) : selection.verdictFor(node, kinds, typing);
 	}
 
 	/**

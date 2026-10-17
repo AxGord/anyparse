@@ -396,6 +396,32 @@ final class MemberLookup {
 	}
 
 	/**
+	 * `closureFreeOfExtensionTypes` asked of a declaration the caller already holds — a binding, not a name: every link of
+	 * `start`'s closure resolves to one declaration, none brings static extensions of its own (`@:using`), and no `@:forward`
+	 * abstract or `Dynamic` supertype exposes members no index lists.
+	 */
+	public function declarationFreeOfExtensionTypes(start: ResolvedType): Bool {
+		return freeOfExtensionTypes(start, []);
+	}
+
+	/** `typeProvablyLacksMember` asked of a declaration the caller already holds: no link of `start`'s closure declares `member`. */
+	public function declarationLacksMember(start: ResolvedType, member: String): Bool {
+		return lacksMemberClosure(start, member, []);
+	}
+
+	/**
+	 * The type of `start`'s closure — the type itself, what it aliases, then each supertype in the order it writes them —
+	 * that declares `member` first, with every declaration of it there (a member declared in several branches of a `#if`
+	 * is one logical member): `declaringHost` asked of a declaration the caller already holds. A link that does not resolve
+	 * is passed over, so a caller that needs the NEAREST declaration (a covariant override may sit on the link it cannot
+	 * read) proves the closure resolvable first (`declarationFreeOfExtensionTypes`). Null when no link declares it.
+	 */
+	public function declaringMember(start: ResolvedType, member: String): Null<{ members: Array<MemberInfo>, host: ResolvedType }> {
+		final hit: Null<{ member: MemberInfo, host: ResolvedType }> = declaredMemberClosure(start, member, []);
+		return hit == null ? null : { members: hit.host.type.members.filter(m -> m.name == member), host: hit.host };
+	}
+
+	/**
 	 * EVERY declaration of `member` on `typeName`. A type declares one member more than once only
 	 * when the declarations sit in different branches of a `#if` region, so they are ONE logical
 	 * member: rewriting a single branch leaves every other build target with accesses that no

@@ -59,7 +59,7 @@ final class NominalTypes {
 	 * (`forBindingElementTypeSource`), a field PATH walked from its root as one (`indexAccess`), a tabled static call, the self reference
 	 * (`indexSelf`), and a local written with no type by its initializer (`localInitializer`). It types no element or construction.
 	 */
-	private static final INDEX_HOST: TypingHost<IndexTyping> = {
+	private static final INDEX_HOST: TypingHost<String, IndexTyping> = {
 		peel: (node, _) -> node,
 		isAccess: (kind, c) -> kind == c.shape.fieldAccessKind,
 		literal: (typeName, _) -> typeName,
@@ -512,23 +512,23 @@ final class NominalTypes {
 	 * through (`peel`), a literal, the self reference, an identifier (`identifierType`), a field access, an element read, a
 	 * call and a construction; the host answers each in its own terms. Null for every other shape.
 	 */
-	public static function typeWalk<C>(raw: QueryNode, shape: RefShape, host: TypingHost<C>, ctx: C): Null<String> {
+	public static function typeWalk<T, C>(raw: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
 		final node: QueryNode = host.peel(raw, ctx);
 		final name: Null<String> = node.name;
 		final kind: String = node.kind;
 		final literalType: Null<String> = shape.literalTypeNames?.get(kind);
-		final literal: Null<(typeName:String, ctx:C) -> Null<String>> = host.literal;
+		final literal: Null<(typeName:String, ctx:C) -> Null<T>> = host.literal;
 		if (literalType != null) return literal == null ? null : literal(literalType, ctx);
-		if (kind == shape.identKind && name != null)
+		if ((kind == shape.identKind || kind == shape.stringInterpIdentKind) && name != null)
 			return name == shape.selfReferenceText ? host.self(node, ctx) : identifierType(node, shape, host, ctx);
 		if (host.isAccess(kind, ctx) && name != null && node.children.length > 0) return host.access(node, ctx);
-		final element: Null<(container:String, ctx:C) -> Null<String>> = host.element;
+		final element: Null<(container:T, ctx:C) -> Null<T>> = host.element;
 		if (kind == shape.indexAccessKind && element != null && node.children.length > 0) {
-			final container: Null<String> = typeWalk(node.children[0], shape, host, ctx);
+			final container: Null<T> = typeWalk(node.children[0], shape, host, ctx);
 			return container == null ? null : element(container, ctx);
 		}
 		if (kind == shape.callKind && node.children.length > 0) return host.call(node, ctx);
-		final construction: Null<(node:QueryNode, ctx:C) -> Null<String>> = host.construction;
+		final construction: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.construction;
 		return kind == shape.newExprKind && name != null && construction != null ? construction(node, ctx) : null;
 	}
 
@@ -963,15 +963,15 @@ final class NominalTypes {
 	 * host's ONE cycle guard (`reading`: `for (x in x)`, a local whose initializer reads itself) — the type of the
 	 * expression initialising it or the element of the loop binding it; for a name binding no value, what it names.
 	 */
-	private static function identifierType<C>(ident: QueryNode, shape: RefShape, host: TypingHost<C>, ctx: C): Null<String> {
+	private static function identifierType<T, C>(ident: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
 		final from: Null<Int> = host.binding(ident, ctx);
 		if (from == null) return host.unbound(ident, ctx);
-		final written: Null<String> = host.bound(from, ctx);
+		final written: Null<T> = host.bound(from, ctx);
 		final reading: Array<Int> = host.reading(ctx);
 		if (written != null || reading.contains(from)) return written;
 		reading.push(from);
 		final init: Null<QueryNode> = host.initializer(from, ident, ctx);
-		final held: Null<String> = init == null ? host.loopElement(from, ctx) : typeWalk(init, shape, host, ctx);
+		final held: Null<T> = init == null ? host.loopElement(from, ctx) : typeWalk(init, shape, host, ctx);
 		reading.pop();
 		return held;
 	}
@@ -1068,13 +1068,15 @@ typedef ChainTypeContext = {
 }
 
 /**
- * The resolution `NominalTypes.typeWalk` asks for. Both hosts answer a type SOURCE, and differ in how it is spelled: the call graph spells
- * it as it keys types (`CallGraphKeys.keyedIn`), the index as it was written, resolved in the file that wrote it. `C` is what a walk
+ * The resolution `NominalTypes.typeWalk` asks for, answering in its own currency `T`. Two hosts answer a type SOURCE and
+ * differ in how it is spelled: the call graph spells it as it keys types (`CallGraphKeys.keyedIn`), the index as it was
+ * written, resolved in the file that wrote it. The third, `OperandBinder`, answers what that written type BINDS to where it
+ * is written (a `TypeNameBinding.Tier`), the currency an operator-overload gate judges a declaration in. `C` is what a walk
  * threads through every question (the call graph's enclosing type). The walk owns the shapes; the host owns what a
  * binding, a member, a call ARE — `docs/decisions.md`, "ONE structural walk, TWO resolution models". An arc a host does
  * not know is a null function (the walk skips the shape) or a null answer, never a guess.
  */
-typedef TypingHost<C> = {
+typedef TypingHost<T, C> = {
 	/** `node` with what a type passes through unchanged (parentheses) peeled off, or `node` itself. */
 	final peel: (node:QueryNode, ctx:C) -> QueryNode;
 
@@ -1082,37 +1084,37 @@ typedef TypingHost<C> = {
 	final isAccess: (kind:String, ctx:C) -> Bool;
 
 	/** The value of a literal whose type `RefShape.literalTypeNames` names `typeName`; null for a host typing none. */
-	final literal: Null<(typeName:String, ctx:C) -> Null<String>>;
+	final literal: Null<(typeName:String, ctx:C) -> Null<T>>;
 
 	/** What the self reference `node` denotes. */
-	final self: (node:QueryNode, ctx:C) -> Null<String>;
+	final self: (node:QueryNode, ctx:C) -> Null<T>;
 
 	/** The binding offset of the value the identifier `ident` reads, or null when it binds none. */
 	final binding: (ident:QueryNode, ctx:C) -> Null<Int>;
 
 	/** The type the binding at `from` is written with, or the host otherwise holds for it; null when none. */
-	final bound: (from:Int, ctx:C) -> Null<String>;
+	final bound: (from:Int, ctx:C) -> Null<T>;
 
 	/** The expression initialising the binding at `from`, written with no type, as read at `use`: the binding holds its type. */
 	final initializer: (from:Int, use:QueryNode, ctx:C) -> Null<QueryNode>;
 
 	/** The element the loop binder at `from` binds, read off what the loop iterates. */
-	final loopElement: (from:Int, ctx:C) -> Null<String>;
+	final loopElement: (from:Int, ctx:C) -> Null<T>;
 
 	/** What the identifier `ident`, which binds no value, names. */
-	final unbound: (ident:QueryNode, ctx:C) -> Null<String>;
+	final unbound: (ident:QueryNode, ctx:C) -> Null<T>;
 
 	/** What the field access `node` (an `isAccess` kind with a receiver) reads. */
-	final access: (node:QueryNode, ctx:C) -> Null<String>;
+	final access: (node:QueryNode, ctx:C) -> Null<T>;
 
 	/** The element an index access into a value of type `container` reads; null for a host typing none. */
-	final element: Null<(container:String, ctx:C) -> Null<String>>;
+	final element: Null<(container:T, ctx:C) -> Null<T>>;
 
 	/** What the call `node` returns. */
-	final call: (node:QueryNode, ctx:C) -> Null<String>;
+	final call: (node:QueryNode, ctx:C) -> Null<T>;
 
 	/** What the construction `node` makes; null for a host typing none. */
-	final construction: Null<(node:QueryNode, ctx:C) -> Null<String>>;
+	final construction: Null<(node:QueryNode, ctx:C) -> Null<T>>;
 
 	/** The binding offsets whose unannotated type the walk is reading right now, against a cycle (`for (x in x)`). */
 	final reading: (ctx:C) -> Array<Int>;

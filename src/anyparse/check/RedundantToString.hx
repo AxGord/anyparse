@@ -192,9 +192,7 @@ final class RedundantToString implements Check implements DefaultOff {
 		if (tree == null) return null;
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return {
-			binder: provider == null
-				? null
-				: new OperandBinder(file, source, tree, seams.shape, index, provider, OperandBinder.builtinNamesOf(seams.shape)),
+			binder: OperandBinder.forFile(plugin, file, source, tree, index),
 			root: tree,
 			source: source,
 			seams: seams,
