@@ -9004,7 +9004,7 @@
 		},
 		{
 			"name": "M-ESCAPES-FACTS-INSTANCES",
-			"type": "anyparse.query.FactsEscapes",
+			"type": "anyparse.query.FactsInstances",
 			"method": "scanInstances",
 			"find": "if (fact != null && fact.params.length == args.length) for (i => name in fact.params)\n\t\t\t\tbindInstance(out, '$id.$name', args[i]);",
 			"replace": "",
@@ -9020,7 +9020,7 @@
 		},
 		{
 			"name": "M-ESCAPES-FACTS-GENERIC-METHOD",
-			"type": "anyparse.query.FactsEscapes",
+			"type": "anyparse.query.FactsInstances",
 			"method": "unifyInstantiation",
 			"find": "unifyInstance(out, declared, applied);",
 			"replace": "{}",
