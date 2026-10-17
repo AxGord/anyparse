@@ -155,9 +155,9 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterKwRefLowering` | 31 |
 | `WriterTriviaStarEmitLowering` | 28 |
 | `WriterCtorBlankLowering` | 17 |
-| `WriterLowering` | 19 |
+| `WriterLowering` | 17 |
 | `WriterRefLeadLowering` | 17 |
-| `WriterPrattLowering` | 14 |
+| `WriterPrattLowering` | 16 |
 | `WriterPolicyLowering` | 10 |
 | `TriviaPairSlots` | 9 |
 | `TriviaPairAltCtor` | 8 |
