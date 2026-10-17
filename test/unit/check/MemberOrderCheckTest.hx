@@ -703,8 +703,8 @@ class MemberOrderCheckTest extends Test {
 			'the inline subgroup itself stays tight'
 		);
 		Assert.equals(
-			0, separateInlineViolations('class C {\n\tstatic inline final A:Int = 1;\n\t/** Doc. */\n\tstatic final B:Int = 2;\n}').length,
-			'a comment-led slot is never demanded a blank'
+			0, separateInlineViolations('class C {\n\tstatic inline final A:Int = 1;\n\t// Note.\n\tstatic final B:Int = 2;\n}').length,
+			'a line-comment-led slot is never demanded a blank'
 		);
 		Assert.equals(
 			0,
