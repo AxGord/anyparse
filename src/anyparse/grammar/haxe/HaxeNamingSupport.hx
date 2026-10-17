@@ -9,6 +9,7 @@ import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
 import haxe.Exception;
 
 using StringTools;
@@ -67,6 +68,9 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	/** The node kind of a binding declared after the comma in `var a = 1, b = 2;` — see `VarHost`. */
 	private static inline final VAR_MORE_KIND: String = 'VarMore';
+
+	/** The grant annotation `implicitReachOf` sets apart from every other metadata. */
+	private static inline final ALLOW_META: String = '@:allow';
 
 	private static final CAMEL_CASE_PATTERN: String = "^[a-z_][a-zA-Z0-9]*$";
 
@@ -184,9 +188,14 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	public function new() {}
 
-	public function project(tree: QueryNode): Array<NamedDecl> {
+	public function project(tree: QueryNode, ?properties: () -> Map<Int, Bool>): Array<NamedDecl> {
 		final out: Array<NamedDecl> = [];
-		walk(tree, [], null, false, false, null, out);
+		walk(tree, [], {
+			typeName: null,
+			rtti: false,
+			isExtern: false,
+			properties: properties
+		}, null, out);
 		return out;
 	}
 
@@ -347,22 +356,6 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * The one correction of `name` among `candidates` that `format` accepts, or null when none does
-	 * or two different ones do. A correction equal to `name` is not one - `Naming.correctedName`
-	 * rejects it anyway, and counting it would make an unfixable name read as an ambiguous one.
-	 */
-	private static function soleConforming(candidates: Array<String -> Null<String>>, name: String, format: EReg): Null<String> {
-		var found: Null<String> = null;
-		for (candidate in candidates) {
-			final corrected: Null<String> = candidate(name);
-			if (corrected == null || corrected == name || !format.match(corrected)) continue;
-			if (found != null && found != corrected) return null;
-			found = corrected;
-		}
-		return found;
-	}
-
-	/**
 	 * Whether a projected declaration is a structural / serialization field - a
 	 * typedef or inline anon-structure member (a `Required` / `Optional` node
 	 * whose parent is `Anon`). Its name is a wire contract (a server JSON key, a
@@ -386,6 +379,54 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
+	 * Whether `name` is a Haxe property ACCESSOR's — the `get_` / `set_` prefix a `(get, set)`
+	 * declaration binds a property to. checkstyle spells the identical test as `FieldUtils.isGetter` /
+	 * `isSetter`, and two questions in this class ask it for different reasons: `implicitReachOf`
+	 * (an accessor is invoked THROUGH the property, so no in-source identifier reference reaches it)
+	 * and `isReservedName` (an accessor's spelling IS the property's, so no naming rule governs it —
+	 * `MethodNameCheck.checkField` returns on `f.isGetter() || f.isSetter()` before it matches a
+	 * format). Sharing the predicate and not the ANSWER is the point: reusing `implicitReach` for
+	 * the naming question would also exempt `new`, a dunder name, a metadata-bearing member and a
+	 * `Class<T>`-registry static, four things checkstyle's gate says nothing about and three of which
+	 * are legitimate naming findings.
+	 *
+	 * Prefix-only, deliberately, and not "a sibling property declares this accessor": an `override
+	 * function get_x` backs a property declared in a SUPERTYPE, usually in another file, so a
+	 * structural test would exempt exactly the accessors whose property is nearest and report the ones
+	 * whose property is furthest out of reach. It would also be a THIRD independent spelling of "what
+	 * is an accessor" in this class — `hasPhysicalAccessors` already walks the other direction.
+	 */
+	private static inline function isAccessorName(name: String): Bool {
+		return name.startsWith('get_') || name.startsWith('set_');
+	}
+
+	/**
+	 * Whether a declaration of `category` sits in the same run scope as one of `target` - the scope a
+	 * leading modifier / meta run spans. Member scope holds the three member categories
+	 * interchangeably (a `@:keep` run reaches whichever of field / constant / method follows it);
+	 * every other scope is its own, so a type's run is ended by a type and by nothing else.
+	 */
+	private static inline function sameRunScope(category: NamingCategory, target: NamingCategory): Bool {
+		return isMemberCategory(target) ? isMemberCategory(category) : category == target;
+	}
+
+	/**
+	 * The one correction of `name` among `candidates` that `format` accepts, or null when none does
+	 * or two different ones do. A correction equal to `name` is not one - `Naming.correctedName`
+	 * rejects it anyway, and counting it would make an unfixable name read as an ambiguous one.
+	 */
+	private static function soleConforming(candidates: Array<String -> Null<String>>, name: String, format: EReg): Null<String> {
+		var found: Null<String> = null;
+		for (candidate in candidates) {
+			final corrected: Null<String> = candidate(name);
+			if (corrected == null || corrected == name || !format.match(corrected)) continue;
+			if (found != null && found != corrected) return null;
+			found = corrected;
+		}
+		return found;
+	}
+
+	/**
 	 * Walk `node`, appending a `NamedDecl` for every declaration whose kind
 	 * maps to a category. `mods` come from the modifier siblings preceding the
 	 * node in its parent (the projection surfaces `public static fn` as
@@ -394,8 +435,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * (a compile-time constant - a write to it is a compile error).
 	 */
 	private static function walk(
-		node: QueryNode, ancestors: Array<QueryNode>, enclosingType: Null<String>, enclosingRtti: Bool, enclosingExtern: Bool,
-		host: Null<VarHost>, out: Array<NamedDecl>
+		node: QueryNode, ancestors: Array<QueryNode>, enclosing: Enclosing, host: Null<VarHost>, out: Array<NamedDecl>
 	): Void {
 		// Macro reification (`macro { … }`) is opaque: its identifiers are splice
 		// templates (`$name`), not real declarations — skip the whole subtree, as
@@ -409,33 +449,39 @@ final class HaxeNamingSupport implements NamingSupport {
 		// whole context: category, the modifier run that precedes the HEAD (`static var a = 1, b = 2`
 		// makes both Constants), and its structural-field status.
 		final inherited: Null<VarHost> = node.kind == VAR_MORE_KIND ? host : null;
-		final mods: Array<String> = withEnclosingExtern(inherited == null ? modsOf(node, parent) : inherited.mods, enclosingExtern);
+		final mods: Array<String> = withEnclosingExtern(inherited == null ? modsOf(node, parent) : inherited.mods, enclosing.isExtern);
 		final structural: Bool = inherited == null ? isStructuralField(parent) : inherited.structural;
 		var category: Null<NamingCategory> = inherited == null ? categoryOf(node, mods) : inherited.category;
-		if (parent != null && parent.kind == 'EnumAbstractDecl' && (node.kind == 'FinalMember' || node.kind == 'VarMember'))
+		if (parent != null && parent.kind == 'EnumAbstractDecl' && isEnumAbstractValue(node, mods, enclosing.properties))
 			category = NamingCategory.EnumValue;
 		final name: Null<String> = node.name;
 		if (category != null && name != null)
-			out.push(namedDeclOf(node, parent, ancestors, category, name, mods, structural, enclosingType, enclosingRtti));
+			out.push(namedDeclOf(node, parent, ancestors, category, name, mods, structural, enclosing.typeName, enclosing.rtti));
 		// A type decl becomes the enclosing type of its descendants — its name is
 		// on the node carrying category Type (the inner ClassForm for a final
 		// class, the flattened AbstractClassDecl for an abstract class).
-		final childEnclosing: Null<String> = category == NamingCategory.Type && name != null ? name : enclosingType;
+		final childEnclosing: Null<String> = category == NamingCategory.Type && name != null ? name : enclosing.typeName;
 		// A `@:rtti` type serializes by reflecting on its field NAMES, so its member
 		// fields are rename-unsafe. Once true it stays true for every descendant.
 		final childEnclosingRtti: Bool = category == NamingCategory.Type
-			? enclosingRtti || metaInRun(node, ancestors, NamingCategory.Type, '@:rtti')
-			: enclosingRtti;
+			? enclosing.rtti || metaInRun(node, ancestors, NamingCategory.Type, '@:rtti')
+			: enclosing.rtti;
 		// An `extern` type's members are named by the external contract it binds to, never by the
 		// project — the question `ignoreExtern` asks, and checkstyle asks it of the DECLARING TYPE's own
 		// flag. Once true it stays true for every descendant, exactly as `@:rtti` does.
-		final childEnclosingExtern: Bool = category == NamingCategory.Type ? mods.contains(EXTERN_MOD) : enclosingExtern;
+		final childEnclosingExtern: Bool = category == NamingCategory.Type ? mods.contains(EXTERN_MOD) : enclosing.isExtern;
 		// The head binding's context, handed to the `VarMore` chain hanging off it. A `VarMore` passes
 		// its own inherited context straight on, since the chain is right-recursive (`a{more:[b{more:[c]}]}`).
 		final resolved: Null<NamingCategory> = category;
 		final childHost: Null<VarHost> = resolved == null ? null : { category: resolved, mods: mods, structural: structural };
 		ancestors.push(node);
-		for (child in node.children) walk(child, ancestors, childEnclosing, childEnclosingRtti, childEnclosingExtern, childHost, out);
+		final inner: Enclosing = {
+			typeName: childEnclosing,
+			rtti: childEnclosingRtti,
+			isExtern: childEnclosingExtern,
+			properties: enclosing.properties
+		};
+		for (child in node.children) walk(child, ancestors, inner, childHost, out);
 		ancestors.pop();
 	}
 
@@ -502,10 +548,12 @@ final class HaxeNamingSupport implements NamingSupport {
 		if (name == 'new') return ImplicitReach.Constructor;
 		if (DUNDER_NAME_PATTERN.match(name)) return ImplicitReach.MagicName;
 		if (isAccessorName(name)) return ImplicitReach.Accessor;
-		if (metaInRun(node, ancestors, category)) return ImplicitReach.Annotation;
+		// `@:allow` is the one annotation that reaches nothing by NAME - its grantee spells the member -
+		// so a run carrying only grants is not `Annotation`, and answers last, after every real reach.
+		if (metaInRun(node, ancestors, category, null, ALLOW_META)) return ImplicitReach.Annotation;
 		if (isEntryPoint(category, name, node, mods)) return ImplicitReach.EntryPoint;
-		final registry: Bool = node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node);
-		return registry ? ImplicitReach.TypeRegistry : null;
+		if (node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node)) return ImplicitReach.TypeRegistry;
+		return metaInRun(node, ancestors, category, ALLOW_META) ? ImplicitReach.AllowGrant : null;
 	}
 
 	/**
@@ -532,28 +580,6 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * Whether `name` is a Haxe property ACCESSOR's — the `get_` / `set_` prefix a `(get, set)`
-	 * declaration binds a property to. checkstyle spells the identical test as `FieldUtils.isGetter` /
-	 * `isSetter`, and two questions in this class ask it for different reasons: `implicitReachOf`
-	 * (an accessor is invoked THROUGH the property, so no in-source identifier reference reaches it)
-	 * and `isReservedName` (an accessor's spelling IS the property's, so no naming rule governs it —
-	 * `MethodNameCheck.checkField` returns on `f.isGetter() || f.isSetter()` before it matches a
-	 * format). Sharing the predicate and not the ANSWER is the point: reusing `implicitReach` for
-	 * the naming question would also exempt `new`, a dunder name, a metadata-bearing member and a
-	 * `Class<T>`-registry static, four things checkstyle's gate says nothing about and three of which
-	 * are legitimate naming findings.
-	 *
-	 * Prefix-only, deliberately, and not "a sibling property declares this accessor": an `override
-	 * function get_x` backs a property declared in a SUPERTYPE, usually in another file, so a
-	 * structural test would exempt exactly the accessors whose property is nearest and report the ones
-	 * whose property is furthest out of reach. It would also be a THIRD independent spelling of "what
-	 * is an accessor" in this class — `hasPhysicalAccessors` already walks the other direction.
-	 */
-	private static inline function isAccessorName(name: String): Bool {
-		return name.startsWith('get_') || name.startsWith('set_');
-	}
-
-	/**
 	 * Whether a var / final member named `name` is a property backed by physical
 	 * `get_<name>` / `set_<name>` accessor methods declared as siblings. Renaming
 	 * the property alone (e.g. to a `_`-prefixed form) would orphan those
@@ -568,7 +594,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * Does an annotation - `metaName` when given, any `Meta` / `MetaCall` otherwise - precede `node`
+	 * Does an annotation - `metaName` when given, otherwise any `Meta` / `MetaCall` other than `except` - precede `node`
 	 * in its leading modifier / meta run? Scans the preceding siblings, skipping modifier kinds and
 	 * annotations that are not the requested one; anything else ends the run, so an annotation
 	 * written for one declaration cannot reach the next.
@@ -598,7 +624,9 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * level out, which at worst hands a SECOND member of the same branch an annotation written for
 	 * the first: a forfeited rewrite, never a wrong one.
 	 */
-	private static function metaInRun(node: QueryNode, ancestors: Array<QueryNode>, target: NamingCategory, ?metaName: String): Bool {
+	private static function metaInRun(
+		node: QueryNode, ancestors: Array<QueryNode>, target: NamingCategory, ?metaName: String, ?except: String
+	): Bool {
 		var subject: QueryNode = node;
 		var depth: Int = ancestors.length - 1;
 		while (depth >= 0) {
@@ -611,7 +639,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				i--;
 				final kind: String = sibling.kind;
 				if (isMetaKind(kind)) {
-					if (metaName == null || sibling.name == metaName) return true;
+					if (metaName == null ? sibling.name != except : sibling.name == metaName) return true;
 					continue;
 				}
 				final crossable: Bool = kind == 'Conditional' ? !holdsRunTarget(sibling, target) : MOD_KIND_TO_NAME.exists(kind);
@@ -637,16 +665,6 @@ final class HaxeNamingSupport implements NamingSupport {
 			final category: Null<NamingCategory> = categoryOf(child, []);
 			return category != null && sameRunScope(category, target) || holdsRunTarget(child, target);
 		});
-	}
-
-	/**
-	 * Whether a declaration of `category` sits in the same run scope as one of `target` - the scope a
-	 * leading modifier / meta run spans. Member scope holds the three member categories
-	 * interchangeably (a `@:keep` run reaches whichever of field / constant / method follows it);
-	 * every other scope is its own, so a type's run is ended by a type and by nothing else.
-	 */
-	private static inline function sameRunScope(category: NamingCategory, target: NamingCategory): Bool {
-		return isMemberCategory(target) ? isMemberCategory(category) : category == target;
 	}
 
 	/**
@@ -821,7 +839,6 @@ final class HaxeNamingSupport implements NamingSupport {
 		return [for (kind in kinds) MOD_KIND_TO_NAME[kind] ?? kind];
 	}
 
-
 	/**
 	 * Whether contract prefix `prefix` claims `name` for the question `wholeName` asks.
 	 *
@@ -857,6 +874,24 @@ final class HaxeNamingSupport implements NamingSupport {
 		return false;
 	}
 
+	/**
+	 * Whether a `var` / `final` member of an `enum abstract` is one of its VALUES. The compiler makes a
+	 * value - `public static inline`, typed by the abstract - of every NON-static field written as a
+	 * plain variable, a `private` one included; a `static` member and a PROPERTY (an accessor clause,
+	 * `var label(get, never)`) stay ordinary members of the abstract, under the member policy. Verified
+	 * on Haxe 4.3.7: `E.label` is "Cannot access non-static abstract field statically", a `static var s`
+	 * is `Int`, not `E`.
+	 *
+	 * Without `properties` the caller holds no type facts, and every such member stays a value - the
+	 * reading this projection gave before it could tell them apart.
+	 */
+	private static function isEnumAbstractValue(node: QueryNode, mods: Array<String>, properties: Null<() -> Map<Int, Bool>>): Bool {
+		if (node.kind != 'FinalMember' && node.kind != 'VarMember') return false;
+		if (properties == null) return true;
+		final span: Null<Span> = node.span;
+		return !mods.contains('static') && (span == null || !properties().exists(span.from));
+	}
+
 }
 
 /**
@@ -873,4 +908,15 @@ private typedef VarHost = {
 
 	/** Whether the head binding is an anon-structure field, whose name is a wire contract. */
 	final structural: Bool;
+};
+
+/**
+ * What the walk carries down from the declarations enclosing a node: the nearest type's name, whether
+ * it (or an outer one) is `@:rtti` or `extern`, and the caller's property facts (`NamingSupport.project`).
+ */
+private typedef Enclosing = {
+	final typeName: Null<String>;
+	final rtti: Bool;
+	final isExtern: Bool;
+	final properties: Null<() -> Map<Int, Bool>>;
 };

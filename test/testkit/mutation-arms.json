@@ -1238,8 +1238,8 @@
 			"name": "M-GRANT-SLOT-UNREAD",
 			"type": "anyparse.query.RefactorSupport",
 			"method": "privateMemberScanIsSound",
-			"find": "return !index.text.skippedMayReference(member) && !index.text.sourceCarriesAllowGrant(source);",
-			"replace": "return !index.text.skippedMayReference(member);",
+			"find": "grants == null ? !index.text.sourceCarriesAllowGrant(source) : grants.length == 0",
+			"replace": "grants == null ? true : grants.length == 0",
 			"note": "the confinement gate stops asking the index for its @:allow answer, so the run-scoped slot the scan was hoisted into is no longer read"
 		},
 		{
@@ -10738,8 +10738,8 @@
 			"name": "M-COLLECT-NO-ENABLEMENT",
 			"type": "anyparse.check.Linter",
 			"method": "collect",
-			"find": "return resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement);",
-			"replace": "return kept;",
+			"find": "resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement)",
+			"replace": "kept",
 			"note": "no path that writes a fix honours a file's own enabled:false"
 		},
 		{
@@ -23634,7 +23634,7 @@
 			"name": "M-PRIVATIZE-FRAGMENT",
 			"type": "anyparse.check.NamingPrivatize",
 			"method": "publicKeywordIfConfined",
-			"find": "if (ReflectionScan.runtimeNameFragment(ctx.fragments, c.decl.name)) return null;",
+			"find": "if (ReflectionScan.runtimeNameFragment(ctx.fragments, name)) return null;",
 			"replace": "",
 			"note": "an interpolation fragment that may spell the name at runtime does not refuse"
 		},
@@ -23642,8 +23642,8 @@
 			"name": "M-PRIVATIZE-TOKENS-UNCHECKED",
 			"type": "anyparse.check.NamingPrivatize",
 			"method": "publicKeywordIfConfined",
-			"find": "regions != null && PublicReach.occursOnlyWithin(c.decl.name, ctx.tokens, regions, ctx.wide)",
-			"replace": "regions != null",
+			"find": "if (PublicReach.occursOnlyWithin(name, ctx.tokens, regions, ctx.wide)) return keyword.span;",
+			"replace": "return keyword.span;",
 			"note": "an outside reader does not refuse"
 		},
 		{
@@ -23965,6 +23965,152 @@
 			"find": "|| !index.members.closureFreeOfExtensionTypes(receiver, file)",
 			"replace": "|| false",
 			"note": "a file's using answers a call on a receiver whose type (or a supertype) brings extensions of its own (@:using), which 4.3.7 binds first"
+		},
+		{
+			"name": "M-NAMING-ENUMVALUE-PROPERTY",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "isEnumAbstractValue",
+			"find": "(span == null || !properties().exists(span.from))",
+			"replace": "true",
+			"note": "a property of an enum abstract (`var x(get, never)`) reads as one of its values again"
+		},
+		{
+			"name": "M-NAMING-ENUMVALUE-STATIC",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "isEnumAbstractValue",
+			"find": "!mods.contains('static') && ",
+			"replace": "",
+			"note": "a static member of an enum abstract reads as one of its values again"
+		},
+		{
+			"name": "M-NAMING-PROPERTY-FACTS-NULL",
+			"type": "anyparse.check.Naming",
+			"method": "propertyFacts",
+			"force": "null",
+			"note": "the naming projection gets no property facts, so every enum-abstract var / final stays a value"
+		},
+		{
+			"name": "M-NAMING-LOCAL-CROSS-NOTE",
+			"type": "anyparse.check.NamingRenames",
+			"method": "crossFileCandidate",
+			"find": "if (isBodyScopedCategory(decl.category)) return null;",
+			"replace": "",
+			"note": "the cross-file path writes its not-a-member sentence first on a local / parameter, burying the single-file path's collision reason"
+		},
+		{
+			"name": "M-NUP-DECLINE-SILENT",
+			"type": "anyparse.check.NoUnderscorePrefix",
+			"method": "renameSpansFor",
+			"find": "refusal(RenameRefusal.nameCollides(target));",
+			"replace": "",
+			"note": "a strip refused on a collision returns no edit and no reason"
+		},
+		{
+			"name": "M-LINT-SUPERSEDES-IGNORED",
+			"type": "anyparse.check.Linter",
+			"method": "withoutSuperseded",
+			"force": "found",
+			"note": "naming and no-underscore-prefix both report the same underscore-prefixed binding"
+		},
+		{
+			"name": "M-NUP-SUPERSEDES-NONE",
+			"type": "anyparse.check.NoUnderscorePrefix",
+			"method": "supersedes",
+			"force": "[]",
+			"note": "no-underscore-prefix no longer replaces naming's finding on the same binding"
+		},
+		{
+			"name": "M-FIXDRIVER-SUPERSEDES-IGNORED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyLintPass",
+			"find": "final violations: Array<Violation> = Linter.withoutSuperseded(found, checks);",
+			"replace": "final violations: Array<Violation> = found;",
+			"note": "the fixer counts an underscore-prefixed binding twice - once from the active scope, once from the full one"
+		},
+		{
+			"name": "M-ALLOW-REACHING-FILE",
+			"type": "anyparse.query.AllowGrants",
+			"method": "reaching",
+			"find": "for (hit in hits) if (reachesMember(hit, member, owner))",
+			"replace": "for (hit in hits)",
+			"note": "every @:allow in the file reaches every member again - a grant on one member taints its neighbours"
+		},
+		{
+			"name": "M-CONFINED-GRANTS-IGNORED",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "privateMemberScanIsSound",
+			"find": "grants == null ? !index.text.sourceCarriesAllowGrant(source) : grants.length == 0",
+			"replace": "!index.text.sourceCarriesAllowGrant(source)",
+			"note": "the confinement proof asks the file-level @:allow answer even when the member's own grants are known"
+		},
+		{
+			"name": "M-ALLOW-GRANTEE-SUBTYPES",
+			"type": "anyparse.query.AllowGrants",
+			"method": "granteeFiles",
+			"find": "for (sub in index.subtypes.subtypeDecls(t.name, fi.file)) if (!files.contains(sub.file.file)) files.push(sub.file.file);",
+			"replace": "",
+			"note": "a grantee's subtype, which the compiler also lets in, is left out of the edit set"
+		},
+		{
+			"name": "M-ALLOW-GRANTEE-PACKAGE",
+			"type": "anyparse.query.AllowGrants",
+			"method": "names",
+			"find": "type == path || type.startsWith('$path.') || path.startsWith('$type.')",
+			"replace": "type == path || path.startsWith('$type.')",
+			"note": "a package grant reaches no type of its package"
+		},
+		{
+			"name": "M-ALLOW-GRANTEE-UNMATCHED",
+			"type": "anyparse.query.AllowGrants",
+			"method": "granteeFiles",
+			"find": "if (!matched) return { files: [], unmatched: path };",
+			"replace": "",
+			"note": "a grant naming no type the index sees is read as reaching nothing, and the rename goes ahead"
+		},
+		{
+			"name": "M-NAMING-ALLOWGRANT-AS-ANNOTATION",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "implicitReachOf",
+			"find": "metaInRun(node, ancestors, category, null, ALLOW_META)",
+			"replace": "metaInRun(node, ancestors, category)",
+			"note": "a member carrying only @:allow is refused as annotated again"
+		},
+		{
+			"name": "M-NAMING-CROSS-GRANTEES-DROPPED",
+			"type": "anyparse.check.NamingRenames",
+			"method": "crossFileCandidate",
+			"find": "final grantees: Array<String> = opened;",
+			"replace": "final grantees: Array<String> = [];",
+			"note": "a granted member's rename stops at its own hierarchy and strands the grantee's access"
+		},
+		{
+			"name": "M-NAMING-FOREIGN-UNBOUND",
+			"type": "anyparse.check.NamingRenames",
+			"method": "foreignBoundSpans",
+			"force": "[]",
+			"note": "an unrelated class's own same-named private blocks a public rename and the privatize arm again"
+		},
+		{
+			"name": "M-NAMING-OUTSIDE-SCOPE-IGNORED",
+			"type": "anyparse.check.NamingRenames",
+			"method": "outsideScopeFile",
+			"force": "null",
+			"note": "a narrowed --fix renames a public member a project file outside the run still reads"
+		},
+		{
+			"name": "M-PRIVATIZE-FOREIGN-IGNORED",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "foreignRegions",
+			"force": "[]",
+			"note": "the privatize arm counts an unrelated class's own same-named private as a read of the member"
+		},
+		{
+			"name": "M-NAMING-FOREIGN-LOSES-TO-BARE",
+			"type": "anyparse.check.NamingRenames",
+			"method": "otherFileRenameSpans",
+			"find": "for (s in refs.bareBound) if (!OccurrenceScan.offsetWithinAny(s.from, foreign)) s",
+			"replace": "for (s in refs.bareBound) s",
+			"note": "a subtype's same-named parameter read is renamed into the inherited field: `super.setup(accountScreen)` becomes `super.setup(_accountScreen)`, which compiles"
 		}
 	]
 }

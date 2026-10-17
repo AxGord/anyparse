@@ -12,6 +12,8 @@ import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingRule;
+import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -111,7 +113,7 @@ final class NamingPrivatize {
 			final declSpan: Null<Span> = c.decl.span;
 			final owner: Null<String> = c.decl.enclosingType;
 			if (declSpan == null || owner == null) continue;
-			final keywordSpan: Null<Span> = publicKeywordIfConfined(c, declSpan, owner, plugin, ctx);
+			final keywordSpan: Null<Span> = publicKeywordIfConfined(c, declSpan, owner, plugin, ctx, files);
 			if (keywordSpan == null) continue;
 			// Re-bound: strict null-safety does not narrow inside a struct literal.
 			final keywordAt: Span = keywordSpan;
@@ -129,8 +131,10 @@ final class NamingPrivatize {
 
 	/** The `public` keyword's span of `c` when every gate proves nothing outside its type and subtypes reads it, else null. */
 	private static function publicKeywordIfConfined(
-		c: PrivatizeCandidate, declSpan: Span, owner: String, plugin: GrammarPlugin, ctx: Evidence
+		c: PrivatizeCandidate, declSpan: Span, owner: String, plugin: GrammarPlugin, ctx: Evidence,
+		files: Array<{ file: String, source: String }>
 	): Null<Span> {
+		final name: String = c.decl.name;
 		final cls: Null<QueryNode> = CheckScan.classBodies(c.tree).find(n -> n.name == owner && contains(n.span, declSpan));
 		if (cls == null) return null;
 		final lex: Array<LexRegion> = plugin.lexicalRegions(c.source);
@@ -149,9 +153,45 @@ final class NamingPrivatize {
 		// member stays visible once private. The type's OWN `@:build` still does (`typeOutOfReach`).
 		if (PublicReach.typeOutOfReach(type) || PublicReach.chainOutOfReach(scope, host, type, false)) return null;
 		if (ctx.wide.allFiles().exists(fi -> fi.accessGrants.contains(owner))) return null;
-		if (ReflectionScan.runtimeNameFragment(ctx.fragments, c.decl.name)) return null;
+		if (ReflectionScan.runtimeNameFragment(ctx.fragments, name)) return null;
 		final regions: Null<Array<ReachRegion>> = allowedRegions(c, cls, owner, lex, scope);
-		return regions != null && PublicReach.occursOnlyWithin(c.decl.name, ctx.tokens, regions, ctx.wide) ? keyword.span : null;
+		if (regions == null) return null;
+		if (PublicReach.occursOnlyWithin(name, ctx.tokens, regions, ctx.wide)) return keyword.span;
+		// The cheap answer refused: some occurrence lies outside the type and its subtypes. One the resolver binds to
+		// ANOTHER declaration of the name - an unrelated class's own `private final _sc`, a local - is not a read of this
+		// member, so it joins the allowed set as its own span and the count is asked again.
+		final foreign: Array<ReachRegion> = foreignRegions(name, owner, regions, files, plugin, ctx);
+		return foreign.length > 0 && PublicReach.occursOnlyWithin(name, ctx.tokens, regions.concat(foreign), ctx.wide)
+			? keyword.span
+			: null;
+	}
+
+	/**
+	 * Every occurrence of `name`, outside `regions`, that the resolver binds to a declaration of it other than `owner`'s
+	 * member (`NamingRenames.foreignBoundSpans`), one region per identifier. Read over every source the token count saw
+	 * that spells the name - the report set and the resolution scope; a file that does not parse contributes nothing,
+	 * so its occurrences keep the count unequal and the member public.
+	 */
+	private static function foreignRegions(
+		name: String, owner: String, regions: Array<ReachRegion>, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin,
+		ctx: Evidence
+	): Array<ReachRegion> {
+		final out: Array<ReachRegion> = [];
+		final support: Null<NamingSupport> = plugin.namingSupport();
+		if (support == null) return out;
+		final sources: Map<String, String> = [];
+		for (entry in RefactorSupport.resolutionSourcesOf(plugin) ?? []) sources[entry.file] = entry.source;
+		for (entry in files) sources[entry.file] = entry.source;
+		for (file => source in sources) if (source.indexOf(name) >= 0) {
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+			if (tree == null) continue;
+			final spans: Array<Span> = NamingRenames.foreignBoundSpans(
+				source, tree, name, owner, plugin, support, plugin.refShape(), ctx.wide, file
+			);
+			for (s in spans) if (!regions.exists(r -> r.file == file && r.span.from <= s.from && s.to <= r.span.to))
+				out.push({ file: file, source: source, span: s });
+		}
+		return out;
 	}
 
 	/**
