@@ -1,7 +1,9 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
+import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxNamedFnExpr;
 import anyparse.grammar.haxe.HxStatement;
 import utest.Assert;
@@ -36,7 +38,7 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 	public inline function testWriterRoundTripNamedFnExpr(): Void {
 		writerEquals(
 			'class C { static function main() { var g = function compute(x:Int):Int { return x; } } }',
-			'class C {\n\tstatic function main() {\n\t\tvar g = function compute(x:Int):Int {\n\t\t\treturn x;\n\t\t};\n\t}\n}\n'
+			'class C {\n\tstatic function main() {\n\t\tvar g = function compute(x:Int):Int {\n\t\t\treturn x;\n\t\t}\n\t}\n}\n'
 		);
 	}
 
@@ -125,6 +127,37 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 			'class C {\n\tfunction f():Void {\n\t\tfinal g = function named() return 1; // c\n\t\ttrace(g());\n\t}\n}',
 			'class C {\n\tfunction f():Void {\n\t\tg = function named() return 1;\n\t\ttrace(g());\n\t}\n}'
 		]) Assert.equals(src, HxWriteFixture.triviaWrite(src, opts), src);
+	}
+
+	/**
+	 * A named function expression with a BLOCK body ends its statement at its `}`, exactly as the anonymous
+	 * spelling does: `haxe --interp` 4.3.7 runs `x = function n() { return 1; } trace(x());` and the `var` form,
+	 * while an EXPRESSION body ends there only when the body itself ends with `}` (`return switch …`, `return
+	 * {a: 1}`) and otherwise still needs its `;` (`x = function n() return 1 trace(x());` is `Missing ;`).
+	 */
+	@:pin('control')
+	@:killer('M-NAMED-FN-STMT-NO-ARM') @:killer('M-NAMED-FN-NOT-BRACE-ENDED') @:killer('M-NAMED-FN-EXPR-BODY-RELAXED')
+	public function testNamedFnExprBlockBodyEndsItsStatement(): Void {
+		for (src in [
+			'class C { function f():Void { x = function n() { return 1; } trace(x()); } }',
+			'class C { function f():Void { var y = function n() { return 1; } trace(y()); } }',
+			'class C { function f():Void { x = function n(v:Int):Int { return v; } trace(x(1)); } }',
+			'class C { function f():Void { x = function n() return switch 1 { case _: 7; } trace(x()); } }',
+			'class C { function f():Void { var y = function n() return {a: 1} trace(y().a); } }'
+		]) {
+			Assert.equals(2, parseBody(src).length, src);
+			Assert.equals(
+				HxWriteFixture.triviaWrite(src, '{}'), HxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(src, '{}'), '{}'), src
+			);
+		}
+		Assert.raises(parseBody.bind('class C { function f():Void { x = function n() return 1 trace(x()); } }'));
+		final plain: String = HxModuleWriter.write(HaxeModuleParser.parse(
+			'class C { function f():Void { var g = function() { return 1; }; var h = function n() { return 1; }; } }'
+		));
+		Assert.equals(
+			'class C {\n\tfunction f():Void {\n\t\tvar g = function() {\n\t\t\treturn 1;\n\t\t}\n\t\tvar h = function n() {\n\t\t\treturn 1;\n\t\t}\n\t}\n}\n',
+			plain
+		);
 	}
 
 	private function parseBody(source: String): Array<HxStatement> {

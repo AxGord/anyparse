@@ -151,6 +151,26 @@ class RewriteSliceTest extends Test {
 		Assert.isTrue(okText(Rewrite.rewrite(src, "g($x)", "k($x)", true, new HaxeQueryPlugin())).contains('k(1)'));
 	}
 
+	/**
+	 * A value metavariable never captures a TYPE argument. `new $C($b, $a)` over `new Map<String, Int>()`
+	 * used to bind the two type arguments as values and write `new Map(Int, String)`, re-parseably; the
+	 * construction now has no value argument to bind, so only `new Pair(1, 2)` is rewritten. A template
+	 * cannot keep type arguments its pattern did not write, so such a match is refused, and writing them
+	 * (`new $C<$T>($a)`) rewrites it.
+	 */
+	@:pin('control')
+	@:killer('M-MATCH-ONE-FLAT-RUN') @:killer('M-MATCH-UNWRITTEN-DROPPED') @:killer('M-REWRITE-UNWRITTEN-IGNORED')
+	public function testAValueCaptureNeverTakesATypeArgument(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tvar m = new Map<String, Int>();\n\t\tvar p = new Pair(1, 2);\n\t}\n}';
+		final swapped: String = okText(Rewrite.rewrite(src, "new $C($a, $b)", "new $C($b, $a)", true, new HaxeQueryPlugin()));
+		Assert.isTrue(swapped.contains('var m = new Map<String, Int>();'), swapped);
+		Assert.isTrue(swapped.contains('var p = new Pair(2, 1);'), swapped);
+		final boxed: String = 'class C {\n\tfunction f() {\n\t\tvar b = new Box<Int>(1);\n\t}\n}';
+		Assert.isTrue(isErr(Rewrite.rewrite(boxed, "new $C($a)", "make($a)", true, new HaxeQueryPlugin())));
+		final kept: String = okText(Rewrite.rewrite(boxed, "new $C<$T>($a)", "new $C<$T>($a, 0)", true, new HaxeQueryPlugin()));
+		Assert.isTrue(kept.contains('var b = new Box<Int>(1, 0);'), kept);
+	}
+
 	private function okText(res: EditResult): String {
 		return switch res {
 			case Ok(text): text;

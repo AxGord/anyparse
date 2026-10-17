@@ -258,10 +258,10 @@ final class Metavar {
 			if (bare != null) {
 				return tree.kind == identKind && newChildren.length == 0
 					? new QueryNode(KIND, bare, [], tree.span)
-					: new QueryNode(tree.kind, '$$$bare', newChildren, tree.span, newType);
+					: new QueryNode(tree.kind, '$$$bare', newChildren, tree.span, newType, tree.typeArgCount);
 			}
 		}
-		return new QueryNode(tree.kind, n, newChildren, tree.span, newType);
+		return new QueryNode(tree.kind, n, newChildren, tree.span, newType, tree.typeArgCount);
 	}
 
 	/**
@@ -412,9 +412,8 @@ final class PatternStar {
 	private static final NAME_SLOT_REFUSAL: String = 'pattern: `...` cannot stand where the grammar needs a name — it marks a run of '
 		+ 'CHILDREN, so it belongs inside the brackets (' + '`new T(...)`), not in place of the type or callee';
 	private static final TWO_STARS_REFUSAL: String = 'pattern: two `...` in one child list — the matcher anchors one prefix and one suffix '
-		+ 'around a SINGLE star, so a second one has nothing to anchor against ('
-		+ '`new $$T<...>(...)` in particular cannot work: a constructor call keeps its type '
-		+ 'arguments and its value arguments in ONE flat child list, so the two stars would be ' + 'indistinguishable)';
+		+ 'around a SINGLE star, so a second one has nothing to anchor against (a constructor\'s type arguments are a list '
+		+ 'of their own: `new $$T<...>(...)` is one star in each)';
 
 	/**
 	 * True when the `...` starting at `at` stands alone in a child slot —
@@ -470,7 +469,7 @@ final class PatternStar {
 		final newType: Null<QueryNode> = slot == null ? null : reclassify(slot);
 		return tree.name == PLACEHOLDER && children.length == 0 && span != null && span.to - span.from == PLACEHOLDER.length
 			? new QueryNode(KIND, null, [], span)
-			: new QueryNode(tree.kind, tree.name, children, tree.span, newType);
+			: new QueryNode(tree.kind, tree.name, children, tree.span, newType, tree.typeArgCount);
 	}
 
 	/**
@@ -479,12 +478,10 @@ final class PatternStar {
 	 *  - a star as the pattern ROOT (`...`, and `new ...()` whose whole node
 	 *    collapses into one) — that is a match-everything wildcard, not a
 	 *    pattern, and `$_` already spells "one of anything";
-	 *  - TWO stars in ONE child list — the matcher anchors a prefix from the
-	 *    left and a suffix from the right around exactly one star, and a
-	 *    second needs backtracking. For the position that would motivate it,
-	 *    `new $T<...>(...)`, it would be a lie anyway: `NewExpr` flattens type
-	 *    arguments and value arguments into one child list, so the two stars
-	 *    are indistinguishable and the pattern would mean exactly `new $T(...)`;
+	 *  - TWO stars in ONE run — the matcher anchors a prefix from the left and a
+	 *    suffix from the right around exactly one star, and a second needs
+	 *    backtracking. A node's type arguments are a run of their own
+	 *    (`QueryNode.typeArgCount`), so `new $T<...>(...)` is one star per run;
 	 *  - the placeholder surviving in a NAME slot — the ellipsis was written
 	 *    where an identifier is required.
 	 */
@@ -499,14 +496,23 @@ final class PatternStar {
 
 	private static function checkNode(node: QueryNode): Null<String> {
 		if (node.name == PLACEHOLDER) return NAME_SLOT_REFUSAL;
-		var stars: Int = 0;
-		for (c in node.children) if (c.kind == KIND) stars++;
-		if (stars > 1) return TWO_STARS_REFUSAL;
+		// One star per RUN: a node's type arguments and its other children are unified apart
+		// (`Matcher.unifyChildren`), so `new $T<...>(...)` carries one in each.
+		final kids: Array<QueryNode> = node.children;
+		final split: Int = node.typeArgCount;
+		if (stars(kids, 0, split) > 1 || stars(kids, split, kids.length) > 1) return TWO_STARS_REFUSAL;
 		for (c in node.children) {
 			final message: Null<String> = checkNode(c);
 			if (message != null) return message;
 		}
 		return null;
+	}
+
+	/** How many stars `children[from, to)` holds. */
+	private static function stars(children: Array<QueryNode>, from: Int, to: Int): Int {
+		var n: Int = 0;
+		for (k in from ... to) if (children[k].kind == KIND) n++;
+		return n;
 	}
 
 }

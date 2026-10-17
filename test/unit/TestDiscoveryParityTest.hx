@@ -1202,6 +1202,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
 			'unit.check.ComparisonToBooleanCheckTest#testResolvedMemberTypedByTypeParamSkipped :: control :: M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND',
 			'unit.check.ComparisonToBooleanCheckTest#testTypeParamSpelledLikeBoolSkipped :: control :: M-NULLITY-TYPE-PARAM-BLIND',
+			'unit.check.ComplexityCheckTest#testWhileExpressionCounted :: control :: M-VOCAB-WHILE-EXPR-NOT-BRANCH',
 			'unit.check.ConfiguredIdiomE2ETest#testTheOracleRevertsWhatTheRuleCannotProve :: control :: M-EVENT-NO-MISMATCH',
 			'unit.check.CrossScopeSoundnessTest#testAnUnreadableReflectiveFileLicensesNothingExtra :: control :: '
 				+ 'M-REFLECTION-UNREADABLE-BLIND,M-INLINE-UNREADABLE-BLIND',
@@ -1877,6 +1878,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferLocalFunctionCheckTest#testLiteralReadingItsOwnNameRefused :: control :: M-LOCALFN-OUTER-NAME-READ',
 			'unit.check.PreferLocalFunctionCheckTest#testSignatureMismatchRefused :: control :: M-LOCALFN-SIGNATURE-ANY',
 			'unit.check.PreferLocalFunctionCheckTest#testVoidExpressionBodyIsWrapped :: control :: M-LOCALFN-VOID-RETURNED',
+			'unit.check.PreferLocalFunctionCheckTest#testWhileExpressionPositionRefused :: control :: M-VOCAB-WHILE-EXPR-NOT-BRANCH',
 			'unit.check.PreferNullCoalescingCheckTest#testNullFallbackIsTheGuardedValue :: control :: M-NULLCOAL-NULL-FALLBACK',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunGetsNoSecondUsing :: control :: M-GUARDED-USING-ABSENT',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunRefusalNamesTheRegion :: control :: M-GUARDED-USING-ABSENT',
@@ -2841,6 +2843,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testReturnTypeToBlockBodyKeepsTheComment :: control :: M-FNBODY-GAP-COMMENT-NONE',
 			'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testReturnTypeToExpressionBodyKeepsTheComment :: control :: '
 				+ 'M-FNBODY-GAP-COMMENT-NONE',
+			'unit.grammar.haxe.HxDoWhileThrowTryCatchSliceTest#testPlainWriterDropsTheSemicolonBeforeWhile :: control :: '
+				+ 'M-DOWHILE-PLAIN-SEMI',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBareBodyElseIfTrailsCommentAfterCondition :: control :: '
 				+ 'M-EICR-AFTERCOND-RESET',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBracedElseIfGluesAndTrailsCommentAfterOpenCurly :: control :: '
@@ -2933,6 +2937,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testReportedConfigGuardStaysGlued :: control :: M-LOOPIF-ALWAYS',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testReportedSiteBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testWhileIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
+			'unit.grammar.haxe.HxNamedFnExprSliceTest#testNamedFnExprBlockBodyEndsItsStatement :: control :: '
+				+ 'M-NAMED-FN-STMT-NO-ARM,M-NAMED-FN-NOT-BRACE-ENDED,M-NAMED-FN-EXPR-BODY-RELAXED',
 			'unit.grammar.haxe.HxNestingCostTest#testCollapsePassComputesEachSharedNodeOnce :: control :: '
 				+ 'M-COLLAPSE-REWRITE-MEMO-OFF,M-COLLAPSE-SUBTREE-MEMO-OFF,M-COLLAPSE-COMMIT-MEMO-OFF',
 			'unit.grammar.haxe.HxNestingCostTest#testEachBodyIsWrittenOnce :: control :: M-FOR-BODY-PROBE-EAGER,M-CHAIN-WALK-EAGER',
@@ -3105,6 +3111,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.AmbientImportResolutionTest#testTheNearestAmbientSourceWinsAndTheParentStillBinds :: control :: '
 				+ 'M-AMBIENT-IMPORT-BAND',
 			'unit.query.ApqMatcherTest#testTryPatternMatchesEveryPosition :: control :: M-SEARCH-TRY-EXPR-UNRELATED',
+			'unit.query.ApqMatcherTest#testTypeArgumentsAndValueArgumentsAreSeparateRuns :: control :: '
+				+ 'M-MATCH-ONE-FLAT-RUN,M-WALK-TYPE-ARGS-UNCOUNTED',
 			'unit.query.ApqUsesTest#testQualifiedIsOptInSoRewritersKeepTheExactAnswer :: control :: M-USES-QUALIFIED-DEFAULT',
 			'unit.query.ApqUsesTest#testQualifiedSpellingsAcrossTypePositions :: control :: M-USES-EXACT-ONLY',
 			'unit.query.ApqUsesTest#testQualifiedSubModuleTypeIsFoundBySimpleName :: control :: M-USES-EXACT-ONLY',
@@ -3284,6 +3292,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CompilerFactsTest#testASplicedFactRunsAtTheSitesOfTheCallThatSplicedItIn :: control :: '
 				+ 'M-FACTS-SPLICE-SITES-MET,M-FACTS-SPLICE-UNATTRIBUTED,M-FACTS-SPLICE-HARMLESS,M-FACTS-SPLICE-INNERMOST,'
 				+ 'M-FACTS-SPLICE-SECOND-SITE',
+			'unit.query.CondBranchSplitTest#testARebuiltNodeKeepsItsTypeArgumentCount :: control :: M-CONDBRANCH-TYPE-ARGS-DROPPED',
 			'unit.query.CondQueryTest#testABranchBodyNeverCarriesADirective :: control :: M-COND-BODY-SWALLOWS-DIRECTIVES',
 			'unit.query.CondQueryTest#testAMetadataNameIsASymbolRowAndKeepsItsSigil :: control :: M-COND-NAMES-DROP-META-NAME',
 			'unit.query.CondQueryTest#testANestedRegionRunsInsideItsParentBranch :: control :: M-COND-INNERMOST-FRAME',
@@ -4138,6 +4147,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE',
 			'unit.query.PatchSliceTest#testStringLiteralPerLineIndentStillRefused :: control :: M-PATCH-SHAPE-ALWAYS-SURVIVES',
 			'unit.query.PatchSliceTest#testTransferUnderADocMovedByAnEarlierGrowingPairRefused :: control :: M-PATCH-DOCEND-NEVER-SHIFTS',
+			'unit.query.PatternParseProbe#testTwoEllipsesInOneChildListAreRefused :: control :: M-STAR-ONE-PER-LIST',
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredKindNameIsOneTheGrammarProjects :: control :: '
 				+ 'M-PROJECTED-KINDS-ALT-ONLY,M-DECL-HOST-KIND-STALE',
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredTokenIsOneTheParserCaptures :: control :: '
@@ -4159,12 +4169,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
 			'unit.query.RewriteSliceTest#testANameSlotCaptureSplicesBare :: control :: M-REWRITE-NAME-CAPTURE-HOLE',
 			'unit.query.RewriteSliceTest#testATemplateIsAlignedToEachSitesTerminator :: control :: M-REWRITE-TRAILER-UNALIGNED',
+			'unit.query.RewriteSliceTest#testAValueCaptureNeverTakesATypeArgument :: control :: '
+				+ 'M-MATCH-ONE-FLAT-RUN,M-MATCH-UNWRITTEN-DROPPED,M-REWRITE-UNWRITTEN-IGNORED',
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
 				+ 'M-SETMOD-GUARDED-ANY-VISIBILITY',
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
 			'unit.query.SetModifierSliceTest#testPrivateOnAFinalClassPrecedesTheFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.ShapeVocabTest#testAKindTwoSeamsNameIsAnsweredOnce :: control :: M-VOCAB-UNION-DUPLICATES',
 			'unit.query.ShapeVocabTest#testAnUnsetSeamAddsNothing :: control :: M-VOCAB-UNSET-SEAM-ADDED',
+			'unit.query.ShapeVocabTest#testEveryHaxeLoopAndConditionalIsABranch :: control :: M-VOCAB-WHILE-EXPR-NOT-BRANCH',
 			'unit.query.ShapeVocabTest#testHaxeLoopAndFunctionVocabulary :: control :: '
 				+ 'M-VOCAB-NESTED-NO-NAMED-FN,M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
 			'unit.query.ShardPlanTest#testAClassHeavierThanAShardIsDealtAsSlices :: control :: M-SHARD-SPLIT-NEVER,M-SHARD-SPLIT-SLICE-WEIGHT',
@@ -7071,7 +7084,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-SITES-EXPR-RETURN-NO-LANDING',
 			'M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
 			'M-RLW-NAMED-FN-NOT-BINDER',
-			'M-RLW-LOCAL-FN-AS-BINDER'
+			'M-RLW-LOCAL-FN-AS-BINDER',
+			'M-DOWHILE-PLAIN-SEMI',
+			'M-NAMED-FN-STMT-NO-ARM',
+			'M-NAMED-FN-NOT-BRACE-ENDED',
+			'M-NAMED-FN-EXPR-BODY-RELAXED',
+			'M-VOCAB-WHILE-EXPR-NOT-BRANCH',
+			'M-MATCH-ONE-FLAT-RUN',
+			'M-MATCH-UNWRITTEN-DROPPED',
+			'M-REWRITE-UNWRITTEN-IGNORED',
+			'M-WALK-TYPE-ARGS-UNCOUNTED',
+			'M-STAR-ONE-PER-LIST',
+			'M-CONDBRANCH-TYPE-ARGS-DROPPED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -7298,6 +7322,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-JSON-KEY-DUPLICATES :: anyparse.macro.MetaInspect#checkWireKeys',
 			'M-JSON-KEY-DUP-AT-FIELD :: anyparse.macro.MetaInspect#checkWireKeys',
 			'M-SEARCH-TRY-EXPR-UNRELATED :: anyparse.grammar.haxe.HaxeQueryPlugin#FinalMember:SEARCH_KIND_EQUIVALENCE',
+			'M-DOWHILE-PLAIN-SEMI :: anyparse.macro.WriterKwRefLowering#kwRefParts',
+			'M-NAMED-FN-STMT-NO-ARM :: anyparse.grammar.haxe.HxAstPredLowering#stmtExprNoSemiAtField',
+			'M-NAMED-FN-NOT-BRACE-ENDED :: anyparse.grammar.haxe.HxAstPredLowering#endsWithCloseBraceField',
+			'M-NAMED-FN-EXPR-BODY-RELAXED :: anyparse.grammar.haxe.HxAstPredLowering#stmtExprNoSemiAtField',
+			'M-WALK-TYPE-ARGS-UNCOUNTED :: anyparse.macro.QueryWalkerLowering#seqTypeArgCount',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
