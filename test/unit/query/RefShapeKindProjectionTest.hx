@@ -29,7 +29,7 @@ using Lambda;
  * arrow-parameter label as a type — and a kind set cannot say which rule it means.
  *
  * The two sides have different authors, which is what makes the comparison worth running:
- * the declared side is hand-typed in `HaxeQueryPlugin.refShape`, the projected side is
+ * the declared side is hand-typed in `HaxeRefShape.shape`, the projected side is
  * `HaxeQueryWalker.projectedKinds()`, emitted by `QueryWalkerLowering` from the same grammar
  * shape the walk itself is generated from. Nothing else in the tree compares them.
  *

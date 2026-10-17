@@ -8,7 +8,7 @@ import anyparse.runtime.Span;
  *
  * `(q: Int) -> q > 0` and `function(q) return q > 0` route their parameter through
  * `HxLambdaParam` / `HxParam`, so it reaches the query tree as a `Required` node — a
- * `HaxeQueryPlugin.DECL_HOST_KINDS` entry, i.e. a binder. The bare spelling `q -> q > 0` does
+ * `HaxeRefShape.DECL_HOST_KINDS` entry, i.e. a binder. The bare spelling `q -> q > 0` does
  * not: `HxExpr.ThinArrow` is an ordinary right-associative Pratt infix operator whose BOTH
  * operands are typed `HxExpr`, so the parameter arrives as a plain `IdentExpr` and `Refs`
  * reads it as a reference to whatever encloses the lambda. That asymmetry is a WRITER
