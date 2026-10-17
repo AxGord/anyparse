@@ -3464,6 +3464,30 @@ decided the question; it may not become a record of runs.
   name slot; `super`, which Haxe does not reserve. Refused although Haxe takes it: `this` as a `for` variable or a lambda parameter (`for (this in a)`, `(this) -> 1`: Haxe reads those heads as expressions, where `this` is an identifier), and `new` as the name of a function inside a `#if` name splice (`HxConditionalFnName`) — none is code an op writes or a project holds (both corpora parse unchanged), and a refusal is the loud direction. Writer and formatter are untouched: `fmt --write` over TM src (876
   files) and anyparse src (1140) is byte-identical. Fixture consequence: a `CallGraphTest` fixture named a function
   `untyped` — branch `feat/infra-N12`
+- `CallGraph` splits along its one internal seam: the per-file edge collection — `collectEdges` with its 69 closures and
+  every local that lives for one file's walk (the frames, the resolved call sites, the types the walk gave values) — is
+  `CallGraphEdges.collect(g, entry)`, the shape `CallGraphNodes.collect` already had, and `CallGraph` keeps the node
+  table and the public surface its 86 readers use (2144 -> ~600 lines; 67 members, still over 50 — they are the table's
+  fields and its query surface, which no reader may lose). The closures stay closures: they are the walk's own scope, and
+  turning them into members of a per-file object would add ~60 fields of shape vocabulary for no reader. `ParsedEntry`
+  is the one public typedef both collectors read (`CallGraphNodes`' private `Entry` copy is gone) — branch
+  `feat/infra-N13`
+- MEASURED, NOT IMPLEMENTED: a class member declared in several `#if` branches stays one folded node. Same-name methods
+  of one type under exclusive branches: TM `1d1ba147` / `f81c2049` / `bd943dac` / src `f979b1db` 4 each, all one name —
+  `getFolderContentAPI` under `#if FEATURE_SHARE_EXTRA` / `#else` (the abstract twins in `RemoteFileSystemBase`, the
+  bodies in `DrillsRemoteFileSystem`, `SessionsRemoteFileSystem`, the test's `TestRemoteFileSystem`); anyparse 1
+  (`CompilerDisplayOracle.new`, `#if nodejs`); no overloads, every pair sibling branches of one region. A node per body
+  bound per build (N11's module-level shape) separates NOTHING there: the base's callers at 176/216/1013 are unguarded
+  (they run in both builds: every body), the two guarded ones (1397, 1409) bind to the abstract twins, which run nothing
+  and dispatch to subclasses in other files (no per-build answer across files: every body), and the one
+  `new CompilerDisplayOracle` sits in the same file whose two constructor bodies make the same call. What it would cost:
+  every reader that names a member by name gets the first body only — `ownMember` (10 sites), `memberOnChain` (11) and
+  `virtualTargets` (10) in `CallGraphFacts`, `CallGraphKeys`, `MemberReach`, `ReachGraph`, `ConstructorWiring`,
+  `FactsView`, `LockAliases`, `LockSites`, `ObjectPaths`, `LibraryBodies`, `ThreadSafety` — and each of those 31 that
+  reads the body or walks on from it would have to expand through `bodiesOf` to stay fail-closed; only the ones feeding
+  `addEdge` expand already. The module-level case has no such reader. The fold unions
+  the bodies' edges, which is sound; it is left until a tree measures a call site a split would bind — branch
+  `feat/infra-N13`
 - `simplify-boolean-ternary` and `simplify-boolean-return-chain` wrote a flat `||` that strands a null-safety
   narrowing: `prefer-ternary-return` folded `if (a == null || b == null) return true; return mayUnify(a, b);` into
   `a == null || b == null ? true : mayUnify(a, b)` (a ternary narrows its branch from the whole condition), and the
