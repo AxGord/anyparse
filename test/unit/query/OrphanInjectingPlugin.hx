@@ -80,6 +80,10 @@ final class OrphanInjectingPlugin implements GrammarPlugin {
 		return _inner.layoutMetrics(optsJson);
 	}
 
+	public function memberGapPolicy(?optsJson: String): Null<MemberGapPolicy> {
+		return _inner.memberGapPolicy(optsJson);
+	}
+
 	public function writeRoundTripPlain(source: String, ?optsJson: String): Null<String> {
 		return _inner.writeRoundTripPlain(source, optsJson);
 	}

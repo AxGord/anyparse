@@ -69,6 +69,10 @@ final class UntypedPlugin implements GrammarPlugin {
 		throw new NotImplementedException();
 	}
 
+	public function memberGapPolicy(?optsJson: String): Null<MemberGapPolicy> {
+		throw new NotImplementedException();
+	}
+
 	public function writeRoundTripPlain(source: String, ?optsJson: String): Null<String> {
 		throw new NotImplementedException();
 	}
