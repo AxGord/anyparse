@@ -58,6 +58,14 @@ final class SubtypeGraph {
 	/** Every indexed file's `FileInfo`, handed over by the owning index. */
 	private final _files: Array<FileInfo>;
 
+	/**
+	 * Every declared type in `_files` / `types` order (`types`) and, per member NAME, the ordinals of the
+	 * types that declare a member of that name (`byName`), built on first use. `subtypeOverridesProperty`
+	 * asks about three names per property and used to rescan every member of every type in the project for
+	 * each ask (~0.3 s of a TM `lint --all`).
+	 */
+	private var _memberOwners: Null<{ types: Array<ResolvedType>, byName: Map<String, Array<Int>> }> = null;
+
 	/** Per-file source text, handed over by the owning index. */
 	private final _sources: Map<String, String>;
 
@@ -239,17 +247,16 @@ final class SubtypeGraph {
 	 */
 	public function subtypeOverridesProperty(owner: String, prop: String): Bool {
 		final names: Array<String> = ['get_$prop', 'set_$prop', prop];
-		for (fi in _files) for (t in fi.types) if (t.name != owner) {
-			final matches: Array<MemberInfo> = t.members.filter(m -> names.contains(m.name));
-			if (matches.length == 0) continue;
-			if (isSubtype(t.name, owner)) return true;
+		for (resolved in typesDeclaringAny(names)) if (resolved.type.name != owner) {
+			final matches: Array<MemberInfo> = resolved.type.members.filter(m -> names.contains(m.name));
+			if (isSubtype(resolved.type.name, owner)) return true;
 			if (!matches.exists(m -> m.isOverride)) continue;
-			final declarer: Null<String> = overriddenDeclarer({ file: fi, type: t }, names, owner);
+			final declarer: Null<String> = overriddenDeclarer({ file: resolved.file, type: resolved.type }, names, owner);
 			if (declarer != null) {
 				if (declarer == owner) return true;
 				continue;
 			}
-			if (!provablyNotSubtype(t.name, owner)) return true;
+			if (!provablyNotSubtype(resolved.type.name, owner)) return true;
 		}
 		return false;
 	}
@@ -987,6 +994,39 @@ final class SubtypeGraph {
 				return [for (a in up) CallGraphNames.substituteTypeParams(a, params, args, typeSyntax)];
 		}
 		return null;
+	}
+
+	/**
+	 * The types declaring a member named one of `names`, each once, in `_files` / `types` order — exactly the
+	 * types the full scan `subtypeOverridesProperty` used to make would have found a match in, in the order it
+	 * met them.
+	 */
+	private function typesDeclaringAny(names: Array<String>): Array<ResolvedType> {
+		final owners: { types: Array<ResolvedType>, byName: Map<String, Array<Int>> } = memberOwners();
+		final ordinals: Array<Int> = [];
+		for (name in names) for (ordinal in owners.byName[name] ?? []) if (!ordinals.contains(ordinal)) ordinals.push(ordinal);
+		ordinals.sort((a, b) -> a - b);
+		return [for (ordinal in ordinals) owners.types[ordinal]];
+	}
+
+	/** `_memberOwners`, built on the first call. */
+	private function memberOwners(): { types: Array<ResolvedType>, byName: Map<String, Array<Int>> } {
+		final cached: Null<{ types: Array<ResolvedType>, byName: Map<String, Array<Int>> }> = _memberOwners;
+		if (cached != null) return cached;
+		final types: Array<ResolvedType> = [];
+		final byName: Map<String, Array<Int>> = [];
+		for (fi in _files) for (t in fi.types) {
+			final ordinal: Int = types.length;
+			types.push({ file: fi, type: t });
+			for (m in t.members) {
+				final owners: Array<Int> = byName[m.name] ?? [];
+				if (owners.length == 0 || owners[owners.length - 1] != ordinal) owners.push(ordinal);
+				byName[m.name] = owners;
+			}
+		}
+		final built: { types: Array<ResolvedType>, byName: Map<String, Array<Int>> } = { types: types, byName: byName };
+		_memberOwners = built;
+		return built;
 	}
 
 }
