@@ -3606,3 +3606,39 @@ decided the question; it may not become a record of runs.
   closed: the token count is NAME-keyed, so a common private-field name anywhere in the project refuses the arm; a
   resolution-based occurrence attribution (the rename's own `otherFileRenameSpans`) would lift that — branch
   `feat/infra-N19`
+- the operator-overload gate typed operands with a walk of its own (`OperandBinder.tierOf`: identifier, call, field,
+  construction), so every arc the shared walk had gained since — an unannotated local's initializer, the self reference,
+  a static extension — was missing exactly where a rule asked whether `!` / `==` / `+` is the language's, and every TM
+  `!x` whose operand no annotation names stayed refused once `tink` put an `@:op(!A)` in scope → ONE operand typing:
+  `OperandBinder` is the third host of `NominalTypes.typeWalk<T, C>` (`TypingHost` gains its currency `T`; the binder's is
+  `TypeNameBinding.Tier`, what a written type BINDS to where it is written — the "decl-tier currency the walk does not
+  carry" of the B4b entry above, now carried). The by-simple-NAME deep walk (`expressionTypeNominal`) is NOT the
+  operator gate's source and must not become it: its answers are names, and the measured `2bdac5ef` cases (an unindexed
+  import beside an indexed namesake, an `@:overload` extern, a `Null<R>` alias) are exactly the names it would misjudge.
+  The binder answers the arcs in its own currency and fail-closed, each verified on 4.3.7 `--interp`: an inherited member
+  (through a receiver or an implicit `this`) only up a closure that resolves link by link and brings no `@:using` (a
+  covariant override may sit on an unread link; a supertype's static is not in scope bare — an `import Other.flag` wins);
+  a static extension from the LAST `using` of the file whose module (EVERY type of it — `using Mod` binds
+  `Mod.Other.tag`) declares the static, taking exactly the receiver's declaration first; refused under a receiver
+  closure's own `@:using` (it binds ahead of every file `using`), a `#if`-guarded `using`, an unindexed one, an alias
+  (`using` a typedef binds the aliased class's statics); an abstract's `@:op(a.b)` only when no `using` in scope, own or
+  ambient, declares a static of the field's name (`r.foo` under `using Ext` is the extension even beside a resolver).
+  Doors added to the shared layer for it: `MemberLookup.declarationFreeOfExtensionTypes` / `declarationLacksMember` /
+  `declaringMember` (by declaration), `ValueNameBinding.usingHosts` / `usingDeclarations`. TM: `FileListSelect.hx:145`
+  (`fileName.toLowerCase().endsWith(…)`) and `ThumbnailReader.hx:85` (`drill.hasNode.thumbnail`) become invertible; all
+  other all-rules findings identical on the three TM recall trees and anyparse — branch `feat/infra-N22`
+- the compiler's facts were a second proof for ONE operator-gate consumer (fold's own `FactsTypeOracle.forFix` in its
+  fix), so a site only the facts type stayed refused by every negation rule → the facts are the second source INSIDE
+  `OperatorSelection` (`typingFor` hands every asking rule an `OperandTyping` { written, proven }), read only in a `--fix`
+  run — the run whose edit journal marks it (`FactsTypeOracle.forFixRun`), whose fix gates compile them anyway — and
+  lazily on the first operand the binding leaves unproven. A plain `lint` never compiles facts for it, so a site only
+  the facts prove (TM `FileSystemItemData.hx:330`, an untyped lambda parameter) is reported and fixed by `--fix` and
+  silent under `lint`: accepted, the alternative being report-only findings for every unproven negation. The facts vouch
+  only for a built-in or a class/interface/enum every configuration agrees on (`nonOverloadingName`); an `@:op(a.b)`
+  field's facts site names `resolve`, which the text never spells, so that shape is the binder's alone — branch
+  `feat/infra-N22`
+- `prefer-if-expression-chain` built a per-FILE `OperatorSelection` for the switch rule it defers to, which saw no `==`
+  overload a sibling module declares: a ternary chain over such a type read as claimed by the switch rule, which itself
+  (one table per run) refused it, so neither reported it; and the fold's fix judged a construct the run left report-only
+  against its own file's overloads alone and merged it → one table per run, and a fix asks with the report index it is
+  handed (`OperatorSelection.of`'s `report`). Found by `OperandTypingTest`'s parity matrix — branch `feat/infra-N22`

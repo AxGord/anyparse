@@ -125,8 +125,9 @@ enum OperatorVerdict {
  *  - a verdict is per BINDING, never per simple name: `import far.Tag` beside an indexed class
  *    `other.Tag` names the import, so a tier that could bind the name to something the index
  *    does not hold answers `Unproven` rather than falling through to the class. Worth knowing
- *    before writing a fixture: a member reached only through a supertype, or through a receiver
- *    no binding types, has no written type here, and only the compiler's facts can vouch for it.
+ *    before writing a fixture: a member inherited past a supertype link the index cannot resolve,
+ *    an untyped lambda parameter, or a receiver no binding types has no written type here, and
+ *    only the compiler's facts can vouch for it — inside a `--fix` run.
  *
  * ## Grammar-agnostic
  *
