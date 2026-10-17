@@ -558,6 +558,27 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 		Assert.isTrue('$lambda'.indexOf('DoWhileExpr') != -1, '$lambda');
 	}
 
+	/**
+	 * The PLAIN writer never puts a `;` between a bare-expression body and `while`: Haxe 4.3.7 refuses
+	 * `do i++; while (c)` (`Expected while`) in statement and expression position alike. The parser keeps
+	 * accepting the legacy `do foo(); while (c);` spelling; written back it loses the `;`.
+	 */
+	@:pin('control')
+	@:killer('M-DOWHILE-PLAIN-SEMI')
+	public function testPlainWriterDropsTheSemicolonBeforeWhile(): Void {
+		for (src => kept in [
+			'class C { function f():Void { do i++ while (i < 3); } }' => 'do i++ while (i < 3);',
+			'class C { function f():Void { do foo(); while (c); } }' => 'do foo() while (c);',
+			'class C { function f():Void { final g = () -> do i++ while (i < 5); } }' => 'do i++ while (i < 5);',
+			'class C { function f():Void { x = do i++ while (i < 7); } }' => 'do i++ while (i < 7);',
+			'class C { function f():Void { do do i++ while (a) while (b); } }' => 'do do i++ while (a) while (b);'
+		]) {
+			final written: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
+			Assert.isTrue(written.indexOf(kept) != -1, '$src -> $written');
+			Assert.equals(-1, written.indexOf('; while'), '$src -> $written');
+		}
+	}
+
 	/** Parse function body statements from a single-function class. */
 	private function parseBody(source: String): Array<HxStatement> {
 		final fn: HxFnDecl = parseSingleFnDecl(source);

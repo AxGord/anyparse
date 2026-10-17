@@ -73,6 +73,17 @@ final class Rewrite {
 		// END differently: a statement `try … catch (e) null;` owns its `;`, the same `try` as a
 		// value does not. One template cannot be right for both, so when the matches disagree each
 		// expansion is aligned to its own site's terminator. Matches of one shape are left alone.
+		// A pattern that writes no type arguments matches a construction that has some, and no
+		// metavariable holds them: splicing the template over the match would drop `<Int>` from
+		// `new Box<Int>(1)`, re-parseably. Refuse, naming the site, rather than guess.
+		for (m in accepted) for (at in m.unwritten) {
+			final lc: Position = at.lineCol(source);
+			return Err(
+				'rewrite: the match at ${lc.line}:${lc.col} writes type arguments the pattern does not '
+				+ '(`${source.substring(at.from, at.to)}`) — no metavariable holds them, so the replacement would drop them; '
+				+ 'write them in the pattern (`new $$C<$$T>(…)`)'
+			);
+		}
 		final trailers: Array<String> = [for (m in accepted) trailer(source, m.node)];
 		final mixed: Bool = trailers.exists(t -> t != trailers[0]);
 		final edits: Array<GuardedEdit> = [];

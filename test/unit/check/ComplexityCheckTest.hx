@@ -232,6 +232,25 @@ class ComplexityCheckTest extends Test {
 		Assert.equals(identity, check.messageIdentity(identity));
 	}
 
+	/**
+	 * A `while` counts one decision point in every position: the statement, a lambda body and a comprehension
+	 * alike — 19 `&&` (score 20) plus one `while` is 21, over the threshold.
+	 */
+	@:pin('control')
+	@:killer('M-VOCAB-WHILE-EXPR-NOT-BRANCH')
+	public function testWhileExpressionCounted(): Void {
+		final chain: String = [for (_ in 0...20) 'a'].join(' && ');
+		for (loop in [
+			'while (a) a = false;',
+			'final g = () -> while (a) a = false;',
+			'final xs = [while (a) a = false];',
+			'final ys = [for (i in 0...2) i];'
+		]) {
+			final vs: Array<Violation> = violations('class C {\n\tfunction big(a:Bool):Bool {\n\t\t$loop\n\t\treturn $chain;\n\t}\n}');
+			Assert.equals(1, vs.length, loop);
+		}
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new Complexity(), src);
 	}

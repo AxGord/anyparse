@@ -134,7 +134,7 @@ final class CondBranchProjection {
 		if (kids.length == 0) return node;
 		final projected: Array<QueryNode> = [for (k in kids) projectBranches(k, source, seams)];
 		final rebuilt: Array<QueryNode> = seams.blockKinds.contains(node.kind) ? splitBlockChildren(projected, source, seams) : projected;
-		return sameNodes(kids, rebuilt) ? node : new QueryNode(node.kind, node.name, rebuilt, node.span);
+		return sameNodes(kids, rebuilt) ? node : new QueryNode(node.kind, node.name, rebuilt, node.span, node.type, node.typeArgCount);
 	}
 
 	/**
