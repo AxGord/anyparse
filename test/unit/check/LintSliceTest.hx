@@ -329,6 +329,8 @@ class LintSliceTest extends Test {
 	 * initializer (a call) — the binding is reported, the side effect is
 	 * preserved, and the finding carries the reason.
 	 */
+	@:killer('M-UNUSED-LOCAL-IMPURE-UNSAID')
+	@:pin('control')
 	public function testFixSkipsSideEffectingInit(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x:Int = compute();\n\t\ttrace(1);\n\t}\n}';
 		final check: UnusedLocal = new UnusedLocal();
@@ -356,6 +358,8 @@ class LintSliceTest extends Test {
 	 * The DELETION stays refused there: the fix removes the whole line, which on a shared
 	 * declaration would take the live sibling with it. Reported, never cut.
 	 */
+	@:killer('M-UNUSED-LOCAL-SHARED-LINE-UNSAID')
+	@:pin('control')
 	public function testUnusedLocalFixSkipsMultiVarContinuation(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tvar used:Int = 1, unusedTail:Int = 2;\n\t\ttrace(used);\n\t}\n}';
 		final check: UnusedLocal = new UnusedLocal();

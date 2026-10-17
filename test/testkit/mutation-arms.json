@@ -22948,6 +22948,61 @@
 			"find": "run = orLeaves(cond, true, source, typeNominalOf, []);",
 			"replace": "run = null;",
 			"note": "a negated `&&` guard's `||` is one opaque operand of the chain before it, so its null test strands"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NULL-SITE-ADMITTED",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "report",
+			"find": " || nullable['${member.name}#$index'] == true",
+			"replace": "",
+			"note": "a call passing null where the default lands is ignored, so it silently takes the default"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NONNULL-ANY",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "provenNonNull",
+			"force": "true",
+			"note": "every argument counts as non-null, a variable or a call included"
+		},
+		{
+			"name": "M-DEFAULT-ARG-UNRESOLVED-NULL-IGNORED",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "collectCalls",
+			"find": "if (called != null && scope.memberOwners.exists(called))",
+			"replace": "if (called != null && resolveCallee(call, owner, entry, scope, seams) != null)",
+			"note": "only resolved calls are read, so a null handed through a receiver the rule cannot type escapes"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NULL-CONST-NONNULL",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "collectMembers",
+			"find": "scope.constants['$owner.$name'] = child.children.length == 0 || child.children[0].kind != seams.nullLiteralKind;",
+			"replace": "scope.constants['$owner.$name'] = true;",
+			"note": "an inline constant whose value is null proves its argument non-null"
+		},
+		{
+			"name": "M-UNUSED-LOCAL-IMPURE-UNSAID",
+			"type": "anyparse.check.UnusedLocal",
+			"method": "fix",
+			"find": "v.declineReason = 'the initializer is not provably side-effect-free, so deleting the declaration would drop whatever '",
+			"replace": "final unsaid: String = 'the initializer is not provably side-effect-free, so deleting the declaration would drop whatever '",
+			"note": "the side-effecting-initializer refusal names no reason in the --fix ledger"
+		},
+		{
+			"name": "M-UNUSED-LOCAL-SHARED-LINE-UNSAID",
+			"type": "anyparse.check.UnusedLocal",
+			"method": "fix",
+			"find": "v.declineReason = 'the binding shares its declaration line with another one, and the deletion takes the whole line';",
+			"replace": "final unsaid: String = 'the binding shares its declaration line with another one, and the deletion takes the whole line';",
+			"note": "the shared-line refusal names no reason in the --fix ledger"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-FIELD-KIND-PURITY",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "fix",
+			"find": ": TypeResolver.isDeletionPure.bind(_, tree, shape, declaredTypes, index);",
+			"replace": ": MemberKinds.isSideEffectFree.bind(_, shape);",
+			"note": "a field initializer is judged kind-only again, so a pure collection literal or stdlib call keeps a dead field"
 		}
 	]
 }

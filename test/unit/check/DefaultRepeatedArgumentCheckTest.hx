@@ -225,6 +225,8 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 	 * defaulting the parameter turned `seedGhost(null)` into `seedGhost(GHOST_ID)` and the test it drove failed. It
 	 * compiles, so no typecheck can catch it: the finding is refused.
 	 */
+	@:killer('M-DEFAULT-ARG-NULL-SITE-ADMITTED')
+	@:pin('control')
 	public function testNullArgumentSiteBlocks(): Void {
 		final src: String = 'class C {\n\tprivate static inline final GHOST_ID:Int = 34236;\n\n'
 			+ '\tprivate function seedGhost(cloudId:Null<Int>):Void {}\n\n'
@@ -234,6 +236,8 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 	}
 
 	/** A site whose argument is not PROVEN non-null — a variable, a call — may pass `null` at run time: refused the same way. */
+	@:killer('M-DEFAULT-ARG-NONNULL-ANY')
+	@:pin('control')
 	public function testMaybeNullArgumentSiteBlocks(): Void {
 		final head: String = '${CONST}class S {\n\tpublic static function d(ms:Null<Int>):Bool return true;\n}\n';
 		Assert.equals(
@@ -243,6 +247,8 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 	}
 
 	/** A call of the member's NAME the rule cannot resolve still counts: its `null` would take the default too. */
+	@:killer('M-DEFAULT-ARG-UNRESOLVED-NULL-IGNORED')
+	@:pin('control')
 	public function testUnresolvedNullSiteBlocks(): Void {
 		Assert.equals(
 			0,
@@ -259,6 +265,20 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 			+ 'class U {\n\tfunction f(a:Int):Void {\n\t\tS.d(K.T);\n\t\tS.d(K.T);\n\t\tS.d(-1);\n\t\tS.d(new U());\n\t\tS.d(a > 0);\n\t\tS.d(\'s\');\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(3, editCount(src));
+	}
+
+	/** An `inline` constant whose value is `null` is a `null` argument under another name. */
+	@:killer('M-DEFAULT-ARG-NULL-CONST-NONNULL')
+	@:pin('control')
+	public function testNullValuedConstantSiteBlocks(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class K {\n\tpublic static inline final T:Int = 3000;\n\tpublic static inline final NONE:Null<Int> = null;\n}\n'
+				+ 'class S {\n\tpublic static function d(ms:Null<Int>):Bool return true;\n}\n'
+				+ 'class U {\n\tfunction f():Void {\n\t\tS.d(K.T);\n\t\tS.d(K.T);\n\t\tS.d(K.NONE);\n\t}\n}'
+			).length
+		);
 	}
 
 	private function violations(src: String): Array<Violation> {

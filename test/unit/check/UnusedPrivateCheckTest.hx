@@ -1007,6 +1007,8 @@ class UnusedPrivateCheckTest extends Test {
 	 * used to be the narrower kind-only one, so TM's `bitmapDataCollection: Map<String, Any> = []` was declined as "not
 	 * provably side-effect-free".
 	 */
+	@:killer('M-UNUSED-PRIVATE-FIELD-KIND-PURITY')
+	@:pin('control')
 	public function testFixDeletesFieldWithPureLiteralOrStdlibInit(): Void {
 		Assert.equals(1, fixEdits('class C {\n\tprivate static final M: Map<String, Int> = [];\n}').length);
 		Assert.equals(1, fixEdits('class C {\n\tprivate static final A: Array<Int> = [1, 2];\n}').length);
