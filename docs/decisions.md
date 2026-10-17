@@ -3822,8 +3822,8 @@ decided the question; it may not become a record of runs.
   its name at run time: `Type.getClassName`, `resolveClass`, serialization, so it is refused rather than proven unread);
   enum-abstract values only (a plain enum constructor's name is runtime-visible), valued by an initializer or an
   `indexValuedEnumAbstractUnderlyings` underlying (Haxe: an implicit `String` value is the name, an implicit `Int` one the
-  previous plus one); not a main / guarded / metadata-carrying type; no `StringLiteral` naming it, no runtime type path
-  (`ReflectionScan.runtimeTypePath`); the old name declared once (a leftover would bind elsewhere — CrossRenameMember's own
+  previous plus one); not a main / guarded / metadata-carrying type; for a TYPE no `StringLiteral` naming it and no runtime type path
+  (`ReflectionScan.runtimeTypePath`) — not for a value, which has no runtime name (TM `'vertical'` literals are data); the old name declared once (a leftover would bind elsewhere — CrossRenameMember's own
   documented silent case is an imported homonym value); the new name declared nowhere (resolution index, std included) and
   spelled in no project file but a comment; an enum abstract's PROPERTY is no value for those homonym tests; every edited
   file in the run. Type / EnumValue rules carry `pascalCase` (the arm is their only consumer). Separately (A5's "5 private
