@@ -25,7 +25,8 @@ using Lambda;
  *    own type parameters in scope;
  *  - `recv.m` and `recv.m(…)`: the receiver's own declarations (typed the same way, or a type name
  *    for a static access), then `m` as each of them DECLARES it — its type or its return type, bound
- *    in the declaring file with the owner's and the method's type parameters shadowing.
+ *    in the declaring file with the owner's and the method's type parameters shadowing;
+ *  - a construction `new T(…)`: the type it writes, here.
  *
  * Everything else is `Unknown`: an inherited member, a receiver no rule above types, a member whose
  * type is not written. A built-in candidate among several drops out of a `Bound` answer, since it can
@@ -91,6 +92,10 @@ final class OperandBinder {
 			return _identKinds.contains(callee.kind) ? localCallTier(callee) : member(callee, true);
 		}
 		if (operand.kind == fieldKind) return member(operand, false);
+		if (operand.kind == _shape.newExprKind) {
+			final at: Null<Span> = operand.span;
+			return at == null ? Unknown : writtenTier(operand.name, at.from);
+		}
 		final from: Null<Int> = hitOf(operand)?.bindingSpan?.from;
 		return from == null ? Unknown : _declared.writtenHeadTier(from, _wrappers, _builtins);
 	}

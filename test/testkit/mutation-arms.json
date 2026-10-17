@@ -10645,7 +10645,7 @@
 			"method": "resolveReceiver",
 			"find": "decls: boundDecls(ctx.binder?.tierOf(receiver)),",
 			"replace": "decls: null,",
-			"note": "an identifier receiver's type is never bound"
+			"note": "an identifier or construction receiver's type is never bound"
 		},
 		{
 			"name": "M-TOSTRING-STRING-BINDING",
@@ -22314,6 +22314,14 @@
 			"find": "if (up != null && args.length >= params.length)",
 			"replace": "if (up != null)",
 			"note": "a link filling fewer parameters than the type it names has still answers"
+		},
+		{
+			"name": "M-OPERAND-NEW-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "tierOf",
+			"find": "return at == null ? Unknown : writtenTier(operand.name, at.from);",
+			"replace": "return Unknown;",
+			"note": "a construction is no longer of the type it writes, so its operator and its toString go unproven"
 		}
 	]
 }

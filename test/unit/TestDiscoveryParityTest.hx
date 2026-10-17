@@ -1548,6 +1548,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OperandBindingTest#testAliasOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-ALIAS-BLIND',
 			'unit.check.OperandBindingTest#testAmbientImportOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
 			'unit.check.OperandBindingTest#testCallToFunctionOfThisFileIsProven :: control :: M-OPERAND-LOCAL-CALL-CUT',
+			'unit.check.OperandBindingTest#testConstructionIsOfTheTypeItWrites :: control :: M-OPERAND-NEW-CUT',
 			'unit.check.OperandBindingTest#testDeclarationInsideTheBranchOutranksItsCapture :: control :: M-OPERAND-CASE-CAPTURE-INSIDE',
 			'unit.check.OperandBindingTest#testImportOfUnindexedTypeIsNotItsIndexedNamesake :: control :: M-OPERAND-SIMPLE-NAME',
 			'unit.check.OperandBindingTest#testImportOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
@@ -7076,7 +7077,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-RLW-NAMED-FN-NOT-BINDER',
 			'M-RLW-LOCAL-FN-AS-BINDER',
 			'M-SUBTYPE-ARGS-SUBSTITUTED',
-			'M-SUBTYPE-ARGS-ARITY'
+			'M-SUBTYPE-ARGS-ARITY',
+			'M-OPERAND-NEW-CUT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

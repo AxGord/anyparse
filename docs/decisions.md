@@ -3271,3 +3271,13 @@ decided the question; it may not become a record of runs.
   the switch rule now seeds a local bound from a field-path map read (`final u:Colour = b.cache[k]; switch u`),
   which it missed (`NullableSwitchMissingNullCheckTest#testDeclaredLocalFromAMapReadFlagged`, RED on `b5a5bccac`)
   — branch `feat/infra-N6`
+- `RedundantToString.resolveReceiver` bound a construction's type itself (`OperandBinder.writtenTier` on the
+  written name) beside the identifier it asked the shared binder for → `OperandBinder.tierOf` types a construction
+  `new T(…)` as the type it writes, bound where written, so every consumer of the binder sees it: the operator gate
+  now proves `new Tag() + 'a' + 'b'` built-in concatenation for a plain class and still refuses it for an unindexed
+  import (`OperandBindingTest#testConstructionIsOfTheTypeItWrites`, RED on `b5a5bccac`). The literal arm stays in
+  the rule: no consumer of the binder tells a literal's `Free` from `Unknown` (`OperatorSelection` decides a literal
+  before it asks), so a binder arm for it would be unkillable. The non-null half is already the shared provers'
+  (`TypeResolver.isProvablyNonNull`, `DeclaredNullity.ofMemberReturn`); the curated static-return table
+  (`staticMethodReturns`) stays the rule's, read where the binder's static access has no declaration — branch
+  `feat/infra-N6`

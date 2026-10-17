@@ -135,6 +135,17 @@ class OperandBindingTest extends Test {
 		Assert.equals(FIXABLE, fold([], '', 'h: Int', 'name() + \''));
 	}
 
+	/**
+	 * A construction is of the type it writes, bound here (`OperandBinder.tierOf`): `new Tag()` of the same-package plain
+	 * class is proven, the same `new Tag()` under `import far.Tag;` is the unindexed import's and stays unproven.
+	 */
+	@:pin('control')
+	@:killer('M-OPERAND-NEW-CUT')
+	public function testConstructionIsOfTheTypeItWrites(): Void {
+		Assert.equals(FIXABLE, fold(['u/Tag.hx' => PLAIN_TAG], '', 'h: Int', 'new Tag() + \''), 'the same-package class');
+		Assert.equals(REPORT_ONLY, fold(['u/Tag.hx' => PLAIN_TAG], 'import far.Tag;', 'h: Int', 'new Tag() + \''), 'the unindexed import');
+	}
+
 	/** The shared predicate covers every rule that asks it: the join of two `+=` on the imported `Tag`. */
 	@:pin('control')
 	@:killer('M-BINDING-UNINDEXED-IMPORT-FREE')

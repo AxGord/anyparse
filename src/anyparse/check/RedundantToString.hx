@@ -390,32 +390,27 @@ final class RedundantToString implements Check implements DefaultOff {
 	}
 
 	/**
-	 * The receiver's resolved simple nominal TYPE NAME plus whether it is provably NON-NULL — the
-	 * two facts every gate downstream needs, recovered in one pass because the same shape decides
-	 * both. A plain identifier goes through the shared prover (`TypeResolver.isProvablyNonNull`); a
-	 * `new T(...)` and a literal are non-null by construction; a call is resolved through its
-	 * declared return type. The NULL LITERAL is excluded FIRST and explicitly: it is absent from
-	 * `literalTypeNames` today, but that omission is maintained for another consumer, and inheriting
-	 * it would make `null.toString()` fixable the day the map gains an entry.
+	 * The receiver's resolved type DECLARATIONS plus whether it is provably NON-NULL — the two facts
+	 * every gate downstream needs. An identifier and a construction `new T(...)` are bound by the
+	 * shared operand binder (`OperandBinder.tierOf`: the identifier's annotation, the type the
+	 * construction writes); a literal is a built-in type no declaration stands for; a call is
+	 * resolved through its declared return type (`callReceiver`). Non-null: an identifier through the
+	 * shared prover (`TypeResolver.isProvablyNonNull`), a construction and a literal by construction.
+	 * The NULL LITERAL is excluded FIRST and explicitly: it is absent from `literalTypeNames` today,
+	 * but that omission is maintained for another consumer, and inheriting it would make
+	 * `null.toString()` fixable the day the map gains an entry.
 	 */
 	private static function resolveReceiver(receiver: QueryNode, callSpan: Span, ctx: Ctx): ReceiverInfo {
 		final seams: Seams = ctx.seams;
 		final unresolved: ReceiverInfo = { decls: null, nonNull: false };
-		if (receiver.kind == seams.identKind) return {
-			decls: boundDecls(ctx.binder?.tierOf(receiver)),
-			nonNull: TypeResolver.isProvablyNonNull(receiver, ctx.root, seams.shape, ctx.nullity)
-		};
 		if (receiver.kind == seams.shape.nullLiteralKind) return unresolved;
-		final newExprKind: Null<String> = seams.shape.newExprKind;
-		final recvSpan: Null<Span> = receiver.span;
-		if (newExprKind != null && receiver.kind == newExprKind)
-			return { decls: recvSpan == null ? null : boundDecls(ctx.binder?.writtenTier(receiver.name, recvSpan.from)), nonNull: true };
-		return if (seams.literalTypeNames.exists(receiver.kind))
-			{ decls: [], nonNull: true }
-		else if (receiver.kind == seams.callKind)
-			callReceiver(receiver, callSpan, ctx)
-		else
-			unresolved;
+		if (receiver.kind == seams.callKind) return callReceiver(receiver, callSpan, ctx);
+		if (seams.literalTypeNames.exists(receiver.kind)) return { decls: [], nonNull: true };
+		final constructed: Bool = receiver.kind == seams.shape.newExprKind;
+		return !constructed && receiver.kind != seams.identKind ? unresolved : {
+			decls: boundDecls(ctx.binder?.tierOf(receiver)),
+			nonNull: constructed || TypeResolver.isProvablyNonNull(receiver, ctx.root, seams.shape, ctx.nullity)
+		};
 	}
 
 	/**
@@ -447,8 +442,7 @@ final class RedundantToString implements Check implements DefaultOff {
 		}
 		final owners: Null<Array<ResolvedType>> = binder.receiverDecls(owner);
 		final metaName: Null<String> = seams.shape.nullSafetyMetaName;
-		if (owners == null || metaName == null) return unresolved;
-		return {
+		return owners == null || metaName == null ? unresolved : {
 			decls: boundDecls(binder.tierOf(call)),
 			nonNull: TypeResolver.enclosingIsNullSafe(ctx.root, callSpan, metaName, seams.shape.nullSafetyDisableArg)
 				&& ctx.nullity.ofMemberReturn(owners, method) != Unproven
