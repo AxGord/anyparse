@@ -94,7 +94,9 @@ final class Refs {
 
 	/**
 	 * The binding of the reference or declaration of `name` starting at `from` in `tree`: the offset its binding starts
-	 * at, -1 for one that binds nothing — a member, an import, a type — and null when no hit of `name` starts there.
+	 * at, -1 for one that binds nothing — a member, an import, a type, a module-level value (which one, by the `#if`
+	 * branch the read is compiled in, is `ValueNameBinding.moduleValuesAt`'s answer) — and null when no hit of `name`
+	 * starts there.
 	 * Memoized per tree and name in the run's `RefsCache` when the shape carries one, so a walk asking it of every
 	 * identifier pays one resolution of the file.
 	 */

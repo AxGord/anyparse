@@ -47,7 +47,7 @@ final class PatternNameScope {
 		final fi: Null<FileInfo> = index.fileInfo(file);
 		if (fi == null) return null;
 		final local: Array<String> = CasePatterns.constantNames([root], plugin.refShape());
-		for (name in fi.moduleFields) if (!local.contains(name)) local.push(name);
+		for (field in fi.moduleFields) if (!local.contains(field.name)) local.push(field.name);
 		return new PatternNameScope(root, plugin, local, fi, index);
 	}
 

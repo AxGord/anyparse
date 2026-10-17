@@ -309,23 +309,28 @@ final class CallGraphKeys {
 	/**
 	 * The one static of `imported` — what the module and the imports of the file supply
 	 * under the unbound `name` (`ValueNameBinding.importedStatics`) —, read where nothing
-	 * nearer binds it: `currentType`'s chain — which the index must hold whole — declares it nowhere but as a supertype's
-	 * static, which a bare name does not see. Null when the module itself declares the name, or the imports bind none, more
-	 * than one, or may bind one the index cannot list.
+	 * nearer binds it: no member of `currentType`'s chain may (`memberMayBind`). Null when the module itself declares the name
+	 * where it is read, or the imports bind none, more than one, or may bind one the index cannot list.
 	 */
 	public static function importedStatic(
 		g: CallGraph, imported: ImportedStatics, name: String, currentType: Null<String>
 	): Null<{ owner: String, member: String }> {
-		final types: CallGraphTypes = g.types;
-		if (
-			currentType != null && (
-				!types.chainFullyIndexed(currentType) || types.declaringTypeOf(currentType, name) != null
-				&& !staticOfSupertype(g, currentType, name)
-			)
-		)
-			return null;
+		if (memberMayBind(g, currentType, name)) return null;
 		if (imported.unknown || imported.statics.length != 1) return null;
 		return { owner: imported.statics[0].owner, member: imported.statics[0].member };
+	}
+
+	/**
+	 * Whether a member of `currentType`'s chain in `g` may be what the bare name `name` read inside it means: one the chain
+	 * declares, but a supertype's static (`staticOfSupertype`), or any one when the index does not hold the chain whole. Such
+	 * a member comes before a module-level field and an imported static of the name (4.3.7, `hx/p3`, `hx/p4`). False in
+	 * module-level code, which sees no type's members.
+	 */
+	public static function memberMayBind(g: CallGraph, currentType: Null<String>, name: String): Bool {
+		final types: CallGraphTypes = g.types;
+		return currentType != null
+			&& (!types.chainFullyIndexed(currentType) || types.declaringTypeOf(currentType, name) != null
+				&& !staticOfSupertype(g, currentType, name));
 	}
 
 	/**
