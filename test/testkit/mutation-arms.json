@@ -22639,8 +22639,8 @@
 			"name": "M-RECEIVER-UNRELATED-ROUTED",
 			"type": "anyparse.query.MoveMemberReceivers",
 			"method": "receiverVerdict",
-			"find": "if (prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return LEAVE;",
-			"replace": "if (prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return 'unrelated';",
+			"find": "if (classOrInterface(prep, type) && prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return LEAVE;",
+			"replace": "if (classOrInterface(prep, type) && prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return 'unrelated';",
 			"note": "a receiver of an unrelated type declaring a same-named member refuses the move instead of being left alone"
 		},
 		{
@@ -22650,6 +22650,53 @@
 			"find": "return viaPublic",
 			"replace": "return true",
 			"note": "a caller in another class is routed through a private holding field it cannot reach"
+		},
+		{
+			"name": "M-SUBTYPE-ROOT-NEGATIVE-LIST",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "closureExcludesFrom",
+			"find": "if (!COMPLETE_SUPERTYPE_KINDS.contains(cur.type.kind) && !cur.type.isAnonStruct) return false;",
+			"replace": "if ((cur.type.kind == 'TypedefDecl' || cur.type.kind == ABSTRACT_DECL_KIND) && !cur.type.isAnonStruct) return false;",
+			"note": "the root refusal is the negative list it replaced (typedef alias, plain abstract), so a `@:forward enum abstract` over a type reads as provably unrelated to it"
+		},
+		{
+			"name": "M-RECEIVER-STRUCTURE-LEFT",
+			"type": "anyparse.query.MoveMemberReceivers",
+			"method": "classOrInterface",
+			"force": "true",
+			"note": "a receiver of any provably-not-subtype kind is left alone, so a structure value holding the source keeps calling a member that left"
+		},
+		{
+			"name": "M-MOVE-OVERRIDE-MEMBER",
+			"type": "anyparse.query.MoveMember",
+			"method": "inheritanceRefusal",
+			"find": "if (overrideKind != null && m.group.modifiers.exists(mod -> mod.kind == overrideKind))",
+			"replace": "if (overrideKind == null)",
+			"note": "an `override` whose base is outside the scope moves, and the destination declares an override of nothing"
+		},
+		{
+			"name": "M-MOVE-IMPLEMENTATION",
+			"type": "anyparse.query.MoveMember",
+			"method": "inheritanceRefusal",
+			"find": "final ancestor: Null<String> = prep.index.subtypes.declaringAncestorOf(src, m.name);",
+			"replace": "final ancestor: Null<String> = null;",
+			"note": "the implementation of an interface method moves, and the source no longer implements its interface"
+		},
+		{
+			"name": "M-MOVE-OVERRIDDEN-MEMBER",
+			"type": "anyparse.query.MoveMember",
+			"method": "inheritanceRefusal",
+			"find": "if (prep.index.subtypes.subtypeDeclaresMember(src, m.name))",
+			"replace": "if (prep.index.subtypes.subtypeDeclaresMember(src, m.name) && m.isStatic)",
+			"note": "a member a subclass overrides moves, and the override overrides nothing"
+		},
+		{
+			"name": "M-MOVE-UNRESOLVED-INTERFACE",
+			"type": "anyparse.query.MoveMember",
+			"method": "inheritanceRefusal",
+			"find": "if (decls.length != 1 || !interfacesResolve(decls[0].supertypes)) return false;",
+			"replace": "if (decls.length == 1 && !interfacesResolve(decls[0].supertypes)) return false;",
+			"note": "an `implements` target outside the scope is read as declaring nothing, so a member it may declare moves"
 		}
 	]
 }

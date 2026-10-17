@@ -13,6 +13,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -869,6 +870,7 @@ final class MoveMember {
 				for (line in lines) if (!carried.contains(line))
 					carried.push(line);
 		}
+
 		// One seat decides where a carried `using` goes — see `MoveSymbol.carriedDestEdits`. A
 		// destination whose own `using` run cannot be ranked above is a REFUSAL here too, for the same
 		// reason: the only remaining order gives the destination's own calls the carried module.
@@ -1002,6 +1004,8 @@ final class MoveMember {
 		for (m in prep.moved) if (captures.contains(m.name))
 			return 'a switch case pattern in ${prep.srcFile} binds "${m.name}" — reference resolution cannot tell the '
 				+ 'capture from the member; rename the capture first';
+		final inherited: Null<String> = inheritanceRefusal(prep);
+		if (inherited != null) return inherited;
 		return prep.moved.exists(m -> !m.isStatic) && thisInsideCuts(prep)
 			? 'a moved body references "this", which would re-bind to "${prep.destTypeName}" — rewrite to bare member access first'
 			: null;
@@ -1469,6 +1473,51 @@ final class MoveMember {
 			? 'cross-package move supports static members only in this increment '
 				+ '(source package "${srcInfo.pkg}" != destination package "${destInfo.pkg}")'
 			: null;
+	}
+
+	/**
+	 * Why a moved INSTANCE member cannot leave its type's inheritance family, or null when it provably belongs to none. Moving
+	 * one writes a tree Haxe rejects, every shape compile-probed on 4.3.7: an `override` lands in a destination it overrides
+	 * nothing in; the implementation of a supertype's member — an interface method, an `abstract` one, which carry no
+	 * `override` — leaves the source short of it ("Field isPure needed by p.I is missing"); and a member a subtype overrides
+	 * leaves that override overriding nothing. Positive: an `implements` target that does not resolve in scope, or a
+	 * super-interface of one, may declare the member, so it refuses too. An unresolved SUPERCLASS needs no such refusal for a
+	 * plain class ancestor — a member it declares could only be redeclared here with `override` — and is the one residual:
+	 * an `abstract class` outside the scope whose `abstract` method this member implements.
+	 */
+	private static function inheritanceRefusal(prep: MovePrep): Null<String> {
+		final src: String = prep.srcTypeName;
+		final interfacesSeen: Array<String> = [];
+		function interfacesResolve(names: Array<String>): Bool {
+			for (name in names) if (!interfacesSeen.contains(name)) {
+				interfacesSeen.push(name);
+				final decls: Array<TypeDeclInfo> = prep.index.refs.declsNamed(name);
+				if (decls.length != 1 || !interfacesResolve(decls[0].supertypes)) return false;
+			}
+			return true;
+		}
+		function chainInterfacesResolve(name: String, seen: Array<String>): Bool {
+			final decls: Array<TypeDeclInfo> = prep.index.refs.declsNamed(name);
+			if (decls.length != 1 || seen.contains(name)) return true;
+			seen.push(name);
+			final decl: TypeDeclInfo = decls[0];
+			if (!interfacesResolve(decl.interfaces)) return false;
+			for (sup in decl.supertypes) if (!decl.interfaces.contains(sup) && !chainInterfacesResolve(sup, seen)) return false;
+			return true;
+		}
+		for (m in prep.moved) if (!m.isStatic) {
+			final head: String = 'cannot move "${m.name}" out of "$src"';
+			final overrideKind: Null<String> = prep.shape.overrideModifierKind;
+			if (overrideKind != null && m.group.modifiers.exists(mod -> mod.kind == overrideKind))
+				return '$head: it overrides a supertype\'s member, and the destination would declare an override of nothing';
+			final ancestor: Null<String> = prep.index.subtypes.declaringAncestorOf(src, m.name);
+			if (ancestor != null) return '$head: "$ancestor", a supertype of "$src", declares it, and "$src" would no longer implement it';
+			if (prep.index.subtypes.subtypeDeclaresMember(src, m.name))
+				return '$head: a subtype of "$src" declares it too, and its override would override nothing';
+			if (!chainInterfacesResolve(src, []))
+				return '$head: an interface "$src" implements does not resolve in scope and may declare it';
+		}
+		return null;
 	}
 
 }

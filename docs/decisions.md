@@ -3386,3 +3386,19 @@ decided the question; it may not become a record of runs.
   class-level `@:access`, the sub-type import of `ReceiverHit`'s `move`). Two helpers moved to their shared homes for
   reuse rather than copied: `PreferReadOnlyField.isProperty` -> `SourceText.isProperty` and
   `DependencyCarry.memberAccessKinds` -> `ShapeVocab.memberAccessKinds` — branch `feat/infra-N10`
+- a receiver-qualified caller of a moved instance member was LEFT alone whenever `SubtypeGraph.provablyNotSubtype`
+  cleared its receiver's type, and that proof's root refusal was a NEGATIVE list (`typedef` alias, plain `abstract`):
+  a `@:forward enum abstract A(G)` read as unrelated to `G`, and so did a structure declaring `isPure`, which a `G`
+  value unifies with — both moves wrote a tree 4.3.7 rejects (`p.A has no field isPure`, `p.G should be p.S`). Two
+  positive lists now: the proof starts only from a kind whose supertype list is complete (`COMPLETE_SUPERTYPE_KINDS`:
+  class, abstract class, interface, enum, or an anonymous structure), which also corrects `naming`'s receiver
+  attribution for a forwarding enum abstract; and `MoveMemberReceivers` leaves a receiver alone only when it names ONE
+  class or interface of the scope (`classOrInterface`) — a structure's provable non-subtyping says nothing about the
+  `G` it may hold. Everything else refuses — branch `feat/infra-N12`
+- `move-member` moved an instance member of the source's inheritance family: an `override` (the destination declared
+  an override of nothing), the implementation of an interface method (the source no longer implemented it), a member
+  a subclass overrides. `MoveMember.inheritanceRefusal` refuses all three, and — positive — a member an `implements`
+  target or super-interface outside the scope may declare. An unresolved SUPERCLASS is not refused: a plain class
+  ancestor's member could only be redeclared with `override`, which the modifier check sees; the residual is an
+  `abstract class` outside the scope whose `abstract` method the member implements without the keyword (the same
+  residual `CrossRenameMember` carries) — branch `feat/infra-N12`

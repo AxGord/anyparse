@@ -1648,4 +1648,21 @@ class SymbolIndexSliceTest extends Test {
 		];
 	}
 
+	/**
+	 * An `enum abstract` reaches other types through `@:forward` / `@:to` exactly as a plain abstract does, so its empty
+	 * supertype list proves nothing either: `@:forward enum abstract E(Owner)` reads `Owner`'s members. The root refusal
+	 * named the plain abstract and the typedef alias only, and answered "provably not a subtype" for this one.
+	 */
+	@:pin('control')
+	@:killer('M-SUBTYPE-ROOT-NEGATIVE-LIST')
+	public function testProvablyNotSubtypeRefusesAForwardingEnumAbstract(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/EFwd.hx', source: '@:forward\nenum abstract EFwd(Owner) {}' },
+			{ file: 'src/Owner.hx', source: 'class Owner {}' },
+			{ file: 'src/Other.hx', source: 'class Other {}' }
+		], plugin());
+		Assert.isFalse(index.subtypes.provablyNotSubtype('EFwd', 'Owner'));
+		Assert.isTrue(index.subtypes.provablyNotSubtype('Other', 'Owner'));
+	}
+
 }

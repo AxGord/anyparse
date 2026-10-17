@@ -40,17 +40,20 @@ final class SubtypeGraph {
 	private static final BARE_IMPLEMENTABLE_OWNER_KINDS: Array<String> = ['InterfaceDecl', 'AbstractClassDecl'];
 
 	/**
-	 * The decl kinds whose `supertypes` is NOT their complete set of inheritance edges: a `typedef`
-	 * ALIAS (`typedef A = C`, legal in an `extends` position) and an abstract (`abstract W(C)` with
-	 * `@:forward` / `@:from` / `@:to`) each reach another type through a link no `extends` /
-	 * `implements` clause records. Their closure therefore looks EMPTY, which a negative-reachability
-	 * proof would read as "excludes everything" — so `closureExcludes` refuses them at its ROOT. As a
-	 * supertype LINK an abstract is a different matter: Haxe rejects one in either inheritance clause,
-	 * so a link resolving to it is no edge at all and is stepped over (`supertypeLinkIsAbstract`). A
+	 * The decl kinds whose `supertypes` IS their complete set of inheritance edges — a class, an
+	 * abstract class, an interface, an enum — and so the only ones a negative-reachability proof may
+	 * start from (`closureExcludesFrom`), with an anonymous structure, whose `> Base` extensions are
+	 * already in `supertypesRaw`. Every other kind reaches types through a link no `extends` /
+	 * `implements` clause records: a `typedef` ALIAS (`typedef A = C`), an abstract and an `enum
+	 * abstract` (`@:forward` / `@:from` / `@:to`). Their closure looks EMPTY, which the proof would read
+	 * as "excludes everything", so it refuses them. A positive list: the negative one it replaced named
+	 * the typedef and the plain abstract and let a `@:forward enum abstract E(Owner)` through as
+	 * unrelated to `Owner`. As a supertype LINK an abstract is a different matter: Haxe rejects one in
+	 * either inheritance clause, so a link resolving to it is no edge at all and is stepped over. A
 	 * POSITIVE proof (`closureContains`) needs no guard either way: an unseen edge only makes it miss,
 	 * which is its safe direction.
 	 */
-	private static final ALIASING_DECL_KINDS: Array<String> = ['TypedefDecl', 'AbstractDecl'];
+	private static final COMPLETE_SUPERTYPE_KINDS: Array<String> = ['ClassDecl', 'AbstractClassDecl', 'InterfaceDecl', 'EnumDecl'];
 
 	/** Every indexed file's `FileInfo`, handed over by the owning index. */
 	private final _files: Array<FileInfo>;
@@ -799,7 +802,7 @@ final class SubtypeGraph {
 	 * Whether `name`'s transitive supertype closure is FULLY index-resolved AND excludes
 	 * `target`. A supertype name absent or ambiguous in the index (an external type, or a
 	 * project file not in the set) makes the relation unknown → false, as does reaching
-	 * `target` itself, as does an ALIASING decl at the walk's ROOT (see `ALIASING_DECL_KINDS`
+	 * `target` itself, as does any decl at the walk's ROOT whose supertype list is not complete (see `COMPLETE_SUPERTYPE_KINDS`
 	 * — its empty `supertypes` would "exclude" the target vacuously). A supertype LINK that
 	 * resolves to an abstract is stepped over rather than doubted (`supertypeLinkIsAbstract`):
 	 * no `extends` / `implements` clause can name one, so it is not an inheritance edge.
@@ -819,12 +822,11 @@ final class SubtypeGraph {
 	 */
 	private function closureExcludesFrom(cur: ResolvedType, target: String, seen: Array<String>): Bool {
 		if (!_refs.markSeen(cur, seen)) return true;
-		// An ALIAS (`typedef A = C`, a `@:forward` abstract) reaches other types through `@:from` /
-		// `@:to` edges the closure cannot follow, so its own supertype list proves nothing. An
-		// ANONYMOUS STRUCTURE has no such edges — its only inheritance links are the `> Base`
+		// Only a kind whose supertype list is complete proves anything (`COMPLETE_SUPERTYPE_KINDS`). An
+		// ANONYMOUS STRUCTURE has no hidden edges either — its only inheritance links are the `> Base`
 		// structural extensions already in `supertypesRaw`, and a structure can never be a subtype
-		// of a class — so the closure over it IS complete and the refusal does not apply.
-		if (ALIASING_DECL_KINDS.contains(cur.type.kind) && !cur.type.isAnonStruct) return false;
+		// of a class — so the closure over it IS complete.
+		if (!COMPLETE_SUPERTYPE_KINDS.contains(cur.type.kind) && !cur.type.isAnonStruct) return false;
 		for (raw in cur.type.supertypesRaw) {
 			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			if (anc == null) return false;
@@ -836,7 +838,7 @@ final class SubtypeGraph {
 			// `DisplayObject` carries one inside a dead `#if` branch, which the branch-blind
 			// supertype scan records like any other). Nothing is reachable through such a link.
 			// Only the LINK is stepped over — an abstract at the walk's ROOT keeps the
-			// `ALIASING_DECL_KINDS` refusal above, whose `@:forward` / `@:to` edges a caller
+			// `COMPLETE_SUPERTYPE_KINDS` refusal above, whose `@:forward` / `@:to` edges a caller
 			// attributing member occurrences must not lose.
 			if (ancestor.type.kind == ABSTRACT_DECL_KIND) continue;
 			if (!closureExcludesFrom(ancestor, target, seen)) return false;

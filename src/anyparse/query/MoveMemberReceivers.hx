@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.check.CheckScan;
 import anyparse.query.MoveMember.MovePrep;
 import anyparse.query.MoveMember.MovedMember;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -30,10 +31,11 @@ final class MoveMemberReceivers {
 	 *
 	 * Positive and fail-closed, per access: a receiver typed (`NominalTypes.expressionTypeNominal`) as the source type —
 	 * declared once in scope — or a subtype of it, which inherits the via field, is routed through it; one provably
-	 * unrelated (an in-scope type outside the source's subtree, or a standard-library type declaring a member of that
-	 * name) is someone else's member and is left alone; a type-namespace receiver is a static access and not this
-	 * member's; anything else — an untyped receiver, `Dynamic`, a type parameter, a structure, `super`, a null-safe
-	 * access — refuses the move.
+	 * unrelated (an in-scope CLASS or INTERFACE outside the source's subtree, or a standard-library type declaring a
+	 * member of that name) is someone else's member and is left alone; a type-namespace receiver is a static access and
+	 * not this member's; anything else — an untyped receiver, `Dynamic`, a type parameter, a structure (a `G` unifies
+	 * with one declaring its members), an abstract or `enum abstract` (whose `@:forward` reaches the source's members),
+	 * `super`, a null-safe access — refuses the move.
 	 */
 	public static function collectReceiverHits(prep: MovePrep, plugin: GrammarPlugin): { error: Null<String>, hits: Array<ReceiverHit> } {
 		final instance: Array<MovedMember> = prep.moved.filter(m -> !m.isStatic);
@@ -119,7 +121,7 @@ final class MoveMemberReceivers {
 		if (type == null) return 'its receiver\'s type is not known';
 		if (type == prep.srcTypeName || prep.index.subtypes.isSubtype(type, prep.srcTypeName))
 			return srcUnique ? ROUTE : 'more than one type in scope is named "${prep.srcTypeName}"';
-		if (prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return LEAVE;
+		if (classOrInterface(prep, type) && prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return LEAVE;
 		if (StdTypes.memberOf(plugin, type, node.name ?? '') != null) return LEAVE;
 		return 'its receiver is a "$type", which is not provably unrelated to "${prep.srcTypeName}"';
 	}
@@ -129,6 +131,18 @@ final class MoveMemberReceivers {
 		var at: QueryNode = node;
 		while (at.kind == MemberKinds.FIELD_ACCESS_KIND && at.children.length > 0) at = at.children[0];
 		return at.kind == MemberKinds.IDENT_EXPR_KIND ? at : null;
+	}
+
+	/**
+	 * Whether `type` names exactly one class or interface of the scope: the only kinds whose members are their own, so that
+	 * a provably unrelated one cannot be reaching the source's member. An abstract (`@:forward`, `@:to`) and an `enum
+	 * abstract` reach another type's members, and a structure is unified with any class declaring its fields — a `G` value
+	 * can be held in either, and a `G` member read through it.
+	 */
+	private static function classOrInterface(prep: MovePrep, type: String): Bool {
+		final kinds: Array<String> = (prep.shape.classDeclKinds ?? []).concat(prep.shape.interfaceDeclKinds ?? []);
+		final decls: Array<TypeDeclInfo> = prep.index.refs.declsNamed(type);
+		return decls.length == 1 && kinds.contains(decls[0].kind);
 	}
 
 }

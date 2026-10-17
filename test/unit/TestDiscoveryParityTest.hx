@@ -4090,6 +4090,9 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-WILDCARD-BINDS-BLIND',
 			'unit.query.MoveMemberSplitSliceTest#testAFieldSomethingElseReachesStaysAndRefuses :: control :: '
 				+ 'M-OWNED-FIELD-ANY-READER,M-OWNED-FIELD-ACCESS-BLIND,M-OWNED-FIELD-PROPERTY,M-OWNED-READERS-UNNAMED',
+			'unit.query.MoveMemberSplitSliceTest#testAMemberOfAnInheritanceFamilyRefusesTheMove :: control :: '
+				+ 'M-MOVE-OVERRIDE-MEMBER,M-MOVE-IMPLEMENTATION,M-MOVE-OVERRIDDEN-MEMBER,M-MOVE-UNRESOLVED-INTERFACE',
+			'unit.query.MoveMemberSplitSliceTest#testAReceiverNotProvenAnUnrelatedClassRefusesTheMove :: control :: M-RECEIVER-STRUCTURE-LEFT',
 			'unit.query.MoveMemberSplitSliceTest#testAReceiverTheOpCannotProveRefusesTheMove :: control :: '
 				+ 'M-RECEIVER-UNKNOWN-ROUTED,M-RECEIVER-UNRELATED-ROUTED,M-VIA-PRIVATE-REACHED',
 			'unit.query.MoveMemberSplitSliceTest#testASourceSubModuleTypeIsImportedAtTheDestination :: control :: '
@@ -4234,6 +4237,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-INDEX-GUARDED-PRIVATE-SPLIT,M-INDEX-GUARDED-PRIVATE-PAST-MODIFIERS',
 			'unit.query.SymbolIndexSliceTest#testPlatformFileDeclaresTheModuleBeforeItsDot :: control :: '
 				+ 'M-MODULE-PLATFORM,M-MODULE-SCAN-PLATFORM',
+			'unit.query.SymbolIndexSliceTest#testProvablyNotSubtypeRefusesAForwardingEnumAbstract :: control :: M-SUBTYPE-ROOT-NEGATIVE-LIST',
 			'unit.query.TypeNameBindingTest#testADeclarationIsAtItsCanonicalPath :: control :: M-BINDINGS-DECLS-AT-SUBTYPE,M-CANONICAL-SUBTYPE',
 			'unit.query.TypeNameBindingTest#testAGuardedImportAgainstAStdTypeIsUnknown :: control :: M-BINDING-STRICT-OUTSIDE',
 			'unit.query.TypeNameBindingTest#testAGuardedImportAgainstAnotherBindingIsUnknown :: control :: M-AMBIENT-GUARDED-UNION',
@@ -7163,7 +7167,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-RECEIVER-ROUTING-OFF',
 			'M-RECEIVER-UNKNOWN-ROUTED',
 			'M-RECEIVER-UNRELATED-ROUTED',
-			'M-VIA-PRIVATE-REACHED'
+			'M-VIA-PRIVATE-REACHED',
+			'M-SUBTYPE-ROOT-NEGATIVE-LIST',
+			'M-RECEIVER-STRUCTURE-LEFT',
+			'M-MOVE-OVERRIDE-MEMBER',
+			'M-MOVE-IMPLEMENTATION',
+			'M-MOVE-OVERRIDDEN-MEMBER',
+			'M-MOVE-UNRESOLVED-INTERFACE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
