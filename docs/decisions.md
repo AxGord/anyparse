@@ -3184,3 +3184,9 @@ decided the question; it may not become a record of runs.
   — branch `feat/infra-N8`
 - `ImplicitSites.landings` asked `returnStatementKind` → an expression-bodied `function f():String return d;` is a
   `ReturnExpr` and landed nowhere; every `return` carrying a value is `valueReturnKinds` — branch `feat/infra-N8`
+- `redundant-lambda-wrapper`'s own `binderKindsOf` and `prefer-range-loop`'s copy of the closure-capture walk are
+  deleted. The binders are `BinderScan.binderKinds` less the local functions, which this rule reads as CALLEES
+  (`localFns`); the one kind that adds, the named function literal, is a real shadow — read past, the member's
+  signature answered for it and `foreach(ok)` was proposed for a `(v:Int, ?w:Int) -> Bool` literal Haxe 4.3.7
+  rejects. `LoopScan.capturedByClosure` takes the two kind sets it reads instead of a whole `LoopSeams`, so
+  `prefer-range-loop`'s bundle passes as it is — branch `feat/infra-N8`

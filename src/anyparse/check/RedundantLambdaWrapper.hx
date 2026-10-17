@@ -2,9 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.BinderScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
@@ -528,19 +530,6 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 	}
 
 	/**
-	 * Every declaration seam that BINDS a value name — the set whose members shadow a bare callee.
-	 */
-	private static function binderKindsOf(shape: RefShape): Array<String> {
-		return (shape.localDeclKinds ?? []).concat(shape.paramKinds ?? [])
-			.concat(shape.localDeclExprKinds ?? [])
-			.concat(shape.staticLocalDeclKinds ?? [])
-			.concat(shape.localDeclContinuationKinds ?? [])
-			.concat(shape.selfScopeDeclKinds ?? [])
-			.concat(shape.casePatternBinderKinds ?? [])
-			.concat(shape.iterationValueBinderKinds ?? []);
-	}
-
-	/**
 	 * Resolve every seam the check reads, or null when one it cannot work without is unset.
 	 */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
@@ -564,7 +553,10 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 			functionKinds: shape.functionKinds ?? [],
 			localFunctionKinds: shape.localFunctionKinds ?? [],
 			inlineFunctionKinds: shape.inlineFunctionKinds ?? [],
-			binderKinds: binderKindsOf(shape),
+			// every binder shadows a bare callee except the local functions, which ARE callees (`localFns`)
+			binderKinds: [
+				for (k in BinderScan.binderKinds(shape)) if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k
+			],
 			reducibleBinderKinds: (shape.paramKinds ?? []).filter(k -> k != shape.optionalParamKind && k != shape.restParamKind)
 				.concat(shape.localDeclKinds ?? []),
 			modifierKinds: modifiers,

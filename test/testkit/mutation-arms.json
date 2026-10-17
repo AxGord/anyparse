@@ -22196,6 +22196,22 @@
 			"find": "doWhileLoopKinds: ['DoWhileStmt', 'DoWhileExpr'],",
 			"replace": "doWhileLoopKinds: ['DoWhileStmt'],",
 			"note": "a do-while in expression position (`() -> do x while (c)`) is no loop to any reader of the loop vocabulary"
+		},
+		{
+			"name": "M-RLW-NAMED-FN-NOT-BINDER",
+			"type": "anyparse.check.RedundantLambdaWrapper",
+			"method": "resolveSeams",
+			"find": "if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k",
+			"replace": "if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k) && k != shape.namedFnExprKind) k",
+			"note": "a named function literal does not shadow a member callee, so the member's signature answers for it and a reduction the compiler rejects is proposed"
+		},
+		{
+			"name": "M-RLW-LOCAL-FN-AS-BINDER",
+			"type": "anyparse.check.RedundantLambdaWrapper",
+			"method": "resolveSeams",
+			"find": "for (k in BinderScan.binderKinds(shape)) if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k",
+			"replace": "for (k in BinderScan.binderKinds(shape)) k",
+			"note": "a local function counts as a shadowing binder rather than as the callee it is, so `p -> ok(p)` over a local `function ok` is never reduced"
 		}
 	]
 }

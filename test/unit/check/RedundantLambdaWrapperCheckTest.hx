@@ -165,6 +165,8 @@ class RedundantLambdaWrapperCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> Std.parseInt(p));\n\t}\n}').length);
 	}
 
+	@:pin('control')
+	@:killer('M-RLW-LOCAL-FN-AS-BINDER')
 	public function testLocalFunctionFlagged(): Void {
 		Assert.equals(
 			1,
@@ -470,6 +472,25 @@ class RedundantLambdaWrapperCheckTest extends Test {
 		discriminate(
 			'untyped body', '${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p) untyped Helper.isPos(p));\n\t}\n}',
 			'${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p) return Helper.isPos(p));\n\t}\n}'
+		);
+	}
+
+	/**
+	 * A NAMED function literal binds its name in the enclosing scope, so it shadows a member of that name for a
+	 * bare callee like any other binder (`BinderScan.binderKinds`). Read past it, the member's one-parameter
+	 * signature answered for `ok`, and `foreach(ok)` was proposed for the literal `(v:Int, ?w:Int) -> Bool` —
+	 * which `haxe --interp` 4.3.7 rejects (`should be (item : Int) -> Bool`).
+	 */
+	@:pin('control')
+	@:killer('M-RLW-NAMED-FN-NOT-BINDER')
+	public function testNamedFunctionLiteralShadowsAMemberCallee(): Void {
+		final member: String = '\tfunction ok(v:Int):Bool return true;\n';
+		discriminate(
+			'named function literal',
+			'class C {\n$member\tfunction f():Void {\n\t\tfinal g = function ok(v:Int, ?w:Int):Bool {\n\t\t\treturn true;\n\t\t};\n'
+			+ '\t\txs.foreach(p -> ok(p));\n\t}\n}',
+			'class C {\n$member\tfunction f():Void {\n\t\tfinal g = function other(v:Int, ?w:Int):Bool {\n\t\t\treturn true;\n\t\t};\n'
+			+ '\t\txs.foreach(p -> ok(p));\n\t}\n}'
 		);
 	}
 

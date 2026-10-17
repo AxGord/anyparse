@@ -1976,6 +1976,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ISVAR-SCOPE-REPORT-ONLY',
 			'unit.check.RedundantIsVarCheckTest#testSubclassOverrideWritingStorageNotFlagged :: control :: M-ISVAR-ACCESSOR-BODY-BLIND',
 			'unit.check.RedundantIsVarCheckTest#testUnresolvedSupertypeNotFlagged :: control :: M-ISVAR-CHAIN-UNRESOLVED-ADMITTED',
+			'unit.check.RedundantLambdaWrapperCheckTest#testLocalFunctionFlagged :: control :: M-RLW-LOCAL-FN-AS-BINDER',
+			'unit.check.RedundantLambdaWrapperCheckTest#testNamedFunctionLiteralShadowsAMemberCallee :: control :: M-RLW-NAMED-FN-NOT-BINDER',
 			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedOverANonStandardMap :: control :: M-MAPITER-SUBTYPE-VETO-OFF',
 			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedOverAliasedList :: control :: M-ULB-IMPORT-ALIAS-BLIND',
 			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedOverMapAndUnknownIterable :: control :: M-MAPITERKEY-UNPROVEN-DROPPED',
@@ -7043,7 +7045,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-COND-NAMED-FN-NOT-IN-EFFECT',
 			'M-COND-CONTINUATION-NOT-IN-EFFECT',
 			'M-SITES-EXPR-RETURN-NO-LANDING',
-			'M-VOCAB-DOWHILE-EXPR-NOT-LOOP'
+			'M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
+			'M-RLW-NAMED-FN-NOT-BINDER',
+			'M-RLW-LOCAL-FN-AS-BINDER'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

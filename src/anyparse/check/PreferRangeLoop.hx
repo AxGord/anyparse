@@ -321,22 +321,6 @@ final class PreferRangeLoop implements Check {
 	}
 
 	/**
-	 * Whether any nested-function subtree (`ShapeVocab.nestedFunctionKinds`: a lambda, a local
-	 * or `inline` function, a named function expression) within `scope` references `loopVar`
-	 * (a word-boundary match inside the closure's span). Such a closure captures the
-	 * `while`'s one function-scoped counter by reference, so the range `for`'s
-	 * per-iteration re-scoping would change what it observes — a conservative bail.
-	 */
-	private static function capturedByClosure(scope: QueryNode, source: String, loopVar: String, s: Seams): Bool {
-		if (s.opaqueKinds.contains(scope.kind)) return false;
-		if (s.closureKinds.contains(scope.kind)) {
-			final span: Null<Span> = scope.span;
-			if (span != null && OccurrenceScan.referencedInRange(source, loopVar, span.from, span.to, [])) return true;
-		}
-		return scope.children.exists(c -> capturedByClosure(c, source, loopVar, s));
-	}
-
-	/**
 	 * The matched counter loop `(decl, whileNode)` inside `scope` — the loop variable,
 	 * its init and bound nodes, the `while` and its body block — or null when any gate
 	 * fails. Shared by `tryMatch` (report) and `fixWalk` (rewrite) so both see one
@@ -376,7 +360,7 @@ final class PreferRangeLoop implements Check {
 			null
 		else if (OccurrenceScan.referencedInRange(source, loopVar, whileSpan.to, scopeSpan.to, []))
 			null
-		else if (capturedByClosure(scope, source, loopVar, s))
+		else if (LoopScan.capturedByClosure(scope, source, loopVar, s))
 			null
 		else
 			{
