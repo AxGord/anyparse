@@ -797,4 +797,18 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 		return widest;
 	}
 
+	/**
+	 * A body statement stands in for its member only where the member renders it exactly as it renders alone. The
+	 * body of a function literal the source indents a level short of where the writer puts it renders a tab deeper
+	 * inside its member than in the one-statement wrapper, so measured alone this merge would fit by the four columns
+	 * it is really over: the member scope sees the width the file will have, and nothing is proposed.
+	 */
+	@:pin('control')
+	@:killer('M-FOLD-STATEMENT-UNPROVEN')
+	public function testStatementStandsInOnlyWhereItRendersAlike(): Void {
+		final literal: String = StringTools.lpad('', 'a', 116);
+		final src: String = 'class C {\n\tstatic var x = [\n\t\tfunction() {\n\t\tg(\'${literal}\' + \'bbbbbbbb\');\n\t\t}\n\t];\n}\n';
+		Assert.equals(0, violations(src).length);
+	}
+
 }

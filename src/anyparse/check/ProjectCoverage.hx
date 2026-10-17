@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.LintDocuments.DocumentMemo;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -34,6 +35,13 @@ final class ProjectCoverage {
 
 	/** `<document>\t<exclude>` -> whether the run covers that document's project. */
 	private final _covered: Map<String, Bool> = [];
+
+	/**
+	 * Every `apqlint.json` this coverage read, parsed once: each run directory resolves its chain and then reads each
+	 * document of it again for its own declarations, so a single-config project used to parse its one document twice
+	 * per directory (~0.33 s on the TM tree). Only read here, never handed on.
+	 */
+	private final _documents: DocumentMemo = [];
 
 	public function new(files: Array<String>) {
 		#if (sys || nodejs)
@@ -121,12 +129,12 @@ final class ProjectCoverage {
 	 * when none does, or one cannot be read. A nested document restating `closedWorld` closes no project of its own: the
 	 * run must still cover the outer one, whose files may call and write into the inner directory.
 	 */
-	private static function declaringDocument(file: String): String {
+	private function declaringDocument(file: String): String {
 		var found: String = '';
-		for (path in LintConfig.discoverChain(file).chain) {
+		for (path in LintConfig.discoverChain(file, _documents).chain) {
 			final content: Null<String> = try File.getContent(path) catch (_: Exception) null;
 			if (content == null) return '';
-			final config: LintConfig = LintConfig.parse(content, Path.directory(path));
+			final config: LintConfig = LintConfig.parse(content, Path.directory(path), _documents);
 			if (config.boolOption('thread-safety', 'closedWorld') != null || config.resolutionRoots().length > 0) found = path;
 		}
 		return found;

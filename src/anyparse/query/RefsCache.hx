@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
+import anyparse.query.TypeResolver.NullSafetyScope;
 
 /**
  * Run-scoped memoization of `Refs.find`, keyed by tree identity.
@@ -34,6 +35,9 @@ final class RefsCache {
 
 	/** Tree -> name -> reference offset -> its binding's offset (`bindingAt`), built per name on its first question. */
 	private final _bindings: Map<QueryNode, Map<String, Map<Int, Int>>> = [];
+
+	/** Tree -> `<metaName>\t<disableArg>` -> its `@:nullSafety` scopes (`TypeResolver.collectNullSafetyScopes`). */
+	private final _nullSafetyScopes: Map<QueryNode, Map<String, Array<NullSafetyScope>>> = [];
 
 	public function new() {}
 
@@ -93,6 +97,21 @@ final class RefsCache {
 		final n: Null<String> = node.name;
 		if (n != null) out.push(n);
 		for (c in node.children) collectNames(c, out);
+	}
+
+	/**
+	 * The `@:nullSafety` scopes of `tree` under `key` (the meta name and its disable argument), built by `build` on the
+	 * first question and kept for the run like every index here. The array is never handed to a caller that writes it:
+	 * `TypeResolver` only iterates it.
+	 */
+	public function nullSafetyScopes(tree: QueryNode, key: String, build: () -> Array<NullSafetyScope>): Array<NullSafetyScope> {
+		final byKey: Map<String, Array<NullSafetyScope>> = _nullSafetyScopes[tree] ?? [];
+		_nullSafetyScopes[tree] = byKey;
+		final known: Null<Array<NullSafetyScope>> = byKey[key];
+		if (known != null) return known;
+		final built: Array<NullSafetyScope> = build();
+		byKey[key] = built;
+		return built;
 	}
 
 }

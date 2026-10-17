@@ -1388,6 +1388,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FixVerifierProbeRefusalE2ETest#testAWriterRefusedSetKeepsItsWritableUnits :: control :: M-WRITER-NARROW-NONE',
 			'unit.check.FoldStringLiteralsCandidateGateTest#testEveryOutOfScopeCallSpellingIsRefused :: control :: M-MACRO-VALUE-UNLISTED',
 			'unit.check.FoldStringLiteralsCheckTest#testConstantOperandMergesAsText :: control :: M-FOLD-CONSTANT-AS-EXPRESSION',
+			'unit.check.FoldStringLiteralsWidthCheckTest#testStatementStandsInOnlyWhereItRendersAlike :: control :: M-FOLD-STATEMENT-UNPROVEN',
 			'unit.check.GuardContinueCheckTest#testDefersADoWhileLoopGuardLifts :: control :: '
 				+ 'M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY',
 			'unit.check.GuardContinueCheckTest#testElseBranchNotFlagged :: control :: M-GUARD-ELSE-ADMITTED',
@@ -7457,6 +7458,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-USING-HOSTS-ALIAS',
 			'M-USING-DECLS-AMBIENT',
 			'M-FOLD-FIX-REPORT-INDEX',
+			'M-FOLD-STATEMENT-UNPROVEN',
 			'M-PIEC-FIX-REPORT-INDEX',
 			'M-PIEC-RUN-SELECTION'
 		];

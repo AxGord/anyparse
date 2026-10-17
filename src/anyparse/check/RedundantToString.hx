@@ -442,7 +442,7 @@ final class RedundantToString implements Check implements DefaultOff {
 		final metaName: Null<String> = seams.shape.nullSafetyMetaName;
 		return owners == null || metaName == null ? unresolved : {
 			decls: boundDecls(binder.tierOf(call)),
-			nonNull: TypeResolver.enclosingIsNullSafe(ctx.root, callSpan, metaName, seams.shape.nullSafetyDisableArg)
+			nonNull: TypeResolver.enclosingIsNullSafe(ctx.root, callSpan, metaName, seams.shape.nullSafetyDisableArg, seams.shape.refsCache)
 				&& ctx.nullity.ofMemberReturn(owners, method) != Unproven
 		};
 	}

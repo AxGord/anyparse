@@ -58,6 +58,14 @@ final class SubtypeGraph {
 	/** Every indexed file's `FileInfo`, handed over by the owning index. */
 	private final _files: Array<FileInfo>;
 
+	/**
+	 * Every declared type in `_files` / `types` order (`types`) and, per member NAME, the ordinals of the
+	 * types that declare a member of that name (`byName`), built on first use. `subtypeOverridesProperty`
+	 * asks about three names per property and used to rescan every member of every type in the project for
+	 * each ask (~0.3 s of a TM `lint --all`).
+	 */
+	private var _memberOwners: Null<{ types: Array<ResolvedType>, byName: Map<String, Array<Int>> }> = null;
+
 	/** Per-file source text, handed over by the owning index. */
 	private final _sources: Map<String, String>;
 
@@ -239,17 +247,39 @@ final class SubtypeGraph {
 	 */
 	public function subtypeOverridesProperty(owner: String, prop: String): Bool {
 		final names: Array<String> = ['get_$prop', 'set_$prop', prop];
-		for (fi in _files) for (t in fi.types) if (t.name != owner) {
-			final matches: Array<MemberInfo> = t.members.filter(m -> names.contains(m.name));
-			if (matches.length == 0) continue;
-			if (isSubtype(t.name, owner)) return true;
+		final owners: { types: Array<ResolvedType>, byName: Map<String, Array<Int>> } = _memberOwners ?? {
+			final types: Array<ResolvedType> = [];
+			final byName: Map<String, Array<Int>> = [];
+			for (fi in _files) for (t in fi.types) {
+				final ordinal: Int = types.length;
+				types.push({ file: fi, type: t });
+				for (m in t.members) {
+					final declaring: Array<Int> = byName[m.name] ?? [];
+					if (declaring.length == 0 || declaring[declaring.length - 1] != ordinal) declaring.push(ordinal);
+					byName[m.name] = declaring;
+				}
+			}
+			final built: { types: Array<ResolvedType>, byName: Map<String, Array<Int>> } = { types: types, byName: byName };
+			_memberOwners = built;
+			built;
+		};
+		// the types declaring a member of one of `names`, each once, in `_files` / `types` order — the types the full
+		// scan this replaced found a match in, in the order it met them
+		final ordinals: Array<Int> = [];
+		for (name in names) for (ordinal in owners.byName[name] ?? []) if (!ordinals.contains(ordinal)) ordinals.push(ordinal);
+		ordinals.sort((a, b) -> a - b);
+		for (ordinal in ordinals) {
+			final resolved: ResolvedType = owners.types[ordinal];
+			if (resolved.type.name == owner) continue;
+			final matches: Array<MemberInfo> = resolved.type.members.filter(m -> names.contains(m.name));
+			if (isSubtype(resolved.type.name, owner)) return true;
 			if (!matches.exists(m -> m.isOverride)) continue;
-			final declarer: Null<String> = overriddenDeclarer({ file: fi, type: t }, names, owner);
+			final declarer: Null<String> = overriddenDeclarer({ file: resolved.file, type: resolved.type }, names, owner);
 			if (declarer != null) {
 				if (declarer == owner) return true;
 				continue;
 			}
-			if (!provablyNotSubtype(t.name, owner)) return true;
+			if (!provablyNotSubtype(resolved.type.name, owner)) return true;
 		}
 		return false;
 	}

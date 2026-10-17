@@ -4,6 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
+import anyparse.check.LintDocuments;
 import anyparse.check.Linter;
 import anyparse.check.LongLockExplain.LongLockReport;
 import anyparse.check.OracleDeclaration;
@@ -233,8 +234,13 @@ final class LintCommand implements CliCommand {
 		// otherwise a check runs when it is enabled for at least one file, and
 		// `Linter.run` drops its findings on the files that disable it.
 		final applyEnablement: Bool = o.ruleFilters.length == 0;
+		// Enablement is asked per DISTINCT config, not per file: every file of a directory gets the same memoised config,
+		// and the per-file form asked each of ~190 checks once per file (~0.17 s on the TM tree). `paths` is the run's
+		// file order, the order every later per-file question discovers configs in, so each once-per-document config
+		// warning prints where it did.
+		final fileConfigs: Array<LintConfig> = LintDocuments.distinctConfigs(paths, resolveConfig);
 		final activeChecks: Array<Check> = applyEnablement ? [
-			for (c in checks) if (files.exists(f -> resolveConfig(f.file).enabledFor(c.id(), !(c is DefaultOff)))) c
+			for (c in checks) if (fileConfigs.exists(config -> config.enabledFor(c.id(), !(c is DefaultOff)))) c
 		] : checks;
 
 		// Resolution scope: the UNION of `resolutionRoots` (explicit dirs) and `resolutionLibs`
