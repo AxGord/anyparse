@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.NegatedCondition.InversionSeams;
 import anyparse.check.NegatedCondition.InversionSite;
@@ -41,14 +42,23 @@ import anyparse.runtime.Span;
  * : y` -> `a && b ? y : x`). The walk STOPS at a flagged node, so a nested one surfaces on a later pass and per-pass
  * edits never overlap; a report-only node is descended into. Chains with `comparison-to-boolean` through the `--fix`
  * fixed point (`x == false` -> `!x` -> swapped away). Unset `ifStatementKinds` or `notKind` makes the check a no-op.
+ *
+ * ## Option `keepDefaultElse` (default off)
+ *
+ * With `"keepDefaultElse": true` a negated choice whose CURRENT else arm is a default literal (`null`, `false`, a
+ * numeric zero, an empty string; parenthesised too) is left alone: `!hasNext ? event : null` keeps the fallback
+ * last, where the inversion would bury the value (`hasNext ? null : event`). Likewise a value `if`, and an `if`
+ * statement whose else branch is `return <default>;` (bare or alone in a block). A non-default else still inverts.
+ * The gate is `NegatedCondition`'s, so the four ternary builders read this same option.
  */
 @:nullSafety(Strict)
-final class InvertNegatedIfElse implements Check {
+final class InvertNegatedIfElse implements Check implements ConfigAware {
+
+	public static inline final RULE_ID: String = 'invert-negated-if-else';
 
 	/** An if node with an else branch has children [cond, then, else]. */
 	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
 
-	private static inline final RULE_ID: String = 'invert-negated-if-else';
 	private static inline final MSG_STATEMENT: String = 'this negated if-else can be inverted — drop the ! and swap the branches';
 	private static inline final MSG_TERNARY: String = 'this negated ternary can be inverted — drop the ! and swap the branches';
 	private static inline final MSG_IF_EXPRESSION: String = 'this negated if-expression can be inverted — drop the ! and swap the branches';
@@ -56,7 +66,14 @@ final class InvertNegatedIfElse implements Check {
 	/** Appended to a value-form message when a comment keeps the site report-only. */
 	private static inline final COMMENT_BLOCKS: String = ' (a comment blocks the autofix)';
 
+	/** The linter's per-file config resolver (`keepDefaultElse`), or null to read each file's chain from disk. */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return RULE_ID;
@@ -68,7 +85,7 @@ final class InvertNegatedIfElse implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(
-			files, plugin, resolveSeams(plugin, files),
+			files, plugin, resolveSeams(plugin, files, _resolveConfig),
 			(entry, tree, seams, violations) -> walk(violations, scanOf(seams, entry.file, entry.source, tree, plugin), tree)
 		);
 	}
@@ -83,7 +100,8 @@ final class InvertNegatedIfElse implements Check {
 	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
 		final file: String = violations[0].file;
-		return RunScan.editsWith(plugin, source, resolveSeams(plugin, [{ file: file, source: source }], index), (root, seams) -> {
+		final resolved: Null<Seams> = resolveSeams(plugin, [{ file: file, source: source }], _resolveConfig, index);
+		return RunScan.editsWith(plugin, source, resolved, (root, seams) -> {
 			final scan: Scan = scanOf(seams, file, source, root, plugin);
 			final byKey: Map<String, QueryNode> = [];
 			MemberKinds.indexNodesByKind(root, seams.ifKinds.concat(seams.valueKinds), byKey);
@@ -140,11 +158,13 @@ final class InvertNegatedIfElse implements Check {
 
 	/**
 	 * Whether the `if` statement `ifNode` (with an `else`) is a swap candidate: its condition reads
-	 * positive through `NegatedCondition.positive` (a built-in top-level not whose rebuild drops no
-	 * comment) and its `else` branch is not itself an `if`.
+	 * positive through `NegatedCondition.positive` for its `else` branch (a built-in top-level not whose
+	 * rebuild drops no comment, and no `keepDefaultElse` default arm) and that branch is not itself an `if`.
 	 */
 	private static function statementInvertible(ifNode: QueryNode, scan: Scan): Bool {
-		return !scan.seams.ifKinds.contains(ifNode.children[2].kind) && NegatedCondition.positive(ifNode.children[0], scan.site) != null;
+		final elseBranch: QueryNode = ifNode.children[2];
+		return
+			!scan.seams.ifKinds.contains(elseBranch.kind) && NegatedCondition.positive(ifNode.children[0], elseBranch, scan.site) != null;
 	}
 
 	/**
@@ -159,7 +179,7 @@ final class InvertNegatedIfElse implements Check {
 		final thenBranch: QueryNode = node.children[1];
 		final elseBranch: QueryNode = node.children[2];
 		if (sameConstruct(thenBranch, node, scan.seams) || sameConstruct(elseBranch, node, scan.seams)) return Skip;
-		final kept: Null<QueryNode> = NegatedCondition.negatedOperand(cond, scan.site);
+		final kept: Null<QueryNode> = NegatedCondition.invertibleOperand(cond, elseBranch, scan.site);
 		final condSpan: Null<Span> = tight(cond, scan);
 		final thenSpan: Null<Span> = tight(thenBranch, scan);
 		final elseSpan: Null<Span> = tight(elseBranch, scan);
@@ -194,7 +214,7 @@ final class InvertNegatedIfElse implements Check {
 		final condSpan: Null<Span> = tight(cond, scan);
 		final thenSpan: Null<Span> = RegionTerminator.ownedSpan(thenBranch, source, shape);
 		final elseSpan: Null<Span> = RegionTerminator.ownedSpan(elseBranch, source, shape);
-		final keptSpan: Null<Span> = NegatedCondition.positive(cond, scan.site)?.span;
+		final keptSpan: Null<Span> = NegatedCondition.positive(cond, elseBranch, scan.site)?.span;
 		if (condSpan == null || thenSpan == null || elseSpan == null || keptSpan == null) return;
 		edits.push({ span: condSpan, text: source.substring(keptSpan.from, keptSpan.to) });
 		edits.push({ span: thenSpan, text: source.substring(elseSpan.from, elseSpan.to) });
@@ -214,7 +234,7 @@ final class InvertNegatedIfElse implements Check {
 		final condSpan: Null<Span> = tight(cond, scan);
 		final thenSpan: Null<Span> = tight(node.children[1], scan);
 		final elseSpan: Null<Span> = tight(node.children[2], scan);
-		final keptSpan: Null<Span> = NegatedCondition.negatedOperand(cond, scan.site)?.span;
+		final keptSpan: Null<Span> = NegatedCondition.invertibleOperand(cond, node.children[2], scan.site)?.span;
 		if (condSpan == null || thenSpan == null || elseSpan == null || keptSpan == null) return;
 		out.push(splice(condSpan, keptSpan, source));
 		out.push(splice(thenSpan, elseSpan, source));
@@ -242,22 +262,17 @@ final class InvertNegatedIfElse implements Check {
 				return fresh;
 			},
 			seams: seams,
-			site: {
-				seams: seams.negation,
-				file: file,
-				source: source,
-				root: root
-			}
+			site: NegatedCondition.site(seams.negation, file, source, root)
 		};
 	}
 
-	/** Resolve the if / value-form / negation seams, or null when a required piece is unset. */
+	/** Resolve the if / value-form / negation seams, or null when a required piece is unset; `config` resolves `keepDefaultElse`. */
 	private static function resolveSeams(
-		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, ?report: SymbolIndex
+		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, config: Null<(String) -> LintConfig>, ?report: SymbolIndex
 	): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, files, report);
+		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, files, config, report);
 		if (ifKinds.length == 0 || negation == null) return null;
 		final ternaryKind: Null<String> = shape.ternaryKind;
 		final ifExpressionKinds: Array<String> = shape.ifExpressionKinds ?? [];

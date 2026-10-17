@@ -561,6 +561,24 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals('return d.has.t ? decode(d.node.t.data) : null;', es[0].text);
 	}
 
+	/**
+	 * Under `invert-negated-if-else`'s `keepDefaultElse` a negated guard whose fallthrough returns a default
+	 * literal keeps its negation — `return !a ? x : null;` — where the positive form would bury `x` behind the
+	 * default; a default in the guard's own value still moves last, and with the option off nothing changes.
+	 *
+	 * RED under M-NEGCOND-KEEP-DEFAULT-BLIND and M-PTR-KEEP-DEFAULT-THEN-ARM (the gate asked about the guard's value).
+	 */
+	@:pin('control')
+	@:killer('M-NEGCOND-KEEP-DEFAULT-BLIND', 'M-PTR-KEEP-DEFAULT-THEN-ARM')
+	public function testKeepDefaultElseKeepsTheNegatedGuard(): Void {
+		final src: String = 'class C {\n\tfunction f():String {\n\t\tif (!a) return x;\n\t\treturn null;\n\t}\n}';
+		Assert.equals('return !a ? x : null;', keptEdit(src, true));
+		Assert.equals('return a ? null : x;', keptEdit(src, false));
+		Assert.equals(
+			'return a ? x : null;', keptEdit('class C {\n\tfunction f():String {\n\t\tif (!a) return null;\n\t\treturn x;\n\t}\n}', true)
+		);
+	}
+
 	/** The redundant paren around the negated operand drops, and comes back only where `?:` would capture it. */
 	public function testNegatedCompoundGuardDropsParen(): Void {
 		Assert.equals(
@@ -607,6 +625,11 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals(
 			'return !a && b ? 1 : 2;', edits('class C {\n\tfunction f():Int {\n\t\tif (!a && b) return 1;\n\t\treturn 2;\n\t}\n}')[0].text
 		);
+	}
+
+	/** The one edit of a `--fix` pass over `src` with `invert-negated-if-else` `keepDefaultElse` set to `on`. */
+	private function keptEdit(src: String, on: Bool): String {
+		return CheckFixture.soleEditUnder(new PreferTernaryReturn(), src, InvertNegatedIfElseCheckTest.keepConfig(on));
 	}
 
 	private function violations(src: String): Array<Violation> {
