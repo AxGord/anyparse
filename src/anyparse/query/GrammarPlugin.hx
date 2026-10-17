@@ -2725,8 +2725,9 @@ typedef RefShape = {
 	@:optional var loopStatementKinds: Array<String>;
 
 	/**
-	 * Loop-statement kinds whose FIRST child is the loop body and whose condition is
-	 * the LAST child (Haxe `DoWhileStmt`, the `do … while` form) — the body-first
+	 * Loop kinds whose FIRST child is the loop body and whose condition is the LAST
+	 * child (Haxe `DoWhileStmt`, the `do … while` statement, and `DoWhileExpr`, the same
+	 * loop in expression position: a lambda body, an `if` branch) — the body-first
 	 * counterpart of `loopStatementKinds`. The `guard-continue` check reads the body
 	 * off `children[0]` to de-nest a trailing `if (c) { … }` into an `if (!c) continue;`
 	 * guard. Optional; unset makes `guard-continue` skip do-while loops.

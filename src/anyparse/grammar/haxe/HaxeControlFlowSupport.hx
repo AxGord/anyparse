@@ -45,6 +45,7 @@ final class HaxeControlFlowSupport implements ControlFlowSupport {
 		'WhileStmt',
 		'WhileExpr',
 		'DoWhileStmt',
+		'DoWhileExpr',
 		'TryCatchStmt',
 		'TryCatchStmtBare',
 		'TryExpr',

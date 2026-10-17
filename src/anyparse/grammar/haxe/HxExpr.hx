@@ -112,6 +112,17 @@ enum HxExpr {
 	@:kw('while') @:fmt(whilePolicy)
 	WhileExpr(stmt: HxWhileExpr);
 
+	/**
+	 * `do body while (cond)` in EXPRESSION position — a lambda or function body, an `if` branch, a paren
+	 * operand: Haxe parses a do-while as an expression wherever one may stand (`haxe --interp` 4.3.7 runs
+	 * `() -> do i++ while (i < 3)`). The statement form `HxStatement.DoWhileStmt` keeps every statement
+	 * occurrence (it is dispatched first there and owns the `;`); this ctor carries the same `HxDoWhileStmt`
+	 * without a terminator, so both project the same children — body first, condition last — and every
+	 * reader of a do-while (`RefShape.doWhileLoopKinds`) names the two kinds together.
+	 */
+	@:kw('do')
+	DoWhileExpr(stmt: HxDoWhileStmt);
+
 	@:kw('switch') @:fmt(switchPolicy, propagateExprPosition)
 	SwitchExpr(stmt: HxSwitchStmt);
 
@@ -216,7 +227,7 @@ enum HxExpr {
 	InlineExpr(operand: HxExpr);
 
 	@:kw('function')
-	NamedFnExpr(decl: HxFnDecl);
+	NamedFnExpr(decl: HxNamedFnExpr);
 
 	@:kw('function') @:fmt(anonFuncParens)
 	FnExpr(fn: HxFnExpr);

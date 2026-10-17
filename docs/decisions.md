@@ -3221,3 +3221,32 @@ decided the question; it may not become a record of runs.
   name must be followed by `(`), a `macro` / `extern` host and a taken member name are refused too. Checked by
   compiling the result: `run`/`twice` before and after the extraction print the same values under Haxe 4.3.7
   `--interp` — branch `feat/infra-N5`
+- a named function expression was to keep `HxFnDecl` and have its body's optional `;` gated by context → the `;`
+  after `final g = function named() return 1` is the STATEMENT's for the compiler (Haxe 4.3.7 `--interp` runs it
+  with a comment or an assignment around it), and no shape gate can tell an expression-position body from a member's;
+  `NamedFnExpr` now carries `HxNamedFnExpr` — `HxFnDecl`'s signature, formatting knobs included, over the
+  expression-position `HxFnExprBody`, which owns no terminator. Rejected the other fix, an absent optional literal
+  rewinding the trivia it skipped: it would narrow every `@:trailOpt` node's span at once to cure one grammar error
+  — branch `feat/infra-N8`
+- a do-while is an expression in Haxe (4.3.7 `--interp`: a lambda body, an anonymous function body, an `if` branch,
+  a paren operand) → `HxExpr.DoWhileExpr` over the statement's own `HxDoWhileStmt`, read wherever `DoWhileStmt` is
+  (`doWhileLoopKinds`, `conditionLastChildKinds`, `branchKinds`, the execution model's kinds, the fixed-slot,
+  case-glue and tail-seal tables). `@:meta do … while (c);` now projects as `ExprStmt(MetaExpr(DoWhileExpr))` like
+  `@:meta while`, not `MetaStmt(DoWhileStmt)`, and keeps its layout; `MetaStmt`'s kind witness moved to
+  `@:meta if (a) b(); c();`. `prefer-lambda-expression-body` still leaves `do … while` out: its terminator strip
+  walks the LAST child, which is a do-while's condition — branch `feat/infra-N8`
+- the conditional-arm redeclaration gate read ONE name per statement (`topLevelDeclaredName`) → a statement declares
+  every continuation declarator (`var a = 1, v = 2`) and every named function literal outside a nested function
+  (`final h = function v() …`; the compiler binds `v` in the enclosing scope), and renaming either past an arm that
+  declares the name too broke every build that compiles the arm out (`--interp`: `Unknown identifier : v`).
+  `BinderScan.statementDeclaredNames` answers all of them and replaces the single-name function; it over-counts a
+  name nested in a block or a branch of the statement (a ternary branch scopes a named literal), which only refuses
+  — branch `feat/infra-N8`
+- `ImplicitSites.landings` asked `returnStatementKind` → an expression-bodied `function f():String return d;` is a
+  `ReturnExpr` and landed nowhere; every `return` carrying a value is `valueReturnKinds` — branch `feat/infra-N8`
+- `redundant-lambda-wrapper`'s own `binderKindsOf` and `prefer-range-loop`'s copy of the closure-capture walk are
+  deleted. The binders are `BinderScan.binderKinds` less the local functions, which this rule reads as CALLEES
+  (`localFns`); the one kind that adds, the named function literal, is a real shadow — read past, the member's
+  signature answered for it and `foreach(ok)` was proposed for a `(v:Int, ?w:Int) -> Bool` literal Haxe 4.3.7
+  rejects. `LoopScan.capturedByClosure` takes the two kind sets it reads instead of a whole `LoopSeams`, so
+  `prefer-range-loop`'s bundle passes as it is — branch `feat/infra-N8`

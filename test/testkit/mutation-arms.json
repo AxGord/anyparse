@@ -22250,6 +22250,54 @@
 			"find": "if (at < 0 || at >= source.length || source.fastCodeAt(at) != '('.code)",
 			"replace": "if (false)",
 			"note": "a host with type parameters is extracted from, and the member's parameter `w:T` names a type parameter the new member does not declare"
+		},
+		{
+			"name": "M-COND-NAMED-FN-NOT-IN-EFFECT",
+			"type": "anyparse.query.BinderScan",
+			"method": "statementDeclaredNames",
+			"find": "(continuations.contains(node.kind) || node.kind == shape.namedFnExprKind)",
+			"replace": "continuations.contains(node.kind)",
+			"note": "a named function literal's name is no declaration in effect, so renaming `v` of `final h = function v() …` past which an arm declares `v` too is not refused and the build that compiles the arm out reads a name that no longer exists"
+		},
+		{
+			"name": "M-COND-CONTINUATION-NOT-IN-EFFECT",
+			"type": "anyparse.query.BinderScan",
+			"method": "statementDeclaredNames",
+			"find": "(continuations.contains(node.kind) || node.kind == shape.namedFnExprKind)",
+			"replace": "node.kind == shape.namedFnExprKind",
+			"note": "a continuation declarator (`var a = 1, v = 2`) is no declaration in effect, so renaming `v` past which an arm declares `v` too is not refused"
+		},
+		{
+			"name": "M-SITES-EXPR-RETURN-NO-LANDING",
+			"type": "anyparse.query.ImplicitSites",
+			"method": "landings",
+			"find": "(_shape.valueReturnKinds ?? []).contains(kind)",
+			"replace": "kind == _shape.returnStatementKind",
+			"note": "only the `return` STATEMENT lands its value, so an expression-bodied `function f():String return d;` converts nothing and the `toString` it runs is never reached"
+		},
+		{
+			"name": "M-VOCAB-DOWHILE-EXPR-NOT-LOOP",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "refShape",
+			"find": "doWhileLoopKinds: ['DoWhileStmt', 'DoWhileExpr'],",
+			"replace": "doWhileLoopKinds: ['DoWhileStmt'],",
+			"note": "a do-while in expression position (`() -> do x while (c)`) is no loop to any reader of the loop vocabulary"
+		},
+		{
+			"name": "M-RLW-NAMED-FN-NOT-BINDER",
+			"type": "anyparse.check.RedundantLambdaWrapper",
+			"method": "resolveSeams",
+			"find": "if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k",
+			"replace": "if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k) && k != shape.namedFnExprKind) k",
+			"note": "a named function literal does not shadow a member callee, so the member's signature answers for it and a reduction the compiler rejects is proposed"
+		},
+		{
+			"name": "M-RLW-LOCAL-FN-AS-BINDER",
+			"type": "anyparse.check.RedundantLambdaWrapper",
+			"method": "resolveSeams",
+			"find": "for (k in BinderScan.binderKinds(shape)) if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k",
+			"replace": "for (k in BinderScan.binderKinds(shape)) k",
+			"note": "a local function counts as a shadowing binder rather than as the callee it is, so `p -> ok(p)` over a local `function ok` is never reduced"
 		}
 	]
 }

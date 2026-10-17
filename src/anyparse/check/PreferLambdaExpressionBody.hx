@@ -63,8 +63,9 @@ using StringTools;
  * the branch-aware one: the branch-aware projection would split the region into
  * `CondBranch` statement lists and could present a one-statement branch as if it were the
  * whole body. `do … while` is outside the accepted set deliberately: its condition is the LAST child, so the body-tail recursion
- * the terminator strip below relies on does not describe it, and the collapsed form `() -> do f() while (c)` — which Haxe 4.3.7
- * accepts — is no expression this grammar parses (it has a `do … while` STATEMENT only), so the rewrite could not re-parse.
+ * the terminator strip below relies on does not describe it. The collapsed form `() -> do f() while (c)` does parse — Haxe
+ * 4.3.7 accepts it and this grammar reads it as `DoWhileExpr` — so the strip is the one reason left; teaching it the
+ * body-first shape would admit the arm.
  *
  * The `function` literal (`fnExprKind`) is deliberately NOT matched. `prefer-arrow-callback`
  * owns that node in call-argument position and normalises it INTO one of the arrow kinds;

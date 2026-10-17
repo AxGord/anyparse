@@ -163,7 +163,8 @@ final class ImplicitSites {
 			if (declared != null) land(value, declared);
 		}
 		if (kind == _shape.assignKind && node.children.length == 2) land(node.children[1], typeOf(file, tree, source, node.children[0]));
-		if (kind == _shape.returnStatementKind && node.children.length > 0) {
+		// every `return` carrying a value — a statement and an expression body's alike (`function f():String return d;`)
+		if ((_shape.valueReturnKinds ?? []).contains(kind) && node.children.length > 0) {
 			final written: Null<QueryNode> = fn == null || (_shape.lambdaKinds ?? []).contains(fn.kind)
 				? null
 				: fn.children.find(c -> annotations.contains(c.kind));

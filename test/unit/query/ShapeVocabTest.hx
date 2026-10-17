@@ -35,11 +35,11 @@ class ShapeVocabTest extends Test {
 	}
 
 	/** The Haxe grammar's loops and functions, each union spelled out. */
-	@:pin('control') @:killer('M-VOCAB-NESTED-NO-NAMED-FN')
+	@:pin('control') @:killer('M-VOCAB-NESTED-NO-NAMED-FN') @:killer('M-VOCAB-DOWHILE-EXPR-NOT-LOOP')
 	public function testHaxeLoopAndFunctionVocabulary(): Void {
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
-		Assert.same(['ForStmt', 'WhileStmt', 'DoWhileStmt', 'ForExpr', 'WhileExpr'], ShapeVocab.loopKinds(shape));
-		Assert.same(['ForStmt', 'WhileStmt', 'DoWhileStmt'], ShapeVocab.statementLoopKinds(shape));
+		Assert.same(['ForStmt', 'WhileStmt', 'DoWhileStmt', 'DoWhileExpr', 'ForExpr', 'WhileExpr'], ShapeVocab.loopKinds(shape));
+		Assert.same(['ForStmt', 'WhileStmt', 'DoWhileStmt', 'DoWhileExpr'], ShapeVocab.statementLoopKinds(shape));
 		Assert.same([
 			'ThinArrow',
 			'ThinParenLambdaExpr',

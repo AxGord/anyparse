@@ -82,13 +82,16 @@ final class HxCasePredLowering extends AstPredLowering {
 	 *
 	 * `BlockExpr` and `MacroExpr` are absent for the same reason `BlockStmt`
 	 * is absent from the statement table — a brace-opening value keeps its
-	 * glue. There is no `DoWhileExpr`; `do … while` has only the statement
-	 * form, which a metadata prefix routes through `MetaStmt` instead.
+	 * glue. `DoWhileExpr` is here for the same reason as `WhileExpr`: since
+	 * `do … while` has an expression form, `case A: @:meta do x() while (c);`
+	 * projects as `ExprStmt(MetaExpr(…, DoWhileExpr))` rather than the
+	 * `MetaStmt(DoWhileStmt)` it was before, and keeps the layout it had then.
 	 */
 	private static final CONTROL_FLOW_EXPR_CTORS: Array<String> = [
 		'IfExpr',
 		'ForExpr',
 		'WhileExpr',
+		'DoWhileExpr',
 		'SwitchExpr',
 		'SwitchExprBare',
 		'TryExpr'

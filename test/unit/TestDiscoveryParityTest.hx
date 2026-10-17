@@ -1976,6 +1976,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ISVAR-SCOPE-REPORT-ONLY',
 			'unit.check.RedundantIsVarCheckTest#testSubclassOverrideWritingStorageNotFlagged :: control :: M-ISVAR-ACCESSOR-BODY-BLIND',
 			'unit.check.RedundantIsVarCheckTest#testUnresolvedSupertypeNotFlagged :: control :: M-ISVAR-CHAIN-UNRESOLVED-ADMITTED',
+			'unit.check.RedundantLambdaWrapperCheckTest#testLocalFunctionFlagged :: control :: M-RLW-LOCAL-FN-AS-BINDER',
+			'unit.check.RedundantLambdaWrapperCheckTest#testNamedFunctionLiteralShadowsAMemberCallee :: control :: M-RLW-NAMED-FN-NOT-BINDER',
 			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedOverANonStandardMap :: control :: M-MAPITER-SUBTYPE-VETO-OFF',
 			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedOverAliasedList :: control :: M-ULB-IMPORT-ALIAS-BLIND',
 			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedOverMapAndUnknownIterable :: control :: M-MAPITERKEY-UNPROVEN-DROPPED',
@@ -3738,6 +3740,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-SHAPE-PURE-GETENV,M-REACH-RUN-QUIET',
 			'unit.query.MemberReachFactsTest#testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily :: control :: M-FACTS-REACH-ESCAPE-TYPED',
 			'unit.query.MemberReachFactsTest#testAnEscapedValueMayBeAnyOfItsSubtypesUnderTheTruth :: control :: M-ESCAPES-FACTS-SUBTYPES',
+			'unit.query.MemberReachFactsTest#testAnExpressionBodiedReturnLandsAtItsFunctionsReturnType :: control :: '
+				+ 'M-SITES-EXPR-RETURN-NO-LANDING',
 			'unit.query.MemberReachFactsTest#testAnExpressionMacroAnInlinedMethodCallsLeavesItsCallerItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-EXPANSION,M-FACTS-TEXT-EXPANSION-SPLICED,M-FACTS-EXPANSION-NESTED',
 			'unit.query.MemberReachFactsTest#testAnExpressionMacroAnInlinedSetterIsHandedIsItsTextUnderTheTruth :: control :: '
@@ -4145,9 +4149,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
 			'unit.query.RemoveParamSliceTest#testAClassMethodAndItsCallThatNowFitComeBackCanonical :: control :: M-SIGNATURE-EDIT-RAW-SPLICE',
 			'unit.query.RemoveParamSliceTest#testAnInterfaceSignatureThatNowFitsComesBackCanonical :: control :: M-SIGNATURE-EDIT-RAW-SPLICE',
+			'unit.query.RenameSliceTest#testContinuationDeclaratorInEffectBeforeACondArmRefused :: control :: '
+				+ 'M-COND-CONTINUATION-NOT-IN-EFFECT',
 			'unit.query.RenameSliceTest#testModelledSpliceConditionOccurrenceRenames :: control :: M-COND-GAP-KEEPS-DIRECTIVES',
 			'unit.query.RenameSliceTest#testNameOfANamedFunctionExpressionSweepsTheEnclosingMethod :: control :: '
 				+ 'M-BINDER-NAMED-FN-NO-STEP-OUT',
+			'unit.query.RenameSliceTest#testNamedFnExprNameInEffectAroundACondArmRefused :: control :: M-COND-NAMED-FN-NOT-IN-EFFECT',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
 			'unit.query.RewriteSliceTest#testANameSlotCaptureSplicesBare :: control :: M-REWRITE-NAME-CAPTURE-HOLE',
@@ -4158,7 +4165,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SetModifierSliceTest#testPrivateOnAFinalClassPrecedesTheFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.ShapeVocabTest#testAKindTwoSeamsNameIsAnsweredOnce :: control :: M-VOCAB-UNION-DUPLICATES',
 			'unit.query.ShapeVocabTest#testAnUnsetSeamAddsNothing :: control :: M-VOCAB-UNSET-SEAM-ADDED',
-			'unit.query.ShapeVocabTest#testHaxeLoopAndFunctionVocabulary :: control :: M-VOCAB-NESTED-NO-NAMED-FN',
+			'unit.query.ShapeVocabTest#testHaxeLoopAndFunctionVocabulary :: control :: '
+				+ 'M-VOCAB-NESTED-NO-NAMED-FN,M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
 			'unit.query.ShardPlanTest#testAClassHeavierThanAShardIsDealtAsSlices :: control :: M-SHARD-SPLIT-NEVER,M-SHARD-SPLIT-SLICE-WEIGHT',
 			'unit.query.ShardPlanTest#testAMalformedSliceTokenIsRefused :: control :: M-SHARD-FILTER-PARSE-RANGE',
 			'unit.query.ShardPlanTest#testAPinnedClassIsNeverSliced :: control :: M-SHARD-SPLIT-STICKY',
@@ -7057,7 +7065,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-EXTRACT-MEMBER-STATIC-LOST',
 			'M-EXTRACT-MEMBER-COPIES-ASSIGNED',
 			'M-EXTRACT-MEMBER-WRITTEN-TYPE-TRUSTED',
-			'M-EXTRACT-MEMBER-TYPE-PARAMS-BLIND'
+			'M-EXTRACT-MEMBER-TYPE-PARAMS-BLIND',
+			'M-COND-NAMED-FN-NOT-IN-EFFECT',
+			'M-COND-CONTINUATION-NOT-IN-EFFECT',
+			'M-SITES-EXPR-RETURN-NO-LANDING',
+			'M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
+			'M-RLW-NAMED-FN-NOT-BINDER',
+			'M-RLW-LOCAL-FN-AS-BINDER'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

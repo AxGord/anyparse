@@ -5388,4 +5388,24 @@ class MemberReachFactsTest extends Test {
 		]) assertGuarded(guardedFixture(null, nested, null, hop), false);
 	}
 
+	/**
+	 * An EXPRESSION-bodied `return` lands its value exactly as a block-bodied one does (`RefShape.valueReturnKinds`):
+	 * `d` returned as the `String` the function declares is converted by its `toString`, which replaces `items` — a
+	 * local `inline` function's and a method's alike. It landed nowhere while only the `return` STATEMENT was read.
+	 */
+	@:pin('control')
+	@:killer('M-SITES-EXPR-RETURN-NO-LANDING')
+	public function testAnExpressionBodiedReturnLandsAtItsFunctionsReturnType(): Void {
+		function region(code: String, member: String): String {
+			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\n' + member + '\tstatic function main() {\n\t\td = new Obj();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+		}
+		assertMatch(
+			ask(['Main.hx' => region('inline function named():String return d; named();', '')], null, false), r -> r.match(Reached(_))
+		);
+		final conv: String = '\tstatic function conv():String\n\t\treturn d;\n\n';
+		assertMatch(ask(['Main.hx' => region('conv();', conv)], null, false), r -> r.match(Reached(_)));
+		assertMatch(ask(['Main.hx' => region('inline function named():Int return 1; named();', '')], null, false), r -> r.match(Proven));
+	}
+
 }

@@ -370,7 +370,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 	 *
 	 * DIRECT children only, and that is the whole safety argument. A declaration one level down is
 	 * scoped to what encloses it and takes nothing over: a nested block, a switch arm and a
-	 * brace-less `if` body each bind only within themselves, and `topLevelDeclaredName`'s descent
+	 * brace-less `if` body each bind only within themselves, and `BinderScan.topLevelDeclaredNode`'s descent
 	 * through single-child wrappers — right for a predicate whose conservative direction is REFUSAL —
 	 * would claim them here, where the conservative direction is silence. A conditional-compilation
 	 * arm is excluded by the same rule for a stronger reason: its declarations are children of the

@@ -187,8 +187,13 @@ final class LoopScan {
 	 * word-boundary match inside the closure's span). Such a closure captures ONE
 	 * function-scoped binding by reference, so a rewrite that re-scopes the name per
 	 * iteration would change what the closure observes — a conservative bail.
+	 *
+	 * It reads only the two kind sets, so it asks for them alone: a `LoopSeams` passes as it is, and
+	 * so does `prefer-range-loop`'s own bundle, which kept a copy of this walk for want of one.
 	 */
-	public static function capturedByClosure(scope: QueryNode, source: String, name: String, s: LoopSeams): Bool {
+	public static function capturedByClosure(
+		scope: QueryNode, source: String, name: String, s: { var closureKinds: Array<String>; var opaqueKinds: Array<String>; }
+	): Bool {
 		if (s.opaqueKinds.contains(scope.kind)) return false;
 		if (s.closureKinds.contains(scope.kind)) {
 			final span: Null<Span> = scope.span;
