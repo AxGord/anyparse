@@ -1683,7 +1683,9 @@ final class CallGraph {
 			];
 			if (targets.length > 0) {
 				for (i in 1...targets.length) addEdge(frameId(currentType), targets[i], Call, null, file, span);
-				if (imported.unknown) unresolvedAt(span, UnboundName(name), currentType);
+				// a build that declares a module-level value of the name calls the function it holds
+				final declared: Bool = span != null && (moduleValuesOf(name, span.from)?.decls.length ?? 0) > 0;
+				if (imported.unknown || declared) unresolvedAt(span, UnboundName(name), currentType);
 				return targets[0];
 			}
 			// an enum constructor builds a value and runs nothing — the language finds one by the expected type, imported or

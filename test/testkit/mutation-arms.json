@@ -22386,6 +22386,14 @@
 			"find": "holder.index.values.importedStatics(holder.info, name, at)",
 			"replace": "holder.index.values.importedStatics(holder.info, name)",
 			"note": "an import binds a name whose module-level declaration every build compiling the read declares"
+		},
+		{
+			"name": "M-GRAPH-MODULE-CALL-UNSEEN",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (imported.unknown || declared) unresolvedAt(span, UnboundName(name), currentType);",
+			"replace": "if (imported.unknown) unresolvedAt(span, UnboundName(name), currentType);",
+			"note": "a bare call some builds make on a module-level value holding a function records only the imported static it may run"
 		}
 	]
 }

@@ -3141,10 +3141,11 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-LOOP-ELEMENT,M-TS-LOOP-KEY-BINDER,M-TS-LOOP-KV-LISTED,M-TS-LOOP-ITERATOR,M-TS-LOOP-NEXT,M-TS-LOOP-AGREE,'
 				+ 'M-TS-LOOP-OWN-PARAMS,M-TS-LOOP-THROUGH',
 			'unit.query.CallGraphTest#testAModuleLevelFieldComesBeforeAnImportedStatic :: control :: '
-				+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
+				+ 'M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
 			'unit.query.CallGraphTest#testAModuleLevelValueUnderIfBindsInTheBuildsThatCompileIt :: control :: '
 				+ 'M-GRAPH-MODULE-VALUE-TYPED,M-GRAPH-MODULE-VALUE-MEMBER-FIRST,M-GRAPH-MODULE-RECEIVERS,M-GRAPH-MODULE-RECEIVERS-IMPORTS,'
-				+ 'M-GRAPH-MODULE-RECEIVERS-MEMBER,M-GRAPH-MODULE-RECEIVERS-UNTYPED,M-GRAPH-IMPORTED-POSITION',
+				+ 'M-GRAPH-MODULE-RECEIVERS-MEMBER,M-GRAPH-MODULE-RECEIVERS-UNTYPED,M-GRAPH-IMPORTED-POSITION,M-TS-MODULE-NAME,'
+				+ 'M-GRAPH-MODULE-CALL-UNSEEN',
 			'unit.query.CallGraphTest#testANameNoImportBindsIsLookedUpInTheFilesPackages :: control :: '
 				+ 'M-TS-PACKAGE-LOOKUP,M-TS-PACKAGE-ENCLOSING,M-TS-PACKAGE-PROJECT-FIRST',
 			'unit.query.CallGraphTest#testAReceiverANewMakesIsOfTheTypeItNames :: control :: M-TS-NEW-RECEIVER',
@@ -7087,7 +7088,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-GRAPH-MODULE-RECEIVERS-IMPORTS',
 			'M-GRAPH-MODULE-RECEIVERS-MEMBER',
 			'M-GRAPH-MODULE-RECEIVERS-UNTYPED',
-			'M-GRAPH-IMPORTED-POSITION'
+			'M-GRAPH-IMPORTED-POSITION',
+			'M-GRAPH-MODULE-CALL-UNSEEN'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

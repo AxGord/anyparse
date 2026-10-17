@@ -1332,7 +1332,7 @@ class CallGraphTest extends Test {
 	 * Review R5 F4 (`h/stat-modvar(-rev)`): a field the reading file's own module declares at module level — plain, `final`,
 	 * inside a conditional region — is what a bare name means there, before any static an import brings in under it.
 	 */
-	@:pin('control') @:killer('M-TS-MODULE-NAME') @:killer('M-TS-MODULE-NAME-NESTED') @:killer('M-TS-MODULE-NAME-ALIAS')
+	@:pin('control') @:killer('M-TS-MODULE-NAME-NESTED') @:killer('M-TS-MODULE-NAME-ALIAS')
 	public function testAModuleLevelFieldComesBeforeAnImportedStatic(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1367,7 +1367,7 @@ class CallGraphTest extends Test {
 	@:pin('control')
 	@:killer('M-GRAPH-MODULE-VALUE-TYPED') @:killer('M-GRAPH-MODULE-VALUE-MEMBER-FIRST') @:killer('M-GRAPH-MODULE-RECEIVERS')
 	@:killer('M-GRAPH-MODULE-RECEIVERS-IMPORTS') @:killer('M-GRAPH-MODULE-RECEIVERS-MEMBER') @:killer('M-GRAPH-MODULE-RECEIVERS-UNTYPED')
-	@:killer('M-GRAPH-IMPORTED-POSITION')
+	@:killer('M-GRAPH-IMPORTED-POSITION') @:killer('M-TS-MODULE-NAME') @:killer('M-GRAPH-MODULE-CALL-UNSEEN')
 	public function testAModuleLevelValueUnderIfBindsInTheBuildsThatCompileIt(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1391,9 +1391,10 @@ class CallGraphTest extends Test {
 			'package app; #if a final lock:utils.Lock = null; #end class Unseen extends lib.Base { function field():Void lock.wait(); }',
 			'package app; #if a final lock = null; #else final lock:utils.Lock = null; #end'
 			+ ' class Untyped { static function field():Void lock.wait(); }',
-			'package app; class B { public static function go():Void {} }',
-			'package app; import app.B.*; #if a function go():Void {} #end'
-			+ ' #if a class Value { static function take(f:() -> Void):Void {} static function field():Void take(go); } #end'
+			'package app; class B { public static function cb():Void {} }',
+			'package app; import app.B.*; #if a var cb:() -> Void = null; #end'
+			+ ' #if a class Calls { static function field():Void cb(); } #end class CallsOut { static function field():Void cb(); }',
+			'package app; import app.B.*; var cb:() -> Void = null; class CallsPlain { static function field():Void cb(); }'
 		]);
 		function targets(from: String): Array<String> {
 			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
@@ -1409,9 +1410,14 @@ class CallGraphTest extends Test {
 		Assert.same(['Other.wait'], targets('Kid.field'), 'an inherited member comes before a module-level field');
 		Assert.same([], targets('Unseen.field'), 'a supertype the index does not hold may declare it');
 		Assert.same([], targets('Untyped.field'), 'one build\'s value is not typed: the receiver is unresolved');
-		Assert.isFalse([for (e in g.outEdges('Value.field')) e.to].contains(
-			'B.go'
-		), 'the build compiling the read declares the function: no import binds it');
+		Assert.same([], targets('Calls.field'), 'every build compiling the call declares the value: no import binds it');
+		Assert.same(['B.cb'], targets('CallsOut.field'), 'the builds without it call the imported static');
+		Assert.same(
+			['UnboundName(cb)'],
+			[for (u in g.unresolved) if (u.from == 'CallsOut.field') Std.string(u.reason)],
+			'and the others the value'
+		);
+		Assert.same([], targets('CallsPlain.field'), 'a declaration no #if guards hides the import everywhere');
 		#else
 		Assert.pass('non-sys target');
 		#end
