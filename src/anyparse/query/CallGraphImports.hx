@@ -91,7 +91,8 @@ final class CallGraphImports {
 		for (t in fi.types) {
 			recordMembers(t, key);
 			// a type is named by its module's path and its own name, a main type by its module's path too; and by its package
-			// and its name, whatever its module is called — what an import reads when a file does not name its module
+			// and its name, whatever its module is called — its runtime path (`Type.getClassName`), which a declaration of the
+			// classes made from a computed name spells (`ReflectiveReach.neverMade`) and no source can write for a sub-type
 			final inModule: String = '${fi.module}.${t.name}';
 			final inPackage: String = fi.pkg == '' ? t.name : '${fi.pkg}.${t.name}';
 			CallGraphTypes.unionInto(_declaredPaths, t.name, t.isMain ? [fi.module, inModule, inPackage] : [inModule, inPackage]);

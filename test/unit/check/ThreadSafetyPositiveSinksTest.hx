@@ -165,8 +165,8 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * native shares the name `Lock` (keyed by its path), and a waiver of that native keeps it — the library call may still
 	 * reach it where nothing says which `Lock` a value holds.
 	 */
-	@:pin('control') @:killer('M-TS-PATH-FOREIGN') @:killer('M-TS-PATH-IMPORT') @:killer('M-TS-PATH-RECEIVER-STATIC')
-	@:killer('M-TS-PATH-NEW') @:killer('M-TS-PATH-MATCH') @:killer('M-TS-SHADOWING-KEPT') @:killer('M-TS-PATH-DECLARED-PACKAGE')
+	@:pin('control') @:killer('M-TS-PATH-FOREIGN') @:killer('M-TS-PATH-RECEIVER-STATIC')
+	@:killer('M-TS-PATH-NEW') @:killer('M-TS-PATH-MATCH') @:killer('M-TS-SHADOWING-KEPT')
 	@:killer('M-TS-PATH-NOMINAL') @:killer('M-TS-ALIAS-TYPE')
 	public function testALibraryTypeIsNotItsProjectNamesake(): Void {
 		#if (sys || nodejs)
@@ -316,7 +316,7 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 */
 	@:pin('control') @:killer('M-TS-STD-RETURN') @:killer('M-TS-STD-FIELD') @:killer('M-TS-STD-GETTER') @:killer('M-TS-STD-GETTER-LOCAL')
 	@:killer('M-TS-STD-GETTER-TYPED') @:killer('M-TS-NEW-RECEIVER') @:killer('M-TS-ALIAS-TYPE') @:killer('M-TS-STD-PLACEHOLDER')
-	@:killer('M-TS-BUILTIN-EVENTS')
+	@:killer('M-TS-BUILTIN-EVENTS') @:killer('M-TS-PATH-IMPORT')
 	public function testStdResultsTypeTheirReceivers(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
