@@ -20579,7 +20579,7 @@
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "subjectEnum",
 			"find": "final written: Null<String> = subjectType(BoolExprShape.unwrapParens(held.children[0], _shape.parenKind));",
-			"replace": "final only: Array<String> = @:privateAccess _graph.types.imports._enumConstructors[ctor] ?? []; if (only.length == 1) return only[0]; final written: Null<String> = null;",
+			"replace": "final only: Array<String> = [for (f in _graph.index?.allFiles() ?? []) for (t in f.types) if (t.members.exists(m -> m.name == ctor && (_shape.execution?.enumConstructorKinds ?? []).contains(m.kind))) t.name]; if (only.length == 1) return only[0]; final written: Null<String> = null;",
 			"note": "a capture is typed by the one indexed enum declaring its constructor's name, whatever the subject is (review R3 H2)"
 		},
 		{
