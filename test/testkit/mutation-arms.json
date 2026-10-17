@@ -2178,7 +2178,7 @@
 		},
 		{
 			"name": "M-NAMING-SKIPSCAN-REPORT-INDEX",
-			"type": "anyparse.check.Naming",
+			"type": "anyparse.check.NamingRenames",
 			"method": "crossFileCandidate",
 			"find": "final unreadable: Array<String> = resolutionIndex.text.skippedFilesMentioning([decl.name, ownerName, targetName], declFile);",
 			"replace": "final unreadable: Array<String> = index.text.skippedFilesMentioning([decl.name, ownerName, targetName]);",
@@ -2828,7 +2828,7 @@
 		},
 		{
 			"name": "M-REFLECTION-REPORT-INDEX-RENAME",
-			"type": "anyparse.check.Naming",
+			"type": "anyparse.check.NamingRenames",
 			"method": "reflectionNamesInOtherFiles",
 			"find": "for (entry in ReflectionScan.scopeFiles(index == null ? [] : indexSources(index), plugin)) if (entry.file != currentFile) {",
 			"replace": "for (entry in (index == null ? [] : indexSources(index))) if (entry.file != currentFile) {",

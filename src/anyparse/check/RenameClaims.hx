@@ -90,7 +90,7 @@ final class RenameClaims {
 	/**
 	 * The type whose inheritance chain a rename of `decl` would introduce the new name into - the owner
 	 * of a FIELD or a METHOD, the two categories Haxe forbids redeclaring in a subclass and the two
-	 * `Naming.renameEditsFor` already holds to the inherited-member proof. Null for anything else: a
+	 * `NamingRenames.renameEditsFor` already holds to the inherited-member proof. Null for anything else: a
 	 * local / param / catch var only SHADOWS an inherited member (which Haxe permits), a type has no
 	 * owner, and a static constant is not inherited at all.
 	 *

@@ -130,7 +130,7 @@ final class ReflectionScan {
 		// makes. ASYMPTOTIC insurance rather than a measured win: a linear `seen.contains` is one compare
 		// per (scope x scope) pair, and a declared `resolutionLibs` puts thousands of paths in the scope,
 		// while this whole function is a sliver of a run either way (V8 compares paths drawn from one
-		// array by pointer). The widening's cost sits in `Naming.reflectionNamesInOtherFiles`' pre-filter,
+		// array by pointer). The widening's cost sits in `NamingRenames.reflectionNamesInOtherFiles`' pre-filter,
 		// not in this union. `Bool` values are the flag a Haxe set has to carry.
 		final out: Array<ScopeFile> = [];
 		final seen: Map<String, Bool> = [];
