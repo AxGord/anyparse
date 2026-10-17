@@ -1715,6 +1715,18 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ORPHAN-UNREADABLE-SUBTYPE-OWNER-WIDE,M-ORPHAN-REPORT-OWNER-WIDE',
 			'unit.check.OrphanAccessorCheckTest#testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows :: control :: '
 				+ 'M-ORPHAN-ARMS-SHARE-REASON',
+			'unit.check.OversizedTypeCheckTest#testACeilingLessGrantIsRefusedWithAMigrationMessage :: control :: '
+				+ 'M-OVERSIZED-LEGACY-GRANT,M-OVERSIZED-PROBLEM-SILENT',
+			'unit.check.OversizedTypeCheckTest#testACeilingNotAboveTheThresholdIsRefused :: control :: M-OVERSIZED-CEILING-AT-THRESHOLD',
+			'unit.check.OversizedTypeCheckTest#testAGrantWithoutAReasonIsRefused :: control :: M-OVERSIZED-GRANT-REASONLESS',
+			'unit.check.OversizedTypeCheckTest#testAMalformedGrantIsRefused :: control :: '
+				+ 'M-OVERSIZED-GRANT-NAME,M-OVERSIZED-CLAUSE-ORDER,M-OVERSIZED-CLAUSE-REPEATED,M-OVERSIZED-CEILING-DIGITS',
+			'unit.check.OversizedTypeCheckTest#testARefusedGrantIsReportedOncePerRun :: control :: M-OVERSIZED-PROBLEM-ONCE',
+			'unit.check.OversizedTypeCheckTest#testAnUngrantedDimensionKeepsTheThreshold :: control :: M-OVERSIZED-UNGRANTED-DIMENSION',
+			'unit.check.OversizedTypeCheckTest#testGrantPastItsCeilingReportsTheTypeAgain :: control :: '
+				+ 'M-OVERSIZED-GRANT-UNBOUNDED,M-OVERSIZED-BEYOND-UNNAMED',
+			'unit.check.OversizedTypeCheckTest#testLineCeilingIsJudgedOnItsOwn :: control :: M-OVERSIZED-GRANT-LINES-UNBOUNDED',
+			'unit.check.OversizedTypeCheckTest#testTwoGrantsForOneTypeAreBothRefused :: control :: M-OVERSIZED-DUPLICATE-GRANT',
 			'unit.check.OwnedTypesCheckTest#testANameNoTierBindsIsNotReported :: control :: M-OWNED-FREE-REPORTED',
 			'unit.check.OwnedTypesCheckTest#testAQualifiedExpressionIsAMention :: control :: M-OWNED-QUALIFIED-EXPR-IGNORED',
 			'unit.check.OwnedTypesCheckTest#testASameNamedTypeOfAnotherPackageIsNotReported :: control :: M-OWNED-BOUND-BY-NAME',
@@ -7213,7 +7225,21 @@ class TestDiscoveryParityTest extends Test {
 			'M-RESERVED-IDENT-NAME',
 			'M-RESERVED-VAR-NAME',
 			'M-RESERVED-FN-NAME',
-			'M-RESERVED-VERSIONED-REFUSED'
+			'M-RESERVED-VERSIONED-REFUSED',
+			'M-OVERSIZED-GRANT-UNBOUNDED',
+			'M-OVERSIZED-GRANT-LINES-UNBOUNDED',
+			'M-OVERSIZED-UNGRANTED-DIMENSION',
+			'M-OVERSIZED-BEYOND-UNNAMED',
+			'M-OVERSIZED-PROBLEM-ONCE',
+			'M-OVERSIZED-PROBLEM-SILENT',
+			'M-OVERSIZED-LEGACY-GRANT',
+			'M-OVERSIZED-GRANT-REASONLESS',
+			'M-OVERSIZED-GRANT-NAME',
+			'M-OVERSIZED-CLAUSE-ORDER',
+			'M-OVERSIZED-CLAUSE-REPEATED',
+			'M-OVERSIZED-CEILING-DIGITS',
+			'M-OVERSIZED-DUPLICATE-GRANT',
+			'M-OVERSIZED-CEILING-AT-THRESHOLD'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
