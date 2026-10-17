@@ -144,7 +144,8 @@ final class MoveCommand implements CliCommand {
 		CliIo.sysPrint('or given a statement, and the imports the moved body depends on are\n');
 		CliIo.sysPrint('carried into the destination — a type position, an upper-initial\n');
 		CliIo.sysPrint('static receiver T.x(), and every unguarded `using` of the source file\n');
-		CliIo.sysPrint('the destination lacks when the decl holds a member access at all (one\n');
+		CliIo.sysPrint('the destination lacks when the decl may call one of its extensions (one\n');
+		CliIo.sysPrint('whose extension methods are known and none called stays behind; one\n');
 		CliIo.sysPrint('whose bound type name collides at the destination is skipped; a\n');
 		CliIo.sysPrint('destination whose own `using` run offers no seat above it is refused).\n');
 		CliIo.sysPrint('An import the moved body needs that the source reaches only through a\n');

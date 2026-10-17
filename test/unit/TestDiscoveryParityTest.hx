@@ -794,6 +794,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxPrecedenceTableTest',
 		'unit.grammar.haxe.HxPrefixSliceTest',
 		'unit.grammar.haxe.HxRegexLitSliceTest',
+		'unit.grammar.haxe.HxReservedNameSliceTest',
 		'unit.grammar.haxe.HxRestProbeSelfBreakSliceTest',
 		'unit.grammar.haxe.HxReturnBodySliceTest',
 		'unit.grammar.haxe.HxReturnCallOpenParenSliceTest',
@@ -2948,6 +2949,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxNestingCostTest#testEachBodyIsWrittenOnce :: control :: M-FOR-BODY-PROBE-EAGER,M-CHAIN-WALK-EAGER',
 			'unit.grammar.haxe.HxNestingCostTest#testParserRunsEachNestedAtomOnce :: control :: M-PARSE-MEMO-REPLAY-OFF,M-PARSE-MEMO-STASHED-SKIP',
 			'unit.grammar.haxe.HxNestingCostTest#testWriterDocKeepsItsSharing :: control :: M-GROUPIFY-SHARED-OFF',
+			'unit.grammar.haxe.HxReservedNameSliceTest#testAKeywordANewerHaxeAddedStillNamesAVersionGatedDeclaration :: control :: '
+				+ 'M-RESERVED-VERSIONED-REFUSED',
+			'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoFunctionParameterOrBinderName :: control :: '
+				+ 'M-RESERVED-IDENT-NAME,M-RESERVED-FN-NAME',
+			'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoLocalOrFieldName :: control :: M-RESERVED-VAR-NAME',
 			'unit.grammar.haxe.HxRestProbeSelfBreakSliceTest#testArrayStillBreaksForAShortTrailingCall :: control :: '
 				+ 'M-RESTPROBE-COLUMN-FLAT',
 			'unit.grammar.haxe.HxRestProbeSelfBreakSliceTest#testCallStillBreaksBeforeAChainLink :: control :: M-RESTPROBE-FULL-LINE',
@@ -4095,10 +4101,15 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-WILDCARD-BINDS-BLIND',
 			'unit.query.MoveMemberSplitSliceTest#testAFieldSomethingElseReachesStaysAndRefuses :: control :: '
 				+ 'M-OWNED-FIELD-ANY-READER,M-OWNED-FIELD-ACCESS-BLIND,M-OWNED-FIELD-PROPERTY,M-OWNED-READERS-UNNAMED',
+			'unit.query.MoveMemberSplitSliceTest#testAMemberOfAnInheritanceFamilyRefusesTheMove :: control :: '
+				+ 'M-MOVE-OVERRIDE-MEMBER,M-MOVE-IMPLEMENTATION,M-MOVE-OVERRIDDEN-MEMBER,M-MOVE-UNRESOLVED-INTERFACE',
+			'unit.query.MoveMemberSplitSliceTest#testAReceiverNotProvenAnUnrelatedClassRefusesTheMove :: control :: M-RECEIVER-STRUCTURE-LEFT',
 			'unit.query.MoveMemberSplitSliceTest#testAReceiverTheOpCannotProveRefusesTheMove :: control :: '
 				+ 'M-RECEIVER-UNKNOWN-ROUTED,M-RECEIVER-UNRELATED-ROUTED,M-VIA-PRIVATE-REACHED',
 			'unit.query.MoveMemberSplitSliceTest#testASourceSubModuleTypeIsImportedAtTheDestination :: control :: '
 				+ 'M-CARRY-OWN-SUB-UNCARRIED',
+			'unit.query.MoveMemberSplitSliceTest#testCarriedStatementsLandImportsFirstAndOnlyUsedUsings :: control :: '
+				+ 'M-CARRY-ORDER-MET,M-CARRY-USING-UNUSED,M-CARRY-IMPORTLESS-BELOW,M-CARRY-USING-ORDER-MET',
 			'unit.query.MoveMemberSplitSliceTest#testFieldsOnlyTheMovedGroupUsesMoveAlong :: control :: M-OWNED-FIELDS-OFF',
 			'unit.query.MoveMemberSplitSliceTest#testKeepBareImportsTheDestinationStaticsInsteadOfQualifying :: control :: '
 				+ 'M-KEEP-BARE-IGNORED',
@@ -4106,6 +4117,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-KEEP-BARE-CLASH-BLIND,M-KEEP-BARE-NOT-MAIN',
 			'unit.query.MoveMemberSplitSliceTest#testReceiverQualifiedCallersRouteThroughTheHoldingField :: control :: '
 				+ 'M-RECEIVER-ROUTING-OFF',
+			'unit.query.MoveMemberSplitSliceTest#testScaffoldWiresTheViaFieldBeforeTheConstructorBindsAMethod :: control :: '
+				+ 'M-SCAFFOLD-VIA-AT-END',
 			'unit.query.MoveMemberSplitSliceTest#testTwoMembersNeedingPrivateAccessShareOneTypeGrant :: control :: '
 				+ 'M-ACCESS-GRANT-PER-MEMBER',
 			'unit.query.MoveSymbolSliceTest#testACommentOnlyFullyQualifiedMentionDoesNotRefuseTheMove :: control :: '
@@ -4239,6 +4252,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-INDEX-GUARDED-PRIVATE-SPLIT,M-INDEX-GUARDED-PRIVATE-PAST-MODIFIERS',
 			'unit.query.SymbolIndexSliceTest#testPlatformFileDeclaresTheModuleBeforeItsDot :: control :: '
 				+ 'M-MODULE-PLATFORM,M-MODULE-SCAN-PLATFORM',
+			'unit.query.SymbolIndexSliceTest#testProvablyNotSubtypeRefusesAForwardingEnumAbstract :: control :: M-SUBTYPE-ROOT-NEGATIVE-LIST',
 			'unit.query.TypeNameBindingTest#testADeclarationIsAtItsCanonicalPath :: control :: M-BINDINGS-DECLS-AT-SUBTYPE,M-CANONICAL-SUBTYPE',
 			'unit.query.TypeNameBindingTest#testAGuardedImportAgainstAStdTypeIsUnknown :: control :: M-BINDING-STRICT-OUTSIDE',
 			'unit.query.TypeNameBindingTest#testAGuardedImportAgainstAnotherBindingIsUnknown :: control :: M-AMBIENT-GUARDED-UNION',
@@ -7184,7 +7198,22 @@ class TestDiscoveryParityTest extends Test {
 			'M-GRAPH-MODULE-BINDING-VALUE',
 			'M-GRAPH-MODULE-BINDING-IMPORTS',
 			'M-GRAPH-MODULE-REF',
-			'M-GRAPH-MODULE-IDENT'
+			'M-GRAPH-MODULE-IDENT',
+			'M-SUBTYPE-ROOT-NEGATIVE-LIST',
+			'M-RECEIVER-STRUCTURE-LEFT',
+			'M-MOVE-OVERRIDE-MEMBER',
+			'M-MOVE-IMPLEMENTATION',
+			'M-MOVE-OVERRIDDEN-MEMBER',
+			'M-MOVE-UNRESOLVED-INTERFACE',
+			'M-SCAFFOLD-VIA-AT-END',
+			'M-CARRY-ORDER-MET',
+			'M-CARRY-IMPORTLESS-BELOW',
+			'M-CARRY-USING-UNUSED',
+			'M-CARRY-USING-ORDER-MET',
+			'M-RESERVED-IDENT-NAME',
+			'M-RESERVED-VAR-NAME',
+			'M-RESERVED-FN-NAME',
+			'M-RESERVED-VERSIONED-REFUSED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -7416,6 +7445,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-NAMED-FN-NOT-BRACE-ENDED :: anyparse.grammar.haxe.HxAstPredLowering#endsWithCloseBraceField',
 			'M-NAMED-FN-EXPR-BODY-RELAXED :: anyparse.grammar.haxe.HxAstPredLowering#stmtExprNoSemiAtField',
 			'M-WALK-TYPE-ARGS-UNCOUNTED :: anyparse.macro.QueryWalkerLowering#seqTypeArgCount',
+			'M-RESERVED-IDENT-NAME :: anyparse.grammar.haxe.HxIdentLit#MetaCall:@:re',
+			'M-RESERVED-VAR-NAME :: anyparse.grammar.haxe.HxVarNameLit#MetaCall:@:re',
+			'M-RESERVED-FN-NAME :: anyparse.grammar.haxe.HxFnNameLit#MetaCall:@:re',
+			'M-RESERVED-VERSIONED-REFUSED :: anyparse.grammar.haxe.HxVarNameLit#MetaCall:@:re',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

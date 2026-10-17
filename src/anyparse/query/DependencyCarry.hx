@@ -45,8 +45,8 @@ final class DependencyCarry {
 	 * is `D`, and that the destination does not already carry verbatim, the
 	 * statement is returned as READY TEXT for the destination.
 	 *
-	 * Beside those, EVERY unguarded `using` of the source file the destination
-	 * lacks is returned when the decl holds a member access at all — see
+	 * Beside those, every unguarded `using` of the source file the destination
+	 * lacks is returned when the decl may call one of its extensions — see
 	 * `usingLinesToCarry`, which is where the skip-rather-than-refuse rule for
 	 * a colliding `using` lives.
 	 *
@@ -173,8 +173,7 @@ final class DependencyCarry {
 		if (wildRefusal != null) return CarryErr(wildRefusal);
 		for (group in guarded) carried.push(GuardedImportCarry.blockText(group.condition, group.lines, shape));
 		return CarryOk(usingLinesToCarry(
-			source, tree, ShapeVocab.memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried,
-			plugin.lexicalRegions(destSource)
+			source, tree, ShapeVocab.memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried, plugin
 		));
 	}
 
@@ -820,10 +819,11 @@ final class DependencyCarry {
 	 * moved body's `s.trim()` arriving at a destination holding no `using StringTools;` reads `String has
 	 * no field trim`.
 	 *
-	 * Carried unconditionally, with ONE necessary condition the tree can actually answer: a static
-	 * extension is invoked as `expr.method(...)`, so a declaration holding no member access at all can
-	 * need none. That keeps the line off the pure-data moves — a typedef, an enum of bare constructors
-	 * — without ever guessing WHICH extension a body uses, which is the guess this exists to avoid.
+	 * Carried unless proven unneeded, with two conditions the tree can answer: a static extension is
+	 * invoked as `expr.method(...)`, so a declaration holding no member access at all can need none,
+	 * which keeps the line off the pure-data moves; and when the module's method set is KNOWN, a body
+	 * calling none of them needs none either (`using Lambda;` beside a body that only calls `trim`). It
+	 * never guesses WHICH extension a body uses — an unlistable module's line is carried.
 	 *
 	 * A `#if`-guarded statement is skipped for the reason every other carry skips one: it binds under
 	 * its own flag and under no other, and an unconditional line at the destination does not reproduce
@@ -831,12 +831,19 @@ final class DependencyCarry {
 	 */
 	private static function usingLinesToCarry(
 		source: String, tree: QueryNode, accessKinds: Array<String>, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo,
-		destSource: String, files: Array<FileInfo>, carried: Array<String>, destRegions: Array<LexRegion>
+		destSource: String, files: Array<FileInfo>, carried: Array<String>, plugin: GrammarPlugin
 	): Array<String> {
 		if (!declHasMemberAccess(tree, declSpan, accessKinds)) return carried;
+		final destRegions: Array<LexRegion> = plugin.lexicalRegions(destSource);
+		final declText: String = source.substring(declSpan.from, declSpan.to);
 		for (imp in cursorInfo.imports) if (!imp.guarded && imp.kind == ImportKind.Using) {
 			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
 			if (path == null) continue;
+			// Proven unneeded, the one case left behind: the module's extension methods are KNOWN (the std probe, or a
+			// module the scope declares, whose members the index carries in full) and the moved code calls none of them —
+			// the verdict `unused-import` would give the carried line. A set that cannot be listed keeps the line.
+			final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? moduleMemberNames(files, path);
+			if (methods != null && !OccurrenceScan.usingExtensionCalled(declText, imp.raw, methods)) continue;
 			// `!other.guarded` is what makes this the right question. A guarded statement is a rung of SOME
 			// build's ladder and of no other, so a `#if js using StringTools; #end` at the destination
 			// satisfies nothing for the default configuration — without the filter the move writes both
@@ -1151,6 +1158,12 @@ final class DependencyCarry {
 		)
 			out.push(name);
 		for (c in node.children) collectBareMentions(c, declSpan, identKind, candidates, out);
+	}
+
+	/** Every member name of every type the scope's module `module` declares — a `using`'s method set — or null when the scope holds no such module. */
+	private static function moduleMemberNames(files: Array<FileInfo>, module: String): Null<Array<String>> {
+		final info: Null<FileInfo> = files.find(f -> f.module == module);
+		return info == null ? null : [for (t in info.types) for (m in t.members) m.name];
 	}
 
 }

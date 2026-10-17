@@ -22639,8 +22639,8 @@
 			"name": "M-RECEIVER-UNRELATED-ROUTED",
 			"type": "anyparse.query.MoveMemberReceivers",
 			"method": "receiverVerdict",
-			"find": "if (prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return LEAVE;",
-			"replace": "if (prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return 'unrelated';",
+			"find": "if (classOrInterface(prep, type) && prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return LEAVE;",
+			"replace": "if (classOrInterface(prep, type) && prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return 'unrelated';",
 			"note": "a receiver of an unrelated type declaring a same-named member refuses the move instead of being left alone"
 		},
 		{
@@ -22762,6 +22762,129 @@
 			"find": "final module: Null<ModuleBinding> = bound != null && bound >= 0 ? null : moduleBinding(name, span, currentType);",
 			"replace": "final module: Null<ModuleBinding> = null;",
 			"note": "the one module-level function a bare call binds does not type the call's result"
+		},
+		{
+			"name": "M-SUBTYPE-ROOT-NEGATIVE-LIST",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "closureExcludesFrom",
+			"find": "if (!COMPLETE_SUPERTYPE_KINDS.contains(cur.type.kind) && !cur.type.isAnonStruct) return false;",
+			"replace": "if ((cur.type.kind == 'TypedefDecl' || cur.type.kind == ABSTRACT_DECL_KIND) && !cur.type.isAnonStruct) return false;",
+			"note": "the root refusal is the negative list it replaced (typedef alias, plain abstract), so a `@:forward enum abstract` over a type reads as provably unrelated to it"
+		},
+		{
+			"name": "M-RECEIVER-STRUCTURE-LEFT",
+			"type": "anyparse.query.MoveMemberReceivers",
+			"method": "classOrInterface",
+			"force": "true",
+			"note": "a receiver of any provably-not-subtype kind is left alone, so a structure value holding the source keeps calling a member that left"
+		},
+		{
+			"name": "M-MOVE-OVERRIDE-MEMBER",
+			"type": "anyparse.query.MoveMember",
+			"method": "inheritanceRefusal",
+			"find": "if (overrideKind != null && m.group.modifiers.exists(mod -> mod.kind == overrideKind))",
+			"replace": "if (overrideKind == null)",
+			"note": "an `override` whose base is outside the scope moves, and the destination declares an override of nothing"
+		},
+		{
+			"name": "M-MOVE-IMPLEMENTATION",
+			"type": "anyparse.query.MoveMember",
+			"method": "inheritanceRefusal",
+			"find": "final ancestor: Null<String> = prep.index.subtypes.declaringAncestorOf(src, m.name);",
+			"replace": "final ancestor: Null<String> = null;",
+			"note": "the implementation of an interface method moves, and the source no longer implements its interface"
+		},
+		{
+			"name": "M-MOVE-OVERRIDDEN-MEMBER",
+			"type": "anyparse.query.MoveMember",
+			"method": "inheritanceRefusal",
+			"find": "if (prep.index.subtypes.subtypeDeclaresMember(src, m.name))",
+			"replace": "if (prep.index.subtypes.subtypeDeclaresMember(src, m.name) && m.isStatic)",
+			"note": "a member a subclass overrides moves, and the override overrides nothing"
+		},
+		{
+			"name": "M-MOVE-UNRESOLVED-INTERFACE",
+			"type": "anyparse.query.MoveMember",
+			"method": "inheritanceRefusal",
+			"find": "if (decls.length != 1 || !interfacesResolve(decls[0].supertypes)) return false;",
+			"replace": "if (decls.length == 1 && !interfacesResolve(decls[0].supertypes)) return false;",
+			"note": "an `implements` target outside the scope is read as declaring nothing, so a member it may declare moves"
+		},
+		{
+			"name": "M-SCAFFOLD-VIA-AT-END",
+			"type": "anyparse.query.MoveScaffold",
+			"method": "viaWiringOffset",
+			"find": "if (span != null && (writes(stmt) || superCall(stmt))) at = span.to;",
+			"replace": "if (span != null) at = span.to;",
+			"note": "the via assignment lands after the last constructor statement again, after a method was bound under Strict null safety"
+		},
+		{
+			"name": "M-CARRY-ORDER-MET",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "carriedImportEdit",
+			"find": "? canonicalCarry(carried, plugin.refShape())",
+			"replace": "? carried",
+			"note": "carried statements land in the order the moved members met them, a `using` between two imports"
+		},
+		{
+			"name": "M-CARRY-IMPORTLESS-BELOW",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "carriedDestEdits",
+			"find": "else if (destInfo.imports.exists(imp -> imp.kind != ImportKind.Using))",
+			"replace": "else if (true)",
+			"note": "a destination with only `using` lines gets the carried imports below its `using` run"
+		},
+		{
+			"name": "M-CARRY-USING-UNUSED",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "usingLinesToCarry",
+			"find": "if (methods != null && !OccurrenceScan.usingExtensionCalled(declText, imp.raw, methods)) continue;",
+			"replace": "if (methods == null && declText == '') continue;",
+			"note": "a `using` whose extensions the moved code calls none of is carried anyway"
+		},
+		{
+			"name": "M-CARRY-USING-ORDER-MET",
+			"type": "anyparse.query.MoveMember",
+			"method": "pushImportEdits",
+			"find": "usings.sort((a, b) -> prep.srcSource.indexOf(a) - prep.srcSource.indexOf(b));",
+			"replace": "",
+			"note": "the union of the members' carried `using` lines keeps the order the members met them in, not the source's, and the extension ranking flips"
+		},
+		{
+			"name": "M-RESERVED-IDENT-NAME",
+			"type": "anyparse.grammar.haxe.HxIdentLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
+			"replace": "",
+			"note": "a declaration name (parameter, binder, type, enum constructor, structure field) takes a reserved word Haxe refuses"
+		},
+		{
+			"name": "M-RESERVED-VAR-NAME",
+			"type": "anyparse.grammar.haxe.HxVarNameLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
+			"replace": "(?!(?:var|final)\\\\b)",
+			"note": "a `var` / `final` name takes every reserved word but `var` and `final` again"
+		},
+		{
+			"name": "M-RESERVED-FN-NAME",
+			"type": "anyparse.grammar.haxe.HxFnNameLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
+			"replace": "",
+			"note": "a function name takes a reserved word Haxe refuses"
+		},
+		{
+			"name": "M-RESERVED-VERSIONED-REFUSED",
+			"type": "anyparse.grammar.haxe.HxVarNameLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "|null|override|",
+			"replace": "|null|operator|overload|override|",
+			"note": "a `var` name refuses `operator` / `overload` too, and a module declaring one under a `#if` for an older Haxe skip-parses"
 		}
 	]
 }

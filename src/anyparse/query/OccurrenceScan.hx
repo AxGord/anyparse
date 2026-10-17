@@ -625,6 +625,17 @@ final class OccurrenceScan {
 		return head.startsWith('import ') || head.startsWith('using ');
 	}
 
+	/**
+	 * Whether `source` calls an extension method the statement `using <raw>` brings, `methods` being the statement's method
+	 * set (`GrammarPlugin.knownExtensionMethods`, or the members of the module a scope declares): a `.method` occurrence,
+	 * a `<Bound>.method` static access excluded — that one reaches the type through no extension. The one test
+	 * `unused-import` deletes a `using` by and a move leaves one behind by.
+	 */
+	public static function usingExtensionCalled(source: String, raw: String, methods: Array<String>): Bool {
+		final bound: String = SourceText.lastSegment(raw);
+		return methods.exists(m -> methodCalledInSource(source, m, bound));
+	}
+
 }
 
 /**

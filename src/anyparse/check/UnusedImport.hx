@@ -459,7 +459,7 @@ final class UnusedImport implements Check {
 			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': $MSG_USING_UNTRACKED', DECLINE_USING_UNTRACKED));
 			return;
 		}
-		if (methods.exists(m -> scans.exists(scan -> OccurrenceScan.methodCalledInSource(scan.source, m, bound)))) return;
+		if (scans.exists(scan -> OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods))) return;
 		out.push(make(file, imp, Severity.Warning, 'unused using \'${imp.raw}\''));
 	}
 

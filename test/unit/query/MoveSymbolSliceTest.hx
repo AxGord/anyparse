@@ -2426,7 +2426,7 @@ class MoveSymbolSliceTest extends Test {
 					+ '\tpublic static function use(s:String):String return s.go();\n}'
 				},
 				{ file: 'p/Dest.hx', source: '$destHeader\nclass Dest {\n\tpublic static function d(s:String):String return s.go();\n}' },
-				{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {}' },
+				{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {\n\tpublic static function go(s:String):String return s;\n}' },
 				{ file: 'q/Other.hx', source: 'package q;\n\nclass Other {}' },
 				{ file: 'q/Third.hx', source: 'package q;\n\nclass Third {}' }
 			]);
@@ -2458,7 +2458,7 @@ class MoveSymbolSliceTest extends Test {
 				+ '\tpublic static function use(s:String):String return s.go();\n}'
 			},
 			{ file: 'p/Dest.hx', source: 'package p;\n\n#if eval\nusing q.Other;\n#end\nimport a.B;\n\nclass Dest {}' },
-			{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {}' },
+			{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {\n\tpublic static function go(s:String):String return s;\n}' },
 			{ file: 'q/Other.hx', source: 'package q;\n\nclass Other {}' },
 			{ file: 'a/B.hx', source: 'package a;\n\nclass B {}' }
 		], plugin(), typeRefShape()), 'offers no seat above it');
@@ -2478,7 +2478,7 @@ class MoveSymbolSliceTest extends Test {
 				+ '\tpublic static function use(s:String):String return s.go();\n}'
 			},
 			{ file: 'p/Dest.hx', source: 'package p; using q.Other;\n\nclass Dest {}' },
-			{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {}' },
+			{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {\n\tpublic static function go(s:String):String return s;\n}' },
 			{ file: 'q/Other.hx', source: 'package q;\n\nclass Other {}' }
 		], plugin(), typeRefShape()), 'offers no seat above it');
 	}
@@ -2503,25 +2503,36 @@ class MoveSymbolSliceTest extends Test {
 
 	/**
 	 * The SPLIT path: a carry holding both a plain import and a `using` puts each at its own seat — the
-	 * import at the ordinary anchor, the `using` at the head of the destination's run. Nothing else in
+	 * import at the ordinary anchor, the `using` at the head of the destination's run. A destination
+	 * with no import of its own takes both at that head instead, the imports first. Nothing else in
 	 * the suite carries both at once, so `carriedImportLines` and the two-edit branch had no coverage.
 	 */
 	public function testACarriedImportAndUsingTakeSeparateSeats(): Void {
-		final changes: Array<MoveChange> = okChanges('p/Src.hx', 9, 7, 'p/Dest.hx', [
-			{
-				file: 'p/Src.hx',
-				source: 'package p;\n\nimport a.Dep;\n\nusing q.Ext;\n\nclass Src {}\n\nclass Moved {\n\tvar d:Dep;\n\n'
-				+ '\tpublic static function use(s:String):String return s.go();\n}'
-			},
-			{ file: 'p/Dest.hx', source: 'package p;\n\nusing q.Other;\n\nclass Dest {}' },
-			{ file: 'a/Dep.hx', source: 'package a;\n\nclass Dep {}' },
-			{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {}' },
-			{ file: 'q/Other.hx', source: 'package q;\n\nclass Other {}' }
-		]);
+		inline function moveInto(destHeader: String): Array<MoveChange> {
+			return okChanges('p/Src.hx', 9, 7, 'p/Dest.hx', [
+				{
+					file: 'p/Src.hx',
+					source: 'package p;\n\nimport a.Dep;\n\nusing q.Ext;\n\nclass Src {}\n\nclass Moved {\n\tvar d:Dep;\n\n'
+					+ '\tpublic static function use(s:String):String return s.go();\n}'
+				},
+				{ file: 'p/Dest.hx', source: '${destHeader}class Dest {}' },
+				{ file: 'a/B.hx', source: 'package a;\n\nclass B {}' },
+				{ file: 'a/Dep.hx', source: 'package a;\n\nclass Dep {}' },
+				{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {\n\tpublic static function go(s:String):String return s;\n}' },
+				{ file: 'q/Other.hx', source: 'package q;\n\nclass Other {}' }
+			]);
+		}
 		Assert.equals(
-			'package p;\n\nusing q.Ext;\nusing q.Other;\nimport a.Dep;\n\nclass Dest {}\n\nclass Moved {\n\tvar d:Dep;\n\n'
+			'package p;\n\nimport a.B;\nimport a.Dep;\n\nusing q.Ext;\nusing q.Other;\n\nclass Dest {}\n\nclass Moved {\n\tvar d:Dep;\n\n'
 			+ '\tpublic static function use(s:String):String return s.go();\n}\n',
-			changeFor(changes, 'p/Dest.hx').newSource
+			changeFor(moveInto('package p;\n\nimport a.B;\n\nusing q.Other;\n\n'), 'p/Dest.hx').newSource
+		);
+		// A destination with no import of its own: the seat above its `using` run takes the import too, ahead of the `using`
+		// lines, where the ordinary anchor — below the run — used to put it after them.
+		Assert.equals(
+			'package p;\n\nimport a.Dep;\n\nusing q.Ext;\nusing q.Other;\n\nclass Dest {}\n\nclass Moved {\n\tvar d:Dep;\n\n'
+			+ '\tpublic static function use(s:String):String return s.go();\n}\n',
+			changeFor(moveInto('package p;\n\nusing q.Other;\n\n'), 'p/Dest.hx').newSource
 		);
 	}
 
