@@ -23294,7 +23294,7 @@
 			"name": "M-NEGCOND-SWAP-OFF",
 			"type": "anyparse.check.NegatedCondition",
 			"method": "ternaryEdit",
-			"find": "final kept: Null<QueryNode> = positive(cond, site);",
+			"find": "final kept: Null<QueryNode> = positive(cond, elseValue, site);",
 			"replace": "final kept: Null<QueryNode> = null;",
 			"note": "a ternary built from a negated guard keeps the `!` (`x = !a ? 1 : 2`)"
 		},
