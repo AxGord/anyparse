@@ -5,6 +5,7 @@ import anyparse.check.DoubleNegation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.InvertNegatedIfElse;
 import anyparse.check.JoinStringAppend;
+import anyparse.check.PreferTernaryReturn;
 import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
@@ -57,6 +58,11 @@ class OperatorOverloadGateTest extends Test {
 	private static final NEGATION_USE: String = 'class Use2 {\n\n\tpublic static function a(f: Flag, g: Flag): Bool {\n'
 		+ '\t\treturn !(f == g);\n\t}\n\n\tpublic static function b(f: Flag): Bool {\n\t\treturn !!f;\n\t}\n\n'
 		+ '\tpublic static function d(f: Flag, x: Int): Int {\n\t\tif (!f) return x else return -x;\n\t}\n\n}\n';
+
+	/** A negated ternary and a negated guard pair over the `Flag` abstract — the value forms of the `if (!f)` swap. */
+	private static final NEGATED_VALUE_USE: String = 'class Use3 {\n\n\tpublic static function e(f: Flag, x: Int): Int {\n'
+		+ '\t\treturn !f ? x : -x;\n\t}\n\n\tpublic static function g(f: Flag, x: Int): Int {\n\t\tif (!f) return x;\n'
+		+ '\t\treturn -x;\n\t}\n\n}\n';
 
 	/** An abstract whose `@:op(A += B)` inserts a separator — the append twin of the `Dir` shape. */
 	private static final APPEND_OVERLOAD: String = 'abstract Route(String) from String to String {\n\n'
@@ -154,6 +160,27 @@ class OperatorOverloadGateTest extends Test {
 		Assert.isTrue(reports(new InvertNegatedIfElse(), NEGATION_PLAIN, NEGATION_USE, 'if (!f)'));
 	}
 
+	/** The ternary swap is the same complement, so it asks the same question. */
+	public function testInvertTernarySkipsOverloadedNot(): Void {
+		Assert.isFalse(reports(new InvertNegatedIfElse(), NEGATION_OVERLOAD, NEGATED_VALUE_USE, '!f ?'));
+	}
+
+	public function testInvertTernaryReportsPlainNot(): Void {
+		Assert.isTrue(reports(new InvertNegatedIfElse(), NEGATION_PLAIN, NEGATED_VALUE_USE, '!f ?'));
+	}
+
+	/**
+	 * A ternary BUILT from a negated guard is oriented positive only for the built-in `!`, and the
+	 * fix decides it with the overload declared in ANOTHER module — the report index it is handed.
+	 */
+	public function testTernaryReturnKeepsOverloadedNot(): Void {
+		Assert.equals('return !f ? x : -x;', ternaryReturnFix(NEGATION_OVERLOAD));
+	}
+
+	public function testTernaryReturnInvertsPlainNot(): Void {
+		Assert.equals('return f ? -x : x;', ternaryReturnFix(NEGATION_PLAIN));
+	}
+
 	/**
 	 * Whether `check` reports a finding whose span covers `needle` in the USE file, with `decl` in
 	 * the same run — the two-file shape is the point: the annotation that decides the verdict lives
@@ -175,6 +202,16 @@ class OperatorOverloadGateTest extends Test {
 			return v.file == 'Use.hx' && span != null && span.from <= at && at < span.to
 			&& v.message.indexOf('overloads the concatenation operator') == -1;
 		});
+	}
+
+	/** The one `prefer-ternary-return` edit over `NEGATED_VALUE_USE`'s guard pair, with `decl` in the same run. */
+	private function ternaryReturnFix(decl: String): String {
+		final run: FixRun = CheckFixture.fixRun(new PreferTernaryReturn(), [
+			{ file: 'Use.hx', source: NEGATED_VALUE_USE },
+			{ file: 'Decl.hx', source: decl }
+		], 'Use.hx', new HaxeQueryPlugin());
+		Assert.equals(1, run.edits.length);
+		return run.edits.length == 0 ? '' : run.edits[0].text;
 	}
 
 }

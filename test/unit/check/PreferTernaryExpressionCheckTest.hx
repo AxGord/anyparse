@@ -234,6 +234,13 @@ class PreferTernaryExpressionCheckTest extends Test {
 		Assert.equals(0, violations("class C {\n\tfunction f():Void {\n\t\tvar x = \"${if (c) 1 else 2}\";\n\t}\n}").length);
 	}
 
+	/** A negated condition is written POSITIVE, the branches swapped. */
+	public function testNegatedConditionEmitsPositiveTernary(): Void {
+		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f():Void {\n\t\tvar x = if (!c) 1 else 2;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('c ? 2 : 1', es[0].text);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferTernaryExpression(), src);
 	}

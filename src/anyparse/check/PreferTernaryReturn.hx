@@ -3,6 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.CarryingEdit;
 import anyparse.check.Check.CarryingFix;
 import anyparse.check.Check.Violation;
+import anyparse.check.NegatedCondition.InversionSeams;
+import anyparse.check.NegatedCondition.InversionSite;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
@@ -54,7 +56,8 @@ using StringTools;
  * `return cond ? a : b;`. The condition is a `ParenGuard` hole: it gains parentheses exactly where it would bind
  * across `?` bare (a ternary, an assignment, an arrow lambda, `in`), so precedence is preserved; every other
  * condition (comparison, `&&` / `||`, `??`, call, identifier) is emitted bare, per the user's no-redundant-parens
- * preference. The return values are copied verbatim.
+ * preference. The return values are copied verbatim. A condition whose top-level node is a built-in `!`
+ * is emitted POSITIVE, the two values swapped (`NegatedCondition`; `buildEdit` names the one exception).
  * `RefactorSupport.dropContainedEdits` keeps edits non-overlapping. Needs
  * `ControlFlowSupport` and `RefShape.returnStatementKind`; either unset makes
  * the check report-only / a no-op.
@@ -128,7 +131,10 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 		final flagged: Array<String> = RunScan.spanKeys(violations);
 		final edits: Array<CarryingEdit> = [];
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
-		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), regions, plugin);
+		final file: String = violations.length == 0 ? '' : violations[0].file;
+		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, [{ file: file, source: source }], index);
+		final site: Null<InversionSite> = NegatedCondition.siteOf(negation, file, source, tree);
+		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), regions, plugin, site);
 		final kept: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([
 			for (edit in edits)
 				{
@@ -176,7 +182,7 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 	/** Mirror `walk` — including its `retType` rebinding: collect one replacement edit per flagged `if`/`return` pair. */
 	private static function collectFixes(
 		node: QueryNode, source: String, s: Seams, retType: Null<String>, flagged: Array<String>, edits: Array<CarryingEdit>,
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, regions: Array<LexRegion>, plugin: GrammarPlugin
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, regions: Array<LexRegion>, plugin: GrammarPlugin, site: Null<InversionSite>
 	): Void {
 		final childRetType: Null<String> = childReturnType(node, source, s, retType);
 		if (s.support.blockKinds().contains(node.kind)) {
@@ -186,11 +192,11 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 				if (match == null) continue;
 				final ifSpan: Null<Span> = match.ifNode.span;
 				if (!(ifSpan != null && flagged.contains('${ifSpan.from}:${ifSpan.to}'))) continue;
-				final edit: Null<CarryingEdit> = buildEdit(match, source, regions, plugin);
+				final edit: Null<CarryingEdit> = buildEdit(match, source, regions, plugin, site);
 				if (edit != null) edits.push(edit);
 			}
 		}
-		for (c in node.children) collectFixes(c, source, s, childRetType, flagged, edits, comments, regions, plugin);
+		for (c in node.children) collectFixes(c, source, s, childRetType, flagged, edits, comments, regions, plugin, site);
 	}
 
 	/**
@@ -293,9 +299,15 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 		return null;
 	}
 
-	/** Build the `return cond ? a : b;` edit spanning the `if` through the trailing `return`. */
+	/**
+	 * Build the `return cond ? a : b;` edit spanning the `if` through the trailing `return`, oriented
+	 * positive: a guard `NegatedCondition.positive` reads as a negation (`if (!c) return a; return b;`)
+	 * is written `return c ? b : a;`. A guard carrying its own trailing comment keeps the negated
+	 * form — that comment rides the `?` value, and the swap would move the value it describes into
+	 * the `:` slot, where a line comment glued before the `;` would comment the terminator out.
+	 */
 	private static function buildEdit(
-		match: TernaryMatch, source: String, regions: Array<LexRegion>, plugin: GrammarPlugin
+		match: TernaryMatch, source: String, regions: Array<LexRegion>, plugin: GrammarPlugin, site: Null<InversionSite>
 	): Null<CarryingEdit> {
 		final ifSpan: Null<Span> = match.ifNode.span;
 		final condSpan: Null<Span> = match.condition.span;
@@ -303,10 +315,14 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 		final elseSpan: Null<Span> = match.elseValue.span;
 		final nextSpan: Null<Span> = match.nextReturn.span;
 		if (ifSpan == null || condSpan == null || thenSpan == null || elseSpan == null || nextSpan == null) return null;
-		final condition: String = source.substring(condSpan.from, condSpan.to);
-		final thenSource: String = source.substring(thenSpan.from, thenSpan.to);
-		final elseSource: String = source.substring(elseSpan.from, elseSpan.to);
 		final split: PreservedComments = preservedComments(source, ifSpan, thenSpan, nextSpan, [condSpan, thenSpan, elseSpan], regions);
+		final positive: Null<Span> = split.branchTrailing == null ? NegatedCondition.positive(match.condition, site)?.span : null;
+		// The three ranges the replacement quotes byte for byte, in the order it puts them in: the
+		// condition (its positive operand when inverted), the `?` value, the `:` value.
+		final carried: Array<Span> = positive == null ? [condSpan, thenSpan, elseSpan] : [positive, elseSpan, thenSpan];
+		final condition: String = source.substring(carried[0].from, carried[0].to);
+		final first: String = source.substring(carried[1].from, carried[1].to);
+		final second: String = source.substring(carried[2].from, carried[2].to);
 		// The guard's own trailing comment rides its branch; every other comment
 		// keeps the leading-block hoist. The broken layout is what makes the
 		// line-style case legal (a `//` glued before the `:` would comment the
@@ -315,20 +331,23 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 		// spliced file.
 		final head: String = '${split.hoisted}return ';
 		final text: String = split.branchTrailing == null
-			? '$head$condition ? $thenSource : $elseSource;'
-			: '$head$condition\n? $thenSource ${split.branchTrailing}\n: $elseSource;';
+			? '$head$condition ? $first : $second;'
+			: '$head$condition\n? $first ${split.branchTrailing}\n: $second;';
 		final whole: Span = new Span(ifSpan.from, nextSpan.to);
 		// The condition is a `ParenGuard` hole: it gains a pair exactly where it would bind across
-		// `?` bare (a ternary, an assignment, an arrow lambda, `in`).
-		final guarded: Array<{ span: Span, text: String }> = ParenGuard.guard(source, [
-			{ span: whole, text: text, holes: [new Span(head.length, head.length + condition.length)] }
-		], plugin);
-		// The three ranges the replacement quotes byte for byte, in the order it puts them in —
-		// the same three `preservedComments` is handed to decide which comments it may leave
-		// alone, so the declaration is a list this function had already built. The guard can put
-		// parentheses AROUND the condition; the source text is still inside the result, which is
-		// the whole of what a verbatim carry claims.
-		return { span: whole, text: guarded[0].text, carried: [condSpan, thenSpan, elseSpan] };
+		// `?` bare (a ternary, an assignment, an arrow lambda, `in`). Swapped values are holes too:
+		// each now stands in the other's slot, and the parse round-trip proves it re-reads as itself.
+		final holes: Array<Span> = [new Span(head.length, head.length + condition.length)];
+		if (positive != null) {
+			final firstFrom: Int = head.length + condition.length + ' ? '.length;
+			final secondFrom: Int = firstFrom + first.length + ' : '.length;
+			holes.push(new Span(firstFrom, firstFrom + first.length));
+			holes.push(new Span(secondFrom, secondFrom + second.length));
+		}
+		final guarded: Array<{ span: Span, text: String }> = ParenGuard.guard(source, [{ span: whole, text: text, holes: holes }], plugin);
+		// The guard can put parentheses AROUND a quoted range; the source text is still inside the
+		// result, which is the whole of what a verbatim carry claims.
+		return { span: whole, text: guarded[0].text, carried: carried };
 	}
 
 	/**

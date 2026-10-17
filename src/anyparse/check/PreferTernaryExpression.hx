@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.NegatedCondition.InversionSeams;
+import anyparse.check.NegatedCondition.InversionSite;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
@@ -93,7 +95,9 @@ import anyparse.runtime.Span;
  * being an expression, so the enclosing statement's terminator is untouched. The three pieces
  * are copied verbatim from their spans. The condition is a `ParenGuard` hole: it gains parentheses exactly
  * where it would bind across `?` bare (a ternary, an assignment, an arrow lambda, `in`), per the user's
- * no-redundant-parens preference; the branches are copied bare, which the branch whitelist is what makes safe.
+ * no-redundant-parens preference; the branches are copied bare, which the branch whitelist is what makes
+ * safe. A condition whose top-level node is a built-in `!` is emitted POSITIVE, the two values swapped
+ * and both made holes too (`NegatedCondition.ternaryEdit`, the read `invert-negated-if-else` makes).
  *
  * The replaced region stops at the ELSE-BRANCH's end, not at the node's own: an
  * `if`-expression span runs on through the trivia after its last token, and splicing that
@@ -124,11 +128,11 @@ final class PreferTernaryExpression implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
+		final seams: Null<Seams> = readSeams(plugin, files);
 		if (seams == null) return [];
 		final resolveIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return [
-			for (entry in files) for (m in collect(plugin, entry.source, seams, resolveIndex))
+			for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex))
 				{
 					file: entry.file,
 					span: m.span,
@@ -142,11 +146,12 @@ final class PreferTernaryExpression implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
+		final file: String = violations.length == 0 ? '' : violations[0].file;
+		final seams: Null<Seams> = readSeams(plugin, [{ file: file, source: source }], index);
 		if (seams == null) return [];
 		final resolveIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([{ file: '', source: source }], plugin, index);
 		final byKey: Map<String, Match> = [];
-		for (m in collect(plugin, source, seams, resolveIndex)) byKey['${m.span.from}:${m.span.to}'] = m;
+		for (m in collect(plugin, file, source, seams, resolveIndex)) byKey['${m.span.from}:${m.span.to}'] = m;
 		final guarded: Array<GuardedEdit> = [];
 		final plain: Array<{ span: Span, text: String }> = CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
 			guarded.push(m.edit);
@@ -159,10 +164,12 @@ final class PreferTernaryExpression implements Check {
 	}
 
 	/**
-	 * Every rewritable 2-branch value `if` in `source` (empty when it does not parse).
+	 * Every rewritable 2-branch value `if` in `file`'s `source` (empty when it does not parse).
 	 * `run` and `fix` both go through it, so neither can encode a gate the other misses.
 	 */
-	private static function collect(plugin: GrammarPlugin, source: String, s: Seams, resolveIndex: () -> Null<SymbolIndex>): Array<Match> {
+	private static function collect(
+		plugin: GrammarPlugin, file: String, source: String, s: Seams, resolveIndex: () -> Null<SymbolIndex>
+	): Array<Match> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;
@@ -170,6 +177,7 @@ final class PreferTernaryExpression implements Check {
 		walk(root, {
 			root: root,
 			source: source,
+			site: NegatedCondition.siteOf(s.negation, file, source, root),
 			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source)),
 			seams: s,
 			plugin: plugin,
@@ -178,8 +186,13 @@ final class PreferTernaryExpression implements Check {
 		return out;
 	}
 
-	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
-	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+	/**
+	 * Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op).
+	 * `files` / `report` scope the negation read's operator table (`NegatedCondition.readSeams`).
+	 */
+	private static function readSeams(
+		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, ?report: SymbolIndex
+	): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final ifExprKinds: Null<Array<String>> = shape.ifExpressionKinds;
 		if (ifExprKinds == null || ifExprKinds.length == 0) return null;
@@ -204,6 +217,7 @@ final class PreferTernaryExpression implements Check {
 			delimitedAllKinds: (shape.delimitedAllChildKinds ?? []).concat(parenKind == null ? [] : [parenKind]),
 			delimitedTailKinds: shape.delimitedTailChildKinds ?? [],
 			opaqueKinds: shape.opaqueKinds ?? [],
+			negation: NegatedCondition.readSeams(plugin, files, report),
 			shape: shape
 		};
 	}
@@ -269,9 +283,7 @@ final class PreferTernaryExpression implements Check {
 		final elseSource: String = src.substring(elseSpan.from, elseSpan.to);
 		return {
 			span: span,
-			edit: ParenGuard.ternaryEdit(
-				new Span(span.from, elseSpan.to), '', src.substring(condSpan.from, condSpan.to), thenSource, elseSource, ''
-			)
+			edit: NegatedCondition.ternaryEdit(new Span(span.from, elseSpan.to), '', condition, thenSource, elseSource, '', src, scan.site)
 		};
 	}
 
@@ -284,6 +296,9 @@ private typedef Seams = {
 	var delimitedAllKinds: Array<String>;
 	var delimitedTailKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+
+	/** The negation read the emitted ternary is oriented by; null when the grammar has no not kind. */
+	var negation: Null<InversionSeams>;
 	var shape: RefShape;
 }
 
@@ -299,6 +314,9 @@ private typedef Match = {
 private typedef Scan = {
 	var root: QueryNode;
 	var source: String;
+
+	/** The file's negation site (`NegatedCondition`), null when the grammar has no not kind. */
+	var site: Null<InversionSite>;
 	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
 	var seams: Seams;
 	var plugin: GrammarPlugin;

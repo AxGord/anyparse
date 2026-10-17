@@ -551,6 +551,62 @@ class PreferTernaryReturnCheckTest extends Test {
 		}
 	}
 
+	/** The TM shape the task came from (`ThumbnailReader`, anonymized): a negated guard collapses to the POSITIVE ternary. */
+	public function testNegatedGuardEmitsPositiveTernary(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():Bytes {\n\t\tif (!d.has.t) return null;\n\t\treturn decode(d.node.t.data);\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return d.has.t ? decode(d.node.t.data) : null;', es[0].text);
+	}
+
+	/** The redundant paren around the negated operand drops, and comes back only where `?:` would capture it. */
+	public function testNegatedCompoundGuardDropsParen(): Void {
+		Assert.equals(
+			'return a && b ? 2 : 1;', edits('class C {\n\tfunction f():Int {\n\t\tif (!(a && b)) return 1;\n\t\treturn 2;\n\t}\n}')[0].text
+		);
+		Assert.equals(
+			'return (a = b) ? 2 : 1;', edits('class C {\n\tfunction f():Int {\n\t\tif (!(a = b)) return 1;\n\t\treturn 2;\n\t}\n}')[0].text
+		);
+	}
+
+	/** The carried ranges follow the inverted order: the positive operand, then the values as they now stand. */
+	public function testNegatedGuardCarriesInvertedRanges(): Void {
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\tif (!a) return 1;\n\t\treturn 2;\n\t}\n}';
+		final carrying: Array<CarryingEdit> = new PreferTernaryReturn().fixCarrying(
+			source, CheckFixture.violations(new PreferTernaryReturn(), source), new HaxeQueryPlugin()
+		);
+		Assert.equals(1, carrying.length);
+		Assert.equals('return a ? 2 : 1;', carrying[0].text);
+		Assert.equals('a|2|1', [for (s in carrying[0].carried) source.substring(s.from, s.to)].join('|'));
+	}
+
+	/** A comment the positive condition would drop keeps the condition as written. */
+	public function testNegatedGuardConditionCommentKeepsNegation(): Void {
+		Assert.equals(
+			'return !/* k */a ? 1 : 2;',
+			edits('class C {\n\tfunction f():Int {\n\t\tif (!/* k */a) return 1;\n\t\treturn 2;\n\t}\n}')[0].text
+		);
+	}
+
+	/** A guard's own trailing comment rides the `?` value, so the guard keeps its orientation. */
+	public function testNegatedGuardTrailingCommentKeepsNegation(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\tif (!a) return 1; // one\n\t\treturn 2;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('return !a\n? 1 // one\n: 2;', es[0].text);
+	}
+
+	/** `!=` and a negated `&&` operand are no top-level `!`: emitted as written. */
+	public function testNonTopLevelNotKeepsOrientation(): Void {
+		Assert.equals(
+			'return a != b ? 1 : 2;', edits('class C {\n\tfunction f():Int {\n\t\tif (a != b) return 1;\n\t\treturn 2;\n\t}\n}')[0].text
+		);
+		Assert.equals(
+			'return !a && b ? 1 : 2;', edits('class C {\n\tfunction f():Int {\n\t\tif (!a && b) return 1;\n\t\treturn 2;\n\t}\n}')[0].text
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferTernaryReturn(), src);
 	}

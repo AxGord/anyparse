@@ -539,8 +539,8 @@
 		{
 			"name": "M-INVERT-REGION-UNGUARDED",
 			"type": "anyparse.check.InvertNegatedIfElse",
-			"method": "inversionEdits",
-			"find": "\t\tif (RegionTerminator.unterminatedRegion(thenBranch, source, seams.shape)) return;\n",
+			"method": "statementEdits",
+			"find": "\t\tif (RegionTerminator.unterminatedRegion(thenBranch, source, shape)) return;\n",
 			"replace": "",
 			"note": "a then-region closed only by the `else` is swapped into the tail slot with no terminator"
 		},
