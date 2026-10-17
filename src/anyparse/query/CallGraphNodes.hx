@@ -70,7 +70,12 @@ final class CallGraphNodes {
 			final name: Null<String> = node.name;
 			if (span != null && name != null && fnKinds.contains(node.kind)) {
 				final owner: String = typeName ?? moduleType;
-				fnId = parentFn == null ? '$owner.$name' : '$parentFn#$name';
+				fnId = if (parentFn != null)
+					'$parentFn#$name'
+				else if (typeName == null)
+					bodyId(g, '$owner.$name', entry.file)
+				else
+					'$owner.$name';
 				final id: String = fnId;
 				final first: Bool = register(
 					g, id, entry, parentFn == null ? owner : typeName, name, span, isDynamic && parentFn == null,
@@ -167,6 +172,24 @@ final class CallGraphNodes {
 			g._facts.returnSources.remove(id);
 		}
 		if (unread || others.exists(o -> params(o) != written)) g._facts.overloadedParams[id] = true;
+	}
+
+	/**
+	 * The id of a module-level function `base` (`Mod.f`) declared in `file`: `base` itself for its first declaration there,
+	 * and for each further one — another `#if` branch's body, since two module-level declarations of a name do not compile
+	 * in one build — `base@2`, `base@3`, … in source order, a node of its own (`CallGraph.bodiesOf`), so what one build's
+	 * body runs is never another's. A further body takes every edge an earlier file left on `base`: it names the function,
+	 * not one of its bodies. A declaration of `base` in another file — the module on another class path — still folds in.
+	 */
+	private static function bodyId(g: CallGraph, base: String, file: String): String {
+		final key: String = CallGraphNames.normalizePath(file);
+		if (!g.declarationsOf(base).exists(d -> CallGraphNames.normalizePath(d.file) == key)) return base;
+		final bodies: Array<String> = g._bodies[base] ?? [];
+		final id: String = '$base${CallGraph.BODY_MARK}${bodies.length + 2}';
+		bodies.push(id);
+		g._bodies[base] = bodies;
+		for (e in g.inEdges(base).copy()) g.indexEdge(CallGraph.retargeted(e, id));
+		return id;
 	}
 
 	/**

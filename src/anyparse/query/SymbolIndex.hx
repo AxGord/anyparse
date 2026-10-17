@@ -543,7 +543,8 @@ typedef FileInfo = {
 	/**
 	 * The module's module-level value declarations (`RefShape.moduleValueDeclKinds`: a function, a `var`, a `final`), each
 	 * one in source order, a conditional region's included — what a bare name in the module means, in the builds that compile
-	 * it, before any static an import brings in under it (`ValueNameBinding.moduleValuesAt`).
+	 * it, before any static an import brings in under it (`ValueNameBinding.moduleValuesAt`) — and
+	 * the one reading of the module-level fields an import of the module brings (`ImportBindings`).
 	 */
 	var moduleFields: Array<ModuleField>;
 }
