@@ -3161,3 +3161,10 @@ decided the question; it may not become a record of runs.
   parse in this grammar, Haxe accepts it); `ScratchField`'s `loopKinds` / `doWhileKinds` are two arms of one union (a
   do-while body all-conditional because a `continue` skips its rest); `FactsProvenance` reads the LOWERED loops (`for`
   and comprehensions), and no `do … while` is lowered — branch `feat/infra-N2`
+- a named function expression was to keep `HxFnDecl` and have its body's optional `;` gated by context → the `;`
+  after `final g = function named() return 1` is the STATEMENT's for the compiler (Haxe 4.3.7 `--interp` runs it
+  with a comment or an assignment around it), and no shape gate can tell an expression-position body from a member's;
+  `NamedFnExpr` now carries `HxNamedFnExpr` — `HxFnDecl`'s signature, formatting knobs included, over the
+  expression-position `HxFnExprBody`, which owns no terminator. Rejected the other fix, an absent optional literal
+  rewinding the trivia it skipped: it would narrow every `@:trailOpt` node's span at once to cure one grammar error
+  — branch `feat/infra-N8`

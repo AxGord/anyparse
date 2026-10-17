@@ -216,7 +216,7 @@ enum HxExpr {
 	InlineExpr(operand: HxExpr);
 
 	@:kw('function')
-	NamedFnExpr(decl: HxFnDecl);
+	NamedFnExpr(decl: HxNamedFnExpr);
 
 	@:kw('function') @:fmt(anonFuncParens)
 	FnExpr(fn: HxFnExpr);
