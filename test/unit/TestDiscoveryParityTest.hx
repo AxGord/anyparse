@@ -1575,6 +1575,14 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-LOOPGUARD-EXPR-BODY-KEPT,M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY,M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY',
 			'unit.check.MagicNumberCheckTest#testADirectArgumentOfAnIgnoredCallIsExempt :: control :: M-MAGIC-CALLARG-BLIND',
 			'unit.check.MagicNumberCheckTest#testADottedEntryMatchesTheCalleeTail :: control :: M-MAGIC-CALLARG-SUFFIX-LOOSE',
+			'unit.check.MagicNumberCheckTest#testANamedCollectionOfLiteralsIsATable :: control :: '
+				+ 'M-MAGIC-TABLE-COLLECTION-BLIND,M-MAGIC-TABLE-COLLECTION-UNNAMED',
+			'unit.check.MagicNumberCheckTest#testANegatedArgumentOfAnIgnoredCallIsExempt :: control :: M-MAGIC-CALLARG-NEG-BLIND',
+			'unit.check.MagicNumberCheckTest#testASwitchOfLiteralArmsIsATable :: control :: '
+				+ 'M-MAGIC-TABLE-SWITCH-BLIND,M-MAGIC-TABLE-SWITCH-ARM-LOOSE',
+			'unit.check.MagicNumberCheckTest#testAValueObjectBuiltInAListedArgumentIsExempt :: control :: M-MAGIC-CALLARG-NESTED-NEW',
+			'unit.check.MagicNumberCheckTest#testAnIgnoredConstructorIsSpelledDotNew :: control :: M-MAGIC-CALLARG-NEW-BLIND',
+			'unit.check.MagicNumberCheckTest#testLiteralTablesAreOffByDefault :: control :: M-MAGIC-TABLES-DEFAULT-ON',
 			'unit.check.MemberOrderCheckTest#testInlineSubgroupBlankInConditionalRebuildUnderOption :: control :: '
 				+ 'M-MO-INLINE-BOUNDARY-OFF,M-MO-INLINE-SEPARATOR-DROPPED,M-MO-INLINE-CONDITIONAL-REBUILD-UNREAD',
 			'unit.check.MemberOrderCheckTest#testInlineSubgroupBlankInsertedBySpacingOnlyFallback :: control :: '
@@ -1606,12 +1614,28 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-MO-WRITER-UNMEASURABLE-GUESS',
 			'unit.check.MemberSpacingPolicyTest#testTheWriterPolicyIsReadOnlyOnTheKindsItCovers :: control :: '
 				+ 'M-MO-WRITER-CONTAINER-KIND',
+			'unit.check.NamingCheckCrossFileFixTest#testAGrantedMemberRenamesIntoItsGranteesAndTheirSubtypes :: control :: '
+				+ 'M-ALLOW-GRANTEE-SUBTYPES,M-NAMING-ALLOWGRANT-AS-ANNOTATION,M-NAMING-CROSS-GRANTEES-DROPPED',
+			'unit.check.NamingCheckCrossFileFixTest#testAMemberGrantDoesNotTaintItsNeighbours :: control :: '
+				+ 'M-ALLOW-REACHING-FILE,M-CONFINED-GRANTS-IGNORED',
+			'unit.check.NamingCheckCrossFileFixTest#testANarrowedPublicRenameRefusesAReaderOutsideItsScope :: control :: '
+				+ 'M-NAMING-OUTSIDE-SCOPE-IGNORED',
+			'unit.check.NamingCheckCrossFileFixTest#testAPackageGrantRenamesIntoThePackage :: control :: M-ALLOW-GRANTEE-PACKAGE',
+			'unit.check.NamingCheckCrossFileFixTest#testASubtypeParameterOfTheSameNameIsNotRenamed :: control :: '
+				+ 'M-NAMING-FOREIGN-LOSES-TO-BARE',
+			'unit.check.NamingCheckCrossFileFixTest#testAnUnrelatedSameNamedPrivateDoesNotBlockAPublicRename :: control :: '
+				+ 'M-NAMING-FOREIGN-UNBOUND',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
 				+ 'M-NAMING-SKIPSCAN-REPORT-INDEX,M-SKIPSCAN-SCOPEWIDE',
+			'unit.check.NamingCheckCrossFileFixTest#testUnresolvableHierarchyTellsItsTwoCausesApart :: control :: '
+				+ 'M-ALLOW-GRANTEE-UNMATCHED',
+			'unit.check.NamingCheckLocalFixTest#testLocalAndParamCollisionsNameTheTakenName :: control :: M-NAMING-LOCAL-CROSS-NOTE',
 			'unit.check.NamingCheckMemberFixTest#testAccessGrantOutsideReportScopeRefusesSingleFileRename :: control :: '
 				+ 'M-CONFINEMENT-REPORT-INDEX-RENAME',
 			'unit.check.NamingCheckMemberFixTest#testReflectionCallOutsideReportScopeRefusesRename :: control :: '
 				+ 'M-REFLECTION-REPORT-INDEX-RENAME',
+			'unit.check.NamingCheckTest#testEnumAbstractPropertyAndStaticTakeTheMemberPolicy :: control :: '
+				+ 'M-NAMING-ENUMVALUE-PROPERTY,M-NAMING-ENUMVALUE-STATIC,M-NAMING-PROPERTY-FACTS-NULL',
 			'unit.check.NamingPrivatizeTest#testANameThePrivateRuleRejectsIsNotACandidate :: control :: M-PRIVATIZE-RULE-UNCHECKED',
 			'unit.check.NamingPrivatizeTest#testANarrowedRunSeesAReaderOutsideItsScope :: control :: M-PRIVATIZE-TOKENS-UNCHECKED',
 			'unit.check.NamingPrivatizeTest#testAPublicUnderscoreFieldReadOnlyInsideIsPrivatized :: control :: '
@@ -1619,12 +1643,18 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NamingPrivatizeTest#testASubtypeReaderStillPrivatizes :: control :: M-PRIVATIZE-NO-SUBTYPE-REGION',
 			'unit.check.NamingPrivatizeTest#testAnAutoBuildAncestorDoesNotRefuse :: control :: M-PRIVATIZE-AUTOBUILD-COUNTS',
 			'unit.check.NamingPrivatizeTest#testAnOutsideReaderKeepsTheRename :: control :: M-NAMING-RISKY-FINDINGS-ALL,M-PRIVATIZE-TOKENS-UNCHECKED',
+			'unit.check.NamingPrivatizeTest#testAnUnrelatedSameNamedPrivateDoesNotRefuse :: control :: '
+				+ 'M-PRIVATIZE-FOREIGN-IGNORED,M-NAMING-FOREIGN-UNBOUND',
 			'unit.check.NamingPrivatizeTest#testEachGateRefusesTheArm :: control :: M-PRIVATIZE-UNCERTAIN-RUN,'
 				+ 'M-PRIVATIZE-TYPE-REACH,M-PRIVATIZE-CHAIN,M-PRIVATIZE-ACCESS-GRANT,M-PRIVATIZE-FRAGMENT,M-PRIVATIZE-TOKENS-UNCHECKED',
 			'unit.check.NamingPrivatizeTest#testNoDeclaredScopeLeavesTheRename :: control :: M-PRIVATIZE-INCOMPLETE-PROJECT',
 			'unit.check.NamingPrivatizeTest#testTheCandidateTestIsAPositiveList :: control :: M-PRIVATIZE-METHOD-CANDIDATE,M-PRIVATIZE-NO-UNDERSCORE,'
 				+ 'M-PRIVATIZE-NOT-PUBLIC,M-PRIVATIZE-NO-OWNER,M-PRIVATIZE-IMPLICIT-REACH,M-PRIVATIZE-RENAME-UNSAFE',
 			'unit.check.NamingPrivatizeTest#testTheOracleRunPrivatizes :: control :: M-RISKYARM-NOT-VERIFIED,M-FIXVERIFY-RISKYARM-FIX',
+			'unit.check.NoUnderscorePrefixCheckTest#testNamingYieldsTheBindingThisRuleReports :: control :: '
+				+ 'M-LINT-SUPERSEDES-IGNORED,M-NUP-SUPERSEDES-NONE',
+			'unit.check.NoUnderscorePrefixCheckTest#testRefusedStripDeclaresItsReason :: control :: M-NUP-DECLINE-SILENT',
+			'unit.check.NoUnderscorePrefixCheckTest#testTheFixerSeesTheBindingOnce :: control :: M-FIXDRIVER-SUPERSEDES-IGNORED',
 			'unit.check.NullableSourceResolutionScopeTest#testExcludedArrayPopStaysUnseeded :: control :: M-NULLABLE-INDEX-EXCLUSION',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
@@ -1935,6 +1965,13 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PFPF-MACRO-SILENT',
 			'unit.check.PreferFinalMacroOwnerTest#testTheFoldIsNeverAdmittedOnAMacroBuiltOwner :: control :: M-FINAL-MACRO-FOLD-ADMITTED',
 			'unit.check.PreferFindCheckTest#testFixRefusedWhenTheOnlyUsingIsGuarded :: control :: M-GUARDED-USING-ABSENT',
+			'unit.check.PreferForeachCheckTest#testALaterUsingOfferingNoExtensionIsPassedOver :: control :: M-EXT-DECL-PASS-OVER,M-EXT-DECL-STATIC,M-EXT-DECL-NOUSING',
+			'unit.check.PreferForeachCheckTest#testALaterUsingThatMayOfferTheExtensionStopsTheWalk :: control :: M-EXT-DECL-BUILT,M-EXT-DECL-GUARDED-HOST',
+			'unit.check.PreferForeachCheckTest#testGuardedUsingOrDeclarationRefuses :: control :: M-EXT-DECL-GUARDED-MEMBER,M-BINDER-EXTENSION-GUARDED-USING',
+			'unit.check.PreferForeachCheckTest#testLaterUsingWinsOverEarlierOne :: control :: M-BINDER-EXTENSION-LAST-USING',
+			'unit.check.PreferForeachCheckTest#testReceiverUsingMetaBeatsTheFileUsing :: control :: M-EXT-NOMINAL-ATUSING',
+			'unit.check.PreferForeachCheckTest#testTwoTypesOfOneModuleDeclaringTheNameRefuse :: control :: M-EXT-DECL-TWO-HOSTS',
+			'unit.check.PreferForeachCheckTest#testUnindexedLaterUsingStopsTheWalk :: control :: M-BINDER-EXTENSION-UNINDEXED',
 			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainElseWhileNotFlagged :: control :: M-ELSELESS-FINAL-ELSE',
 			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainImpureInitNotFlagged :: control :: M-DECLCHAIN-INIT-ANY',
 			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainNestedWriteNotFlagged :: control :: M-DECLCHAIN-OCCURRENCE-COUNT',
@@ -2217,6 +2254,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StaticReflectionReachTest#testTheCliDeletesADistinctiveStaticOnlyATableSpells :: control :: M-STATICREACH-NEVER',
 			'unit.check.StaticReflectionReachTest#testTheOwnerInAnOpaqueRegionKeepsTheGate :: control :: M-STATICREACH-OPAQUE-CHAIN-BLIND',
 			'unit.check.StringLiteralDupCheckTest#testMapOfOnlyStringLiteralsIsATable :: control :: M-STRING-LITERAL-DUP-MAP-ENTRY-BLIND',
+			'unit.check.StringLiteralDupCheckTest#testMapWithNegativeValuesIsATable :: control :: M-LITERAL-TABLE-NEG-ENTRY-BLIND',
 			'unit.check.StringLiteralDupCheckTest#testMapWithNonStringValuesIsATable :: control :: '
 				+ 'M-STRING-LITERAL-DUP-STRING-ONLY-ENTRIES',
 			'unit.check.StringLiteralDupCheckTest#testMixedArrayIsNotATable :: control :: M-STRING-LITERAL-DUP-TABLE-ANY',
@@ -6003,6 +6041,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-LINT-SUMMARY-THRESHOLD-UNREAD',
 			'M-MAGIC-CALLARG-BLIND',
 			'M-MAGIC-CALLARG-SUFFIX-LOOSE',
+			'M-MAGIC-CALLARG-NEG-BLIND',
+			'M-MAGIC-CALLARG-NEW-BLIND',
+			'M-MAGIC-CALLARG-NESTED-NEW',
+			'M-MAGIC-TABLE-SWITCH-BLIND',
+			'M-MAGIC-TABLE-SWITCH-ARM-LOOSE',
+			'M-MAGIC-TABLE-COLLECTION-BLIND',
+			'M-MAGIC-TABLE-COLLECTION-UNNAMED',
+			'M-MAGIC-TABLES-DEFAULT-ON',
+			'M-LITERAL-TABLE-NEG-ENTRY-BLIND',
 			'M-INTERP-CONSTANT-BLOCK-IGNORED',
 			'M-FOLD-CONSTANT-AS-EXPRESSION',
 			'M-CONSTANT-NEGATIVE-ZERO-SIGNED',
@@ -7496,7 +7543,34 @@ class TestDiscoveryParityTest extends Test {
 			'M-SHADOWING-LOCAL-OUTER-READ-IGNORED',
 			'M-SHADOWING-LOCAL-NO-ASSIGNMENT',
 			'M-SHADOWING-LOCAL-CAPTURE-IGNORED',
-			'M-LOWER-CAMEL-FIRST-ONLY'
+			'M-LOWER-CAMEL-FIRST-ONLY',
+			'M-EXT-DECL-BUILT',
+			'M-EXT-DECL-PASS-OVER',
+			'M-EXT-DECL-TWO-HOSTS',
+			'M-EXT-DECL-GUARDED-HOST',
+			'M-EXT-DECL-GUARDED-MEMBER',
+			'M-EXT-DECL-STATIC',
+			'M-EXT-DECL-NOUSING',
+			'M-EXT-NOMINAL-ATUSING',
+			'M-NAMING-ENUMVALUE-PROPERTY',
+			'M-NAMING-ENUMVALUE-STATIC',
+			'M-NAMING-PROPERTY-FACTS-NULL',
+			'M-NAMING-LOCAL-CROSS-NOTE',
+			'M-NUP-DECLINE-SILENT',
+			'M-LINT-SUPERSEDES-IGNORED',
+			'M-NUP-SUPERSEDES-NONE',
+			'M-FIXDRIVER-SUPERSEDES-IGNORED',
+			'M-ALLOW-REACHING-FILE',
+			'M-CONFINED-GRANTS-IGNORED',
+			'M-ALLOW-GRANTEE-SUBTYPES',
+			'M-ALLOW-GRANTEE-PACKAGE',
+			'M-ALLOW-GRANTEE-UNMATCHED',
+			'M-NAMING-ALLOWGRANT-AS-ANNOTATION',
+			'M-NAMING-CROSS-GRANTEES-DROPPED',
+			'M-NAMING-FOREIGN-UNBOUND',
+			'M-NAMING-OUTSIDE-SCOPE-IGNORED',
+			'M-PRIVATIZE-FOREIGN-IGNORED',
+			'M-NAMING-FOREIGN-LOSES-TO-BARE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

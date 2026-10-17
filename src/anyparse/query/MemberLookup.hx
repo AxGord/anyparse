@@ -423,7 +423,7 @@ final class MemberLookup {
 	 * is passed over, so a caller that needs the NEAREST declaration (a covariant override may sit on the link it cannot
 	 * read) proves the closure resolvable first (`declarationFreeOfExtensionTypes`). Null when no link declares it.
 	 */
-	public function declaringMember(start: ResolvedType, member: String): Null<{ members: Array<MemberInfo>, host: ResolvedType }> {
+	public function declaringMember(start: ResolvedType, member: String): Null<HostedMembers> {
 		final hit: Null<{ member: MemberInfo, host: ResolvedType }> = declaredMemberClosure(start, member, []);
 		return hit == null ? null : { members: hit.host.type.members.filter(m -> m.name == member), host: hit.host };
 	}
@@ -899,5 +899,19 @@ typedef MemberDeclaration = {
 
 	/** The file holding the declaration. */
 	final file: FileInfo;
+
+}
+
+/**
+ * Every declaration of one member name on the one type declaring it (`MemberLookup.declaringMember`,
+ * `ValueNameBinding.extensionDeclaration`): several only for a member declared in several branches of a `#if`.
+ */
+typedef HostedMembers = {
+
+	/** The member's declarations, as the host declares them. */
+	final members: Array<MemberInfo>;
+
+	/** The declaration of the type declaring them. */
+	final host: ResolvedType;
 
 }

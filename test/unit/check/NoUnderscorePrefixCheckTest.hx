@@ -2,15 +2,19 @@ package unit.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
+import anyparse.check.Naming;
 import anyparse.check.NoUnderscorePrefix;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.Cli;
 import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
 import unit.CheckFixture;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -89,6 +93,85 @@ class NoUnderscorePrefixCheckTest extends Test {
 			+ '\t\ttrace(_value + value);\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * A refused strip SAYS why: the fix used to return no edit and no reason, which `lint --fix`
+	 * reports as a rule that "declares neither NoAutofix nor a decline reason".
+	 */
+	@:pin('control')
+	@:killer('M-NUP-DECLINE-SILENT')
+	public function testRefusedStripDeclaresItsReason(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function run(label:String):String {\n'
+			+ '\t\tfinal _label:String = label + "!";\n\t\treturn _label;\n\t}\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, plugin, CheckFixture.index(files, plugin)).length);
+		Assert.stringContains("'label' is already bound", vs[0].declineReason ?? '');
+	}
+
+	/**
+	 * One finding per identifier: with this rule enabled, an underscore-prefixed local carries ITS
+	 * finding and `naming` reports nothing more for it - the same binding used to be reported twice,
+	 * once by each rule. With the rule off, `naming` still reports it (the control).
+	 */
+	@:pin('control')
+	@:killer('M-LINT-SUPERSEDES-IGNORED', 'M-NUP-SUPERSEDES-NONE')
+	public function testNamingYieldsTheBindingThisRuleReports(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function run(text:String):String {\n\t\tfinal _label:String = text + "!";\n'
+			+ '\t\treturn _label;\n\t}\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final on: LintConfig = LintConfig.parse('{"rules":{"no-underscore-prefix":{"enabled":true}}}');
+		final both: Array<Violation> = Linter.collect(
+			files, new HaxeQueryPlugin(),
+			[new Naming(), new NoUnderscorePrefix()],
+			file -> on, false
+		);
+		Assert.equals(1, both.length, [for (v in both) '${v.rule}: ${v.message}'].join(' | '));
+		Assert.equals('no-underscore-prefix', both[0].rule);
+		final off: LintConfig = LintConfig.parse('{}');
+		final namingOnly: Array<Violation> = Linter.collect(files, new HaxeQueryPlugin(), [new Naming()], file -> off, false);
+		Assert.equals(1, namingOnly.length);
+		Assert.equals('naming', namingOnly[0].rule);
+	}
+
+	/**
+	 * The fixer sees the binding once too: `lint --fix` lints the active and the full-scope checks in two runs, and
+	 * the same supersession is asked over their union, so the decline ledger counts ONE finding in ONE rule where it
+	 * counted this rule's and `naming`'s.
+	 */
+	@:pin('control')
+	@:killer('M-FIXDRIVER-SUPERSEDES-IGNORED')
+	public function testTheFixerSeesTheBindingOnce(): Void {
+		#if nodejs
+		final src: String = 'package pkg;\nclass C {\n\tpublic function run(label:String):String {\n\t\tfinal _label:String = label + "!";\n'
+			+ '\t\treturn _label;\n\t}\n}\n';
+		final dir: String = CliFixture.writeDir('nup-ledger', [
+			{ name: 'apqlint.json', source: '{"rules":{"no-underscore-prefix":{"enabled":true}}}' }
+		]);
+		FileSystem.createDirectory('$dir/pkg');
+		File.saveContent('$dir/pkg/C.hx', src);
+		var err: String = '';
+		CliFixture.always(
+			() -> CliFixture.removeDir(dir), () -> err = CliFixture.captureStderr(() -> Cli.run([
+				'lint',
+				'--no-oracle',
+				'--fix',
+				'--verbose',
+				'--rule',
+				'naming',
+				'--rule',
+				'no-underscore-prefix',
+				'$dir/pkg'
+			]))
+		);
+		Assert.stringContains('1 reported finding(s) in 1 rule(s) got NO edit', err);
+		#else
+		Assert.pass('node only: stderr capture');
+		#end
 	}
 
 	public function testCatchVariableNeverFlagged(): Void {

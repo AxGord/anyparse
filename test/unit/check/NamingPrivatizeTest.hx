@@ -120,6 +120,25 @@ final class NamingPrivatizeTest extends Test {
 	}
 
 	/**
+	 * An unrelated class's OWN `private final _label` is another declaration, and its reads are bound to it, so
+	 * they do not count against the owner's: the arm privatizes, over the whole project and on a narrowed run
+	 * alike. The raw token count used to veto it (TM `SessionPDFPreview._scrollContainer` beside two other
+	 * classes' private `_scrollContainer`), and the narrowed run then RENAMED what the whole one declined.
+	 */
+	@:pin('control')
+	@:killer('M-PRIVATIZE-FOREIGN-IGNORED', 'M-NAMING-FOREIGN-UNBOUND')
+	public function testAnUnrelatedSameNamedPrivateDoesNotRefuse(): Void {
+		final unrelated: String = 'package pkg;\nclass Y {\n\tprivate final _label:Int = 2;\n\n\tpublic function size():Int {\n'
+			+ '\t\treturn _label + this._label;\n\t}\n}\n';
+		Assert.isTrue(privatizes([{ file: 'pkg/C.hx', source: OWNER }, { file: 'pkg/Y.hx', source: unrelated }], []), 'whole project');
+		Assert.isTrue(privatizes([{ file: 'pkg/C.hx', source: OWNER }], [{ file: 'pkg/Y.hx', source: unrelated }]), 'narrowed run');
+		final reads: String = unrelated.replace('return _label + this._label;', 'return _label + new C()._label;');
+		Assert.isFalse(
+			privatizes([{ file: 'pkg/C.hx', source: OWNER }, { file: 'pkg/Y.hx', source: reads }], []), 'control: Y also reads C\'s'
+		);
+	}
+
+	/**
 	 * Without a DECLARED resolution scope the only evidence is the report set, which a narrowed run
 	 * narrows, so the arm stays off and the finding keeps the rename it always had.
 	 */

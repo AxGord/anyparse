@@ -941,7 +941,11 @@ decided the question; it may not become a record of runs.
 - per-file lint consumers never reaching a 200-finding threshold → with `--all` four TM files do (`AnimationStateTest.hx` 610, `StringUtil.hx` 328, `RemoteFileSystemBaseTest.hx` 285, `AnimationSerializationTest.hx` 204); the lint-warn hook greps `<file>:<l>:<c>:` lines and now asks for `--full` when the engine offers it, and the workflow engine's `hxq-lint-file.sh` needs the same
 - one more project key costing `LintConfig` one field and one accessor → it sat at exactly 50 members (`oversized-type` max 50); `describeOracle` / `oracleKey`, pure functions over an `OracleConfig`, moved to `OracleDeclaration`, the summary default to `LintFormat`
 - `ignoreCallArguments` matching the RESOLVED callee (the declaration `t` binds to) → the rule is a per-file syntactic walk with no symbol index, and TM writes `t` bare through `import macros.Lang.t;` in 190 files; the entry matches the tail of the callee path as WRITTEN, so `["t"]` is the TM spelling and `Lang.t` deliberately does not reach a bare `t(…)` — branch `batch/lint-summary`
-- a negated literal as a direct argument (`t('x', -5)`) → the grammar parses it as `Neg(IntLit 5)`, so the call is not the literal's parent; left flagged, the same "direct only" line that keeps `t('x', 100 + k)` flagged
+- a negated literal as a direct argument (`t('x', -5)`) → the grammar parses it as `Neg(IntLit 5)`, so the call is not the literal's parent; left flagged, the same "direct only" line that keeps `t('x', 100 + k)` flagged — SUPERSEDED by N29: Haxe has no negative literal, so `-5` IS the argument and `f(-18)` is exempt exactly when `f(18)` is (TM `setHitArea(-16, 4, 80, 64)` under `["setHitArea"]`); the negation hands the key context to its operand alone, so `t('x', -k * 4)` keeps its `4` — branch `feat/infra-N29`
+- the constructor spelling for `ignoreCallArguments` (N29): a bare `SpriteDefinition` matching `new SpriteDefinition(…)` → it would make one entry mean a call AND a constructor, and Haxe already spells a constructor used as a value `SpriteDefinition.new`; an entry is matched against the constructed type's path followed by `RefShape.constructorName` (`new data.T(…)` is `[data, T, new]`), with the usual tail rule, type arguments excluded (`Map.new` reaches `new Map<String, Int>(…)`). Nothing is exempt unless listed; a bare `new` entry would reach every constructor — branch `feat/infra-N29`
+- a `Point` built inside a listed constructor's argument (`new SpriteDefinition(id, new Point(-18, -83.75))`, TM AssetLibrary ×71) → listing `Point.new` would exempt every layout `new Point(x, y)` in the project; instead a constructor that is ITSELF a direct listed argument (a value object built in place) carries the key context to its arguments. Through `new` alone: an ordinary call (`make(5)`) or an operator inside the argument resets it, because its literals are that callee's or that expression's, not the listed one's — branch `feat/infra-N29`
+- magic-number literal tables as an option (`literalTables`, default off) rather than a default (N29) → a default would silently drop findings in every project already linting; the shapes are positive: a switch whose every arm is `Plain` patterns of scalar data / `_` / or-patterns of those plus ONE `ExprStmt` of scalar data (`DefaultBranch`: the statement alone) — a guard, a capture, a block body, an unknown arm kind make it no table, and the subject is walked as logic; a collection literal (`LiteralTables.isCollectionTable`) only when NAMED — the direct initializer of a local, or the sole return of a function body (TM `Base64.initDecodeChar`). An inline `draw([3, 4])` has no name. No naming requirement for a switch, whose patterns ARE the keys — branch `feat/infra-N29`
+- the collection-table predicate moved out of `StringLiteralDup.isTable` / `isDataEntry` into `LiteralTables` (N29) so `magic-number` asks the same question instead of a second copy; the shared datum also admits a negation over a childless numeric literal (`-1`) — a negative number is data — which changes `string-literal-dup` only for a collection literal that holds a negative number beside its strings (a map `"aaaa" => -1`), now a table like its positive twin — branch `feat/infra-N29`
 - a project-side `.apq/` line in every `.gitignore` → hxq owns the directory, so it writes `.apq/.gitignore` of `*` itself (the pytest / ruff / mypy cache shape); the write sits inline in `OracleGeneration.prepare` rather than in a helper member because the type is at `oversized-type` max 50 — branch `batch/interp-literal`
 - `prefer-interpolation` writing TM's `'${0} ${i + 1}'` → it rewrites only `Std.string(x)`; the chain `0 + ' ' + (i + 1)` was merged by `fold-adjacent-string-literals`, whose seam decomposed the `0` operand as an expression — the fix is `StringFoldSupport.constantText` (a target-invariant literal decomposes as TEXT), which covers the chain and a literal's own `${0}` alike — branch `batch/interp-literal`
 - cleaning an EXISTING `'${0} …'` inside `fold-adjacent-string-literals` → that rule reports on PARTITIONS, and a literal whose constant block becomes text keeps its one-group partition, so it never reports it; `prefer-interpolation` already walks interpolation blocks and re-renders the literal through the same seam
@@ -3751,3 +3755,58 @@ decided the question; it may not become a record of runs.
   a `RiskyFix`; the binder is its verification. Shared pieces MOVED: `SourceText.lowerCamel` (was
   `IntroduceParameterObject`'s private first-letter copy; now lowers a leading acronym run, `URLPair` → `urlPair`) and
   `TypeNameBinding.AMBIENT_TYPE_NAMES` (was `ExplicitType.AMBIENT_TYPES`) — branch `feat/infra-N28`
+- the static-extension arc of the deep type walk (`NominalTypes.staticExtensionNominal` → `StructuralTypes.extensionReturnNominal`)
+  answered FAIL-OPEN in six shapes (each a 4.3.7 probe): it read only the MAIN type of a used module (an extension on a
+  sub-type was missed), ignored a `@:using` on the receiver's type chain (which binds first), fell back to an EARLIER
+  `using` past a later one whose first parameter it merely could not prove accepting (`<T>(s:T)` and `(s:Dynamic)` both
+  bind there), past a `using` it could not read (unindexed, alias), counted no `#if`-guarded `using`, and took a
+  `@:noUsing` static. → the walk over the `using`s is ONE shared door, `ValueNameBinding.extensionDeclaration` (POSITIVE:
+  last `using` offering a static of the name — `@:noUsing` and instance members are not offered — on exactly one type of
+  its module; null for an unreadable `using`, a build-macro type, two declaring types, a `#if`-guarded type or
+  declaration), used by both `OperandBinder.extensionTier` (its own copy deleted) and the deep walk; a first parameter
+  not proven to accept now ENDS the walk; the deep walk also requires `closureFreeOfExtensionTypes`, and a file with a
+  guarded `using` gets no extension arc (`UsingScan.extensionUsings`, shared with the binder). Not followed: an alias
+  `using` (`typedef AliasHost = B` binds `B`'s statics) stays a refusal like the binder's; `import.hx` usings are not
+  read by the deep walk (a file's own `using` outranks them, 4.3.7, so the walk can only miss, never mis-answer) —
+  branch `feat/infra-N31`
+- N26 A1 — an `enum abstract`'s members were all projected as enum VALUES, so `public var vertical(get, never):Bool`
+  and `public static var lock` read as "PascalCase or UPPER_SNAKE enum value" (TM SelectionHandle, AgeGroup). Haxe 4.3.7
+  makes a value of every NON-static field written as a plain variable (`private var C = 3` included) and of nothing else
+  (`E.label` → "Cannot access non-static abstract field statically", `static var s` is `Int`). → `NamingSupport.project`
+  takes a lazy property-facts thunk (`Naming.propertyFacts`, the plugin's `TypeInfoProvider.propertyAccessors` — the
+  grammar-AST fact the tree projection drops), and `HaxeNamingSupport.isEnumAbstractValue` is the positive test (non-static,
+  no accessor clause). Without the thunk the projection keeps its old reading, which is what `unused-private` (N28's
+  file, not touched here) and `no-underscore-prefix` still get: they ask nothing of an enum-abstract member's category.
+  A6 untouched: a PRIVATE property of an enum abstract now meets the same private-field rule a class's does, so whatever
+  A6 decides for storage-less private properties covers both (no TM site; both TM shapes are `public`) — branch `feat/infra-N26`
+- N26 A2 — `@:allow` was read off the FILE (`RefactorSupport.carriesAllowGrant`): one grant anywhere refused every private
+  member's rename (TM PitchArea 24 + PitchAreaField 4 + PlayerBase 1), and a member carrying only `@:allow` was refused
+  as "carries metadata". Haxe 4.3.7: a member grant opens that member only; a type-path grant reaches the type and its
+  SUBTYPES (`@:allow(B)` → `BSub extends B` compiles); a package grant reaches subpackages (`@:allow(foo)` → `foo.bar.Q`);
+  the path is literal (`@:allow(G)` does not reach `foo.G`). → `AllowGrants.reaching` (member + enclosing-type grants via
+  `Meta.find`; null when a code `@:allow` is not attributed — then the file-level answer stands) and `granteeFiles` (types
+  whose dot path equals / lies under / is a prefix of the grant, plus `subtypeDecls`; name-keyed, so a superset; an
+  unmatched path refuses with `crossAllowUnenumerable`). `isPrivateMemberConfined` / `privateMemberScanIsSound` take
+  `?grants` (absent = file-level; other callers unchanged); `ImplicitReach.AllowGrant` for a run of only `@:allow` metas,
+  asked LAST, so `unused-private` / the privatize arm still see a non-null reach. A public member asks nothing of a grant
+  (its affected set is every file spelling it) — branch `feat/infra-N26`
+- N26 A3 — the cross-file rename enumerated a public member's affected files from the LINT scope, so `lint X.hx --fix`
+  renamed `public final _scrollContainer` in X while the whole-project run declined; and both the rename and the
+  privatize arm counted an unrelated class's OWN `private final _scrollContainer` as a reference. → (1)
+  `NamingRenames.outsideScopeFile`: a project file (`resolutionProjectSourcesOf`) outside the run that declares a subtype /
+  `@:access` grant, or (public) holds an occurrence not all accounted for, refuses (`crossOutsideScope`) — a narrow scope can
+  only refuse more; (2) `foreignBoundSpans`: the occurrences each OTHER same-named declaration resolves (its own
+  `declaringFileRenameSpans`; a member of a type provably unrelated in both directions, a local, a parameter) are excluded
+  in `otherFileRenameSpans` and become allowed regions of the privatize arm (`NamingPrivatize.foreignRegions`). In a
+  subtype file the scope-correct foreign set WINS over the class-attributed bare half — the TM census caught the
+  opposite order renaming four overrides' `super.setup(accountScreen)` PARAMETER into the inherited field, which compiles;
+  a receiver-typed access both halves claim refuses — branch `feat/infra-N26`
+- N26 A4 — a local / parameter's decline read "only a member has a confinement proof": the cross-file path, asked first,
+  wrote `NOT_A_MEMBER` and first-writer-wins buried the single-file path's collision. → body-scoped categories leave the
+  cross-file path silently; `nameCollides(target)` / `qualifyFailed(target)` name the taken name. `no-underscore-prefix`
+  writes a reason at every refusing gate. One finding per identifier: `Check.Supersedes` + `Linter.withoutSuperseded` drop
+  a superseded rule's finding at the same file + start offset when the superseding check's finding SURVIVED every
+  per-file gate and suppression (so it never leaves zero), and `LintFixDriver.applyLintPass` asks it again over the
+  active + full-scope union. `no-underscore-prefix` supersedes `naming` (it is opted into and its options state the stance
+  on exactly these bindings). No collision-free alternative name is invented: the finding stays report-only with the
+  reason — branch `feat/infra-N26`

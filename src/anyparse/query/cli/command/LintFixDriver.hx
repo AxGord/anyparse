@@ -313,14 +313,18 @@ final class LintFixDriver {
 		// the report and to the fixer. Re-measured every pass, because a pass rewrites the file
 		// it reads — see `LintRange` for the drift that buys and why it is bounded.
 		final sourceOf: (String) -> Null<String> = f -> fileSourceOf(files, f);
-		final violations: Array<Violation> = LintCommand.withinRange(
+		final found: Array<Violation> = LintCommand.withinRange(
 			PhaseTimings.measure('pass lint active', () -> Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement)),
 			sourceOf, range
 		);
 		final whole: Array<Violation> = PhaseTimings.measure(
 			'pass lint full-scope', () -> Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)
 		);
-		for (v in LintCommand.withinRange(whole, sourceOf, range)) violations.push(v);
+		for (v in LintCommand.withinRange(whole, sourceOf, range)) found.push(v);
+		// The two scopes lint in two runs, so the cross-rule supersession `Linter.collect` applies inside each
+		// one is asked again over their union: an underscore-prefixed local is `no-underscore-prefix`'s in
+		// the active set and `naming`'s in the full one, and the fixer should see it once, as the report does.
+		final violations: Array<Violation> = Linter.withoutSuperseded(found, checks);
 		// The FIRST pass's report is the one a reader compares `fixed N` against: later passes see
 		// only what an earlier edit exposed. Recorded here so the run can say WHICH rules reported
 		// and — through the decline half of the same ledger, filled in below where each `fix` is

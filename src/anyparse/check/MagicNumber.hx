@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
+import anyparse.check.LiteralTables.LiteralTableShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
@@ -48,7 +49,11 @@ using StringTools;
  *     with no size sibling (`from + 3`) stays flagged. A literal that is DIRECTLY an argument of a
  *     call named in the `ignoreCallArguments` option (`t('label', 10233)` under `["t"]`) is a key
  *     the callee owns, and exempt; one nested in an argument expression (`t('x', 100 + k)`) is not.
- *  3. its numeric value is not in the exempt set `{0, 1, 2}` plus any number
+ *     So is a negated one (`f(-18)`), a constructor's under `T.new`, and one of a value object built in
+ *     place as a listed argument (`childKeyCtx`).
+ *  3. under `literalTables` (default off), it is not in a switch or named collection TABLE
+ *     (`LiteralTables`, `isNamedTable`).
+ *  4. its numeric value is not in the exempt set `{0, 1, 2}` plus any number
  *     listed in the `magic-number` `ignore` option of a discovered
  *     `apqlint.json`. A negative literal parses as a negation wrapping a
  *     non-negative literal (`-1` is `Neg(IntLit 1)`), so the magnitude check on
@@ -63,6 +68,9 @@ using StringTools;
 @:nullSafety(Strict)
 final class MagicNumber implements Check implements ConfigAware implements NoAutofix {
 
+	/** This check's stable id, also the key of its `apqlint.json` options. */
+	private static inline final RULE_ID: String = 'magic-number';
+
 	/** Conventional values that carry no hidden meaning and are never flagged. */
 	private static final EXEMPT: Array<Float> = [-1, 0, 1, 2];
 
@@ -76,7 +84,7 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 	}
 
 	public function id(): String {
-		return 'magic-number';
+		return RULE_ID;
 	}
 
 	public function description(): String {
@@ -88,20 +96,21 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 		final numericKinds: Array<String> = shape.numericLiteralKinds ?? [];
 		final functionKinds: Array<String> = shape.functionKinds ?? [];
 		if (numericKinds.length == 0 || functionKinds.length == 0) return [];
-		final cfg: MagicNumberCfg = buildCfg(shape, numericKinds, functionKinds);
+		final cfg: MagicNumberCfg = buildCfg(shape, numericKinds, functionKinds, plugin);
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			// Exempt base: a project checkstyle `MagicNumber.ignoreNumbers`, else the built-in default;
 			// the apqlint `ignore` list adds to it.
 			final base: Array<Float> = plugin.checkOverrides(entry.file)?.magicNumberIgnore ?? EXEMPT;
-			final ignore: Array<Float> = LintConfig.resolveWith(_resolveConfig, entry.file)
-				.numberListOption('magic-number', 'ignore') ?? [];
-			final exempt: Array<Float> = base.concat(ignore);
-			final calls: Array<String> = LintConfig.resolveWith(_resolveConfig, entry.file)
-				.stringListOption('magic-number', 'ignoreCallArguments') ?? [];
-			walk(
-				violations, entry.file, tree, null, false, false, cfg,
-				{ values: exempt, calls: [for (c in calls) if (c != '') c.split('.')] }
-			);
+			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
+			final ignore: Array<Float> = config.numberListOption(RULE_ID, 'ignore') ?? [];
+			final calls: Array<String> = config.stringListOption(RULE_ID, 'ignoreCallArguments') ?? [];
+			final exempt: MagicNumberExempt = {
+				values: base.concat(ignore),
+				calls: [for (c in calls) if (c != '') c.split('.')],
+				tables: config.boolOption(RULE_ID, 'literalTables') ?? false,
+				source: entry.source
+			};
+			walk(violations, entry.file, tree, null, false, false, false, cfg, exempt);
 		});
 	}
 
@@ -132,16 +141,32 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 	}
 
 	/**
+	 * The key-context flag for the `childIndex`-th child. A `keyHost` — a listed call or constructor, or a
+	 * constructor that is itself in key context (a value object built in place as a listed argument:
+	 * `new SpriteDefinition(id, new Point(-18, -83.75))`) — hands it to its ARGUMENTS: a call's children
+	 * after the callee, a constructor's after its type arguments (`QueryNode.typeArgCount`). A negation in
+	 * key context hands it to its operand, since Haxe has no negative literal (`f(-18)` is `Neg(IntLit 18)`).
+	 * Every other node resets it, so `t('x', 100 + k)` and `t('x', make(5))` keep their literals flagged.
+	 */
+	private static inline function childKeyCtx(
+		node: QueryNode, childIndex: Int, currentCtx: Bool, keyHost: Bool, cfg: MagicNumberCfg
+	): Bool {
+		return keyHost ? childIndex >= (node.kind == cfg.callKind ? 1 : node.typeArgCount) : currentCtx && node.kind == cfg.negationKind;
+	}
+
+	/**
 	 * Walk `node`, tracking whether we are inside a function unit (`inFunction`,
-	 * sticky once set), the `parent` node (for sibling/context checks), and whether
+	 * sticky once set), the `parent` node (for sibling/context checks), whether
 	 * we sit in a string-POSITION context (`positionCtx` — inside a position-method
-	 * call's arguments, propagated through offset arithmetic). Flag a numeric literal
-	 * in logic that is not a named-binding initializer, an object-field value, an
-	 * array index, a collection-size comparison or arithmetic, or a string position,
-	 * and whose value is not exempt.
+	 * call's arguments, propagated through offset arithmetic), and whether we sit in a
+	 * KEY context (`keyCtx` — a direct argument of an `ignoreCallArguments` callee, see
+	 * `childKeyCtx`). Flag a numeric literal in logic that is not a named-binding
+	 * initializer, an object-field value, an array index, a collection-size comparison
+	 * or arithmetic, a string position or a key, and whose value is not exempt. Under
+	 * `literalTables` a switch table's arms and a named collection table are not walked.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, node: QueryNode, parent: Null<QueryNode>, inFunction: Bool, positionCtx: Bool,
+		out: Array<Violation>, file: String, node: QueryNode, parent: Null<QueryNode>, inFunction: Bool, positionCtx: Bool, keyCtx: Bool,
 		cfg: MagicNumberCfg, exempt: MagicNumberExempt
 	): Void {
 		final parentKind: String = parent != null ? parent.kind : '';
@@ -149,13 +174,26 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 		if (
 			here && cfg.numericKinds.contains(node.kind) && !cfg.localDeclKinds.contains(parentKind) && parentKind != cfg.objectFieldKind
 			&& !isArrayIndex(parent, cfg) && !hasSizeFieldSibling(node, parent, cfg, cfg.comparisonKinds)
-			&& !hasSizeFieldSibling(node, parent, cfg, cfg.additiveKinds) && !positionCtx
-			&& !isIgnoredCallArgument(node, parent, cfg, exempt.calls)
+			&& !hasSizeFieldSibling(node, parent, cfg, cfg.additiveKinds) && !positionCtx && !keyCtx
 		)
 			flag(out, file, node, exempt.values);
+		if (exempt.tables) {
+			if (LiteralTables.isSwitchTable(node, exempt.source, cfg.tables)) {
+				// The table is the arms; the subject is logic like any other expression.
+				walk(out, file, node.children[0], node, here, false, false, cfg, exempt);
+				return;
+			}
+			if (isNamedTable(node, parent, cfg, exempt.source)) return;
+		}
 		final posCall: Bool = isPositionCall(node, cfg);
-		for (i in 0...node.children.length)
-			walk(out, file, node.children[i], node, here, childPositionCtx(node, i, positionCtx, posCall, cfg), cfg, exempt);
+		final keyHost: Bool = isIgnoredCall(node, cfg, exempt.calls) || keyCtx && node.kind == cfg.newExprKind;
+		for (i in 0...node.children.length) {
+			final child: QueryNode = node.children[i];
+			walk(
+				out, file, child, node, here, childPositionCtx(node, i, positionCtx, posCall, cfg),
+				childKeyCtx(node, i, keyCtx, keyHost, cfg), cfg, exempt
+			);
+		}
 	}
 
 	/** Append a `Warning` unless the literal's value is exempt or unparseable. */
@@ -168,7 +206,7 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 		out.push({
 			file: file,
 			span: span,
-			rule: 'magic-number',
+			rule: RULE_ID,
 			severity: Severity.Warning,
 			message: 'magic number $text — extract into a named constant'
 		});
@@ -208,7 +246,9 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 	}
 
 	/** Resolve the kind/name config once per run from `shape` — threads one struct into the recursion instead of a dozen scalars. */
-	private static function buildCfg(shape: RefShape, numericKinds: Array<String>, functionKinds: Array<String>): MagicNumberCfg {
+	private static function buildCfg(
+		shape: RefShape, numericKinds: Array<String>, functionKinds: Array<String>, plugin: GrammarPlugin
+	): MagicNumberCfg {
 		return {
 			numericKinds: numericKinds,
 			functionKinds: functionKinds,
@@ -222,7 +262,13 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 			callKind: shape.callKind ?? '',
 			parenKind: shape.parenKind ?? '',
 			positionMethodNames: shape.positionMethodNames ?? [],
-			additiveKinds: shape.additiveKinds ?? []
+			additiveKinds: shape.additiveKinds ?? [],
+			newExprKind: shape.newExprKind ?? '',
+			negationKind: shape.negationKind ?? '',
+			constructorName: shape.constructorName ?? '',
+			functionBodyKinds: shape.functionBodyKinds ?? [],
+			valueReturnKinds: shape.valueReturnKinds ?? [],
+			tables: LiteralTables.shapeOf(shape, plugin.stringFoldSupport())
 		};
 	}
 
@@ -245,21 +291,48 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 	}
 
 	/**
-	 * A literal that is DIRECTLY an argument of a call whose callee matches an `ignoreCallArguments`
-	 * entry — `t('Complete with AI', 10233)`, where the number is a key the callee owns, not a quantity.
-	 *
-	 * Direct means the call is the literal's parent and the literal is not its callee: `t('x', 100 + k)`
-	 * keeps the literal under the operator and stays flagged, and so does a negated one (`t('x', -5)`).
-	 * An entry matches when its dotted segments are the LAST segments of the callee as written (see
-	 * `pathEndsWith`).
+	 * Whether `node` is a call or a constructor whose callee matches an `ignoreCallArguments` entry — the
+	 * callee owns its arguments' literals as keys (`t('Complete with AI', 10233)`), not quantities. An entry
+	 * matches when its dotted segments are the LAST segments of the callee as written (see `pathEndsWith`
+	 * and `calledPath`).
 	 */
-	private static function isIgnoredCallArgument(
-		node: QueryNode, parent: Null<QueryNode>, cfg: MagicNumberCfg, calls: Array<Array<String>>
-	): Bool {
-		if (parent == null || calls.length == 0 || cfg.callKind == '' || parent.kind != cfg.callKind || parent.children[0] == node)
-			return false;
-		final path: Array<String> = NodeShape.calleePath(parent.children[0], cfg.fieldAccessKind, cfg.identKind);
-		return calls.exists(entry -> pathEndsWith(path, entry));
+	private static function isIgnoredCall(node: QueryNode, cfg: MagicNumberCfg, calls: Array<Array<String>>): Bool {
+		if (calls.length == 0) return false;
+		final path: Array<String> = calledPath(node, cfg);
+		return path.length > 0 && calls.exists(entry -> pathEndsWith(path, entry));
+	}
+
+	/**
+	 * The callee path an `ignoreCallArguments` entry is matched against: a call's callee as written
+	 * (`NodeShape.calleePath` — `Lang.t(…)` is `[Lang, t]`), or for a constructor the constructed type's
+	 * path followed by the grammar's `RefShape.constructorName` — `new data.SpriteDefinition(…)` is
+	 * `[data, SpriteDefinition, new]`, the spelling Haxe itself gives a constructor used as a value
+	 * (`SpriteDefinition.new`). Type arguments are no part of the path. Empty for anything else, and for a
+	 * constructor when the grammar names no constructor, so no entry reaches it.
+	 */
+	private static function calledPath(node: QueryNode, cfg: MagicNumberCfg): Array<String> {
+		if (node.kind == cfg.callKind && node.children.length > 0)
+			return NodeShape.calleePath(node.children[0], cfg.fieldAccessKind, cfg.identKind);
+		final typeName: Null<String> = node.name;
+		return node.kind == cfg.newExprKind && typeName != null && cfg.constructorName != ''
+			? typeName.split('.').concat([cfg.constructorName])
+			: [];
+	}
+
+	/**
+	 * Whether `node` is a collection TABLE (`LiteralTables.isCollectionTable`) a NAME gives its meaning to —
+	 * the reasoning that already exempts `final x = 5000;`: the direct initializer of a local
+	 * (`RefShape.localDeclKinds`), or, tested at a function BODY (`RefShape.functionBodyKinds`), the value
+	 * of the body's only statement when that is a return (`RefShape.valueReturnKinds`):
+	 * `function initDecodeChar() return [-1, 62, 63]`. A table handed to a call, built inside an expression
+	 * or returned beside other statements has no name of its own and stays logic.
+	 */
+	private static function isNamedTable(node: QueryNode, parent: Null<QueryNode>, cfg: MagicNumberCfg, source: String): Bool {
+		if (LiteralTables.isCollectionTable(node, source, cfg.tables)) return parent != null && cfg.localDeclKinds.contains(parent.kind);
+		if (!cfg.functionBodyKinds.contains(node.kind) || node.children.length != 1) return false;
+		final ret: QueryNode = node.children[0];
+		return cfg.valueReturnKinds.contains(ret.kind) && ret.children.length == 1
+			&& LiteralTables.isCollectionTable(ret.children[0], source, cfg.tables);
 	}
 
 	/**
@@ -295,13 +368,22 @@ private typedef MagicNumberCfg = {
 	final parenKind: String;
 	final positionMethodNames: Array<String>;
 	final additiveKinds: Array<String>;
+	final newExprKind: String;
+	final negationKind: String;
+	final constructorName: String;
+	final functionBodyKinds: Array<String>;
+	final valueReturnKinds: Array<String>;
+	final tables: LiteralTableShape;
 };
 
 /**
- * What exempts a literal in one file: the exempt `values`, and the `ignoreCallArguments` entries,
- * each already split into its dotted segments.
+ * What exempts a literal in one file: the exempt `values`, the `ignoreCallArguments` entries, each
+ * already split into its dotted segments, whether `literalTables` is on, and the file's `source` (a
+ * table's string data is read through the grammar's string-fold seam, which needs it).
  */
 private typedef MagicNumberExempt = {
 	final values: Array<Float>;
 	final calls: Array<Array<String>>;
+	final tables: Bool;
+	final source: String;
 };

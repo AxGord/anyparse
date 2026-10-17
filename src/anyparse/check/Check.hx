@@ -710,3 +710,17 @@ interface CrossFileAnchored {
 	function setReportable(reportable: Null<(String) -> Bool>): Void;
 
 }
+
+/**
+ * A check whose finding on a declaration REPLACES another rule's finding on that same declaration: the two rules
+ * judge one identifier, and a reader told about it twice gets one fact in two sentences. `Linter.collect` drops a
+ * finding of a rule `supersedes` names when this check reported, in the same run and after every per-file gate,
+ * a finding starting where it starts. Asked of the run's surviving findings, so a rule disabled, gated off or
+ * suppressed for the file leaves the other rule's finding standing - one finding per identifier, never zero.
+ */
+interface Supersedes {
+
+	/** The rule ids whose same-span findings this check's findings replace. */
+	function supersedes(): Array<String>;
+
+}

@@ -1,10 +1,10 @@
 package anyparse.check;
 
-import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.CallGraphNames;
 import anyparse.query.CasePatterns;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
@@ -237,7 +237,7 @@ final class OperandBinder {
 			return call ? extensionTier(owners[0], name) : resolveTier(owners[0], name);
 		final found: Array<ResolvedType> = [];
 		for (owner in owners) {
-			final declared: Null<{ members: Array<MemberInfo>, host: ResolvedType }> = declarationOf(owner, name);
+			final declared: Null<HostedMembers> = declarationOf(owner, name);
 			if (declared == null) return Unknown;
 			switch boundMembers(declared.members, declared.host, call) {
 				case Bound(decls):
@@ -280,7 +280,7 @@ final class OperandBinder {
 	 * closure that resolves link by link and brings no extensions (`MemberLookup.declarationFreeOfExtensionTypes`), since a
 	 * covariant override on a link the index cannot read would be the declaration the compiler types the access by.
 	 */
-	private function declarationOf(owner: ResolvedType, name: String): Null<{ members: Array<MemberInfo>, host: ResolvedType }> {
+	private function declarationOf(owner: ResolvedType, name: String): Null<HostedMembers> {
 		final own: Array<MemberInfo> = owner.type.members.filter(m -> m.name == name);
 		return if (own.length > 0)
 			{ members: own, host: owner }
@@ -302,41 +302,32 @@ final class OperandBinder {
 		if (name == null || span == null || !_identKinds.contains(ident.kind)) return Unknown;
 		if (bindsHere(TypeResolver.resolveBindingHit(name, span, _tree, _shape)) || capturedBetween(name, span, null)) return Unknown;
 		final owner: Null<ResolvedType> = enclosingDeclaration(span);
-		final declared: Null<{ members: Array<MemberInfo>, host: ResolvedType }> = owner == null ? null : declarationOf(owner, name);
+		final declared: Null<HostedMembers> = owner == null ? null : declarationOf(owner, name);
 		return declared == null || declared.members.exists(m -> m.isStatic) ? Unknown : boundMembers(declared.members, declared.host, call);
 	}
 
 	/**
 	 * `recv.method(…)` on a receiver of the one declaration `owner`, whose closure provably declares no `method`: the static
-	 * extension the language binds there — from the LAST `using` of this file whose module declares a static `method`, which
-	 * must take `owner` itself as its first parameter — its written return bound where it is declared. 4.3.7 binds a type's
-	 * own `@:using` ahead of every `using` of the file and an extension declared on ANY type of a used module, so a closure
-	 * bringing extensions, a guarded `using`, a module the index does not hold or declaring the name twice, and a first
-	 * parameter that is not exactly `owner` (a supertype, a type parameter, a structure) are each `Unknown`.
+	 * extension the language binds there — the one declaration the file's `using`s supply (`ValueNameBinding.extensionDeclaration`,
+	 * which owns the walk), which must take `owner` itself as its first parameter — its written return bound where it is
+	 * declared. 4.3.7 binds a type's own `@:using` ahead of every `using` of the file, so a closure bringing extensions, a
+	 * guarded `using`, a walk the shared door does not prove, a name declared twice, and a first parameter that is not
+	 * exactly `owner` (a supertype, a type parameter, a structure) are each `Unknown`.
 	 */
 	private function extensionTier(owner: ResolvedType, method: String): Tier {
 		final usings: Null<Array<String>> = _usings();
 		if (usings == null || !_index.members.declarationFreeOfExtensionTypes(owner)) return Unknown;
-		var k: Int = usings.length;
-		while (k-- > 0) {
-			final hosts: Null<Array<ResolvedType>> = _index.values.usingHosts(usings[k]);
-			if (hosts == null) return Unknown;
-			final named: Array<{ host: ResolvedType, member: MemberInfo }> = [
-				for (h in hosts) for (m in h.type.members) if (m.name == method) { host: h, member: m }
-			];
-			if (named.length == 0) continue;
-			if (named.length != 1) return Unknown;
-			final host: ResolvedType = named[0].host;
-			final m: MemberInfo = named[0].member;
-			final first: Null<String> = m.firstParamTypeSource;
-			final params: Array<String> = host.type.typeParamNames.concat(m.typeParamNames);
-			if (!m.isStatic || m.guarded || first == null || host.type.typeParamArity != host.type.typeParamNames.length) return Unknown;
-			return switch DeclaredNullity.headTierIn(first, host.file, m.declFrom, _index, params, _wrappers, _builtins) {
-				case Bound(decls) if (decls.length == 1 && sameDeclaration(decls[0], owner)): boundMembers([m], host, true);
-				case _: Unknown;
-			};
-		}
-		return Unknown;
+		final declared: Null<HostedMembers> = _index.values.extensionDeclaration(usings, method);
+		if (declared == null || declared.members.length != 1) return Unknown;
+		final host: ResolvedType = declared.host;
+		final m: MemberInfo = declared.members[0];
+		final first: Null<String> = m.firstParamTypeSource;
+		final params: Array<String> = host.type.typeParamNames.concat(m.typeParamNames);
+		if (first == null || host.type.typeParamArity != host.type.typeParamNames.length) return Unknown;
+		return switch DeclaredNullity.headTierIn(first, host.file, m.declFrom, _index, params, _wrappers, _builtins) {
+			case Bound(decls) if (decls.length == 1 && sameDeclaration(decls[0], owner)): boundMembers([m], host, true);
+			case _: Unknown;
+		};
 	}
 
 	/**
@@ -421,8 +412,7 @@ final class OperandBinder {
 		function usingModules(): Null<Array<String>> {
 			if (!read) {
 				read = true;
-				final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
-				usings = header.guardedUsings.length > 0 ? null : UsingScan.usingModules(header);
+				usings = UsingScan.extensionUsings(UsingScan.headerOf(tree, source, plugin));
 			}
 			return usings;
 		}
