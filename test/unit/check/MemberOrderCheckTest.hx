@@ -610,6 +610,114 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
+	 * Option OFF (the default) keeps today's tight rank group: the blank between an `inline` constant and the
+	 * initialized constant of the same rank is reported and the fix removes it - the TM `FileListItemGrid` shape.
+	 */
+	@:killer('M-MO-INLINE-OPTION-IGNORED')
+	@:pin('control')
+	public function testInlineSubgroupBlankRemovedByDefault(): Void {
+		final vs: Array<Violation> = violations(inlineSubgroupSource('\n\n'));
+		Assert.equals(1, vs.length, 'the blank inside one rank group is flagged');
+		Assert.equals('members of one rank group are separated by a blank line', vs[0].message);
+		Assert.equals(inlineSubgroupCanonical('\n'), canonicalizedFix(inlineSubgroupSource('\n\n')), 'the fix closes the gap');
+	}
+
+	/** Under `separateInlineSubgroup` the same blank is exactly what the rank group wants: nothing to report, nothing to fix. */
+	@:killer('M-MO-INLINE-BOUNDARY-OFF', 'M-MO-INLINE-REPORT-UNREAD')
+	@:pin('control')
+	public function testInlineSubgroupBlankKeptUnderOption(): Void {
+		Assert.equals(0, separateInlineViolations(inlineSubgroupSource('\n\n')).length, 'the blank at the subgroup boundary is accepted');
+		Assert.equals(0, edits(inlineSubgroupSource('\n\n'), separateInlineResolver()).length, 'and left alone');
+	}
+
+	/** Under the option a MISSING blank at the boundary is reported with its own message, and the fix inserts exactly one. */
+	@:killer('M-MO-INLINE-BOUNDARY-OFF', 'M-MO-INLINE-REPORT-UNREAD', 'M-MO-INLINE-FIX-UNREAD', 'M-MO-INLINE-MESSAGE-AS-RANK')
+	@:pin('control')
+	public function testInlineSubgroupBlankInsertedUnderOption(): Void {
+		final vs: Array<Violation> = separateInlineViolations(inlineSubgroupSource('\n'));
+		Assert.equals(1, vs.length, 'the glued boundary is flagged');
+		Assert.equals('the inline members of a rank group are not separated from the rest of it by a blank line', vs[0].message);
+		final fixed: String = canonicalizedFix(inlineSubgroupSource('\n'), separateInlineResolver());
+		Assert.equals(inlineSubgroupCanonical('\n\n'), fixed, 'one blank inserted');
+		Assert.equals(0, separateInlineViolations(fixed).length, 'converges');
+	}
+
+	/** EXACTLY one: two blank lines at the boundary are reported under the option and collapse to one. */
+	@:killer('M-MO-INLINE-BOUNDARY-OFF', 'M-MO-INLINE-BOUNDARY-AT-LEAST-ONE')
+	@:pin('control')
+	public function testInlineSubgroupDoubleBlankCollapsesUnderOption(): Void {
+		Assert.equals(1, separateInlineViolations(inlineSubgroupSource('\n\n\n')).length, 'two blanks flagged');
+		Assert.equals(inlineSubgroupCanonical('\n\n'), canonicalizedFix(inlineSubgroupSource('\n\n\n'), separateInlineResolver()));
+	}
+
+	/**
+	 * The spacing-only arm lands the same blank: an `@:meta` run above a member-level `#if` pins the order
+	 * (`reorderRefusal`), so the boundary blank has to come from `emitSpacingOnly`, not from a rebuild.
+	 */
+	@:killer('M-MO-INLINE-BOUNDARY-OFF', 'M-MO-INLINE-SPACING-ONLY-UNREAD')
+	@:pin('control')
+	public function testInlineSubgroupBlankInsertedBySpacingOnlyFallback(): Void {
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\tstatic inline final A:Int = 1;\n\tstatic final B:Int = 2;\n'
+			+ '\n\t@:keep\n\t#if X\n\tpublic var x:Int = 0;\n\t#end\n}';
+		final fixed: String = fixedSource(src, separateInlineResolver());
+		Assert.isTrue(fixed.indexOf('function m') < fixed.indexOf('inline final A'), 'the order is pinned: $fixed');
+		Assert.isTrue(fixed.contains('A:Int = 1;\n\n'), 'the boundary blank still lands: $fixed');
+		Assert.isTrue(fixed.contains('#if X'), 'the guarded member stays guarded: $fixed');
+	}
+
+	/** The reorder rebuild places the boundary blank too: the inline constant sorts to the front and the rest follows one blank below. */
+	@:killer('M-MO-INLINE-BOUNDARY-OFF', 'M-MO-INLINE-SEPARATOR-DROPPED')
+	@:pin('control')
+	public function testInlineSubgroupBlankOnReorderUnderOption(): Void {
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\tstatic final B:Int = 2;\n\tstatic inline final A:Int = 1;\n}';
+		final fixed: String = canonicalizedFix(src, separateInlineResolver());
+		Assert.isTrue(fixed.contains('A:Int = 1;\n\n\tstatic final B:Int = 2;\n'), 'inline first, one blank, then the rest: $fixed');
+		Assert.equals(0, separateInlineViolations(fixed).length, 'converges');
+		Assert.isTrue(canonicalizedFix(src).contains('A:Int = 1;\n\tstatic final B:Int = 2;\n'), 'option off: tight as before');
+	}
+
+	/**
+	 * The `#if`-region rebuild reads the option for its unconditional runs: a guarded field elsewhere in the type keeps the blank.
+	 */
+	@:killer('M-MO-INLINE-BOUNDARY-OFF', 'M-MO-INLINE-SEPARATOR-DROPPED', 'M-MO-INLINE-CONDITIONAL-REBUILD-UNREAD')
+	@:pin('control')
+	public function testInlineSubgroupBlankInConditionalRebuildUnderOption(): Void {
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\tstatic final B:Int = 2;\n\tstatic inline final A:Int = 1;\n'
+			+ '\n\t#if X\n\tpublic var x:Int = 0;\n\t#end\n}';
+		final fixed: String = canonicalizedFix(src, separateInlineResolver());
+		Assert.isTrue(fixed.contains('A:Int = 1;\n\n\tstatic final B:Int = 2;\n'), 'one blank at the subgroup boundary: $fixed');
+		Assert.isTrue(fixed.indexOf('#if X') < fixed.indexOf('function m'), 'the guarded field still sorts ahead of the method: $fixed');
+		Assert.equals(0, separateInlineViolations(fixed).length, 'converges');
+	}
+
+	/**
+	 * What the option leaves alone: each subgroup stays tight, a comment-led slot at the boundary keeps its
+	 * exemption, and inline and non-inline members of one `#if` block (which carry no sub-order) want no blank.
+	 */
+	@:killer('M-MO-INLINE-CONDITIONAL-BOUNDARY', 'M-MO-INLINE-BOUNDARY-BEFORE-EXEMPTIONS')
+	@:pin('control')
+	public function testInlineSubgroupOptionLeavesTheRestAlone(): Void {
+		Assert.equals(
+			'members of one rank group are separated by a blank line',
+			separateInlineViolations('class C {\n\tstatic inline final A:Int = 1;\n\n\tstatic inline final B:Int = 2;\n}')[0].message,
+			'the inline subgroup itself stays tight'
+		);
+		Assert.equals(
+			0, separateInlineViolations('class C {\n\tstatic inline final A:Int = 1;\n\t/** Doc. */\n\tstatic final B:Int = 2;\n}').length,
+			'a comment-led slot is never demanded a blank'
+		);
+		Assert.equals(
+			0,
+			separateInlineViolations('class C {\n\t#if X\n\tstatic inline final A:Int = 1;\n\tstatic final B:Int = 2;\n\t#end\n}').length,
+			'no boundary inside a conditional block'
+		);
+		Assert.equals(
+			0, separateInlineViolations('class C {\n\tinline function f():Void {}\n\tfunction g():Void {}\n}').length,
+			'same-rank methods keep their separators untouched'
+		);
+	}
+
+	/**
 	 * A conditional with an `#else` reorders like any other guarded block: the whole
 	 * `#if`/`#else`/`#end` travels to its section end with each branch keeping its own
 	 * members - the branch a member was declared in is part of its identity, not a
@@ -1342,6 +1450,16 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(parses(fixed), 'the partial reorder parses: $fixed');
 	}
 
+	/** An `inline` constant and an initialized constant of the same rank, `gap` between their slots. */
+	private inline function inlineSubgroupSource(gap: String): String {
+		return 'class C {\n\tprivate static inline final A:Float = 9;$gap\tprivate static final B:String = \'Shared\';\n}';
+	}
+
+	/** `inlineSubgroupSource(gap)` as the writer round-trip prints it. */
+	private inline function inlineSubgroupCanonical(gap: String): String {
+		return '${inlineSubgroupSource(gap)}\n';
+	}
+
 	/** A side-effecting initializer pinned under the field above it, plus a constant no constraint holds. */
 	private inline function pinnedPairWithFreeConstantSource(): String {
 		return 'class C {\n\tprivate var _scale:Float = 4;\n\n\tprivate final _image:B = new B(Assets.get(0));\n\n'
@@ -1444,6 +1562,19 @@ class MemberOrderCheckTest extends Test {
 	private function movableArglessNewResolver(): (String) -> LintConfig {
 		final cfg: LintConfig = LintConfig.parse('{"rules": {"member-order": {"movableArglessNew": true}}}');
 		return _ -> cfg;
+	}
+
+	/** A config resolver that enables the opt-in `separateInlineSubgroup` member-order option for every file. */
+	private function separateInlineResolver(): (String) -> LintConfig {
+		final cfg: LintConfig = LintConfig.parse('{"rules": {"member-order": {"separateInlineSubgroup": true}}}');
+		return _ -> cfg;
+	}
+
+	/** The findings of `src` under `separateInlineResolver`. */
+	private function separateInlineViolations(src: String): Array<Violation> {
+		final check: MemberOrder = new MemberOrder();
+		check.setConfigResolver(separateInlineResolver());
+		return CheckFixture.violations(check, src);
 	}
 
 	/** A resolver pinning the EMPTY config, so a test run's verdicts cannot depend on an `apqlint.json` discovered from the process cwd. */
