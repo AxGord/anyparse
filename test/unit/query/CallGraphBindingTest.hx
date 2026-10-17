@@ -134,13 +134,14 @@ class CallGraphBindingTest extends Test {
 			'package app; class B { public static function f():Void {} }',
 			'package app; class Runner { public static function create(fn:() -> Void):Void {} }',
 			'package app; import app.Main.f; class Elsewhere { static function call():Void f(); }',
-			'package app; import app.B.*; class Main { static function call():Void f(); } #if a function f():Void new '
-			+ 'utils.Lock().wait(); #elseif b function f():Void new utils.Other().wait(); #end function viaModule():Void f(); #if a class '
-			+ 'InA { static function call():Void f(); } #else class NotA { static function call():Void f(); } #end class Shadow {'
-			+ ' static function f():Void {} static function call():Void f(); } class Ref { static function call():Void Runner.create(f); }'
-			+ ' function local():Void { function f():Void {} f(); } #if a function g():Void {} #else var g:() -> Void = null; #end '
-			+ 'function viaG():Void g(); function make():utils.Lock return null; class Typed { static function call():Void make().wait(); }'
-			+ ' class Parent { public function new() {} public function f():Void {} } class Kid extends Parent { function call():Void f(); }',
+			'package app; import app.B.*; class Main { static function call():Void f(); } '
+			+ '#if a function f():Void new utils.Lock().wait(); #elseif b function f():Void new utils.Other().wait(); #end function '
+			+ 'viaModule():Void f(); #if a class InA { static function call():Void f(); } #else class NotA {'
+			+ ' static function call():Void f(); } #end class Shadow { static function f():Void {} static function call():Void f(); } '
+			+ 'class Ref { static function call():Void Runner.create(f); } function local():Void { function f():Void {} f(); } '
+			+ '#if a function g():Void {} #else var g:() -> Void = null; #end function viaG():Void g(); function make():utils.Lock return '
+			+ 'null; class Typed { static function call():Void make().wait(); } class Parent { public function new() {} '
+			+ 'public function f():Void {} } class Kid extends Parent { function call():Void f(); }',
 			'package app; import app.Main.f; class Later { static function call():Void f(); }'
 		]);
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());

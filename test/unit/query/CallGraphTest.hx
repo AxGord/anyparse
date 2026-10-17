@@ -1414,23 +1414,14 @@ class CallGraphTest extends Test {
 		Assert.same([], targets('Untyped.field'), 'one build\'s value is not typed: the receiver is unresolved');
 		Assert.same([], targets('Calls.field'), 'every build compiling the call declares the value: no import binds it');
 		Assert.same(['B.cb'], targets('CallsOut.field'), 'the builds without it call the imported static');
-		Assert.same(
-			['FunctionValue(cb)'],
-			[for (u in g.unresolved) if (u.from == 'CallsOut.field') Std.string(u.reason)],
-			'and the others the value'
-		);
+		function reasons(from: String): Array<String> {
+			return [for (u in g.unresolved) if (u.from == from) Std.string(u.reason)];
+		}
+		Assert.same(['FunctionValue(cb)'], reasons('CallsOut.field'), 'and the others the value');
 		Assert.same(['B.cb'], targets('Far.field'), 'a supertype the index does not hold may declare it: the import, by name');
-		Assert.same(
-			['UnboundName(cb)'],
-			[for (u in g.unresolved) if (u.from == 'Far.field') Std.string(u.reason)],
-			'and the builds declaring the value'
-		);
+		Assert.same(['UnboundName(cb)'], reasons('Far.field'), 'and the builds declaring the value');
 		Assert.same([], targets('FarIn.field'), 'a read every build of which declares the value binds no import');
-		Assert.same(
-			['UnboundName(cb)'],
-			[for (u in g.unresolved) if (u.from == 'FarIn.field') Std.string(u.reason)],
-			'the supertype or the value it holds'
-		);
+		Assert.same(['UnboundName(cb)'], reasons('FarIn.field'), 'the supertype or the value it holds');
 		Assert.same([], targets('CallsPlain.field'), 'a declaration no #if guards hides the import everywhere');
 		#else
 		Assert.pass('non-sys target');
