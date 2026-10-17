@@ -393,6 +393,21 @@ class JoinReturnCheckTest extends Test {
 		Assert.equals('return (cast x : Bytes);', es[0].text);
 	}
 
+	/**
+	 * The return type a pair is judged against is its OWN function's, and a named function expression or an
+	 * `inline` local function is one (`ShapeVocab.functionLikeKinds`). Read off the OUTER method instead, an
+	 * `Int`-returning method made the annotation look restated, and the collapse dropped the ascription of a
+	 * function that has no return type of its own.
+	 */
+	public function testANestedFunctionsOwnReturnTypeDecides(): Void {
+		final body: String = '{\n\t\t\tfinal x:Int = k();\n\t\t\treturn x;\n\t\t}';
+		for (nested in ['final h = function g() $body;', 'inline function g() $body']) {
+			final es: Array<{ span: Span, text: String }> = edits(wrapRet('Int', '$nested\n\t\treturn 0;'));
+			Assert.equals(1, es.length, nested);
+			if (es.length == 1) Assert.equals('return (k() : Int);', es[0].text);
+		}
+	}
+
 	/** Two sibling `#if` branches declaring the same name, each returning it. */
 	private inline function branchPair(): String {
 		return '#if A\n\t\tvar x:Int = g();\n\t\treturn x;\n\t\t#else\n\t\tfinal x:Int = h();\n\t\treturn x;\n\t\t#end';
@@ -433,21 +448,6 @@ class JoinReturnCheckTest extends Test {
 	/** Wrap an assignment-arm body in a method with a pre-existing `str` param and an explicit return type. */
 	private function wrapAssignRet(retType: String, body: String): String {
 		return 'class C {\n\tfunction f(str:String):$retType {\n\t\t$body\n\t}\n}';
-	}
-
-	/**
-	 * The return type a pair is judged against is its OWN function's, and a named function expression or an
-	 * `inline` local function is one (`ShapeVocab.functionLikeKinds`). Read off the OUTER method instead, an
-	 * `Int`-returning method made the annotation look restated, and the collapse dropped the ascription of a
-	 * function that has no return type of its own.
-	 */
-	public function testANestedFunctionsOwnReturnTypeDecides(): Void {
-		final body: String = '{\n\t\t\tfinal x:Int = k();\n\t\t\treturn x;\n\t\t}';
-		for (nested in ['final h = function g() $body;', 'inline function g() $body']) {
-			final es: Array<{ span: Span, text: String }> = edits(wrapRet('Int', '$nested\n\t\treturn 0;'));
-			Assert.equals(1, es.length, nested);
-			if (es.length == 1) Assert.equals('return (k() : Int);', es[0].text);
-		}
 	}
 
 }

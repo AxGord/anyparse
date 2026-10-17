@@ -409,27 +409,6 @@ class LoopGuardCheckTest extends Test {
 		Assert.equals(wrapPositioned(merged), applyFix(wrapPositioned(input)));
 	}
 
-	private inline function wrap(loopCode: String): String {
-		return wrapIn('xs:Array<Int>', loopCode);
-	}
-
-	private inline function wrapPositioned(stmt: String): String {
-		return wrapIn('p:Bool, xs:Array<Int>, ok:Bool, c:Bool, g:Bool', stmt);
-	}
-
-	private function violations(source: String): Array<Violation> {
-		return CheckFixture.violations(new LoopGuard(), source);
-	}
-
-	private function applyFix(source: String): String {
-		return CheckFixture.fixedSource(new LoopGuard(), source);
-	}
-
-
-	private function wrapIn(signature: String, loopCode: String): String {
-		return 'class C {\n\tfunction f($signature):Void {\n\t\t$loopCode\n\t}\n}';
-	}
-
 	/**
 	 * A `do … while` is a loop like any other here: a `continue` in the FIRST position of its body
 	 * skips the rest of that body and goes on to the condition, exactly what wrapping the rest in the
@@ -450,6 +429,26 @@ class LoopGuardCheckTest extends Test {
 		final src: String = wrapPositioned('do if (c) {\n\t\t\tif (g) continue;\n\t\t\ttrace(1);\n\t\t} while (ok);');
 		Assert.equals(1, violations(src).length);
 		Assert.equals(wrapPositioned('do if (c && !g) {\n\t\t\ttrace(1);\n\t\t} while (ok);'), applyFix(src));
+	}
+
+	private inline function wrap(loopCode: String): String {
+		return wrapIn('xs:Array<Int>', loopCode);
+	}
+
+	private inline function wrapPositioned(stmt: String): String {
+		return wrapIn('p:Bool, xs:Array<Int>, ok:Bool, c:Bool, g:Bool', stmt);
+	}
+
+	private function violations(source: String): Array<Violation> {
+		return CheckFixture.violations(new LoopGuard(), source);
+	}
+
+	private function applyFix(source: String): String {
+		return CheckFixture.fixedSource(new LoopGuard(), source);
+	}
+
+	private function wrapIn(signature: String, loopCode: String): String {
+		return 'class C {\n\tfunction f($signature):Void {\n\t\t$loopCode\n\t}\n}';
 	}
 
 }

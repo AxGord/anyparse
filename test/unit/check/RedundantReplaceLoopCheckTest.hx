@@ -684,6 +684,22 @@ class RedundantReplaceLoopCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * The parameters of a named function expression and of an `inline` local function are as caller-chosen as a
+	 * method's or a lambda's (`ShapeVocab.functionLikeKinds`), so a loop on them is arm C's too.
+	 */
+	public function testNestedFunctionParameterOperandFlagged(): Void {
+		final loop: String = '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n';
+		for (open in ['final g = function named(', 'inline function inl(']) {
+			final close: String = StringTools.startsWith(open, 'final') ? '};' : '}';
+			final src: String =
+				'class C {\n\tfunction f():Void {\n\t\t${open}line:String, word:String, replace:String):String {\n$loop\t\t$close\n\t}\n}';
+			final vs: Array<Violation> = violations(src);
+			Assert.equals(1, vs.length, open);
+			if (vs.length == 1) Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when replace contains word'));
+		}
+	}
+
 	/** The verbatim `stripWord` canary shape: a parameter `S` and a literal `B`. */
 	private inline function stripWordSource(): String {
 		return 'class C {\n\tpublic static function stripWord(line:String, word:String):String {\n'
@@ -734,22 +750,6 @@ class RedundantReplaceLoopCheckTest extends Test {
 			[new RedundantReplaceLoop()],
 			resolver, applyEnablement
 		);
-	}
-
-	/**
-	 * The parameters of a named function expression and of an `inline` local function are as caller-chosen as a
-	 * method's or a lambda's (`ShapeVocab.functionLikeKinds`), so a loop on them is arm C's too.
-	 */
-	public function testNestedFunctionParameterOperandFlagged(): Void {
-		final loop: String = '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n';
-		for (open in ['final g = function named(', 'inline function inl(']) {
-			final close: String = StringTools.startsWith(open, 'final') ? '};' : '}';
-			final src: String = 'class C {\n\tfunction f():Void {\n\t\t${open}line:String, word:String, replace:String):String {\n'
-				+ '$loop\t\t$close\n\t}\n}';
-			final vs: Array<Violation> = violations(src);
-			Assert.equals(1, vs.length, open);
-			if (vs.length == 1) Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when replace contains word'));
-		}
 	}
 
 }

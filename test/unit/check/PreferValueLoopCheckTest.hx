@@ -260,8 +260,8 @@ class PreferValueLoopCheckTest extends Test {
 	}
 
 	public function testFixRewritesFieldCollection(): Void {
-		final src: String = 'class C {\n\tvar points:Array<Point> = [];\n\n\tvar canvas:Canvas;\n\n\tfunction f():Void {\n'
-			+ '\t\tfor (i in 0...points.length) canvas.draw(points[i]);\n\t}\n}\n\nclass Canvas {\n\tpublic function draw(p:Point):Void {}\n}';
+		final src: String = 'class C {\n\tvar points:Array<Point> = [];\n\n\tvar canvas:Canvas;\n\n\tfunction f():Void {\n\t\tfor ('
+			+ 'i in 0...points.length) canvas.draw(points[i]);\n\t}\n}\n\nclass Canvas {\n\tpublic function draw(p:Point):Void {}\n}';
 		assertFixCanonical(src, ['for (point in points)', 'canvas.draw(point)'], ['points[i]']);
 	}
 
@@ -325,10 +325,11 @@ class PreferValueLoopCheckTest extends Test {
 			);
 		}
 		// `super.refresh()` runs the base body, which dispatches `grow()` back to this class's override.
-		final viaSuper: String = 'class B {\n\tpublic function new() {}\n\n\tpublic function refresh():Void grow();\n\n\tpublic function grow():Void {}\n}\n\n'
-			+ 'class C extends B {\n\tfinal items:Array<Item> = [];\n\n\tfinal sink:Sink = new Sink();\n\n'
-			+ '\toverride public function grow():Void items.push(new Item());\n\n\tfunction f():Void {\n\t\tfor (i in 0...items.length) {\n'
-			+ '\t\t\tsuper.refresh();\n\t\t\tsink.use(items[i]);\n\t\t}\n\t}\n}$SUPPORT';
+		final viaSuper: String = 'class B {\n\tpublic function new() {}\n\n\tpublic function refresh():Void grow();\n\n'
+			+ '\tpublic function grow():Void {}\n}\n\nclass C extends B {\n\tfinal items:Array<Item> = [];\n\n'
+			+ '\tfinal sink:Sink = new Sink();\n\n\toverride public function grow():Void items.push(new Item());\n\n'
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) {\n\t\t\tsuper.refresh();\n'
+			+ '\t\t\tsink.use(items[i]);\n\t\t}\n\t}\n}$SUPPORT';
 		final superDecline: String = declineOf(viaSuper) ?? '';
 		Assert.isTrue(
 			StringTools.startsWith(superDecline, ElementLoopRewrite.SELF_CALL_DECLINE) && superDecline.indexOf('C.grow') >= 0, superDecline
@@ -488,6 +489,17 @@ class PreferValueLoopCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { for (i in 0...items.length) { use(items[i]);').length);
 	}
 
+	/** A named function expression or an `inline` local function reading `items[i]` reads it when it RUNS, as a lambda does. */
+	public function testEveryNestedFunctionFormReadNotFlagged(): Void {
+		for (read in [
+			'fns.push(function named() return items[i]);',
+			'inline function named() return items[i];\n\t\t\tfns.push(named);'
+		]) {
+			final loop: String = 'for (i in 0...items.length) {\n\t\t\t$read\n\t\t}';
+			Assert.equals(0, violations(wrap('items:Array<Item>, fns:Array<() -> Item>', loop)).length, read);
+		}
+	}
+
 	private function wrapFn(body: String): String {
 		return wrap('items:Array<Item>', body);
 	}
@@ -557,17 +569,6 @@ class PreferValueLoopCheckTest extends Test {
 		final r: CheckRun = runAndExpectOne(src);
 		Assert.equals(0, CheckFixture.fixOf(r.check, src, r.vs, project(src)).length);
 		return r.vs.length == 1 ? r.vs[0].declineReason : null;
-	}
-
-	/** A named function expression or an `inline` local function reading `items[i]` reads it when it RUNS, as a lambda does. */
-	public function testEveryNestedFunctionFormReadNotFlagged(): Void {
-		for (read in [
-			'fns.push(function named() return items[i]);',
-			'inline function named() return items[i];\n\t\t\tfns.push(named);'
-		]) {
-			final loop: String = 'for (i in 0...items.length) {\n\t\t\t$read\n\t\t}';
-			Assert.equals(0, violations(wrap('items:Array<Item>, fns:Array<() -> Item>', loop)).length, read);
-		}
 	}
 
 }

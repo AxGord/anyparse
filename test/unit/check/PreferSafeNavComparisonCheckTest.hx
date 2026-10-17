@@ -281,6 +281,17 @@ class PreferSafeNavComparisonCheckTest extends Test {
 		Assert.equals(local('final ok:Bool = x?.b != null;'), applyFix(local('final ok:Bool = (x != null) && x.b != null;')));
 	}
 
+	/**
+	 * A named function expression bounds the narrowing scan like any other function (`ShapeVocab.functionLikeKinds`),
+	 * also when its body is an expression rather than a block: a later mention in the ENCLOSING method relies on no
+	 * narrowing of the nested function's run, so it refuses nothing.
+	 */
+	public function testANamedFunctionExpressionBoundsTheScan(): Void {
+		final src: String = local('final g = function named():Bool return x != null && x.b != null;\n\t\tuse(x.b);');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(1, violations(local('final g = () -> x != null && x.b != null;\n\t\tuse(x.b);')).length);
+	}
+
 	private function local(stmt: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x:Sys = mk();\n\t\t$stmt\n\t}\n}';
 	}
@@ -291,17 +302,6 @@ class PreferSafeNavComparisonCheckTest extends Test {
 
 	private function applyFix(source: String): String {
 		return CheckFixture.fixedSource(new PreferSafeNavComparison(), source);
-	}
-
-	/**
-	 * A named function expression bounds the narrowing scan like any other function (`ShapeVocab.functionLikeKinds`),
-	 * also when its body is an expression rather than a block: a later mention in the ENCLOSING method relies on no
-	 * narrowing of the nested function's run, so it refuses nothing.
-	 */
-	public function testANamedFunctionExpressionBoundsTheScan(): Void {
-		final src: String = local('final g = function named():Bool return x != null && x.b != null;\n\t\tuse(x.b);');
-		Assert.equals(1, violations(src).length);
-		Assert.equals(1, violations(local('final g = () -> x != null && x.b != null;\n\t\tuse(x.b);')).length);
 	}
 
 }

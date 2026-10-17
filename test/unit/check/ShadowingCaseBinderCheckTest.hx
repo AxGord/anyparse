@@ -43,8 +43,8 @@ class ShadowingCaseBinderCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-SHADOWING-BINDER-UNPROVEN')
 	public function testUnprovenSubjectRefused(): Void {
-		final src: String = 'class C {\n\tvar closeAction: Kind;\n\n\tfunction f(v: Kind): Void {\n\t\tswitch v {\n\t\t\tcase closeAction: r();'
-			+ '\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tvar closeAction: Kind;\n\n\tfunction f(v: Kind): Void {\n\t\tswitch v {\n'
+			+ '\t\t\tcase closeAction: r();\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -132,16 +132,6 @@ class ShadowingCaseBinderCheckTest extends Test {
 		Assert.isTrue(ids.contains('shadowing-case-binder'));
 	}
 
-	/** A class declaring `closeAction`, switching on `v` with a lone `case $name:` arm. */
-	private function withField(name: String): String {
-		return 'class C {\n\tvar closeAction: String;\n\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase $name: r();\n\t\t}'
-			+ '\n\t}\n}';
-	}
-
-	private function violations(src: String): Array<Violation> {
-		return CheckFixture.violations(new ShadowingCaseBinder(), src);
-	}
-
 	/**
 	 * A parameter of EVERY function-like host is in scope in its body — a named function expression
 	 * and an `inline` local function as much as a method or a lambda (`ShapeVocab.functionLikeKinds`).
@@ -166,12 +156,22 @@ class ShadowingCaseBinderCheckTest extends Test {
 	 */
 	public function testNameOfANestedFunctionShadowFlagged(): Void {
 		for (decl in ['final h = function mode(): Void {};', 'inline function mode(): Void {}']) {
-			final src: String = 'class C {\n\tfunction f(v: Dynamic): Void {\n\t\t$decl\n\t\tswitch v {\n\t\t\tcase mode: r();\n\t\t}'
-				+ '\n\t}\n}';
+			final src: String =
+				'class C {\n\tfunction f(v: Dynamic): Void {\n\t\t$decl\n\t\tswitch v {\n\t\t\tcase mode: r();\n\t\t}\n\t}\n}';
 			final vs: Array<Violation> = violations(src);
 			Assert.equals(1, vs.length, decl);
 			if (vs.length == 1) Assert.stringContains('shadows the local', vs[0].message);
 		}
+	}
+
+	/** A class declaring `closeAction`, switching on `v` with a lone `case $name:` arm. */
+	private function withField(name: String): String {
+		return 'class C {\n\tvar closeAction: String;\n\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase $name: r();\n\t\t}'
+			+ '\n\t}\n}';
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return CheckFixture.violations(new ShadowingCaseBinder(), src);
 	}
 
 }
