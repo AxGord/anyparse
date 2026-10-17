@@ -5,6 +5,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
+import anyparse.check.PublicReach.MemberRun;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
@@ -14,11 +15,8 @@ import anyparse.query.MemberKinds;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 using StringTools;
@@ -41,7 +39,7 @@ using StringTools;
  * method the rest of the project calls. That is also why the rule is registered in the
  * `--fix` loop's full-scope set.
  *
- * ## The reference test — two complementary text mechanisms
+ * ## The reference test — two complementary text mechanisms (shared through `PublicReach`)
  *
  * 1. A GLOBAL identifier-token count map, built once per `run` — i.e. once per lint report and
  *    once per `--fix` PASS, not once per process — over every source in report UNION resolution
@@ -50,7 +48,7 @@ using StringTools;
  *    member is a candidate only when the map's count for its name EQUALS the count of the same
  *    tokens inside the member's OWN exclusion region — i.e. every occurrence in the whole scope
  *    is its own declaration. That comparison is a proof only because the map is built over a
- *    SUPERSET of the member's own file (`tokenCounts` unions the report set in by path).
+ *    SUPERSET of the member's own file (`PublicReach.tokenCounts` unions the report set in by path).
  * 2. The authoritative confirm, on the REPORT index only: `RawSourceScan.nameOccursOutside`. Its
  *    ONE added power over the token map is `RefactorSupport.DOLLAR_ESCAPES`: a `\x24name` /
  *    `$name` interpolation escape relaxes the LEFT word boundary, and the plain tokenizer
@@ -158,15 +156,6 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	/** The wrapper of a dunder name (`__init__`) — a compiler hook, not a call target. */
 	private static inline final DUNDER: String = '__';
 
-	/** The modifier sibling an explicit `public` projects as. */
-	private static inline final PUBLIC_MODIFIER: String = 'Public';
-
-	/** The modifier sibling `override` projects as. */
-	private static inline final OVERRIDE_MODIFIER: String = 'Override';
-
-	/** The modifier sibling `static` projects as — the one modifier no framework contract claims. */
-	private static inline final STATIC_MODIFIER: String = 'Static';
-
 	/**
 	 * Method names the runtime or the compiler reaches with NO call token anywhere in source —
 	 * so the reference test, which only ever sees written text, cannot possibly find one.
@@ -242,10 +231,10 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	 * Report every provably unreferenced public method across `files`, and record the ones whose
 	 * deletion is proven safe. NEITHER scope carries a skip-parse gate. The reference proof is
 	 * textual on both of its mechanisms and `SymbolIndexBuilder` RETAINS a skipped file's raw
-	 * source, so `tokenCounts` counts that file's tokens like any other and `nameOccursOutside`
+	 * source, so `PublicReach.tokenCounts` counts that file's tokens like any other and `nameOccursOutside`
 	 * walks it — a call hiding in an unreadable file still fails the proof, and one that is not
 	 * there does not silence the rule for every other file. What a skipped file could otherwise
-	 * invalidate is its DECLARATIONS, and `walkChain` answers that per class: a supertype it
+	 * invalidate is its DECLARATIONS, and `PublicReach.chainOutOfReach` answers that per class: a supertype it
 	 * cannot resolve leaves the chain unresolved and the class is left alone.
 	 */
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -256,7 +245,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		final wide: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		final ctx: Ctx = {
-			tokens: tokenCounts(files, wide, plugin),
+			tokens: PublicReach.tokenCounts(files, wide, plugin),
 			fragments: ReflectionScan.reflectionSurface(files, plugin).fragments,
 			naming: plugin.namingSupport(),
 			contracts: contracts
@@ -264,7 +253,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			// The resolution index carries the report files too, but only when a scope reached the
 			// run at all — fall back to the report index rather than skipping the file. The token
-			// map covers the file either way (`tokenCounts` unions the report set in by path).
+			// map covers the file either way (`PublicReach.tokenCounts` unions the report set in by path).
 			final scope: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
 			final info: Null<FileInfo> = scope.fileInfo(entry.file);
 			if (info == null) return;
@@ -309,13 +298,10 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		final declared: Null<TypeDeclInfo> = host.types.find(t -> t.name == owner);
 		// A `@:build` macro can generate the call the scan cannot see; a `@:keep` class is reached
 		// by machinery no scan models; an `extern class` declares members of a foreign object.
-		if (declared == null || declared.hasKeep || declared.hasBuild || declared.isExtern) return;
+		if (declared == null || PublicReach.typeOutOfReach(declared)) return;
 		final candidates: Array<Candidate> = unreferencedCandidates(cls, source, host.file, index, ctx, branch, regions);
 		if (candidates.length == 0) return;
-		if (scope.traits.transitivelyCarriesRtti(owner)) return;
-		final chain: Chain = { unresolved: false, generated: false };
-		walkChain(scope, host, declared, chain, []);
-		if (chain.unresolved || chain.generated) return;
+		if (PublicReach.chainOutOfReach(scope, host, declared, true)) return;
 		final deleting: Array<QueryNode> = [];
 		for (candidate in candidates) {
 			final name: String = candidate.name;
@@ -384,21 +370,11 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
 			if (name == null || span == null) return;
-			var isPublic: Bool = false;
-			var isOverride: Bool = false;
-			var isStatic: Bool = false;
-			var annotated: Bool = false;
-			for (mod in run) {
-				if (mod.kind == PUBLIC_MODIFIER) isPublic = true;
-				if (mod.kind == STATIC_MODIFIER) isStatic = true;
-				// A conditional region never reaches the run any more — `eachMember` descends into it
-				// and the annotations written inside surface as ordinary `Meta` siblings, while a
-				// region that merely CARRIES a modifier out makes the run uncertain and the member is
-				// skipped above. Both readings are stricter than the old wrapper count.
-				if (MemberKinds.META_KINDS.contains(mod.kind)) annotated = true;
-				if (mod.kind == OVERRIDE_MODIFIER) isOverride = true;
-			}
-			if (!isPublic || isOverride || annotated || !reportableName(name)) return;
+			// A conditional region never reaches the run any more — `eachMember` descends into it and
+			// the annotations written inside surface as ordinary `Meta` siblings, while a region that
+			// merely CARRIES a modifier out makes the run uncertain and the member is skipped above.
+			final mods: MemberRun = PublicReach.readRun(run);
+			if (!mods.isPublic || mods.isOverride || mods.annotated || !reportableName(name)) return;
 			// Re-bound: a null-safety narrowing does not reach inside an anonymous structure literal.
 			final memberName: String = name;
 			final memberSpan: Span = span;
@@ -408,7 +384,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 				name: memberName,
 				span: memberSpan,
 				node: child,
-				isStatic: isStatic
+				isStatic: mods.isStatic
 			});
 		});
 		return out;
@@ -424,11 +400,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	private static function provablyUnreferenced(
 		name: String, file: String, source: String, region: Span, index: SymbolIndex, ctx: Ctx
 	): Bool {
-		final own: Map<String, Int> = [];
-		countTokens(source, region.from, region.to, own);
-		// Short-circuit deliberate: the confirm is a per-candidate scan of every report file, so
-		// it must never run for a name the cheap map already saw somewhere else.
-		return ctx.tokens[name] == own[name] && !index.text.nameOccursOutside(name, file, region);
+		return PublicReach.occursOnlyWithin(name, ctx.tokens, [{ file: file, source: source, span: region }], index);
 	}
 
 	/**
@@ -454,93 +426,6 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			&& !(name.startsWith(DUNDER) && name.endsWith(DUNDER));
 	}
 
-	/**
-	 * Accumulate into `chain` whether any ANCESTOR of `type` carries `@:autoBuild` (it generates
-	 * members into this class, so its member set is unknowable) and whether any supertype
-	 * reference resolved to no indexed declaration (the chain cannot be read at all). Either one
-	 * takes the whole class out of scope.
-	 */
-	private static function walkChain(scope: SymbolIndex, host: FileInfo, type: TypeDeclInfo, chain: Chain, seen: Array<String>): Void {
-		final visited: String = '${host.file}#${type.name}';
-		if (seen.contains(visited)) return;
-		seen.push(visited);
-		for (raw in type.supertypesRaw) {
-			final supers: Array<{ file: FileInfo, type: TypeDeclInfo }> = scope.resolveTypeRefsFrom(raw, host.file, type.span.from);
-			if (supers.length == 0) {
-				chain.unresolved = true;
-				continue;
-			}
-			for (s in supers) {
-				if (s.type.hasAutoBuild) chain.generated = true;
-				walkChain(scope, s.file, s.type, chain, seen);
-			}
-		}
-	}
-
-	/**
-	 * The identifier-token occurrence counts over report UNION resolution scope — the run's
-	 * cost-bounded pre-filter.
-	 *
-	 * Two invariants the count comparison in `provablyUnreferenced` rests on, both established
-	 * here by construction:
-	 *
-	 * 1. The map is a SUPERSET of every REPORT file, `files` included. `wide` may legitimately
-	 *    lack one (`run` handles that case), and a map missing the declaration's OWN tokens can
-	 *    make `global == own` hold by coincidence against unrelated library occurrences the
-	 *    report-scope confirm cannot see — a false finding, and a deletion. The report set is
-	 *    therefore unioned in, keyed by PATH so nothing is counted twice.
-	 * 2. Nothing in the resolution scope is silently missing. Counting tokens is a RAW-TEXT
-	 *    operation that needs no parse, so the scope's own sources are read when the host exposes
-	 *    them — a library file the parser skipped still contributes. Reading them off the INDEX
-	 *    instead would drop such a file from both `allFiles` and `sourceOf`, and a call inside it
-	 *    would read as absent. The index path is the fallback for a plugin hosting no scope, where
-	 *    `wide` IS the report index and the union below covers it whole anyway.
-	 */
-	private static function tokenCounts(
-		files: Array<{ file: String, source: String }>, wide: SymbolIndex, plugin: GrammarPlugin
-	): Map<String, Int> {
-		final sources: Map<String, String> = [];
-		final resolution: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionSourcesOf(plugin);
-		if (resolution == null)
-			for (fi in wide.allFiles()) sources[fi.file] = indexedSource(wide, fi.file);
-		else
-			for (entry in resolution) sources[entry.file] = entry.source;
-		for (entry in files) sources[entry.file] = entry.source;
-		final out: Map<String, Int> = [];
-		for (src in sources) countTokens(src, 0, src.length, out);
-		return out;
-	}
-
-	/** `scope`'s source for `file`. The index writes it in lockstep with the `FileInfo`, so an absent one is a broken index. */
-	private static function indexedSource(scope: SymbolIndex, file: String): String {
-		final src: Null<String> = scope.sourceOf(file);
-		if (src == null) throw new Exception('SymbolIndex lists \'$file\' but holds no source for it');
-		return src;
-	}
-
-	/**
-	 * Accumulate into `out` the occurrence count of every identifier token in `source[from, to)`,
-	 * word-boundary by construction. Raw text, so tokens inside comments, string literals and
-	 * `#if` branches all count — the conservative direction (an extra occurrence only ever keeps
-	 * a member). A token STRADDLING `to` is counted truncated, which likewise can only under-count
-	 * the region and so silence a finding.
-	 */
-	private static function countTokens(source: String, from: Int, to: Int, out: Map<String, Int>): Void {
-		final stop: Int = to <= source.length ? to : source.length;
-		var i: Int = from;
-		while (i < stop) {
-			if (!SourceText.isIdentStartChar(source.fastCodeAt(i))) {
-				i++;
-				continue;
-			}
-			var end: Int = i + 1;
-			while (end < stop && SourceText.isIdentChar(source.fastCodeAt(end))) end++;
-			final token: String = source.substring(i, end);
-			out[token] = (out[token] ?? 0) + 1;
-			i = end;
-		}
-	}
-
 	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set every region guard counts. */
 	private static function isDeclKind(node: QueryNode): Bool {
 		return MemberKinds.isMemberDeclKind(node.kind);
@@ -562,17 +447,6 @@ private typedef Candidate = {
 
 	/** Whether the declaration carries `static` — no framework INVOCATION contract can claim one. */
 	final isStatic: Bool;
-
-};
-
-/** The accumulated verdict of one inheritance-chain walk. */
-private typedef Chain = {
-
-	/** Whether a supertype reference resolved to no indexed declaration, leaving the chain unreadable. */
-	var unresolved: Bool;
-
-	/** Whether an ancestor carries `@:autoBuild` — it generates members into the class the walk started from. */
-	var generated: Bool;
 
 };
 

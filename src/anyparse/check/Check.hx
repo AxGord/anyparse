@@ -195,6 +195,34 @@ interface QuotationAware {}
  */
 interface RiskyFix {}
 /**
+ * Opt-in capability of a TRUSTED check one of whose fix ARMS is risky - the per-arm counterpart of
+ * the whole-check `RiskyFix` marker. The check's ordinary `fix` / `crossFileFix` stays in the
+ * unverified safe loop and must DECLINE every finding the risky arm owns; the arm's own edits come
+ * from `riskyFix` and reach the tree only through `FixVerifier`'s typecheck-and-revert pipeline, so
+ * without a `compilerOracle` such a finding is report-only (the check is offered to the verifier
+ * only when one is configured, so a run with none is byte-identical to one without the arm).
+ *
+ * The first consumer is `naming`'s privatize arm: a public `_x` nothing outside its type reads is
+ * made private rather than renamed, and that verdict rests on a NEGATIVE whole-project gate list,
+ * exactly the reason `unused-public-member`'s deletions are `RiskyFix`.
+ */
+interface RiskyArm {
+
+	/**
+	 * The subset of `violations` (this check's own, from its latest `run`) whose fix is the risky
+	 * arm. The verifier asks only these of `riskyFix` and tallies only these, so a finding the safe
+	 * arm already handles never reads as a risky decline.
+	 */
+	public function riskyArmFindings(violations: Array<Violation>): Array<Violation>;
+
+	/** The risky arm's edits for `violations` (its own findings, all in `source`). */
+	public function riskyFix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }>;
+
+}
+
+/**
  * Opt-in MARKER of a `Check` that reads the project's framework roster
  * (`LintConfig.frameworksFor`) — the `apqlint.json` `frameworks` contracts naming which member
  * names a framework reaches by name, on which root types.

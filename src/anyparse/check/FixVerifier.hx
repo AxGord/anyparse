@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
+import anyparse.check.Check.RiskyArm;
 import anyparse.check.Check.Violation;
 import anyparse.check.CompilerOracle.OracleBaseline;
 import anyparse.check.CompilerOracle.OracleExclusion;
@@ -377,8 +378,12 @@ final class FixVerifier {
 			// reification and inline-suppression gates here. The oracle below cannot stand in for
 			// either — a risky rewrite inside a `macro …` quotation still typechecks, and so does one
 			// on a line whose `// noqa` says the rule is wrong there.
-			final all: Array<Violation> = Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)
+			final collected: Array<Violation> = Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)
 				.filter(v -> v.rule == check.id());
+			// A `RiskyArm` check is verified for its risky arm's findings ONLY: the rest belong to its safe
+			// arm, which the safe loop has already run, and tallying them here would report them as risky
+			// declines.
+			final all: Array<Violation> = check is RiskyArm ? (cast check: RiskyArm).riskyArmFindings(collected) : collected;
 			for (entry in files) {
 				final own: Array<Violation> = all.filter(v -> v.file == entry.file);
 				if (own.length == 0) continue;
@@ -388,7 +393,7 @@ final class FixVerifier {
 				final edits: Array<GroupedEdit> = check is GroupedFix
 					? (cast check: GroupedFix).fixGrouped(entry.source, own, plugin, index)
 					: [
-						for (e in check.fix(entry.source, own, plugin, index)) { span: e.span, text: e.text, group: null }
+						for (e in flatFix(check, entry.source, own, plugin, index)) { span: e.span, text: e.text, group: null }
 					];
 				if (edits.length == 0) {
 					// The check was asked for these findings and answered nothing — a decline, and
@@ -874,6 +879,13 @@ final class FixVerifier {
 			k++;
 		}
 		return k;
+	}
+
+	/** The flat edits `check` proposes for `own` in `source`: a `RiskyArm`'s risky arm, every other check's `fix`. */
+	private static function flatFix(
+		check: Check, source: String, own: Array<Violation>, plugin: GrammarPlugin, index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return check is RiskyArm ? (cast check: RiskyArm).riskyFix(source, own, plugin, index) : check.fix(source, own, plugin, index);
 	}
 
 }
