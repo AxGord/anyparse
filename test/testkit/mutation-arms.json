@@ -23853,6 +23853,36 @@
 			"method": "conditionLoopKinds",
 			"force": "statementLoopKinds(shape)",
 			"note": "the condition loops keep the iterating `for`, so an empty `for (x in items()) {}` passes as a drain loop"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-MACRO-NO-PROOF",
+			"type": "anyparse.check.ExplicitType",
+			"method": "macroReturnsExpr",
+			"force": "false",
+			"note": "no macro function's returns are proven, so `macro … return macro f($e)` stays an unfixed explicit-type finding although its type is Expr by construction"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-MACRO-NO-COMPANION",
+			"type": "anyparse.check.ExplicitType",
+			"method": "returnProof",
+			"find": "\t\t? Companion\n",
+			"replace": "\t\t? Unproven\n",
+			"note": "a `return Context.error(…)` is no Dynamic companion, so getProjectVersion's catch arm blocks its Expr annotation"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-MACRO-ANY-RETURN",
+			"type": "anyparse.check.ExplicitType",
+			"method": "macroReturnsExpr",
+			"force": "true",
+			"note": "every macro function is proven, so `return macro : Int` (a ComplexType) and `return null` get `:Expr`"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-MACRO-SHADOW",
+			"type": "anyparse.check.ExplicitType",
+			"method": "returnProof",
+			"find": " && !NominalTypes.shadowedByNonStdType(index, call.typeName)",
+			"replace": "",
+			"note": "a project's own `Context.error` counts as the Dynamic macro-API one, so a return of whatever it answers is taken for an Expr companion"
 		}
 	]
 }

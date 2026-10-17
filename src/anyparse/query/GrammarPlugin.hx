@@ -585,6 +585,15 @@ typedef RefShape = {
 	@:optional var opaqueKinds: Array<String>;
 
 	/**
+	 * The FIXED type the value of each quotation kind has, fully qualified — Haxe's `macro …` is a
+	 * `haxe.macro.Expr`, `macro : T` a `haxe.macro.Expr.ComplexType`, `macro class { … }` a
+	 * `haxe.macro.Expr.TypeDefinition`, whatever is quoted. A kind of `opaqueKinds` absent here has no
+	 * type a reader may rely on. `explicit-type` reads it to type a `macro` function's returns, where
+	 * the display oracle is blind. Optional; unset means no quotation is typed.
+	 */
+	@:optional var quotationTypes: Map<String, String>;
+
+	/**
 	 * Node kinds whose text is a MODULE PATH rather than a reference to any binding — Haxe's
 	 * `PackageDecl` and `ImportDecl`. A word-boundary occurrence of an identifier inside one names
 	 * a package segment or a type in a dotted path; it cannot be a use of a local or a member, and

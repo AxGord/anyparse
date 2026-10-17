@@ -8,10 +8,12 @@ import anyparse.check.LiteralInfer.AnnotationSite;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
+import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
@@ -64,6 +66,17 @@ final class ExplicitType implements Check implements OracleAssisted {
 	private static inline final DECLINE_NO_RETURN_SLOT: String = "no `)` sits right before the function's body, where the return type goes";
 
 	private static inline final DECLINE_NO_NAME: String = 'the declaration does not spell its name in active code';
+
+	private static inline final DECLINE_MACRO_RETURN: String = 'a `macro` function the oracle cannot type: not every value it returns '
+		+ 'is an expression quotation (`macro …`) or `Context.error`';
+
+	private static inline final DECLINE_MACRO_PARAM: String = 'a parameter of a `macro` function: the oracle cannot type macro context';
+
+	/** The type every value of a `macro` function's proven returns has. */
+	private static inline final MACRO_RETURN_TYPE: String = 'haxe.macro.Expr';
+
+	/** A ternary's children: the condition and its two arms. */
+	private static inline final IF_ELSE_CHILDREN: Int = 3;
 
 	private static inline final DECLINE_NO_SLOT: String = 'no slot after the name takes the annotation';
 
@@ -219,14 +232,16 @@ final class ExplicitType implements Check implements OracleAssisted {
 				final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
 				collectVoidReturnEdits(tree, source, shape, violations, functions, memberKinds, edits);
 				collectInheritedParamEdits(tree, source, violations, plugin, index, functions, params, edits);
+				collectMacroReturnEdits(tree, source, violations, plugin, index, functions, memberKinds, edits);
 				recordStructuralDeclines(violations, edits);
 				return edits;
 			});
 	}
 
 	/**
-	 * Give every finding `edits` left unfixed its decline reason. An edit belongs to the NARROWEST finding around it: a
-	 * function's return-type finding spans its parameters' findings too.
+	 * Give every finding `edits` left unfixed, and no earlier pass declined in its own words (the `macro` pass), its
+	 * decline reason. An edit belongs to the NARROWEST finding around it: a function's return-type finding spans its
+	 * parameters' findings too.
 	 */
 	private static function recordStructuralDeclines(violations: Array<Violation>, edits: Array<{ span: Span, text: String }>): Void {
 		final fixed: Array<Violation> = [];
@@ -243,7 +258,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 			}
 			if (owner != null) fixed.push(owner);
 		}
-		for (v in violations) if (!fixed.contains(v))
+		for (v in violations) if (!fixed.contains(v) && v.declineReason == null)
 			v.declineReason = v.message == RETURN_MESSAGE ? DECLINE_NO_STRUCTURAL_RETURN : DECLINE_NO_STRUCTURAL_TYPE;
 	}
 
@@ -516,6 +531,131 @@ final class ExplicitType implements Check implements OracleAssisted {
 			}
 		}
 		walk(tree);
+	}
+
+	/**
+	 * The `macro`-function pass of `fix()`, the only route to such a function's annotation: the display oracle is blind
+	 * inside a `macro` function. A flagged return type becomes `haxe.macro.Expr` (through the file's printer, imported or
+	 * qualified) when `macroReturnsExpr` proves the function's own returns; otherwise it declines with
+	 * `DECLINE_MACRO_RETURN`. Every flagged parameter of a `macro` function declines with `DECLINE_MACRO_PARAM` — nothing
+	 * structural types it and the oracle cannot.
+	 */
+	private static function collectMacroReturnEdits(
+		tree: QueryNode, source: String, violations: Array<Violation>, plugin: GrammarPlugin, index: Null<SymbolIndex>,
+		functions: Array<String>, members: Array<String>, edits: Array<{ span: Span, text: String }>
+	): Void {
+		final shape: RefShape = plugin.refShape();
+		final macroKind: Null<String> = shape.macroModifierKind;
+		if (macroKind == null || violations.length == 0) return;
+		final flagged: Map<String, Violation> = [];
+		for (v in violations) {
+			final vspan: Null<Span> = v.span;
+			if (vspan != null) flagged['${vspan.from}:${vspan.to}'] = v;
+		}
+		final params: Array<String> = shape.paramKinds ?? [];
+		final bodies: Array<String> = shape.functionBodyKinds ?? [];
+		final boundary: QueryNode -> Bool = c -> members.contains(c.kind);
+		final file: String = violations[0].file;
+		var printer: Null<TypeRefPrinter> = null;
+		final own: Array<{ span: Span, text: String }> = [];
+
+		function findingOf(node: QueryNode): Null<Violation> {
+			final span: Null<Span> = node.span;
+			return span == null ? null : flagged['${span.from}:${span.to}'];
+		}
+
+		function annotate(fn: QueryNode): Void {
+			for (c in fn.children) if (params.contains(c.kind)) {
+				final pv: Null<Violation> = findingOf(c);
+				if (pv != null) pv.declineReason = DECLINE_MACRO_PARAM;
+			}
+			final v: Null<Violation> = findingOf(fn);
+			final span: Null<Span> = fn.span;
+			if (v == null || span == null) return;
+			final body: Null<QueryNode> = fn.children.find(c -> bodies.contains(c.kind));
+			if (body == null || !macroReturnsExpr(body, shape, tree, index)) {
+				v.declineReason = DECLINE_MACRO_RETURN;
+				return;
+			}
+			final at: Int = voidInsertPoint(span.from, body, source);
+			if (at < 0) {
+				v.declineReason = DECLINE_NO_RETURN_SLOT;
+				return;
+			}
+			final site: AnnotationSite = { file: file, methodName: null };
+			final fileprinter: TypeRefPrinter = printer ?? LiteralInfer.printerFor(source, tree, plugin, file);
+			printer = fileprinter;
+			final type: Null<String> = LiteralInfer.normalizeWith(MACRO_RETURN_TYPE, fileprinter, MAX_ANON_LEN, site, at);
+			if (type == null)
+				v.declineReason = LiteralInfer.unwritableReason(MACRO_RETURN_TYPE, MAX_ANON_LEN, site, false);
+			else
+				own.push({ span: new Span(at, at), text: ':$type' });
+		}
+
+		function walk(node: QueryNode): Void {
+			final kids: Array<QueryNode> = node.children;
+			for (i in 0...kids.length) {
+				final child: QueryNode = kids[i];
+				if (functions.contains(child.kind) && MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary)) annotate(child);
+				walk(child);
+			}
+		}
+		walk(tree);
+		if (own.length == 0) return;
+		for (edit in own) edits.push(edit);
+		if (printer != null) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
+	}
+
+	/**
+	 * Whether every value `body` returns in its own scope — nested functions and quotations aside, whose `return`s are not
+	 * this function's — has a `returnProof`, and at least one is a quotation. The compiler unifies exactly those returns to
+	 * `haxe.macro.Expr`, the `Dynamic` companion in either order (measured, Haxe 4.3.7); a bare `return;`, any other value,
+	 * or no return at all is no proof.
+	 */
+	private static function macroReturnsExpr(body: QueryNode, shape: RefShape, tree: QueryNode, index: Null<SymbolIndex>): Bool {
+		final returns: Array<String> = ShapeVocab.returnKinds(shape);
+		final stops: Array<String> = ShapeVocab.nestedFunctionKinds(shape).concat(shape.opaqueKinds ?? []);
+		var quoted: Bool = false;
+		var proven: Bool = true;
+		function walk(node: QueryNode): Void {
+			if (!proven || stops.contains(node.kind)) return;
+			if (returns.contains(node.kind))
+				switch node.children.length == 1 ? returnProof(node.children[0], shape, tree, index) : Unproven {
+					case Quoted:
+						quoted = true;
+					case Companion:
+					case Unproven:
+						proven = false;
+				}
+			for (c in node.children) walk(c);
+		}
+		walk(body);
+		return proven && quoted;
+	}
+
+	/**
+	 * What `value` proves about a `macro` function's return type: `Quoted` for a quotation `RefShape.quotationTypes` types
+	 * `haxe.macro.Expr`, `Companion` for a tabled static call answering `Dynamic` (`Context.error`) whose type name no
+	 * project type shadows, either through a parenthesis or through both arms of a ternary (`Quoted` when one arm is);
+	 * `Unproven` for anything else.
+	 */
+	private static function returnProof(value: QueryNode, shape: RefShape, tree: QueryNode, index: Null<SymbolIndex>): ReturnProof {
+		final quotations: Map<String, String> = shape.quotationTypes ?? [];
+		final kids: Array<QueryNode> = value.children;
+		if (quotations[value.kind] == MACRO_RETURN_TYPE) return Quoted;
+		if (value.kind == shape.parenKind && kids.length == 1) return returnProof(kids[0], shape, tree, index);
+		if (value.kind == shape.ternaryKind && kids.length == IF_ELSE_CHILDREN) return switch [
+			returnProof(kids[1], shape, tree, index),
+			returnProof(kids[2], shape, tree, index)
+		] {
+			case [Unproven, _] | [_, Unproven]: Unproven;
+			case [Quoted, _] | [_, Quoted]: Quoted;
+			case _: Companion;
+		};
+		final call: Null<{ typeName: String, returnSource: String }> = NominalTypes.tabledStaticCall(value, tree, shape);
+		return call != null && call.returnSource == 'Dynamic' && !NominalTypes.shadowedByNonStdType(index, call.typeName)
+			? Companion
+			: Unproven;
 	}
 
 	/**
@@ -796,6 +936,20 @@ final class ExplicitType implements Check implements OracleAssisted {
 			if (at >= 0) edits.push({ span: new Span(at, at), text: ':$typeSource' });
 		}
 	}
+
+}
+
+/** What one returned value proves about a `macro` function's return type (`ExplicitType.returnProof`). */
+private enum ReturnProof {
+
+	/** A quotation of an expression: its type is `haxe.macro.Expr`. */
+	Quoted;
+
+	/** A `Dynamic` value (`Context.error`): unifies with the quotations beside it. */
+	Companion;
+
+	/** Anything else. */
+	Unproven;
 
 }
 

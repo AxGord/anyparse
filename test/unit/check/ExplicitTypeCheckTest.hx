@@ -249,6 +249,78 @@ class ExplicitTypeCheckTest extends Test {
 		Assert.equals(0, fixCount('class C { macro static function f() {} }'));
 	}
 
+	@:pin('control')
+	@:killer('M-EXPLICIT-TYPE-MACRO-NO-PROOF')
+	public function testFixMacroFunctionReturningQuotationIsExpr(): Void {
+		// TM macros/Lang.hx `t`: the oracle is blind in a macro function, and a quotation's type is `Expr` by construction.
+		final src: String = "import haxe.macro.Expr;\nclass C {\n\tmacro static function t(e:Expr) {\n\t\treturn macro f($e);\n\t}\n}";
+		Assert.equals(
+			"import haxe.macro.Expr;\nclass C {\n\tmacro static function t(e:Expr):Expr {\n\t\treturn macro f($e);\n\t}\n}", applyFix(src)
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-EXPLICIT-TYPE-MACRO-NO-COMPANION')
+	public function testFixMacroFunctionTernaryAndContextError(): Void {
+		// TM crashdumper Util.getProjectVersion: a ternary of quotations, and `Context.error` (Dynamic) in the catch.
+		final src: String = "import haxe.macro.Context;\nimport haxe.macro.Expr;\nclass C {\n\tmacro static function v(p:String) {\n"
+			+ "\t\ttry {\n\t\t\treturn p.length > 0 ? macro 1 : (macro 2);\n\t\t} catch (e:haxe.Exception) {\n"
+			+ "\t\t\treturn Context.error('no', Context.currentPos());\n\t\t}\n\t}\n}";
+		Assert.isTrue(applyFix(src).indexOf('function v(p:String):Expr {') != -1, 'got: ${applyFix(src)}');
+	}
+
+	public function testFixMacroFunctionImportsExpr(): Void {
+		final out: String = applyFix('class C {\n\tmacro static function t() {\n\t\treturn macro 1;\n\t}\n}');
+		Assert.isTrue(out.indexOf('function t():Expr {') != -1 && out.indexOf('import haxe.macro.Expr;') != -1, 'got: $out');
+	}
+
+	@:pin('control')
+	@:killer('M-EXPLICIT-TYPE-MACRO-ANY-RETURN')
+	public function testMacroFunctionWithUnprovenReturnDeclines(): Void {
+		// A type quotation is a `ComplexType`, a `null` is no proof, a `Context.error` alone types nothing.
+		for (body in [
+			'return macro : Int;',
+			'if (b) return null; return macro 1;',
+			"return haxe.macro.Context.error('x', p);"
+		]) {
+			final src: String = 'class C {\n\tmacro static function t(b:Bool) {\n\t\t$body\n\t}\n}';
+			Assert.equals(src, applyFix(src));
+			final run: FixRun = CheckFixture.fixRun(new ExplicitType(), [{ file: 'C.hx', source: src }]);
+			Assert.isTrue(
+				(run.violations[0].declineReason ?? '').indexOf('`macro` function') != -1, 'got: ${run.violations[0].declineReason}'
+			);
+		}
+	}
+
+	public function testMacroFunctionReturnsOfNestedFunctionsAndQuotationsDoNotCount(): Void {
+		// The lambda's `return 1` and the quoted `return 2` are not `t`'s returns.
+		final src: String = 'class C {\n\tmacro static function t() {\n\t\tvar g = () -> {\n\t\t\treturn 1;\n\t\t};\n'
+			+ '\t\treturn macro {\n\t\t\treturn 2;\n\t\t};\n\t}\n}';
+		Assert.isTrue(applyFix(src).indexOf('function t():Expr {') != -1, 'got: ${applyFix(src)}');
+	}
+
+	@:pin('control')
+	@:killer('M-EXPLICIT-TYPE-MACRO-SHADOW')
+	public function testMacroFunctionShadowedContextDeclines(): Void {
+		// A project `Context` may return anything: its `error` is no `Dynamic` companion.
+		final src: String =
+			'class C {\n\tmacro static function t(b:Bool) {\n\t\tif (b) return Context.error(1);\n\t\treturn macro 1;\n\t}\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: src },
+			{ file: 'Context.hx', source: 'class Context {\n\tpublic static function error(x:Int):Int {\n\t\treturn x;\n\t}\n}' }
+		];
+		final run: FixRun = CheckFixture.fixRun(new ExplicitType(), files);
+		Assert.equals(0, run.edits.length);
+	}
+
+	public function testMacroFunctionParameterDeclinesInItsOwnWords(): Void {
+		final run: FixRun = CheckFixture.fixRun(
+			new ExplicitType(), [{ file: 'C.hx', source: 'class C {\n\tmacro static function t(e):Void {}\n}' }]
+		);
+		Assert.equals(1, run.violations.length);
+		Assert.isTrue((run.violations[0].declineReason ?? '').indexOf('`macro` function') != -1, 'got: ${run.violations[0].declineReason}');
+	}
+
 	public function testFixSkipsExpressionBodyReturn(): Void {
 		// An expression-bodied `function f() return 5;` is a value-return — report-only.
 		Assert.equals(0, fixCount('class C { public function f() return 5; }'));
