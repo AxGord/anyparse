@@ -2407,9 +2407,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyOwnReasonsTest#testARepeatedOrUnknownUnresolvedCallKeepsTheLockLong :: control :: M-TS-DOM-BRIEF-REPEATED',
 			'unit.check.ThreadSafetyOwnReasonsTest#testAnUnresolvedCallInACatchIsAnErrorPath :: control :: M-TS-BLIND-CATCH-OFF',
 			'unit.check.ThreadSafetyPositiveSinksTest#testADottedWaiverNamesOnlyTheTypeAtThatPath :: control :: M-TS-DOTTED-WILDCARD',
-			'unit.check.ThreadSafetyPositiveSinksTest#testALibraryTypeIsNotItsProjectNamesake :: control :: '
-				+ 'M-TS-PATH-FOREIGN,M-TS-PATH-IMPORT,M-TS-PATH-RECEIVER-STATIC,M-TS-PATH-NEW,M-TS-PATH-MATCH,M-TS-SHADOWING-KEPT,'
-				+ 'M-TS-PATH-NOMINAL,M-TS-ALIAS-TYPE',
+			'unit.check.ThreadSafetyPositiveSinksTest#testALibraryTypeIsNotItsProjectNamesake :: control :: M-TS-PATH-FOREIGN,'
+				+ 'M-TS-PATH-RECEIVER-STATIC,M-TS-PATH-NEW,M-TS-PATH-MATCH,M-TS-SHADOWING-KEPT,M-TS-PATH-NOMINAL,M-TS-ALIAS-TYPE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALocalOfACallResultIsTypedByWhatTheCallReturns :: control :: '
 				+ 'M-NOMINAL-LOCAL-INIT,M-TS-LOCAL-CALL-READ',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdLockWrittenInADeclarationWaitsWhereverItIsRead :: control :: '
@@ -2425,7 +2424,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-NATIVE-CALLEE-SPAN,M-TS-NATIVE-CODE-CALLS,M-TS-NATIVE-LOADED-MEMBER',
 			'unit.check.ThreadSafetyPositiveSinksTest#testStdResultsTypeTheirReceivers :: control :: '
 				+ 'M-TS-STD-RETURN,M-TS-STD-FIELD,M-TS-STD-GETTER,M-TS-STD-GETTER-LOCAL,M-TS-STD-GETTER-TYPED,M-TS-NEW-RECEIVER,M-TS-ALIAS-TYPE,'
-				+ 'M-TS-STD-PLACEHOLDER,M-TS-BUILTIN-EVENTS',
+				+ 'M-TS-STD-PLACEHOLDER,M-TS-BUILTIN-EVENTS,M-TS-PATH-IMPORT',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheBuiltinAppliesWithNoSinks :: control :: '
 				+ 'M-TS-REPORT-NEEDS-SINKS,M-TS-BUILTIN-OFF,M-TS-BUILTIN-ANY-NODE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheNoticeCountsWhatNonBlockingRemoved :: control :: M-TS-NOTICE-WAIVED',

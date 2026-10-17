@@ -3132,3 +3132,11 @@ decided the question; it may not become a record of runs.
   (`M-TS-PATH-DECLARED-PACKAGE`) survived because every pin wrote main types, whose package path is their module's path.
   Re-pinned on `ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations` (a sub-type of
   `pkg.Nodes` declared reflective as `pkg.Node`) — branch `feat/infra-N3`
+- `TypeMetaFacts.isEnum` and its tables (`_enums`, `_nonEnums`, `_enumKinds`, the constructor's `enumKinds`) are
+  deleted: since `ReflectiveValues.enumType` asks the only declaration's kind itself (`ReflectiveReach.onlyDeclaration`,
+  branch `feat/infra-B3c`) nothing read them, and `M-TS-ENUM-KIND`, which cut their writer, SURVIVED every sweep. The arm
+  is re-aimed at `enumType` with the same cut (a structure typedef taken for an enum) and kills its pin,
+  `ThreadSafetyReflectiveSealTest#testAStructureTypedefMayHoldALock`. `M-TS-PATH-IMPORT` is re-pinned on
+  `ThreadSafetyPositiveSinksTest#testStdResultsTypeTheirReceivers`, the test its cut breaks: the import case of
+  `testALibraryTypeIsNotItsProjectNamesake` is typed through a path that does not ask `CallGraphImports.typeOf` — branch
+  `feat/infra-N3`

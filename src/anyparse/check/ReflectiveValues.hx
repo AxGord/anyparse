@@ -188,8 +188,9 @@ final class ReflectiveValues {
 	}
 
 	/**
-	 * Whether `type` is an enum the run declares once (`TypeMetaFacts.isEnum`), asked of its declaration's KIND: a typedef of a
-	 * structure holds any object with its fields, an abstract whatever it wraps.
+	 * Whether `type` is an enum the run declares once (`ReflectiveReach.onlyDeclaration`), asked of its declaration's KIND
+	 * (`RefShape.runtimeTaggedTypeKinds`): a typedef of a structure holds any object with its fields, an abstract whatever it
+	 * wraps.
 	 */
 	private function enumType(type: String): Bool {
 		final index: Null<SymbolIndex> = _graph.index;

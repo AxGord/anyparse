@@ -19726,10 +19726,10 @@
 		},
 		{
 			"name": "M-TS-ENUM-KIND",
-			"type": "anyparse.query.TypeMetaFacts",
-			"method": "record",
-			"find": "if (_enumKinds.contains(t.kind))",
-			"replace": "if (_enumKinds.contains(t.kind) || t.isAnonStruct)",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "enumType",
+			"find": "return decl != null && (_shape.runtimeTaggedTypeKinds ?? []).contains(decl.type.kind);",
+			"replace": "return decl != null && ((_shape.runtimeTaggedTypeKinds ?? []).contains(decl.type.kind) || decl.type.isAnonStruct);",
 			"note": "a typedef of a structure is taken for an enum, which no lock is (R4 F2)"
 		},
 		{
