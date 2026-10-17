@@ -51,7 +51,8 @@ using StringTools;
  * / abstract); an interface, enum, enum abstract or typedef is deliberately out of scope (a grammar-sized enum is a definition
  * table, not a decomposition candidate). A grammar that declares no containers or no member kinds makes the check a no-op. The
  * thresholds are the built-in defaults unless a discovered `apqlint.json`
- * configures `maxMembers` / `maxLines` on the `oversized-type` rule.
+ * configures `maxMembers` / `maxLines` on the `oversized-type` rule, or grants a type a CEILING of its own
+ * (`readGrant`: silent within it, reported again past it).
  */
 @:nullSafety(Strict)
 final class OversizedType implements Check implements ConfigAware implements VolatileMessage implements NoAutofix {
@@ -109,8 +110,17 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	private static inline final NO_SEAM_TAIL: String =
 		' — a decomposition candidate; no member-reference seam — look for an architectural one (a command / handler / responsibility per module)';
 
-	/** Separator between the granted type NAME and the reason it is granted, in an `apqlint.json` entry. */
+	/** Separator between a grant's HEAD (`<Name> <= <ceiling>`) and the reason it is granted, in an `apqlint.json` entry. */
 	private static inline final GRANT_SEP: String = ':';
+
+	/** The grant shape after its name, as every refusal spells it — the one shape `readGrant` accepts. */
+	private static inline final GRANT_SHAPE: String = ' <= <N> members / <M> lines: <reason>';
+
+	/** The relaxation of `GRANT_SHAPE` a refusal adds: a grant need not give both ceilings. */
+	private static inline final EITHER_CLAUSE: String = 'either ceiling alone is accepted, members first when both are given';
+
+	/** The fragment that opens a reported type's grant clause — the grant was not enough for its current size. */
+	private static inline final BEYOND_GRANT: String = ' — beyond its grant \'';
 
 	/** This rule's id — the key its `apqlint.json` options sit under, and the `rule` field of its findings. */
 	private static inline final RULE_ID: String = 'oversized-type';
@@ -139,16 +149,25 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		if (containerKinds.length == 0 || memberKinds.length == 0) return [];
 		var index: Null<SymbolIndex> = null;
 		var indexAsked: Bool = false;
+		final told: Array<String> = [];
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			var graph: Null<CallGraph> = null;
+			final maxMembers: Int = config.intOption(RULE_ID, 'maxMembers') ?? DEFAULT_MAX_MEMBERS;
+			final maxLines: Int = config.intOption(RULE_ID, 'maxLines') ?? DEFAULT_MAX_LINES;
+			final grants: GrantList = readGrants(config, maxMembers, maxLines);
+			// Every file of a run resolves the config again; a refused entry is one finding per run.
+			for (problem in grants.problems) if (!told.contains(problem)) {
+				told.push(problem);
+				violations.push(configProblem(problem));
+			}
 			final cfg: OversizedCfg = {
 				containerKinds: containerKinds,
 				memberKinds: memberKinds,
 				conditionalKind: shape.conditionalMemberKind,
-				maxMembers: config.intOption(RULE_ID, 'maxMembers') ?? DEFAULT_MAX_MEMBERS,
-				maxLines: config.intOption(RULE_ID, 'maxLines') ?? DEFAULT_MAX_LINES,
-				granted: grantedTypes(config),
+				maxMembers: maxMembers,
+				maxLines: maxLines,
+				granted: grants.granted,
 				noSeam: typeName -> {
 					final built: CallGraph = graph ?? CallGraph.build([entry], plugin);
 					graph = built;
@@ -227,28 +246,32 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		final span: Null<Span> = type.span;
 		if (span == null) return;
 		final name: String = type.name ?? '<anonymous>';
-		if (cfg.granted.contains(name)) return;
+		final grant: Null<OversizedGrant> = cfg.granted.find(g -> g.name == name);
+		final maxMembers: Int = grant?.members ?? cfg.maxMembers;
+		final maxLines: Int = grant?.lines ?? cfg.maxLines;
 		final names: Array<String> = memberNames(type, cfg);
 		final members: Int = names.length;
 		final lines: Int = lineExtent(source, span);
 		final over: Array<String> = [];
-		if (members > cfg.maxMembers && !contractFacade(members, cfg.dictated(name, names), cfg.maxMembers))
-			over.push('$members$MEMBERS_UNIT${cfg.maxMembers})');
-		if (lines > cfg.maxLines) over.push('$lines$LINES_UNIT${cfg.maxLines})');
+		if (members > maxMembers && !contractFacade(members, cfg.dictated(name, names), maxMembers))
+			over.push('$members$MEMBERS_UNIT$maxMembers)');
+		if (lines > maxLines) over.push('$lines$LINES_UNIT$maxLines)');
 		if (over.length == 0) return;
+		final beyond: String = grant == null ? '' : '$BEYOND_GRANT${grant.head}\'';
 		final headerEnd: Int = source.indexOf('\n', span.from);
 		out.push({
 			file: file,
 			span: new Span(span.from, headerEnd == -1 ? span.to : headerEnd),
 			rule: RULE_ID,
 			severity: Severity.Warning,
-			message: 'type \'$name\' has ${over.join(' and ')}${cfg.noSeam(name) ? NO_SEAM_TAIL : SEAM_TAIL}'
+			message: 'type \'$name\' has ${over.join(' and ')}$beyond${cfg.noSeam(name) ? NO_SEAM_TAIL : SEAM_TAIL}'
 		});
 	}
 
 	/**
-	 * The type names this project has GRANTED, read from `apqlint.json`
-	 * (`"oversized-type": { "grants": ["Renderer: <reason>", …] }`).
+	 * The grants this project declares in `apqlint.json`
+	 * (`"oversized-type": { "grants": ["Renderer <= 71 members / 4150 lines: <reason>", …] }`),
+	 * each read by `readGrant`, and the refusals: one line per entry left out.
 	 *
 	 * The loader needed no change for this: `rules` carries an arbitrary option bag per rule id
 	 * and `LintConfig.stringListOption` already reads a list of strings out of it, so the grant
@@ -257,20 +280,133 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	 * a property of the code rather than as a project decision, and would have needed a new
 	 * reader per grammar.
 	 *
-	 * An entry with NO reason after the `:` is DROPPED, so the type keeps its finding. That is
-	 * the whole point of the shape: `// noqa: oversized-type` already suppresses this rule
-	 * silently and anonymously on the header line, and a grant list that accepted a bare name
-	 * would be the same thing one file further away. The reason is what a later reader
-	 * disagrees with.
+	 * Two grants naming one type are two ceilings for it, and neither is the obvious one: both
+	 * are refused, so the type keeps its finding until the list says which it means.
 	 */
-	private static function grantedTypes(config: LintConfig): Array<String> {
-		final out: Array<String> = [];
+	private static function readGrants(config: LintConfig, maxMembers: Int, maxLines: Int): GrantList {
+		final read: Array<OversizedGrant> = [];
+		final problems: Array<String> = [];
 		for (entry in config.stringListOption(RULE_ID, 'grants') ?? []) {
-			final at: Int = entry.indexOf(GRANT_SEP);
-			if (at <= 0 || entry.substr(at + 1).trim().length == 0) continue;
-			out.push(entry.substring(0, at).trim());
+			final grant: Null<OversizedGrant> = readGrant(entry.trim(), maxMembers, maxLines, problems);
+			if (grant != null) read.push(grant);
 		}
-		return out;
+		final granted: Array<OversizedGrant> = [];
+		for (grant in read) {
+			if (read.count(g -> g.name == grant.name) == 1) {
+				granted.push(grant);
+				continue;
+			}
+			final twice: String =
+				'$RULE_ID: two grants name "${grant.name}" — one ceiling per type, so both are refused and the type keeps its finding';
+			if (!problems.contains(twice)) problems.push(twice);
+		}
+		return { granted: granted, problems: problems };
+	}
+
+	/**
+	 * One `grants` entry read STRICTLY, or null with the reason pushed to `problems`: a grant
+	 * this cannot read is never a silent grant, and never a silent no-op either.
+	 *
+	 * The shape is `<Name> <= <N> members / <M> lines: <reason>`, either clause alone accepted
+	 * (members first when both are written). A ceiling REPLACES the rule's threshold for that
+	 * type and that dimension, so the type is reported again the moment it grows past what was
+	 * granted; a dimension with no ceiling keeps the threshold. Refused:
+	 *
+	 * - **no reason** after the `:`: `// noqa: oversized-type` already suppresses this rule
+	 *   anonymously on the header line, and a grant list that accepted a bare name would be the
+	 *   same thing one file further away. The reason is what a later reader disagrees with.
+	 * - **no ceiling** (`Name: reason`, the syntax before ceilings): it silenced the type at any
+	 *   size, which is what the ceiling exists to end — refused with the migration spelled out,
+	 *   and the type's own finding, which comes back, gives the size to start from.
+	 * - **a ceiling at or below the threshold**: it grants nothing, and reading it as a TIGHTER
+	 *   limit would report a type no other type of its size is reported for.
+	 * - **any other head**, digits past nine included (no ceiling needs them, and `parseInt`
+	 *   would read them differently per target).
+	 */
+	private static function readGrant(entry: String, maxMembers: Int, maxLines: Int, problems: Array<String>): Null<OversizedGrant> {
+		final at: Int = entry.indexOf(GRANT_SEP);
+		final head: String = (at < 0 ? entry : entry.substring(0, at)).trim();
+		final identifier: EReg = ~/^[A-Za-z_][A-Za-z0-9_]*$/;
+		if (at < 0 || entry.substr(at + 1).trim().length == 0) {
+			final name: String = identifier.match(head) ? head : '<Name>';
+			problems.push(
+				'$RULE_ID grant "$head" gives no reason after "$GRANT_SEP" — refused, the type keeps its finding; write "$name$GRANT_SHAPE"'
+			);
+			return null;
+		}
+		if (identifier.match(head)) {
+			problems.push(
+				'$RULE_ID grant "$head" has no ceiling — a ceiling-less grant silenced the type at any size, so it is refused and the '
+				+ 'type keeps its finding, which gives its current size; write "$head$GRANT_SHAPE" ($EITHER_CLAUSE)'
+			);
+			return null;
+		}
+		final cut: Int = head.indexOf('<=');
+		final name: String = cut < 0 ? '' : head.substring(0, cut).trim();
+		if (!identifier.match(name)) {
+			problems.push(malformedGrant(head));
+			return null;
+		}
+		return readCeilings(name, head, head.substring(cut + 2).split('/'), maxMembers, maxLines, problems);
+	}
+
+	/**
+	 * The grant `head` spells for the type `name`, read from its `/`-separated ceiling clauses,
+	 * or null with the reason pushed to `problems` — the half of `readGrant` past the name.
+	 */
+	private static function readCeilings(
+		name: String, head: String, clauses: Array<String>, maxMembers: Int, maxLines: Int, problems: Array<String>
+	): Null<OversizedGrant> {
+		var members: Null<Int> = null;
+		var lines: Null<Int> = null;
+		// Judged once every clause has read: a malformed head is refused as malformed, whatever its first ceiling says.
+		var grantsNothing: Bool = false;
+		final clause: EReg = ~/^\s*([0-9]{1,9})\s+(members|lines)\s*$/;
+		for (i => text in clauses) {
+			final ceiling: Null<Int> = clause.match(text) ? Std.parseInt(clause.matched(1)) : null;
+			final unit: String = ceiling == null ? '' : clause.matched(2);
+			if (unit == 'members' && i == 0)
+				members = ceiling
+			else if (unit == 'lines' && lines == null)
+				lines = ceiling
+			else {
+				problems.push(malformedGrant(head));
+				return null;
+			}
+			if (ceiling != null && ceiling <= (unit == 'members' ? maxMembers : maxLines)) grantsNothing = true;
+		}
+		if (grantsNothing) {
+			problems.push(
+				'$RULE_ID grant "$head" is not above the rule\'s thresholds ($maxMembers members / $maxLines lines), so it grants'
+				+ ' nothing — refused, the type keeps its finding'
+			);
+			return null;
+		}
+		final ceilings: Array<String> = [];
+		if (members != null) ceilings.push('$members members');
+		if (lines != null) ceilings.push('$lines lines');
+		return {
+			name: name,
+			members: members,
+			lines: lines,
+			head: '$name <= ${ceilings.join(' / ')}'
+		};
+	}
+
+	/** The refusal of a grant whose head `readGrant` cannot read at all. */
+	private static function malformedGrant(head: String): String {
+		return '$RULE_ID grant "$head" is malformed — expected "<Name>$GRANT_SHAPE" ($EITHER_CLAUSE); refused, the type keeps its finding';
+	}
+
+	/** The file-less finding for one refused `grants` entry — the shape `thread-safety` reports its unreadable options in. */
+	private static function configProblem(problem: String): Violation {
+		return {
+			file: '',
+			span: null,
+			rule: RULE_ID,
+			severity: Severity.Warning,
+			message: problem
+		};
 	}
 
 	/**
@@ -424,7 +560,24 @@ private typedef OversizedCfg = {
 	final conditionalKind: Null<String>;
 	final maxMembers: Int;
 	final maxLines: Int;
-	final granted: Array<String>;
+	final granted: Array<OversizedGrant>;
 	final noSeam: (String) -> Bool;
 	final dictated: (String, Array<String>) -> Null<Int>;
+};
+
+/**
+ * One `grants` entry as `OversizedType.readGrant` accepted it: the type it names, its ceiling per dimension (null where
+ * the grant gives none, so the rule's threshold holds there) and its head as a finding quotes it.
+ */
+private typedef OversizedGrant = {
+	final name: String;
+	final members: Null<Int>;
+	final lines: Null<Int>;
+	final head: String;
+};
+
+/** What `OversizedType.readGrants` made of one config's `grants`: the accepted grants and one line per refused entry. */
+private typedef GrantList = {
+	final granted: Array<OversizedGrant>;
+	final problems: Array<String>;
 };

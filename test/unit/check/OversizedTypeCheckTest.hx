@@ -1,17 +1,20 @@
 package unit.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.OversizedType;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -22,6 +25,9 @@ using StringTools;
  * thresholds. Report-only — `fix` yields no edits.
  */
 class OversizedTypeCheckTest extends Test {
+
+	/** The option that lowers the line threshold to 50, for the cases that need a line ceiling in reach of a small fixture. */
+	private static inline final LINES_50: String = '"maxLines": 50, ';
 
 	public function testSmallTypeNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tvar x:Int;\n\tfunction f():Int { return x; }\n}').length);
@@ -197,30 +203,180 @@ class OversizedTypeCheckTest extends Test {
 	}
 
 	/**
-	 * The per-type grant, end to end through a discovered `apqlint.json`: a `grants` entry
-	 * naming the type AND a reason clears its finding. The reason is not decoration — the arm
-	 * below shows a bare name does nothing.
+	 * The per-type grant, end to end through a discovered `apqlint.json`: an entry naming the
+	 * type, a CEILING above the rule's threshold and a reason clears the finding while the type
+	 * stays within that ceiling.
 	 */
-	public function testGrantWithAReasonClearsTheFinding(): Void {
+	public function testGrantWithinItsCeilingClearsTheFinding(): Void {
 		Assert.equals(
-			0, withConfig('{"rules": {"oversized-type": {"grants": ["C: one algorithm, no seam to cut"]}}}', classWithMembers(51)).length
+			0,
+			withConfig(
+				'{"rules": {"oversized-type": {"grants": ["C <= 60 members: one algorithm, no seam to cut"]}}}', classWithMembers(51)
+			).length
 		);
 	}
 
+	/** A ceiling is inclusive, like the thresholds: a type AT its grant's ceiling is still granted. */
+	public function testGrantAtItsCeilingStaysSilent(): Void {
+		Assert.equals(0, granted(['C <= 55 members: one algorithm'], classWithMembers(55)).length);
+	}
+
 	/**
-	 * A grant with no reason after the `:` — or none at all — is DROPPED, so the type keeps its
-	 * finding. Without this the grant list would be `// noqa` one file further away, and the
-	 * whole reason to prefer a config key over a header-line suppression is that a project
-	 * decision has to be arguable by the next reader.
+	 * What the ceiling is for: a granted type that GROWS past it is reported again, measured
+	 * against the ceiling rather than the rule's threshold, and the message names the grant it
+	 * outgrew. Before the ceiling a grant silenced the type at any size.
 	 */
-	public function testGrantWithoutAReasonDoesNotClearIt(): Void {
-		Assert.equals(1, withConfig('{"rules": {"oversized-type": {"grants": ["C"]}}}', classWithMembers(51)).length);
-		Assert.equals(1, withConfig('{"rules": {"oversized-type": {"grants": ["C:   "]}}}', classWithMembers(51)).length);
+	@:pin('control')
+	@:killer('M-OVERSIZED-GRANT-UNBOUNDED', 'M-OVERSIZED-BEYOND-UNNAMED')
+	public function testGrantPastItsCeilingReportsTheTypeAgain(): Void {
+		final vs: Array<Violation> = granted(['C <= 55 members: one algorithm'], classWithMembers(56));
+		Assert.equals(1, vs.length);
+		Assert.equals('C.hx', vs[0].file);
+		Assert.isTrue(vs[0].message.contains("type 'C' has 56 members (max 55) — beyond its grant 'C <= 55 members'"), vs[0].message);
+	}
+
+	/**
+	 * Each dimension has its own ceiling: a type within its member ceiling and past its line
+	 * ceiling reports the lines alone. 51 members, 53 lines + 20 blank ones.
+	 */
+	@:pin('control')
+	@:killer('M-OVERSIZED-GRANT-LINES-UNBOUNDED')
+	public function testLineCeilingIsJudgedOnItsOwn(): Void {
+		final entry: String = 'C <= 60 members / 70 lines: one algorithm';
+		Assert.equals(0, granted([entry], classWithMembers(51), LINES_50).length, 'within both ceilings');
+		final vs: Array<Violation> = granted(
+			[entry], classWithMembers(51).replace('\n}', '${[for (_ in 0...20) '\n'].join('')}\n}'), LINES_50
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("has 73 lines (max 70) — beyond its grant 'C <= 60 members / 70 lines'"), vs[0].message);
+	}
+
+	/**
+	 * A dimension the grant gives no ceiling keeps the rule's threshold: a members-only grant does
+	 * not forgive a type that also crosses the line limit, and the finding says which grant did
+	 * not cover it.
+	 */
+	@:pin('control')
+	@:killer('M-OVERSIZED-UNGRANTED-DIMENSION')
+	public function testAnUngrantedDimensionKeepsTheThreshold(): Void {
+		final vs: Array<Violation> = granted(['C <= 60 members: one algorithm'], classWithMembers(51), LINES_50);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("has 53 lines (max 50) — beyond its grant 'C <= 60 members'"), vs[0].message);
+		Assert.isFalse(vs[0].message.contains('members (max'), vs[0].message);
+	}
+
+	/**
+	 * The grant syntax before ceilings (`Name: reason`) is REFUSED, not read as an unbounded
+	 * grant: the type keeps its finding and a file-less finding says how to migrate the entry.
+	 */
+	@:pin('control')
+	@:killer('M-OVERSIZED-LEGACY-GRANT', 'M-OVERSIZED-PROBLEM-SILENT')
+	public function testACeilingLessGrantIsRefusedWithAMigrationMessage(): Void {
+		final vs: Array<Violation> = granted(['C: one algorithm, no seam to cut'], classWithMembers(51));
+		Assert.equals(2, vs.length);
+		final type: Null<Violation> = vs.find(v -> v.file == 'C.hx');
+		Assert.isTrue(type != null && type.message.contains("type 'C' has 51 members (max 50) —") && !type.message.contains('grant'));
+		final problem: Null<Violation> = vs.find(v -> v.file == '');
+		Assert.notNull(problem);
+		if (problem == null) return;
+		Assert.equals('oversized-type', problem.rule);
+		Assert.equals(Severity.Warning, problem.severity);
+		Assert.isNull(problem.span);
+		Assert.isTrue(problem.message.contains('grant "C" has no ceiling'), problem.message);
+		Assert.isTrue(problem.message.contains('"C <= <N> members / <M> lines: <reason>"'), problem.message);
+	}
+
+	/** Every other shape of the head is refused the same way: the type keeps its finding, the entry is named. */
+	@:pin('control')
+	@:killer('M-OVERSIZED-GRANT-NAME', 'M-OVERSIZED-CLAUSE-ORDER', 'M-OVERSIZED-CLAUSE-REPEATED', 'M-OVERSIZED-CEILING-DIGITS')
+	public function testAMalformedGrantIsRefused(): Void {
+		for (entry in [
+			'C <= many members: r',
+			'C <= 60: r',
+			'C <= 60 lines / 70 members: r',
+			'C <= 60 members / 70 members: r',
+			'C => 60 members: r',
+			'C <= 60 members, 70 lines: r',
+			'C <= 60 members / 70 lines / 80 lines: r',
+			'C<T> <= 60 members: r',
+			'<= 60 members: r',
+			'C <= 9999999999 members: r'
+		]) {
+			final vs: Array<Violation> = granted([entry], classWithMembers(51));
+			Assert.equals(2, vs.length, entry);
+			Assert.isTrue(vs.exists(v -> v.file == '' && v.message.contains('is malformed')), entry);
+		}
+	}
+
+	/** A reason is still required, after a ceiling as before it. */
+	@:pin('control')
+	@:killer('M-OVERSIZED-GRANT-REASONLESS')
+	public function testAGrantWithoutAReasonIsRefused(): Void {
+		for (entry in ['C <= 60 members', 'C <= 60 members:', 'C <= 60 members:   ', 'C']) {
+			final vs: Array<Violation> = granted([entry], classWithMembers(51));
+			Assert.equals(2, vs.length, entry);
+			Assert.isTrue(vs.exists(v -> v.file == '' && v.message.contains('gives no reason')), entry);
+		}
+	}
+
+	/** A ceiling at or below the rule's own threshold grants nothing, so it is refused rather than read as a tighter limit. */
+	@:pin('control')
+	@:killer('M-OVERSIZED-CEILING-AT-THRESHOLD')
+	public function testACeilingNotAboveTheThresholdIsRefused(): Void {
+		for (entry in ['C <= 50 members: r', 'C <= 60 members / 2000 lines: r']) {
+			final vs: Array<Violation> = granted([entry], classWithMembers(51));
+			Assert.equals(2, vs.length, entry);
+			Assert.isTrue(vs.exists(v -> v.file == '' && v.message.contains('is not above')), entry);
+		}
+	}
+
+	/** Two grants for one type are two ceilings for it: both are refused, not the first or the larger one taken. */
+	@:pin('control')
+	@:killer('M-OVERSIZED-DUPLICATE-GRANT')
+	public function testTwoGrantsForOneTypeAreBothRefused(): Void {
+		final vs: Array<Violation> = granted(['C <= 60 members: a', 'C <= 70 members: b'], classWithMembers(51));
+		Assert.equals(2, vs.length);
+		Assert.isTrue(vs.exists(v -> v.file == '' && v.message.contains('two grants name "C"')));
+	}
+
+	/** A refused entry costs only itself: a well-formed grant beside it still applies. */
+	public function testARefusedGrantLeavesItsNeighboursStanding(): Void {
+		final vs: Array<Violation> = granted(['C <= 60 members: one algorithm', 'D: legacy'], classWithMembers(51));
+		Assert.equals(1, vs.length);
+		Assert.equals('', vs[0].file);
+	}
+
+	/** A refused entry is reported ONCE per run, however many files resolve the config holding it. */
+	@:pin('control')
+	@:killer('M-OVERSIZED-PROBLEM-ONCE')
+	public function testARefusedGrantIsReportedOncePerRun(): Void {
+		final config: LintConfig = LintConfig.parse(grantConfig(['D: legacy'], ''));
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new OversizedType(), [{ file: 'A.hx', source: 'class A {}' }, { file: 'B.hx', source: 'class B {}' }], null, _ -> config
+		);
+		Assert.equals(1, vs.length);
 	}
 
 	/** A grant naming a DIFFERENT type leaves this one alone — the list is keyed by name, not a global off switch. */
 	public function testGrantIsKeyedByTypeName(): Void {
-		Assert.equals(1, withConfig('{"rules": {"oversized-type": {"grants": ["Other: not this type"]}}}', classWithMembers(51)).length);
+		Assert.equals(1, granted(['Other <= 60 members: not this type'], classWithMembers(51)).length);
+	}
+
+	/**
+	 * The past-ceiling message keys like any other: the current size leaves the key, the
+	 * CEILING stays — raising a ceiling is a configuration change the blast-radius gate must show.
+	 */
+	public function testMessageIdentityOfAPastCeilingFindingKeepsTheCeiling(): Void {
+		final check: OversizedType = new OversizedType();
+		final config: LintConfig = LintConfig.parse(grantConfig(['C <= 55 members: one algorithm'], ''));
+		final message: String = CheckFixture.violationsIn(
+			check,
+			[{ file: 'C.hx', source: classWithMembers(56) }],
+			null, _ -> config
+		)[0].message;
+		final identity: String = check.messageIdentity(message);
+		Assert.isTrue(identity.contains("# members (max 55) — beyond its grant 'C <= 55 members'"), identity);
+		Assert.equals(identity, check.messageIdentity(identity));
 	}
 
 	/**
@@ -342,6 +498,21 @@ class OversizedTypeCheckTest extends Test {
 		FileSystem.deleteFile('$dir/apqlint.json');
 		FileSystem.deleteDirectory(dir);
 		return out;
+	}
+
+	/**
+	 * Run the check on `src` (as `C.hx`) under a config whose `oversized-type` grants are
+	 * `entries`, `options` spliced in ahead of them — the parsed document, without the disk walk
+	 * `withConfig` pins.
+	 */
+	private function granted(entries: Array<String>, src: String, options: String = ''): Array<Violation> {
+		final config: LintConfig = LintConfig.parse(grantConfig(entries, options));
+		return CheckFixture.violationsIn(new OversizedType(), [{ file: 'C.hx', source: src }], null, _ -> config);
+	}
+
+	/** The `apqlint.json` text granting `entries`, with `options` (each followed by a comma) ahead of the list. */
+	private static function grantConfig(entries: Array<String>, options: String): String {
+		return '{"rules": {"oversized-type": {$options"grants": ${Json.stringify(entries)}}}}';
 	}
 
 	/** An interface named `I` declaring `n` methods `m0`… — the contract a fixture's members are dictated by. */
