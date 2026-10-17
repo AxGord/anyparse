@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.check.CheckScan;
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
+import anyparse.query.CallGraph.ParsedEntry;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
@@ -18,7 +19,7 @@ using Lambda;
 final class CallGraphNodes {
 
 	/** Register the function-like declarations of `entry` as nodes of `g`. */
-	public static function collect(g: CallGraph, entry: Entry): Void {
+	public static function collect(g: CallGraph, entry: ParsedEntry): Void {
 		// noqa: complexity
 		final shape: RefShape = g._shape;
 		final returnTypes: Map<Int, String> = g._provider == null ? [] : g._provider.returnTypes(entry.source);
@@ -198,7 +199,8 @@ final class CallGraphNodes {
 	 * it is the node's first declaration.
 	 */
 	private static function register(
-		g: CallGraph, id: String, entry: Entry, typeName: Null<String>, name: Null<String>, span: Span, isDynamic: Bool, isBodyless: Bool
+		g: CallGraph, id: String, entry: ParsedEntry, typeName: Null<String>, name: Null<String>, span: Span, isDynamic: Bool,
+		isBodyless: Bool
 	): Bool {
 		final held: Null<FnNode> = g.nodes[id];
 		if (held != null && !held.isExternal) {
@@ -245,12 +247,4 @@ final class CallGraphNodes {
 		return first;
 	}
 
-}
-
-/** The parts of a parsed file the nodes are collected from. */
-private typedef Entry = {
-	var file: String;
-	var source: String;
-	var tree: QueryNode;
-	var fnBySpanFrom: Map<Int, String>;
 }
