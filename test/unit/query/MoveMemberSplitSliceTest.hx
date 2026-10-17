@@ -256,10 +256,10 @@ class MoveMemberSplitSliceTest extends Test {
 
 	private static function move(
 		srcFile: String, srcType: String, members: String, destType: String, scopeFiles: Array<{ file: String, source: String }>,
-		?via: String, ?keepBare: Bool
+		?via: String, ?keepBare: Bool, ?scaffold: Bool
 	): MoveResult {
 		return MoveMember.move(
-			srcFile, srcType, members.split(','), destType, via, false, false, scopeFiles, new HaxeQueryPlugin(),
+			srcFile, srcType, members.split(','), destType, via, false, scaffold == true, scopeFiles, new HaxeQueryPlugin(),
 			new HaxeQueryPlugin().typeRefShape(), keepBare == true
 		);
 	}
@@ -349,6 +349,29 @@ class MoveMemberSplitSliceTest extends Test {
 			}
 		]));
 		Assert.isTrue(overridden.contains('"isPure"') && overridden.contains('overrid'), overridden);
+	}
+
+	/**
+	 * `--scaffold` wires the via field where the constructor has assigned every field the new destination is built from —
+	 * not at its end. Under `@:nullSafety(Strict)` a constructor may bind a method (`_hand = { run: run }`) only once every
+	 * field is initialized, so a via assignment appended after that statement no longer compiled ("Cannot use method run
+	 * until all instance fields are initialized", the C2 `FactsEscapes` -> `FactsInstances` split). Compile-proved on
+	 * 4.3.7: the scaffolded `Big` prints 6 as the original did.
+	 */
+	@:pin('control')
+	@:killer('M-SCAFFOLD-VIA-AT-END')
+	public function testScaffoldWiresTheViaFieldBeforeTheConstructorBindsAMethod(): Void {
+		final big: String = okSource(move('p/Big.hx', 'Big', 'twice', 'Half', [
+			{
+				file: 'p/Big.hx',
+				source: 'package p;\n\n@:nullSafety(Strict)\nclass Big {\n\tprivate final _k:Int;\n\tprivate final _hand:{ run:() -> Int };\n\n'
+				+ '\tpublic function new(k:Int) {\n\t\t_k = k;\n\t\t_hand = { run: run };\n\t}\n\n'
+				+ '\tpublic function run():Int return twice();\n\n\tfunction twice():Int return _k * 2;\n}'
+			},
+			{ file: 'p/Half.hx', source: 'package p;\n\nclass Half {}' }
+		], null, false, true), 'p/Big.hx');
+		final wired: Int = big.indexOf('_half = new Half(_k);');
+		Assert.isTrue(wired > big.indexOf('_k = k;') && wired < big.indexOf('_hand = { run: run };'), big);
 	}
 
 }

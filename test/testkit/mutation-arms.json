@@ -22697,6 +22697,14 @@
 			"find": "if (decls.length != 1 || !interfacesResolve(decls[0].supertypes)) return false;",
 			"replace": "if (decls.length == 1 && !interfacesResolve(decls[0].supertypes)) return false;",
 			"note": "an `implements` target outside the scope is read as declaring nothing, so a member it may declare moves"
+		},
+		{
+			"name": "M-SCAFFOLD-VIA-AT-END",
+			"type": "anyparse.query.MoveScaffold",
+			"method": "viaWiringOffset",
+			"find": "if (span != null && (writes(stmt) || superCall(stmt))) at = span.to;",
+			"replace": "if (span != null) at = span.to;",
+			"note": "the via assignment lands after the last constructor statement again, after a method was bound under Strict null safety"
 		}
 	]
 }

@@ -4104,6 +4104,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-KEEP-BARE-CLASH-BLIND,M-KEEP-BARE-NOT-MAIN',
 			'unit.query.MoveMemberSplitSliceTest#testReceiverQualifiedCallersRouteThroughTheHoldingField :: control :: '
 				+ 'M-RECEIVER-ROUTING-OFF',
+			'unit.query.MoveMemberSplitSliceTest#testScaffoldWiresTheViaFieldBeforeTheConstructorBindsAMethod :: control :: '
+				+ 'M-SCAFFOLD-VIA-AT-END',
 			'unit.query.MoveMemberSplitSliceTest#testTwoMembersNeedingPrivateAccessShareOneTypeGrant :: control :: '
 				+ 'M-ACCESS-GRANT-PER-MEMBER',
 			'unit.query.MoveSymbolSliceTest#testACommentOnlyFullyQualifiedMentionDoesNotRefuseTheMove :: control :: '
@@ -7173,7 +7175,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-MOVE-OVERRIDE-MEMBER',
 			'M-MOVE-IMPLEMENTATION',
 			'M-MOVE-OVERRIDDEN-MEMBER',
-			'M-MOVE-UNRESOLVED-INTERFACE'
+			'M-MOVE-UNRESOLVED-INTERFACE',
+			'M-SCAFFOLD-VIA-AT-END'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

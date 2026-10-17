@@ -3402,3 +3402,11 @@ decided the question; it may not become a record of runs.
   ancestor's member could only be redeclared with `override`, which the modifier check sees; the residual is an
   `abstract class` outside the scope whose `abstract` method the member implements without the keyword (the same
   residual `CrossRenameMember` carries) — branch `feat/infra-N12`
+- `--scaffold` appended `<via> = new Dest(...)` at the END of the source constructor. Under `@:nullSafety(Strict)` a
+  constructor may use a method only once every field is initialized, so the C2 `FactsEscapes` -> `FactsInstances`
+  replay no longer compiled ("Cannot use method escape until all instance fields are initialized"), and without null
+  safety a method the constructor calls met a null via field. `MoveScaffold.viaWiringOffset` places it right after the
+  last top-level statement writing one of the fields the destination is built from (and after a `super(...)` call):
+  a constructor that compiles under Strict has written every field before its first method use, so that point
+  precedes it. The replay now typechecks the whole engine (`haxe bin/apq-js.hxml --no-output`) — branch
+  `feat/infra-N12`
