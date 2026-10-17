@@ -205,6 +205,35 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A comment anywhere in a FLAT chain's span is refused by the fix, which regenerates the whole span from the conditions
+	 * alone: between two guards, between a guard's condition and its `return`, or in a condition's operator glue (which the
+	 * negation drops). The finding stays reported, and the decline says why.
+	 */
+	@:pin('control')
+	@:killer('M-RETURN-CHAIN-COMMENT-ADMITTED')
+	public function testCommentInAFlatChainIsNotDropped(): Void {
+		for (body in [
+			'{ if (a) return true;\n// why\nif (b) return true; return false; }',
+			'{ if (a) return false; /* keep */ if (b) return false; return true; }',
+			'{ if (a) // a first\nreturn true; if (b) return true; return false; }',
+			'{ if (a /* x */ && b) return false; if (c) return false; return true; }'
+		]) {
+			Assert.equals('', reduce(body), body);
+			final src: String =
+				'class C { static function f(a: Bool, b: Bool, c: Bool, x: Int, s: String, t: String, y: Float): Dynamic ${body} }';
+			final found: Array<Violation> = violations(body);
+			Assert.equals(1, found.length, 'still reported: $body');
+			CheckFixture.fixOf(new SimplifyBooleanReturnChain(), src, found);
+			Assert.isTrue((found[0].declineReason ?? '').indexOf('comment') >= 0, 'the decline names the comment: $body');
+		}
+	}
+
+	/** The comment gate reads the chain's own span only: a comment before the first guard or after the closing return is outside it. */
+	public function testCommentOutsideTheChainStillReduces(): Void {
+		Assert.equals('return a || b;', reduce('{ // lead\nif (a) return true; if (b) return true; return false; // tail\n}'));
+	}
+
 	private function violations(body: String): Array<Violation> {
 		final src: String =
 			'class C { static function f(a: Bool, b: Bool, c: Bool, x: Int, s: String, t: String, y: Float): Dynamic ${body} }';

@@ -122,6 +122,9 @@ final class LintFixDriver {
 		// What each rule's fix DID this run — the measurement that replaces the guess
 		// `fixed N issue(s)` used to leave the reader to make.
 		final ledger: Map<String, RuleFixOutcome> = [];
+		// The edits each file took in the CURRENT safe round, so a round the net rolls back can take its own edits off
+		// the count — and only its own: the follow-up round clears it, since its revert restores the verified bytes.
+		final safeEditsOf: Map<String, Int> = [];
 
 		// The safe fixed-point loop, as a closure, because it runs TWICE: the risky and
 		// oracle-assisted phases below write AFTER it has finished, so without a second round
@@ -148,7 +151,7 @@ final class LintFixDriver {
 						applyLintPass(
 							active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement,
 							optsByFile, passes, noted, notedRewrites, changedFiles, ledger, coupled, range, created, baselineBeforeCreate,
-							originalOf
+							originalOf, safeEditsOf
 						)
 				);
 				fixedCount += pass.fixedDelta;
@@ -159,7 +162,8 @@ final class LintFixDriver {
 
 		// The safe pass is applied under a NET when an oracle is configured: typecheck the
 		// tree BEFORE writing, write, then typecheck again. A green-then-red transition is
-		// the safe fixes' own doing, and the whole pass is rolled back.
+		// the safe fixes' own doing: the files the compiler blames are rolled back (the whole
+		// pass when it cannot attribute), and the run goes on over the green tree that leaves.
 		//
 		// Without this the run reported `risky-fix skipped (oracle baseline does not
 		// typecheck)` — a message about the wrong thing entirely. `FixVerifier`'s baseline
@@ -177,10 +181,7 @@ final class LintFixDriver {
 		// too, and ahead of the summary line whose tails point back at them.
 		final named: Array<String> = [];
 		nameExclusions(named, safePass.excluded);
-		if (safePass.reverted) {
-			CliIo.stderr(safePass.notice);
-			return EXIT_RUNTIME;
-		}
+		fixedCount -= settleRevert(safePass, safeEditsOf, changedFiles, files, originalOf, true);
 
 		// The bytes the SAFE loop settled on, so the follow-up round below can name exactly the
 		// files the two verified phases went on to rewrite. Their own applied/reverted lists do
@@ -226,16 +227,14 @@ final class LintFixDriver {
 		final followUp: SafePassOutcome = PhaseTimings.measure(
 			'fix follow-up', () -> followUpRound(files, settledOf, list -> {
 				final before: Int = fixedCount;
+				safeEditsOf.clear();
 				active = list;
 				converge(maxPasses);
 				return fixedCount - before;
 			}, coupled, changedFiles, oracles, created)
 		);
 		nameExclusions(named, followUp.excluded);
-		if (followUp.reverted) {
-			CliIo.stderr(followUp.notice);
-			return EXIT_RUNTIME;
-		}
+		fixedCount -= settleRevert(followUp, safeEditsOf, changedFiles, files, originalOf, false);
 
 		final baselineTail: String = safePass.tail;
 		final skipTail: String = LintFixLedger.skippedTail(noted, changedFiles);
@@ -270,7 +269,8 @@ final class LintFixDriver {
 			}
 			CliIo.stderr('apq lint --fix: risky-fix DECLINED ${d.file} (${d.rule}): ${d.reason} — ${d.edits} edit(s) left report-only\n');
 		}
-		return EXIT_OK;
+		// A revert is a fixer defect even when the run recovered from it, so the run still fails — after doing everything else.
+		return safePass.reverted || followUp.reverted ? EXIT_RUNTIME : EXIT_OK;
 	}
 
 	/**
@@ -287,7 +287,7 @@ final class LintFixDriver {
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, notedRewrites: Array<String>,
 		changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>, range: Null<LintRange>,
-		?created: Array<String>, ?baselineBeforeCreate: () -> Void, ?originals: Map<String, String>
+		?created: Array<String>, ?baselineBeforeCreate: () -> Void, ?originals: Map<String, String>, ?editsOf: Map<String, Int>
 	): LintPassResult {
 		// Every memo whose answer depends on an ambient source's TEXT is dropped at the head of each
 		// pass: a previous pass may have created or rewritten one, and a memo taken before that
@@ -348,7 +348,7 @@ final class LintFixDriver {
 		}
 		fixedDelta += applyCrossFileRenames(
 			crossRenames, files, optsByFile, cached, touchedThisPass, changedFiles, nextActive, coupled, created ?? [],
-			baselineBeforeCreate
+			baselineBeforeCreate, editsOf
 		);
 		for (entry in active) if (!touchedThisPass.contains(entry.file)) {
 			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
@@ -393,7 +393,11 @@ final class LintFixDriver {
 			// AFTER the gate, never during collection: a check whose edits the writer refuses achieved
 			// nothing, and counting them as `edits` there claimed the rule had fixed those findings.
 			ledgerFileLintEdits(ledger, groups, passes == 1);
-			if (settled != null) fixedDelta += commitLintPassFile(entry, groups, settled, notedRewrites, changedFiles, nextActive);
+			if (settled != null) {
+				final landed: Int = commitLintPassFile(entry, groups, settled, notedRewrites, changedFiles, nextActive);
+				countEdits(editsOf, entry.file, landed);
+				fixedDelta += landed;
+			}
 		}
 		return { nextActive: nextActive, fixedDelta: fixedDelta };
 	}
@@ -411,7 +415,7 @@ final class LintFixDriver {
 		renames: Array<Array<CrossFileEdits>>, files: Array<{ file: String, source: String }>, optsByFile: Map<String, Null<String>>,
 		cached: GrammarPlugin, touchedThisPass: Array<String>, changedFiles: Array<String>,
 		nextActive: Array<{ file: String, source: String }>, coupled: Array<Array<String>>, created: Array<String>,
-		beforeCreate: Null<() -> Void>
+		beforeCreate: Null<() -> Void>, editsOf: Null<Map<String, Int>>
 	): Int {
 		var total: Int = 0;
 		for (component in crossFileComponents(renames)) {
@@ -450,6 +454,8 @@ final class LintFixDriver {
 			// reverting the removals without the created file leaves a tree that does not compile.
 			final unit: Array<String> = [for (m in createdNow) m.file].concat([for (s in staged) s.file]);
 			if (unit.length > 1) coupled.push(unit);
+			for (m in createdNow) countEdits(editsOf, m.file, 1);
+			for (slice in slices) countEdits(editsOf, slice.file, slice.edits.length);
 			total += createdNow.length;
 			for (slice in slices) total += slice.edits.length;
 		}
@@ -960,8 +966,9 @@ final class LintFixDriver {
 	 *
 	 * A failing pass no longer costs the whole wave: `LintFixSafePass.narrow` reverts the
 	 * files the compiler blames and keeps the rest, falling back to the whole-wave
-	 * rollback only when nothing the run wrote can be implicated. Either way the caller
-	 * aborts, with a notice that NAMES what went back.
+	 * rollback only when nothing the run wrote can be implicated. Either way the tree ends
+	 * on a build the oracle confirmed green, and the notice NAMES what went back; the caller
+	 * goes on to its later phases (`settleRevert`).
 	 *
 	 * Split out of `applyLintFixes` to keep that function under the complexity budget.
 	 */
@@ -971,6 +978,7 @@ final class LintFixDriver {
 	): SafePassOutcome {
 		if (pre == null || oracles.length == 0) return {
 			reverted: false,
+			revertedFiles: [],
 			tail: '',
 			notice: '',
 			excluded: []
@@ -991,12 +999,14 @@ final class LintFixDriver {
 		final errors: String = switch decision {
 			case Proceed: return {
 				reverted: false,
+				revertedFiles: [],
 				tail: '',
 				notice: '',
 				excluded: excluded
 			};
 			case NoNet(tail): return {
 				reverted: false,
+				revertedFiles: [],
 				tail: tail,
 				notice: '',
 				excluded: excluded
@@ -1009,12 +1019,14 @@ final class LintFixDriver {
 		// undoing is what made the tree red.
 		function restore(list: Array<String>): Void {
 			final undo: Array<{ path: String, content: String }> = [];
-			// A file this run CREATED has no previous bytes to restore, so its revert is a DELETE.
-			// Taken after the writes, so a failed write set leaves the tree as it was rather than
-			// half restored and half removed.
+			// A file with no bytes in `originalOf` did not exist when they were taken: this round CREATED it, so its
+			// revert is a DELETE — and it leaves `files`, since the phases after this one judge what is on disk. Asked of
+			// the snapshot, not of `created`: a file an EARLIER round created is in the follow-up round's snapshot and is
+			// restored to those bytes, where deleting it would break every file that imports it. Taken after the writes,
+			// so a failed write set leaves the tree as it was rather than half restored and half removed.
 			final remove: Array<String> = [];
 			for (entry in files) if (list.contains(entry.file)) {
-				if (created.contains(entry.file)) {
+				if (!originalOf.exists(entry.file)) {
 					remove.push(entry.file);
 					continue;
 				}
@@ -1026,21 +1038,31 @@ final class LintFixDriver {
 				});
 			}
 			CliIo.writeFiles(undo);
-			for (path in remove) CliIo.deletePath(path);
+			for (path in remove) {
+				CliIo.deletePath(path);
+				created.remove(path);
+				final gone: Null<{ file: String, source: String }> = files.find(entry -> entry.file == path);
+				if (gone != null) files.remove(gone);
+			}
 		}
 		final narrowing: SafePassNarrowing = LintFixSafePass.narrow(
 			errors, changedFiles, coupled, restore, CompilerOracle.typecheckAll.bind(judging), LintFixSafePass.NARROW_ROUNDS
 		);
 		// `narrow` reverted whatever it could attribute; an un-narrowable wave still owes the
 		// caller's own whole-wave rollback, which is the behaviour this net had before.
-		switch narrowing {
-			case Narrowed(_, _):
+		final reverted: Array<String> = switch narrowing {
+			case Narrowed(files, _): files;
 			case WholeWave(_):
-				restore(changedFiles);
-		}
+				final all: Array<String> = changedFiles.copy();
+				restore(all);
+				all;
+		};
+		// Either arm ends on a tree the oracle confirmed green: `Narrowed` on its last probe, `WholeWave` on the bytes the
+		// pre-write verdict judged (`classify` reverts only after a green one). So the caller goes on to its later phases.
 		return {
 			reverted: true,
-			tail: '',
+			revertedFiles: reverted,
+			tail: ', safe-pass REVERTED ${reverted.length} file(s) the compiler rejected (their edits are not counted)',
 			notice: LintFixSafePass.revertNotice(narrowing, changedFiles.length, errors),
 			excluded: excluded
 		};
@@ -1106,6 +1128,7 @@ final class LintFixDriver {
 	): SafePassOutcome {
 		final quiet: SafePassOutcome = {
 			reverted: false,
+			revertedFiles: [],
 			tail: '',
 			notice: '',
 			excluded: []
@@ -1122,6 +1145,7 @@ final class LintFixDriver {
 		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracles, created);
 		return {
 			reverted: pass.reverted,
+			revertedFiles: pass.revertedFiles,
 			tail: '${pass.tail}, follow-up: $fixed edit(s) in ${rewritten.length} file(s) exposed by the verified phases',
 			notice: pass.notice,
 			excluded: pass.excluded
@@ -1161,6 +1185,40 @@ final class LintFixDriver {
 		// "behave as if the project configured no compilerOracle" — the flag and the missing key
 		// then cannot drift apart by construction.
 		return applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, range, verbose, noOracle ? [] : oracles, resolution);
+	}
+
+	/** Add `edits` to `file`'s tally in `editsOf` — the per-file count a reverted file's edits are taken back by. */
+	private static inline function countEdits(editsOf: Null<Map<String, Int>>, file: String, edits: Int): Void {
+		if (editsOf != null && edits > 0) editsOf[file] = (editsOf[file] ?? 0) + edits;
+	}
+
+	/**
+	 * Settle the run's books after a safe round the net rolled back, and say the run goes on: the round's edits in each
+	 * reverted file (`editsOf`, this round's own tally) come off the count, and `changedFiles` keeps only the files whose
+	 * bytes still differ from the run's start (a file the revert deleted has left `files` and counts as unchanged). Answers
+	 * the number of edits to take off; 0 when the round reverted nothing.
+	 *
+	 * The run does not stop here. It used to — and the tree it left was the one the net had just confirmed green, so a
+	 * single bad safe edit silently cancelled every risky and oracle-assisted fix of the run.
+	 */
+	private static function settleRevert(
+		outcome: SafePassOutcome, editsOf: Map<String, Int>, changedFiles: Array<String>, files: Array<{ file: String, source: String }>,
+		originalOf: Map<String, String>, goesOn: Bool
+	): Int {
+		if (!outcome.reverted) return 0;
+		CliIo.stderr(outcome.notice);
+		if (goesOn)
+			CliIo.stderr(
+				'apq lint --fix: the tree is back to a build the oracle confirmed green — the risky and oracle-assisted phases go on\n'
+			);
+		var takenBack: Int = 0;
+		for (file in outcome.revertedFiles) takenBack += editsOf[file] ?? 0;
+		final stillChanged: Array<String> = [
+			for (file in changedFiles) if (files.exists(entry -> entry.file == file && entry.source != originalOf[file])) file
+		];
+		changedFiles.resize(0);
+		for (file in stillChanged) changedFiles.push(file);
+		return takenBack;
 	}
 
 }

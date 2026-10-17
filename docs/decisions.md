@@ -3574,3 +3574,23 @@ decided the question; it may not become a record of runs.
   object literal, a function value, a comparison or boolean operator, a reference to an `inline` constant whose value
   is no `null` literal (such a constant is no default candidate either). A variable or a call is not proven — no
   types read, since a non-`Null<T>` declaration proves nothing without null safety — branch `feat/infra-N15`
+- `lint --fix` returned `EXIT_RUNTIME` right after its safe-pass net rolled files back, BEFORE the risky and
+  oracle-assisted phases, although every revert arm ends on a tree the oracle confirmed green (`Narrowed` on its last
+  probe; the whole-wave revert on the very bytes the pre-write verdict judged — `classify` reverts only after a green
+  one). One bad safe edit thus silently cancelled every verified fix of the run (anyparse: 13 `redundant-import`, 7
+  `explicit-local-type`). The run now goes on: the notice is printed, then `the tree is back to a build the oracle
+  confirmed green — the risky and oracle-assisted phases go on`; the reverted round's edits in the reverted files come
+  off the summary count (`safeEditsOf`, per file, the follow-up round keeping its own) and `changedFiles` keeps only
+  files still differing from the run's start; the summary carries `safe-pass REVERTED N file(s) …`; the exit code is
+  still `EXIT_RUNTIME`, at the END — a revert is a fixer defect even when the run recovers. Fail-closed stays with the
+  phases themselves: each takes its own baseline and skips on a red one. The per-rule ledger still counts the reverted
+  edits as produced (it says what a rule PRODUCED; the notice names what went back). With it the follow-up revert now
+  deletes only a file the reverted round's own snapshot lacks — a file an earlier round created is restored, where the
+  old `created.contains` test deleted it under every importer — branch `feat/infra-N23`
+- `simplify-boolean-return-chain`'s fix replaces the whole chain span (first guard .. closing return) with a `return`
+  rebuilt from the conditions alone, so on the FLAT path (N15 already refuses a regrouping chain) a comment between two
+  guards, between a guard's condition and its return, or in a condition's operator glue was dropped. The fix now
+  declines a chain whose span holds a comment marker (`SourceComments.hasCommentMarker`, string-blind, so a `//`
+  inside a string literal also declines — the conservative direction) with a `Violation.declineReason`; the finding
+  stays reported, so report mode is unchanged. Refused rather than carried: the comment has no seat in a one-line
+  boolean expression the writer would keep — branch `feat/infra-N23`

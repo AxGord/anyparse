@@ -218,6 +218,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.LintConfigTest',
 		'unit.check.LintFixDeclineWiringSliceTest',
 		'unit.check.LintFixFollowUpRoundTest',
+		'unit.check.LintFixSafeRevertContinuesTest',
 		'unit.check.LintLanguageVersionGateTest',
 		'unit.check.LintModuleSecondaryTypeSliceTest',
 		'unit.check.LintReportChannelSliceTest',
@@ -1511,6 +1512,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.LintFixDeclineWiringSliceTest#testARefusedFindingCostsItsRuleNothingElse :: control :: M-LINTFIX-FINDING-SPLIT-NONE',
 			'unit.check.LintFixDeclineWiringSliceTest#testARefusedRuleCostsOnlyItsOwnEdits :: control :: M-LINTFIX-BLAME-SITE-ALWAYS',
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
+			'unit.check.LintFixSafeRevertContinuesTest#testANarrowedRevertKeepsTheGoodSafeEditAndTheVerifiedOnes :: control :: '
+				+ 'M-SAFE-REVERT-ABORTS,M-SAFE-REVERT-EDITS-COUNTED,M-SAFE-REVERT-FILES-COUNTED,M-SAFE-REVERT-EXIT-OK',
+			'unit.check.LintFixSafeRevertContinuesTest#testRiskyAndOracleAssistedFixesLandAfterAWholeWaveSafeRevert :: control :: '
+				+ 'M-SAFE-REVERT-ABORTS,M-SAFE-REVERT-EDITS-COUNTED,M-SAFE-REVERT-FILES-COUNTED,M-SAFE-REVERT-EXIT-OK,M-SAFE-REVERT-UNSAID',
 			'unit.check.LintLanguageVersionGateTest#testAnExplicitRuleSelectionKeepsTheVersionFloor :: control :: M-VERSION-LIFTED-BY-RULE',
 			'unit.check.LintModuleSecondaryTypeSliceTest#testAModuleWhoseConstructorsCannotBeListedStaysAdvisory :: control :: '
 				+ 'M-UNUSED-VALUES-UNLISTED-DELETED',
@@ -2106,6 +2111,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ScratchFieldCheckTest#testWritesInBothArmsHaveNoDeclarationSlot :: control :: M-SCRATCH-SLOT-ANYWHERE',
 			'unit.check.ShadowingCaseBinderCheckTest#testUnprovenSubjectRefused :: control :: M-SHADOWING-BINDER-UNPROVEN',
 			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
+			'unit.check.SimplifyBooleanReturnChainCheckTest#testCommentInAFlatChainIsNotDropped :: control :: M-RETURN-CHAIN-COMMENT-ADMITTED',
 			'unit.check.SimplifyBooleanReturnChainCheckTest#testNegatedConjunctionGuardRegroups :: control :: '
 				+ 'M-GUARD-CHAIN-NEGATED-RUN-DROPPED',
 			'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestRegroups :: control :: M-NARROWING-OR-FLAT',
@@ -7343,7 +7349,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-DEFAULT-ARG-NULL-CONST-NONNULL',
 			'M-UNUSED-LOCAL-IMPURE-UNSAID',
 			'M-UNUSED-LOCAL-SHARED-LINE-UNSAID',
-			'M-UNUSED-PRIVATE-FIELD-KIND-PURITY'
+			'M-UNUSED-PRIVATE-FIELD-KIND-PURITY',
+			'M-SAFE-REVERT-ABORTS',
+			'M-SAFE-REVERT-EDITS-COUNTED',
+			'M-SAFE-REVERT-FILES-COUNTED',
+			'M-SAFE-REVERT-EXIT-OK',
+			'M-SAFE-REVERT-UNSAID',
+			'M-RETURN-CHAIN-COMMENT-ADMITTED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
