@@ -108,6 +108,18 @@ final class FactsTypeOracle implements TypeOracle {
 	}
 
 	/**
+	 * `forFix` for a question a CHECK asks while a `--fix` run is under way — the run that reads compiler facts, marked by
+	 * its edit journal (`CachingGrammarPlugin.editJournal`), whose fix gates compile them anyway — and null in any other
+	 * run: a report run never pays for a facts compile on a check's behalf. The operator-overload gate asks here
+	 * (`OperatorSelection`), in the run phase as in the fix phase, so a site only the facts prove is reported by the run
+	 * that will fix it.
+	 */
+	public static function forFixRun(plugin: GrammarPlugin, file: String, source: String): Null<FactsTypeOracle> {
+		final journal: Null<EditJournal> = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
+		return journal == null ? null : forFix(plugin, file, source);
+	}
+
+	/**
 	 * The id of the type every configuration gave the expression at `expr` (`valueType`) — a `Null<…>` unwrapped when
 	 * `unwrapNull` (`FactsTypeText.unwrapNull`), type arguments dropped — when it names a type the facts hold; null
 	 * otherwise: a declined answer, a type parameter, a function or structure type, or a `Null<…>` kept.

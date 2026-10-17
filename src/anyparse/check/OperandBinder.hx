@@ -3,7 +3,7 @@ package anyparse.check;
 import anyparse.query.CallGraphNames;
 import anyparse.query.CasePatterns;
 import anyparse.query.DeclaredNullity;
-import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
@@ -71,9 +71,8 @@ final class OperandBinder {
 	private final _identKinds: Array<String>;
 	private final _fnKinds: Array<String>;
 
-	public function new(
-		file: String, source: String, tree: QueryNode, shape: RefShape, index: SymbolIndex, provider: TypeInfoProvider,
-		builtins: Array<String>
+	private function new(
+		file: String, source: String, tree: QueryNode, shape: RefShape, index: SymbolIndex, provider: TypeInfoProvider
 	) {
 		_file = file;
 		_source = source;
@@ -81,7 +80,7 @@ final class OperandBinder {
 		_shape = shape;
 		_index = index;
 		_declared = DeclaredNullity.of(file, tree, source, shape, provider, index.typeSyntax, () -> index);
-		_builtins = builtins;
+		_builtins = builtinNamesOf(shape);
 		_wrappers = shape.memberTransparentWrapperTypeNames ?? [];
 		_identKinds = [
 			for (kind in [shape.identKind, shape.stringInterpIdentKind]) if (kind != null) kind
@@ -242,6 +241,18 @@ final class OperandBinder {
 			case Bound(decls): decls;
 			case _: null;
 		};
+	}
+
+	/**
+	 * THE way a rule obtains the binder of one file — the operator-overload gate (`OperatorSelection.typingFor`),
+	 * `redundant-tostring` and `prefer-bind` alike: over `index`, the grammar's type information and its built-in type
+	 * names. Null when the grammar carries no type information.
+	 */
+	public static function forFile(
+		plugin: GrammarPlugin, file: String, source: String, tree: QueryNode, index: SymbolIndex
+	): Null<OperandBinder> {
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return provider == null ? null : new OperandBinder(file, source, tree, plugin.refShape(), index, provider);
 	}
 
 	/** The type names the grammar declares built in — a literal's type or a basic value type — each once. */

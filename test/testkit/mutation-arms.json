@@ -10242,11 +10242,11 @@
 		},
 		{
 			"name": "M-FOLD-FACTS-OPERAND",
-			"type": "anyparse.check.FoldStringLiterals",
-			"method": "fix",
-			"find": "final oracle: Null<FactsTypeOracle> = tree == null ? null : FactsTypeOracle.forFix(plugin, file, source);",
-			"replace": "final oracle: Null<FactsTypeOracle> = null;",
-			"note": "a construct the run left Unproven is never asked of the compiler's facts, so an operand only they type keeps the fix off"
+			"type": "anyparse.check.OperatorSelection",
+			"method": "factsProof",
+			"find": "oracle = FactsTypeOracle.forFixRun(_plugin, file, source);",
+			"replace": "oracle = null;",
+			"note": "an operand the binding leaves unproven is never asked of the compiler's facts, so a construct only they type stays report-only (fold) or unreported (the negation family)"
 		},
 		{
 			"name": "M-FACTS-VALUE-TYPE-FLOWS",

@@ -2,13 +2,13 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
+import anyparse.check.OperatorSelection.OperandTyping;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeNameBinding.Tier;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -114,7 +114,7 @@ final class SimplifyNegatedCompound implements Check {
 			// that actually holds the shape — most files skip it entirely.
 			if (tree == null || !hasShape(tree, seams)) continue;
 			final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file);
-			final written: Null<(QueryNode) -> Tier> = seams.selection?.typingFor(entry.file, entry.source, tree);
+			final written: Null<OperandTyping> = seams.selection?.typingFor(entry.file, entry.source, tree);
 			for (c in candidates(tree, null, entry.source, seams, types, written, [])) violations.push({
 				file: entry.file,
 				span: c.span,
@@ -143,7 +143,7 @@ final class SimplifyNegatedCompound implements Check {
 					source, plugin, tree, violations[0].file, index
 				);
 				final bySpan: Map<String, Candidate> = [];
-				final written: Null<(QueryNode) -> Tier> = s.selection?.typingFor(violations[0].file, source, tree);
+				final written: Null<OperandTyping> = s.selection?.typingFor(violations[0].file, source, tree);
 				for (c in candidates(tree, null, source, s, types, written, [])) bySpan['${c.span.from}:${c.span.to}'] = c;
 				return CheckScan.collectSpanEdits(violations, bySpan, (c, _) -> ({ span: c.span, text: c.text }));
 			});
@@ -168,7 +168,7 @@ final class SimplifyNegatedCompound implements Check {
 	 */
 	private static function candidates(
 		node: QueryNode, parent: Null<QueryNode>, source: String, s: Seams, types: Null<(QueryNode) -> Null<String>>,
-		written: Null<(QueryNode) -> Tier>, out: Array<Candidate>
+		written: Null<OperandTyping>, out: Array<Candidate>
 	): Array<Candidate> {
 		if (s.opaqueKinds.contains(node.kind)) return out;
 		final accepted: Null<Candidate> = candidateAt(node, parent, source, s, types, written);
@@ -183,7 +183,7 @@ final class SimplifyNegatedCompound implements Check {
 	/** The accepted rewrite AT `node`, or null when it is not the shape or any gate refuses it. */
 	private static function candidateAt(
 		node: QueryNode, parent: Null<QueryNode>, source: String, s: Seams, types: Null<(QueryNode) -> Null<String>>,
-		written: Null<(QueryNode) -> Tier>
+		written: Null<OperandTyping>
 	): Null<Candidate> {
 		final operand: Null<QueryNode> = s.support.negatedOperandOf(node);
 		final span: Null<Span> = node.span;
