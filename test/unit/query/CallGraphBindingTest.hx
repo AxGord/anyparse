@@ -1,6 +1,9 @@
 package unit.query;
 
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
+import anyparse.query.SymbolIndex;
 import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
@@ -111,6 +114,64 @@ class CallGraphBindingTest extends Test {
 		]);
 		final out: Array<String> = [for (e in g.outEdges('U.run')) if (e.kind == Virtual) e.to];
 		Assert.same(['R.m'], out, 'the override of a class extending the alias');
+	}
+
+	/**
+	 * Each body of a module-level function the module declares in several `#if` branches is a node of its own (`Main.f`, then
+	 * `Main.f@2`), and a bare use binds the bodies the builds compiling it may run — the imported static in the builds declaring
+	 * none — while a member of the enclosing chain and a local function still come first (Haxe 4.3.7 `v-N11-hx/p1`). A name
+	 * nothing binds per build — an import naming the function, a query — runs every body.
+	 */
+	@:pin('control')
+	@:killer('M-GRAPH-BODY-SPLIT') @:killer('M-GRAPH-BODY-EXPAND') @:killer('M-GRAPH-BODY-EXACT') @:killer('M-GRAPH-BODY-TARGETS')
+	@:killer('M-GRAPH-BODY-COPY-IN') @:killer('M-GRAPH-BODY-PURGE') @:killer('M-GRAPH-MODULE-BINDING')
+	@:killer('M-GRAPH-MODULE-BINDING-MEMBER') @:killer('M-GRAPH-MODULE-BINDING-LOCAL') @:killer('M-GRAPH-MODULE-BINDING-VALUE')
+	@:killer('M-GRAPH-MODULE-BINDING-IMPORTS') @:killer('M-GRAPH-MODULE-REF') @:killer('M-GRAPH-MODULE-IDENT')
+	public function testEachBodyOfAModuleLevelFunctionUnderIfIsANodeOfItsOwn(): Void {
+		final files: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package utils; class Other { public function new() {} public function wait():Bool return true; }',
+			'package app; class B { public static function f():Void {} }',
+			'package app; class Runner { public static function create(fn:() -> Void):Void {} }',
+			'package app; import app.Main.f; class Elsewhere { static function call():Void f(); }',
+			'package app; import app.B.*; class Main { static function call():Void f(); } #if a function f():Void new '
+			+ 'utils.Lock().wait(); #elseif b function f():Void new utils.Other().wait(); #end function viaModule():Void f(); #if a class '
+			+ 'InA { static function call():Void f(); } #else class NotA { static function call():Void f(); } #end class Shadow {'
+			+ ' static function f():Void {} static function call():Void f(); } class Ref { static function call():Void Runner.create(f); }'
+			+ ' function local():Void { function f():Void {} f(); } #if a function g():Void {} #else var g:() -> Void = null; #end '
+			+ 'function viaG():Void g(); function make():utils.Lock return null; class Typed { static function call():Void make().wait(); }'
+		]);
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final last: Int = files.length - 1;
+		final g: CallGraph = CallGraph.build(files.slice(0, last), plugin, SymbolIndex.build(files, plugin));
+		g.addFiles([files[last]]);
+		function targets(from: String, kind: EdgeKind = Call): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == kind) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['Lock.wait'], targets('Main.f'), 'the #if a body runs its own code');
+		Assert.same(['Other.wait'], targets('Main.f@2'), 'the #elseif b body is a node of its own');
+		Assert.same(['B.f', 'Main.f', 'Main.f@2'], targets('Main.viaModule'), 'module-level code: each body, and the import');
+		Assert.same([], [for (u in g.unresolved) if (u.from == 'Main.viaModule') u.reason], 'nothing unresolved there');
+		Assert.same(['B.f', 'Main.f', 'Main.f@2'], targets('Main.call'), 'the main class sees no member f: the module\'s');
+		Assert.same(['Main.f'], targets('InA.call'), 'a use in #if a binds the #if a body');
+		Assert.same(['B.f', 'Main.f@2'], targets('NotA.call'), 'its #else: the #elseif body, or the import');
+		Assert.same(['Shadow.f'], targets('Shadow.call'), 'a static of the enclosing class comes first');
+		Assert.same(['B.f', 'Main.f', 'Main.f@2'], targets('Ref.call', Ref), 'a read as a value binds the same bodies');
+		Assert.same(['Main.local#f'], targets('Main.local'), 'a local function comes first');
+		Assert.same(['Main.g'], targets('Main.viaG'), 'the build declaring a function runs its body');
+		Assert.same(
+			['FunctionValue(g)'],
+			[for (u in g.unresolved) if (u.from == 'Main.viaG') Std.string(u.reason)],
+			'the other runs the value its var holds'
+		);
+		Assert.same(['Lock.wait', 'Main.make'], targets('Typed.call'), 'a call of the one function a use binds is of its return type');
+		Assert.same(['Main.f', 'Main.f@2'], targets('Elsewhere.call'), 'an import names the function: every body');
+		Assert.same(['Main.f', 'Main.f@2'], [for (n in g.resolveTarget('Main.f')) n.id], 'so does a query');
+		g.removeFile(files[last].file);
+		g.addFiles([files[last]]);
+		Assert.same(['Main.f', 'Main.f@2'], targets('Elsewhere.call'), 'read again, each body once');
 	}
 
 	private inline function graphOf(sources: Array<String>): CallGraph {

@@ -296,6 +296,9 @@ final class CallGraph {
 	/** The name of the STATIC field-initializer pseudo-node, which no constructor runs. */
 	public static inline final STATIC_INIT_NAME: String = '<static>';
 
+	/** What joins a module-level function's id and the ordinal of a further body of it (`Mod.f@2`, `bodiesOf`). */
+	public static inline final BODY_MARK: String = '@';
+
 	/** What a type parameter nothing binds becomes in a written type: text that names no type. */
 	private static inline final UNKNOWN_TYPE: String = '$$_';
 
@@ -343,6 +346,12 @@ final class CallGraph {
 	/** File -> every declaration of a function-like node it holds, for `declarationAt`. */
 	private final _fileDeclarations: Map<String, Array<FnDeclaration>> = [];
 
+	/**
+	 * Module-level function id -> the ids of its further bodies in its file, one per `#if` branch declaring it again, each a
+	 * node of its own (`CallGraphNodes.bodyId`, `bodiesOf`).
+	 */
+	private final _bodies: Map<String, Array<String>> = [];
+
 	/** Field-initializer pseudo-node id -> the files holding initializers it runs (`initializerFiles`). */
 	private final _initFiles: Map<String, Array<String>> = [];
 
@@ -376,6 +385,15 @@ final class CallGraph {
 	/** The node of `member` that `typeName` itself declares — not an inherited one — or null. */
 	public inline function ownMember(typeName: String, member: String): Null<String> {
 		return _members[typeName]?.get(member);
+	}
+
+	/**
+	 * Every node a reference naming `id` may run: `id`, then — for a module-level function its file declares in several `#if`
+	 * branches — each further body (`Mod.f@2`, …), a node of its own. A bare use the graph binds per build names the bodies
+	 * it runs; anything else naming the function — an import, a qualified access, a query — runs every one (`addEdge`).
+	 */
+	public inline function bodiesOf(id: String): Array<String> {
+		return [id].concat(_bodies[id] ?? []);
 	}
 
 	/** Every type the graph holds a declaration of. */
@@ -491,12 +509,12 @@ final class CallGraph {
 	public function resolveTarget(query: String): Array<FnNode> {
 		final simple: String = CallGraphNames.lastSegments(query, 2);
 		final ids: Array<String> = simple.indexOf('.') == -1 ? _byMember[simple] ?? [] : types.imports.memberIds(query);
-		return [
-			for (id in ids) {
-				final n: Null<FnNode> = nodes[id];
-				if (n != null) n;
-			}
-		];
+		final out: Array<FnNode> = [];
+		for (id in ids) for (body in bodiesOf(id)) {
+			final n: Null<FnNode> = nodes[body];
+			if (n != null && !out.contains(n)) out.push(n);
+		}
+		return out;
 	}
 
 	/**
@@ -583,11 +601,13 @@ final class CallGraph {
 		if (!_entries.exists(key)) return;
 		_entries.remove(key);
 		final removed: Map<String, Bool> = nodesLeavingWith(key);
+		// a body's edges from other files are copies of the function's, made again when the file is read again
+		final bodies: Array<String> = [for (ids in _bodies) for (id in ids) if (removed.exists(id)) id];
 		_fileNodes.remove(key);
 		_fileDeclarations.remove(key);
 		forgetDeclarationsIn(key);
 		forgetNodes(file, removed);
-		purgeSites(key, removed);
+		purgeSites(key, removed, bodies);
 	}
 
 	/**
@@ -634,6 +654,7 @@ final class CallGraph {
 		facts?.forget(file, removed);
 		for (table in _members) for (member in [for (m => id in table) if (removed.exists(id)) m]) table.remove(member);
 		for (name => ids in _byMember) _byMember[name] = [for (id in ids) if (!removed.exists(id)) id];
+		for (id in [for (id in _bodies.keys()) id]) if (removed.exists(id)) _bodies.remove(id);
 	}
 
 	/**
@@ -712,10 +733,13 @@ final class CallGraph {
 		return id;
 	}
 
-	/** Drop every edge made at a site of `file` or from one of the `removed` nodes, its unresolved records and its constructor runs. */
-	private function purgeSites(key: String, removed: Map<String, Bool>): Void {
+	/**
+	 * Drop every edge made at a site of `file`, from one of the `removed` nodes or into one of the further `bodies` among them,
+	 * its unresolved records and its constructor runs.
+	 */
+	private function purgeSites(key: String, removed: Map<String, Bool>, bodies: Array<String>): Void {
 		final kept: Array<CallEdge> = [
-			for (e in edges) if (CallGraphNames.normalizePath(e.file) != key && !removed.exists(e.from)) e
+			for (e in edges) if (CallGraphNames.normalizePath(e.file) != key && !removed.exists(e.from) && !bodies.contains(e.to)) e
 		];
 		edges.resize(0);
 		_out.clear();
@@ -771,9 +795,13 @@ final class CallGraph {
 		return id;
 	}
 
+	/**
+	 * Add the edge `from` -> `to`, and — unless it is `exact`, naming the one body of a module-level function a bare use binds
+	 * per build — one to each further body `to` has (`bodiesOf`): a reference naming the function runs whichever its build has.
+	 */
 	private function addEdge(
 		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String,
-		?receiverField: String, ?typed: String, ?inlined: Bool, ?storedInto: String, ?viaMember: String
+		?receiverField: String, ?typed: String, ?inlined: Bool, ?storedInto: String, ?viaMember: String, exact: Bool = false
 	): Void {
 		final edge: CallEdge = {
 			from: from,
@@ -791,7 +819,28 @@ final class CallGraph {
 		if (viaMember != null) edge.viaMember = viaMember;
 		// a faceted function's syntax still records every edge it names, which the facts only add to — unless they are the
 		// truth: then its edge at a site they type is dropped (`CallGraphFacts.holdsBack`)
-		if (facts?.holdsBack(edge) != true) indexEdge(edge);
+		for (e in [edge].concat(exact ? [] : [for (body in _bodies[to] ?? []) retargeted(edge, body)])) if (facts?.holdsBack(e) != true)
+			indexEdge(e);
+	}
+
+	/** `edge` made into `to`, every other field kept. */
+	private static function retargeted(edge: CallEdge, to: String): CallEdge {
+		final out: CallEdge = {
+			from: edge.from,
+			to: to,
+			kind: edge.kind,
+			via: edge.via,
+			file: edge.file,
+			span: edge.span,
+			dispatchType: edge.dispatchType,
+			receiverField: edge.receiverField
+		};
+		if (edge.spliced != null) out.spliced = edge.spliced;
+		if (edge.typed != null) out.typed = edge.typed;
+		if (edge.inlined != null) out.inlined = edge.inlined;
+		if (edge.storedInto != null) out.storedInto = edge.storedInto;
+		if (edge.viaMember != null) out.viaMember = edge.viaMember;
+		return out;
 	}
 
 	/**
@@ -910,6 +959,43 @@ final class CallGraph {
 			return null;
 		}
 
+		/**
+		 * The functions a bare use of `name` at `span` may run when the module declares a value of the name and no member of
+		 * `currentType`'s chain may be meant (`CallGraphKeys.memberMayBind`; Haxe 4.3.7 `v-N11-hx/p1`): the body of each
+		 * module-level function some build compiling the use declares (`ValueNameBinding.moduleValuesAt`) — its own node,
+		 * never another build's (`bodiesOf`) — and, in the builds declaring none, each static an import binds the name to. A
+		 * build declaring a module-level VALUE runs the function it holds, and one whose import the index cannot list may run
+		 * any: `unresolved` says why. Null for a name the module declares no value of.
+		 */
+		function moduleBinding(name: String, span: Span, currentType: Null<String>): Null<ModuleBinding> {
+			final values: Null<ModuleValues> = moduleValuesOf(name, span.from);
+			if (values == null || values.decls.length == 0 || CallGraphKeys.memberMayBind(this, currentType, name)) return null;
+			final out: ModuleBinding = { targets: [], unresolved: null };
+			for (d in values.decls) {
+				final body: Null<String> = entry.fnBySpanFrom[d.span.from];
+				if (body == null)
+					out.unresolved = FunctionValue(name)
+				else if (!out.targets.contains(body))
+					out.targets.push(body);
+			}
+			final imported: Null<ImportedStatics> = values.imported;
+			if (imported != null) {
+				for (s in imported.statics) {
+					final target: String = memberOnChain(s.owner, s.member) ?? externalNode(s.owner, s.member);
+					if (!out.targets.contains(target)) out.targets.push(target);
+				}
+				if (imported.unknown && out.unresolved == null) out.unresolved = UnboundName(name);
+			}
+			return out;
+		}
+
+		/** `moduleBinding` for a bare identifier `name` at `span`, which no local function, local or parameter binds first. */
+		function bareModuleBinding(name: String, span: Null<Span>, currentType: Null<String>): Null<ModuleBinding> {
+			if (span == null || localFn(name) != null) return null;
+			final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
+			return bound != null && bound >= 0 ? null : moduleBinding(name, span, currentType);
+		}
+
 		/** Whether `name` is a type parameter in scope — of a function on the frame stack or of `currentType` — naming no indexed type. */
 		function isTypeParam(name: String, currentType: Null<String>): Bool {
 			if (currentType != null && types.generics.declaresTypeParam(currentType, name)) return true;
@@ -974,8 +1060,12 @@ final class CallGraph {
 			final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 			// a lambda's first parameter starts where the lambda does: only a local function NAMED so is what the name binds
 			final fn: Null<String> = bound == null ? null : entry.fnBySpanFrom[bound];
+			// a function the module declares: the one every build compiling the use runs, else none is the function named
+			final module: Null<ModuleBinding> = bound != null && bound >= 0 ? null : moduleBinding(name, span, currentType);
 			return if (bound != null && bound >= 0)
 				fn != null && nodes[fn]?.name == name ? fn : null
+			else if (module != null)
+				module.targets.length == 1 && module.unresolved == null ? module.targets[0] : null
 			else if (currentType == null)
 				// module-level code sees no class's members, the main class's included: the module's own names and its imports'
 				imported ? importedFunction(name, span, currentType) : null
@@ -1578,6 +1668,9 @@ final class CallGraph {
 			final name: Null<String> = arg.name;
 			if (name == null) return null;
 			if (arg.kind == identKind) {
+				final module: Null<ModuleBinding> = bareModuleBinding(name, arg.span, currentType);
+				if (module != null)
+					return module.targets.length == 0 ? null : { id: module.targets[0], dispatch: null, bodies: module.targets };
 				final target: Null<String> = identTarget(name, arg.span, currentType, true);
 				if (target == null) return null;
 				final member: Bool = currentType != null && memberOnChain(currentType, name) == target;
@@ -1606,6 +1699,12 @@ final class CallGraph {
 		function refEdges(
 			from: String, ref: MethodRef, via: Null<String>, span: Null<Span>, ?storedInto: String, ?viaMember: String
 		): Void {
+			// a module-level function's use bound per build names exactly the bodies it may run
+			final bodies: Null<Array<String>> = ref.bodies;
+			if (bodies != null) {
+				for (body in bodies) addEdge(from, body, Ref, via, file, span, null, null, null, null, storedInto, viaMember, true);
+				return;
+			}
 			addEdge(from, ref.id, Ref, via, file, span, ref.dispatch, null, null, null, storedInto, viaMember);
 			final dispatch: Null<String> = ref.dispatch;
 			final name: Null<String> = nodes[ref.id]?.name;
@@ -1853,7 +1952,16 @@ final class CallGraph {
 			final callee: QueryNode = unwrap(call.children[0]);
 			final calleeName: Null<String> = callee.name;
 			var calleeId: Null<String> = null;
-			if (callee.kind == identKind && calleeName != null) {
+			final module: Null<ModuleBinding> = callee.kind == identKind && calleeName != null
+				? bareModuleBinding(calleeName, callee.span, currentType)
+				: null;
+			if (module != null) {
+				// a module-level function's call bound per build runs exactly the bodies its builds compile
+				for (target in module.targets) addEdge(from, target, Call, null, file, span, null, null, null, null, null, null, true);
+				final reason: Null<UnresolvedReason> = module.unresolved;
+				if (reason != null) unresolvedAt(span, reason, currentType);
+				calleeId = module.targets.length == 1 && reason == null ? module.targets[0] : null;
+			} else if (callee.kind == identKind && calleeName != null) {
 				calleeId = resolveBareCallee(calleeName, callee.span, currentType);
 				if (calleeId != null) {
 					final implicitThis: Array<String> = implicitThisTargets(currentType, calleeName, calleeId);
@@ -2346,6 +2454,18 @@ private typedef Frame = {
 private typedef MethodRef = {
 	var id: String;
 	var dispatch: Null<String>;
+
+	/** For a module-level function's use bound per build, every function it may run (`moduleBinding`), `id` first; else null. */
+	@:optional var bodies: Null<Array<String>>;
+}
+
+/**
+ * What a bare use of a name its module declares a value of may run, by the builds compiling it (`moduleBinding`): each
+ * function, and why a build's is not one the graph holds — a value it calls, or an import the index cannot list.
+ */
+private typedef ModuleBinding = {
+	var targets: Array<String>;
+	var unresolved: Null<UnresolvedReason>;
 }
 
 /** What a call or `new` site resolved to: the target, and the receiver expression a call through a field access was made on. */

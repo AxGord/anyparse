@@ -1394,7 +1394,8 @@ class CallGraphTest extends Test {
 			'package app; class B { public static function cb():Void {} }',
 			'package app; import app.B.*; #if a var cb:() -> Void = null; #end'
 			+ ' #if a class Calls { static function field():Void cb(); } #end class CallsOut { static function field():Void cb(); }',
-			'package app; import app.B.*; var cb:() -> Void = null; class CallsPlain { static function field():Void cb(); }'
+			'package app; import app.B.*; var cb:() -> Void = null; class CallsPlain { static function field():Void cb(); }',
+			'package app; import app.B.*; #if a var cb:() -> Void = null; #end class Far extends lib.Base { function field():Void cb(); }'
 		]);
 		function targets(from: String): Array<String> {
 			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
@@ -1413,9 +1414,15 @@ class CallGraphTest extends Test {
 		Assert.same([], targets('Calls.field'), 'every build compiling the call declares the value: no import binds it');
 		Assert.same(['B.cb'], targets('CallsOut.field'), 'the builds without it call the imported static');
 		Assert.same(
-			['UnboundName(cb)'],
+			['FunctionValue(cb)'],
 			[for (u in g.unresolved) if (u.from == 'CallsOut.field') Std.string(u.reason)],
 			'and the others the value'
+		);
+		Assert.same(['B.cb'], targets('Far.field'), 'a supertype the index does not hold may declare it: the import, by name');
+		Assert.same(
+			['UnboundName(cb)'],
+			[for (u in g.unresolved) if (u.from == 'Far.field') Std.string(u.reason)],
+			'and the builds declaring the value'
 		);
 		Assert.same([], targets('CallsPlain.field'), 'a declaration no #if guards hides the import everywhere');
 		#else

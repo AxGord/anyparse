@@ -95,24 +95,6 @@ final class CondBranchPath {
 	}
 
 	/**
-	 * Whether no build compiles both branches: two branches of one region, or of two regions where the earlier branch `j`
-	 * spells, as its own condition, the `j`-th condition of the later branch's chain — `#if a` against the `#else` or an
-	 * `#elseif` of another `#if a`: the earlier needs `a`, the later `!a` (Haxe 4.3.7). Read only where both chains split back
-	 * into their branches' conditions: one spelling `|` itself, or carrying an empty condition there, is never an alternative.
-	 */
-	private static function alternatives(a: CondFrame, b: CondFrame): Bool {
-		if (a.branch == b.branch) return false;
-		if (a.region == b.region) return true;
-		final early: CondFrame = a.branch < b.branch ? a : b;
-		final late: CondFrame = a.branch < b.branch ? b : a;
-		final earlyChain: Array<String> = early.condition.split(CHAIN_SEPARATOR);
-		final lateChain: Array<String> = late.condition.split(CHAIN_SEPARATOR);
-		if (earlyChain.length != early.branch + 1 || lateChain.length != late.branch + 1) return false;
-		final own: String = earlyChain[early.branch];
-		return own != '' && own == lateChain[early.branch];
-	}
-
-	/**
 	 * Whether two positions sit in the SAME branch of the SAME regions — the strict form of
 	 * `comparable`, for a caller whose question is "is this an illegal DUPLICATE" rather than
 	 * "may these be compared". The two differ on every shape where one position is inside a
@@ -153,6 +135,24 @@ final class CondBranchPath {
 		return outer.foreach(
 			o -> inner.exists(i -> i.branch == o.branch && (i.region == o.region || (o.condition != '' && i.condition == o.condition)))
 		);
+	}
+
+	/**
+	 * Whether no build compiles both branches: two branches of one region, or of two regions where the earlier branch `j`
+	 * spells, as its own condition, the `j`-th condition of the later branch's chain — `#if a` against the `#else` or an
+	 * `#elseif` of another `#if a`: the earlier needs `a`, the later `!a` (Haxe 4.3.7). Read only where both chains split back
+	 * into their branches' conditions: one spelling `|` itself, or carrying an empty condition there, is never an alternative.
+	 */
+	private static function alternatives(a: CondFrame, b: CondFrame): Bool {
+		if (a.branch == b.branch) return false;
+		if (a.region == b.region) return true;
+		final early: CondFrame = a.branch < b.branch ? a : b;
+		final late: CondFrame = a.branch < b.branch ? b : a;
+		final earlyChain: Array<String> = early.condition.split(CHAIN_SEPARATOR);
+		final lateChain: Array<String> = late.condition.split(CHAIN_SEPARATOR);
+		if (earlyChain.length != early.branch + 1 || lateChain.length != late.branch + 1) return false;
+		final own: String = earlyChain[early.branch];
+		return own != '' && own == lateChain[early.branch];
 	}
 
 	/**

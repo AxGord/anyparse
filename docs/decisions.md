@@ -3344,3 +3344,19 @@ decided the question; it may not become a record of runs.
   (`a || b`) is never split — and an empty condition proves nothing; logical equivalence (`#if !a` against `#else`) is
   still not read (`ValueNameBindingTest#testAnotherRegionOfTheSameConditionIsAnAlternative`, RED on `d0f12ab9e`) —
   branch `feat/infra-N11`
+- A module-level FUNCTION the module declares in several `#if` branches was ONE call-graph node (`Mod.f`, keyed by name,
+  every body's edges folded in), and a bare call of it was bound by name only — from a class through the module
+  pseudo-type, from module-level code not at all (`UnboundName`: `Refs` binds no module-level declaration) → each further
+  body in the file is a node of its own (`Mod.f@2`, `Mod.f@3`, … in source order, `CallGraph.bodiesOf`), and a bare call or
+  read binds per build the way a module-level value does (`ValueNameBinding.moduleValuesAt`): the body of each declaration
+  some build compiling the use declares, plus the imported static in the builds declaring none, after a local, a
+  parameter and a member of the enclosing chain (`CallGraphKeys.memberMayBind`) — Haxe 4.3.7 `v-N11-hx/p1` (`#if a` /
+  `#elseif b` bodies: module-level caller, class caller, value read all run the build's body; the module's function beats
+  `import B.*`; a class's own static beats the module's). Fail-closed by construction: every edge that names the function
+  rather than a body — an import, a qualified access, a compiler fact, an earlier file's placeholder — reaches each body
+  (`CallGraph.addEdge`), and so does a query (`resolveTarget`); a call or read that binds several bodies types nothing by
+  them (`identTarget`, a call site's target). A build whose declaration is a module-level VALUE now records the call as a
+  `FunctionValue`, not `UnboundName`: it runs the function the value holds, which is what `FunctionValue` means. A
+  declaration of the module in another file (another class path) still folds into its node. Not done: a member declared in
+  several branches of its class stays one folded node (`CallGraphBindingTest#testEachBodyOfAModuleLevelFunctionUnderIfIsANodeOfItsOwn`,
+  RED on `d0f12ab9e`) — branch `feat/infra-N11`
