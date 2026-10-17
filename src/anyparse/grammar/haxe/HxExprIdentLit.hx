@@ -34,6 +34,6 @@ package anyparse.grammar.haxe;
  * `@:rawString` — same decoding as `HxIdentLit`: the matched slice is
  * the value, no unescape pass.
  */
-@:re('(?!(?:if|else|for|while|do|switch|case|default|try|catch|return|break|continue|throw|var|final|class|dynamic|enum|extends|extern|implements|import|in|interface|operator|overload|override|package|private|public|static|typedef|using)\\b)[A-Za-z_][A-Za-z0-9_]*')
+@:re('(?!(?:if|else|for|while|do|switch|case|default|try|catch|return|break|continue|throw|var|final|class|dynamic|enum|extends|extern|implements|import|in|interface|override|package|private|public|static|typedef|using)\\b)[A-Za-z_][A-Za-z0-9_]*')
 @:rawString
 abstract HxExprIdentLit(String) from String to String {}

@@ -2949,6 +2949,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxNestingCostTest#testEachBodyIsWrittenOnce :: control :: M-FOR-BODY-PROBE-EAGER,M-CHAIN-WALK-EAGER',
 			'unit.grammar.haxe.HxNestingCostTest#testParserRunsEachNestedAtomOnce :: control :: M-PARSE-MEMO-REPLAY-OFF,M-PARSE-MEMO-STASHED-SKIP',
 			'unit.grammar.haxe.HxNestingCostTest#testWriterDocKeepsItsSharing :: control :: M-GROUPIFY-SHARED-OFF',
+			'unit.grammar.haxe.HxReservedNameSliceTest#testAKeywordANewerHaxeAddedStillNamesAVersionGatedDeclaration :: control :: '
+				+ 'M-RESERVED-VERSIONED-REFUSED',
 			'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoFunctionParameterOrBinderName :: control :: '
 				+ 'M-RESERVED-IDENT-NAME,M-RESERVED-FN-NAME',
 			'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoLocalOrFieldName :: control :: M-RESERVED-VAR-NAME',
@@ -7189,7 +7191,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-CARRY-USING-ORDER-MET',
 			'M-RESERVED-IDENT-NAME',
 			'M-RESERVED-VAR-NAME',
-			'M-RESERVED-FN-NAME'
+			'M-RESERVED-FN-NAME',
+			'M-RESERVED-VERSIONED-REFUSED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -7424,6 +7427,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-RESERVED-IDENT-NAME :: anyparse.grammar.haxe.HxIdentLit#MetaCall:@:re',
 			'M-RESERVED-VAR-NAME :: anyparse.grammar.haxe.HxVarNameLit#MetaCall:@:re',
 			'M-RESERVED-FN-NAME :: anyparse.grammar.haxe.HxFnNameLit#MetaCall:@:re',
+			'M-RESERVED-VERSIONED-REFUSED :: anyparse.grammar.haxe.HxVarNameLit#MetaCall:@:re',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

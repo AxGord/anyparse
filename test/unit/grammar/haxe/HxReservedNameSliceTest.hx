@@ -19,7 +19,7 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxReservedNameSliceTest extends Test {
 
-	/** Every word Haxe 4.3 reserves (its lexer's keyword table), each refused as a local's name on 4.3.7. */
+	/** Every word Haxe 4.3 reserves but `operator` and `overload` (its lexer's keyword table), each refused as a local's name on 4.3.7. */
 	private static final RESERVED: Array<String> = [
 		'abstract',
 		'break',
@@ -48,8 +48,6 @@ final class HxReservedNameSliceTest extends Test {
 		'macro',
 		'new',
 		'null',
-		'operator',
-		'overload',
 		'override',
 		'package',
 		'private',
@@ -142,5 +140,18 @@ final class HxReservedNameSliceTest extends Test {
 		'true',
 		'untyped'
 	];
+
+	/**
+	 * `operator` (reserved since 4.0) and `overload` (since 4.2) still name a declaration: every branch of a `#if` region is
+	 * parsed, and code gated on an older compiler declares them — lime's `Cairo` holds `public var operator(get, set)` under
+	 * `#if (haxe_ver < "4.0.0")`, and refusing the word made the whole module skip-parse (its types then missing from every
+	 * library lookup through it).
+	 */
+	@:pin('control')
+	@:killer('M-RESERVED-VERSIONED-REFUSED')
+	public function testAKeywordANewerHaxeAddedStillNamesAVersionGatedDeclaration(): Void {
+		Assert.isTrue(parses('class C {\n\t#if (haxe_ver < "4.0.0")\n\tpublic var operator(get, set):Int;\n\t#end\n}'));
+		Assert.isTrue(parses('class C { function f() { final overload = 1; return overload; } }'));
+	}
 
 }

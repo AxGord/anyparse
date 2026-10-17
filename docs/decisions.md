@@ -3422,14 +3422,14 @@ decided the question; it may not become a record of runs.
   `MoveSymbolSliceTest` fixtures modelled `using q.Ext;` supplying `s.go()` with an EMPTY `class Ext {}` (no such
   extension exists); `Ext` now declares `go` — branch `feat/infra-N12`
 - the name terminals took any identifier-shaped word: `final dynamic = 1;`, `var default:Int;`, `function f(macro:Int)`,
-  `catch (null:Dynamic)` and 41 more reserved words parsed, so an op writing such a name passed its own re-parse gate
-  with a tree Haxe rejects (each of the 45 words of the 4.3 keyword table refused as a local's name, verified on 4.3.7).
+  `catch (null:Dynamic)` and 39 more reserved words parsed, so an op writing such a name passed its own re-parse gate
+  with a tree Haxe rejects (each of the 45 words of the 4.3 keyword table refused as a local's name, verified on 4.3.7). `operator` (reserved since 4.0) and `overload` (4.2) are NOT refused: every branch of a `#if` region is parsed, and code gated on an older compiler declares them — lime's `Cairo` has `public var operator(get, set)` under `#if (haxe_ver < "4.0.0")`; refusing it made that module skip-parse and, through the library index, dropped 6 `prefer-api-idiom` findings on `tm-bd943dac` (found by the all-rules gate).
   `HxIdentLit` (every declaration name: parameter, binder, type, enum constructor, structure field, type parameter),
   `HxVarNameLit` and `HxFnNameLit` (minus `new`, the constructor) now refuse all of them; the slots that DO take a
   keyword moved to `HxWordLit` (a property accessor `(default, null)` / `dynamic`, an interpolated `'$this'`, a `$name`
   reification). `HxExprIdentLit` additionally refuses the declaration words no expression is (`class`, `dynamic`,
   `static`, `using`, …) — `abstract` stays, it is the abstract's own value in `switch abstract { … }`. Not refused: an
   arrow over a check-type expression, `(null:Int) -> 1`, which reaches the general `ThinArrow` fallback rather than a
-  name slot; `super`, which Haxe does not reserve. Writer and formatter are untouched: `fmt --write` over TM src (876
+  name slot; `super`, which Haxe does not reserve. Refused although Haxe takes it: `this` as a `for` variable or a lambda parameter (`for (this in a)`, `(this) -> 1`: Haxe reads those heads as expressions, where `this` is an identifier), and `new` as the name of a function inside a `#if` name splice (`HxConditionalFnName`) — none is code an op writes or a project holds (both corpora parse unchanged), and a refusal is the loud direction. Writer and formatter are untouched: `fmt --write` over TM src (876
   files) and anyparse src (1140) is byte-identical. Fixture consequence: a `CallGraphTest` fixture named a function
   `untyped` — branch `feat/infra-N12`

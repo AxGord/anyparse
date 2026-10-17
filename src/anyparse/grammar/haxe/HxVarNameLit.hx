@@ -10,8 +10,8 @@ package anyparse.grammar.haxe;
  * would make the bare `$ident` expression form ambiguous with a plain identifier; the name
  * slot has no competing leading-`$` production.
  *
- * The `(?!(?:var|final)\b)` negative lookahead rejects a bare `var` or `final` keyword in the
- * name slot. It matters in `HxVarMore.decl`, the `,`-led multi-binding continuation: without
+ * The negative lookahead rejects every reserved word `HxIdentLit` does (Haxe refuses `final dynamic = 1;`); `var` and `final` were
+ * the first two, and the reason they were is its own. It matters in `HxVarMore.decl`, the `,`-led multi-binding continuation: without
  * it `f(var foo, var bar)` (a pattern-position call with two `var <ident>` captures) is
  * greedily consumed as one multi-binding and the stray `bar)` fails the parent's parse; with
  * it the inner `HxVarDecl.name` fails on `var`, the `@:tryparse more` Star rolls back, and the
@@ -26,6 +26,6 @@ package anyparse.grammar.haxe;
  * `from String to String` keeps `(decl.name : String)` reads and string-built test ASTs
  * compiling transparently.
  */
-@:re("\\$?(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|operator|overload|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\b)[A-Za-z_][A-Za-z0-9_]*")
+@:re("\\$?(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\b)[A-Za-z_][A-Za-z0-9_]*")
 @:rawString
 abstract HxVarNameLit(String) from String to String {}

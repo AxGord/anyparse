@@ -22743,7 +22743,7 @@
 			"type": "anyparse.grammar.haxe.HxIdentLit",
 			"method": "@:re",
 			"kind": "MetaCall",
-			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|operator|overload|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
+			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
 			"replace": "",
 			"note": "a declaration name (parameter, binder, type, enum constructor, structure field) takes a reserved word Haxe refuses"
 		},
@@ -22752,7 +22752,7 @@
 			"type": "anyparse.grammar.haxe.HxVarNameLit",
 			"method": "@:re",
 			"kind": "MetaCall",
-			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|operator|overload|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
+			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
 			"replace": "(?!(?:var|final)\\\\b)",
 			"note": "a `var` / `final` name takes every reserved word but `var` and `final` again"
 		},
@@ -22761,9 +22761,18 @@
 			"type": "anyparse.grammar.haxe.HxFnNameLit",
 			"method": "@:re",
 			"kind": "MetaCall",
-			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|null|operator|overload|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
+			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
 			"replace": "",
 			"note": "a function name takes a reserved word Haxe refuses"
+		},
+		{
+			"name": "M-RESERVED-VERSIONED-REFUSED",
+			"type": "anyparse.grammar.haxe.HxVarNameLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "|null|override|",
+			"replace": "|null|operator|overload|override|",
+			"note": "a `var` name refuses `operator` / `overload` too, and a module declaring one under a `#if` for an older Haxe skip-parses"
 		}
 	]
 }
