@@ -40,10 +40,10 @@ class MagicNumberCheckTest extends Test {
 	 * A literal that is DIRECTLY an argument of a call `ignoreCallArguments` names is a key the callee
 	 * owns (`t('Complete with AI', 10233)`), whatever receiver the call is written through.
 	 *
-	 * RED under M-MAGIC-CALLARG-BLIND (the exemption answers false): the three exempt calls come back as
-	 * findings. The nested `100 + k`, the negated `-55` and the unlisted `other(…, 5000)` are flagged
-	 * with the exemption on and off alike, and are what separate "direct arguments of listed calls" from
-	 * "every argument".
+	 * RED under M-MAGIC-CALLARG-BLIND (the exemption answers false): the four exempt calls come back as
+	 * findings. The nested `100 + k` and the unlisted `other(…, 5000)` are flagged with the exemption on
+	 * and off alike, and are what separate "direct arguments of listed calls" from "every argument". A
+	 * negated literal (`-55`) is a direct argument too: Haxe spells a negative constant as a negation.
 	 */
 	@:pin('control')
 	@:killer('M-MAGIC-CALLARG-BLIND')
@@ -51,7 +51,7 @@ class MagicNumberCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction f(k:Int) {\n\t\tt("a", 10233);\n\t\tthis.t("b", 77);\n\t\tmake().t("c", 88);\n'
 			+ '\t\tt("x", 100 + k);\n\t\tt("y", -55);\n\t\tother("z", 5000);\n\t}\n}';
 		final flagged: Array<String> = [for (v in withCalls(src, ['t'])) v.message.split(' ')[2]];
-		Assert.same(['100', '55', '5000'], flagged, 'only the nested, the negated and the unlisted call stay flagged');
+		Assert.same(['100', '5000'], flagged, 'only the nested and the unlisted call stay flagged');
 		Assert.equals(6, violations(src).length, 'without the option every one of them is a finding');
 	}
 
@@ -69,6 +69,130 @@ class MagicNumberCheckTest extends Test {
 			+ '\t\tBlang.t("d", 44);\n\t}\n}';
 		final flagged: Array<String> = [for (v in withCalls(src, ['Lang.t'])) v.message.split(' ')[2]];
 		Assert.same(['33', '44'], flagged, 'a bare t() and a different receiver are not Lang.t');
+	}
+
+	/**
+	 * A negated literal is a DIRECT argument: Haxe has no negative literal, `-18` is `Neg(IntLit 18)`, so
+	 * the negation is the argument and the literal sits one level below it. `f(-18)` is exempt exactly when
+	 * `f(18)` is.
+	 *
+	 * RED under M-MAGIC-CALLARG-NEG-BLIND (the negation does not carry the argument context to its
+	 * literal): `-18` and `-83.75` come back. A negated operand of arithmetic (`-(3) * k`, `-k * 4`) is no
+	 * argument and stays flagged with the arm on and off alike.
+	 */
+	@:pin('control')
+	@:killer('M-MAGIC-CALLARG-NEG-BLIND')
+	public function testANegatedArgumentOfAnIgnoredCallIsExempt(): Void {
+		final src: String = 'class C {\n\tfunction g(k:Int) {\n\t\tf(18);\n\t\tf(-18);\n\t\tf(-83.75, -k * 4);\n\t}\n}';
+		final flagged: Array<String> = [for (v in withCalls(src, ['f'])) v.message.split(' ')[2]];
+		Assert.same(['4'], flagged, 'only the literal under arithmetic stays flagged');
+		Assert.equals(4, violations(src).length, 'without the option every one of them is a finding');
+	}
+
+	/**
+	 * A CONSTRUCTOR is listed as `T.new`, the spelling Haxe itself gives a constructor used as a value
+	 * (`Point.new`): the entry matches the tail of the constructed type's path followed by `new`, so
+	 * `SpriteDefinition.new` reaches `new SpriteDefinition(…)` and `new data.SpriteDefinition(…)`, and type
+	 * arguments are no part of the path (`Map.new` reaches `new Map<String, Int>(…)`). A bare `Other`
+	 * names a CALL `Other(…)`, never a constructor, so nothing is exempt unless configured.
+	 *
+	 * RED under M-MAGIC-CALLARG-NEW-BLIND (no constructor is ever a listed callee): 77, 78 and 79 come back.
+	 */
+	@:pin('control')
+	@:killer('M-MAGIC-CALLARG-NEW-BLIND')
+	public function testAnIgnoredConstructorIsSpelledDotNew(): Void {
+		final src: String = 'class C {\n\tfunction g() {\n\t\tnew SpriteDefinition("a", 77);\n\t\tnew data.SpriteDefinition("b", 78);\n'
+			+ '\t\tnew Map<String, Int>(79);\n\t\tnew Other("c", 80);\n\t\tnew Blah.SpriteDefinitionX("d", 81);\n\t}\n}';
+		final calls: Array<String> = ['SpriteDefinition.new', 'Map.new', 'Other'];
+		final flagged: Array<String> = [for (v in withCalls(src, calls)) v.message.split(' ')[2]];
+		Assert.same(['80', '81'], flagged, 'a bare entry and a different type name reach no constructor');
+	}
+
+	/**
+	 * A value object BUILT IN PLACE as a direct argument of a listed callee carries that callee's data:
+	 * `new SpriteDefinition('players:east', new Point(-28, -77.65))` registers the sprite's offset, and the
+	 * `Point` is only its carrier. The context passes through `new` alone — an ordinary call
+	 * (`make(5)`) or an operator (`3 * k`) inside the argument resets it — and a `Point` built anywhere
+	 * else is untouched.
+	 *
+	 * RED under M-MAGIC-CALLARG-NESTED-NEW (a constructor inside a listed argument does not carry the
+	 * context): -28, -77.65 and the 6 inside `new Point(3 * k, 6)` come back.
+	 */
+	@:pin('control')
+	@:killer('M-MAGIC-CALLARG-NESTED-NEW')
+	public function testAValueObjectBuiltInAListedArgumentIsExempt(): Void {
+		final src: String = 'class C {\n\tfunction g(k:Int) {\n\t\tnew SpriteDefinition("a", new Point(-28, -77.65));\n'
+			+ '\t\tnew SpriteDefinition("b", make(5));\n\t\tnew SpriteDefinition("c", new Point(3 * k, 6));\n'
+			+ '\t\tnew Point(9, 10);\n\t\tsetHitArea(-16, 4, 80, 64);\n\t}\n}';
+		final flagged: Array<String> = [
+			for (v in withCalls(src, ['SpriteDefinition.new', 'setHitArea'])) v.message.split(' ')[2]
+		];
+		Assert.same(['5', '3', '9', '10'], flagged, 'only what no listed callee receives directly or through a new stays flagged');
+	}
+
+	/**
+	 * With `literalTables` on, a `switch` whose every arm maps literal patterns to a literal value is a
+	 * lookup TABLE (`case 0x410300: 0xC0;`): the patterns are the keys and the values the data, so neither
+	 * is a hidden quantity. The subject is logic and stays flagged (`base << 16`). One arm that is not
+	 * literal data — a computed value, a guard, a block body, a capture — makes it no table, and every
+	 * literal in it is flagged as before.
+	 *
+	 * RED under M-MAGIC-TABLE-SWITCH-BLIND (no switch is a table): the table's six literals come back.
+	 * RED under M-MAGIC-TABLE-SWITCH-ARM-LOOSE (an arm is judged by its value alone): the guarded and the
+	 * capturing switches lose their 31 / 32 / 41 / 42.
+	 */
+	@:pin('control')
+	@:killer('M-MAGIC-TABLE-SWITCH-BLIND')
+	@:killer('M-MAGIC-TABLE-SWITCH-ARM-LOOSE')
+	public function testASwitchOfLiteralArmsIsATable(): Void {
+		final src: String = 'class C {\n\tfunction g(base:Int, c:Bool, k:Int):Int {\n'
+			+ '\t\tfinal a:Int = switch base << 16 { case 0x410300: 0xC0; case 33 | 44: -55; case _: -1; };\n'
+			+ '\t\tfinal b:Int = switch k { case 21: 22; case 23: k; case _: 0; };\n'
+			+ '\t\tfinal d:Int = switch k { case 31 if (c): 32; case _: 0; };\n'
+			+ '\t\tfinal e:Int = switch k { case 41: 42; case z: 0; };\n'
+			+ '\t\tfinal f:Int = switch k { case 51: { 52; } default: 0; };\n'
+			+ '\t\treturn switch k { case 61: 62; default: 63; };\n\t}\n}';
+		final flagged: Array<String> = [for (v in withTables(src)) v.message.split(' ')[2]];
+		Assert.same(
+			['16', '21', '22', '23', '31', '32', '41', '42', '51', '52'], flagged, 'the subject and the non-table switches stay flagged'
+		);
+		Assert.equals(18, violations(src).length, 'with the option off every literal is a finding');
+	}
+
+	/**
+	 * With `literalTables` on, an array or map literal of literal data is a TABLE when a name gives it its
+	 * meaning: the direct initializer of a local (`final widths = [30, 45]`) or the sole return of a
+	 * function (`function initDecodeChar() return [-1, 62, 63]`) — the same reasoning that already exempts
+	 * `final x = 5000;`. A table passed inline (`draw([3, 4])`) has no name, and one element that is not
+	 * data (`[5, k]`) makes it no table.
+	 *
+	 * RED under M-MAGIC-TABLE-COLLECTION-BLIND (no collection is a named table): the named tables' literals
+	 * come back. RED under M-MAGIC-TABLE-COLLECTION-UNNAMED (every all-literal collection is a table): the
+	 * inline `draw([3, 4])` loses its findings.
+	 */
+	@:pin('control')
+	@:killer('M-MAGIC-TABLE-COLLECTION-BLIND')
+	@:killer('M-MAGIC-TABLE-COLLECTION-UNNAMED')
+	public function testANamedCollectionOfLiteralsIsATable(): Void {
+		final src: String = 'class C {\n\tfunction g(k:Int) {\n\t\tfinal widths = [30, -45, 60];\n\t\tvar keys = [7 => "a", -8 => "b"];\n'
+			+ '\t\tdraw([3, 4]);\n\t\tfinal mixed = [5, k];\n\t}\n\tfunction dec():Array<Int> {\n\t\treturn [-1, 62, 63];\n\t}\n'
+			+ '\tfunction enc():Array<Int> return [64, 65];\n\tfunction two():Array<Int> {\n\t\ttrace(1);\n\t\treturn [97, 98];\n\t}\n}';
+		final flagged: Array<String> = [for (v in withTables(src)) v.message.split(' ')[2]];
+		Assert.same(['3', '4', '5', '97', '98'], flagged, 'an inline, a mixed and a not-sole-return collection stay flagged');
+	}
+
+	/**
+	 * `literalTables` is OFF unless a project sets it: no existing configuration changes behaviour.
+	 *
+	 * RED under M-MAGIC-TABLES-DEFAULT-ON (the option read as on when absent): the switch's literals vanish
+	 * from a run with no option at all.
+	 */
+	@:pin('control')
+	@:killer('M-MAGIC-TABLES-DEFAULT-ON')
+	public function testLiteralTablesAreOffByDefault(): Void {
+		final src: String = 'class C {\n\tfunction g(k:Int):Int {\n\t\treturn switch k { case 71: 72; case _: 73; };\n\t}\n}';
+		Assert.equals(3, violations(src).length);
+		Assert.equals(3, withConfig(src, '{"rules":{"magic-number":{"literalTables":false}}}').length);
 	}
 
 	public function testEveryMagicLiteralFlagged(): Void {
@@ -273,8 +397,18 @@ class MagicNumberCheckTest extends Test {
 
 	/** The findings on `src` under a config whose `ignoreCallArguments` lists `calls`. */
 	private function withCalls(src: String, calls: Array<String>): Array<Violation> {
+		return withConfig(src, '{"rules":{"magic-number":{"ignoreCallArguments":${Json.stringify(calls)}}}}');
+	}
+
+	/** The findings on `src` with `literalTables` on. */
+	private function withTables(src: String): Array<Violation> {
+		return withConfig(src, '{"rules":{"magic-number":{"literalTables":true}}}');
+	}
+
+	/** The findings on `src` under the `apqlint.json` text `json`. */
+	private function withConfig(src: String, json: String): Array<Violation> {
 		final check: MagicNumber = new MagicNumber();
-		final config: LintConfig = LintConfig.parse('{"rules":{"magic-number":{"ignoreCallArguments":${Json.stringify(calls)}}}}');
+		final config: LintConfig = LintConfig.parse(json);
 		check.setConfigResolver(_ -> config);
 		return CheckFixture.violations(check, src);
 	}
