@@ -601,9 +601,11 @@ final class TypeResolver {
 	 * each rejects a null flowing into a nominally non-nullable binding, the sole
 	 * guarantee `isProvablyNonNull` relies on.
 	 */
-	public static function enclosingIsNullSafe(tree: QueryNode, span: Span, metaName: String, disableArg: Null<String>): Bool {
+	public static function enclosingIsNullSafe(
+		tree: QueryNode, span: Span, metaName: String, disableArg: Null<String>, ?memo: RefsCache
+	): Bool {
 		var active: Bool = false;
-		for (s in collectNullSafetyScopes(tree, metaName, disableArg)) if (s.from <= span.from && span.to <= s.to) {
+		for (s in nullSafetyScopes(tree, metaName, disableArg, memo)) if (s.from <= span.from && span.to <= s.to) {
 			if (s.disabled) return false;
 			if (s.typeLevel) active = true;
 		}
@@ -1001,18 +1003,8 @@ final class TypeResolver {
 	 * declaration at its own level (a statement- or expression-level annotation) is
 	 * dropped: it falls outside the member > type > module hierarchy this models.
 	 */
-	private static function collectNullSafetyScopes(tree: QueryNode, metaName: String, disableArg: Null<String>): Array<{
-		from: Int,
-		to: Int,
-		disabled: Bool,
-		typeLevel: Bool
-	}> {
-		final scopes: Array<{
-			from: Int,
-			to: Int,
-			disabled: Bool,
-			typeLevel: Bool
-		}> = [];
+	private static function collectNullSafetyScopes(tree: QueryNode, metaName: String, disableArg: Null<String>): Array<NullSafetyScope> {
+		final scopes: Array<NullSafetyScope> = [];
 		function walk(node: QueryNode): Void {
 			var pending: Array<{ from: Int, disabled: Bool }> = [];
 			for (c in node.children) {
@@ -1190,8 +1182,32 @@ final class TypeResolver {
 		final disableArg: Null<String> = shape.nullSafetyDisableArg;
 		// The written type is resolved LAST: null safety is the cheap half, and resolution may
 		// build the whole resolution index.
-		return enclosingIsNullSafe(root, new Span(bindingFrom, bindingFrom), nullSafetyMetaName, disableArg)
-			&& enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, disableArg) && types.ofBinding(bindingFrom) != Unproven;
+		return enclosingIsNullSafe(root, new Span(bindingFrom, bindingFrom), nullSafetyMetaName, disableArg, shape.refsCache)
+			&& enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, disableArg, shape.refsCache)
+			&& types.ofBinding(bindingFrom) != Unproven;
+	}
+
+	/**
+	 * `collectNullSafetyScopes`, memoised per tree in the run's `memo` when the caller has one: a proof asks
+	 * `enclosingIsNullSafe` twice per operand, and each ask walked the whole file (~0.37 s of a TM `lint --all`).
+	 */
+	private static function nullSafetyScopes(
+		tree: QueryNode, metaName: String, disableArg: Null<String>, memo: Null<RefsCache>
+	): Array<NullSafetyScope> {
+		return memo == null
+			? collectNullSafetyScopes(tree, metaName, disableArg)
+			: memo.nullSafetyScopes(tree, '$metaName\t$disableArg', () -> collectNullSafetyScopes(tree, metaName, disableArg));
 	}
 
 }
+
+/**
+ * One `@:nullSafety` declaration scope (`TypeResolver.collectNullSafetyScopes`): the region from the annotation to
+ * the end of the declaration it annotates, whether it DISABLES null safety, and whether that declaration is a type.
+ */
+typedef NullSafetyScope = {
+	final from: Int;
+	final to: Int;
+	final disabled: Bool;
+	final typeLevel: Bool;
+};
