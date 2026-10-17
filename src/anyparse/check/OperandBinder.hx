@@ -133,7 +133,9 @@ final class OperandBinder {
 			: memberTier(callee.children[0], name, true);
 	}
 
-	/** The expression initialising the local `use` reads, written with no type: the local holds ITS type (`NominalTypes.localInitializer`). */
+	/**
+	 * The expression initialising the unannotated local `use` reads: the local holds ITS type (`NominalTypes.localInitializer`).
+	 */
 	private function initializerOf(use: QueryNode): Null<QueryNode> {
 		return NominalTypes.localInitializer(use, _tree, _shape, _annotations);
 	}
