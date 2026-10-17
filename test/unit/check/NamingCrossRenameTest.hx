@@ -73,7 +73,7 @@ final class NamingCrossRenameTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-XRENAME-INDEXED-UNDERLYING')
+	@:killer('M-XRENAME-INDEXED-UNDERLYING', 'M-XRENAME-STRING-OWN-DECL')
 	public function testAnEnumAbstractAndItsValuesRename(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/E.hx', source: ENUMS },
@@ -83,6 +83,12 @@ final class NamingCrossRenameTest extends Test {
 		final fast: Array<RiskyCrossFileEdit> = armSets(files, [], 'fast');
 		Assert.equals(0, fast.length, 'an implicit String value is its name');
 		Assert.equals(NamingCrossRename.IMPLICIT_VALUE, _lastReason);
+		// A value whose initializer spells its own name: the literal is the VALUE, not a lookup of the name.
+		final selfValued: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/E.hx', source: ENUMS.replace('final goals = \'g\';', 'final goals = \'goals\';') },
+			{ file: 'pkg/F.hx', source: ENUM_USER }
+		];
+		Assert.equals(1, armSets(selfValued, [], 'goals').length, 'its own initializer');
 	}
 
 	/** Each gate, alone on a control fixture, refuses with its own reason. */

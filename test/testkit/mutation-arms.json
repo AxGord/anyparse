@@ -24425,6 +24425,14 @@
 			"find": "hasSubtype(owner, ownerFile)",
 			"replace": "hasSubtype(owner)",
 			"note": "a namesake type's subtypes unconfine a private member"
+		},
+		{
+			"name": "M-XRENAME-STRING-OWN-DECL",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "stringNamesIt",
+			"find": "entry.file == file ? [own] : []",
+			"replace": "[]",
+			"note": "an enum-abstract value's own initializer spelling its name refuses the rename"
 		}
 	]
 }
