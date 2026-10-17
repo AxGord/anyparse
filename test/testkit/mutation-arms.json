@@ -22146,6 +22146,46 @@
 			"method": "declName",
 			"force": "node.name",
 			"note": "the doc-orphan guard reads a declaration's name off its nameless FinalDecl wrapper, drops the watch, and a typedef inserted ahead of a documented `final class` takes its doc at rc 0"
+		},
+		{
+			"name": "M-EXTRACT-MEMBER-IGNORED",
+			"type": "anyparse.query.ExtractMethod",
+			"method": "extractMethod",
+			"find": "if (member) return extractIntoMember(",
+			"replace": "if (false) return extractIntoMember(",
+			"note": "extract-method --member falls back to the local closure, so the run stays inside the function it was meant to leave"
+		},
+		{
+			"name": "M-EXTRACT-MEMBER-STATIC-LOST",
+			"type": "anyparse.query.ExtractMethod",
+			"method": "extractIntoMember",
+			"find": "final isStatic: Bool = shape.staticModifierKind != null && host.run.exists(m -> m.kind == shape.staticModifierKind);",
+			"replace": "final isStatic: Bool = false;",
+			"note": "a run taken out of a static function becomes an INSTANCE member, which the static caller cannot call"
+		},
+		{
+			"name": "M-EXTRACT-MEMBER-COPIES-ASSIGNED",
+			"type": "anyparse.query.ExtractMethod",
+			"method": "collectMemberParams",
+			"find": "if (hits.exists(w -> w.kind == RefKind.Write && bindFrom(w) == b))",
+			"replace": "if (false)",
+			"note": "a local the function assigns is passed by value, so a write a closure makes while the run calls it no longer reaches the copy the extracted member reads"
+		},
+		{
+			"name": "M-EXTRACT-MEMBER-WRITTEN-TYPE-TRUSTED",
+			"type": "anyparse.query.ExtractMethod",
+			"method": "collectMemberParams",
+			"find": "TypeResolver.declaredBindingTypeSource(tree, shape, b, declared)",
+			"replace": "declared()[b]",
+			"note": "the parameter copies a written type its reads do not have - `?o:String` is passed as `String` while the body reads `Null<String>`"
+		},
+		{
+			"name": "M-EXTRACT-MEMBER-TYPE-PARAMS-BLIND",
+			"type": "anyparse.query.ExtractMethod",
+			"method": "hostRefusal",
+			"find": "if (at < 0 || at >= source.length || source.fastCodeAt(at) != '('.code)",
+			"replace": "if (false)",
+			"note": "a host with type parameters is extracted from, and the member's parameter `w:T` names a type parameter the new member does not declare"
 		}
 	]
 }

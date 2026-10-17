@@ -2,6 +2,8 @@ package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
@@ -34,6 +36,23 @@ private typedef LocalDecl = {
 private typedef ReturnVar = {
 	var name: String;
 	var writtenAfter: Bool;
+
+	/** The binding offset of its declaration in the range — where a member extraction reads its written type. */
+	var from: Int;
+}
+
+/** A free local a member extraction passes in: its name, binding offset and the type its declaration writes. */
+private typedef MemberParam = {
+	var name: String;
+	var from: Int;
+	var type: String;
+}
+
+/** The member of a type that holds the range, its modifier run, and every member name the type declares. */
+private typedef MemberHost = {
+	var node: QueryNode;
+	var run: Array<QueryNode>;
+	var names: Array<String>;
 }
 
 /**
@@ -125,7 +144,7 @@ final class ExtractMethod {
 	 */
 	public static function extractMethod(
 		source: String, startLine: Int, startCol: Int, endLine: Int, endCol: Int, name: String, reformat: Bool, plugin: GrammarPlugin,
-		shape: RefShape, ?optsJson: String
+		shape: RefShape, ?optsJson: String, member: Bool = false
 	): EditResult {
 		if (!SourceText.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
 
@@ -148,9 +167,9 @@ final class ExtractMethod {
 		final sel: StmtRange = range;
 
 		// Control-flow escape: a return / break / continue would change
-		// target once wrapped in a closure.
+		// target once wrapped in a function of its own.
 		if (containsControlFlowEscape(sel.stmts))
-			return Err('the selected range contains return / break / continue — cannot extract into a closure');
+			return Err('the selected range contains return / break / continue — cannot extract into a ${member ? 'member' : 'closure'}');
 
 		// A synthesised-function name that already binds in this function
 		// would shadow or redeclare it.
@@ -210,8 +229,10 @@ final class ExtractMethod {
 		for (d in decls) {
 			final hits: Array<RefHit> = Refs.find(d.name, tree, shape);
 			if (readAfterBinding(hits, d.from, sel.toOffset) && !returnVars.exists(r -> r.name == d.name))
-				returnVars.push({ name: d.name, writtenAfter: writtenAfterBinding(hits, d.from, sel.toOffset) });
+				returnVars.push({ name: d.name, writtenAfter: writtenAfterBinding(hits, d.from, sel.toOffset), from: d.from });
 		}
+
+		if (member) return extractIntoMember(source, tree, sel, name, returnVars, reformat, plugin, shape, optsJson);
 
 		final outerWrite: Null<String> = outerLocalMutatedAndUsedAfter(sel, declNames, tree, shape);
 		if (outerWrite != null)
@@ -473,6 +494,162 @@ final class ExtractMethod {
 		var candidate: String = '_${base}Result';
 		while (nameDeclaredInEnclosingFunction(tree, cursor, candidate) || returnVars.exists(r -> r.name == candidate)) candidate += '_';
 		return candidate;
+	}
+
+	/**
+	 * `--member`: the run becomes a new PRIVATE member of the enclosing type, right after the
+	 * member holding it, and the run is replaced with a call — the inverse of `inline-method`,
+	 * and the form that does not leave the work inside the function it was taken from.
+	 *
+	 * A member captures nothing, so every local of the enclosing function the run reads is
+	 * passed as a PARAMETER (in declaration order), typed by the type its declaration WRITES
+	 * (`TypeResolver.declaredBindingTypeSource`); the run's locals read after it come back as
+	 * the return value, typed the same way — one bare, two-plus as an anonymous structure. A
+	 * parameter is a copy, so the op refuses rather than guesses whenever that could differ from
+	 * the shared local the run read: a free local ASSIGNED anywhere in the function (a write the
+	 * run makes, or one a closure makes while the run calls it, would no longer reach it), and a
+	 * local whose written type is not the type its reads have, or that has none. Static-ness
+	 * follows the enclosing member. Refused outright: a constructor (`super(…)` and `final`
+	 * field initialisation are legal only there), a function with type parameters (the
+	 * projection carries none to copy), a `macro` / `extern` member, and a name the type already
+	 * declares.
+	 */
+	private static function extractIntoMember(
+		source: String, tree: QueryNode, sel: StmtRange, name: String, returnVars: Array<ReturnVar>, reformat: Bool, plugin: GrammarPlugin,
+		shape: RefShape, ?optsJson: String
+	): EditResult {
+		final regions: () -> Array<LexRegion> = plugin.lexicalRegions.bind(source);
+		final decl: Null<TypeDeclMatch> = TypeResolver.enclosingTypeDeclAt(tree, sel.fromOffset, sel.toOffset);
+		final found: Null<MemberHost> = decl == null ? null : memberHost(decl, sel, source, shape, regions);
+		if (found == null)
+			return Err('the range is not in a function that is a member of a type — `--member` needs a type to add the new member to');
+		final host: MemberHost = found;
+		final hostName: String = host.node.name ?? '';
+		final hostSpan: Null<Span> = host.node.span;
+		if (hostSpan == null) return Err('the enclosing member has no source span');
+		final refusal: Null<String> = hostRefusal(source, host, hostName, hostSpan, name, shape);
+		if (refusal != null) return Err(refusal);
+
+		final declared: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
+		final params: Array<MemberParam> = [];
+		final paramFailure: Null<String> = collectMemberParams(tree, sel, host.node, hostSpan, declared, shape, params);
+		if (paramFailure != null) return Err(paramFailure);
+		final returnTypes: Array<String> = [];
+		for (r in returnVars) {
+			final type: Null<String> = declared()[r.from];
+			if (type == null)
+				return Err(
+					'local "${r.name}" is read after the range, so the new member returns it, and its declaration writes no type to '
+					+ 'declare the return with — annotate it first'
+				);
+			returnTypes.push(type.trim());
+		}
+
+		final isStatic: Bool = shape.staticModifierKind != null && host.run.exists(m -> m.kind == shape.staticModifierKind);
+		final retType: String = switch returnVars.length {
+			case 0: 'Void';
+			case 1: returnTypes[0];
+			case _: '{ ${[for (k => r in returnVars) '${r.name}: ${returnTypes[k]}'].join(', ')} }';
+		};
+		final returnExpr: String = returnExprText(returnVars);
+		final retLine: String = returnExpr != '' ? '\nreturn $returnExpr;' : '';
+		final memberText: String = '${isStatic ? 'private static' : 'private'} function $name(${params.map(p -> '${p.name}: ${p.type}').join(', ')}): '
+			+ '$retType {\n${source.substring(sel.fromOffset, sel.toOffset)}$retLine\n}';
+		final call: String = '$name(${params.map(p -> p.name).join(', ')})';
+		final callText: String = switch returnVars.length {
+			case 0: '$call;';
+			case 1: '${bindKeyword(returnVars[0])} ${returnVars[0].name}: $retType = $call;';
+			case _:
+				final tmp: String = freshReturnName(tree, sel.fromOffset, returnVars, name);
+				'final $tmp: $retType = $call;\n'
+					+ [
+						for (k => r in returnVars) '${bindKeyword(r)} ${r.name}: ${returnTypes[k]} = $tmp.${r.name};'
+					].join('\n');
+		};
+		final after: Int = ElementSpan.declEditSpan(source, tree, host.node, hostSpan, regions).to;
+		return CanonicalEdit.canonicalize(source, [
+			{ span: new Span(sel.fromOffset, sel.toOffset), text: callText },
+			{ span: new Span(after, after), text: '\n\n$memberText' }
+		], reformat, plugin, optsJson);
+	}
+
+	/**
+	 * The function MEMBER of `decl` whose span holds the range (a local function inside it does not
+	 * count — the new member goes beside a member), with its modifier run and the names of every
+	 * member the type declares, on every conditional branch.
+	 */
+	private static function memberHost(
+		decl: TypeDeclMatch, sel: StmtRange, source: String, shape: RefShape, regions: () -> Array<LexRegion>
+	): Null<MemberHost> {
+		var host: Null<MemberHost> = null;
+		final names: Array<String> = [];
+		MemberBranchScan.eachTypeMember(decl, shape, source, n -> n.name != null, (child, run) -> {
+			final childName: Null<String> = child.name;
+			if (childName != null) names.push(childName);
+			final span: Null<Span> = child.span;
+			if (MemberKinds.FN_DECL_KINDS.contains(child.kind) && span != null && span.from <= sel.fromOffset && sel.toOffset <= span.to)
+				host = { node: child, run: run, names: names };
+		}, regions);
+		return host;
+	}
+
+	/** Why the enclosing member cannot take a sibling extracted from it, or null when it can. */
+	private static function hostRefusal(
+		source: String, host: MemberHost, hostName: String, hostSpan: Span, name: String, shape: RefShape
+	): Null<String> {
+		if (hostName == 'new')
+			return 'cannot extract out of a constructor into a member — `super(…)` and `final` field initialisation are legal only in '
+				+ 'the constructor; extract without --member';
+		for (kind in [shape.macroModifierKind, shape.externModifierKind]) if (kind != null && host.run.exists(m -> m.kind == kind))
+			return 'cannot extract out of a ${kind.toLowerCase()} member into a member — extract without --member';
+		// The projection carries no type parameter, so `function f<T>(x:T)` cannot hand its `T` on:
+		// only a header whose name is followed directly by `(` is known to declare none.
+		final nameAt: Int = SourceText.identTokenOffset(source, hostSpan, hostName);
+		var at: Int = nameAt < 0 ? -1 : nameAt + hostName.length;
+		while (at >= 0 && at < source.length && SourceText.isSpace(source.fastCodeAt(at))) at++;
+		if (at < 0 || at >= source.length || source.fastCodeAt(at) != '('.code)
+			return '"$hostName" declares type parameters (or its header could not be read), which the new member would need and the '
+				+ 'projection does not carry — extract without --member';
+		return host.names.contains(name) ? '"$name" already names a member of the enclosing type — choose a different name' : null;
+	}
+
+	/**
+	 * The enclosing function's locals the range reads, as parameters in declaration order, pushed
+	 * into `params`; or why one of them cannot be passed. A local is the range's when a read in the
+	 * range binds to a declaration inside `host` that precedes the range.
+	 */
+	private static function collectMemberParams(
+		tree: QueryNode, sel: StmtRange, host: QueryNode, hostSpan: Span, declared: () -> Map<Int, String>, shape: RefShape,
+		params: Array<MemberParam>
+	): Null<String> {
+		final kinds: Array<String> = BinderScan.binderKinds(shape);
+		final names: Array<String> = [];
+		function collect(n: QueryNode): Void {
+			final span: Null<Span> = n.span;
+			final nm: Null<String> = n.name;
+			if (span != null && span.from < sel.fromOffset && nm != null && kinds.contains(n.kind) && !names.contains(nm)) names.push(nm);
+			for (c in n.children) collect(c);
+		}
+		collect(host);
+		for (nm in names) {
+			final hits: Array<RefHit> = Refs.find(nm, tree, shape);
+			for (h in hits) if (h.kind != RefKind.Decl && h.span.from >= sel.fromOffset && h.span.from < sel.toOffset) {
+				final b: Int = bindFrom(h);
+				if (b < hostSpan.from || b >= sel.fromOffset || params.exists(p -> p.from == b)) continue;
+				if (hits.exists(w -> w.kind == RefKind.Write && bindFrom(w) == b))
+					return 'local "$nm" is assigned in this function, and the new member would receive a COPY of it — a write the range '
+						+ 'makes, or one a closure makes while the range calls it, would no longer reach the local; extract without '
+						+ '--member, or make it final first';
+				final type: Null<String> = TypeResolver.declaredBindingTypeSource(tree, shape, b, declared);
+				if (type == null)
+					return
+						'local "$nm" has no written type a parameter can copy (an untyped local, a loop or catch variable, an optional, '
+							+ 'null-defaulted or rest parameter) — annotate it first, or extract without --member';
+				params.push({ name: nm, from: b, type: type.trim() });
+			}
+		}
+		params.sort((a, c) -> a.from - c.from);
+		return null;
 	}
 
 }

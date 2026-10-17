@@ -3173,3 +3173,15 @@ decided the question; it may not become a record of runs.
   comes back byte-identical over TM `1d1ba147` (1114 types) and anyparse `src` (2199), and a CLI sample of 27 TM
   files is identical too; the `final` half was fixed by the final-wrapper fold (`bf7c68763`). Pinned by
   `ReplaceNodeSliceTest#testWholeFinalClassReplaceKeepsItsDocAndNeighbour`; nothing to fix — branch `feat/infra-N5`
+- `extract-method --member` extracts into a new PRIVATE member placed after the one holding the run, for a caller
+  that must not leave the work inside the function (C1: a closure's branches count toward its enclosing function).
+  Its parameters are the function's locals the run reads, typed by what their DECLARATIONS write
+  (`TypeResolver.declaredBindingTypeSource`, the reading `identDeclaredTypeSource` already applied, now public so
+  both ask one place), never by inference; the return value is the closure mode's, typed the same way. Positive
+  whitelist, because a parameter is a copy and nothing here type-checks: a local the function assigns ANYWHERE is
+  refused (a write through a closure the run calls would miss the copy — the shape `--member` would otherwise
+  silently change), and so is a local whose written type is not its read type (`?o:T` reads `Null<T>`, rest reads
+  `haxe.Rest<T>`) or has none; a constructor, a host with type parameters (not projected, so read off the header: the
+  name must be followed by `(`), a `macro` / `extern` host and a taken member name are refused too. Checked by
+  compiling the result: `run`/`twice` before and after the extraction print the same values under Haxe 4.3.7
+  `--interp` — branch `feat/infra-N5`

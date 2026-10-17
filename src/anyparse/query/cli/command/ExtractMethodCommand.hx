@@ -24,6 +24,9 @@ typedef ExtractMethodOpts = {
 	var startPos: Null<Position>;
 	var endPos: Null<Position>;
 	var name: Null<String>;
+
+	/** `--member`: extract into a new private member of the enclosing type instead of a local closure. */
+	var member: Bool;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag / malformed
 	// position -> EXIT_USAGE); the caller returns this immediately and ignores the rest.
 	var errExit: Null<Int>;
@@ -65,6 +68,7 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 			startPos: null,
 			endPos: null,
 			name: null,
+			member: false,
 			errExit: code
 		};
 	}
@@ -104,7 +108,7 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 		final shape: RefShape = plugin.refShape();
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = ExtractMethod.extractMethod(
-			source, startPos.line, startPos.col, endPos.line, endPos.col, nameStr, o.reformat, plugin, shape, optsJson
+			source, startPos.line, startPos.col, endPos.line, endPos.col, nameStr, o.reformat, plugin, shape, optsJson, o.member
 		);
 		return CliEdit.finishEdit('extract-method', filePath, o.write, result, fix);
 	}
@@ -115,6 +119,13 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 		CliIo.sysPrint('Extract the contiguous run of statements bounded by the two positions into\n');
 		CliIo.sysPrint('a fresh local function <name> (a closure), replacing the run with a call.\n');
 		CliIo.sysPrint('A local defined in the run and used after it becomes the return value.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('  --member        Extract into a new PRIVATE member of the enclosing type, placed\n');
+		CliIo.sysPrint('                  after the member holding the run: the locals the run reads\n');
+		CliIo.sysPrint('                  become typed parameters, the locals read after it the return\n');
+		CliIo.sysPrint('                  value (the inverse of inline-method). Refuses a local it would\n');
+		CliIo.sysPrint('                  have to copy that the function assigns, or one with no written\n');
+		CliIo.sysPrint('                  type.\n');
 		CliUsage.printOptionsEditTail();
 		CliUsage.printPostWriteFixTail();
 	}
@@ -127,6 +138,7 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 		var startSpec: Null<String> = null;
 		var endSpec: Null<String> = null;
 		var name: Null<String> = null;
+		var member: Bool = false;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -138,6 +150,8 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 					write = true;
 				case '--reformat':
 					reformat = true;
+				case '--member':
+					member = true;
 				case '-h', '--help':
 					printExtractMethodUsage();
 					return extractMethodParseExit(EXIT_OK);
@@ -180,6 +194,7 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 			startPos: startPos,
 			endPos: endPos,
 			name: name,
+			member: member,
 			errExit: null
 		};
 		CliIo.stderr('apq extract-method: malformed end position "$endSpec" — expected <line>:<col>\n');

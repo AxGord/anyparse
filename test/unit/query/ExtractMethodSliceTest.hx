@@ -303,4 +303,106 @@ class ExtractMethodSliceTest extends Test {
 		return ExtractMethod.extractMethod(source, startLine, startCol, endLine, endCol, name, reformat, plugin, shape);
 	}
 
+	/**
+	 * `--member`: the run becomes a private member beside the one holding it. The locals it reads
+	 * (`base`, a parameter, and `label`, read only through a `$label` interpolation) are passed as
+	 * parameters typed by their declarations, the field `_n` is read through the instance as before,
+	 * and the local read after the run (`sum`) comes back as the typed return value.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACT-MEMBER-IGNORED')
+	public function testMemberExtractPassesReadLocalsAndReturnsOne(): Void {
+		final source: String = 'class C {\n\tvar _n:Int = 1;\n\n\tfunction f(base:Int, label:String):Int {\n\t\tfinal scale:Int = base * 2;\n'
+			+ '\t\tfinal sum:Int = scale + _n;\n\t\ttrace(\'$$label: $$sum\');\n\t\treturn sum;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tvar _n:Int = 1;\n\n\tfunction f(base:Int, label:String):Int {\n\t\tfinal sum:Int = total(base);\n'
+			+ '\t\ttrace(\'$$label: $$sum\');\n\t\treturn sum;\n\t}\n\n\tprivate function total(base:Int):Int {\n\t\tfinal scale:Int = base * 2;\n'
+			+ '\t\tfinal sum:Int = scale + _n;\n\t\treturn sum;\n\t}\n}\n';
+		assertMember(source, 5, 3, 6, 3, 'total', expected);
+		final printed: String = 'class C {\n\tvar _n:Int = 1;\n\n\tfunction f(base:Int, label:String):Void {\n\t\tfinal scale:Int = base * 2;\n'
+			+ '\t\ttrace(\'$$label: $$scale\');\n\t}\n}\n';
+		final printedExpected: String = 'class C {\n\tvar _n:Int = 1;\n\n\tfunction f(base:Int, label:String):Void {\n\t\tshow(base, label);\n'
+			+ '\t}\n\n\tprivate function show(base:Int, label:String):Void {\n\t\tfinal scale:Int = base * 2;\n\t\ttrace(\'$$label: $$scale\');\n'
+			+ '\t}\n}\n';
+		assertMember(printed, 5, 3, 6, 3, 'show', printedExpected);
+	}
+
+	/** A static host gives a static member; two locals read after the run come back as one typed structure. */
+	@:pin('control')
+	@:killer('M-EXTRACT-MEMBER-STATIC-LOST')
+	public function testMemberExtractStaticWithStructReturn(): Void {
+		final source: String = 'class C {\n\tstatic function f(x:Int):Int {\n\t\tfinal a:Int = x + 1;\n\t\tfinal b:Int = a * 2;\n'
+			+ '\t\treturn a + b;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tstatic function f(x:Int):Int {\n\t\tfinal _stepResult:{a:Int, b:Int} = step(x);\n'
+			+ '\t\tfinal a:Int = _stepResult.a;\n\t\tfinal b:Int = _stepResult.b;\n\t\treturn a + b;\n\t}\n\n'
+			+ '\tprivate static function step(x:Int):{a:Int, b:Int} {\n\t\tfinal a:Int = x + 1;\n\t\tfinal b:Int = a * 2;\n'
+			+ '\t\treturn {a: a, b: b};\n\t}\n}\n';
+		assertMember(source, 3, 3, 4, 3, 'step', expected);
+	}
+
+	/**
+	 * A parameter is a COPY. `count` is assigned by a closure the run calls, so the extracted
+	 * member would print its own stale copy; the op refuses any local the function assigns.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACT-MEMBER-COPIES-ASSIGNED')
+	public function testMemberExtractRefusesALocalTheFunctionAssigns(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar count:Int = 0;\n\t\tfinal inc:() -> Void = () -> count++;\n'
+			+ '\t\tinc();\n\t\ttrace(count);\n\t}\n}\n';
+		assertMemberRefused(source, 5, 3, 6, 3, 'run', 'local "count" is assigned in this function');
+	}
+
+	/**
+	 * The parameter copies the type the declaration WRITES, so it must be the type the reads have:
+	 * `?o:String` reads as `Null<String>`, and an unannotated local writes none — both refused.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACT-MEMBER-WRITTEN-TYPE-TRUSTED')
+	public function testMemberExtractRefusesAnUntypedOrOptionalLocal(): Void {
+		final optional: String = 'class C {\n\tfunction f(?o:String):Void {\n\t\ttrace(o);\n\t}\n}\n';
+		assertMemberRefused(optional, 3, 3, 3, 3, 'show', 'local "o" has no written type a parameter can copy');
+		final unannotated: String = 'class C {\n\tfunction f():Void {\n\t\tfinal u = 3;\n\t\ttrace(u);\n\t}\n}\n';
+		assertMemberRefused(unannotated, 4, 3, 4, 3, 'show', 'local "u" has no written type a parameter can copy');
+	}
+
+	/** A host with type parameters, a constructor, and a name the type already has are refused. */
+	@:pin('control')
+	@:killer('M-EXTRACT-MEMBER-TYPE-PARAMS-BLIND')
+	public function testMemberExtractRefusesAHostItCannotCopyFrom(): Void {
+		final generic: String = 'class C {\n\tfunction f<T>(v:T):Void {\n\t\tfinal w:T = v;\n\t\ttrace(w);\n\t}\n}\n';
+		assertMemberRefused(generic, 3, 3, 3, 3, 'hold', '"f" declares type parameters');
+		final ctor: String = 'class C {\n\tfunction new(n:Int) {\n\t\tfinal m:Int = n + 1;\n\t\ttrace(m);\n\t}\n}\n';
+		assertMemberRefused(ctor, 3, 3, 4, 3, 'init', 'cannot extract out of a constructor');
+		final taken: String = 'class C {\n\tfunction f(n:Int):Void {\n\t\ttrace(n);\n\t}\n\n\tfunction g():Void {}\n}\n';
+		assertMemberRefused(taken, 3, 3, 3, 3, 'g', '"g" already names a member');
+	}
+
+	private function assertMember(
+		source: String, startLine: Int, startCol: Int, endLine: Int, endCol: Int, name: String, expected: String
+	): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		switch ExtractMethod.extractMethod(
+			source, startLine, startCol, endLine, endCol, name, false, plugin, plugin.refShape(), null, true
+		) {
+			case Ok(text):
+				Assert.equals(expected, text);
+				assertReparses(text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	private function assertMemberRefused(
+		source: String, startLine: Int, startCol: Int, endLine: Int, endCol: Int, name: String, needle: String
+	): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		switch ExtractMethod.extractMethod(
+			source, startLine, startCol, endLine, endCol, name, false, plugin, plugin.refShape(), null, true
+		) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains(needle, message);
+		}
+	}
+
 }

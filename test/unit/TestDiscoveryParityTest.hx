@@ -3358,6 +3358,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ExtractInterfaceSliceTest#testGuardedImplementsRefused :: control :: M-EI-DUP-IMPL-ALLOWED,M-EI-GUARD-FLAT-SCAN',
 			'unit.query.ExtractInterfaceSliceTest#testQualifiedSameNameDoesNotBlock :: control :: M-EI-IMPL-ANY-REFUSED',
 			'unit.query.ExtractInterfaceSliceTest#testSecondInterfaceStillExtracts :: control :: M-EI-IMPL-ANY-REFUSED',
+			'unit.query.ExtractMethodSliceTest#testMemberExtractPassesReadLocalsAndReturnsOne :: control :: M-EXTRACT-MEMBER-IGNORED',
+			'unit.query.ExtractMethodSliceTest#testMemberExtractRefusesAHostItCannotCopyFrom :: control :: M-EXTRACT-MEMBER-TYPE-PARAMS-BLIND',
+			'unit.query.ExtractMethodSliceTest#testMemberExtractRefusesALocalTheFunctionAssigns :: control :: M-EXTRACT-MEMBER-COPIES-ASSIGNED',
+			'unit.query.ExtractMethodSliceTest#testMemberExtractRefusesAnUntypedOrOptionalLocal :: control :: '
+				+ 'M-EXTRACT-MEMBER-WRITTEN-TYPE-TRUSTED',
+			'unit.query.ExtractMethodSliceTest#testMemberExtractStaticWithStructReturn :: control :: M-EXTRACT-MEMBER-STATIC-LOST',
 			'unit.query.FieldRefScanTest#testEveryBinderSpellingIsFoundFromSource :: control :: M-BINDER-KINDS-PARAMS-ONLY',
 			'unit.query.FieldRefScanTest#testEveryFunctionScopeSpellingIsRecognisedFromSource :: control :: '
 				+ 'M-FN-SCOPE-KINDS-DROPS-METHODS',
@@ -7029,7 +7035,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-SEARCH-TRY-EXPR-UNRELATED',
 			'M-REWRITE-TRAILER-UNALIGNED',
 			'M-PATCH-OWN-DOC-UNSEARCHED',
-			'M-PATCH-DOC-OWNER-WRAPPER-BLIND'
+			'M-PATCH-DOC-OWNER-WRAPPER-BLIND',
+			'M-EXTRACT-MEMBER-IGNORED',
+			'M-EXTRACT-MEMBER-STATIC-LOST',
+			'M-EXTRACT-MEMBER-COPIES-ASSIGNED',
+			'M-EXTRACT-MEMBER-WRITTEN-TYPE-TRUSTED',
+			'M-EXTRACT-MEMBER-TYPE-PARAMS-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

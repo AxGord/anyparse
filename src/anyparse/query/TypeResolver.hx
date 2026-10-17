@@ -858,9 +858,22 @@ final class TypeResolver {
 		if (visibleDeclCount(tree, shape, name, span) > 1) return null;
 		final bindingFrom: Null<Int> = resolveBindingFrom(name, span, tree, shape);
 		if (bindingFrom == null) return null;
-		if (skipNullableOptionalParam && paramTypeSourceUnsafe(tree, shape, bindingFrom)) return null;
-		final typeSrc: Null<String> = declaredTypeSources()[bindingFrom];
+		final typeSrc: Null<String> = skipNullableOptionalParam
+			? declaredBindingTypeSource(tree, shape, bindingFrom, declaredTypeSources)
+			: declaredTypeSources()[bindingFrom];
 		return typeSrc == null ? null : stripWs(typeSrc);
+	}
+
+	/**
+	 * The type a binding's DECLARATION writes, when that is the type its reads have, or null.
+	 * Null for a binding with no written type and for a parameter whose written type is not the
+	 * one its body sees: `?b:String` and `b:String = null` read as `Null<String>`, a rest
+	 * parameter `...r:Int` as `haxe.Rest<Int>`. The raw source of the annotation, untrimmed.
+	 */
+	public static function declaredBindingTypeSource(
+		tree: QueryNode, shape: RefShape, bindingFrom: Int, declaredTypeSources: () -> Map<Int, String>
+	): Null<String> {
+		return paramTypeSourceUnsafe(tree, shape, bindingFrom) ? null : declaredTypeSources()[bindingFrom];
 	}
 
 	/**
