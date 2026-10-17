@@ -24227,7 +24227,8 @@
 			"name": "M-XRENAME-NOT-CANDIDATE",
 			"type": "anyparse.check.NamingCrossRename",
 			"method": "isCandidate",
-			"force": "false",
+			"find": "(decl.category == NamingCategory.Type || decl.category == NamingCategory.EnumValue)",
+			"replace": "false",
 			"note": "no type or enum value reaches the cross-file rename arm"
 		},
 		{
@@ -24389,8 +24390,8 @@
 			"name": "M-XRENAME-NO-PROJECT",
 			"type": "anyparse.check.NamingCrossRename",
 			"method": "edits",
-			"find": "if (complete == null) {",
-			"replace": "if (false) {",
+			"find": "RefactorSupport.completeProjectSourcesOf(plugin);",
+			"replace": "RefactorSupport.completeProjectSourcesOf(plugin) ?? files;",
 			"note": "the arm runs without the whole project indexed"
 		},
 		{
