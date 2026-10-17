@@ -4097,6 +4097,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-RECEIVER-UNKNOWN-ROUTED,M-RECEIVER-UNRELATED-ROUTED,M-VIA-PRIVATE-REACHED',
 			'unit.query.MoveMemberSplitSliceTest#testASourceSubModuleTypeIsImportedAtTheDestination :: control :: '
 				+ 'M-CARRY-OWN-SUB-UNCARRIED',
+			'unit.query.MoveMemberSplitSliceTest#testCarriedStatementsLandImportsFirstAndOnlyUsedUsings :: control :: '
+				+ 'M-CARRY-ORDER-MET,M-CARRY-USING-UNUSED,M-CARRY-IMPORTLESS-BELOW,M-CARRY-USING-ORDER-MET',
 			'unit.query.MoveMemberSplitSliceTest#testFieldsOnlyTheMovedGroupUsesMoveAlong :: control :: M-OWNED-FIELDS-OFF',
 			'unit.query.MoveMemberSplitSliceTest#testKeepBareImportsTheDestinationStaticsInsteadOfQualifying :: control :: '
 				+ 'M-KEEP-BARE-IGNORED',
@@ -7176,7 +7178,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-MOVE-IMPLEMENTATION',
 			'M-MOVE-OVERRIDDEN-MEMBER',
 			'M-MOVE-UNRESOLVED-INTERFACE',
-			'M-SCAFFOLD-VIA-AT-END'
+			'M-SCAFFOLD-VIA-AT-END',
+			'M-CARRY-ORDER-MET',
+			'M-CARRY-IMPORTLESS-BELOW',
+			'M-CARRY-USING-UNUSED',
+			'M-CARRY-USING-ORDER-MET'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

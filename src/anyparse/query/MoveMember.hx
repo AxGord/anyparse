@@ -231,7 +231,8 @@ final class MoveMember {
 	private static final ADVISORY: String = 'import-carrying is best-effort — it shares MoveSymbol\'s carry, so a type '
 		+ 'position, an UPPER-initial static receiver (T.go()) and a bare name the source binds through a module-static '
 		+ 'wildcard (import pkg.Mod.*) are priced, and every unguarded `using` of the source file '
-		+ 'the destination lacks is carried when the moved body holds a member access at all. A dependency reached through a '
+		+ 'the destination lacks is carried when the moved body may call one of its extensions (one whose extension methods are '
+		+ 'known, none of them called, stays behind). A dependency reached through a '
 		+ 'VALUE position (Type.createInstance(Dep, [])), a constructor pattern (case Red:) or a LOWERCASE receiver is not, '
 		+ 'a carried `using` is declared FIRST in the destination\'s own `using` run so it ranks last, and a destination '
 		+ 'whose run offers no seat above it (a `#if`-guarded one below the anchor, or one sharing its line) is refused, '
@@ -870,11 +871,15 @@ final class MoveMember {
 				for (line in lines) if (!carried.contains(line))
 					carried.push(line);
 		}
-
+		// Each member's list holds the source's `using` lines in declaration order, the union across members need not
+		// (`[using A]` then `[using B, using A]` reads B after A) — and their order decides which extension wins a name.
+		final usings: Array<String> = MoveSymbol.carriedUsingLines(carried);
+		usings.sort((a, b) -> prep.srcSource.indexOf(a) - prep.srcSource.indexOf(b));
+		final ordered: Array<String> = MoveSymbol.carriedImportLines(carried).concat(usings);
 		// One seat decides where a carried `using` goes — see `MoveSymbol.carriedDestEdits`. A
 		// destination whose own `using` run cannot be ranked above is a REFUSAL here too, for the same
 		// reason: the only remaining order gives the destination's own calls the carried module.
-		final destEdits: CarriedEdits = MoveSymbol.carriedDestEdits(prep.destSource, prep.destInfo, carried, plugin);
+		final destEdits: CarriedEdits = MoveSymbol.carriedDestEdits(prep.destSource, prep.destInfo, ordered, plugin);
 		if (destEdits.unseated.length > 0) return MoveSymbol.unseatedUsingRefusal(prep.destFile, destEdits.unseated);
 		// Captured into locals: a narrowed FIELD does not stay narrowed across the call that reads it.
 		final usingEdit: Null<{ span: Span, text: String }> = destEdits.usingEdit;

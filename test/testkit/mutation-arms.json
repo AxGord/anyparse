@@ -22705,6 +22705,38 @@
 			"find": "if (span != null && (writes(stmt) || superCall(stmt))) at = span.to;",
 			"replace": "if (span != null) at = span.to;",
 			"note": "the via assignment lands after the last constructor statement again, after a method was bound under Strict null safety"
+		},
+		{
+			"name": "M-CARRY-ORDER-MET",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "carriedImportEdit",
+			"find": "? canonicalCarry(carried, plugin.refShape())",
+			"replace": "? carried",
+			"note": "carried statements land in the order the moved members met them, a `using` between two imports"
+		},
+		{
+			"name": "M-CARRY-IMPORTLESS-BELOW",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "carriedDestEdits",
+			"find": "else if (destInfo.imports.exists(imp -> imp.kind != ImportKind.Using))",
+			"replace": "else if (true)",
+			"note": "a destination with only `using` lines gets the carried imports below its `using` run"
+		},
+		{
+			"name": "M-CARRY-USING-UNUSED",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "usingLinesToCarry",
+			"find": "if (methods != null && !OccurrenceScan.usingExtensionCalled(declText, imp.raw, methods)) continue;",
+			"replace": "if (methods == null && declText == '') continue;",
+			"note": "a `using` whose extensions the moved code calls none of is carried anyway"
+		},
+		{
+			"name": "M-CARRY-USING-ORDER-MET",
+			"type": "anyparse.query.MoveMember",
+			"method": "pushImportEdits",
+			"find": "usings.sort((a, b) -> prep.srcSource.indexOf(a) - prep.srcSource.indexOf(b));",
+			"replace": "",
+			"note": "the union of the members' carried `using` lines keeps the order the members met them in, not the source's, and the extension ranking flips"
 		}
 	]
 }

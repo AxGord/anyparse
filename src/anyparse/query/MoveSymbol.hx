@@ -83,7 +83,7 @@ typedef CarriedEdits = {
  * type's body depends on — a `D` written in a type POSITION or as the RECEIVER of a member
  * access (`D.go()`) inside the decl, for which the source has an `import …D;` / `using …D;` and
  * the destination does not — plus every unguarded `using` of the source module the destination
- * lacks, whenever the declaration contains a member access at all.
+ * lacks, whenever the declaration may call one of its extensions (`DependencyCarry.usingLinesToCarry`).
  *
  * Its residual is NOT reliably loud: the destination does not always fail to COMPILE. A `Moved`
  * reaching `r.Helper` through its source file's import, moved into a destination whose own
@@ -118,8 +118,9 @@ final class MoveSymbol {
 		+ 'or a LOWERCASE receiver (tools.go(), traded away so that every local variable does not reach the collision gate) is not '
 		+ 'auto-detected and may need a manual import. An UPPER-initial static receiver (T.go()) IS priced — carried, or refused when the '
 		+ 'two sides disagree about the name. So is every unguarded `using` of the source FILE the destination lacks, whenever the '
-		+ 'declaration holds a member access at all: an extension call names only its method, so nothing can tell which `using` supplies '
-		+ 'it, and a carried one whose bound TYPE name collides at the destination is SKIPPED rather than refused. A carried `using` is '
+		+ 'declaration may call one of its extensions: an extension call names only its method, so nothing can tell which `using` '
+		+ 'supplies it — only a module whose extension methods are KNOWN and none of them called stays behind — and a carried one '
+		+ 'whose bound TYPE name collides at the destination is SKIPPED rather than refused. A carried `using` is '
 		+ 'declared FIRST in the destination\'s own `using` run, so Haxe (which tries static extensions in reverse declaration order) '
 		+ 'ranks it LAST: where two `using` modules supply one method name for one type, the MOVED body takes the destination\'s and the '
 		+ 'destination\'s own calls are untouched. That is the deliberate half — the other placement rebinds the destination instead, '
@@ -194,7 +195,7 @@ final class MoveSymbol {
 		// 5. Dependency imports to carry: type-position and member-access-RECEIVER
 		//    names referenced INSIDE the decl that the source imports explicitly
 		//    and the destination lacks, plus the source file's own unguarded
-		//    `using` statements when the decl holds a member access at all.
+		//    `using` statements when the decl may call one of their extensions.
 		final destSource: Null<String> = sourceOf[destFile];
 		if (destSource == null) return Err('destination file $destFile is not in the scope file set');
 		final oldImportPath: Null<String> = index.importPathOf(typeName);
@@ -323,7 +324,9 @@ final class MoveSymbol {
 		// the op has just written. Same mechanism, one argument.
 		final ordered: Null<ImportAnchor> = orderedCarriedAnchor(destSource, carried, plugin);
 		final anchor: ImportAnchor = ordered ?? importAnchor(destSource, plugin);
-		final lines: Array<String> = ordered == null ? carried : sortedImportLines(carried, ordered.order);
+		final lines: Array<String> = ordered == null
+			? canonicalCarry(carried, plugin.refShape())
+			: sortedImportLines(carried, ordered.order);
 		return {
 			span: new Span(anchor.offset, anchor.offset),
 			text: '${anchor.lead}${lines.join('\n')}\n${anchor.trail}'
@@ -391,13 +394,15 @@ final class MoveSymbol {
 				guardedEdits: guardedEdits,
 				unseated: []
 			};
-		else
+		else if (destInfo.imports.exists(imp -> imp.kind != ImportKind.Using))
 			{
 				usingEdit: { span: new Span(seat, seat), text: '${usings.join('\n')}\n' },
 				importEdit: carriedImportEdit(destSource, rest, plugin),
 				guardedEdits: guardedEdits,
 				unseated: []
 			};
+		else
+			importLessSeat(destSource, seat, usings, rest, guardedEdits, plugin);
 		return foldColocated(seated);
 	}
 
@@ -532,12 +537,12 @@ final class MoveSymbol {
 	 * The `using` half of a carry list, and its complement, split on the keyword `importStatementText`
 	 * writes — an exact test on generated text, not a guess about a user's spelling.
 	 */
-	private static function carriedUsingLines(carried: Array<String>): Array<String> {
+	public static function carriedUsingLines(carried: Array<String>): Array<String> {
 		return carried.filter(line -> line.startsWith('using '));
 	}
 
 	/** The lines of a carry list that are NOT `using` statements. */
-	private static function carriedImportLines(carried: Array<String>): Array<String> {
+	public static function carriedImportLines(carried: Array<String>): Array<String> {
 		return carried.filter(line -> !line.startsWith('using '));
 	}
 
@@ -1468,6 +1473,44 @@ final class MoveSymbol {
 		final sorted: Array<String> = lines.copy();
 		sorted.sort((a, b) -> ImportOrder.compare(order, plainImportPath(a) ?? a, plainImportPath(b) ?? b));
 		return sorted;
+	}
+
+	/**
+	 * `carriedDestEdits` for a destination with no import of its own but a `using` run: the seat above that run takes the
+	 * carried imports AND the carried `using` lines, imports first (`canonicalCarry`), so every import still precedes every
+	 * `using`. The ordinary anchor sits BELOW the run there — `ImportOrder.lastHeaderEnd` answers the last statement of any
+	 * kind when the file has no plain import — and the imports used to land under the destination's `using` lines. A
+	 * guarded region stays at the ordinary anchor, last, as everywhere else.
+	 */
+	private static function importLessSeat(
+		destSource: String, seat: Int, usings: Array<String>, rest: Array<String>, guardedEdits: Array<{ span: Span, text: String }>,
+		plugin: GrammarPlugin
+	): CarriedEdits {
+		final shape: RefShape = plugin.refShape();
+		final plain: Array<String> = rest.filter(line -> !GuardedImportCarry.isBlock(line, shape));
+		return {
+			usingEdit: { span: new Span(seat, seat), text: '${canonicalCarry(plain.concat(usings), shape).join('\n')}\n' },
+			importEdit: carriedImportEdit(destSource, rest.filter(line -> GuardedImportCarry.isBlock(line, shape)), plugin),
+			guardedEdits: guardedEdits,
+			unseated: []
+		};
+	}
+
+	/**
+	 * A carry list in the order a header holds it when no ordered seat of the destination decides it: every import
+	 * statement, sorted (`ImportOrder` ascii), a blank line, the `using` lines in the order they arrive — Haxe tries static
+	 * extensions in REVERSE declaration order, so theirs is semantic and the caller's to settle — then the guarded regions.
+	 * The list is assembled member by member (`MoveMember` carries per moved member), so the order the walk met them in put
+	 * a `using` between two imports, a split block `import-order` reports on the file the op has just written.
+	 */
+	private static function canonicalCarry(carried: Array<String>, shape: RefShape): Array<String> {
+		final blocks: Array<String> = carried.filter(line -> GuardedImportCarry.isBlock(line, shape));
+		final usings: Array<String> = carriedUsingLines(carried);
+		final imports: Array<String> = carried.filter(line -> !blocks.contains(line) && !usings.contains(line));
+		final ascii: Int = ImportOrder.orderNamed('ascii');
+		imports.sort((a, b) -> ImportOrder.compare(ascii, plainImportPath(a) ?? a, plainImportPath(b) ?? b));
+		final head: Array<String> = imports.length > 0 && usings.length > 0 ? imports.concat(['']) : imports;
+		return head.concat(usings).concat(blocks);
 	}
 
 }

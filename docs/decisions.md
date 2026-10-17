@@ -3410,3 +3410,14 @@ decided the question; it may not become a record of runs.
   a constructor that compiles under Strict has written every field before its first method use, so that point
   precedes it. The replay now typechecks the whole engine (`haxe bin/apq-js.hxml --no-output`) — branch
   `feat/infra-N12`
+- a move's carried statements landed in the order the moved members met them (`MoveMember` carries per member): with
+  no ordered seat in the destination that put `using` lines between imports, and a destination with only `using` lines
+  got the imports BELOW its run (`ImportOrder.lastHeaderEnd` answers the last statement of any kind there).
+  `MoveSymbol.canonicalCarry` writes every import sorted (ascii), a blank line, then the `using` lines, then guarded
+  regions; `importLessSeat` gives an import-less destination's `using` seat the imports too, ahead of the `using`
+  lines; and `MoveMember` orders the union of the members' `using` lines by the source's own declaration order — that
+  order decides which extension wins a method name. A `using` whose extension methods are KNOWN (the std probe, or a
+  module the scope declares) and that the moved code calls none of is no longer carried: the same test `unused-import`
+  deletes one by, now ONE function (`OccurrenceScan.usingExtensionCalled`) both call. Fixture consequence: four
+  `MoveSymbolSliceTest` fixtures modelled `using q.Ext;` supplying `s.go()` with an EMPTY `class Ext {}` (no such
+  extension exists); `Ext` now declares `go` — branch `feat/infra-N12`

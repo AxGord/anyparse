@@ -374,4 +374,51 @@ class MoveMemberSplitSliceTest extends Test {
 		Assert.isTrue(wired > big.indexOf('_k = k;') && wired < big.indexOf('_hand = { run: run };'), big);
 	}
 
+	/**
+	 * The statements a move carries land in canonical order: every import, sorted, then the `using` lines, in the source's
+	 * own order — a destination with no import of its own got them in the order the moved members met them, `using` lines
+	 * between imports (the import block split, `import-order`), or every import below its own `using` run. And a `using`
+	 * whose extensions the moved code calls none of (`using Lambda;` beside a body calling only `trim`) is not carried; one
+	 * whose extensions cannot be listed still is. Compile-proved on 4.3.7: both results print 4.
+	 */
+	@:pin('control')
+	@:killer('M-CARRY-ORDER-MET') @:killer('M-CARRY-USING-UNUSED') @:killer('M-CARRY-IMPORTLESS-BELOW')
+	@:killer('M-CARRY-USING-ORDER-MET')
+	public function testCarriedStatementsLandImportsFirstAndOnlyUsedUsings(): Void {
+		final scope: (String) -> Array<{ file: String, source: String }> = dest -> [
+			{
+				file: 'q/Box.hx',
+				source: 'package q;\n\nclass Box {\n\tpublic final v:Int;\n\n\tpublic function new(v:Int) {\n\t\tthis.v = v;\n\t}\n}'
+			},
+			{ file: 'q/Pair.hx', source: 'package q;\n\nclass Pair {\n\tpublic static function of(a:Int):Int return a * 2;\n}' },
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nimport q.Pair;\nimport q.Box;\n\nusing StringTools;\nusing Lambda;\n\nclass Src {\n'
+					+ '\tpublic static function size(s:String):Int return s.trim().length;\n\n'
+					+ '\tpublic static function box(s:String):Box return new Box(Pair.of(size(s)));\n}'
+			},
+			{ file: 'p/Dest.hx', source: dest }
+		];
+		final bare: String = okSource(move('p/Src.hx', 'Src', 'size,box', 'Dest', scope('package p;\n\nclass Dest {}')), 'p/Dest.hx');
+		Assert.isTrue(bare.contains('package p;\n\nimport q.Box;\nimport q.Pair;\n\nusing StringTools;\n\nclass Dest {'), bare);
+		final ranked: String = okSource(
+			move('p/Src.hx', 'Src', 'size,box', 'Dest', scope('package p;\n\nusing haxe.EnumTools;\n\nclass Dest {}')), 'p/Dest.hx'
+		);
+		Assert.isTrue(
+			ranked.contains('package p;\n\nimport q.Box;\nimport q.Pair;\n\nusing StringTools;\nusing haxe.EnumTools;\n\nclass Dest {'),
+			ranked
+		);
+		// Two members carry `[using Lambda]` and `[using StringTools, using Lambda]`: their union must keep the source's order.
+		final both: String = okSource(move('p/Src.hx', 'Src', 'tally,both', 'Dest', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nusing StringTools;\nusing Lambda;\n\nclass Src {\n'
+				+ '\tpublic static function tally(a:Array<Int>):Int return a.count(x -> x > 0);\n\n'
+				+ '\tpublic static function both(s:String, a:Array<Int>):Int return s.trim().length + a.count(x -> x > 1);\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
+		]), 'p/Dest.hx');
+		Assert.isTrue(both.contains('package p;\n\nusing StringTools;\nusing Lambda;\n\nclass Dest {'), both);
+	}
+
 }
