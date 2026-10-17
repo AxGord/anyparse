@@ -3732,3 +3732,44 @@ decided the question; it may not become a record of runs.
   `using` (`typedef AliasHost = B` binds `B`'s statics) stays a refusal like the binder's; `import.hx` usings are not
   read by the deep walk (a file's own `using` outranks them, 4.3.7, so the walk can only miss, never mis-answer) —
   branch `feat/infra-N31`
+- N26 A1 — an `enum abstract`'s members were all projected as enum VALUES, so `public var vertical(get, never):Bool`
+  and `public static var lock` read as "PascalCase or UPPER_SNAKE enum value" (TM SelectionHandle, AgeGroup). Haxe 4.3.7
+  makes a value of every NON-static field written as a plain variable (`private var C = 3` included) and of nothing else
+  (`E.label` → "Cannot access non-static abstract field statically", `static var s` is `Int`). → `NamingSupport.project`
+  takes a lazy property-facts thunk (`Naming.propertyFacts`, the plugin's `TypeInfoProvider.propertyAccessors` — the
+  grammar-AST fact the tree projection drops), and `HaxeNamingSupport.isEnumAbstractValue` is the positive test (non-static,
+  no accessor clause). Without the thunk the projection keeps its old reading, which is what `unused-private` (N28's
+  file, not touched here) and `no-underscore-prefix` still get: they ask nothing of an enum-abstract member's category.
+  A6 untouched: a PRIVATE property of an enum abstract now meets the same private-field rule a class's does, so whatever
+  A6 decides for storage-less private properties covers both (no TM site; both TM shapes are `public`) — branch `feat/infra-N26`
+- N26 A2 — `@:allow` was read off the FILE (`RefactorSupport.carriesAllowGrant`): one grant anywhere refused every private
+  member's rename (TM PitchArea 24 + PitchAreaField 4 + PlayerBase 1), and a member carrying only `@:allow` was refused
+  as "carries metadata". Haxe 4.3.7: a member grant opens that member only; a type-path grant reaches the type and its
+  SUBTYPES (`@:allow(B)` → `BSub extends B` compiles); a package grant reaches subpackages (`@:allow(foo)` → `foo.bar.Q`);
+  the path is literal (`@:allow(G)` does not reach `foo.G`). → `AllowGrants.reaching` (member + enclosing-type grants via
+  `Meta.find`; null when a code `@:allow` is not attributed — then the file-level answer stands) and `granteeFiles` (types
+  whose dot path equals / lies under / is a prefix of the grant, plus `subtypeDecls`; name-keyed, so a superset; an
+  unmatched path refuses with `crossAllowUnenumerable`). `isPrivateMemberConfined` / `privateMemberScanIsSound` take
+  `?grants` (absent = file-level; other callers unchanged); `ImplicitReach.AllowGrant` for a run of only `@:allow` metas,
+  asked LAST, so `unused-private` / the privatize arm still see a non-null reach. A public member asks nothing of a grant
+  (its affected set is every file spelling it) — branch `feat/infra-N26`
+- N26 A3 — the cross-file rename enumerated a public member's affected files from the LINT scope, so `lint X.hx --fix`
+  renamed `public final _scrollContainer` in X while the whole-project run declined; and both the rename and the
+  privatize arm counted an unrelated class's OWN `private final _scrollContainer` as a reference. → (1)
+  `NamingRenames.outsideScopeFile`: a project file (`resolutionProjectSourcesOf`) outside the run that declares a subtype /
+  `@:access` grant, or (public) holds an occurrence not all accounted for, refuses (`crossOutsideScope`) — a narrow scope can
+  only refuse more; (2) `foreignBoundSpans`: the occurrences each OTHER same-named declaration resolves (its own
+  `declaringFileRenameSpans`; a member of a type provably unrelated in both directions, a local, a parameter) are excluded
+  in `otherFileRenameSpans` and become allowed regions of the privatize arm (`NamingPrivatize.foreignRegions`). In a
+  subtype file the scope-correct foreign set WINS over the class-attributed bare half — the TM census caught the
+  opposite order renaming four overrides' `super.setup(accountScreen)` PARAMETER into the inherited field, which compiles;
+  a receiver-typed access both halves claim refuses — branch `feat/infra-N26`
+- N26 A4 — a local / parameter's decline read "only a member has a confinement proof": the cross-file path, asked first,
+  wrote `NOT_A_MEMBER` and first-writer-wins buried the single-file path's collision. → body-scoped categories leave the
+  cross-file path silently; `nameCollides(target)` / `qualifyFailed(target)` name the taken name. `no-underscore-prefix`
+  writes a reason at every refusing gate. One finding per identifier: `Check.Supersedes` + `Linter.withoutSuperseded` drop
+  a superseded rule's finding at the same file + start offset when the superseding check's finding SURVIVED every
+  per-file gate and suppression (so it never leaves zero), and `LintFixDriver.applyLintPass` asks it again over the
+  active + full-scope union. `no-underscore-prefix` supersedes `naming` (it is opted into and its options state the stance
+  on exactly these bindings). No collision-free alternative name is invented: the finding stays report-only with the
+  reason — branch `feat/infra-N26`
