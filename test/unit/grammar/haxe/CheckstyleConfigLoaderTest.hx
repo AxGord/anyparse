@@ -269,8 +269,10 @@ class CheckstyleConfigLoaderTest extends Test {
 		final method: Null<String -> Null<String>> = policy[0].normalize;
 		Assert.notNull(method);
 		if (method != null) Assert.equals('doThing', method('_doThing'));
-		// A TYPE rename reaches every file that names it, so the built-in leaves it report-only.
-		Assert.isNull(policy[1].normalize);
+		// A TYPE takes the built-in's PascalCase correction too: only `naming`'s compiler-verified cross-file arm asks for it.
+		final type: Null<String -> Null<String>> = policy[1].normalize;
+		Assert.notNull(type);
+		if (type != null) Assert.equals('JsonField', type('JSON_FIELD'));
 		final param: Null<String -> Null<String>> = policy[2].normalize;
 		Assert.notNull(param);
 		if (param != null) Assert.equals('countryId', param('country_id'));

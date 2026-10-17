@@ -46,7 +46,7 @@ using Lambda;
  *   typedef, an abstract, an enum abstract). A class, an interface or an enum keeps its name at run
  *   time — `Type.getClassName`, `Type.resolveClass`, serialized data — where no typecheck sees it.
  *   Not a module's MAIN type (the file would have to be renamed with it), no metadata beyond the
- *   inert `SAFE_TYPE_METAS`, not inside a `#if` region.
+ *   name-inert ones the grammar lists (`RefShape.nameInertTypeMetaNames`), not inside a `#if` region.
  * - An ENUM VALUE only of an `enum abstract` (a plain enum constructor's name is printed by
  *   `Std.string` and serialized), and only one whose VALUE does not depend on its name: it has an
  *   initializer, or the abstract's underlying type numbers implicit values
@@ -64,21 +64,6 @@ using Lambda;
 @:nullSafety(Strict)
 @:access(anyparse.check.Naming)
 final class NamingCrossRename {
-
-	/**
-	 * Metadata on a type that no tool, macro or runtime reads by the type's NAME: it changes how the
-	 * compiler treats the declaration, never what it is called at run time.
-	 */
-	private static final SAFE_TYPE_METAS: Array<String> = [
-		'@:forward',
-		'@:forwardStatics',
-		'@:transitive',
-		'@:nullSafety',
-		'@:enum',
-		'@:noCompletion',
-		'@:noDoc',
-		'@:callable'
-	];
 
 	/** The run does not index the whole project. */
 	public static inline final NO_PROJECT: String =
@@ -273,16 +258,14 @@ final class NamingCrossRename {
 		return ctx.index.fileInfo(file)?.types.find(t -> t.name == name);
 	}
 
-	/** Whether `type` carries metadata outside `SAFE_TYPE_METAS`, or the projection could not attribute one. */
+	/** Whether `type` carries metadata outside the grammar's name-inert list (`RefShape.nameInertTypeMetaNames`), or one the projection could not attribute. */
 	private static function unsafeTypeMeta(tree: QueryNode, source: String, type: TypeDeclInfo, plugin: GrammarPlugin): Bool {
 		if (type.hasBuild || type.hasAutoBuild || type.hasKeep || type.hasRtti || type.isExtern || type.bringsExtensions) return true;
+		final inert: Array<String> = plugin.refShape().nameInertTypeMetaNames ?? [];
 		for (hit in Meta.find(tree, plugin.metaShape(), source)) {
 			final owner: Null<Span> = hit.declSpan;
 			if (owner == null) return true;
-			if (
-				owner.from <= type.span.from && type.span.from < owner.to && hit.declName == type.name
-				&& !SAFE_TYPE_METAS.contains(hit.annotation)
-			)
+			if (owner.from <= type.span.from && type.span.from < owner.to && hit.declName == type.name && !inert.contains(hit.annotation))
 				return true;
 		}
 		return false;

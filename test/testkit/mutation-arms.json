@@ -24408,7 +24408,7 @@
 			"name": "M-XRENAME-SAFE-META",
 			"type": "anyparse.check.NamingCrossRename",
 			"method": "unsafeTypeMeta",
-			"find": "!SAFE_TYPE_METAS.contains(hit.annotation)",
+			"find": "!inert.contains(hit.annotation)",
 			"replace": "true",
 			"note": "an inert @:forward refuses the rename"
 		},

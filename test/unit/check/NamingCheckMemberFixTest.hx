@@ -892,8 +892,8 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	 */
 	public function testEveryRefusedRenameNamesItsGate(): Void {
 		Assert.equals(
-			'only a member (field / constant / method) has a confinement proof, and this declaration is not one — a type or enum-value '
-			+ 'rename reaches every file that names it',
+			'a type or enum-value rename reaches every file that names it, so only the cross-file `rename --scope` arm can fix it — '
+			+ 'applied only through the compiler oracle',
 			refusalFor([{ file: 'C.hx', source: 'class foo {}' }], 'C.hx')
 		);
 		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate function __render():Void {}\n}';

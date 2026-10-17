@@ -1477,6 +1477,13 @@ typedef RefShape = {
 	@:optional var indexValuedEnumAbstractUnderlyings: Array<String>;
 
 	/**
+	 * Type metadata that changes how the compiler treats a declaration and that no tool, macro or runtime
+	 * resolves by the type's NAME (Haxe `@:forward`, `@:nullSafety`, `@:enum`, …). Every OTHER metadata on a
+	 * type refuses `naming`'s cross-file rename arm. Optional; unset makes every metadata refuse.
+	 */
+	@:optional var nameInertTypeMetaNames: Array<String>;
+
+	/**
 	 * The grammar's raw dynamic-type name (Haxe `Dynamic`) — the `avoid-dynamic`
 	 * check flags a whole-word occurrence of it in a declared type position (field,
 	 * parameter, return, type argument, or annotated local). A typed abstraction whose
