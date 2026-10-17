@@ -23887,7 +23887,7 @@
 		{
 			"name": "M-UNUSED-PRIVATE-CHAIN-NOT-RESOLVED",
 			"type": "anyparse.check.UnusedPrivate",
-			"method": "supertypeDecline",
+			"method": "scopeChainDecline",
 			"find": "case Absent: null;",
 			"replace": "case Absent: DECLINE_UNRESOLVED_CHAIN;",
 			"note": "a resolution-scope proof that no supertype declares the name is not taken, so every private method of a subclass stays undeletable without compiler facts (TM Form / PlayerBase / ProfileButton …)"
