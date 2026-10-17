@@ -87,4 +87,17 @@ class ShapeVocabTest extends Test {
 		};
 	}
 
+	/**
+	 * Every loop and every two-armed conditional of the Haxe grammar is a decision point (`branchKinds`): the
+	 * hand-kept list missed `WhileExpr` (a `while` comprehension or lambda body) while `ForExpr` was there.
+	 */
+	@:pin('control')
+	@:killer('M-VOCAB-WHILE-EXPR-NOT-BRANCH')
+	public function testEveryHaxeLoopAndConditionalIsABranch(): Void {
+		final shape: RefShape = new HaxeQueryPlugin().refShape();
+		final branches: Array<String> = shape.branchKinds ?? [];
+		for (kind in ShapeVocab.loopKinds(shape).concat(ShapeVocab.conditionalKinds(shape)))
+			Assert.isTrue(branches.contains(kind), '$kind is not in branchKinds');
+	}
+
 }

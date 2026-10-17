@@ -3260,3 +3260,8 @@ decided the question; it may not become a record of runs.
   without the anonymous arm's byte-parity `nested ||` relaxation (`x = function n() return 1 trace(x());` is `Missing ;`).
   The plain writer therefore drops the optional `;` after `var g = function n() { … }` exactly as it does after the
   anonymous spelling — branch `feat/infra-N9`
+- `branchKinds` (cyclomatic decision points; `prefer-local-function`'s conditional-evaluation stop;
+  `join-single-use-local`'s field-chain refusal) lacked `WhileExpr` while `ForExpr` was in it, so a `while` comprehension
+  or lambda body counted nothing and a binding under one was hoisted. Added; `ShapeVocabTest` now pins every
+  `ShapeVocab.loopKinds` / `conditionalKinds` member into the list. `join-single-use-local` cannot change: its loop
+  barrier (`ShapeVocab.loopKinds`) already refused a read under `WhileExpr` — branch `feat/infra-N9`

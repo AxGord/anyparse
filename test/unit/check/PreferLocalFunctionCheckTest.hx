@@ -429,4 +429,20 @@ class PreferLocalFunctionCheckTest extends Test {
 		return CanonicalEdit.applyEdits(src, edits(src));
 	}
 
+	/**
+	 * A `while` in EXPRESSION position (a comprehension, a lambda body) runs its body zero or more times, exactly
+	 * as the statement form and a `for` comprehension do, so a binding under it is not hoisted either.
+	 */
+	@:pin('control')
+	@:killer('M-VOCAB-WHILE-EXPR-NOT-BRANCH')
+	public function testWhileExpressionPositionRefused(): Void {
+		for (loop in ['while (c)', 'for (i in 0...2)'])
+			Assert.equals(
+				0,
+				violations('class C {\n\tfunction f():Void {\n\t\tvar h:Void->Void;\n\t\tg([$loop h = function():Void { p(); }]);\n\t}\n}')
+					.length,
+				loop
+			);
+	}
+
 }

@@ -22330,6 +22330,14 @@
 			"find": "caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], at(ident('_e'), macro true))",
 			"replace": "caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], macro true)",
 			"note": "a named literal's EXPRESSION body ends its statement with no `;`, so `x = function n() return 1 trace(x());` (Haxe: `Missing ;`) parses"
+		},
+		{
+			"name": "M-VOCAB-WHILE-EXPR-NOT-BRANCH",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "'WhileStmt',\n\t\t\t\t'WhileExpr',\n\t\t\t\t'DoWhileStmt',\n\t\t\t\t'DoWhileExpr',",
+			"replace": "'WhileStmt',\n\t\t\t\t'DoWhileStmt',\n\t\t\t\t'DoWhileExpr',",
+			"note": "a `while` comprehension or lambda body is no decision point: complexity counts nothing for it and a binding under it is hoisted"
 		}
 	]
 }

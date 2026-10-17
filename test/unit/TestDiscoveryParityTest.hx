@@ -1202,6 +1202,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
 			'unit.check.ComparisonToBooleanCheckTest#testResolvedMemberTypedByTypeParamSkipped :: control :: M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND',
 			'unit.check.ComparisonToBooleanCheckTest#testTypeParamSpelledLikeBoolSkipped :: control :: M-NULLITY-TYPE-PARAM-BLIND',
+			'unit.check.ComplexityCheckTest#testWhileExpressionCounted :: control :: M-VOCAB-WHILE-EXPR-NOT-BRANCH',
 			'unit.check.ConfiguredIdiomE2ETest#testTheOracleRevertsWhatTheRuleCannotProve :: control :: M-EVENT-NO-MISMATCH',
 			'unit.check.CrossScopeSoundnessTest#testAnUnreadableReflectiveFileLicensesNothingExtra :: control :: '
 				+ 'M-REFLECTION-UNREADABLE-BLIND,M-INLINE-UNREADABLE-BLIND',
@@ -1877,6 +1878,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferLocalFunctionCheckTest#testLiteralReadingItsOwnNameRefused :: control :: M-LOCALFN-OUTER-NAME-READ',
 			'unit.check.PreferLocalFunctionCheckTest#testSignatureMismatchRefused :: control :: M-LOCALFN-SIGNATURE-ANY',
 			'unit.check.PreferLocalFunctionCheckTest#testVoidExpressionBodyIsWrapped :: control :: M-LOCALFN-VOID-RETURNED',
+			'unit.check.PreferLocalFunctionCheckTest#testWhileExpressionPositionRefused :: control :: M-VOCAB-WHILE-EXPR-NOT-BRANCH',
 			'unit.check.PreferNullCoalescingCheckTest#testNullFallbackIsTheGuardedValue :: control :: M-NULLCOAL-NULL-FALLBACK',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunGetsNoSecondUsing :: control :: M-GUARDED-USING-ABSENT',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunRefusalNamesTheRegion :: control :: M-GUARDED-USING-ABSENT',
@@ -4169,6 +4171,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SetModifierSliceTest#testPrivateOnAFinalClassPrecedesTheFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.ShapeVocabTest#testAKindTwoSeamsNameIsAnsweredOnce :: control :: M-VOCAB-UNION-DUPLICATES',
 			'unit.query.ShapeVocabTest#testAnUnsetSeamAddsNothing :: control :: M-VOCAB-UNSET-SEAM-ADDED',
+			'unit.query.ShapeVocabTest#testEveryHaxeLoopAndConditionalIsABranch :: control :: M-VOCAB-WHILE-EXPR-NOT-BRANCH',
 			'unit.query.ShapeVocabTest#testHaxeLoopAndFunctionVocabulary :: control :: '
 				+ 'M-VOCAB-NESTED-NO-NAMED-FN,M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
 			'unit.query.ShardPlanTest#testAClassHeavierThanAShardIsDealtAsSlices :: control :: M-SHARD-SPLIT-NEVER,M-SHARD-SPLIT-SLICE-WEIGHT',
@@ -7079,7 +7082,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-DOWHILE-PLAIN-SEMI',
 			'M-NAMED-FN-STMT-NO-ARM',
 			'M-NAMED-FN-NOT-BRACE-ENDED',
-			'M-NAMED-FN-EXPR-BODY-RELAXED'
+			'M-NAMED-FN-EXPR-BODY-RELAXED',
+			'M-VOCAB-WHILE-EXPR-NOT-BRANCH'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
