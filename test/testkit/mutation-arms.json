@@ -23085,6 +23085,163 @@
 			"find": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, options.separateInline);",
 			"replace": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, false);",
 			"note": "the spacing-only fallback of a pinned container ignores the option, so its glued boundary is reported for ever and never fixed"
+		},
+		{
+			"name": "M-NEGCOND-ANY-KIND",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "negatedOperand",
+			"find": "not.kind != s.notKind || ",
+			"replace": "",
+			"note": "any one-operand condition reads as a negation, so `a.b ? 1 : 2` is \"inverted\" to `b ? 2 : 1`"
+		},
+		{
+			"name": "M-NEGCOND-PAREN-KEPT",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "negatedOperand",
+			"find": "operand.kind == s.parenKind && operand.children.length == 1",
+			"replace": "false",
+			"note": "the redundant paren around the negated operand is kept: `!(a || b) ? x : y` becomes `(a || b) ? y : x`"
+		},
+		{
+			"name": "M-NEGCOND-OVERLOAD-BLIND",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "builtinNot",
+			"force": "true",
+			"note": "an `@:op(!A)` overload is ignored, so a `!` that need not be the complement is dropped and the branches swapped"
+		},
+		{
+			"name": "M-NEGCOND-COMMENT-BEFORE-KEPT",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "commentOutside",
+			"find": "SourceComments.hasCommentMarker(source, outer.from, inner.from) || ",
+			"replace": "",
+			"note": "a comment between the `!` and its operand is not seen, and the positive rebuild drops it"
+		},
+		{
+			"name": "M-NEGCOND-COMMENT-AFTER-KEPT",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "commentOutside",
+			"find": "inner.to, outer.to",
+			"replace": "inner.to, inner.to",
+			"note": "a comment after the operand inside the dropped paren is not seen, and the positive rebuild drops it"
+		},
+		{
+			"name": "M-NEGCOND-COMMENT-WHOLE-COND",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "commentOutside",
+			"force": "SourceComments.hasCommentMarker(source, outer.from, outer.to)",
+			"note": "a comment INSIDE the kept operand blocks the inversion too, though it travels verbatim"
+		},
+		{
+			"name": "M-NEGCOND-SWAP-OFF",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "ternaryEdit",
+			"find": "final kept: Null<QueryNode> = positive(cond, site);",
+			"replace": "final kept: Null<QueryNode> = null;",
+			"note": "a ternary built from a negated guard keeps the `!` (`x = !a ? 1 : 2`)"
+		},
+		{
+			"name": "M-OPSEL-REPORT-DROPPED",
+			"type": "anyparse.check.OperatorSelection",
+			"method": "indexes",
+			"find": "_report ?? IndexScope.report(_files, _plugin)",
+			"replace": "IndexScope.report(_files, _plugin)",
+			"note": "a fix's report index is ignored, so an `@:op(!A)` declared in a sibling module is unseen by the fix that orients a ternary"
+		},
+		{
+			"name": "M-INVERT-VALUE-CHAIN-SWAPPED",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "valueVerdict",
+			"find": "if (sameConstruct(thenBranch, node, scan.seams) || sameConstruct(elseBranch, node, scan.seams)) return Skip;",
+			"replace": "",
+			"note": "a ternary chain or else-if value chain is swapped, re-nesting it"
+		},
+		{
+			"name": "M-INVERT-VALUE-GLUE-BEFORE-BLIND",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "valueVerdict",
+			"find": "condSpan.to, thenSpan.from",
+			"replace": "condSpan.to, condSpan.to",
+			"note": "a comment between the condition and the then-branch stays while the branches move"
+		},
+		{
+			"name": "M-INVERT-VALUE-GLUE-AFTER-BLIND",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "valueVerdict",
+			"find": "thenSpan.to, elseSpan.from",
+			"replace": "thenSpan.to, thenSpan.to",
+			"note": "a comment between the two branches stays while the branches move"
+		},
+		{
+			"name": "M-INVERT-VALUE-NO-DESCEND",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "walk",
+			"find": "\t\t\t\t\t\tout.push(finding(scan, span, message + COMMENT_BLOCKS));\n",
+			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, message + COMMENT_BLOCKS));\n\t\t\t\t\t\treturn;\n",
+			"note": "a report-only value form stops the walk, so an invertible conditional inside it is never fixed"
+		},
+		{
+			"name": "M-INVERT-VALUE-DESCEND-FIXED",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "walk",
+			"find": "\t\t\t\t\t\tout.push(finding(scan, span, message));\n\t\t\t\t\t\treturn;\n",
+			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, message));\n",
+			"note": "a fixable value form does not stop the walk, so a nested one is rewritten in the same pass (overlapping edits)"
+		},
+		{
+			"name": "M-INVERT-VALUE-UNGUARDED",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "fix",
+			"find": "edits.concat(ParenGuard.guard(source, guarded, plugin))",
+			"replace": "edits.concat([for (g in guarded) { span: g.span, text: g.text }])",
+			"note": "value splices skip the parse round-trip: `!(a = b) ? 1 : 2` becomes `a = b ? 2 : 1`"
+		},
+		{
+			"name": "M-INVERT-VALUE-LOOSE-SPAN",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "tight",
+			"force": "node.span",
+			"note": "a splice over a node span that runs on through trailing trivia welds the condition to the `?` (`a? 2 : 1`)"
+		},
+		{
+			"name": "M-PTR-NO-ORIENT",
+			"type": "anyparse.check.PreferTernaryReturn",
+			"method": "fixCarrying",
+			"find": "NegatedCondition.siteOf(negation, file, source, tree)",
+			"replace": "null",
+			"note": "prefer-ternary-return writes `return !c ? a : b;` again"
+		},
+		{
+			"name": "M-PTR-TRAILING-SWAPS",
+			"type": "anyparse.check.PreferTernaryReturn",
+			"method": "buildEdit",
+			"find": "split.branchTrailing == null ? NegatedCondition.positive(match.condition, site)?.span : null",
+			"replace": "NegatedCondition.positive(match.condition, site)?.span",
+			"note": "a guard's own trailing comment is left riding the value that moved to the `:` slot"
+		},
+		{
+			"name": "M-RRT-NO-ORIENT",
+			"type": "anyparse.check.ReturnReassignTernary",
+			"method": "matchesIn",
+			"find": "NegatedCondition.siteOf(s.negation, file, source, tree)",
+			"replace": "null",
+			"note": "return-reassign-ternary writes `return !c ? e : x;` again"
+		},
+		{
+			"name": "M-PTA-NO-ORIENT",
+			"type": "anyparse.check.PreferTernaryAssignment",
+			"method": "fix",
+			"find": "NegatedCondition.siteOf(negation, file, source, tree)",
+			"replace": "null",
+			"note": "prefer-ternary-assignment writes `x = !c ? a : b;` again, in both arms"
+		},
+		{
+			"name": "M-PTE-NO-ORIENT",
+			"type": "anyparse.check.PreferTernaryExpression",
+			"method": "collect",
+			"find": "NegatedCondition.siteOf(s.negation, file, source, root)",
+			"replace": "null",
+			"note": "prefer-ternary-expression writes `!c ? a : b` again"
 		}
 	]
 }

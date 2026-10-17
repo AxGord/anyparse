@@ -552,6 +552,7 @@ class PreferTernaryReturnCheckTest extends Test {
 	}
 
 	/** The TM shape the task came from (`ThumbnailReader`, anonymized): a negated guard collapses to the POSITIVE ternary. */
+	@:pin('control') @:killer('M-PTR-NO-ORIENT')
 	public function testNegatedGuardEmitsPositiveTernary(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
 			'class C {\n\tfunction f():Bytes {\n\t\tif (!d.has.t) return null;\n\t\treturn decode(d.node.t.data);\n\t}\n}'
@@ -590,6 +591,7 @@ class PreferTernaryReturnCheckTest extends Test {
 	}
 
 	/** A guard's own trailing comment rides the `?` value, so the guard keeps its orientation. */
+	@:pin('control') @:killer('M-PTR-TRAILING-SWAPS')
 	public function testNegatedGuardTrailingCommentKeepsNegation(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f():Int {\n\t\tif (!a) return 1; // one\n\t\treturn 2;\n\t}\n}');

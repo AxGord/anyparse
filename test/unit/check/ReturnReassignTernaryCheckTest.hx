@@ -331,6 +331,7 @@ class ReturnReassignTernaryCheckTest extends Test {
 	}
 
 	/** A negated guard collapses to the POSITIVE ternary: the r-value and the returned local change places. */
+	@:pin('control') @:killer('M-RRT-NO-ORIENT', 'M-NEGCOND-SWAP-OFF')
 	public function testNegatedGuardEmitsPositiveTernary(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(fn('var x = 1;\n\t\tif (!a) x = 2;\n\t\treturn x;'));
 		Assert.equals(1, es.length);

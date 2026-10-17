@@ -235,6 +235,7 @@ class PreferTernaryExpressionCheckTest extends Test {
 	}
 
 	/** A negated condition is written POSITIVE, the branches swapped. */
+	@:pin('control') @:killer('M-PTE-NO-ORIENT', 'M-NEGCOND-SWAP-OFF')
 	public function testNegatedConditionEmitsPositiveTernary(): Void {
 		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f():Void {\n\t\tvar x = if (!c) 1 else 2;\n\t}\n}');
 		Assert.equals(1, es.length);
