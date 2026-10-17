@@ -90,21 +90,23 @@ typedef FieldWriteSite = {
 @:nullSafety(Strict)
 final class FieldWrites {
 
+	private static inline final REFLECT: String = 'Reflect';
+	private static inline final DYNAMIC_ACCESS: String = 'DynamicAccess';
+
+	/** How many functions making an `unplaced` write the notice names (`notices`). */
+	private static inline final NOTICE_NAMES: Int = 3;
+
 	/**
 	 * The reflective calls writing a field by name, off `Reflect` (`recordReflective`) -> how many arguments a direct
 	 * call takes: the object, the name, and but for `deleteField` the value.
 	 */
 	private static final REFLECT_WRITES: Map<String, Int> = ['setField' => 3, 'setProperty' => 3, 'deleteField' => 2];
 
-	private static inline final REFLECT: String = 'Reflect';
-
 	/**
 	 * The `DynamicAccess` methods writing the field their key names (`recordReflective`) -> how many arguments a call takes with
 	 * its receiver: the object, the name, and but for `remove` the value.
 	 */
 	private static final DYNAMIC_ACCESS_WRITES: Map<String, Int> = ['set' => 3, 'remove' => 2];
-
-	private static inline final DYNAMIC_ACCESS: String = 'DynamicAccess';
 
 	/**
 	 * The types, by simple name, whose index write `o[k] = v` stores an element and writes no field (`record`): the array, the
@@ -135,9 +137,6 @@ final class FieldWrites {
 		'Float64Array'
 	];
 
-	/** How many functions making an `unplaced` write the notice names (`notices`). */
-	private static inline final NOTICE_NAMES: Int = 3;
-
 	/** Whether the run sees every write of the project: every file's chain declares `closedWorld` and the run covers the project. */
 	public final complete: Bool;
 
@@ -150,8 +149,8 @@ final class FieldWrites {
 	/** Each file -> what types an expression of it, as far as the declarations say (`typeOf`); null when nothing can. */
 	private final _typers: Map<String, Null<(QueryNode) -> Null<String>>> = [];
 
-	/** The index `typeOf` resolves through (`heldIndex`); null until first demanded. */
-	private var _index: Null<SymbolIndex> = null;
+	/** Each lock member name -> the members of that name a lock call reads (`Owner.member`, `markLockMembers`). */
+	private final _lockFields: Map<String, Array<String>> = [];
 
 	private final _plugin: GrammarPlugin;
 
@@ -161,17 +160,17 @@ final class FieldWrites {
 	/** What a reflective write on a value the run places on no class stores (`storesLock`). */
 	private final _values: ReflectiveValues;
 
-	/** Each lock member name -> the members of that name a lock call reads (`Owner.member`, `markLockMembers`). */
-	private final _lockFields: Map<String, Array<String>> = [];
-
-	/** Each write `unplaced` holds, a literal name's included, with the types of what it stores (`storedTypes`); null until first asked. */
-	private var _stores: Null<Array<{ site: FieldWriteSite, types: Null<Array<String>> }>> = null;
-
 	private final _graph: CallGraph;
 	private final _shape: RefShape;
 
 	/** What reads a plain string literal's content (`Reflect.setField(o, "name", v)`); null for a grammar with none. */
 	private final _fold: Null<StringFoldSupport>;
+
+	/** The index `typeOf` resolves through (`heldIndex`); null until first demanded. */
+	private var _index: Null<SymbolIndex> = null;
+
+	/** Each write `unplaced` holds, a literal name's included, with the types of what it stores (`storedTypes`); null until first asked. */
+	private var _stores: Null<Array<{ site: FieldWriteSite, types: Null<Array<String>> }>> = null;
 
 	/**
 	 * The writes of the files `graph` holds; `complete` when the run sees every write of the project, `reflectiveClasses`
@@ -193,12 +192,142 @@ final class FieldWrites {
 	}
 
 	/**
+	 * Whether a reflective write may store a value in a field named `name`: one filed under the name, or a computed one
+	 * whose reach holds a type declaring a member so named on its chain — or that reaches any type's (`unplaced`), which
+	 * may store anything in any field, a lock in any lock member included, unless what it stores holds no lock of the type
+	 * of a lock member so named (`storesLock`). That is the sound default; what keeps a write on a value of no declared
+	 * class off it is a POSITIVE exclusion (`ReflectiveReach.placeOf`, `ReflectiveValues.typesOf`), never the absence of a
+	 * known class.
+	 */
+	public inline function reflectivelyWritten(name: String): Bool {
+		return reflectiveWritersOf(name).length > 0;
+	}
+
+	/**
 	 * Every write that may write a target named `name`: those naming it, in the order the files were walked, then every
 	 * reflective write of a computed name.
 	 */
 	public function of(name: String): Array<FieldWriteSite> {
 		final named: Array<FieldWriteSite> = _byName[name] ?? [];
 		return _computed.length == 0 ? named : named.concat(_computed);
+	}
+
+	/**
+	 * Whether `site` may write the field of that name `owner` declares: a reflective write when `owner` is among the types
+	 * it may reach (`ReflectiveReach.placeOf`; any, when unknown); any other receiver's write always — what it is written on, nothing here
+	 * can tell — and the running object's when its type declares the field as `owner`'s, declares none by the name (a local
+	 * of that name included), or is unknown. An interface's field is declared again by every implementer, so any own write
+	 * of the name may be one of it.
+	 */
+	public function mayWrite(site: FieldWriteSite, owner: String): Bool {
+		final reaches: Null<Array<String>> = site.reaches;
+		return site.reflective
+			? reaches == null || reaches.contains(owner)
+			: !site.own || !site.typed || site.declaring == null || site.declaring == owner || _graph.types.isInterface(owner);
+	}
+
+	/**
+	 * Records `fields` (`Owner.member`) as the lock members of their names, the members a lock call reads: what an
+	 * `unplaced` write stores counts against a name only when it may be a lock of the type one of them is declared of.
+	 */
+	public function markLockMembers(fields: Array<String>): Void {
+		for (f in fields) {
+			final name: String = LockSites.memberName(f);
+			final known: Array<String> = _lockFields[name] ?? [];
+			if (!known.contains(f)) known.push(f);
+			_lockFields[name] = known;
+		}
+	}
+
+	/**
+	 * The functions making the reflective writes that may store a value in a field named `name` (`reflectivelyWritten`), each
+	 * once — a write outside every function by its file.
+	 */
+	public function reflectiveWritersOf(name: String): Array<String> {
+		final out: Array<String> = [];
+		for (site in (_byName[name] ?? []).concat(_computed)) if (
+			site.reflective && (site.reaches == null ? storesLock(site, _lockFields[name]) : reachesDeclarer(site, name))
+		) {
+			final at: String = site.fn ?? site.file;
+			if (!out.contains(at)) out.push(at);
+		}
+		return out;
+	}
+
+	/**
+	 * Why a lock call made on the member `field` (`CallEdge.receiverField`) names no lock — `lock` null — when reflective
+	 * writes may store any lock in that member (`reflectiveWritersOf`): the member and the functions making them, said
+	 * after a finding's message; null for a named lock, no member, or a member no reflective write reaches.
+	 */
+	public function unsealedNote(field: Null<String>, lock: Null<String>): Null<String> {
+		final member: Null<String> = field == null || lock != null ? null : LockSites.memberName(field);
+		final writers: Array<String> = member == null ? [] : reflectiveWritersOf(member);
+		return writers.length == 0
+			? null
+			: ' — its lock member $member names no lock: a reflective write may store any lock in it (${firstNames(writers)})';
+	}
+
+	/**
+	 * The reflective writes of a computed name on a value the run places on no class and no exclusion bounds (`ReflectiveReach.placeOf`:
+	 * `Dynamic`, `Any`, a type parameter nothing bounds, a value the declarations do not type): each may store anything in
+	 * any field, and `reflectivelyWritten` counts each for every name.
+	 */
+	public function unplaced(): Array<FieldWriteSite> {
+		return _computed.filter(site -> site.reaches == null);
+	}
+
+	/**
+	 * What the reflective writes cost the lock names (`reflectivelyWritten`): one line naming the functions making an
+	 * `unplaced` write, which unseals every lock member, one naming each function whose write a positive exclusion bounds,
+	 * with the exclusion — the first `NOTICE_NAMES` of each — and, when `unnamed` lock holds lost the name of their member to
+	 * such a write, one counting them, with the preconditions of the instantiation bound the run fails
+	 * (`ReflectiveReach.lacking`) when a write is unplaced; none when there is no such write.
+	 */
+	public function notices(unnamed: Int): Array<String> {
+		final where: Array<String> = [];
+		final typed: Array<String> = [];
+		final kept: Array<String> = [];
+		sortUnplaced(where, typed, kept);
+		final placed: Array<String> = [];
+		for (list in [_computed].concat([for (sites in _byName) sites])) for (w in list) {
+			final by: Null<String> = w.placedBy;
+			final entry: String = '${w.fn ?? w.file} ($by)';
+			if (by != null && !placed.contains(entry)) placed.push(entry);
+		}
+		final out: Array<String> = [];
+		if (where.length > 0)
+			out.push(
+				'a reflective write of a computed name on a value the run places on no class (Dynamic, Any, a type parameter'
+				+ ' nothing bounds, or one the declarations do not type) may store any lock in any lock member, so no lock is'
+				+ ' named by its member: ${firstNames(where)}'
+			);
+		if (typed.length > 0)
+			out.push(
+				'a reflective write of a computed name on a value the run places on no class may store a lock of the type it stores'
+				+ ' in any lock member of that type, so no such member names its lock: ${firstNames(typed)}'
+			);
+		if (kept.length > 0)
+			out.push(
+				'reflective writes on a value the run places on no class kept off every lock member, since what each stores is no'
+				+ ' lock of a lock member\'s type: ${firstNames(kept)}'
+			);
+		if (placed.length > 0)
+			out.push(
+				'reflective writes on a value whose declared type places it on no class, each bounded by what the value provably is:'
+				+ ' ${firstNames(placed)}'
+			);
+		// what would have bounded an unplaced write on a type parameter: a run over a whole closed project declaring its reflection
+		final missing: Array<String> = _targets.lacking();
+		final lacking: String = where.length == 0 && typed.length == 0 || missing.length == 0
+			? ''
+			: '; a type parameter is bounded by its instantiations only in a run over a whole closedWorld project declaring'
+				+ ' reflectiveClasses — here: ${missing.join(', ')}';
+		if (unnamed > 0)
+			out.push(
+				'$unnamed lock hold(s) lost the name of their lock member to a reflective write — each is keyed by its pair\'s take'
+				+ ' and its finding names the writers$lacking'
+			);
+		return out;
 	}
 
 	/**
@@ -369,73 +498,6 @@ final class FieldWrites {
 	}
 
 	/**
-	 * Whether `site` may write the field of that name `owner` declares: a reflective write when `owner` is among the types
-	 * it may reach (`ReflectiveReach.placeOf`; any, when unknown); any other receiver's write always — what it is written on, nothing here
-	 * can tell — and the running object's when its type declares the field as `owner`'s, declares none by the name (a local
-	 * of that name included), or is unknown. An interface's field is declared again by every implementer, so any own write
-	 * of the name may be one of it.
-	 */
-	public function mayWrite(site: FieldWriteSite, owner: String): Bool {
-		final reaches: Null<Array<String>> = site.reaches;
-		return site.reflective
-			? reaches == null || reaches.contains(owner)
-			: !site.own || !site.typed || site.declaring == null || site.declaring == owner || _graph.types.isInterface(owner);
-	}
-
-	/**
-	 * Whether a reflective write may store a value in a field named `name`: one filed under the name, or a computed one
-	 * whose reach holds a type declaring a member so named on its chain — or that reaches any type's (`unplaced`), which
-	 * may store anything in any field, a lock in any lock member included, unless what it stores holds no lock of the type
-	 * of a lock member so named (`storesLock`). That is the sound default; what keeps a write on a value of no declared
-	 * class off it is a POSITIVE exclusion (`ReflectiveReach.placeOf`, `ReflectiveValues.typesOf`), never the absence of a
-	 * known class.
-	 */
-	public inline function reflectivelyWritten(name: String): Bool {
-		return reflectiveWritersOf(name).length > 0;
-	}
-
-	/**
-	 * Records `fields` (`Owner.member`) as the lock members of their names, the members a lock call reads: what an
-	 * `unplaced` write stores counts against a name only when it may be a lock of the type one of them is declared of.
-	 */
-	public function markLockMembers(fields: Array<String>): Void {
-		for (f in fields) {
-			final name: String = LockSites.memberName(f);
-			final known: Array<String> = _lockFields[name] ?? [];
-			if (!known.contains(f)) known.push(f);
-			_lockFields[name] = known;
-		}
-	}
-
-	/**
-	 * The functions making the reflective writes that may store a value in a field named `name` (`reflectivelyWritten`), each
-	 * once — a write outside every function by its file.
-	 */
-	public function reflectiveWritersOf(name: String): Array<String> {
-		final out: Array<String> = [];
-		for (site in (_byName[name] ?? []).concat(_computed)) if (
-			site.reflective && (site.reaches == null ? storesLock(site, _lockFields[name]) : reachesDeclarer(site, name))
-		) {
-			final at: String = site.fn ?? site.file;
-			if (!out.contains(at)) out.push(at);
-		}
-		return out;
-	}
-
-	/**
-	 * Why a lock call made on the member `field` (`CallEdge.receiverField`) names no lock — `lock` null — when reflective
-	 * writes may store any lock in that member (`reflectiveWritersOf`): the member and the functions making them, said
-	 * after a finding's message; null for a named lock, no member, or a member no reflective write reaches.
-	 */
-	public function unsealedNote(field: Null<String>, lock: Null<String>): Null<String> {
-		final member: Null<String> = field == null || lock != null ? null : LockSites.memberName(field);
-		final writers: Array<String> = member == null ? [] : reflectiveWritersOf(member);
-		return writers.length == 0
-			? null
-			: ' — its lock member $member names no lock: a reflective write may store any lock in it (${firstNames(writers)})';
-	}
-
-	/**
 	 * Whether the `unplaced` write `site` may store a lock in one of the lock members `fields` (any member, when null or
 	 * none is known): what it stores may be any object (`storedTypes` null), or of a type that may be a lock of the type
 	 * one of them is declared of (`ReflectiveValues.mayHold`).
@@ -473,69 +535,6 @@ final class FieldWrites {
 	}
 
 	/**
-	 * The reflective writes of a computed name on a value the run places on no class and no exclusion bounds (`ReflectiveReach.placeOf`:
-	 * `Dynamic`, `Any`, a type parameter nothing bounds, a value the declarations do not type): each may store anything in
-	 * any field, and `reflectivelyWritten` counts each for every name.
-	 */
-	public function unplaced(): Array<FieldWriteSite> {
-		return _computed.filter(site -> site.reaches == null);
-	}
-
-	/**
-	 * What the reflective writes cost the lock names (`reflectivelyWritten`): one line naming the functions making an
-	 * `unplaced` write, which unseals every lock member, one naming each function whose write a positive exclusion bounds,
-	 * with the exclusion — the first `NOTICE_NAMES` of each — and, when `unnamed` lock holds lost the name of their member to
-	 * such a write, one counting them, with the preconditions of the instantiation bound the run fails
-	 * (`ReflectiveReach.lacking`) when a write is unplaced; none when there is no such write.
-	 */
-	public function notices(unnamed: Int): Array<String> {
-		final where: Array<String> = [];
-		final typed: Array<String> = [];
-		final kept: Array<String> = [];
-		sortUnplaced(where, typed, kept);
-		final placed: Array<String> = [];
-		for (list in [_computed].concat([for (sites in _byName) sites])) for (w in list) {
-			final by: Null<String> = w.placedBy;
-			final entry: String = '${w.fn ?? w.file} ($by)';
-			if (by != null && !placed.contains(entry)) placed.push(entry);
-		}
-		final out: Array<String> = [];
-		if (where.length > 0)
-			out.push(
-				'a reflective write of a computed name on a value the run places on no class (Dynamic, Any, a type parameter'
-				+ ' nothing bounds, or one the declarations do not type) may store any lock in any lock member, so no lock is'
-				+ ' named by its member: ${firstNames(where)}'
-			);
-		if (typed.length > 0)
-			out.push(
-				'a reflective write of a computed name on a value the run places on no class may store a lock of the type it stores'
-				+ ' in any lock member of that type, so no such member names its lock: ${firstNames(typed)}'
-			);
-		if (kept.length > 0)
-			out.push(
-				'reflective writes on a value the run places on no class kept off every lock member, since what each stores is no'
-				+ ' lock of a lock member\'s type: ${firstNames(kept)}'
-			);
-		if (placed.length > 0)
-			out.push(
-				'reflective writes on a value whose declared type places it on no class, each bounded by what the value provably is:'
-				+ ' ${firstNames(placed)}'
-			);
-		// what would have bounded an unplaced write on a type parameter: a run over a whole closed project declaring its reflection
-		final missing: Array<String> = _targets.lacking();
-		final lacking: String = where.length == 0 && typed.length == 0 || missing.length == 0
-			? ''
-			: '; a type parameter is bounded by its instantiations only in a run over a whole closedWorld project declaring'
-				+ ' reflectiveClasses — here: ${missing.join(', ')}';
-		if (unnamed > 0)
-			out.push(
-				'$unnamed lock hold(s) lost the name of their lock member to a reflective write — each is keyed by its pair\'s take'
-				+ ' and its finding names the writers$lacking'
-			);
-		return out;
-	}
-
-	/**
 	 * Files each function making an `unplaced` write (`notices`) by what it stores: under `where` one that may store any
 	 * object, under `typed` one storing a lock of some lock member's type, under `kept` one storing no lock of any — a
 	 * write naming its field by a literal only there: it costs one member, and only keeping off it is news.
@@ -558,9 +557,9 @@ final class FieldWrites {
 		}
 	}
 
-	/** `at`, the function making a reflective write, with the types `types` of what it stores. */
-	private static function storing(at: String, types: Array<String>): String {
-		return '$at (${types.length == 0 ? 'it stores no object' : 'it stores ${types.join(', ')}'})';
+	/** Whether `kind` is a field access of `shape`: plain, null-safe or forced. */
+	public static inline function accessKind(kind: String, shape: RefShape): Bool {
+		return kind == shape.fieldAccessKind || kind == shape.nullSafeAccessKind || kind == shape.forceFieldAccessKind;
 	}
 
 	/** The first `NOTICE_NAMES` of `names`, and how many more there are. */
@@ -569,17 +568,17 @@ final class FieldWrites {
 		return names.slice(0, NOTICE_NAMES).join(', ') + more;
 	}
 
-	/** Whether `kind` is a field access of `shape`: plain, null-safe or forced. */
-	public static inline function accessKind(kind: String, shape: RefShape): Bool {
-		return kind == shape.fieldAccessKind || kind == shape.nullSafeAccessKind || kind == shape.forceFieldAccessKind;
-	}
-
 	/** Whether `node` names a member of the running object under `shape`: a bare name, or a member read off `this`. */
 	public static function ownMemberRead(node: QueryNode, shape: RefShape): Bool {
 		return node.kind == shape.identKind
 			? node.name != shape.selfReferenceText
 			: accessKind(node.kind, shape) && node.children.length > 0 && node.children[0].kind == shape.identKind
 				&& node.children[0].name == shape.selfReferenceText;
+	}
+
+	/** `at`, the function making a reflective write, with the types `types` of what it stores. */
+	private static function storing(at: String, types: Array<String>): String {
+		return '$at (${types.length == 0 ? 'it stores no object' : 'it stores ${types.join(', ')}'})';
 	}
 
 }

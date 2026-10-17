@@ -245,6 +245,11 @@ final class LockSites {
 		return FieldWrites.accessKind(kind, _shape);
 	}
 
+	/** Whether `node` names a member of the running object: a bare name, or a member read off `this`. */
+	public inline function readsOwnMember(node: QueryNode): Bool {
+		return FieldWrites.ownMemberRead(node, _shape);
+	}
+
 	/** The lock `edge` is made on: a wrapper call's lock, else its receiver's member when that member is sealed, else null. */
 	public function lockOf(edge: CallEdge): Null<String> {
 		final site: Null<String> = siteKey(edge);
@@ -290,11 +295,6 @@ final class LockSites {
 	public function isStaticLock(lock: String): Bool {
 		final dot: Int = lock.lastIndexOf('.');
 		return dot > 0 && _graph.types.isStatic(lock.substring(0, dot), lock.substring(dot + 1));
-	}
-
-	/** Whether `node` names a member of the running object: a bare name, or a member read off `this`. */
-	public inline function readsOwnMember(node: QueryNode): Bool {
-		return FieldWrites.ownMemberRead(node, _shape);
 	}
 
 	/** The callee expression of the call `edge` sits at, found by its exact span in the branch-aware tree. */

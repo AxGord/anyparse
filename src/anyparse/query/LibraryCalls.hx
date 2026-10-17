@@ -21,13 +21,13 @@ using Lambda;
 @:nullSafety(Strict)
 final class LibraryCalls {
 
-	private final _scope: ReachProject;
-
 	/** Extern type -> whether it is closed over inert values (`externClosed`). */
 	private final _externClosed: Map<String, Bool> = [];
 
 	/** Type -> whether a program type extending it overrides a method (`overriddenBelow`), settled on first need. */
 	private final _overriddenBelow: Map<String, Bool> = [];
+
+	private final _scope: ReachProject;
 
 	public function new(scope: ReachProject) {
 		_scope = scope;
@@ -78,11 +78,6 @@ final class LibraryCalls {
 		final reads: Null<Array<String>> = array ? execution?.nonMutatingArrayMethods : execution?.nonMutatingMapMethods;
 		final changes: Null<Array<String>> = array ? execution?.mutatingArrayMethods : execution?.mutatingMapMethods;
 		return (reads ?? []).contains(name) || (mutatorsToo && (changes ?? []).contains(name));
-	}
-
-	/** Whether a type declared outside the standard library extends or implements `type`. */
-	private function projectSubtype(type: String): Bool {
-		return _scope.index.subtypes.subtypeFiles(type).exists(f -> !StdResolver.isStdFile(f));
 	}
 
 	/**
@@ -164,21 +159,6 @@ final class LibraryCalls {
 	}
 
 	/**
-	 * Whether a type extending `type` that is no extern overrides a method — an instance of it is one of `type`, whose target
-	 * code may call the override — or a type extending it is not declared once, so nothing here says.
-	 */
-	private function overriddenBelow(type: String): Bool {
-		final cached: Null<Bool> = _overriddenBelow[type];
-		if (cached != null) return cached;
-		final found: Bool = _scope.index.subtypes.subtypeNames(type).exists(s -> {
-			final decl: Null<TypeDeclInfo> = _scope.declarationOf(s);
-			decl == null || (!decl.isExtern && decl.members.exists(m -> m.isOverride));
-		});
-		_overriddenBelow[type] = found;
-		return found;
-	}
-
-	/**
 	 * Whether the body-less extern member `type.name` may be HANDED a program object: a parameter written with a type
 	 * that is neither inert (`inertType`) nor a function type, or with none. Target code reaches such an object's
 	 * members by name — a `toJSON`, a `toString`, a `then` — without any call the graph can see.
@@ -203,6 +183,26 @@ final class LibraryCalls {
 		final values: Array<String> =
 			[for (t in (_scope.shape.literalTypeNames ?? []).iterator()) t].concat(_scope.shape.nonNullableTypeNames ?? []);
 		return _scope.plugin.typeSyntax(typeSource)?.holdsFunction() != true && nominal != null && values.contains(nominal);
+	}
+
+	/** Whether a type declared outside the standard library extends or implements `type`. */
+	private function projectSubtype(type: String): Bool {
+		return _scope.index.subtypes.subtypeFiles(type).exists(f -> !StdResolver.isStdFile(f));
+	}
+
+	/**
+	 * Whether a type extending `type` that is no extern overrides a method — an instance of it is one of `type`, whose target
+	 * code may call the override — or a type extending it is not declared once, so nothing here says.
+	 */
+	private function overriddenBelow(type: String): Bool {
+		final cached: Null<Bool> = _overriddenBelow[type];
+		if (cached != null) return cached;
+		final found: Bool = _scope.index.subtypes.subtypeNames(type).exists(s -> {
+			final decl: Null<TypeDeclInfo> = _scope.declarationOf(s);
+			decl == null || (!decl.isExtern && decl.members.exists(m -> m.isOverride));
+		});
+		_overriddenBelow[type] = found;
+		return found;
 	}
 
 }

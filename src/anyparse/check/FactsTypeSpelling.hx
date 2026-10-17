@@ -20,32 +20,12 @@ typedef TypeScope = {
 @:nullSafety(Strict)
 final class FactsTypeSpelling {
 
-	private var _failure: Null<String> = null;
-
 	private final _scope: TypeScope;
+
+	private var _failure: Null<String> = null;
 
 	private function new(scope: TypeScope) {
 		_scope = scope;
-	}
-
-	/**
-	 * `type` spelled as Haxe source — `(Int,?String)->Bool` as `(Int, ?String) -> Bool`, a type parameter `$pack.Box.T`
-	 * as `pack.Box.T` — or `Declined` when no source can write it: an unknown anywhere in it, a type parameter `scope`
-	 * does not hold (`inScope`), an abstract's statics (`Abstract<…>`) or implementation class.
-	 */
-	public static function spell(type: String, scope: TypeScope): OracleType {
-		final read: Null<FactsType> = FactsTypeTree.read(type);
-		if (read == null) return Declined(FactsDecline.NoFact);
-		final writer: FactsTypeSpelling = new FactsTypeSpelling(scope);
-		final spelled: Null<String> = writer.type(read);
-		final failure: Null<String> = writer._failure;
-		return failure != null || spelled == null ? Declined(failure ?? FactsDecline.NoFact) : Typed(spelled);
-	}
-
-	/** Whether the type parameter `path` (`<owner>.<name>`) is one `scope` holds: its owner is the scope's type or method. */
-	public static function inScope(path: String, scope: TypeScope): Bool {
-		final owner: String = SourceText.parentPath(path);
-		return owner != '' && (owner == scope.owner || owner == scope.method);
 	}
 
 	/** `t` spelled; null once `_failure` is set. */
@@ -100,6 +80,26 @@ final class FactsTypeSpelling {
 	private function fail(reason: String): Null<String> {
 		if (_failure == null) _failure = reason;
 		return null;
+	}
+
+	/**
+	 * `type` spelled as Haxe source — `(Int,?String)->Bool` as `(Int, ?String) -> Bool`, a type parameter `$pack.Box.T`
+	 * as `pack.Box.T` — or `Declined` when no source can write it: an unknown anywhere in it, a type parameter `scope`
+	 * does not hold (`inScope`), an abstract's statics (`Abstract<…>`) or implementation class.
+	 */
+	public static function spell(type: String, scope: TypeScope): OracleType {
+		final read: Null<FactsType> = FactsTypeTree.read(type);
+		if (read == null) return Declined(FactsDecline.NoFact);
+		final writer: FactsTypeSpelling = new FactsTypeSpelling(scope);
+		final spelled: Null<String> = writer.type(read);
+		final failure: Null<String> = writer._failure;
+		return failure != null || spelled == null ? Declined(failure ?? FactsDecline.NoFact) : Typed(spelled);
+	}
+
+	/** Whether the type parameter `path` (`<owner>.<name>`) is one `scope` holds: its owner is the scope's type or method. */
+	public static function inScope(path: String, scope: TypeScope): Bool {
+		final owner: String = SourceText.parentPath(path);
+		return owner != '' && (owner == scope.owner || owner == scope.method);
 	}
 
 }

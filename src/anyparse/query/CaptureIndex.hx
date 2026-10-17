@@ -37,6 +37,7 @@ final class CaptureIndex {
 	private final _switchOf: Map<QueryNode, QueryNode> = [];
 	private final _root: QueryNode;
 	private final _shape: RefShape;
+
 	private var _constants: Null<Array<QueryNode>> = null;
 	private var _count: Int = 0;
 

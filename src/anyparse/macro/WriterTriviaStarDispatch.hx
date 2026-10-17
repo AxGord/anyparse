@@ -46,6 +46,36 @@ using anyparse.macro.MetaInspect;
 final class WriterTriviaStarDispatch {
 
 	/**
+	 * ω-if-leader-case-symmetry: the case-UNIT flattener. A `#if`-guarded case
+	 * region is ONE Star element whose Doc carries directive hardlines (flat
+	 * width `-1`), so without this predicate the region could only FOLLOW a
+	 * sibling's break, never LEAD one; it expands the region into its inner
+	 * case elements, and both channels of the pre-pass then judge each one on
+	 * its own.
+	 */
+	private static inline function caseSiblingUnitsFnExpr(
+		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
+	): Null<Expr> {
+		return casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseSiblingUnits');
+	}
+
+	/**
+	 * ω-case-sibling-symmetry widened: the STRUCTURAL verdict, answering what
+	 * the flat-width measurement cannot — whether a unit sits below its label
+	 * for reasons of SHAPE (a multi-statement body, a single statement the
+	 * flat-refusal gate rejects, or a label-splice region, whose shared body
+	 * always renders below the labels it was split from). One `true` in the
+	 * expanded unit list decides the whole switch, so the pre-pass short-
+	 * circuits to `BodyFit.SIBLING_FORCE_BREAK` and never runs the measuring
+	 * loop at all.
+	 */
+	private static inline function caseSiblingStructuralFnExpr(
+		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
+	): Null<Expr> {
+		return casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseUnitStructuralBreak');
+	}
+
+	/**
 	 * Trivia close-peek (`@:trail`) Star dispatch (the `if (closeText != null)`
 	 * branch of the `isTriviaStar` block in `emitWriterStarField`). Emits the
 	 * leftCurly separator, routes a flat-sep Star through `triviaSepStarExpr`, else
@@ -770,36 +800,6 @@ final class WriterTriviaStarDispatch {
 		return !tc.formatInfo.astPreds || caseSymArgs == null || caseSymArgs.length != 2
 			? null
 			: AstPredLowering.predFnExpr(tc.shape.root, true, false, '${namePrefix}_${simpleName(elemRefName)}');
-	}
-
-	/**
-	 * ω-if-leader-case-symmetry: the case-UNIT flattener. A `#if`-guarded case
-	 * region is ONE Star element whose Doc carries directive hardlines (flat
-	 * width `-1`), so without this predicate the region could only FOLLOW a
-	 * sibling's break, never LEAD one; it expands the region into its inner
-	 * case elements, and both channels of the pre-pass then judge each one on
-	 * its own.
-	 */
-	private static inline function caseSiblingUnitsFnExpr(
-		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
-	): Null<Expr> {
-		return casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseSiblingUnits');
-	}
-
-	/**
-	 * ω-case-sibling-symmetry widened: the STRUCTURAL verdict, answering what
-	 * the flat-width measurement cannot — whether a unit sits below its label
-	 * for reasons of SHAPE (a multi-statement body, a single statement the
-	 * flat-refusal gate rejects, or a label-splice region, whose shared body
-	 * always renders below the labels it was split from). One `true` in the
-	 * expanded unit list decides the whole switch, so the pre-pass short-
-	 * circuits to `BodyFit.SIBLING_FORCE_BREAK` and never runs the measuring
-	 * loop at all.
-	 */
-	private static inline function caseSiblingStructuralFnExpr(
-		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
-	): Null<Expr> {
-		return casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseUnitStructuralBreak');
 	}
 
 	/**

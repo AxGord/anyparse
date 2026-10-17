@@ -64,7 +64,6 @@ final class ReachDefinesProbe {
 	/** The bound of the random suffix that keeps two runs' probe directories apart. */
 	private static inline final DIRECTORY_SUFFIX_BOUND: Int = 0x7fffffff;
 
-
 	/** Spawn buffer, in bytes: `-v` names every parsed module. */
 	private static inline final BUFFER: Int = 256 * 1024 * 1024;
 
@@ -106,47 +105,6 @@ final class ReachDefinesProbe {
 	public static function abandon(probe: DefinesProbe): Void {
 		probe.runs?.cancel();
 		for (p in probe.ready ?? []) discard(p.dir);
-	}
-
-	/** Every configuration's probe directory and arguments, or null when any of them cannot be prepared (and none is kept). */
-	private static function prepareAll(oracles: Array<OracleConfig>): Null<Array<{ dir: String, args: Array<String> }>> {
-		final prepared: Array<Null<{ dir: String, args: Array<String> }>> = [for (i in 0...oracles.length) prepare(oracles[i], i)];
-		final ready: Array<{ dir: String, args: Array<String> }> = [for (p in prepared) if (p != null) p];
-		if (ready.length == oracles.length) return ready;
-		for (p in ready) discard(p.dir);
-		return null;
-	}
-
-	private static function jobsOf(oracles: Array<OracleConfig>, ready: Array<{ dir: String, args: Array<String> }>): Array<SpawnJob> {
-		return [for (i in 0...ready.length) { args: ready[i].args, cwd: oracles[i].dir }];
-	}
-
-	/**
-	 * The builds the probe compiles `runs` of `oracles` (prepared as `ready`, null when they could not be) report, the
-	 * probe directories deleted; null when any configuration answers nothing.
-	 */
-	private static function answerAll(
-		oracles: Array<OracleConfig>, ready: Null<Array<{ dir: String, args: Array<String> }>>, runs: Array<HaxeRun>
-	): Null<ReachBuilds> {
-		for (p in ready ?? []) discard(p.dir);
-		if (runs.length != oracles.length || oracles.length == 0) return null;
-		final out: Array<ReachConfiguration> = [];
-		for (i in 0...oracles.length) {
-			final configuration: Null<ReachConfiguration> = answer(oracles[i], runs[i]);
-			if (configuration == null) return null;
-			out.push(configuration);
-		}
-		final seen: Map<String, Bool> = [];
-		final library: Array<{ file: String, source: String }> = [];
-		#if (sys || nodejs)
-		for (c in out) for (path in c.compiled) if (!seen.exists(path)) {
-			seen[path] = true;
-			// a file that cannot be read declares nothing the walk resolves against: a call into it stays a blind spot
-			final source: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
-			if (source != null) library.push({ file: path, source: source });
-		}
-		#end
-		return { configurations: out, library: library };
 	}
 
 	/**
@@ -204,6 +162,47 @@ final class ReachDefinesProbe {
 			compiled: compiled,
 			types: types
 		};
+	}
+
+	/** Every configuration's probe directory and arguments, or null when any of them cannot be prepared (and none is kept). */
+	private static function prepareAll(oracles: Array<OracleConfig>): Null<Array<{ dir: String, args: Array<String> }>> {
+		final prepared: Array<Null<{ dir: String, args: Array<String> }>> = [for (i in 0...oracles.length) prepare(oracles[i], i)];
+		final ready: Array<{ dir: String, args: Array<String> }> = [for (p in prepared) if (p != null) p];
+		if (ready.length == oracles.length) return ready;
+		for (p in ready) discard(p.dir);
+		return null;
+	}
+
+	private static function jobsOf(oracles: Array<OracleConfig>, ready: Array<{ dir: String, args: Array<String> }>): Array<SpawnJob> {
+		return [for (i in 0...ready.length) { args: ready[i].args, cwd: oracles[i].dir }];
+	}
+
+	/**
+	 * The builds the probe compiles `runs` of `oracles` (prepared as `ready`, null when they could not be) report, the
+	 * probe directories deleted; null when any configuration answers nothing.
+	 */
+	private static function answerAll(
+		oracles: Array<OracleConfig>, ready: Null<Array<{ dir: String, args: Array<String> }>>, runs: Array<HaxeRun>
+	): Null<ReachBuilds> {
+		for (p in ready ?? []) discard(p.dir);
+		if (runs.length != oracles.length || oracles.length == 0) return null;
+		final out: Array<ReachConfiguration> = [];
+		for (i in 0...oracles.length) {
+			final configuration: Null<ReachConfiguration> = answer(oracles[i], runs[i]);
+			if (configuration == null) return null;
+			out.push(configuration);
+		}
+		final seen: Map<String, Bool> = [];
+		final library: Array<{ file: String, source: String }> = [];
+		#if (sys || nodejs)
+		for (c in out) for (path in c.compiled) if (!seen.exists(path)) {
+			seen[path] = true;
+			// a file that cannot be read declares nothing the walk resolves against: a call into it stays a blind spot
+			final source: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
+			if (source != null) library.push({ file: path, source: source });
+		}
+		#end
+		return { configurations: out, library: library };
 	}
 
 	/**
@@ -312,7 +311,6 @@ final class ReachDefinesProbe {
 		}
 		#end
 	}
-
 
 	/** The define and value one value line carries — a JSON array of two strings — or null for anything else. */
 	private static function valuePair(json: String): Null<{ name: String, value: String }> {

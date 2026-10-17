@@ -248,7 +248,7 @@ final class FactsView {
 	private var _nativeReach: Null<FactsNativeReach> = null;
 
 	private function new(table: CompilerFacts, scope: ReachProject, truth: Bool) {
-		this._table = table;
+		_table = table;
 		_scope = scope;
 		this.truth = truth;
 	}
@@ -1756,8 +1756,7 @@ final class FactsView {
 	 * public spelling of the id, or `impl` itself when it is not spelled so.
 	 */
 	private function implemented(impl: String): String {
-		final held: Null<Map<String, String>> = _implementing;
-		final byImpl: Map<String, String> = held ?? [
+		final byImpl: Map<String, String> = _implementing ?? [
 			for (id in _table.typeIds()) {
 				final fact: Null<TypeFact> = _table.type(id);
 				final implementation: Null<String> = fact?.kind == ABSTRACT_KIND ? fact?.implementation : null;

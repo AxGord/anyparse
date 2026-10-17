@@ -335,6 +335,20 @@ final class OracleCache {
 		return #if nodejs js.node.Crypto.createHash('md5').update(data, 'utf8').digest('hex') #else haxe.crypto.Md5.encode(data) #end;
 	}
 
+	/**
+	 * `store`, but only when the compile input still hashes to `fingerprint` — the fingerprint taken BEFORE the compile.
+	 * A tree that moved while the compiler ran (an editor saving, another run regenerating an hxml) produced a verdict
+	 * about neither state, and filing it under the old fingerprint would hand it to the next run of the old tree. Answers
+	 * whether it stored.
+	 */
+	public static function storeIfUnchanged(
+		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, ?defines: Array<String>, ?memo: Map<String, String>
+	): Bool {
+		if (OracleCache.fingerprint(hxml, cwd, defines, memo) != fingerprint) return false;
+		store(hxml, cwd, fingerprint, outcome, defines);
+		return true;
+	}
+
 	/** The library name of a `-lib` token, with any `:version` suffix stripped. */
 	private static function libName(token: String): String {
 		final colon: Int = token.indexOf(':');
@@ -623,19 +637,5 @@ final class OracleCache {
 		return try sys.io.File.getContent(path) catch (_exception: haxe.Exception) null;
 	}
 	#end
-
-	/**
-	 * `store`, but only when the compile input still hashes to `fingerprint` — the fingerprint taken BEFORE the compile.
-	 * A tree that moved while the compiler ran (an editor saving, another run regenerating an hxml) produced a verdict
-	 * about neither state, and filing it under the old fingerprint would hand it to the next run of the old tree. Answers
-	 * whether it stored.
-	 */
-	public static function storeIfUnchanged(
-		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, ?defines: Array<String>, ?memo: Map<String, String>
-	): Bool {
-		if (OracleCache.fingerprint(hxml, cwd, defines, memo) != fingerprint) return false;
-		store(hxml, cwd, fingerprint, outcome, defines);
-		return true;
-	}
 
 }

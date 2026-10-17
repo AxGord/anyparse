@@ -321,6 +321,17 @@ final class BinaryChainEmit {
 	}
 
 	/**
+	 * True iff any operand `Doc` is a top-level function call
+	 * (`DocMeasure.operandIsCall`). The ω-opbool-reeval gate mirrors fork
+	 * `hasSimpleCallParamBreaksBetween` (an inner `POpen` that wrapped); a chain
+	 * with NO call operand can never have a callParameter wrap to re-evaluate
+	 * after, so the marker is skipped (byte-inert).
+	 */
+	private static inline function containsCallOperand(items: Array<Doc>): Bool {
+		return items.exists(DocMeasure.operandIsCall);
+	}
+
+	/**
 	 * Recursive helper that builds the `IfWidthExceeds + IfBreak` tree
 	 * for chain-emit's cascade-with-thresholds layout. Sister of
 	 * `WrapList.buildThresholdTree` but emits chain shapes
@@ -389,17 +400,6 @@ final class BinaryChainEmit {
 				return false;
 		}
 		return ops.length > 0;
-	}
-
-	/**
-	 * True iff any operand `Doc` is a top-level function call
-	 * (`DocMeasure.operandIsCall`). The ω-opbool-reeval gate mirrors fork
-	 * `hasSimpleCallParamBreaksBetween` (an inner `POpen` that wrapped); a chain
-	 * with NO call operand can never have a callParameter wrap to re-evaluate
-	 * after, so the marker is skipped (byte-inert).
-	 */
-	private static function containsCallOperand(items: Array<Doc>): Bool {
-		return items.exists(DocMeasure.operandIsCall);
 	}
 
 	/**

@@ -313,11 +313,6 @@ final class ReflectiveValues {
 			noteClaim(out.fields, written);
 	}
 
-	/** Adds `key` to `claims` once. */
-	private static inline function noteClaim(claims: Array<String>, key: String): Void {
-		if (!claims.contains(key)) claims.push(key);
-	}
-
 	/**
 	 * Whether the expression `node` of `file` may hand on a value its declared type was never checked against: it holds an
 	 * unchecked `cast` (`uncheckedCastKind`) or an `untyped` (`untypedKinds`) anywhere, or is itself declared of a catch-all
@@ -574,6 +569,11 @@ final class ReflectiveValues {
 			walk(held.tree);
 		}
 		return out;
+	}
+
+	/** Adds `key` to `claims` once. */
+	private static inline function noteClaim(claims: Array<String>, key: String): Void {
+		if (!claims.contains(key)) claims.push(key);
 	}
 
 }

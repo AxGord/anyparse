@@ -28,8 +28,8 @@ final class CodepointIndex {
 	private final _wideCodepoint: Array<Int>;
 
 	private function new(wideNative: Array<Int>, wideCodepoint: Array<Int>) {
-		this._wideNative = wideNative;
-		this._wideCodepoint = wideCodepoint;
+		_wideNative = wideNative;
+		_wideCodepoint = wideCodepoint;
 	}
 
 	/** The native offset of codepoint offset `codepoint`. */

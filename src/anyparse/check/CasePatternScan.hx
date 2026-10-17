@@ -61,6 +61,43 @@ final class CasePatternScan {
 		return code >= 'A'.code && code <= 'Z'.code;
 	}
 
+	/**
+	 * The LEADING run of `branch`'s pattern children — the `case A, B:` alternatives.
+	 * A `var x` capture projects as its own kind rather than through the plain wrapper,
+	 * so both count.
+	 */
+	public static inline function patternRun(seams: CaseSeams, branch: QueryNode): Array<QueryNode> {
+		return CasePatterns.patternRun(branch, seams.shape);
+	}
+
+	/**
+	 * Every name declared across `trees` that Haxe can resolve UNQUALIFIED in a pattern
+	 * position — the set a bare pattern identifier must NOT be in before it may be read as
+	 * a binder (see the type doc's spelling assumption). Three declaration classes qualify:
+	 * a member of an exhaustiveness-checked type (`constantHostKinds`), a member of any
+	 * abstract or alias declaration (`constantMemberHostKinds` — which is what reaches a
+	 * legacy `@:enum abstract`, projected as a plain abstract with no marker this scan can
+	 * read), and any STATIC member of any type, since a `static inline` field resolves as a
+	 * pattern constant both inside its own type and through a static import.
+	 *
+	 * Only names that do NOT open uppercase are collected: an uppercase name is refused by
+	 * the spelling assumption before this set is ever consulted, so admitting one would
+	 * grow the set without changing a single verdict.
+	 */
+	public static inline function declaredConstantNames(seams: CaseSeams, trees: Array<QueryNode>): Array<String> {
+		return CasePatterns.constantNames(trees, seams.shape);
+	}
+
+	/**
+	 * Whether `node` is a constructor-EXTRACTION pattern whose callee is NAMED — a bare identifier
+	 * or the dotted path of a qualified constructor, the only two callee spellings a pattern may
+	 * carry. Public for the same reason `startsUpper` is: `case-pattern-separator`'s pattern
+	 * whitelist asks this exact question of the same node, and a second copy would drift.
+	 */
+	public static inline function isNamedCallee(seams: CaseSeams, node: QueryNode): Bool {
+		return CasePatterns.isNamedCallee(node, seams.shape);
+	}
+
 	/** The seam kinds both case-arm rules read, or null when the grammar leaves a required one unset. */
 	public static function seamsOf(plugin: GrammarPlugin): Null<CaseSeams> {
 		final shape: RefShape = plugin.refShape();
@@ -106,15 +143,6 @@ final class CasePatternScan {
 			constantLeafKinds: leaves,
 			scope: scopeSeamsOf(shape)
 		};
-	}
-
-	/**
-	 * The LEADING run of `branch`'s pattern children — the `case A, B:` alternatives.
-	 * A `var x` capture projects as its own kind rather than through the plain wrapper,
-	 * so both count.
-	 */
-	public static inline function patternRun(seams: CaseSeams, branch: QueryNode): Array<QueryNode> {
-		return CasePatterns.patternRun(branch, seams.shape);
 	}
 
 	/** The guard node of `branch` (the parenthesised condition after its pattern run), or null when it has none. */
@@ -219,24 +247,6 @@ final class CasePatternScan {
 	}
 
 	/**
-	 * Every name declared across `trees` that Haxe can resolve UNQUALIFIED in a pattern
-	 * position — the set a bare pattern identifier must NOT be in before it may be read as
-	 * a binder (see the type doc's spelling assumption). Three declaration classes qualify:
-	 * a member of an exhaustiveness-checked type (`constantHostKinds`), a member of any
-	 * abstract or alias declaration (`constantMemberHostKinds` — which is what reaches a
-	 * legacy `@:enum abstract`, projected as a plain abstract with no marker this scan can
-	 * read), and any STATIC member of any type, since a `static inline` field resolves as a
-	 * pattern constant both inside its own type and through a static import.
-	 *
-	 * Only names that do NOT open uppercase are collected: an uppercase name is refused by
-	 * the spelling assumption before this set is ever consulted, so admitting one would
-	 * grow the set without changing a single verdict.
-	 */
-	public static inline function declaredConstantNames(seams: CaseSeams, trees: Array<QueryNode>): Array<String> {
-		return CasePatterns.constantNames(trees, seams.shape);
-	}
-
-	/**
 	 * `node`'s name when it carries a NON-EMPTY one, else null — the guard every reader of a bare
 	 * identifier pattern opens with, here rather than once per reader. Public for the same reason
 	 * `startsUpper` is: `case-pattern-separator` asks it of the same nodes.
@@ -244,16 +254,6 @@ final class CasePatternScan {
 	public static function patternName(node: QueryNode): Null<String> {
 		final name: Null<String> = node.name;
 		return name == null || name.length == 0 ? null : name;
-	}
-
-	/**
-	 * Whether `node` is a constructor-EXTRACTION pattern whose callee is NAMED — a bare identifier
-	 * or the dotted path of a qualified constructor, the only two callee spellings a pattern may
-	 * carry. Public for the same reason `startsUpper` is: `case-pattern-separator`'s pattern
-	 * whitelist asks this exact question of the same node, and a second copy would drift.
-	 */
-	public static inline function isNamedCallee(seams: CaseSeams, node: QueryNode): Bool {
-		return CasePatterns.isNamedCallee(node, seams.shape);
 	}
 
 	/**
@@ -363,12 +363,10 @@ final class CasePatternScan {
 		return wrapper.children.length == 1 ? wrapper.children[0] : null;
 	}
 
-
 	/** Whether any direct child of `nodes` whose kind is in `kinds` declares `name`. */
 	private static function declaresNamed(kinds: Array<String>, nodes: Array<QueryNode>, name: String): Bool {
 		return nodes.exists(node -> kinds.contains(node.kind) && node.name == name);
 	}
-
 
 	/**
 	 * Whether `scope`'s subtree declares `name` at a position BEFORE `arm` — the bindings actually in
@@ -381,7 +379,6 @@ final class CasePatternScan {
 		if (seams.scope.bindingDeclKinds.contains(scope.kind) && scope.name == name && span != null && span.from < at.from) return true;
 		return scope.children.exists(child -> declaresBefore(seams, child, arm, at, name));
 	}
-
 
 	/**
 	 * The SCOPE half of the seams — every kind `shadowedDeclaration` needs to walk an ancestor chain.

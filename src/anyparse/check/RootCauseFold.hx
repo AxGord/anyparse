@@ -307,47 +307,6 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 	}
 
 	/**
-	 * The hold `a` before its finding is made: whether it makes its lock long under `costs`, the costed taint over the
-	 * normal paths (`makesLong`) — a hold long only where a `catch` runs is reported as info by its own grade — nothing
-	 * judged.
-	 */
-	public static function unreported(a: LockAcquire, costs: LockTaint): FoldHold {
-		return {
-			hold: a,
-			lock: a.lock ?? a.pair.lockId,
-			longMaking: makesLong(a, costs),
-			finding: null,
-			calls: [],
-			taint: null,
-			held: null,
-			opaque: false,
-			madeWarning: false,
-			elsewhere: false
-		};
-	}
-
-	/**
-	 * `fold` with its finding `finding`, graded `graded` under a hold of `held`, its long calls read over the normal paths
-	 * (`normal`: a call only a `catch` runs is no reason a warning warns); `handOff`: graded as handing its lock off.
-	 */
-	public static function judgedAs(
-		fold: FoldHold, finding: Violation, graded: GradedHold, held: Null<String>, normal: LockTaint, handOff: Bool
-	): FoldHold {
-		return {
-			hold: fold.hold,
-			lock: fold.lock,
-			longMaking: fold.longMaking,
-			finding: finding,
-			calls: [for (c in normal.blockingCalls(fold.hold, held)) c.edge],
-			taint: normal,
-			held: held,
-			opaque: handOff || graded.taint.blindLong(fold.hold),
-			madeWarning: !graded.info,
-			elsewhere: graded.elsewhere == true
-		};
-	}
-
-	/**
 	 * Whether the warned hold `d` makes a sink call another one (at `i`) is long by, as often — repeating along its trail
 	 * where the other's may (`repeated`) —: a hold reaching it once reports no stall of one repeating it under its own lock
 	 * (TM's `FolderWatcher.rename`'s one stat against `updateInternal`'s walk over the whole tree). And it is a hold of the
@@ -372,18 +331,6 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 		final covering: Array<String> = _threads(by.hold.edge.from);
 		final covered: Array<String> = _threads(own.hold.edge.from);
 		return covered.length > 0 && covered.foreach(t -> covering.contains(t));
-	}
-
-	/**
-	 * Whether the hold `a` is a reason its lock is long under the costed `costs`, as the solve that made it long reads it
-	 * (`ThreadSafety.solveLongLocks`): it outlives its function, spans an unresolved call long on its own, or — taken
-	 * where another thread may contend — spans a call that blocks.
-	 */
-	private static function makesLong(a: LockAcquire, costs: LockTaint): Bool {
-		if (a.lock == null) return false;
-		if (LongLockExplain.leaks(a) || costs.blindLong(a)) return true;
-		final held: Null<String> = costs.reentrantHeld(a);
-		return !a.uncontended && a.window.exists(e -> costs.blockingTrail(a, e, held) != null);
 	}
 
 	/**
@@ -430,8 +377,80 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 		return finding != null && _suppressed(finding);
 	}
 
-	private static function memberOf(m: FoldHold): String {
+	/**
+	 * The hold `a` before its finding is made: whether it makes its lock long under `costs`, the costed taint over the
+	 * normal paths (`makesLong`) — a hold long only where a `catch` runs is reported as info by its own grade — nothing
+	 * judged.
+	 */
+	public static function unreported(a: LockAcquire, costs: LockTaint): FoldHold {
+		return {
+			hold: a,
+			lock: a.lock ?? a.pair.lockId,
+			longMaking: makesLong(a, costs),
+			finding: null,
+			calls: [],
+			taint: null,
+			held: null,
+			opaque: false,
+			madeWarning: false,
+			elsewhere: false
+		};
+	}
+
+	/**
+	 * `fold` with its finding `finding`, graded `graded` under a hold of `held`, its long calls read over the normal paths
+	 * (`normal`: a call only a `catch` runs is no reason a warning warns); `handOff`: graded as handing its lock off.
+	 */
+	public static function judgedAs(
+		fold: FoldHold, finding: Violation, graded: GradedHold, held: Null<String>, normal: LockTaint, handOff: Bool
+	): FoldHold {
+		return {
+			hold: fold.hold,
+			lock: fold.lock,
+			longMaking: fold.longMaking,
+			finding: finding,
+			calls: [for (c in normal.blockingCalls(fold.hold, held)) c.edge],
+			taint: normal,
+			held: held,
+			opaque: handOff || graded.taint.blindLong(fold.hold),
+			madeWarning: !graded.info,
+			elsewhere: graded.elsewhere == true
+		};
+	}
+
+	/**
+	 * Whether the holds `by` and `own` hold one lock: a lock object a member names, the same for both. An unnamed lock (a
+	 * local, a getter's value) is keyed by its pair's take member, which every unnamed lock of the pair shares — never
+	 * the same lock for this (`FoldHold.lock`).
+	 */
+	private static inline function sameLock(by: FoldHold, own: FoldHold): Bool {
+		return by.hold.lock != null && own.hold.lock != null && by.lock == own.lock;
+	}
+
+	/**
+	 * Whether the hold `own` is taken inside the hold `by` in one function: of the same lock, by the same call (a helper
+	 * taking both), or inside `by`'s window — its work runs under both locks. Two holds of different locks one after the
+	 * other in a function are two stalls, each of its lock.
+	 */
+	private static inline function nests(by: FoldHold, own: FoldHold): Bool {
+		return by.hold.edge.from == own.hold.edge.from
+			&& (sameLock(by, own) || by.hold.edge == own.hold.edge || by.hold.window.contains(own.hold.edge));
+	}
+
+	private static inline function memberOf(m: FoldHold): String {
 		return m.finding?.data?.member ?? m.hold.edge.from;
+	}
+
+	/**
+	 * Whether the hold `a` is a reason its lock is long under the costed `costs`, as the solve that made it long reads it
+	 * (`ThreadSafety.solveLongLocks`): it outlives its function, spans an unresolved call long on its own, or — taken
+	 * where another thread may contend — spans a call that blocks.
+	 */
+	private static function makesLong(a: LockAcquire, costs: LockTaint): Bool {
+		if (a.lock == null) return false;
+		if (LongLockExplain.leaks(a) || costs.blindLong(a)) return true;
+		final held: Null<String> = costs.reentrantHeld(a);
+		return !a.uncontended && a.window.exists(e -> costs.blockingTrail(a, e, held) != null);
 	}
 
 	/** By member, file and offset of the hold's finding. */
@@ -462,25 +481,6 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 			case [Uncovered, Uncovered]: true;
 			case _: false;
 		};
-	}
-
-	/**
-	 * Whether the holds `by` and `own` hold one lock: a lock object a member names, the same for both. An unnamed lock (a
-	 * local, a getter's value) is keyed by its pair's take member, which every unnamed lock of the pair shares — never
-	 * the same lock for this (`FoldHold.lock`).
-	 */
-	private static inline function sameLock(by: FoldHold, own: FoldHold): Bool {
-		return by.hold.lock != null && own.hold.lock != null && by.lock == own.lock;
-	}
-
-	/**
-	 * Whether the hold `own` is taken inside the hold `by` in one function: of the same lock, by the same call (a helper
-	 * taking both), or inside `by`'s window — its work runs under both locks. Two holds of different locks one after the
-	 * other in a function are two stalls, each of its lock.
-	 */
-	private static inline function nests(by: FoldHold, own: FoldHold): Bool {
-		return by.hold.edge.from == own.hold.edge.from
-			&& (sameLock(by, own) || by.hold.edge == own.hold.edge || by.hold.window.contains(own.hold.edge));
 	}
 
 }

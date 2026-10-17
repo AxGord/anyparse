@@ -336,6 +336,25 @@ final class ShardPlan {
 	}
 
 	/**
+	 * The weights a timing file holds: `<ms>\t<tests>\t<class>` rows, what a runner writes under `APQ_TEST_TIMING`. A class
+	 * run as slices on several shards has a row per slice, summed here into the class's. A row of any other shape is
+	 * skipped — a weight only balances the split, so a damaged file costs balance and never correctness.
+	 */
+	public static function parseWeights(text: String): Map<String, ClassWeight> {
+		final out: Map<String, ClassWeight> = [];
+		for (line in text.split('\n')) {
+			final cells: Array<String> = line.split('\t');
+			final ms: Int = (cells.length == 3 ? Std.parseInt(cells[0]) : null) ?? -1;
+			final tests: Int = (cells.length == 3 ? Std.parseInt(cells[1]) : null) ?? -1;
+			if (ms < 0 || tests < 0) continue;
+			final cls: String = cells[2].trim();
+			final before: ClassWeight = out[cls] ?? { ms: 0, tests: 0 };
+			out[cls] = { ms: before.ms + ms, tests: before.tests + tests };
+		}
+		return out;
+	}
+
+	/**
 	 * Collect one `addCase(new X())` per call, and one complaint per call
 	 * whose shape cannot become an `APQ_TEST` filter.
 	 *
@@ -583,25 +602,6 @@ final class ShardPlan {
 	/** The tiebreak once primaries agree: lowercase sorts before uppercase. */
 	private static function caseWeight(code: Int): Int {
 		return code >= 'A'.code && code <= 'Z'.code ? 1 : 0;
-	}
-
-	/**
-	 * The weights a timing file holds: `<ms>\t<tests>\t<class>` rows, what a runner writes under `APQ_TEST_TIMING`. A class
-	 * run as slices on several shards has a row per slice, summed here into the class's. A row of any other shape is
-	 * skipped — a weight only balances the split, so a damaged file costs balance and never correctness.
-	 */
-	public static function parseWeights(text: String): Map<String, ClassWeight> {
-		final out: Map<String, ClassWeight> = [];
-		for (line in text.split('\n')) {
-			final cells: Array<String> = line.split('\t');
-			final ms: Int = (cells.length == 3 ? Std.parseInt(cells[0]) : null) ?? -1;
-			final tests: Int = (cells.length == 3 ? Std.parseInt(cells[1]) : null) ?? -1;
-			if (ms < 0 || tests < 0) continue;
-			final cls: String = cells[2].trim();
-			final before: ClassWeight = out[cls] ?? { ms: 0, tests: 0 };
-			out[cls] = { ms: before.ms + ms, tests: before.tests + tests };
-		}
-		return out;
 	}
 
 }

@@ -96,7 +96,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/** The name of a program's entry point, which the runtime calls. */
 	public static inline final ENTRY_POINT: String = 'main';
 
-
 	private static inline final EVIDENCE_CAP: Int = 8;
 
 	/** Why each lock of the last run is long, when the run was asked to say (`explainLongLocks`); null otherwise. */
@@ -289,7 +288,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		return ProjectCoverage.excluded(file, config.stringListOption('thread-safety', 'exclude') ?? []) ? 'config-excluded' : null;
 	}
 
-
 	/**
 	 * Why each lock is long (`LongLockExplain.report`) when this check was asked (`explainLongLocks`), null otherwise: the
 	 * holds `acquires` of `sites` judged against the converged `long` and `taints`, the takes a main-thread state — loud or
@@ -380,6 +378,55 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		return byFile;
 	}
 
+	/** A subject naming several ids (the two locks of an inversion), sorted and joined by `SUBJECT_SEPARATOR`. */
+	public static inline function subjectOf(ids: Array<String>): String {
+		return sortedIds(ids).join(SUBJECT_SEPARATOR);
+	}
+
+	/**
+	 * `parts` joined as a call chain, at most `cap` of them: the head says where the chain leaves its function, the
+	 * last two what it ends in.
+	 */
+	public static function elided(parts: Array<String>, cap: Int): String {
+		return (parts.length <= cap ? parts : parts.slice(0, cap - 2).concat(['...']).concat(parts.slice(-2))).join(' -> ');
+	}
+
+	/**
+	 * The member a function id belongs to: a lambda's or a local function's id (`Type.member#…`) is its
+	 * enclosing member's, and a field initializer's lambda (`Type#n`) the initializer pseudo-node's that
+	 * holds it (`Type.<init>`, `Type.<static>`) — where the calls an initializer makes directly sit too.
+	 */
+	public static function memberOf(graph: CallGraph, id: String): String {
+		var cursor: String = id;
+		while (true) {
+			final hash: Int = cursor.indexOf('#');
+			if (hash < 0) return cursor;
+			final head: String = cursor.substring(0, hash);
+			if (head.indexOf('.') >= 0) return head;
+			// a field initializer's lambda (`Type#n`) sits in the type's initializer pseudo-node, which owns its direct calls too
+			final container: Null<String> = graph.inEdges(cursor).find(e -> e.kind == Contains)?.from;
+			if (container == null) return head;
+			cursor = container;
+		}
+	}
+
+	/** `ids` sorted: the order a subject or a chain names several ids in, whatever order the graph met them. */
+	public static function sortedIds(ids: Array<String>): Array<String> {
+		final sorted: Array<String> = ids.copy();
+		sorted.sort(Reflect.compare);
+		return sorted;
+	}
+
+	/**
+	 * Whether no supertype of `type` may declare `name` (`MemberLookup.supertypesDeclareNone`, by declaration): every one
+	 * the index resolves declares none, and every one it does not is the superclass of a class — whose members the class can
+	 * only reach by an `override`, which a sealed member never carries. An interface the index does not hold may declare
+	 * anything; a graph with no index proves nothing.
+	 */
+	private static inline function inheritsNothingNamed(graph: CallGraph, type: String, name: String): Bool {
+		return graph.index?.members.supertypesDeclareNone(type, name) == true;
+	}
+
 	/**
 	 * The `ChainLists` of one option set `options`, resolved over `graph`, its `closedWorld` as the run covers it; a
 	 * `boundedRepeats` entry matching no function lands in `found`.
@@ -434,45 +481,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		};
 	}
 
-	/** A subject naming several ids (the two locks of an inversion), sorted and joined by `SUBJECT_SEPARATOR`. */
-	public static inline function subjectOf(ids: Array<String>): String {
-		return sortedIds(ids).join(SUBJECT_SEPARATOR);
-	}
-
-	/**
-	 * `parts` joined as a call chain, at most `cap` of them: the head says where the chain leaves its function, the
-	 * last two what it ends in.
-	 */
-	public static function elided(parts: Array<String>, cap: Int): String {
-		return (parts.length <= cap ? parts : parts.slice(0, cap - 2).concat(['...']).concat(parts.slice(-2))).join(' -> ');
-	}
-
-	/**
-	 * The member a function id belongs to: a lambda's or a local function's id (`Type.member#…`) is its
-	 * enclosing member's, and a field initializer's lambda (`Type#n`) the initializer pseudo-node's that
-	 * holds it (`Type.<init>`, `Type.<static>`) — where the calls an initializer makes directly sit too.
-	 */
-	public static function memberOf(graph: CallGraph, id: String): String {
-		var cursor: String = id;
-		while (true) {
-			final hash: Int = cursor.indexOf('#');
-			if (hash < 0) return cursor;
-			final head: String = cursor.substring(0, hash);
-			if (head.indexOf('.') >= 0) return head;
-			// a field initializer's lambda (`Type#n`) sits in the type's initializer pseudo-node, which owns its direct calls too
-			final container: Null<String> = graph.inEdges(cursor).find(e -> e.kind == Contains)?.from;
-			if (container == null) return head;
-			cursor = container;
-		}
-	}
-
-	/** `ids` sorted: the order a subject or a chain names several ids in, whatever order the graph met them. */
-	public static function sortedIds(ids: Array<String>): Array<String> {
-		final sorted: Array<String> = ids.copy();
-		sorted.sort(Reflect.compare);
-		return sorted;
-	}
-
 	/** The lists of the chain `file` sits under — every edge's file is one the graph was built from. */
 	private static function listsOfFile(byFile: Map<String, ChainLists>, file: String): ChainLists {
 		final lists: Null<ChainLists> = byFile[file];
@@ -523,7 +531,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		return sealedSlots.contains(edge.storedInto ?? '') || stored.stored(edge) || neverInvoked(edge, listsOf(edge.file))
 			|| ThreadGraph.madeWhereHanded(graph, edge);
 	}
-
 
 	/**
 	 * Whether a function the walk reaches through no edge may still run, ASSUMED on the main thread: any function, unless
@@ -632,16 +639,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		if (unresolvedNames.contains(name) || graph.unresolvedAccessesRunning([node]).length > 0) return false;
 		final declarations: Array<FnDeclaration> = graph.declarationsOf(id);
 		return declarations.length > 0 && declarations.foreach(d -> plainMember(graph, plugin, d));
-	}
-
-	/**
-	 * Whether no supertype of `type` may declare `name` (`MemberLookup.supertypesDeclareNone`, by declaration): every one
-	 * the index resolves declares none, and every one it does not is the superclass of a class — whose members the class can
-	 * only reach by an `override`, which a sealed member never carries. An interface the index does not hold may declare
-	 * anything; a graph with no index proves nothing.
-	 */
-	private static inline function inheritsNothingNamed(graph: CallGraph, type: String, name: String): Bool {
-		return graph.index?.members.supertypesDeclareNone(type, name) == true;
 	}
 
 	/** Whether the member declared at `d` carries neither `override` nor any metadata. */
@@ -816,7 +813,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			covers.push({ finding: r.finding, by: [for (w in around) w.finding] });
 		}
 	}
-
 
 	/** The own-work taint of the costed taint `costs` (`LockTaint.ownWork`). */
 	private static function ownWorkOf(costs: LockTaint): LockTaint {

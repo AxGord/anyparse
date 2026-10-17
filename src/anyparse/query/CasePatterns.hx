@@ -29,9 +29,6 @@ final class CasePatterns {
 	/** An `=`-capture and an extractor both have exactly two children. */
 	private static inline final PAIR_CHILD_COUNT: Int = 2;
 
-	/** The last segment of a wildcard import path. */
-	private static inline final WILDCARD_SEGMENT: String = '*';
-
 	/**
 	 * The LEADING run of `branch`'s pattern children — the `case A, B:` alternatives. A top-level
 	 * `var x` capture projects as its own kind rather than through the plain wrapper, so both count.
@@ -248,6 +245,20 @@ final class CasePatterns {
 		return callee.kind == shape.identKind || callee.kind == shape.fieldAccessKind;
 	}
 
+	/** The pattern leaves that bind nothing and hold no sub-pattern: a dotted path and the literals. */
+	public static function constantLeafKinds(shape: RefShape): Array<String> {
+		final leaves: Array<String> = [];
+		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
+		if (fieldAccessKind != null) leaves.push(fieldAccessKind);
+		for (kind in shape.stringLiteralKinds ?? []) leaves.push(kind);
+		for (kind in shape.numericLiteralKinds ?? []) leaves.push(kind);
+		final boolKind: Null<String> = shape.boolLitKind;
+		if (boolKind != null) leaves.push(boolKind);
+		final nullKind: Null<String> = shape.nullLiteralKind;
+		if (nullKind != null) leaves.push(nullKind);
+		return leaves;
+	}
+
 	/**
 	 * Walk one pattern node; `whole` marks the node that IS the entire pattern, `site` what its expected
 	 * type is known from (`PatternSite`).
@@ -352,20 +363,6 @@ final class CasePatterns {
 		scanNode(state, rhs, false, site);
 	}
 
-	/** The pattern leaves that bind nothing and hold no sub-pattern: a dotted path and the literals. */
-	public static function constantLeafKinds(shape: RefShape): Array<String> {
-		final leaves: Array<String> = [];
-		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
-		if (fieldAccessKind != null) leaves.push(fieldAccessKind);
-		for (kind in shape.stringLiteralKinds ?? []) leaves.push(kind);
-		for (kind in shape.numericLiteralKinds ?? []) leaves.push(kind);
-		final boolKind: Null<String> = shape.boolLitKind;
-		if (boolKind != null) leaves.push(boolKind);
-		final nullKind: Null<String> = shape.nullLiteralKind;
-		if (nullKind != null) leaves.push(nullKind);
-		return leaves;
-	}
-
 	/**
 	 * Whether `root` declares a type named `name` whose kind cannot stand for another type: any
 	 * `typeDeclKinds` or `bareConstructorTypeKinds` declaration except an alias (`aliasingDeclKinds`)
@@ -455,10 +452,11 @@ typedef PatternScan = {
 @:nullSafety(Strict)
 private final class ScanState {
 
+	public var modelled(default, null): Bool = true;
+
 	public final idents: Array<PatternIdent> = [];
 	public final shape: RefShape;
 	public final constants: Array<String>;
-	public var modelled(default, null): Bool = true;
 
 	public function new(shape: RefShape, constants: Array<String>) {
 		this.shape = shape;

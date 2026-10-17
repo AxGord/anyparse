@@ -422,6 +422,26 @@ final class BodyFit {
 	}
 
 	/**
+	 * Rebuild `items` with `f` applied to its last non-`Empty` element, or `null`
+	 * when there is no such element or `f` declines it.
+	 *
+	 * The two rewriting twins differ only in which walk they recurse with, so the
+	 * `Concat` arm is one helper taking that walk as its argument rather than two
+	 * copies to keep in step. Trailing `Empty` placeholders survive: the search
+	 * SKIPS them, the rebuild writes back at the index the search returned, and
+	 * `copy()` carries everything else through untouched.
+	 */
+	public static function rebuiltTail(items: Array<Doc>, f: Doc -> Null<Doc>): Null<Doc> {
+		final i: Int = lastNonEmptyIdx(items);
+		if (i < 0) return null;
+		final rebuilt: Null<Doc> = f(items[i]);
+		if (rebuilt == null) return null;
+		final copy: Array<Doc> = items.copy();
+		copy[i] = rebuilt;
+		return Doc.Concat(copy);
+	}
+
+	/**
 	 * Pin a body that IS an expression paren to its GLUED delimiters: `({` on
 	 * the header line, `})` closing the body, never the opened
 	 * `(` / newline / `{` shape.
@@ -611,26 +631,6 @@ final class BodyFit {
 			case _:
 				return null;
 		}
-	}
-
-	/**
-	 * Rebuild `items` with `f` applied to its last non-`Empty` element, or `null`
-	 * when there is no such element or `f` declines it.
-	 *
-	 * The two rewriting twins differ only in which walk they recurse with, so the
-	 * `Concat` arm is one helper taking that walk as its argument rather than two
-	 * copies to keep in step. Trailing `Empty` placeholders survive: the search
-	 * SKIPS them, the rebuild writes back at the index the search returned, and
-	 * `copy()` carries everything else through untouched.
-	 */
-	public static function rebuiltTail(items: Array<Doc>, f: Doc -> Null<Doc>): Null<Doc> {
-		final i: Int = lastNonEmptyIdx(items);
-		if (i < 0) return null;
-		final rebuilt: Null<Doc> = f(items[i]);
-		if (rebuilt == null) return null;
-		final copy: Array<Doc> = items.copy();
-		copy[i] = rebuilt;
-		return Doc.Concat(copy);
 	}
 
 	/**

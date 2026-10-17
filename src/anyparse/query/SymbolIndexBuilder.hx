@@ -200,6 +200,11 @@ final class SymbolIndexBuilder {
 		return RefactorSupport.typeDeclOf(node) ?? condSharedBodyDeclOf(node);
 	}
 
+	/** Whether `pendingMeta` holds the grammar's (optional) tag `name` — false when the grammar names none. */
+	private static inline function carriesMeta(pendingMeta: Array<String>, name: Null<String>): Bool {
+		return name != null && pendingMeta.contains(name);
+	}
+
 	/**
 	 * The module-level value declarations of `tree` (`RefShape.moduleValueDeclKinds`: a function, a `var`, the form a `final`
 	 * wraps), every one in source order — inside a conditional region or any other nameless wrapper too, never inside a named
@@ -222,11 +227,6 @@ final class SymbolIndexBuilder {
 		}
 		for (c in tree.children) walk(c);
 		return out;
-	}
-
-	/** Whether `pendingMeta` holds the grammar's (optional) tag `name` — false when the grammar names none. */
-	private static inline function carriesMeta(pendingMeta: Array<String>, name: Null<String>): Bool {
-		return name != null && pendingMeta.contains(name);
 	}
 
 	/**

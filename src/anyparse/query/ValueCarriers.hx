@@ -30,6 +30,12 @@ final class ValueCarriers {
 	 */
 	public var metIncomplete(default, null): Bool = false;
 
+	/**
+	 * The types whose instances may have escaped the type system by their typed ids (`ValueEscapes.escapedIds`), where the
+	 * compiler facts say; null for any, or where they do not.
+	 */
+	public var escapedIds: () -> Null<Array<String>> = () -> null;
+
 	/** Type -> whether every subtype of it is one the index lists (`complete`), settled on first need. */
 	private final _completeByType: Map<String, Bool> = [];
 
@@ -49,12 +55,6 @@ final class ValueCarriers {
 
 	private var _completeMemo: Null<Bool> = null;
 
-	/**
-	 * The types whose instances may have escaped the type system by their typed ids (`ValueEscapes.escapedIds`), where the
-	 * compiler facts say; null for any, or where they do not.
-	 */
-	public var escapedIds: () -> Null<Array<String>> = () -> null;
-
 	public function new(scope: ReachProject, complete: () -> Bool, escaped: () -> Null<Array<String>>, buildsListed: Bool) {
 		_scope = scope;
 		_complete = complete;
@@ -63,19 +63,18 @@ final class ValueCarriers {
 	}
 
 	/** Start a new question: nothing met yet. */
-	public function startQuestion(): Void {
+	public inline function startQuestion(): Void {
 		metIncomplete = false;
 	}
 
 	/** Drop what was settled over the project's text, which changed. */
-	public function forget(): Void {
+	public inline function forget(): Void {
 		_completeByType.clear();
 	}
 
 	/** Whether the index holds every type the run's builds compile, so a subtype it does not list does not exist. */
 	public function classpathComplete(): Bool {
-		final held: Null<Bool> = _completeMemo;
-		final answer: Bool = held ?? _complete();
+		final answer: Bool = _completeMemo ?? _complete();
 		_completeMemo = answer;
 		if (!answer) metIncomplete = true;
 		return answer;

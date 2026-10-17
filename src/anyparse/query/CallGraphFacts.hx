@@ -58,7 +58,6 @@ final class CallGraphFacts {
 	/** The fact kind of a method's body (`TypedFactsProbe`): the one kind a build macro's own method is taken in as. */
 	private static inline final METHOD_KIND: String = 'method';
 
-
 	/** The kind of a typed interface (`TypeFact.kind`). */
 	private static inline final INTERFACE_KIND: String = 'interface';
 
@@ -68,21 +67,18 @@ final class CallGraphFacts {
 	/** The call accesses by a name off a value of no class or a structure (`CallFact.access`). */
 	private static final DYNAMIC_CALLS: Array<String> = ['FDynamic', 'FAnon'];
 
-	/** The view over the table the graph reads. */
-	public final view: FactsView;
-
-	/**
-	 * Node id -> the facts that replaced its syntax: its edges, unresolved sites and accesses come from them, every other
-	 * node's from its syntax.
-	 */
-	public final faceted: Map<String, Array<FactNode>> = [];
-
 	/**
 	 * The faceted nodes of the file whose edges the graph is collecting: their syntax records its
 	 * edges, which the facts only add to — under the truth, only those at a site the facts do not
 	 * type (`holdsBack`) — but none of its unresolved sites and accesses, which the facts type.
 	 */
 	public var muted(default, null): Map<String, Bool> = [];
+
+	/**
+	 * Node id -> the facts that replaced its syntax: its edges, unresolved sites and accesses come from them, every other
+	 * node's from its syntax.
+	 */
+	public final faceted: Map<String, Array<FactNode>> = [];
 
 	/**
 	 * Node id -> the body a build macro made for it (`adopt`), which the facts describe and no text holds: it is read by
@@ -95,6 +91,9 @@ final class CallGraphFacts {
 	 * folds under a simple name several typed types share, those of the type, read through its facts.
 	 */
 	public final qualified: Map<String, QualifiedRead> = [];
+
+	/** The view over the table the graph reads. */
+	public final view: FactsView;
 
 	/** Node id -> the facts `recordMuted` recorded for it last, whose edges the graph holds. */
 	private final _recorded: Map<String, Array<FactNode>> = [];
@@ -268,14 +267,6 @@ final class CallGraphFacts {
 		return key;
 	}
 
-	/** Drop the unresolved sites and accesses of the node `id`, which its facts are about to record again. */
-	private static function retract(g: CallGraph, id: String): Void {
-		var i: Int = g.unresolved.length;
-		while (i-- > 0) if (g.unresolved[i].from == id) g.unresolved.splice(i, 1);
-		i = g.unresolvedAccess.length;
-		while (i-- > 0) if (g.unresolvedAccess[i].from == id) g.unresolvedAccess.splice(i, 1);
-	}
-
 	/** Forget the text of `file`, which left the graph, and the `removed` nodes it declared. */
 	public function forget(file: String, removed: Map<String, Bool>): Void {
 		for (id in removed.keys()) {
@@ -285,6 +276,83 @@ final class CallGraphFacts {
 			_recorded.remove(id);
 		}
 		view.forget(file);
+	}
+
+	/**
+	 * Whether the syntax's edge `e` is a call of an expression macro the compiler replaced by an expansion the facts `bodies`
+	 * hold (`FactNode.expansions`): the edge runs into the macro's own code, which runs while compiling, in no program — what
+	 * runs is the expansion, read through those facts. Its site lies in the expansion's anchor, in the function's own file.
+	 */
+	private function expandedAt(g: CallGraph, bodies: Array<FactNode>, e: CallEdge): Bool {
+		final at: Null<Span> = e.span;
+		if (at == null) return false;
+		final site: Span = at;
+		final key: String = view._table.keyOf(e.file);
+		for (n in bodies) for (x in n.expansions) {
+			final expander: Null<String> = x.expander;
+			if (expander == null || x.anchor.file != key || site.from < x.anchor.span.from || x.anchor.span.to < site.to) continue;
+			// the graph holds no node for a macro function: the edge names it by its type's and its own name
+			final owner: String = ownerOf(expander);
+			final type: String = view.graphType(owner);
+			final name: String = expander.substr(owner.length + 1);
+			if (e.to == '$type.$name' || g.memberOnChain(type, name) == e.to) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Take in (`adopt`) the methods a build macro made of the typed type `id`, which the graph calls `type`, declared in
+	 * `file` (keyed `key`), adding their ids to `out`: none unless a build macro ran over it and it was typed from that file.
+	 */
+	private function adoptType(g: CallGraph, file: String, key: String, type: String, id: String, out: Array<String>): Void {
+		final table: CompilerFacts = view._table;
+		final typed: Null<TypeFact> = table.type(id);
+		if (typed == null || typed.builds.length == 0 || table.typePosition(id)?.file != key) return;
+		for (nodeId in table.nodeIdsOf(id)) {
+			final n: Null<FactNode> = table.node(nodeId);
+			final field: String = SourceText.lastSegment(nodeId);
+			final kinds: Array<String> = typed.fields.find(f -> f.name == field)?.kinds ?? [];
+			// a macro function in every build runs in no program; one a build may replace is a value there
+			if (n == null || n.kind != METHOD_KIND || n.overloadIndex > 0 || (
+				kinds.length > 0 && kinds.foreach(k -> k == CompilerFacts.MACRO_FIELD_KIND)
+			))
+				continue;
+			final name: String = view.graphMember(id, field);
+			final graphId: String = '$type.$name';
+			final declared: Bool = g.nodes[graphId]?.isExternal == false;
+			if (declared && !n.generated) continue;
+			if (!declared) adoptNode(g, graphId, file, type, name, kinds.contains(DYNAMIC_FIELD));
+			adopted[graphId] = n;
+			out.push(graphId);
+		}
+	}
+
+	/**
+	 * The graph node declared where the compiler typed the function `id` — a local or nested function of `node`'s own
+	 * text, or of the callee an inlined body spliced it in from — or null when no node of the graph starts where it does.
+	 */
+	public static function graphNodeOf(g: CallGraph, node: FnNode, id: String, view: FactsView): Null<String> {
+		final fact: Null<FactNode> = view._table.node(id);
+		final file: Null<String> = fact == null || fact.generated ? null : graphFile(g, node, fact.at.file, view);
+		if (fact == null || file == null) return null;
+		final at: Span = fact.at.span;
+		// a node's span may run on over trailing trivia the compiler's range stops before: the two share their start — the
+		// start of the declaration holding it, which for a node folding several may be another than its first
+		final found: Null<FnDeclaration> = g.declarationAt(file, at.from);
+		return found != null && found.span.from == at.from ? found.id : null;
+	}
+
+	/** A site by its exact range: a syntax edge is dropped only at a range the compiler typed itself. */
+	private static inline function siteKey(span: Span): String {
+		return '${span.from}:${span.to}';
+	}
+
+	/** Drop the unresolved sites and accesses of the node `id`, which its facts are about to record again. */
+	private static function retract(g: CallGraph, id: String): Void {
+		var i: Int = g.unresolved.length;
+		while (i-- > 0) if (g.unresolved[i].from == id) g.unresolved.splice(i, 1);
+		i = g.unresolvedAccess.length;
+		while (i-- > 0) if (g.unresolvedAccess[i].from == id) g.unresolvedAccess.splice(i, 1);
 	}
 
 	/**
@@ -633,21 +701,6 @@ final class CallGraphFacts {
 		return declared != null && (declared.kind == 'class' || declared.kind == 'interface') ? declared.id : CompilerFacts.baseId(owner);
 	}
 
-	/**
-	 * The graph node declared where the compiler typed the function `id` — a local or nested function of `node`'s own
-	 * text, or of the callee an inlined body spliced it in from — or null when no node of the graph starts where it does.
-	 */
-	public static function graphNodeOf(g: CallGraph, node: FnNode, id: String, view: FactsView): Null<String> {
-		final fact: Null<FactNode> = view._table.node(id);
-		final file: Null<String> = fact == null || fact.generated ? null : graphFile(g, node, fact.at.file, view);
-		if (fact == null || file == null) return null;
-		final at: Span = fact.at.span;
-		// a node's span may run on over trailing trivia the compiler's range stops before: the two share their start — the
-		// start of the declaration holding it, which for a node folding several may be another than its first
-		final found: Null<FnDeclaration> = g.declarationAt(file, at.from);
-		return found != null && found.span.from == at.from ? found.id : null;
-	}
-
 	/** The file of the graph whose table key is `key` — `node`'s own, or another the graph holds — or null for none. */
 	private static function graphFile(g: CallGraph, node: FnNode, key: String, view: FactsView): Null<String> {
 		if (view._table.keyOf(node.file) == key) return node.file;
@@ -698,64 +751,10 @@ final class CallGraphFacts {
 			.exists(f -> f.typed != null && f.to == e.to && (f.spliced?.sites ?? []).exists(s -> s.from <= span.from && span.to <= s.to));
 	}
 
-	/**
-	 * Whether the syntax's edge `e` is a call of an expression macro the compiler replaced by an expansion the facts `bodies`
-	 * hold (`FactNode.expansions`): the edge runs into the macro's own code, which runs while compiling, in no program — what
-	 * runs is the expansion, read through those facts. Its site lies in the expansion's anchor, in the function's own file.
-	 */
-	private function expandedAt(g: CallGraph, bodies: Array<FactNode>, e: CallEdge): Bool {
-		final at: Null<Span> = e.span;
-		if (at == null) return false;
-		final site: Span = at;
-		final key: String = view._table.keyOf(e.file);
-		for (n in bodies) for (x in n.expansions) {
-			final expander: Null<String> = x.expander;
-			if (expander == null || x.anchor.file != key || site.from < x.anchor.span.from || x.anchor.span.to < site.to) continue;
-			// the graph holds no node for a macro function: the edge names it by its type's and its own name
-			final owner: String = ownerOf(expander);
-			final type: String = view.graphType(owner);
-			final name: String = expander.substr(owner.length + 1);
-			if (e.to == '$type.$name' || g.memberOnChain(type, name) == e.to) return true;
-		}
-		return false;
-	}
-
-	/** A site by its exact range: a syntax edge is dropped only at a range the compiler typed itself. */
-	private static inline function siteKey(span: Span): String {
-		return '${span.from}:${span.to}';
-	}
-
 	/** The declaring type of a call target `pack.Type.field`. */
 	private static function ownerOf(target: String): String {
 		final dot: Int = target.lastIndexOf('.');
 		return dot < 0 ? target : target.substr(0, dot);
-	}
-
-	/**
-	 * Take in (`adopt`) the methods a build macro made of the typed type `id`, which the graph calls `type`, declared in
-	 * `file` (keyed `key`), adding their ids to `out`: none unless a build macro ran over it and it was typed from that file.
-	 */
-	private function adoptType(g: CallGraph, file: String, key: String, type: String, id: String, out: Array<String>): Void {
-		final table: CompilerFacts = view._table;
-		final typed: Null<TypeFact> = table.type(id);
-		if (typed == null || typed.builds.length == 0 || table.typePosition(id)?.file != key) return;
-		for (nodeId in table.nodeIdsOf(id)) {
-			final n: Null<FactNode> = table.node(nodeId);
-			final field: String = SourceText.lastSegment(nodeId);
-			final kinds: Array<String> = typed.fields.find(f -> f.name == field)?.kinds ?? [];
-			// a macro function in every build runs in no program; one a build may replace is a value there
-			if (n == null || n.kind != METHOD_KIND || n.overloadIndex > 0 || (
-				kinds.length > 0 && kinds.foreach(k -> k == CompilerFacts.MACRO_FIELD_KIND)
-			))
-				continue;
-			final name: String = view.graphMember(id, field);
-			final graphId: String = '$type.$name';
-			final declared: Bool = g.nodes[graphId]?.isExternal == false;
-			if (declared && !n.generated) continue;
-			if (!declared) adoptNode(g, graphId, file, type, name, kinds.contains(DYNAMIC_FIELD));
-			adopted[graphId] = n;
-			out.push(graphId);
-		}
 	}
 
 	/**

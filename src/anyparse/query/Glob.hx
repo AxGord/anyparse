@@ -34,6 +34,15 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 final class Glob {
 
+	/**
+	 * A fully-anchored regex matching the qualified names (`pack.sub.Name`) the glob `spec` describes: star within one
+	 * dotted segment, double-star across segments (followed by a dot it also matches none), `?` one character of a
+	 * segment, `[...]` a character class.
+	 */
+	public static inline function qualifiedNames(spec: String): EReg {
+		return globToRegex(spec, '.');
+	}
+
 	public static function expand(spec: String, extension: String): Array<String> {
 		final out: Array<String> = [];
 		#if (sys || nodejs)
@@ -68,67 +77,6 @@ final class Glob {
 		var end: Int = spec.length;
 		while (end > 1 && spec.charAt(end - 1) == '/') end--;
 		return end == spec.length ? spec : spec.substr(0, end);
-	}
-
-	#if (sys || nodejs)
-	private static function collect(dir: String, extension: String, into: Array<String>): Void {
-		for (name in FileSystem.readDirectory(dir)) {
-			final path: String = '$dir/$name';
-			if (FileSystem.isDirectory(path))
-				collect(path, extension, into);
-			else if (StringTools.endsWith(name, extension))
-				into.push(path);
-		}
-	}
-
-	/**
-	 * Recursively walk `fsDir`, accumulating the printable path in
-	 * `prefix` (empty when the walk root is the cwd), and keep files
-	 * whose printable path fully matches `re`.
-	 */
-	private static function collectMatching(fsDir: String, prefix: String, re: EReg, into: Array<String>): Void {
-		for (name in FileSystem.readDirectory(fsDir)) {
-			final fsPath: String = '$fsDir/$name';
-			final rel: String = prefix == '' ? name : '$prefix/$name';
-			if (FileSystem.isDirectory(fsPath))
-				collectMatching(fsPath, rel, re, into);
-			else if (re.match(rel))
-				into.push(rel);
-		}
-	}
-
-	private static inline function isGlobChar(c: String): Bool {
-		return c == '*' || c == '?' || c == '[';
-	}
-
-	private static function isGlob(spec: String): Bool {
-		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) return true;
-		return false;
-	}
-
-	/**
-	 * Literal directory prefix preceding the first glob metacharacter,
-	 * with no trailing slash. `''` when the pattern starts globbing
-	 * before any `/` (walk root is the cwd).
-	 */
-	private static function globBase(spec: String): String {
-		var firstGlob: Int = spec.length;
-		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) {
-			firstGlob = i;
-			break;
-		}
-		final lastSlash: Int = spec.substr(0, firstGlob).lastIndexOf('/');
-		return lastSlash < 0 ? '' : spec.substr(0, lastSlash);
-	}
-	#end
-
-	/**
-	 * A fully-anchored regex matching the qualified names (`pack.sub.Name`) the glob `spec` describes: star within one
-	 * dotted segment, double-star across segments (followed by a dot it also matches none), `?` one character of a
-	 * segment, `[...]` a character class.
-	 */
-	public static inline function qualifiedNames(spec: String): EReg {
-		return globToRegex(spec, '.');
 	}
 
 	/**
@@ -183,5 +131,57 @@ final class Glob {
 		buf.add('$');
 		return new EReg(buf.toString(), '');
 	}
+
+	#if (sys || nodejs)
+	private static function collect(dir: String, extension: String, into: Array<String>): Void {
+		for (name in FileSystem.readDirectory(dir)) {
+			final path: String = '$dir/$name';
+			if (FileSystem.isDirectory(path))
+				collect(path, extension, into);
+			else if (StringTools.endsWith(name, extension))
+				into.push(path);
+		}
+	}
+
+	/**
+	 * Recursively walk `fsDir`, accumulating the printable path in
+	 * `prefix` (empty when the walk root is the cwd), and keep files
+	 * whose printable path fully matches `re`.
+	 */
+	private static function collectMatching(fsDir: String, prefix: String, re: EReg, into: Array<String>): Void {
+		for (name in FileSystem.readDirectory(fsDir)) {
+			final fsPath: String = '$fsDir/$name';
+			final rel: String = prefix == '' ? name : '$prefix/$name';
+			if (FileSystem.isDirectory(fsPath))
+				collectMatching(fsPath, rel, re, into);
+			else if (re.match(rel))
+				into.push(rel);
+		}
+	}
+
+	private static inline function isGlobChar(c: String): Bool {
+		return c == '*' || c == '?' || c == '[';
+	}
+
+	private static function isGlob(spec: String): Bool {
+		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) return true;
+		return false;
+	}
+
+	/**
+	 * Literal directory prefix preceding the first glob metacharacter,
+	 * with no trailing slash. `''` when the pattern starts globbing
+	 * before any `/` (walk root is the cwd).
+	 */
+	private static function globBase(spec: String): String {
+		var firstGlob: Int = spec.length;
+		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) {
+			firstGlob = i;
+			break;
+		}
+		final lastSlash: Int = spec.substr(0, firstGlob).lastIndexOf('/');
+		return lastSlash < 0 ? '' : spec.substr(0, lastSlash);
+	}
+	#end
 
 }

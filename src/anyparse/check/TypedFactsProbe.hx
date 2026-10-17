@@ -260,6 +260,21 @@ final class TypedFactsProbe {
 		#end
 	}
 
+	/** The arguments of the facts compile of `hxml` under `defines`, writing to `out` with the hook found under `dir`. */
+	public static function compileArgs(hxml: String, defines: Array<String>, dir: String, out: String): Array<String> {
+		// the hook's class path goes AFTER the hxml: a later class path wins, so a project holding its own copy — anyparse —
+		// still runs the one written here. `keep-inline-positions` leaves an inlined body at the callee's positions: without
+		// it every fact of the body lands on the call site's range and reads as the type of the call itself
+		return CompilerOracle.defineFlags(defines.concat(['keep-inline-positions'])).concat([
+			hxml,
+			'--no-output',
+			'-cp',
+			dir,
+			'--macro',
+			'anyparse.check.TypedFactsMacro.run(${haxe.Json.stringify(out)})'
+		]);
+	}
+
 	/**
 	 * Whether the facts compile of `oracle` should bring its baseline typecheck along: the run will ask for one of the tree
 	 * as it is now, the memo holds none, and it is not a run that answers baselines from the persisted cache, which
@@ -279,21 +294,6 @@ final class TypedFactsProbe {
 		if (run.status == 0) return 'it wrote no facts file';
 		final first: String = StringTools.trim(run.err.split('\n').find(l -> StringTools.trim(l) != '' && l.indexOf('Warning') < 0) ?? '');
 		return 'the compile failed (status ${run.status})' + (first == '' ? '' : ': $first');
-	}
-
-	/** The arguments of the facts compile of `hxml` under `defines`, writing to `out` with the hook found under `dir`. */
-	public static function compileArgs(hxml: String, defines: Array<String>, dir: String, out: String): Array<String> {
-		// the hook's class path goes AFTER the hxml: a later class path wins, so a project holding its own copy — anyparse —
-		// still runs the one written here. `keep-inline-positions` leaves an inlined body at the callee's positions: without
-		// it every fact of the body lands on the call site's range and reads as the type of the call itself
-		return CompilerOracle.defineFlags(defines.concat(['keep-inline-positions'])).concat([
-			hxml,
-			'--no-output',
-			'-cp',
-			dir,
-			'--macro',
-			'anyparse.check.TypedFactsMacro.run(${haxe.Json.stringify(out)})'
-		]);
 	}
 
 	#if (sys || nodejs)

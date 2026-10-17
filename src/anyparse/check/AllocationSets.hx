@@ -29,15 +29,15 @@ final class AllocationSets {
 	/** Each field id -> its sealed allocation set, null when it has none. */
 	private final _fields: Map<String, Null<Array<String>>> = [];
 
+	/** Each file -> the type names its imports bind (`importsOf`). */
+	private final _imports: Map<String, FileImports> = [];
+
 	private final _graph: CallGraph;
 	private final _sites: LockSites;
 	private final _shape: RefShape;
 
 	/** The run's field writes. */
 	private final _writes: FieldWrites;
-
-	/** Each file -> the type names its imports bind (`importsOf`). */
-	private final _imports: Map<String, FileImports> = [];
 
 	public function new(graph: CallGraph, plugin: GrammarPlugin, sites: LockSites, writes: FieldWrites) {
 		_graph = graph;
@@ -81,19 +81,6 @@ final class AllocationSets {
 		return kept.length == 0 ? null : kept.join(SEPARATOR);
 	}
 
-	/** The class the `new` at the site of the construction `edge` names; null when the tree cannot place it. */
-	private function constructedAt(edge: CallEdge): Null<String> {
-		final at: Null<Span> = edge.span;
-		var node: Null<QueryNode> = at == null ? null : _graph.treeOf(edge.file);
-		while (node != null && at != null) {
-			final span: Null<Span> = node.span;
-			if (node.kind == _shape.newExprKind && span != null && span.from == at.from && span.to == at.to)
-				return constructed(node, edge.file)?.join(SEPARATOR);
-			node = node.children.find(c -> c.span != null && c.span.from <= at.from && c.span.to >= at.to);
-		}
-		return null;
-	}
-
 	/**
 	 * The classes every value of the field `field` (`Type.member`) is constructed as: its declared value, if any, and every
 	 * write of it a `new` (through `?:` and conditional compilation), each write a plain assignment; null otherwise, when
@@ -121,6 +108,19 @@ final class AllocationSets {
 		final answer: Null<Array<String>> = !sealed || found.length == 0 ? null : found;
 		_fields[field] = answer;
 		return answer;
+	}
+
+	/** The class the `new` at the site of the construction `edge` names; null when the tree cannot place it. */
+	private function constructedAt(edge: CallEdge): Null<String> {
+		final at: Null<Span> = edge.span;
+		var node: Null<QueryNode> = at == null ? null : _graph.treeOf(edge.file);
+		while (node != null && at != null) {
+			final span: Null<Span> = node.span;
+			if (node.kind == _shape.newExprKind && span != null && span.from == at.from && span.to == at.to)
+				return constructed(node, edge.file)?.join(SEPARATOR);
+			node = node.children.find(c -> c.span != null && c.span.from <= at.from && c.span.to >= at.to);
+		}
+		return null;
 	}
 
 	/**

@@ -240,48 +240,6 @@ final class CallGraphKeys {
 		return g._facts.overloadedParams.exists(id) ? null : declaredParamTypes(g, id);
 	}
 
-	/** `paramTypesOf` for a function offering no other signature: what its declarations write. */
-	private static function declaredParamTypes(g: CallGraph, id: String): Null<Array<Null<String>>> {
-		final cached: Null<Array<Null<String>>> = g._facts.paramTypes[id];
-		if (cached != null) return cached;
-		final n: Null<FnNode> = g.nodes[id];
-		if (n == null) return null;
-		final imports: CallGraphImports = g.types.imports;
-		final typeSyntax: TypeSyntaxReader = g._plugin.typeSyntax;
-		final declared: Array<FnDeclaration> = g.declarationsOf(id);
-		if (declared.length == 0) return externalParamTypes(g, n);
-		var out: Null<Array<Null<String>>> = null;
-		var rest: Bool = false;
-		var skippableFrom: Int = -1;
-		final unkeyed: Array<String> = g.types.generics.typeParamsOf(n.typeName ?? '').concat(g._facts.typeParams[id] ?? []);
-		for (d in declared) {
-			final entry: Null<{ tree: QueryNode, source: String }> = g._entries[CallGraphNames.normalizePath(d.file)];
-			final read: Null<{ params: Array<Null<String>>, rest: Bool, skippableFrom: Int }> = entry == null
-				? null
-				: CallGraphNames.declaredParams(entry.tree, entry.source, d.span.from, g._shape, g._provider);
-			if (read == null) return null;
-			final written: Array<Null<String>> = [
-				for (p in read.params) p == null ? null : keyedIn(imports, d.file, typeSyntax, p, unkeyed)
-			];
-			final held: Null<Array<Null<String>>> = out;
-			skippableFrom = skippableFrom < 0 ? read.skippableFrom : Std.int(Math.min(skippableFrom, read.skippableFrom));
-			if (held == null) {
-				out = written;
-				rest = read.rest;
-			} else if (
-				read.rest != rest || written.length != held.length || [for (i in 0...held.length) held[i] == written[i]].contains(false)
-			) {
-				return null;
-			}
-		}
-		final params: Null<Array<Null<String>>> = out;
-		if (params == null) return null;
-		if (rest) g._facts.restParams[id] = true;
-		if (skippableFrom < params.length) g._facts.skippable[id] = { from: skippableFrom, count: params.length };
-		g._facts.paramTypes[id] = params;
-		return params;
-	}
-
 	/**
 	 * Whether the argument at `index` of a call passing `count` arguments to `id` of `g` (`paramTypesOf` read) may bind a later
 	 * parameter than the one at its position: a parameter the language may skip sits at or before it while the call passes
@@ -410,6 +368,48 @@ final class CallGraphKeys {
 				{ file: d.file, written: read };
 			}
 		];
+	}
+
+	/** `paramTypesOf` for a function offering no other signature: what its declarations write. */
+	private static function declaredParamTypes(g: CallGraph, id: String): Null<Array<Null<String>>> {
+		final cached: Null<Array<Null<String>>> = g._facts.paramTypes[id];
+		if (cached != null) return cached;
+		final n: Null<FnNode> = g.nodes[id];
+		if (n == null) return null;
+		final imports: CallGraphImports = g.types.imports;
+		final typeSyntax: TypeSyntaxReader = g._plugin.typeSyntax;
+		final declared: Array<FnDeclaration> = g.declarationsOf(id);
+		if (declared.length == 0) return externalParamTypes(g, n);
+		var out: Null<Array<Null<String>>> = null;
+		var rest: Bool = false;
+		var skippableFrom: Int = -1;
+		final unkeyed: Array<String> = g.types.generics.typeParamsOf(n.typeName ?? '').concat(g._facts.typeParams[id] ?? []);
+		for (d in declared) {
+			final entry: Null<{ tree: QueryNode, source: String }> = g._entries[CallGraphNames.normalizePath(d.file)];
+			final read: Null<{ params: Array<Null<String>>, rest: Bool, skippableFrom: Int }> = entry == null
+				? null
+				: CallGraphNames.declaredParams(entry.tree, entry.source, d.span.from, g._shape, g._provider);
+			if (read == null) return null;
+			final written: Array<Null<String>> = [
+				for (p in read.params) p == null ? null : keyedIn(imports, d.file, typeSyntax, p, unkeyed)
+			];
+			final held: Null<Array<Null<String>>> = out;
+			skippableFrom = skippableFrom < 0 ? read.skippableFrom : Std.int(Math.min(skippableFrom, read.skippableFrom));
+			if (held == null) {
+				out = written;
+				rest = read.rest;
+			} else if (
+				read.rest != rest || written.length != held.length || [for (i in 0...held.length) held[i] == written[i]].contains(false)
+			) {
+				return null;
+			}
+		}
+		final params: Null<Array<Null<String>>> = out;
+		if (params == null) return null;
+		if (rest) g._facts.restParams[id] = true;
+		if (skippableFrom < params.length) g._facts.skippable[id] = { from: skippableFrom, count: params.length };
+		g._facts.paramTypes[id] = params;
+		return params;
 	}
 
 	/**

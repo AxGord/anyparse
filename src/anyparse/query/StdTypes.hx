@@ -24,12 +24,6 @@ final class StdTypes {
 	/** How deep a member is looked for through supertypes and typedef targets. */
 	private static inline final MAX_DEPTH: Int = 8;
 
-	/** Type simple name -> the std core modules of that name (`haxe.io.Input`); null until the std is listed. */
-	private static var _modules: Null<Map<String, Array<String>>> = null;
-
-	/** The std root `_modules` lists — a discovery that answers another (`StdResolver.resetCache`) lists again. */
-	private static var _listedRoot: Null<String> = null;
-
 	/** Every std core module path, for resolving a simple name written inside one. */
 	private static final modulePaths: Map<String, Bool> = [];
 
@@ -38,6 +32,15 @@ final class StdTypes {
 
 	/** Every package a std core module sits in (the toplevel as ''), telling a package the core holds from a library's. */
 	private static final packages: Map<String, Bool> = [];
+
+	/** Module path -> the declarations of a std module outside the core (`moduleTypes`), null for one that cannot be read. */
+	private static final outsideInfos: Map<String, Null<FileInfo>> = [];
+
+	/** Type simple name -> the std core modules of that name (`haxe.io.Input`); null until the std is listed. */
+	private static var _modules: Null<Map<String, Array<String>>> = null;
+
+	/** The std root `_modules` lists — a discovery that answers another (`StdResolver.resetCache`) lists again. */
+	private static var _listedRoot: Null<String> = null;
 
 	/**
 	 * What `member` of the std type `typeName` (a simple name, or a module path) is: the module path of the type it
@@ -105,6 +108,22 @@ final class StdTypes {
 		packages.clear();
 		moduleInfos.clear();
 		outsideInfos.clear();
+	}
+
+	/**
+	 * The types the std module `module` declares (`haxe.Timer`, the toplevel `StdTypes`, a target module such as
+	 * `js.html.Element` outside the core the other answers here read), read once — what a name binding over an index that
+	 * does not hold the std asks before it lets a lower tier answer. Null when that cannot be told: no std discovered, no
+	 * std file of that module, or one that does not parse.
+	 */
+	public static function moduleTypes(plugin: GrammarPlugin, module: String): Null<Array<TypeDeclInfo>> {
+		listed();
+		if (modulePaths.exists(module)) return infoOf(plugin, module)?.types;
+		if (outsideInfos.exists(module)) return outsideInfos[module]?.types;
+		final root: Null<String> = StdResolver.stdDir();
+		final info: Null<FileInfo> = root == null ? null : parsed(plugin, '$root/${module.split('.').join('/')}.hx');
+		outsideInfos[module] = info;
+		return info?.types;
 	}
 
 	/** Push into `found` what `member` of the type at `path` is, or, when it declares none, what its supertypes and typedef targets do. */
@@ -219,30 +238,11 @@ final class StdTypes {
 		return #if (sys || nodejs) try sys.io.File.getContent(file) catch (exception: Exception) null #else null #end;
 	}
 
-	/**
-	 * The types the std module `module` declares (`haxe.Timer`, the toplevel `StdTypes`, a target module such as
-	 * `js.html.Element` outside the core the other answers here read), read once — what a name binding over an index that
-	 * does not hold the std asks before it lets a lower tier answer. Null when that cannot be told: no std discovered, no
-	 * std file of that module, or one that does not parse.
-	 */
-	public static function moduleTypes(plugin: GrammarPlugin, module: String): Null<Array<TypeDeclInfo>> {
-		listed();
-		if (modulePaths.exists(module)) return infoOf(plugin, module)?.types;
-		if (outsideInfos.exists(module)) return outsideInfos[module]?.types;
-		final root: Null<String> = StdResolver.stdDir();
-		final info: Null<FileInfo> = root == null ? null : parsed(plugin, '$root/${module.split('.').join('/')}.hx');
-		outsideInfos[module] = info;
-		return info?.types;
-	}
-
 	/** The declarations of the std file `file`, null when it cannot be read or does not parse. */
 	private static function parsed(plugin: GrammarPlugin, file: String): Null<FileInfo> {
 		final source: Null<String> = read(file);
 		return source == null ? null : try IndexScope.declarationsOf(file, source, plugin) catch (exception: Exception) null;
 	}
-
-	/** Module path -> the declarations of a std module outside the core (`moduleTypes`), null for one that cannot be read. */
-	private static final outsideInfos: Map<String, Null<FileInfo>> = [];
 
 }
 

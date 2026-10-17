@@ -193,6 +193,28 @@ final class StdResolver {
 	}
 
 	/**
+	 * The std beside the first `haxe` of `bins` — every `haxe` on PATH, in PATH order — that has one: `siblingStdOf` its
+	 * symlink chain resolved (`resolve`), else the places the compiler itself searches from its own spelling
+	 * (`<dir>/../lib/haxe/std`, `<dir>/../share/haxe/std`, `<dir>/std`, as its `-v` `Classpath:` line lists them). Null
+	 * when none `exists`. A `haxe` with no std beside it is a wrapper — a test harness's shim, a version manager's script —
+	 * that hands the build to a compiler later on PATH, whose std is the one read; stopping at it fell through to the known
+	 * locations and indexed whichever install they name first.
+	 */
+	public static function firstSiblingStd(bins: Array<String>, resolve: (String) -> String, exists: (String) -> Bool): Null<String> {
+		for (bin in bins) {
+			final dir: String = Path.directory(bin);
+			final candidates: Array<String> = [
+				siblingStdOf(resolve(bin), exists),
+				Path.normalize(Path.join([dir, '..', 'lib', 'haxe', 'std'])),
+				Path.normalize(Path.join([dir, '..', 'share', 'haxe', 'std'])),
+				Path.normalize(Path.join([dir, 'std']))
+			];
+			for (c in candidates) if (exists(c)) return c;
+		}
+		return null;
+	}
+
+	/**
 	 * Whether `APQ_NO_STD` DECLINES the auto-discovered std: set to anything other than the
 	 * empty string or `0`. The env twin of the `apqlint.json` `resolutionStd: false` key, and
 	 * the only way to refuse the std on a machine where `KNOWN_LOCATIONS` finds one whatever
@@ -302,28 +324,6 @@ final class StdResolver {
 	/** Whether `path` exists AND is a directory — the injected `exists` predicate for the real filesystem. */
 	private static function dirExists(path: String): Bool {
 		return #if (sys || nodejs) FileSystem.exists(path) && FileSystem.isDirectory(path) #else false #end;
-	}
-
-	/**
-	 * The std beside the first `haxe` of `bins` — every `haxe` on PATH, in PATH order — that has one: `siblingStdOf` its
-	 * symlink chain resolved (`resolve`), else the places the compiler itself searches from its own spelling
-	 * (`<dir>/../lib/haxe/std`, `<dir>/../share/haxe/std`, `<dir>/std`, as its `-v` `Classpath:` line lists them). Null
-	 * when none `exists`. A `haxe` with no std beside it is a wrapper — a test harness's shim, a version manager's script —
-	 * that hands the build to a compiler later on PATH, whose std is the one read; stopping at it fell through to the known
-	 * locations and indexed whichever install they name first.
-	 */
-	public static function firstSiblingStd(bins: Array<String>, resolve: (String) -> String, exists: (String) -> Bool): Null<String> {
-		for (bin in bins) {
-			final dir: String = Path.directory(bin);
-			final candidates: Array<String> = [
-				siblingStdOf(resolve(bin), exists),
-				Path.normalize(Path.join([dir, '..', 'lib', 'haxe', 'std'])),
-				Path.normalize(Path.join([dir, '..', 'share', 'haxe', 'std'])),
-				Path.normalize(Path.join([dir, 'std']))
-			];
-			for (c in candidates) if (exists(c)) return c;
-		}
-		return null;
 	}
 
 }

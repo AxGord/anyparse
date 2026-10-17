@@ -71,20 +71,20 @@ final class TypeMetaFacts {
 	}
 
 	/**
+	 * The head path of the underlying type each declaration of the `@:forward` abstract `typeName` writes, with the file
+	 * writing it — where the name is read (`CallGraphImports.keyedWhereWritten`); none for a `#if`-guarded declaration.
+	 */
+	public inline function forwardsWritten(typeName: String): Array<{ path: String, file: String }> {
+		return _forwardsWritten[typeName] ?? [];
+	}
+
+	/**
 	 * The underlying type a `@:forward` abstract `typeName` routes `member` to — a member it does not declare
 	 * itself, and one its `@:forward(...)` names when it names any — or null.
 	 */
 	public function forwardedTo(typeName: String, member: String): Null<String> {
 		final only: Null<Array<String>> = _forwardedOnly[typeName];
 		return only != null && !only.contains(member) ? null : _forwards[typeName];
-	}
-
-	/**
-	 * The head path of the underlying type each declaration of the `@:forward` abstract `typeName` writes, with the file
-	 * writing it — where the name is read (`CallGraphImports.keyedWhereWritten`); none for a `#if`-guarded declaration.
-	 */
-	public inline function forwardsWritten(typeName: String): Array<{ path: String, file: String }> {
-		return _forwardsWritten[typeName] ?? [];
 	}
 
 	/** Fold the modifiers and metadata of one declaration, of the file keyed `file`. */

@@ -57,6 +57,38 @@ final class ProbeCommand implements CliCommand {
 		printProbeUsage();
 	}
 
+	public static function emitOneWriterProbe(
+		plugin: GrammarPlugin, source: String, file: String, lang: String, plain: Bool, optsJson: Null<String>
+	): Bool {
+		final label: String = plain ? 'plain' : 'trivia';
+		CliIo.sysPrint('=== $label ===\n');
+		final emitted: Null<String> = try (
+			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
+		) catch (e: ParseError) {
+			CliIo.stderr('apq writer-probe: $label: $file: $e\n');
+			return false;
+		} catch (e: Exception) {
+			CliIo.stderr('apq writer-probe: $label: $file: ${e.message}\n');
+			return false;
+		}
+		if (emitted == null) {
+			final flag: String = plain ? '--writer-output-plain' : '--writer-output';
+			CliIo.stderr('apq writer-probe: $label: no writer wired up for lang "$lang" ($flag equivalent)\n');
+			return false;
+		}
+		CliIo.sysPrint(emitted);
+		if (!emitted.endsWith('\n')) CliIo.sysPrint('\n');
+		// DX v10: source-preservation note. The trivia pipeline is meant
+		// to round-trip source bytes verbatim (subject to the writer's
+		// fidelity); a byte-diff signals an actual writer-fidelity gap
+		// (e.g. `HxVarMore` `,` collapsing the space, or `static var`
+		// emitted as `staticvar`). Plain pipeline is allowed
+		// to canonicalise, so the check is trivia-only. The note is
+		// stderr — stdout stays the labelled output, exit code unchanged.
+		if (!plain) writerProbeSourcePreservationNote(source, emitted);
+		return true;
+	}
+
 	private static inline function isAstBoolFlag(flag: String): Bool {
 		return AST_BOOL_FLAGS.contains(flag);
 	}
@@ -223,6 +255,69 @@ final class ProbeCommand implements CliCommand {
 		#end
 	}
 
+	private static function writerProbeSourcePreservationNote(source: String, emitted: String): Void {
+		if (source == emitted) return;
+		final minLen: Int = source.length < emitted.length ? source.length : emitted.length;
+		var diffAt: Int = minLen;
+		for (i in 0...minLen) if (source.fastCodeAt(i) != emitted.fastCodeAt(i)) {
+			diffAt = i;
+			break;
+		}
+		// Show a small window around the divergence on each side so the
+		// reader can immediately see the missing/extra bytes without
+		// re-running a diff tool.
+		final wnd: Int = 8;
+		final sFrom: Int = diffAt - wnd >= 0 ? diffAt - wnd : 0;
+		final sExp: String = escapeProbeWindow(source.substring(sFrom, diffAt + wnd < source.length ? diffAt + wnd : source.length));
+		final sAct: String = escapeProbeWindow(emitted.substring(sFrom, diffAt + wnd < emitted.length ? diffAt + wnd : emitted.length));
+		CliIo.stderr('apq writer-probe: NOTE trivia output differs from source at offset $diffAt (writer-fidelity gap)\n');
+		CliIo.stderr('  source : "$sExp"\n');
+		CliIo.stderr('  emitted: "$sAct"\n');
+	}
+
+	private static function escapeProbeWindow(s: String): String {
+		final buf: StringBuf = new StringBuf();
+		for (i in 0...s.length) {
+			final c: Int = s.fastCodeAt(i);
+			switch c {
+				case '\n'.code:
+					buf.add('\\n');
+				case '\t'.code:
+					buf.add('\\t');
+				case '\r'.code:
+					buf.add('\\r');
+				case '"'.code:
+					buf.add('\\"');
+				case _:
+					buf.addChar(c);
+			}
+		}
+		return buf.toString();
+	}
+
+	private static function printProbeUsage(): Void {
+		CliIo.sysPrint('Usage: apq probe <code> [ast-options]\n');
+		CliIo.sysPrint('       apq probe - [ast-options]   (read code from stdin)\n');
+		CliIo.sysPrint('       apq probe <code> --writer-probe   (trivia + plain side-by-side)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Inline-source variant of `apq ast`. Accepts every ast option\n');
+		CliIo.sysPrint('(--depth/--select/--at/--json/--writer-output/--writer-output-plain/\n');
+		CliIo.sysPrint('--writer-output --diff/--min-children/--max-children/--lang).\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('--writer-probe diverts to the `writer-probe` aggregator: emits BOTH\n');
+		CliIo.sysPrint('the trivia and plain writer outputs separated by `=== trivia ===` /\n');
+		CliIo.sysPrint('`=== plain ===` fences. Mirrors `apq writer-probe <file>` for inline\n');
+		CliIo.sysPrint('source — no scratch file needed.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('The source is staged to a scratch slot and the path is printed on\n');
+		CliIo.sysPrint('stderr — read it from there, it is per-process. $STAGE_PROBE_ENV\n');
+		CliIo.sysPrint('names the slot outright.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Example:\n');
+		CliIo.sysPrint("  apq probe 'class C { function f() { @:m return switch x { case _: 0; } } }' --depth 6\n");
+		CliIo.sysPrint("  apq probe 'class C {}' --writer-probe\n");
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * The scratch path THIS process stages to: `$STAGE_PROBE_ENV` when set,
@@ -291,100 +386,5 @@ final class ProbeCommand implements CliCommand {
 		#end
 	}
 	#end
-
-	public static function emitOneWriterProbe(
-		plugin: GrammarPlugin, source: String, file: String, lang: String, plain: Bool, optsJson: Null<String>
-	): Bool {
-		final label: String = plain ? 'plain' : 'trivia';
-		CliIo.sysPrint('=== $label ===\n');
-		final emitted: Null<String> = try (
-			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
-		) catch (e: ParseError) {
-			CliIo.stderr('apq writer-probe: $label: $file: $e\n');
-			return false;
-		} catch (e: Exception) {
-			CliIo.stderr('apq writer-probe: $label: $file: ${e.message}\n');
-			return false;
-		}
-		if (emitted == null) {
-			final flag: String = plain ? '--writer-output-plain' : '--writer-output';
-			CliIo.stderr('apq writer-probe: $label: no writer wired up for lang "$lang" ($flag equivalent)\n');
-			return false;
-		}
-		CliIo.sysPrint(emitted);
-		if (!emitted.endsWith('\n')) CliIo.sysPrint('\n');
-		// DX v10: source-preservation note. The trivia pipeline is meant
-		// to round-trip source bytes verbatim (subject to the writer's
-		// fidelity); a byte-diff signals an actual writer-fidelity gap
-		// (e.g. `HxVarMore` `,` collapsing the space, or `static var`
-		// emitted as `staticvar`). Plain pipeline is allowed
-		// to canonicalise, so the check is trivia-only. The note is
-		// stderr — stdout stays the labelled output, exit code unchanged.
-		if (!plain) writerProbeSourcePreservationNote(source, emitted);
-		return true;
-	}
-
-	private static function writerProbeSourcePreservationNote(source: String, emitted: String): Void {
-		if (source == emitted) return;
-		final minLen: Int = source.length < emitted.length ? source.length : emitted.length;
-		var diffAt: Int = minLen;
-		for (i in 0...minLen) if (source.fastCodeAt(i) != emitted.fastCodeAt(i)) {
-			diffAt = i;
-			break;
-		}
-		// Show a small window around the divergence on each side so the
-		// reader can immediately see the missing/extra bytes without
-		// re-running a diff tool.
-		final wnd: Int = 8;
-		final sFrom: Int = diffAt - wnd >= 0 ? diffAt - wnd : 0;
-		final sExp: String = escapeProbeWindow(source.substring(sFrom, diffAt + wnd < source.length ? diffAt + wnd : source.length));
-		final sAct: String = escapeProbeWindow(emitted.substring(sFrom, diffAt + wnd < emitted.length ? diffAt + wnd : emitted.length));
-		CliIo.stderr('apq writer-probe: NOTE trivia output differs from source at offset $diffAt (writer-fidelity gap)\n');
-		CliIo.stderr('  source : "$sExp"\n');
-		CliIo.stderr('  emitted: "$sAct"\n');
-	}
-
-	private static function escapeProbeWindow(s: String): String {
-		final buf: StringBuf = new StringBuf();
-		for (i in 0...s.length) {
-			final c: Int = s.fastCodeAt(i);
-			switch c {
-				case '\n'.code:
-					buf.add('\\n');
-				case '\t'.code:
-					buf.add('\\t');
-				case '\r'.code:
-					buf.add('\\r');
-				case '"'.code:
-					buf.add('\\"');
-				case _:
-					buf.addChar(c);
-			}
-		}
-		return buf.toString();
-	}
-
-	private static function printProbeUsage(): Void {
-		CliIo.sysPrint('Usage: apq probe <code> [ast-options]\n');
-		CliIo.sysPrint('       apq probe - [ast-options]   (read code from stdin)\n');
-		CliIo.sysPrint('       apq probe <code> --writer-probe   (trivia + plain side-by-side)\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Inline-source variant of `apq ast`. Accepts every ast option\n');
-		CliIo.sysPrint('(--depth/--select/--at/--json/--writer-output/--writer-output-plain/\n');
-		CliIo.sysPrint('--writer-output --diff/--min-children/--max-children/--lang).\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('--writer-probe diverts to the `writer-probe` aggregator: emits BOTH\n');
-		CliIo.sysPrint('the trivia and plain writer outputs separated by `=== trivia ===` /\n');
-		CliIo.sysPrint('`=== plain ===` fences. Mirrors `apq writer-probe <file>` for inline\n');
-		CliIo.sysPrint('source — no scratch file needed.\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('The source is staged to a scratch slot and the path is printed on\n');
-		CliIo.sysPrint('stderr — read it from there, it is per-process. $STAGE_PROBE_ENV\n');
-		CliIo.sysPrint('names the slot outright.\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Example:\n');
-		CliIo.sysPrint("  apq probe 'class C { function f() { @:m return switch x { case _: 0; } } }' --depth 6\n");
-		CliIo.sysPrint("  apq probe 'class C {}' --writer-probe\n");
-	}
 
 }

@@ -81,32 +81,6 @@ final class AstCommand implements CliCommand {
 		printAstUsage();
 	}
 
-	/** Terminal-case AstOpts: a flag/usage path that the caller returns immediately, ignoring every other field. */
-	private static inline function astParseExit(code: Int): AstOpts {
-		return {
-			lang: '',
-			json: false,
-			depth: -1,
-			selectExpr: null,
-			atExpr: null,
-			wantDoc: false,
-			wantSource: false,
-			writerOutput: false,
-			writerOutputPlain: false,
-			writerDiff: false,
-			minChildren: -1,
-			maxChildren: -1,
-			childrenLimit: -1,
-			spans: false,
-			countOnly: false,
-			typeRefs: false,
-			file: null,
-			codeArg: null,
-			stdinFlag: false,
-			errExit: code
-		};
-	}
-
 	public static function runAst(args: Array<String>): Int {
 		final o: AstOpts = parseAstArgs(args);
 		if (o.errExit != null) return o.errExit;
@@ -194,6 +168,32 @@ final class AstCommand implements CliCommand {
 		final shaped: QueryNode = shapeAstOutput(tree, o.depth, o.childrenLimit);
 		CliIo.sysPrint(o.json ? Json.renderTree(fileLabel, source, shaped) : Text.render(shaped, o.spans));
 		return EXIT_OK;
+	}
+
+	/** Terminal-case AstOpts: a flag/usage path that the caller returns immediately, ignoring every other field. */
+	private static inline function astParseExit(code: Int): AstOpts {
+		return {
+			lang: '',
+			json: false,
+			depth: -1,
+			selectExpr: null,
+			atExpr: null,
+			wantDoc: false,
+			wantSource: false,
+			writerOutput: false,
+			writerOutputPlain: false,
+			writerDiff: false,
+			minChildren: -1,
+			maxChildren: -1,
+			childrenLimit: -1,
+			spans: false,
+			countOnly: false,
+			typeRefs: false,
+			file: null,
+			codeArg: null,
+			stdinFlag: false,
+			errExit: code
+		};
 	}
 
 	/**

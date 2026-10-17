@@ -47,6 +47,9 @@ final class TypedFactsWalk {
 	/** What this node's facts cannot capture exactly, for the consumer to answer Unknown. */
 	private final _incomplete: Array<String> = [];
 
+	/** The field reads held back until their local's uses are known: the fact without its use, and the local. */
+	private final _deferred: Array<{ fact: String, local: Int }> = [];
+
 	private final _host: TypedFactsMacro;
 	private final _kind: String;
 	private final _owner: String;
@@ -74,9 +77,6 @@ final class TypedFactsWalk {
 	 * no instance of a class, for as long as it lives. Shared with the nested walks.
 	 */
 	private final _literals: Map<Int, Bool>;
-
-	/** The field reads held back until their local's uses are known: the fact without its use, and the local. */
-	private final _deferred: Array<{ fact: String, local: Int }> = [];
 
 	/** How the value of the expression `walk` is about to visit is used; `visit` takes it and resets it to `Value`. */
 	private var _use: FactUse = Value;
@@ -132,18 +132,18 @@ final class TypedFactsWalk {
 		host: TypedFactsMacro, id: String, kind: String, owner: String, isStatic: Bool, signature: String, name: Null<String>,
 		locals: Map<Int, String>, written: Map<Int, Bool>, aliases: Map<Int, Alias>, built: Map<Int, Bool>, literals: Map<Int, Bool>
 	) {
-		this._host = host;
+		_host = host;
 		this.id = host.uniqueId(id);
-		this._kind = kind;
-		this._owner = owner;
-		this._isStatic = isStatic;
-		this._signature = signature;
-		this._name = name;
-		this._locals = locals;
-		this._written = written;
-		this._aliases = aliases;
-		this._built = built;
-		this._literals = literals;
+		_kind = kind;
+		_owner = owner;
+		_isStatic = isStatic;
+		_signature = signature;
+		_name = name;
+		_locals = locals;
+		_written = written;
+		_aliases = aliases;
+		_built = built;
+		_literals = literals;
 	}
 
 	/** Mark the node with a header flag (`gen`: macro-placed; `gi`: a `@:generic` instance's copy), kept out of file ranges. */
@@ -207,6 +207,11 @@ final class TypedFactsWalk {
 		out.add('}');
 		_host.nodes++;
 		_host.line(out.toString());
+	}
+
+	/** Whether the range `info` of an expression lies in the body's own range: code of the body's text. */
+	private inline function own(info: { min: Int, max: Int, file: String }): Bool {
+		return info.file == _home && info.min >= _min && info.max <= _max;
 	}
 
 	/**
@@ -403,11 +408,6 @@ final class TypedFactsWalk {
 		return code || (e.expr.match(TConst(_)) && _host.inlineCallee(info.file, info.min, info.max) != null);
 	}
 
-	/** Whether the range `info` of an expression lies in the body's own range: code of the body's text. */
-	private inline function own(info: { min: Int, max: Int, file: String }): Bool {
-		return info.file == _home && info.min >= _min && info.max <= _max;
-	}
-
 	/**
 	 * The range of the body's own code between the statements of `exprs` around the `index`-th — the end of the last one
 	 * before it that is own code (`own`) to the start of the first one after it — within `outer`, the range of the
@@ -439,11 +439,6 @@ final class TypedFactsWalk {
 		var held: Bool = true;
 		TypedExprTools.iter(e, x -> if (held && !holdsOwnCode(x, site)) held = false);
 		return held;
-	}
-
-	/** Whether `info` lies in the declared range of `method`. */
-	private static inline function holds(method: InlineMethod, info: { min: Int, max: Int, file: String }): Bool {
-		return info.file == method.file && info.min >= method.min && info.max <= method.max;
 	}
 
 	/** Walk `e`, whose value is used as `use`. */
@@ -814,24 +809,6 @@ final class TypedFactsWalk {
 		};
 	}
 
-	/** Whether `e` is an object literal, seen through parentheses and metadata. */
-	private static function objectLiteral(e: TypedExpr): Bool {
-		return switch e.expr {
-			case TParenthesis(inner), TMeta(_, inner): objectLiteral(inner);
-			case TObjectDecl(_): true;
-			case _: false;
-		};
-	}
-
-	/** Whether `e` is a construction, seen through parentheses and metadata. */
-	private static function constructed(e: TypedExpr): Bool {
-		return switch e.expr {
-			case TParenthesis(inner), TMeta(_, inner): constructed(inner);
-			case TNew(_, _, _): true;
-			case _: false;
-		};
-	}
-
 	/**
 	 * The written side of an assignment: a field is a write (and a read too when `alsoRead`), an array element is a write
 	 * through the array holding it, anything else is walked. `fresh`: the target alone holds the value stored.
@@ -867,39 +844,6 @@ final class TypedFactsWalk {
 	}
 
 	/**
-	 * Whether `e` hands a field's or a local's value on AS IT IS, so the local initialized with it or assigned it holds that
-	 * value: the read itself, or a VALUE-TRANSPARENT construct at least one of whose value positions does — parentheses,
-	 * metadata, a block by its last expression (the typer wraps every branch of an if- or switch-expression in one), an
-	 * `if` with an `else` (a ternary is one), a `switch`, a `try`. Those are exactly the constructs `visit`
-	 * walks every value position of with the use it was handed, the condition, subject and patterns with their own, so a
-	 * `Held` reaches a read in a branch and nothing else: `final l = if (c) items else null;` holds `items` as
-	 * `l = items;` in a branch of a statement `if` does. Measured: without the block step the typed `if (c) items else null` is
-	 * `TIf(c, TBlock([items]), TBlock([null]))` and the read stays a value. A positive list: a cast, a call, an operator or anything
-	 * else hands on some other value, or one the facts cannot follow, and the read stays a value.
-	 */
-	private static function heldValue(e: TypedExpr): Bool {
-		return switch e.expr {
-			case TField(_, _), TLocal(_): true;
-			case TParenthesis(inner), TMeta(_, inner):
-				heldValue(inner);
-			// the typer wraps every branch of an if- / switch-expression in a block whose last expression is its value
-			case TBlock(exprs):
-				exprs.length > 0 && heldValue(exprs[exprs.length - 1]);
-			case TIf(_, then, otherwise):
-				otherwise != null && (heldValue(then) || heldValue(otherwise));
-			case TSwitch(_, cases, otherwise):
-				var held: Bool = otherwise != null && heldValue(otherwise);
-				for (c in cases) held = held || heldValue(c.expr);
-				held;
-			case TTry(body, catches):
-				var held: Bool = heldValue(body);
-				for (c in catches) held = held || heldValue(c.expr);
-				held;
-			case _: false;
-		};
-	}
-
-	/**
 	 * Record a read of the local `v`, whose value `alias` holds, used as `use`: a read from a nested function captures the
 	 * value; one stored in another local of this node (`Held`) is used as that local's reads are (`Alias.links`); a write
 	 * is no use; and the receiver an inline method of no parameter was spliced in with (`substitutedReceiver`) is the
@@ -919,21 +863,6 @@ final class TypedFactsWalk {
 				final method: Null<String> = substitutedReceiver(v, substituted);
 				aliasUse(alias, method == null ? use : Call(method));
 		}
-	}
-
-	/**
-	 * The method an inlined call of which had the local `v` for its receiver, read directly under that method's spliced code
-	 * (`substituted`): one declaring no parameter, so that no value of the call site but its receiver reaches its body, of
-	 * the class of `v`'s type; null otherwise.
-	 */
-	private static function substitutedReceiver(v: TVar, substituted: Null<InlineMethod>): Null<String> {
-		if (substituted == null || substituted.arity != 0) return null;
-		final dot: Int = substituted.id.lastIndexOf('.');
-		final name: String = substituted.id.substr(dot + 1);
-		return switch TypeTools.followWithAbstracts(v.t) {
-			case TInst(c, _) if (TypedFactsTypeStrings.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;
-			case _: null;
-		};
 	}
 
 	/** The uses of the value the local `local` holds: its reads', and those of every local it is stored in, in turn. */
@@ -1164,6 +1093,99 @@ final class TypedFactsWalk {
 		}
 	}
 
+	/**
+	 * The first argument of a call handing it to a `Dynamic` parameter, as the call fact's `o` — its type — and `x` — an
+	 * object of exactly its class (`exactObject`); empty for any other call. A value handed to a parameter of no type records
+	 * no flow when it has none either (`flowText`), and the argument of a call an inlined body spliced in lies in the text of
+	 * the method it came from, so nothing else says what the call was handed.
+	 */
+	private function dynamicOperand(fnType: Null<Type>, args: Array<TypedExpr>): String {
+		final params: Null<Array<{ name: String, opt: Bool, t: Type }>> = parametersOf(fnType);
+		final first: Null<TypedExpr> = args.length > 0 ? args[0] : null;
+		return params == null || params.length == 0 || first == null || str(params[0].t) != 'Dynamic'
+			? ''
+			: ',"o":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '');
+	}
+
+	/** Whether `info` lies in the declared range of `method`. */
+	private static inline function holds(method: InlineMethod, info: { min: Int, max: Int, file: String }): Bool {
+		return info.file == method.file && info.min >= method.min && info.max <= method.max;
+	}
+
+	private static inline function str(t: Null<Type>): String {
+		return TypedFactsTypeStrings.typeString(t, 0);
+	}
+
+	private static inline function q(s: String): String {
+		return TypedFactsTypeStrings.q(s);
+	}
+
+	/** Whether `e` is an object literal, seen through parentheses and metadata. */
+	private static function objectLiteral(e: TypedExpr): Bool {
+		return switch e.expr {
+			case TParenthesis(inner), TMeta(_, inner): objectLiteral(inner);
+			case TObjectDecl(_): true;
+			case _: false;
+		};
+	}
+
+	/** Whether `e` is a construction, seen through parentheses and metadata. */
+	private static function constructed(e: TypedExpr): Bool {
+		return switch e.expr {
+			case TParenthesis(inner), TMeta(_, inner): constructed(inner);
+			case TNew(_, _, _): true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * Whether `e` hands a field's or a local's value on AS IT IS, so the local initialized with it or assigned it holds that
+	 * value: the read itself, or a VALUE-TRANSPARENT construct at least one of whose value positions does — parentheses,
+	 * metadata, a block by its last expression (the typer wraps every branch of an if- or switch-expression in one), an
+	 * `if` with an `else` (a ternary is one), a `switch`, a `try`. Those are exactly the constructs `visit`
+	 * walks every value position of with the use it was handed, the condition, subject and patterns with their own, so a
+	 * `Held` reaches a read in a branch and nothing else: `final l = if (c) items else null;` holds `items` as
+	 * `l = items;` in a branch of a statement `if` does. Measured: without the block step the typed `if (c) items else null` is
+	 * `TIf(c, TBlock([items]), TBlock([null]))` and the read stays a value. A positive list: a cast, a call, an operator or anything
+	 * else hands on some other value, or one the facts cannot follow, and the read stays a value.
+	 */
+	private static function heldValue(e: TypedExpr): Bool {
+		return switch e.expr {
+			case TField(_, _), TLocal(_): true;
+			case TParenthesis(inner), TMeta(_, inner):
+				heldValue(inner);
+			// the typer wraps every branch of an if- / switch-expression in a block whose last expression is its value
+			case TBlock(exprs):
+				exprs.length > 0 && heldValue(exprs[exprs.length - 1]);
+			case TIf(_, then, otherwise):
+				otherwise != null && (heldValue(then) || heldValue(otherwise));
+			case TSwitch(_, cases, otherwise):
+				var held: Bool = otherwise != null && heldValue(otherwise);
+				for (c in cases) held = held || heldValue(c.expr);
+				held;
+			case TTry(body, catches):
+				var held: Bool = heldValue(body);
+				for (c in catches) held = held || heldValue(c.expr);
+				held;
+			case _: false;
+		};
+	}
+
+	/**
+	 * The method an inlined call of which had the local `v` for its receiver, read directly under that method's spliced code
+	 * (`substituted`): one declaring no parameter, so that no value of the call site but its receiver reaches its body, of
+	 * the class of `v`'s type; null otherwise.
+	 */
+	private static function substitutedReceiver(v: TVar, substituted: Null<InlineMethod>): Null<String> {
+		if (substituted == null || substituted.arity != 0) return null;
+		final dot: Int = substituted.id.lastIndexOf('.');
+		final name: String = substituted.id.substr(dot + 1);
+		return switch TypeTools.followWithAbstracts(v.t) {
+			case TInst(c, _) if (TypedFactsTypeStrings.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;
+			case _: null;
+		};
+	}
+
 	/** Record `use` as one of the uses of the value `alias` holds. */
 	private static function aliasUse(alias: Alias, use: FactUse): Void {
 		final text: String = useText(use);
@@ -1184,28 +1206,6 @@ final class TypedFactsWalk {
 			case Argument(target, access, index): '"u":"value","ag":${q(target)},"aa":"$access","ai":$index';
 			case Value, Statement, Held(_), Assigned: '"u":"value"';
 		};
-	}
-
-	private static inline function str(t: Null<Type>): String {
-		return TypedFactsTypeStrings.typeString(t, 0);
-	}
-
-	private static inline function q(s: String): String {
-		return TypedFactsTypeStrings.q(s);
-	}
-
-	/**
-	 * The first argument of a call handing it to a `Dynamic` parameter, as the call fact's `o` — its type — and `x` — an
-	 * object of exactly its class (`exactObject`); empty for any other call. A value handed to a parameter of no type records
-	 * no flow when it has none either (`flowText`), and the argument of a call an inlined body spliced in lies in the text of
-	 * the method it came from, so nothing else says what the call was handed.
-	 */
-	private function dynamicOperand(fnType: Null<Type>, args: Array<TypedExpr>): String {
-		final params: Null<Array<{ name: String, opt: Bool, t: Type }>> = parametersOf(fnType);
-		final first: Null<TypedExpr> = args.length > 0 ? args[0] : null;
-		return params == null || params.length == 0 || first == null || str(params[0].t) != 'Dynamic'
-			? ''
-			: ',"o":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '');
 	}
 
 	/** The type the abstract `t` wraps, at its arguments — what its value is at run time; null for any other type and a core type. */

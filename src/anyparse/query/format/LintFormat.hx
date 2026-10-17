@@ -32,6 +32,13 @@ final class LintFormat {
 	/** Files named, one per line, when a summary covers ONE rule — the by-file breakdown a `--rule` run asks for. */
 	public static inline final SUMMARY_FILES_SINGLE_RULE: Int = 10;
 
+	/**
+	 * The findings a text report lists before summarising when no `reportSummaryThreshold` is declared.
+	 * Sized for a reader rather than a tool: a few screens, and well above what one file's lint yields
+	 * in practice, so a per-file run keeps its list.
+	 */
+	public static inline final DEFAULT_REPORT_SUMMARY_THRESHOLD: Int = 200;
+
 	/** The column an `--explain-long` reason's kind is padded to: the longest kind, `spans-blocking`. */
 	private static inline final LONG_REASON_WIDTH: Int = 14;
 
@@ -352,13 +359,6 @@ final class LintFormat {
 		final levels: Array<Severity> = [Severity.Error, Severity.Warning, Severity.Info];
 		return [for (level in levels) if (group.exists(v -> v.severity == level)) level.label()].join('/');
 	}
-
-	/**
-	 * The findings a text report lists before summarising when no `reportSummaryThreshold` is declared.
-	 * Sized for a reader rather than a tool: a few screens, and well above what one file's lint yields
-	 * in practice, so a per-file run keeps its list.
-	 */
-	public static inline final DEFAULT_REPORT_SUMMARY_THRESHOLD: Int = 200;
 
 }
 

@@ -20,18 +20,18 @@ using StringTools;
 @:nullSafety(Strict)
 final class TypedFactsTypeStrings {
 
-	/** Deeper type nesting prints as unknown, so a recursive structure cannot grow a line without bound. */
-	private static inline final TYPE_DEPTH: Int = 8;
-
-	/** Whether each class path names a type parameter, decided once per path: reading a `Ref` decodes the whole class. */
-	private static final typeParams: Map<String, Bool> = [];
-
 	/**
 	 * Every typedef a type string printed, by id and declaration: an import alias (`import pack.T as U`) is one no module
 	 * lists, so the compile's records are closed over them once the module types are written (`run`). Two aliases of one
 	 * name of one module share an id, and each gets a record: the table holds every target an id names.
 	 */
 	public static final printedTypedefs: Map<String, Ref<DefType>> = [];
+
+	/** Deeper type nesting prints as unknown, so a recursive structure cannot grow a line without bound. */
+	private static inline final TYPE_DEPTH: Int = 8;
+
+	/** Whether each class path names a type parameter, decided once per path: reading a `Ref` decodes the whole class. */
+	private static final typeParams: Map<String, Bool> = [];
 
 	/** `s` as a JSON string. Names, paths and type strings carry no control character, so only a quote or a backslash needs the printer. */
 	public static function q(s: String): String {
@@ -100,12 +100,12 @@ final class TypedFactsTypeStrings {
 		return isParam ? '$$$path' : path + paramString(params, depth);
 	}
 
-	private static function paramString(params: Array<Type>, depth: Int): String {
-		return params.length == 0 ? '' : '<' + [for (p in params) typeString(p, depth + 1)].join(',') + '>';
-	}
-
 	public static function typeList(list: Array<Type>): String {
 		return arr([for (t in list) q(typeString(t, 0))]);
+	}
+
+	private static function paramString(params: Array<Type>, depth: Int): String {
+		return params.length == 0 ? '' : '<' + [for (p in params) typeString(p, depth + 1)].join(',') + '>';
 	}
 
 }

@@ -65,11 +65,11 @@ final class ThreadSafetyOptions {
 	/** The keys holding `true` or `false`. */
 	public static final FLAG_KEYS: Array<String> = ['closedWorld', 'compilerFacts'];
 
-	/** The keys every rule takes, which the linter reads itself when well-formed (`LintDocuments.parseRule`). */
-	private static final LIFTED_KEYS: Array<String> = ['enabled', 'severity'];
-
 	private static inline final BUDGET_KEY: String = 'repeatBudgetMs';
 	private static inline final BOUNDED_KEY: String = 'boundedRepeats';
+
+	/** The keys every rule takes, which the linter reads itself when well-formed (`LintDocuments.parseRule`). */
+	private static final LIFTED_KEYS: Array<String> = ['enabled', 'severity'];
 
 	/** What the read left out, one line each, by key. */
 	public final problems: Array<String> = [];
@@ -89,14 +89,14 @@ final class ThreadSafetyOptions {
 	/** Whether the chain writes any option for the rule at all, well-formed or not: one that does is a config to report on. */
 	public final declared: Bool;
 
-	/** The option keys the chain writes, well-formed or not. */
-	private final _written: Array<String>;
-
 	/** Each LIST key -> its strings; a key absent or dropped holds none. */
 	private final _lists: Map<String, Array<String>> = [];
 
 	/** Each FLAG key -> its value; a key absent or dropped is false. */
 	private final _flags: Map<String, Bool> = [];
+
+	/** The option keys the chain writes, well-formed or not. */
+	private final _written: Array<String>;
 
 	private function new(config: LintConfig) {
 		_written = config.optionKeys(RULE);
@@ -114,15 +114,15 @@ final class ThreadSafetyOptions {
 		}
 	}
 
+	/** Whether the chain writes the option `key`, whatever its shape. */
+	public inline function wrote(key: String): Bool {
+		return _written.contains(key);
+	}
+
 	/** The strings of the LIST option `key` (`LIST_KEYS`); none when it is absent or was dropped. */
 	public function list(key: String): Array<String> {
 		if (!LIST_KEYS.contains(key)) throw new Exception('thread-safety: "$key" is no list option');
 		return _lists[key] ?? [];
-	}
-
-	/** Whether the chain writes the option `key`, whatever its shape. */
-	public inline function wrote(key: String): Bool {
-		return _written.contains(key);
 	}
 
 	/** The FLAG option `key` (`FLAG_KEYS`); false when it is absent or was dropped. */

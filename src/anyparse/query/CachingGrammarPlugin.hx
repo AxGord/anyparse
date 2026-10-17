@@ -62,11 +62,16 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	/** Roots parsed by this wrapper — one per distinct source once the projections share it. */
 	public var rootParses(default, null): Int = 0;
 
+	/**
+	 * The run's record of every rewrite `CanonicalEdit.canonicalize` settled through this plugin, or null — the default, for a
+	 * run that asks no question of an earlier text of a file. A `--fix` run that reads compiler facts sets one.
+	 */
+	public var editJournal: Null<EditJournal> = null;
+
 	// The parsed ROOT per source — the one thing the projection caches below could not
 	// share, so each of them re-parsed. Values may be null (a source that does not parse
 	// memoises its failure too), so reads go through `exists`, not a null test.
 	private final _rootCache: Map<String, Null<Any>> = [];
-
 	private final _parseCache: Map<String, QueryNode> = [];
 	private final _typeRefCache: Map<String, QueryNode> = [];
 	private final _branchAwareCache: Map<String, QueryNode> = [];
@@ -117,14 +122,6 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private final _lexicalRegionsCache: Map<String, Array<LexRegion>> = [];
 
 	/**
-	 * The grammar's `RefShape`, built once per wrapper. The inner plugin builds a fresh shape on
-	 * every call — several hundred fields, a dozen maps and the kind lists concatenated anew — and
-	 * the checks ask it per file. Consumers only read it (the one write, `refsCache`, is this
-	 * class's own and is the same value on every call).
-	 */
-	private var _refShape: Null<RefShape> = null;
-
-	/**
 	 * The ambient-import chain per DIRECTORY and package, memoised for the run: the seam walks a
 	 * file's ancestors on disk and reads each source it finds, and every file of one directory with
 	 * one package gets the same chain by construction.
@@ -161,6 +158,12 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	/** `writeIndexOver`'s memo, keyed and validated like `_indexMemo`. */
 	private final _writeIndexMemo: Map<String, { sources: Array<String>, index: FieldWriteIndex }> = [];
 
+	/** `module#name` -> the types of that name the module declares in the resolution scope, null when unknown (`moduleTypesInScope`). */
+	private final _scopeModules: Map<String, Null<Array<TypeDeclInfo>>> = [];
+
+	/** File path -> the source its declarations were read from and what `declarationsOf` read. */
+	private final _declarations: Map<String, { source: String, info: Null<FileInfo> }> = [];
+
 	private final _inner: GrammarPlugin;
 
 	/**
@@ -177,6 +180,14 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * `SharedParseTier` documents why that bound is what makes a process-scoped tier safe here.
 	 */
 	private final _shared: SharedParseTier;
+
+	/**
+	 * The grammar's `RefShape`, built once per wrapper. The inner plugin builds a fresh shape on
+	 * every call — several hundred fields, a dozen maps and the kind lists concatenated anew — and
+	 * the checks ask it per file. Consumers only read it (the one write, `refsCache`, is this
+	 * class's own and is the same value on every call).
+	 */
+	private var _refShape: Null<RefShape> = null;
 
 	// Resolution scope (SymbolIndexHost): a thunk yielding the report files and the
 	// configured library sources APART, and the memoised index built from their union. Both
@@ -195,6 +206,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 
 	/** The pass's `MemberReach`, dropped with the other per-pass memos. */
 	private var _memberReach: Null<MemberReach> = null;
+
+	/** File name (`Mod.hx`) -> the resolution scope's sources of that name, built on the first `moduleTypesInScope`. */
+	private var _scopeByFileName: Null<Map<String, Array<{ file: String, source: String }>>> = null;
 
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
@@ -399,12 +413,6 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final start: Null<() -> Void> = _resolutionScope?.buildsAhead;
 		if (start != null) start();
 	}
-
-	/**
-	 * The run's record of every rewrite `CanonicalEdit.canonicalize` settled through this plugin, or null — the default, for a
-	 * run that asks no question of an earlier text of a file. A `--fix` run that reads compiler facts sets one.
-	 */
-	public var editJournal: Null<EditJournal> = null;
 
 	/** `SymbolIndexHost`: the compiler facts the run's resolution scope names (`ResolutionScope.facts`), or null. */
 	public function compilerFacts(): Null<CompilerFacts> {
@@ -758,66 +766,6 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return result;
 	}
 
-	/** The injected scope's two-and-a-half views, forced (the library read happens here), or null when none was injected. */
-	private inline function scopeSources(): Null<ResolutionSources> {
-		return _resolutionScope?.sources();
-	}
-
-	/**
-	 * The parsed root of `source`, memoised for the whole run — the ONE parse the four
-	 * projections above share. `exists` is the read rather than a null test because a
-	 * source that does not parse memoises a NULL root, so a skip-parse file is not
-	 * re-parsed once per projection either. Called only where `provider` is in hand, so
-	 * the capability check stays at the call site instead of being re-tested here.
-	 */
-	private function rootOf(provider: ParsedRootProvider, source: String): Null<Any> {
-		if (_rootCache.exists(source)) return _rootCache[source];
-		final root: Null<Any> = provider.parseRoot(source);
-		_rootCache[source] = root;
-		rootParses++;
-		return root;
-	}
-
-	/**
-	 * The span-info bundle assembled from the wrapped plugin's five individual
-	 * `TypeInfoProvider` accessors — the path for an inner that supplies per-map type
-	 * info but not the batched `SpanTypeInfoProvider` capability. Exactly reproduces
-	 * the pre-batching behaviour (each map is `inner.X(source)` or empty).
-	 */
-	private function fallbackSpanInfo(source: String): SpanTypeInfo {
-		final inner: Null<TypeInfoProvider> = _inner is TypeInfoProvider ? cast _inner : null;
-		return {
-			declaredTypes: inner != null ? inner.declaredTypes(source) : [],
-			returnTypes: inner != null ? inner.returnTypes(source) : [],
-			propertyAccessors: inner != null ? inner.propertyAccessors(source) : [],
-			propertyWriteAccessors: inner != null ? inner.propertyWriteAccessors(source) : [],
-			declaredTypeSources: inner != null ? inner.declaredTypeSources(source) : [],
-			castTargetSources: inner != null ? inner.castTargetSources(source) : [],
-			typeParamNames: inner != null ? inner.typeParamNames(source) : [],
-			typeParamConstraints: []
-		};
-	}
-
-	/**
-	 * The memo key of one file set: the third-party tag and the ordered paths, each length-prefixed so no
-	 * two sets spell one key (the `importMap` key's rule). Order is part of it, because the index keeps
-	 * its files in input order and two orders are therefore two answers.
-	 */
-	private static function fileSetKey(files: Array<{ file: String, source: String }>, thirdPartyFiles: Array<String>): String {
-		final key: StringBuf = new StringBuf();
-		key.add('${thirdPartyFiles.length}|');
-		for (file in thirdPartyFiles) key.add('${file.length}:$file');
-		for (entry in files) key.add('${entry.file.length}:${entry.file}');
-		return key.toString();
-	}
-
-	/** Whether `files` still carries, path for path, the `sources` a memo entry was built from. */
-	private static function sameSources(sources: Array<String>, files: Array<{ file: String, source: String }>): Bool {
-		if (sources.length != files.length) return false;
-		for (i => source in sources) if (source != files[i].source) return false;
-		return true;
-	}
-
 	/**
 	 * The types named `name` the module `module` declares in the resolution scope, or null when the scope holds no file of
 	 * that module or one that does not parse. The module is the file the compiler would load, `<root>/a/b/C.hx` under any
@@ -893,14 +841,65 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return info;
 	}
 
-	/** `module#name` -> the types of that name the module declares in the resolution scope, null when unknown (`moduleTypesInScope`). */
-	private final _scopeModules: Map<String, Null<Array<TypeDeclInfo>>> = [];
+	/** The injected scope's two-and-a-half views, forced (the library read happens here), or null when none was injected. */
+	private inline function scopeSources(): Null<ResolutionSources> {
+		return _resolutionScope?.sources();
+	}
 
-	/** File path -> the source its declarations were read from and what `declarationsOf` read. */
-	private final _declarations: Map<String, { source: String, info: Null<FileInfo> }> = [];
+	/**
+	 * The parsed root of `source`, memoised for the whole run — the ONE parse the four
+	 * projections above share. `exists` is the read rather than a null test because a
+	 * source that does not parse memoises a NULL root, so a skip-parse file is not
+	 * re-parsed once per projection either. Called only where `provider` is in hand, so
+	 * the capability check stays at the call site instead of being re-tested here.
+	 */
+	private function rootOf(provider: ParsedRootProvider, source: String): Null<Any> {
+		if (_rootCache.exists(source)) return _rootCache[source];
+		final root: Null<Any> = provider.parseRoot(source);
+		_rootCache[source] = root;
+		rootParses++;
+		return root;
+	}
 
-	/** File name (`Mod.hx`) -> the resolution scope's sources of that name, built on the first `moduleTypesInScope`. */
-	private var _scopeByFileName: Null<Map<String, Array<{ file: String, source: String }>>> = null;
+	/**
+	 * The span-info bundle assembled from the wrapped plugin's five individual
+	 * `TypeInfoProvider` accessors — the path for an inner that supplies per-map type
+	 * info but not the batched `SpanTypeInfoProvider` capability. Exactly reproduces
+	 * the pre-batching behaviour (each map is `inner.X(source)` or empty).
+	 */
+	private function fallbackSpanInfo(source: String): SpanTypeInfo {
+		final inner: Null<TypeInfoProvider> = _inner is TypeInfoProvider ? cast _inner : null;
+		return {
+			declaredTypes: inner != null ? inner.declaredTypes(source) : [],
+			returnTypes: inner != null ? inner.returnTypes(source) : [],
+			propertyAccessors: inner != null ? inner.propertyAccessors(source) : [],
+			propertyWriteAccessors: inner != null ? inner.propertyWriteAccessors(source) : [],
+			declaredTypeSources: inner != null ? inner.declaredTypeSources(source) : [],
+			castTargetSources: inner != null ? inner.castTargetSources(source) : [],
+			typeParamNames: inner != null ? inner.typeParamNames(source) : [],
+			typeParamConstraints: []
+		};
+	}
+
+	/**
+	 * The memo key of one file set: the third-party tag and the ordered paths, each length-prefixed so no
+	 * two sets spell one key (the `importMap` key's rule). Order is part of it, because the index keeps
+	 * its files in input order and two orders are therefore two answers.
+	 */
+	private static function fileSetKey(files: Array<{ file: String, source: String }>, thirdPartyFiles: Array<String>): String {
+		final key: StringBuf = new StringBuf();
+		key.add('${thirdPartyFiles.length}|');
+		for (file in thirdPartyFiles) key.add('${file.length}:$file');
+		for (entry in files) key.add('${entry.file.length}:${entry.file}');
+		return key.toString();
+	}
+
+	/** Whether `files` still carries, path for path, the `sources` a memo entry was built from. */
+	private static function sameSources(sources: Array<String>, files: Array<{ file: String, source: String }>): Bool {
+		if (sources.length != files.length) return false;
+		for (i => source in sources) if (source != files[i].source) return false;
+		return true;
+	}
 
 }
 

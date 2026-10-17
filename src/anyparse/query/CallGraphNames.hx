@@ -12,6 +12,11 @@ using StringTools;
 @:nullSafety(Strict)
 final class CallGraphNames {
 
+	/** Whether `t` is a typedef naming another type of its own simple name — a re-export, not a second declaration. */
+	public static inline function selfAlias(t: TypeDeclInfo): Bool {
+		return t.aliasTargetNominal == t.name;
+	}
+
 	/**
 	 * The written return type of the function `fn`: its last type annotation (one of `annotationKinds`)
 	 * that is its own child rather than a parameter's, or null when it declares none.
@@ -66,11 +71,6 @@ final class CallGraphNames {
 			case Structure(fields): fields.find(f -> f.name == field)?.type.text;
 			case _: null;
 		};
-	}
-
-	/** Whether `t` is a typedef naming another type of its own simple name — a re-export, not a second declaration. */
-	public static function selfAlias(t: TypeDeclInfo): Bool {
-		return t.aliasTargetNominal == t.name;
 	}
 
 	/** The function declaration of `tree` (a node of one of `fnKinds`) starting at `from`, or null. */

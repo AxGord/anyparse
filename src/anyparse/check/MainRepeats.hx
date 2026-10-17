@@ -161,31 +161,6 @@ final class MainRepeats {
 		}
 	}
 
-	/** `e` an owner of the call `path` walks down to, once, by a way through a value handed on or not (`handed`). */
-	private static function own(owners: Array<RepeatOwner>, e: CallEdge, path: Array<String>, handed: Bool): Void {
-		if (!owners.exists(o -> o.edge == e)) owners.push({ edge: e, path: path, handed: handed });
-	}
-
-	/**
-	 * Nearest first, then one whose way runs calls alone before one through a value handed on (review round 4 `f10`: a
-	 * value may be stored, not run), then by file, by offset as a number — an unrelated edit before both moves neither
-	 * past the other — and by target.
-	 */
-	private static function nearestFirst(a: RepeatOwner, b: RepeatOwner): Int {
-		final at: Int = a.edge.span?.from ?? -1;
-		final bt: Int = b.edge.span?.from ?? -1;
-		return if (a.path.length != b.path.length)
-			a.path.length - b.path.length
-		else if (a.handed != b.handed)
-			a.handed ? 1 : -1
-		else if (a.edge.file != b.edge.file)
-			Reflect.compare(a.edge.file, b.edge.file)
-		else if (at != bt)
-			at - bt
-		else
-			Reflect.compare(a.edge.to, b.edge.to);
-	}
-
 	/**
 	 * Whether `id` is code the runtime runs once per program: the entry
 	 * point, or a type's static initializers (`CallGraph.STATIC_INIT_NAME`).
@@ -194,7 +169,6 @@ final class MainRepeats {
 		final name: Null<String> = _graph.node(id)?.name;
 		return name == ThreadSafety.ENTRY_POINT || name == CallGraph.STATIC_INIT_NAME;
 	}
-
 
 	/**
 	 * The valuation the edge `e` enters its target under from its function's state `valuation` on the main thread: the
@@ -219,6 +193,31 @@ final class MainRepeats {
 
 	private static inline function key(id: String, valuation: String): String {
 		return '$id|$valuation';
+	}
+
+	/** `e` an owner of the call `path` walks down to, once, by a way through a value handed on or not (`handed`). */
+	private static function own(owners: Array<RepeatOwner>, e: CallEdge, path: Array<String>, handed: Bool): Void {
+		if (!owners.exists(o -> o.edge == e)) owners.push({ edge: e, path: path, handed: handed });
+	}
+
+	/**
+	 * Nearest first, then one whose way runs calls alone before one through a value handed on (review round 4 `f10`: a
+	 * value may be stored, not run), then by file, by offset as a number — an unrelated edit before both moves neither
+	 * past the other — and by target.
+	 */
+	private static function nearestFirst(a: RepeatOwner, b: RepeatOwner): Int {
+		final at: Int = a.edge.span?.from ?? -1;
+		final bt: Int = b.edge.span?.from ?? -1;
+		return if (a.path.length != b.path.length)
+			a.path.length - b.path.length
+		else if (a.handed != b.handed)
+			a.handed ? 1 : -1
+		else if (a.edge.file != b.edge.file)
+			Reflect.compare(a.edge.file, b.edge.file)
+		else if (at != bt)
+			at - bt
+		else
+			Reflect.compare(a.edge.to, b.edge.to);
 	}
 
 	/** Whether `way` binds more than `known` does: more turns, a worse turn, or an entry it does not name. */

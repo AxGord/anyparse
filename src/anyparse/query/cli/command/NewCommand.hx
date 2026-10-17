@@ -68,27 +68,6 @@ final class NewCommand implements CliCommand {
 		printNewUsage();
 	}
 
-	private static inline function newParseExit(code: Int): NewOpts {
-		return {
-			lang: '',
-			write: false,
-			asClass: false,
-			open: false,
-			raw: false,
-			kind: 'class',
-			iface: null,
-			underlying: null,
-			bodiesArg: null,
-			bodiesFromFile: null,
-			extendsList: [],
-			fromList: [],
-			toList: [],
-			fields: [],
-			path: null,
-			errExit: code
-		};
-	}
-
 	/**
 	 * `apq new <path> (--class | --implements <iface>) [--field <m>]...
 	 * [--bodies -] [--write]` — create a new module deterministically: derive
@@ -122,6 +101,27 @@ final class NewCommand implements CliCommand {
 			return tail == '' ? '' : tail.split('/').join('.');
 		}
 		return '';
+	}
+
+	private static inline function newParseExit(code: Int): NewOpts {
+		return {
+			lang: '',
+			write: false,
+			asClass: false,
+			open: false,
+			raw: false,
+			kind: 'class',
+			iface: null,
+			underlying: null,
+			bodiesArg: null,
+			bodiesFromFile: null,
+			extendsList: [],
+			fromList: [],
+			toList: [],
+			fields: [],
+			path: null,
+			errExit: code
+		};
 	}
 
 	/**

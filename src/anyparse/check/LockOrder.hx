@@ -323,6 +323,15 @@ final class LockOrder {
 		return '${edge.file}:${edge.span?.from ?? -1}';
 	}
 
+	/**
+	 * Whether `a` precedes `b`: a step whose path runs calls alone before one through a value handed on (`handed`), then by
+	 * the member holding the first lock (`ThreadSafety.memberOf`), the anchor's file and offset, and the path — a total order
+	 * over what a finding says, so the step a report names does not depend on walk order.
+	 */
+	private static inline function precedes(a: RankedStep, b: RankedStep): Bool {
+		return a.handed != b.handed ? !a.handed : earlier(a.member, a.anchor, a.path, b.member, b.anchor, b.path);
+	}
+
 	/** A state of `id` on `ctx` under `valuation` holding `held`, entered by `arrival` (none for an entry point). */
 	private static function heldState(id: String, ctx: Int, valuation: String, held: Array<String>, arrival: Null<Arrival>): HeldState {
 		return {
@@ -381,15 +390,6 @@ final class LockOrder {
 			if (known == null || precedes(s, known)) out = s;
 		}
 		return out;
-	}
-
-	/**
-	 * Whether `a` precedes `b`: a step whose path runs calls alone before one through a value handed on (`handed`), then by
-	 * the member holding the first lock (`ThreadSafety.memberOf`), the anchor's file and offset, and the path — a total order
-	 * over what a finding says, so the step a report names does not depend on walk order.
-	 */
-	private static inline function precedes(a: RankedStep, b: RankedStep): Bool {
-		return a.handed != b.handed ? !a.handed : earlier(a.member, a.anchor, a.path, b.member, b.anchor, b.path);
 	}
 
 	/** The order `precedes` and `climbPrecedes` share: by member, then the anchor's file and offset, then the path. */

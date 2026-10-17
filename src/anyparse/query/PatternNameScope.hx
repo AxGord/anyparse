@@ -30,6 +30,7 @@ final class PatternNameScope {
 	public final root: QueryNode;
 
 	public final shape: RefShape;
+
 	private final _local: Array<String>;
 	private final _fi: FileInfo;
 	private final _index: SymbolIndex;
@@ -42,6 +43,11 @@ final class PatternNameScope {
 		_index = index;
 	}
 
+	/** Whether `name` may resolve to a value a bare pattern compares against, from this file. */
+	public function mayCompare(name: String): Bool {
+		return !_fi.ambientImportsBounded || _local.contains(name) || _index.values.mayImportValue(_fi, name);
+	}
+
 	/** The scope of `file` (whose parsed tree is `root`), or null when the index does not hold the file — nothing can then be proven. */
 	public static function of(file: String, root: QueryNode, plugin: GrammarPlugin, index: SymbolIndex): Null<PatternNameScope> {
 		final fi: Null<FileInfo> = index.fileInfo(file);
@@ -49,11 +55,6 @@ final class PatternNameScope {
 		final local: Array<String> = CasePatterns.constantNames([root], plugin.refShape());
 		for (field in fi.moduleFields) if (!local.contains(field.name)) local.push(field.name);
 		return new PatternNameScope(root, plugin, local, fi, index);
-	}
-
-	/** Whether `name` may resolve to a value a bare pattern compares against, from this file. */
-	public function mayCompare(name: String): Bool {
-		return !_fi.ambientImportsBounded || _local.contains(name) || _index.values.mayImportValue(_fi, name);
 	}
 
 }

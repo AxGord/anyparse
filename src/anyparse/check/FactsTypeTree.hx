@@ -47,30 +47,12 @@ typedef FactsField = {
 @:nullSafety(Strict)
 final class FactsTypeTree {
 
-	private var _pos: Int = 0;
-
 	private final _text: String;
+
+	private var _pos: Int = 0;
 
 	private function new(text: String) {
 		_text = text;
-	}
-
-	/** `text` read whole, or null when it is not one type of the grammar. */
-	public static function read(text: String): Null<FactsType> {
-		final reader: FactsTypeTree = new FactsTypeTree(text);
-		final type: Null<FactsType> = reader.type();
-		return reader._pos == text.length ? type : null;
-	}
-
-	/** `t` spelled in the facts type grammar, as the facts spell it: `read(text(t))` is `t`. */
-	public static function text(t: FactsType): String {
-		return switch t {
-			case Unknown: '?';
-			case Parameter(path): '$$$path';
-			case Named(name, args): args.length == 0 ? name : '$name<${args.map(text).join(',')}>';
-			case Function(args, result): '(${[for (a in args) (a.optional ? '?' : '') + text(a.type)].join(',')})->${text(result)}';
-			case Structure(fields): '{${[for (f in fields) (f.optional ? '?' : '') + f.name + ':' + text(f.type)].join(',')}}';
-		};
 	}
 
 	/** The type at `_pos`; null when the text is malformed. */
@@ -171,6 +153,24 @@ final class FactsTypeTree {
 
 	private function peek(): Int {
 		return _pos < _text.length ? _text.fastCodeAt(_pos) : -1;
+	}
+
+	/** `text` read whole, or null when it is not one type of the grammar. */
+	public static function read(text: String): Null<FactsType> {
+		final reader: FactsTypeTree = new FactsTypeTree(text);
+		final type: Null<FactsType> = reader.type();
+		return reader._pos == text.length ? type : null;
+	}
+
+	/** `t` spelled in the facts type grammar, as the facts spell it: `read(text(t))` is `t`. */
+	public static function text(t: FactsType): String {
+		return switch t {
+			case Unknown: '?';
+			case Parameter(path): '$$$path';
+			case Named(name, args): args.length == 0 ? name : '$name<${args.map(text).join(',')}>';
+			case Function(args, result): '(${[for (a in args) (a.optional ? '?' : '') + text(a.type)].join(',')})->${text(result)}';
+			case Structure(fields): '{${[for (f in fields) (f.optional ? '?' : '') + f.name + ':' + text(f.type)].join(',')}}';
+		};
 	}
 
 	/**

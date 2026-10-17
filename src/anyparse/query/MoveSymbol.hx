@@ -442,6 +442,19 @@ final class MoveSymbol {
 	}
 
 	/**
+	 * The `using` half of a carry list, and its complement, split on the keyword `importStatementText`
+	 * writes — an exact test on generated text, not a guess about a user's spelling.
+	 */
+	public static function carriedUsingLines(carried: Array<String>): Array<String> {
+		return carried.filter(line -> line.startsWith('using '));
+	}
+
+	/** The lines of a carry list that are NOT `using` statements. */
+	public static function carriedImportLines(carried: Array<String>): Array<String> {
+		return carried.filter(line -> !line.startsWith('using '));
+	}
+
+	/**
 	 * Fold a merged `#if` region's edit into the ordinary import edit when the two land on the SAME
 	 * offset — which they now can, since a carried region merges on the line after its region's own
 	 * last import and that is exactly where the ordinary anchor sits when the header root IS that
@@ -530,19 +543,6 @@ final class MoveSymbol {
 		if (seat < 0) seat = ordinary;
 		for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && imp.span.from < seat) return -1;
 		return seat;
-	}
-
-	/**
-	 * The `using` half of a carry list, and its complement, split on the keyword `importStatementText`
-	 * writes — an exact test on generated text, not a guess about a user's spelling.
-	 */
-	public static function carriedUsingLines(carried: Array<String>): Array<String> {
-		return carried.filter(line -> line.startsWith('using '));
-	}
-
-	/** The lines of a carry list that are NOT `using` statements. */
-	public static function carriedImportLines(carried: Array<String>): Array<String> {
-		return carried.filter(line -> !line.startsWith('using '));
 	}
 
 	/**

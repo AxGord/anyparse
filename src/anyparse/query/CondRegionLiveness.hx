@@ -248,6 +248,11 @@ final class CondRegionLiveness {
 		return span == null ? null : evaluateFacts(source.substring(span.from, span.to), facts);
 	}
 
+	/** Three-valued negation: an unknown operand stays unknown. */
+	private static inline function notOf(value: Null<Bool>): Null<Bool> {
+		return value == null ? null : !value;
+	}
+
 	/**
 	 * The offsets that decide whether every byte of `spans` is live.
 	 *
@@ -285,11 +290,6 @@ final class CondRegionLiveness {
 				j++;
 		}
 		return out;
-	}
-
-	/** Three-valued negation: an unknown operand stays unknown. */
-	private static function notOf(value: Null<Bool>): Null<Bool> {
-		return value == null ? null : !value;
 	}
 
 	/** Three-valued conjunction: false wins over unknown, and true needs BOTH proved. */

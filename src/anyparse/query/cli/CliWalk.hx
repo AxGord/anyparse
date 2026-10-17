@@ -33,6 +33,25 @@ final class CliWalk {
 	private static inline final AUTO_LIMIT_THRESHOLD: Int = 500;
 
 	/**
+	 * Walker flood guard. When the caller did NOT pass `--limit` (`limit < 0`)
+	 * and the total hit count exceeds `AUTO_LIMIT_THRESHOLD`, returns the
+	 * threshold so the caller trims to it. Otherwise returns `limit` unchanged.
+	 * Purely numeric — the caller reports any resulting truncation via
+	 * `reportCapHit` once it knows what `limitEntries` actually trimmed.
+	 *
+	 * Killer case: `apq lit '/*' src/ --any-kind` would flood ~165KB of leaf
+	 * hits; the guard caps to `AUTO_LIMIT_THRESHOLD` automatically, and
+	 * `reportCapHit` surfaces the count so the user can re-run with an
+	 * explicit `--limit N` for a precise budget.
+	 *
+	 * `--limit 0` (any explicit value) is honoured verbatim — the guard
+	 * only fires on the implicit "no limit" default.
+	 */
+	public static inline function effectiveAutoLimit(limit: Int, totalHits: Int): Int {
+		return limit >= 0 || totalHits <= AUTO_LIMIT_THRESHOLD ? limit : AUTO_LIMIT_THRESHOLD;
+	}
+
+	/**
 	 * Keep at most `limit` hits total across the per-file entries,
 	 * truncating the entry that crosses the budget and dropping the
 	 * rest. `limit < 0` is "no limit" (the no-flag default). Generic
@@ -55,25 +74,6 @@ final class CliWalk {
 			}
 		}
 		return out;
-	}
-
-	/**
-	 * Walker flood guard. When the caller did NOT pass `--limit` (`limit < 0`)
-	 * and the total hit count exceeds `AUTO_LIMIT_THRESHOLD`, returns the
-	 * threshold so the caller trims to it. Otherwise returns `limit` unchanged.
-	 * Purely numeric — the caller reports any resulting truncation via
-	 * `reportCapHit` once it knows what `limitEntries` actually trimmed.
-	 *
-	 * Killer case: `apq lit '/*' src/ --any-kind` would flood ~165KB of leaf
-	 * hits; the guard caps to `AUTO_LIMIT_THRESHOLD` automatically, and
-	 * `reportCapHit` surfaces the count so the user can re-run with an
-	 * explicit `--limit N` for a precise budget.
-	 *
-	 * `--limit 0` (any explicit value) is honoured verbatim — the guard
-	 * only fires on the implicit "no limit" default.
-	 */
-	public static function effectiveAutoLimit(limit: Int, totalHits: Int): Int {
-		return limit >= 0 || totalHits <= AUTO_LIMIT_THRESHOLD ? limit : AUTO_LIMIT_THRESHOLD;
 	}
 
 	/**
@@ -560,7 +560,6 @@ final class CliWalk {
 		final suggestions: Array<String> = findFuzzy(name, candidates);
 		return suggestions.length > 0 ? '\napq $cmd: Did you mean: ${suggestions.join(', ')}?' : '';
 	}
-
 
 	/**
 	 * Heuristic: does the query look like a leading-dot field-name slot

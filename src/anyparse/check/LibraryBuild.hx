@@ -66,19 +66,6 @@ final class LibraryBuild {
 		]
 	];
 
-	/** The hxml flags that pick a target. */
-	private static final TARGET_FLAGS: Map<String, String> = [
-		'-cpp' => 'cpp',
-		'--cpp' => 'cpp',
-		'-hl' => 'hl',
-		'--hl' => 'hl',
-		'-js' => 'js',
-		'--js' => 'js',
-		'-neko' => 'neko',
-		'--neko' => 'neko',
-		'--interp' => 'interp'
-	];
-
 	/** The package names, and file-name suffixes, the compiler reserves for one target each. */
 	public static final TARGET_PACKAGES: Array<String> = [
 		'cpp', 'cs', 'eval', 'flash', 'hl', 'java', 'js', 'jvm', 'lua', 'neko', 'php', 'python'
@@ -95,6 +82,19 @@ final class LibraryBuild {
 
 	/** The buffer `haxe -version` answers into. */
 	private static inline final VERSION_BUFFER: Int = 64 * 1024;
+
+	/** The hxml flags that pick a target. */
+	private static final TARGET_FLAGS: Map<String, String> = [
+		'-cpp' => 'cpp',
+		'--cpp' => 'cpp',
+		'-hl' => 'hl',
+		'--hl' => 'hl',
+		'-js' => 'js',
+		'--js' => 'js',
+		'-neko' => 'neko',
+		'--neko' => 'neko',
+		'--interp' => 'interp'
+	];
 
 	/** The absolute library source directories, each once. */
 	public final classPaths: Array<String>;

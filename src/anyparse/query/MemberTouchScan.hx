@@ -197,16 +197,6 @@ final class MemberTouchScan {
 		return found;
 	}
 
-	/** The own methods of the grammar's built-in array type (`RefShape.arrayTypeNames`). */
-	public static function arrayMethods(shape: RefShape): OwnMethods {
-		return { reads: shape.execution?.nonMutatingArrayMethods ?? [], changes: shape.execution?.mutatingArrayMethods ?? [] };
-	}
-
-	/** The own methods of the grammar's built-in map types (`ExecutionShape.mapTypeNames`). */
-	public static function mapMethods(shape: RefShape): OwnMethods {
-		return { reads: shape.execution?.nonMutatingMapMethods ?? [], changes: shape.execution?.mutatingMapMethods ?? [] };
-	}
-
 	/** Where code that can run before `region` runs again ends: `region.to`, or the end of the outermost loop of `fn` enclosing it. */
 	public function rerunEnd(fn: QueryNode, region: Span): Int {
 		final loops: Array<String> = ShapeVocab.statementLoopKinds(_scope.shape);
@@ -238,6 +228,50 @@ final class MemberTouchScan {
 		if (freshResult(value, ctx)) return true;
 		final call: Null<QueryNode -> Bool> = ctx.call;
 		return call != null && value.kind == _scope.shape.callKind && call(value);
+	}
+
+	/**
+	 * Record into `out` how the faceted node `id` — one reading a name several types share as one type's member
+	 * (`CallGraphFacts.qualify`), made after `scan` — touches the member `declaring` declares as `name`, read through its
+	 * typed accesses (`nodeAccesses`, `recordTyped`) as `scan` reads every faceted function of the project. False when the
+	 * facts do not answer for them: the node is then none the walk can read as that type's.
+	 */
+	public function scanNode(
+		g: CallGraph, id: String, name: String, declaring: String, access: ReachAccess, owns: OwnMethods, out: MemberTouches,
+		regionFile: String, region: Null<Span>
+	): Bool {
+		final facts: Null<CallGraphFacts> = g.facts;
+		final node: Null<FnNode> = g.node(id);
+		final bodies: Null<Array<FactNode>> = facts?.faceted[id];
+		if (facts == null || node == null || bodies == null || !facts.view.truth) return false;
+		final owners: Array<String> = facts.view.bySimpleName()[declaring] ?? [];
+		if (owners.length == 0) return false;
+		return switch nodeAccesses(g, node, bodies, name, declaring, owners, facts.view, false) {
+			case Typed(accesses):
+				recordTyped(g, id, name, accesses, access, owns, out, regionFile, region);
+				true;
+			case BySyntax, Unread: false;
+		};
+	}
+
+	/** Whether the text at `span` of `file` spells the member `name` on its own `this`: the bare name, or `this.name`. */
+	public function onSelf(g: CallGraph, file: String, span: Span, name: String): Bool {
+		final shape: RefShape = _scope.shape;
+		var found: Bool = false;
+		function walk(node: QueryNode): Void {
+			final at: Null<Span> = node.span;
+			if (found || (at != null && (at.from > span.from || at.to < span.to))) return;
+			if (at != null && at.from == span.from && at.to == span.to && node.name == name) {
+				final receiver: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
+				final self: Bool = receiver != null && receiver.kind == shape.identKind && receiver.name == shape.selfReferenceText;
+				if (node.kind == shape.identKind || (_hazards.isAccess(node.kind) && self)) found = true;
+			}
+			// a node with no span of its own may still hold the text
+			for (c in node.children) walk(c);
+		}
+		final tree: Null<QueryNode> = g.treeOf(file);
+		if (tree != null) walk(tree);
+		return found;
 	}
 
 	private function scanFile(
@@ -348,26 +382,6 @@ final class MemberTouchScan {
 	}
 
 	/**
-	 * The names the imports of `file` give the static `name` of `declaring` besides its own (`ValueNameBinding.fieldAliases`):
-	 * every alias but one whose path names a type proven not to be `declaring` — one declared once, declaring `name` itself.
-	 * An alias whose path did not decode may name any static.
-	 */
-	private static function aliasesIn(g: CallGraph, file: String, name: String, declaring: String): Array<String> {
-		final held: Null<HeldFile> = g.types.heldFile(file);
-		final aliases: Array<FieldAlias> = held == null ? [] : held.index.values.fieldAliases(held.info);
-		final out: Array<String> = [];
-		for (a in aliases) {
-			final target: Null<ImportedStatic> = a.target;
-			// a static of a type declared once, which declares `name` itself, is provably not `declaring`'s
-			final other: Bool = target != null
-				&& (target.member != name || target.owner != declaring && target.decls.length == 1
-					&& target.decls[0].type.members.exists(m -> m.name == name));
-			if (!other && a.alias != name && !out.contains(a.alias)) out.push(a.alias);
-		}
-		return out;
-	}
-
-	/**
 	 * Under the truth (`FactsView.truth`), each faceted function of the project with the accesses the compiler typed in it of
 	 * the member `declaring` declares as `name`: that function is read through them (`recordTyped`), not through its syntax.
 	 * Every access of a field in typed code is a `FieldFact`, a property's through its accessor a call, so no access of the
@@ -472,86 +486,6 @@ final class MemberTouchScan {
 	}
 
 	/**
-	 * Queue the functions the compiler made inside the body `n` that the graph declares no node for (`nodeAccesses`), every
-	 * one in a body a build macro made; one an expansion placed that names the member leaves the node unread. False when
-	 * one has no facts.
-	 */
-	private static function nestedBodies(walk: TouchWalk, n: FactNode): Bool {
-		for (child in n.fns) {
-			final nested: Null<FactNode> = walk.view.node(child);
-			if (nested == null) return false;
-			// a function an expansion placed outside its type's file runs whenever its value is called: what it does to a
-			// name of the member no reading places
-			if (!walk.made && nested.generated && expansionCode(walk.g, walk.node, n, nested.at, walk.view)) {
-				if (nested.fields.exists(f -> f.field == walk.name) || nested.calls.exists(c -> calledField(c.target) == walk.name))
-					walk.unread = true;
-			} else if (walk.made || CallGraphFacts.graphNodeOf(walk.g, walk.node, child, walk.view) == null)
-				walk.work.push(nested);
-		}
-		return true;
-	}
-
-	/**
-	 * Whether the fact at `at` of `node`'s body `n` lies in code an expression macro's expansion built, under the truth: `n`
-	 * holds an expansion (`macro-expansion`), and `at` lies outside the text of every declaration of `node` and in no body
-	 * an inlined call spliced in (`FactSites.spliceOf`), whose method's own text answers for it.
-	 */
-	private static function expansionCode(g: CallGraph, node: FnNode, n: FactNode, at: FactPos, view: FactsView): Bool {
-		return view.truth && FactMarkers.carries(n, m -> m.match(MacroExpansion)) && declarationHolding(g, node.id, at, view) == null
-			&& view.spliceOf(n, at) == null;
-	}
-
-	/**
-	 * The typed access `f` of code an expression macro's expansion built into `n`, read where it runs: at each site the
-	 * expansion holding it runs at (`FactSites.expansionSites`), or over the whole of `n` when none is known.
-	 */
-	private static function expansionRuns(n: FactNode, f: FieldFact, view: FactsView): Array<FieldFact> {
-		final expansion: Null<ExpansionFact> = view.expansionOf(n, f.at);
-		final sites: Array<Span> = (expansion == null ? null : view.expansionSites(n, expansion)) ?? [n.at.span];
-		return [
-			for (s in sites)
-				{
-					owner: f.owner,
-					field: f.field,
-					access: f.access,
-					receiver: f.receiver,
-					type: f.type,
-					write: f.write,
-					at: { file: n.at.file, span: s },
-					use: f.use,
-					method: f.method,
-					fresh: f.fresh,
-					held: f.held,
-					argument: f.argument
-				}
-		];
-	}
-
-	/**
-	 * Record into `out` how the faceted node `id` — one reading a name several types share as one type's member
-	 * (`CallGraphFacts.qualify`), made after `scan` — touches the member `declaring` declares as `name`, read through its
-	 * typed accesses (`nodeAccesses`, `recordTyped`) as `scan` reads every faceted function of the project. False when the
-	 * facts do not answer for them: the node is then none the walk can read as that type's.
-	 */
-	public function scanNode(
-		g: CallGraph, id: String, name: String, declaring: String, access: ReachAccess, owns: OwnMethods, out: MemberTouches,
-		regionFile: String, region: Null<Span>
-	): Bool {
-		final facts: Null<CallGraphFacts> = g.facts;
-		final node: Null<FnNode> = g.node(id);
-		final bodies: Null<Array<FactNode>> = facts?.faceted[id];
-		if (facts == null || node == null || bodies == null || !facts.view.truth) return false;
-		final owners: Array<String> = facts.view.bySimpleName()[declaring] ?? [];
-		if (owners.length == 0) return false;
-		return switch nodeAccesses(g, node, bodies, name, declaring, owners, facts.view, false) {
-			case Typed(accesses):
-				recordTyped(g, id, name, accesses, access, owns, out, regionFile, region);
-				true;
-			case BySyntax, Unread: false;
-		};
-	}
-
-	/**
 	 * Record the method `id` a build macro made (`CallGraphFacts.adopted`) whose facts do not say how it accesses a name of
 	 * the member (`typedAccesses`): it touches the member, and — for `Mutate` — lets its value escape, both where its body is.
 	 */
@@ -652,47 +586,6 @@ final class MemberTouchScan {
 			escape = escape || one.escape;
 		}
 		return { touch: touch, escape: escape };
-	}
-
-	/**
-	 * What a read of the member's value used as `use` does for `Mutate` (`FieldFact.use`): a method call is a read only for one
-	 * of the container's own readers (the facts name the method the receiver's type declares, never an extension), a change
-	 * without an escape only for one of its own changers; an index, a member read, a comparison, an iteration and the read
-	 * half of a compound write of the field are nothing; an element or member write touches; a value handed on escapes. A
-	 * POSITIVE list: a use it does not name — a code the facts producer has grown since, an empty one — touches and escapes.
-	 */
-	private static function classifyUse(use: Null<String>, method: Null<String>, owns: OwnMethods): Verdict {
-		return switch use {
-			case 'call':
-				final called: String = method ?? '';
-				final reads: Bool = owns.reads.contains(called);
-				final own: Bool = reads || owns.changes.contains(called);
-				{ touch: !reads, escape: !own };
-			case 'index', 'member', 'compare', 'iter', 'update': { touch: false, escape: false };
-			case 'elemWrite', 'memberWrite': { touch: true, escape: false };
-			case 'value': { touch: false, escape: true };
-			case _: { touch: true, escape: true };
-		};
-	}
-
-	/** Whether the text at `span` of `file` spells the member `name` on its own `this`: the bare name, or `this.name`. */
-	public function onSelf(g: CallGraph, file: String, span: Span, name: String): Bool {
-		final shape: RefShape = _scope.shape;
-		var found: Bool = false;
-		function walk(node: QueryNode): Void {
-			final at: Null<Span> = node.span;
-			if (found || (at != null && (at.from > span.from || at.to < span.to))) return;
-			if (at != null && at.from == span.from && at.to == span.to && node.name == name) {
-				final receiver: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
-				final self: Bool = receiver != null && receiver.kind == shape.identKind && receiver.name == shape.selfReferenceText;
-				if (node.kind == shape.identKind || (_hazards.isAccess(node.kind) && self)) found = true;
-			}
-			// a node with no span of its own may still hold the text
-			for (c in node.children) walk(c);
-		}
-		final tree: Null<QueryNode> = g.treeOf(file);
-		if (tree != null) walk(tree);
-		return found;
 	}
 
 	/**
@@ -894,6 +787,118 @@ final class MemberTouchScan {
 		return null;
 	}
 
+	/** The own methods of the grammar's built-in array type (`RefShape.arrayTypeNames`). */
+	public static function arrayMethods(shape: RefShape): OwnMethods {
+		return { reads: shape.execution?.nonMutatingArrayMethods ?? [], changes: shape.execution?.mutatingArrayMethods ?? [] };
+	}
+
+	/** The own methods of the grammar's built-in map types (`ExecutionShape.mapTypeNames`). */
+	public static function mapMethods(shape: RefShape): OwnMethods {
+		return { reads: shape.execution?.nonMutatingMapMethods ?? [], changes: shape.execution?.mutatingMapMethods ?? [] };
+	}
+
+	/** Whether `span` shares a position with `region`; false when either is missing. */
+	private static inline function meets(span: Null<Span>, region: Null<Span>): Bool {
+		return span != null && region != null && span.from < region.to && region.from < span.to;
+	}
+
+	/**
+	 * The names the imports of `file` give the static `name` of `declaring` besides its own (`ValueNameBinding.fieldAliases`):
+	 * every alias but one whose path names a type proven not to be `declaring` — one declared once, declaring `name` itself.
+	 * An alias whose path did not decode may name any static.
+	 */
+	private static function aliasesIn(g: CallGraph, file: String, name: String, declaring: String): Array<String> {
+		final held: Null<HeldFile> = g.types.heldFile(file);
+		final aliases: Array<FieldAlias> = held == null ? [] : held.index.values.fieldAliases(held.info);
+		final out: Array<String> = [];
+		for (a in aliases) {
+			final target: Null<ImportedStatic> = a.target;
+			// a static of a type declared once, which declares `name` itself, is provably not `declaring`'s
+			final other: Bool = target != null
+				&& (target.member != name || target.owner != declaring && target.decls.length == 1
+					&& target.decls[0].type.members.exists(m -> m.name == name));
+			if (!other && a.alias != name && !out.contains(a.alias)) out.push(a.alias);
+		}
+		return out;
+	}
+
+	/**
+	 * Queue the functions the compiler made inside the body `n` that the graph declares no node for (`nodeAccesses`), every
+	 * one in a body a build macro made; one an expansion placed that names the member leaves the node unread. False when
+	 * one has no facts.
+	 */
+	private static function nestedBodies(walk: TouchWalk, n: FactNode): Bool {
+		for (child in n.fns) {
+			final nested: Null<FactNode> = walk.view.node(child);
+			if (nested == null) return false;
+			// a function an expansion placed outside its type's file runs whenever its value is called: what it does to a
+			// name of the member no reading places
+			if (!walk.made && nested.generated && expansionCode(walk.g, walk.node, n, nested.at, walk.view)) {
+				if (nested.fields.exists(f -> f.field == walk.name) || nested.calls.exists(c -> calledField(c.target) == walk.name))
+					walk.unread = true;
+			} else if (walk.made || CallGraphFacts.graphNodeOf(walk.g, walk.node, child, walk.view) == null)
+				walk.work.push(nested);
+		}
+		return true;
+	}
+
+	/**
+	 * Whether the fact at `at` of `node`'s body `n` lies in code an expression macro's expansion built, under the truth: `n`
+	 * holds an expansion (`macro-expansion`), and `at` lies outside the text of every declaration of `node` and in no body
+	 * an inlined call spliced in (`FactSites.spliceOf`), whose method's own text answers for it.
+	 */
+	private static function expansionCode(g: CallGraph, node: FnNode, n: FactNode, at: FactPos, view: FactsView): Bool {
+		return view.truth && FactMarkers.carries(n, m -> m.match(MacroExpansion)) && declarationHolding(g, node.id, at, view) == null
+			&& view.spliceOf(n, at) == null;
+	}
+
+	/**
+	 * The typed access `f` of code an expression macro's expansion built into `n`, read where it runs: at each site the
+	 * expansion holding it runs at (`FactSites.expansionSites`), or over the whole of `n` when none is known.
+	 */
+	private static function expansionRuns(n: FactNode, f: FieldFact, view: FactsView): Array<FieldFact> {
+		final expansion: Null<ExpansionFact> = view.expansionOf(n, f.at);
+		final sites: Array<Span> = (expansion == null ? null : view.expansionSites(n, expansion)) ?? [n.at.span];
+		return [
+			for (s in sites)
+				{
+					owner: f.owner,
+					field: f.field,
+					access: f.access,
+					receiver: f.receiver,
+					type: f.type,
+					write: f.write,
+					at: { file: n.at.file, span: s },
+					use: f.use,
+					method: f.method,
+					fresh: f.fresh,
+					held: f.held,
+					argument: f.argument
+				}
+		];
+	}
+
+	/**
+	 * What a read of the member's value used as `use` does for `Mutate` (`FieldFact.use`): a method call is a read only for one
+	 * of the container's own readers (the facts name the method the receiver's type declares, never an extension), a change
+	 * without an escape only for one of its own changers; an index, a member read, a comparison, an iteration and the read
+	 * half of a compound write of the field are nothing; an element or member write touches; a value handed on escapes. A
+	 * POSITIVE list: a use it does not name — a code the facts producer has grown since, an empty one — touches and escapes.
+	 */
+	private static function classifyUse(use: Null<String>, method: Null<String>, owns: OwnMethods): Verdict {
+		return switch use {
+			case 'call':
+				final called: String = method ?? '';
+				final reads: Bool = owns.reads.contains(called);
+				final own: Bool = reads || owns.changes.contains(called);
+				{ touch: !reads, escape: !own };
+			case 'index', 'member', 'compare', 'iter', 'update': { touch: false, escape: false };
+			case 'elemWrite', 'memberWrite': { touch: true, escape: false };
+			case 'value': { touch: false, escape: true };
+			case _: { touch: true, escape: true };
+		};
+	}
+
 	/** The field a call fact's `target` names (`pack.Type.field`, a bare field name), or null for a call of no field. */
 	private static function calledField(target: Null<String>): Null<String> {
 		return target == null ? null : SourceText.lastSegment(target);
@@ -902,11 +907,6 @@ final class MemberTouchScan {
 	/** The declaration of the node `id` (`CallGraph.declarationsOf`) whose text holds the fact position `at`, or null. */
 	private static function declarationHolding(g: CallGraph, id: String, at: FactPos, view: FactsView): Null<FnDeclaration> {
 		return g.declarationsOf(id).find(d -> at.file == view.keyOf(d.file) && d.span.from <= at.span.from && at.span.to <= d.span.to);
-	}
-
-	/** Whether `span` shares a position with `region`; false when either is missing. */
-	private static function meets(span: Null<Span>, region: Null<Span>): Bool {
-		return span != null && region != null && span.from < region.to && region.from < span.to;
 	}
 
 	/**

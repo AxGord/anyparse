@@ -42,6 +42,11 @@ typedef MainRepetition = {
 @:nullSafety(Strict)
 final class MainSinkReport {
 
+	/** `<file>:<offset>` of the site of `edge`. */
+	public static inline function siteKey(edge: CallEdge): String {
+		return '${edge.file}:${edge.span?.from ?? -1}';
+	}
+
 	/**
 	 * Each of finding (a) over `graph`, under the plain `taints` and the costed `costs`, into `violations`. A call long
 	 * only where a `catch` runs — itself inside one, or a take of a lock long over the normal paths of no hold — is
@@ -178,12 +183,6 @@ final class MainSinkReport {
 			if (named.length > 0) kept.message += ' — with ${[for (n in named) '"$n"'].join(', ')} on the same way, reported here';
 		}
 	}
-
-	/** `<file>:<offset>` of the site of `edge`. */
-	public static inline function siteKey(edge: CallEdge): String {
-		return '${edge.file}:${edge.span?.from ?? -1}';
-	}
-
 
 	/**
 	 * The functions the main thread runs (`runs`) only from inside a sink's own body: every call into one comes from a

@@ -49,12 +49,6 @@ final class ReflectiveReach {
 	/** The `Type` member making a class value of a name (`resolvedLiteral`). */
 	private static inline final RESOLVE_CLASS: String = 'resolveClass';
 
-	/**
-	 * The globs naming every class a class value made from a computed name may be of (`reflectiveClasses`, the one list
-	 * every file of the run declares); null when undeclared, and such a value may then be of any class.
-	 */
-	private final _reflectiveClasses: Null<Array<String>>;
-
 	/** Each class or interface -> the types whose fields a write on a value of it may reach (`reachOf`). */
 	private final _reach: Map<String, Array<String>> = [];
 
@@ -64,20 +58,24 @@ final class ReflectiveReach {
 	/** Each file -> the names a `case` pattern of it captures (`binderType`). */
 	private final _captures: Map<String, Array<String>> = [];
 
-	/** The types the held files make objects of or read as class values (`madeTypes`); null until first asked. */
-	private var _made: Null<Array<String>> = null;
-
 	/** The names a `new` of the held files makes that resolve to no type (`unresolvedMade`), which may be an alias of any. */
 	private final _unresolvedMade: Array<String> = [];
 
+	/**
+	 * The globs naming every class a class value made from a computed name may be of (`reflectiveClasses`, the one list
+	 * every file of the run declares); null when undeclared, and such a value may then be of any class.
+	 */
+	private final _reflectiveClasses: Null<Array<String>>;
+
 	private final _graph: CallGraph;
-
 	private final _plugin: GrammarPlugin;
-
 	private final _shape: RefShape;
 
 	/** Whether the run sees every type and every write of the project (`FieldWrites.complete`). */
 	private final _complete: Bool;
+
+	/** The types the held files make objects of or read as class values (`madeTypes`); null until first asked. */
+	private var _made: Null<Array<String>> = null;
 
 	public function new(graph: CallGraph, plugin: GrammarPlugin, complete: Bool, ?reflectiveClasses: Array<String>) {
 		_graph = graph;
@@ -85,28 +83,6 @@ final class ReflectiveReach {
 		_shape = plugin.refShape();
 		_complete = complete;
 		_reflectiveClasses = reflectiveClasses;
-	}
-
-	/**
-	 * The classes a class value made from a computed name may be of, as the project declares them (`reflectiveClasses`,
-	 * its responsibility): the one list the config of every file of `files` declares, each resolved by `resolve`; null when
-	 * a file declares none or another list, and such a value may then be of any class.
-	 */
-	public static inline function declaredClasses(
-		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>
-	): Null<Array<String>> {
-		return declaredGlobs(files, resolve, c -> c.reflectiveClasses());
-	}
-
-	/**
-	 * The classes whose methods a read of a computed name may obtain, as the project declares them
-	 * (`reflectiveMethodHolders`): the one list the config of every file of `files` declares, each resolved by `resolve`;
-	 * null when a file declares none or another list, and such a read may then obtain any method.
-	 */
-	public static inline function declaredMethodHolders(
-		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>
-	): Null<Array<String>> {
-		return declaredGlobs(files, resolve, c -> c.reflectiveMethodHolders());
 	}
 
 	/**
@@ -134,6 +110,52 @@ final class ReflectiveReach {
 		if (param != null) return param;
 		final reaches: Null<Array<String>> = reachOf(type);
 		return reaches != null ? { reaches: reaches, by: capture } : freshPlacement(file, fn, target) ?? { reaches: null, by: null };
+	}
+
+	/**
+	 * Every type the name `written` may mean in `file`: as written, as the file's imports, aliases and wildcards bind it or
+	 * may bind it (`keysOf`), and the type each typedef alias of those stands for — a superset, so no spelling of a type
+	 * escapes it.
+	 */
+	public function namedTypes(file: String, written: String): Array<String> {
+		final simple: String = CallGraphNames.lastSegments(written, 1);
+		final out: Array<String> = [simple];
+		for (key in keysOf(file, written)) for (t in [key, aliased(key)]) if (!out.contains(t)) out.push(t);
+		return out;
+	}
+
+	/**
+	 * The written type of the enum-constructor parameter a `case` capture `value`, in `file`, binds (`Ctor(a, b)`), with
+	 * the exclusion that typed it: when the switch subject is declared of an indexed enum declaring a constructor of that
+	 * name (`subjectEnum`, `subjectType` typing the subject), with as many parameters as the pattern, and the parameter
+	 * names none of the enum's own type parameters; null for any other value.
+	 */
+	public function binderType(file: String, value: QueryNode, subjectType: (QueryNode) -> Null<String>): Null<Capture> {
+		final name: Null<String> = value.name;
+		final at: Null<Span> = value.span;
+		final tree: Null<QueryNode> = _graph.treeOf(file);
+		if (value.kind != _shape.identKind || name == null || at == null || tree == null) return null;
+		if (!capturesOf(file, tree).contains(name)) return null;
+		final from: Null<Int> = TypeResolver.resolveBindingFrom(name, at, tree, _shape);
+		final pattern: Null<QueryNode> = from == null
+			? null
+			: holderOf(
+				tree, from, n -> n.kind == _shape.callKind && n.children.exists(c -> c.kind == _shape.identKind && c.span?.from == from)
+			);
+		if (pattern == null) return null;
+		final ctor: String = pattern.children[0].name ?? '';
+		final owner: Null<String> = subjectEnum(file, tree, pattern, ctor, subjectType);
+		if (owner == null) return null;
+		final index: Null<SymbolIndex> = _graph.index;
+		final enumDecl: Null<ResolvedType> = index == null ? null : onlyDeclaration(index, owner);
+		final info: Null<MemberInfo> = enumDecl?.type.members.find(m -> m.name == ctor);
+		if (enumDecl == null || info == null) return null;
+		if (info.paramTypeSources.length != pattern.children.length - 1) return null;
+		final written: Null<String> = info.paramTypeSources[pattern.children.findIndex(c -> c.span?.from == from) - 1];
+		// a parameter of the enum's own type parameters is what the subject's arguments bind, which nothing here reads
+		if (written == null || CallGraphNames.mentionsTypeName(written, enumDecl.type.typeParamNames, _plugin.typeSyntax)) return null;
+		final outer: Null<String> = NominalTypes.outerNominalOf(written, _plugin.typeSyntax);
+		return outer == null ? null : { type: outer, by: 'a capture of $owner.$ctor, typed by its parameter' };
 	}
 
 	/**
@@ -303,18 +325,6 @@ final class ReflectiveReach {
 	}
 
 	/**
-	 * Every type the name `written` may mean in `file`: as written, as the file's imports, aliases and wildcards bind it or
-	 * may bind it (`keysOf`), and the type each typedef alias of those stands for — a superset, so no spelling of a type
-	 * escapes it.
-	 */
-	public function namedTypes(file: String, written: String): Array<String> {
-		final simple: String = CallGraphNames.lastSegments(written, 1);
-		final out: Array<String> = [simple];
-		for (key in keysOf(file, written)) for (t in [key, aliased(key)]) if (!out.contains(t)) out.push(t);
-		return out;
-	}
-
-	/**
 	 * The keys the name `written` may mean in `file` (`CallGraph.typeKeysOf`): the one the file binds it to, then each
 	 * one an `#if`-guarded statement or a wildcard may bind it to instead — itself when nothing binds it.
 	 */
@@ -376,40 +386,6 @@ final class ReflectiveReach {
 	}
 
 	/**
-	 * The written type of the enum-constructor parameter a `case` capture `value`, in `file`, binds (`Ctor(a, b)`), with
-	 * the exclusion that typed it: when the switch subject is declared of an indexed enum declaring a constructor of that
-	 * name (`subjectEnum`, `subjectType` typing the subject), with as many parameters as the pattern, and the parameter
-	 * names none of the enum's own type parameters; null for any other value.
-	 */
-	public function binderType(file: String, value: QueryNode, subjectType: (QueryNode) -> Null<String>): Null<Capture> {
-		final name: Null<String> = value.name;
-		final at: Null<Span> = value.span;
-		final tree: Null<QueryNode> = _graph.treeOf(file);
-		if (value.kind != _shape.identKind || name == null || at == null || tree == null) return null;
-		if (!capturesOf(file, tree).contains(name)) return null;
-		final from: Null<Int> = TypeResolver.resolveBindingFrom(name, at, tree, _shape);
-		final pattern: Null<QueryNode> = from == null
-			? null
-			: holderOf(
-				tree, from, n -> n.kind == _shape.callKind && n.children.exists(c -> c.kind == _shape.identKind && c.span?.from == from)
-			);
-		if (pattern == null) return null;
-		final ctor: String = pattern.children[0].name ?? '';
-		final owner: Null<String> = subjectEnum(file, tree, pattern, ctor, subjectType);
-		if (owner == null) return null;
-		final index: Null<SymbolIndex> = _graph.index;
-		final enumDecl: Null<ResolvedType> = index == null ? null : onlyDeclaration(index, owner);
-		final info: Null<MemberInfo> = enumDecl?.type.members.find(m -> m.name == ctor);
-		if (enumDecl == null || info == null) return null;
-		if (info.paramTypeSources.length != pattern.children.length - 1) return null;
-		final written: Null<String> = info.paramTypeSources[pattern.children.findIndex(c -> c.span?.from == from) - 1];
-		// a parameter of the enum's own type parameters is what the subject's arguments bind, which nothing here reads
-		if (written == null || CallGraphNames.mentionsTypeName(written, enumDecl.type.typeParamNames, _plugin.typeSyntax)) return null;
-		final outer: Null<String> = NominalTypes.outerNominalOf(written, _plugin.typeSyntax);
-		return outer == null ? null : { type: outer, by: 'a capture of $owner.$ctor, typed by its parameter' };
-	}
-
-	/**
 	 * The enum a `case` pattern `pattern` of `file`, whose tree is `tree`, builds with the constructor `ctor`: the one the
 	 * switch subject is declared of (`subjectType`, through the file's imports and typedef aliases), when it declares
 	 * `ctor` and the pattern is a top-level one of its arm — an alternative of it included. Null otherwise: a constructor
@@ -452,18 +428,6 @@ final class ReflectiveReach {
 		return names;
 	}
 
-	/**
-	 * The one list of globs `read` takes off the config of every file of `files`, each resolved by `resolve`; null when a
-	 * file declares none or another list.
-	 */
-	private static function declaredGlobs(
-		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>, read: (LintConfig) -> Null<Array<String>>
-	): Null<Array<String>> {
-		final lists: Array<Null<Array<String>>> = [for (f in files) read(LintConfig.resolveWith(resolve, f.file))];
-		final first: Null<Array<String>> = lists.length == 0 ? null : lists[0];
-		return first != null && lists.foreach(l -> l != null && l.join('\n') == first.join('\n')) ? first : null;
-	}
-
 	/** The simple name `name` stands for through its typedef aliases (`TypeRefIndex.aliasedName`); itself with no index. */
 	private function aliased(name: String): String {
 		return _graph.index?.refs.aliasedName(name) ?? name;
@@ -472,6 +436,28 @@ final class ReflectiveReach {
 	/** Whether the graph's index declares a type of the name `name`. */
 	private function declared(name: String): Bool {
 		return (_graph.index?.refs.declsNamed(name) ?? []).length > 0;
+	}
+
+	/**
+	 * The classes a class value made from a computed name may be of, as the project declares them (`reflectiveClasses`,
+	 * its responsibility): the one list the config of every file of `files` declares, each resolved by `resolve`; null when
+	 * a file declares none or another list, and such a value may then be of any class.
+	 */
+	public static inline function declaredClasses(
+		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>
+	): Null<Array<String>> {
+		return declaredGlobs(files, resolve, c -> c.reflectiveClasses());
+	}
+
+	/**
+	 * The classes whose methods a read of a computed name may obtain, as the project declares them
+	 * (`reflectiveMethodHolders`): the one list the config of every file of `files` declares, each resolved by `resolve`;
+	 * null when a file declares none or another list, and such a read may then obtain any method.
+	 */
+	public static inline function declaredMethodHolders(
+		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>
+	): Null<Array<String>> {
+		return declaredGlobs(files, resolve, c -> c.reflectiveMethodHolders());
 	}
 
 	/**
@@ -501,12 +487,6 @@ final class ReflectiveReach {
 		return out;
 	}
 
-	/** Whether the span of `node` holds the span `at`. */
-	private static function holds(node: QueryNode, at: Span): Bool {
-		final own: Null<Span> = node.span;
-		return own != null && own.from <= at.from && at.to <= own.to;
-	}
-
 	/** The innermost node `test` accepts whose span holds the offset `from`, in `node`'s subtree; null when none does. */
 	public static function holderOf(node: QueryNode, from: Int, test: (QueryNode) -> Bool): Null<QueryNode> {
 		final at: Null<Span> = node.span;
@@ -516,6 +496,24 @@ final class ReflectiveReach {
 			if (hit != null) return hit;
 		}
 		return test(node) ? node : null;
+	}
+
+	/**
+	 * The one list of globs `read` takes off the config of every file of `files`, each resolved by `resolve`; null when a
+	 * file declares none or another list.
+	 */
+	private static function declaredGlobs(
+		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>, read: (LintConfig) -> Null<Array<String>>
+	): Null<Array<String>> {
+		final lists: Array<Null<Array<String>>> = [for (f in files) read(LintConfig.resolveWith(resolve, f.file))];
+		final first: Null<Array<String>> = lists.length == 0 ? null : lists[0];
+		return first != null && lists.foreach(l -> l != null && l.join('\n') == first.join('\n')) ? first : null;
+	}
+
+	/** Whether the span of `node` holds the span `at`. */
+	private static function holds(node: QueryNode, at: Span): Bool {
+		final own: Null<Span> = node.span;
+		return own != null && own.from <= at.from && at.to <= own.to;
 	}
 
 }

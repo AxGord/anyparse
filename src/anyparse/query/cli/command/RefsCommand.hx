@@ -91,6 +91,22 @@ final class RefsCommand implements CliCommand {
 		printRefsUsage();
 	}
 
+	/**
+	 * Collect every named leaf/inner-node into `out` for fuzzy
+	 * "did you mean" suggestions. The full vocabulary covered by the
+	 * walked tree — wider than just decls — keeps the suggestion list
+	 * useful for either refs (value bindings) or uses (type positions)
+	 * without needing a per-shape collector.
+	 */
+	public static function collectNames(root: QueryNode, out: Map<String, Bool>): Void {
+		function walk(n: QueryNode): Void {
+			final nm: Null<String> = n.name;
+			if (nm != null && nm.length > 0) out[nm] = true;
+			for (c in n.children) walk(c);
+		}
+		walk(root);
+	}
+
 	private static inline function kindAllowed(k: RefKind, decls: Bool, reads: Bool, writes: Bool): Bool {
 		return switch k {
 			case Decl: decls;
@@ -217,22 +233,6 @@ final class RefsCommand implements CliCommand {
 		CliIo.sysPrint('for all of them. Each name gets its own `=== <name> ===` section on stdout\n');
 		CliIo.sysPrint('and its own --limit budget. Without the separator the grammar is unchanged\n');
 		CliIo.sysPrint('(first positional = name, rest = scope). --json takes ONE name.\n');
-	}
-
-	/**
-	 * Collect every named leaf/inner-node into `out` for fuzzy
-	 * "did you mean" suggestions. The full vocabulary covered by the
-	 * walked tree — wider than just decls — keeps the suggestion list
-	 * useful for either refs (value bindings) or uses (type positions)
-	 * without needing a per-shape collector.
-	 */
-	public static function collectNames(root: QueryNode, out: Map<String, Bool>): Void {
-		function walk(n: QueryNode): Void {
-			final nm: Null<String> = n.name;
-			if (nm != null && nm.length > 0) out[nm] = true;
-			for (c in n.children) walk(c);
-		}
-		walk(root);
 	}
 
 	private static function parseRefsArgs(args: Array<String>): RefsOpts {

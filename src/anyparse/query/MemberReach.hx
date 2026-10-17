@@ -977,14 +977,6 @@ final class MemberReach {
 		};
 	}
 
-	/** The spans of the entry's own code: the region, or each call site. */
-	private static function entrySpans(entry: ReachEntry): Array<Span> {
-		return switch entry {
-			case Region(_, span): [span];
-			case Calls(_, sites): [for (s in sites) if (s.span != null) s.span];
-		};
-	}
-
 	/**
 	 * Under the truth (`FactsView.truth`), the site of the build macro that made the code of a type holding one of `spans`
 	 * of `file` other than its text (`ReachGraph.rewrittenBy`), or null: an entry is text, which may be none of what the
@@ -2429,7 +2421,7 @@ final class MemberReach {
 			span: span
 		};
 		if (resolved != null && g.node(resolved)?.isExternal == false) enqueue(resolved, step);
-		var grown: Null<ReachUnknown> = _projectSources.exists(_scope.siteOf(type)?.file ?? '') ? null : _g.loadOverrides(g, type, name);
+		final grown: Null<ReachUnknown> = _projectSources.exists(_scope.siteOf(type)?.file ?? '') ? null : _g.loadOverrides(g, type, name);
 		for (v in g.virtualTargets(type, name)) enqueue(v, step);
 		if (resolved != null && g.node(resolved)?.isExternal == false) return grown;
 		// a type that declares no constructor has a generated one: its initializers, then its superclass's constructor
@@ -2828,70 +2820,6 @@ final class MemberReach {
 	}
 
 	/**
-	 * The analysis for one lint run over `file` (whose current text is `source`): the project is the
-	 * report UNION the declared `resolutionRoots` when the run's host declared roots that ALL matched, else
-	 * `file` alone with the scope marked unknown; types resolve through the host's resolution index
-	 * (libraries included) when there is one. Memoised on the host for the rest of the pass.
-	 */
-	public static function forRun(plugin: GrammarPlugin, file: String, source: String): MemberReach {
-		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
-		final scoped: Null<Array<{ file: String, source: String }>> = host?.completeProjectFiles();
-		final project: Array<{ file: String, source: String }> = scoped == null
-			? [{ file: file, source: source }]
-			: [for (f in scoped) f.file == file ? { file: file, source: source } : f];
-		if (scoped != null && !project.exists(f -> f.file == file)) project.push({ file: file, source: source });
-		// an edit applied earlier in the pass to ANY project file makes the memoised graph describe code that is gone:
-		// taken in place when it changed no declaration, else the analysis is rebuilt
-		final memo: Null<MemberReach> = host?.memberReach();
-		final changed: Null<Array<{ file: String, source: String }>> = memo?.changedFiles(project);
-		if (memo != null && changed != null && (changed.length == 0 || memo.refresh(changed))) return memo;
-		final index: SymbolIndex = host?.resolutionIndex() ?? IndexScope.over(project, plugin);
-		// an analysis reading compiler facts escalates on its first question (`escalation`), which probes the builds: their
-		// compiles start now, beside the facts this waits on below, instead of after them
-		host?.reachBuildsAhead();
-		// the resolution scope is what the project declares, not what its builds compile: only the builds can say that no
-		// subtype or override lies outside the index (`configuredFor`)
-		final built: MemberReach = new MemberReach(
-			plugin, project, index, scoped != null, MAX_LIBRARY_FILES, MAX_VISITED, null, () -> false,
-			FactsView.over(host?.compilerFacts())
-		);
-		// the builds are probed only once a question needs them (`escalation`), and read the project's text as it is then
-		if (host != null) {
-			final configure: () -> Null<MemberReach> = configuredFor.bind(plugin, project, scoped != null, host);
-			built._configure = configure;
-			built._reconfigure = configure;
-			built._factsTruthAvailable = built._scope.facts != null;
-			if (scoped != null) host.setMemberReach(built);
-		}
-		return built;
-	}
-
-	/** Whether `inner` lies within `outer`. */
-	private static inline function within(inner: Null<Span>, outer: Span): Bool {
-		return inner != null && outer.from <= inner.from && inner.to <= outer.to;
-	}
-
-	/** Whether the site `span` is exactly `at`. */
-	private static inline function sameSpan(span: Null<Span>, at: Span): Bool {
-		return span != null && span.from == at.from && span.to == at.to;
-	}
-
-	/**
-	 * Whether what the admission `site` lets run may be a function the walk never enters, as it reaches no toucher by an
-	 * edge: a function value (a lambda read by its syntax, a library function such as `Std.string`), a reflectively
-	 * constructed object, any code at all. Such a function may run any implicitly-called member on any value it is handed.
-	 */
-	private static inline function runsUnreadCode(site: AdmissionSite): Bool {
-		return !site.always && (site.values || site.all == true || site.constructors);
-	}
-
-	/** Whether `site` runs nothing but the function values a call of a value of a function type, no `dynamic` method's, may run. */
-	private static inline function onlyValues(site: AdmissionSite): Bool {
-		return site.values && site.called != null && site.stored == null && !site.constructors && site.all != true
-			&& site.names.length == 0 && (site.ids ?? []).length == 0 && (site.owned ?? []).length == 0;
-	}
-
-	/**
 	 * What the native site `x`, read where the compiler facts are the truth, may do to the member `names` spell, of a type
 	 * `declaring` declares (`NativeSiteReach`): an object carrying it may have left the type system when the escapes are not
 	 * known, or a type a value of which carries it (`ValueCarriers.declaredValueTypes`) escaped.
@@ -3023,6 +2951,78 @@ final class MemberReach {
 		else
 			out.ids = ids;
 		return out;
+	}
+
+	/**
+	 * The analysis for one lint run over `file` (whose current text is `source`): the project is the
+	 * report UNION the declared `resolutionRoots` when the run's host declared roots that ALL matched, else
+	 * `file` alone with the scope marked unknown; types resolve through the host's resolution index
+	 * (libraries included) when there is one. Memoised on the host for the rest of the pass.
+	 */
+	public static function forRun(plugin: GrammarPlugin, file: String, source: String): MemberReach {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		final scoped: Null<Array<{ file: String, source: String }>> = host?.completeProjectFiles();
+		final project: Array<{ file: String, source: String }> = scoped == null
+			? [{ file: file, source: source }]
+			: [for (f in scoped) f.file == file ? { file: file, source: source } : f];
+		if (scoped != null && !project.exists(f -> f.file == file)) project.push({ file: file, source: source });
+		// an edit applied earlier in the pass to ANY project file makes the memoised graph describe code that is gone:
+		// taken in place when it changed no declaration, else the analysis is rebuilt
+		final memo: Null<MemberReach> = host?.memberReach();
+		final changed: Null<Array<{ file: String, source: String }>> = memo?.changedFiles(project);
+		if (memo != null && changed != null && (changed.length == 0 || memo.refresh(changed))) return memo;
+		final index: SymbolIndex = host?.resolutionIndex() ?? IndexScope.over(project, plugin);
+		// an analysis reading compiler facts escalates on its first question (`escalation`), which probes the builds: their
+		// compiles start now, beside the facts this waits on below, instead of after them
+		host?.reachBuildsAhead();
+		// the resolution scope is what the project declares, not what its builds compile: only the builds can say that no
+		// subtype or override lies outside the index (`configuredFor`)
+		final built: MemberReach = new MemberReach(
+			plugin, project, index, scoped != null, MAX_LIBRARY_FILES, MAX_VISITED, null, () -> false,
+			FactsView.over(host?.compilerFacts())
+		);
+		// the builds are probed only once a question needs them (`escalation`), and read the project's text as it is then
+		if (host != null) {
+			final configure: () -> Null<MemberReach> = configuredFor.bind(plugin, project, scoped != null, host);
+			built._configure = configure;
+			built._reconfigure = configure;
+			built._factsTruthAvailable = built._scope.facts != null;
+			if (scoped != null) host.setMemberReach(built);
+		}
+		return built;
+	}
+
+	/** Whether `inner` lies within `outer`. */
+	private static inline function within(inner: Null<Span>, outer: Span): Bool {
+		return inner != null && outer.from <= inner.from && inner.to <= outer.to;
+	}
+
+	/** Whether the site `span` is exactly `at`. */
+	private static inline function sameSpan(span: Null<Span>, at: Span): Bool {
+		return span != null && span.from == at.from && span.to == at.to;
+	}
+
+	/**
+	 * Whether what the admission `site` lets run may be a function the walk never enters, as it reaches no toucher by an
+	 * edge: a function value (a lambda read by its syntax, a library function such as `Std.string`), a reflectively
+	 * constructed object, any code at all. Such a function may run any implicitly-called member on any value it is handed.
+	 */
+	private static inline function runsUnreadCode(site: AdmissionSite): Bool {
+		return !site.always && (site.values || site.all == true || site.constructors);
+	}
+
+	/** Whether `site` runs nothing but the function values a call of a value of a function type, no `dynamic` method's, may run. */
+	private static inline function onlyValues(site: AdmissionSite): Bool {
+		return site.values && site.called != null && site.stored == null && !site.constructors && site.all != true
+			&& site.names.length == 0 && (site.ids ?? []).length == 0 && (site.owned ?? []).length == 0;
+	}
+
+	/** The spans of the entry's own code: the region, or each call site. */
+	private static function entrySpans(entry: ReachEntry): Array<Span> {
+		return switch entry {
+			case Region(_, span): [span];
+			case Calls(_, sites): [for (s in sites) if (s.span != null) s.span];
+		};
 	}
 
 	/** The tree and text of `file` as the graph holds them, or null when it holds neither. */

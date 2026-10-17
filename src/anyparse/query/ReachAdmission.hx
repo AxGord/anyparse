@@ -14,15 +14,15 @@ using Lambda;
 @:nullSafety(Strict)
 final class ReachAdmission {
 
-	private final _scope: ReachProject;
-	private final _g: ReachGraph;
-
 	/**
 	 * Whether a method may be obtained as a value of no type — by its name off a value of no class, or by reflection — which
 	 * code the graph cannot follow may then call (`FunctionValueTypes.obtainedUntyped`). No method is, until the analysis
 	 * owning the admission says so.
 	 */
 	public var obtainedUntyped: (g:CallGraph, node:FnNode) -> Bool = (g, node) -> false;
+
+	private final _scope: ReachProject;
+	private final _g: ReachGraph;
 
 	public function new(scope: ReachProject, g: ReachGraph) {
 		_scope = scope;

@@ -26,29 +26,29 @@ final class FactsInstances {
 	 */
 	public var unread(default, null): Bool = false;
 
-	private final _table: CompilerFacts;
-
-	/** Type parameter (`pack.Type.T`, `method.T`) -> the types a value bound to it may have, by their text; built on first need. */
-	private var _instances: Null<Map<String, Map<String, FactsType>>> = null;
-
 	/**
 	 * The type parameters a generic method's declared type holds where the type the compiler instantiated it at has no part
 	 * that matches: what they stand for there is not known.
 	 */
 	private final _unresolved: Map<String, Bool> = [];
 
+	private final _table: CompilerFacts;
+
+	/** Type parameter (`pack.Type.T`, `method.T`) -> the types a value bound to it may have, by their text; built on first need. */
+	private var _instances: Null<Map<String, Map<String, FactsType>>> = null;
+
 	public function new(table: CompilerFacts) {
 		_table = table;
-	}
-
-	/** The types a value of the type parameter `path` may have, by their text; null when no instantiation binds it. */
-	public function boundTo(path: String): Null<Map<String, FactsType>> {
-		return instances()[path];
 	}
 
 	/** Whether an instantiation leaves `path` unknown (`_unresolved`); settled by the first `boundTo`. */
 	public inline function unresolved(path: String): Bool {
 		return _unresolved.exists(path);
+	}
+
+	/** The types a value of the type parameter `path` may have, by their text; null when no instantiation binds it. */
+	public function boundTo(path: String): Null<Map<String, FactsType>> {
+		return instances()[path];
 	}
 
 	/**
@@ -74,55 +74,6 @@ final class FactsInstances {
 		}
 		_instances = out;
 		return out;
-	}
-
-	/** Every type text `n`'s facts spell, in the order `instances` reads them. */
-	private static function nodeTypeTexts(n: FactNode): Array<Null<String>> {
-		final texts: Array<Null<String>> = [n.signature];
-		for (p in n.params) texts.push(p.type);
-		for (v in n.variants) {
-			texts.push(v.signature);
-			for (p in v.params) texts.push(p.type);
-		}
-		for (c in n.calls) {
-			texts.push(c.receiver);
-			texts.push(c.result);
-			texts.push(c.signature);
-		}
-		for (x in n.news) texts.push(x.instance);
-		for (f in n.fields) {
-			texts.push(f.receiver);
-			texts.push(f.type);
-		}
-		for (e in n.elementWrites) texts.push(e.receiver);
-		for (f in n.flows) {
-			texts.push(f.from);
-			texts.push(f.to);
-		}
-		for (h in n.handed) {
-			texts.push(h.from);
-			texts.push(h.to);
-		}
-		for (s in n.strings) texts.push(s.operand);
-		for (i in n.iterations) {
-			texts.push(i.binder);
-			texts.push(i.iterated);
-		}
-		for (v in n.vars) texts.push(v.type);
-		for (r in n.reads) texts.push(r.type);
-		return texts;
-	}
-
-	/** Every type text a type's own facts spell: its fields, supertypes, targets, underlying types, constructors. */
-	private static function typeFactTexts(fact: TypeFact): Array<Null<String>> {
-		final texts: Array<Null<String>> = [for (f in fact.fields) for (t in f.types) t];
-		texts.push(fact.superClass);
-		for (i in fact.interfaces) texts.push(i);
-		for (t in fact.targets) texts.push(t);
-		for (t in fact.underlying) texts.push(t);
-		for (c in fact.constructors) texts.push(c.type);
-		texts.push(fact.genericOf);
-		return texts;
 	}
 
 	/** Read one type text once, binding every type argument it applies; a text that does not read marks the table unread. */
@@ -151,13 +102,6 @@ final class FactsInstances {
 				for (f in fields) scanInstances(out, f.type);
 			case Parameter(_), Unknown:
 		}
-	}
-
-	/** Record `t` as one instance of the type parameter `path`. */
-	private static function bindInstance(out: Map<String, Map<String, FactsType>>, path: String, t: FactsType): Void {
-		final types: Map<String, FactsType> = out[path] ?? [];
-		out[path] = types;
-		types['$t'] = t;
 	}
 
 	/** Unify a generic instantiation's declared type with the applied one; either text failing to read marks the table unread. */
@@ -210,6 +154,62 @@ final class FactsInstances {
 				for (f in fields) unresolveParameters(f.type);
 			case Unknown:
 		}
+	}
+
+	/** Every type text `n`'s facts spell, in the order `instances` reads them. */
+	private static function nodeTypeTexts(n: FactNode): Array<Null<String>> {
+		final texts: Array<Null<String>> = [n.signature];
+		for (p in n.params) texts.push(p.type);
+		for (v in n.variants) {
+			texts.push(v.signature);
+			for (p in v.params) texts.push(p.type);
+		}
+		for (c in n.calls) {
+			texts.push(c.receiver);
+			texts.push(c.result);
+			texts.push(c.signature);
+		}
+		for (x in n.news) texts.push(x.instance);
+		for (f in n.fields) {
+			texts.push(f.receiver);
+			texts.push(f.type);
+		}
+		for (e in n.elementWrites) texts.push(e.receiver);
+		for (f in n.flows) {
+			texts.push(f.from);
+			texts.push(f.to);
+		}
+		for (h in n.handed) {
+			texts.push(h.from);
+			texts.push(h.to);
+		}
+		for (s in n.strings) texts.push(s.operand);
+		for (i in n.iterations) {
+			texts.push(i.binder);
+			texts.push(i.iterated);
+		}
+		for (v in n.vars) texts.push(v.type);
+		for (r in n.reads) texts.push(r.type);
+		return texts;
+	}
+
+	/** Every type text a type's own facts spell: its fields, supertypes, targets, underlying types, constructors. */
+	private static function typeFactTexts(fact: TypeFact): Array<Null<String>> {
+		final texts: Array<Null<String>> = [for (f in fact.fields) for (t in f.types) t];
+		texts.push(fact.superClass);
+		for (i in fact.interfaces) texts.push(i);
+		for (t in fact.targets) texts.push(t);
+		for (t in fact.underlying) texts.push(t);
+		for (c in fact.constructors) texts.push(c.type);
+		texts.push(fact.genericOf);
+		return texts;
+	}
+
+	/** Record `t` as one instance of the type parameter `path`. */
+	private static function bindInstance(out: Map<String, Map<String, FactsType>>, path: String, t: FactsType): Void {
+		final types: Map<String, FactsType> = out[path] ?? [];
+		out[path] = types;
+		types['$t'] = t;
 	}
 
 }

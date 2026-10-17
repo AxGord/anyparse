@@ -118,45 +118,6 @@ final class FmtCommand implements CliCommand {
 		printFmtUsage();
 	}
 
-	private static inline function fmtParseExit(code: Int): FmtOpts {
-		return {
-			lang: '',
-			write: false,
-			list: false,
-			verify: false,
-			onePass: false,
-			inputSpecs: [],
-			errExit: code
-		};
-	}
-
-	/**
-	 * `apq fmt <file/dir/glob>... [--write] [--list]` — canonicalise Haxe
-	 * source by re-emitting it through the writer (the same whole-file pipeline
-	 * the writer-emit ops use), formatted by the project `hxformat.json`
-	 * discovered from each file's directory. This is the deterministic
-	 * file-level counterpart of the node-level writer-emit ops: it is what
-	 * makes a freshly written file byte-canonical (the create recipe's
-	 * finisher) and is the measuring stick for the canonical gate
-	 * (`writeRoundTrip(s) == s`). With no flags on a single concrete file the
-	 * formatted source goes to stdout; on multiple files / a directory `--list`
-	 * mode is implied (gofmt `-l`: print the paths whose output differs). A
-	 * file that fails to parse is reported and skipped; the exit code is
-	 * non-zero if any file failed. A file whose re-emission would drop a
-	 * comment is reported the same way and left byte-identical — see the
-	 * comment-loss obligation on `GrammarPlugin.writeRoundTrip` — and a
-	 * conditional-compilation region the parser captured raw is reported per
-	 * region while the file is still formatted around it
-	 * (`opaqueCondRegionNotes`). Every one of
-	 * those behaviours lives in `fmtRun` / `formatOneFile`; this entry only
-	 * prints what the run decided to say.
-	 */
-	private static function runFmt(args: Array<String>): Int {
-		final run: FmtRunResult = fmtRun(args);
-		if (run.summary.length > 0) CliIo.stderr(run.summary);
-		return run.exit;
-	}
-
 	/**
 	 * `apq fmt`'s whole run, with the summary handed BACK instead of printed.
 	 *
@@ -251,6 +212,148 @@ final class FmtCommand implements CliCommand {
 	}
 
 	/**
+	 * Warn once per run when the comment guard's escape hatch is set. It
+	 * exists for writer development on the read-only probes, but it is
+	 * process-wide: left in a shell profile or a CI environment it silently
+	 * re-arms comment DELETION on every write path. A rewrite command that
+	 * runs under it says so.
+	 */
+	public static function warnCommentGuardDeclined(): Void {
+		if (CommentInventory.guardDeclined())
+			CliIo.stderr('apq: ${CommentInventory.DECLINE_ENV} is set — the comment-loss guard is OFF; a rewrite may DELETE comments\n');
+	}
+
+	/**
+	 * One note per `#if ... #end` region in `path` that the writer LEFT ALONE.
+	 *
+	 * `fmt` reformats such a file normally and silently declines the region inside it, which is
+	 * the one outcome a reader cannot tell from a bug: the lines around it moved, these did not,
+	 * and nothing said why (`} catch (_:Dynamic) {` and its `}` left on two lines while the
+	 * statements above them were normalised, because the `try` opens in one region and the
+	 * `catch` closes in another). Same class of event as the comment-loss refusal on
+	 * `GrammarPlugin.writeRoundTrip`, reported for the same reason: the writer is DECLINING
+	 * rather than damaging. It is not a refusal though — the rest of the file is formatted and
+	 * written — so it is a note, never a failure and never a `--verify` divergence.
+	 *
+	 * Unconditional rather than behind a flag, because the reader who needs it is the one who
+	 * did NOT know to ask. Not a lint rule either: a region like this is often the only way to
+	 * write what it writes, so a check firing on it would be reporting correct code. The cost is
+	 * one extra parse per file that HAS a `#if`; a file without one never reaches it, and an
+	 * EXPLICIT `--list` skips it altogether (the first line of the body). A lazy variant does
+	 * not exist: deferring the parse to the files `fmt` leaves UNCHANGED is the identity on an
+	 * already-canonical tree, and its inverse — notes only for a file `fmt` rewrites — deletes
+	 * the whole output on that same tree. Nor can the WRITER answer instead of a second parse:
+	 * `writeRoundTrip` parses with `HaxeModuleTriviaParser`, whose tree carries no spans and
+	 * records nothing for a `@:rawString` terminal, so exposing the decline from there is a
+	 * PARSER change, not an exposure of something already there.
+	 *
+	 * Two sentences, because two things are true: a region whose node kept CHILDREN inside it
+	 * is unbalanced in its HEAD only (e.g. `CondSharedBodyDecl`, `CondSpliceBlockOpen`,
+	 * `CondSpliceBlockTail`), and the writer reformats the statements past the `#end`, so those
+	 * get their own sentence and a quote that stops at the first child. What decides it is the
+	 * TREE, not the ctor name, so a grammar that gives an existing ctor a structural field
+	 * cannot leave a hand-kept list stale. `RefShape.opaqueCondRegionKinds` stays the WIDE set —
+	 * the mutating ops' fail-closed gate reads it through
+	 * `CondRegionScan.opaqueCondRegionMentioning` — and only this note reads the narrower fact.
+	 *
+	 * Handed BACK rather than printed, for the reason the summary line is: `Sys.stderr()` on
+	 * hxnodejs is a raw fd, so a printed sentence is unassertable. A parse failure here is
+	 * swallowed: `fmt` has already formatted the file, so a disagreement between the two front
+	 * ends is not a fact about formatting and must not take the run down.
+	 */
+	public static function opaqueCondRegionNotes(
+		plugin: GrammarPlugin, path: String, source: String, listedExplicitly: Bool = false
+	): Array<String> {
+		// ω-region-note-list: the notes are OFF when `--list` was SPELLED and on when list mode was
+		// merely implied. The flag is the machine mode — one line per drifted path, which is what a
+		// whole-tree gate asks for — and this second front end is a measurable share of that
+		// gate's cost. A human surveying a directory types `fmt <dir>` and never has to
+		// know the flag exists, which is the reader these notes were written for; `--write`,
+		// `--verify` and a single file to stdout keep them too. The gate lives HERE rather than at
+		// the call site because the parse below is the whole cost, and because a fixture can then
+		// reach it.
+		if (listedExplicitly) return [];
+		final shape: RefShape = plugin.refShape();
+		final kinds: Null<Array<String>> = shape.opaqueCondRegionKinds;
+		if (kinds == null || kinds.length == 0) return [];
+		if (source.indexOf(shape.conditionalIfKeyword ?? '#if') == -1) return [];
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final regions: Array<OpaqueCondRegion> = CondRegionScan.opaqueCondRegions(tree, source, shape);
+		if (regions.length == 0) return [];
+		// Asked only once a region exists: the lexical scan is a second pass over the file, and
+		// the overwhelmingly common answer above is the empty array.
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+		return [
+			for (opaque in regions) {
+				// The bytes the writer re-emits verbatim are the GAPS, not the whole region. A
+				// region whose node kept CHILDREN inside it is unbalanced in its scaffolding only —
+				// `CondSharedBodyDecl` keeps two class headers and the `#else` / `#end` markers raw
+				// around a member list it formats — so quoting from the first raw byte to the last
+				// ran the sentence over code the writer reformats. A wholly raw region has exactly
+				// one gap and its quote is unchanged.
+				//
+				// No projection carries a comment node anywhere, so a comment between the `#end` and
+				// the continuation lands in a gap and used to close the quote. Trimmed for the
+				// COORDINATE as well as the quote: a comment before the `#if` moves the line the
+				// note names off the directive it is about. A gap that was ONLY a comment trims to
+				// nothing and drops out; if every one of them does, the region itself is the quote.
+				final trimmed: Array<Span> = [for (gap in opaque.gaps) SourceComments.trimTrivia(source, gap, comments)];
+				final raw: Array<Span> = trimmed.filter(s -> s.to > s.from);
+				final quoted: Array<Span> = raw.length > 0 ? raw : [SourceComments.trimTrivia(source, opaque.region, comments)];
+				final at: Position = quoted[0].lineCol(source);
+				final excerpt: String = SourceText.regionsExcerpt(source, quoted);
+				opaque.formatted.length > 0
+					? 'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region formatted only in part - '
+						+ '"$excerpt" is not a balanced subtree in its position, so the parser captured those bytes raw and the'
+						+ ' writer re-emits them byte-for-byte; what the quote elides is formatted like any other subtree'
+					: 'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region left unformatted - '
+						+ '"$excerpt" is not a balanced subtree, so the parser captured it raw'
+						+ ' and the writer re-emits it byte-for-byte; restructure it into a balanced #if to have it formatted';
+			}
+		];
+	}
+
+	private static inline function fmtParseExit(code: Int): FmtOpts {
+		return {
+			lang: '',
+			write: false,
+			list: false,
+			verify: false,
+			onePass: false,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	/**
+	 * `apq fmt <file/dir/glob>... [--write] [--list]` — canonicalise Haxe
+	 * source by re-emitting it through the writer (the same whole-file pipeline
+	 * the writer-emit ops use), formatted by the project `hxformat.json`
+	 * discovered from each file's directory. This is the deterministic
+	 * file-level counterpart of the node-level writer-emit ops: it is what
+	 * makes a freshly written file byte-canonical (the create recipe's
+	 * finisher) and is the measuring stick for the canonical gate
+	 * (`writeRoundTrip(s) == s`). With no flags on a single concrete file the
+	 * formatted source goes to stdout; on multiple files / a directory `--list`
+	 * mode is implied (gofmt `-l`: print the paths whose output differs). A
+	 * file that fails to parse is reported and skipped; the exit code is
+	 * non-zero if any file failed. A file whose re-emission would drop a
+	 * comment is reported the same way and left byte-identical — see the
+	 * comment-loss obligation on `GrammarPlugin.writeRoundTrip` — and a
+	 * conditional-compilation region the parser captured raw is reported per
+	 * region while the file is still formatted around it
+	 * (`opaqueCondRegionNotes`). Every one of
+	 * those behaviours lives in `fmtRun` / `formatOneFile`; this entry only
+	 * prints what the run decided to say.
+	 */
+	private static function runFmt(args: Array<String>): Int {
+		final run: FmtRunResult = fmtRun(args);
+		if (run.summary.length > 0) CliIo.stderr(run.summary);
+		return run.exit;
+	}
+
+	/**
 	 * The per-mode run summary `apq fmt` RETURNS for its caller to print.
 	 *
 	 * Every mode states BOTH quantities — how many files the run considered and
@@ -320,18 +423,6 @@ final class FmtCommand implements CliCommand {
 				+ ' — the one-pass canonical gate `writeRoundTrip(s) == s` does not hold for them\n'
 			);
 		return out.toString();
-	}
-
-	/**
-	 * Warn once per run when the comment guard's escape hatch is set. It
-	 * exists for writer development on the read-only probes, but it is
-	 * process-wide: left in a shell profile or a CI environment it silently
-	 * re-arms comment DELETION on every write path. A rewrite command that
-	 * runs under it says so.
-	 */
-	public static function warnCommentGuardDeclined(): Void {
-		if (CommentInventory.guardDeclined())
-			CliIo.stderr('apq: ${CommentInventory.DECLINE_ENV} is set — the comment-loss guard is OFF; a rewrite may DELETE comments\n');
 	}
 
 	private static function printFmtUsage(): Void {
@@ -589,97 +680,6 @@ final class FmtCommand implements CliCommand {
 			unsettled: unsettled,
 			fatalExit: null
 		};
-	}
-
-	/**
-	 * One note per `#if ... #end` region in `path` that the writer LEFT ALONE.
-	 *
-	 * `fmt` reformats such a file normally and silently declines the region inside it, which is
-	 * the one outcome a reader cannot tell from a bug: the lines around it moved, these did not,
-	 * and nothing said why (`} catch (_:Dynamic) {` and its `}` left on two lines while the
-	 * statements above them were normalised, because the `try` opens in one region and the
-	 * `catch` closes in another). Same class of event as the comment-loss refusal on
-	 * `GrammarPlugin.writeRoundTrip`, reported for the same reason: the writer is DECLINING
-	 * rather than damaging. It is not a refusal though — the rest of the file is formatted and
-	 * written — so it is a note, never a failure and never a `--verify` divergence.
-	 *
-	 * Unconditional rather than behind a flag, because the reader who needs it is the one who
-	 * did NOT know to ask. Not a lint rule either: a region like this is often the only way to
-	 * write what it writes, so a check firing on it would be reporting correct code. The cost is
-	 * one extra parse per file that HAS a `#if`; a file without one never reaches it, and an
-	 * EXPLICIT `--list` skips it altogether (the first line of the body). A lazy variant does
-	 * not exist: deferring the parse to the files `fmt` leaves UNCHANGED is the identity on an
-	 * already-canonical tree, and its inverse — notes only for a file `fmt` rewrites — deletes
-	 * the whole output on that same tree. Nor can the WRITER answer instead of a second parse:
-	 * `writeRoundTrip` parses with `HaxeModuleTriviaParser`, whose tree carries no spans and
-	 * records nothing for a `@:rawString` terminal, so exposing the decline from there is a
-	 * PARSER change, not an exposure of something already there.
-	 *
-	 * Two sentences, because two things are true: a region whose node kept CHILDREN inside it
-	 * is unbalanced in its HEAD only (e.g. `CondSharedBodyDecl`, `CondSpliceBlockOpen`,
-	 * `CondSpliceBlockTail`), and the writer reformats the statements past the `#end`, so those
-	 * get their own sentence and a quote that stops at the first child. What decides it is the
-	 * TREE, not the ctor name, so a grammar that gives an existing ctor a structural field
-	 * cannot leave a hand-kept list stale. `RefShape.opaqueCondRegionKinds` stays the WIDE set —
-	 * the mutating ops' fail-closed gate reads it through
-	 * `CondRegionScan.opaqueCondRegionMentioning` — and only this note reads the narrower fact.
-	 *
-	 * Handed BACK rather than printed, for the reason the summary line is: `Sys.stderr()` on
-	 * hxnodejs is a raw fd, so a printed sentence is unassertable. A parse failure here is
-	 * swallowed: `fmt` has already formatted the file, so a disagreement between the two front
-	 * ends is not a fact about formatting and must not take the run down.
-	 */
-	public static function opaqueCondRegionNotes(
-		plugin: GrammarPlugin, path: String, source: String, listedExplicitly: Bool = false
-	): Array<String> {
-		// ω-region-note-list: the notes are OFF when `--list` was SPELLED and on when list mode was
-		// merely implied. The flag is the machine mode — one line per drifted path, which is what a
-		// whole-tree gate asks for — and this second front end is a measurable share of that
-		// gate's cost. A human surveying a directory types `fmt <dir>` and never has to
-		// know the flag exists, which is the reader these notes were written for; `--write`,
-		// `--verify` and a single file to stdout keep them too. The gate lives HERE rather than at
-		// the call site because the parse below is the whole cost, and because a fixture can then
-		// reach it.
-		if (listedExplicitly) return [];
-		final shape: RefShape = plugin.refShape();
-		final kinds: Null<Array<String>> = shape.opaqueCondRegionKinds;
-		if (kinds == null || kinds.length == 0) return [];
-		if (source.indexOf(shape.conditionalIfKeyword ?? '#if') == -1) return [];
-		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final regions: Array<OpaqueCondRegion> = CondRegionScan.opaqueCondRegions(tree, source, shape);
-		if (regions.length == 0) return [];
-		// Asked only once a region exists: the lexical scan is a second pass over the file, and
-		// the overwhelmingly common answer above is the empty array.
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
-		return [
-			for (opaque in regions) {
-				// The bytes the writer re-emits verbatim are the GAPS, not the whole region. A
-				// region whose node kept CHILDREN inside it is unbalanced in its scaffolding only —
-				// `CondSharedBodyDecl` keeps two class headers and the `#else` / `#end` markers raw
-				// around a member list it formats — so quoting from the first raw byte to the last
-				// ran the sentence over code the writer reformats. A wholly raw region has exactly
-				// one gap and its quote is unchanged.
-				//
-				// No projection carries a comment node anywhere, so a comment between the `#end` and
-				// the continuation lands in a gap and used to close the quote. Trimmed for the
-				// COORDINATE as well as the quote: a comment before the `#if` moves the line the
-				// note names off the directive it is about. A gap that was ONLY a comment trims to
-				// nothing and drops out; if every one of them does, the region itself is the quote.
-				final trimmed: Array<Span> = [for (gap in opaque.gaps) SourceComments.trimTrivia(source, gap, comments)];
-				final raw: Array<Span> = trimmed.filter(s -> s.to > s.from);
-				final quoted: Array<Span> = raw.length > 0 ? raw : [SourceComments.trimTrivia(source, opaque.region, comments)];
-				final at: Position = quoted[0].lineCol(source);
-				final excerpt: String = SourceText.regionsExcerpt(source, quoted);
-				opaque.formatted.length > 0
-					? 'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region formatted only in part - '
-						+ '"$excerpt" is not a balanced subtree in its position, so the parser captured those bytes raw and the'
-						+ ' writer re-emits them byte-for-byte; what the quote elides is formatted like any other subtree'
-					: 'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region left unformatted - '
-						+ '"$excerpt" is not a balanced subtree, so the parser captured it raw'
-						+ ' and the writer re-emits it byte-for-byte; restructure it into a balanced #if to have it formatted';
-			}
-		];
 	}
 
 }

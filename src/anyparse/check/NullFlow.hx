@@ -390,164 +390,6 @@ final class NullFlow {
 	}
 
 	/**
-	 * The file's NON-NULL PREDICATES: member functions whose truth proves an argument non-null, so a
-	 * guard `if (!check(item)) return;` narrows `item` like `if (item == null) return;` would. A
-	 * positive whitelist, every clause of which a call site must be able to rely on:
-	 *
-	 *  - the body is ONE `return` of a conjunction (`&&`, parentheses unwrapped) with a
-	 *    `param != null` conjunct, and writes nothing — so a true result means the argument passed
-	 *    was not null;
-	 *  - the member cannot be replaced: `inline`, `static` or `final`, and not `dynamic`, `macro`,
-	 *    `overload` or `@:overload` — a subclass override or a reassigned body would answer instead;
-	 *  - no rest parameter, and its name is declared nowhere else in the file (no local, parameter,
-	 *    capture or second member of that name), so a bare call inside the declaring type body can
-	 *    only bind to it.
-	 *
-	 * Anything else is not a predicate. A call must be bare, pass exactly `arity` arguments, and sit inside the
-	 * declaring type body, and an argument counts only when its binding is written with the SAME type text as the
-	 * parameter (`predicateArgs`): a different type may reach the parameter through an implicit conversion (an
-	 * abstract's `@:from` / `@:to`) that turns a null argument into a non-null parameter. The written types come
-	 * from `TypeInfoProvider.declaredTypeSources`, so a consumer passing none to `analyze` gets no predicates at all.
-	 */
-	private static function nonNullPredicates(
-		root: QueryNode, shape: RefShape, identKind: String, typeSources: Map<Int, String>
-	): Array<NonNullPredicate> {
-		final maybeNotEq: Null<String> = shape.notEqKind;
-		if (maybeNotEq == null) return [];
-		final notEqKind: String = maybeNotEq;
-		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(
-			shape.finalModifierMemberKind == null ? [] : [shape.finalModifierMemberKind]
-		);
-		final declKinds: Array<String> = BinderScan.binderKinds(shape).concat(fnKinds).concat(shape.fieldDeclKinds ?? []);
-		final modifierKinds: Array<String> = (shape.visibilityModifierKinds ?? []).concat(shape.modifierOrderKinds ?? [])
-			.concat(META_KINDS);
-		final declared: Map<String, Int> = [];
-		function count(node: QueryNode): Void {
-			final name: Null<String> = node.name;
-			if (name != null && declKinds.contains(node.kind)) declared[name] = (declared[name] ?? 0) + 1;
-			for (c in node.children) count(c);
-		}
-		count(root);
-		final out: Array<NonNullPredicate> = [];
-		function walk(node: QueryNode): Void {
-			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			final bodySpan: Null<Span> = decl?.nameNode.span;
-			if (decl != null && bodySpan != null) for (fn in decl.nameNode.children) {
-				final name: Null<String> = fn.name;
-				if (name == null || !fnKinds.contains(fn.kind) || declared[name] != 1) continue;
-				final modifiers: Array<QueryNode> = MemberKinds.precedingModifiers(fn, decl.nameNode, modifierKinds).concat(fn.children);
-				final predicate: Null<NonNullPredicate> = predicateOf(
-					fn, name, bodySpan, modifiers, shape, identKind, notEqKind, typeSources
-				);
-				if (predicate != null) out.push(predicate);
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(root);
-		return out;
-	}
-
-	/** `fn` as a `NonNullPredicate` under `nonNullPredicates`' whitelist, given its modifier run `modifiers`, else null. */
-	private static function predicateOf(
-		fn: QueryNode, name: String, bodySpan: Span, modifiers: Array<QueryNode>, shape: RefShape, identKind: String, notEqKind: String,
-		typeSources: Map<Int, String>
-	): Null<NonNullPredicate> {
-		if (!predicateModifiers(fn, modifiers, shape)) return null;
-		final params: Array<QueryNode> = fn.children.filter(c -> (shape.paramKinds ?? []).contains(c.kind));
-		if (params.exists(p -> p.kind == shape.restParamKind)) return null;
-		final returned: Null<QueryNode> = soleReturnedExpr(fn, shape);
-		if (returned == null || (shape.writeParentKinds ?? []).exists(k -> MemberKinds.subtreeContainsKind(returned, k))) return null;
-		final nonNullParams: Array<Int> = nonNullConjuncts(returned, params, shape, identKind, notEqKind);
-		final paramTypes: Array<Null<String>> = [
-			for (p in params) {
-				final span: Null<Span> = p.span;
-				final written: Null<String> = span == null ? null : typeSources[span.from];
-				written == null ? null : TypeResolver.stripWs(written);
-			}
-		];
-		return nonNullParams.length == 0 ? null : {
-			name: name,
-			body: bodySpan,
-			arity: params.length,
-			nonNullParams: nonNullParams,
-			paramTypes: paramTypes
-		};
-	}
-
-	/**
-	 * Whether the modifier run `modifiers` lets `fn` run only as its body reads (`predicateOf`): not `dynamic`, a macro or an
-	 * overload, and a `final`, `inline` or `static` member no subclass overrides.
-	 */
-	private static function predicateModifiers(fn: QueryNode, modifiers: Array<QueryNode>, shape: RefShape): Bool {
-		inline function carries(kind: Null<String>): Bool return kind != null && modifiers.exists(m -> m.kind == kind);
-		final overloadMeta: Null<String> = shape.signatureOverloadMetaName;
-		if (
-			carries(shape.dynamicModifierKind) || carries(shape.macroModifierKind) || carries(shape.overloadModifierKind)
-			|| overloadMeta != null && modifiers.exists(m -> META_KINDS.contains(m.kind) && m.name == overloadMeta)
-		)
-			return false;
-		return fn.kind == shape.finalModifierMemberKind || carries(shape.inlineModifierKind) || carries(shape.staticModifierKind);
-	}
-
-	/** The indexes of `params` an `!= null` conjunct of `returned` (its `&&` operands, through parentheses) compares, each once. */
-	private static function nonNullConjuncts(
-		returned: QueryNode, params: Array<QueryNode>, shape: RefShape, identKind: String, notEqKind: String
-	): Array<Int> {
-		final conjuncts: Array<QueryNode> = [];
-		function flatten(n: QueryNode): Void {
-			if (n.kind == BOOL_AND_KIND || n.kind == shape.parenKind && n.children.length == 1)
-				for (c in n.children) flatten(c)
-			else
-				conjuncts.push(n);
-		}
-		flatten(returned);
-		final nonNullParams: Array<Int> = [];
-		for (c in conjuncts) if (c.kind == notEqKind) {
-			final operand: Null<String> = NodeShape.nullComparedIdent(c, identKind, shape.nullLiteralKind)?.name;
-			final index: Int = params.findIndex(p -> p.name == operand);
-			if (operand != null && index >= 0 && !nonNullParams.contains(index)) nonNullParams.push(index);
-		}
-		return nonNullParams;
-	}
-
-	/**
-	 * The expression `fn` returns when its whole body is one value `return` — a block holding only
-	 * that statement, or an expression body — else null.
-	 */
-	private static function soleReturnedExpr(fn: QueryNode, shape: RefShape): Null<QueryNode> {
-		final bodies: Array<QueryNode> = fn.children.filter(c -> (shape.functionBodyKinds ?? []).contains(c.kind));
-		if (bodies.length != 1) return null;
-		final body: QueryNode = bodies[0];
-		final wrapped: Bool = body.kind == shape.blockBodyKind || (shape.expressionBodyKinds ?? []).contains(body.kind);
-		if (!wrapped || body.children.length != 1) return null;
-		final ret: QueryNode = body.children[0];
-		return (shape.valueReturnKinds ?? []).contains(ret.kind) && ret.children.length == 1 ? ret.children[0] : null;
-	}
-
-	/**
-	 * The argument names a positive call `call` to a `NonNullPredicate` proves non-null: a bare callee
-	 * naming one whose type body holds the call, exactly `arity` arguments, and each proven argument a
-	 * plain identifier. Empty for any other call.
-	 */
-	private static function predicateArgs(call: QueryNode, ctx: FlowCtx): Array<String> {
-		final span: Null<Span> = call.span;
-		if (span == null || call.children.length == 0 || call.children[0].kind != ctx.identKind) return [];
-		final callee: Null<String> = call.children[0].name;
-		final predicate: Null<NonNullPredicate> = ctx.nonNullPredicates.find(
-			p -> p.name == callee && p.body.from <= span.from && span.to <= p.body.to && p.arity == call.children.length - 1
-		);
-		if (predicate == null) return [];
-		final out: Array<String> = [];
-		for (i in predicate.nonNullParams) {
-			final arg: QueryNode = call.children[i + 1];
-			final name: Null<String> = arg.name;
-			final written: Null<String> = predicate.paramTypes[i];
-			if (arg.kind == ctx.identKind && name != null && written != null && ctx.argType(arg) == written) out.push(name);
-		}
-		return out;
-	}
-
-	/**
 	 * The initializer expression of a local declaration node, or null when it has
 	 * none. A declaration's initializer is its LAST child — a top-level
 	 * anonymous-struct type annotation also projects as a child
@@ -750,6 +592,164 @@ final class NullFlow {
 			aliases: [],
 			present: []
 		};
+	}
+
+	/**
+	 * The file's NON-NULL PREDICATES: member functions whose truth proves an argument non-null, so a
+	 * guard `if (!check(item)) return;` narrows `item` like `if (item == null) return;` would. A
+	 * positive whitelist, every clause of which a call site must be able to rely on:
+	 *
+	 *  - the body is ONE `return` of a conjunction (`&&`, parentheses unwrapped) with a
+	 *    `param != null` conjunct, and writes nothing — so a true result means the argument passed
+	 *    was not null;
+	 *  - the member cannot be replaced: `inline`, `static` or `final`, and not `dynamic`, `macro`,
+	 *    `overload` or `@:overload` — a subclass override or a reassigned body would answer instead;
+	 *  - no rest parameter, and its name is declared nowhere else in the file (no local, parameter,
+	 *    capture or second member of that name), so a bare call inside the declaring type body can
+	 *    only bind to it.
+	 *
+	 * Anything else is not a predicate. A call must be bare, pass exactly `arity` arguments, and sit inside the
+	 * declaring type body, and an argument counts only when its binding is written with the SAME type text as the
+	 * parameter (`predicateArgs`): a different type may reach the parameter through an implicit conversion (an
+	 * abstract's `@:from` / `@:to`) that turns a null argument into a non-null parameter. The written types come
+	 * from `TypeInfoProvider.declaredTypeSources`, so a consumer passing none to `analyze` gets no predicates at all.
+	 */
+	private static function nonNullPredicates(
+		root: QueryNode, shape: RefShape, identKind: String, typeSources: Map<Int, String>
+	): Array<NonNullPredicate> {
+		final maybeNotEq: Null<String> = shape.notEqKind;
+		if (maybeNotEq == null) return [];
+		final notEqKind: String = maybeNotEq;
+		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(
+			shape.finalModifierMemberKind == null ? [] : [shape.finalModifierMemberKind]
+		);
+		final declKinds: Array<String> = BinderScan.binderKinds(shape).concat(fnKinds).concat(shape.fieldDeclKinds ?? []);
+		final modifierKinds: Array<String> = (shape.visibilityModifierKinds ?? []).concat(shape.modifierOrderKinds ?? [])
+			.concat(META_KINDS);
+		final declared: Map<String, Int> = [];
+		function count(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (name != null && declKinds.contains(node.kind)) declared[name] = (declared[name] ?? 0) + 1;
+			for (c in node.children) count(c);
+		}
+		count(root);
+		final out: Array<NonNullPredicate> = [];
+		function walk(node: QueryNode): Void {
+			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			final bodySpan: Null<Span> = decl?.nameNode.span;
+			if (decl != null && bodySpan != null) for (fn in decl.nameNode.children) {
+				final name: Null<String> = fn.name;
+				if (name == null || !fnKinds.contains(fn.kind) || declared[name] != 1) continue;
+				final modifiers: Array<QueryNode> = MemberKinds.precedingModifiers(fn, decl.nameNode, modifierKinds).concat(fn.children);
+				final predicate: Null<NonNullPredicate> = predicateOf(
+					fn, name, bodySpan, modifiers, shape, identKind, notEqKind, typeSources
+				);
+				if (predicate != null) out.push(predicate);
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(root);
+		return out;
+	}
+
+	/** `fn` as a `NonNullPredicate` under `nonNullPredicates`' whitelist, given its modifier run `modifiers`, else null. */
+	private static function predicateOf(
+		fn: QueryNode, name: String, bodySpan: Span, modifiers: Array<QueryNode>, shape: RefShape, identKind: String, notEqKind: String,
+		typeSources: Map<Int, String>
+	): Null<NonNullPredicate> {
+		if (!predicateModifiers(fn, modifiers, shape)) return null;
+		final params: Array<QueryNode> = fn.children.filter(c -> (shape.paramKinds ?? []).contains(c.kind));
+		if (params.exists(p -> p.kind == shape.restParamKind)) return null;
+		final returned: Null<QueryNode> = soleReturnedExpr(fn, shape);
+		if (returned == null || (shape.writeParentKinds ?? []).exists(k -> MemberKinds.subtreeContainsKind(returned, k))) return null;
+		final nonNullParams: Array<Int> = nonNullConjuncts(returned, params, shape, identKind, notEqKind);
+		final paramTypes: Array<Null<String>> = [
+			for (p in params) {
+				final span: Null<Span> = p.span;
+				final written: Null<String> = span == null ? null : typeSources[span.from];
+				written == null ? null : TypeResolver.stripWs(written);
+			}
+		];
+		return nonNullParams.length == 0 ? null : {
+			name: name,
+			body: bodySpan,
+			arity: params.length,
+			nonNullParams: nonNullParams,
+			paramTypes: paramTypes
+		};
+	}
+
+	/**
+	 * Whether the modifier run `modifiers` lets `fn` run only as its body reads (`predicateOf`): not `dynamic`, a macro or an
+	 * overload, and a `final`, `inline` or `static` member no subclass overrides.
+	 */
+	private static function predicateModifiers(fn: QueryNode, modifiers: Array<QueryNode>, shape: RefShape): Bool {
+		inline function carries(kind: Null<String>): Bool return kind != null && modifiers.exists(m -> m.kind == kind);
+		final overloadMeta: Null<String> = shape.signatureOverloadMetaName;
+		if (
+			carries(shape.dynamicModifierKind) || carries(shape.macroModifierKind) || carries(shape.overloadModifierKind)
+			|| overloadMeta != null && modifiers.exists(m -> META_KINDS.contains(m.kind) && m.name == overloadMeta)
+		)
+			return false;
+		return fn.kind == shape.finalModifierMemberKind || carries(shape.inlineModifierKind) || carries(shape.staticModifierKind);
+	}
+
+	/** The indexes of `params` an `!= null` conjunct of `returned` (its `&&` operands, through parentheses) compares, each once. */
+	private static function nonNullConjuncts(
+		returned: QueryNode, params: Array<QueryNode>, shape: RefShape, identKind: String, notEqKind: String
+	): Array<Int> {
+		final conjuncts: Array<QueryNode> = [];
+		function flatten(n: QueryNode): Void {
+			if (n.kind == BOOL_AND_KIND || n.kind == shape.parenKind && n.children.length == 1)
+				for (c in n.children) flatten(c)
+			else
+				conjuncts.push(n);
+		}
+		flatten(returned);
+		final nonNullParams: Array<Int> = [];
+		for (c in conjuncts) if (c.kind == notEqKind) {
+			final operand: Null<String> = NodeShape.nullComparedIdent(c, identKind, shape.nullLiteralKind)?.name;
+			final index: Int = params.findIndex(p -> p.name == operand);
+			if (operand != null && index >= 0 && !nonNullParams.contains(index)) nonNullParams.push(index);
+		}
+		return nonNullParams;
+	}
+
+	/**
+	 * The expression `fn` returns when its whole body is one value `return` — a block holding only
+	 * that statement, or an expression body — else null.
+	 */
+	private static function soleReturnedExpr(fn: QueryNode, shape: RefShape): Null<QueryNode> {
+		final bodies: Array<QueryNode> = fn.children.filter(c -> (shape.functionBodyKinds ?? []).contains(c.kind));
+		if (bodies.length != 1) return null;
+		final body: QueryNode = bodies[0];
+		final wrapped: Bool = body.kind == shape.blockBodyKind || (shape.expressionBodyKinds ?? []).contains(body.kind);
+		if (!wrapped || body.children.length != 1) return null;
+		final ret: QueryNode = body.children[0];
+		return (shape.valueReturnKinds ?? []).contains(ret.kind) && ret.children.length == 1 ? ret.children[0] : null;
+	}
+
+	/**
+	 * The argument names a positive call `call` to a `NonNullPredicate` proves non-null: a bare callee
+	 * naming one whose type body holds the call, exactly `arity` arguments, and each proven argument a
+	 * plain identifier. Empty for any other call.
+	 */
+	private static function predicateArgs(call: QueryNode, ctx: FlowCtx): Array<String> {
+		final span: Null<Span> = call.span;
+		if (span == null || call.children.length == 0 || call.children[0].kind != ctx.identKind) return [];
+		final callee: Null<String> = call.children[0].name;
+		final predicate: Null<NonNullPredicate> = ctx.nonNullPredicates.find(
+			p -> p.name == callee && p.body.from <= span.from && span.to <= p.body.to && p.arity == call.children.length - 1
+		);
+		if (predicate == null) return [];
+		final out: Array<String> = [];
+		for (i in predicate.nonNullParams) {
+			final arg: QueryNode = call.children[i + 1];
+			final name: Null<String> = arg.name;
+			final written: Null<String> = predicate.paramTypes[i];
+			if (arg.kind == ctx.identKind && name != null && written != null && ctx.argType(arg) == written) out.push(name);
+		}
+		return out;
 	}
 
 	/**

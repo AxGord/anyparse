@@ -396,6 +396,17 @@ final class SourceText {
 		return out.toString();
 	}
 
+	/**
+	 * Whether the first non-whitespace byte at or after `nameEnd` (the end of a field name)
+	 * is `(` — a property accessor head (`var x(get, null)`), which the projection drops.
+	 */
+	public static function isProperty(source: String, nameEnd: Int): Bool {
+		final n: Int = source.length;
+		var i: Int = nameEnd;
+		while (i < n && isSpace(source.fastCodeAt(i))) i++;
+		return i < n && source.fastCodeAt(i) == '('.code;
+	}
+
 	/** Whether the occurrence of `name` at `at` in `head` stands alone — no identifier character on either side. */
 	private static inline function standaloneIdentAt(head: String, name: String, at: Int): Bool {
 		final after: Int = at + name.length;
@@ -416,17 +427,6 @@ final class SourceText {
 		if (!isUpperCode(name.fastCodeAt(at - 1))) return true;
 		final next: Int = at + 1 < name.length ? name.fastCodeAt(at + 1) : 0;
 		return isLowerCode(next);
-	}
-
-	/**
-	 * Whether the first non-whitespace byte at or after `nameEnd` (the end of a field name)
-	 * is `(` — a property accessor head (`var x(get, null)`), which the projection drops.
-	 */
-	public static function isProperty(source: String, nameEnd: Int): Bool {
-		final n: Int = source.length;
-		var i: Int = nameEnd;
-		while (i < n && isSpace(source.fastCodeAt(i))) i++;
-		return i < n && source.fastCodeAt(i) == '('.code;
 	}
 
 }

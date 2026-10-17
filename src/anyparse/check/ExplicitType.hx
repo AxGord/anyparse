@@ -66,12 +66,9 @@ final class ExplicitType implements Check implements OracleAssisted {
 	private static inline final RETURN_MESSAGE: String = 'function declared without an explicit return type';
 
 	private static inline final DECLINE_NO_RETURN_SLOT: String = "no `)` sits right before the function's body, where the return type goes";
-
 	private static inline final DECLINE_NO_NAME: String = 'the declaration does not spell its name in active code';
-
 	private static inline final DECLINE_MACRO_RETURN: String = 'a `macro` function the oracle cannot type: not every value it returns '
 		+ 'is an expression quotation (`macro …`) or `Context.error`';
-
 	private static inline final DECLINE_MACRO_PARAM: String = 'a parameter of a `macro` function: the oracle cannot type macro context';
 
 	/** The type every value of a `macro` function's proven returns has. */
@@ -81,10 +78,8 @@ final class ExplicitType implements Check implements OracleAssisted {
 	private static inline final IF_ELSE_CHILDREN: Int = 3;
 
 	private static inline final DECLINE_NO_SLOT: String = 'no slot after the name takes the annotation';
-
 	private static inline final DECLINE_NO_STRUCTURAL_RETURN: String = 'a non-Void return type has no structural evidence — the '
 		+ 'oracle-assisted pass types it when the project configures a compilerOracle';
-
 	private static inline final DECLINE_NO_STRUCTURAL_TYPE: String = 'no structural rule names its type — a literal, a typed `new` '
 		+ 'or cast initializer, or a supertype declaring the parameter — and the oracle-assisted pass types it when the project '
 		+ 'configures a compilerOracle';
@@ -212,30 +207,6 @@ final class ExplicitType implements Check implements OracleAssisted {
 	}
 
 	/**
-	 * Give every finding `edits` left unfixed, and no earlier pass declined in its own words (the `macro` pass), its
-	 * decline reason. An edit belongs to the NARROWEST finding around it: a function's return-type finding spans its
-	 * parameters' findings too.
-	 */
-	private static function recordStructuralDeclines(violations: Array<Violation>, edits: Array<{ span: Span, text: String }>): Void {
-		final fixed: Array<Violation> = [];
-		for (e in edits) {
-			var owner: Null<Violation> = null;
-			for (v in violations) {
-				final span: Null<Span> = v.span;
-				final best: Null<Span> = owner?.span;
-				if (
-					span != null && span.from <= e.span.from && e.span.from <= span.to
-					&& (best == null || best.from <= span.from && span.to <= best.to)
-				)
-					owner = v;
-			}
-			if (owner != null) fixed.push(owner);
-		}
-		for (v in violations) if (!fixed.contains(v) && v.declineReason == null)
-			v.declineReason = v.message == RETURN_MESSAGE ? DECLINE_NO_STRUCTURAL_RETURN : DECLINE_NO_STRUCTURAL_TYPE;
-	}
-
-	/**
 	 * The RETURN half of a printed function type — `(name : String) -> String` yields `String`.
 	 * Public as the parse seam its own tests drive: a function-TYPED parameter is the shape that
 	 * tells a real reading from a split at the first `->`, and no realistic fixture reaches it
@@ -261,6 +232,41 @@ final class ExplicitType implements Check implements OracleAssisted {
 	private static inline function isNominalPart(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
 			|| c == '.'.code;
+	}
+
+	/** `edit` appended to `edits` unless it is null. */
+	private static inline function pushEdit(edits: Array<{ span: Span, text: String }>, edit: Null<{ span: Span, text: String }>): Void {
+		if (edit != null) edits.push(edit);
+	}
+
+	/** The finding `flagged` keys at `node`'s span, or null. */
+	private static inline function findingAt(flagged: Map<String, Violation>, node: QueryNode): Null<Violation> {
+		final span: Null<Span> = node.span;
+		return span == null ? null : flagged['${span.from}:${span.to}'];
+	}
+
+	/**
+	 * Give every finding `edits` left unfixed, and no earlier pass declined in its own words (the `macro` pass), its
+	 * decline reason. An edit belongs to the NARROWEST finding around it: a function's return-type finding spans its
+	 * parameters' findings too.
+	 */
+	private static function recordStructuralDeclines(violations: Array<Violation>, edits: Array<{ span: Span, text: String }>): Void {
+		final fixed: Array<Violation> = [];
+		for (e in edits) {
+			var owner: Null<Violation> = null;
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				final best: Null<Span> = owner?.span;
+				if (
+					span != null && span.from <= e.span.from && e.span.from <= span.to
+					&& (best == null || best.from <= span.from && span.to <= best.to)
+				)
+					owner = v;
+			}
+			if (owner != null) fixed.push(owner);
+		}
+		for (v in violations) if (!fixed.contains(v) && v.declineReason == null)
+			v.declineReason = v.message == RETURN_MESSAGE ? DECLINE_NO_STRUCTURAL_RETURN : DECLINE_NO_STRUCTURAL_TYPE;
 	}
 
 	/**
@@ -290,11 +296,6 @@ final class ExplicitType implements Check implements OracleAssisted {
 		final own: Array<QueryNode> = [for (c in fn.children) if (s.params.contains(c.kind)) c];
 		for (index in 0...own.length) pushEdit(out, paramOracleEdit(s, fn, own[index], index));
 		return out;
-	}
-
-	/** `edit` appended to `edits` unless it is null. */
-	private static inline function pushEdit(edits: Array<{ span: Span, text: String }>, edit: Null<{ span: Span, text: String }>): Void {
-		if (edit != null) edits.push(edit);
 	}
 
 	/**
@@ -569,12 +570,6 @@ final class ExplicitType implements Check implements OracleAssisted {
 		return type == null
 			? decline(v, LiteralInfer.unwritableReason(MACRO_RETURN_TYPE, MAX_ANON_LEN, site, false))
 			: { span: new Span(at, at), text: ':$type' };
-	}
-
-	/** The finding `flagged` keys at `node`'s span, or null. */
-	private static inline function findingAt(flagged: Map<String, Violation>, node: QueryNode): Null<Violation> {
-		final span: Null<Span> = node.span;
-		return span == null ? null : flagged['${span.from}:${span.to}'];
 	}
 
 	/**

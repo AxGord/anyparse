@@ -118,6 +118,69 @@ final class TypeResolver {
 	}
 
 	/**
+	 * Whether `operand` is a plain identifier resolvable to a provably non-null
+	 * type — a `RefShape.nonNullableTypeNames` value type written by its own name
+	 * (null-safety-independent), or, while null-safety is active, a declared type
+	 * that RESOLVES to a declaration excluding null (`DeclaredNullity` — a typedef of
+	 * `Null<…>`, a type parameter, an unresolvable name all fail). An operand bound to
+	 * an optional parameter, to a declaration INITIALISED BY THE LITERAL `null`
+	 * (`p: T = null`, `var f: T = null`, `var l: T = null` alike — the declaration's
+	 * own syntax outranks its written type, so `bindingIsNullInitialised` is checked
+	 * BEFORE the nominal), to a `RefShape.nullableWrapperTypeNames` type (`Null<…>` /
+	 * `Dynamic` / `Any`), or with no recovered nominal type keeps the conservative
+	 * default and is NOT proven non-null.
+	 *
+	 * The value-type arm is target-dependent and this entry point grants it. A caller
+	 * whose CONSTRUCT proves the target is dynamic — a comparison against the `null`
+	 * literal, which does not compile on a static target — must ask
+	 * `isProvablyNonNullAtNullComparison` instead; both run the one implementation.
+	 *
+	 * The nominal-under-null-safety proof requires the enclosing `@:nullSafety` to be
+	 * active at BOTH the operand's binding declaration and the read — the nearest
+	 * annotation wins at each (member > type > module), so a member-level
+	 * `@:nullSafety(Off)` on the field/local (Pony's `TouchableBase` timer fields) or
+	 * on the reading method refuses, even inside a null-safe class. Bare `@:nullSafety`
+	 * is Haxe-default Loose and is trusted here: Loose rejects a null flowing into a
+	 * nominally non-nullable binding exactly as Strict does (its only relaxations are
+	 * read-side narrowing of already-`Null<…>` values, which never reach this proof).
+	 * Shared by every null-aware check whose construct is not itself target
+	 * evidence (`redundant-null-coalescing`, `unnecessary-safe-nav`,
+	 * `comparison-to-boolean`, …).
+	 */
+	public static inline function isProvablyNonNull(operand: QueryNode, root: QueryNode, shape: RefShape, types: DeclaredNullity): Bool {
+		return provablyNonNull(operand, root, shape, types, true);
+	}
+
+	/**
+	 * `isProvablyNonNull` for an operand that sits in a COMPARISON AGAINST THE `null` LITERAL —
+	 * the question `unnecessary-null-check` and `dead-null-guard` ask. Same proof, minus the
+	 * value-type fast path: the comparison being asked about is ITSELF the evidence that this
+	 * file's target treats the value type as nullable.
+	 *
+	 * On a static target the comparison does not COMPILE — Haxe 4.3.7 answers `On static
+	 * platforms, null can't be used as basic type Int` (verified for `Int` / `Float` / `Bool` /
+	 * `UInt`, on a parameter and on a field, for `-cpp` and `-hl`; `-js` / `-neko` / `-python` /
+	 * `-lua` accept all four). So a file that CONTAINS one is a dynamic-target file by
+	 * construction, and there a bare `Int` IS nullable, which is exactly what the guard is
+	 * for. Nothing else the linter can read supplies that: `apqlint.json` carries no target
+	 * key, no seam reads compiler defines, and a `compilerOracle` hxml may name several
+	 * targets at once (Pony's names neko AND nodejs).
+	 *
+	 * The `@:nullSafety` arm below is untouched and still proves such an operand non-null:
+	 * null safety normalises a non-`Null<…>` type to non-nullable on EVERY target and rejects
+	 * a null flowing into it, so that conclusion is the COMPILER's rather than the target's.
+	 *
+	 * Note this argument does NOT extend to `??` / `?.`: `p ?? 7` on a `p: Int` compiles on
+	 * `-cpp` and `-hl` (the compiler folds it), so those constructs prove nothing about the
+	 * target and their checks keep `isProvablyNonNull`.
+	 */
+	public static inline function isProvablyNonNullAtNullComparison(
+		operand: QueryNode, root: QueryNode, shape: RefShape, types: DeclaredNullity
+	): Bool {
+		return provablyNonNull(operand, root, shape, types, false);
+	}
+
+	/**
 	 * The innermost type declaration whose text holds the offset `at` — or, given `to`, the whole
 	 * range `at`...`to` — or null outside every one. The walk enters only the nodes that hold it.
 	 */
@@ -637,69 +700,6 @@ final class TypeResolver {
 			if (s.typeLevel) active = true;
 		}
 		return active;
-	}
-
-	/**
-	 * Whether `operand` is a plain identifier resolvable to a provably non-null
-	 * type — a `RefShape.nonNullableTypeNames` value type written by its own name
-	 * (null-safety-independent), or, while null-safety is active, a declared type
-	 * that RESOLVES to a declaration excluding null (`DeclaredNullity` — a typedef of
-	 * `Null<…>`, a type parameter, an unresolvable name all fail). An operand bound to
-	 * an optional parameter, to a declaration INITIALISED BY THE LITERAL `null`
-	 * (`p: T = null`, `var f: T = null`, `var l: T = null` alike — the declaration's
-	 * own syntax outranks its written type, so `bindingIsNullInitialised` is checked
-	 * BEFORE the nominal), to a `RefShape.nullableWrapperTypeNames` type (`Null<…>` /
-	 * `Dynamic` / `Any`), or with no recovered nominal type keeps the conservative
-	 * default and is NOT proven non-null.
-	 *
-	 * The value-type arm is target-dependent and this entry point grants it. A caller
-	 * whose CONSTRUCT proves the target is dynamic — a comparison against the `null`
-	 * literal, which does not compile on a static target — must ask
-	 * `isProvablyNonNullAtNullComparison` instead; both run the one implementation.
-	 *
-	 * The nominal-under-null-safety proof requires the enclosing `@:nullSafety` to be
-	 * active at BOTH the operand's binding declaration and the read — the nearest
-	 * annotation wins at each (member > type > module), so a member-level
-	 * `@:nullSafety(Off)` on the field/local (Pony's `TouchableBase` timer fields) or
-	 * on the reading method refuses, even inside a null-safe class. Bare `@:nullSafety`
-	 * is Haxe-default Loose and is trusted here: Loose rejects a null flowing into a
-	 * nominally non-nullable binding exactly as Strict does (its only relaxations are
-	 * read-side narrowing of already-`Null<…>` values, which never reach this proof).
-	 * Shared by every null-aware check whose construct is not itself target
-	 * evidence (`redundant-null-coalescing`, `unnecessary-safe-nav`,
-	 * `comparison-to-boolean`, …).
-	 */
-	public static function isProvablyNonNull(operand: QueryNode, root: QueryNode, shape: RefShape, types: DeclaredNullity): Bool {
-		return provablyNonNull(operand, root, shape, types, true);
-	}
-
-	/**
-	 * `isProvablyNonNull` for an operand that sits in a COMPARISON AGAINST THE `null` LITERAL —
-	 * the question `unnecessary-null-check` and `dead-null-guard` ask. Same proof, minus the
-	 * value-type fast path: the comparison being asked about is ITSELF the evidence that this
-	 * file's target treats the value type as nullable.
-	 *
-	 * On a static target the comparison does not COMPILE — Haxe 4.3.7 answers `On static
-	 * platforms, null can't be used as basic type Int` (verified for `Int` / `Float` / `Bool` /
-	 * `UInt`, on a parameter and on a field, for `-cpp` and `-hl`; `-js` / `-neko` / `-python` /
-	 * `-lua` accept all four). So a file that CONTAINS one is a dynamic-target file by
-	 * construction, and there a bare `Int` IS nullable, which is exactly what the guard is
-	 * for. Nothing else the linter can read supplies that: `apqlint.json` carries no target
-	 * key, no seam reads compiler defines, and a `compilerOracle` hxml may name several
-	 * targets at once (Pony's names neko AND nodejs).
-	 *
-	 * The `@:nullSafety` arm below is untouched and still proves such an operand non-null:
-	 * null safety normalises a non-`Null<…>` type to non-nullable on EVERY target and rejects
-	 * a null flowing into it, so that conclusion is the COMPILER's rather than the target's.
-	 *
-	 * Note this argument does NOT extend to `??` / `?.`: `p ?? 7` on a `p: Int` compiles on
-	 * `-cpp` and `-hl` (the compiler folds it), so those constructs prove nothing about the
-	 * target and their checks keep `isProvablyNonNull`.
-	 */
-	public static function isProvablyNonNullAtNullComparison(
-		operand: QueryNode, root: QueryNode, shape: RefShape, types: DeclaredNullity
-	): Bool {
-		return provablyNonNull(operand, root, shape, types, false);
 	}
 
 	/**

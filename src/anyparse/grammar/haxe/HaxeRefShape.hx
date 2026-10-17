@@ -87,6 +87,9 @@ final class HaxeRefShape {
 		'KeyValueBinder'
 	];
 
+	/** The annotation that keeps a static out of `using`: calling it as an extension does not compile. */
+	private static inline final NO_USING_META: String = '@:noUsing';
+
 	/**
 	 * The assignment-operator kinds — plain `=` plus every compound form, in
 	 * declaration order. Shared so `refShape`'s `writeParentKinds` (which adds the
@@ -216,9 +219,6 @@ final class HaxeRefShape {
 		'FinalMember',
 		'Assign'
 	];
-
-	/** The annotation that keeps a static out of `using`: calling it as an extension does not compile. */
-	private static inline final NO_USING_META: String = '@:noUsing';
 
 	/** The table itself — see the type doc; every list carries the reason for its members beside it. */
 	public static function shape(): RefShape {

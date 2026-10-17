@@ -98,29 +98,6 @@ final class ElementLoopRewrite {
 	}
 
 	/**
-	 * The singular of `name` read as a plural at its very end, or null when no rule applies — the
-	 * whole-name rules `singularOf` asks of every word end.
-	 */
-	private static function singularOfEnding(name: String): Null<String> {
-		if (name.endsWith(PLURAL_IES)) {
-			// A `…y` singular pluralises through a consonant (`property`, `body`); a stem already
-			// ending in a vowel had an `…ie` singular, which loses only the `s`.
-			final stem: String = name.substring(0, name.length - PLURAL_IES.length);
-			return if (stem.length == 0)
-				null
-			else if (VOWELS.indexOf(stem.charAt(stem.length - 1)) >= 0)
-				name.substring(0, name.length - PLURAL_S.length)
-			else
-				stem + SINGULAR_Y;
-		}
-		for (suffix in SIBILANT_PLURALS) if (name.endsWith(suffix)) return name.substring(0, name.length - PLURAL_ES.length);
-		for (suffix in SINGULAR_ENDINGS) if (name.endsWith(suffix)) return null;
-		if (!name.endsWith(PLURAL_S)) return null;
-		final stem: String = name.substring(0, name.length - PLURAL_S.length);
-		return stem.length == 0 ? null : stem;
-	}
-
-	/**
 	 * The name a value binder derived from `collection` would take, or why a loop rewrite may not write one.
 	 * The candidate is `elementNameOf(collection)`, the one derivation both element-loop rules use.
 	 * A candidate spelled ANYWHERE in ACTIVE text inside `scan` (named `where` in the refusal) is refused - a masked
@@ -249,21 +226,6 @@ final class ElementLoopRewrite {
 	}
 
 	/**
-	 * The element name derived from a collection named `collection`: the singular of the name with its
-	 * leading underscores dropped (`_points` -> `point`), or null when it has none.
-	 */
-	private static inline function elementNameOf(collection: String): Null<String> {
-		return singularOf(withoutLeadingUnderscores(collection));
-	}
-
-	/** `name` with every leading underscore dropped — the private-member prefix a binder does not carry. */
-	private static function withoutLeadingUnderscores(name: String): String {
-		var at: Int = 0;
-		while (at < name.length && name.charAt(at) == UNDERSCORE) at++;
-		return name.substring(at);
-	}
-
-	/**
 	 * The body gates both element-loop rewrites share, each on a line of its own: the collection is only
 	 * read in length-preserving positions, nothing in the body re-binds the index or the collection (a
 	 * nested binder would own the `X[i]` under it, and the over-wide name-slot answer is also what
@@ -273,6 +235,50 @@ final class ElementLoopRewrite {
 	public static function bodyAdmitsElementLoop(h: IndexedLoopHeader, source: String, sizeMember: String, core: LoopSeams): Bool {
 		return LoopScan.usedOnlyAsStableCollection(h.body, h.collection, sizeMember, core) && !LoopScan.bindsName(h.body, h.index, core)
 			&& !LoopScan.bindsName(h.body, h.collection, core) && !LoopScan.capturedByClosure(h.body, source, h.collection, core);
+	}
+
+	/**
+	 * The element name derived from a collection named `collection`: the singular of the name with its
+	 * leading underscores dropped (`_points` -> `point`), or null when it has none.
+	 */
+	private static inline function elementNameOf(collection: String): Null<String> {
+		return singularOf(withoutLeadingUnderscores(collection));
+	}
+
+	/** Whether a word of `name` ends at `end`: the end of the name, or before a character that is not a lower-case letter. */
+	private static inline function endsWord(name: String, end: Int): Bool {
+		final next: Int = end < name.length ? name.fastCodeAt(end) : -1;
+		return next < 'a'.code || next > 'z'.code;
+	}
+
+	/**
+	 * The singular of `name` read as a plural at its very end, or null when no rule applies — the
+	 * whole-name rules `singularOf` asks of every word end.
+	 */
+	private static function singularOfEnding(name: String): Null<String> {
+		if (name.endsWith(PLURAL_IES)) {
+			// A `…y` singular pluralises through a consonant (`property`, `body`); a stem already
+			// ending in a vowel had an `…ie` singular, which loses only the `s`.
+			final stem: String = name.substring(0, name.length - PLURAL_IES.length);
+			return if (stem.length == 0)
+				null
+			else if (VOWELS.indexOf(stem.charAt(stem.length - 1)) >= 0)
+				name.substring(0, name.length - PLURAL_S.length)
+			else
+				stem + SINGULAR_Y;
+		}
+		for (suffix in SIBILANT_PLURALS) if (name.endsWith(suffix)) return name.substring(0, name.length - PLURAL_ES.length);
+		for (suffix in SINGULAR_ENDINGS) if (name.endsWith(suffix)) return null;
+		if (!name.endsWith(PLURAL_S)) return null;
+		final stem: String = name.substring(0, name.length - PLURAL_S.length);
+		return stem.length == 0 ? null : stem;
+	}
+
+	/** `name` with every leading underscore dropped — the private-member prefix a binder does not carry. */
+	private static function withoutLeadingUnderscores(name: String): String {
+		var at: Int = 0;
+		while (at < name.length && name.charAt(at) == UNDERSCORE) at++;
+		return name.substring(at);
 	}
 
 	/**
@@ -287,12 +293,6 @@ final class ElementLoopRewrite {
 			if (h != null && elementNameOf(h.collection) == candidate) return true;
 		}
 		return node.children.exists(c -> nestingLoopDerives(c, loop, candidate, f));
-	}
-
-	/** Whether a word of `name` ends at `end`: the end of the name, or before a character that is not a lower-case letter. */
-	private static inline function endsWord(name: String, end: Int): Bool {
-		final next: Int = end < name.length ? name.fastCodeAt(end) : -1;
-		return next < 'a'.code || next > 'z'.code;
 	}
 
 	/** Whether one of the two nodes' spans contains the other's. */

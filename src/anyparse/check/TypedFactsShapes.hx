@@ -70,6 +70,15 @@ final class TypedFactsShapes {
 		'Reflect.deleteField' => 1
 	];
 
+	/** The package of the class every exception the language throws as it is extends (`isException`). */
+	private static inline final EXCEPTION_PACKAGE: String = 'haxe';
+
+	/** The name of that class. */
+	private static inline final EXCEPTION_NAME: String = 'Exception';
+
+	/** The classes a construction of which only the place it is stored into holds (`isFresh`): a `new Map` makes its implementation. */
+	private static final FRESH_CLASSES: Array<String> = ['Array', 'haxe.ds._Map.Map_Impl_'];
+
 	/**
 	 * The target code a native call with the arguments `args` pastes into the output, as the tail of its `native` fact:
 	 * `c`, the text of its first argument when that is a string literal; `cc` when the call carries code (`carrying`) whose
@@ -94,15 +103,6 @@ final class TypedFactsShapes {
 		};
 	}
 
-	/** The package of the class every exception the language throws as it is extends (`isException`). */
-	private static inline final EXCEPTION_PACKAGE: String = 'haxe';
-
-	/** The name of that class. */
-	private static inline final EXCEPTION_NAME: String = 'Exception';
-
-	/** The classes a construction of which only the place it is stored into holds (`isFresh`): a `new Map` makes its implementation. */
-	private static final FRESH_CLASSES: Array<String> = ['Array', 'haxe.ds._Map.Map_Impl_'];
-
 	/**
 	 * The native identifier the chain of field accesses `e` is rooted at, through parentheses and metadata: target code the
 	 * chain spells (`untyped __global__.String`). Null for any other expression, a bare identifier included.
@@ -122,16 +122,6 @@ final class TypedFactsShapes {
 			case TField(receiver, fa): '${chainText(receiver)}.${describe(fa).field}';
 			case TParenthesis(inner), TMeta(_, inner): chainText(inner);
 			case _: '';
-		};
-	}
-
-	/** The native identifier `e` is, or the chain of field accesses `e` is rooted at; null otherwise. */
-	private static function identRoot(e: TypedExpr): Null<TypedExpr> {
-		return switch e.expr {
-			case TIdent(_): e;
-			case TField(receiver, _): identRoot(receiver);
-			case TParenthesis(inner), TMeta(_, inner): identRoot(inner);
-			case _: null;
 		};
 	}
 
@@ -233,6 +223,16 @@ final class TypedFactsShapes {
 		}
 		scan(body);
 		return out;
+	}
+
+	/** The native identifier `e` is, or the chain of field accesses `e` is rooted at; null otherwise. */
+	private static function identRoot(e: TypedExpr): Null<TypedExpr> {
+		return switch e.expr {
+			case TIdent(_): e;
+			case TField(receiver, _): identRoot(receiver);
+			case TParenthesis(inner), TMeta(_, inner): identRoot(inner);
+			case _: null;
+		};
 	}
 
 }

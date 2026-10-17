@@ -45,11 +45,11 @@ private enum CondOrder {
 @:nullSafety(Strict)
 final class CondValues {
 
-	/** A number `float_of_string` and the target read alike: decimal digits, optionally a fraction. */
-	private static final DECIMAL: EReg = ~/^[0-9]+(\.[0-9]+)?$/;
-
 	/** The last code of ASCII, whose strings order alike byte by byte and code unit by code unit. */
 	private static inline final ASCII_LAST: Int = 0x7f;
+
+	/** A number `float_of_string` and the target read alike: decimal digits, optionally a fraction. */
+	private static final DECIMAL: EReg = ~/^[0-9]+(\.[0-9]+)?$/;
 
 	/** A version part `int_of_string` reads as this number: decimal digits, few enough for any integer. */
 	private static final SMALL_DIGITS: EReg = ~/^[0-9]{1,9}$/;

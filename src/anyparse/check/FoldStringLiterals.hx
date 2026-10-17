@@ -1548,13 +1548,13 @@ private class PlanContext {
 	 */
 	private final _scopes: Map<String, Null<MemberScope>> = [];
 
+	/** Statement region ("<from>:<to>") -> whether its member renders it exactly as it renders alone (`rendersAlone`). */
+	private final _alone: Map<String, Bool> = [];
+
 	private var _originalLines: Null<Array<String>> = null;
 	private var _originalFailed: Bool = false;
 	private var _memberSpans: Null<Array<Span>> = null;
 	private var _statementSpans: Null<Array<Span>> = null;
-
-	/** Statement region ("<from>:<to>") -> whether its member renders it exactly as it renders alone (`rendersAlone`). */
-	private final _alone: Map<String, Bool> = [];
 
 	public function new(
 		plugin: GrammarPlugin, seams: Seams, source: String, optsJson: Null<String>, metrics: LayoutMetrics, operators: Null<OperatorGate>
@@ -1614,6 +1614,11 @@ private class PlanContext {
 		if (statement == null) return memberScope;
 		final statementScope: Null<MemberScope> = scopeOf(statement, STATEMENT_SCOPE_HEAD, STATEMENT_SCOPE_TAIL);
 		return statementScope != null && rendersAlone(statementScope, memberScope) ? statementScope : memberScope;
+	}
+
+	/** The first non-blank offset on `pos`'s line when that line opens exactly one indent deep, else -1. */
+	private inline function memberLineStart(pos: Int): Int {
+		return lineStartAtDepth(pos, 1);
 	}
 
 	/**
@@ -1689,11 +1694,6 @@ private class PlanContext {
 			}
 		}
 		for (child in node.children) collectMembers(child, out);
-	}
-
-	/** The first non-blank offset on `pos`'s line when that line opens exactly one indent deep, else -1. */
-	private function memberLineStart(pos: Int): Int {
-		return lineStartAtDepth(pos, 1);
 	}
 
 	/**

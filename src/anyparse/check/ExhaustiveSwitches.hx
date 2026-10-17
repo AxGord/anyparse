@@ -45,6 +45,12 @@ final class ExhaustiveSwitches {
 	/** The members `holdsValues` is judging: each is assumed to hold only values while it is, so nothing judged then is kept. */
 	private final _judging: Array<String> = [];
 
+	/** Name -> every write in the run to a bare name or a field so named, with where it sits (`writesTo`), filled per name on first use. */
+	private final _writesOf: Map<String, Array<WriteSite>> = [];
+
+	/** `<function id>#<parameter index>` of the parameters `callersPassValues` is judging: each is taken to pass values meanwhile. */
+	private final _passing: Array<String> = [];
+
 	private final _graph: CallGraph;
 	private final _shape: RefShape;
 
@@ -55,9 +61,6 @@ final class ExhaustiveSwitches {
 	private final _metaKinds: Array<String>;
 	private final _typeKinds: Array<String>;
 
-	/** Name -> every write in the run to a bare name or a field so named, with where it sits (`writesTo`), filled per name on first use. */
-	private final _writesOf: Map<String, Array<WriteSite>> = [];
-
 	/** The graph's held trees, and the lookups made in them. */
 	private final _trees: HeldTrees;
 
@@ -66,9 +69,6 @@ final class ExhaustiveSwitches {
 
 	/** Whether code outside the run may call a function of the graph, so what its parameters hold is not the run's to tell. */
 	private final _seedable: (String) -> Bool;
-
-	/** `<function id>#<parameter index>` of the parameters `callersPassValues` is judging: each is taken to pass values meanwhile. */
-	private final _passing: Array<String> = [];
 
 	public function new(graph: CallGraph, plugin: GrammarPlugin, writes: FieldWrites, seedable: (String) -> Bool) {
 		_graph = graph;
@@ -506,7 +506,6 @@ final class ExhaustiveSwitches {
 			null;
 		return values == null ? null : { values: values, at: contextOf(edge.file, site) };
 	}
-
 
 	/**
 	 * Whether the call `call` at `at` hands back a value of `closed` through an implicit conversion: the graph resolves

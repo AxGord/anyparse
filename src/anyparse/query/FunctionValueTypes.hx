@@ -62,12 +62,6 @@ using Lambda;
 @:nullSafety(Strict)
 final class FunctionValueTypes {
 
-	/** The kinds of a typed type no value of another such type unifies with but its subtypes' (`TypeFact.kind`). */
-	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface', 'enum'];
-
-	/** The call accesses that may run an instance method a type declares (`CallFact.access`). */
-	private static final INVOKING: Array<String> = ['FInstance', 'FClosure', 'super'];
-
 	/** The kind of a typed class (`TypeFact.kind`). */
 	private static inline final CLASS_KIND: String = 'class';
 
@@ -79,32 +73,6 @@ final class FunctionValueTypes {
 
 	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
 	private static inline final INLINED: String = 'inlined';
-
-	/** The field accesses of a write by name on a value of no class or on a structure (`FieldFact.access`). */
-	private static final UNTYPED_ACCESSES: Array<String> = ['FDynamic', 'FAnon'];
-
-	/**
-	 * Every call access the facts write (`CallFact.access`): a typed field's (`FInstance`, `FStatic`, `FClosure`, `FEnum`,
-	 * a replaceable field's `fieldValue`, a splice's `inlined`, `super`), one by name (`UNTYPED_ACCESSES`), and the calls
-	 * naming no field (`local`, `ident` — target code, read as such — and `value`). A call of any other access may run anything.
-	 */
-	private static final CALL_ACCESSES: Array<String> = [
-		'FInstance',
-		'FStatic',
-		'FClosure',
-		'FEnum',
-		'fieldValue',
-		'inlined',
-		'super',
-		'FDynamic',
-		'FAnon',
-		'local',
-		'ident',
-		'value'
-	];
-
-	/** The reflective members that write a field an object's name names. */
-	private static final REFLECTIVE_WRITERS: Array<String> = ['Reflect.setField', 'Reflect.setProperty'];
 
 	/** The reflective class whose members write fields by name: read as a value, whatever calls it may. */
 	private static inline final REFLECT: String = 'Reflect';
@@ -133,6 +101,41 @@ final class FunctionValueTypes {
 	/** What the facts spell a type parameter with (`FactsTypeTree`). */
 	private static inline final PARAMETER: String = '$$';
 
+	/** What a nested function's graph id holds (`FactsView.NESTED_MARK`): a lambda's or a local function's value is typed. */
+	private static inline final NESTED: String = '#';
+
+	/** The kinds of a typed type no value of another such type unifies with but its subtypes' (`TypeFact.kind`). */
+	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface', 'enum'];
+
+	/** The call accesses that may run an instance method a type declares (`CallFact.access`). */
+	private static final INVOKING: Array<String> = ['FInstance', 'FClosure', 'super'];
+
+	/** The field accesses of a write by name on a value of no class or on a structure (`FieldFact.access`). */
+	private static final UNTYPED_ACCESSES: Array<String> = ['FDynamic', 'FAnon'];
+
+	/**
+	 * Every call access the facts write (`CallFact.access`): a typed field's (`FInstance`, `FStatic`, `FClosure`, `FEnum`,
+	 * a replaceable field's `fieldValue`, a splice's `inlined`, `super`), one by name (`UNTYPED_ACCESSES`), and the calls
+	 * naming no field (`local`, `ident` — target code, read as such — and `value`). A call of any other access may run anything.
+	 */
+	private static final CALL_ACCESSES: Array<String> = [
+		'FInstance',
+		'FStatic',
+		'FClosure',
+		'FEnum',
+		'fieldValue',
+		'inlined',
+		'super',
+		'FDynamic',
+		'FAnon',
+		'local',
+		'ident',
+		'value'
+	];
+
+	/** The reflective members that write a field an object's name names. */
+	private static final REFLECTIVE_WRITERS: Array<String> = ['Reflect.setField', 'Reflect.setProperty'];
+
 	/** The facts node kinds of a function expression and of a local function (`TypedFactsProbe`). */
 	private static final EXPRESSION_KINDS: Array<String> = ['fn', 'local'];
 
@@ -142,8 +145,34 @@ final class FunctionValueTypes {
 	 */
 	private static final ESCAPED_VALUES: FactPos = { file: '', span: new Span(0, 0) };
 
-	/** What a nested function's graph id holds (`FactsView.NESTED_MARK`): a lambda's or a local function's value is typed. */
-	private static inline final NESTED: String = '#';
+	/** A called value's range -> the function values it may hold (`argumentValues`), or null for those its type admits. */
+	private final _arguments: Map<String, Null<Array<FactPos>>> = [];
+
+	/** A table key -> its text and tree (`parsed`), or null when it does not read. */
+	private final _parsed: Map<String, Null<ParsedFile>> = [];
+
+	/** A facts type -> every type a value of it may be held as (`typedAs`). */
+	private final _typedAs: Map<String, Array<String>> = [];
+
+	/**
+	 * A facts type text -> the function type it reads as (`functionText`), null for one that is none. It reads only the
+	 * text and the table's typedefs, which an edit of the run does not change (`CompilerFacts.invalidate` drops sources,
+	 * never types); `mayRun` parsed the same texts once per escaped function type per value type held, 72 of TM's 533
+	 * `--fix` seconds.
+	 */
+	private final _functionTexts: Map<String, Null<FactsType>> = [];
+
+	/**
+	 * A type held -> whether a value of it may be one of the escaped function values (`meetsEscaped`): keyed by its one
+	 * varying input, the escaped list being read once (`escapedTexts`).
+	 */
+	private final _meetsEscaped: Map<String, Bool> = [];
+
+	/** Graph node id -> whether its function may be obtained as a value of no type (`obtainedUntyped`). */
+	private final _untyped: Map<String, Bool> = [];
+
+	/** A `dynamic` method (`pack.Type.field`) -> where the values stored into it are written (`storedValues`), or null for any. */
+	private final _stored: Map<String, Null<Array<FactPos>>> = [];
 
 	private final _view: FactsView;
 	private final _scope: ReachProject;
@@ -160,46 +189,17 @@ final class FunctionValueTypes {
 	/** The types a value of a type parameter may have (`ValueEscapes.parameterBindings`), or null when not known. */
 	private final _bindings: (path:String) -> Null<Array<FactsType>>;
 
-	/** A called value's range -> the function values it may hold (`argumentValues`), or null for those its type admits. */
-	private final _arguments: Map<String, Null<Array<FactPos>>> = [];
-
-	/** A table key -> its text and tree (`parsed`), or null when it does not read. */
-	private final _parsed: Map<String, Null<ParsedFile>> = [];
-
-	/** A facts type -> every type a value of it may be held as (`typedAs`). */
-	private final _typedAs: Map<String, Array<String>> = [];
-
 	/** The flows of the facts by the type of the value (`flowGraph`), built on first need. */
 	private var _flows: Null<Map<String, Array<String>>> = null;
 
 	/** The escaped function types as the facts spell them (`escapedTexts`), read on first need. */
 	private var _escapedText: Null<Array<String>> = null;
 
-	/**
-	 * A facts type text -> the function type it reads as (`functionText`), null for one that is none. It reads only the
-	 * text and the table's typedefs, which an edit of the run does not change (`CompilerFacts.invalidate` drops sources,
-	 * never types); `mayRun` parsed the same texts once per escaped function type per value type held, 72 of TM's 533
-	 * `--fix` seconds.
-	 */
-	private final _functionTexts: Map<String, Null<FactsType>> = [];
-
-	/**
-	 * A type held -> whether a value of it may be one of the escaped function values (`meetsEscaped`): keyed by its one
-	 * varying input, the escaped list being read once (`escapedTexts`).
-	 */
-	private final _meetsEscaped: Map<String, Bool> = [];
-
 	/** Facts node id -> the signatures of the function expressions calling it (`callerSignatures`), built on first need. */
 	private var _callers: Null<Map<String, Array<String>>> = null;
 
-	/** Graph node id -> whether its function may be obtained as a value of no type (`obtainedUntyped`). */
-	private final _untyped: Map<String, Bool> = [];
-
 	/** Field name -> the call facts that may run an instance method of it (`invocationsOf`), built on first need. */
 	private var _invocations: Null<Map<String, Array<CallFact>>> = null;
-
-	/** A `dynamic` method (`pack.Type.field`) -> where the values stored into it are written (`storedValues`), or null for any. */
-	private final _stored: Map<String, Null<Array<FactPos>>> = [];
 
 	public function new(
 		view: FactsView, scope: ReachProject, escapedFunctions: () -> Null<Array<FactsType>>, escapedTypes: () -> Null<Array<String>>,
@@ -241,6 +241,54 @@ final class FunctionValueTypes {
 	public function storedIn(g: CallGraph, candidates: Array<String>, field: String): Null<Array<String>> {
 		final values: Null<Array<FactPos>> = _view.truth ? storedValues(field) : null;
 		return values == null ? null : writtenAt(g, candidates, values);
+	}
+
+	/**
+	 * Whether a call of a value of the facts type `called` may run the function the graph node `id` is, by type (see the type
+	 * doc): always but under the truth, for a called type that reads as no function type, while the escapes are not known,
+	 * and for a function the facts give no type of.
+	 */
+	public function mayRun(g: CallGraph, id: String, called: String): Bool {
+		final target: String = FactsTypeText.unwrapNull(called);
+		final escaped: Null<Array<String>> = escapedTexts();
+		if (!_view.truth || functionOf(FactsTypeTree.read(target)) == null || escaped == null) return true;
+		final own: Null<Array<String>> = valueTypes(g, id);
+		if (own == null) return true;
+		for (s in own) for (t in typedAs(s)) if (sameOrGeneric(t, target) || meetsEscaped(t, escaped)) return true;
+		return obtainedUntyped(g, id);
+	}
+
+	/**
+	 * Whether the function the graph node `id` is may be obtained as a value of no type, under the truth: a method read by its
+	 * name off a value of no class or by reflection (`FactsMethodValues.obtainedUntyped`), off an object that may be of a type
+	 * its type's name stands for or of a subtype. Such a value may be called wherever a value of any type is: code the walk
+	 * cannot follow may run it. A lambda or a local function is obtained only as the typed value its expression makes. Read
+	 * once per node.
+	 */
+	public function obtainedUntyped(g: CallGraph, id: String): Bool {
+		if (!_view.truth || id.indexOf(NESTED) >= 0) return false;
+		final held: Null<Bool> = _untyped[id];
+		if (held != null) return held;
+		final node: Null<CallGraph.FnNode> = g.node(id);
+		final type: Null<String> = node?.typeName;
+		final name: Null<String> = node?.name;
+		final owners: Array<String> = type == null ? [] : _view.bySimpleName()[type] ?? [];
+		final hierarchy: Array<String> = [];
+		for (o in owners) for (t in [o].concat(_view._table.subtypesOf(o))) if (!hierarchy.contains(t)) hierarchy.push(t);
+		// a constructor and the pseudo-nodes running a type's initializers are no field any read names
+		final initializers: Bool = name == CallGraph.INIT_NAME || name == CallGraph.STATIC_INIT_NAME
+			|| name == (_scope.shape.constructorName ?? 'new');
+		final statics: Bool = name != null
+			&& owners.exists(o -> _view._table.type(o)?.fields.exists(f -> f.name == name && f.isStatic) == true);
+		final answer: Bool = !initializers
+			&& (name == null || hierarchy.length == 0 || _methods().obtainedUntyped(name, hierarchy, _escapedTypes(), _bindings, statics));
+		_untyped[id] = answer;
+		return answer;
+	}
+
+	/** The call node of `tree` spanning exactly `span`, or null. */
+	private inline function callAt(tree: QueryNode, span: Span): Null<QueryNode> {
+		return nodeAt(tree, span, _scope.shape.callKind, false);
 	}
 
 	/** Of `candidates`, the functions written at one of `values`, and every one that escaped when they hold `ESCAPED_VALUES`. */
@@ -395,21 +443,6 @@ final class FunctionValueTypes {
 		return true;
 	}
 
-	/** Whether `n` may hold a write whose field name is lost: a reflective writer spliced in, or a marker no reader knows. */
-	private static function writeNameLost(n: FactNode): Bool {
-		return FactMarkers.carries(
-			n, m -> switch m {
-				// a reflective writer spliced in lost the name it was handed
-				case ReflectionInlined:
-					final spliced: Null<Array<String>> = FactsView.splicedReflection(n);
-					spliced == null || spliced.exists(s -> REFLECTIVE_WRITERS.contains(s));
-				// a marker no reader knows may say a write's name was lost
-				case Unknown(_): true;
-				case StaleForeign, InlineSite, MacroExpansion, ReflectionUnattributed, ReflectionFrom(_): false;
-			}
-		);
-	}
-
 	/**
 	 * Add to `out` where the function values `n`'s reflective writes of the field `name` store are written (`untypedStores`):
 	 * each naming it by a literal. False when one may store anything else, and when one's name is computed while the project
@@ -434,21 +467,6 @@ final class FunctionValueTypes {
 		final read: Null<ParsedFile> = parsed(at.file);
 		final call: Null<QueryNode> = read == null ? null : nodeAt(read.tree, at.span, _scope.shape.callKind, false);
 		return call == null || call.children.length != 4 ? null : storedValue(n, at, call.children[3]);
-	}
-
-	/**
-	 * Whether a call of a value of the facts type `called` may run the function the graph node `id` is, by type (see the type
-	 * doc): always but under the truth, for a called type that reads as no function type, while the escapes are not known,
-	 * and for a function the facts give no type of.
-	 */
-	public function mayRun(g: CallGraph, id: String, called: String): Bool {
-		final target: String = FactsTypeText.unwrapNull(called);
-		final escaped: Null<Array<String>> = escapedTexts();
-		if (!_view.truth || functionOf(FactsTypeTree.read(target)) == null || escaped == null) return true;
-		final own: Null<Array<String>> = valueTypes(g, id);
-		if (own == null) return true;
-		for (s in own) for (t in typedAs(s)) if (sameOrGeneric(t, target) || meetsEscaped(t, escaped)) return true;
-		return obtainedUntyped(g, id);
 	}
 
 	/**
@@ -664,21 +682,6 @@ final class FunctionValueTypes {
 		}
 	}
 
-	/** Whether `n` may hold a construction whose arguments are lost: one spliced in, or a marker no reader knows. */
-	private static function constructionLost(n: FactNode): Bool {
-		return FactMarkers.carries(
-			n, m -> switch m {
-				// a construction spliced in lost the arguments it was handed
-				case ReflectionInlined:
-					final spliced: Null<Array<String>> = FactsView.splicedReflection(n);
-					spliced == null || spliced.contains(CONSTRUCTING);
-				// a marker no reader knows may say a construction's arguments were lost
-				case Unknown(_): true;
-				case StaleForeign, InlineSite, MacroExpansion, ReflectionUnattributed, ReflectionFrom(_): false;
-			}
-		);
-	}
-
 	/**
 	 * Add to `out` where the function value the reflective construction `r` hands the `index`-th constructor parameter of
 	 * `owner` is written (`reflectiveConstructions`), or `ESCAPED_VALUES` when what it hands is not known.
@@ -705,11 +708,6 @@ final class FunctionValueTypes {
 			escapedValues(out)
 		else
 			for (where in held) out.push(where);
-	}
-
-	/** Mark `out` as holding function values that left the type system (`ESCAPED_VALUES`), once. */
-	private static inline function escapedValues(out: Array<FactPos>): Void {
-		if (!out.contains(ESCAPED_VALUES)) out.push(ESCAPED_VALUES);
 	}
 
 	/**
@@ -928,11 +926,6 @@ final class FunctionValueTypes {
 		return found;
 	}
 
-	/** The call node of `tree` spanning exactly `span`, or null. */
-	private function callAt(tree: QueryNode, span: Span): Null<QueryNode> {
-		return nodeAt(tree, span, _scope.shape.callKind, false);
-	}
-
 	/**
 	 * The node of `tree` of the kind `kind` spanning exactly `span` — or, `byTarget`, whose first child does: an assignment
 	 * of what the facts place at its written side — or null, and null for a kind the grammar does not name.
@@ -1008,34 +1001,6 @@ final class FunctionValueTypes {
 		}
 		_callers = out;
 		return out;
-	}
-
-	/**
-	 * Whether the function the graph node `id` is may be obtained as a value of no type, under the truth: a method read by its
-	 * name off a value of no class or by reflection (`FactsMethodValues.obtainedUntyped`), off an object that may be of a type
-	 * its type's name stands for or of a subtype. Such a value may be called wherever a value of any type is: code the walk
-	 * cannot follow may run it. A lambda or a local function is obtained only as the typed value its expression makes. Read
-	 * once per node.
-	 */
-	public function obtainedUntyped(g: CallGraph, id: String): Bool {
-		if (!_view.truth || id.indexOf(NESTED) >= 0) return false;
-		final held: Null<Bool> = _untyped[id];
-		if (held != null) return held;
-		final node: Null<CallGraph.FnNode> = g.node(id);
-		final type: Null<String> = node?.typeName;
-		final name: Null<String> = node?.name;
-		final owners: Array<String> = type == null ? [] : _view.bySimpleName()[type] ?? [];
-		final hierarchy: Array<String> = [];
-		for (o in owners) for (t in [o].concat(_view._table.subtypesOf(o))) if (!hierarchy.contains(t)) hierarchy.push(t);
-		// a constructor and the pseudo-nodes running a type's initializers are no field any read names
-		final initializers: Bool = name == CallGraph.INIT_NAME || name == CallGraph.STATIC_INIT_NAME
-			|| name == (_scope.shape.constructorName ?? 'new');
-		final statics: Bool = name != null
-			&& owners.exists(o -> _view._table.type(o)?.fields.exists(f -> f.name == name && f.isStatic) == true);
-		final answer: Bool = !initializers
-			&& (name == null || hierarchy.length == 0 || _methods().obtainedUntyped(name, hierarchy, _escapedTypes(), _bindings, statics));
-		_untyped[id] = answer;
-		return answer;
 	}
 
 	/**
@@ -1131,6 +1096,41 @@ final class FunctionValueTypes {
 		final out: Null<FactsType> = functionOf(FactsTypeTree.read(text));
 		_functionTexts[text] = out;
 		return out;
+	}
+
+	/** Mark `out` as holding function values that left the type system (`ESCAPED_VALUES`), once. */
+	private static inline function escapedValues(out: Array<FactPos>): Void {
+		if (!out.contains(ESCAPED_VALUES)) out.push(ESCAPED_VALUES);
+	}
+
+	/** Whether `n` may hold a write whose field name is lost: a reflective writer spliced in, or a marker no reader knows. */
+	private static function writeNameLost(n: FactNode): Bool {
+		return FactMarkers.carries(
+			n, m -> switch m {
+				// a reflective writer spliced in lost the name it was handed
+				case ReflectionInlined:
+					final spliced: Null<Array<String>> = FactsView.splicedReflection(n);
+					spliced == null || spliced.exists(s -> REFLECTIVE_WRITERS.contains(s));
+				// a marker no reader knows may say a write's name was lost
+				case Unknown(_): true;
+				case StaleForeign, InlineSite, MacroExpansion, ReflectionUnattributed, ReflectionFrom(_): false;
+			}
+		);
+	}
+
+	/** Whether `n` may hold a construction whose arguments are lost: one spliced in, or a marker no reader knows. */
+	private static function constructionLost(n: FactNode): Bool {
+		return FactMarkers.carries(
+			n, m -> switch m {
+				// a construction spliced in lost the arguments it was handed
+				case ReflectionInlined:
+					final spliced: Null<Array<String>> = FactsView.splicedReflection(n);
+					spliced == null || spliced.contains(CONSTRUCTING);
+				// a marker no reader knows may say a construction's arguments were lost
+				case Unknown(_): true;
+				case StaleForeign, InlineSite, MacroExpansion, ReflectionUnattributed, ReflectionFrom(_): false;
+			}
+		);
 	}
 
 }

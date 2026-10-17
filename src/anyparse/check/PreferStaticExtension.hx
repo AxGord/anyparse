@@ -321,6 +321,11 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			});
 	}
 
+	/** The path a module-level type is imported by: its module's for the main type, the module's plus its name otherwise. */
+	private static inline function qualifiedPath(d: ResolvedType): String {
+		return d.type.isMain ? d.file.module : '${d.file.module}.${d.type.name}';
+	}
+
 	/**
 	 * Bundle the `RefShape` seams + type provider, or null when a required
 	 * kind / type information is missing (the check is then a no-op).
@@ -509,11 +514,6 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			proven: bound && info.ambientImportsBounded,
 			usings: usings
 		};
-	}
-
-	/** The path a module-level type is imported by: its module's for the main type, the module's plus its name otherwise. */
-	private static inline function qualifiedPath(d: ResolvedType): String {
-		return d.type.isMain ? d.file.module : '${d.file.module}.${d.type.name}';
 	}
 
 	/** The path of every `using` declaration under `node`, whatever region holds it. */

@@ -84,6 +84,23 @@ final class ConfigFinder {
 		return #if (sys || nodejs) sys.FileSystem.exists(path) && !sys.FileSystem.isDirectory(path) #else false #end;
 	}
 
+	/**
+	 * The nearest directory at or above `dir` holding one of `PROJECT_ROOT_MARKERS` — the project root the inheriting
+	 * walk stops at — or null when none does, or the target has no file IO.
+	 */
+	public static function projectRoot(dir: String): Null<String> {
+		#if (sys || nodejs)
+		var current: String = haxe.io.Path.removeTrailingSlashes(sys.FileSystem.absolutePath(dir));
+		while (current != '') {
+			if (marksProjectRoot(current, PROJECT_ROOT_MARKERS)) return current;
+			final parent: String = haxe.io.Path.directory(current);
+			if (parent == current) break;
+			current = parent;
+		}
+		#end
+		return null;
+	}
+
 	/** Whether `dir` lies strictly beneath `bound` — the walk may climb while it does, and stops AT `bound`. */
 	private static inline function under(dir: String, bound: String): Bool {
 		return dir != bound && dir.indexOf('$bound/') == 0;
@@ -136,23 +153,6 @@ final class ConfigFinder {
 		for (marker in boundary) if (sys.FileSystem.exists('$dir/$marker')) return true;
 		#end
 		return false;
-	}
-
-	/**
-	 * The nearest directory at or above `dir` holding one of `PROJECT_ROOT_MARKERS` — the project root the inheriting
-	 * walk stops at — or null when none does, or the target has no file IO.
-	 */
-	public static function projectRoot(dir: String): Null<String> {
-		#if (sys || nodejs)
-		var current: String = haxe.io.Path.removeTrailingSlashes(sys.FileSystem.absolutePath(dir));
-		while (current != '') {
-			if (marksProjectRoot(current, PROJECT_ROOT_MARKERS)) return current;
-			final parent: String = haxe.io.Path.directory(current);
-			if (parent == current) break;
-			current = parent;
-		}
-		#end
-		return null;
 	}
 
 }

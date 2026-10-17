@@ -26,15 +26,6 @@ using Lambda;
 @:nullSafety(Strict)
 final class FactsProvenance {
 
-	/** The fact kinds of a type's own function body, as opposed to a function nested in one. */
-	private static final OWN_BODY_KINDS: Array<String> = ['method', 'ctor'];
-
-	/**
-	 * The metadata of an abstract's field the compiler calls where the text writes an operator, a conversion, an index
-	 * access or a field no declaration names, and never the field's name.
-	 */
-	private static final IMPLICITLY_CALLED_META: Array<String> = [':op', ':from', ':to', ':arrayAccess', ':resolve'];
-
 	/** The kind of an abstract's implementation class (`TypeFact.kind`). */
 	private static inline final IMPL_KIND: String = 'impl';
 
@@ -52,6 +43,15 @@ final class FactsProvenance {
 
 	/** The flow of a value handed to a call as an argument (`FlowFact.via`). */
 	private static inline final ARG_FLOW: String = 'arg';
+
+	/** The fact kinds of a type's own function body, as opposed to a function nested in one. */
+	private static final OWN_BODY_KINDS: Array<String> = ['method', 'ctor'];
+
+	/**
+	 * The metadata of an abstract's field the compiler calls where the text writes an operator, a conversion, an index
+	 * access or a field no declaration names, and never the field's name.
+	 */
+	private static final IMPLICITLY_CALLED_META: Array<String> = [':op', ':from', ':to', ':arrayAccess', ':resolve'];
 
 	private final _view: FactsView;
 	private final _scope: ReachProject;
@@ -134,6 +134,11 @@ final class FactsProvenance {
 		final files: Array<String> = _view.ownerFiles(type, owner);
 		final ids: Array<String> = _view.standingFor(type, owner);
 		return files.length > 0 && ids.length > 0 && textual(g, type, files, ids);
+	}
+
+	/** The name of a constructor (`RefShape.constructorName`). */
+	private inline function constructorName(): String {
+		return _scope.shape.constructorName ?? 'new';
 	}
 
 	/**
@@ -289,18 +294,6 @@ final class FactsProvenance {
 	}
 
 	/**
-	 * Whether the typed constructor `n` is one the compiler made for a class the text gives none: it calls its super's —
-	 * handing it its own parameters, every such flow at the constructor's own range — and does nothing else: no
-	 * construction, field access, other flow, conversion, iteration, reflection, native code or function.
-	 */
-	private static function madeConstructor(n: FactNode): Bool {
-		final own: (FactPos) -> Bool = p -> p.file == n.at.file && p.span.from == n.at.span.from && p.span.to == n.at.span.to;
-		return n.kind == 'ctor' && n.calls.foreach(c -> c.access == SUPER) && n.news.length == 0 && n.fields.length == 0
-			&& n.elementWrites.length == 0 && n.flows.foreach(f -> f.via == ARG_FLOW && own(f.at)) && n.strings.length == 0
-			&& n.iterations.length == 0 && n.reflection.length == 0 && n.natives.length == 0 && n.fns.length == 0;
-	}
-
-	/**
 	 * Whether every fact of the typed body `n` sits on `body`'s text as its own — as `factsMatch` asks, save that what an
 	 * inlined method spliced in, positioned in that method's declared range (`FactSites.spliceOf`), in the body of a
 	 * method `n` is wholly the inlined call of (`outer`, `inlinedWhole`)
@@ -449,19 +442,6 @@ final class FactsProvenance {
 	}
 
 	/**
-	 * Whether the offset `other` of the range `p`, whose offset `spliced` lies in the code an inlined call spliced into `n`,
-	 * lies in a site of that call in `body` whose text spells the member `name`.
-	 */
-	private static function siteSpells(n: FactNode, p: FactPos, spliced: Int, other: Int, name: String, body: BodyText): Bool {
-		return n.splices.exists(s ->
-			s.body.file == p.file && s.body.span.from <= spliced && spliced <= s.body.span.to && s.sites.exists(site -> {
-				final at: FactPos = { file: n.at.file, span: site };
-				site.from <= other && other <= site.to && body.holds(at) && body.mentions(at, name);
-			})
-		);
-	}
-
-	/**
 	 * Whether the call `c` of `n` is a conversion the compiler writes where the text writes one (`runsNoCode`) of a field read
 	 * at the very range it sits at, which the compiler joined from code an inlined call spliced in (`readJoined`): the read
 	 * the text writes — `${map[key].field}` — is what it converts.
@@ -481,11 +461,6 @@ final class FactsProvenance {
 				!f.write && f.at.file == p.file && f.at.span.from == p.span.from && f.at.span.to == p.span.to
 				&& joined(n, f.at, f.field, body)
 		);
-	}
-
-	/** Whether the range `outer` holds `p`; false for none. */
-	private static function holds(outer: Null<FactPos>, p: FactPos): Bool {
-		return outer != null && outer.file == p.file && outer.span.from <= p.span.from && p.span.to <= outer.span.to;
 	}
 
 	/** The member the text spells for the call `c`: an accessor's property; null for a call of no field. */
@@ -550,11 +525,6 @@ final class FactsProvenance {
 		return field != null && field.meta.exists(m -> IMPLICITLY_CALLED_META.contains(m));
 	}
 
-	/** The name of a constructor (`RefShape.constructorName`). */
-	private inline function constructorName(): String {
-		return _scope.shape.constructorName ?? 'new';
-	}
-
 	/** Whether every fact of the typed body `n` sits on `body`'s text as its own (see `bodyIsSource`). */
 	private function factsMatch(n: FactNode, body: BodyText): Bool {
 		return !n.generated && n.incomplete.length <= 0 && n.natives.length <= 0 && !n.reflection.exists(r -> r.isValue)
@@ -581,6 +551,36 @@ final class FactsProvenance {
 			if (!body.mentions(c.at, spelled) && !(body.lowered(c.at) && iterationCalls.contains(member))) return false;
 		}
 		return true;
+	}
+
+	/**
+	 * Whether the typed constructor `n` is one the compiler made for a class the text gives none: it calls its super's —
+	 * handing it its own parameters, every such flow at the constructor's own range — and does nothing else: no
+	 * construction, field access, other flow, conversion, iteration, reflection, native code or function.
+	 */
+	private static function madeConstructor(n: FactNode): Bool {
+		final own: (FactPos) -> Bool = p -> p.file == n.at.file && p.span.from == n.at.span.from && p.span.to == n.at.span.to;
+		return n.kind == 'ctor' && n.calls.foreach(c -> c.access == SUPER) && n.news.length == 0 && n.fields.length == 0
+			&& n.elementWrites.length == 0 && n.flows.foreach(f -> f.via == ARG_FLOW && own(f.at)) && n.strings.length == 0
+			&& n.iterations.length == 0 && n.reflection.length == 0 && n.natives.length == 0 && n.fns.length == 0;
+	}
+
+	/**
+	 * Whether the offset `other` of the range `p`, whose offset `spliced` lies in the code an inlined call spliced into `n`,
+	 * lies in a site of that call in `body` whose text spells the member `name`.
+	 */
+	private static function siteSpells(n: FactNode, p: FactPos, spliced: Int, other: Int, name: String, body: BodyText): Bool {
+		return n.splices.exists(s ->
+			s.body.file == p.file && s.body.span.from <= spliced && spliced <= s.body.span.to && s.sites.exists(site -> {
+				final at: FactPos = { file: n.at.file, span: site };
+				site.from <= other && other <= site.to && body.holds(at) && body.mentions(at, name);
+			})
+		);
+	}
+
+	/** Whether the range `outer` holds `p`; false for none. */
+	private static function holds(outer: Null<FactPos>, p: FactPos): Bool {
+		return outer != null && outer.file == p.file && outer.span.from <= p.span.from && p.span.to <= outer.span.to;
 	}
 
 	/** The field a node id names (`pack.Type.field`, `pack.Type.field~n` for a further overload). */
@@ -848,20 +848,19 @@ private final class BodyText {
 @:nullSafety(Strict)
 private final class Interpolation {
 
-	/** The escapes read, by the character after the backslash. */
-	private static final ESCAPES: Array<Int> = ['n'.code, 'r'.code, 't'.code, '\\'.code, '"'.code, '\''.code];
-
 	/** The first code UTF-8 writes in two bytes, the first it writes in three, and the bytes a basic-plane code takes at most. */
 	private static inline final TWO_BYTES: Int = 0x80;
 
 	private static inline final THREE_BYTES: Int = 0x800;
-
 	private static inline final MAX_WIDTH: Int = 3;
 
 	/** The first and the last code unit of a surrogate pair: a character past the basic plane. */
 	private static inline final SURROGATE_FIRST: Int = 0xd800;
 
 	private static inline final SURROGATE_LAST: Int = 0xdfff;
+
+	/** The escapes read, by the character after the backslash. */
+	private static final ESCAPES: Array<Int> = ['n'.code, 'r'.code, 't'.code, '\\'.code, '"'.code, '\''.code];
 
 	/** The string's range, quotes included. */
 	public final span: Span;

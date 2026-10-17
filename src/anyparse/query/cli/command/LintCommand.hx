@@ -337,7 +337,7 @@ final class LintCommand implements CliCommand {
 	 * run nearly always asks and then the compiles overlap the checks; a report or a narrowed run keeps asking on demand,
 	 * where an early start would compile every configuration for nothing.
 	 */
-	public static function startsFactsEarly(scoped: Bool, oracles: Int, noOracle: Bool, narrowed: Bool, fix: Bool): Bool {
+	public static inline function startsFactsEarly(scoped: Bool, oracles: Int, noOracle: Bool, narrowed: Bool, fix: Bool): Bool {
 		return fix && scoped && oracles > 0 && !noOracle && !narrowed;
 	}
 
@@ -1276,7 +1276,7 @@ final class LintCommand implements CliCommand {
 	 * keeps its list by the same threshold; one that is still over it (a single rule across a whole
 	 * tree) gets the summary, which for one rule is a by-file breakdown.
 	 */
-	public static function summarises(shown: Int, format: String, forced: Null<Bool>, threshold: Int): Bool {
+	public static inline function summarises(shown: Int, format: String, forced: Null<Bool>, threshold: Int): Bool {
 		return format == FORMAT_TEXT && (forced != null ? forced : threshold > 0 && shown > threshold);
 	}
 

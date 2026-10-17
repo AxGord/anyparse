@@ -195,6 +195,14 @@ final class LintConfig {
 	}
 
 	/**
+	 * A rule-specific option as the raw JSON the document wrote, or null when unset — for an option whose shape no typed
+	 * accessor reads (`prefer-api-idiom`'s list of objects), so the owning check validates it entry by entry itself.
+	 */
+	public inline function jsonOption(id: String, key: String): Null<JValue> {
+		return propOf(id, key);
+	}
+
+	/**
 	 * Every compiler-oracle configuration the project declares (the root `compilerOracle`
 	 * key), in declared order; an empty array when it does not opt in.
 	 *
@@ -389,14 +397,6 @@ final class LintConfig {
 		final out: Array<String> = [];
 		LintDocuments.collectStrings(raw, out);
 		return out;
-	}
-
-	/**
-	 * A rule-specific option as the raw JSON the document wrote, or null when unset — for an option whose shape no typed
-	 * accessor reads (`prefer-api-idiom`'s list of objects), so the owning check validates it entry by entry itself.
-	 */
-	public function jsonOption(id: String, key: String): Null<JValue> {
-		return propOf(id, key);
 	}
 
 	/**

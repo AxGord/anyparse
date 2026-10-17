@@ -80,20 +80,6 @@ final class LintDocuments {
 		};
 	}
 
-	/**
-	 * One rule entry layered over the ancestor's entry of the same id: `enabled` and
-	 * `severity` fall through when the nearer document leaves them unsaid, and the
-	 * option bags merge per key. So a nested `{"oversized-type": {"maxMembers": 100}}`
-	 * raises exactly that threshold and changes nothing else about the rule.
-	 */
-	private static function mergeRule(near: RuleConfig, far: Null<RuleConfig>): RuleConfig {
-		if (far == null) return near;
-		final props: Map<String, JValue> = [];
-		for (key => value in far.props) props[key] = value;
-		for (key => value in near.props) props[key] = value;
-		return { enabled: near.enabled ?? far.enabled, severity: near.severity ?? far.severity, props: props };
-	}
-
 	/** The finished config for a folded document — the one place the "absent" nulls collapse into the defaults. */
 	public static function fromDocument(doc: LintDocument): LintConfig {
 		return new LintConfig(
@@ -153,6 +139,40 @@ final class LintDocuments {
 			inherit: config.inherit,
 			drops: drops
 		};
+	}
+
+	/** `parseDocument`, answered from `memo` when the same content was parsed against the same directory before. */
+	public static function parseDocumentIn(memo: Null<DocumentMemo>, content: String, ?baseDir: String): Null<LintDocument> {
+		if (memo == null) return parseDocument(content, baseDir);
+		final key: String = '${baseDir ?? ''}\n$content';
+		if (memo.exists(key)) return memo[key];
+		final doc: Null<LintDocument> = parseDocument(content, baseDir);
+		memo[key] = doc;
+		return doc;
+	}
+
+	/** The configs `resolve` hands `files`, each once (by identity), in the order of the first file that names it. */
+	public static function distinctConfigs(files: Array<String>, resolve: (String) -> LintConfig): Array<LintConfig> {
+		final configs: Array<LintConfig> = [];
+		for (file in files) {
+			final config: LintConfig = resolve(file);
+			if (!configs.contains(config)) configs.push(config);
+		}
+		return configs;
+	}
+
+	/**
+	 * One rule entry layered over the ancestor's entry of the same id: `enabled` and
+	 * `severity` fall through when the nearer document leaves them unsaid, and the
+	 * option bags merge per key. So a nested `{"oversized-type": {"maxMembers": 100}}`
+	 * raises exactly that threshold and changes nothing else about the rule.
+	 */
+	private static function mergeRule(near: RuleConfig, far: Null<RuleConfig>): RuleConfig {
+		if (far == null) return near;
+		final props: Map<String, JValue> = [];
+		for (key => value in far.props) props[key] = value;
+		for (key => value in near.props) props[key] = value;
+		return { enabled: near.enabled ?? far.enabled, severity: near.severity ?? far.severity, props: props };
 	}
 
 	/**
@@ -254,26 +274,6 @@ final class LintDocuments {
 				drops.push('frameworks[$i] is not an object — dropped');
 		}
 		return out;
-	}
-
-	/** `parseDocument`, answered from `memo` when the same content was parsed against the same directory before. */
-	public static function parseDocumentIn(memo: Null<DocumentMemo>, content: String, ?baseDir: String): Null<LintDocument> {
-		if (memo == null) return parseDocument(content, baseDir);
-		final key: String = '${baseDir ?? ''}\n$content';
-		if (memo.exists(key)) return memo[key];
-		final doc: Null<LintDocument> = parseDocument(content, baseDir);
-		memo[key] = doc;
-		return doc;
-	}
-
-	/** The configs `resolve` hands `files`, each once (by identity), in the order of the first file that names it. */
-	public static function distinctConfigs(files: Array<String>, resolve: (String) -> LintConfig): Array<LintConfig> {
-		final configs: Array<LintConfig> = [];
-		for (file in files) {
-			final config: LintConfig = resolve(file);
-			if (!configs.contains(config)) configs.push(config);
-		}
-		return configs;
 	}
 
 }

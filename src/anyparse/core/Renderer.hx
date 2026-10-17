@@ -757,6 +757,20 @@ class Renderer {
 	}
 
 	/**
+	 * Whether `s` is a gap a pending forward hardline swallows: all blank, not verbatim, and
+	 * arriving while an `OptHardlineSkipBeforeHardline` is still pending.
+	 *
+	 * Such a gap was written for a token meant to follow on the SAME line - the `' '` before
+	 * `while` / `else` / `catch` after a `} // c`. That line now ends at the hardline, so the gap
+	 * has nothing left to separate: whether the hardline flushes for the follower or an incoming
+	 * break absorbs it, the gap goes, the way a pending `OptSpace` does. Flushing on it instead
+	 * wrote the newline and then the blank, one space past the statement indent.
+	 */
+	private static inline function absorbedByPendingHardline(ctx: RenderCtx, s: String, verbatim: Bool): Bool {
+		return !verbatim && ctx.pendingHardline >= 0 && trailBlankStart(s) == 0;
+	}
+
+	/**
 	 * Decide whether a collapse-candidate expression paren COMMITS to open
 	 * for the `CollapsePass` decision list (ω-collapse-commit). `breakDoc` is
 	 * the paren's OPEN branch from `IfFullLineExceeds(n, breakDoc, glued)`;
@@ -2996,20 +3010,6 @@ class Renderer {
 		// hardline's share of the invariant.
 		breakLine(ctx, ctx.pendingHardline, false);
 		ctx.pendingHardline = -1;
-	}
-
-	/**
-	 * Whether `s` is a gap a pending forward hardline swallows: all blank, not verbatim, and
-	 * arriving while an `OptHardlineSkipBeforeHardline` is still pending.
-	 *
-	 * Such a gap was written for a token meant to follow on the SAME line - the `' '` before
-	 * `while` / `else` / `catch` after a `} // c`. That line now ends at the hardline, so the gap
-	 * has nothing left to separate: whether the hardline flushes for the follower or an incoming
-	 * break absorbs it, the gap goes, the way a pending `OptSpace` does. Flushing on it instead
-	 * wrote the newline and then the blank, one space past the statement indent.
-	 */
-	private static inline function absorbedByPendingHardline(ctx: RenderCtx, s: String, verbatim: Bool): Bool {
-		return !verbatim && ctx.pendingHardline >= 0 && trailBlankStart(s) == 0;
 	}
 
 	/**

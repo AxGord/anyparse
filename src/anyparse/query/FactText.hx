@@ -15,6 +15,14 @@ using StringTools;
 @:nullSafety(Strict)
 final class FactText {
 
+	/** The `NODE_HEAD` groups of a node's range. */
+	private static inline final HEAD_MIN: Int = 3;
+
+	private static inline final HEAD_MAX: Int = 4;
+
+	/** The length of an accessor's `get_`/`set_` prefix. */
+	private static inline final ACCESSOR_PREFIX: Int = 4;
+
 	/** The prefix every node line starts with, which the writer guarantees: id, home file, range. */
 	private static final NODE_HEAD: EReg = ~/^\{"k":"node","id":("(?:[^"\\]|\\.)*"),"f":("(?:[^"\\]|\\.)*"),"p":\[(\d+),(\d+)\]/;
 
@@ -23,14 +31,6 @@ final class FactText {
 
 	/** A bare identifier. */
 	private static final IDENTIFIER: EReg = ~/^[A-Za-z_][A-Za-z0-9_]*$/;
-
-	/** The `NODE_HEAD` groups of a node's range. */
-	private static inline final HEAD_MIN: Int = 3;
-
-	private static inline final HEAD_MAX: Int = 4;
-
-	/** The length of an accessor's `get_`/`set_` prefix. */
-	private static inline final ACCESSOR_PREFIX: Int = 4;
 
 	/**
 	 * The head of a node line — id, home file as written, range — whether it holds a foreign position, and whether its

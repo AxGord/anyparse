@@ -75,6 +75,45 @@ final class OracleDeclaration {
 		return configHits > ownHits ? config : own;
 	}
 
+	/**
+	 * `path` absolute with every symlink resolved — the identity of a file however a config spells it. A path that does
+	 * not exist yet (an hxml before its first generation) resolves its nearest existing ancestor and keeps the rest.
+	 */
+	public static function realPath(path: String): String {
+		#if (sys || nodejs)
+		final absolute: String = Path.removeTrailingSlashes(Path.normalize(sys.FileSystem.absolutePath(path)));
+		if (sys.FileSystem.exists(absolute)) {
+			final resolved: Null<String> = try sys.FileSystem.fullPath(absolute) catch (exception: Exception) null;
+			return resolved == null ? absolute : Path.normalize(resolved);
+		}
+		final parent: String = Path.directory(absolute);
+		return parent == '' || parent == absolute ? absolute : Path.join([realPath(parent), Path.withoutDirectory(absolute)]);
+		#else
+		return path;
+		#end
+	}
+
+	/**
+	 * One configuration named for a diagnostic: its hxml, plus the defines it adds when it
+	 * declares any.
+	 *
+	 * Every message that used to quote a bare hxml path now has several configurations to tell
+	 * apart, and two of them can share one hxml and differ only in a define.
+	 */
+	public static function describeOracle(oracle: OracleConfig): String {
+		return oracle.defines.length == 0 ? oracle.hxml : '${oracle.hxml} -D ${oracle.defines.join(' -D ')}';
+	}
+
+	/**
+	 * One string per distinct compile a configuration describes: hxml, directory, and defines in
+	 * declared order, each separated by a newline no path or define name carries. The ONE spelling
+	 * every "same configuration?" question shares — the coverage memo, the warm server's state file,
+	 * a report's dedupe — so two of them cannot disagree on what counts as the same build.
+	 */
+	public static function oracleKey(oracle: OracleConfig): String {
+		return [oracle.hxml, oracle.dir ?? ''].concat(oracle.defines).join('\n');
+	}
+
 	/** `dir`, or `/` for the empty string `Path.directory` yields at the filesystem root. */
 	private static inline function dirOrRoot(dir: String): String {
 		return dir == '' ? '/' : dir;
@@ -268,45 +307,6 @@ final class OracleDeclaration {
 				);
 		}
 		return out;
-	}
-
-	/**
-	 * `path` absolute with every symlink resolved — the identity of a file however a config spells it. A path that does
-	 * not exist yet (an hxml before its first generation) resolves its nearest existing ancestor and keeps the rest.
-	 */
-	public static function realPath(path: String): String {
-		#if (sys || nodejs)
-		final absolute: String = Path.removeTrailingSlashes(Path.normalize(sys.FileSystem.absolutePath(path)));
-		if (sys.FileSystem.exists(absolute)) {
-			final resolved: Null<String> = try sys.FileSystem.fullPath(absolute) catch (exception: Exception) null;
-			return resolved == null ? absolute : Path.normalize(resolved);
-		}
-		final parent: String = Path.directory(absolute);
-		return parent == '' || parent == absolute ? absolute : Path.join([realPath(parent), Path.withoutDirectory(absolute)]);
-		#else
-		return path;
-		#end
-	}
-
-	/**
-	 * One configuration named for a diagnostic: its hxml, plus the defines it adds when it
-	 * declares any.
-	 *
-	 * Every message that used to quote a bare hxml path now has several configurations to tell
-	 * apart, and two of them can share one hxml and differ only in a define.
-	 */
-	public static function describeOracle(oracle: OracleConfig): String {
-		return oracle.defines.length == 0 ? oracle.hxml : '${oracle.hxml} -D ${oracle.defines.join(' -D ')}';
-	}
-
-	/**
-	 * One string per distinct compile a configuration describes: hxml, directory, and defines in
-	 * declared order, each separated by a newline no path or define name carries. The ONE spelling
-	 * every "same configuration?" question shares — the coverage memo, the warm server's state file,
-	 * a report's dedupe — so two of them cannot disagree on what counts as the same build.
-	 */
-	public static function oracleKey(oracle: OracleConfig): String {
-		return [oracle.hxml, oracle.dir ?? ''].concat(oracle.defines).join('\n');
 	}
 
 }

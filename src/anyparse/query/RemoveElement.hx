@@ -64,16 +64,6 @@ final class RemoveElement {
 	}
 
 	/**
-	 * The element at `cursor` with its parent — lifted to the wrapper when it is a `final class`'s
-	 * inner form, whose own span leaves the wrapper's `final` behind to glue onto the NEXT declaration
-	 * (`final abstract class Y`). Both the removal and its description read it, so they name one cut.
-	 */
-	private static function elementAt(tree: QueryNode, source: String, cursor: Int): Null<ElementHit> {
-		final hit: Null<ElementHit> = RefactorSupport.elementAtFrom(tree, source, cursor);
-		return hit == null ? null : liftedHit(tree, hit.node);
-	}
-
-	/**
 	 * The one line a removal owed its caller: what the cut at `line:col` takes, named and
 	 * counted, for the op to print beside the file it wrote.
 	 *
@@ -122,6 +112,16 @@ final class RemoveElement {
 				case Failed(_): null;
 			}
 		);
+	}
+
+	/**
+	 * The element at `cursor` with its parent — lifted to the wrapper when it is a `final class`'s
+	 * inner form, whose own span leaves the wrapper's `final` behind to glue onto the NEXT declaration
+	 * (`final abstract class Y`). Both the removal and its description read it, so they name one cut.
+	 */
+	private static function elementAt(tree: QueryNode, source: String, cursor: Int): Null<ElementHit> {
+		final hit: Null<ElementHit> = RefactorSupport.elementAtFrom(tree, source, cursor);
+		return hit == null ? null : liftedHit(tree, hit.node);
 	}
 
 	/** The element `node` names with its parent, lifted to a folding `final` wrapper as `elementAt` does. */

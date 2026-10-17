@@ -36,24 +36,6 @@ final class CalleesCommand implements CliCommand {
 		printCallChainsUsage('callees', true);
 	}
 
-	private static inline function runCallees(args: Array<String>, ctx: CliContext): Int {
-		return runCallChains('callees', true, args, ctx);
-	}
-
-	/**
-	 * The approximate-graph note for `callers` / `callees`. Severity does not swing with the
-	 * unresolved COUNT but with `provenEmpty`: `CallChains.render` always emits the root label,
-	 * so a one-line tree is an empty answer that reads exactly like a populated one, and there
-	 * the omission is the dangerous kind. With edges shown the result is merely partial. Sister
-	 * of `memberAccessNudge`, same two-severity shape; the caller invokes this only when
-	 * something IS unresolved, so a fully resolved zero never claims to be inconclusive.
-	 */
-	private static function chainUnresolvedNote(cmd: String, target: String, unresolved: Int, provenEmpty: Bool): String {
-		return provenEmpty
-			? 'apq $cmd: no $cmd resolved, but $unresolved call site(s) in scope are unresolved — this is NOT proof "$target" has none'
-			: 'apq $cmd: note — $unresolved call site(s) unresolved; the graph is approximate';
-	}
-
 	public static function runCallChains(cmd: String, outward: Bool, args: Array<String>, ctx: CliContext): Int {
 		var lang: String = 'haxe';
 		var depth: Int = 1;
@@ -127,6 +109,35 @@ final class CalleesCommand implements CliCommand {
 		return ctx.emptyExit(provenEmpty);
 	}
 
+	public static function printCallChainsUsage(cmd: String, outward: Bool): Void {
+		final what: String = outward ? 'functions CALLED BY the target (out-edges)' : 'functions CALLING the target (in-edges)';
+		CliIo.sysPrint('Usage: apq $cmd <Type.method|method> <file-or-dir-or-glob>... [options]\n\n');
+		CliIo.sysPrint('Transitive call tree: $what.\n\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --depth <n>    Levels to expand (default 1)\n');
+		CliIo.sysPrint('  --kinds <k,..> Edge kinds: call,ref,new,virtual,contains,accessor (default all)\n');
+		CliIo.sysPrint('  --limit <n>    Max total tree lines across matches (default $DEFAULT_CHAIN_LINES; 0 = uncapped)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+	}
+
+	private static inline function runCallees(args: Array<String>, ctx: CliContext): Int {
+		return runCallChains('callees', true, args, ctx);
+	}
+
+	/**
+	 * The approximate-graph note for `callers` / `callees`. Severity does not swing with the
+	 * unresolved COUNT but with `provenEmpty`: `CallChains.render` always emits the root label,
+	 * so a one-line tree is an empty answer that reads exactly like a populated one, and there
+	 * the omission is the dangerous kind. With edges shown the result is merely partial. Sister
+	 * of `memberAccessNudge`, same two-severity shape; the caller invokes this only when
+	 * something IS unresolved, so a fully resolved zero never claims to be inconclusive.
+	 */
+	private static function chainUnresolvedNote(cmd: String, target: String, unresolved: Int, provenEmpty: Bool): String {
+		return provenEmpty
+			? 'apq $cmd: no $cmd resolved, but $unresolved call site(s) in scope are unresolved — this is NOT proof "$target" has none'
+			: 'apq $cmd: note — $unresolved call site(s) unresolved; the graph is approximate';
+	}
+
 	/**
 	 * Print every match's call tree and report whether the EMPTY answer is PROVEN: no tree
 	 * carried an edge line AND every match was rendered. `CallChains.render` always emits the
@@ -158,17 +169,6 @@ final class CalleesCommand implements CliCommand {
 			return false;
 		}
 		return !anyEdge;
-	}
-
-	public static function printCallChainsUsage(cmd: String, outward: Bool): Void {
-		final what: String = outward ? 'functions CALLED BY the target (out-edges)' : 'functions CALLING the target (in-edges)';
-		CliIo.sysPrint('Usage: apq $cmd <Type.method|method> <file-or-dir-or-glob>... [options]\n\n');
-		CliIo.sysPrint('Transitive call tree: $what.\n\n');
-		CliIo.sysPrint('Options:\n');
-		CliIo.sysPrint('  --depth <n>    Levels to expand (default 1)\n');
-		CliIo.sysPrint('  --kinds <k,..> Edge kinds: call,ref,new,virtual,contains,accessor (default all)\n');
-		CliIo.sysPrint('  --limit <n>    Max total tree lines across matches (default $DEFAULT_CHAIN_LINES; 0 = uncapped)\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
 }

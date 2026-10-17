@@ -16,7 +16,6 @@ using StringTools;
 final class WriterEqualsCommand implements CliCommand {
 
 	private static inline final BYTE_DIFF_WINDOW: Int = 40;
-
 	private static inline final BYTE_DIFF_LEAD: Int = 4;
 
 	public function new() {}
@@ -48,6 +47,21 @@ final class WriterEqualsCommand implements CliCommand {
 	 */
 	public static inline function readExpectedForCompare(path: String): String {
 		return CliIo.readHxtestSectionOrRaw(path, 2);
+	}
+
+	public static function describeByteDiff(actual: String, expected: String): String {
+		final maxLen: Int = expected.length < actual.length ? expected.length : actual.length;
+		var diffAt: Int = -1;
+		for (idx in 0...maxLen) if (expected.fastCodeAt(idx) != actual.fastCodeAt(idx)) {
+			diffAt = idx;
+			break;
+		}
+		if (diffAt == -1) diffAt = maxLen;
+		final start: Int = diffAt - BYTE_DIFF_LEAD < 0 ? 0 : diffAt - BYTE_DIFF_LEAD;
+		final expWin: String = escapeWindow(expected.substr(start, BYTE_DIFF_WINDOW));
+		final actWin: String = escapeWindow(actual.substr(start, BYTE_DIFF_WINDOW));
+		return
+			'apq writer-equals: byte-diff @ $diffAt  exp=<$expWin>  act=<$actWin>  (exp.len=${expected.length}, act.len=${actual.length})';
 	}
 
 	/**
@@ -138,21 +152,6 @@ final class WriterEqualsCommand implements CliCommand {
 		if (emitted == expected) return EXIT_OK;
 		CliIo.sysPrint('${describeByteDiff(emitted, expected)}\n');
 		return EXIT_RUNTIME;
-	}
-
-	public static function describeByteDiff(actual: String, expected: String): String {
-		final maxLen: Int = expected.length < actual.length ? expected.length : actual.length;
-		var diffAt: Int = -1;
-		for (idx in 0...maxLen) if (expected.fastCodeAt(idx) != actual.fastCodeAt(idx)) {
-			diffAt = idx;
-			break;
-		}
-		if (diffAt == -1) diffAt = maxLen;
-		final start: Int = diffAt - BYTE_DIFF_LEAD < 0 ? 0 : diffAt - BYTE_DIFF_LEAD;
-		final expWin: String = escapeWindow(expected.substr(start, BYTE_DIFF_WINDOW));
-		final actWin: String = escapeWindow(actual.substr(start, BYTE_DIFF_WINDOW));
-		return
-			'apq writer-equals: byte-diff @ $diffAt  exp=<$expWin>  act=<$actWin>  (exp.len=${expected.length}, act.len=${actual.length})';
 	}
 
 	private static function escapeWindow(s: String): String {

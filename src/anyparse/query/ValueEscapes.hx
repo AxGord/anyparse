@@ -105,17 +105,6 @@ final class ValueEscapes {
 		return _read?.parameterTypes(path);
 	}
 
-	/** The answer, computed once. */
-	private function answered(): EscapeAnswer {
-		var answer: Null<EscapeAnswer> = _answer;
-		if (answer == null) {
-			answer = compute();
-			_answer = answer;
-		}
-		if (answer.raw) onRaw();
-		return answer;
-	}
-
 	/** Drop the answer: the project's text changed. */
 	public function forget(): Void {
 		_answer = null;
@@ -125,6 +114,17 @@ final class ValueEscapes {
 	/** Whether a value stored in a position declared `type` keeps a nominal type the analysis follows (`ValueCarriers.typedNominal`). */
 	private inline function typedPosition(type: String): Bool {
 		return _carriers.typedNominal(type);
+	}
+
+	/** The answer, computed once. */
+	private function answered(): EscapeAnswer {
+		var answer: Null<EscapeAnswer> = _answer;
+		if (answer == null) {
+			answer = compute();
+			_answer = answer;
+		}
+		if (answer.raw) onRaw();
+		return answer;
 	}
 
 	/**

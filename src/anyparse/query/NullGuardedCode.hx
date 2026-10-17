@@ -39,9 +39,6 @@ using Lambda;
 @:nullSafety(Strict)
 final class NullGuardedCode {
 
-	/** The field accesses of a typed call of a method a parameter of whose holds what the call hands it (`CallFact.access`). */
-	private static final FORWARDING: Array<String> = ['FStatic', 'FInstance'];
-
 	/** The access of a typed call of a static method (`CallFact.access`). */
 	private static inline final STATIC_ACCESS: String = 'FStatic';
 
@@ -55,12 +52,6 @@ final class NullGuardedCode {
 	private static inline final CLASS_KIND: String = 'class';
 
 	private static inline final METHOD_KIND: String = 'method';
-
-	/** The reflective members that write a member by its name: a value they store replaces the one it held. */
-	private static final WRITERS: Array<String> = ['Reflect.setField', 'Reflect.setProperty'];
-
-	/** The kinds of a typed type a test of whose values against null is the language's own (`builtinEquality`). */
-	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface', 'enum'];
 
 	/** The nullable wrapper: a value of it is one of its argument's, or null. */
 	private static inline final NULLABLE: String = 'Null';
@@ -82,6 +73,24 @@ final class NullGuardedCode {
 	/** The metadata making a field callable by code outside the program. */
 	private static inline final EXPOSE: String = ':expose';
 
+	/** The prefix a target gives a Haxe name it cannot spell as it is: the name stands behind it. */
+	private static inline final MANGLED: String = '_hx_';
+
+	/** How many calls a function value is followed through before its uses count as unknown. */
+	private static inline final MAX_DEPTH: Int = 8;
+
+	/** How many typedefs a container's type is read through. */
+	private static inline final MAX_ALIASES: Int = 8;
+
+	/** The field accesses of a typed call of a method a parameter of whose holds what the call hands it (`CallFact.access`). */
+	private static final FORWARDING: Array<String> = ['FStatic', 'FInstance'];
+
+	/** The reflective members that write a member by its name: a value they store replaces the one it held. */
+	private static final WRITERS: Array<String> = ['Reflect.setField', 'Reflect.setProperty'];
+
+	/** The kinds of a typed type a test of whose values against null is the language's own (`builtinEquality`). */
+	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface', 'enum'];
+
 	/** The containers whose element store holds the value stored and calls nothing (`containerSealed`), by typed id. */
 	private static final CONTAINERS: Array<String> = ['Array', 'haxe.ds.Map'];
 
@@ -91,14 +100,20 @@ final class NullGuardedCode {
 	/** A word of target code. */
 	private static final WORD: EReg = ~/[A-Za-z_][A-Za-z0-9_]*/g;
 
-	/** The prefix a target gives a Haxe name it cannot spell as it is: the name stands behind it. */
-	private static inline final MANGLED: String = '_hx_';
+	/** Graph file -> the ranges of its text no run reaches (`deadSpans`). */
+	private final _dead: Map<String, Array<Span>> = [];
 
-	/** How many calls a function value is followed through before its uses count as unknown. */
-	private static inline final MAX_DEPTH: Int = 8;
+	/** `node id:index` -> whether that parameter holds null in every run (`nullOnly`). */
+	private final _nullOnly: Map<String, Bool> = [];
 
-	/** How many typedefs a container's type is read through. */
-	private static inline final MAX_ALIASES: Int = 8;
+	/** `hypothesis|owner.field:element` -> whether a value stored into it, or into an element of it, is never read again. */
+	private final _sealed: Map<String, Bool> = [];
+
+	/** A table key -> its text and tree, or null when it does not read. */
+	private final _parsed: Map<String, Null<ParsedText>> = [];
+
+	/** A table key -> the branches of its text a null guard decides (`guardedBranches`), read once. */
+	private final _branches: Map<String, Array<{ param: MemberParam, branch: Span }>> = [];
 
 	private final _view: FactsView;
 	private final _scope: ReachProject;
@@ -113,26 +128,11 @@ final class NullGuardedCode {
 	/** Which methods the program may obtain as values (`FactsMethodValues`). */
 	private final _methods: () -> FactsMethodValues;
 
-	/** Graph file -> the ranges of its text no run reaches (`deadSpans`). */
-	private final _dead: Map<String, Array<Span>> = [];
-
-	/** `node id:index` -> whether that parameter holds null in every run (`nullOnly`). */
-	private final _nullOnly: Map<String, Bool> = [];
-
-	/** `hypothesis|owner.field:element` -> whether a value stored into it, or into an element of it, is never read again. */
-	private final _sealed: Map<String, Bool> = [];
-
-	/** A table key -> its text and tree, or null when it does not read. */
-	private final _parsed: Map<String, Null<ParsedText>> = [];
-
 	/** The facts read once (`gathered`): calls by target, field accesses by `owner.field`, the words of all target code. */
 	private var _index: Null<FactsIndex> = null;
 
 	/** The parameter whose holding null in every run is being asked (`nullOnly`), as `keyOf` spells it; null between questions. */
 	private var _assumed: Null<String> = null;
-
-	/** A table key -> the branches of its text a null guard decides (`guardedBranches`), read once. */
-	private final _branches: Map<String, Array<{ param: MemberParam, branch: Span }>> = [];
 
 	public function new(
 		view: FactsView, scope: ReachProject, escapedTypes: () -> Null<Array<String>>, bindings: (path:String) -> Null<Array<FactsType>>,
@@ -155,6 +155,11 @@ final class NullGuardedCode {
 			_dead[file] = spans;
 		}
 		return spans.exists(d -> span.from >= d.from && span.to <= d.to);
+	}
+
+	/** `node` seen through parentheses. */
+	private inline function unwrap(node: QueryNode): QueryNode {
+		return BoolExprShape.unwrapParens(node, _shape.parenKind);
 	}
 
 	/**
@@ -520,17 +525,6 @@ final class NullGuardedCode {
 		};
 	}
 
-	/** `t` seen through `Null<T>`. */
-	private static function unwrapNullable(t: FactsType): FactsType {
-		var current: FactsType = t;
-		while (true) switch current {
-			case Named(NULLABLE, [inner]):
-				current = inner;
-			case _:
-				return current;
-		}
-	}
-
 	/**
 	 * Whether the code at `at` lies in a branch a guard of the parameter asked about decides (`_assumed`): code no run before
 	 * a first one handed the parameter another value runs.
@@ -632,20 +626,6 @@ final class NullGuardedCode {
 		return facts.computedTargetCode || facts.targetWords.exists(name);
 	}
 
-	/** The words of the target code `code`, a name a target mangled (`MANGLED`) standing for the name behind it too. */
-	private static function wordsOf(code: String): Array<String> {
-		final out: Array<String> = [];
-		var at: Int = 0;
-		while (WORD.matchSub(code, at)) {
-			final word: String = WORD.matched(0);
-			out.push(word);
-			if (word.startsWith(MANGLED)) out.push(word.substr(MANGLED.length));
-			final pos: { pos: Int, len: Int } = WORD.matchedPos();
-			at = pos.pos + pos.len;
-		}
-		return out;
-	}
-
 	/** The facts the questions read, gathered once over every node and type the builds typed. */
 	private function gathered(): FactsIndex {
 		final held: Null<FactsIndex> = _index;
@@ -671,6 +651,55 @@ final class NullGuardedCode {
 			if (t == null) continue;
 			for (c in t.code) gatherWords(out, c);
 			for (f in t.fields) for (c in f.code) gatherWords(out, c);
+		}
+		return out;
+	}
+
+	/** The function node of `tree` of a function-declaration kind whose range holds `span`, innermost. */
+	private function enclosingFunction(tree: QueryNode, span: Span): Null<QueryNode> {
+		final kinds: Array<String> = _shape.functionKinds ?? [];
+		var found: Null<QueryNode> = null;
+		function walk(node: QueryNode): Void {
+			final s: Null<Span> = node.span;
+			if (s != null && (span.from < s.from || span.to > s.to)) return;
+			if (s != null && kinds.contains(node.kind)) found = node;
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return found;
+	}
+
+	/** The text the facts of the file keyed `key` were read off and its tree, parsed once; null when it does not read. */
+	private function parsed(key: String): Null<ParsedText> {
+		if (_parsed.exists(key)) return _parsed[key];
+		final source: Null<String> = _view.sourceOf(key);
+		final tree: Null<QueryNode> = source == null ? null : ParseGate.parseOrNull(_scope.plugin, source);
+		final read: Null<ParsedText> = source == null || tree == null ? null : { source: source, tree: tree };
+		_parsed[key] = read;
+		return read;
+	}
+
+	/** `t` seen through `Null<T>`. */
+	private static function unwrapNullable(t: FactsType): FactsType {
+		var current: FactsType = t;
+		while (true) switch current {
+			case Named(NULLABLE, [inner]):
+				current = inner;
+			case _:
+				return current;
+		}
+	}
+
+	/** The words of the target code `code`, a name a target mangled (`MANGLED`) standing for the name behind it too. */
+	private static function wordsOf(code: String): Array<String> {
+		final out: Array<String> = [];
+		var at: Int = 0;
+		while (WORD.matchSub(code, at)) {
+			final word: String = WORD.matched(0);
+			out.push(word);
+			if (word.startsWith(MANGLED)) out.push(word.substr(MANGLED.length));
+			final pos: { pos: Int, len: Int } = WORD.matchedPos();
+			at = pos.pos + pos.len;
 		}
 		return out;
 	}
@@ -716,20 +745,6 @@ final class NullGuardedCode {
 		for (w in wordsOf(code)) out.targetWords[w] = true;
 	}
 
-	/** The function node of `tree` of a function-declaration kind whose range holds `span`, innermost. */
-	private function enclosingFunction(tree: QueryNode, span: Span): Null<QueryNode> {
-		final kinds: Array<String> = _shape.functionKinds ?? [];
-		var found: Null<QueryNode> = null;
-		function walk(node: QueryNode): Void {
-			final s: Null<Span> = node.span;
-			if (s != null && (span.from < s.from || span.to > s.to)) return;
-			if (s != null && kinds.contains(node.kind)) found = node;
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return found;
-	}
-
 	/** The nodes of `tree` from its root down to the one spanning exactly `span`, the deepest such, or null. */
 	private static function ancestors(tree: QueryNode, span: Span): Null<Array<QueryNode>> {
 		final path: Array<QueryNode> = [];
@@ -757,21 +772,6 @@ final class NullGuardedCode {
 			if (n.kind == kind) return n;
 		}
 		return null;
-	}
-
-	/** `node` seen through parentheses. */
-	private function unwrap(node: QueryNode): QueryNode {
-		return BoolExprShape.unwrapParens(node, _shape.parenKind);
-	}
-
-	/** The text the facts of the file keyed `key` were read off and its tree, parsed once; null when it does not read. */
-	private function parsed(key: String): Null<ParsedText> {
-		if (_parsed.exists(key)) return _parsed[key];
-		final source: Null<String> = _view.sourceOf(key);
-		final tree: Null<QueryNode> = source == null ? null : ParseGate.parseOrNull(_scope.plugin, source);
-		final read: Null<ParsedText> = source == null || tree == null ? null : { source: source, tree: tree };
-		_parsed[key] = read;
-		return read;
 	}
 
 }

@@ -46,11 +46,11 @@ final class FactsTypeOracle implements TypeOracle {
 	/** The suffix of an abstract's implementation class: its members are the abstract's. */
 	private static inline final IMPL_SUFFIX: String = '_Impl_';
 
-	/** The node kinds that are a member function's own body (`TypedFactsProbe`). */
-	private static final MEMBER_FUNCTION_KINDS: Array<String> = ['method', 'ctor'];
-
 	/** A supertype's metadata whose macro runs over every subtype as its own `@:build` (`inheritedMember`). */
 	private static inline final AUTO_BUILD_META: String = ':autoBuild';
+
+	/** The node kinds that are a member function's own body (`TypedFactsProbe`). */
+	private static final MEMBER_FUNCTION_KINDS: Array<String> = ['method', 'ctor'];
 
 	/** The kinds the facts give a type no operator overload can be declared on (`CompilerFacts.TypeFact`). */
 	private static final PLAIN_KINDS: Array<String> = ['class', 'interface', CompilerFacts.ENUM_TYPE_KIND];
@@ -58,13 +58,13 @@ final class FactsTypeOracle implements TypeOracle {
 	/** The table this oracle reads. */
 	public final facts: CompilerFacts;
 
+	/** Table key -> where the facts of that file are read, settled on first need. */
+	private final _sites: Map<String, Null<FactsSite>> = [];
+
 	private final _current: (String) -> Null<String>;
 	private final _journal: Null<EditJournal>;
 	private final _plugin: GrammarPlugin;
 	private final _fallback: Null<() -> Null<TypeOracle>>;
-
-	/** Table key -> where the facts of that file are read, settled on first need. */
-	private final _sites: Map<String, Null<FactsSite>> = [];
 
 	/** `facts` read as the compile read each file (`CompilerFacts.asCompiled`), built on first need. */
 	private var _asCompiled: Null<CompilerFacts> = null;
@@ -83,40 +83,6 @@ final class FactsTypeOracle implements TypeOracle {
 		_journal = journal;
 		_plugin = plugin;
 		_fallback = fallback;
-	}
-
-	/**
-	 * The compiler facts of the run `plugin` serves (`SymbolIndexHost.compilerFacts`), when every configuration contributed
-	 * to them: a configuration missing from the table could type a declaration differently, and agreement is what a facts
-	 * answer rests on. Null otherwise, or when the run reads none.
-	 */
-	public static function runFacts(plugin: GrammarPlugin): Null<CompilerFacts> {
-		final facts: Null<CompilerFacts> = plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null;
-		return facts == null || !facts.complete() ? null : facts;
-	}
-
-	/**
-	 * The oracle a check or a fix of `file`, whose text is `source` now, asks over the run's facts (`runFacts`) — the door a
-	 * structural rule reads the compiler's facts through — placing a rewritten file through the run's edit journal; null
-	 * when the run has no such facts. It has no fallback: a file whose compiled text is gone declines.
-	 */
-	public static function forFix(plugin: GrammarPlugin, file: String, source: String): Null<FactsTypeOracle> {
-		final facts: Null<CompilerFacts> = runFacts(plugin);
-		if (facts == null) return null;
-		final journal: Null<EditJournal> = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
-		return new FactsTypeOracle(facts, f -> f == file ? source : null, journal, plugin);
-	}
-
-	/**
-	 * `forFix` for a question a CHECK asks while a `--fix` run is under way — the run that reads compiler facts, marked by
-	 * its edit journal (`CachingGrammarPlugin.editJournal`), whose fix gates compile them anyway — and null in any other
-	 * run: a report run never pays for a facts compile on a check's behalf. The operator-overload gate asks here
-	 * (`OperatorSelection`), in the run phase as in the fix phase, so a site only the facts prove is reported by the run
-	 * that will fix it.
-	 */
-	public static function forFixRun(plugin: GrammarPlugin, file: String, source: String): Null<FactsTypeOracle> {
-		final journal: Null<EditJournal> = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
-		return journal == null ? null : forFix(plugin, file, source);
 	}
 
 	/**
@@ -217,17 +183,6 @@ final class FactsTypeOracle implements TypeOracle {
 		final builtins: Array<String> = [for (name in shape.literalTypeNames ?? []) name].concat(shape.nonNullableTypeNames ?? []);
 		return id != null && (builtins.contains(id) || (declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind)))
 			? SourceText.lastSegment(id)
-			: null;
-	}
-
-	/** The span of the parentheses directly around `at` in `source`, or null. */
-	private static function parenthesized(source: String, at: Span): Null<Span> {
-		var from: Int = at.from - 1;
-		while (from >= 0 && source.isSpace(from)) from--;
-		var to: Int = at.to;
-		while (to < source.length && source.isSpace(to)) to++;
-		return from >= 0 && to < source.length && source.fastCodeAt(from) == '('.code && source.fastCodeAt(to) == ')'.code
-			? new Span(from, to + 1)
 			: null;
 	}
 
@@ -414,11 +369,6 @@ final class FactsTypeOracle implements TypeOracle {
 		};
 	}
 
-	/** The token of `name` ending at `nameEnd`. */
-	private static inline function nameOf(name: String, nameEnd: Int): Span {
-		return new Span(nameEnd - name.length, nameEnd);
-	}
-
 	/** The member and the type holding `span` in the file of `site` as it is now; null names where it lies in none. */
 	private function homeOf(site: FactsSite, span: Span): Home {
 		final shape: RefShape = _plugin.refShape();
@@ -456,15 +406,6 @@ final class FactsTypeOracle implements TypeOracle {
 		return member != null && memberOf(n) == member && sameType(site, n.owner, here);
 	}
 
-	/** Whether the typed type `owner` is the type `here` names (see `sameHome`). */
-	private static function sameType(site: FactsSite, owner: String, here: Home): Bool {
-		final generic: Null<String> = site.facts.type(owner)?.genericOf;
-		var id: String = generic == null ? owner : CompilerFacts.baseId(generic);
-		id = SourceText.lastSegment(id);
-		if (id.endsWith(IMPL_SUFFIX)) id = id.substr(0, id.length - IMPL_SUFFIX.length);
-		return here.type != null && id == here.type;
-	}
-
 	/**
 	 * Where the facts of `file` are read: the table itself when the text it describes is still at hand — mapped onto the
 	 * file as it is now when the run changed it since — else the table as the compile read it (`asCompiled`), which a file
@@ -495,21 +436,6 @@ final class FactsTypeOracle implements TypeOracle {
 		return site;
 	}
 
-	/** Whether a value of the facts type `from` is `Dynamic` or holds it: assigning it binds no monomorph. */
-	private static function dynamicSource(from: String): Bool {
-		return from == 'Dynamic' || from.startsWith('Dynamic<') || from.startsWith('Null<Dynamic');
-	}
-
-	/** The one type all of `types` agree on, spelled; `none` when there is none, a decline naming them when several. */
-	private static function agreed(types: Array<String>, scope: TypeScope, none: String): OracleType {
-		return if (types.length == 0)
-			Declined(none)
-		else if (types.length > 1)
-			Declined('the oracle configurations type it differently: ${types.join(' / ')}')
-		else
-			FactsTypeSpelling.spell(types[0], scope);
-	}
-
 	/**
 	 * The typed bodies of the member function `name` of the type holding `at` (its name token, or one of its parameters'):
 	 * nested functions, inlined copies and macro-placed bodies are not the member's own.
@@ -524,6 +450,85 @@ final class FactsTypeOracle implements TypeOracle {
 				)
 					n
 		];
+	}
+
+	/**
+	 * The compiler facts of the run `plugin` serves (`SymbolIndexHost.compilerFacts`), when every configuration contributed
+	 * to them: a configuration missing from the table could type a declaration differently, and agreement is what a facts
+	 * answer rests on. Null otherwise, or when the run reads none.
+	 */
+	public static function runFacts(plugin: GrammarPlugin): Null<CompilerFacts> {
+		final facts: Null<CompilerFacts> = plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null;
+		return facts == null || !facts.complete() ? null : facts;
+	}
+
+	/**
+	 * The oracle a check or a fix of `file`, whose text is `source` now, asks over the run's facts (`runFacts`) — the door a
+	 * structural rule reads the compiler's facts through — placing a rewritten file through the run's edit journal; null
+	 * when the run has no such facts. It has no fallback: a file whose compiled text is gone declines.
+	 */
+	public static function forFix(plugin: GrammarPlugin, file: String, source: String): Null<FactsTypeOracle> {
+		final facts: Null<CompilerFacts> = runFacts(plugin);
+		if (facts == null) return null;
+		final journal: Null<EditJournal> = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
+		return new FactsTypeOracle(facts, f -> f == file ? source : null, journal, plugin);
+	}
+
+	/**
+	 * `forFix` for a question a CHECK asks while a `--fix` run is under way — the run that reads compiler facts, marked by
+	 * its edit journal (`CachingGrammarPlugin.editJournal`), whose fix gates compile them anyway — and null in any other
+	 * run: a report run never pays for a facts compile on a check's behalf. The operator-overload gate asks here
+	 * (`OperatorSelection`), in the run phase as in the fix phase, so a site only the facts prove is reported by the run
+	 * that will fix it.
+	 */
+	public static function forFixRun(plugin: GrammarPlugin, file: String, source: String): Null<FactsTypeOracle> {
+		final journal: Null<EditJournal> = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
+		return journal == null ? null : forFix(plugin, file, source);
+	}
+
+	/** The token of `name` ending at `nameEnd`. */
+	private static inline function nameOf(name: String, nameEnd: Int): Span {
+		return new Span(nameEnd - name.length, nameEnd);
+	}
+
+	/** Whether `inner` lies within `outer`. */
+	private static inline function within(inner: Span, outer: Span): Bool {
+		return outer.from <= inner.from && inner.to <= outer.to;
+	}
+
+	/** The span of the parentheses directly around `at` in `source`, or null. */
+	private static function parenthesized(source: String, at: Span): Null<Span> {
+		var from: Int = at.from - 1;
+		while (from >= 0 && source.isSpace(from)) from--;
+		var to: Int = at.to;
+		while (to < source.length && source.isSpace(to)) to++;
+		return from >= 0 && to < source.length && source.fastCodeAt(from) == '('.code && source.fastCodeAt(to) == ')'.code
+			? new Span(from, to + 1)
+			: null;
+	}
+
+	/** Whether the typed type `owner` is the type `here` names (see `sameHome`). */
+	private static function sameType(site: FactsSite, owner: String, here: Home): Bool {
+		final generic: Null<String> = site.facts.type(owner)?.genericOf;
+		var id: String = generic == null ? owner : CompilerFacts.baseId(generic);
+		id = SourceText.lastSegment(id);
+		if (id.endsWith(IMPL_SUFFIX)) id = id.substr(0, id.length - IMPL_SUFFIX.length);
+		return here.type != null && id == here.type;
+	}
+
+	/** Whether a value of the facts type `from` is `Dynamic` or holds it: assigning it binds no monomorph. */
+	private static function dynamicSource(from: String): Bool {
+		return from == 'Dynamic' || from.startsWith('Dynamic<') || from.startsWith('Null<Dynamic');
+	}
+
+	/** The one type all of `types` agree on, spelled; `none` when there is none, a decline naming them when several. */
+	private static function agreed(types: Array<String>, scope: TypeScope, none: String): OracleType {
+		return if (types.length == 0)
+			Declined(none)
+		else if (types.length > 1)
+			Declined('the oracle configurations type it differently: ${types.join(' / ')}')
+		else
+			FactsTypeSpelling.spell(types[0], scope);
 	}
 
 	/**
@@ -557,11 +562,6 @@ final class FactsTypeOracle implements TypeOracle {
 			if (cut >= 0) member = member.substr(0, cut);
 		}
 		return member;
-	}
-
-	/** Whether `inner` lies within `outer`. */
-	private static inline function within(inner: Span, outer: Span): Bool {
-		return outer.from <= inner.from && inner.to <= outer.to;
 	}
 
 }
