@@ -23628,6 +23628,54 @@
 			"find": " || (autoBuildCounts && chain.generated)",
 			"replace": "",
 			"note": "an @:autoBuild ancestor no longer keeps unused-public-member from deleting a method its macro may call"
+		},
+		{
+			"name": "M-SAFE-REVERT-ABORTS",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyLintFixes",
+			"find": "fixedCount -= settleRevert(safePass, safeEditsOf, changedFiles, files, originalOf, true);",
+			"replace": "if (safePass.reverted) {\n\t\t\tCliIo.stderr(safePass.notice);\n\t\t\treturn EXIT_RUNTIME;\n\t\t}",
+			"note": "the run stops after a safe revert, before the risky and oracle-assisted phases, although the revert left the tree green"
+		},
+		{
+			"name": "M-SAFE-REVERT-EDITS-COUNTED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "settleRevert",
+			"find": "for (file in outcome.revertedFiles) takenBack += editsOf[file] ?? 0;",
+			"replace": "",
+			"note": "the summary still counts the edits of the files the net rolled back"
+		},
+		{
+			"name": "M-SAFE-REVERT-FILES-COUNTED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "settleRevert",
+			"find": "changedFiles.resize(0);",
+			"replace": "stillChanged.resize(0);",
+			"note": "the summary still counts a reverted file as changed"
+		},
+		{
+			"name": "M-SAFE-REVERT-EXIT-OK",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyLintFixes",
+			"find": "return safePass.reverted || followUp.reverted ? EXIT_RUNTIME : EXIT_OK;",
+			"replace": "return EXIT_OK;",
+			"note": "a run that had to revert a safe fix exits as a success"
+		},
+		{
+			"name": "M-SAFE-REVERT-UNSAID",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "settleRevert",
+			"find": "if (goesOn)",
+			"replace": "if (false)",
+			"note": "the run goes on after a safe revert without saying so"
+		},
+		{
+			"name": "M-RETURN-CHAIN-COMMENT-ADMITTED",
+			"type": "anyparse.check.SimplifyBooleanReturnChain",
+			"method": "fix",
+			"find": "if (SourceComments.hasCommentMarker(source, span.from, span.to)) {",
+			"replace": "if (false) {",
+			"note": "the flat guard-chain rewrite drops a comment inside the chain"
 		}
 	]
 }
