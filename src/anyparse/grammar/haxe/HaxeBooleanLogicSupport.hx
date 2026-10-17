@@ -321,6 +321,11 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		return span == null ? '' : source.substring(span.from, span.to).trim();
 	}
 
+	/** Whether `text` holds a comment opener — over-reads one inside a string literal, which only refuses a regrouping. */
+	private static inline function commented(text: String): Bool {
+		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
+	}
+
 	/**
 	 * The precedence an expression must bind at to sit UNPARENTHESISED in a `slotKind` child slot, or
 	 * null when the slot constrains nothing — including a kind this function does not model, since an
@@ -748,11 +753,6 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 			l
 		else
 			null;
-	}
-
-	/** Whether `text` holds a comment opener — over-reads one inside a string literal, which only refuses a regrouping. */
-	private static inline function commented(text: String): Bool {
-		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
 	}
 
 }

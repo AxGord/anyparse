@@ -504,20 +504,8 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 		]) {
 			if (kind != null && !modifiers.contains(kind)) modifiers.push(kind);
 		}
-		final nonNullKinds: Array<String> = [
-			for (kind in MemberKinds.constantLiteralKinds(shape)) if (kind != shape.nullLiteralKind) kind
-		];
-		for (kind in [
-			shape.newExprKind,
-			shape.arrayLiteralKind,
-			shape.objectLiteralKind,
-			shape.notKind,
-			shape.logicalAndKind,
-			shape.logicalOrKind
-		]) if (kind != null) nonNullKinds.push(kind);
-		for (kind in (shape.lambdaKinds ?? []).concat(shape.comparisonKinds ?? [])) nonNullKinds.push(kind);
 		return {
-			nonNullKinds: nonNullKinds,
+			nonNullKinds: nonNullKindsOf(shape),
 			nullLiteralKind: shape.nullLiteralKind,
 			parenKind: shape.parenKind,
 			negationKind: shape.negationKind,
@@ -552,10 +540,28 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 	 */
 	private static function provenNonNull(arg: QueryNode, owner: Null<String>, entry: Parsed, scope: Scope, seams: Seams): Bool {
 		final kids: Array<QueryNode> = arg.children;
-		if ((arg.kind == seams.parenKind || arg.kind == seams.negationKind) && kids.length == 1)
-			return provenNonNull(kids[0], owner, entry, scope, seams);
-		if (seams.nonNullKinds.contains(arg.kind)) return true;
-		return owner != null && constantSpelling(arg, owner, owner, entry, scope, seams) != null;
+		return (arg.kind == seams.parenKind || arg.kind == seams.negationKind) && kids.length == 1
+			? provenNonNull(kids[0], owner, entry, scope, seams)
+			: seams.nonNullKinds.contains(arg.kind) || owner != null && constantSpelling(arg, owner, owner, entry, scope, seams) != null;
+	}
+
+	/**
+	 * The kinds of an expression that is never `null` (`provenNonNull`): a non-null literal, a
+	 * construction, a collection or object literal, a function value, a boolean operator's result.
+	 */
+	private static function nonNullKindsOf(shape: RefShape): Array<String> {
+		final out: Array<String> = [
+			for (kind in MemberKinds.constantLiteralKinds(shape)) if (kind != shape.nullLiteralKind) kind
+		];
+		for (kind in [
+			shape.newExprKind,
+			shape.arrayLiteralKind,
+			shape.objectLiteralKind,
+			shape.notKind,
+			shape.logicalAndKind,
+			shape.logicalOrKind
+		]) if (kind != null) out.push(kind);
+		return out.concat(shape.lambdaKinds ?? []).concat(shape.comparisonKinds ?? []);
 	}
 
 }

@@ -23199,8 +23199,8 @@
 		{
 			"name": "M-UNUSED-PRIVATE-FIELD-KIND-PURITY",
 			"type": "anyparse.check.UnusedPrivate",
-			"method": "fix",
-			"find": ": TypeResolver.isDeletionPure.bind(_, tree, shape, declaredTypes, index);",
+			"method": "initializerPurity",
+			"find": ": TypeResolver.isDeletionPure.bind(_, tree, shape, RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [], index);",
 			"replace": ": MemberKinds.isSideEffectFree.bind(_, shape);",
 			"note": "a field initializer is judged kind-only again, so a pure collection literal or stdlib call keeps a dead field"
 		}

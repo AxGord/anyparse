@@ -301,13 +301,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		// resolution scope onto whatever it is handed.
 		final reflected: Array<String> = _reflectedContents ?? ReflectionScan.reflectionSurface([{ file: '', source: source }], plugin)
 			.whole;
-		// A field initializer is judged by the deletion purity `unused-local` asks of a local's: with an index, a plain field
-		// read, a pure array literal and a provably pure stdlib call widen the kind-only answer.
 		final shape: RefShape = plugin.refShape();
-		final declaredTypes: Map<Int, String> = RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [];
-		final pure: (QueryNode) -> Bool = index == null
-			? MemberKinds.isSideEffectFree.bind(_, shape)
-			: TypeResolver.isDeletionPure.bind(_, tree, shape, declaredTypes, index);
+		final pure: (QueryNode) -> Bool = initializerPurity(plugin, source, tree, index);
 
 		final deleting: Array<QueryNode> = [];
 		// The finding behind each member this call TRIED to delete, so the region gate below can name
@@ -956,6 +951,20 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 				declined.declineReason = 'every member of its `#if` branch would go with it, and emptying a conditional region '
 					+ 'loses the branch itself';
 		}
+	}
+
+	/**
+	 * How `fix` judges a field initializer: by the deletion purity `unused-local` asks of a local's — with an index, a
+	 * plain field read, a pure array literal and a provably pure stdlib call widen the kind-only answer
+	 * (`TypeResolver.isDeletionPure`); without one, `MemberKinds.isSideEffectFree`.
+	 */
+	private static function initializerPurity(
+		plugin: GrammarPlugin, source: String, tree: QueryNode, index: Null<SymbolIndex>
+	): (QueryNode) -> Bool {
+		final shape: RefShape = plugin.refShape();
+		return index == null
+			? MemberKinds.isSideEffectFree.bind(_, shape)
+			: TypeResolver.isDeletionPure.bind(_, tree, shape, RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [], index);
 	}
 
 }
