@@ -3329,3 +3329,60 @@ decided the question; it may not become a record of runs.
   is listed once); only the paths keep a memo, cleared when an index is taken. A graph merges an index only over files
   it does not hold, so asking the whole index answers what the per-file tables held — byte-identical on the three TM
   trees and anyparse — branch `feat/infra-N6`
+- the last two readers of a construction's children as its arguments read `QueryNode.typeArgCount` now. `ImplicitSites.
+  landings` landed EVERY child of a `new` as a value, so `new Box<Int>(d)` put a landing of no known type at `Int` — a
+  string conversion of any object at every construction that writes type arguments. `CallGraph` (`handleNew`'s
+  argument scan, `argumentSlot`, the expected type of a constructor argument) skips them too; there it was a pure
+  move (a `Named` child is neither a lambda, a call nor a value read), and the expected-type slice no longer re-derives
+  the count through `NominalTypes.writtenConstruction` — branch `feat/infra-N10`
+- `apq rewrite 'final $x = $v' 'var $x = $v'` over `final f:Float = 1` wrote `var f = 1` — re-parseable, and an `Int`
+  where there was a `Float`: a pattern with no type slot constrains none (kept — `search` still finds an annotated
+  declaration with the plain spelling), and nothing recorded that the input HAD one. `Matcher.unifyType` records the
+  input's type in `Match.unwritten` as it records unwritten type arguments, now an enum (`TypeArguments` /
+  `TypeAnnotation`), and `rewrite` refuses the match naming the type and the spelling that carries it
+  (`final $x:$T = $v`). Refusal rather than carry: the template is text, and which slot of it would take the type is
+  not something the op can know — branch `feat/infra-N10`
+- a moved declaration that names a SUB-module type of its own source module (`typedef Pair` beside `class Src`) was
+  refused by `move` and `move-member` alike ("no import to carry"), and `testAStaticReceiverOnASiblingSubTypeIsRefused`
+  documented the false premise that no statement can name such a type from another file. `import <module>.<Sub>;` does
+  (compile-proved on 4.3.7, including a source module left with no main type after the move), so
+  `DependencyCarry.ownSubModuleImport` carries it when the source binds the name through its module-own rung and holds
+  no statement of its own; the collision gate then prices it as a carried statement. A `private` sub-type, which no
+  spelling imports, still refuses, and the module's MAIN type is not covered (the package rung reaches it in the same
+  package) — branch `feat/infra-N10`
+- `move-member` refused a move whose bodies read a MUTABLE field ("shared mutable state cannot be mirrored") even when
+  nothing but the moved members touched it, though listing the field by hand moved it fine. `MoveMemberFields.
+  ownedFieldClosure` takes along, to a fixed point, every instance data field the moved members alone own — every bare
+  reference `Refs` binds to it inside a moved member, no field access of its name outside them in any scope file, a
+  plain field (a `var` with no accessor clause, a `final` with an initializer), not `#if`-guarded, no destination member
+  of that name. Anything else stays, and the refusal now names the staying members that keep it (fail-closed as
+  before; listing the field explicitly still routes those readers through the via field) — branch `feat/infra-N10`
+- receiver-qualified callers of a moved INSTANCE member (`_g.x()` in another class) were left unrewritten by contract
+  ("they fail the next compile loudly"), so a split into a nested object (`_g.x()` -> `_g.library.x()`, C2's
+  `LibraryCalls`) ended in 24 hand edits. `MoveMemberReceivers` classifies every access named like a moved instance
+  member by its receiver's type, through the checks' own typing door (`CheckScan.typeNominalResolver` over the move's
+  scope index): the source type (declared once in scope) or a subtype routes through the via field; an in-scope type
+  `SubtypeGraph.provablyNotSubtype` clears, or a std type declaring a member of that name (`StdTypes.memberOf`), is left
+  alone; a type-namespace receiver is a static access; anything else — untyped, `Dynamic`, a type parameter, `super`, a
+  null-safe access — REFUSES the move (positive whitelist), which turns some former successes that wrote a broken tree
+  into refusals. A caller outside the source type needs the via field public. Known limit: a forwarding abstract over
+  the source (`@:forward abstract A(Src)`) is read as unrelated — the result then fails to compile, loudly — branch
+  `feat/infra-N10`
+- `move-member --keep-bare` (opt-in, default unchanged) keeps the source's bare callers of moved statics bare through
+  one `import <destModule>.*;` (C2 wrote it by hand for `TypedFactsTypeStrings`). The wildcard binds a name only
+  after the file's own resolution fails — a local, a class or supertype static, a module-level value, an explicit field
+  import each win (compile-probed on 4.3.7) — so the op proves it whole: destination is its module's main class in
+  another module, the source's supertype chain resolves and declares none of the wildcard's names
+  (`DependencyCarry.wildcardBoundNames`, the carry's own model of what such a wildcard binds), the source imports and
+  declares none of them, and no identifier of the source spells one anywhere but at the kept callers; otherwise a
+  refusal naming the reason. Opt-in because a default change would rewrite every pinned move-member result — branch
+  `feat/infra-N10`
+- two or more moved members needing private access to the source each got their own `@:access(<pkg>.<Src>)` line;
+  they now share one on the destination TYPE, placed where `add-meta` places an entry (`AddMeta.entryEdit`, the
+  placement `addMeta` itself now goes through). One member keeps the member-level line (the user's rule: method-level
+  when only it needs the grant) — branch `feat/infra-N10`
+- the N10 additions put `MoveMember` over the member limit (55 > 50); the owned-field closure and the receiver
+  classification moved out to `MoveMemberFields` / `MoveMemberReceivers`, with `move-member` itself (`--keep-bare`, the
+  class-level `@:access`, the sub-type import of `ReceiverHit`'s `move`). Two helpers moved to their shared homes for
+  reuse rather than copied: `PreferReadOnlyField.isProperty` -> `SourceText.isProperty` and
+  `DependencyCarry.memberAccessKinds` -> `ShapeVocab.memberAccessKinds` — branch `feat/infra-N10`

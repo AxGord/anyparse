@@ -1631,15 +1631,24 @@ class MoveSymbolSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * The source module declares `Sub` itself, and a module's own type beats every import — so the module import that also
+	 * declares one is NOT what the moved code means by the name, and carrying it would rebind the moved code to `q.Mod.Sub`
+	 * with nothing said. What the moved code means is the source's own sub-type, which `import p.Mover.Sub;` names exactly:
+	 * that is carried, and the module import is not. Compile-proved on 4.3.7 (`d` keeps the type `p.Mover.Sub`).
+	 */
+	@:pin('control')
+	@:killer('M-CARRY-OWN-SUB-UNCARRIED')
 	public function testAModuleImportTheLadderDoesNotAgreeWithIsNotCarried(): Void {
-		// The source module declares `Sub` itself, and a module's own type beats every import — so the
-		// module import that also declares one is NOT what the moved code means by the name, and
-		// carrying it would rebind the moved code to `q.Mod.Sub` with nothing said.
-		assertErrContains(MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', [
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 5, 7, 'p/Host.hx', [
 			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
 			{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Mod;\n\nclass Mover {\n\tvar d:Sub;\n}\n\nclass Sub {}' },
 			{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {}' }
-		], plugin(), typeRefShape()), 'no import to carry');
+		]);
+		Assert.equals(
+			'package p;\n\nimport p.Mover.Sub;\n\nclass Host {}\n\nclass Mover {\n\tvar d:Sub;\n}\n',
+			changeFor(changes, 'p/Host.hx').newSource
+		);
 	}
 
 	public function testQualifiedTypeHeadRebindingAcrossPackagesRefused(): Void {
@@ -2238,20 +2247,34 @@ class MoveSymbolSliceTest extends Test {
 	}
 
 	/**
-	 * The same widening turns a silent break into a refusal where carrying cannot help: a SECONDARY
-	 * type of the module the declaration is leaving is `Type not found` from anywhere else, so there is
-	 * no statement to write. Compile-proved on the shape — the base engine writes two files at rc 0 and
-	 * the tree then reads `Type not found : Sib` — and the whole refusal cost this arm adds to the
-	 * Pony census is a couple of cases, both of them exactly this.
+	 * The same widening prices a SECONDARY type of the module the declaration is leaving: it is `Type not found` bare from
+	 * anywhere else, the source holds no statement for it, and the move refused — although `import p.Mover.Sib;` names it
+	 * exactly. That import is carried now, and a `private` sub-type, which no spelling imports, still refuses.
+	 * Compile-proved on 4.3.7: the moved `use()` returns `Sib.go()` from `p.Host` as it did from `p.Mover`.
 	 */
-	public function testAStaticReceiverOnASiblingSubTypeIsRefused(): Void {
-		assertErrContains(MoveSymbol.moveType('p/Mover.hx', 3, 7, 'p/Host.hx', [
-			{
-				file: 'p/Mover.hx',
-				source: 'package p;\n\nclass Mover {\n\tpublic static function use():Int return Sib.go();\n}\n\nclass Sib {}'
-			},
-			{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {}' }
-		], plugin(), typeRefShape()), 'no import to carry');
+	@:pin('control')
+	@:killer('M-CARRY-OWN-SUB-UNCARRIED') @:killer('M-CARRY-OWN-SUB-PRIVATE')
+	public function testAStaticReceiverOnASiblingSubTypeIsCarried(): Void {
+		inline function scope(sib: String): Array<{ file: String, source: String }> {
+			return [
+				{
+					file: 'p/Mover.hx',
+					source: 'package p;\n\nclass Mover {\n\tpublic static function use():Int return Sib.go();\n}\n\n$sib'
+				},
+				{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {}' }
+			];
+		}
+		final changes: Array<MoveChange> = okChanges(
+			'p/Mover.hx', 3, 7, 'p/Host.hx', scope('class Sib {\n\tpublic static function go():Int return 1;\n}')
+		);
+		Assert.isTrue(changeFor(changes, 'p/Host.hx').newSource.contains('import p.Mover.Sib;'), changeFor(changes, 'p/Host.hx').newSource);
+		assertErrContains(
+			MoveSymbol.moveType(
+				'p/Mover.hx', 3, 7, 'p/Host.hx', scope('private class Sib {\n\tpublic static function go():Int return 1;\n}'), plugin(),
+				typeRefShape()
+			),
+			'no import to carry'
+		);
 	}
 
 	/**

@@ -1944,8 +1944,8 @@ final class CallGraph {
 			for (alternate in types.imports.alternateTypes(file, typeName)) constructionRun(alternate, node.span, currentType);
 			final span: Null<Span> = node.span;
 			if (span != null) sites[span.from] = { target: target, receiver: null };
-			// constructor args can carry callbacks / lambdas too
-			scanArgs(node.children, 0, target, null, currentType);
+			// constructor args can carry callbacks / lambdas too; the leading `typeArgCount` children are type arguments
+			scanArgs(node.children, node.typeArgCount, target, null, currentType);
 		}
 
 		/**
@@ -2036,9 +2036,7 @@ final class CallGraph {
 			} else if ((kind == callKind && index >= 1) || kind == newExprKind) {
 				final site: Null<CallSite> = span == null ? null : sites[span.from];
 				// a `new` names its type's arguments among its children (`new Box<Int>(x)`): they are no arguments
-				final args: Array<QueryNode> = kind == callKind
-					? holder.children.slice(1)
-					: holder.children.slice(NominalTypes.writtenConstruction(holder, shape, source)?.args.length ?? holder.children.length);
+				final args: Array<QueryNode> = kind == callKind ? holder.children.slice(1) : holder.children.slice(holder.typeArgCount);
 				final at: Int = args.indexOf(holder.children[index]);
 				site == null || at < 0 ? null : argumentTypeSource(site, at, args.length, currentType);
 			} else
@@ -2224,7 +2222,7 @@ final class CallGraph {
 
 		/** Whether child `i` of `node` is a call / constructor ARGUMENT value slot, which `scanArgs` / `handleNew` own. */
 		function argumentSlot(node: QueryNode, i: Int, inArgument: Bool): Bool {
-			return (node.kind == callKind && i >= 1) || (newExprKind != null && node.kind == newExprKind)
+			return (node.kind == callKind && i >= 1) || (newExprKind != null && node.kind == newExprKind && i >= node.typeArgCount)
 				|| (inArgument && (node.kind == parenKind || (node.kind == ternaryKind && i >= 1)));
 		}
 

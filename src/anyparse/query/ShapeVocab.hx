@@ -122,4 +122,16 @@ final class ShapeVocab {
 		return out;
 	}
 
+	/**
+	 * The kinds a MEMBER ACCESS projects as — the node whose receiver child is the head of a
+	 * `Helper.go()`. Read off the shape rather than spelled here, so a second grammar's own spellings
+	 * arrive with it; a shape that declares none contributes no receiver names at all.
+	 */
+	public static function memberAccessKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		for (kind in [shape.fieldAccessKind, shape.nullSafeAccessKind, shape.forceFieldAccessKind]) if (kind != null && !out.contains(kind))
+			out.push(kind);
+		return out;
+	}
+
 }

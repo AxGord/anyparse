@@ -174,7 +174,8 @@ final class ImplicitSites {
 				land(node.children[0], written.name);
 		}
 		if (kind == _shape.callKind) for (i in 1...node.children.length) land(node.children[i], null);
-		if (kind == _shape.newExprKind) for (arg in node.children) land(arg, null);
+		// a construction's leading `typeArgCount` children are the type arguments it writes (`new Box<Int>(x)`), no values
+		if (kind == _shape.newExprKind) for (k in node.typeArgCount ... node.children.length) land(node.children[k], null);
 		return out;
 	}
 

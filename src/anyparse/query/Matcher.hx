@@ -56,7 +56,7 @@ final class Matcher {
 	): Void {
 		if (kindFilter == null || input.kind == kindFilter) {
 			final bindings: Map<String, QueryNode> = [];
-			final unwritten: Array<Span> = [];
+			final unwritten: Array<Unwritten> = [];
 			if (unify(pattern, input, eq, bindings, unwritten)) {
 				final span: Null<Span> = input.span;
 				if (span != null) out.push(new Match(span, bindings, input, unwritten));
@@ -74,7 +74,7 @@ final class Matcher {
 	 * 1`) are enforced.
 	 */
 	private static function unify(
-		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>, unwritten: Array<Span>
+		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>, unwritten: Array<Unwritten>
 	): Bool {
 		// A star is consumed by its PARENT's child loop below and never reaches
 		// here as a whole-subtree pattern — `PatternStar.validate` refuses a
@@ -131,11 +131,19 @@ final class Matcher {
 	 * pattern that names a type requires the input to carry one and to unify with it. The
 	 * slot's subtree is an ordinary tree, so a metavariable inside it (`final $x:Array<$T> = $v`)
 	 * binds exactly as it does anywhere else.
+	 *
+	 * The unconstrained input type is recorded in `unwritten`, as a type argument is: nothing in
+	 * the pattern holds it, so `rewrite 'final $x = $v' 'var $x = $v'` over `final f:Float = 1`
+	 * wrote `var f = 1` — re-parseable, and an `Int` where there was a `Float`.
 	 */
 	private static function unifyType(
-		pType: Null<QueryNode>, iType: Null<QueryNode>, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>, unwritten: Array<Span>
+		pType: Null<QueryNode>, iType: Null<QueryNode>, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>,
+		unwritten: Array<Unwritten>
 	): Bool {
-		return pType == null || iType != null && unify(pType, iType, eq, bindings, unwritten);
+		if (pType != null) return iType != null && unify(pType, iType, eq, bindings, unwritten);
+		final at: Null<Span> = iType?.span;
+		if (at != null) unwritten.push(TypeAnnotation(at));
+		return true;
 	}
 
 	/**
@@ -147,7 +155,7 @@ final class Matcher {
 	 * `unwritten`, because nothing in the pattern can carry those arguments into a replacement.
 	 */
 	private static function unifyChildren(
-		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>, unwritten: Array<Span>
+		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>, unwritten: Array<Unwritten>
 	): Bool {
 		final pTypes: Int = pattern.typeArgCount;
 		final iTypes: Int = input.typeArgCount;
@@ -155,7 +163,7 @@ final class Matcher {
 		final ic: Array<QueryNode> = input.children;
 		if (pTypes == 0 && iTypes > 0) {
 			final at: Null<Span> = input.span;
-			if (at != null) unwritten.push(at);
+			if (at != null) unwritten.push(TypeArguments(at));
 		} else if (!unifyRun(pc, 0, pTypes, ic, 0, iTypes, eq, bindings, unwritten))
 			return false;
 		return unifyRun(pc, pTypes, pc.length, ic, iTypes, ic.length, eq, bindings, unwritten);
@@ -171,7 +179,7 @@ final class Matcher {
 	 */
 	private static function unifyRun(
 		p: Array<QueryNode>, pFrom: Int, pTo: Int, i: Array<QueryNode>, iFrom: Int, iTo: Int, eq: Null<KindEquivalence>,
-		bindings: Map<String, QueryNode>, unwritten: Array<Span>
+		bindings: Map<String, QueryNode>, unwritten: Array<Unwritten>
 	): Bool {
 		final star: Int = starIndex(p, pFrom, pTo);
 		final pLen: Int = pTo - pFrom;
@@ -217,17 +225,29 @@ final class Match {
 	public final node: QueryNode;
 
 	/**
-	 * The spans of the matched nodes whose TYPE ARGUMENTS the pattern did not write (`new $C($a)`
-	 * over `new Box<Int>(1)`): the match is sound, but no metavariable holds those arguments, so a
-	 * replacement spliced over `span` would drop them — `Rewrite` refuses such a match.
+	 * The parts of the matched nodes the pattern did not write — the type arguments of `new Box<Int>(1)`
+	 * under `new $C($a)`, the type of `final b:String = 1` under `final $x = $v`: the match is sound, but no
+	 * metavariable holds them, so a replacement spliced over `span` would drop them — `Rewrite` refuses such
+	 * a match.
 	 */
-	public final unwritten: Array<Span>;
+	public final unwritten: Array<Unwritten>;
 
-	public function new(span: Span, bindings: Map<String, QueryNode>, node: QueryNode, ?unwritten: Array<Span>) {
+	public function new(span: Span, bindings: Map<String, QueryNode>, node: QueryNode, ?unwritten: Array<Unwritten>) {
 		this.span = span;
 		this.bindings = bindings;
 		this.node = node;
 		this.unwritten = unwritten ?? [];
 	}
+
+}
+
+/** A part of a matched node its pattern did not write, so no metavariable holds it (`Match.unwritten`). */
+enum Unwritten {
+
+	/** The type arguments of a construction (`new Box<Int>(1)` under `new $C($a)`), at the construction's span. */
+	TypeArguments(at: Span);
+
+	/** The type a declaration or a check writes (`final b:String = 1` under `final $x = $v`), at the type's span. */
+	TypeAnnotation(at: Span);
 
 }
