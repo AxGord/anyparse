@@ -111,9 +111,10 @@ final class WriterBlankLowering {
 	 * knob rather than adding to it; `apply` measures both neighbours and
 	 * splices the hardlines in at the recorded index.
 	 *
-	 * The width side compares against ONE indent level. That is exact for a
-	 * top-level type and under-counts for a nested one, which can only cost a
-	 * blank that a stricter measure would have added — never a spurious one.
+	 * The measure is the runtime `anyparse.format.MemberGap.multiline` (ONE
+	 * indent level of width), the same predicate the `member-order` check reads
+	 * through `GrammarPlugin.memberGapPolicy`, so the check never demands a
+	 * tight gap this pass would open again.
 	 */
 	private static function blankAroundMultilineExprs(optField: Null<String>): {
 		final markExpr: Expr;
@@ -136,12 +137,10 @@ final class WriterBlankLowering {
 			seenExpr: macro _bamHad = _inner.length > _bamAt,
 			applyExpr: macro {
 				if (_si > 0 && !_bamHad && $knob > 0) {
-					final _bamCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-					inline function _bamMulti(_d: anyparse.core.Doc): Bool {
-						return anyparse.core.DocMeasure.hasForcedBreak(_d)
-							|| _bamCols + anyparse.core.DocMeasure.flatTokenWidth(_d) > opt.lineWidth;
-					}
-					if (_bamMulti(_elem) || (_priorElemDoc != null && _bamMulti(_priorElemDoc))) {
+					if (
+						anyparse.format.MemberGap.multiline(_elem, opt)
+						|| (_priorElemDoc != null && anyparse.format.MemberGap.multiline(_priorElemDoc, opt))
+					) {
 						var _bami: Int = 0;
 						while (_bami < $knob) {
 							_inner.insert(_bamAt, _dhl());

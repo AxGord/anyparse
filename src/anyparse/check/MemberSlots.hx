@@ -22,6 +22,8 @@ using StringTools;
  * Slots are DISJOINT and each ends at the member's own last code byte: the parser stretches some
  * expression-body spans over the trailing trivia, and `ownSourceEnd` cuts that back off
  * - an overlap would make the reorder duplicate or strand a neighbour's doc comment.
+ * `leadComments` are the comments the slot opens with, before the declaration itself, in source
+ * order - the writer's leading comments of the member, which its doc-comment blank-line rule reads.
  */
 typedef OrderedMember = {
 	var node: QueryNode;
@@ -41,6 +43,7 @@ typedef OrderedMember = {
 
 	var leadTrivia: String;
 	var leadFrom: Int;
+	var leadComments: Array<String>;
 }
 
 /**
@@ -358,7 +361,10 @@ final class MemberSlots {
 			regionFrom: region.from,
 			regionTo: region.to,
 			leadTrivia: '',
-			leadFrom: full.from
+			leadFrom: full.from,
+			leadComments: [
+				for (c in comments) if (c.from >= full.from && c.to <= own.from) source.substring(c.from, c.to)
+			]
 		});
 	}
 

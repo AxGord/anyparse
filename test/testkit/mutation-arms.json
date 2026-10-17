@@ -23026,65 +23026,153 @@
 			"name": "M-MO-INLINE-SEPARATOR-DROPPED",
 			"type": "anyparse.check.MemberSpacing",
 			"method": "separatorBetween",
-			"find": " || inlineSubgroupBoundary(prev, next, separateInline)",
-			"replace": "",
-			"note": "the reorder rebuild joins the inline subgroup and the rest with a bare newline, so a reordered type comes out without the blank the check then demands"
+			"find": "return if (want != null)\n\t\tseparatorOf(want.count)",
+			"replace": "return if (false)\n\t\tseparatorOf(0)",
+			"note": "the reorder rebuild stops reading `wantedBlanks` and joins every same-rank field pair with a bare newline, so a reordered type comes out without the inline-subgroup blank or the writer's doc-comment / multi-line blank the check then demands"
 		},
 		{
 			"name": "M-MO-INLINE-REPORT-UNREAD",
 			"type": "anyparse.check.MemberOrder",
 			"method": "run",
-			"find": "final separateInline: Bool = optionOn(entry.file, 'separateInlineSubgroup');",
-			"replace": "final separateInline: Bool = false;",
+			"find": "optionOn(entry.file, 'separateInlineSubgroup')",
+			"replace": "false",
 			"note": "the REPORT path ignores the option, so it flags the very blank the option asks for while the fix path inserts it"
 		},
 		{
 			"name": "M-MO-INLINE-FIX-UNREAD",
 			"type": "anyparse.check.MemberOrder",
 			"method": "fix",
-			"find": "final separateInline: Bool = violations.length > 0 && optionOn(violations[0].file, 'separateInlineSubgroup');",
-			"replace": "final separateInline: Bool = false;",
+			"find": "optionOn(violations[0].file, 'separateInlineSubgroup')",
+			"replace": "false",
 			"note": "the FIX path ignores the option, so a boundary finding re-derives as no issue there and is never fixed"
 		},
 		{
 			"name": "M-MO-INLINE-MESSAGE-AS-RANK",
 			"type": "anyparse.check.MemberSpacing",
-			"method": "firstSpacingIssue",
-			"find": "else if (members[i].rank != members[i + 1].rank)",
-			"replace": "else if (true)",
+			"method": "messageOf",
+			"find": "case InlineBoundary: 'the inline members of a rank group are not separated from the rest of it by a blank line';",
+			"replace": "case InlineBoundary: 'rank groups are not separated by a blank line';",
 			"note": "a missing blank at the inline-subgroup boundary is reported as a missing RANK-group blank, naming a boundary that is not there"
 		},
 		{
 			"name": "M-MO-INLINE-BOUNDARY-BEFORE-EXEMPTIONS",
 			"type": "anyparse.check.MemberSpacing",
-			"method": "spacingViolation",
-			"find": "else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull\n\telse if (inlineSubgroupBoundary(a, b, separateInline))\n\t\tblanks != 1 ? 1 : null",
-			"replace": "else if (inlineSubgroupBoundary(a, b, separateInline))\n\t\tblanks != 1 ? 1 : null\n\telse if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull",
-			"note": "the boundary is asked before the non-field and comment-led exemptions, so a same-rank method pair and a doc-commented field are demanded a blank they never were"
+			"method": "ownWant",
+			"find": "else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull\n\telse if (inlineSubgroupBoundary(a, b, separateInline))\n\t\t{ count: 1, atLeast: false, rule: InlineBoundary }",
+			"replace": "else if (inlineSubgroupBoundary(a, b, separateInline))\n\t\t{ count: 1, atLeast: false, rule: InlineBoundary }\n\telse if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull",
+			"note": "the boundary is asked before the non-field and comment-led exemptions, so a same-rank method pair and a line-comment-led field are demanded a blank they never were"
 		},
 		{
 			"name": "M-MO-INLINE-BOUNDARY-AT-LEAST-ONE",
 			"type": "anyparse.check.MemberSpacing",
 			"method": "spacingViolation",
-			"find": "else if (inlineSubgroupBoundary(a, b, separateInline))\n\t\tblanks != 1 ? 1 : null",
-			"replace": "else if (inlineSubgroupBoundary(a, b, separateInline))\n\t\tblanks == 0 ? 1 : null",
+			"find": "want.atLeast ? blanks < want.count : blanks != want.count",
+			"replace": "want.atLeast || want.rule == InlineBoundary ? blanks < want.count : blanks != want.count",
 			"note": "the boundary wants AT LEAST one blank instead of exactly one, so two blank lines there are left standing"
 		},
 		{
 			"name": "M-MO-INLINE-CONDITIONAL-REBUILD-UNREAD",
 			"type": "anyparse.check.MemberOrder",
 			"method": "buildConditionalRegion",
-			"find": "MemberSpacing.separatorBetween(prevMember, m, source, separateInline)",
-			"replace": "MemberSpacing.separatorBetween(prevMember, m, source, false)",
+			"find": "MemberSpacing.separatorBetween(prevMember, m, source, spacing)",
+			"replace": "MemberSpacing.separatorBetween(prevMember, m, source, { separateInline: false, writer: spacing.writer })",
 			"note": "the `#if`-region rebuild ignores the option, so a type with any conditional member loses the inline-subgroup blank on reorder"
 		},
 		{
 			"name": "M-MO-INLINE-SPACING-ONLY-UNREAD",
 			"type": "anyparse.check.MemberOrder",
 			"method": "emitReorder",
-			"find": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, options.separateInline);",
-			"replace": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, false);",
+			"find": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, spacing);",
+			"replace": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, { separateInline: false, writer: spacing.writer });",
 			"note": "the spacing-only fallback of a pinned container ignores the option, so its glued boundary is reported for ever and never fixed"
+		},
+		{
+			"name": "M-MO-WRITER-REPORT-UNREAD",
+			"type": "anyparse.check.MemberOrder",
+			"method": "run",
+			"find": "MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup'))",
+			"replace": "{ separateInline: optionOn(entry.file, 'separateInlineSubgroup'), writer: null }",
+			"note": "the REPORT path ignores the writer's member-gap policy, so it flags a blank the writer forces (the 44 TM blanks around multi-line fields) while the fix path - reading the policy - finds nothing to do"
+		},
+		{
+			"name": "M-MO-WRITER-FIX-UNREAD",
+			"type": "anyparse.check.MemberOrder",
+			"method": "fix",
+			"find": "? MemberSpacing.policyOf(violations[0].file, plugin, optionOn(violations[0].file, 'separateInlineSubgroup'))",
+			"replace": "? { separateInline: optionOn(violations[0].file, 'separateInlineSubgroup'), writer: null }",
+			"note": "the FIX path ignores the writer's member-gap policy, so a doc-commented field the report flags re-derives as no issue there and is never set off"
+		},
+		{
+			"name": "M-MO-WRITER-DOC-IGNORED",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "wantedBlanks",
+			"find": "final forced: Null<Int> = writer.docBlanks(a.leadComments, b.leadComments);",
+			"replace": "final forced: Null<Int> = null;",
+			"note": "the writer's doc-comment rule is not asked, so a glued doc-commented field stays exempt and `lint` is silent about the blanks `fmt` then adds"
+		},
+		{
+			"name": "M-MO-WRITER-MULTILINE-IGNORED",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "wantedBlanks",
+			"find": "if (base == null || base.count != 0) return base;",
+			"replace": "if (true) return base;",
+			"note": "the writer's multi-line rule is not asked, so the blank `aroundMultilineFields` writes around a multi-line field is reported as a gap inside one rank group, for ever - the fix's edit is undone by the canonical round-trip"
+		},
+		{
+			"name": "M-MO-WRITER-UNMEASURABLE-GUESS",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "wantedBlanks",
+			"find": "else if (multiA == null || multiB == null)\n\t\tnull\n\telse",
+			"replace": "else",
+			"note": "a slot the multi-line measure cannot read is guessed to be one-line, so the check demands a tight gap the writer may keep open"
+		},
+		{
+			"name": "M-MO-WRITER-CONDITIONAL",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "wantedBlanks",
+			"find": "a.condition == null && b.condition == null ? spacing.writer : null",
+			"replace": "spacing.writer",
+			"note": "the writer's member-gap policy is applied inside an `#if` body too, whose members the writer writes with their source gaps"
+		},
+		{
+			"name": "M-MO-WRITER-CONTAINER-KIND",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "forContainer",
+			"find": "return writer == null || writer.containerKinds.contains(containerKind)",
+			"replace": "return true",
+			"note": "the writer's member-gap policy is applied to a container kind the writer does not run it on"
+		},
+		{
+			"name": "M-MO-WRITER-MINIMUM-AS-EXACT",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "spacingViolation",
+			"find": "want.atLeast ? blanks < want.count : blanks != want.count",
+			"replace": "blanks != want.count",
+			"note": "the writer's doc / multi-line blank is read as an EXACT count, though the writer keeps a fuller gap as the source has it, so two blanks before a doc-commented method are reported against a writer that writes them"
+		},
+		{
+			"name": "M-GAP-DOC-PRECEDENCE",
+			"type": "anyparse.format.MemberGap",
+			"method": "docGap",
+			"find": "return if (docVetoes(nextDocLed, before))\n\t\tNoBlank\n\telse if (docAdds(prevDocLed, nextDocLed, after, before))\n\t\tBlank",
+			"replace": "return if (docAdds(prevDocLed, nextDocLed, after, before))\n\t\tBlank\n\telse if (docVetoes(nextDocLed, before))\n\t\tNoBlank",
+			"note": "the after-doc blank beats `beforeDocCommentEmptyLines: none`, the reverse of the writer's precedence, so the check demands a blank between two doc-commented members the writer removes"
+		},
+		{
+			"name": "M-GAP-MULTILINE-AFTER-NOBLANK",
+			"type": "anyparse.format.MemberGap",
+			"method": "forcedBlanks",
+			"find": "else if (multilineNeighbour && aroundMultiline > 0)\n\t\taroundMultiline\n\telse if (doc == NoBlank)\n\t\t0",
+			"replace": "else if (doc == NoBlank)\n\t\t0\n\telse if (multilineNeighbour && aroundMultiline > 0)\n\t\taroundMultiline",
+			"note": "a forced zero beats the multi-line rule, though the writer tops the empty gap up afterwards, so the check demands a tight gap before a multi-line doc-commented member the writer sets off"
+		},
+		{
+			"name": "M-GAP-DOCLED-ANY-COMMENT",
+			"type": "anyparse.format.MemberGap",
+			"method": "docLed",
+			"find": "return leadingComments.exists(c -> c.startsWith(DOC_OPEN));",
+			"replace": "return leadingComments.exists(c -> c.startsWith('/'));",
+			"note": "every leading comment counts as a doc comment, in the writer and the check alike, so a line-comment-led field is set off by blanks it never had"
 		},
 		{
 			"name": "M-NEGCOND-ANY-KIND",

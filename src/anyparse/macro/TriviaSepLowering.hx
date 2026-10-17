@@ -1509,24 +1509,20 @@ final class TriviaSepLowering {
 		// at inter-element slots. Compile-time gate keeps callers without
 		// the flag (`HxExpr.ArrayExpr.elems`, `HxObjectLit.fields`)
 		// byte-identical to pre-slice behaviour.
+		// The doc-comment rule is the shared runtime policy (`anyparse.format.MemberGap`); a sep-Star
+		// carries the before-doc half only, so the previous element reads as not doc-led.
 		final stripByCurrDocExpr: Expr = beforeDocCommentEmptyLines
-			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.None)
+			? macro anyparse.format.MemberGap.docStrips(
+				false, _currHasDocComment, anyparse.format.CommentEmptyLinesPolicy.Ignore, opt.beforeDocCommentEmptyLines
+			)
 			: macro false;
 		final addByCurrDocExpr: Expr = beforeDocCommentEmptyLines
-			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.One)
+			? macro anyparse.format.MemberGap.docAdds(
+				false, _currHasDocComment, anyparse.format.CommentEmptyLinesPolicy.Ignore, opt.beforeDocCommentEmptyLines
+			)
 			: macro false;
 		final currHasDocComputeExpr: Expr = beforeDocCommentEmptyLines
-			? macro {
-				_currHasDocComment = false;
-				var _cdci: Int = 0;
-				while (_cdci < _t.leadingComments.length) {
-					if (StringTools.startsWith(_t.leadingComments[_cdci], '/**')) {
-						_currHasDocComment = true;
-						break;
-					}
-					_cdci++;
-				}
-			}
+			? macro _currHasDocComment = anyparse.format.MemberGap.docLed(_t.leadingComments)
 			: macro {};
 		// ω-typedef-between-fields: runtime predicate that strips the
 		// source-captured inter-field blank for a typedef RHS body. Fires

@@ -87,16 +87,7 @@ final class TriviaBlockLowering {
 			};
 			final scanBody: Expr = macro {
 				final _condBody = $bodyAccess;
-				if (_condBody.length > 0) {
-					var _ctdi: Int = 0;
-					while (_ctdi < _condBody[0].leadingComments.length) {
-						if (StringTools.startsWith(_condBody[0].leadingComments[_ctdi], '/**')) {
-							_currHasDocComment = true;
-							break;
-						}
-						_ctdi++;
-					}
-				}
+				if (_condBody.length > 0 && anyparse.format.MemberGap.docLed(_condBody[0].leadingComments)) _currHasDocComment = true;
 			};
 			final lookThroughSwitch: Expr = {
 				expr: ESwitch(classifierAccess, [{ values: [condLeadingDocInfo.condCasePattern], guard: null, expr: scanBody }], macro {}),
@@ -106,15 +97,7 @@ final class TriviaBlockLowering {
 		} : macro {};
 		return beforeDocCommentEmptyLines
 			? macro {
-				_currHasDocComment = false;
-				var _cdci: Int = 0;
-				while (_cdci < _t.leadingComments.length) {
-					if (StringTools.startsWith(_t.leadingComments[_cdci], '/**')) {
-						_currHasDocComment = true;
-						break;
-					}
-					_cdci++;
-				}
+				_currHasDocComment = anyparse.format.MemberGap.docLed(_t.leadingComments);
 				$condLeadingDocExpr;
 			}
 			: macro {};
@@ -228,11 +211,22 @@ final class TriviaBlockLowering {
 	): Expr {
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		if (!anyEmptyLinesFlag) return triviaBlockSourceBlankOnlyExpr(uniformStmtBlanks, blankExtras);
-		final stripByDocExpr: Expr = afterFieldsWithDocComments
-			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.None)
+		// The doc-comment rule is ONE runtime policy (`anyparse.format.MemberGap`), shared with the
+		// `member-order` check: each side the Star carries no flag for reads as "not doc-led" under `Ignore`.
+		final prevDocExpr: Expr = afterFieldsWithDocComments ? macro _prevHadDocComment : macro false;
+		final afterPolicyExpr: Expr = afterFieldsWithDocComments
+			? macro opt.afterFieldsWithDocComments
+			: macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
+		final currDocExpr: Expr = beforeDocCommentEmptyLines ? macro _currHasDocComment : macro false;
+		final beforePolicyExpr: Expr = beforeDocCommentEmptyLines
+			? macro opt.beforeDocCommentEmptyLines
+			: macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
+		final docRule: Bool = afterFieldsWithDocComments || beforeDocCommentEmptyLines;
+		final stripByDocExpr: Expr = docRule
+			? macro anyparse.format.MemberGap.docStrips($prevDocExpr, $currDocExpr, $afterPolicyExpr, $beforePolicyExpr)
 			: macro false;
-		final addByDocExpr: Expr = afterFieldsWithDocComments
-			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.One)
+		final addByDocExpr: Expr = docRule
+			? macro anyparse.format.MemberGap.docAdds($prevDocExpr, $currDocExpr, $afterPolicyExpr, $beforePolicyExpr)
 			: macro false;
 		final stripByExistingExpr: Expr = existingBetweenFields
 			? macro (opt.existingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)
@@ -249,11 +243,8 @@ final class TriviaBlockLowering {
 		// Companion suppress: in extern context fork never re-adds a blank at the
 		// inter-member slot when the next member's leading carries the split shape.
 		final addSuppressOnSplitLeadingExpr: Expr = existingBetweenFields ? macro (opt._classExtern && _currHasSplitLeading) : macro false;
-		final stripByCurrDocExpr: Expr = beforeDocCommentEmptyLines
-			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.None)
-			: macro false;
-		final addByCurrDocExpr: Expr = beforeDocCommentEmptyLines
-			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.One)
+		final vetoByDocExpr: Expr = beforeDocCommentEmptyLines
+			? macro anyparse.format.MemberGap.docVetoes(_currHasDocComment, opt.beforeDocCommentEmptyLines)
 			: macro false;
 		final currHasDocComputeExpr: Expr = triviaBlockCurrHasDocComputeExpr(beforeDocCommentEmptyLines, condLeadingDocInfo);
 		final currHasSplitLeadingComputeExpr: Expr = triviaBlockCurrHasSplitLeadingComputeExpr(existingBetweenFields);
@@ -270,11 +261,11 @@ final class TriviaBlockLowering {
 			currHasSplitLeadingComputeExpr: currHasSplitLeadingComputeExpr,
 			stripByDocExpr: stripByDocExpr,
 			stripByExistingExpr: stripByExistingExpr,
-			stripByCurrDocExpr: stripByCurrDocExpr,
+			vetoByDocExpr: vetoByDocExpr,
 			stripBySplitLeadingExpr: stripBySplitLeadingExpr,
 			addSuppressOnSplitLeadingExpr: addSuppressOnSplitLeadingExpr,
 			addByDocExpr: addByDocExpr,
-			addByCurrDocExpr: addByCurrDocExpr,
+
 			addByInterMemberExpr: addByInterMemberExpr,
 			addByUniformBetweenExpr: addByUniformBetweenExpr
 		});
@@ -351,11 +342,10 @@ final class TriviaBlockLowering {
 		final currHasSplitLeadingComputeExpr: Expr = g.currHasSplitLeadingComputeExpr;
 		final stripByDocExpr: Expr = g.stripByDocExpr;
 		final stripByExistingExpr: Expr = g.stripByExistingExpr;
-		final stripByCurrDocExpr: Expr = g.stripByCurrDocExpr;
+		final vetoByDocExpr: Expr = g.vetoByDocExpr;
 		final stripBySplitLeadingExpr: Expr = g.stripBySplitLeadingExpr;
 		final addSuppressOnSplitLeadingExpr: Expr = g.addSuppressOnSplitLeadingExpr;
 		final addByDocExpr: Expr = g.addByDocExpr;
-		final addByCurrDocExpr: Expr = g.addByCurrDocExpr;
 		final addByInterMemberExpr: Expr = g.addByInterMemberExpr;
 		final addByUniformBetweenExpr: Expr = g.addByUniformBetweenExpr;
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
@@ -363,20 +353,20 @@ final class TriviaBlockLowering {
 			$currHasDocComputeExpr;
 			$currKindComputeExpr;
 			$currHasSplitLeadingComputeExpr;
-			final _stripBlank: Bool = $stripByDocExpr || $stripByExistingExpr || $stripByCurrDocExpr || $stripBySplitLeadingExpr;
+			final _stripBlank: Bool = $stripByDocExpr || $stripByExistingExpr || $stripBySplitLeadingExpr;
 			// ω-beforedoc-none-precedence: fork's `markDocCommentEmptyLines` applies
 			// `beforeDocCommentEmptyLines` to the before-doc slot AFTER
 			// `afterFieldsWithDocComments` (the prior field's after-slot is the same
 			// physical gap), so the before-policy is the last write and wins. When
 			// the current element opens with a doc comment and the before-policy is
-			// `None`, the slot is forced to zero blanks — `$stripByCurrDocExpr`
-			// already zeroes `_sourceBlank`, so AND-out every add
+			// `None`, the slot is forced to zero blanks — `$stripByDocExpr`
+			// already zeroes `_sourceBlank`, so `$vetoByDocExpr` AND-outs every add
 			// (`afterFieldsWithDocComments.One`, the interMember / uniform adds) too.
 			// Byte-inert when the Star carries no `beforeDocCommentEmptyLines` flag
-			// (`$stripByCurrDocExpr` is the compile-time literal `false`) or the
+			// (`$vetoByDocExpr` is the compile-time literal `false`) or the
 			// runtime policy is not `None`.
-			final _addBlank: Bool = !$stripByCurrDocExpr && !$addSuppressOnSplitLeadingExpr
-				&& ($addByDocExpr || $addByCurrDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
+			final _addBlank: Bool = !$vetoByDocExpr && !$addSuppressOnSplitLeadingExpr
+				&& ($addByDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
 			final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) {
 				_inner.push(_dhl());
@@ -1039,18 +1029,7 @@ final class TriviaBlockLowering {
 		indentCaseLabelsGate: Bool, lineCommentTrailBlank: Bool
 	): WriterLowering.BlockLeafExprs {
 		final trackDocCommentExpr: Expr = afterFieldsWithDocComments
-			? macro {
-				var _hasDoc: Bool = false;
-				var _dci: Int = 0;
-				while (_dci < _t.leadingComments.length) {
-					if (StringTools.startsWith(_t.leadingComments[_dci], '/**')) {
-						_hasDoc = true;
-						break;
-					}
-					_dci++;
-				}
-				_prevHadDocComment = _hasDoc;
-			}
+			? macro _prevHadDocComment = anyparse.format.MemberGap.docLed(_t.leadingComments)
 			: macro {};
 		// ω-indent-case-labels: when the call site opts in via
 		// `@:fmt(indentCaseLabels)`, the body wrap is gated on `opt.indentCaseLabels`
@@ -1308,11 +1287,11 @@ typedef BlankGateExprs = {
 	final currHasSplitLeadingComputeExpr: Expr;
 	final stripByDocExpr: Expr;
 	final stripByExistingExpr: Expr;
-	final stripByCurrDocExpr: Expr;
+	final vetoByDocExpr: Expr;
 	final stripBySplitLeadingExpr: Expr;
 	final addSuppressOnSplitLeadingExpr: Expr;
 	final addByDocExpr: Expr;
-	final addByCurrDocExpr: Expr;
+
 	final addByInterMemberExpr: Expr;
 	final addByUniformBetweenExpr: Expr;
 };

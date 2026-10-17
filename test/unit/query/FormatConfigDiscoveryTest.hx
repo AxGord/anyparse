@@ -5,6 +5,7 @@ import anyparse.query.FormatConfigDiscovery;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
+import unit.ConfigTrees;
 import utest.Assert;
 import utest.Test;
 
@@ -21,17 +22,17 @@ import utest.Test;
  */
 class FormatConfigDiscoveryTest extends Test {
 
-	/** Every directory `makeTree` built, removed in `teardown` so a suite run leaves none behind. */
-	private final _made: Array<String> = [];
+	/** The fixture trees, removed in `teardown` so a suite run leaves none behind. */
+	private final _trees: ConfigTrees = new ConfigTrees('apq-format-config-discovery-test');
 
 	public function testFindsNearestAncestorConfig(): Void {
-		final dir: String = makeTree('nearest');
+		final dir: String = _trees.make('nearest');
 		File.saveContent(Path.join([dir, 'hxformat.json']), '{"wrapping": {"maxLineLength": 111}}');
 		Assert.equals('{"wrapping": {"maxLineLength": 111}}', FormatConfigDiscovery.discover(Path.join([dir, 'A.hx'])));
 	}
 
 	public function testWalksUpPastDirectoriesWithoutOne(): Void {
-		final dir: String = makeTree('walkup');
+		final dir: String = _trees.make('walkup');
 		File.saveContent(Path.join([dir, 'hxformat.json']), '{"wrapping": {"maxLineLength": 122}}');
 		final nested: String = Path.join([dir, 'a', 'b']);
 		FileSystem.createDirectory(nested);
@@ -40,7 +41,7 @@ class FormatConfigDiscoveryTest extends Test {
 
 	/** A second file in the SAME directory is answered from the memo — the config it names is gone by then. */
 	public function testMemoisedByDirectory(): Void {
-		final dir: String = makeTree('memo');
+		final dir: String = _trees.make('memo');
 		final config: String = Path.join([dir, 'hxformat.json']);
 		File.saveContent(config, '{"wrapping": {"maxLineLength": 133}}');
 		Assert.equals('{"wrapping": {"maxLineLength": 133}}', FormatConfigDiscovery.discover(Path.join([dir, 'A.hx'])));
@@ -55,14 +56,14 @@ class FormatConfigDiscoveryTest extends Test {
 	 * hop and wrote through `writeRoundTrip`, which raised `unexpected input` on it.
 	 */
 	public function testBlankConfigResolvesToNoConfig(): Void {
-		final dir: String = makeTree('blank');
+		final dir: String = _trees.make('blank');
 		File.saveContent(Path.join([dir, 'hxformat.json']), '  \n\t\n');
 		Assert.isNull(FormatConfigDiscovery.discover(Path.join([dir, 'A.hx'])));
 	}
 
 	/** The NEGATIVE answer is memoised too: a config written after the first miss is not picked up. */
 	public function testNegativeAnswerMemoised(): Void {
-		final dir: String = makeTree('negative');
+		final dir: String = _trees.make('negative');
 		final stray: Null<String> = ancestorConfig(dir);
 		if (stray != null) Assert.fail('an hxformat.json above the system temp directory ($stray) invalidates this fixture');
 		Assert.isNull(FormatConfigDiscovery.discover(Path.join([dir, 'A.hx'])));
@@ -83,7 +84,7 @@ class FormatConfigDiscoveryTest extends Test {
 	 */
 	@:access(anyparse.grammar.haxe.HaxeFormatConfigDiagnostics)
 	public function testTheUnusableSettingsReportNamesTheConfigNotTheFileItGoverns(): Void {
-		final dir: String = makeTree('reportpath');
+		final dir: String = _trees.make('apq-fcd-reportpath');
 		File.saveContent(Path.join([dir, 'hxformat.json']), '{"noSuchKnobAtAll": 1}');
 		final nested: String = Path.join([dir, 'a']);
 		FileSystem.createDirectory(nested);
@@ -95,36 +96,7 @@ class FormatConfigDiscoveryTest extends Test {
 
 	/** Remove every directory the finished fixture built — the cache outlives the test, the files need not. */
 	public function teardown(): Void {
-		for (dir in _made) removeTree(dir);
-		_made.resize(0);
-	}
-
-	/** A fresh, uniquely named directory under the system temp — no ancestor of it holds an `hxformat.json`. */
-	private function makeTree(name: String): String {
-		final dir: String = Path.join([tempRoot(), 'apq-fcd-$name-${Std.random(0x7FFFFFFF)}']);
-		FileSystem.createDirectory(dir);
-		_made.push(dir);
-		return dir;
-	}
-
-	/** The directory the fixtures build under, created on first use. */
-	private function tempRoot(): String {
-		final root: String = Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', 'apq-format-config-discovery-test']);
-		if (!FileSystem.exists(root)) FileSystem.createDirectory(root);
-		return root;
-	}
-
-	/** `dir` and everything under it, deleted. */
-	private static function removeTree(dir: String): Void {
-		if (!FileSystem.exists(dir)) return;
-		for (entry in FileSystem.readDirectory(dir)) {
-			final path: String = Path.join([dir, entry]);
-			if (FileSystem.isDirectory(path))
-				removeTree(path);
-			else
-				FileSystem.deleteFile(path);
-		}
-		FileSystem.deleteDirectory(dir);
+		_trees.removeAll();
 	}
 
 	/**

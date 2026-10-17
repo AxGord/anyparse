@@ -3606,3 +3606,31 @@ decided the question; it may not become a record of runs.
   closed: the token count is NAME-keyed, so a common private-field name anywhere in the project refuses the arm; a
   resolution-based occurrence attribution (the rename's own `otherFileRenameSpans`) would lift that — branch
   `feat/infra-N19`
+- `member-order` asks the WRITER's member-gap policy before its own (user request 2026-10-17, N21; found by N16): in TM
+  44 findings `members of one rank group are separated by a blank line` sat next to a field the writer renders over
+  several lines under `emptyLines.aroundMultilineFields: 1`, so `--fix` emitted the edit, the canonical round-trip put
+  the blank back, and the finding returned for ever; and a doc-commented field glued between two plain ones was exempt
+  although `fmt` always sets it off. The writer is right in both — it is what the project's `hxformat.json` asks for —
+  so its policy became ONE set of runtime predicates both sides call, `anyparse.format.MemberGap`: `docLed` (the
+  `/**` leading-comment scan, previously four inline copies in `TriviaBlockLowering` / `TriviaSepLowering`),
+  `docStrips` / `docVetoes` / `docAdds` (the `afterFieldsWithDocComments` / `beforeDocCommentEmptyLines` gates, the
+  before-policy's `none` winning as the gap's last write) and `multiline` (the `_bamMulti` Doc measure of
+  `blankAroundMultilineMembers`); `docGap` / `forcedBlanks` compose them in the writer's order for a reader that asks
+  about a whole gap (the multi-line rule tops an EMPTY gap up after the doc rule, so it lifts a forced zero; a gap that
+  already holds the doc blank keeps one). The check reaches them through `GrammarPlugin.memberGapPolicy(optsJson)` (the
+  file's own `hxformat.json`, discovered as `fmt` discovers it; memoised per config by `CachingGrammarPlugin`); the
+  Haxe plugin measures a slot by writing it through `HaxeModuleTriviaWriter.writeHxMemberDeclT`, the element the
+  writer measures, with a per-slot memo. `MemberSpacing.wantedBlanks` is the one per-pair predicate the report, the
+  spacing-only fix and both rebuild joins read: the writer's doc rule first (a comment-led slot the writer
+  blank-separates is now REQUIRED to be — reported before `fmt` runs, and the fix lands the writer's blanks), else the
+  check's own rule, and only where that rule wants a TIGHT gap the multi-line rule, measured lazily (the answer must
+  depend on it). Scope: unconditional pairs only (an `#if` body is written with its source gaps); the four visibility
+  containers the writer's class/abstract Stars cover (`MemberGapPolicy.containerKinds`); a slot the measure cannot read
+  leaves the pair to the source (positive whitelist: no guessed one-line); a line / block (non-doc) comment-led slot
+  stays exempt, as the writer keeps its gaps; same-rank methods and a rank boundary are not lifted (the multi-line rule
+  only ever ADDS a blank there, and the rule already wants one or has no opinion); `afterFieldsWithDocComments: none`
+  alone (`StripsSource`) is left to the check's own rule, since whether the gap ends blank depends on rules outside the
+  policy. Known residue: an extern class's split-leading veto (`// x` then `/** doc */`, `_classExtern`) is not modelled
+  — the check may demand the doc blank there and the writer keeps the source blank it then lands, so it converges.
+  `separateInlineSubgroup` and `movableArglessNew` are unchanged; the spacing context is one `SpacingPolicy` record
+  (`separateInline` + `writer`), resolved per file by `MemberSpacing.policyOf` on both paths — branch `feat/infra-N21`
