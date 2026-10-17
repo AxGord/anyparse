@@ -1001,6 +1001,25 @@ class UnusedPrivateCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A field initializer is judged by the same deletion purity `unused-local` asks (`TypeResolver.isDeletionPure`):
+	 * a collection literal of pure elements and a provably pure stdlib call are dropped with the field. The field answer
+	 * used to be the narrower kind-only one, so TM's `bitmapDataCollection: Map<String, Any> = []` was declined as "not
+	 * provably side-effect-free".
+	 */
+	@:killer('M-UNUSED-PRIVATE-FIELD-KIND-PURITY')
+	@:pin('control')
+	public function testFixDeletesFieldWithPureLiteralOrStdlibInit(): Void {
+		Assert.equals(1, fixEdits('class C {\n\tprivate static final M: Map<String, Int> = [];\n}').length);
+		Assert.equals(1, fixEdits('class C {\n\tprivate static final A: Array<Int> = [1, 2];\n}').length);
+		Assert.equals(1, fixEdits('class C {\n\tprivate static final R: Int = Math.round(1.5);\n}').length);
+	}
+
+	/** An element of an array initializer that may run code keeps the field, as a call initializer does. */
+	public function testFixSkipsFieldWithSideEffectingArrayElement(): Void {
+		Assert.equals(0, fixEdits('class C {\n\tprivate static final A: Array<Int> = [sideEffect()];\n}').length);
+	}
+
 	/** `run` reports the dead member and `fix` declines it — the shape every class-annotation gate has. */
 	private function assertReportedButNotDeleted(src: String): Void {
 		final check: UnusedPrivate = new UnusedPrivate();

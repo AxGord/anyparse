@@ -23,7 +23,9 @@ interface BooleanLogicSupport {
 	 * forms — with precedence-safe parentheses. Null when neither branch is a
 	 * boolean literal (nothing to simplify), when both branches are the SAME
 	 * literal (collapsing would drop `cond`'s evaluation), or when the node is not
-	 * a well-formed ternary. `source` is the file text the node's spans index into.
+	 * a well-formed ternary, or when a null test buried in a compound operand of the `||` it would write
+	 * narrows a later operand (no grouping carries that fact; a bare null test past the first operand is
+	 * regrouped instead, as in `negateCondition`). `source` is the file text the node's spans index into.
 	 *
 	 * `typeNominalOf` is the same operand-type probe `negateCondition` takes, and it
 	 * governs the same one thing: whether negating the condition may FLIP an ordered
@@ -53,8 +55,9 @@ interface BooleanLogicSupport {
 	 * are the guard condition nodes, `lits[i]` their return's boolean literal node
 	 * (parallel to `conds`), `finalLit` the trailing return's literal; `source` indexes
 	 * the node spans. Each `cond_i` is an `if` condition — non-null `Bool` under strict
-	 * null-safety, since the source compiles — so joining them with `&&` / `||` is
-	 * sound; conditions are kept verbatim, preserving any `== true` null-safety idiom.
+	 * null-safety, since the source compiles — so joining them with `&&` / `||` is sound; conditions are kept verbatim, preserving any
+	 * `== true` null-safety idiom. An `||` run keeps the narrowing each guard's early return gave the conditions after it: a stranded
+	 * bare null test is regrouped as in `negateCondition`, and a chain whose compound condition narrows a later one is refused (null).
 	 *
 	 * `typeNominalOf` is the same operand-type probe `negateCondition` takes: it licenses
 	 * the ordered-comparison FLIP (`!(a < b)` -> `a >= b`) inside a negated condition, and

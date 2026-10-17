@@ -23242,6 +23242,124 @@
 			"find": "NegatedCondition.siteOf(s.negation, file, source, root)",
 			"replace": "null",
 			"note": "prefer-ternary-expression writes `!c ? a : b` again"
+		},
+		{
+			"name": "M-NARROWING-OR-FLAT",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"force": "flat",
+			"note": "every `||` a boolean reduction writes joins flat, stranding a null test past the first operand"
+		},
+		{
+			"name": "M-NARROWING-OR-COMPOUND-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (leaf.tested.contains(name) && !leaf.providers.contains(name)) return null;",
+			"replace": "if (false && leaf.tested.contains(name)) return null;",
+			"note": "a null comparison buried in a compound operand no longer refuses a reduction whose later operand it narrows"
+		},
+		{
+			"name": "M-NARROWING-OR-GLUE-COMMENT-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (commented(glue) || commented(leaf.op.src)) return null;",
+			"replace": "if (commented(leaf.op.src)) return null;",
+			"note": "a regrouped chain drops a comment standing between two of its operands"
+		},
+		{
+			"name": "M-NARROWING-OR-INNER-COMMENT-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (commented(glue) || commented(leaf.op.src)) return null;",
+			"replace": "if (commented(glue)) return null;",
+			"note": "a regrouped chain joins an operand whose span carries a line comment, which swallows the rest of the line"
+		},
+		{
+			"name": "M-OR-LEAVES-OR-OPAQUE",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "orLeaves",
+			"find": "if (kids.length == 2 && node.kind == (negated ? 'And' : 'Or'))",
+			"replace": "if (kids.length == 2 && negated && node.kind == 'And')",
+			"note": "an `||` is one opaque operand, so a null test inside it is never seen as stranded"
+		},
+		{
+			"name": "M-OR-LEAVES-NEGATED-AND-OPAQUE",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "orLeaves",
+			"find": "if (kids.length == 2 && node.kind == (negated ? 'And' : 'Or'))",
+			"replace": "if (kids.length == 2 && !negated && node.kind == 'Or')",
+			"note": "a negated `&&` is one opaque operand, so the De Morgan `||` it writes is never regrouped"
+		},
+		{
+			"name": "M-TERNARY-OR-BRANCH-UNREAD",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "simplifyBooleanTernary",
+			"find": "orLeaves(elseNode, false, source, typeNominalOf, orLeaves(cond, false, source, typeNominalOf, []))",
+			"replace": "orLeaves(cond, false, source, typeNominalOf, [])",
+			"note": "the kept branch is left out of the `||` chain the reduction judges, so a null test inside it is never regrouped"
+		},
+		{
+			"name": "M-GUARD-CHAIN-NEGATED-RUN-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "reduceBooleanGuardChain",
+			"find": "run = orLeaves(cond, true, source, typeNominalOf, []);",
+			"replace": "run = null;",
+			"note": "a negated `&&` guard's `||` is one opaque operand of the chain before it, so its null test strands"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NULL-SITE-ADMITTED",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "report",
+			"find": " || nullable['${member.name}#$index'] == true",
+			"replace": "",
+			"note": "a call passing null where the default lands is ignored, so it silently takes the default"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NONNULL-ANY",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "provenNonNull",
+			"force": "true",
+			"note": "every argument counts as non-null, a variable or a call included"
+		},
+		{
+			"name": "M-DEFAULT-ARG-UNRESOLVED-NULL-IGNORED",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "collectCalls",
+			"find": "if (called != null && scope.memberOwners.exists(called))",
+			"replace": "if (called != null && resolveCallee(call, owner, entry, scope, seams) != null)",
+			"note": "only resolved calls are read, so a null handed through a receiver the rule cannot type escapes"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NULL-CONST-NONNULL",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "collectMembers",
+			"find": "scope.constants['$owner.$name'] = child.children.length == 0 || child.children[0].kind != seams.nullLiteralKind;",
+			"replace": "scope.constants['$owner.$name'] = true;",
+			"note": "an inline constant whose value is null proves its argument non-null"
+		},
+		{
+			"name": "M-UNUSED-LOCAL-IMPURE-UNSAID",
+			"type": "anyparse.check.UnusedLocal",
+			"method": "fix",
+			"find": "v.declineReason = 'the initializer is not provably side-effect-free, so deleting the declaration would drop whatever '",
+			"replace": "final unsaid: String = 'the initializer is not provably side-effect-free, so deleting the declaration would drop whatever '",
+			"note": "the side-effecting-initializer refusal names no reason in the --fix ledger"
+		},
+		{
+			"name": "M-UNUSED-LOCAL-SHARED-LINE-UNSAID",
+			"type": "anyparse.check.UnusedLocal",
+			"method": "fix",
+			"find": "v.declineReason = 'the binding shares its declaration line with another one, and the deletion takes the whole line';",
+			"replace": "final unsaid: String = 'the binding shares its declaration line with another one, and the deletion takes the whole line';",
+			"note": "the shared-line refusal names no reason in the --fix ledger"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-FIELD-KIND-PURITY",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "initializerPurity",
+			"find": ": TypeResolver.isDeletionPure.bind(_, tree, shape, RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [], index);",
+			"replace": ": MemberKinds.isSideEffectFree.bind(_, shape);",
+			"note": "a field initializer is judged kind-only again, so a pure collection literal or stdlib call keeps a dead field"
 		}
 	]
 }

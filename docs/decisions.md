@@ -3542,3 +3542,35 @@ decided the question; it may not become a record of runs.
   `OperatorSelection.of` takes the fix's report index (`?report`): a builder DECIDES the orientation in `fix`, where
   `files` is the one file being fixed, so an `@:op(!A)` declared in a sibling module would otherwise go unseen —
   branch `feat/infra-N18`
+- `simplify-boolean-ternary` and `simplify-boolean-return-chain` wrote a flat `||` that strands a null-safety
+  narrowing: `prefer-ternary-return` folded `if (a == null || b == null) return true; return mayUnify(a, b);` into
+  `a == null || b == null ? true : mayUnify(a, b)` (a ternary narrows its branch from the whole condition), and the
+  boolean reduction then wrote `a == null || b == null || mayUnify(a, b)`, which Haxe 4.3.7 rejects ("Cannot pass
+  nullable value"): a fact reaches a later `||` operand from the chain's FIRST operand only, while an `&&` chain carries
+  every fact (`a != null && b != null && b.length` compiles). Two `--fix` safe edits over anyparse were reverted for it
+  (`CallRepetition.repeatedUnder`, `FunctionValueTypes.sameOrGeneric`). The engine already knew this —
+  `negateAndChain` right-nests a group at a stranded null test — but the two reductions joined through the plain
+  binary `joinOr`. Both now write every `||` result through `narrowingOr` over the chain's operands (`orLeaves`: `||`
+  sides, De Morgan'd `&&` sides under negation, parens transparent, also inside the kept branch and across guard
+  rungs): flat and byte-identical when nothing is stranded, `a == null || (b == null || mayUnify(a, b))` when a bare
+  null test past the first operand narrows a later one, and REFUSED (null — no finding) when a null comparison buried
+  in a compound operand does (`!(a != null && b != null) || b.length > 0` does not compile and no grouping fixes it;
+  the positive whitelist: only the bare-test shape is known to carry a fact) — branch `feat/infra-N15`
+- `unused-local` declined its two refusals (a side-effecting initializer, a binding sharing its line) with no
+  `Violation.declineReason`, so `--fix` printed "returned no edit … will not say which it is" for TM's six remaining
+  findings (all call initializers). Each gate now writes its sentence — branch `feat/infra-N15`
+- `unused-private` judged a FIELD initializer by the kind-only `MemberKinds.isSideEffectFree` while `unused-local`
+  judges a local's by the type-aware `TypeResolver.isDeletionPure` (a pure array / map literal, a plain field read, a
+  provably pure stdlib call): two answers to one question, and TM's `bitmapDataCollection: Map<String, Any> = []` was
+  declined as "not provably side-effect-free". The field gate now asks `isDeletionPure` when the fix has an index
+  (the kind-only answer without one) — branch `feat/infra-N15`
+- `default-repeated-argument` changed what a call means: it took "a site passing something else keeps its explicit
+  argument" for meaning-preserving, but Haxe hands a parameter its default for an explicit `null` too (`f(null)` with
+  `x:Null<Int> = 7` answers 7 on 4.3.7, `--interp` and js). TM's `SharedSyncLoopTest.seedGhost(cloudId:Null<Int>)`
+  got `= GHOST_ID` from three agreeing sites, so the fourth, `seedGhost(null)`, silently became
+  `seedGhost(GHOST_ID)` and the test it drove failed; it compiles, so the oracle cannot catch this class. Now EVERY
+  call of the name (resolved or not) is read: an argument at the parameter's position that is not proven non-null
+  refuses the finding. Proven = a POSITIVE list (`provenNonNull`): a non-null literal (also negated), `new`, an array /
+  object literal, a function value, a comparison or boolean operator, a reference to an `inline` constant whose value
+  is no `null` literal (such a constant is no default candidate either). A variable or a call is not proven — no
+  types read, since a non-`Null<T>` declaration proves nothing without null safety — branch `feat/infra-N15`

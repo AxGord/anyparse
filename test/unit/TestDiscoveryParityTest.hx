@@ -1247,7 +1247,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.DeadSafeNavTest#testVisibleProofSurvivesAnUnseenRenarrowing :: control :: M-DSN-RENARROW-HIDES',
 			'unit.check.DeadSafeNavTest#testWrittenNameIsNotRestored :: control :: M-NULLFLOW-SHADOW-RESTORES-WRITTEN',
 			'unit.check.DefaultRepeatedArgumentCheckTest#testArgumentPastAnOptionalParameterNotCounted :: control :: M-DRA-SKIPPED-SLOT',
+			'unit.check.DefaultRepeatedArgumentCheckTest#testMaybeNullArgumentSiteBlocks :: control :: M-DEFAULT-ARG-NONNULL-ANY',
 			'unit.check.DefaultRepeatedArgumentCheckTest#testMiddleArgumentNeverDropped :: control :: M-DRA-MIDDLE-ARGUMENT',
+			'unit.check.DefaultRepeatedArgumentCheckTest#testNullArgumentSiteBlocks :: control :: M-DEFAULT-ARG-NULL-SITE-ADMITTED',
+			'unit.check.DefaultRepeatedArgumentCheckTest#testNullValuedConstantSiteBlocks :: control :: M-DEFAULT-ARG-NULL-CONST-NONNULL',
+			'unit.check.DefaultRepeatedArgumentCheckTest#testUnresolvedNullSiteBlocks :: control :: '
+				+ 'M-DEFAULT-ARG-UNRESOLVED-NULL-IGNORED',
 			'unit.check.DocLengthCheckTest#testOnlyADocBlockIsMeasured :: control :: M-DOC-LENGTH-ANY-COMMENT',
 			'unit.check.DocLengthCheckTest#testTheDeclaredMaximumIsRead :: control :: M-DOC-LENGTH-CONFIG-BLIND',
 			'unit.check.DocMeasurementClaimCheckTest#testANumericContractIsNotAReading :: control :: M-DOC-CLAIM-BARE-NUMBER',
@@ -1517,6 +1522,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-LINT-SUMMARY-THRESHOLD-UNREAD',
 			'unit.check.LintReportChannelSliceTest#testTheThresholdDecidesBetweenListAndSummary :: control :: M-LINT-SUMMARY-NEVER',
 			'unit.check.LintScopeGateTest#testALibsOnlyScopeIsNamedAsAGap :: control :: M-SCOPE-GAP-SILENT',
+			'unit.check.LintSliceTest#testFixSkipsSideEffectingInit :: control :: M-UNUSED-LOCAL-IMPURE-UNSAID',
+			'unit.check.LintSliceTest#testUnusedLocalFixSkipsMultiVarContinuation :: control :: M-UNUSED-LOCAL-SHARED-LINE-UNSAID',
 			'unit.check.LoopBoundLengthMismatchCheckTest#testABinderTakingTheNameRefuses :: control :: M-LOOPBOUND-SHADOW',
 			'unit.check.LoopBoundLengthMismatchCheckTest#testABoundNamingTheArrayIsRelated :: control :: M-LOOPBOUND-RELATED-OFF',
 			'unit.check.LoopBoundLengthMismatchCheckTest#testAComprehensionLiteralIsNoLength :: control :: M-LOOPBOUND-UNSIZED',
@@ -2099,6 +2106,20 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ScratchFieldCheckTest#testWritesInBothArmsHaveNoDeclarationSlot :: control :: M-SCRATCH-SLOT-ANYWHERE',
 			'unit.check.ShadowingCaseBinderCheckTest#testUnprovenSubjectRefused :: control :: M-SHADOWING-BINDER-UNPROVEN',
 			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
+			'unit.check.SimplifyBooleanReturnChainCheckTest#testNegatedConjunctionGuardRegroups :: control :: '
+				+ 'M-GUARD-CHAIN-NEGATED-RUN-DROPPED',
+			'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestRegroups :: control :: M-NARROWING-OR-FLAT',
+			'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestWithCommentNotReduced :: control :: '
+				+ 'M-NARROWING-OR-GLUE-COMMENT-ADMITTED',
+			'unit.check.SimplifyBooleanTernaryCheckTest#testCompoundNullTestBeforeReuseNotSimplified :: control :: '
+				+ 'M-NARROWING-OR-COMPOUND-ADMITTED',
+			'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestInBranchRegroups :: control :: M-TERNARY-OR-BRANCH-UNREAD',
+			'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestRegroupsInNegatedAnd :: control :: '
+				+ 'M-OR-LEAVES-NEGATED-AND-OPAQUE',
+			'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestRegroupsInOr :: control :: '
+				+ 'M-NARROWING-OR-FLAT,M-OR-LEAVES-OR-OPAQUE',
+			'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestWithCommentNotSimplified :: control :: '
+				+ 'M-NARROWING-OR-INNER-COMMENT-ADMITTED',
 			'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
 			'unit.check.StaticReflectionReachTest#testAClassReifyingBuildMacroKeepsTheGate :: control :: M-STATICREACH-REIFY-BLIND',
 			'unit.check.StaticReflectionReachTest#testAClassSourceInAnOpaqueRegionKeepsTheGate :: control :: '
@@ -2690,6 +2711,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnusedPrivateCheckTest#testClassReachedThroughAnImportAliasKeepsItsPrivateConstructor :: control :: '
 				+ 'M-CTOR-IMPORT-ALIAS-BLIND',
 			'unit.check.UnusedPrivateCheckTest#testEntryPointMainIsNeverUnused :: control :: M-ENTRY-POINT-UNREACHED',
+			'unit.check.UnusedPrivateCheckTest#testFixDeletesFieldWithPureLiteralOrStdlibInit :: control :: '
+				+ 'M-UNUSED-PRIVATE-FIELD-KIND-PURITY',
 			'unit.check.UnusedPrivateCheckTest#testMainTakingAParameterIsNoEntryPoint :: control :: M-ENTRY-POINT-ANY-ARITY',
 			'unit.check.UnusedPrivateCheckTest#testNamesakeSubtypeNoLongerShieldsAPrivateConstructor :: control :: '
 				+ 'M-SUBTYPE-KEY-SIMPLE-NAME',
@@ -7305,7 +7328,22 @@ class TestDiscoveryParityTest extends Test {
 			'M-PTR-TRAILING-SWAPS',
 			'M-RRT-NO-ORIENT',
 			'M-PTA-NO-ORIENT',
-			'M-PTE-NO-ORIENT'
+			'M-PTE-NO-ORIENT',
+			'M-NARROWING-OR-FLAT',
+			'M-NARROWING-OR-COMPOUND-ADMITTED',
+			'M-NARROWING-OR-GLUE-COMMENT-ADMITTED',
+			'M-NARROWING-OR-INNER-COMMENT-ADMITTED',
+			'M-OR-LEAVES-OR-OPAQUE',
+			'M-OR-LEAVES-NEGATED-AND-OPAQUE',
+			'M-TERNARY-OR-BRANCH-UNREAD',
+			'M-GUARD-CHAIN-NEGATED-RUN-DROPPED',
+			'M-DEFAULT-ARG-NULL-SITE-ADMITTED',
+			'M-DEFAULT-ARG-NONNULL-ANY',
+			'M-DEFAULT-ARG-UNRESOLVED-NULL-IGNORED',
+			'M-DEFAULT-ARG-NULL-CONST-NONNULL',
+			'M-UNUSED-LOCAL-IMPURE-UNSAID',
+			'M-UNUSED-LOCAL-SHARED-LINE-UNSAID',
+			'M-UNUSED-PRIVATE-FIELD-KIND-PURITY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

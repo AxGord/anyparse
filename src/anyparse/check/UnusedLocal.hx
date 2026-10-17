@@ -191,8 +191,8 @@ final class UnusedLocal implements Check implements VolatileMessage {
 	 * Delete each fixable unused-local declaration. A flagged local is wholly
 	 * unreferenced, so the deletion is safe whenever the initializer carries
 	 * no side effect (or is absent). The declaration's whole physical line is
-	 * removed (`lineExtendedSpan`) so the batched `canonicalize` leaves no
-	 * blank residue; a side-effecting initializer is skipped (no edit).
+	 * removed (`lineExtendedSpan`) so the batched `canonicalize` leaves no blank residue; a side-effecting initializer, and a binding
+	 * sharing its line with another, is skipped (no edit) with its `Violation.declineReason`, which `--fix` names in its ledger.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -229,7 +229,11 @@ final class UnusedLocal implements Check implements VolatileMessage {
 					? TypeResolver.isDeletionPure(init, treeRoot, shape, declaredTypes, index)
 					: MemberKinds.isSideEffectFree(init, shape)
 			);
-			if (!deletable) continue;
+			if (!deletable) {
+				v.declineReason = 'the initializer is not provably side-effect-free, so deleting the declaration would drop whatever '
+					+ 'it does — and whether the value was meant to be used is the author\'s call';
+				continue;
+			}
 			// A binding that SHARES its line with another one is reported but never cut: the deletion
 			// below takes the whole LINE. That is both a continuation (`b` in `var a = 1, b = 2;`) and
 			// a head that still carries one — deleting `a` there dropped the live `b` with it and left
@@ -237,7 +241,10 @@ final class UnusedLocal implements Check implements VolatileMessage {
 			// middle one is its span MINUS the continuation nested inside it (the chain is
 			// right-recursive), and a head needs its first continuation promoted into its place — so it
 			// is refused rather than approximated.
-			if (continuationKinds.contains(decl.kind) || decl.children.exists(k -> continuationKinds.contains(k.kind))) continue;
+			if (continuationKinds.contains(decl.kind) || decl.children.exists(k -> continuationKinds.contains(k.kind))) {
+				v.declineReason = 'the binding shares its declaration line with another one, and the deletion takes the whole line';
+				continue;
+			}
 			edits.push({ span: ElementSpan.lineExtendedSpan(source, span), text: '' });
 		}
 		return edits;
