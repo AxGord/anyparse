@@ -3329,3 +3329,18 @@ decided the question; it may not become a record of runs.
   is listed once); only the paths keep a memo, cleared when an index is taken. A graph merges an index only over files
   it does not hold, so asking the whole index answers what the per-file tables held — byte-identical on the three TM
   trees and anyparse — branch `feat/infra-N6`
+- `ImportBindings.readModuleFields` was a second reader of a module's module-level fields — it re-parsed the file's
+  retained source and kept every named top-level declaration that was not a type or an import statement → it reads the
+  index's `FileInfo.moduleFields` (each name once), the reading `ValueNameBinding` already used. The kinds agree
+  (`RefShape.moduleValueDeclKinds` is every value binder the grammar spells), and every indexed file's source is
+  retained, so the null "unparseable" set it could answer never arose for an indexed module: byte-identical on the three
+  TM trees, anyparse and the review fixtures — branch `feat/infra-N11`
+- `CondBranchPath.comparable` read two positions as alternatives only when ONE region held both in different branches,
+  so a use in `#if a … #else USE #end` could bind a module-level declaration in an earlier `#if a DECL #end` that no
+  build compiling the use has → two branches of two regions are alternatives too when the earlier branch `j` spells, as
+  its own condition, the `j`-th condition of the later one's chain (the earlier needs it, the later its negation; Haxe
+  4.3.7 `v-N11-hx/p2`: `#if foo final w … #end` then `#if foo … #elseif bar USE #else USE #end` reads the imported `w` in
+  both `USE`s). Read only where each chain splits back into exactly its branch's conditions — a condition spelling `|`
+  (`a || b`) is never split — and an empty condition proves nothing; logical equivalence (`#if !a` against `#else`) is
+  still not read (`ValueNameBindingTest#testAnotherRegionOfTheSameConditionIsAnAlternative`, RED on `d0f12ab9e`) —
+  branch `feat/infra-N11`

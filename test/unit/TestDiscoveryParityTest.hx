@@ -4262,7 +4262,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ValueNameBindingTest#testAnImportBringsTheValuesOfTheTypesItPutsInScope :: control :: '
 				+ 'M-VALUES-IMPORTED-CTOR,M-VALUES-WILDCARD-CTOR,M-VALUES-ALIAS-WHOLE-MODULE,M-VALUES-FIELD-IMPORT-TYPES,M-SCOPE-MODULE-IMPORT-BLIND',
 			'unit.query.ValueNameBindingTest#testAnUnlistedImportIsTheOneACallMayBeRoutedThrough :: control :: '
-				+ 'M-MACRO-VALUE-UNLISTED,M-MACRO-EXTENSIONS-ONLY'
+				+ 'M-MACRO-VALUE-UNLISTED,M-MACRO-EXTENSIONS-ONLY',
+			'unit.query.ValueNameBindingTest#testAnotherRegionOfTheSameConditionIsAnAlternative :: control :: '
+				+ 'M-COND-ALTERNATIVE-REGIONS,M-COND-ALTERNATIVE-SPLIT'
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -7123,7 +7125,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-SUBTYPE-ARGS-SUBSTITUTED',
 			'M-SUBTYPE-ARGS-ARITY',
 			'M-OPERAND-NEW-CUT',
-			'M-MEMBER-KIND-IGNORED'
+			'M-MEMBER-KIND-IGNORED',
+			'M-COND-ALTERNATIVE-REGIONS',
+			'M-COND-ALTERNATIVE-SPLIT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

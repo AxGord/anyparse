@@ -22514,6 +22514,22 @@
 			"find": "return (table[member] ?? []).exists(k -> kinds.contains(k));",
 			"replace": "return table.exists(member);",
 			"note": "a member of any kind counts as one of the kinds asked, so a field reads as an enum constructor a bare call may build"
+		},
+		{
+			"name": "M-COND-ALTERNATIVE-REGIONS",
+			"type": "anyparse.query.CondBranchPath",
+			"method": "alternatives",
+			"find": "return own != '' && own == lateChain[early.branch];",
+			"replace": "return false;",
+			"note": "two regions spelling the same condition where the earlier branch is taken are never alternatives, so a use in the other's #else may bind a declaration no build compiling it has"
+		},
+		{
+			"name": "M-COND-ALTERNATIVE-SPLIT",
+			"type": "anyparse.query.CondBranchPath",
+			"method": "alternatives",
+			"find": "if (earlyChain.length != early.branch + 1 || lateChain.length != late.branch + 1) return false;",
+			"replace": "",
+			"note": "a chain is split on every | it spells, so a condition holding || is read as a run of conditions it is not and two branches some build compiles together read as alternatives"
 		}
 	]
 }
