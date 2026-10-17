@@ -3,14 +3,14 @@ package anyparse.macro;
 #if macro
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
+import anyparse.macro.Lowering.*;
+import anyparse.macro.MacroNames.*;
+import anyparse.macro.OperatorLoopLowering.*;
+import anyparse.macro.ParseDispatchLowering.*;
+import anyparse.macro.PrattMeta.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
-import anyparse.macro.Lowering.*;
-import anyparse.macro.OperatorLoopLowering.*;
-import anyparse.macro.PrattMeta.*;
-import anyparse.macro.ParseDispatchLowering.*;
-import anyparse.macro.MacroNames.*;
 
 using StringTools;
 using anyparse.macro.MetaInspect;

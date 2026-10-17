@@ -2,12 +2,12 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.macro.MacroNames.*;
+import anyparse.macro.WriterCascadeLowering.*;
+import anyparse.macro.WriterLoweringSupport.*;
+import anyparse.macro.WriterPolicyLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.WriterCascadeLowering.*;
-import anyparse.macro.WriterPolicyLowering.*;
-import anyparse.macro.WriterLoweringSupport.*;
-import anyparse.macro.MacroNames.*;
 
 using Lambda;
 using anyparse.macro.MetaInspect;

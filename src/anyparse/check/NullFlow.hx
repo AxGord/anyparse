@@ -7,7 +7,6 @@ import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.TypeResolver;

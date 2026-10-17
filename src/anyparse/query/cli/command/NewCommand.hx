@@ -1,11 +1,11 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ExitCode.*;
 import anyparse.query.NewFile.NewFileResult;
 import anyparse.query.NewFile.NewFileSpec;
 import anyparse.query.cli.CliContext;
 import haxe.io.Path;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;

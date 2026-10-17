@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.Diff;
+import anyparse.query.ExitCode.*;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.cli.CliContext;
 import anyparse.query.format.Json;
@@ -9,7 +10,6 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;

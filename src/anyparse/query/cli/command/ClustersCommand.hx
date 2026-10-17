@@ -2,8 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.Clusters.ClusterReport;
-import anyparse.query.cli.CliContext;
 import anyparse.query.ExitCode.*;
+import anyparse.query.cli.CliContext;
 
 using StringTools;
 

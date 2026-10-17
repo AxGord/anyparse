@@ -1,12 +1,12 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.macro.WriterBlankLowering.*;
+import anyparse.macro.WriterLoweringSupport.*;
+import anyparse.macro.WriterPolicyLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
-import anyparse.macro.WriterPolicyLowering.*;
-import anyparse.macro.WriterLoweringSupport.*;
-import anyparse.macro.WriterBlankLowering.*;
 
 /**
  * Pass 3W helpers — the separated-list (`@:trivia` + `@:sep`) Star emit

@@ -2,11 +2,11 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.macro.Lowering.*;
 import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.ExprTools;
-import anyparse.macro.Lowering.*;
 
 using Lambda;
 using StringTools;

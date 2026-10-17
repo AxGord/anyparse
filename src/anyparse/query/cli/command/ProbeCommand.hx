@@ -1,10 +1,10 @@
 package anyparse.query.cli.command;
 
 import anyparse.core.TempScratch;
+import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliContext;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 

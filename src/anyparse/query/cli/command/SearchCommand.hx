@@ -1,12 +1,12 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
 import anyparse.query.Matcher.Match;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliContext;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;

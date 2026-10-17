@@ -1,12 +1,12 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.command.SweepCorpus.SweepCorpusResult;
 import anyparse.query.format.json.SweepFixture;
 import anyparse.query.format.json.SweepSnapshot;
 import anyparse.query.format.json.SweepSnapshotParser;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;

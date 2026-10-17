@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.check.FactsTypeTree;
-import anyparse.check.FactsTypeTree.FactsType;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.FlowFact;

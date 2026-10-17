@@ -2,9 +2,9 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.MacroNames.*;
 
 using Lambda;
 using anyparse.macro.MetaInspect;

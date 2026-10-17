@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.cli.CliArgs;
@@ -7,7 +8,6 @@ import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliWalk;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;

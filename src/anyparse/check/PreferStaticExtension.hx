@@ -15,8 +15,6 @@ import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeResolver;

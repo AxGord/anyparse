@@ -12,6 +12,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli.RuleEdits;
 import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.EditJournal;
+import anyparse.query.ExitCode.*;
 import anyparse.query.IndexScope;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintCommand.CheckPartition;
@@ -19,7 +20,6 @@ import anyparse.query.cli.command.LintCommand.LintRange;
 import anyparse.query.cli.command.LintFixVerify.AssistedOutcome;
 import anyparse.query.cli.command.LintFixVerify.RiskyFixOutcome;
 import anyparse.runtime.Span;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;

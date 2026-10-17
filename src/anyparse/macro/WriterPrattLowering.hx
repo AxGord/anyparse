@@ -3,15 +3,15 @@ package anyparse.macro;
 #if macro
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
+import anyparse.macro.MacroNames.*;
+import anyparse.macro.PrattMeta.*;
+import anyparse.macro.WriterBlankLowering.*;
+import anyparse.macro.WriterChainLowering.*;
+import anyparse.macro.WriterLoweringSupport.*;
+import anyparse.macro.WriterPolicyLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
-import anyparse.macro.PrattMeta.*;
-import anyparse.macro.WriterBlankLowering.*;
-import anyparse.macro.WriterPolicyLowering.*;
-import anyparse.macro.WriterLoweringSupport.*;
-import anyparse.macro.WriterChainLowering.*;
-import anyparse.macro.MacroNames.*;
 
 using StringTools;
 using Lambda;

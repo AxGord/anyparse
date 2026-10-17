@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
@@ -9,7 +10,6 @@ import anyparse.query.cli.CliWalk;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 

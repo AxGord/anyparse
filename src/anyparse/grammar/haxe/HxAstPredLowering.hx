@@ -2,9 +2,9 @@ package anyparse.grammar.haxe;
 
 #if macro
 import anyparse.macro.AstPredLowering;
+import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.MacroNames.*;
 
 /**
  * Haxe-grammar AST-predicate tables — the domain knowledge behind the

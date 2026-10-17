@@ -2,12 +2,12 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.macro.Lowering.*;
+import anyparse.macro.MacroNames.*;
+import anyparse.macro.ParseDispatchLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
-import anyparse.macro.Lowering.*;
-import anyparse.macro.ParseDispatchLowering.*;
-import anyparse.macro.MacroNames.*;
 
 using Lambda;
 using StringTools;

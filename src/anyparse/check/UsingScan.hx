@@ -7,9 +7,6 @@ import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.ResolvedType;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
 using Lambda;

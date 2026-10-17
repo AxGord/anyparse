@@ -11,8 +11,6 @@ import anyparse.check.OracleDeclaration;
 import anyparse.check.OracleGeneration;
 import anyparse.check.OracleRunMemo;
 import anyparse.check.ReachDefinesProbe;
-import anyparse.check.ReachDefinesProbe.AheadBuilds;
-import anyparse.check.ReachDefinesProbe.DefinesProbe;
 import anyparse.check.Severity;
 import anyparse.check.ThreadSafety;
 import anyparse.check.TypedFactsProbe;

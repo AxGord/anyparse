@@ -3,10 +3,10 @@ package anyparse.macro;
 #if macro
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
+import anyparse.macro.WriterLoweringSupport.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
-import anyparse.macro.WriterLoweringSupport.*;
 
 using Lambda;
 using anyparse.macro.MetaInspect;
