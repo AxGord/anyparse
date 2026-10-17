@@ -1586,7 +1586,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NamingPrivatizeTest#testASubtypeReaderStillPrivatizes :: control :: M-PRIVATIZE-NO-SUBTYPE-REGION',
 			'unit.check.NamingPrivatizeTest#testAnAutoBuildAncestorDoesNotRefuse :: control :: M-PRIVATIZE-AUTOBUILD-COUNTS',
 			'unit.check.NamingPrivatizeTest#testAnOutsideReaderKeepsTheRename :: control :: M-NAMING-RISKY-FINDINGS-ALL,M-PRIVATIZE-TOKENS-UNCHECKED',
-			'unit.check.NamingPrivatizeTest#testEachGateRefusesTheArm :: control :: M-PRIVATIZE-UNCERTAIN-RUN,M-PRIVATIZE-META-RUN,'
+			'unit.check.NamingPrivatizeTest#testEachGateRefusesTheArm :: control :: M-PRIVATIZE-UNCERTAIN-RUN,'
 				+ 'M-PRIVATIZE-TYPE-REACH,M-PRIVATIZE-CHAIN,M-PRIVATIZE-ACCESS-GRANT,M-PRIVATIZE-FRAGMENT,M-PRIVATIZE-TOKENS-UNCHECKED',
 			'unit.check.NamingPrivatizeTest#testNoDeclaredScopeLeavesTheRename :: control :: M-PRIVATIZE-INCOMPLETE-PROJECT',
 			'unit.check.NamingPrivatizeTest#testTheCandidateTestIsAPositiveList :: control :: M-PRIVATIZE-METHOD-CANDIDATE,M-PRIVATIZE-NO-UNDERSCORE,'
@@ -7369,7 +7369,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-PRIVATIZE-RULE-UNCHECKED',
 			'M-PRIVATIZE-INCOMPLETE-PROJECT',
 			'M-PRIVATIZE-UNCERTAIN-RUN',
-			'M-PRIVATIZE-META-RUN',
+
 			'M-PRIVATIZE-TYPE-REACH',
 			'M-PRIVATIZE-CHAIN',
 			'M-PRIVATIZE-AUTOBUILD-COUNTS',

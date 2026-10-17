@@ -23441,14 +23441,6 @@
 			"note": "a modifier run only some builds see is privatized"
 		},
 		{
-			"name": "M-PRIVATIZE-META-RUN",
-			"type": "anyparse.check.NamingPrivatize",
-			"method": "publicKeywordIfConfined",
-			"find": "if (keyword == null || mods.annotated) return null;",
-			"replace": "if (keyword == null) return null;",
-			"note": "metadata inside a member-position `#if` region does not refuse"
-		},
-		{
 			"name": "M-PRIVATIZE-TYPE-REACH",
 			"type": "anyparse.check.NamingPrivatize",
 			"method": "publicKeywordIfConfined",

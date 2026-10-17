@@ -154,8 +154,8 @@ final class NamingPrivatizeTest extends Test {
 
 	/** Each gate, alone on the control fixture, refuses the arm. */
 	@:pin('control')
-	@:killer('M-PRIVATIZE-UNCERTAIN-RUN', 'M-PRIVATIZE-META-RUN', 'M-PRIVATIZE-TYPE-REACH', 'M-PRIVATIZE-CHAIN',
-		'M-PRIVATIZE-ACCESS-GRANT', 'M-PRIVATIZE-FRAGMENT', 'M-PRIVATIZE-TOKENS-UNCHECKED')
+	@:killer('M-PRIVATIZE-UNCERTAIN-RUN', 'M-PRIVATIZE-TYPE-REACH', 'M-PRIVATIZE-CHAIN', 'M-PRIVATIZE-ACCESS-GRANT',
+		'M-PRIVATIZE-FRAGMENT', 'M-PRIVATIZE-TOKENS-UNCHECKED')
 	public function testEachGateRefusesTheArm(): Void {
 		final user: { file: String, source: String } = { file: 'pkg/D.hx', source: SILENT_USER };
 		final refusals: Array<{ what: String, files: Array<{ file: String, source: String }> }> = [

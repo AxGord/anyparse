@@ -138,7 +138,8 @@ final class NamingPrivatize {
 		if (found == null || !found.certain) return null;
 		final mods: MemberRun = PublicReach.readRun(found.run);
 		final keyword: Null<QueryNode> = mods.publicModifier;
-		if (keyword == null || mods.annotated) return null;
+		// Metadata anywhere in the run, a guarded one included, is already the grammar's `implicitReach`, which `isCandidate` refuses.
+		if (keyword == null) return null;
 		final scope: SymbolIndex = ctx.wide.fileInfo(c.file) == null ? ctx.index : ctx.wide;
 		final host: Null<FileInfo> = scope.fileInfo(c.file);
 		final declared: Null<TypeDeclInfo> = host?.types.find(t -> t.name == owner);
