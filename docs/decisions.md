@@ -3464,3 +3464,17 @@ decided the question; it may not become a record of runs.
   name slot; `super`, which Haxe does not reserve. Refused although Haxe takes it: `this` as a `for` variable or a lambda parameter (`for (this in a)`, `(this) -> 1`: Haxe reads those heads as expressions, where `this` is an identifier), and `new` as the name of a function inside a `#if` name splice (`HxConditionalFnName`) — none is code an op writes or a project holds (both corpora parse unchanged), and a refusal is the loud direction. Writer and formatter are untouched: `fmt --write` over TM src (876
   files) and anyparse src (1140) is byte-identical. Fixture consequence: a `CallGraphTest` fixture named a function
   `untyped` — branch `feat/infra-N12`
+- `simplify-boolean-ternary` and `simplify-boolean-return-chain` wrote a flat `||` that strands a null-safety
+  narrowing: `prefer-ternary-return` folded `if (a == null || b == null) return true; return mayUnify(a, b);` into
+  `a == null || b == null ? true : mayUnify(a, b)` (a ternary narrows its branch from the whole condition), and the
+  boolean reduction then wrote `a == null || b == null || mayUnify(a, b)`, which Haxe 4.3.7 rejects ("Cannot pass
+  nullable value"): a fact reaches a later `||` operand from the chain's FIRST operand only, while an `&&` chain carries
+  every fact (`a != null && b != null && b.length` compiles). Two `--fix` safe edits over anyparse were reverted for it
+  (`CallRepetition.repeatedUnder`, `FunctionValueTypes.sameOrGeneric`). The engine already knew this —
+  `negateAndChain` right-nests a group at a stranded null test — but the two reductions joined through the plain
+  binary `joinOr`. Both now write every `||` result through `narrowingOr` over the chain's operands (`orLeaves`: `||`
+  sides, De Morgan'd `&&` sides under negation, parens transparent, also inside the kept branch and across guard
+  rungs): flat and byte-identical when nothing is stranded, `a == null || (b == null || mayUnify(a, b))` when a bare
+  null test past the first operand narrows a later one, and REFUSED (null — no finding) when a null comparison buried
+  in a compound operand does (`!(a != null && b != null) || b.length > 0` does not compile and no grouping fixes it;
+  the positive whitelist: only the bare-test shape is known to carry a fact) — branch `feat/infra-N15`

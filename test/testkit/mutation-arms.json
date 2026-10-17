@@ -22885,6 +22885,69 @@
 			"find": "|null|override|",
 			"replace": "|null|operator|overload|override|",
 			"note": "a `var` name refuses `operator` / `overload` too, and a module declaring one under a `#if` for an older Haxe skip-parses"
+		},
+		{
+			"name": "M-NARROWING-OR-FLAT",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"force": "flat",
+			"note": "every `||` a boolean reduction writes joins flat, stranding a null test past the first operand"
+		},
+		{
+			"name": "M-NARROWING-OR-COMPOUND-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (leaf.tested.contains(name) && !leaf.providers.contains(name)) return null;",
+			"replace": "if (false && leaf.tested.contains(name)) return null;",
+			"note": "a null comparison buried in a compound operand no longer refuses a reduction whose later operand it narrows"
+		},
+		{
+			"name": "M-NARROWING-OR-GLUE-COMMENT-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (commented(glue) || commented(leaf.op.src)) return null;",
+			"replace": "if (commented(leaf.op.src)) return null;",
+			"note": "a regrouped chain drops a comment standing between two of its operands"
+		},
+		{
+			"name": "M-NARROWING-OR-INNER-COMMENT-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (commented(glue) || commented(leaf.op.src)) return null;",
+			"replace": "if (commented(glue)) return null;",
+			"note": "a regrouped chain joins an operand whose span carries a line comment, which swallows the rest of the line"
+		},
+		{
+			"name": "M-OR-LEAVES-OR-OPAQUE",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "orLeaves",
+			"find": "if (kids.length == 2 && node.kind == (negated ? 'And' : 'Or'))",
+			"replace": "if (kids.length == 2 && negated && node.kind == 'And')",
+			"note": "an `||` is one opaque operand, so a null test inside it is never seen as stranded"
+		},
+		{
+			"name": "M-OR-LEAVES-NEGATED-AND-OPAQUE",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "orLeaves",
+			"find": "if (kids.length == 2 && node.kind == (negated ? 'And' : 'Or'))",
+			"replace": "if (kids.length == 2 && !negated && node.kind == 'Or')",
+			"note": "a negated `&&` is one opaque operand, so the De Morgan `||` it writes is never regrouped"
+		},
+		{
+			"name": "M-TERNARY-OR-BRANCH-UNREAD",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "simplifyBooleanTernary",
+			"find": "orLeaves(elseNode, false, source, typeNominalOf, orLeaves(cond, false, source, typeNominalOf, []))",
+			"replace": "orLeaves(cond, false, source, typeNominalOf, [])",
+			"note": "the kept branch is left out of the `||` chain the reduction judges, so a null test inside it is never regrouped"
+		},
+		{
+			"name": "M-GUARD-CHAIN-NEGATED-RUN-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "reduceBooleanGuardChain",
+			"find": "run = orLeaves(cond, true, source, typeNominalOf, []);",
+			"replace": "run = null;",
+			"note": "a negated `&&` guard's `||` is one opaque operand of the chain before it, so its null test strands"
 		}
 	]
 }

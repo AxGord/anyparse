@@ -2052,6 +2052,20 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ScratchFieldCheckTest#testWritesInBothArmsHaveNoDeclarationSlot :: control :: M-SCRATCH-SLOT-ANYWHERE',
 			'unit.check.ShadowingCaseBinderCheckTest#testUnprovenSubjectRefused :: control :: M-SHADOWING-BINDER-UNPROVEN',
 			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
+			'unit.check.SimplifyBooleanReturnChainCheckTest#testNegatedConjunctionGuardRegroups :: control :: '
+				+ 'M-GUARD-CHAIN-NEGATED-RUN-DROPPED',
+			'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestRegroups :: control :: M-NARROWING-OR-FLAT',
+			'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestWithCommentNotReduced :: control :: '
+				+ 'M-NARROWING-OR-GLUE-COMMENT-ADMITTED',
+			'unit.check.SimplifyBooleanTernaryCheckTest#testCompoundNullTestBeforeReuseNotSimplified :: control :: '
+				+ 'M-NARROWING-OR-COMPOUND-ADMITTED',
+			'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestInBranchRegroups :: control :: M-TERNARY-OR-BRANCH-UNREAD',
+			'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestRegroupsInNegatedAnd :: control :: '
+				+ 'M-OR-LEAVES-NEGATED-AND-OPAQUE',
+			'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestRegroupsInOr :: control :: '
+				+ 'M-NARROWING-OR-FLAT,M-OR-LEAVES-OR-OPAQUE',
+			'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestWithCommentNotSimplified :: control :: '
+				+ 'M-NARROWING-OR-INNER-COMMENT-ADMITTED',
 			'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
 			'unit.check.StaticReflectionReachTest#testAClassReifyingBuildMacroKeepsTheGate :: control :: M-STATICREACH-REIFY-BLIND',
 			'unit.check.StaticReflectionReachTest#testAClassSourceInAnOpaqueRegionKeepsTheGate :: control :: '
@@ -7213,7 +7227,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-RESERVED-IDENT-NAME',
 			'M-RESERVED-VAR-NAME',
 			'M-RESERVED-FN-NAME',
-			'M-RESERVED-VERSIONED-REFUSED'
+			'M-RESERVED-VERSIONED-REFUSED',
+			'M-NARROWING-OR-FLAT',
+			'M-NARROWING-OR-COMPOUND-ADMITTED',
+			'M-NARROWING-OR-GLUE-COMMENT-ADMITTED',
+			'M-NARROWING-OR-INNER-COMMENT-ADMITTED',
+			'M-OR-LEAVES-OR-OPAQUE',
+			'M-OR-LEAVES-NEGATED-AND-OPAQUE',
+			'M-TERNARY-OR-BRANCH-UNREAD',
+			'M-GUARD-CHAIN-NEGATED-RUN-DROPPED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
