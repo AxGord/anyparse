@@ -79,21 +79,20 @@ final class AddMeta {
 		for (sibling in run) if (MemberKinds.META_KINDS.contains(sibling.kind) && sibling.name == nameNN)
 			return Err('already annotated: $nameNN');
 
-		final at: Null<Int> = insertOffset(run, hostNN);
-		if (at == null) return Err('the resolved ${resolved.kind} node has no source span to annotate');
-		final atNN: Int = at;
-
-		// NON-zero-width on purpose. `RefactorSupport.docSplittingEdit` refuses a
-		// zero-width newline-carrying insert that lands between a `/**` block and the
-		// declaration it documents — correct for a SIBLING, which would steal the doc,
-		// and exactly wrong here: metadata is part of the declaration the doc already
-		// describes. Consuming the declaration's first byte and re-emitting it says
-		// that in the shape of the edit rather than by exempting this op from the guard.
-		final edit: { span: Span, text: String } = {
-			span: new Span(atNN, atNN + 1),
-			text: '$text\n${lineIndentAt(source, atNN)}${source.charAt(atNN)}'
-		};
+		final edit: Null<{ span: Span, text: String }> = runEdit(source, run, hostNN, text);
+		if (edit == null) return Err('the resolved ${resolved.kind} node has no source span to annotate');
 		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
+	}
+
+	/**
+	 * The edit adding the entry `text` to the declaration `decl` of `tree` (the text of `source`) where `addMeta` puts it
+	 * — below its doc, at the end of its metadata run, above its modifiers — or null when it carries no span. No duplicate
+	 * check: the caller decides whether the entry is already there. `MoveMember` grants a moved group's private access once,
+	 * on the destination TYPE, through it.
+	 */
+	public static function entryEdit(source: String, tree: QueryNode, decl: QueryNode, text: String): Null<{ span: Span, text: String }> {
+		final host: Null<QueryNode> = declarationHost(tree, decl);
+		return host == null ? null : runEdit(source, prefixRun(TreePath.parentOf(tree, host), host), host, text);
 	}
 
 	/**
@@ -160,6 +159,24 @@ final class AddMeta {
 		var start: Int = i;
 		while (start > 0 && MemberKinds.isModifierOrMetaKind(siblings[start - 1].kind)) start--;
 		return siblings.slice(start, i);
+	}
+
+	/**
+	 * The insertion of `text` into `host`'s prefix `run` (`insertOffset`), or null when nothing there carries a span.
+	 *
+	 * NON-zero-width on purpose. `RefactorSupport.docSplittingEdit` refuses a zero-width newline-carrying insert that lands
+	 * between a `/**` block and the declaration it documents — correct for a SIBLING, which would steal the doc, and exactly
+	 * wrong here: metadata is part of the declaration the doc already describes. Consuming the declaration's first byte and
+	 * re-emitting it says that in the shape of the edit rather than by exempting this op from the guard.
+	 */
+	private static function runEdit(
+		source: String, run: Array<QueryNode>, host: QueryNode, text: String
+	): Null<{ span: Span, text: String }> {
+		final at: Null<Int> = insertOffset(run, host);
+		return at == null ? null : {
+			span: new Span(at, at + 1),
+			text: '$text\n${lineIndentAt(source, at)}${source.charAt(at)}'
+		};
 	}
 
 	/**

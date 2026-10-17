@@ -173,7 +173,7 @@ final class DependencyCarry {
 		if (wildRefusal != null) return CarryErr(wildRefusal);
 		for (group in guarded) carried.push(GuardedImportCarry.blockText(group.condition, group.lines, shape));
 		return CarryOk(usingLinesToCarry(
-			source, tree, memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried,
+			source, tree, ShapeVocab.memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried,
 			plugin.lexicalRegions(destSource)
 		));
 	}
@@ -253,6 +253,28 @@ final class DependencyCarry {
 				for (h in hits[name] ?? [])
 					if (h.kind != RefKind.Decl && h.bindingSpan == null) { name: name, span: h.span, interpolated: h.interpolated }
 		];
+	}
+
+	/**
+	 * The simple names an `import <holder's module>.*;` binds (`staticNamesOf`: its MAIN type's statics, `enum abstract`
+	 * values and enum constructors) — what `move-member --keep-bare` must prove no other reference of the file it adds that
+	 * wildcard to spells.
+	 */
+	public static inline function wildcardBoundNames(holder: FileInfo, shape: RefShape): Array<String> {
+		return staticNamesOf(holder, shape);
+	}
+
+	/** Whether `info`'s file already declares the unguarded module-static wildcard `import <module>.*;`. */
+	public static function hasModuleStaticWildcard(info: FileInfo, module: String): Bool {
+		return info.imports.exists(imp -> !imp.guarded && imp.kind == ImportKind.Wild && imp.raw == '$module.*');
+	}
+
+	/**
+	 * Whether an import / using / alias statement of `info`'s file binds the simple name `name` itself — a field import
+	 * `import p.M.name;`, an alias `… as name` — which outranks any module-static wildcard (`keepBareRefusal`).
+	 */
+	public static function importsSimpleName(info: FileInfo, name: String): Bool {
+		return info.imports.exists(imp -> imp.kind != ImportKind.Wild && SourceText.lastSegment(imp.raw) == name);
 	}
 
 	/**
@@ -732,18 +754,6 @@ final class DependencyCarry {
 	}
 
 	/**
-	 * The kinds a MEMBER ACCESS projects as — the node whose receiver child is the head of a
-	 * `Helper.go()`. Read off the shape rather than spelled here, so a second grammar's own spellings
-	 * arrive with it; a shape that declares none contributes no receiver names at all.
-	 */
-	private static function memberAccessKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = [];
-		for (kind in [shape.fieldAccessKind, shape.nullSafeAccessKind, shape.forceFieldAccessKind]) if (kind != null && !out.contains(kind))
-			out.push(kind);
-		return out;
-	}
-
-	/**
 	 * Every UPPER-INITIAL name written as the RECEIVER of a member access inside `declSpan` —
 	 * the `Helper` of `Helper.go()`, of `Helper.CONST` and of `@:build(Helper.make())`.
 	 *
@@ -873,7 +883,7 @@ final class DependencyCarry {
 	): Array<String> {
 		final refs: Array<NameSpan> = [];
 		collectDependencyNames(tree, declSpan, typeRefShape, typeName, refs);
-		collectReceiverNames(tree, declSpan, shape.identKind, memberAccessKinds(shape), typeName, refs);
+		collectReceiverNames(tree, declSpan, shape.identKind, ShapeVocab.memberAccessKinds(shape), typeName, refs);
 		final shadows: Array<NameSpan> = functionTypeParamNames(plugin, source, declSpan);
 		for (t in cursorInfo.types)
 			if (t.span.from <= declSpan.from && t.span.to >= declSpan.to)

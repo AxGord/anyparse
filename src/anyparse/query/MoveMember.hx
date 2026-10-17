@@ -3,6 +3,8 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.MoveMemberFields.*;
+import anyparse.query.MoveMemberReceivers.ReceiverHit;
 import anyparse.query.MoveSymbol.CarriedEdits;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
@@ -31,7 +33,7 @@ typedef MemberGroup = {
  * span, and staticness (instance members obey the sibling-fields
  * contract — see the class doc).
  */
-private typedef MovedMember = {
+typedef MovedMember = {
 	var name: String;
 	var group: MemberGroup;
 	var span: Span;
@@ -117,6 +119,9 @@ typedef MovePrep = {
 	var srcDecl: TypeDeclMatch;
 	var moved: Array<MovedMember>;
 	var closureAdded: Array<String>;
+
+	/** The instance fields the move set took along because only its members read or write them (`ownedFieldClosure`). */
+	var fieldsAdded: Array<String>;
 	var destFile: String;
 	var destDecl: TypeDeclMatch;
 	var destSource: String;
@@ -168,15 +173,21 @@ enum ViaResult {
  *    `Dest` (`--via`, auto-detected when the type has exactly one);
  *    moved bodies may keep reading FINAL fields that the destination
  *    declares under the same names — the caller must construct the
- *    destination with the same values (advisory). Receiver-qualified
- *    external calls (`x.member()`) are NOT rewritten — they fail the
- *    next compile loudly.
+ *    destination with the same values (advisory). So is every
+ *    RECEIVER-qualified caller whose receiver is provably a `Src`
+ *    (`g.member()` becomes `g.via.member()`, `MoveMemberReceivers`); an
+ *    unprovable receiver refuses the move. The fields only the moved
+ *    members read or write move along with them (`MoveMemberFields`).
  *  - References between moved members stay bare — they resolve at the
  *    destination. Bare self-references inside a moved body stay bare.
  *  - Bare accesses INSIDE a moved body to STATIC members staying on the
  *    source type are qualified as `Src.other`. When any such member is
- *    private, the moved decl gains an `@:access(<pkg>.<Src>)` line and
- *    the advisory says so.
+ *    private, the moved decl gains an `@:access(<pkg>.<Src>)` line — on
+ *    the destination TYPE, once, when two or more moved members need it —
+ *    and the advisory says so. Under `keepBare` the bare callers in the
+ *    source of the moved STATIC members stay bare, through one
+ *    `import <destModule>.*;` the op proves rebinds nothing else
+ *    (`keepBareRefusal`).
  *  - A private (or default-visibility) member that still has callers
  *    after the move is promoted to `public` at the destination, noted
  *    in the advisory. With no remaining callers the visibility is kept.
@@ -191,9 +202,8 @@ enum ViaResult {
  *
  * ## Refusals (correctness boundary)
  *
- * A moved body that references `this`, calls an instance member staying
- * on the source type, or reads a MUTABLE instance field is refused — the
- * sibling-fields contract covers final fields only. A cross-package
+ * A moved body that references `this`, calls an instance member staying on the source type, or reads a MUTABLE instance
+ * field some staying member also reaches is refused — the sibling-fields contract covers final fields only. A cross-package
  * destination is refused for an INSTANCE move (the via field's type
  * would have to be imported into the source, which is deferred); an
  * all-static move across packages is wired, dotted callers included —
@@ -246,7 +256,8 @@ final class MoveMember {
 	 */
 	public static function move(
 		srcFile: String, srcTypeName: String, memberNames: Array<String>, destTypeName: String, viaField: Null<String>, closure: Bool,
-		scaffold: Bool, scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeRefShape: TypeRefShape
+		scaffold: Bool, scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeRefShape: TypeRefShape,
+		keepBare: Bool = false
 	): MoveResult {
 		if (srcTypeName == destTypeName) return Err('source and destination type are the same — nothing to move');
 		if (memberNames.length == 0) return Err('no members named — nothing to move');
@@ -263,6 +274,8 @@ final class MoveMember {
 		final advisoryExtras: Array<String> = [];
 		if (prep.closureAdded.length > 0)
 			advisoryExtras.push('--closure pulled in ${prep.closureAdded.length} instance member(s): ${quoted(prep.closureAdded)}');
+		if (prep.fieldsAdded.length > 0)
+			advisoryExtras.push('moved along field(s) ${quoted(prep.fieldsAdded)}, which only the moved members read or write');
 		final outsideCallersOf: Map<String, Int> = [for (m in prep.moved) m.name => 0];
 		for (m in prep.moved) if (m.isStatic)
 			outsideCallersOf[m.name] = collectQualifiedEdits(prep, m, editsByFile, movedTextEdits, callerFilesNeedingImport);
@@ -284,10 +297,10 @@ final class MoveMember {
 			}
 		} else
 			[];
-		applySiblingOutcome(prep, sibling.accessMembers, sibling.fieldDeps, movedTextEdits, advisoryExtras);
+		applySiblingOutcome(prep, sibling.accessMembers, sibling.fieldDeps, movedTextEdits, editsByFile, advisoryExtras);
 
 		final rewireError: Null<String> = collectCallerRewires(
-			prep, viaField, scaffold, scaffoldFields, plugin, editsByFile, outsideCallersOf, advisoryExtras
+			prep, viaField, scaffold, keepBare, scaffoldFields, plugin, editsByFile, movedTextEdits, outsideCallersOf, advisoryExtras
 		);
 		if (rewireError != null) return Err(rewireError);
 		for (m in prep.moved) promotionEdit(prep, m, outsideCallersOf[m.name] ?? 0, movedTextEdits, advisoryExtras);
@@ -470,10 +483,10 @@ final class MoveMember {
 		if (destSource == null) return PErr('destination file ${destHit.file} is not in the scope file set');
 		final destTree: Null<QueryNode> = trees[destHit.file];
 		if (destTree == null) return PErr('destination file ${destHit.file} is not indexed');
-		final effectiveNames: Array<String> = closure
-			? expandInstanceCallClosure(srcDecl, srcTree, srcSource, memberNames, plugin)
-			: memberNames;
-		final closureAdded: Array<String> = [for (name in effectiveNames) if (!memberNames.contains(name)) name];
+		final called: Array<String> = closure ? expandInstanceCallClosure(srcDecl, srcTree, srcSource, memberNames, plugin) : memberNames;
+		final fieldsAdded: Array<String> = ownedFieldClosure(srcDecl, srcTree, srcSource, called, destHit.decl, destSource, trees, plugin);
+		final effectiveNames: Array<String> = called.concat(fieldsAdded);
+		final closureAdded: Array<String> = [for (name in called) if (!memberNames.contains(name)) name];
 		final moved: Array<MovedMember> = [];
 		final memberError: Null<String> = resolveMovedMembers(
 			srcDecl, destHit.decl, srcSource, srcTypeName, destTypeName, effectiveNames, moved, destSource, plugin.refShape(),
@@ -510,6 +523,7 @@ final class MoveMember {
 			srcDecl: srcDeclNN,
 			moved: moved,
 			closureAdded: closureAdded,
+			fieldsAdded: fieldsAdded,
 			destFile: destHit.file,
 			destDecl: destHit.decl,
 			destSource: destSourceNN,
@@ -728,7 +742,7 @@ final class MoveMember {
 		};
 		for (sibling in candidates)
 			scanSibling(prep, sibling, hitsByName[sibling.member.name ?? ''] ?? [], movedTextEdits, state, plugin.lexicalRegions);
-		final problems: Array<String> = siblingProblems(prep, state, scaffold);
+		final problems: Array<String> = siblingProblems(prep, state, scaffold, plugin);
 		return problems.length > 0
 			? {
 				error: problems.join('; '),
@@ -775,14 +789,8 @@ final class MoveMember {
 	private static function accessEdit(
 		prep: MovePrep, m: MovedMember, movedTextEdits: Array<{ span: Span, text: String }>, advisoryExtras: Array<String>
 	): Void {
-		final accessPath: String = prep.srcInfo.pkg == '' ? prep.srcTypeName : '${prep.srcInfo.pkg}.${prep.srcTypeName}';
-		// A grant the destination TYPE already carries covers every member it will hold, the moved
-		// one included, so a member-level copy of it is dead text — and a destination whose own
-		// grant is the reason the move was legal in the first place is exactly where such a copy
-		// lands. Only the fully-qualified spelling
-		// counts as a match: a short `@:access(Src)` resolves through the destination's own imports,
-		// and reading one as this path would DROP a grant the moved body needs.
-		if (RefactorSupport.accessGrantsOn(prep.trees[prep.destFile], prep.destDecl.declNode, '@:access').contains(accessPath)) return;
+		final accessPath: Null<String> = missingAccessGrant(prep);
+		if (accessPath == null) return;
 		final lineStart: Int = SourceText.lineStartAt(prep.srcSource, m.group.groupSpan.from);
 		final indent: String = prep.srcSource.substring(lineStart, m.group.groupSpan.from);
 		// A decl sharing its line with other code (one-line class) gets the
@@ -797,6 +805,43 @@ final class MoveMember {
 		advisoryExtras.push(
 			'moved body of "${m.name}" references private member(s) of "${prep.srcTypeName}" — added @:access($accessPath)'
 		);
+	}
+
+	/**
+	 * ONE `@:access(<pkg>.<Src>)` on the destination TYPE for the `granted` moved members, which all reference private
+	 * members of the source: the grant covers every member the type holds, so a copy on each was the same line repeated.
+	 * Placed as `add-meta` places an entry (`AddMeta.entryEdit`): below the type's doc, above its modifiers.
+	 */
+	private static function typeAccessEdit(
+		prep: MovePrep, granted: Array<MovedMember>, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
+		advisoryExtras: Array<String>
+	): Void {
+		final accessPath: Null<String> = missingAccessGrant(prep);
+		final destTree: Null<QueryNode> = prep.trees[prep.destFile];
+		if (accessPath == null || destTree == null) return;
+		final edit: Null<{ span: Span, text: String }> = AddMeta.entryEdit(
+			prep.destSource, destTree, prep.destDecl.declNode, '@:access($accessPath)'
+		);
+		if (edit == null) return;
+		ScopeFiles.editsFor(editsByFile, prep.destFile).push(edit);
+		advisoryExtras.push(
+			'moved bodies of ${quoted([for (m in granted) m.name])} reference private member(s) of "${prep.srcTypeName}" — added '
+			+ '@:access($accessPath) to "${prep.destTypeName}"'
+		);
+	}
+
+	/**
+	 * The `<pkg>.<Src>` path a moved body's `@:access` grant names, or null when the destination TYPE already carries it.
+	 * A grant the type carries covers every member it will hold, the moved ones included, so another copy is dead text —
+	 * and a destination whose own grant is the reason the move was legal in the first place is exactly where such a copy
+	 * lands. Only the fully-qualified spelling counts as a match: a short `@:access(Src)` resolves through the destination's
+	 * own imports, and reading one as this path would DROP a grant the moved body needs.
+	 */
+	private static function missingAccessGrant(prep: MovePrep): Null<String> {
+		final accessPath: String = prep.srcInfo.pkg == '' ? prep.srcTypeName : '${prep.srcInfo.pkg}.${prep.srcTypeName}';
+		return RefactorSupport.accessGrantsOn(prep.trees[prep.destFile], prep.destDecl.declNode, '@:access').contains(accessPath)
+			? null
+			: accessPath;
 	}
 
 	/**
@@ -963,35 +1008,41 @@ final class MoveMember {
 	}
 
 	/**
-	 * Rewrites the bare in-src callers of every moved member: a static
-	 * member qualifies as `Dest.m`, an instance member routes through the
-	 * via field on the source type. Returns an error message, or null.
+	 * Rewrites the callers of every moved member: a bare static one qualifies as `Dest.m` (or stays bare under
+	 * `keepBare`), a bare instance one and a receiver-qualified one (`g.m()`, `collectReceiverHits`) route through the via
+	 * field on the source type — `via.m()`, `g.via.m()`. Returns an error message, or null.
 	 */
 	private static function collectCallerRewires(
-		prep: MovePrep, viaField: Null<String>, scaffold: Bool, scaffoldFields: Array<ScaffoldField>, plugin: GrammarPlugin,
-		editsByFile: Map<String, Array<{ span: Span, text: String }>>, outsideCallersOf: Map<String, Int>, advisoryExtras: Array<String>
+		prep: MovePrep, viaField: Null<String>, scaffold: Bool, keepBare: Bool, scaffoldFields: Array<ScaffoldField>,
+		plugin: GrammarPlugin, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
+		movedTextEdits: Array<{ span: Span, text: String }>, outsideCallersOf: Map<String, Int>, advisoryExtras: Array<String>
 	): Null<String> {
 		final bareHits: Array<BareHit> = collectBareCallerHits(prep, plugin);
-		for (h in bareHits) if (h.m.isStatic) {
-			ScopeFiles.editsFor(editsByFile, prep.srcFile).push(qualifyEdit(h, '${prep.destTypeName}.'));
-			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
-		}
+		final staticError: Null<String> = rewireStaticCallers(
+			prep, bareHits.filter(h -> h.m.isStatic), keepBare, plugin, editsByFile, outsideCallersOf, advisoryExtras
+		);
+		if (staticError != null) return staticError;
 		final instanceHits: Array<BareHit> = bareHits.filter(h -> !h.m.isStatic);
-		if (instanceHits.length == 0) return null;
+		final receivers: { error: Null<String>, hits: Array<ReceiverHit> } = MoveMemberReceivers.collectReceiverHits(prep, plugin);
+		if (receivers.error != null) return receivers.error;
+		if (instanceHits.length == 0 && receivers.hits.length == 0) return null;
 		final via: { name: String, scaffold: Bool } = switch MoveScaffold.resolveViaField(prep, viaField, scaffold, plugin) {
 			case VErr(message): return message;
 			case VOk(name): { name: name, scaffold: false };
 			case VScaffold(name): { name: name, scaffold: true };
 		};
-		if (via.scaffold) {
-			final srcCtor: Null<MemberGroup> = constructorGroupOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions);
-			final ctorSpan: Null<Span> = srcCtor?.member.span;
-			if (ctorSpan != null && instanceHits.exists(h -> h.offset >= ctorSpan.from && h.offset < ctorSpan.to))
-				return 'a moved instance member is called inside the "${prep.srcTypeName}" constructor — the scaffolded via '
-					+ 'field would be read before it is initialized; move the call out of the constructor or wire the via field manually';
-		}
+		final viaError: Null<String> = viaReachError(prep, via, instanceHits, receivers.hits, plugin);
+		if (viaError != null) return viaError;
 		for (h in instanceHits) {
 			ScopeFiles.editsFor(editsByFile, prep.srcFile).push(qualifyEdit(h, '${via.name}.'));
+			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
+		}
+		for (h in receivers.hits) {
+			final edit: { span: Span, text: String } = { span: new Span(h.at, h.at), text: '${via.name}.' };
+			if (h.inCut)
+				movedTextEdits.push(edit)
+			else
+				ScopeFiles.editsFor(editsByFile, h.file).push(edit);
 			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
 		}
 		if (via.scaffold) {
@@ -1001,9 +1052,132 @@ final class MoveMember {
 				'--scaffold added via field "${via.name}" wired `new ${prep.destTypeName}(...)` in the "${prep.srcTypeName}" constructor'
 			);
 		} else {
-			advisoryExtras.push('bare instance caller(s) in "${prep.srcTypeName}" rewired through "${via.name}"');
+			advisoryExtras.push('instance caller(s) of the moved member(s) rewired through "${via.name}"');
 		}
 		return null;
+	}
+
+	/**
+	 * Why the via field cannot serve the callers it is about to route, or null: a SCAFFOLDED one read inside the source
+	 * constructor would be read before it is initialized, and one that is not `public` cannot be reached by a
+	 * receiver-qualified caller outside the source type (`g.via.m()` from another class).
+	 */
+	private static function viaReachError(
+		prep: MovePrep, via: { name: String, scaffold: Bool }, instanceHits: Array<BareHit>, receivers: Array<ReceiverHit>,
+		plugin: GrammarPlugin
+	): Null<String> {
+		if (via.scaffold) {
+			final srcCtor: Null<MemberGroup> = constructorGroupOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions);
+			final ctorSpan: Null<Span> = srcCtor?.member.span;
+			if (ctorSpan != null && instanceHits.exists(h -> h.offset >= ctorSpan.from && h.offset < ctorSpan.to))
+				return 'a moved instance member is called inside the "${prep.srcTypeName}" constructor — the scaffolded via '
+					+ 'field would be read before it is initialized; move the call out of the constructor or wire the via field manually';
+		}
+		final outside: Null<ReceiverHit> = receivers.find(h -> h.outsideType);
+		if (outside == null) return null;
+		final viaPublic: Bool = !via.scaffold
+			&& memberGroupOf(prep.srcDecl, via.name, prep.srcSource, prep.shape, plugin.lexicalRegions)?.modifiers.exists(mod ->
+				mod.kind == 'Public'
+			) == true;
+		return viaPublic
+			? null
+			: '"${outside.m.name}" is reached through a "${prep.srcTypeName}" receiver in ${outside.file}, outside the type, and the via '
+				+ 'field "${via.name}" is not public — make it public, or route those callers yourself';
+	}
+
+	/**
+	 * The bare in-source callers of the moved STATIC members: each qualified as `Dest.m` — or, under `keepBare`, left
+	 * bare with ONE `import <destModule>.*;` added to the source file, so a source that called them bare keeps reading as
+	 * it did. Every one still counts as a caller outside the destination (visibility promotion). Returns the refusal
+	 * `keepBareRefusal` gives, or null.
+	 */
+	private static function rewireStaticCallers(
+		prep: MovePrep, hits: Array<BareHit>, keepBare: Bool, plugin: GrammarPlugin,
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, outsideCallersOf: Map<String, Int>, advisoryExtras: Array<String>
+	): Null<String> {
+		if (keepBare && hits.length > 0) {
+			final refusal: Null<String> = keepBareRefusal(prep, hits);
+			if (refusal != null) return refusal;
+			final wildcard: String = '${prep.destModule.path}.*';
+			if (!DependencyCarry.hasModuleStaticWildcard(prep.srcInfo, prep.destModule.path)) {
+				final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.srcSource, prep.srcInfo, plugin, wildcard);
+				if (edit != null) ScopeFiles.editsFor(editsByFile, prep.srcFile).push(edit);
+			}
+			advisoryExtras.push(
+				'${hits.length} bare caller(s) in "${prep.srcTypeName}" kept bare through `import $wildcard;` (--keep-bare)'
+			);
+		}
+		for (h in hits) {
+			if (!keepBare) ScopeFiles.editsFor(editsByFile, prep.srcFile).push(qualifyEdit(h, '${prep.destTypeName}.'));
+			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
+		}
+		return null;
+	}
+
+	/**
+	 * Why `import <destModule>.*;` cannot keep the source's bare callers bound to the moved statics, or null when it can.
+	 *
+	 * The wildcard brings in EVERY static of the destination's main class (`DependencyCarry.wildcardBoundNames`), and it
+	 * binds a bare name only after the file's own resolution has failed: a local, a member of the enclosing class or of its
+	 * supertypes, a module-level value of the source module, an explicit field import — each wins over it (compile-probed
+	 * on 4.3.7 for the class static and the module-level function). So the proof is positive and whole: the destination is
+	 * its module's MAIN class in another module, the source's supertype chain resolves and declares none of the names, the
+	 * source module declares no module-level value and imports none of them, and no identifier of the source file spells
+	 * one of them anywhere but at the kept callers — a reference to anything else of that name could change what it means.
+	 */
+	private static function keepBareRefusal(prep: MovePrep, kept: Array<BareHit>): Null<String> {
+		final head: String = '--keep-bare cannot keep the bare caller(s) bound: ';
+		if (prep.srcFile == prep.destFile) return '${head}"${prep.destTypeName}" shares the source module';
+		final destMain: Bool = prep.destInfo.types.exists(t -> t.name == prep.destTypeName && t.isMain);
+		if (prep.destDecl.kind != 'ClassDecl' || !destMain)
+			return
+				'${head}"${prep.destTypeName}" is not the main class of its module, and `import <module>.*;` brings in only that class\'s statics';
+		if (!prep.index.subtypes.supertypeChainResolved(prep.srcTypeName))
+			return '${head}the supertypes of "${prep.srcTypeName}" do not resolve in scope, and a static they declare would win';
+		final names: Array<String> = DependencyCarry.wildcardBoundNames(prep.destInfo, prep.shape);
+		for (m in prep.moved) if (m.isStatic) pushUnique(names, m.name);
+		for (n in names) {
+			final rival: Null<String> = keepBareRival(prep, n);
+			if (rival != null) return '$head$rival "$n", which would win';
+		}
+		final clash: Null<QueryNode> = keepBareClash(prep, names, [for (h in kept) h.offset]);
+		if (clash == null) return null;
+		final at: Position = (clash.span ?? new Span(0, 0)).lineCol(prep.srcSource);
+		return '$head${prep.srcFile}:${at.line}:${at.col} spells "${clash.name}" for something the wildcard would rebind';
+	}
+
+	/** What outranks a module-static wildcard for the name `n` in the source file (`keepBareRefusal`), or null. */
+	private static function keepBareRival(prep: MovePrep, n: String): Null<String> {
+		final ancestor: Null<String> = prep.index.subtypes.declaringAncestorOf(prep.srcTypeName, n);
+		return if (ancestor != null)
+			'"$ancestor", a supertype of "${prep.srcTypeName}", declares'
+		else if (prep.srcInfo.moduleFields.exists(f -> f.name == n))
+			'${prep.srcFile} declares a module-level'
+		else if (DependencyCarry.importsSimpleName(prep.srcInfo, n))
+			'${prep.srcFile} imports its own'
+		else
+			null;
+	}
+
+	/** The first identifier of the source file outside the moved members that spells one of `names` and is no kept caller. */
+	private static function keepBareClash(prep: MovePrep, names: Array<String>, keptAt: Array<Int>): Null<QueryNode> {
+		final identKinds: Array<String> = [
+			for (k in [prep.shape.identKind, prep.shape.stringInterpIdentKind]) if (k != null) k
+		];
+		function walk(node: QueryNode): Null<QueryNode> {
+			final from: Int = node.span?.from ?? -1;
+			if (
+				from >= 0 && identKinds.contains(node.kind) && names.contains(node.name ?? '') && !keptAt.contains(from)
+				&& !insideAnyCut(prep, from)
+			)
+				return node;
+			for (c in node.children) {
+				final found: Null<QueryNode> = walk(c);
+				if (found != null) return found;
+			}
+			return null;
+		}
+		return walk(prep.srcTree);
 	}
 
 	/**
@@ -1172,7 +1346,7 @@ final class MoveMember {
 	 * The refusal messages for the three violation buckets `scanSibling`
 	 * fills — reported together so one run surfaces the whole closure.
 	 */
-	private static function siblingProblems(prep: MovePrep, state: SiblingScanState, scaffold: Bool): Array<String> {
+	private static function siblingProblems(prep: MovePrep, state: SiblingScanState, scaffold: Bool, plugin: GrammarPlugin): Array<String> {
 		final problems: Array<String> = [];
 		if (state.staysBehind.length > 0)
 			problems.push(
@@ -1182,7 +1356,8 @@ final class MoveMember {
 		if (state.mutableDeps.length > 0)
 			problems.push(
 				'moved bodies read mutable instance field(s) ${quoted(state.mutableDeps)} — shared mutable state '
-				+ 'cannot be mirrored onto "${prep.destTypeName}"; make them final or refactor first'
+				+ 'cannot be mirrored onto "${prep.destTypeName}"${stayingReadersNote(prep, state.mutableDeps, plugin)}; make them '
+				+ 'final or refactor first'
 			);
 		// A missing final field on the destination is a hard error UNLESS
 		// --scaffold is on, which generates the field + constructor instead.
@@ -1195,16 +1370,20 @@ final class MoveMember {
 	}
 
 	/**
-	 * Applies `collectSiblingEdits`'s outcome: `@:access` per moved member
-	 * whose body reads a private static sibling, plus the final-field-dep
-	 * advisory (the caller must construct the destination with the same
-	 * values).
+	 * Applies `collectSiblingEdits`'s outcome: the `@:access` grant the moved bodies reading a private static sibling need,
+	 * plus the final-field-dep advisory (the caller must construct the destination with the same values). One such body
+	 * takes the grant on its own declaration; two or more share ONE on the destination type (`typeAccessEdit`) instead of
+	 * a copy per member.
 	 */
 	private static function applySiblingOutcome(
 		prep: MovePrep, accessMembers: Array<String>, fieldDeps: Array<String>, movedTextEdits: Array<{ span: Span, text: String }>,
-		advisoryExtras: Array<String>
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, advisoryExtras: Array<String>
 	): Void {
-		for (m in prep.moved) if (accessMembers.contains(m.name)) accessEdit(prep, m, movedTextEdits, advisoryExtras);
+		final granted: Array<MovedMember> = prep.moved.filter(m -> accessMembers.contains(m.name));
+		if (granted.length > 1)
+			typeAccessEdit(prep, granted, editsByFile, advisoryExtras);
+		else
+			for (m in granted) accessEdit(prep, m, movedTextEdits, advisoryExtras);
 		if (fieldDeps.length > 0)
 			advisoryExtras.push(
 				'moved bodies read final field(s) ${quoted(fieldDeps)} — construct "${prep.destTypeName}" with the same values'

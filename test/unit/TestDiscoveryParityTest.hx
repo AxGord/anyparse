@@ -4082,8 +4082,21 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-WILDCARD-RIVAL-ORDER-BLIND',
 			'unit.query.MoveFamilyCaptureTest#testASubModuleMoveRepointsNoWildcardCallerByteIdentically :: control :: '
 				+ 'M-WILDCARD-BINDS-BLIND',
+			'unit.query.MoveMemberSplitSliceTest#testAFieldSomethingElseReachesStaysAndRefuses :: control :: '
+				+ 'M-OWNED-FIELD-ANY-READER,M-OWNED-FIELD-ACCESS-BLIND,M-OWNED-FIELD-PROPERTY,M-OWNED-READERS-UNNAMED',
+			'unit.query.MoveMemberSplitSliceTest#testAReceiverTheOpCannotProveRefusesTheMove :: control :: '
+				+ 'M-RECEIVER-UNKNOWN-ROUTED,M-RECEIVER-UNRELATED-ROUTED,M-VIA-PRIVATE-REACHED',
 			'unit.query.MoveMemberSplitSliceTest#testASourceSubModuleTypeIsImportedAtTheDestination :: control :: '
 				+ 'M-CARRY-OWN-SUB-UNCARRIED',
+			'unit.query.MoveMemberSplitSliceTest#testFieldsOnlyTheMovedGroupUsesMoveAlong :: control :: M-OWNED-FIELDS-OFF',
+			'unit.query.MoveMemberSplitSliceTest#testKeepBareImportsTheDestinationStaticsInsteadOfQualifying :: control :: '
+				+ 'M-KEEP-BARE-IGNORED',
+			'unit.query.MoveMemberSplitSliceTest#testKeepBareRefusesWhatTheWildcardCouldRebind :: control :: '
+				+ 'M-KEEP-BARE-CLASH-BLIND,M-KEEP-BARE-NOT-MAIN',
+			'unit.query.MoveMemberSplitSliceTest#testReceiverQualifiedCallersRouteThroughTheHoldingField :: control :: '
+				+ 'M-RECEIVER-ROUTING-OFF',
+			'unit.query.MoveMemberSplitSliceTest#testTwoMembersNeedingPrivateAccessShareOneTypeGrant :: control :: '
+				+ 'M-ACCESS-GRANT-PER-MEMBER',
 			'unit.query.MoveSymbolSliceTest#testACommentOnlyFullyQualifiedMentionDoesNotRefuseTheMove :: control :: '
 				+ 'M-MOVE-FQN-COMMENT-MASK-NONE',
 			'unit.query.MoveSymbolSliceTest#testACommentOnlyMentionIsNotAReference :: control :: M-MOVE-NAMESCAN-COMMENT-COUNTED',
@@ -7127,7 +7140,20 @@ class TestDiscoveryParityTest extends Test {
 			'M-LANDING-TYPE-ARGS-AS-VALUES',
 			'M-MATCH-TYPE-SLOT-UNRECORDED',
 			'M-CARRY-OWN-SUB-UNCARRIED',
-			'M-CARRY-OWN-SUB-PRIVATE'
+			'M-CARRY-OWN-SUB-PRIVATE',
+			'M-ACCESS-GRANT-PER-MEMBER',
+			'M-KEEP-BARE-IGNORED',
+			'M-KEEP-BARE-CLASH-BLIND',
+			'M-KEEP-BARE-NOT-MAIN',
+			'M-OWNED-FIELDS-OFF',
+			'M-OWNED-FIELD-ANY-READER',
+			'M-OWNED-FIELD-ACCESS-BLIND',
+			'M-OWNED-FIELD-PROPERTY',
+			'M-OWNED-READERS-UNNAMED',
+			'M-RECEIVER-ROUTING-OFF',
+			'M-RECEIVER-UNKNOWN-ROUTED',
+			'M-RECEIVER-UNRELATED-ROUTED',
+			'M-VIA-PRIVATE-REACHED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

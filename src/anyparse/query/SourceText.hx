@@ -365,4 +365,14 @@ final class SourceText {
 		return next >= 'a'.code && next <= 'z'.code;
 	}
 
+	/**
+	 * Whether the first non-whitespace byte at or after `nameEnd` (the end of a field name) is `(` — a property accessor head (`var x(get, null)`), which the projection drops.
+	 */
+	public static function isProperty(source: String, nameEnd: Int): Bool {
+		final n: Int = source.length;
+		var i: Int = nameEnd;
+		while (i < n && isSpace(source.fastCodeAt(i))) i++;
+		return i < n && source.fastCodeAt(i) == '('.code;
+	}
+
 }

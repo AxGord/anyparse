@@ -96,7 +96,7 @@ Scope-correct edits driven by the `refs` / `Scope` binding resolver: everything 
 | `change-sig` | `apq change-sig <file> (<line>:<col> \| --select 'FnMember:<name>' \| --match '<pattern>') <perm>  (perm = comma-separated 0-based new order, e.g. 2,0,1)` |
 | `remove-param` | `apq remove-param <file> (<line>:<col> \| --select 'FnMember:<name>' \| --match '<pattern>') <index> [--write]  (index = 0-based parameter to remove)` |
 | `move` | `apq move <file> (<line>:<col> \| --select 'ClassDecl:<Name>' \| --match '<pattern>') <dest-file> --scope <dir> [--write]` — a type to another file; importers repointed, a `using` carried |
-| `move-member` | `apq move-member <srcFile> <member[,member...]> --to <DestType> --scope <dir> [options]` — any package if all static; `--closure` / `--scaffold` |
+| `move-member` | `apq move-member <srcFile> <member[,member...]> --to <DestType> --scope <dir> [options]` — any package if all static; `--closure` / `--scaffold` / `--keep-bare` (bare static callers in the source stay bare via `import <Dest>.*;`); receiver-qualified instance callers route through the holding field (`g.m()` → `g.via.m()`), fields only the moved members use move along |
 | `extract-interface` | `apq extract-interface <srcFile> <IfaceName> [options]` |
 | `pull-up` / `push-down` | `apq pull-up <srcFile> <member> --to <superclass> --scope <dir> [options]` / `apq push-down <srcFile> <member> --to <subclass> --scope <dir> [options]` |
 | `extract-superclass` | `apq extract-superclass <srcFile> <SuperName> --members m1,m2 [options]` |

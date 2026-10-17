@@ -3310,3 +3310,39 @@ decided the question; it may not become a record of runs.
   no statement of its own; the collision gate then prices it as a carried statement. A `private` sub-type, which no
   spelling imports, still refuses, and the module's MAIN type is not covered (the package rung reaches it in the same
   package) — branch `feat/infra-N10`
+- `move-member` refused a move whose bodies read a MUTABLE field ("shared mutable state cannot be mirrored") even when
+  nothing but the moved members touched it, though listing the field by hand moved it fine. `MoveMemberFields.
+  ownedFieldClosure` takes along, to a fixed point, every instance data field the moved members alone own — every bare
+  reference `Refs` binds to it inside a moved member, no field access of its name outside them in any scope file, a
+  plain field (a `var` with no accessor clause, a `final` with an initializer), not `#if`-guarded, no destination member
+  of that name. Anything else stays, and the refusal now names the staying members that keep it (fail-closed as
+  before; listing the field explicitly still routes those readers through the via field) — branch `feat/infra-N10`
+- receiver-qualified callers of a moved INSTANCE member (`_g.x()` in another class) were left unrewritten by contract
+  ("they fail the next compile loudly"), so a split into a nested object (`_g.x()` -> `_g.library.x()`, C2's
+  `LibraryCalls`) ended in 24 hand edits. `MoveMemberReceivers` classifies every access named like a moved instance
+  member by its receiver's type, through the checks' own typing door (`CheckScan.typeNominalResolver` over the move's
+  scope index): the source type (declared once in scope) or a subtype routes through the via field; an in-scope type
+  `SubtypeGraph.provablyNotSubtype` clears, or a std type declaring a member of that name (`StdTypes.memberOf`), is left
+  alone; a type-namespace receiver is a static access; anything else — untyped, `Dynamic`, a type parameter, `super`, a
+  null-safe access — REFUSES the move (positive whitelist), which turns some former successes that wrote a broken tree
+  into refusals. A caller outside the source type needs the via field public. Known limit: a forwarding abstract over
+  the source (`@:forward abstract A(Src)`) is read as unrelated — the result then fails to compile, loudly — branch
+  `feat/infra-N10`
+- `move-member --keep-bare` (opt-in, default unchanged) keeps the source's bare callers of moved statics bare through
+  one `import <destModule>.*;` (C2 wrote it by hand for `TypedFactsTypeStrings`). The wildcard binds a name only
+  after the file's own resolution fails — a local, a class or supertype static, a module-level value, an explicit field
+  import each win (compile-probed on 4.3.7) — so the op proves it whole: destination is its module's main class in
+  another module, the source's supertype chain resolves and declares none of the wildcard's names
+  (`DependencyCarry.wildcardBoundNames`, the carry's own model of what such a wildcard binds), the source imports and
+  declares none of them, and no identifier of the source spells one anywhere but at the kept callers; otherwise a
+  refusal naming the reason. Opt-in because a default change would rewrite every pinned move-member result — branch
+  `feat/infra-N10`
+- two or more moved members needing private access to the source each got their own `@:access(<pkg>.<Src>)` line;
+  they now share one on the destination TYPE, placed where `add-meta` places an entry (`AddMeta.entryEdit`, the
+  placement `addMeta` itself now goes through). One member keeps the member-level line (the user's rule: method-level
+  when only it needs the grant) — branch `feat/infra-N10`
+- the N10 additions put `MoveMember` over the member limit (55 > 50); the owned-field closure and the receiver
+  classification moved out to `MoveMemberFields` / `MoveMemberReceivers`, with `move-member` itself (`--keep-bare`, the
+  class-level `@:access`, the sub-type import of `ReceiverHit`'s `move`). Two helpers moved to their shared homes for
+  reuse rather than copied: `PreferReadOnlyField.isProperty` -> `SourceText.isProperty` and
+  `DependencyCarry.memberAccessKinds` -> `ShapeVocab.memberAccessKinds` — branch `feat/infra-N10`
