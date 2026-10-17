@@ -22166,6 +22166,22 @@
 			"note": "the named function expression drops out of every nested- and function-like-kind reader: its scope, parameters, returns and captures are read as the enclosing function's"
 		},
 		{
+			"name": "M-COND-NAMED-FN-NOT-IN-EFFECT",
+			"type": "anyparse.query.BinderScan",
+			"method": "statementDeclaredNames",
+			"find": "(continuations.contains(node.kind) || node.kind == shape.namedFnExprKind)",
+			"replace": "continuations.contains(node.kind)",
+			"note": "a named function literal's name is no declaration in effect, so renaming `v` of `final h = function v() …` past which an arm declares `v` too is not refused and the build that compiles the arm out reads a name that no longer exists"
+		},
+		{
+			"name": "M-COND-CONTINUATION-NOT-IN-EFFECT",
+			"type": "anyparse.query.BinderScan",
+			"method": "statementDeclaredNames",
+			"find": "(continuations.contains(node.kind) || node.kind == shape.namedFnExprKind)",
+			"replace": "node.kind == shape.namedFnExprKind",
+			"note": "a continuation declarator (`var a = 1, v = 2`) is no declaration in effect, so renaming `v` past which an arm declares `v` too is not refused"
+		},
+		{
 			"name": "M-VOCAB-DOWHILE-EXPR-NOT-LOOP",
 			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
 			"method": "refShape",

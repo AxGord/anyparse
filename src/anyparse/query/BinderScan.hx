@@ -32,19 +32,42 @@ final class BinderScan {
 	}
 
 	/**
-	 * The local name a top-level statement DECLARES, or null — the `name` of
-	 * `topLevelDeclaredNode`'s result. ONE `declKinds` list rather than the node walk's
-	 * statement/expression pair: its two callers, `exclusiveBranchRedeclaration` and
-	 * `condArmDeclarations`, ask with a vocabulary that is already a union.
+	 * Every local name a top-level statement DECLARES into the statement list that holds it: the name of
+	 * `topLevelDeclaredNode`'s declaration, the names of that declaration's continuation declarators
+	 * (`var a = 1, v = 2` declares `v` as well), and the name of every NAMED function literal the statement
+	 * carries outside a nested function — `final h = function v() …` declares `v` as well as `h`, because the
+	 * compiler binds a named function literal's name in the enclosing scope (`haxe --interp` 4.3.7 reads `v()`
+	 * on the next line). Asked by `CondRegionScan.exclusiveBranchRedeclaration` and its per-arm half with a
+	 * `declKinds` vocabulary that is already a union.
+	 *
+	 * It over-approximates in ONE direction: a continuation or a named literal inside a block or a branch of
+	 * the statement counts, though the compiler scopes it there (`c ? function t() … : null` leaves `t` unbound
+	 * past it). Both callers refuse on a name in effect, so an extra name can only refuse — the conservative
+	 * edge `topLevelDeclaredNode`'s single-child descent already has. A nested function's body is another
+	 * scope and is not entered.
 	 */
-	public static function topLevelDeclaredName(stmt: QueryNode, declKinds: Array<String>, metaKinds: Array<String>): Null<String> {
-		final decl: Null<QueryNode> = topLevelDeclaredNode(stmt, declKinds, [], metaKinds);
-		return decl?.name;
+	public static function statementDeclaredNames(
+		stmt: QueryNode, declKinds: Array<String>, metaKinds: Array<String>, shape: RefShape
+	): Array<String> {
+		final out: Array<String> = [];
+		final head: Null<String> = topLevelDeclaredNode(stmt, declKinds, [], metaKinds)?.name;
+		if (head != null) out.push(head);
+		final continuations: Array<String> = shape.localDeclContinuationKinds ?? [];
+		final nested: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
+		function collect(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (name != null && (continuations.contains(node.kind) || node.kind == shape.namedFnExprKind) && !out.contains(name))
+				out.push(name);
+			if (nested.contains(node.kind)) return;
+			for (c in node.children) collect(c);
+		}
+		collect(stmt);
+		return out;
 	}
 
 	/**
 	 * The declaration NODE a top-level statement DECLARES a local in, or null — the
-	 * node `topLevelDeclaredName` reads the name off, exposed for callers that also
+	 * node `statementDeclaredNames` reads the head name off, exposed for callers that also
 	 * need its span (`guard-continue`'s collision rename locates the binder token
 	 * inside it). Same walk: a `localDeclKinds` statement answers directly, otherwise
 	 * the walk descends through single-payload wrappers (`metaKinds` children skipped)

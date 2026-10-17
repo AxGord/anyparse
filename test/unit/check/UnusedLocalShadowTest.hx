@@ -415,7 +415,7 @@ class UnusedLocalShadowTest extends Test {
 	/**
 	 * A declaration one level DOWN takes nothing over: it is scoped to the block it sits in, and the
 	 * `return a` past that block reads the outer binding. Claiming it — which
-	 * `topLevelDeclaredName`'s descent through single-child wrappers would do — makes the autofix
+	 * `BinderScan.topLevelDeclaredNode`'s descent through single-child wrappers would do — makes the autofix
 	 * delete a live declaration and leaves the read unbound.
 	 */
 	public function testNestedBlockRedeclarationKeepsDeclaration(): Void {

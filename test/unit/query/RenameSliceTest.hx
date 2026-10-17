@@ -906,6 +906,37 @@ class RenameSliceTest extends Test {
 		assertRenameErr(src, 3, 22, 'w', 'no parsed expression');
 	}
 
+	/**
+	 * A NAMED function expression declares its name in the enclosing scope (`haxe --interp` 4.3.7 reads `v()` after
+	 * `final h = function v() …`), so it is a declaration already in effect before a region whose arm declares the name
+	 * too, and one an arm may carry. Renaming the function's name used to pass: the arm scan read only `h`, and the
+	 * rename wrote `function w()` while `trace(v())` past the `#end` kept reading `v` — `Unknown identifier : v` in
+	 * every build but js.
+	 */
+	@:pin('control')
+	@:killer('M-COND-NAMED-FN-NOT-IN-EFFECT')
+	public function testNamedFnExprNameInEffectAroundACondArmRefused(): Void {
+		final before: String = 'class C {\n\tfunction f():Void {\n\t\tfinal h = function v():Int {\n\t\t\treturn 1;\n\t\t};\n'
+			+ '\t\t#if js\n\t\tvar v = () -> 2;\n\t\t#end\n\t\ttrace(v());\n\t}\n}';
+		assertRenameErr(before, 3, 22, 'w', 'the declaration at 7:3 sits on a conditional-compilation arm');
+		final onArm: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = () -> 1;\n\t\t#if js\n'
+			+ '\t\tfinal h = function v():Int {\n\t\t\treturn 2;\n\t\t};\n\t\t#end\n\t\ttrace(v());\n\t}\n}';
+		assertRenameErr(onArm, 3, 3, 'w', 'the declaration at 5:3 sits on a conditional-compilation arm');
+	}
+
+	/**
+	 * A CONTINUATION declarator is in effect from its statement on exactly as the head is: renaming `v` of
+	 * `var a = 1, v = 2;` past which an arm declares `v` too used to pass, because the arm scan read only the head
+	 * `a` — and the rewritten `return a + w` left the non-js build reading the arm's `v`, which it compiles out.
+	 */
+	@:pin('control')
+	@:killer('M-COND-CONTINUATION-NOT-IN-EFFECT')
+	public function testContinuationDeclaratorInEffectBeforeACondArmRefused(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Int {\n\t\tvar a = 1, v = 2;\n\t\t#if js\n\t\tvar v = 3;\n\t\t#end\n\t\treturn a + v;\n\t}\n}';
+		assertRenameErr(src, 3, 14, 'w', 'the declaration at 5:3 sits on a conditional-compilation arm');
+	}
+
 	private function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {
 		final result: RenameResult = renameOf(source, line, col, newName);
 		switch result {

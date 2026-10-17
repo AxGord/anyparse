@@ -253,10 +253,12 @@ final class CondRegionScan {
 	 * closure declared between the two, a self-reading `var x = x + 1` and two declarations inside ONE arm
 	 * alike.
 	 *
-	 * One conservative edge: the arm test is `topLevelDeclaredName`, which descends a single-child
-	 * wrapper, so an arm whose only statement is a BLOCK declaring the name counts as declaring it even
-	 * though a block-scoped declaration cannot be read past the `#end`. That direction refuses, which is
-	 * the safe one; the same descent is what lets a lone-statement NESTED region be seen at all.
+	 * Two conservative edges, both refusing: the declaration test is `BinderScan.statementDeclaredNames`,
+	 * which counts a continuation declarator or a named function literal nested in a block or a branch of
+	 * the statement though the compiler scopes it there; and it descends a single-child wrapper, so an arm
+	 * whose only statement is a BLOCK declaring the name counts as declaring it even though a block-scoped
+	 * declaration cannot be read past the `#end`. That direction refuses, which is the safe one; the same
+	 * descent is what lets a lone-statement NESTED region be seen at all.
 	 */
 	public static function exclusiveBranchRedeclaration(
 		scope: QueryNode, source: String, name: String, plugin: GrammarPlugin, shape: RefShape
@@ -278,7 +280,8 @@ final class CondRegionScan {
 			declKinds: TypeResolver.blockScopedValueDeclarationKinds(shape),
 			metaKinds: plugin.metaShape().metaKinds,
 			elseKeywords: elseKeywords,
-			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source))
+			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source)),
+			shape: shape
 		};
 		// A PARAMETER is in effect for the whole body, so it is an "already in effect" declaration
 		// for every region under it - the same standing a sibling declaration before the region has.
@@ -304,7 +307,7 @@ final class CondRegionScan {
 						if (inEffect) return decls[0].span;
 						inEffect = true;
 					}
-				} else if (BinderScan.topLevelDeclaredName(c, scan.declKinds, scan.metaKinds) == scan.name)
+				} else if (declares(c, scan))
 					inEffect = true;
 				final found: Null<Span> = walk(c, inEffect);
 				if (found != null) return found;
@@ -453,7 +456,7 @@ final class CondRegionScan {
 		);
 		final out: Array<QueryNode> = [];
 		if (runs == null) {
-			for (c in region.children) if (BinderScan.topLevelDeclaredName(c, scan.declKinds, scan.metaKinds) == scan.name) out.push(c);
+			for (c in region.children) if (declares(c, scan)) out.push(c);
 			return out;
 		}
 		for (run in runs) for (n in run.nodes) {
@@ -464,11 +467,16 @@ final class CondRegionScan {
 				out.push(nested[0]);
 				break;
 			}
-			if (BinderScan.topLevelDeclaredName(n, scan.declKinds, scan.metaKinds) != scan.name) continue;
+			if (!declares(n, scan)) continue;
 			out.push(n);
 			break;
 		}
 		return out;
+	}
+
+	/** Whether the statement `stmt` declares `scan.name` into the statement list holding it (`BinderScan.statementDeclaredNames`). */
+	private static function declares(stmt: QueryNode, scan: ArmScan): Bool {
+		return BinderScan.statementDeclaredNames(stmt, scan.declKinds, scan.metaKinds, scan.shape).contains(scan.name);
 	}
 
 }
@@ -508,4 +516,5 @@ private typedef ArmScan = {
 	final metaKinds: Array<String>;
 	final elseKeywords: Array<String>;
 	final comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+	final shape: RefShape;
 };

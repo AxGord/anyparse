@@ -4134,9 +4134,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
 			'unit.query.RemoveParamSliceTest#testAClassMethodAndItsCallThatNowFitComeBackCanonical :: control :: M-SIGNATURE-EDIT-RAW-SPLICE',
 			'unit.query.RemoveParamSliceTest#testAnInterfaceSignatureThatNowFitsComesBackCanonical :: control :: M-SIGNATURE-EDIT-RAW-SPLICE',
+			'unit.query.RenameSliceTest#testContinuationDeclaratorInEffectBeforeACondArmRefused :: control :: '
+				+ 'M-COND-CONTINUATION-NOT-IN-EFFECT',
 			'unit.query.RenameSliceTest#testModelledSpliceConditionOccurrenceRenames :: control :: M-COND-GAP-KEEPS-DIRECTIVES',
 			'unit.query.RenameSliceTest#testNameOfANamedFunctionExpressionSweepsTheEnclosingMethod :: control :: '
 				+ 'M-BINDER-NAMED-FN-NO-STEP-OUT',
+			'unit.query.RenameSliceTest#testNamedFnExprNameInEffectAroundACondArmRefused :: control :: M-COND-NAMED-FN-NOT-IN-EFFECT',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
@@ -7035,6 +7038,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY',
 			'M-BINDER-NAMED-FN-NO-STEP-OUT',
 			'M-VOCAB-NESTED-NO-NAMED-FN',
+			'M-COND-NAMED-FN-NOT-IN-EFFECT',
+			'M-COND-CONTINUATION-NOT-IN-EFFECT',
 			'M-VOCAB-DOWHILE-EXPR-NOT-LOOP'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];

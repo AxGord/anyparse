@@ -3175,3 +3175,10 @@ decided the question; it may not become a record of runs.
   `@:meta while`, not `MetaStmt(DoWhileStmt)`, and keeps its layout; `MetaStmt`'s kind witness moved to
   `@:meta if (a) b(); c();`. `prefer-lambda-expression-body` still leaves `do … while` out: its terminator strip
   walks the LAST child, which is a do-while's condition — branch `feat/infra-N8`
+- the conditional-arm redeclaration gate read ONE name per statement (`topLevelDeclaredName`) → a statement declares
+  every continuation declarator (`var a = 1, v = 2`) and every named function literal outside a nested function
+  (`final h = function v() …`; the compiler binds `v` in the enclosing scope), and renaming either past an arm that
+  declares the name too broke every build that compiles the arm out (`--interp`: `Unknown identifier : v`).
+  `BinderScan.statementDeclaredNames` answers all of them and replaces the single-name function; it over-counts a
+  name nested in a block or a branch of the statement (a ternary branch scopes a named literal), which only refuses
+  — branch `feat/infra-N8`
