@@ -2657,8 +2657,8 @@
 		},
 		{
 			"name": "M-ELEMENT-LOOP-TYPE-CALLEE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": [
 				"\t\t\t\t\tif ((bound == null || bound < 0) && CallGraphNames.isTypeLike(name)) return {\n",
 				"if (each.length == 0) {\n\t\t\t\t\t\t\tunresolvedAt(span, UnresolvedReceiver(calleeName), currentType);\n"
@@ -2671,9 +2671,9 @@
 		},
 		{
 			"name": "M-ELEMENT-LOOP-NEW-EXPR",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "\t\t\tif (target != null) addEdge(from, target, New, null, file, span);\n",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "\t\t\tif (target != null) g.addEdge(from, target, New, null, file, span);\n",
 			"replace": "",
 			"note": "a constructor call leaves no edge, so a constructor that grows or replaces the collection runs behind an element binder unseen"
 		},
@@ -4959,16 +4959,16 @@
 		},
 		{
 			"name": "M-GRAPH-SETTER-EDGE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "\t\t\tif (writeSlot && prop.info.hasSetter && !(ownStorage && insideAccessor(accessorPrefixes[1] + name)))\n\t\t\t\taccessorEdge(accessorPrefixes[1]);\n",
 			"replace": "",
 			"note": "a property write leaves no edge to its setter, so the code set_x runs is invisible"
 		},
 		{
 			"name": "M-GRAPH-GETTER-EDGE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "\t\t\tif (reads && prop.info.hasGetter && !(ownStorage && insideAccessor(accessorPrefixes[0] + name)))\n\t\t\t\taccessorEdge(accessorPrefixes[0]);\n",
 			"replace": "",
 			"note": "a property read leaves no edge to its getter, so the code get_x runs is invisible"
@@ -5463,40 +5463,40 @@
 		},
 		{
 			"name": "M-GRAPH-STATIC-INIT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "\t\t\t\tif (frames.length == 0 && MemberKinds.macroModifierPrecedes(kids, i, staticKind, modifierBoundary)) inStaticInit = true;\n",
 			"replace": "",
 			"note": "a static initializer lands on <init>, so every constructor appears to run it"
 		},
 		{
 			"name": "M-GRAPH-VALUE-USE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "refEdges(frameId(currentType), ref, null, span, storedInto());",
 			"replace": "{}",
 			"note": "a method stored, returned or put in a literal leaves no Ref edge, so a later call through that value reaches nothing"
 		},
 		{
 			"name": "M-GRAPH-VALUE-USE-LAMBDA",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "\t\t\t\tif (lambdaId != null) addEdge(frameId(currentType), lambdaId, Ref, null, file, span, null, null, null, null, storedInto());\n",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "\t\t\t\tif (lambdaId != null)\n\t\t\t\t\tg.addEdge(frameId(currentType), lambdaId, Ref, null, file, span, null, null, null, null, storedInto());\n",
 			"replace": "",
 			"note": "a lambda stored or returned leaves no Ref edge"
 		},
 		{
 			"name": "M-GRAPH-FIELD-PATH-RECEIVER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "\t\t\tfinal written: Null<String> = typeSourceOf(recv, currentType);\n",
 			"replace": "\t\t\tfinal written: Null<String> = null;\n",
 			"note": "a receiver typed only through declared member types (w.worker, an inherited field) stays unresolved"
 		},
 		{
 			"name": "M-GRAPH-ELEMENT-RECEIVER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "element: (container, _) -> elementTypeSource(container),",
 			"replace": "element: (container, _) -> null,",
 			"note": "an element receiver a[i] stays untyped, so a[i].x = v runs no setter"
@@ -5511,16 +5511,16 @@
 		},
 		{
 			"name": "M-GRAPH-DYNAMIC-METHOD",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "\n\t\t\t\t\tif (nodes[calleeId]?.isDynamic == true) unresolvedAt(span, FunctionValue(calleeName), currentType);\n",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "\n\t\t\t\t\tif (g.nodes[calleeId]?.isDynamic == true) unresolvedAt(span, FunctionValue(calleeName), currentType);\n",
 			"replace": "\n",
 			"note": "a call to a dynamic method is only a call to its default body, though the program may have reassigned it"
 		},
 		{
 			"name": "M-GRAPH-DYNAMIC-RECEIVER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "\t\t\t\t\t\t\tunresolvedAt(span, DynamicReceiver(calleeName), currentType);\n",
 			"replace": "\t\t\t\t\t\t\tunresolvedAt(span, UnresolvedReceiver(calleeName), currentType);\n",
 			"note": "a Dynamic receiver is recorded as merely unresolved"
@@ -5590,8 +5590,8 @@
 		},
 		{
 			"name": "M-GRAPH-OWN-ACCESSOR-ANY-RECEIVER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "!(ownStorage && insideAccessor(accessorPrefixes[1] + name))",
 			"replace": "!insideAccessor(accessorPrefixes[1] + name)",
 			"note": "inside set_x any `.x` write counts as the stored field, so another object's setter run from there leaves no edge"
@@ -5613,8 +5613,8 @@
 		},
 		{
 			"name": "M-GRAPH-SETTER-READ-DIRECT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "!(ownStorage && insideAccessor(accessorPrefixes[0] + name))",
 			"replace": "!(ownStorage && (insideAccessor(accessorPrefixes[0] + name) || insideAccessor(accessorPrefixes[1] + name)))",
 			"note": "a read of x inside set_x counts as the stored field, though the language runs the getter there"
@@ -5770,9 +5770,9 @@
 		},
 		{
 			"name": "M-GRAPH-EAGER-INIT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "\t\t\t\tif (frames.length == 0 && fieldKinds.contains(c.kind) && CtorFieldFold.declInitializer(c, shape) != null)\n\t\t\t\t\tinitNode(typeName ?? moduleType, file, inStaticInit); // noqa: unused-return-value\n",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "\t\t\t\tif (frames.length == 0 && fieldKinds.contains(c.kind) && CtorFieldFold.declInitializer(c, shape) != null)\n\t\t\t\t\tg.initNode(typeName ?? moduleType, file, inStaticInit); // noqa: unused-return-value\n",
 			"replace": "",
 			"note": "a type whose field initializers call nothing has no initializer node, so a construction never runs the touch, conversion or target code they hold"
 		},
@@ -5888,11 +5888,11 @@
 		},
 		{
 			"name": "M-GRAPH-ABSTRACT-THIS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": [
-				"if (currentType == null || !_facts.abstracts.exists(currentType)) return currentType;",
-				"final underlying: Null<String> = _facts.abstracts[currentType];\n\t\t\treturn underlying == null || types.generics.declaresTypeParam(currentType, underlying)\n\t\t\t\t? underlying\n\t\t\t\t: types.resolveAlias(types.imports.typeOf(file, underlying));"
+				"if (currentType == null || !g._facts.abstracts.exists(currentType)) return currentType;",
+				"final underlying: Null<String> = g._facts.abstracts[currentType];\n\t\t\treturn underlying == null || g.types.generics.declaresTypeParam(currentType, underlying)\n\t\t\t\t? underlying\n\t\t\t\t: g.types.resolveAlias(g.types.imports.typeOf(file, underlying));"
 			],
 			"replace": [
 				"return currentType;",
@@ -5902,10 +5902,10 @@
 		},
 		{
 			"name": "M-GRAPH-SUPER-CTOR-RUN",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "_wiring.record({\n\t\t\t\t\ttypeName: superclass,",
-			"replace": "_wiring.record({\n\t\t\t\t\ttypeName: '',",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "g._wiring.record({\n\t\t\t\t\ttypeName: superclass,",
+			"replace": "g._wiring.record({\n\t\t\t\t\ttypeName: '',",
 			"note": "a `super()` records no constructor run, so the generated constructor of a supertype that declares none never runs its initializers"
 		},
 		{
@@ -5918,56 +5918,56 @@
 		},
 		{
 			"name": "M-GRAPH-SAFE-METHOD-VALUE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (!isAccessKind(arg.kind) || arg.children.length <= 0) return null;",
 			"replace": "if (arg.kind != fieldAccessKind || arg.children.length <= 0) return null;",
 			"note": "a method value read through `?.` or `!.` is no Ref"
 		},
 		{
 			"name": "M-GRAPH-NEW-ARGS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "scanArgs(node.children, node.typeArgCount, target, null, currentType);",
 			"replace": "",
 			"note": "constructor arguments hand on no function value"
 		},
 		{
 			"name": "M-GRAPH-REF-OVERRIDES",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (dispatch != null && name != null) for (v in virtualTargets(dispatch, name))\n\t\t\t\taddEdge(from, v, Ref, via, file, span, dispatch, null, null, null, storedInto, viaMember);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "if (dispatch != null && name != null) for (v in g.virtualTargets(dispatch, name))\n\t\t\t\tg.addEdge(from, v, Ref, via, file, span, dispatch, null, null, null, storedInto, viaMember);",
 			"replace": "",
 			"note": "a method value reaches only the static type's method, never an override"
 		},
 		{
 			"name": "M-GRAPH-UNLOADED-METHOD-VALUE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "|| types.hasFunctionNamed(rawName)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "|| g.types.hasFunctionNamed(rawName)",
 			"replace": "",
 			"note": "a method value of a type whose file is not loaded yet leaves no Ref"
 		},
 		{
 			"name": "M-GRAPH-CONSTRUCTION-LITERAL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (objectLiteralKind != null && node.kind == objectLiteralKind) handleConstructionLiteral(node, typeName);",
 			"replace": "",
 			"note": "a literal typed as a @:structInit class leaves no New edge"
 		},
 		{
 			"name": "M-GRAPH-TYPE-ARGUMENT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "return if (args != null && args.length >= params.length)\n\t\t\t\tCallGraphNames.substituteTypeParams(written, params, args, _plugin.typeSyntax)",
-			"replace": "return if (args != null && false)\n\t\t\t\tCallGraphNames.substituteTypeParams(written, params, args, _plugin.typeSyntax)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "return if (args != null && args.length >= params.length)\n\t\t\t\tCallGraphNames.substituteTypeParams(written, params, args, g._plugin.typeSyntax)",
+			"replace": "return if (args != null && false)\n\t\t\t\tCallGraphNames.substituteTypeParams(written, params, args, g._plugin.typeSyntax)",
 			"note": "a member type spelling a type parameter never takes the receiver's argument for it"
 		},
 		{
 			"name": "M-GRAPH-TYPE-PARAM",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "else if (!isTypeParam(outer, currentType))",
 			"replace": "else if (true)",
 			"note": "a receiver typed as a type parameter is taken for a type of that name"
@@ -5982,17 +5982,17 @@
 		},
 		{
 			"name": "M-GRAPH-TYPEDEF-ALIAS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "else if (!isTypeParam(outer, currentType))\n\ttypes.resolveAlias(outer)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "else if (!isTypeParam(outer, currentType))\n\tg.types.resolveAlias(outer)",
 			"replace": "else if (!isTypeParam(outer, currentType))\n\touter",
 			"note": "a receiver typed by a typedef alias is not seen through"
 		},
 		{
 			"name": "M-GRAPH-USING-EXTENSION",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "final extensions: Array<String> = types.imports.staticExtensionsOf(file, calleeName);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "final extensions: Array<String> = g.types.imports.staticExtensionsOf(file, calleeName);",
 			"replace": "final extensions: Array<String> = [];",
 			"note": "a static extension a `using` brings in is never resolved"
 		},
@@ -6006,16 +6006,16 @@
 		},
 		{
 			"name": "M-GRAPH-INTERFACE-PROPERTY",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "\t\t\t\t\texternalNode(prop.owner, accessor, true)\n",
-			"replace": "\t\t\t\t\texternalNode(prop.owner, accessor)\n",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "\t\t\t\t\tg.externalNode(prop.owner, accessor, true)\n",
+			"replace": "\t\t\t\t\tg.externalNode(prop.owner, accessor)\n",
 			"note": "an interface property with no accessor body names an external placeholder instead of a body-less declaration"
 		},
 		{
 			"name": "M-GRAPH-ACCESS-RECORDED",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "member: name,\n\t\t\t\t\t\twrite: writeSlot,",
 			"replace": "member: '',\n\t\t\t\t\t\twrite: writeSlot,",
 			"note": "an untyped property access is recorded against no member"
@@ -6030,18 +6030,18 @@
 		},
 		{
 			"name": "M-GRAPH-DISPATCH-TYPE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "addEdge(from, target, Call, null, file, span, recv.isValue ? recv.typeName : null, field);",
-			"replace": "addEdge(from, target, Call, null, file, span, null, field);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "g.addEdge(from, target, Call, null, file, span, recv.isValue ? recv.typeName : null, field);",
+			"replace": "g.addEdge(from, target, Call, null, file, span, null, field);",
 			"note": "an instance call records no dispatch type, so overrides loaded later are never reached"
 		},
 		{
 			"name": "M-GRAPH-STATIC-NO-VIRTUAL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "return types.isStatic(owner, member) ? [] : virtualTargets(typeName, member);",
-			"replace": "return virtualTargets(typeName, member);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "return g.types.isStatic(owner, member) ? [] : g.virtualTargets(typeName, member);",
+			"replace": "return g.virtualTargets(typeName, member);",
 			"note": "a bare call to a static gets virtual edges to same-named statics of subtypes"
 		},
 		{
@@ -6053,9 +6053,9 @@
 		},
 		{
 			"name": "M-GRAPH-UNBOUND-CAPITAL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (imported.unknown || !types.imports.isEnumConstructor(name) || types.hasStaticFunctionNamed(name))",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "if (imported.unknown || !g.types.imports.isEnumConstructor(name) || g.types.hasStaticFunctionNamed(name))",
 			"replace": "if (imported.unknown || !CallGraphNames.isTypeLike(name))",
 			"note": "an unbound capitalized call is taken for an enum constructor, so an imported static function called that way runs unseen"
 		},
@@ -6156,32 +6156,32 @@
 		},
 		{
 			"name": "M-GRAPH-STORED-FIELD",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (storedField(node.children[0], name, currentType)) return;",
 			"replace": "",
 			"note": "a stored anonymous-structure field read counts as a method read whenever some function shares its name"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-ARGUMENT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "} else if ((kind == callKind && index >= 1) || kind == newExprKind) {",
 			"replace": "} else if (false) {",
 			"note": "a literal passed as an argument is never typed by the parameter"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-ELEMENT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "else if (kind == arrayLiteralKind) {",
 			"replace": "else if (false) {",
 			"note": "a literal inside an array literal is never typed by the element type"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-RETURN",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "else if (returnKinds.contains(kind))",
 			"replace": "else if (false)",
 			"note": "a returned literal is never typed by the return type"
@@ -6196,32 +6196,32 @@
 		},
 		{
 			"name": "M-GRAPH-SUPER-AMBIGUOUS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (types.declarationCount(superclass) > 1) {",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "if (g.types.declarationCount(superclass) > 1) {",
 			"replace": "if (false) {",
 			"note": "`super()` on a name two types share resolves to whichever the tables hold"
 		},
 		{
 			"name": "M-GRAPH-UNSUBSTITUTED-PARAM",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "CallGraphNames.substituteTypeParams(written, params, [for (_ in params) UNKNOWN_TYPE], _plugin.typeSyntax);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "CallGraphNames.substituteTypeParams(written, params, [for (_ in params) CallGraph.UNKNOWN_TYPE], g._plugin.typeSyntax);",
 			"replace": "written;",
 			"note": "a member type spelling a parameter the receiver gives no argument for resolves to a class of that name"
 		},
 		{
 			"name": "M-GRAPH-RETURN-PARAM",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "final viewed: String = throughParams(written, owner, receiverSource, receiverType, currentType);",
 			"replace": "final viewed: String = written;",
 			"note": "a return type that is the owner's parameter never takes the receiver's argument"
 		},
 		{
 			"name": "M-GRAPH-FN-RETURN-PARAM",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (!named) return viewed;",
 			"replace": "if (!named || true) return viewed;",
 			"note": "a return type that is the function's own parameter resolves to a class of that name"
@@ -6236,8 +6236,8 @@
 		},
 		{
 			"name": "M-GRAPH-FORWARD",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "final recv: Receiver = forwarded == null ? written : { typeName: forwarded, isValue: true, isDynamic: false };",
 			"replace": "final recv: Receiver = written;",
 			"note": "a call through a `@:forward` abstract never reaches the underlying type's member"
@@ -6252,24 +6252,24 @@
 		},
 		{
 			"name": "M-GRAPH-INHERITED-PLACEHOLDER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (declaring != null) return externalNode(declaring, name);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "if (declaring != null) return g.externalNode(declaring, name);",
 			"replace": "",
 			"note": "a bare call to a method of a supertype not loaded yet leaves no edge"
 		},
 		{
 			"name": "M-GRAPH-ENUM-VS-STATIC",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (imported.unknown || !types.imports.isEnumConstructor(name) || types.hasStaticFunctionNamed(name))",
-			"replace": "if (imported.unknown || !types.imports.isEnumConstructor(name))",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "if (imported.unknown || !g.types.imports.isEnumConstructor(name) || g.types.hasStaticFunctionNamed(name))",
+			"replace": "if (imported.unknown || !g.types.imports.isEnumConstructor(name))",
 			"note": "a visible enum constructor hides a static function of the same name"
 		},
 		{
 			"name": "M-GRAPH-IMPORTED-STATIC",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (targets.length > 0) {",
 			"replace": "if (false) {",
 			"note": "an imported static called by its simple name is never resolved"
@@ -6300,9 +6300,9 @@
 		},
 		{
 			"name": "M-GRAPH-STATIC-FIELD-TYPE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (staticOwner != null && types.isStatic(staticOwner, name)) return memberTypeSource(staticOwner, name);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "if (staticOwner != null && g.types.isStatic(staticOwner, name)) return memberTypeSource(staticOwner, name);",
 			"replace": "",
 			"note": "a static field read off its type name (`Store.arr`) has no type, so a call on it is unresolved"
 		},
@@ -6364,56 +6364,56 @@
 		},
 		{
 			"name": "M-GRAPH-PLACEHOLDER-DISPATCH",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "(memberOnChain(currentType, calleeName) == calleeId || placeholder)",
-			"replace": "(memberOnChain(currentType, calleeName) == calleeId || placeholder && false)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "(g.memberOnChain(currentType, calleeName) == calleeId || placeholder)",
+			"replace": "(g.memberOnChain(currentType, calleeName) == calleeId || placeholder && false)",
 			"note": "a bare call to a member of an unloaded supertype records no dispatch, so overrides loaded later are never reached"
 		},
 		{
 			"name": "M-GRAPH-PLACEHOLDER-DECLARING",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "externalNode(types.declaringTypeOf(recv.typeName, calleeName) ?? recv.typeName, calleeName)",
-			"replace": "externalNode(recv.typeName, calleeName)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "g.types.declaringTypeOf(recv.typeName, calleeName) ?? recv.typeName, calleeName",
+			"replace": "recv.typeName, calleeName",
 			"note": "a call through `this` to an unloaded supertype's member names a placeholder no file ever upgrades"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-ARMS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "|| (switchKinds.contains(kind) && index >= 1) || ((kind == caseBranchKind || blockKinds.contains(kind)) && last)",
 			"replace": "",
 			"note": "a literal in a switch / if arm or ending a block is never typed by what encloses it"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-REST",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "? Std.int(Math.min(index, params.length - 1))",
 			"replace": "? index",
 			"note": "only the first argument of a rest parameter is typed"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-LAMBDA",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "else if (lambdaKinds.contains(kind) && last)",
 			"replace": "else if (false)",
 			"note": "a lambda's body is never typed by its function type's return"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-MAP",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "} else if (kind == mapEntryKind && index == 1 && level > 0 && lineage[level - 1].kind == arrayLiteralKind) {",
 			"replace": "} else if (false) {",
 			"note": "a map literal's value is never typed by the map's value type"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-FIELD",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "} else if (kind == objectFieldKind && level > 0 && lineage[level - 1].kind == objectLiteralKind) {",
 			"replace": "} else if (false) {",
 			"note": "an object literal's field is never typed by the field's declared type"
@@ -6492,9 +6492,9 @@
 		},
 		{
 			"name": "M-GRAPH-CALL-ELEMENT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "final returned: Null<String> = returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "final returned: Null<String> = returnSourceOf(call.target) ?? StdTypes.returnOf(g._plugin, g.nodes[call.target]);",
 			"replace": "final returned: Null<String> = null;",
 			"note": "an element of a call's result (`b.get()[0]`) has no type, so a call on it is unresolved"
 		},
@@ -6508,10 +6508,10 @@
 		},
 		{
 			"name": "M-GRAPH-ABSTRACT-THIS-ALIAS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": ": types.resolveAlias(types.imports.typeOf(file, underlying));",
-			"replace": ": types.imports.typeOf(file, underlying);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": ": g.types.resolveAlias(g.types.imports.typeOf(file, underlying));",
+			"replace": ": g.types.imports.typeOf(file, underlying);",
 			"note": "`this` inside an abstract over a typedef alias stays the alias, so `this.copy()` on the std `Rest` is an unresolved call"
 		},
 		{
@@ -8744,9 +8744,9 @@
 		},
 		{
 			"name": "M-GRAPH-USING-META",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "final bringing: Null<String> = types.firstOnChain(recv.typeName, t -> types.meta.bringsExtensions(t));",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "final bringing: Null<String> = g.types.firstOnChain(recv.typeName, t -> g.types.meta.bringsExtensions(t));",
 			"replace": "final bringing: Null<String> = null;",
 			"note": "a call no member declares resolves to the extensions the file's `using`s name, though a `@:using` on the receiver's type may supply another"
 		},
@@ -11193,8 +11193,8 @@
 		},
 		{
 			"name": "M-GRAPH-RECEIVER-LOCAL-FIELD",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (bound != null && bound >= 0 && bindsLocally(bound)) return null;",
 			"replace": "",
 			"note": "a parameter or local named like a member is read as that member, so a lock some other binding aliases gets the member's identity"
@@ -11345,17 +11345,17 @@
 		},
 		{
 			"name": "M-GRAPH-RECEIVER-TYPED-BASE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "owner = base == null || base.isDynamic ? null : base.typeName;",
 			"replace": "owner = null;",
 			"note": "a member read off another typed value names no member, so a lock taken through another instance is an unknown lock and never the member it is"
 		},
 		{
 			"name": "M-GRAPH-RECEIVER-PROPERTY",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "|| types.propertyOnChain(owner, name) != null) return null;",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "|| g.types.propertyOnChain(owner, name) != null) return null;",
 			"replace": ") return null;",
 			"note": "a property with a getter names one stored lock, though the getter may hand back any other"
 		},
@@ -11945,9 +11945,9 @@
 		},
 		{
 			"name": "M-GRAPH-BOUND-DECLARING",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "nominals.find(n -> types.declaringTypeOf(n, member) != null)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "nominals.find(n -> g.types.declaringTypeOf(n, member) != null)",
 			"replace": "nominals[0]",
 			"note": "of several bounds the first is taken whether or not it declares the member"
 		},
@@ -11961,16 +11961,16 @@
 		},
 		{
 			"name": "M-GRAPH-BOUND-DECL-SCOPE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "final encloses: Bool = at != MEMBER_SCOPE && at >= span.from && at < span.to;",
 			"replace": "final encloses: Bool = true;",
 			"note": "a type parameter is looked up from the call site, so a function's own `T` captures the `T` a field or an outer parameter was declared with"
 		},
 		{
 			"name": "M-GRAPH-BOUND-LOCAL-SCOPE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "return bindsLocally(bound) ? bound : MEMBER_SCOPE;",
 			"replace": "return MEMBER_SCOPE;",
 			"note": "a parameter's type is read in the enclosing type's scope, so a function's own bounded `T` is taken for the class's"
@@ -11993,8 +11993,8 @@
 		},
 		{
 			"name": "M-GRAPH-ABSTRACT-PARAM-BOUND",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "? (member == null ? null : boundType(underlying, currentType, member, MEMBER_SCOPE))",
 			"replace": "? underlying",
 			"note": "`this` of an abstract over its own type parameter is taken for a type named like the parameter"
@@ -12459,8 +12459,8 @@
 		},
 		{
 			"name": "M-GRAPH-ABSTRACT-THIS-STORAGE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (recv.typeName != currentType) ownStorage = false;",
 			"replace": "",
 			"note": "an abstract's `this.x` inside its own accessor of `x` reads as the accessor's storage, though `this` is the value it wraps: the wrapped value's property accessor (openfl `Vector.get_length` reading `IVector.length`) never runs"
@@ -14211,16 +14211,16 @@
 		},
 		{
 			"name": "M-CALLGRAPH-ALIAS-VALUE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "\n\t\t\t\t\t|| importsFunction(rawName, span.from)",
 			"replace": "",
 			"note": "a static function imported under another name and read as a value gets no `Ref` edge, so a call of a value never admits it"
 		},
 		{
 			"name": "M-CALLGRAPH-IMPORTED-VALUE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "?? (\n\t\t\t\t\timported ? importedFunction(name, span, currentType) : null",
 			"replace": "?? (\n\t\t\t\t\tnull",
 			"note": "a static function an import binds (`import p.T.f;`, an alias, a wildcard) read as a value in another type gets no `Ref` edge, so a call of a value never admits it"
@@ -18595,9 +18595,9 @@
 		},
 		{
 			"name": "M-GRAPH-LAMBDA-PARAM-SELF",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "fn != null && nodes[fn]?.name == name ? fn : null",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "fn != null && g.nodes[fn]?.name == name ? fn : null",
 			"replace": "fn",
 			"note": "a lambda's first parameter, starting where the lambda does, reads as a reference to the lambda"
 		},
@@ -20046,17 +20046,17 @@
 		},
 		{
 			"name": "M-TS-PATH-RECEIVER-STATIC",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "typeName: types.imports.pathType(CallGraphKeys.packagePathOf(recv, n -> isAccessKind(n.kind), unboundIdent) ?? name),",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "typeName: g.types.imports.pathType(CallGraphKeys.packagePathOf(recv, n -> isAccessKind(n.kind), unboundIdent) ?? name),",
 			"replace": "typeName: name,",
 			"note": "a static call written off a package path (sys.io.File.getContent) merges into the project type of its last segment"
 		},
 		{
 			"name": "M-TS-PATH-NEW",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "final typeName: String = types.imports.typeOf(file, rawName);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "final typeName: String = g.types.imports.typeOf(file, rawName);",
 			"replace": "final typeName: String = CallGraphNames.lastSegments(rawName, 1);",
 			"note": "new sys.thread.Lock() runs the constructor of the project's Lock"
 		},
@@ -20086,9 +20086,9 @@
 		},
 		{
 			"name": "M-TS-PATH-NOMINAL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "final outer: Null<String> = path == null ? null : types.imports.pathType(path);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "final outer: Null<String> = path == null ? null : g.types.imports.pathType(path);",
 			"replace": "final outer: Null<String> = path == null ? null : SourceText.lastSegment(path);",
 			"note": "a member or a return type written with a library package merges into the project type of its simple name"
 		},
@@ -20134,25 +20134,25 @@
 		},
 		{
 			"name": "M-TS-STD-GETTER-LOCAL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "&& types.declarationCount(declared) == 0",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "&& g.types.declarationCount(declared) == 0",
 			"replace": "&& false",
 			"note": "a std property no project type names is never read through its getter"
 		},
 		{
 			"name": "M-TS-STD-GETTER-TYPED",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (found == null && types.declarationCount(ownerType) == 0) stdAccessors(ownerType);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "if (found == null && g.types.declarationCount(ownerType) == 0) stdAccessors(ownerType);",
 			"replace": "",
 			"note": "a std property a project property shares its name with is never read through its getter"
 		},
 		{
 			"name": "M-TS-STD-PLACEHOLDER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "types.declarationCount(innerRecv.typeName) == 0 ? externalNode(innerRecv.typeName, innerName) : null",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "g.types.declarationCount(innerRecv.typeName) == 0 ? g.externalNode(innerRecv.typeName, innerName) : null",
 			"replace": "null",
 			"note": "a call of a library type's member names no target, so its std return type is never read"
 		},
@@ -20320,17 +20320,17 @@
 		},
 		{
 			"name": "M-TS-ALTERNATE-CALL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "for (type in [recv.typeName].concat(alternates)) {",
 			"replace": "for (type in [recv.typeName]) {",
 			"note": "a call dispatches to the first candidate type only"
 		},
 		{
 			"name": "M-TS-ALTERNATE-NEW",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "for (alternate in types.imports.alternateTypes(file, typeName)) constructionRun(alternate, node.span, currentType);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "for (alternate in g.types.imports.alternateTypes(file, typeName)) constructionRun(alternate, node.span, currentType);",
 			"replace": "",
 			"note": "a new constructs the first candidate type only"
 		},
@@ -20352,8 +20352,8 @@
 		},
 		{
 			"name": "M-TS-LOCAL-CALL-READ",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "initializer: (_, use, _) -> NominalTypes.localInitializer(use, tree, shape, typeSources),",
 			"replace": "initializer: (_, use, _) -> null,",
 			"note": "a local a call initialises is never typed by what the call returns"
@@ -20672,48 +20672,48 @@
 		},
 		{
 			"name": "M-TS-DECL-MEMBER-FILE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource,",
-			"replace": "[], types.memberOnChain(owner, member)?.typeSource,",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "g.types.imports.memberFilesOf(owner, member), g.types.memberOnChain(owner, member)?.typeSource,",
+			"replace": "[], g.types.memberOnChain(owner, member)?.typeSource,",
 			"note": "a member's written type is read through the imports of the file reading it, not the one declaring it (review R3 M1)"
 		},
 		{
 			"name": "M-TS-DECL-RETURN-FILE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "return readIn(files, settled, nodes[target]?.typeName, target, each);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "return readIn(files, settled, g.nodes[target]?.typeName, target, each);",
 			"replace": "return settled;",
 			"note": "a function's written return type is read through the imports of the file calling it (review R3 M1)"
 		},
 		{
 			"name": "M-TS-DECL-READ-FROM",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "types.imports.alternateTypesIn([file].concat(readFrom), recv.typeName);",
-			"replace": "types.imports.alternateTypes(file, recv.typeName);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "g.types.imports.alternateTypesIn([file].concat(readFrom), recv.typeName);",
+			"replace": "g.types.imports.alternateTypes(file, recv.typeName);",
 			"note": "a guarded or maybe-wildcard name of the file declaring the receiver's type supplies no other type the call may run on"
 		},
 		{
 			"name": "M-TS-DECL-BOUND",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "nominals.push(types.resolveAlias(types.imports.typeOf(file, outer)))",
-			"replace": "nominals.push(types.resolveAlias(outer))",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "nominals.push(g.types.resolveAlias(g.types.imports.typeOf(file, outer)))",
+			"replace": "nominals.push(g.types.resolveAlias(outer))",
 			"note": "a type parameter's bound is read by its simple name, whatever the file imports"
 		},
 		{
 			"name": "M-TS-DECL-UNDERLYING",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "types.resolveAlias(types.imports.typeOf(file, underlying))",
-			"replace": "types.resolveAlias(underlying)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "g.types.resolveAlias(g.types.imports.typeOf(file, underlying))",
+			"replace": "g.types.resolveAlias(underlying)",
 			"note": "an abstract's underlying type is read by its simple name, whatever the file imports"
 		},
 		{
 			"name": "M-TS-ALTERNATE-WHOLE-CALL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (calleeId == null) calleeId = target;",
 			"replace": "if (calleeId == null) calleeId = target;\nif (target == null) break;",
 			"note": "an alternate type is dispatched only when the project namesake resolves the call to a member (review R3 M2)"
@@ -20736,17 +20736,17 @@
 		},
 		{
 			"name": "M-TS-KEY-MEMBER-PARAMS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "types.memberOnChain(owner, member)?.typeSource, owner, null,",
-			"replace": "types.memberOnChain(owner, member)?.typeSource, null, null,",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "g.types.memberOnChain(owner, member)?.typeSource, owner, null,",
+			"replace": "g.types.memberOnChain(owner, member)?.typeSource, null, null,",
 			"note": "a member's type is keyed without its owner's type parameters (R4 F5)"
 		},
 		{
 			"name": "M-TS-KEY-RETURN-PARAMS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "return readIn(files, settled, nodes[target]?.typeName, target, each);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "return readIn(files, settled, g.nodes[target]?.typeName, target, each);",
 			"replace": "return readIn(files, settled, null, null, each);",
 			"note": "a return type is keyed without its owner's and function's type parameters (R4 F5)"
 		},
@@ -20791,17 +20791,17 @@
 		},
 		{
 			"name": "M-TS-IMPORT-STATIC-FIELD",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (imported != null) return memberTypeSource(imported.owner, imported.member);",
 			"replace": "",
 			"note": "a static an import binds by its own name, read bare, is not typed (review R4 F7)"
 		},
 		{
 			"name": "M-TS-IMPORT-STATIC-CALL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "? CallGraphKeys.importedStatic(this, importedOf(innerName, inner.span?.from), innerName, currentType)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "? CallGraphKeys.importedStatic(g, importedOf(innerName, inner.span?.from), innerName, currentType)",
 			"replace": "? null",
 			"note": "the result of a static function an import binds, called bare, is not typed (review R4 F7)"
 		},
@@ -20887,9 +20887,9 @@
 		},
 		{
 			"name": "M-TS-INFER-SHADOW",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (named && own.exists(p -> types.generics.declaresTypeParam(owner ?? '', p))) return null;",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "if (named && own.exists(p -> g.types.generics.declaresTypeParam(owner ?? '', p))) return null;",
 			"replace": "",
 			"note": "a function's type parameter shadowing its type's takes the receiver's type argument"
 		},
@@ -20903,17 +20903,17 @@
 		},
 		{
 			"name": "M-TS-DECL-EACH-MEMBER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "types.imports.memberTypesOf(owner, member)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "g.types.imports.memberTypesOf(owner, member)",
 			"replace": "null",
 			"note": "a member its declarations write differently is typed as neither (review R4 F7)"
 		},
 		{
 			"name": "M-TS-DECL-EACH-RETURN",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "? CallGraphKeys.returnsWritten(this, target) : null;",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "? CallGraphKeys.returnsWritten(g, target) : null;",
 			"replace": "? null : null;",
 			"note": "a return type its declarations write differently is typed as neither (review R4 F6 remainder)"
 		},
@@ -21007,152 +21007,152 @@
 		},
 		{
 			"name": "M-TS-FORWARD-KEYED",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": ": types.resolveAlias(types.imports.keyedWhereWritten(types.meta.forwardsWritten(written.typeName), simple));",
-			"replace": ": types.resolveAlias(simple);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": ": g.types.resolveAlias(g.types.imports.keyedWhereWritten(g.types.meta.forwardsWritten(written.typeName), simple));",
+			"replace": ": g.types.resolveAlias(simple);",
 			"note": "a `@:forward` abstract routes to the simple name of its underlying type, whatever its own file imports (review R4 F7)"
 		},
 		{
 			"name": "M-TS-FORWARD-PARAM",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "final forwarded: Null<String> = simple == null || types.generics.declaresTypeParam(written.typeName, simple)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "final forwarded: Null<String> = simple == null || g.types.generics.declaresTypeParam(written.typeName, simple)",
 			"replace": "final forwarded: Null<String> = simple == null",
 			"note": "an abstract forwarding to its own type parameter routes to a type of that name"
 		},
 		{
 			"name": "M-TS-FORWARD-ALIAS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": ": types.resolveAlias(types.imports.keyedWhereWritten(",
-			"replace": ": (types.imports.keyedWhereWritten(",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": ": g.types.resolveAlias(g.types.imports.keyedWhereWritten(",
+			"replace": ": (g.types.imports.keyedWhereWritten(",
 			"note": "an underlying type written as a typedef alias is not seen through"
 		},
 		{
 			"name": "M-TS-CALLED-VALUE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "return call == null ? calledResult(typeSourceOf(expr.children[0], currentType)) : targetReturnSource(expr, call, currentType);",
 			"replace": "return call == null ? null : targetReturnSource(expr, call, currentType);",
 			"note": "a call of a value no function declaration names — a function-typed field, parameter or call result — is not typed (review R4 F7)"
 		},
 		{
 			"name": "M-TS-CALLED-RECEIVER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "\tif (call != null) {\n\t\t// a nullable / dynamic wrapper the declaration returns names no dispatchable type\n\t\tfinal written: Null<String> = targetReturnSource(recv, call, currentType, nullableWrappers);",
 			"replace": "\tif (recv.kind == callKind && call == null) return null;\n\tif (call != null) {\n\t\t// a nullable / dynamic wrapper the declaration returns names no dispatchable type\n\t\tfinal written: Null<String> = targetReturnSource(recv, call, currentType, nullableWrappers);",
 			"note": "a receiver that is a call of a function-typed value stays unresolved"
 		},
 		{
 			"name": "M-TS-CALLED-NULL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "return CallGraphNames.functionReturnSource(written?.wrapped(['Null']) ?? written);",
 			"replace": "return CallGraphNames.functionReturnSource(written);",
 			"note": "a nullable function type returns nothing the graph types"
 		},
 		{
 			"name": "M-TS-LOOP-ELEMENT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (iterationKinds.contains(node.kind)) typeLoopBinder(node, typeName);",
 			"replace": "",
 			"note": "a loop's binder is not typed by what its iterable yields (review R4 F7)"
 		},
 		{
 			"name": "M-TS-LOOP-KEY-BINDER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "final binder: Null<Span> = valueBinder == null ? loop.span : valueBinder.span;",
 			"replace": "final binder: Null<Span> = loop.span;",
 			"note": "a key-value loop's KEY binder is typed as the element"
 		},
 		{
 			"name": "M-TS-LOOP-KV-LISTED",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (listed != null || keyValue) return listed;",
 			"replace": "if (listed != null) return listed;",
 			"note": "a key-value loop's value binder over a non-standard container is typed by its iterator()"
 		},
 		{
 			"name": "M-TS-LOOP-ITERATOR",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "final iterator: Null<{ written: String, file: Null<String> }> = memberReturn(container, 'iterator', currentType);",
 			"replace": "final iterator: Null<{ written: String, file: Null<String> }> = null;",
 			"note": "a loop over a value with iterator() binds nothing"
 		},
 		{
 			"name": "M-TS-LOOP-NEXT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "final own: Null<String> = memberReturn(container, 'next', currentType)?.written;",
 			"replace": "final own: Null<String> = null;",
 			"note": "a loop over an iterator binds nothing"
 		},
 		{
 			"name": "M-TS-LOOP-AGREE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "return viaIterator == null || own == null || viaIterator == own ? viaIterator ?? own : null;",
 			"replace": "return viaIterator ?? own;",
 			"note": "a value whose iterator() and next() disagree binds what iterator() yields"
 		},
 		{
 			"name": "M-TS-LOOP-OWN-PARAMS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "target == null || (_facts.typeParams[target] ?? []).length > 0 ? null : returnSourceOf(target);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "target == null || (g._facts.typeParams[target] ?? []).length > 0 ? null : returnSourceOf(target);",
 			"replace": "target == null ? null : returnSourceOf(target);",
 			"note": "a member declaring its own type parameters binds a type named like one"
 		},
 		{
 			"name": "M-TS-LOOP-THROUGH",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "written: throughParams(written, nodes[target]?.typeName, source, type, currentType),",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "written: throughParams(written, g.nodes[target]?.typeName, source, type, currentType),",
 			"replace": "written: written,",
 			"note": "a container's type parameter in what its iterator yields is not bound by the value's argument"
 		},
 		{
 			"name": "M-TS-LAMBDA-PARAMS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (lambdaKinds.contains(node.kind)) typeLambdaParams(node, typeName);",
 			"replace": "",
 			"note": "a lambda parameter written with no type is not typed by the function type the lambda is expected to be (review R4 F7)"
 		},
 		{
 			"name": "M-TS-LAMBDA-ARITY",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (written.length != params.length) return;",
 			"replace": "if (written.length < params.length) return;",
 			"note": "a lambda is typed by a function type of more parameters than it declares"
 		},
 		{
 			"name": "M-TS-LAMBDA-ANNOTATED",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "for (p in params) if (p.span != null && !typeSources.exists(p.span?.from ?? -1)) p",
 			"replace": "for (p in params) if (p.span != null) p",
 			"note": "a lambda parameter written with a type is retyped by the expected function type"
 		},
 		{
 			"name": "M-TS-LAMBDA-NULL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "final written: Array<TypeSyntax> = switch (read?.wrapped(['Null']) ?? read)?.shape {",
 			"replace": "final written: Array<TypeSyntax> = switch read?.shape {",
 			"note": "a nullable function type types no lambda parameter"
 		},
 		{
 			"name": "M-TS-NEW-RECEIVER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "at == null || name == null ? null : keys.keyed(name, at.from);",
 			"replace": "null;",
 			"note": "a receiver a `new` makes is untyped (R7 L1b)"
@@ -21175,9 +21175,9 @@
 		},
 		{
 			"name": "M-TS-STD-CONTAINER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "return types.imports.isStandard(file, path, standardContainers[SourceText.lastSegment(path)] ?? []) ? element : null;",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "return g.types.imports.isStandard(file, path, standardContainers[SourceText.lastSegment(path)] ?? []) ? element : null;",
 			"replace": "return element;",
 			"note": "a container is read as the std one its simple name spells wherever written (a project List<T> yields T)"
 		},
@@ -21199,9 +21199,9 @@
 		},
 		{
 			"name": "M-TS-SKIP-SHIFT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (target != null && CallGraphKeys.mayShift(this, target, index, count)) return null;",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "if (target != null && CallGraphKeys.mayShift(g, target, index, count)) return null;",
 			"replace": "",
 			"note": "an argument after a skippable parameter binds the parameter at its position (`run(?a, f, ?g)` called `run(x, y)` types `y` by `f`)"
 		},
@@ -21215,8 +21215,8 @@
 		},
 		{
 			"name": "M-TS-SKIP-NEW-ARGS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "kind == callKind ? holder.children.slice(1) : holder.children.slice(holder.typeArgCount);",
 			"replace": "kind == callKind ? holder.children.slice(1) : holder.children;",
 			"note": "a `new` counts the type arguments it names among its arguments"
@@ -21295,16 +21295,16 @@
 		},
 		{
 			"name": "M-TS-MODULE-FN-CLASS-CHAIN",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "final inherited: Null<String> = currentType == null || hidden ? null : memberOnChain(currentType, name);",
-			"replace": "final inherited: Null<String> = hidden ? null : memberOnChain(currentType ?? moduleType, name);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "final inherited: Null<String> = currentType == null || hidden ? null : g.memberOnChain(currentType, name);",
+			"replace": "final inherited: Null<String> = hidden ? null : g.memberOnChain(currentType ?? moduleType, name);",
 			"note": "a module-level function reaches the main class's chain, its supertype's static before the import (review L3 G5)"
 		},
 		{
 			"name": "M-TS-MODULE-FN-IMPORTED-REF",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "included: the module's own names and its imports'\n\t\t\t\timported ? importedFunction(name, span, currentType) : null",
 			"replace": "included: the module's own names and its imports'\n\t\t\t\tnull",
 			"note": "a static an import binds, read as a value in module-level code, names nothing"
@@ -21343,9 +21343,9 @@
 		},
 		{
 			"name": "M-TS-NULLABLE-PATH-KEY",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "final outer: Null<String> = path == null ? null : types.imports.pathType(path);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "final outer: Null<String> = path == null ? null : g.types.imports.pathType(path);",
 			"replace": "final outer: Null<String> = path;",
 			"note": "the type a Null<T> local wraps is keyed by the path its text spells, so a call on it runs a placeholder of the path"
 		},
@@ -21407,9 +21407,9 @@
 		},
 		{
 			"name": "M-TS-OVERLOAD-RETURN-EACH",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (_facts.overloadedReturns.exists(target)) return null;",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "if (g._facts.overloadedReturns.exists(target)) return null;",
 			"replace": "",
 			"note": "a node folding declarations one of which offers other signatures reads each declaration's return"
 		},
@@ -21447,33 +21447,33 @@
 		},
 		{
 			"name": "M-TS-SUPER-STATIC-READ",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "return currentType == null || CallGraphKeys.staticOfSupertype(this, currentType, name)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "return currentType == null || CallGraphKeys.staticOfSupertype(g, currentType, name)",
 			"replace": "return currentType == null",
 			"note": "a bare read no import settles is typed by a supertype's static"
 		},
 		{
 			"name": "M-TS-SUPER-STATIC-CALL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "(CallGraphKeys.staticOfSupertype(this, currentType, name) ? null : memberOnChain(currentType, name))",
-			"replace": "memberOnChain(currentType, name)",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "(CallGraphKeys.staticOfSupertype(g, currentType, name) ? null : g.memberOnChain(currentType, name))",
+			"replace": "g.memberOnChain(currentType, name)",
 			"note": "a bare call's target is a supertype's static function before the imported one"
 		},
 		{
 			"name": "M-TS-SUPER-STATIC-HIDDEN",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "final hidden: Bool = currentType != null && CallGraphKeys.staticOfSupertype(this, currentType, name);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "final hidden: Bool = currentType != null && CallGraphKeys.staticOfSupertype(g, currentType, name);",
 			"replace": "final hidden: Bool = false;",
 			"note": "a bare call no import settles runs a supertype's static function"
 		},
 		{
 			"name": "M-TS-SUPER-STATIC-MODULE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "final moduleFn: Null<String> = CallGraphKeys.declaredOn(this, moduleType, name);",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "final moduleFn: Null<String> = CallGraphKeys.declaredOn(g, moduleType, name);",
 			"replace": "final moduleFn: Null<String> = memberOnChain(moduleType, name);",
 			"note": "a supertype's static function is taken for a module function of the class's own module"
 		},
@@ -21922,8 +21922,8 @@
 		},
 		{
 			"name": "M-TS-RETURN-WRAPPER-BOUND",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "final written: Null<String> = targetReturnSource(recv, call, currentType, nullableWrappers);",
 			"replace": "final written: Null<String> = [for (w in [targetReturnSource(recv, call, currentType)]) if (w != null && !nullableWrappers.contains(NominalTypes.outerNominalOf(w.trim(), _plugin.typeSyntax) ?? '')) w][0];",
 			"note": "the wrapper refusal reads the return after its type parameters are bound, so a T bound to Null<X> names nothing"
@@ -22421,64 +22421,64 @@
 		},
 		{
 			"name": "M-GRAPH-MODULE-VALUE-TYPED",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "return values.decls.length == 1 && values.imported == null ? typeSources[values.decls[0].span.from] : null;",
 			"replace": "return null;",
 			"note": "a module-level value every build compiling the read declares is not typed"
 		},
 		{
 			"name": "M-GRAPH-MODULE-VALUE-MEMBER-FIRST",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "values.decls.length > 0 && !CallGraphKeys.memberMayBind(this, currentType, name))",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "values.decls.length > 0 && !CallGraphKeys.memberMayBind(g, currentType, name))",
 			"replace": "values.decls.length > 0)",
 			"note": "a module-level value outranks a member the enclosing type's chain declares"
 		},
 		{
 			"name": "M-GRAPH-MODULE-RECEIVERS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "? moduleReceivers(callee.children[0], currentType, calleeName) ?? []",
 			"replace": "? []",
 			"note": "a call on a module-level value only some builds declare dispatches on none of its types"
 		},
 		{
 			"name": "M-GRAPH-MODULE-RECEIVERS-IMPORTS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "for (s in imported.statics) written.push(memberTypeSource(s.owner, s.member));",
 			"replace": "",
 			"note": "the builds compiling no module-level declaration of the name do not dispatch on the imported static"
 		},
 		{
 			"name": "M-GRAPH-MODULE-RECEIVERS-MEMBER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "imported == null || values.decls.length == 0 || CallGraphKeys.memberMayBind(this, currentType, name))",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "imported == null || values.decls.length == 0 || CallGraphKeys.memberMayBind(g, currentType, name))",
 			"replace": "imported == null || values.decls.length == 0)",
 			"note": "a module-level value is dispatched on where a member of the enclosing type's chain may be meant"
 		},
 		{
 			"name": "M-GRAPH-MODULE-RECEIVERS-UNTYPED",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (nominal == null || nullableWrappers.contains(nominal)) return null;",
 			"replace": "if (nominal == null) continue; if (nullableWrappers.contains(nominal)) return null;",
 			"note": "a build whose value is not typed is dropped instead of leaving the receiver unresolved"
 		},
 		{
 			"name": "M-GRAPH-IMPORTED-POSITION",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "holder.index.values.importedStatics(holder.info, name, at)",
 			"replace": "holder.index.values.importedStatics(holder.info, name)",
 			"note": "an import binds a name whose module-level declaration every build compiling the read declares"
 		},
 		{
 			"name": "M-GRAPH-MODULE-CALL-UNSEEN",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "if (imported.unknown || declared) unresolvedAt(span, UnboundName(name), currentType);",
 			"replace": "if (imported.unknown) unresolvedAt(span, UnboundName(name), currentType);",
 			"note": "a bare call some builds make on a module-level value holding a function records only the imported static it may run"
@@ -22717,48 +22717,48 @@
 		},
 		{
 			"name": "M-GRAPH-MODULE-BINDING",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "? bareModuleBinding(calleeName, callee.span, currentType)",
 			"replace": "? null",
 			"note": "a bare call of a module-level function is bound by name, never per build: module-level code's is unresolved"
 		},
 		{
 			"name": "M-GRAPH-MODULE-BINDING-MEMBER",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "|| CallGraphKeys.memberMayBind(this, currentType, name)) return null;",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "|| CallGraphKeys.memberMayBind(g, currentType, name)) return null;",
 			"replace": ") return null;",
 			"note": "a module-level function comes before a member of the enclosing chain of its name"
 		},
 		{
 			"name": "M-GRAPH-MODULE-BINDING-VALUE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "out.unresolved = FunctionValue(name)",
 			"replace": "out.unresolved = null",
 			"note": "a build declaring a module-level value calls nothing the graph is told of"
 		},
 		{
 			"name": "M-GRAPH-MODULE-BINDING-IMPORTS",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "for (s in imported.statics) {",
 			"replace": "for (s in imported.statics.slice(0, 0)) {",
 			"note": "the builds declaring no module-level function of the name call no imported static"
 		},
 		{
 			"name": "M-GRAPH-MODULE-REF",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "final module: Null<ModuleBinding> = bareModuleBinding(name, arg.span, currentType);",
 			"replace": "final module: Null<ModuleBinding> = null;",
 			"note": "a module-level function read as a value is bound by name: one under #if in several builds is no reference at all"
 		},
 		{
 			"name": "M-GRAPH-MODULE-IDENT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
 			"find": "final module: Null<ModuleBinding> = bound != null && bound >= 0 ? null : moduleBinding(name, span, currentType);",
 			"replace": "final module: Null<ModuleBinding> = null;",
 			"note": "the one module-level function a bare call binds does not type the call's result"
