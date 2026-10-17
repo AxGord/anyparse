@@ -996,6 +996,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.MoveFamilyCaptureTest',
 		'unit.query.MoveGuardedImportCarryTest',
 		'unit.query.MoveMemberSliceTest',
+		'unit.query.MoveMemberSplitSliceTest',
 		'unit.query.MoveSymbolSliceTest',
 		'unit.query.MutationSchemaTest',
 		'unit.query.MutationVerdictTest',
@@ -4077,6 +4078,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-WILDCARD-RIVAL-ORDER-BLIND',
 			'unit.query.MoveFamilyCaptureTest#testASubModuleMoveRepointsNoWildcardCallerByteIdentically :: control :: '
 				+ 'M-WILDCARD-BINDS-BLIND',
+			'unit.query.MoveMemberSplitSliceTest#testASourceSubModuleTypeIsImportedAtTheDestination :: control :: '
+				+ 'M-CARRY-OWN-SUB-UNCARRIED',
 			'unit.query.MoveSymbolSliceTest#testACommentOnlyFullyQualifiedMentionDoesNotRefuseTheMove :: control :: '
 				+ 'M-MOVE-FQN-COMMENT-MASK-NONE',
 			'unit.query.MoveSymbolSliceTest#testACommentOnlyMentionIsNotAReference :: control :: M-MOVE-NAMESCAN-COMMENT-COUNTED',
@@ -4084,7 +4087,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-MOVE-NAMESCAN-FULLSTOP-BLIND',
 			'unit.query.MoveSymbolSliceTest#testACutBeforeATrailingCommentKeepsOneSeparator :: control :: M-MOVE-CUT-TAKES-BOTH-RUNS',
 			'unit.query.MoveSymbolSliceTest#testAMiddleDeclarationWithOneBlankSideKeepsIt :: control :: M-MOVE-SIBLINGS-FALSE',
+			'unit.query.MoveSymbolSliceTest#testAModuleImportTheLadderDoesNotAgreeWithIsNotCarried :: control :: M-CARRY-OWN-SUB-UNCARRIED',
 			'unit.query.MoveSymbolSliceTest#testASiblingPackageIsNotAnAncestorSoItIsLeftAlone :: control :: M-MOVE-PACKAGE-CHAIN-ANY',
+			'unit.query.MoveSymbolSliceTest#testAStaticReceiverOnASiblingSubTypeIsCarried :: control :: '
+				+ 'M-CARRY-OWN-SUB-UNCARRIED,M-CARRY-OWN-SUB-PRIVATE',
 			'unit.query.MoveSymbolSliceTest#testAValuePositionIsStillNotPriced :: control :: M-MOVE-RECEIVER-ANY-IDENT',
 			'unit.query.MoveSymbolSliceTest#testAliasDependencyIsCarriedIntoTheDestination :: control :: M-MOVE-ALIAS-SUFFIX-DROPPED',
 			'unit.query.MoveSymbolSliceTest#testAliasImporterRepointedKeepingItsBinding :: control :: M-MOVE-ALIAS-SUFFIX-DROPPED',
@@ -7101,7 +7107,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-STAR-ONE-PER-LIST',
 			'M-CONDBRANCH-TYPE-ARGS-DROPPED',
 			'M-LANDING-TYPE-ARGS-AS-VALUES',
-			'M-MATCH-TYPE-SLOT-UNRECORDED'
+			'M-MATCH-TYPE-SLOT-UNRECORDED',
+			'M-CARRY-OWN-SUB-UNCARRIED',
+			'M-CARRY-OWN-SUB-PRIVATE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

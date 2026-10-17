@@ -3287,3 +3287,11 @@ decided the question; it may not become a record of runs.
   `TypeAnnotation`), and `rewrite` refuses the match naming the type and the spelling that carries it
   (`final $x:$T = $v`). Refusal rather than carry: the template is text, and which slot of it would take the type is
   not something the op can know — branch `feat/infra-N10`
+- a moved declaration that names a SUB-module type of its own source module (`typedef Pair` beside `class Src`) was
+  refused by `move` and `move-member` alike ("no import to carry"), and `testAStaticReceiverOnASiblingSubTypeIsRefused`
+  documented the false premise that no statement can name such a type from another file. `import <module>.<Sub>;` does
+  (compile-proved on 4.3.7, including a source module left with no main type after the move), so
+  `DependencyCarry.ownSubModuleImport` carries it when the source binds the name through its module-own rung and holds
+  no statement of its own; the collision gate then prices it as a carried statement. A `private` sub-type, which no
+  spelling imports, still refuses, and the module's MAIN type is not covered (the package rung reaches it in the same
+  package) — branch `feat/infra-N10`

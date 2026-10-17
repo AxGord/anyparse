@@ -22402,6 +22402,22 @@
 			"find": "if (at != null) unwritten.push(TypeAnnotation(at));",
 			"replace": "if (at != null) unwritten.remove(TypeAnnotation(at));",
 			"note": "a match on a type the pattern did not write is not recorded, so `rewrite 'final $x = $v' 'var $x = $v'` drops `:Float` from `final f:Float = 1`"
+		},
+		{
+			"name": "M-CARRY-OWN-SUB-UNCARRIED",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "dependencyImportLinesToCarry",
+			"find": "final ownSub: Null<String> = ownSubModuleImport(dep, wanted, provider, cursorInfo);",
+			"replace": "final ownSub: Null<String> = null;",
+			"note": "a sub-module type of the source module is carried by no statement, and the move refuses with \"no import to carry\" over a type `import <module>.<Sub>;` names"
+		},
+		{
+			"name": "M-CARRY-OWN-SUB-PRIVATE",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "ownSubModuleImport",
+			"find": "t.name == dep && !t.isMain && !t.isPrivate",
+			"replace": "t.name == dep && !t.isMain",
+			"note": "a `private` sub-module type, which no spelling imports, is carried as `import <module>.<Sub>;`"
 		}
 	]
 }
