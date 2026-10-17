@@ -15,7 +15,8 @@ final class ShapeVocab {
 
 	/**
 	 * The loop STATEMENTS — `loopStatementKinds` (body last) and `doWhileLoopKinds` (body first), each once: every loop but
-	 * a comprehension's (`[for …]`, `[while …]`).
+	 * a comprehension's (`[for …]`, `[while …]`). A do-while in expression position is one of them: it is the statement's
+	 * loop over the statement's children, and no comprehension generator.
 	 */
 	public static function statementLoopKinds(shape: RefShape): Array<String> {
 		return union([shape.loopStatementKinds, shape.doWhileLoopKinds]);

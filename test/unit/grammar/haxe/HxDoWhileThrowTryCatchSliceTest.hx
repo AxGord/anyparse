@@ -536,6 +536,28 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 		}
 	}
 
+	/**
+	 * A do-while is an EXPRESSION wherever one may stand — a lambda body, an anonymous function body, an `if` branch, a
+	 * paren operand (`haxe --interp` 4.3.7 runs each) — and projects as `DoWhileExpr`, the statement form's twin over the
+	 * same `HxDoWhileStmt`. Both writers keep it whole, and the formatted text is a fixed point.
+	 */
+	public function testDoWhileExpression(): Void {
+		final opts: String = '{"sameLine": {"doWhileBody": "fitLine"}}';
+		for (src => kept in [
+			'class C { function f():Void { final g = () -> do i++ while (i < 3); } }' => 'do i++ while (i < 3);',
+			'class C { function f():Void { final h = function() do i++ while (i < 5); } }' => 'do i++ while (i < 5);',
+			'class C { function f():Void { if (i > 0) do i++ while (i < 7) else trace(0); } }' => 'do i++ while (i < 7)',
+			'class C { function f():Void { (do i++ while (i < 9)); } }' => '(do i++ while (i < 9));'
+		]) {
+			roundTrip(src);
+			final formatted: String = HxWriteFixture.triviaWrite(src, opts);
+			Assert.isTrue(formatted.indexOf(kept) != -1, '$src -> $formatted');
+			Assert.equals(formatted, HxWriteFixture.triviaWrite(formatted, opts), src);
+		}
+		final lambda: HxStatement = parseBody('class C { function f():Void { final g = () -> do i++ while (i < 3); } }')[0];
+		Assert.isTrue('$lambda'.indexOf('DoWhileExpr') != -1, '$lambda');
+	}
+
 	/** Parse function body statements from a single-function class. */
 	private function parseBody(source: String): Array<HxStatement> {
 		final fn: HxFnDecl = parseSingleFnDecl(source);

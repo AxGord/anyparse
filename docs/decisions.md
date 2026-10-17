@@ -3168,3 +3168,10 @@ decided the question; it may not become a record of runs.
   expression-position `HxFnExprBody`, which owns no terminator. Rejected the other fix, an absent optional literal
   rewinding the trivia it skipped: it would narrow every `@:trailOpt` node's span at once to cure one grammar error
   — branch `feat/infra-N8`
+- a do-while is an expression in Haxe (4.3.7 `--interp`: a lambda body, an anonymous function body, an `if` branch,
+  a paren operand) → `HxExpr.DoWhileExpr` over the statement's own `HxDoWhileStmt`, read wherever `DoWhileStmt` is
+  (`doWhileLoopKinds`, `conditionLastChildKinds`, `branchKinds`, the execution model's kinds, the fixed-slot,
+  case-glue and tail-seal tables). `@:meta do … while (c);` now projects as `ExprStmt(MetaExpr(DoWhileExpr))` like
+  `@:meta while`, not `MetaStmt(DoWhileStmt)`, and keeps its layout; `MetaStmt`'s kind witness moved to
+  `@:meta if (a) b(); c();`. `prefer-lambda-expression-body` still leaves `do … while` out: its terminator strip
+  walks the LAST child, which is a do-while's condition — branch `feat/infra-N8`

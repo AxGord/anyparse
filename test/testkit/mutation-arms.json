@@ -22164,6 +22164,14 @@
 			"find": "one(shape.namedFnExprKind),",
 			"replace": "",
 			"note": "the named function expression drops out of every nested- and function-like-kind reader: its scope, parameters, returns and captures are read as the enclosing function's"
+		},
+		{
+			"name": "M-VOCAB-DOWHILE-EXPR-NOT-LOOP",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "refShape",
+			"find": "doWhileLoopKinds: ['DoWhileStmt', 'DoWhileExpr'],",
+			"replace": "doWhileLoopKinds: ['DoWhileStmt'],",
+			"note": "a do-while in expression position (`() -> do x while (c)`) is no loop to any reader of the loop vocabulary"
 		}
 	]
 }

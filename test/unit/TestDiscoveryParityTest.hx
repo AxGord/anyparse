@@ -4145,7 +4145,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SetModifierSliceTest#testPrivateOnAFinalClassPrecedesTheFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.ShapeVocabTest#testAKindTwoSeamsNameIsAnsweredOnce :: control :: M-VOCAB-UNION-DUPLICATES',
 			'unit.query.ShapeVocabTest#testAnUnsetSeamAddsNothing :: control :: M-VOCAB-UNSET-SEAM-ADDED',
-			'unit.query.ShapeVocabTest#testHaxeLoopAndFunctionVocabulary :: control :: M-VOCAB-NESTED-NO-NAMED-FN',
+			'unit.query.ShapeVocabTest#testHaxeLoopAndFunctionVocabulary :: control :: '
+				+ 'M-VOCAB-NESTED-NO-NAMED-FN,M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
 			'unit.query.ShardPlanTest#testAClassHeavierThanAShardIsDealtAsSlices :: control :: M-SHARD-SPLIT-NEVER,M-SHARD-SPLIT-SLICE-WEIGHT',
 			'unit.query.ShardPlanTest#testAMalformedSliceTokenIsRefused :: control :: M-SHARD-FILTER-PARSE-RANGE',
 			'unit.query.ShardPlanTest#testAPinnedClassIsNeverSliced :: control :: M-SHARD-SPLIT-STICKY',
@@ -7033,7 +7034,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY',
 			'M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY',
 			'M-BINDER-NAMED-FN-NO-STEP-OUT',
-			'M-VOCAB-NESTED-NO-NAMED-FN'
+			'M-VOCAB-NESTED-NO-NAMED-FN',
+			'M-VOCAB-DOWHILE-EXPR-NOT-LOOP'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

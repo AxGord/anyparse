@@ -564,7 +564,7 @@ class SingleStmtBraces {
 				true;
 			// Expressions closed by a brace or a paren.
 			case 'ArrayExpr', 'ObjectLit', 'BlockExpr', 'ParenExpr', 'ECheckTypeExpr', 'NewExpr', 'TypedCastExpr', 'SwitchExpr',
-				'SwitchExprBare', 'DollarBlockExpr', 'DollarReifExpr':
+				'SwitchExprBare', 'DollarBlockExpr', 'DollarReifExpr', 'DoWhileExpr':
 				true;
 			// Postfix operators and member access - the last token is a bracket, an
 			// operator or a name.
