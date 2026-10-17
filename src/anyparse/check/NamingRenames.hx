@@ -766,19 +766,28 @@ final class NamingRenames {
 			typedBound: Array<Span>,
 			ignore: Array<Span>
 		} = inheritedFieldRefSpans(source, tree, name, ownerName, plugin, shape, resolutionIndex);
-		// No scope-correct reference set exists for a file that does not declare the binding, so BOTH
-		// owner-bound halves are the rename targets here.
-		final ownerBound: Array<Span> = mergeUniqueSpans(refs.bareBound.concat(refs.typedBound), family);
+		// Occurrences bound to ANOTHER declaration of the name in this file - an unrelated class's own
+		// same-named member, a local, a parameter - are that declaration's, not this member's.
+		final foreign: Array<Span> = foreignBoundSpans(source, tree, name, ownerName, plugin, support, shape, resolutionIndex, file);
+		// A RECEIVER-typed access both halves claim is a contradiction no reading settles: refuse.
+		if (refs.typedBound.exists(s -> OccurrenceScan.offsetWithinAny(s.from, foreign))) return null;
+		// The BARE half is attributed by the enclosing class alone, so it also holds a read a same-named
+		// parameter or local of a subtype's method binds - `override function setup(accountScreen) {
+		// super.setup(accountScreen); }` beside the owner's `accountScreen` field. The foreign half
+		// resolves that read scope-correctly, so it wins: renaming it would turn the argument into the
+		// field, which compiles. With no foreign declaration the bare half stays the rename target, the
+		// way it was when any such binding blocked the whole rename.
+		final bare: Array<Span> = [
+			for (s in refs.bareBound) if (!OccurrenceScan.offsetWithinAny(s.from, foreign)) s
+		];
+		final ownerBound: Array<Span> = mergeUniqueSpans(bare.concat(refs.typedBound), family);
 		// Both the owner-bound targets AND the provably-different-owner occurrences are excluded from
 		// the completeness scan: the former are renamed, the latter left as-is; only an occurrence that
 		// is NEITHER (unprovable) stays uncovered and blocks the whole rename below.
 		// Module paths and type references are inert here too — see `declaringFileRenameSpans`. A
 		// subtype file naming a type after the member being renamed is the same shape, one file over.
-		// Occurrences bound to ANOTHER declaration of the name in this file - an unrelated class's own
-		// same-named member, a local, a parameter - are that declaration's, not this member's.
-		final foreign: Array<Span> = foreignBoundSpans(source, tree, name, ownerName, plugin, support, shape, resolutionIndex, file);
 		final excluded: Array<Span> = ownerBound.concat(refs.ignore)
-			.concat([for (s in foreign) if (!OccurrenceScan.offsetWithinAny(s.from, ownerBound)) s])
+			.concat(foreign)
 			.concat(OccurrenceScan.modulePathSpans(tree, shape))
 			.concat(typeReferenceSpans(source, tree, name, shape, plugin, { index: resolutionIndex, file: file }));
 		final classified: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(

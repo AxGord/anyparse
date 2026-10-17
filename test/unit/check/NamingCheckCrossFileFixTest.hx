@@ -1090,6 +1090,25 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		);
 	}
 
+	/**
+	 * A subtype's override whose PARAMETER shares the inherited field's name binds its bare reads to the
+	 * parameter, so the cross-file rename leaves them alone. The class-attributed half of the subtype scan
+	 * claims every bare read in a subtype for the owner; once the parameter's own occurrences were accounted
+	 * for, that half renamed `super.setup(accountScreen)` into `super.setup(_accountScreen)` - which compiles,
+	 * and passes the field where the argument was meant (TM `AccountType` and its four plans).
+	 */
+	@:pin('control')
+	@:killer('M-NAMING-FOREIGN-LOSES-TO-BARE')
+	public function testASubtypeParameterOfTheSameNameIsNotRenamed(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var accountScreen:Int = 0;\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function setup(accountScreen:Int):Void {\n\t\tthis.accountScreen = accountScreen;\n\t}\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\toverride public function setup(accountScreen:Int):Void {\n'
+			+ '\t\tsuper.setup(accountScreen);\n\t}\n}';
+		final rename: Array<CrossFileEdits> = crossFileRename([{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }]);
+		assertRenameSlice(rename, 'pkg/C.hx', cSrc, 'this._accountScreen = accountScreen', 'var accountScreen');
+		Assert.isFalse(Lambda.exists(rename, slice -> slice.file == 'pkg/D.hx'), 'the override\'s parameter is not the field');
+	}
+
 	/** The cross-file renames `report` yields under a resolution scope split into `roots` and `library`. */
 	private function scopedRenameCount(
 		report: Array<{ file: String, source: String }>, roots: Array<{ file: String, source: String }>,

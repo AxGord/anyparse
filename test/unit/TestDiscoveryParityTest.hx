@@ -1606,6 +1606,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NamingCheckCrossFileFixTest#testANarrowedPublicRenameRefusesAReaderOutsideItsScope :: control :: '
 				+ 'M-NAMING-OUTSIDE-SCOPE-IGNORED',
 			'unit.check.NamingCheckCrossFileFixTest#testAPackageGrantRenamesIntoThePackage :: control :: M-ALLOW-GRANTEE-PACKAGE',
+			'unit.check.NamingCheckCrossFileFixTest#testASubtypeParameterOfTheSameNameIsNotRenamed :: control :: '
+				+ 'M-NAMING-FOREIGN-LOSES-TO-BARE',
 			'unit.check.NamingCheckCrossFileFixTest#testAnUnrelatedSameNamedPrivateDoesNotBlockAPublicRename :: control :: '
 				+ 'M-NAMING-FOREIGN-UNBOUND',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
@@ -7498,7 +7500,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-NAMING-CROSS-GRANTEES-DROPPED',
 			'M-NAMING-FOREIGN-UNBOUND',
 			'M-NAMING-OUTSIDE-SCOPE-IGNORED',
-			'M-PRIVATIZE-FOREIGN-IGNORED'
+			'M-PRIVATIZE-FOREIGN-IGNORED',
+			'M-NAMING-FOREIGN-LOSES-TO-BARE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

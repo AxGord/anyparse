@@ -23969,6 +23969,14 @@
 			"method": "foreignRegions",
 			"force": "[]",
 			"note": "the privatize arm counts an unrelated class's own same-named private as a read of the member"
+		},
+		{
+			"name": "M-NAMING-FOREIGN-LOSES-TO-BARE",
+			"type": "anyparse.check.NamingRenames",
+			"method": "otherFileRenameSpans",
+			"find": "final bare: Array<Span> = [for (s in refs.bareBound) if (!OccurrenceScan.offsetWithinAny(s.from, foreign)) s];",
+			"replace": "final bare: Array<Span> = refs.bareBound;",
+			"note": "a subtype's same-named parameter read is renamed into the inherited field: `super.setup(accountScreen)` becomes `super.setup(_accountScreen)`, which compiles"
 		}
 	]
 }
