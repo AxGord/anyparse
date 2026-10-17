@@ -266,6 +266,16 @@ final class LintDocuments {
 		return doc;
 	}
 
+	/** The configs `resolve` hands `files`, each once (by identity), in the order of the first file that names it. */
+	public static function distinctConfigs(files: Array<String>, resolve: (String) -> LintConfig): Array<LintConfig> {
+		final configs: Array<LintConfig> = [];
+		for (file in files) {
+			final config: LintConfig = resolve(file);
+			if (!configs.contains(config)) configs.push(config);
+		}
+		return configs;
+	}
+
 }
 
 /**

@@ -604,8 +604,13 @@ final class TypeResolver {
 	public static function enclosingIsNullSafe(
 		tree: QueryNode, span: Span, metaName: String, disableArg: Null<String>, ?memo: RefsCache
 	): Bool {
+		// memoised per tree in the run's `memo` when the caller has one: a proof asks twice per operand, and each ask
+		// walked the whole file (~0.37 s of a TM `lint --all`)
+		final scopes: Array<NullSafetyScope> = memo == null
+			? collectNullSafetyScopes(tree, metaName, disableArg)
+			: memo.nullSafetyScopes(tree, '$metaName\t$disableArg', () -> collectNullSafetyScopes(tree, metaName, disableArg));
 		var active: Bool = false;
-		for (s in nullSafetyScopes(tree, metaName, disableArg, memo)) if (s.from <= span.from && span.to <= s.to) {
+		for (s in scopes) if (s.from <= span.from && span.to <= s.to) {
 			if (s.disabled) return false;
 			if (s.typeLevel) active = true;
 		}
@@ -1185,18 +1190,6 @@ final class TypeResolver {
 		return enclosingIsNullSafe(root, new Span(bindingFrom, bindingFrom), nullSafetyMetaName, disableArg, shape.refsCache)
 			&& enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, disableArg, shape.refsCache)
 			&& types.ofBinding(bindingFrom) != Unproven;
-	}
-
-	/**
-	 * `collectNullSafetyScopes`, memoised per tree in the run's `memo` when the caller has one: a proof asks
-	 * `enclosingIsNullSafe` twice per operand, and each ask walked the whole file (~0.37 s of a TM `lint --all`).
-	 */
-	private static function nullSafetyScopes(
-		tree: QueryNode, metaName: String, disableArg: Null<String>, memo: Null<RefsCache>
-	): Array<NullSafetyScope> {
-		return memo == null
-			? collectNullSafetyScopes(tree, metaName, disableArg)
-			: memo.nullSafetyScopes(tree, '$metaName\t$disableArg', () -> collectNullSafetyScopes(tree, metaName, disableArg));
 	}
 
 }

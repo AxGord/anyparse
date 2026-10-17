@@ -4,6 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
+import anyparse.check.LintDocuments;
 import anyparse.check.Linter;
 import anyparse.check.LongLockExplain.LongLockReport;
 import anyparse.check.OracleDeclaration;
@@ -233,7 +234,14 @@ final class LintCommand implements CliCommand {
 		// otherwise a check runs when it is enabled for at least one file, and
 		// `Linter.run` drops its findings on the files that disable it.
 		final applyEnablement: Bool = o.ruleFilters.length == 0;
-		final activeChecks: Array<Check> = applyEnablement ? enabledChecks(checks, files, resolveConfig) : checks;
+		// Enablement is asked per DISTINCT config, not per file: every file of a directory gets the same memoised config,
+		// and the per-file form asked each of ~190 checks once per file (~0.17 s on the TM tree). `paths` is the run's
+		// file order, the order every later per-file question discovers configs in, so each once-per-document config
+		// warning prints where it did.
+		final fileConfigs: Array<LintConfig> = LintDocuments.distinctConfigs(paths, resolveConfig);
+		final activeChecks: Array<Check> = applyEnablement ? [
+			for (c in checks) if (fileConfigs.exists(config -> config.enabledFor(c.id(), !(c is DefaultOff)))) c
+		] : checks;
 
 		// Resolution scope: the UNION of `resolutionRoots` (explicit dirs) and `resolutionLibs`
 		// (haxelib names) across every discovered config, PLUS the auto-discovered Haxe std, which
@@ -1594,25 +1602,6 @@ final class LintCommand implements CliCommand {
 				+ ' flags, so the reach analysis walks every conditional branch\n'
 			);
 		return all;
-	}
-
-	/**
-	 * The checks enabled for at least one of `files`. Asked per DISTINCT config, not per file: the memoised
-	 * resolver hands every file of a directory the same `LintConfig`, and the per-file form asked each of ~190
-	 * checks once per file (~0.17 s on the TM tree). Configs are collected in file order, which is the order the
-	 * per-file form discovered them in, so every once-per-document config warning prints where it always did.
-	 */
-	private static function enabledChecks(
-		checks: Array<Check>, files: Array<{ file: String, source: String }>, resolveConfig: (String) -> LintConfig
-	): Array<Check> {
-		final configs: Array<LintConfig> = [];
-		for (f in files) {
-			final config: LintConfig = resolveConfig(f.file);
-			if (!configs.contains(config)) configs.push(config);
-		}
-		return [
-			for (c in checks) if (configs.exists(config -> config.enabledFor(c.id(), !(c is DefaultOff)))) c
-		];
 	}
 
 }

@@ -247,7 +247,30 @@ final class SubtypeGraph {
 	 */
 	public function subtypeOverridesProperty(owner: String, prop: String): Bool {
 		final names: Array<String> = ['get_$prop', 'set_$prop', prop];
-		for (resolved in typesDeclaringAny(names)) if (resolved.type.name != owner) {
+		final owners: { types: Array<ResolvedType>, byName: Map<String, Array<Int>> } = _memberOwners ?? {
+			final types: Array<ResolvedType> = [];
+			final byName: Map<String, Array<Int>> = [];
+			for (fi in _files) for (t in fi.types) {
+				final ordinal: Int = types.length;
+				types.push({ file: fi, type: t });
+				for (m in t.members) {
+					final declaring: Array<Int> = byName[m.name] ?? [];
+					if (declaring.length == 0 || declaring[declaring.length - 1] != ordinal) declaring.push(ordinal);
+					byName[m.name] = declaring;
+				}
+			}
+			final built: { types: Array<ResolvedType>, byName: Map<String, Array<Int>> } = { types: types, byName: byName };
+			_memberOwners = built;
+			built;
+		};
+		// the types declaring a member of one of `names`, each once, in `_files` / `types` order — the types the full
+		// scan this replaced found a match in, in the order it met them
+		final ordinals: Array<Int> = [];
+		for (name in names) for (ordinal in owners.byName[name] ?? []) if (!ordinals.contains(ordinal)) ordinals.push(ordinal);
+		ordinals.sort((a, b) -> a - b);
+		for (ordinal in ordinals) {
+			final resolved: ResolvedType = owners.types[ordinal];
+			if (resolved.type.name == owner) continue;
 			final matches: Array<MemberInfo> = resolved.type.members.filter(m -> names.contains(m.name));
 			if (isSubtype(resolved.type.name, owner)) return true;
 			if (!matches.exists(m -> m.isOverride)) continue;
@@ -994,39 +1017,6 @@ final class SubtypeGraph {
 				return [for (a in up) CallGraphNames.substituteTypeParams(a, params, args, typeSyntax)];
 		}
 		return null;
-	}
-
-	/**
-	 * The types declaring a member named one of `names`, each once, in `_files` / `types` order — exactly the
-	 * types the full scan `subtypeOverridesProperty` used to make would have found a match in, in the order it
-	 * met them.
-	 */
-	private function typesDeclaringAny(names: Array<String>): Array<ResolvedType> {
-		final owners: { types: Array<ResolvedType>, byName: Map<String, Array<Int>> } = memberOwners();
-		final ordinals: Array<Int> = [];
-		for (name in names) for (ordinal in owners.byName[name] ?? []) if (!ordinals.contains(ordinal)) ordinals.push(ordinal);
-		ordinals.sort((a, b) -> a - b);
-		return [for (ordinal in ordinals) owners.types[ordinal]];
-	}
-
-	/** `_memberOwners`, built on the first call. */
-	private function memberOwners(): { types: Array<ResolvedType>, byName: Map<String, Array<Int>> } {
-		final cached: Null<{ types: Array<ResolvedType>, byName: Map<String, Array<Int>> }> = _memberOwners;
-		if (cached != null) return cached;
-		final types: Array<ResolvedType> = [];
-		final byName: Map<String, Array<Int>> = [];
-		for (fi in _files) for (t in fi.types) {
-			final ordinal: Int = types.length;
-			types.push({ file: fi, type: t });
-			for (m in t.members) {
-				final owners: Array<Int> = byName[m.name] ?? [];
-				if (owners.length == 0 || owners[owners.length - 1] != ordinal) owners.push(ordinal);
-				byName[m.name] = owners;
-			}
-		}
-		final built: { types: Array<ResolvedType>, byName: Map<String, Array<Int>> } = { types: types, byName: byName };
-		_memberOwners = built;
-		return built;
 	}
 
 }
