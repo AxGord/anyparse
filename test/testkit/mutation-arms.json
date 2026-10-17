@@ -21225,7 +21225,7 @@
 			"name": "M-TS-MODULE-NAME",
 			"type": "anyparse.query.ValueNameBinding",
 			"method": "importedStatics",
-			"find": "\t\tif (fi.moduleFields.exists(f -> f.name == name && CondBranchPath.within(use, branchOf(fi, f)))) return out;\n",
+			"find": "\t\t\tif (fi.moduleFields.exists(f -> f.name == name && CondBranchPath.within(use, branchOf(fi, f)))) return out;\n",
 			"replace": "",
 			"note": "a static an import brings in wins over a module-level field of the same name"
 		},

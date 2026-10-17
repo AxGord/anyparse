@@ -132,8 +132,11 @@ final class ValueNameBinding {
 	 */
 	public function importedStatics(fi: FileInfo, name: String, ?at: Int): ImportedStatics {
 		final out: ImportedStatics = { statics: [], unknown: false };
-		final use: Array<CondFrame> = at == null ? [] : _refs.names.branchPathAt(fi, at);
-		if (fi.moduleFields.exists(f -> f.name == name && CondBranchPath.within(use, branchOf(fi, f)))) return out;
+		// the use's branch is read only for a name the module declares — most are not
+		if (fi.moduleFields.exists(f -> f.name == name)) {
+			final use: Array<CondFrame> = at == null ? [] : _refs.names.branchPathAt(fi, at);
+			if (fi.moduleFields.exists(f -> f.name == name && CondBranchPath.within(use, branchOf(fi, f)))) return out;
+		}
 		for (imp in importsOf(fi)) switch imp.kind {
 			case ImportKind.Import:
 				final named: Null<ImportedStatic> = SourceText.lastSegment(imp.raw) == name ? staticOf(imp.raw) : null;
