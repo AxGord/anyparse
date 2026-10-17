@@ -3488,6 +3488,24 @@ decided the question; it may not become a record of runs.
   `addEdge` expand already. The module-level case has no such reader. The fold unions
   the bodies' edges, which is sound; it is left until a tree measures a call site a split would bind — branch
   `feat/infra-N13`
+- an `oversized-type` grant (`"Name: reason"`) silenced its type at ANY size, so a granted type could grow without
+  bound and nothing said so. A grant now carries a CEILING, `"<Name> <= <N> members / <M> lines: <reason>"` (either
+  clause alone, members first when both are given; digits capped at nine, a type name an ASCII identifier), which
+  REPLACES the threshold for that type and that dimension: silent within it, reported again past it with the grant
+  named (`… (max 71) — beyond its grant 'Renderer <= 71 members / 4150 lines'`), the current size masked out of the
+  finding key and the ceiling kept in it (a raised ceiling is a configuration change the blast-radius gate must
+  show). A dimension the grant gives no ceiling keeps the threshold. The ceiling-less legacy shape is REFUSED, not
+  read as an unbounded grant and not given a default margin: accepting it would keep exactly the silence the change
+  exists to end, and a refusal costs one config edit whose numbers the type's own returning finding supplies. Every
+  other unreadable entry — no reason, a ceiling at or below the threshold (it grants nothing, and reading it as a
+  TIGHTER limit would report a type no other type its size is reported for), any other head, two grants for one type
+  (two ceilings, neither obviously meant) — is refused the same way: it grants nothing and is reported once per run as
+  a file-less `Warning`, the shape `thread-safety` reports an option it could not read in. Migrated grants: ceilings
+  = current size + 5% rounded up (lines to the next 50) — `Renderer`, `WrapList`, `NullFlow`, the test tree's
+  `TestDiscoveryParityTest`, and the types C2 measured and declined (`FactsView`, `MemberReach`, `TypedFactsWalk`,
+  `FunctionValueTypes`, `NullGuardedCode`, `CompilerFacts`, `ReachGraph`, `FactsEscapes`, `TypedFactsMacro`), each
+  with C2's reason; and `CallGraph`, still 67 members after N13 moved its edge collection out (its public question
+  surface, which 86 files read) — branch `feat/infra-N14`
 - `member-order` gains an opt-in, SPACING-ONLY option `separateInlineSubgroup` (default OFF, user request 2026-10-17
   from TM `FileListItemGrid`, where `--fix` deleted the blank between `private static inline final CATEGORY_TAG_BOTTOM`
   and `private static final SHARED_WITH_ME_ICON_TEXT`): an `inline` and a non-`inline` FIELD of one rank, both
