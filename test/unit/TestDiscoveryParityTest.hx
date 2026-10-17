@@ -1499,7 +1499,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.InvertNegatedIfElseCheckTest#testDefaultLastMessages :: control :: '
 				+ 'M-INVERT-DEFAULT-LAST-VALUE-MESSAGE,M-INVERT-DEFAULT-LAST-STATEMENT-MESSAGE',
 			'unit.check.InvertNegatedIfElseCheckTest#testDefaultLastTurnsADefaultFirstChoice :: control :: '
-				+ 'M-NEGCOND-SWAP-DEFAULT-LAST-DROPPED,M-NEGCOND-SWAP-DEFAULT-LAST-ARMS-SWAPPED',
+				+ 'M-NEGCOND-SWAP-DEFAULT-LAST-DROPPED,M-NEGCOND-SWAP-DEFAULT-LAST-ARMS-SWAPPED,M-NEGCOND-DEFAULT-LAST-INTERPOLATION-AS-LITERAL',
 			'unit.check.InvertNegatedIfElseCheckTest#testIfExpressionElseIfChainNotFlagged :: control :: M-INVERT-VALUE-CHAIN-SWAPPED',
 			'unit.check.InvertNegatedIfElseCheckTest#testKeepDefaultElseInvertsANonDefaultElse :: control :: '
 				+ 'M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL,M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM,M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM',
@@ -7624,7 +7624,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-NEGCOND-DEFAULT-LAST-ON',
 			'M-NEGCOND-DEFAULT-LAST-NO-KEEP',
 			'M-INVERT-DEFAULT-LAST-VALUE-MESSAGE',
-			'M-INVERT-DEFAULT-LAST-STATEMENT-MESSAGE'
+			'M-INVERT-DEFAULT-LAST-STATEMENT-MESSAGE',
+			'M-NEGCOND-DEFAULT-LAST-INTERPOLATION-AS-LITERAL'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

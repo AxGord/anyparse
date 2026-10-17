@@ -12,6 +12,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
+
 /**
  * The one place a condition whose TOP-LEVEL node is a logical NOT is read in its positive form —
  * for the branch swap `invert-negated-if-else` performs on an `if` statement, a value-position `if`
@@ -90,7 +92,10 @@ final class NegatedCondition {
 				turnableKinds: [
 					for (k in negation.atomicKinds) if (k != shape.boolLitKind && k != shape.parenKind) k
 				].concat(equality),
-				negationKinds: [notKind].concat(equality)
+				negationKinds: [notKind].concat(equality),
+				interpolationKinds: [
+					for (k in [shape.stringInterpIdentKind, shape.stringInterpBlockKind]) if (k != null) k
+				]
 			}
 		};
 	}
@@ -299,10 +304,15 @@ final class NegatedCondition {
 			&& CaseValueKey.isDefaultLiteral(value.kind, site.source.substring(span.from, span.to), site.seams.defaults.values);
 	}
 
-	/** Whether `value` is a literal of any value (`CaseValueKey.isLiteral`). */
+	/**
+	 * Whether `value` is a literal of any value (`CaseValueKey.isLiteral`) — an interpolating string is not:
+	 * it computes its value, as `'${item.id}'` does.
+	 */
 	private static function isLiteral(value: QueryNode, site: InversionSite): Bool {
+		final d: DefaultElseSeams = site.seams.defaults;
 		final span: Null<Span> = value.span;
-		return span != null && CaseValueKey.isLiteral(value.kind, site.source.substring(span.from, span.to), site.seams.defaults.values);
+		return span != null && CaseValueKey.isLiteral(value.kind, site.source.substring(span.from, span.to), d.values)
+			&& !value.children.exists(c -> d.interpolationKinds.contains(c.kind));
 	}
 
 	/** Whether a comment lies in `outer` before or after `inner` — the part of `outer` a rebuild as `inner` drops. */
@@ -350,6 +360,9 @@ typedef DefaultElseSeams = {
 
 	/** The operators a `defaultLast` negation adds or flips — the not, `==`, `!=` — each asked of the operator table. */
 	final negationKinds: Array<String>;
+
+	/** The interpolation segment kinds of a string literal: a string holding one computes its value. */
+	final interpolationKinds: Array<String>;
 };
 
 /** One file's negation context: the run seams plus the file, its source and its parsed tree. */

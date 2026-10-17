@@ -24437,6 +24437,14 @@
 			"find": "swap.defaultLast ? MSG_DEFAULT_STATEMENT : MSG_STATEMENT",
 			"replace": "MSG_STATEMENT",
 			"note": "a default-last turn of an if statement is worded as a dropped negation"
+		},
+		{
+			"name": "M-NEGCOND-DEFAULT-LAST-INTERPOLATION-AS-LITERAL",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "isLiteral",
+			"find": "\n\t\t\t&& !value.children.exists(c -> d.interpolationKinds.contains(c.kind))",
+			"replace": "",
+			"note": "an interpolating string reads as a literal, so `folder ? null : '${item.id}'` is left default-first"
 		}
 	]
 }

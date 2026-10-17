@@ -3844,7 +3844,8 @@ decided the question; it may not become a record of runs.
   than the order it fixes — untouched. A not the strip refuses (an overloaded `!`, a kept default else) is not turned
   either: no `!!`. (4) The operator gate is `OperatorSelection` over the operators the turn WRITES — the not it adds and
   the `==` / `!=` it flips (`NegatedCondition.builtin`, which the strip's not check now shares). (5) "Literal" for the
-  else arm is `CaseValueKey.isLiteral` (any number, bool, `null`, string, a negated number), so two literals
+  else arm is `CaseValueKey.isLiteral` (any number, bool, `null`, string, a negated number) minus an interpolating
+  string, which computes its value (TM `folder ? null : '${incrementalCloudAction.cloudId}'`), so two literals
   (`_targetSelected ? 0.0 : 1.0`) are a mapping and stay; arms are read the way `keepDefaultElse` reads them
   (`armValue`), and both or neither must be a `return`. (6) The four ternary builders keep the orientation of the guard
   they collapse (`PreferTernaryReturn` quotes its condition byte for byte, so it cannot carry a rebuilt one); a

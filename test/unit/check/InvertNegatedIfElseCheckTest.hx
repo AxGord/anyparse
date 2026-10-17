@@ -308,13 +308,16 @@ class InvertNegatedIfElseCheckTest extends Test {
 	/**
 	 * Under `defaultLast` a choice whose THEN arm is a default literal and whose else arm is no literal is
 	 * turned around so the default goes last: an atom gains a bare `!`, an `==` / `!=` flips, in a ternary,
-	 * a value `if` and an `if` statement returning both values (bare or braced).
+	 * a value `if` and an `if` statement returning both values (bare or braced). An interpolating string computes
+	 * its value, so it is no literal.
 	 *
-	 * RED under M-NEGCOND-SWAP-DEFAULT-LAST-DROPPED (the swap never asks the turn) and
-	 * M-NEGCOND-SWAP-DEFAULT-LAST-ARMS-SWAPPED (the turn asked about the else arm).
+	 * RED under M-NEGCOND-SWAP-DEFAULT-LAST-DROPPED (the swap never asks the turn),
+	 * M-NEGCOND-SWAP-DEFAULT-LAST-ARMS-SWAPPED (the turn asked about the else arm) and
+	 * M-NEGCOND-DEFAULT-LAST-INTERPOLATION-AS-LITERAL (an interpolating string read as a literal).
 	 */
 	@:pin('control')
 	@:killer('M-NEGCOND-SWAP-DEFAULT-LAST-DROPPED', 'M-NEGCOND-SWAP-DEFAULT-LAST-ARMS-SWAPPED')
+	@:killer('M-NEGCOND-DEFAULT-LAST-INTERPOLATION-AS-LITERAL')
 	public function testDefaultLastTurnsADefaultFirstChoice(): Void {
 		for (pair in [
 			['final v = hasNext ? null : e;', 'final v = !hasNext ? e : null;'],
@@ -323,6 +326,8 @@ class InvertNegatedIfElseCheckTest extends Test {
 			['final v = o.f(x) ? false : y;', 'final v = !o.f(x) ? y : false;'],
 			['final v = (a) ? "" : y;', 'final v = !a ? y : "";'],
 			['final v = a[0] ? (null) : y;', 'final v = !a[0] ? y : (null);'],
+			["final v = a ? null : '${o.id}';", "final v = !a ? '${o.id}' : null;"],
+			["final v = a ? '' : 'x$y';", "final v = !a ? 'x$y' : '';"],
 			['final v = if (a) null else x;', 'final v = if (!a) x else null;'],
 			['if (a) return null; else return x;', 'if (!a) return x; else return null;'],
 			[
@@ -373,6 +378,7 @@ class InvertNegatedIfElseCheckTest extends Test {
 		for (body in [
 			'final v = a ? 0.0 : 1.0;',
 			'final v = a ? null : "x";',
+			"final v = a ? null : 'plain';",
 			'final v = a ? 0 : -1;',
 			'final v = a ? false : true;',
 			'final v = a ? x : y;',
