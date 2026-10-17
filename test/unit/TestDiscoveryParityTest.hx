@@ -967,6 +967,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.GlobExpandTest',
 		'unit.query.GreedyDeclSpanEditBoundarySliceTest',
 		'unit.query.HaxelibResolverTest',
+		'unit.query.ImplicitSitesTest',
 		'unit.query.ImplicitStdScopeTest',
 		'unit.query.IndexScopeTest',
 		'unit.query.InheritanceMoveSliceTest',
@@ -3389,6 +3390,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.GreedyDeclSpanEditBoundarySliceTest#testAGreedyModuleDeclSpanIsTrimmedToItsOwnLastToken :: control :: '
 				+ 'M-DECL-EDIT-SPAN-UNTRIMMED',
 			'unit.query.HaxelibResolverTest#testAMultiLibraryAnswerSplitsOneRootPerLibrary :: control :: M-HAXELIB-BATCH-COUNT-IGNORED',
+			'unit.query.ImplicitSitesTest#testAConstructionLandsItsValueArgumentsOnly :: control :: M-LANDING-TYPE-ARGS-AS-VALUES',
 			'unit.query.IndexScopeTest#testAChangedSourceIsRebuilt :: control :: M-INDEX-MEMO-UNVALIDATED',
 			'unit.query.IndexScopeTest#testTheKeyTellsEveryFileSetApart :: control :: M-INDEX-KEY-UNPREFIXED,M-INDEX-MEMO-TAG-IGNORED',
 			'unit.query.IndexScopeTest#testTheMemoDiesWithTheAmbientChain :: control :: M-INDEX-MEMO-OUTLIVES-AMBIENT',
@@ -7095,7 +7097,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-REWRITE-UNWRITTEN-IGNORED',
 			'M-WALK-TYPE-ARGS-UNCOUNTED',
 			'M-STAR-ONE-PER-LIST',
-			'M-CONDBRANCH-TYPE-ARGS-DROPPED'
+			'M-CONDBRANCH-TYPE-ARGS-DROPPED',
+			'M-LANDING-TYPE-ARGS-AS-VALUES'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

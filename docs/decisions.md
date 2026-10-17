@@ -3274,3 +3274,9 @@ decided the question; it may not become a record of runs.
   arguments constrains none, as the type slot does, so `new $T(...)` still counts every construction; `apq rewrite`
   refuses such a match on a construction that writes some (`Match.unwritten`): no metavariable holds them, so the
   splice would drop them — branch `feat/infra-N9`
+- the last two readers of a construction's children as its arguments read `QueryNode.typeArgCount` now. `ImplicitSites.
+  landings` landed EVERY child of a `new` as a value, so `new Box<Int>(d)` put a landing of no known type at `Int` — a
+  string conversion of any object at every construction that writes type arguments. `CallGraph` (`handleNew`'s
+  argument scan, `argumentSlot`, the expected type of a constructor argument) skips them too; there it was a pure
+  move (a `Named` child is neither a lambda, a call nor a value read), and the expected-type slice no longer re-derives
+  the count through `NominalTypes.writtenConstruction` — branch `feat/infra-N10`

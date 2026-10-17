@@ -5928,7 +5928,7 @@
 			"name": "M-GRAPH-NEW-ARGS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "scanArgs(node.children, 0, target, null, currentType);",
+			"find": "scanArgs(node.children, node.typeArgCount, target, null, currentType);",
 			"replace": "",
 			"note": "constructor arguments hand on no function value"
 		},
@@ -21217,8 +21217,8 @@
 			"name": "M-TS-SKIP-NEW-ARGS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": ": holder.children.slice(NominalTypes.writtenConstruction(holder, shape, source)?.args.length ?? holder.children.length);",
-			"replace": ": holder.children;",
+			"find": "kind == callKind ? holder.children.slice(1) : holder.children.slice(holder.typeArgCount);",
+			"replace": "kind == callKind ? holder.children.slice(1) : holder.children;",
 			"note": "a `new` counts the type arguments it names among its arguments"
 		},
 		{
@@ -22386,6 +22386,14 @@
 			"find": "node.span, node.type, node.typeArgCount)",
 			"replace": "node.span, node.type)",
 			"note": "a node the branch projection rebuilds loses its type-argument count"
+		},
+		{
+			"name": "M-LANDING-TYPE-ARGS-AS-VALUES",
+			"type": "anyparse.query.ImplicitSites",
+			"method": "landings",
+			"find": "for (k in node.typeArgCount ... node.children.length) land(node.children[k], null);",
+			"replace": "for (k in 0 ... node.children.length) land(node.children[k], null);",
+			"note": "a construction's type arguments land as values of no known type: a string conversion of any object at every `new Box<Int>(…)`"
 		}
 	]
 }
