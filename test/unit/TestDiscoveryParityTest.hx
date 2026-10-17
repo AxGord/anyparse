@@ -1538,6 +1538,21 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-LOOPGUARD-EXPR-BODY-KEPT,M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY,M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY',
 			'unit.check.MagicNumberCheckTest#testADirectArgumentOfAnIgnoredCallIsExempt :: control :: M-MAGIC-CALLARG-BLIND',
 			'unit.check.MagicNumberCheckTest#testADottedEntryMatchesTheCalleeTail :: control :: M-MAGIC-CALLARG-SUFFIX-LOOSE',
+			'unit.check.MemberOrderCheckTest#testInlineSubgroupBlankInConditionalRebuildUnderOption :: control :: '
+				+ 'M-MO-INLINE-BOUNDARY-OFF,M-MO-INLINE-SEPARATOR-DROPPED,M-MO-INLINE-CONDITIONAL-REBUILD-UNREAD',
+			'unit.check.MemberOrderCheckTest#testInlineSubgroupBlankInsertedBySpacingOnlyFallback :: control :: '
+				+ 'M-MO-INLINE-BOUNDARY-OFF,M-MO-INLINE-SPACING-ONLY-UNREAD',
+			'unit.check.MemberOrderCheckTest#testInlineSubgroupBlankInsertedUnderOption :: control :: '
+				+ 'M-MO-INLINE-BOUNDARY-OFF,M-MO-INLINE-REPORT-UNREAD,M-MO-INLINE-FIX-UNREAD,M-MO-INLINE-MESSAGE-AS-RANK',
+			'unit.check.MemberOrderCheckTest#testInlineSubgroupBlankKeptUnderOption :: control :: '
+				+ 'M-MO-INLINE-BOUNDARY-OFF,M-MO-INLINE-REPORT-UNREAD',
+			'unit.check.MemberOrderCheckTest#testInlineSubgroupBlankOnReorderUnderOption :: control :: '
+				+ 'M-MO-INLINE-BOUNDARY-OFF,M-MO-INLINE-SEPARATOR-DROPPED',
+			'unit.check.MemberOrderCheckTest#testInlineSubgroupBlankRemovedByDefault :: control :: M-MO-INLINE-OPTION-IGNORED',
+			'unit.check.MemberOrderCheckTest#testInlineSubgroupDoubleBlankCollapsesUnderOption :: control :: '
+				+ 'M-MO-INLINE-BOUNDARY-OFF,M-MO-INLINE-BOUNDARY-AT-LEAST-ONE',
+			'unit.check.MemberOrderCheckTest#testInlineSubgroupOptionLeavesTheRestAlone :: control :: '
+				+ 'M-MO-INLINE-CONDITIONAL-BOUNDARY,M-MO-INLINE-BOUNDARY-BEFORE-EXEMPTIONS',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
 				+ 'M-NAMING-SKIPSCAN-REPORT-INDEX,M-SKIPSCAN-SCOPEWIDE',
 			'unit.check.NamingCheckMemberFixTest#testAccessGrantOutsideReportScopeRefusesSingleFileRename :: control :: '
@@ -7239,7 +7254,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-OVERSIZED-CLAUSE-REPEATED',
 			'M-OVERSIZED-CEILING-DIGITS',
 			'M-OVERSIZED-DUPLICATE-GRANT',
-			'M-OVERSIZED-CEILING-AT-THRESHOLD'
+			'M-OVERSIZED-CEILING-AT-THRESHOLD',
+			'M-MO-INLINE-BOUNDARY-OFF',
+			'M-MO-INLINE-OPTION-IGNORED',
+			'M-MO-INLINE-CONDITIONAL-BOUNDARY',
+			'M-MO-INLINE-SEPARATOR-DROPPED',
+			'M-MO-INLINE-REPORT-UNREAD',
+			'M-MO-INLINE-FIX-UNREAD',
+			'M-MO-INLINE-MESSAGE-AS-RANK',
+			'M-MO-INLINE-BOUNDARY-BEFORE-EXEMPTIONS',
+			'M-MO-INLINE-BOUNDARY-AT-LEAST-ONE',
+			'M-MO-INLINE-CONDITIONAL-REBUILD-UNREAD',
+			'M-MO-INLINE-SPACING-ONLY-UNREAD'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

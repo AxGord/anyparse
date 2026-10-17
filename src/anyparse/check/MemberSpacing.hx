@@ -28,7 +28,8 @@ private typedef DirectiveGap = {
 /**
  * The BLANK-LINE half of `member-order`: what has to sit in the gap BETWEEN two collected
  * member slots. Two independent gap rules live here — one blank line between rank groups and
- * none inside one field group, and one blank line around a member-level `#if` / `#end` — plus
+ * none inside one field group (optionally one between a rank's `inline` subgroup and the rest of
+ * it, `separateInlineSubgroup`), and one blank line around a member-level `#if` / `#end` — plus
  * the gate that switches both off for a container whose gaps hold code the rule cannot model.
  *
  * Each rule answers twice, in the same shape the check needs: as the first `LayoutIssue` for
@@ -57,13 +58,13 @@ final class MemberSpacing {
 	 * finds no issue and a re-run converges.
 	 */
 	public static function emitSpacingOnly(
-		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String
+		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String, separateInline: Bool
 	): Void {
 		if (spacingDisabled(members, source)) return;
 		for (i in 0...members.length - 1) {
 			final a: OrderedMember = members[i];
 			final b: OrderedMember = members[i + 1];
-			final want: Null<Int> = spacingViolation(a, b, source);
+			final want: Null<Int> = spacingViolation(a, b, source, separateInline);
 			if (want == null) continue;
 			final gap: String = source.substring(a.span.to, b.span.from);
 			final indent: String = gap.substring(gap.lastIndexOf('\n') + 1);
@@ -76,7 +77,8 @@ final class MemberSpacing {
 	 * The first member separated from its predecessor by the wrong number of blank
 	 * lines, or null. The per-pair policy lives in `spacingViolation` (shared with
 	 * the fixer's spacing-only fallback): different-rank neighbours want exactly one
-	 * blank line; same-rank FIELD neighbours want none (a tight group), unless either
+	 * blank line; same-rank FIELD neighbours want none (a tight group) - save, under the opt-in `separateInlineSubgroup` option,
+	 * exactly one at the boundary between the rank's `inline` subgroup and the rest of it (`inlineSubgroupBoundary`) - unless either
 	 * slot leads with a comment - the writer itself keeps a blank line after a
 	 * doc-commented member, and a blank before a doc comment is never stripped or
 	 * demanded. Same-rank methods are left alone - they are conventionally
@@ -86,15 +88,18 @@ final class MemberSpacing {
 	 * finding could never converge. Skips pairs sharing a line, crossing an `#if`
 	 * boundary, or whose gap holds directive / stray text.
 	 */
-	public static function firstSpacingIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
+	public static function firstSpacingIssue(members: Array<OrderedMember>, source: String, separateInline: Bool): Null<LayoutIssue> {
 		if (spacingDisabled(members, source)) return null;
 		for (i in 0...members.length - 1) {
-			final want: Null<Int> = spacingViolation(members[i], members[i + 1], source);
+			final want: Null<Int> = spacingViolation(members[i], members[i + 1], source, separateInline);
 			if (want != null) return {
 				member: members[i + 1],
-				message: want == 1
-					? 'rank groups are not separated by a blank line'
-					: 'members of one rank group are separated by a blank line'
+				message: if (want == 0)
+					'members of one rank group are separated by a blank line'
+				else if (members[i].rank != members[i + 1].rank)
+					'rank groups are not separated by a blank line'
+				else
+					'the inline members of a rank group are not separated from the rest of it by a blank line'
 			};
 		}
 		return null;
@@ -111,12 +116,17 @@ final class MemberSpacing {
 	/**
 	 * The separator between two consecutive reordered members: a blank line between rank
 	 * groups, before a method, or before a comment-led slot (a member whose leading doc the
-	 * writer keeps blank-separated); a single newline between two same-rank plain fields. Note
+	 * writer keeps blank-separated); a single newline between two same-rank plain fields, save across
+	 * the inline-subgroup boundary when `separateInline` is on (`inlineSubgroupBoundary`, the same
+	 * predicate `spacingViolation` reads, so the rebuild lands exactly what the check demands). Note
 	 * this drives the raw joins INSIDE a rebuilt `#if` region, where the writer preserves them
 	 * verbatim; outside `#if`, the writer re-inserts blank-after-doc during canonicalization.
 	 */
-	public static function separatorBetween(prev: OrderedMember, next: OrderedMember, source: String): String {
-		return prev.rank != next.rank || !next.isField || slotStartsWithComment(next, source) ? GROUP_SEPARATOR : '\n';
+	public static function separatorBetween(prev: OrderedMember, next: OrderedMember, source: String, separateInline: Bool): String {
+		return prev.rank != next.rank || !next.isField || slotStartsWithComment(next, source)
+			|| inlineSubgroupBoundary(prev, next, separateInline)
+			? GROUP_SEPARATOR
+			: '\n';
 	}
 
 	/**
@@ -129,10 +139,13 @@ final class MemberSpacing {
 	}
 
 	/** Join `sorted` member slots for the reordered region, blank-separating rank groups and members that lead with a comment. */
-	public static function joinMembers(sorted: Array<OrderedMember>, source: String): String {
+	public static function joinMembers(sorted: Array<OrderedMember>, source: String, separateInline: Bool): String {
 		final parts: Array<String> = [source.substring(sorted[0].span.from, sorted[0].span.to)];
 		for (i in 1...sorted.length)
-			parts.push(separatorBetween(sorted[i - 1], sorted[i], source) + source.substring(sorted[i].span.from, sorted[i].span.to));
+			parts.push(
+				separatorBetween(sorted[i - 1], sorted[i], source, separateInline)
+				+ source.substring(sorted[i].span.from, sorted[i].span.to)
+			);
 		return parts.join('');
 	}
 
@@ -160,21 +173,41 @@ final class MemberSpacing {
 	}
 
 	/**
+	 * Whether the same-rank FIELD pair `a` / `b` straddles the boundary between the rank's
+	 * `inline` subgroup and the rest of it - the one gap the opt-in `separateInlineSubgroup`
+	 * option (`separateInline`) wants exactly one blank line in, where a tight field group
+	 * otherwise wants none. Only an UNCONDITIONAL pair qualifies: the inline-leads sub-order is
+	 * a key of plain members alone (`MemberOrder.subRank`), so inside an `#if` block inline and
+	 * non-inline members interleave freely and a boundary there would be noise. The caller has
+	 * already established the shared rank and that `b` is a field; `a` shares that rank, so it
+	 * is a field too. Spacing only: no ORDER question reads it, so the rank and the sort stay
+	 * the config-independent answer the report and the fix share.
+	 */
+	private static inline function inlineSubgroupBoundary(a: OrderedMember, b: OrderedMember, separateInline: Bool): Bool {
+		return separateInline && a.condition == null && b.condition == null && a.isInline != b.isInline;
+	}
+
+	/**
 	 * The blank-line count the spacing rule demands between the adjacent slots `a`
 	 * and `b` when the pair currently violates it, or null when the pair is exempt
-	 * (different `#if` condition, same-line, directive / stray text in the gap,
-	 * same-rank non-field or comment-led pair) or already correct. The single source
+	 * (different `#if` condition, same-line, directive / stray text in the gap, same-rank non-field or comment-led pair) or already
+	 * correct. `separateInline` is the `separateInlineSubgroup` option: on, a same-rank field pair across the inline-subgroup
+	 * boundary wants exactly one blank line instead of none; a comment-led pair keeps its exemption either way. The single source
 	 * of the per-pair spacing policy - shared by the check (`firstSpacingIssue`) and
 	 * the fixer's spacing-only fallback (`emitSpacingOnly`) so the two cannot drift.
 	 */
-	private static function spacingViolation(a: OrderedMember, b: OrderedMember, source: String): Null<Int> {
+	private static function spacingViolation(a: OrderedMember, b: OrderedMember, source: String, separateInline: Bool): Null<Int> {
 		if (a.condition != b.condition) return null;
 		final gap: String = source.substring(a.span.to, b.span.from);
 		if (gap.indexOf('\n') < 0 || gap.trim() != '') return null;
 		final blanks: Int = blankLineCount(gap);
 		return if (a.rank != b.rank)
 			blanks != 1 ? 1 : null
-		else if (b.isField && blanks != 0 && !slotStartsWithComment(a, source) && !slotStartsWithComment(b, source))
+		else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))
+			null
+		else if (inlineSubgroupBoundary(a, b, separateInline))
+			blanks != 1 ? 1 : null
+		else if (blanks != 0)
 			0
 		else
 			null;
