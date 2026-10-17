@@ -22502,8 +22502,8 @@
 		{
 			"name": "M-OPERAND-NEW-CUT",
 			"type": "anyparse.check.OperandBinder",
-			"method": "tierOf",
-			"find": "return at == null ? Unknown : writtenTier(operand.name, at.from);",
+			"method": "constructionTier",
+			"find": "return at == null ? Unknown : writtenTier(node.name, at.from);",
 			"replace": "return Unknown;",
 			"note": "a construction is no longer of the type it writes, so its operator and its toString go unproven"
 		},

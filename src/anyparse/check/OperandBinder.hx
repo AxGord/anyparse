@@ -4,6 +4,7 @@ import anyparse.query.CallGraphNames;
 import anyparse.query.CasePatterns;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.SourceText;
@@ -17,7 +18,10 @@ using Lambda;
 
 /**
  * What the declared type of an operand binds to, for ONE file — every type bound in the scope of the
- * file that WRITES it, never by its simple name:
+ * file that WRITES it, never by its simple name. This is not a typer of its own: the shapes are walked
+ * by THE structural walk every typer shares (`NominalTypes.typeWalk`), and this class is that walk's
+ * BINDING host (`HOST`) — the resolution model whose currency is what a written type binds to
+ * (`TypeNameBinding.Tier`), beside the index's written sources and the call graph's keyed ones:
  *
  *  - a read of a binding this file declares (a local, a parameter, a field, a `$name` fragment):
  *    its annotation, here;
@@ -34,6 +38,27 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class OperandBinder {
+
+	/** The binding resolution of the shared walk: each arc answered in this file's scope, an arc it does not know null. */
+	private static final HOST: TypingHost<Tier, OperandBinder> = {
+		peel: (node, _) -> node,
+		isAccess: (kind, b) -> kind == b._shape.fieldAccessKind,
+		literal: null,
+		self: (_, _) -> null,
+		binding: (ident, b) -> b.hitOf(ident)?.bindingSpan?.from,
+		bound: (from, b) -> b._declared.writtenHeadTier(from, b._wrappers, b._builtins),
+		initializer: (_, _, _) -> null,
+		loopElement: (_, _) -> null,
+		unbound: (_, _) -> null,
+		access: (node, b) -> b.accessTier(node),
+		element: null,
+		call: (node, b) -> b.callTier(node),
+		construction: (node, b) -> b.constructionTier(node),
+		reading: b -> b._reading
+	};
+
+	/** The binding offsets whose unannotated type the walk is reading right now (`TypingHost.reading`). */
+	private final _reading: Array<Int> = [];
 
 	private final _file: String;
 	private final _source: String;
@@ -78,26 +103,31 @@ final class OperandBinder {
 		return _declared.headTier(written, at, _wrappers, _builtins);
 	}
 
-	/** What `operand`'s declared type binds to. */
+	/** What `operand`'s declared type binds to: the shared walk over this file's binding resolution (`HOST`). */
 	public function tierOf(operand: QueryNode): Tier {
-		final fieldKind: Null<String> = _shape.fieldAccessKind;
-		final member: (QueryNode, Bool) -> Tier = (access, call) -> {
-			final name: Null<String> = access.name;
-			return name == null || access.kind != fieldKind || access.children.length != 1
-				? Unknown
-				: memberTier(access.children[0], name, call);
-		};
-		if (operand.kind == _shape.callKind && operand.children.length > 0) {
-			final callee: QueryNode = operand.children[0];
-			return _identKinds.contains(callee.kind) ? localCallTier(callee) : member(callee, true);
-		}
-		if (operand.kind == fieldKind) return member(operand, false);
-		if (operand.kind == _shape.newExprKind) {
-			final at: Null<Span> = operand.span;
-			return at == null ? Unknown : writtenTier(operand.name, at.from);
-		}
-		final from: Null<Int> = hitOf(operand)?.bindingSpan?.from;
-		return from == null ? Unknown : _declared.writtenHeadTier(from, _wrappers, _builtins);
+		return NominalTypes.typeWalk(operand, _shape, HOST, this) ?? Unknown;
+	}
+
+	/** `recv.m` read: the member as the receiver's declarations declare it. */
+	private function accessTier(access: QueryNode): Tier {
+		final name: Null<String> = access.name;
+		return name == null || access.children.length != 1 ? Unknown : memberTier(access.children[0], name, false);
+	}
+
+	/** A call: to a function this file declares by its bare name, or to `recv.m(…)` as the receiver's declarations declare `m`. */
+	private function callTier(call: QueryNode): Tier {
+		final callee: QueryNode = call.children[0];
+		if (_identKinds.contains(callee.kind)) return localCallTier(callee);
+		final name: Null<String> = callee.name;
+		return name == null || callee.kind != _shape.fieldAccessKind || callee.children.length != 1
+			? Unknown
+			: memberTier(callee.children[0], name, true);
+	}
+
+	/** A construction `new T(…)`: the type it writes, bound here. */
+	private function constructionTier(node: QueryNode): Tier {
+		final at: Null<Span> = node.span;
+		return at == null ? Unknown : writtenTier(node.name, at.from);
 	}
 
 	/**
