@@ -156,6 +156,23 @@ class MemberOrderWriterGapTest extends Test {
 	}
 
 	/**
+	 * The writer's doc blank is a MINIMUM: it fills an empty gap and keeps a fuller one as the source has it (here up
+	 * to `maxAnywhereInFile: 2`), so two blank lines before a doc-commented method are no finding - the check's own
+	 * rule leaves same-rank methods alone, and the writer asks for nothing more. Killed by
+	 * `M-MO-WRITER-MINIMUM-AS-EXACT`.
+	 */
+	@:pin('control')
+	@:killer('M-MO-WRITER-MINIMUM-AS-EXACT')
+	public function testTheWritersDocBlankIsAMinimum(): Void {
+		final config: String = '{"emptyLines": {"maxAnywhereInFile": 2}}';
+		final src: String = 'class C {\n\tfunction a():Void {}\n\n\n\t/** B. */\n\tfunction b():Void {}\n}\n';
+		Assert.equals(src, formatted(src, config), 'the writer keeps both blanks');
+		Assert.equals(0, violations(fileUnder(config), src).length);
+		final glued: String = src.replace('{}\n\n\n', '{}\n');
+		Assert.equals(1, violations(fileUnder(config), glued).length, 'an empty gap is still reported');
+	}
+
+	/**
 	 * `beforeDocCommentEmptyLines: none` removes the blank before a doc-commented member even where a rank boundary
 	 * or an after-doc blank would put one: the check demands none there and accepts the writer's output. Killed by
 	 * `M-GAP-DOC-PRECEDENCE`.

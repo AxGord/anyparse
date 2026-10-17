@@ -47,9 +47,14 @@ private enum abstract GapRule(Int) {
 
 }
 
-/** The blank lines one member gap wants and the rule that decided it (`MemberSpacing.wantedBlanks`). */
+/**
+ * The blank lines one member gap wants and the rule that decided it (`MemberSpacing.wantedBlanks`). `atLeast` marks a
+ * MINIMUM - the writer's own answer, which fills an empty gap with `count` blank lines and keeps a fuller one as the
+ * source has it - where the check's own rules ask for exactly `count`.
+ */
 private typedef GapWant = {
 	final count: Int;
+	final atLeast: Bool;
 	final rule: GapRule;
 }
 
@@ -241,7 +246,8 @@ final class MemberSpacing {
 	 * exempt. Otherwise the check's own rule (`ownWant`) answers. Where that rule wants a tight gap, the writer's
 	 * multi-line rule is asked as well: a member it renders over several lines is set off by `aroundMultilineFields`
 	 * blank lines (`multilineBlanks`), measured on the member's Doc (`multiline`) only when the answer depends on it -
-	 * and a slot the measure cannot read leaves the pair to the source rather than guessing. The multi-line rule is
+	 * and a slot the measure cannot read leaves the pair to the source rather than guessing. A writer answer is a minimum
+	 * (`GapWant.atLeast`): the writer keeps a fuller gap as the source has it, so only an empty one is reported. The multi-line rule is
 	 * not asked where the check's own rule already wants a blank or has no opinion: it only ever adds blanks there.
 	 */
 	private static function wantedBlanks(a: OrderedMember, b: OrderedMember, source: String, spacing: SpacingPolicy): Null<GapWant> {
@@ -249,15 +255,22 @@ final class MemberSpacing {
 		final own: Null<GapWant> = ownWant(a, b, source, spacing.separateInline);
 		if (writer == null) return own;
 		final forced: Null<Int> = writer.docBlanks(a.leadComments, b.leadComments);
-		final base: Null<GapWant> = forced == null || (own != null && own.count == forced) ? own : { count: forced, rule: DocComment };
+		final base: Null<GapWant> = if (forced == null)
+			own
+		else if (forced == 0)
+			own != null && own.count == 0 ? own : { count: 0, atLeast: false, rule: DocComment }
+		else if (own != null && own.count >= forced)
+			own
+		else
+			{ count: forced, atLeast: true, rule: DocComment };
 		if (base == null || base.count != 0) return base;
 		final lifted: Null<Int> = writer.multilineBlanks(a.leadComments, b.leadComments);
 		if (lifted == null || lifted == 0) return base;
 		final multiA: Null<Bool> = writer.multiline(source.substring(a.span.from, a.span.to));
-		if (multiA == true) return { count: lifted, rule: Multiline };
+		if (multiA == true) return { count: lifted, atLeast: true, rule: Multiline };
 		final multiB: Null<Bool> = writer.multiline(source.substring(b.span.from, b.span.to));
 		return if (multiB == true)
-			{ count: lifted, rule: Multiline }
+			{ count: lifted, atLeast: true, rule: Multiline }
 		else if (multiA == null || multiB == null)
 			null
 		else
@@ -273,13 +286,13 @@ final class MemberSpacing {
 	 */
 	private static function ownWant(a: OrderedMember, b: OrderedMember, source: String, separateInline: Bool): Null<GapWant> {
 		return if (a.rank != b.rank)
-			{ count: 1, rule: RankBoundary }
+			{ count: 1, atLeast: false, rule: RankBoundary }
 		else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))
 			null
 		else if (inlineSubgroupBoundary(a, b, separateInline))
-			{ count: 1, rule: InlineBoundary }
+			{ count: 1, atLeast: false, rule: InlineBoundary }
 		else
-			{ count: 0, rule: TightGroup };
+			{ count: 0, atLeast: false, rule: TightGroup };
 	}
 
 	/** The finding message for a gap that does not hold the blank lines `want` asks for. */
@@ -311,7 +324,8 @@ final class MemberSpacing {
 		final gap: String = source.substring(a.span.to, b.span.from);
 		if (gap.indexOf('\n') < 0 || gap.trim() != '') return null;
 		final want: Null<GapWant> = wantedBlanks(a, b, source, spacing);
-		return want != null && blankLineCount(gap) != want.count ? want : null;
+		final blanks: Int = blankLineCount(gap);
+		return want != null && (want.atLeast ? blanks < want.count : blanks != want.count) ? want : null;
 	}
 
 	/**

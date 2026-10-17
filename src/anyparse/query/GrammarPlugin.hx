@@ -3709,8 +3709,9 @@ typedef LayoutMetrics = {
  * The member-gap half of a writer's blank-line policy under one format config (`GrammarPlugin.memberGapPolicy`):
  * the blank lines the writer FORCES between two adjacent members of a type body, whatever the source holds there.
  * A check that demands blank lines between members asks this instead of keeping a policy of its own, so it never
- * demands a gap `fmt` would rewrite. Every answer is null when the writer leaves the gap to the source - or when the
- * policy cannot tell, which a caller reads the same way.
+ * demands a gap `fmt` would rewrite. A positive answer is a MINIMUM - the writer fills an EMPTY gap with that
+ * many blank lines and keeps a non-empty one as the source has it - and 0 is exact; every answer is null when
+ * the writer leaves the gap to the source, or when the policy cannot tell, which a caller reads the same way.
  *
  * `containerKinds` are the projected container kinds whose member list the writer runs this policy on.
  * `docBlanks(prev, next)` is what the doc-comment rule forces, given each member's leading comments in source order.

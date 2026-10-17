@@ -1586,6 +1586,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.MemberOrderWriterGapTest#testTheBeforeDocNonePolicyRemovesTheBlankAndWins :: control :: M-GAP-DOC-PRECEDENCE',
 			'unit.check.MemberOrderWriterGapTest#testTheWritersBlankAroundAMultiLineFieldIsNotReported :: control :: '
 				+ 'M-MO-WRITER-REPORT-UNREAD,M-MO-WRITER-MULTILINE-IGNORED',
+			'unit.check.MemberOrderWriterGapTest#testTheWritersDocBlankIsAMinimum :: control :: M-MO-WRITER-MINIMUM-AS-EXACT',
 			'unit.check.MemberSpacingPolicyTest#testAnUnmeasurableSlotLeavesThePairToTheSource :: control :: '
 				+ 'M-MO-WRITER-UNMEASURABLE-GUESS',
 			'unit.check.MemberSpacingPolicyTest#testTheWriterPolicyIsReadOnlyOnTheKindsItCovers :: control :: '
@@ -7348,6 +7349,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-MO-WRITER-UNMEASURABLE-GUESS',
 			'M-MO-WRITER-CONDITIONAL',
 			'M-MO-WRITER-CONTAINER-KIND',
+			'M-MO-WRITER-MINIMUM-AS-EXACT',
 			'M-GAP-DOC-PRECEDENCE',
 			'M-GAP-MULTILINE-AFTER-NOBLANK',
 			'M-GAP-DOCLED-ANY-COMMENT',

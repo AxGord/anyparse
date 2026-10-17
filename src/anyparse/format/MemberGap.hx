@@ -103,8 +103,9 @@ final class MemberGap {
 	 * either member renders over several lines (`multiline`), `aroundMultiline` the `aroundMultilineFields` knob. The
 	 * composition of the writer's two steps: the doc-comment rule writes its blank (`Blank`) or forces zero (`NoBlank`),
 	 * and only then does the multi-line rule top an EMPTY gap up to the knob - so it lifts a forced zero too, while a
-	 * gap that already holds the doc blank keeps that one. `StripsSource` answers null: whether the gap ends up blank
-	 * depends on rules outside this policy.
+	 * gap that already holds the doc blank keeps that one. A positive answer is a MINIMUM: the writer fills an EMPTY
+	 * gap with that many blank lines and keeps a non-empty one as the source has it (up to `maxAnywhereInFile`); 0
+	 * is exact. `StripsSource` answers null: whether the gap ends up blank depends on rules outside this policy.
 	 */
 	public static function forcedBlanks(doc: DocGapVerdict, multilineNeighbour: Bool, aroundMultiline: Int): Null<Int> {
 		return if (doc == Blank)

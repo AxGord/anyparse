@@ -23066,8 +23066,8 @@
 			"name": "M-MO-INLINE-BOUNDARY-AT-LEAST-ONE",
 			"type": "anyparse.check.MemberSpacing",
 			"method": "spacingViolation",
-			"find": "return want != null && blankLineCount(gap) != want.count ? want : null;",
-			"replace": "return want != null && (want.rule == InlineBoundary ? blankLineCount(gap) == 0 : blankLineCount(gap) != want.count) ? want : null;",
+			"find": "want.atLeast ? blanks < want.count : blanks != want.count",
+			"replace": "want.atLeast || want.rule == InlineBoundary ? blanks < want.count : blanks != want.count",
 			"note": "the boundary wants AT LEAST one blank instead of exactly one, so two blank lines there are left standing"
 		},
 		{
@@ -23141,6 +23141,14 @@
 			"find": "return writer == null || writer.containerKinds.contains(containerKind)",
 			"replace": "return true",
 			"note": "the writer's member-gap policy is applied to a container kind the writer does not run it on"
+		},
+		{
+			"name": "M-MO-WRITER-MINIMUM-AS-EXACT",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "spacingViolation",
+			"find": "want.atLeast ? blanks < want.count : blanks != want.count",
+			"replace": "blanks != want.count",
+			"note": "the writer's doc / multi-line blank is read as an EXACT count, though the writer keeps a fuller gap as the source has it, so two blanks before a doc-commented method are reported against a writer that writes them"
 		},
 		{
 			"name": "M-GAP-DOC-PRECEDENCE",
