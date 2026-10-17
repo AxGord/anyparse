@@ -1,6 +1,7 @@
 package anyparse.check;
 
 using StringTools;
+using Lambda;
 
 /**
  * A type in the facts type grammar (`TypedFactsProbe`), read into its parts: the one reader of that spelling, behind
@@ -170,6 +171,20 @@ final class FactsTypeTree {
 
 	private function peek(): Int {
 		return _pos < _text.length ? _text.fastCodeAt(_pos) : -1;
+	}
+
+	/**
+	 * Whether `t` holds no type parameter and no unknown anywhere in it: a type the compiler fixed in full, which no
+	 * argument or later use of a value can bind — what a declaration typing a value with it gives that value at once.
+	 */
+	public static function isClosed(t: FactsType): Bool {
+		return switch t {
+			case Unknown, Parameter(_): false;
+			case Named(_, args): args.foreach(isClosed);
+			case Function(args, result):
+				args.foreach(a -> isClosed(a.type)) && isClosed(result);
+			case Structure(fields): fields.foreach(f -> isClosed(f.type));
+		};
 	}
 
 }

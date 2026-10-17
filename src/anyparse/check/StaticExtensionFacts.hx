@@ -24,8 +24,6 @@ final class StaticExtensionFacts {
 	/** A type's own static extensions: `x.method()` resolves through them BEFORE any `using` of the file. */
 	private static inline final USING_META: String = ':using';
 
-	/** A macro function's field kind: its extension form is handed the receiver's expression, not its value. */
-	private static inline final MACRO_KIND: String = 'macro';
 
 	/** The static access the facts record for `Module.method(…)`. */
 	private static inline final STATIC_ACCESS: String = 'FStatic';
@@ -175,15 +173,16 @@ final class StaticExtensionFacts {
 
 	/**
 	 * The first parameter's type of the static `method` of `owner`, when it is one plain, required parameter every
-	 * configuration typed alike, of a function that is neither a macro nor overloaded; null otherwise.
+	 * configuration typed alike, of a function that is neither a macro (whose extension form is handed the receiver's
+	 * expression, not its value) nor overloaded; null otherwise.
 	 */
 	private static function firstParam(facts: CompilerFacts, owner: String, method: String): Null<String> {
 		final declared: Array<FieldDeclFact> = (facts.type(owner)?.fields ?? []).filter(f -> f.name == method);
 		if (declared.length != 1) return null;
 		final field: FieldDeclFact = declared[0];
 		if (
-			!field.isStatic || field.kinds.contains(MACRO_KIND) || field.meta.contains(NO_USING_META) || field.overloads.exists(n -> n > 0)
-			|| field.types.length != 1
+			!field.isStatic || field.kinds.contains(CompilerFacts.MACRO_FIELD_KIND) || field.meta.contains(NO_USING_META)
+			|| field.overloads.exists(n -> n > 0) || field.types.length != 1
 		)
 			return null;
 		return firstParamOf(field.type);

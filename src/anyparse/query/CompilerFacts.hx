@@ -487,6 +487,15 @@ typedef TypeFact = {
 @:nullSafety(Strict)
 final class CompilerFacts {
 
+	/** The kind the facts give an enum (`TypeFact.kind`). */
+	public static inline final ENUM_TYPE_KIND: String = 'enum';
+
+	/**
+	 * A kind the facts give a macro function's field (`FieldDeclFact.kinds`): its body runs while compiling, in no program,
+	 * and a call of it is the code it returns, not a value.
+	 */
+	public static inline final MACRO_FIELD_KIND: String = 'macro';
+
 	/** The `_madeFrom` prefix of a `_nodeCache` id. */
 	private static inline final NODE_ENTRY: String = 'node:';
 

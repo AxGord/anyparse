@@ -53,7 +53,7 @@ final class FactsTypeOracle implements TypeOracle {
 	private static inline final AUTO_BUILD_META: String = ':autoBuild';
 
 	/** The kinds the facts give a type no operator overload can be declared on (`CompilerFacts.TypeFact`). */
-	private static final PLAIN_KINDS: Array<String> = ['class', 'interface', 'enum'];
+	private static final PLAIN_KINDS: Array<String> = ['class', 'interface', CompilerFacts.ENUM_TYPE_KIND];
 
 	/** The table this oracle reads. */
 	public final facts: CompilerFacts;
@@ -266,6 +266,54 @@ final class FactsTypeOracle implements TypeOracle {
 	public function readsAsCompiled(file: String): Bool {
 		final site: Null<FactsSite> = facts.compiled(file) ? siteOf(file) : null;
 		return site != null && site.facts == facts && site.text == site.current;
+	}
+
+	/**
+	 * Whether every call fact at the range `call` of `file` — at least one — dispatches to one field every configuration
+	 * typed alike, neither a macro nor overloaded, declared with a closed result (`FactsTypeTree.isClosed`): the call's type
+	 * is then that result whatever its arguments are. Asked by range, so only of the text the compile read (`readsAsCompiled`).
+	 */
+	public function callResultClosed(file: String, call: Span): Bool {
+		function closedResult(target: Null<String>): Bool {
+			final dot: Int = target?.lastIndexOf('.') ?? -1;
+			if (target == null || dot <= 0) return false;
+			final name: String = target.substr(dot + 1);
+			final declared: Array<FieldDeclFact> = (facts.type(target.substr(0, dot))?.fields ?? []).filter(f -> f.name == name);
+			if (declared.length != 1) return false;
+			final field: FieldDeclFact = declared[0];
+			if (field.types.length != 1 || field.kinds.contains(CompilerFacts.MACRO_FIELD_KIND) || field.overloads.exists(n -> n > 0))
+				return false;
+			return switch FactsTypeTree.read(field.type) {
+				case Function(_, result): FactsTypeTree.isClosed(result);
+				case _: false;
+			};
+		}
+		final calls: Array<CallFact> = readsAsCompiled(file) ? facts.callsAt(file, call) : [];
+		return calls.length > 0 && calls.foreach(c -> closedResult(c.target));
+	}
+
+	/**
+	 * Whether at least one enum the facts hold declares a constructor `callee` taking an argument `index`, and every such
+	 * constructor types that argument closed (`FactsTypeTree.isClosed`): the name alone does not say which enum a pattern
+	 * is of, though one taking fewer arguments it cannot be.
+	 */
+	public function constructorArgumentClosed(callee: String, index: Int): Bool {
+		var seen: Bool = false;
+		for (id in facts.typeIds()) {
+			final t: Null<TypeFact> = facts.type(id);
+			if (t != null && t.kind == CompilerFacts.ENUM_TYPE_KIND) for (c in t.constructors) if (c.name == callee) {
+				switch FactsTypeTree.read(c.type) {
+					// one taking no argument, or fewer, is no constructor a pattern with this argument can be of
+					case Named(_, _):
+					case Function(args, _) if (index >= args.length):
+					case Function(args, _) if (FactsTypeTree.isClosed(args[index].type)):
+						seen = true;
+					case _:
+						return false;
+				}
+			}
+		}
+		return seen;
 	}
 
 	/**

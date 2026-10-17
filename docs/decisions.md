@@ -3821,3 +3821,20 @@ decided the question; it may not become a record of runs.
   (`MemberKinds.FIELD_MEMBER_KINDS`) and reads the field's own text, which spells its declared type (Haxe 4.3.7 requires
   a structure function field's return type: `Explicit type required for field f`). A file that does not parse or a
   member truly not found still answers null and keeps every type in reach — branch `feat/infra-N24`
+- N24 (b) — `prefer-static-extension` asked the compiler facts only for a receiver whose declaration WRITES its type, so
+  109 anyparse sites (with the oracle) stayed report-only, 72 of them identifiers bound with no written type: 45
+  constructor-pattern captures (`case Line(flat)`), 22 loop binders, 5 lambda parameters. The gate exists because an
+  inferred binding may be typed by the very call being rewritten: Haxe 4.3.7 types `x.trim()` on a monomorph as a
+  structure with a `trim` field, so `var xs = []; for (x in xs) StringTools.trim(x)` compiles and `x.trim()` does not
+  (`String should be { trim : () -> Unknown<0> }`); a capture of a generic enum's `Box(v:T)` over `var g = Box(null)` is
+  the same. → `FactsBindings.fixedAt`, a POSITIVE list of bindings the compiler typed when it bound them: a capture of a
+  constructor argument every same-named constructor the facts hold types closed (`FactsTypeTree.isClosed`: no type
+  parameter, no unknown; `FactsTypeOracle.constructorArgumentClosed`; one taking no argument or fewer is skipped — a
+  pattern with that argument cannot be of it: `SiteFamily.Text` beside `Doc.Text(s)`), and a single-binder loop's binder over a call
+  every call fact at its range dispatches to one non-macro, non-overloaded field with a closed result
+  (`FactsTypeOracle.callResultClosed`). Facts are read through the `FactsTypeOracle` door (owned-types) and only on the
+  text the compile read. Still refused, by design: a loop over a local or a generic call, a lambda's parameter (typed
+  by the callee's expected function type, which may hold a monomorph), a whole-pattern capture, and a constructor name
+  a generic enum's constructor shares. The facts' `macro` / `enum` kind spellings moved to `CompilerFacts`
+  (`MACRO_FIELD_KIND`, `ENUM_TYPE_KIND`; the private copies in `StaticExtensionFacts` and `CallGraphFacts` deleted) —
+  branch `feat/infra-N24`

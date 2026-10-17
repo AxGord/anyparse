@@ -2037,6 +2037,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferStaticExtensionCheckTest#testMessageQuotesLiteralWhitespaceExactlyAsTheFixWritesIt :: control :: '
 				+ 'M-RENDER-SPAN-TOKENS',
 			'unit.check.PreferStaticExtensionCheckTest#testUsingInAnotherBranchDoesNotCoverTheCall :: control :: M-COND-BRANCH-SPAN-SHARED',
+			'unit.check.PreferStaticExtensionFactsTest#testABinderALaterCallMayHaveTypedIsNotRewritten :: control :: '
+				+ 'M-FACTS-CLOSED-PARAMETER,M-FACTS-FIXED-ANY-BINDER,M-FACTS-FIXED-LOOP-ANY,M-FACTS-CTOR-EVERY',
+			'unit.check.PreferStaticExtensionFactsTest#testABinderTheCompilerTypedWhenItBoundItIsRewritten :: control :: '
+				+ 'M-FACTS-FIXED-CAPTURE,M-FACTS-FIXED-LOOP,M-FACTS-CTOR-ARITY',
 			'unit.check.PreferStaticExtensionFactsTest#testAConditionalUsingProvidingTheMethodDropsTheSite :: control :: M-PSE-CHANNEL-REGION-USING',
 			'unit.check.PreferStaticExtensionFactsTest#testADynamicReceiverIsDropped :: control :: M-PSE-FACTS-DYNAMIC',
 			'unit.check.PreferStaticExtensionFactsTest#testAForwardingAbstractIsNoMemberHost :: control :: M-PSE-FACTS-HOSTS',
@@ -2059,6 +2063,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferStaticExtensionFactsTest#testTheFactsWeighEveryTypeAUsedModuleDeclares :: control :: M-PSE-FACTS-USING-MODULE-WIDE',
 			'unit.check.PreferStaticExtensionFactsTest#testTheFactsWeighTheConfiguredModulesNeighbours :: control :: M-PSE-FACTS-USING-SELF-MODULE',
 			'unit.check.PreferStaticExtensionFactsTest#testTheFirstParameterOfAFactsSignature :: control :: M-PSE-FIRST-PARAM',
+			'unit.check.PreferStaticExtensionFactsTest#testTheRewrittenBindersPrintWhatTheyPrinted :: guard :: ',
 			'unit.check.PreferStaticExtensionFactsTest#testTheRewrittenProgramPrintsWhatItPrinted :: guard :: ',
 			'unit.check.PreferSwitchCheckTest#testBareBranchBodiesGainATerminator :: control :: M-SWITCH-BARE-BODY-VERBATIM',
 			'unit.check.PreferSwitchCheckTest#testDuplicateValueAcrossSpellingsNotFlagged :: control :: M-SWITCH-VALUES-NOT-DISTINCT',
@@ -5820,6 +5825,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-ALIKE-FOLD',
 			'M-FACTS-ALIKE-TOSTRING',
 			'M-FACTS-META-UNION',
+			'M-FACTS-FIXED-CAPTURE',
+			'M-FACTS-FIXED-LOOP',
+			'M-FACTS-FIXED-LOOP-ANY',
+			'M-FACTS-CTOR-EVERY',
+			'M-FACTS-CTOR-ARITY',
+			'M-FACTS-CLOSED-PARAMETER',
+			'M-FACTS-FIXED-ANY-BINDER',
 			'M-PSE-FACTS-INFERRED',
 			'M-PSE-FACTS-OFF',
 			'M-PSE-FACTS-SHADOW',

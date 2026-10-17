@@ -58,8 +58,6 @@ final class CallGraphFacts {
 	/** The fact kind of a method's body (`TypedFactsProbe`): the one kind a build macro's own method is taken in as. */
 	private static inline final METHOD_KIND: String = 'method';
 
-	/** The field kind of a macro function (`TypeFact.fields`): its body runs while compiling, in no program. */
-	private static inline final MACRO_FIELD: String = 'macro';
 
 	/** The kind of a typed interface (`TypeFact.kind`). */
 	private static inline final INTERFACE_KIND: String = 'interface';
@@ -744,7 +742,9 @@ final class CallGraphFacts {
 			final field: String = SourceText.lastSegment(nodeId);
 			final kinds: Array<String> = typed.fields.find(f -> f.name == field)?.kinds ?? [];
 			// a macro function in every build runs in no program; one a build may replace is a value there
-			if (n == null || n.kind != METHOD_KIND || n.overloadIndex > 0 || (kinds.length > 0 && kinds.foreach(k -> k == MACRO_FIELD)))
+			if (n == null || n.kind != METHOD_KIND || n.overloadIndex > 0 || (
+				kinds.length > 0 && kinds.foreach(k -> k == CompilerFacts.MACRO_FIELD_KIND)
+			))
 				continue;
 			final name: String = view.graphMember(id, field);
 			final graphId: String = '$type.$name';
