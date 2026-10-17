@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.NegatedCondition.InversionSeams;
 import anyparse.check.NegatedCondition.InversionSite;
@@ -112,12 +113,19 @@ import anyparse.runtime.Span;
  * direction.
  */
 @:nullSafety(Strict)
-final class PreferTernaryExpression implements Check {
+final class PreferTernaryExpression implements Check implements ConfigAware {
 
 	/** An `if`-expression has exactly [condition, then-branch, else-branch] children -- its `else` is mandatory. */
 	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
 
+	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'prefer-ternary-expression';
@@ -128,7 +136,7 @@ final class PreferTernaryExpression implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin, files);
+		final seams: Null<Seams> = readSeams(plugin, files, _resolveConfig);
 		if (seams == null) return [];
 		final resolveIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return [
@@ -147,7 +155,7 @@ final class PreferTernaryExpression implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final file: String = violations.length == 0 ? '' : violations[0].file;
-		final seams: Null<Seams> = readSeams(plugin, [{ file: file, source: source }], index);
+		final seams: Null<Seams> = readSeams(plugin, [{ file: file, source: source }], _resolveConfig, index);
 		if (seams == null) return [];
 		final resolveIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([{ file: '', source: source }], plugin, index);
 		final byKey: Map<String, Match> = [];
@@ -191,7 +199,7 @@ final class PreferTernaryExpression implements Check {
 	 * `files` / `report` scope the negation read's operator table (`NegatedCondition.readSeams`).
 	 */
 	private static function readSeams(
-		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, ?report: SymbolIndex
+		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, config: Null<(String) -> LintConfig>, ?report: SymbolIndex
 	): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final ifExprKinds: Null<Array<String>> = shape.ifExpressionKinds;
@@ -217,7 +225,7 @@ final class PreferTernaryExpression implements Check {
 			delimitedAllKinds: (shape.delimitedAllChildKinds ?? []).concat(parenKind == null ? [] : [parenKind]),
 			delimitedTailKinds: shape.delimitedTailChildKinds ?? [],
 			opaqueKinds: shape.opaqueKinds ?? [],
-			negation: NegatedCondition.readSeams(plugin, files, report),
+			negation: NegatedCondition.readSeams(plugin, files, config, report),
 			shape: shape
 		};
 	}
@@ -276,15 +284,17 @@ final class PreferTernaryExpression implements Check {
 		final condSpan: Null<Span> = condition.span;
 		final thenSpan: Null<Span> = thenBranch.span;
 		final elseSpan: Null<Span> = elseBranch.span;
-		if (span == null || condSpan == null || thenSpan == null || elseSpan == null) return null;
-		if (IfExpressionChain.droppedComment(span, [condSpan, thenSpan, elseSpan], scan.comments)) return null;
-		final src: String = scan.source;
-		final thenSource: String = src.substring(thenSpan.from, thenSpan.to);
-		final elseSource: String = src.substring(elseSpan.from, elseSpan.to);
-		return {
-			span: span,
-			edit: NegatedCondition.ternaryEdit(new Span(span.from, elseSpan.to), '', condition, thenSource, elseSource, '', src, scan.site)
-		};
+		return if (span == null || condSpan == null || thenSpan == null || elseSpan == null)
+			null
+		else if (IfExpressionChain.droppedComment(span, [condSpan, thenSpan, elseSpan], scan.comments))
+			null
+		else
+			{
+				span: span,
+				edit: NegatedCondition.ternaryEdit(
+					new Span(span.from, elseSpan.to), '', condition, thenBranch, elseBranch, '', scan.source, scan.site
+				)
+			};
 	}
 
 }

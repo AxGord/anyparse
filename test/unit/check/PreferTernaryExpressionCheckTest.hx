@@ -242,6 +242,25 @@ class PreferTernaryExpressionCheckTest extends Test {
 		Assert.equals('c ? 2 : 1', es[0].text);
 	}
 
+	/**
+	 * Under `invert-negated-if-else`'s `keepDefaultElse` a value `if` whose else value is a default literal
+	 * becomes the NEGATED ternary, the default kept last; with the option off it is oriented positive.
+	 *
+	 * RED under M-NEGCOND-KEEP-DEFAULT-BLIND and M-NEGCOND-KEEP-DEFAULT-THEN-ARM.
+	 */
+	@:pin('control')
+	@:killer('M-NEGCOND-KEEP-DEFAULT-BLIND', 'M-NEGCOND-KEEP-DEFAULT-THEN-ARM')
+	public function testKeepDefaultElseKeepsTheNegatedIfExpression(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = if (!c) x else false;\n\t}\n}';
+		Assert.equals('!c ? x : false', keptEdit(src, true));
+		Assert.equals('c ? false : x', keptEdit(src, false));
+	}
+
+	/** The one edit of a `--fix` pass over `src` with `invert-negated-if-else` `keepDefaultElse` set to `on`. */
+	private function keptEdit(src: String, on: Bool): String {
+		return CheckFixture.soleEditUnder(new PreferTernaryExpression(), src, InvertNegatedIfElseCheckTest.keepConfig(on));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferTernaryExpression(), src);
 	}

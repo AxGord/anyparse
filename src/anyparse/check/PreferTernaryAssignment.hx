@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.DeclFallbackChain.DeclSeams;
 import anyparse.check.NegatedCondition.InversionSeams;
@@ -86,7 +87,7 @@ import anyparse.runtime.Span;
  * check a no-op).
  */
 @:nullSafety(Strict)
-final class PreferTernaryAssignment implements Check {
+final class PreferTernaryAssignment implements Check implements ConfigAware {
 
 	/** An `if` with an `else` has exactly [condition, then-branch, else-branch] children. */
 	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
@@ -98,7 +99,14 @@ final class PreferTernaryAssignment implements Check {
 	private static inline final DECL_MESSAGE: String =
 		'this declaration and the else-less if assignment after it can be a single ternary initializer';
 
+	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'prefer-ternary-assignment';
@@ -132,7 +140,7 @@ final class PreferTernaryAssignment implements Check {
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final file: String = violations.length == 0 ? '' : violations[0].file;
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
-		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, [{ file: file, source: source }], index);
+		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, [{ file: file, source: source }], _resolveConfig, index);
 		final site: Null<InversionSite> = NegatedCondition.siteOf(negation, file, source, tree);
 		final guarded: Array<GuardedEdit> = [];
 		final plain: Array<{ span: Span, text: String }> =
@@ -285,10 +293,8 @@ final class PreferTernaryAssignment implements Check {
 		final elseRhsSpan: Null<Span> = m.elseRhs.span;
 		if (thenSpan == null || thenRhsSpan == null || condSpan == null || elseRhsSpan == null) return null;
 		final prefix: String = source.substring(thenSpan.from, thenRhsSpan.from);
-		final thenRhs: String = source.substring(thenRhsSpan.from, thenRhsSpan.to);
-		final elseRhs: String = source.substring(elseRhsSpan.from, elseRhsSpan.to);
 		final passed: Null<GuardedEdit> = passThroughEdit(span, prefix, m.condition, m.thenRhs, m.elseRhs, source, shape);
-		return passed ?? NegatedCondition.ternaryEdit(span, prefix, m.condition, thenRhs, elseRhs, ';', source, site);
+		return passed ?? NegatedCondition.ternaryEdit(span, prefix, m.condition, m.thenRhs, m.elseRhs, ';', source, site);
 	}
 
 	/**
@@ -319,8 +325,7 @@ final class PreferTernaryAssignment implements Check {
 			out.push({
 				key: m.declSpan,
 				edit: passThroughEdit(m.region, head, cond, value, m.init, source, d.shape) ?? NegatedCondition.ternaryEdit(
-					m.region, head, cond, source.substring(valueSpan.from, valueSpan.to), source.substring(initSpan.from, initSpan.to),
-					';', source, site
+					m.region, head, cond, value, m.init, ';', source, site
 				)
 			});
 		}

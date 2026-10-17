@@ -112,6 +112,24 @@ final class CheckFixture {
 		return CanonicalEdit.applyEdits(source, edits(check, source, plugin));
 	}
 
+	/** `fixRun` over `source` as `C.hx` under the `apqlint.json` text `json` — the config every file of the run reads. */
+	public static function fixRunUnder(check: Check, source: String, json: String): FixRun {
+		final config: LintConfig = LintConfig.parse(json);
+		return fixRun(check, [{ file: 'C.hx', source: source }], null, null, _ -> config);
+	}
+
+	/** `fixedSource` under the `apqlint.json` text `json` (`fixRunUnder`). */
+	public static function fixedUnder(check: Check, source: String, json: String): String {
+		return CanonicalEdit.applyEdits(source, fixRunUnder(check, source, json).edits);
+	}
+
+	/** The text of the ONE edit `fixRunUnder` makes (asserted). */
+	public static function soleEditUnder(check: Check, source: String, json: String): String {
+		final edits: Array<FixEdit> = fixRunUnder(check, source, json).edits;
+		Assert.equals(1, edits.length, 'one edit');
+		return edits[0].text;
+	}
+
 	/**
 	 * The `SymbolIndex` over `files` (third-party files tagged as given), asked of the run host the way a rule asks one
 	 * (`IndexScope.over`; `report` when no third-party set is named) — the one door a test takes to an index it hands a

@@ -23294,7 +23294,7 @@
 			"name": "M-NEGCOND-SWAP-OFF",
 			"type": "anyparse.check.NegatedCondition",
 			"method": "ternaryEdit",
-			"find": "final kept: Null<QueryNode> = positive(cond, site);",
+			"find": "final kept: Null<QueryNode> = positive(cond, elseValue, site);",
 			"replace": "final kept: Null<QueryNode> = null;",
 			"note": "a ternary built from a negated guard keeps the `!` (`x = !a ? 1 : 2`)"
 		},
@@ -23373,8 +23373,8 @@
 			"name": "M-PTR-TRAILING-SWAPS",
 			"type": "anyparse.check.PreferTernaryReturn",
 			"method": "buildEdit",
-			"find": "split.branchTrailing == null ? NegatedCondition.positive(match.condition, site)?.span : null",
-			"replace": "NegatedCondition.positive(match.condition, site)?.span",
+			"find": "Null<Span> = split.branchTrailing == null",
+			"replace": "Null<Span> = true",
 			"note": "a guard's own trailing comment is left riding the value that moved to the `:` slot"
 		},
 		{
@@ -24222,6 +24222,133 @@
 			"find": "for (s in refs.bareBound) if (!OccurrenceScan.offsetWithinAny(s.from, foreign)) s",
 			"replace": "for (s in refs.bareBound) s",
 			"note": "a subtype's same-named parameter read is renamed into the inherited field: `super.setup(accountScreen)` becomes `super.setup(_accountScreen)`, which compiles"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-BLIND",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "keepsDefaultElse",
+			"force": "false",
+			"note": "`keepDefaultElse` never keeps a negation: `!a ? x : null` is still inverted to `a ? null : x` with the option on"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-ON",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "site",
+			"find": "KEEP_DEFAULT_ELSE) ?? false",
+			"replace": "KEEP_DEFAULT_ELSE) ?? true",
+			"note": "`keepDefaultElse` is read as on when no config sets it, so every project silently stops inverting `!a ? x : null`"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-NO-RETURN",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "keepsDefaultElse",
+			"find": "value.kind == d.returnKind",
+			"replace": "false",
+			"note": "a statement else branch `return null;` is not read through to its value, so `if (!a) return x; else return null;` is inverted"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-NO-BLOCK",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "keepsDefaultElse",
+			"find": "value.kind == d.blockKind",
+			"replace": "false",
+			"note": "a braced else branch `{ return false; }` is not read through, so it is inverted while the bare one is kept"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-NO-PAREN",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "keepsDefaultElse",
+			"find": "BoolExprShape.unwrapParens(value, site.seams.parenKind)",
+			"replace": "value",
+			"note": "a parenthesised default `!a ? x : (null)` is no default arm and is inverted"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "keepsDefaultElse",
+			"find": "CaseValueKey.isDefaultLiteral(literal.kind, site.source.substring(span.from, span.to), d.values)",
+			"replace": "true",
+			"note": "every else arm counts as a default, so `!a ? x : 1` is no longer inverted under the option"
+		},
+		{
+			"name": "M-NEGCOND-KEEP-DEFAULT-THEN-ARM",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "ternaryEdit",
+			"find": "positive(cond, elseValue, site)",
+			"replace": "positive(cond, thenValue, site)",
+			"note": "a ternary builder asks the gate about the THEN value: `if (!a) y = x; else y = 0;` is oriented positive to `y = a ? 0 : x;` under the option"
+		},
+		{
+			"name": "M-PTR-KEEP-DEFAULT-THEN-ARM",
+			"type": "anyparse.check.PreferTernaryReturn",
+			"method": "buildEdit",
+			"find": "match.condition, match.elseValue, site",
+			"replace": "match.condition, match.thenValue, site",
+			"note": "prefer-ternary-return asks the gate about the guard value: `if (!a) return x; return null;` becomes `return a ? null : x;` under the option"
+		},
+		{
+			"name": "M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "statementInvertible",
+			"find": "NegatedCondition.positive(ifNode.children[0], elseBranch, scan.site)",
+			"replace": "NegatedCondition.positive(ifNode.children[0], ifNode.children[1], scan.site)",
+			"note": "an if statement is gated on its THEN branch: `if (!a) return null; else return x;` is no longer inverted under the option"
+		},
+		{
+			"name": "M-INVERT-KEEP-DEFAULT-STATEMENT-EDIT-THEN-ARM",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "statementEdits",
+			"find": "NegatedCondition.positive(cond, elseBranch, scan.site)",
+			"replace": "NegatedCondition.positive(cond, thenBranch, scan.site)",
+			"note": "the statement fix re-validates against the THEN branch: a reported `if (!a) return null; else return x;` gets no edit"
+		},
+		{
+			"name": "M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "valueVerdict",
+			"find": "invertibleOperand(cond, elseBranch, scan.site)",
+			"replace": "invertibleOperand(cond, thenBranch, scan.site)",
+			"note": "a value form is gated on its THEN arm: `!a ? null : x` is no longer reported under the option"
+		},
+		{
+			"name": "M-INVERT-KEEP-DEFAULT-VALUE-EDIT-THEN-ARM",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "valueEdits",
+			"find": "invertibleOperand(cond, node.children[2], scan.site)",
+			"replace": "invertibleOperand(cond, node.children[1], scan.site)",
+			"note": "the value fix re-validates against the THEN arm: a reported `!a ? null : x` gets no edit"
+		},
+		{
+			"name": "M-DEFLIT-NULL-DROPPED",
+			"type": "anyparse.check.CaseValueKey",
+			"method": "isDefaultLiteral",
+			"find": "key == NULL_KEY || ",
+			"replace": "",
+			"note": "`null` is no default literal, so `!a ? x : null` is inverted under `keepDefaultElse`"
+		},
+		{
+			"name": "M-DEFLIT-FALSE-DROPPED",
+			"type": "anyparse.check.CaseValueKey",
+			"method": "isDefaultLiteral",
+			"find": "key == '${BOOL_PREFIX}false' || ",
+			"replace": "",
+			"note": "`false` is no default literal, so `!a ? x : false` is inverted under `keepDefaultElse`"
+		},
+		{
+			"name": "M-DEFLIT-ZERO-DROPPED",
+			"type": "anyparse.check.CaseValueKey",
+			"method": "isDefaultLiteral",
+			"find": "key == numberKey(0) || ",
+			"replace": "",
+			"note": "a numeric zero is no default literal, so `!a ? x : 0` is inverted under `keepDefaultElse`"
+		},
+		{
+			"name": "M-DEFLIT-EMPTY-STRING-DROPPED",
+			"type": "anyparse.check.CaseValueKey",
+			"method": "isDefaultLiteral",
+			"find": " || key == STRING_PREFIX",
+			"replace": "",
+			"note": "an empty string is no default literal, so `!a ? x : \"\"` is inverted under `keepDefaultElse`"
 		},
 		{
 			"name": "M-XRENAME-NOT-CANDIDATE",

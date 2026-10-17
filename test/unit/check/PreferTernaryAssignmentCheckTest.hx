@@ -319,6 +319,29 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		Assert.equals('var k:Int = id == 1 ? -1 : 5;', es[0].text);
 	}
 
+	/**
+	 * Under `invert-negated-if-else`'s `keepDefaultElse` a negated condition whose else value is a default
+	 * literal keeps its negation in both arms — `y = !a ? x : 0;`, `var k:Int = !a ? 5 : 0;` — and with the
+	 * option off the ternary is oriented positive as before.
+	 *
+	 * RED under M-NEGCOND-KEEP-DEFAULT-BLIND and M-NEGCOND-KEEP-DEFAULT-THEN-ARM (`ternaryEdit` asks about the then value).
+	 */
+	@:pin('control')
+	@:killer('M-NEGCOND-KEEP-DEFAULT-BLIND', 'M-NEGCOND-KEEP-DEFAULT-THEN-ARM')
+	public function testKeepDefaultElseKeepsTheNegatedAssignment(): Void {
+		final assign: String = 'class C {\n\tfunction f() {\n\t\tif (!a) y = x;\n\t\telse y = 0;\n\t}\n}';
+		Assert.equals('y = !a ? x : 0;', keptEdit(assign, true));
+		Assert.equals('y = a ? 0 : x;', keptEdit(assign, false));
+		final decl: String = 'class C {\n\tfunction f() {\n\t\tvar k:Int = 0;\n\t\tif (!a) k = 5;\n\t}\n}';
+		Assert.equals('var k:Int = !a ? 5 : 0;', keptEdit(decl, true));
+		Assert.equals('var k:Int = a ? 0 : 5;', keptEdit(decl, false));
+	}
+
+	/** The one edit of a `--fix` pass over `src` with `invert-negated-if-else` `keepDefaultElse` set to `on`. */
+	private function keptEdit(src: String, on: Bool): String {
+		return CheckFixture.soleEditUnder(new PreferTernaryAssignment(), src, InvertNegatedIfElseCheckTest.keepConfig(on));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferTernaryAssignment(), src);
 	}
