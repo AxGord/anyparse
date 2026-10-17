@@ -35,7 +35,7 @@ using Lambda;
  * an optional-marker node (`var ?x:T`) that owns the name and the type. Before that was fixed
  * nearly every indexed anon-struct member of this project read as unannotated, and a share of
  * the Pony fork's did too. `testExplicitVarFormStructureRefutesToo` is the discriminator and
- * `SymbolIndexBuilder.typeInfoKeyOf` is the seam. The four structures the Pony fork withheld
+ * `SymbolIndexMembers.typeInfoKeyOf` is the seam. The four structures the Pony fork withheld
  * findings against are still written shorthand (`{app:String, debug:Bool}`,
  * `{d:EventDispatcher, n:String}`, `{min:Time, max:Time}`).
  */
