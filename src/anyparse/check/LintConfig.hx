@@ -173,21 +173,22 @@ final class LintConfig {
 
 	public function new(
 		rules: Map<String, RuleConfig>, ?compilerOracles: Array<OracleConfig>, ?resolutionRoots: Array<String>,
-		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool, ?languageVersion: String,
-		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, ?reachConfigurationsComplete: Bool, ?reportSummaryThreshold: Int,
-		?reflectiveClasses: Array<String>, ?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>
+		?resolutionLibs: Array<String>, resolutionStd: Bool = true, compilerOracleServer: Bool = false, ?languageVersion: String,
+		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, reachConfigurationsComplete: Bool = false,
+		reportSummaryThreshold: Int = LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD, ?reflectiveClasses: Array<String>,
+		?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>
 	) {
 		_ownedTypes = ownedTypes ?? [];
-		_reportSummaryThreshold = reportSummaryThreshold ?? LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD;
-		_reachConfigurationsComplete = reachConfigurationsComplete ?? false;
+		_reportSummaryThreshold = reportSummaryThreshold;
+		_reachConfigurationsComplete = reachConfigurationsComplete;
 		_reflectiveClasses = reflectiveClasses;
 		_reflectiveMethodHolders = reflectiveMethodHolders;
 		_rules = rules;
 		_compilerOracles = compilerOracles ?? [];
-		_compilerOracleServer = compilerOracleServer ?? false;
+		_compilerOracleServer = compilerOracleServer;
 		_resolutionRoots = resolutionRoots ?? [];
 		_resolutionLibs = resolutionLibs ?? [];
-		_resolutionStd = resolutionStd ?? true;
+		_resolutionStd = resolutionStd;
 		_languageVersion = languageVersion;
 		_frameworks = frameworks ?? [];
 		_drops = drops ?? [];

@@ -788,7 +788,7 @@ final class CompilerFacts {
 	public function typeOfExpressionAt(file: String, span: Span): Null<String> {
 		final source: Null<String> = sourceOf(_key(file));
 		if (source == null) return null;
-		final text: String = StringTools.trim(source.substring(span.from, span.to));
+		final text: String = source.substring(span.from, span.to).trim();
 		final seen: Array<String> = [];
 		final bare: Bool = FactText.bare(text);
 		for (n in nodesAround(file, span)) for (site in FactText.typedSites(n, bare)) {

@@ -321,7 +321,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 
 	/** Gate 1: a line comment with nothing but whitespace before it (its close is the line end by construction). */
 	private static function ownsItsLine(source: String, tok: CommentTok): Bool {
-		return tok.isLine && StringTools.trim(indentOf(source, tok.from)) == '';
+		return tok.isLine && indentOf(source, tok.from).trim() == '';
 	}
 
 	/** Consecutive whole-line tokens grouped into runs — a gap of one line or more starts a new run. */

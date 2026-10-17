@@ -385,7 +385,7 @@ final class MemberSpacing {
 		var lastEndTo: Int = -1;
 		var cursor: Int = gapFrom;
 		for (seg in source.substring(gapFrom, gapTo).split('\n')) {
-			final t: String = StringTools.trim(seg);
+			final t: String = seg.trim();
 			if (firstIfStart < 0 && t.startsWith('#if')) firstIfStart = cursor;
 			if (t == '#end') lastEndTo = cursor + seg.length;
 			cursor += seg.length + 1;

@@ -367,7 +367,7 @@ final class CtorFieldWrite {
 		// `Colors.WHITE` keep their uppercase root and stay movable).
 		if (bf != null) return allowStatics && statics.contains(bf);
 		if (!hasSupertypeClause(container, shape)) return true;
-		final c0: Int = StringTools.fastCodeAt(name, 0);
+		final c0: Int = name.fastCodeAt(0);
 		// An uppercase root is a TYPE reference (`Colors.WHITE`) — never an inherited member, and
 		// decided without touching the index. A lowercase one asks the index whether any ancestor
 		// could declare it.
@@ -789,7 +789,7 @@ final class CtorFieldWrite {
 				MemberBranchScan.fold(ctx.branch, node.children, false, (exported, child) -> {
 					if (ctx.visibility.contains(child.kind)) {
 						final span: Null<Span> = child.span;
-						return exported || span != null && StringTools.trim(ctx.source.substring(span.from, span.to)) != ctx.defaultVis;
+						return exported || span != null && ctx.source.substring(span.from, span.to).trim() != ctx.defaultVis;
 					}
 					if (!ctx.members.contains(child.kind)) return exported;
 					if (ctx.mutableFields.contains(child.kind)) ctx.visit(owner, child, ctx.source, ctx.file, exported);

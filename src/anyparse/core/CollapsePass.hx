@@ -496,7 +496,7 @@ final class CollapsePass {
 			case Concat(parts) if (parts.length >= 2):
 				switch parts[parts.length - 1] {
 					case Text(t):
-						t.length >= 2 && StringTools.fastCodeAt(t, 0) == ' '.code;
+						t.length >= 2 && t.fastCodeAt(0) == ' '.code;
 					case _: false;
 				}
 			case _: false;
@@ -866,7 +866,7 @@ final class CollapsePass {
 			switch item {
 				case Concat([operand, Text(opText)]):
 					operands.push(operand);
-					final trimmed: String = StringTools.ltrim(opText);
+					final trimmed: String = opText.ltrim();
 					if (trimmed.length == 0) return null;
 					ops.push(trimmed);
 				case _:
@@ -1059,13 +1059,12 @@ final class CollapsePass {
 	 * waste in every case.
 	 */
 	private static function hasAnyCandidate(d: Doc, decisions: CollapseRun): Bool {
-		return anyInSubtree(
-			d, node -> switch node {
+		return anyInSubtree(d, node -> {
+			switch node {
 				case CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_): true;
 				case _: isCandidate(node, decisions);
-			},
-			new DocIdentityMap(), decisions
-		);
+			}
+		}, new DocIdentityMap(), decisions);
 	}
 
 	/** True iff `d`'s subtree contains a `CollapseProbe` region. */
@@ -1178,7 +1177,7 @@ final class CollapsePass {
 				// argument width unmeasured by the same-level sum below.
 				final leadIsBareHardline: Bool = i < innerItems.length && switch innerItems[i] {
 					case Line(s):
-						s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code;
+						s.length > 0 && s.fastCodeAt(0) == '\n'.code;
 					case _: false;
 				};
 				if (!leadIsBareHardline) return false;
@@ -1224,7 +1223,7 @@ final class CollapsePass {
 	private static function argsStartsWithHardline(d: Doc): Bool {
 		return switch d {
 			case Line(s):
-				s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code;
+				s.length > 0 && s.fastCodeAt(0) == '\n'.code;
 			case Nest(_, inner): argsStartsWithHardline(inner);
 			case Concat(items):
 				var i: Int = 0;

@@ -1463,7 +1463,7 @@ class Renderer {
 				// fork's `collapseChainBreaksAfter` asks: "is there a binary
 				// continuation after the close `)` at all". So descend PAST a
 				// soft Line and keep scanning for a real token.
-				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? false : null;
+				return flat.length > 0 && flat.fastCodeAt(0) == '\n'.code ? false : null;
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				return false;
 			case Nest(_, innerDoc), BreakCommit(_, innerDoc), LeadingBreak(_, innerDoc):
@@ -1545,7 +1545,7 @@ class Renderer {
 			case OptSpaceSkipAfterHardline:
 				return { add: 1, aborted: false };
 			case Line(flat):
-				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { add: 0, aborted: true };
+				if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) return { add: 0, aborted: true };
 				return { add: flat.length, aborted: false };
 			case Concat(items):
 				var i: Int = items.length;
@@ -1618,7 +1618,7 @@ class Renderer {
 				// check by length alone and the parent Group would
 				// commit to MFlat, causing the renderer to emit
 				// hardlines without any indent. ω-break-group.
-				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { spend: 0, broke: true };
+				if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) return { spend: 0, broke: true };
 				return { spend: flat.length, broke: false };
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				// All three opt-hardline variants are hardlines by intent
@@ -1696,7 +1696,7 @@ class Renderer {
 				return { add: 1, aborted: false };
 			case Line(flat):
 				if (node.mode == MBreak) return { add: 0, aborted: true };
-				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { add: 0, aborted: true };
+				if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) return { add: 0, aborted: true };
 				return { add: flat.length, aborted: false };
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				return { add: 0, aborted: true };
@@ -1834,7 +1834,7 @@ class Renderer {
 				if (s.length > 0) return { add: s.length, aborted: false, delim: DocMeasure.lastCharIsOpenDelim(s) };
 				return { add: 0, aborted: false, delim: null };
 			case Line(flat):
-				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { add: 0, aborted: true, delim: null };
+				if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) return { add: 0, aborted: true, delim: null };
 				if (node.mode == MBreak) return { add: 0, aborted: true, delim: null };
 				if (flat.length > 0) return { add: flat.length, aborted: false, delim: DocMeasure.lastCharIsOpenDelim(flat) };
 				return { add: 0, aborted: false, delim: null };
@@ -2146,7 +2146,7 @@ class Renderer {
 				if (nl >= 0) return { add: nl, aborted: true };
 				return { add: s.length, aborted: false };
 			case Line(flat):
-				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code)
+				if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code)
 					// Forced hardline always terminates the first line.
 					return { add: 0, aborted: true };
 				if (node.mode == MBreak)
@@ -3860,7 +3860,7 @@ class Renderer {
 				case OptSpaceSkipAfterHardline:
 					total += 1;
 				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
+					if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) {
 						if (condSpliceFirstLine < 0 && sawCondDirective) condSpliceFirstLine = total;
 						return { first: first, last: -1, condSpliceFirstLine: condSpliceFirstLine };
 					}
@@ -3902,14 +3902,14 @@ class Renderer {
 	private static function startsCollection(item: Doc): Bool {
 		final head: Null<String> = DocMeasure.firstVisibleText(item);
 		if (head == null || head.length == 0) return false;
-		final open: Int = StringTools.fastCodeAt(head, 0);
+		final open: Int = head.fastCodeAt(0);
 		if (open != '['.code && open != '{'.code) return false;
 		// An EMPTY collection is not a boundary — `f({}, cb -> …)` has nothing
 		// for the reader to navigate around, and pushing `cb` off its line only
 		// strands a two-character `{},`. The writer emits an empty pair as ONE
 		// `Text` carrying both delimiters, so it is exactly the token this walk
 		// returns.
-		final trimmed: String = StringTools.trim(head);
+		final trimmed: String = head.trim();
 		return trimmed != '[]' && trimmed != '{}';
 	}
 

@@ -228,10 +228,10 @@ final class OccurrenceScan {
 	 * `Limit.MAX` on a `using a.b.Limit` a fully-qualified STATIC access reaching
 	 * the type through no import at all, not the extension call the `using` enables.
 	 */
-	public static function methodCalledInSource(source: String, name: String, ?skipReceiver: String): Bool {
+	public static function methodCalledInSource(source: String, name: String, skipReceiver: String = ''): Bool {
 		final len: Int = name.length;
 		if (len == 0) return false;
-		final skip: String = skipReceiver ?? '';
+		final skip: String = skipReceiver;
 		inline function qualifiedBySkip(dotAt: Int): Bool {
 			final start: Int = dotAt - skip.length;
 			return skip.length > 0 && start >= 0 && source.substr(start, skip.length) == skip

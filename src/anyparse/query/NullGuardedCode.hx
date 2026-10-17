@@ -13,6 +13,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -453,7 +454,7 @@ final class NullGuardedCode {
 	private function containerSealed(owner: String, field: String): Bool {
 		if (!plainStatic(owner, field)) return false;
 		final declared: Null<FieldDeclFact> = _view.type(owner)?.fields.find(f -> f.name == field);
-		if (declared == null || !declared.types.foreach(t -> container(t))) return false;
+		if (declared == null || !declared.types.foreach(container)) return false;
 		return (gathered().fields['$owner.$field'] ?? []).foreach(a ->
 			!(a.fact.write ? !a.fact.fresh : a.fact.use != COMPARE && !elementStoreReceiver(a.fact.at))
 		);
@@ -638,7 +639,7 @@ final class NullGuardedCode {
 		while (WORD.matchSub(code, at)) {
 			final word: String = WORD.matched(0);
 			out.push(word);
-			if (StringTools.startsWith(word, MANGLED)) out.push(word.substr(MANGLED.length));
+			if (word.startsWith(MANGLED)) out.push(word.substr(MANGLED.length));
 			final pos: { pos: Int, len: Int } = WORD.matchedPos();
 			at = pos.pos + pos.len;
 		}

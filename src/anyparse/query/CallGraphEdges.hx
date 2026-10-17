@@ -988,7 +988,7 @@ final class CallGraphEdges {
 		function storedField(recv: QueryNode, field: String, currentType: Null<String>): Bool {
 			final declared: Null<String> = typeSourceOf(recv, currentType);
 			if (declared == null) return false;
-			final peeled: String = NominalTypes.unwrapNullable(StringTools.trim(declared), transparentWrappers, g._plugin.typeSyntax);
+			final peeled: String = NominalTypes.unwrapNullable(declared.trim(), transparentWrappers, g._plugin.typeSyntax);
 			final outer: Null<String> = NominalTypes.outerNominalOf(peeled, g._plugin.typeSyntax);
 			final anon: Null<String> = outer == null ? peeled : g.types.resolveAlias(outer);
 			final fieldType: Null<String> = if (anon == peeled)

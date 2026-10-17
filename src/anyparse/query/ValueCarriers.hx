@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -136,7 +137,7 @@ final class ValueCarriers {
 	 */
 	public function typedNominal(type: String): Bool {
 		final source: String = NominalTypes.unwrapNullable(
-			StringTools.trim(type), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
+			type.trim(), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
 		);
 		final nominal: Null<String> = nominalOf(source);
 		final decl: Null<TypeDeclInfo> = nominal == null ? null : declarationOf(nominal);
@@ -150,9 +151,7 @@ final class ValueCarriers {
 	/** Whether `type` is one of the language's primitive value types — a literal's, or one that cannot be null. */
 	public function primitive(type: String): Bool {
 		final nominal: Null<String> = NominalTypes.outerNominalOf(
-			NominalTypes.unwrapNullable(
-				StringTools.trim(type), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
-			),
+			NominalTypes.unwrapNullable(type.trim(), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax),
 			_scope.plugin.typeSyntax
 		);
 		if (nominal == null) return false;
@@ -182,7 +181,7 @@ final class ValueCarriers {
 	 * function type, a catch-all, the class-value type, a name not declared exactly once.
 	 */
 	private function nominalOf(type: String): Null<String> {
-		var t: Null<String> = NominalTypes.outerNominalOf(StringTools.trim(type), _scope.plugin.typeSyntax);
+		var t: Null<String> = NominalTypes.outerNominalOf(type.trim(), _scope.plugin.typeSyntax);
 		final seen: Array<String> = [];
 		while (t != null) {
 			final current: String = t;

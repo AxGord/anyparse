@@ -766,7 +766,7 @@ final class SourceComments {
 	 */
 	public static function isNoqaComment(source: String, region: LexRegion): Bool {
 		for (raw in source.substring(region.from, region.to).split('\n')) {
-			var line: String = StringTools.trim(raw);
+			var line: String = raw.trim();
 			if (line.startsWith('//') || line.startsWith('/*')) line = line.substr(2).trim();
 			final lower: String = line.toLowerCase();
 			if (lower == 'noqa' || lower.startsWith('noqa:')) return true;

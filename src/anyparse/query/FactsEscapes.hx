@@ -210,7 +210,7 @@ final class FactsEscapes {
 			final receiver: Null<String> = c.receiver;
 			if (byName(c.access) && receiver != null && !escape(receiver)) return false;
 		}
-		return n.reflection.foreach(r -> produced(r));
+		return n.reflection.foreach(produced);
 	}
 
 	/**

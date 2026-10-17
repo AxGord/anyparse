@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -462,7 +463,7 @@ final class CallRepetition {
 		final tree: Null<QueryNode> = _trees.ofFile(edge.file);
 		final span: Null<Span> = edge.span;
 		if (tree == null || span == null) return [];
-		final wanted: String = StringTools.endsWith(label, ' #1') ? label.substring(0, label.length - 3) : label;
+		final wanted: String = label.endsWith(' #1') ? label.substring(0, label.length - 3) : label;
 		return [
 			for (l in loops.around(
 				tree, span.from

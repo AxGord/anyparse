@@ -1258,9 +1258,7 @@ final class ReconCommand implements CliCommand {
 	}
 
 	public static function reconNormalize(message: Null<String>): String {
-		return message == null || message == ''
-			? '<no message>'
-			: StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
+		return message == null || message == '' ? '<no message>' : message.replace('\n', '\\n').replace('\t', '\\t');
 	}
 	#end
 

@@ -830,7 +830,7 @@ private final class BodyText {
 	/** The end of `span` of `source` without the whitespace after the node: the compiler's position of an expression has none. */
 	private static function trimmedEnd(source: String, span: Span): Int {
 		var end: Int = span.to;
-		while (end > span.from && StringTools.isSpace(source, end - 1)) end--;
+		while (end > span.from && source.isSpace(end - 1)) end--;
 		return end;
 	}
 

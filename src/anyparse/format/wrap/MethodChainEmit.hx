@@ -737,7 +737,7 @@ class MethodChainEmit {
 	private static function startsWithHardline(d: Doc): Bool {
 		return switch d {
 			case Line(s):
-				s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code;
+				s.length > 0 && s.fastCodeAt(0) == '\n'.code;
 			case Nest(_, inner): startsWithHardline(inner);
 			case Concat(items):
 				var i: Int = 0;

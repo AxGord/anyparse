@@ -491,7 +491,7 @@ final class PatternStar {
 
 	/** True when `root` contains at least one star — the gate every text-producing op consults. */
 	public static function contains(root: QueryNode): Bool {
-		return root.kind == KIND || root.children.exists(c -> contains(c));
+		return root.kind == KIND || root.children.exists(contains);
 	}
 
 	private static function checkNode(node: QueryNode): Null<String> {

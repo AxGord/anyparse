@@ -113,7 +113,7 @@ final class MemberSlots {
 	/** Whether a line in `source[from,to)` starts (after indentation) with `#else` or `#elseif`. */
 	public static function hasBranchDirective(source: String, from: Int, to: Int): Bool {
 		for (line in source.substring(from, to).split('\n')) {
-			final t: String = StringTools.ltrim(line);
+			final t: String = line.ltrim();
 			if (t.startsWith('#else')) return true;
 		}
 		return false;

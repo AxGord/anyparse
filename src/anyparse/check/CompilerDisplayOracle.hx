@@ -326,7 +326,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	 */
 	private static function relativeToCwd(file: String, cwd: Null<String>): String {
 		if (cwd == null) return file;
-		final prefix: String = StringTools.endsWith(cwd, '/') ? cwd : '$cwd/';
+		final prefix: String = cwd.endsWith('/') ? cwd : '$cwd/';
 		return file.startsWith(prefix) ? file.substring(prefix.length) : file;
 	}
 
@@ -342,7 +342,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	/** `cwd`/`file` joined (single slash), or `file` when `cwd` is null. */
 	private static function joinCwd(cwd: Null<String>, file: String): String {
 		if (cwd == null) return file;
-		final base: String = StringTools.endsWith(cwd, '/') ? cwd.substring(0, cwd.length - 1) : cwd;
+		final base: String = cwd.endsWith('/') ? cwd.substring(0, cwd.length - 1) : cwd;
 		return '$base/$file';
 	}
 	#end

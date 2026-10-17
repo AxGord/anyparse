@@ -721,7 +721,7 @@ final class HaxeNamingSupport implements NamingSupport {
 		if (init == null || init.kind != 'IdentExpr') return false;
 		final n: Null<String> = init.name;
 		if (n == null || n.length == 0) return false;
-		final c: Int = StringTools.fastCodeAt(n, 0);
+		final c: Int = n.fastCodeAt(0);
 		return c >= 'A'.code && c <= 'Z'.code;
 	}
 

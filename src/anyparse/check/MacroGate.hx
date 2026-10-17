@@ -232,7 +232,7 @@ final class MacroGate {
 	 * remove `+` operators the argument already had.
 	 */
 	public function blocks(calls: Array<CallRef>, groups: Int): Bool {
-		return groups >= 2 && calls.exists(call -> blocksCall(call));
+		return groups >= 2 && calls.exists(blocksCall);
 	}
 
 	/**

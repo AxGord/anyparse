@@ -322,8 +322,7 @@ final class CallGraphFacts {
 		final target: Null<String> = c.target;
 		return receiver != null && target != null && DYNAMIC_CALLS.contains(c.access) && n.natives.exists(x -> {
 			final code: Null<String> = x.code;
-			code != null && !x.computed && StringTools.endsWith(code, '.$target') && x.at.file == receiver.file
-			&& x.at.span.from == receiver.span.from;
+			code != null && !x.computed && code.endsWith('.$target') && x.at.file == receiver.file && x.at.span.from == receiver.span.from;
 		});
 	}
 

@@ -190,7 +190,7 @@ final class LibraryBuild {
 		if (parts.length != 3 || major == null || minor == null || patch == null) return [];
 		final out: Array<String> = [
 			'haxe=$version',
-			'haxe_ver=$major.$minor${StringTools.lpad('$patch', '0', PATCH_DIGITS)}'
+			'haxe_ver=$major.$minor${'$patch'.lpad('0', PATCH_DIGITS)}'
 		];
 		for (m in FIRST_MAJOR_DEFINE ... major + 1) out.push('haxe$m');
 		return out;

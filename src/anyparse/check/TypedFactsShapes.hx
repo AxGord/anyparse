@@ -6,6 +6,8 @@ import haxe.macro.Type;
 import haxe.macro.TypeTools;
 import haxe.macro.TypedExprTools;
 
+using Lambda;
+
 
 /** The shapes of the typed tree `TypedFactsWalk` asks about, answered without walking. */
 @:nullSafety(Strict)
@@ -160,13 +162,11 @@ final class TypedFactsShapes {
 	public static function isFresh(e: TypedExpr): Bool {
 		final leaves: Array<TypedExpr> = [];
 		collectLeaves(e, leaves);
-		return Lambda.foreach(
-			leaves, leaf -> switch leaf.expr {
-				case TArrayDecl(_), TConst(TNull): true;
-				case TNew(c, _, _): FRESH_CLASSES.contains(c.toString());
-				case _: false;
-			}
-		);
+		return leaves.foreach(leaf -> switch leaf.expr {
+			case TArrayDecl(_), TConst(TNull): true;
+			case TNew(c, _, _): FRESH_CLASSES.contains(c.toString());
+			case _: false;
+		});
 	}
 
 	public static function restElement(t: Type): Null<Type> {

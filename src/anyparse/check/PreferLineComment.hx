@@ -203,7 +203,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 		final gutter: Bool = javadocStyled(raw);
 		final dedent: String = commonIndent(raw.slice(1));
 		final lines: Array<String> = [StringTools.trim(raw[0])];
-		for (i in 1...raw.length) lines.push(stripGutter(StringTools.rtrim(dedented(raw[i], dedent)), gutter));
+		for (i in 1...raw.length) lines.push(stripGutter(dedented(raw[i], dedent).rtrim(), gutter));
 		return SourceComments.trimBlankEdges(lines);
 	}
 

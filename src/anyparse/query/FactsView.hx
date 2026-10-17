@@ -1797,7 +1797,7 @@ final class FactsView {
 	 * whitelist: an unknown, a type parameter, an abstract, a function type, an enum and every other type are not.
 	 */
 	public function classless(type: String): Bool {
-		final read: Null<FactsType> = FactsTypeTree.read(StringTools.trim(type));
+		final read: Null<FactsType> = FactsTypeTree.read(type.trim());
 		return read != null && classlessType(read, 0);
 	}
 
@@ -1818,7 +1818,7 @@ final class FactsView {
 
 	/** The facts type string `type` seen through every wrapper that keeps its members (`Null<T>`). */
 	private function unwrapped(type: String): String {
-		return FactsTypeText.unwrap(StringTools.trim(type), _scope.shape.memberTransparentWrapperTypeNames ?? []);
+		return FactsTypeText.unwrap(type.trim(), _scope.shape.memberTransparentWrapperTypeNames ?? []);
 	}
 
 	/** The graph's names (`graphMember`) of every method the typed type `id` declares, an accessor among them. */

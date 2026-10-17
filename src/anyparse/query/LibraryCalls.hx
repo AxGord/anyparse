@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -196,9 +197,7 @@ final class LibraryCalls {
 	/** Whether a value written `typeSource` runs no code when a call converts it to a string: a string, number or boolean. */
 	public function inertType(typeSource: String): Bool {
 		final nominal: Null<String> = NominalTypes.outerNominalOf(
-			NominalTypes.unwrapNullable(
-				StringTools.trim(typeSource), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
-			),
+			NominalTypes.unwrapNullable(typeSource.trim(), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax),
 			_scope.plugin.typeSyntax
 		);
 		final values: Array<String> =

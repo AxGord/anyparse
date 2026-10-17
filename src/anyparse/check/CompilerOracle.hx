@@ -262,7 +262,7 @@ final class CompilerOracle {
 	private static function remembered(
 		memo: OracleRunMemo, oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
 	): Array<Null<OracleOutcome>> {
-		return PhaseTimings.measure('oracle typecheck', () -> rememberedTimed(memo, oracles, stopAfterFailure, verbose));
+		return PhaseTimings.measure('oracle typecheck', rememberedTimed.bind(memo, oracles, stopAfterFailure, verbose));
 	}
 
 	/** `remembered`, untimed. */

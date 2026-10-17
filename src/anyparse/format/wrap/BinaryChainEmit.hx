@@ -5,6 +5,7 @@ import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -398,7 +399,7 @@ final class BinaryChainEmit {
 	 * after, so the marker is skipped (byte-inert).
 	 */
 	private static function containsCallOperand(items: Array<Doc>): Bool {
-		return items.exists(it -> DocMeasure.operandIsCall(it));
+		return items.exists(DocMeasure.operandIsCall);
 	}
 
 	/**
@@ -445,9 +446,7 @@ final class BinaryChainEmit {
 	private static function leadingOperandOpensDelim(item0: Doc, parenOnly: Bool = false): Bool {
 		return switch item0 {
 			case Text(s):
-				s.length > 0
-					&& (StringTools.fastCodeAt(s, 0) == '('.code || !parenOnly
-						&& (StringTools.fastCodeAt(s, 0) == '['.code || StringTools.fastCodeAt(s, 0) == '{'.code));
+				s.length > 0 && (s.fastCodeAt(0) == '('.code || !parenOnly && (s.fastCodeAt(0) == '['.code || s.fastCodeAt(0) == '{'.code));
 			case Concat(arr):
 				var hit: Bool = false;
 				var done: Bool = false;

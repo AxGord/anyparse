@@ -458,8 +458,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	private static function collectReferences(node: QueryNode, kinds: Array<String>, out: Array<String>): Void {
 		final name: Null<String> = node.name;
 		if (
-			name != null && kinds.contains(node.kind)
-			&& (StringTools.startsWith(name, CheckScan.GET_PREFIX) || StringTools.startsWith(name, CheckScan.SET_PREFIX))
+			name != null && kinds.contains(node.kind) && (name.startsWith(CheckScan.GET_PREFIX) || name.startsWith(CheckScan.SET_PREFIX))
 			&& !out.contains(name)
 		)
 			out.push(name);

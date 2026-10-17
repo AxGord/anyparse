@@ -61,7 +61,7 @@ final class LibraryBodies {
 		options: ThreadSafetyOptions
 	) {
 		PhaseTimings.time('library parse', () -> for (s in sources) try plugin.parseFile(s.source) catch (exception: haxe.Exception) {});
-		final graph: CallGraph = PhaseTimings.measure('library graph', () -> CallGraph.build(sources, plugin));
+		final graph: CallGraph = PhaseTimings.measure('library graph', CallGraph.build.bind(sources, plugin));
 		files = sources.length - graph.skippedFiles.length;
 		skipped = graph.skippedFiles.length;
 		final found: { ids: Array<String>, chains: Map<String, Array<String>>, waivers: Array<String> } = {

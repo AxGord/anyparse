@@ -129,7 +129,7 @@ final class StdResolver {
 	 */
 	public static function stdEntryOf(value: String, separator: String, holdsStd: (String) -> Bool): Null<String> {
 		final entries: Array<String> = [
-			for (e in value.split(separator)) if (StringTools.trim(e) != '') StringTools.trim(e)
+			for (e in value.split(separator)) if (e.trim() != '') StringTools.trim(e)
 		];
 		if (entries.length <= 1) return entries.length == 0 ? null : entries[0];
 		for (e in entries) if (holdsStd(e)) return e;
@@ -177,7 +177,7 @@ final class StdResolver {
 	 */
 	public static function isUnder(dir: String, path: String): Bool {
 		final root: String = Path.removeTrailingSlashes(Path.normalize(dir));
-		return root != '' && StringTools.startsWith(Path.normalize(path), '$root/');
+		return root != '' && Path.normalize(path).startsWith('$root/');
 	}
 
 	/**
@@ -227,7 +227,7 @@ final class StdResolver {
 		#if (sys || nodejs)
 		final v: Null<String> = Sys.getEnv('HAXE_STD_PATH');
 		if (v == null) return null;
-		final trimmed: String = StringTools.trim(v);
+		final trimmed: String = v.trim();
 		return trimmed == '' ? null : trimmed;
 		#else
 		return null;

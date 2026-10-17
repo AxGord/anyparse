@@ -156,7 +156,7 @@ final class FactsNativeReach {
 	 */
 	private static function handed(x: NativeFact, hand: NativeHand): Bool {
 		final code: Null<String> = x.code;
-		final literal: Bool = code != null && !StringTools.startsWith(code, '${x.name}.');
+		final literal: Bool = code != null && !code.startsWith('${x.name}.');
 		return [for (i in (literal ? 1 : 0) ... x.handed.length) x.handed[i]].foreach(hand.escape);
 	}
 
@@ -258,7 +258,7 @@ final class FactsNativeReach {
 		final out: Array<String> = [];
 		var start: Int = -1;
 		for (i in 0...code.length + 1) {
-			final c: Int = i < code.length ? StringTools.fastCodeAt(code, i) : 0;
+			final c: Int = i < code.length ? code.fastCodeAt(i) : 0;
 			final word: Bool = c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
 				|| (start >= 0 && c >= '0'.code && c <= '9'.code);
 			if (word && start < 0) start = i;

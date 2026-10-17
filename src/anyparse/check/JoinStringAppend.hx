@@ -368,9 +368,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 		target: QueryNode, tree: QueryNode, s: Seams, declaredTypeSources: () -> Map<Int, String>
 	): Null<String> {
 		final raw: Null<String> = TypeResolver.identDeclaredTypeSource(target, s.shape, tree, declaredTypeSources, false);
-		return raw == null
-			? null
-			: NominalTypes.unwrapNullable(StringTools.trim(raw), s.shape.nullableWrapperTypeNames ?? [], s.typeSyntax);
+		return raw == null ? null : NominalTypes.unwrapNullable(raw.trim(), s.shape.nullableWrapperTypeNames ?? [], s.typeSyntax);
 	}
 
 	/** `term`'s own verbatim source text, wrapped in parens when its root kind is not a provable `+`-safe operand. */

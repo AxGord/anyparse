@@ -511,7 +511,7 @@ final class OracleCoverage {
 	 * takes — is answered from it, since the probe IS that compile; every probe spawned is filed for a later baseline.
 	 */
 	private static function remembered(asked: Array<OracleConfig>): Array<HaxeRun> {
-		return PhaseTimings.measure('oracle coverage', () -> rememberedTimed(asked));
+		return PhaseTimings.measure('oracle coverage', rememberedTimed.bind(asked));
 	}
 
 	/** `remembered`, untimed. */

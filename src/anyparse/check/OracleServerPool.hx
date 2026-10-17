@@ -76,7 +76,7 @@ final class OracleServerPool {
 	 * started, under `APQ_NO_ORACLE_SERVER`, or when the machine's compile budget cannot hold them all.
 	 */
 	public function start(oracles: Array<OracleConfig>): Void {
-		PhaseTimings.time('oracle servers start', () -> startTimed(oracles));
+		PhaseTimings.time('oracle servers start', startTimed.bind(oracles));
 	}
 
 	/** `start`, untimed. */
@@ -110,7 +110,7 @@ final class OracleServerPool {
 	 * moved since the server's last compile is invalidated first. The compiles overlap; none stops another.
 	 */
 	public function compile(oracles: Array<OracleConfig>): Array<Null<HaxeRun>> {
-		return PhaseTimings.measure('oracle warm compile', () -> compileTimed(oracles));
+		return PhaseTimings.measure('oracle warm compile', compileTimed.bind(oracles));
 	}
 
 	/** `compile`, untimed. */

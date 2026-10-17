@@ -4,6 +4,8 @@ package anyparse.check;
 import haxe.Json;
 import haxe.macro.Type;
 
+using StringTools;
+
 /**
  * The PRINTING half of the facts type grammar (`TypedFactsProbe` specifies it, `FactsTypeTree` reads it back): a
  * compiler `Type` as the type string a facts record carries, plus the two JSON spellings every record line is built
@@ -59,8 +61,8 @@ final class TypedFactsTypeStrings {
 			case TType(d, params):
 				// the compiler names the typedef of a type's statics after it (`Enum<pack.E>`), which carries no arguments of its own
 				final name: String = d.toString();
-				if (!StringTools.endsWith(name, '>')) printedTypedefs['$name@${d.get().pos}'] = d;
-				StringTools.endsWith(name, '>') ? name : name + paramString(params, depth);
+				if (!name.endsWith('>')) printedTypedefs['$name@${d.get().pos}'] = d;
+				name.endsWith('>') ? name : name + paramString(params, depth);
 			case TAbstract(a, params): a.toString() + paramString(params, depth);
 			case TDynamic(null): 'Dynamic';
 			case TDynamic(inner): 'Dynamic<${typeString(inner, depth + 1)}>';

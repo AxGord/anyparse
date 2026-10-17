@@ -15,6 +15,7 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -580,7 +581,7 @@ final class GuardContinue implements Check {
 	): Null<{ span: Span, text: String }> {
 		final cut: Null<GuardSplice> = GuardScan.splice(m, source, s.negation, s.support, types);
 		if (cut == null) return null;
-		final inner: String = StringTools.rtrim(applyRenames(cut.inner, cut.innerFrom, m.renames));
+		final inner: String = applyRenames(cut.inner, cut.innerFrom, m.renames).rtrim();
 		var to: Int = cut.ifSpan.to;
 		final hoisted: StringBuf = new StringBuf();
 		for (t in m.tail) {

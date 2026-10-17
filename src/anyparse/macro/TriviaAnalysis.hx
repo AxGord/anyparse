@@ -114,8 +114,7 @@ class TriviaAnalysis {
 	}
 
 	private static function hasAnyTriviaStar(node: ShapeNode): Bool {
-		return node.kind == Star && node.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true
-			|| node.children.exists(child -> hasAnyTriviaStar(child));
+		return node.kind == Star && node.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true || node.children.exists(hasAnyTriviaStar);
 	}
 
 	private static function collectRefs(node: ShapeNode): Array<String> {

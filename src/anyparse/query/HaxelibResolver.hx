@@ -79,7 +79,7 @@ final class HaxelibResolver {
 		final parsed: Null<HaxelibJson> = try HaxelibJsonParser.parse(haxelibJson) catch (exception: Exception) null;
 		if (parsed == null) return null;
 		final classPathRaw: Null<String> = parsed.classPath;
-		final classPath: String = classPathRaw != null ? StringTools.trim(classPathRaw) : '';
+		final classPath: String = classPathRaw != null ? classPathRaw.trim() : '';
 		return Path.normalize(classPath == '' ? root : Path.join([root, classPath]));
 	}
 

@@ -4,6 +4,8 @@ import anyparse.grammar.json.JValue;
 import anyparse.runtime.EditDistance;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * One well-formed `boundedRepeats` entry, as written: the member, the
  * call or loop header it narrows to, the bound and the cost of a turn.
@@ -103,7 +105,7 @@ final class ThreadSafetyOptions {
 		for (pair in list('lockPairs')) if (pair.lastIndexOf('/') <= 0)
 			problems.push('malformed lockPairs entry "$pair" — expected "<lock pattern>/<unlock member>"');
 		for (entry in list('nonBlocking')) {
-			final written: String = StringTools.trim(entry);
+			final written: String = entry.trim();
 			final cut: Int = firstSpace(written);
 			if (cut > 0)
 				nonBlocking.push(written.substring(0, cut))
@@ -276,7 +278,7 @@ final class ThreadSafetyOptions {
 
 	/** The index of the first whitespace character of `text`; -1 when it has none. */
 	private static function firstSpace(text: String): Int {
-		for (i in 0...text.length) if (StringTools.isSpace(text, i)) return i;
+		for (i in 0...text.length) if (text.isSpace(i)) return i;
 		return -1;
 	}
 

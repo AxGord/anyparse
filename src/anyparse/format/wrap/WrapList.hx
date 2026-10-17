@@ -514,7 +514,7 @@ class WrapList {
 					w(sep, depth);
 					for (it in items) w(it, depth);
 				case Text(t):
-					if (depth == 1) switch StringTools.trim(t) {
+					if (depth == 1) switch t.trim() {
 						case '?':
 							question = true;
 						case ':':
@@ -819,7 +819,7 @@ class WrapList {
 			case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline:
 				return false;
 			case Line(flat):
-				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
+				return flat.length > 0 && flat.fastCodeAt(0) == '\n'.code;
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				// All three opt-hardline variants count as a leading
 				// hardline for the wrap-engine `(...)` shape decision.
@@ -931,9 +931,7 @@ class WrapList {
 				OptHardlineSkipBeforeHardline:
 				return false;
 			case Text(s):
-				return s.length > 0
-					&& (StringTools.fastCodeAt(s, 0) == '('.code || StringTools.fastCodeAt(s, 0) == '['.code
-						|| StringTools.fastCodeAt(s, 0) == '{'.code);
+				return s.length > 0 && (s.fastCodeAt(0) == '('.code || s.fastCodeAt(0) == '['.code || s.fastCodeAt(0) == '{'.code);
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
 				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
@@ -981,7 +979,7 @@ class WrapList {
 				return false;
 			case Text(s):
 				if (s.length == 0) return false;
-				final c: Int = StringTools.fastCodeAt(s, s.length - 1);
+				final c: Int = s.fastCodeAt(s.length - 1);
 				return c == ')'.code || c == ']'.code || c == '}'.code;
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
@@ -1022,7 +1020,7 @@ class WrapList {
 				return false;
 			case Text(s):
 				if (s.length == 0) return false;
-				final c: Int = StringTools.fastCodeAt(s, s.length - 1);
+				final c: Int = s.fastCodeAt(s.length - 1);
 				return c >= '0'.code && c <= '9'.code;
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
@@ -1092,7 +1090,7 @@ class WrapList {
 					w(sep, depth);
 					for (it in items) w(it, depth);
 				case Text(t):
-					switch StringTools.trim(t) {
+					switch t.trim() {
 						case '+', '-': record(true, depth);
 						case '||', '&&', '?', ':':
 							record(false, depth);
@@ -1127,7 +1125,7 @@ class WrapList {
 				OptHardlineSkipBeforeHardline:
 				return false;
 			case Text(s):
-				return s.length > 0 && (StringTools.fastCodeAt(s, 0) == '['.code || StringTools.fastCodeAt(s, 0) == '{'.code);
+				return s.length > 0 && (s.fastCodeAt(0) == '['.code || s.fastCodeAt(0) == '{'.code);
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
 				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
@@ -1165,7 +1163,7 @@ class WrapList {
 				OptHardlineSkipBeforeHardline:
 				return false;
 			case Text(s):
-				return StringTools.endsWith(s, '#end');
+				return s.endsWith('#end');
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
 				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
@@ -1224,7 +1222,7 @@ class WrapList {
 	public static function lastVisibleText(d: Doc): Null<String> {
 		return switch d {
 			case Text(s):
-				final t: String = StringTools.trim(s);
+				final t: String = s.trim();
 				t == '' ? null : t;
 			case Concat(arr):
 				var r: Null<String> = null;
@@ -1725,7 +1723,7 @@ class WrapList {
 					w(sep, depth);
 					for (it in items) w(it, depth);
 				case Text(t):
-					if (depth == 1) switch StringTools.trim(t) {
+					if (depth == 1) switch t.trim() {
 						case '+', '-', '||', '&&':
 							found = true;
 						case _:
@@ -1930,7 +1928,7 @@ class WrapList {
 		return switch (node) {
 			case Text(s): s.length;
 			case Line(flat):
-				flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? -1 : flat.length;
+				flat.length > 0 && flat.fastCodeAt(0) == '\n'.code ? -1 : flat.length;
 			case OptSpace(s): s.length;
 			case OptSpaceSkipAfterHardline: 1;
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline: -1;
@@ -2943,7 +2941,7 @@ class WrapList {
 				case Fill(items, _, _), FillWithRestProbe(items, _, _), FillBreakAfterWrap(items, _, _):
 					return items.length > 0;
 				case Line(s):
-					if (s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code) return true;
+					if (s.length > 0 && s.fastCodeAt(0) == '\n'.code) return true;
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 					return true;
 				case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline:
@@ -3044,7 +3042,7 @@ class WrapList {
 			case Concat(arr):
 				var hit: Bool = false;
 				for (k in 0...arr.length) if (!hit) switch arr[k] {
-					case Line(flat) if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code && k + 1 < arr.length
+					case Line(flat) if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code && k + 1 < arr.length
 						&& DocMeasure.firstVisibleTextStartsWith(arr[k + 1], '.'.code)):
 						hit = true;
 					// Follow ONLY a bare chain-tail `Nest` (where MethodChainEmit
@@ -3857,7 +3855,7 @@ class WrapList {
 			case Empty: false;
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline: true;
 			case Line(flat):
-				flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
+				flat.length > 0 && flat.fastCodeAt(0) == '\n'.code;
 			case Text(_), OptSpace(_), OptSpaceSkipAfterHardline, IfBreak(_, _), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _),
 				IfLineExceeds(_, _, _), IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
 				IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
@@ -3922,7 +3920,7 @@ class WrapList {
 	private static function firstVisibleTextIsFunctionKw(d: Doc): Bool {
 		return switch d {
 			case Text(s):
-				StringTools.trim(s) == 'function';
+				s.trim() == 'function';
 			case Concat(arr):
 				var found: Bool = false;
 				var hit: Bool = false;
@@ -4022,7 +4020,7 @@ class WrapList {
 	private static function firstVisibleText(d: Doc): Null<String> {
 		return switch d {
 			case Text(s):
-				StringTools.trim(s);
+				s.trim();
 			case Concat(arr):
 				var found: Bool = false;
 				var r: Null<String> = null;
@@ -4356,7 +4354,7 @@ class WrapList {
 			final node: Doc = stack.pop();
 			switch (node) {
 				case Text(s):
-					if (s.length > 0 && !isCommentTextAtom(s)) lastCh = StringTools.fastCodeAt(s, s.length - 1);
+					if (s.length > 0 && !isCommentTextAtom(s)) lastCh = s.fastCodeAt(s.length - 1);
 				case Line(_):
 					// A SOFT line (opAdd / opBool / ternary continuation) reaching before
 					// the delimiter means the delimited construct is NOT what `d` first

@@ -12,6 +12,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -548,7 +549,7 @@ final class FunctionValueTypes {
 	/** The parameter the identifier at `at` in `read` reads, when it is one its function never writes (`Refs`); null otherwise. */
 	private function unwrittenParameter(read: ParsedFile, at: FactPos): Null<QueryNode> {
 		final shape: RefShape = _scope.shape;
-		final name: String = StringTools.trim(read.source.substring(at.span.from, at.span.to));
+		final name: String = read.source.substring(at.span.from, at.span.to).trim();
 		final hits: Array<RefHit> = Refs.find(name, read.tree, shape);
 		final hit: Null<RefHit> = hits.find(h -> h.kind == Read && h.span.from == at.span.from && h.span.to == at.span.to);
 		final declared: Null<QueryNode> = hit?.bindingNode;

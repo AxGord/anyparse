@@ -553,7 +553,7 @@ final class MoveMember {
 					return '${entry.file} has "using $path" — moving a member into a type under `using` could '
 						+ 'hijack extension calls, refusing';
 			}
-			for (path in TypeRefIndex.plainImports(info)) if (memberNames.exists(name -> StringTools.endsWith(path, '.$srcTypeName.$name')))
+			for (path in TypeRefIndex.plainImports(info)) if (memberNames.exists(name -> path.endsWith('.$srcTypeName.$name')))
 				return '${entry.file} has a static import "$path" — refusing';
 		}
 		return null;
@@ -1425,7 +1425,7 @@ final class MoveMember {
 		final bodyClose: Null<Int> = RefactorSupport.typeBodyCloseOffset(prep.destSource, prep.destDecl);
 		if (bodyClose == null) return '"${prep.destTypeName}" has no brace body to receive the member';
 		var wsStart: Int = bodyClose;
-		while (wsStart > 0 && SourceText.isSpace(StringTools.fastCodeAt(prep.destSource, wsStart - 1))) wsStart--;
+		while (wsStart > 0 && SourceText.isSpace(prep.destSource.fastCodeAt(wsStart - 1))) wsStart--;
 		final destFrame: String = destPrepend == '' ? '\n\n${blocks.join('\n\n')}\n\n' : '\n\n$destPrepend\n\n${blocks.join('\n\n')}\n\n';
 		ScopeFiles.editsFor(editsByFile, prep.destFile).push({ span: new Span(wsStart, bodyClose), text: destFrame });
 		return null;

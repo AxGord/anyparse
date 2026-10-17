@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.core.PhaseTimings;
 
+using Lambda;
 using StringTools;
 
 #if nodejs
@@ -292,7 +293,7 @@ final class HaxeSpawn {
 		#if nodejs
 		// a shell job always goes through the driver: only there does a kill reach its whole process group; a tethered one,
 		// because only there is it tethered
-		if ((jobs.length <= 1 || parallel <= 1) && !Lambda.exists(jobs, j -> j.shell != null || j.tethered == true))
+		if ((jobs.length <= 1 || parallel <= 1) && !jobs.exists(j -> j.shell != null || j.tethered == true))
 			return runInOrder(jobs, maxBuffer, stop);
 		// the jobs go in through a FILE and the driver's stdin is the null device: an `input` piped to `spawnSync` can
 		// stall for good on macOS, the stdin socket drained while this process sleeps in `kevent` with bytes still to

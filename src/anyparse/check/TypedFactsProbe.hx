@@ -7,6 +7,8 @@ import anyparse.macro.EmbeddedSource;
 import anyparse.query.CompilerFacts;
 import haxe.io.Path;
 
+using Lambda;
+
 /**
  * What the compiler typed, for every configured compiler oracle: one compile of the configuration's own hxml with the
  * `TypedFactsMacro` hook, which writes the typed tree's facts to a file once typing ended, read into one
@@ -275,9 +277,7 @@ final class TypedFactsProbe {
 	private static function failureOf(run: HaxeRun): String {
 		if (run.failure != '') return run.failure;
 		if (run.status == 0) return 'it wrote no facts file';
-		final first: String = StringTools.trim(
-			Lambda.find(run.err.split('\n'), l -> StringTools.trim(l) != '' && l.indexOf('Warning') < 0) ?? ''
-		);
+		final first: String = StringTools.trim(run.err.split('\n').find(l -> StringTools.trim(l) != '' && l.indexOf('Warning') < 0) ?? '');
 		return 'the compile failed (status ${run.status})' + (first == '' ? '' : ': $first');
 	}
 

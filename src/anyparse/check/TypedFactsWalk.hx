@@ -10,6 +10,7 @@ import haxe.macro.Type;
 import haxe.macro.TypeTools;
 import haxe.macro.TypedExprTools;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -767,7 +768,7 @@ final class TypedFactsWalk {
 			case [TObjectDecl(entries), TAnonymous(a)]:
 				final declared: Array<ClassField> = a.get().fields;
 				for (entry in entries) {
-					final slot: Null<ClassField> = Lambda.find(declared, f -> f.name == entry.name);
+					final slot: Null<ClassField> = declared.find(f -> f.name == entry.name);
 					if (slot != null) flowInto(entry.expr, str(slot.type), 'obj', entry.expr.pos);
 				}
 			case _:

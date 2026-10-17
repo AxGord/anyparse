@@ -18,6 +18,7 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -883,7 +884,7 @@ final class ReachGraph {
 	 * or an interface declared exactly once.
 	 */
 	private function exactTypes(g: CallGraph, type: String): Null<Array<String>> {
-		final nominal: Null<String> = NominalTypes.outerNominalOf(StringTools.trim(type), _scope.plugin.typeSyntax);
+		final nominal: Null<String> = NominalTypes.outerNominalOf(type.trim(), _scope.plugin.typeSyntax);
 		final decl: Null<TypeDeclInfo> = nominal == null ? null : _scope.declarationOf(nominal);
 		if (nominal == null || decl == null) return null;
 		final declared: TypeDeclInfo = decl;
@@ -904,7 +905,7 @@ final class ReachGraph {
 	private function runtimeTypes(g: CallGraph, type: String, family: SiteFamily, escaped: Bool = true): Null<Array<String>> {
 		// an abstract's own member of the family runs on it — static calls the compiler puts where the static type is it; its
 		// own conversion may convert the value it wraps in turn, as `Any`'s does, which may be anything
-		final own: String = g.types.resolveAlias(NominalTypes.outerNominalOf(StringTools.trim(type), _scope.plugin.typeSyntax) ?? type);
+		final own: String = g.types.resolveAlias(NominalTypes.outerNominalOf(type.trim(), _scope.plugin.typeSyntax) ?? type);
 		if (isAbstract(own) && indexImplicit().exists(c -> c.type == own && matches(c.family, family)))
 			return family == Text ? null : [own];
 		// otherwise the value is one of its value types, which run what they and their supertypes declare
@@ -1360,12 +1361,12 @@ final class ReachGraph {
 		var i: Int = 0;
 		final n: Int = text.length;
 		while (i < n) {
-			if (!RawSourceScan.isWordChar(StringTools.fastCodeAt(text, i))) {
+			if (!RawSourceScan.isWordChar(text.fastCodeAt(i))) {
 				i++;
 				continue;
 			}
 			final from: Int = i;
-			while (i < n && RawSourceScan.isWordChar(StringTools.fastCodeAt(text, i))) i++;
+			while (i < n && RawSourceScan.isWordChar(text.fastCodeAt(i))) i++;
 			visit(text.substring(from, i));
 		}
 	}
@@ -1460,7 +1461,7 @@ final class ReachGraph {
 			// its methods, and a placeholder runs nothing — an extern's method is target code, the native admission's
 			// (`FactsView.externMethod`)
 			final textless: Bool = facts.unheld(id) || facts.textless(id);
-			for (member in facts.methodsOf(id)) if (owners.contains(id) || accessors.exists(p -> StringTools.startsWith(member, p))) {
+			for (member in facts.methodsOf(id)) if (owners.contains(id) || accessors.exists(p -> member.startsWith(p))) {
 				if (textless && !facts.externMethod(id, member)) return null;
 				ids.push({ id: g.ownMember(type, member) ?? placeholder(g, type, member), owner: id });
 			}

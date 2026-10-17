@@ -2,6 +2,9 @@ package anyparse.query;
 
 import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
 import anyparse.query.ConfigFinder.ConfigFile;
+
+using StringTools;
+
 #if (sys || nodejs)
 import sys.FileSystem;
 #end
@@ -54,7 +57,7 @@ final class FormatConfigDiscovery {
 	 * wrote through another otherwise reports findings it can never apply.
 	 */
 	public static inline function normalize(text: Null<String>): Null<String> {
-		return text == null || StringTools.trim(text) == '' ? null : text;
+		return text == null || text.trim() == '' ? null : text;
 	}
 
 	/**

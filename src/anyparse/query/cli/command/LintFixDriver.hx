@@ -303,7 +303,7 @@ final class LintFixDriver {
 		// resolution-scoped index (report UNION library) rides the HOST instead, so a check's
 		// resolution gate (naming's inherited-member proof) resolves a library supertype through
 		// `SymbolIndexHost.resolutionIndex()`. Both rebuild per pass over this pass's sources.
-		final index: SymbolIndex = PhaseTimings.measure('pass report index', () -> IndexScope.report(files, cached));
+		final index: SymbolIndex = PhaseTimings.measure('pass report index', IndexScope.report.bind(files, cached));
 		final resolutionFiles: Null<Array<{ file: String, source: String }>> = PhaseTimings.measure(
 			'pass resolution files', () -> cached.resolutionFiles()
 		);

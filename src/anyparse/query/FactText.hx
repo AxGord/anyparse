@@ -6,6 +6,8 @@ import anyparse.query.CompilerFacts.FactPos;
 import haxe.Json;
 import haxe.io.Bytes;
 
+using StringTools;
+
 /**
  * The text side of the compiler facts: reading a facts line without parsing it, the content hash a facts file records
  * per file, and whether a fact the compiler placed at a source range is about the expression written there.
@@ -88,9 +90,9 @@ final class FactText {
 	public static function mentions(text: String, name: String): Bool {
 		var from: Int = text.indexOf(name);
 		while (from >= 0) {
-			final before: Int = from == 0 ? ' '.code : StringTools.fastCodeAt(text, from - 1);
+			final before: Int = from == 0 ? ' '.code : text.fastCodeAt(from - 1);
 			final end: Int = from + name.length;
-			final after: Int = end >= text.length ? ' '.code : StringTools.fastCodeAt(text, end);
+			final after: Int = end >= text.length ? ' '.code : text.fastCodeAt(end);
 			if (!isWordChar(before) && !isWordChar(after)) return true;
 			from = text.indexOf(name, from + 1);
 		}
@@ -101,10 +103,10 @@ final class FactText {
 	public static function spellsCall(text: String, name: String): Bool {
 		var from: Int = text.indexOf(name);
 		while (from >= 0) {
-			final before: Int = from == 0 ? ' '.code : StringTools.fastCodeAt(text, from - 1);
+			final before: Int = from == 0 ? ' '.code : text.fastCodeAt(from - 1);
 			var next: Int = from + name.length;
-			while (next < text.length && StringTools.isSpace(text, next)) next++;
-			if (!isWordChar(before) && next < text.length && StringTools.fastCodeAt(text, next) == '('.code) return true;
+			while (next < text.length && text.isSpace(next)) next++;
+			if (!isWordChar(before) && next < text.length && text.fastCodeAt(next) == '('.code) return true;
 			from = text.indexOf(name, from + 1);
 		}
 		return false;
@@ -118,14 +120,14 @@ final class FactText {
 		var from: Int = text.indexOf(name);
 		while (from >= 0) {
 			final end: Int = from + name.length;
-			final bounded: Bool = (from == 0 || !isWordChar(StringTools.fastCodeAt(text, from - 1)))
-				&& (end >= text.length || !isWordChar(StringTools.fastCodeAt(text, end)));
+			final bounded: Bool = (from == 0 || !isWordChar(text.fastCodeAt(from - 1)))
+				&& (end >= text.length || !isWordChar(text.fastCodeAt(end)));
 			var before: Int = from - 1;
-			while (before >= 0 && StringTools.isSpace(text, before)) before--;
+			while (before >= 0 && text.isSpace(before)) before--;
 			final start: Int = before + 1 - keyword.length;
 			if (
 				bounded && before < from - 1 && start >= 0 && text.substring(start, before + 1) == keyword
-				&& (start == 0 || !isWordChar(StringTools.fastCodeAt(text, start - 1)))
+				&& (start == 0 || !isWordChar(text.fastCodeAt(start - 1)))
 			)
 				return true;
 			from = text.indexOf(name, from + 1);
@@ -140,10 +142,10 @@ final class FactText {
 	public static function endsAccess(text: String, end: Int, name: String): Bool {
 		final from: Int = end - name.length;
 		if (from <= 0 || end > text.length || text.substring(from, end) != name) return false;
-		if (end < text.length && isWordChar(StringTools.fastCodeAt(text, end))) return false;
+		if (end < text.length && isWordChar(text.fastCodeAt(end))) return false;
 		var dot: Int = from - 1;
-		while (dot > 0 && StringTools.isSpace(text, dot)) dot--;
-		return StringTools.fastCodeAt(text, dot) == '.'.code;
+		while (dot > 0 && text.isSpace(dot)) dot--;
+		return text.fastCodeAt(dot) == '.'.code;
 	}
 
 	/** The name a call site's text spells for what it calls — an accessor's property, a local function's binder — or null. */
@@ -152,7 +154,7 @@ final class FactText {
 		if (target == null || c.access == 'local' || c.access == 'value') return null;
 		if (c.access == 'super') return 'super';
 		final name: String = SourceText.lastSegment(target);
-		return StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_') ? name.substr(ACCESSOR_PREFIX) : name;
+		return name.startsWith('get_') || name.startsWith('set_') ? name.substr(ACCESSOR_PREFIX) : name;
 	}
 
 	private static function isWordChar(c: Int): Bool {

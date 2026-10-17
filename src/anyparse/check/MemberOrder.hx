@@ -920,7 +920,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	 */
 	private static function isDirectiveOrBlank(text: String): Bool {
 		for (line in text.split('\n')) {
-			final trimmed: String = StringTools.ltrim(line);
+			final trimmed: String = line.ltrim();
 			if (trimmed == '') continue;
 			if (!trimmed.startsWith('#')) return false;
 			if (SourceComments.textHasCommentMarker(trimmed)) return false;

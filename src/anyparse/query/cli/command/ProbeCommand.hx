@@ -312,7 +312,7 @@ final class ProbeCommand implements CliCommand {
 			return false;
 		}
 		CliIo.sysPrint(emitted);
-		if (!StringTools.endsWith(emitted, '\n')) CliIo.sysPrint('\n');
+		if (!emitted.endsWith('\n')) CliIo.sysPrint('\n');
 		// DX v10: source-preservation note. The trivia pipeline is meant
 		// to round-trip source bytes verbatim (subject to the writer's
 		// fidelity); a byte-diff signals an actual writer-fidelity gap

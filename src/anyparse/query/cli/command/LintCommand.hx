@@ -152,7 +152,7 @@ final class LintCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		final status: Int = PhaseTimings.measure('lint', () -> runLint(args));
+		final status: Int = PhaseTimings.measure('lint', runLint.bind(args));
 		PhaseTimings.report(CliIo.stderr);
 		return status;
 	}
@@ -533,7 +533,7 @@ final class LintCommand implements CliCommand {
 			declared: resolution.declared,
 			sources: resolution.sources,
 			builds: resolution.builds,
-			facts: () -> read(false),
+			facts: read.bind(false),
 			factsEdited: touched,
 			factsSettled: () -> if (early != null) read(true),
 			buildsAhead: resolution.buildsAhead,

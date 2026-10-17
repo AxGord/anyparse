@@ -4,6 +4,8 @@ import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
 import anyparse.format.ArrayMatrixWrap;
 
+using StringTools;
+
 /**
  * Bottom-up grid layout for matrix-shaped array literals.
  *
@@ -97,7 +99,7 @@ final class MatrixWrap {
 			switch node {
 				case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline:
 				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return true;
+					if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) return true;
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 					return true;
 				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner),

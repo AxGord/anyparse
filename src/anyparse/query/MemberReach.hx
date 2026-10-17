@@ -40,6 +40,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.ValueCarriers.CarryRelation;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -385,8 +386,8 @@ final class MemberReach {
 		_metRawRegion = false;
 		_syntaxEntered = false;
 		_carriers.startQuestion();
-		final answer: ReachResult = PhaseTimings.measure('reach answer', () -> answerReach(entry, member, access));
-		final configured: Null<MemberReach> = PhaseTimings.measure('reach escalation', () -> escalation(answer));
+		final answer: ReachResult = PhaseTimings.measure('reach answer', answerReach.bind(entry, member, access));
+		final configured: Null<MemberReach> = PhaseTimings.measure('reach escalation', escalation.bind(answer));
 		return configured == null ? answer : configured.mayReach(entry, member, access);
 	}
 
@@ -838,7 +839,7 @@ final class MemberReach {
 		final source: Null<String> = _projectSources[file] ?? _g.sourceOf(file) ?? _index.sourceOf(file) ?? _configured?.sourceAt(file);
 		if (span == null || source == null) return file;
 		var line: Int = 1;
-		for (i in 0...span.from) if (StringTools.fastCodeAt(source, i) == '\n'.code) line++;
+		for (i in 0...span.from) if (source.fastCodeAt(i) == '\n'.code) line++;
 		return '$file:$line';
 	}
 
