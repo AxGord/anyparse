@@ -160,7 +160,8 @@ class OperandTypingTest extends Test {
 	@:pin('control') @:killer('M-BINDER-CLOSURE-UNRESOLVED')
 	public function testAnInheritedMemberPastAnUnreadSupertypeIsUnproven(): Void {
 		final ok: { file: String, source: String } = { file: 'Ok.hx', source: 'interface Ok {\n\tfunction ok():Bool;\n}\n' };
-		Assert.isFalse(inverts([ok, use('import far.Mid;\n\n', ' extends Mid implements Ok', '!ok()')]));
+		// written qualified, with no import: an unindexed import would leave every simple name of the file unproven itself
+		Assert.isFalse(inverts([ok, use('', ' extends far.Mid implements Ok', '!ok()')]));
 		Assert.isTrue(inverts([ok, OPEN, use('', ' extends Opener implements Ok', '!ok()')]));
 	}
 
@@ -199,10 +200,27 @@ class OperandTypingTest extends Test {
 		]));
 	}
 
-	/** A later `using` the index does not hold may declare the extension: nothing earlier is read past it. */
+	/**
+	 * A later `using` the index does not hold may declare the extension: nothing earlier is read past it. The receiver type
+	 * is written qualified (`p.Box`), which an unindexed module cannot rebind, so it is the `using` alone that refuses.
+	 */
 	@:pin('control') @:killer('M-BINDER-EXTENSION-UNINDEXED')
 	public function testAnUnreadLaterUsingLeavesTheExtensionUnproven(): Void {
-		Assert.isFalse(inverts([TOOLS, use('using Tools;\nusing far.More;\n\n', '', '!s.ext()')]));
+		final box: { file: String, source: String } = {
+			file: 'p/Box.hx',
+			source: 'package p;\n\nclass Box {\n\tpublic function new() {}\n}\n'
+		};
+		final tools: { file: String, source: String } = {
+			file: 'BoxTools.hx',
+			source: 'class BoxTools {\n\tpublic static function ext(b:p.Box):Bool {\n\t\treturn true;\n\t}\n}\n'
+		};
+		final source: String = 'class Use {\n\tfunction f(b:p.Box, x:Int):Int {\n\t\treturn !b.ext() ? 1 : 2;\n\t}\n}\n';
+		Assert.isTrue(inverts([box, tools, { file: 'Use.hx', source: 'using BoxTools;\n\n$source' }]));
+		Assert.isFalse(inverts([
+			box,
+			tools,
+			{ file: 'Use.hx', source: 'using BoxTools;\nusing far.More;\n\n$source' }
+		]));
 	}
 
 	/** `using Mod` brings the statics of every type of the module (4.3.7), not only of `Mod` itself. */
