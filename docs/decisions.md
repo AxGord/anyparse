@@ -3827,3 +3827,27 @@ decided the question; it may not become a record of runs.
   Not routed: `double-negation` / `simplify-negated-compound` never swap branches (they rewrite the condition in place),
   and the guard inverters (`guard-return` / `guard-continue`) ADD a negation to build an early exit, which is a different
   reordering — branch `feat/infra-N33`
+- N34 — `keepDefaultElse` stopped the swap from CREATING `hasNext ? null : _changeEvent`, but earlier `--fix` runs had
+  already written six such sites into TM, and no rule turned them back. → option `defaultLast` (default OFF) under
+  `invert-negated-if-else`: a choice whose THEN arm is a default literal and whose else arm is no literal is turned so
+  the default goes last (`c ? null : v` -> `!c ? v : null`, `a != b ? null : v` -> `a == b ? v : null`; a value `if`;
+  an `if` statement `if (c) return <default>; else return v;`). Decisions: (1) `defaultLast` IMPLIES `keepDefaultElse`
+  (read together in `NegatedCondition.site`): with only the new option on, the swap would invert `!c ? v : null` back to
+  `c ? null : v` and the two directions would ping-pong across `--fix` passes; a project asking for "default last" wants
+  both halves. (2) ONE door for both directions, `NegatedCondition.swapOf(cond, thenArm, elseArm, site)`: the strip
+  (`invertibleOperand`) first, then `defaultLastCondition`; `invert-negated-if-else`'s three forms ask only it, so a
+  swapped choice can never qualify again (a turned `!c ? v : null` is a kept negation, a flipped `a == b ? v : null` has a
+  non-default then arm). (3) Positive whitelist of turnable conditions: an atom that takes a bare `!`
+  (`NegationSeams.atomicKinds` minus the paren and the bool literal) or an `==` / `!=`, which flips NaN-safely; the text
+  is the shared engine's (`NegationScan.negateConditionText`). A compound, an ordered comparison (the engine would keep
+  `!(a < b)` wrapped without a type proof), an `is` or a `?:` would need a wrap or a De Morgan rewrite, which reads worse
+  than the order it fixes — untouched. A not the strip refuses (an overloaded `!`, a kept default else) is not turned
+  either: no `!!`. (4) The operator gate is `OperatorSelection` over the operators the turn WRITES — the not it adds and
+  the `==` / `!=` it flips (`NegatedCondition.builtin`, which the strip's not check now shares). (5) "Literal" for the
+  else arm is `CaseValueKey.isLiteral` (any number, bool, `null`, string, a negated number), so two literals
+  (`_targetSelected ? 0.0 : 1.0`) are a mapping and stay; arms are read the way `keepDefaultElse` reads them
+  (`armValue`), and both or neither must be a `return`. (6) The four ternary builders keep the orientation of the guard
+  they collapse (`PreferTernaryReturn` quotes its condition byte for byte, so it cannot carry a rebuilt one); a
+  default-first ternary one of them writes from a default-first guard is turned by the swap on the next pass, and
+  nothing turns it back — the fixed point is pinned over all five rules (`testDefaultLastFixReachesAFixedPoint`) —
+  branch `feat/infra-N34`

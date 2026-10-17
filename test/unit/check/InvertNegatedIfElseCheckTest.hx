@@ -1,8 +1,12 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
+import anyparse.check.Check;
 import anyparse.check.InvertNegatedIfElse;
 import anyparse.check.Linter;
+import anyparse.check.PreferTernaryAssignment;
+import anyparse.check.PreferTernaryExpression;
+import anyparse.check.PreferTernaryReturn;
+import anyparse.check.ReturnReassignTernary;
 import anyparse.check.Severity;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
@@ -18,6 +22,9 @@ import utest.Test;
  * not flagged.
  */
 class InvertNegatedIfElseCheckTest extends Test {
+
+	/** The most `--fix` passes `settle` runs before it calls the rules a ping-pong. */
+	private static inline final MAX_SETTLE_PASSES: Int = 6;
 
 	public function testNegatedIfElseFlagged(): Void {
 		final vs: Array<Violation> = violations('class C {\n\tfunction f():Void {\n\t\tif (!a) x(); else y();\n\t}\n}');
@@ -276,9 +283,7 @@ class InvertNegatedIfElseCheckTest extends Test {
 	 * (the gate asked about the then arm).
 	 */
 	@:pin('control')
-	@:killer('M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL', 'M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM',
-		'M-INVERT-KEEP-DEFAULT-STATEMENT-EDIT-THEN-ARM')
-	@:killer('M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM', 'M-INVERT-KEEP-DEFAULT-VALUE-EDIT-THEN-ARM')
+	@:killer('M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL', 'M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM', 'M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM')
 	public function testKeepDefaultElseInvertsANonDefaultElse(): Void {
 		for (lit in ['1', 'true', '"s"', '-1', '0.5', 'y', 'f()'])
 			Assert.equals(1, keeping(fn('final v = !a ? x : $lit;'), true).violations.length, lit);
@@ -298,6 +303,182 @@ class InvertNegatedIfElseCheckTest extends Test {
 		final src: String = fn('final v = !a ? x : null;');
 		Assert.equals(fn('final v = a ? null : x;'), CheckFixture.fixedUnder(new InvertNegatedIfElse(), src, '{"rules":{}}'));
 		Assert.equals(fn('final v = a ? null : x;'), fixed(src));
+	}
+
+	/**
+	 * Under `defaultLast` a choice whose THEN arm is a default literal and whose else arm is no literal is
+	 * turned around so the default goes last: an atom gains a bare `!`, an `==` / `!=` flips, in a ternary,
+	 * a value `if` and an `if` statement returning both values (bare or braced).
+	 *
+	 * RED under M-NEGCOND-SWAP-DEFAULT-LAST-DROPPED (the swap never asks the turn) and
+	 * M-NEGCOND-SWAP-DEFAULT-LAST-ARMS-SWAPPED (the turn asked about the else arm).
+	 */
+	@:pin('control')
+	@:killer('M-NEGCOND-SWAP-DEFAULT-LAST-DROPPED', 'M-NEGCOND-SWAP-DEFAULT-LAST-ARMS-SWAPPED')
+	public function testDefaultLastTurnsADefaultFirstChoice(): Void {
+		for (pair in [
+			['final v = hasNext ? null : e;', 'final v = !hasNext ? e : null;'],
+			['final v = a != b ? null : x;', 'final v = a == b ? x : null;'],
+			['final v = a == b ? 0 : f();', 'final v = a != b ? f() : 0;'],
+			['final v = o.f(x) ? false : y;', 'final v = !o.f(x) ? y : false;'],
+			['final v = (a) ? "" : y;', 'final v = !a ? y : "";'],
+			['final v = a[0] ? (null) : y;', 'final v = !a[0] ? y : (null);'],
+			['final v = if (a) null else x;', 'final v = if (!a) x else null;'],
+			['if (a) return null; else return x;', 'if (!a) return x; else return null;'],
+			[
+				'if (a.b) { return 0; } else { return x; }',
+				'if (!a.b) { return x; } else { return 0; }'
+			]
+		]) Assert.equals(fn(pair[1]), lastFixed(fn(pair[0])), pair[0]);
+	}
+
+	/**
+	 * The turn says which direction it is: the default-last messages, not the negation ones.
+	 *
+	 * RED under M-INVERT-DEFAULT-LAST-VALUE-MESSAGE and M-INVERT-DEFAULT-LAST-STATEMENT-MESSAGE.
+	 */
+	@:pin('control')
+	@:killer('M-INVERT-DEFAULT-LAST-VALUE-MESSAGE', 'M-INVERT-DEFAULT-LAST-STATEMENT-MESSAGE')
+	public function testDefaultLastMessages(): Void {
+		Assert.equals(
+			'this ternary puts the default first — invert the condition so the default goes last',
+			lasting(fn('final v = a ? null : x;')).violations[0].message
+		);
+		Assert.equals(
+			'this if-expression puts the default first — invert the condition so the default goes last',
+			lasting(fn('final v = if (a) null else x;')).violations[0].message
+		);
+		Assert.equals(
+			'this if-else returns the default first — invert the condition so the default goes last',
+			lasting(fn('if (a) return null; else return x;')).violations[0].message
+		);
+		Assert.equals(
+			'this negated ternary can be inverted — drop the ! and swap the branches',
+			lasting(fn('final v = !a ? null : x;')).violations[0].message
+		);
+	}
+
+	/**
+	 * What is not turned: two literals (a mapping), a non-default then arm, a condition that would need a wrap
+	 * or a De Morgan rewrite (a compound, an ordered comparison, an `is`), a bool-literal condition, a not the
+	 * strip handles, and arms of which only one is a `return`.
+	 *
+	 * RED under M-NEGCOND-DEFAULT-LAST-BOTH-LITERALS, M-NEGCOND-DEFAULT-LAST-THEN-ANY,
+	 * M-NEGCOND-DEFAULT-LAST-ANY-COND, M-NEGCOND-DEFAULT-LAST-BOOL-COND and M-NEGCOND-DEFAULT-LAST-RETURN-MISMATCH.
+	 */
+	@:pin('control')
+	@:killer('M-NEGCOND-DEFAULT-LAST-BOTH-LITERALS', 'M-NEGCOND-DEFAULT-LAST-THEN-ANY', 'M-NEGCOND-DEFAULT-LAST-ANY-COND')
+	@:killer('M-NEGCOND-DEFAULT-LAST-BOOL-COND', 'M-NEGCOND-DEFAULT-LAST-RETURN-MISMATCH')
+	public function testDefaultLastLeavesWhatItCannotTurn(): Void {
+		for (body in [
+			'final v = a ? 0.0 : 1.0;',
+			'final v = a ? null : "x";',
+			'final v = a ? 0 : -1;',
+			'final v = a ? false : true;',
+			'final v = a ? x : y;',
+			'final v = a ? x : null;',
+			'final v = a && b ? null : x;',
+			'final v = a || b ? null : x;',
+			'final v = a < b ? null : x;',
+			'final v = (a is B) ? null : x;',
+			'final v = true ? null : x;',
+			'if (a) return null; else g();',
+			'if (a) return null; else { g(); return x; }'
+		]) Assert.equals(0, lasting(fn(body)).violations.length, body);
+	}
+
+	/**
+	 * `defaultLast` is OFF unless a project sets it, and `keepDefaultElse` alone does not turn anything.
+	 *
+	 * RED under M-NEGCOND-DEFAULT-LAST-ON (the option read as on when unset).
+	 */
+	@:pin('control')
+	@:killer('M-NEGCOND-DEFAULT-LAST-ON')
+	public function testDefaultLastIsOffByDefault(): Void {
+		final src: String = fn('final v = a ? null : x;');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(0, CheckFixture.fixRunUnder(new InvertNegatedIfElse(), src, '{"rules":{}}').violations.length);
+		Assert.equals(0, keeping(src, true).violations.length);
+	}
+
+	/**
+	 * `defaultLast` implies `keepDefaultElse`: the form it writes is never inverted back, by the swap or by a
+	 * ternary builder orienting a negated guard.
+	 *
+	 * RED under M-NEGCOND-DEFAULT-LAST-NO-KEEP.
+	 */
+	@:pin('control')
+	@:killer('M-NEGCOND-DEFAULT-LAST-NO-KEEP')
+	public function testDefaultLastImpliesKeepDefaultElse(): Void {
+		for (body in [
+			'final v = !a ? x : null;',
+			'final v = if (!a) x else null;',
+			'if (!a) return x; else return null;'
+		]) Assert.equals(0, lasting(fn(body)).violations.length, body);
+		Assert.equals(
+			'return !a ? x : null;',
+			CheckFixture.soleEditUnder(new PreferTernaryReturn(), fn('if (!a) return x;\n\t\treturn null;'), lastConfig())
+		);
+	}
+
+	/**
+	 * With `defaultLast` on, `--fix` over the swap and the four ternary builders settles: every pass after
+	 * the last change makes no edit, and every shape ends default-last — the builders' default-first output
+	 * is turned, and nothing turns it back.
+	 */
+	public function testDefaultLastFixReachesAFixedPoint(): Void {
+		for (pair in [
+			['final v = a ? null : x;', 'final v = !a ? x : null;'],
+			['final v = !a ? x : null;', 'final v = !a ? x : null;'],
+			['final v = !a ? null : x;', 'final v = a ? x : null;'],
+			['final v = a != b ? null : x;', 'final v = a == b ? x : null;'],
+			['final v = if (a) null else x;', 'final v = !a ? x : null;'],
+			['if (a) return null;\n\t\treturn x;', 'return !a ? x : null;'],
+			['if (!a) return x;\n\t\treturn null;', 'return !a ? x : null;'],
+			['if (a) return null; else return x;', 'if (!a) return x; else return null;'],
+			['if (a) y = null; else y = x;', 'y = !a ? x : null;'],
+			[
+				'var r:Null<Int> = g();\n\t\tif (a) r = null;\n\t\treturn r;',
+				'var r:Null<Int> = g();\n\t\treturn !a ? r : null;'
+			],
+			[
+				'final r:Null<Int> = if (a) null else x;\n\t\treturn r;',
+				'final r:Null<Int> = !a ? x : null;\n\t\treturn r;'
+			]
+		]) {
+			final settled: { text: String, passes: Int } = settle(fn(pair[0]));
+			Assert.equals(fn(pair[1]), settled.text, pair[0]);
+			Assert.isTrue(settled.passes <= 3, '${pair[0]}: settled in ${settled.passes} passes');
+		}
+	}
+
+	/** `src` fixed by the swap and the four ternary builders under `defaultLast`, pass after pass until one changes nothing. */
+	private function settle(src: String): { text: String, passes: Int } {
+		final checks: Array<Check> = [
+			new InvertNegatedIfElse(),
+			new PreferTernaryReturn(),
+			new ReturnReassignTernary(),
+			new PreferTernaryAssignment(),
+			new PreferTernaryExpression()
+		];
+		var text: String = src;
+		for (pass in 1...MAX_SETTLE_PASSES + 1) {
+			final before: String = text;
+			for (check in checks) text = CheckFixture.fixedUnder(check, text, lastConfig());
+			if (text == before) return { text: text, passes: pass };
+		}
+		Assert.fail('no fixed point in $MAX_SETTLE_PASSES passes: $text');
+		return { text: text, passes: MAX_SETTLE_PASSES };
+	}
+
+	/** One `--fix` pass over `src` with `defaultLast` on. */
+	private function lasting(src: String): FixRun {
+		return CheckFixture.fixRunUnder(new InvertNegatedIfElse(), src, lastConfig());
+	}
+
+	/** `src` after one `--fix` pass with `defaultLast` on. */
+	private function lastFixed(src: String): String {
+		return CheckFixture.fixedUnder(new InvertNegatedIfElse(), src, lastConfig());
 	}
 
 	private function violations(src: String): Array<Violation> {
@@ -330,6 +511,11 @@ class InvertNegatedIfElseCheckTest extends Test {
 	/** The `apqlint.json` text setting `invert-negated-if-else` `keepDefaultElse` to `on`. */
 	public static function keepConfig(on: Bool): String {
 		return '{"rules":{"invert-negated-if-else":{"keepDefaultElse":$on}}}';
+	}
+
+	/** The `apqlint.json` text setting `invert-negated-if-else` `defaultLast`. */
+	public static function lastConfig(): String {
+		return '{"rules":{"invert-negated-if-else":{"defaultLast":true}}}';
 	}
 
 }
