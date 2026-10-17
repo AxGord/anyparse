@@ -140,7 +140,7 @@ final class MemberTouchScan {
 		if (!(shape.localDeclKinds ?? []).contains(declaration.kind)) return declSpan;
 		final init: Null<QueryNode> = CtorFieldFold.declInitializer(declaration, shape);
 		if (init == null || !isFresh(init, { tree: tree, source: source, call: freshCall })) return init?.span ?? declSpan;
-		final closures: Array<String> = ShapeVocab.lambdaOrLocalFunctionKinds(shape);
+		final closures: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		final end: Int = rerunEnd(fn, region);
 		var found: Null<Span> = null;
 		final declFrom: Int = declSpan.from;
@@ -174,7 +174,7 @@ final class MemberTouchScan {
 	 */
 	public function localTouch(fn: QueryNode, name: String, declFrom: Int, region: Span, owns: OwnMethods): Null<Span> {
 		final shape: RefShape = _scope.shape;
-		final closures: Array<String> = ShapeVocab.lambdaOrLocalFunctionKinds(shape);
+		final closures: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		var found: Null<Span> = null;
 		final lineage: Array<QueryNode> = [];
 		function walk(
@@ -810,7 +810,7 @@ final class MemberTouchScan {
 		final arrows: Array<String> = [
 			for (k in shape.lambdaKinds ?? []) if (k != shape.fnExprKind && k != shape.namedFnExprKind) k
 		];
-		final discarding: Array<String> = ShapeVocab.functionOrLambdaKinds(shape).concat(shape.doWhileLoopKinds ?? []);
+		final discarding: Array<String> = ShapeVocab.functionLikeKinds(shape).concat(shape.doWhileLoopKinds ?? []);
 		return !arrows.contains(owner.kind) && discarding.contains(owner.kind);
 	}
 

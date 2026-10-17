@@ -216,7 +216,7 @@ final class NullGuardedCode {
 	 */
 	private function memberParams(tree: QueryNode): Map<QueryNode, MemberParam> {
 		final out: Map<QueryNode, MemberParam> = [];
-		final functions: Array<String> = ShapeVocab.functionOrLambdaKinds(_shape);
+		final functions: Array<String> = ShapeVocab.functionLikeKinds(_shape);
 		final kinds: Array<String> = _shape.paramKinds ?? [];
 		function walk(node: QueryNode, nested: Bool): Void {
 			final isFunction: Bool = functions.contains(node.kind);
@@ -391,7 +391,7 @@ final class NullGuardedCode {
 	 * whose value is stored nowhere it is read (`storedNowhereRead`).
 	 */
 	private function readsNeverCall(node: FactNode, tree: QueryNode, fn: QueryNode, binding: QueryNode, name: String, depth: Int): Bool {
-		final functions: Array<String> = ShapeVocab.functionOrLambdaKinds(_shape);
+		final functions: Array<String> = ShapeVocab.functionLikeKinds(_shape);
 		for (hit in Refs.find(name, tree, _shape)) if (hit.bindingNode == binding && hit.kind != Decl) {
 			if (hit.kind != Read) return false;
 			final chain: Null<Array<QueryNode>> = ancestors(tree, hit.span);

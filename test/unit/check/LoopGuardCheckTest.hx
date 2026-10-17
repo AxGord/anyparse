@@ -430,4 +430,26 @@ class LoopGuardCheckTest extends Test {
 		return 'class C {\n\tfunction f($signature):Void {\n\t\t$loopCode\n\t}\n}';
 	}
 
+	/**
+	 * A `do … while` is a loop like any other here: a `continue` in the FIRST position of its body
+	 * skips the rest of that body and goes on to the condition, exactly what wrapping the rest in the
+	 * inverted `if` does (verified on `haxe --interp` 4.3.7). Its body is the loop's FIRST child, not
+	 * its last, and `do if (…) { … } while (…);` is the lifted form.
+	 */
+	@:pin('control') @:killer('M-LOOPGUARD-DO-WHILE-BODY-LAST') @:killer('M-LOOPGUARD-BODY-STATEMENT-BLOCK-ONLY')
+	public function testDoWhileLoopFlaggedAndFixed(): Void {
+		final src: String = wrap('do {\n\t\t\tif (x == 0) continue;\n\t\t\ttrace(x);\n\t\t} while (more());');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(wrap('do if (x != 0) {\n\t\t\ttrace(x);\n\t\t} while (more());'), applyFix(src));
+	}
+
+	/** The MERGE arm on a `do … while` whose body is already a lifted header `if (c) { … }`. */
+	@:pin('control') @:killer('M-LOOPGUARD-EXPR-BODY-KEPT') @:killer('M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY')
+	@:killer('M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY')
+	public function testDoWhileMergeArmJoinsTheHeader(): Void {
+		final src: String = wrapPositioned('do if (c) {\n\t\t\tif (g) continue;\n\t\t\ttrace(1);\n\t\t} while (ok);');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(wrapPositioned('do if (c && !g) {\n\t\t\ttrace(1);\n\t\t} while (ok);'), applyFix(src));
+	}
+
 }

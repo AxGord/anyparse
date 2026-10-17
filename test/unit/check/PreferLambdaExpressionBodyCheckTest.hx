@@ -377,8 +377,8 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 
 	/**
 	 * `do … while` is deliberately outside the accepted set: its condition is the LAST child,
-	 * so the body-tail recursion the strip relies on does not describe it. It falls through to
-	 * the arity guard (two children) and is refused there.
+	 * so the body-tail recursion the strip relies on does not describe it, and `() -> do f() while (c)` does not parse
+	 * here (no `do … while` expression form). It falls through to the arity guard (two children) and is refused there.
 	 */
 	public function testDoWhileNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> { do f(); while (c); });\n\t}\n}').length);

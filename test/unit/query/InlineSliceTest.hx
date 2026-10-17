@@ -200,4 +200,21 @@ class InlineSliceTest extends Test {
 		return Inline.inlineVar(source, line, col, plugin, shape);
 	}
 
+	/**
+	 * The blind-spot sweep covers the function the local is declared in (`BinderScan.enclosingFunctionSubtree`),
+	 * and a named function expression or an `inline` local function is one (`ShapeVocab.functionLikeKinds`): an
+	 * escape-spelled hole in the ENCLOSING method cannot hold a read of the nested function's local, so it refuses
+	 * nothing there.
+	 */
+	public function testInlinesALocalOfANestedFunctionPastAnOuterBlindSpot(): Void {
+		for (fn in [
+			['final g = function named():Int {', '};'],
+			['inline function named():Int {', '}']
+		]) {
+			final head: String = "class C {\n\tfunction f(a:Int, b:Int):String {\n\t\t" + fn[0] + '\n';
+			final tail: String = "\t\t" + fn[1] + "\n\t\treturn 'v \\x24{a}';\n\t}\n}";
+			assertInline(head + "\t\t\tvar x = a + b;\n\t\t\treturn x * 2;\n" + tail, 4, 4, head + "\t\t\treturn (a + b) * 2;\n" + tail);
+		}
+	}
+
 }

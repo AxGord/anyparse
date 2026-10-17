@@ -56,9 +56,9 @@ using Lambda;
  * of `S` (the guard's `indexOf` / `contains` argument AND `replace`'s first
  * argument) and `B` (`replace`'s second argument) must be EITHER a plain string
  * literal (`StringFoldSupport.literalOf` — no interpolation) OR a bare identifier
- * bound to a PARAMETER of ANY function OR LAMBDA enclosing the loop (a
- * `RefShape.paramKinds` child of ANY `RefShape.functionKinds` /
- * `lambdaKinds` ancestor, NOT merely the nearest — a lambda's own parameters and
+ * bound to a PARAMETER of ANY function OR LAMBDA enclosing the loop (a `RefShape.paramKinds`
+ * child of ANY function-like ancestor (`ShapeVocab.functionLikeKinds`: a method, a lambda, a
+ * local, `inline` or named function), NOT merely the nearest — a lambda's own parameters and
  * the enclosing METHOD's are equally caller-chosen). Anything else — a field
  * access, a call, an index access, a LOCAL `var`, an unresolvable identifier — is
  * not this pattern and is left alone. The two `S` positions must be the SAME
@@ -160,7 +160,7 @@ using Lambda;
  * subtrees.
  *
  * Two further seam groups are optional, and they fail in OPPOSITE directions.
- * `functionKinds` / `lambdaKinds` / `paramKinds` ENABLE arm C: with none of them a
+ * The function-like kinds (`ShapeVocab.functionLikeKinds`) and `paramKinds` ENABLE arm C: with none of them a
  * parameter operand can never be recognised, so arm C is unreachable and the check
  * keeps its literals-only behaviour exactly as before parameters were admitted.
  * `ifStatementKinds`, `GrammarPlugin.controlFlowSupport()` and `eqKind` drive the
@@ -284,7 +284,7 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 			// count as an enclosing scope a parameter operand may belong to. Which of those scopes
 			// each reader admits differs: `operandOf` takes a parameter of ANY of them,
 			// `dominatingGuards` reads only the innermost.
-			fnKinds: ShapeVocab.functionOrLambdaKinds(shape),
+			fnKinds: ShapeVocab.functionLikeKinds(shape),
 			paramKinds: shape.paramKinds ?? [],
 			ifStatementKinds: shape.ifStatementKinds ?? [],
 			flow: flow,

@@ -35,6 +35,7 @@ class ShapeVocabTest extends Test {
 	}
 
 	/** The Haxe grammar's loops and functions, each union spelled out. */
+	@:pin('control') @:killer('M-VOCAB-NESTED-NO-NAMED-FN')
 	public function testHaxeLoopAndFunctionVocabulary(): Void {
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
 		Assert.same(['ForStmt', 'WhileStmt', 'DoWhileStmt', 'ForExpr', 'WhileExpr'], ShapeVocab.loopKinds(shape));
@@ -61,19 +62,6 @@ class ShapeVocabTest extends Test {
 			'LocalInlineFnStmt'
 		], ShapeVocab.functionLikeKinds(shape));
 		Assert.same(['LocalFnStmt', 'LocalInlineFnStmt'], ShapeVocab.localFunctionScopeKinds(shape));
-		Assert.same([
-			'FnMember',
-			'FinalModifiedMember',
-			'FnDecl',
-			'LocalFnStmt',
-			'ThinArrow',
-			'ThinParenLambdaExpr',
-			'ParenLambdaExpr',
-			'FnExpr'
-		], ShapeVocab.functionOrLambdaKinds(shape));
-		Assert.same(
-			['ThinArrow', 'ThinParenLambdaExpr', 'ParenLambdaExpr', 'FnExpr', 'LocalFnStmt'], ShapeVocab.lambdaOrLocalFunctionKinds(shape)
-		);
 	}
 
 	/** The Haxe grammar's returns, conditionals, `try`s and `switch` arms, each union spelled out. */

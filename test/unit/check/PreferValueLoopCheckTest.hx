@@ -559,6 +559,17 @@ class PreferValueLoopCheckTest extends Test {
 		return r.vs.length == 1 ? r.vs[0].declineReason : null;
 	}
 
+	/** A named function expression or an `inline` local function reading `items[i]` reads it when it RUNS, as a lambda does. */
+	public function testEveryNestedFunctionFormReadNotFlagged(): Void {
+		for (read in [
+			'fns.push(function named() return items[i]);',
+			'inline function named() return items[i];\n\t\t\tfns.push(named);'
+		]) {
+			final loop: String = 'for (i in 0...items.length) {\n\t\t\t$read\n\t\t}';
+			Assert.equals(0, violations(wrap('items:Array<Item>, fns:Array<() -> Item>', loop)).length, read);
+		}
+	}
+
 }
 
 /** One `run` over one fixture: the check instance and the findings it produced, kept together so a fix assertion re-uses both. */

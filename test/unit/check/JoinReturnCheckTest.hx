@@ -435,4 +435,19 @@ class JoinReturnCheckTest extends Test {
 		return 'class C {\n\tfunction f(str:String):$retType {\n\t\t$body\n\t}\n}';
 	}
 
+	/**
+	 * The return type a pair is judged against is its OWN function's, and a named function expression or an
+	 * `inline` local function is one (`ShapeVocab.functionLikeKinds`). Read off the OUTER method instead, an
+	 * `Int`-returning method made the annotation look restated, and the collapse dropped the ascription of a
+	 * function that has no return type of its own.
+	 */
+	public function testANestedFunctionsOwnReturnTypeDecides(): Void {
+		final body: String = '{\n\t\t\tfinal x:Int = k();\n\t\t\treturn x;\n\t\t}';
+		for (nested in ['final h = function g() $body;', 'inline function g() $body']) {
+			final es: Array<{ span: Span, text: String }> = edits(wrapRet('Int', '$nested\n\t\treturn 0;'));
+			Assert.equals(1, es.length, nested);
+			if (es.length == 1) Assert.equals('return (k() : Int);', es[0].text);
+		}
+	}
+
 }

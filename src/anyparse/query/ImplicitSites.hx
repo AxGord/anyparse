@@ -96,7 +96,7 @@ final class ImplicitSites {
 				exact: false
 			});
 		}
-		final functions: Array<String> = ShapeVocab.functionOrLambdaKinds(_shape);
+		final functions: Array<String> = ShapeVocab.functionLikeKinds(_shape);
 		function walk(node: QueryNode, fn: Null<QueryNode>): Void {
 			final kind: String = node.kind;
 			if (concat.contains(kind)) add(Text, node, node.children);

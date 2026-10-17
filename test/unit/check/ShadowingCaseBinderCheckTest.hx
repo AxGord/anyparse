@@ -142,4 +142,36 @@ class ShadowingCaseBinderCheckTest extends Test {
 		return CheckFixture.violations(new ShadowingCaseBinder(), src);
 	}
 
+	/**
+	 * A parameter of EVERY function-like host is in scope in its body — a named function expression
+	 * and an `inline` local function as much as a method or a lambda (`ShapeVocab.functionLikeKinds`).
+	 */
+	public function testParameterOfANestedFunctionShadowFlagged(): Void {
+		for (host in [
+			'final h = function g(mode: String): Void {',
+			'inline function g(mode: String): Void {'
+		]) {
+			final src: String = 'class C {\n\tfunction f(v: Dynamic): Void {\n\t\t$host\n\t\t\tswitch v {\n\t\t\t\tcase mode: r();\n\t\t\t}'
+				+ '\n\t\t}\n\t}\n}';
+			final vs: Array<Violation> = violations(src);
+			Assert.equals(1, vs.length, host);
+			if (vs.length == 1) Assert.stringContains('shadows the parameter', vs[0].message);
+		}
+	}
+
+	/**
+	 * The NAME a named function expression or an `inline` local function declares is a local of the
+	 * enclosing function (Haxe binds `function g` of `final h = function g() …` there too, verified on
+	 * `--interp` 4.3.7), so a later `case g:` shadows it.
+	 */
+	public function testNameOfANestedFunctionShadowFlagged(): Void {
+		for (decl in ['final h = function mode(): Void {};', 'inline function mode(): Void {}']) {
+			final src: String = 'class C {\n\tfunction f(v: Dynamic): Void {\n\t\t$decl\n\t\tswitch v {\n\t\t\tcase mode: r();\n\t\t}'
+				+ '\n\t}\n}';
+			final vs: Array<Violation> = violations(src);
+			Assert.equals(1, vs.length, decl);
+			if (vs.length == 1) Assert.stringContains('shadows the local', vs[0].message);
+		}
+	}
+
 }
