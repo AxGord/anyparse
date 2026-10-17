@@ -493,7 +493,12 @@ class CrossRenameSliceTest extends Test {
 	private function changeFor(changes: Array<FileChange>, file: String): FileChange {
 		for (c in changes) if (c.file == file) return c;
 		Assert.fail('no change for file $file');
-		return { file: file, newSource: '', count: 0 };
+		return {
+			file: file,
+			newSource: '',
+			count: 0,
+			edits: []
+		};
 	}
 
 	private function changeOrNull(changes: Array<FileChange>, file: String): Null<FileChange> {

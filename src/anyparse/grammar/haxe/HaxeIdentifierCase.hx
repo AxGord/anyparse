@@ -136,6 +136,17 @@ final class HaxeIdentifierCase {
 		return upper != name && SourceText.isIdentifier(upper) ? upper : null;
 	}
 
+	/**
+	 * The mechanical fix for a TYPE or an ENUM VALUE violating PascalCase: the shared `camelCore` with its first
+	 * letter capitalised (`__Printer` -> `Printer`, `PITCH_ACTIONS` -> `PitchActions`, `JSON_FIELD` -> `JsonField`,
+	 * `goals` -> `Goals`). No keyword test: every Haxe keyword is lower-case. Not `inline` - passed as a
+	 * `NamingRule.normalize` function value.
+	 */
+	public static function pascalCase(name: String): Null<String> {
+		final core: Null<String> = camelCore(name);
+		return core == null ? null : core.charAt(0).toUpperCase() + core.substr(1);
+	}
+
 	/** Whether `c` is an ASCII decimal digit. */
 	private static inline function isDigit(c: Int): Bool {
 		return c >= '0'.code && c <= '9'.code;
