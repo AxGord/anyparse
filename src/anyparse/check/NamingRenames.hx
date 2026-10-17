@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan.ScopeFile;
+import anyparse.query.AllowGrants;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
@@ -91,7 +92,9 @@ final class NamingRenames {
 		final span: Null<Span> = decl.span;
 		if (span == null || !flaggedFroms.contains(span.from)) return null;
 		final declFrom: Int = span.from;
-		final unsafe: Null<String> = RenameRefusal.of(decl, source, confinementIndex, reflectionNames, confinedMemo);
+		final unsafe: Null<String> = RenameRefusal.of(
+			decl, source, confinementIndex, reflectionNames, confinedMemo, memberGrants(tree, source, plugin, decl)
+		);
 		if (unsafe != null) return RenameRefusal.rename(flaggedAt, declFrom, unsafe);
 		final rule: Null<NamingRule> = Naming.applicableRule(decl, policy);
 		if (rule == null) return RenameRefusal.rename(flaggedAt, declFrom, RenameRefusal.NO_RULE);
@@ -132,7 +135,7 @@ final class NamingRenames {
 			source, tree, span.from, spans, newName, shape, plugin, edits, resolutionIndex, file
 		);
 		return qualified == null
-			? RenameRefusal.rename(flaggedAt, declFrom, RenameRefusal.QUALIFY_FAILED)
+			? RenameRefusal.rename(flaggedAt, declFrom, RenameRefusal.qualifyFailed(newName))
 			: { newName: newName, edits: qualified, scope: scope };
 	}
 
@@ -253,7 +256,8 @@ final class NamingRenames {
 		final declTree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (declTree == null) return null;
 		final tree: QueryNode = declTree;
-		final decl: Null<NamedDecl> = support.project(tree).find(d -> d.span != null && d.span.from == vspan.from);
+		final decl: Null<NamedDecl> = support.project(tree, Naming.propertyFacts(plugin, source))
+			.find(d -> d.span != null && d.span.from == vspan.from);
 		if (decl == null) return null;
 		// Candidate: a NON-confined private field / constant the single-file `fix` skips, or ANY public
 		// member - `RenameRefusal.of` refuses every public declaration, so this is a public member's only path.
@@ -265,6 +269,11 @@ final class NamingRenames {
 		// mute-refused override was reported as owned-and-declined by the cross-file path, which had
 		// declined only because it does not own the declaration at all. So the category is refused
 		// with its own sentence.
+		// A local / parameter / catch variable is the single-file path's alone: its whole scope is one
+		// function body, so there is nothing for this path to prove and nothing for it to SAY. Answering
+		// `NOT_A_MEMBER` here wrote the first decline reason on the finding — first writer wins — and the
+		// single-file path's own sentence (a collision, say) never reached the reader.
+		if (isBodyScopedCategory(decl.category)) return null;
 		final category: Null<String> = crossCategoryRefusal(decl);
 		if (category != null) return RenameRefusal.candidate(v, category);
 		final owner: Null<String> = decl.enclosingType;
@@ -302,7 +311,8 @@ final class NamingRenames {
 		// this one accepts, never the reverse — the two paths can leave a member to nobody (reported,
 		// with `NOT_CONFINED` as its decline reason) and can never both claim it. The gap is the safe
 		// direction; the overlap, which is the one that writes twice, is structurally impossible.
-		if (!isPublic && RefactorSupport.isPrivateMemberConfined(ownerName, decl.name, source, index)) return null;
+		final grants: Null<Array<String>> = memberGrants(tree, source, plugin, decl);
+		if (!isPublic && RefactorSupport.isPrivateMemberConfined(ownerName, decl.name, source, index, grants)) return null;
 		// No reflection guard here, deliberately. `RenameRefusal.of`'s exists because the single-file path
 		// never looks at another file; this path DOES - a public member's affected set is every scope file
 		// mentioning the name (`publicAffectedFiles`), and `otherFileRenameSpans` already refuses on a
@@ -320,7 +330,14 @@ final class NamingRenames {
 		final declarers: Array<FileInfo> = index.refs.declaringFiles(ownerName);
 		if (declarers.length != 1)
 			return RenameRefusal.candidate(v, RenameRefusal.crossOwnerNotUnique(ownerName, declarers.map(f -> f.file)));
-		if (index.text.sourceCarriesAllowGrant(source)) return RenameRefusal.candidate(v, RenameRefusal.CROSS_ALLOW_GRANT);
+		// A PRIVATE member's `@:allow` grantees join its edit set: the grant is read off THIS member and
+		// its type (`AllowGrants.reaching`), never off the file, so a grant on a neighbour opens nothing
+		// here. Enumerated over the RESOLUTION index, the widest one; a grantee file outside this run's
+		// sources is then refused by the per-file loop like any other file it cannot edit. A PUBLIC
+		// member asks nothing of a grant - its affected set is already every file that spells it.
+		final opened: Null<Array<String>> = isPublic ? [] : granteesOf(v, grants, resolutionIndex);
+		if (opened == null) return null;
+		final grantees: Array<String> = opened;
 		// Every refusal from here down belongs to THIS path: the gates above either hand the
 		// declaration to the single-file rename or are not about it at all, and speaking for those
 		// would overwrite the more accurate sentence that path is about to write. The category gate is
@@ -360,8 +377,27 @@ final class NamingRenames {
 			ownerName: ownerName,
 			distinctive: isDistinctiveName(decl.name),
 			isPublic: isPublic,
-			family: overrides
+			family: overrides,
+			grantees: grantees
 		};
+	}
+
+	/**
+	 * The files a PRIVATE member's `grants` open it to (`AllowGrants.granteeFiles`), or null - with the refusal noted on
+	 * `v` - when they cannot be enumerated: the grants themselves could not be read, or one names a grantee the index
+	 * does not see.
+	 */
+	private static function granteesOf(v: Violation, grants: Null<Array<String>>, resolutionIndex: SymbolIndex): Null<Array<String>> {
+		if (grants == null) {
+			RenameRefusal.note(v, RenameRefusal.CROSS_ALLOW_GRANT);
+			return null;
+		}
+		if (grants.length == 0) return [];
+		final opened: Grantees = AllowGrants.granteeFiles(grants, resolutionIndex);
+		final unmatched: Null<String> = opened.unmatched;
+		if (unmatched == null) return opened.files;
+		RenameRefusal.note(v, RenameRefusal.crossAllowUnenumerable(unmatched));
+		return null;
 	}
 
 	/**
@@ -409,12 +445,14 @@ final class NamingRenames {
 		if (candidate == null) return null;
 		final c: CrossFileCandidate = candidate;
 		final slices: Array<CrossFileEdits> = [];
-		final hierarchy: Array<String> = affectedFiles(c.ownerName, c.declFile, index);
+		final hierarchy: Array<String> = affectedFiles(c.ownerName, c.declFile, index, c.grantees);
 		final scanned: Array<String> = c.isPublic ? publicAffectedFiles(hierarchy, c.oldName, index, sourceByFile) : hierarchy;
 		// An override the edit set cannot reach makes the base unrenameable: the family is resolved
 		// against the RESOLUTION index, which sees files the lint scope does not, and half a family
 		// leaves a declaration overriding nothing.
 		for (fm in c.family) if (!scanned.contains(fm.file)) return RenameRefusal.crossRename(v, RenameRefusal.CROSS_FAMILY_UNREACHABLE);
+		final outside: Null<String> = outsideScopeFile(c, sourceByFile, support, shape, plugin, resolutionIndex);
+		if (outside != null) return RenameRefusal.crossRename(v, RenameRefusal.crossOutsideScope(outside));
 		for (file in scanned) {
 			final fileSource: Null<String> = sourceByFile[file];
 			if (fileSource == null) return RenameRefusal.crossRename(v, RenameRefusal.CROSS_FILE_UNREADABLE);
@@ -427,7 +465,9 @@ final class NamingRenames {
 					fsrc, c.tree, c.declFrom, c.oldName, shape, plugin, c.distinctive, false,
 					{ index: resolutionIndex, file: c.declFile, ownerName: c.ownerName }, familySpans
 				)
-				: otherFileRenameSpans(fsrc, c.oldName, plugin, c.distinctive, c.ownerName, shape, resolutionIndex, file, familySpans);
+				: otherFileRenameSpans(
+					fsrc, c.oldName, plugin, c.distinctive, c.ownerName, shape, resolutionIndex, file, support, familySpans
+				);
 			if (spans == null) return RenameRefusal.crossRename(v, RenameRefusal.OCCURRENCE_UNRESOLVED);
 			// A file receiving NO edit and lying outside the owner's own hierarchy cannot collide: nothing
 			// is rewritten there and no member of the owner is inherited there, so the scan below would
@@ -461,6 +501,36 @@ final class NamingRenames {
 			if (spans.length > 0) slices.push({ file: file, edits: fileEdits });
 		}
 		return slices.length == 0 ? null : { slices: slices, owner: c.ownerName, newName: c.targetName };
+	}
+
+	/**
+	 * The first PROJECT file outside this run's sources that the rename of `c` would have to reach, or null when none
+	 * does: a file declaring a subtype of the owner or an `@:access` grant to it, or - for a PUBLIC member - a file whose
+	 * occurrences of the name are not all accounted for (`otherFileRenameSpans` answers edits or cannot prove them).
+	 *
+	 * The edit set is enumerated from the REPORT index, so on a narrowed `--fix` (one file, a subdirectory) a reference in an
+	 * unlinted project file read as absent and the narrow run renamed what the whole-project run refused - the
+	 * lint-fix-scope incident in this rule's shape. The project half of the resolution scope (`resolutionRoots`) closes it: a
+	 * narrow scope can now only refuse more than the project scope, never less. A library file is not asked - it cannot
+	 * name a project type's member - and a run declaring no roots has no wider project to ask about.
+	 */
+	private static function outsideScopeFile(
+		c: CrossFileCandidate, sourceByFile: Map<String, String>, support: NamingSupport, shape: RefShape, plugin: GrammarPlugin,
+		resolutionIndex: SymbolIndex
+	): Null<String> {
+		final project: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionProjectSourcesOf(plugin);
+		if (project == null) return null;
+		final projectFiles: Array<String> = [for (entry in project) entry.file];
+		for (file in affectedFiles(c.ownerName, c.declFile, resolutionIndex)) if (!sourceByFile.exists(file) && projectFiles.contains(file))
+			return file;
+		if (!c.isPublic) return null;
+		for (entry in project) if (!sourceByFile.exists(entry.file) && entry.source.indexOf(c.oldName) >= 0) {
+			final spans: Null<Array<Span>> = otherFileRenameSpans(
+				entry.source, c.oldName, plugin, c.distinctive, c.ownerName, shape, resolutionIndex, entry.file, support
+			);
+			if (spans == null || spans.length > 0) return entry.file;
+		}
+		return null;
 	}
 
 	/**
@@ -600,8 +670,12 @@ final class NamingRenames {
 			source, name, plugin, 0, source.length, excluded
 		);
 		final renamed: Array<Span> = mergeUniqueSpans(mergeUniqueSpans(covered.concat(ownerBound), twins), family);
-		if (classified == null) return OccurrenceScan.referencedInRange(source, name, 0, source.length, excluded) ? null : renamed;
-		return withMentions(renamed, classified, tree, declFrom, shape, distinctive);
+		return if (classified != null)
+			withMentions(renamed, classified, tree, declFrom, shape, distinctive)
+		else if (OccurrenceScan.referencedInRange(source, name, 0, source.length, excluded))
+			null
+		else
+			renamed;
 	}
 
 	/**
@@ -669,15 +743,16 @@ final class NamingRenames {
 	 * (a bare reference / `this.` / `super.` inside a subtype, or a receiver typed to the owner or a
 	 * subtype) is a rename target; one provably binding to a DIFFERENT owner (a sibling class's
 	 * same-named field, reached through a differently-typed receiver) is IGNORED — neither renamed nor
-	 * a blocker; a class declaring its OWN `name` is NOT such a case (the ignore arm is supertype-only,
-	 * so it stays uncovered and blocks); an occurrence whose binding cannot be proven is left
+	 * a blocker; a class declaring its OWN `name` is NOT such a case (the ignore arm is supertype-only),
+	 * but when that class is provably UNRELATED to the owner its own declaration resolves its occurrences
+	 * (`foreignBoundSpans`), and they are excluded too; an occurrence whose binding cannot be proven is left
 	 * uncovered so the completeness gate blocks the whole rename (fail-closed). A distinctive-name
 	 * `CommentTrivia` still renames along. Null on a parse failure or an unattributable active-code
 	 * occurrence. This replaces the old blanket bail on any same-named sibling field.
 	 */
 	private static function otherFileRenameSpans(
 		source: String, name: String, plugin: GrammarPlugin, distinctive: Bool, ownerName: String, shape: RefShape,
-		resolutionIndex: SymbolIndex, file: String, ?familySpans: Array<Span>
+		resolutionIndex: SymbolIndex, file: String, support: NamingSupport, ?familySpans: Array<Span>
 	): Null<Array<Span>> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
@@ -699,7 +774,11 @@ final class NamingRenames {
 		// is NEITHER (unprovable) stays uncovered and blocks the whole rename below.
 		// Module paths and type references are inert here too — see `declaringFileRenameSpans`. A
 		// subtype file naming a type after the member being renamed is the same shape, one file over.
+		// Occurrences bound to ANOTHER declaration of the name in this file - an unrelated class's own
+		// same-named member, a local, a parameter - are that declaration's, not this member's.
+		final foreign: Array<Span> = foreignBoundSpans(source, tree, name, ownerName, plugin, support, shape, resolutionIndex, file);
 		final excluded: Array<Span> = ownerBound.concat(refs.ignore)
+			.concat([for (s in foreign) if (!OccurrenceScan.offsetWithinAny(s.from, ownerBound)) s])
 			.concat(OccurrenceScan.modulePathSpans(tree, shape))
 			.concat(typeReferenceSpans(source, tree, name, shape, plugin, { index: resolutionIndex, file: file }));
 		final classified: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(
@@ -716,6 +795,45 @@ final class NamingRenames {
 				return null;
 		}
 		return spans;
+	}
+
+	/**
+	 * The occurrences of `name` in one file that the resolver binds to a declaration of that name OTHER than `ownerName`'s
+	 * member: a same-named member of a type provably outside `ownerName`'s hierarchy (neither a subtype nor a supertype), a
+	 * local, a parameter, a catch variable. They are accounted for - not this member, so neither renamed nor a blocker - and
+	 * a `private final _sc` in an unrelated class no longer vetoes the rename (or the privatize arm) of a `public final _sc`.
+	 *
+	 * Each such declaration's occurrence set is resolved exactly as its OWN rename would resolve it
+	 * (`declaringFileRenameSpans`, receiver-typed accesses attributed through `inheritedFieldRefSpans`), so an occurrence is
+	 * accounted for only when that resolution is complete: a declaration whose set cannot be proven contributes nothing, and
+	 * its occurrences keep blocking. A same-named member of a RELATED type is a redefinition or an override, never another
+	 * binding, and is left out. Deduped by offset.
+	 */
+	public static function foreignBoundSpans(
+		source: String, tree: QueryNode, name: String, ownerName: String, plugin: GrammarPlugin, support: NamingSupport, shape: RefShape,
+		resolutionIndex: SymbolIndex, file: String
+	): Array<Span> {
+		final out: Array<Span> = [];
+		for (decl in support.project(tree, Naming.propertyFacts(plugin, source))) if (decl.name == name) {
+			final span: Null<Span> = decl.span;
+			final bodyScoped: Bool = isBodyScopedCategory(decl.category);
+			final owner: Null<String> = decl.enclosingType;
+			if (span == null || !bodyScoped && !unrelatedMember(decl, owner, ownerName, resolutionIndex)) continue;
+			final ctx: RenameContext = bodyScoped || owner == null
+				? { index: resolutionIndex, file: file }
+				: { index: resolutionIndex, file: file, ownerName: owner };
+			final spans: Null<Array<Span>> = declaringFileRenameSpans(
+				source, tree, span.from, name, shape, plugin, isDistinctiveName(name), bodyScoped, ctx
+			);
+			if (spans != null) for (s in spans) if (!out.exists(o -> o.from == s.from)) out.push(s);
+		}
+		return out;
+	}
+
+	/** Whether `decl` is a MEMBER of a type `owner` provably unrelated to `ownerName` in either direction - see `foreignBoundSpans`. */
+	private static function unrelatedMember(decl: NamedDecl, owner: Null<String>, ownerName: String, index: SymbolIndex): Bool {
+		return RenameRefusal.isConfinableMemberCategory(decl.category) && owner != null
+			&& index.subtypes.provablyNotSubtype(owner, ownerName) && index.subtypes.provablyNotSubtype(ownerName, owner);
 	}
 
 	/**
@@ -805,11 +923,11 @@ final class NamingRenames {
 
 	/**
 	 * Every report file affected by renaming `owner`'s private member: the declaring file, every
-	 * file declaring a TRANSITIVE subtype of `owner`, and every file with an `@:access(owner)`
-	 * grant. Deduped, in discovery order (declaring file first). All are report files (the index
+	 * file declaring a TRANSITIVE subtype of `owner`, every file with an `@:access(owner)` grant, and every file in `grantees` (those
+	 * an `@:allow` on the member opens it to). Deduped, in discovery order (declaring file first). All are report files (the index
 	 * is report-scoped), hence editable.
 	 */
-	private static function affectedFiles(owner: String, declFile: String, index: SymbolIndex): Array<String> {
+	private static function affectedFiles(owner: String, declFile: String, index: SymbolIndex, ?grantees: Array<String>): Array<String> {
 		final out: Array<String> = [declFile];
 		final closure: Array<String> = [owner];
 		var i: Int = 0;
@@ -821,6 +939,7 @@ final class NamingRenames {
 			}
 		}
 		for (fi in index.allFiles()) if (fi.accessGrants.contains(owner) && !out.contains(fi.file)) out.push(fi.file);
+		for (file in grantees ?? []) if (!out.contains(file)) out.push(file);
 		return out;
 	}
 
@@ -842,7 +961,8 @@ final class NamingRenames {
 	 */
 	private static function crossCategoryRefusal(decl: NamedDecl): Null<String> {
 		final reach: Null<ImplicitReach> = decl.implicitReach;
-		final reached: Null<String> = reach == null ? null : RenameRefusal.implicitReach(reach);
+		// An `@:allow` grant is this path's to carry (`crossFileCandidate` enumerates the grantees), not a refusal.
+		final reached: Null<String> = reach == null || reach == ImplicitReach.AllowGrant ? null : RenameRefusal.implicitReach(reach);
 		return switch decl.category {
 			case NamingCategory.Field, NamingCategory.Constant: reached;
 			case NamingCategory.Method: decl.mods.contains('override') ? RenameRefusal.OVERRIDE : reached;
@@ -1244,7 +1364,7 @@ final class NamingRenames {
 		final refusal: Null<String> = if (inherited != null)
 			inherited
 		else if (collides && !qualifiableBinding(decl))
-			RenameRefusal.NAME_COLLIDES
+			RenameRefusal.nameCollides(corrected)
 		else
 			null;
 		if (refusal == null) return { name: corrected, collides: collides, refusal: null };
@@ -1259,6 +1379,17 @@ final class NamingRenames {
 		final blocked: Bool = RenameRefusal.inherited(decl, candidate, resolutionIndex, file) != null
 			|| collidesInScope(decl, source, tree, candidate, shape, resolutionIndex, plugin);
 		return blocked ? { name: corrected, collides: collides, refusal: refusal } : { name: candidate, collides: false, refusal: null };
+	}
+
+	/**
+	 * The `@:allow` paths reaching `decl` (`AllowGrants.reaching`), or null when that cannot be read - a declaration
+	 * with no span or no enclosing type, or a grant the projection does not attribute. Asked by BOTH rename paths, so
+	 * the single-file path's "confined" and the cross-file path's "not mine" are one answer and never two.
+	 */
+	private static function memberGrants(tree: QueryNode, source: String, plugin: GrammarPlugin, decl: NamedDecl): Null<Array<String>> {
+		final span: Null<Span> = decl.span;
+		final owner: Null<String> = decl.enclosingType;
+		return span == null || owner == null ? null : AllowGrants.reaching(tree, source, plugin, span, owner);
 	}
 
 }
@@ -1295,6 +1426,9 @@ typedef CrossFileCandidate = {
 	final ownerName: String;
 	final distinctive: Bool;
 	final isPublic: Bool;
+
+	/** The files a private member's `@:allow` grants open it to (`AllowGrants.granteeFiles`); empty for a public one. */
+	final grantees: Array<String>;
 
 	/**
 	 * The PROVEN override family of this declaration — every subtype redeclaring it, each with its
@@ -1400,6 +1534,10 @@ class RenameRefusal {
 	public static inline final ENTRY_POINT: String =
 		'the method is the program\'s ENTRY POINT (`static function main()`), named by the build — `-main`, a generated launcher, `--run` — and by no identifier a rename could follow';
 
+	/** An `@:allow` grant opens the member to another type: only the cross-file rename, which enumerates the grantees, can carry it. */
+	public static inline final ALLOW_GRANT: String =
+		'the member carries an `@:allow` grant, which opens it to another type, so the rename must cross into the grantee files';
+
 	/** No enclosing type: the confinement proof has nothing to scope to. */
 	public static inline final NO_OWNER: String = 'the declaration reports no enclosing type, and the confinement proof is scoped to one';
 
@@ -1436,17 +1574,9 @@ class RenameRefusal {
 	public static inline final RTTI_HIERARCHY: String =
 		'the owner sits in an `@:rtti` hierarchy, which serializes by member NAME — a rename would invalidate saved data';
 
-	/** The corrected name is already bound where the rename lands. */
-	public static inline final NAME_COLLIDES: String =
-		'the corrected name is already bound where the rename would land, and this declaration category cannot be disambiguated by qualifying the captured occurrences';
-
 	/** An occurrence of the old name is not accounted for. */
 	public static inline final OCCURRENCE_UNRESOLVED: String =
 		'some textual occurrence of the name is not accounted for by the resolved rename spans — a `#if` branch, a name-shaped string literal, a `noqa`, or an active-code reference the resolver does not attribute — so the rewrite would be incomplete';
-
-	/** Qualification could not repair the collision. */
-	public static inline final QUALIFY_FAILED: String =
-		'the collision is with a binding other than the parameter idiom, so qualifying the captured occurrences would not repair it';
 
 	/** Another accepted rename in this run already claims the name. */
 	public static inline final NAME_CLAIMED: String =
@@ -1459,9 +1589,9 @@ class RenameRefusal {
 	/** The file did not re-parse for the fix pass. */
 	public static inline final NO_TREE: String = 'the file did not re-parse in the fix pass, so no declaration could be located in it';
 
-	/** The declaring file hands its privates to a type the index cannot name from here. */
+	/** The declaring file holds an `@:allow` the projection does not attribute, so whom it reaches is unknown. */
 	public static inline final CROSS_ALLOW_GRANT: String =
-		'the cross-file rename cannot enumerate who reaches the owner — the declaring file carries an `@:allow`, which grants its private members to a type this index cannot enumerate';
+		'the cross-file rename cannot enumerate who reaches the owner — the declaring file carries an `@:allow` the projection does not attribute to a declaration, so which members it opens, and to whom, is unknown';
 
 	/** A member of the override family sits outside the files the rename would edit. */
 	public static inline final CROSS_FAMILY_UNREACHABLE: String =
@@ -1474,6 +1604,34 @@ class RenameRefusal {
 	/** The target name is already bound in a file outside the declaring one. */
 	public static inline final CROSS_COLLISION: String =
 		'the corrected name is already bound in one of the files the rename would edit, where no `this.` qualification can disambiguate it';
+
+	/**
+	 * The corrected name is already bound where the rename lands. It NAMES that name: a reader told only
+	 * that "the name collides" cannot see which binding to look for, and the neighbouring sentences once
+	 * blamed a confinement proof that a local never needs.
+	 */
+	public static inline function nameCollides(target: String): String {
+		return 'the corrected name \'$target\' is already bound where the rename would land (a parameter, local, member or import visible '
+			+ 'there), and this declaration category cannot be disambiguated by qualifying the captured occurrences';
+	}
+
+	/** Qualification could not repair the collision; names the taken name, as `nameCollides` does. */
+	public static inline function qualifyFailed(target: String): String {
+		return 'the corrected name \'$target\' is already bound where the rename would land, by a binding other than the parameter idiom, '
+			+ 'so qualifying the captured occurrences would not repair it';
+	}
+
+	/** An `@:allow` reaching the member names a grantee the index cannot enumerate. */
+	public static inline function crossAllowUnenumerable(path: String): String {
+		return 'the member is opened by an `@:allow` grant to `$path`, which names no type this run\'s index can enumerate - not a plain '
+			+ 'dot path, or a type outside the scope - so the files that reach it are unknown';
+	}
+
+	/** A project file this run does not lint would have to change, or could not be proven not to. */
+	public static inline function crossOutsideScope(file: String): String {
+		return 'the rename would have to reach $file, a project file outside this run\'s sources ('
+			+ 'a subtype, an `@:access` grant, or a reference to the member) - re-run over the project';
+	}
 
 	/** Is `category` one whose rename a per-file confinement proof can ever cover? */
 	public static inline function isConfinableMemberCategory(category: NamingCategory): Bool {
@@ -1506,6 +1664,7 @@ class RenameRefusal {
 			case ImplicitReach.Annotation: CARRIES_METADATA;
 			case ImplicitReach.TypeRegistry: TYPE_REGISTRY;
 			case ImplicitReach.EntryPoint: ENTRY_POINT;
+			case ImplicitReach.AllowGrant: ALLOW_GRANT;
 		}
 	}
 
@@ -1594,7 +1753,7 @@ class RenameRefusal {
 	 */
 	public static function of(
 		decl: NamedDecl, source: String, confinementIndex: Null<SymbolIndex>, reflectionNames: Array<String>,
-		confinedMemo: Map<String, Bool>
+		confinedMemo: Map<String, Bool>, ?grants: Null<Array<String>>
 	): Null<String> {
 		// A declaration the grammar marked rename-unsafe (a typedef / anon-structure
 		// field whose name is a wire contract, or a property backed by physical
@@ -1622,7 +1781,9 @@ class RenameRefusal {
 		// of them.
 		if (category == NamingCategory.Method && decl.mods.contains('override')) return OVERRIDE;
 		final reach: Null<ImplicitReach> = decl.implicitReach;
-		if (reach != null) return implicitReach(reach);
+		// An `@:allow` grant is not a reach by name: the confinement proof below asks it of THIS member
+		// (`grants`) and hands a granted one to the cross-file rename, which enumerates the grantees.
+		if (reach != null && reach != ImplicitReach.AllowGrant) return implicitReach(reach);
 		final owner: Null<String> = decl.enclosingType;
 		if (owner == null) return NO_OWNER;
 		// Cross-file reflection guard: a private member reached from ANOTHER file by a
@@ -1648,7 +1809,7 @@ class RenameRefusal {
 		final memoKey: String = '$owner\t${decl.name}';
 		final cached: Null<Bool> = confinedMemo[memoKey];
 		if (cached != null) return cached ? null : NOT_CONFINED;
-		final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, confinementIndex);
+		final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, confinementIndex, grants);
 		confinedMemo[memoKey] = confined;
 		return confined ? null : NOT_CONFINED;
 	}

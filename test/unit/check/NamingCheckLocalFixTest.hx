@@ -534,6 +534,34 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'inline function a(someN:Int)', 'some_n');
 	}
 
+	/**
+	 * A local and a parameter whose de-prefixed name is already taken in their function decline with
+	 * THAT reason, naming the taken name. The cross-file path, asked first in a `--fix` run, used to
+	 * write "only a member has a confinement proof" on them - first writer wins, and a local needs no
+	 * confinement proof at all - so the real obstacle never reached the reader.
+	 */
+	@:pin('control')
+	@:killer('M-NAMING-LOCAL-CROSS-NOTE')
+	public function testLocalAndParamCollisionsNameTheTakenName(): Void {
+		final local: String = refusalFor([
+			{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\nclass C {\n\tpublic function run(label:String):String {\n\t\tfinal _label:String = label + "!";\n'
+				+ '\t\treturn _label;\n\t}\n}'
+			}
+		], 'pkg/C.hx', true);
+		Assert.stringContains("'label' is already bound", local);
+		final param: String = refusalFor([
+			{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\nclass C {\n\tpublic function other(__drillButtons:Array<Int>):Int {\n'
+				+ '\t\tfinal drillButtons:Int = __drillButtons.length;\n\t\treturn drillButtons;\n\t}\n}'
+			}
+		], 'pkg/C.hx', true);
+		Assert.stringContains("'drillButtons' is already bound", param);
+		Assert.isFalse(param.indexOf('confinement proof') >= 0, 'a parameter needs no confinement proof, got: $param');
+	}
+
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);

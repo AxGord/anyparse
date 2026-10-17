@@ -11,6 +11,8 @@ import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
 
+using Lambda;
+
 /**
  * The `naming` autofix crossing FILE boundaries: a private field renamed in its
  * declaring file must also be rewritten wherever a subtype in another file reads or
@@ -907,6 +909,8 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	 * spelling, and either half alone stays green under the merged sentence that made the two
 	 * indistinguishable.
 	 */
+	@:pin('control')
+	@:killer('M-ALLOW-GRANTEE-UNMATCHED')
 	public function testUnresolvableHierarchyTellsItsTwoCausesApart(): Void {
 		final grant: String = refusalFor([
 			{
@@ -982,6 +986,108 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' }
 		], 'pkg/C.hx', true);
 		Assert.stringContains('`@:allow`', real);
+	}
+
+	/**
+	 * A MEMBER-level `@:allow` grants that one member (Haxe 4.3.7: a grantee reaching a sibling private is
+	 * "Cannot access private field"), so it does not taint the file: an unrelated private `count` beside the
+	 * granted `_shared` is confined and renames in place. It used to decline with "the declaring file carries
+	 * an `@:allow`" - the grant was read off the FILE.
+	 */
+	@:pin('control')
+	@:killer('M-ALLOW-REACHING-FILE', 'M-CONFINED-GRANTS-IGNORED')
+	public function testAMemberGrantDoesNotTaintItsNeighbours(): Void {
+		final aSrc: String = 'package pkg;\nclass A {\n\t@:allow(pkg.B)\n\tprivate final _shared:Int = 1;\n\tprivate var count:Int = 0;\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function bump():Int {\n\t\tcount++;\n\t\treturn count + _shared;\n\t}\n}';
+		final bSrc: String = 'package pkg;\nclass B {\n\tpublic function read(a:A):Int {\n\t\treturn a._shared;\n\t}\n}';
+		assertLocalRenamed(
+			[{ file: 'pkg/A.hx', source: aSrc }, { file: 'pkg/B.hx', source: bSrc }],
+			'pkg/A.hx', aSrc, 'return _count + _shared', 'var count'
+		);
+	}
+
+	/**
+	 * A member whose ONLY annotation is `@:allow` is renamed ACROSS the files its grant opens it to: the grantee
+	 * type's own file and its subtype's (the compiler walks the accessing class's super chain). It used to
+	 * decline as "the member carries metadata", which is true of every grant and says nothing about reach.
+	 */
+	@:pin('control')
+	@:killer('M-ALLOW-GRANTEE-SUBTYPES', 'M-NAMING-ALLOWGRANT-AS-ANNOTATION', 'M-NAMING-CROSS-GRANTEES-DROPPED')
+	public function testAGrantedMemberRenamesIntoItsGranteesAndTheirSubtypes(): Void {
+		final aSrc: String = 'package pkg;\nclass A {\n\t@:allow(pkg.B)\n\tprivate var shared:Int = 1;\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function get():Int {\n\t\treturn shared;\n\t}\n}';
+		final bSrc: String = 'package pkg;\nclass B {\n\tpublic function read(a:A):Int {\n\t\treturn a.shared;\n\t}\n}';
+		final subSrc: String = 'package pkg;\nclass BSub extends B {\n\tpublic function twice(a:A):Int {\n\t\treturn a.shared * 2;\n\t}\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/A.hx', source: aSrc },
+			{ file: 'pkg/B.hx', source: bSrc },
+			{ file: 'pkg/BSub.hx', source: subSrc }
+		];
+		final rename: Array<CrossFileEdits> = crossFileRename(files);
+		assertRenameSlice(rename, 'pkg/A.hx', aSrc, 'return _shared', 'var shared');
+		assertRenameSlice(rename, 'pkg/B.hx', bSrc, 'return a._shared', 'a.shared');
+		assertRenameSlice(rename, 'pkg/BSub.hx', subSrc, 'return a._shared * 2', 'a.shared');
+	}
+
+	/**
+	 * A PACKAGE grantee opens the member to every type of the package and of its subpackages (Haxe 4.3.7:
+	 * `@:allow(foo)` reaches `foo.bar.Q`), so each of those files joins the edit set.
+	 */
+	@:pin('control')
+	@:killer('M-ALLOW-GRANTEE-PACKAGE')
+	public function testAPackageGrantRenamesIntoThePackage(): Void {
+		final aSrc: String = 'package pkg;\nclass A {\n\t@:allow(cmd)\n\tprivate var shared:Int = 1;\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function get():Int {\n\t\treturn shared;\n\t}\n}';
+		final qSrc: String =
+			'package cmd.sub;\nimport pkg.A;\nclass Q {\n\tpublic static function read(a:A):Int {\n\t\treturn a.shared;\n\t}\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/A.hx', source: aSrc }, { file: 'cmd/sub/Q.hx', source: qSrc }];
+		final rename: Array<CrossFileEdits> = crossFileRename(files);
+		assertRenameSlice(rename, 'pkg/A.hx', aSrc, 'return _shared', 'var shared');
+		assertRenameSlice(rename, 'cmd/sub/Q.hx', qSrc, 'return a._shared', 'a.shared');
+	}
+
+	/**
+	 * An unrelated class's OWN same-named private is another binding, not a reference: its occurrences are
+	 * resolved by its own declaration and excluded, so the public rename lands in the owner and in the outside
+	 * reader and leaves the unrelated class untouched. It used to decline - "some textual occurrence of the
+	 * name is not accounted for" - on the unrelated class's own reads.
+	 */
+	@:pin('control')
+	@:killer('M-NAMING-FOREIGN-UNBOUND')
+	public function testAnUnrelatedSameNamedPrivateDoesNotBlockAPublicRename(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tpublic var _label:Int = 1;\n\n\tpublic function new() {}\n}';
+		final dSrc: String = 'package pkg;\nclass D {\n\tpublic function f(c:C):Int {\n\t\treturn c._label;\n\t}\n}';
+		final ySrc: String =
+			'package pkg;\nclass Y {\n\tprivate final _label:Int = 2;\n\n\tpublic function size():Int {\n\t\treturn _label;\n\t}\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/D.hx', source: dSrc },
+			{ file: 'pkg/Y.hx', source: ySrc }
+		];
+		final rename: Array<CrossFileEdits> = crossFileRename(files);
+		assertRenameSlice(rename, 'pkg/C.hx', cSrc, 'public var label', '_label');
+		assertRenameSlice(rename, 'pkg/D.hx', dSrc, 'return c.label', '_label');
+		Assert.isFalse(rename.exists(slice -> slice.file == 'pkg/Y.hx'), 'the unrelated class keeps its own private');
+	}
+
+	/**
+	 * A narrowed run must never accept what the project-wide one refuses: a reader of the public member in a
+	 * project file this run does not lint (`resolutionRoots`) cannot be edited, so the rename is refused rather
+	 * than landing in the owner alone and stranding the reader. It used to rename the owner - the edit set was
+	 * enumerated from the lint scope.
+	 */
+	@:pin('control')
+	@:killer('M-NAMING-OUTSIDE-SCOPE-IGNORED')
+	public function testANarrowedPublicRenameRefusesAReaderOutsideItsScope(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tpublic var _label:Int = 1;\n\n\tpublic function new() {}\n}';
+		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }];
+		final reader: String = 'package pkg;\nclass D {\n\tpublic function f(c:C):Int {\n\t\treturn c._label;\n\t}\n}';
+		final unrelated: String =
+			'package pkg;\nclass Y {\n\tprivate final _label:Int = 2;\n\n\tpublic function size():Int {\n\t\treturn _label;\n\t}\n}';
+		Assert.equals(0, scopedRenameCount(report, [{ file: 'pkg/D.hx', source: reader }], []), 'the outside reader refuses the rename');
+		Assert.equals(
+			1, scopedRenameCount(report, [{ file: 'pkg/Y.hx', source: unrelated }], []), 'control: an unrelated private does not'
+		);
 	}
 
 	/** The cross-file renames `report` yields under a resolution scope split into `roots` and `library`. */

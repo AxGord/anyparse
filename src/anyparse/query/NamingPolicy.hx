@@ -67,6 +67,14 @@ enum abstract ImplicitReach(String) {
 	 */
 	final EntryPoint = 'entryPoint';
 
+	/**
+	 * A member whose only annotations are `@:allow` grants. Not a reach by NAME - the grantee spells the
+	 * member like any other reference - so a rename may follow it, across the files the grant opens it to
+	 * (`AllowGrants`). Distinct from `Annotation` because the two answer the rename differently; every
+	 * consumer that only asks "is it implicitly reached" still sees a non-null reach.
+	 */
+	final AllowGrant = 'allowGrant';
+
 }
 
 /**
@@ -234,8 +242,17 @@ typedef FrameworkContract = {
 @:nullSafety(Strict)
 interface NamingSupport {
 
-	/** The declarations in `tree` worth name-checking, with their category / modifiers. */
-	public function project(tree: QueryNode): Array<NamedDecl>;
+	/**
+	 * The declarations in `tree` worth name-checking, with their category / modifiers.
+	 *
+	 * `properties` answers, on first call, the span starts of the members that declare a property
+	 * accessor clause (`TypeInfoProvider.propertyAccessors`, the grammar-AST fact the tree projection
+	 * drops). A grammar needs it where a projected kind alone cannot tell two categories apart - in
+	 * Haxe, a value of an `enum abstract` from a property declared beside it. A thunk, so a file that
+	 * never asks pays nothing; null when the caller holds no type facts, and an implementation then
+	 * keeps the reading it gives without them.
+	 */
+	public function project(tree: QueryNode, ?properties: () -> Map<Int, Bool>): Array<NamedDecl>;
 
 	/**
 	 * The effective naming policy for the file at `path`: a discovered project

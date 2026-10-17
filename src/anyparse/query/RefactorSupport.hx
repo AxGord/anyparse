@@ -77,19 +77,23 @@ final class RefactorSupport {
 
 	/**
 	 * The two file-wide vetoes `isPrivateMemberConfined` pairs with its per-type ones: no skipped
-	 * file spells `member` (an unreadable one could hide any writer at all) and the member's own
-	 * file carries no `@:allow`, which hands its privates to a type the index cannot name from
-	 * here. Both are per-SUBJECT, not per-run — the earlier wording called this "the part … that
-	 * NO precise gate can refine", which stopped being true when the skip-parse half became
-	 * `skippedMayReference(member)` and was never true of the grant half.
+	 * file spells `member` (an unreadable one could hide any writer at all) and no `@:allow` hands
+	 * the member to a type the index cannot name from here. Both are per-SUBJECT, not per-run - the
+	 * earlier wording called this "the part ... that NO precise gate can refine", which stopped being
+	 * true when the skip-parse half became `skippedMayReference(member)` and was never true of the
+	 * grant half. `grants` is that refinement for the grant half (see `isPrivateMemberConfined`):
+	 * the `@:allow` paths reaching THIS member, or null for the file-level answer.
 	 *
-	 * The other two vetoes — subtype and `@:access` grant — name a REACHABLE file each, so a caller
+	 * The other two vetoes - subtype and `@:access` grant - name a REACHABLE file each, so a caller
 	 * that can scan those files for what it actually fears pairs this with its own gates
 	 * instead: `prefer-final-field` asks only whether such a file WRITES the member, since
 	 * a read survives `final`.
 	 */
-	public static inline function privateMemberScanIsSound(source: String, index: SymbolIndex, member: String): Bool {
-		return !index.text.skippedMayReference(member) && !index.text.sourceCarriesAllowGrant(source);
+	public static inline function privateMemberScanIsSound(
+		source: String, index: SymbolIndex, member: String, ?grants: Null<Array<String>>
+	): Bool {
+		final ungranted: Bool = grants == null ? !index.text.sourceCarriesAllowGrant(source) : grants.length == 0;
+		return !index.text.skippedMayReference(member) && ungranted;
 	}
 
 	/**
@@ -578,11 +582,19 @@ final class RefactorSupport {
 	 * i.e. unreachable from outside it, so an in-file analysis (rename, unused
 	 * detection) sees every possible reference. False when any file skip-parsed (it
 	 * could hide a subtype or `@:access` the index never saw), when a subtype or
-	 * `@:access` grant names the type, or when the file carries an `@:allow` (which
-	 * can expose its privates to another type). Conservative: any doubt is false.
+	 * `@:access` grant names the type, or when an `@:allow` can expose the member to
+	 * another type. Conservative: any doubt is false.
+	 *
+	 * `grants` asks the `@:allow` half of the MEMBER (`AllowGrants.reaching`: the member's own grants
+	 * and its type's) instead of the file: a grant written on ANOTHER member opens only that one, so
+	 * the file-level answer refused every private member of a file holding one. Absent or null - the
+	 * grants could not be read, or the caller never asked - the file-level answer stands.
 	 */
-	public static function isPrivateMemberConfined(owner: String, member: String, source: String, index: SymbolIndex): Bool {
-		return privateMemberScanIsSound(source, index, member) && !index.subtypes.hasSubtype(owner) && !index.text.hasAccessGrant(owner);
+	public static function isPrivateMemberConfined(
+		owner: String, member: String, source: String, index: SymbolIndex, ?grants: Null<Array<String>>
+	): Bool {
+		return privateMemberScanIsSound(source, index, member, grants) && !index.subtypes.hasSubtype(owner)
+			&& !index.text.hasAccessGrant(owner);
 	}
 
 	/**
@@ -614,14 +626,25 @@ final class RefactorSupport {
 	 * carrier file could never have seen it either.
 	 */
 	public static function carriesAllowGrant(source: String, plugin: GrammarPlugin): Bool {
-		var at: Int = source.indexOf('@:allow');
-		if (at < 0) return false;
+		return allowGrantOffsets(source, plugin).length > 0;
+	}
+
+	/**
+	 * The offset of every `@:allow` written IN CODE in `source` - comment, string and regex regions masked
+	 * through `plugin.lexicalRegions`, exactly as `carriesAllowGrant` (which asks whether there is one) needs.
+	 * `AllowGrants.reaching` holds each against the annotations the projection attributes, so a grant it cannot
+	 * place is never silently dropped. A file that does not spell the tag pays one `indexOf`.
+	 */
+	public static function allowGrantOffsets(source: String, plugin: GrammarPlugin): Array<Int> {
+		final out: Array<Int> = [];
+		var at: Int = source.indexOf(AllowGrants.TAG);
+		if (at < 0) return out;
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		while (at >= 0) {
-			if (LexicalRegions.regionAt(at, regions) == null) return true;
-			at = source.indexOf('@:allow', at + 1);
+			if (LexicalRegions.regionAt(at, regions) == null) out.push(at);
+			at = source.indexOf(AllowGrants.TAG, at + 1);
 		}
-		return false;
+		return out;
 	}
 
 	/**

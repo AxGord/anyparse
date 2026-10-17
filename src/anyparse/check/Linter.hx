@@ -5,6 +5,7 @@ import anyparse.check.Check.CrossFileAnchored;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.GraphScoped;
+import anyparse.check.Check.Supersedes;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
@@ -13,6 +14,7 @@ import anyparse.check.SimplifyNegatedCompound;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin;
+import anyparse.runtime.Span;
 
 using Lambda;
 
@@ -455,7 +457,7 @@ final class Linter {
 		];
 		final unquoted: Array<Violation> = ReificationScan.withoutQuoted(raw, files, plugin, ReificationScan.exemptIdsOf(checks));
 		final kept: Array<Violation> = Suppression.apply(unquoted, files, plugin.lexicalRegions);
-		return resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement);
+		return withoutSuperseded(resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement), checks);
 	}
 
 	/**
@@ -499,6 +501,31 @@ final class Linter {
 			if (sev != null) violation.severity = sev;
 		}
 		return out;
+	}
+
+	/**
+	 * `found` without each finding a `Supersedes` check in `checks` replaces: one of a rule it names, starting in the same file at
+	 * the same offset as one of ITS surviving findings. A run holding no such check returns `found` itself.
+	 */
+	public static function withoutSuperseded(found: Array<Violation>, checks: Array<Check>): Array<Violation> {
+		final replaced: Map<String, Array<String>> = [];
+		for (check in checks) if (check is Supersedes) replaced[check.id()] = (cast check: Supersedes).supersedes();
+		if (!replaced.keys().hasNext()) return found;
+		final claimed: Array<String> = [];
+		for (v in found) {
+			final ids: Null<Array<String>> = replaced[v.rule];
+			final span: Null<Span> = v.span;
+			// A finding without a span anchors nothing, so it replaces nothing.
+			if (ids != null && span != null) for (id in ids) claimed.push(supersessionKey(id, v.file, span));
+		}
+		return claimed.length == 0 ? found : [
+			for (v in found) if (!claimed.contains(supersessionKey(v.rule, v.file, v.span))) v
+		];
+	}
+
+	/** The identity `withoutSuperseded` compares findings by: rule, file and start offset (none for a finding without a span). */
+	private static inline function supersessionKey(rule: String, file: String, span: Null<Span>): String {
+		return '$rule\t$file\t${span == null ? -1 : span.from}';
 	}
 
 	/**

@@ -23,6 +23,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -111,7 +112,7 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 			// enum value is PascalCase by convention, so each one reads as a violation.
 			final guarded: Array<Int> = EnumAbstractForms.valueStarts(plugin, tree);
 			final decls: Array<NamedDecl> = [
-				for (d in support.project(tree)) if (!EnumAbstractForms.isValue(d.span, guarded)) d
+				for (d in support.project(tree, propertyFacts(plugin, entry.source))) if (!EnumAbstractForms.isValue(d.span, guarded)) d
 			];
 			final byStart: Map<Int, NamedDecl> = [];
 			for (decl in decls) {
@@ -120,9 +121,9 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 			}
 			final policy: NamingPolicy = support.policyFor(entry.file);
 			for (v in violationsFor(entry.file, decls, policy)) if (!frameworkOwned(v, byStart, support, indexOf, contracts)) {
-				violations.push(v);
 				final at: Null<Span> = v.span;
 				final decl: Null<NamedDecl> = at == null ? null : byStart[at.from];
+				violations.push(v);
 				if (decl == null || !NamingPrivatize.isCandidate(decl, policy)) continue;
 				// Re-bound: strict null-safety does not narrow inside a struct literal.
 				final candidate: NamedDecl = decl;
@@ -187,7 +188,7 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 		// file reaches through a reflection call's string argument (the cross-file reflection
 		// rename guard), plus a per-owner confinement memo so a type with many flagged private
 		// members runs the project-wide confinement scan a single time.
-		final decls: Array<NamedDecl> = support.project(tree);
+		final decls: Array<NamedDecl> = support.project(tree, propertyFacts(plugin, source));
 		final flaggedNames: Array<String> = [];
 		for (decl in decls) {
 			final s: Null<Span> = decl.span;
@@ -428,6 +429,26 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 			});
 		}
 		return out;
+	}
+
+	/**
+	 * The property facts `NamingSupport.project` asks for, read off `source` the first time the projection
+	 * needs them (`TypeInfoProvider.propertyAccessors`, through the plugin's own memo), or null for a
+	 * grammar with no type info. Every projection this check and its rename paths make goes through here,
+	 * so a declaration has ONE category whichever of them asks.
+	 */
+	public static function propertyFacts(plugin: GrammarPlugin, source: String): Null<() -> Map<Int, Bool>> {
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		if (provider == null) return null;
+		final known: TypeInfoProvider = provider;
+		var memo: Null<Map<Int, Bool>> = null;
+		return () -> {
+			final held: Null<Map<Int, Bool>> = memo;
+			if (held != null) return held;
+			final read: Map<Int, Bool> = known.propertyAccessors(source);
+			memo = read;
+			return read;
+		};
 	}
 
 	/**

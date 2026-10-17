@@ -1599,12 +1599,26 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-MO-WRITER-UNMEASURABLE-GUESS',
 			'unit.check.MemberSpacingPolicyTest#testTheWriterPolicyIsReadOnlyOnTheKindsItCovers :: control :: '
 				+ 'M-MO-WRITER-CONTAINER-KIND',
+			'unit.check.NamingCheckCrossFileFixTest#testAGrantedMemberRenamesIntoItsGranteesAndTheirSubtypes :: control :: '
+				+ 'M-ALLOW-GRANTEE-SUBTYPES,M-NAMING-ALLOWGRANT-AS-ANNOTATION,M-NAMING-CROSS-GRANTEES-DROPPED',
+			'unit.check.NamingCheckCrossFileFixTest#testAMemberGrantDoesNotTaintItsNeighbours :: control :: '
+				+ 'M-ALLOW-REACHING-FILE,M-CONFINED-GRANTS-IGNORED',
+			'unit.check.NamingCheckCrossFileFixTest#testANarrowedPublicRenameRefusesAReaderOutsideItsScope :: control :: '
+				+ 'M-NAMING-OUTSIDE-SCOPE-IGNORED',
+			'unit.check.NamingCheckCrossFileFixTest#testAPackageGrantRenamesIntoThePackage :: control :: M-ALLOW-GRANTEE-PACKAGE',
+			'unit.check.NamingCheckCrossFileFixTest#testAnUnrelatedSameNamedPrivateDoesNotBlockAPublicRename :: control :: '
+				+ 'M-NAMING-FOREIGN-UNBOUND',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
 				+ 'M-NAMING-SKIPSCAN-REPORT-INDEX,M-SKIPSCAN-SCOPEWIDE',
+			'unit.check.NamingCheckCrossFileFixTest#testUnresolvableHierarchyTellsItsTwoCausesApart :: control :: '
+				+ 'M-ALLOW-GRANTEE-UNMATCHED',
+			'unit.check.NamingCheckLocalFixTest#testLocalAndParamCollisionsNameTheTakenName :: control :: M-NAMING-LOCAL-CROSS-NOTE',
 			'unit.check.NamingCheckMemberFixTest#testAccessGrantOutsideReportScopeRefusesSingleFileRename :: control :: '
 				+ 'M-CONFINEMENT-REPORT-INDEX-RENAME',
 			'unit.check.NamingCheckMemberFixTest#testReflectionCallOutsideReportScopeRefusesRename :: control :: '
 				+ 'M-REFLECTION-REPORT-INDEX-RENAME',
+			'unit.check.NamingCheckTest#testEnumAbstractPropertyAndStaticTakeTheMemberPolicy :: control :: '
+				+ 'M-NAMING-ENUMVALUE-PROPERTY,M-NAMING-ENUMVALUE-STATIC,M-NAMING-PROPERTY-FACTS-NULL',
 			'unit.check.NamingPrivatizeTest#testANameThePrivateRuleRejectsIsNotACandidate :: control :: M-PRIVATIZE-RULE-UNCHECKED',
 			'unit.check.NamingPrivatizeTest#testANarrowedRunSeesAReaderOutsideItsScope :: control :: M-PRIVATIZE-TOKENS-UNCHECKED',
 			'unit.check.NamingPrivatizeTest#testAPublicUnderscoreFieldReadOnlyInsideIsPrivatized :: control :: '
@@ -1612,12 +1626,18 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NamingPrivatizeTest#testASubtypeReaderStillPrivatizes :: control :: M-PRIVATIZE-NO-SUBTYPE-REGION',
 			'unit.check.NamingPrivatizeTest#testAnAutoBuildAncestorDoesNotRefuse :: control :: M-PRIVATIZE-AUTOBUILD-COUNTS',
 			'unit.check.NamingPrivatizeTest#testAnOutsideReaderKeepsTheRename :: control :: M-NAMING-RISKY-FINDINGS-ALL,M-PRIVATIZE-TOKENS-UNCHECKED',
+			'unit.check.NamingPrivatizeTest#testAnUnrelatedSameNamedPrivateDoesNotRefuse :: control :: '
+				+ 'M-PRIVATIZE-FOREIGN-IGNORED,M-NAMING-FOREIGN-UNBOUND',
 			'unit.check.NamingPrivatizeTest#testEachGateRefusesTheArm :: control :: M-PRIVATIZE-UNCERTAIN-RUN,'
 				+ 'M-PRIVATIZE-TYPE-REACH,M-PRIVATIZE-CHAIN,M-PRIVATIZE-ACCESS-GRANT,M-PRIVATIZE-FRAGMENT,M-PRIVATIZE-TOKENS-UNCHECKED',
 			'unit.check.NamingPrivatizeTest#testNoDeclaredScopeLeavesTheRename :: control :: M-PRIVATIZE-INCOMPLETE-PROJECT',
 			'unit.check.NamingPrivatizeTest#testTheCandidateTestIsAPositiveList :: control :: M-PRIVATIZE-METHOD-CANDIDATE,M-PRIVATIZE-NO-UNDERSCORE,'
 				+ 'M-PRIVATIZE-NOT-PUBLIC,M-PRIVATIZE-NO-OWNER,M-PRIVATIZE-IMPLICIT-REACH,M-PRIVATIZE-RENAME-UNSAFE',
 			'unit.check.NamingPrivatizeTest#testTheOracleRunPrivatizes :: control :: M-RISKYARM-NOT-VERIFIED,M-FIXVERIFY-RISKYARM-FIX',
+			'unit.check.NoUnderscorePrefixCheckTest#testNamingYieldsTheBindingThisRuleReports :: control :: '
+				+ 'M-LINT-SUPERSEDES-IGNORED,M-NUP-SUPERSEDES-NONE',
+			'unit.check.NoUnderscorePrefixCheckTest#testRefusedStripDeclaresItsReason :: control :: M-NUP-DECLINE-SILENT',
+			'unit.check.NoUnderscorePrefixCheckTest#testTheFixerSeesTheBindingOnce :: control :: M-FIXDRIVER-SUPERSEDES-IGNORED',
 			'unit.check.NullableSourceResolutionScopeTest#testExcludedArrayPopStaysUnseeded :: control :: M-NULLABLE-INDEX-EXCLUSION',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
@@ -7460,7 +7480,25 @@ class TestDiscoveryParityTest extends Test {
 			'M-FOLD-FIX-REPORT-INDEX',
 			'M-FOLD-STATEMENT-UNPROVEN',
 			'M-PIEC-FIX-REPORT-INDEX',
-			'M-PIEC-RUN-SELECTION'
+			'M-PIEC-RUN-SELECTION',
+			'M-NAMING-ENUMVALUE-PROPERTY',
+			'M-NAMING-ENUMVALUE-STATIC',
+			'M-NAMING-PROPERTY-FACTS-NULL',
+			'M-NAMING-LOCAL-CROSS-NOTE',
+			'M-NUP-DECLINE-SILENT',
+			'M-LINT-SUPERSEDES-IGNORED',
+			'M-NUP-SUPERSEDES-NONE',
+			'M-FIXDRIVER-SUPERSEDES-IGNORED',
+			'M-ALLOW-REACHING-FILE',
+			'M-CONFINED-GRANTS-IGNORED',
+			'M-ALLOW-GRANTEE-SUBTYPES',
+			'M-ALLOW-GRANTEE-PACKAGE',
+			'M-ALLOW-GRANTEE-UNMATCHED',
+			'M-NAMING-ALLOWGRANT-AS-ANNOTATION',
+			'M-NAMING-CROSS-GRANTEES-DROPPED',
+			'M-NAMING-FOREIGN-UNBOUND',
+			'M-NAMING-OUTSIDE-SCOPE-IGNORED',
+			'M-PRIVATIZE-FOREIGN-IGNORED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

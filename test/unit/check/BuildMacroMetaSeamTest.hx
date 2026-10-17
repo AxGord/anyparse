@@ -105,7 +105,8 @@ class BuildMacroMetaSeamTest extends Test {
 	 *    that caught `@:genericBuild` would pass on any disagreement. Its `@:coreApi` is the same
 	 *    shape and has no second reader.
 	 *  - NOT SEAMED YET. `@:allow` (the privacy waiver that BREAKS a confinement proof — now ONE
-	 *    spelling, `RefactorSupport.carriesAllowGrant`, whose consumers are called once per member
+	 *    spelling, `AllowGrants.TAG`, read by `RefactorSupport.carriesAllowGrant` and by the per-member `AllowGrants.reaching`, whose
+	 *    consumers are called once per member
 	 *    and would need a `RefShape` threaded to them; it was two, in `Naming` as well, until they
 	 *    drifted apart in what a hit meant);
 	 *    `@:isVar` / `@:bypassAccessor` (accessor physics — which annotation gives a property real
@@ -130,7 +131,7 @@ class BuildMacroMetaSeamTest extends Test {
 			'@:overload'
 		],
 		'src/anyparse/query/MemberWriteScan.hx' => ['@:build', '@:autoBuild', '@:genericBuild', '@:coreApi'],
-		'src/anyparse/query/RefactorSupport.hx' => ['@:allow'],
+		'src/anyparse/query/AllowGrants.hx' => ['@:allow'],
 		'src/anyparse/check/TrivialGetter.hx' => ['@:isVar'],
 		'src/anyparse/check/BackingFieldRefs.hx' => ['@:bypassAccessor'],
 		'src/anyparse/check/RedundantBypassAccessor.hx' => ['@:bypassAccessor'],

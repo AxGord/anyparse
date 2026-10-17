@@ -12,6 +12,7 @@ import anyparse.query.NamingPolicy.NamingPolicy;
 import unit.CheckFixture;
 import utest.Assert;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -147,6 +148,24 @@ class NamingCheckTest extends NamingCheckTestBase {
 		final vs: Array<Violation> = violations('enum abstract E(Int) {\n\tfinal bad = 0;\n}');
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('enum value'));
+	}
+
+	@:pin('control')
+	@:killer('M-NAMING-ENUMVALUE-PROPERTY', 'M-NAMING-ENUMVALUE-STATIC', 'M-NAMING-PROPERTY-FACTS-NULL')
+	public function testEnumAbstractPropertyAndStaticTakeTheMemberPolicy(): Void {
+		// Only a NON-static plain `var` / `final` of an enum abstract is a value; a property and a static
+		// member are ordinary members (Haxe 4.3.7: `E.vertical` is "Cannot access non-static abstract field
+		// statically", `static var count` is `Int`). The property and the camelCase static conform to the
+		// member policy, the PascalCase-violating static is reported under it, and a lowercase VALUE still
+		// reads as an enum value.
+		final src: String = 'enum abstract D(Int) {\n\tfinal FROM_LEFT = 0;\n\tfinal bad = 1;\n\n'
+			+ '\tpublic var vertical(get, never):Bool;\n\tpublic static var count:Int = 0;\n\tpublic static var Bad_Static:Int = 0;\n\n'
+			+ '\tpublic inline function get_vertical():Bool {\n\t\treturn abstract == FROM_LEFT;\n\t}\n}';
+		final vs: Array<Violation> = CheckFixture.violations(new Naming(), src);
+		final messages: Array<String> = [for (v in vs) v.message];
+		Assert.equals(2, vs.length, messages.join(' | '));
+		Assert.isTrue(messages.exists(m -> m.contains('enum value') && m.contains("'bad'")), messages.join(' | '));
+		Assert.isTrue(messages.exists(m -> !m.contains('enum value') && m.contains("'Bad_Static'")), messages.join(' | '));
 	}
 
 	public function testInterfaceMemberTreatedAsPublic(): Void {
