@@ -2661,11 +2661,11 @@
 			"method": "collectEdges",
 			"find": [
 				"\t\t\t\t\tif ((bound == null || bound < 0) && CallGraphNames.isTypeLike(name)) return {\n",
-				"if (written == null) {\n\t\t\t\t\t\t\tunresolvedAt(span, UnresolvedReceiver(calleeName), currentType);\n"
+				"if (each.length == 0) {\n\t\t\t\t\t\t\tunresolvedAt(span, UnresolvedReceiver(calleeName), currentType);\n"
 			],
 			"replace": [
 				"\t\t\t\t\tif (false) return {\n",
-				"if (written == null) {\n\t\t\t\t\t\t\t{}\n"
+				"if (each.length == 0) {\n\t\t\t\t\t\t\t{}\n"
 			],
 			"note": "an unbound upper-case receiver is no longer a TYPE and its unresolved call is not recorded, so a static call (Main.grow()) that grows the collection reaches nothing"
 		},
@@ -11140,7 +11140,7 @@
 			"name": "M-SCOPE-MODULE-FIELDS",
 			"type": "anyparse.query.PatternNameScope",
 			"method": "of",
-			"find": "for (name in fi.moduleFields) if (!local.contains(name)) local.push(name);",
+			"find": "for (field in fi.moduleFields) if (!local.contains(field.name)) local.push(field.name);",
 			"replace": "",
 			"note": "a module-level field, which a bare pattern compares against, is not consulted"
 		},
@@ -11148,7 +11148,7 @@
 			"name": "M-SCOPE-MODULE-IMPORT-BLIND",
 			"type": "anyparse.query.ValueNameBinding",
 			"method": "importMayBring",
-			"find": "_refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.contains(name))",
+			"find": "_refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.exists(m -> m.name == name))",
 			"replace": "false",
 			"note": "a module import's module-level fields, which a bare pattern compares against, are not consulted"
 		},
@@ -14213,7 +14213,7 @@
 			"name": "M-CALLGRAPH-ALIAS-VALUE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": " || importsFunction(rawName)",
+			"find": "\n\t\t\t\t\t|| importsFunction(rawName, span.from)",
 			"replace": "",
 			"note": "a static function imported under another name and read as a value gets no `Ref` edge, so a call of a value never admits it"
 		},
@@ -20322,8 +20322,8 @@
 			"name": "M-TS-ALTERNATE-CALL",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "for (type in [written.typeName].concat(alternates)) {",
-			"replace": "for (type in [written.typeName]) {",
+			"find": "for (type in [recv.typeName].concat(alternates)) {",
+			"replace": "for (type in [recv.typeName]) {",
 			"note": "a call dispatches to the first candidate type only"
 		},
 		{
@@ -20690,8 +20690,8 @@
 			"name": "M-TS-DECL-READ-FROM",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "types.imports.alternateTypesIn([file].concat(readFrom), written.typeName);",
-			"replace": "types.imports.alternateTypes(file, written.typeName);",
+			"find": "types.imports.alternateTypesIn([file].concat(readFrom), recv.typeName);",
+			"replace": "types.imports.alternateTypes(file, recv.typeName);",
 			"note": "a guarded or maybe-wildcard name of the file declaring the receiver's type supplies no other type the call may run on"
 		},
 		{
@@ -20801,14 +20801,14 @@
 			"name": "M-TS-IMPORT-STATIC-CALL",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "? CallGraphKeys.importedStatic(this, importedOf(innerName), innerName, currentType)",
+			"find": "? CallGraphKeys.importedStatic(this, importedOf(innerName, inner.span?.from), innerName, currentType)",
 			"replace": "? null",
 			"note": "the result of a static function an import binds, called bare, is not typed (review R4 F7)"
 		},
 		{
 			"name": "M-TS-IMPORT-STATIC-OWN",
 			"type": "anyparse.query.CallGraphKeys",
-			"method": "importedStatic",
+			"method": "memberMayBind",
 			"find": " || types.declaringTypeOf(currentType, name) != null\n\t\t\t\t&& !staticOfSupertype(g, currentType, name)",
 			"replace": "",
 			"note": "an imported static outranks a member of the reading type of the same name"
@@ -20824,7 +20824,7 @@
 		{
 			"name": "M-TS-IMPORT-STATIC-INDEXED",
 			"type": "anyparse.query.CallGraphKeys",
-			"method": "importedStatic",
+			"method": "memberMayBind",
 			"find": "!types.chainFullyIndexed(currentType) || ",
 			"replace": "",
 			"note": "an imported static outranks a member a supertype the index does not hold may declare"
@@ -21225,7 +21225,7 @@
 			"name": "M-TS-MODULE-NAME",
 			"type": "anyparse.query.ValueNameBinding",
 			"method": "importedStatics",
-			"find": "\t\tif (fi.moduleFields.contains(name)) return out;\n",
+			"find": "\t\tif (fi.moduleFields.exists(f -> f.name == name && CondBranchPath.within(use, branchOf(fi, f)))) return out;\n",
 			"replace": "",
 			"note": "a static an import brings in wins over a module-level field of the same name"
 		},
@@ -21241,8 +21241,8 @@
 			"name": "M-TS-MODULE-NAME-ALIAS",
 			"type": "anyparse.query.SymbolIndexBuilder",
 			"method": "moduleFieldsOf",
-			"find": "else if (kinds.contains(node.kind) && !out.contains(name))",
-			"replace": "else if (!out.contains(name))",
+			"find": "if (kinds.contains(node.kind) && span != null) {",
+			"replace": "if (span != null) {",
 			"note": "any named module-level node — an import alias, a type — counts as a value the module declares, hiding the static an import binds"
 		},
 		{
@@ -21440,8 +21440,8 @@
 		{
 			"name": "M-TS-SUPER-STATIC-IMPORT",
 			"type": "anyparse.query.CallGraphKeys",
-			"method": "importedStatic",
-			"find": "\t\t\t\t&& !staticOfSupertype(g, currentType, name)\n",
+			"method": "memberMayBind",
+			"find": "\n\t\t\t\t&& !staticOfSupertype(g, currentType, name)",
 			"replace": "",
 			"note": "a supertype's static keeps an imported static of the name out of a bare read"
 		},
@@ -22298,6 +22298,94 @@
 			"find": "for (k in BinderScan.binderKinds(shape)) if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k",
 			"replace": "for (k in BinderScan.binderKinds(shape)) k",
 			"note": "a local function counts as a shadowing binder rather than as the callee it is, so `p -> ok(p)` over a local `function ok` is never reduced"
+		},
+		{
+			"name": "M-VALUES-MODULE-WITHIN",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "moduleValuesAt",
+			"find": "fields.find(f -> CondBranchPath.within(use, branchOf(fi, f)))",
+			"replace": "fields[0]",
+			"note": "a use binds the first module-level declaration of the name, whichever #if branch it compiles in"
+		},
+		{
+			"name": "M-VALUES-MODULE-ALTERNATIVE",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "moduleValuesAt",
+			"find": "fields.filter(f -> CondBranchPath.comparable(use, branchOf(fi, f)))",
+			"replace": "fields",
+			"note": "a declaration of a branch the use is an alternative of is still one it may bind"
+		},
+		{
+			"name": "M-VALUES-IMPORTS-WITHIN",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importedStatics",
+			"find": "f.name == name && CondBranchPath.within(use, branchOf(fi, f))",
+			"replace": "f.name == name",
+			"note": "a module-level declaration inside #if hides the imported static in the builds without it too"
+		},
+		{
+			"name": "M-VALUES-IMPORTS-POSITION",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importedStatics",
+			"find": "at == null ? [] : _refs.names.branchPathAt(fi, at)",
+			"replace": "[]",
+			"note": "the use's own #if branch is not read: a guarded declaration never hides the imported static"
+		},
+		{
+			"name": "M-GRAPH-MODULE-VALUE-TYPED",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "return values.decls.length == 1 && values.imported == null ? typeSources[values.decls[0].span.from] : null;",
+			"replace": "return null;",
+			"note": "a module-level value every build compiling the read declares is not typed"
+		},
+		{
+			"name": "M-GRAPH-MODULE-VALUE-MEMBER-FIRST",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "values.decls.length > 0 && !CallGraphKeys.memberMayBind(this, currentType, name))",
+			"replace": "values.decls.length > 0)",
+			"note": "a module-level value outranks a member the enclosing type's chain declares"
+		},
+		{
+			"name": "M-GRAPH-MODULE-RECEIVERS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "? moduleReceivers(callee.children[0], currentType, calleeName) ?? []",
+			"replace": "? []",
+			"note": "a call on a module-level value only some builds declare dispatches on none of its types"
+		},
+		{
+			"name": "M-GRAPH-MODULE-RECEIVERS-IMPORTS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "for (s in imported.statics) written.push(memberTypeSource(s.owner, s.member));",
+			"replace": "",
+			"note": "the builds compiling no module-level declaration of the name do not dispatch on the imported static"
+		},
+		{
+			"name": "M-GRAPH-MODULE-RECEIVERS-MEMBER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "values.decls.length == 0 || CallGraphKeys.memberMayBind(this, currentType, name))",
+			"replace": "values.decls.length == 0)",
+			"note": "a module-level value is dispatched on where a member of the enclosing type's chain may be meant"
+		},
+		{
+			"name": "M-GRAPH-MODULE-RECEIVERS-UNTYPED",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (nominal == null || nullableWrappers.contains(nominal)) return null;",
+			"replace": "if (nominal == null) continue; if (nullableWrappers.contains(nominal)) return null;",
+			"note": "a build whose value is not typed is dropped instead of leaving the receiver unresolved"
+		},
+		{
+			"name": "M-GRAPH-IMPORTED-POSITION",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "holder.index.values.importedStatics(holder.info, name, at)",
+			"replace": "holder.index.values.importedStatics(holder.info, name)",
+			"note": "an import binds a name whose module-level declaration every build compiling the read declares"
 		}
 	]
 }

@@ -3142,6 +3142,9 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-LOOP-OWN-PARAMS,M-TS-LOOP-THROUGH',
 			'unit.query.CallGraphTest#testAModuleLevelFieldComesBeforeAnImportedStatic :: control :: '
 				+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
+			'unit.query.CallGraphTest#testAModuleLevelValueUnderIfBindsInTheBuildsThatCompileIt :: control :: '
+				+ 'M-GRAPH-MODULE-VALUE-TYPED,M-GRAPH-MODULE-VALUE-MEMBER-FIRST,M-GRAPH-MODULE-RECEIVERS,M-GRAPH-MODULE-RECEIVERS-IMPORTS,'
+				+ 'M-GRAPH-MODULE-RECEIVERS-MEMBER,M-GRAPH-MODULE-RECEIVERS-UNTYPED,M-GRAPH-IMPORTED-POSITION',
 			'unit.query.CallGraphTest#testANameNoImportBindsIsLookedUpInTheFilesPackages :: control :: '
 				+ 'M-TS-PACKAGE-LOOKUP,M-TS-PACKAGE-ENCLOSING,M-TS-PACKAGE-PROJECT-FIRST',
 			'unit.query.CallGraphTest#testAReceiverANewMakesIsOfTheTypeItNames :: control :: M-TS-NEW-RECEIVER',
@@ -4228,6 +4231,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-UNCHECKED-CLASS-EXTERN,M-UNCHECKED-ALIKE',
 			'unit.query.ValueNameBindingTest#testAModuleFieldComesBeforeAnyImport :: control :: '
 				+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
+			'unit.query.ValueNameBindingTest#testAModuleValueUnderIfBindsInTheBuildsCompilingIt :: control :: '
+				+ 'M-VALUES-MODULE-WITHIN,M-VALUES-MODULE-ALTERNATIVE,M-VALUES-IMPORTS-WITHIN,M-VALUES-IMPORTS-POSITION',
 			'unit.query.ValueNameBindingTest#testAUsingBringsEveryTypeOfItsModule :: control :: M-USING-MODULE-TYPES',
 			'unit.query.ValueNameBindingTest#testAWildcardBringsTheTypesStaticsOnly :: control :: '
 				+ 'M-GRAPH-UNLISTED-WILDCARD,M-VALUES-OWNER-BY-NAME,M-VALUES-EXTERN,M-VALUES-BUILT-ABOVE',
@@ -7071,7 +7076,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-SITES-EXPR-RETURN-NO-LANDING',
 			'M-VOCAB-DOWHILE-EXPR-NOT-LOOP',
 			'M-RLW-NAMED-FN-NOT-BINDER',
-			'M-RLW-LOCAL-FN-AS-BINDER'
+			'M-RLW-LOCAL-FN-AS-BINDER',
+			'M-VALUES-MODULE-WITHIN',
+			'M-VALUES-MODULE-ALTERNATIVE',
+			'M-VALUES-IMPORTS-WITHIN',
+			'M-VALUES-IMPORTS-POSITION',
+			'M-GRAPH-MODULE-VALUE-TYPED',
+			'M-GRAPH-MODULE-VALUE-MEMBER-FIRST',
+			'M-GRAPH-MODULE-RECEIVERS',
+			'M-GRAPH-MODULE-RECEIVERS-IMPORTS',
+			'M-GRAPH-MODULE-RECEIVERS-MEMBER',
+			'M-GRAPH-MODULE-RECEIVERS-UNTYPED',
+			'M-GRAPH-IMPORTED-POSITION'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

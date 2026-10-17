@@ -10,6 +10,7 @@ import anyparse.query.SymbolIndex.AmbientImportGroup;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.query.SymbolIndex.ModuleField;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
@@ -200,19 +201,25 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * The names of the module-level value declarations of `tree` (`RefShape.moduleValueDeclKinds`: a function, a `var`, the
-	 * form a `final` wraps), each once — inside a conditional region or any other nameless wrapper too, never inside a named
+	 * The module-level value declarations of `tree` (`RefShape.moduleValueDeclKinds`: a function, a `var`, the form a `final`
+	 * wraps), every one in source order — inside a conditional region or any other nameless wrapper too, never inside a named
 	 * declaration.
 	 */
-	private static function moduleFieldsOf(tree: QueryNode, shape: RefShape): Array<String> {
+	private static function moduleFieldsOf(tree: QueryNode, shape: RefShape): Array<ModuleField> {
 		final kinds: Array<String> = shape.moduleValueDeclKinds ?? [];
-		final out: Array<String> = [];
+		final out: Array<ModuleField> = [];
 		function walk(node: QueryNode): Void {
 			final name: Null<String> = node.name;
-			if (name == null)
-				for (c in node.children) walk(c)
-			else if (kinds.contains(node.kind) && !out.contains(name))
-				out.push(name);
+			final span: Null<Span> = node.span;
+			if (name == null) {
+				for (c in node.children) walk(c);
+				return;
+			}
+			final declared: String = name;
+			if (kinds.contains(node.kind) && span != null) {
+				final at: Span = span;
+				out.push({ name: declared, span: at });
+			}
 		}
 		for (c in tree.children) walk(c);
 		return out;
