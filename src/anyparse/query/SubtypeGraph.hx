@@ -482,6 +482,18 @@ final class SubtypeGraph {
 	}
 
 	/**
+	 * Every transitive subtype declaration of `owner`, each with the file declaring it — the
+	 * declarations themselves, not just their names or files, for a caller that needs their SPANS
+	 * (a proof that a member is read only inside its type and its subtypes). `fromFile` pins the
+	 * starting declaration exactly as `hasSubtype` does.
+	 */
+	public function subtypeDecls(owner: String, ?fromFile: String): Array<ResolvedType> {
+		final out: Array<ResolvedType> = [];
+		eachSubtype(owner, sub -> out.push(sub), fromFile);
+		return out;
+	}
+
+	/**
 	 * The simple names of every type in `owner`'s transitive SUBTYPE closure, `owner` excluded unless the
 	 * closure names it back. Over-approximated the way `subtypeFiles` is, so a caller may only read a
 	 * name here as "may be a subtype" — a veto, never a proof of relation.

@@ -247,6 +247,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.NamingCheckLocalFixTest',
 		'unit.check.NamingCheckMemberFixTest',
 		'unit.check.NamingCheckTest',
+		'unit.check.NamingPrivatizeTest',
 		'unit.check.NarrowLocalScopeCheckTest',
 		'unit.check.NoUnderscorePrefixCheckTest',
 		'unit.check.NullDereferenceTest',
@@ -1578,6 +1579,19 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-CONFINEMENT-REPORT-INDEX-RENAME',
 			'unit.check.NamingCheckMemberFixTest#testReflectionCallOutsideReportScopeRefusesRename :: control :: '
 				+ 'M-REFLECTION-REPORT-INDEX-RENAME',
+			'unit.check.NamingPrivatizeTest#testANameThePrivateRuleRejectsIsNotACandidate :: control :: M-PRIVATIZE-RULE-UNCHECKED',
+			'unit.check.NamingPrivatizeTest#testANarrowedRunSeesAReaderOutsideItsScope :: control :: M-PRIVATIZE-TOKENS-UNCHECKED',
+			'unit.check.NamingPrivatizeTest#testAPublicUnderscoreFieldReadOnlyInsideIsPrivatized :: control :: '
+				+ 'M-PRIVATIZE-NO-CANDIDATE,M-NAMING-PRIVATIZE-NOT-DECLINED,M-NAMING-RISKYFIX-EMPTY',
+			'unit.check.NamingPrivatizeTest#testASubtypeReaderStillPrivatizes :: control :: M-PRIVATIZE-NO-SUBTYPE-REGION',
+			'unit.check.NamingPrivatizeTest#testAnAutoBuildAncestorDoesNotRefuse :: control :: M-PRIVATIZE-AUTOBUILD-COUNTS',
+			'unit.check.NamingPrivatizeTest#testAnOutsideReaderKeepsTheRename :: control :: M-NAMING-RISKY-FINDINGS-ALL,M-PRIVATIZE-TOKENS-UNCHECKED',
+			'unit.check.NamingPrivatizeTest#testEachGateRefusesTheArm :: control :: M-PRIVATIZE-UNCERTAIN-RUN,'
+				+ 'M-PRIVATIZE-TYPE-REACH,M-PRIVATIZE-CHAIN,M-PRIVATIZE-ACCESS-GRANT,M-PRIVATIZE-FRAGMENT,M-PRIVATIZE-TOKENS-UNCHECKED',
+			'unit.check.NamingPrivatizeTest#testNoDeclaredScopeLeavesTheRename :: control :: M-PRIVATIZE-INCOMPLETE-PROJECT',
+			'unit.check.NamingPrivatizeTest#testTheCandidateTestIsAPositiveList :: control :: M-PRIVATIZE-METHOD-CANDIDATE,M-PRIVATIZE-NO-UNDERSCORE,'
+				+ 'M-PRIVATIZE-NOT-PUBLIC,M-PRIVATIZE-NO-OWNER,M-PRIVATIZE-IMPLICIT-REACH,M-PRIVATIZE-RENAME-UNSAFE',
+			'unit.check.NamingPrivatizeTest#testTheOracleRunPrivatizes :: control :: M-RISKYARM-NOT-VERIFIED,M-FIXVERIFY-RISKYARM-FIX',
 			'unit.check.NullableSourceResolutionScopeTest#testExcludedArrayPopStaysUnseeded :: control :: M-NULLABLE-INDEX-EXCLUSION',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
@@ -2721,6 +2735,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnusedPrivateCheckTest#testStaticReceiverIsNoClassValue :: control :: M-CTOR-RECEIVER-AS-VALUE',
 			'unit.check.UnusedPrivateDeclineReasonTest#testEachGateNamesItself :: control :: '
 				+ 'M-UNUSED-PRIVATE-DECLINE-SILENT,M-UNUSED-PRIVATE-REGION-DECLINE-SILENT',
+			'unit.check.UnusedPublicMemberCheckTest#testAutoBuildAncestorNotFlagged :: control :: M-REACH-AUTOBUILD-IGNORED',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
 			'unit.check.UsingDeclineAttributionTest#testCounterLoopConflictNamesTheSkippedSiteAndKeepsTheOther :: control :: '
 				+ 'M-COUNT-CONFLICT-SILENT',
@@ -7343,7 +7358,31 @@ class TestDiscoveryParityTest extends Test {
 			'M-DEFAULT-ARG-NULL-CONST-NONNULL',
 			'M-UNUSED-LOCAL-IMPURE-UNSAID',
 			'M-UNUSED-LOCAL-SHARED-LINE-UNSAID',
-			'M-UNUSED-PRIVATE-FIELD-KIND-PURITY'
+			'M-UNUSED-PRIVATE-FIELD-KIND-PURITY',
+			'M-PRIVATIZE-NO-CANDIDATE',
+			'M-PRIVATIZE-METHOD-CANDIDATE',
+			'M-PRIVATIZE-NO-UNDERSCORE',
+			'M-PRIVATIZE-NOT-PUBLIC',
+			'M-PRIVATIZE-NO-OWNER',
+			'M-PRIVATIZE-IMPLICIT-REACH',
+			'M-PRIVATIZE-RENAME-UNSAFE',
+			'M-PRIVATIZE-RULE-UNCHECKED',
+			'M-PRIVATIZE-INCOMPLETE-PROJECT',
+			'M-PRIVATIZE-UNCERTAIN-RUN',
+
+			'M-PRIVATIZE-TYPE-REACH',
+			'M-PRIVATIZE-CHAIN',
+			'M-PRIVATIZE-AUTOBUILD-COUNTS',
+			'M-PRIVATIZE-ACCESS-GRANT',
+			'M-PRIVATIZE-FRAGMENT',
+			'M-PRIVATIZE-TOKENS-UNCHECKED',
+			'M-PRIVATIZE-NO-SUBTYPE-REGION',
+			'M-NAMING-PRIVATIZE-NOT-DECLINED',
+			'M-NAMING-RISKYFIX-EMPTY',
+			'M-NAMING-RISKY-FINDINGS-ALL',
+			'M-RISKYARM-NOT-VERIFIED',
+			'M-FIXVERIFY-RISKYARM-FIX',
+			'M-REACH-AUTOBUILD-IGNORED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

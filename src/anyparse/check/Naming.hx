@@ -4,8 +4,11 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.FrameworkAware;
+import anyparse.check.Check.RiskyArm;
 import anyparse.check.Check.Violation;
 import anyparse.check.ConstantHoist.Hoist;
+import anyparse.check.NamingPrivatize.PrivatizeCandidate;
+import anyparse.check.NamingPrivatize.Privatized;
 import anyparse.check.NamingRenames.CrossFileRename;
 import anyparse.check.NamingRenames.DeclRename;
 import anyparse.check.NamingRenames.RenameRefusal;
@@ -61,7 +64,7 @@ using Lambda;
  * drops the finding too.
  */
 @:nullSafety(Strict)
-final class Naming implements Check implements CrossFileFix implements ConfigAware implements FrameworkAware {
+final class Naming implements Check implements CrossFileFix implements RiskyArm implements ConfigAware implements FrameworkAware {
 
 	/**
 	 * A lowercase head over an all-uppercase / digit tail of four or more characters - see `normalizerArtifactName`.
@@ -76,6 +79,13 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
+	/**
+	 * The privatize arm's verdicts from the latest `run`, keyed by `CheckScan.spanKey(file, declaration span)`:
+	 * every whole-project gate is asked there, where the entire file set is in hand, and read back by
+	 * span from `crossFileFix` (which steps aside) and `riskyFix` (which writes the edit).
+	 */
+	private var _privatized: Map<String, Privatized> = [];
 
 	public function new() {}
 
@@ -94,7 +104,8 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		final indexOf: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
-		return RunScan.collectWith(files, plugin, plugin.namingSupport(), (entry, tree, support, violations) -> {
+		final privatizable: Array<PrivatizeCandidate> = [];
+		final out: Array<Violation> = RunScan.collectWith(files, plugin, plugin.namingSupport(), (entry, tree, support, violations) -> {
 			// The values of an enum abstract written `@:enum` (or through the `#if` version guard)
 			// project as fields of a plain abstract, where the FIELD naming rule governs them — and an
 			// enum value is PascalCase by convention, so each one reads as a violation.
@@ -107,10 +118,28 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 				final span: Null<Span> = decl.span;
 				if (span != null) byStart[span.from] = decl;
 			}
-			final reported: Array<Violation> = violationsFor(entry.file, decls, support.policyFor(entry.file));
-			for (v in reported) if (!frameworkOwned(v, byStart, support, indexOf, contracts))
+			final policy: NamingPolicy = support.policyFor(entry.file);
+			for (v in violationsFor(entry.file, decls, policy)) if (!frameworkOwned(v, byStart, support, indexOf, contracts)) {
 				violations.push(v);
+				final at: Null<Span> = v.span;
+				final decl: Null<NamedDecl> = at == null ? null : byStart[at.from];
+				if (decl == null || !NamingPrivatize.isCandidate(decl, policy)) continue;
+				// Re-bound: strict null-safety does not narrow inside a struct literal.
+				final candidate: NamedDecl = decl;
+				privatizable.push({
+					file: entry.file,
+					source: entry.source,
+					tree: tree,
+					decl: candidate
+				});
+			}
 		});
+		_privatized = NamingPrivatize.verdicts(privatizable, files, plugin);
+		for (v in out) {
+			final arm: Null<Privatized> = privatizedOf(v);
+			if (arm != null) v.message += ' — nothing outside ${arm.owner} reads it, so the fix makes it private';
+		}
+		return out;
 	}
 
 	/**
@@ -274,6 +303,11 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		final out: Array<Array<CrossFileEdits>> = [];
 		for (v in violations) {
+			// The privatize arm owns this finding: the rename steps aside, and the edit comes from `riskyFix`.
+			if (privatizedOf(v) != null) {
+				RenameRefusal.note(v, RenameRefusal.PRIVATIZE_ARM);
+				continue;
+			}
 			final rename: Null<CrossFileRename> = NamingRenames.crossFileRenameFor(
 				v, sourceByFile, support, shape, plugin, idx, resolutionIndex
 			);
@@ -286,6 +320,22 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			out.push(rename.slices);
 		}
 		return out;
+	}
+
+	public function riskyArmFindings(violations: Array<Violation>): Array<Violation> {
+		return [for (v in violations) if (privatizedOf(v) != null) v];
+	}
+
+	/** The privatize arm: each finding `run` proved confined gets its `public` keyword rewritten to `private`. */
+	public function riskyFix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			final arm: Null<Privatized> = privatizedOf(v);
+			if (arm != null) edits.push({ span: arm.keywordSpan, text: NamingPrivatize.keyword() });
+		}
+		return edits;
 	}
 
 	/**
@@ -342,6 +392,12 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		if (!defersToAnAcceptedRename(rename, edits, claims, owner, index)) return false;
 		if (declSpan != null) RenameRefusal.note(flaggedAt[declSpan.from], RenameRefusal.NAME_CLAIMED);
 		return true;
+	}
+
+	/** The privatize arm's verdict for `v`, or null when its fix is the rename. */
+	private function privatizedOf(v: Violation): Null<Privatized> {
+		final s: Null<Span> = v.span;
+		return s == null ? null : _privatized[CheckScan.spanKey(v.file, s)];
 	}
 
 	/**

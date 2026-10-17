@@ -98,10 +98,20 @@ final class RawSourceScan {
 	 * `--fix` uses to lift its whole-file conditional-compilation veto.
 	 */
 	public function nameOccursOutside(name: String, excludedFile: String, excludedSpan: Span): Bool {
-		for (file => src in _sources) {
-			final excluded: Array<Span> = file == excludedFile ? [excludedSpan] : [];
-			if (OccurrenceScan.referencedInRange(src, name, 0, src.length, excluded, matchMaskFor(file, src))) return true;
-		}
+		return nameOccursOutsideAll(name, [excludedFile => [excludedSpan]]);
+	}
+
+	/**
+	 * `nameOccursOutside` over SEVERAL excluded regions, possibly in several files: `excluded` maps a
+	 * file to the spans of it that do not count. The same raw-text scan, so `false` proves `name`
+	 * occurs nowhere else in any indexed source — the shape a "read only inside its own type and its
+	 * subtypes" proof needs, where the regions are a type declaration and each of its subtypes'.
+	 */
+	public function nameOccursOutsideAll(name: String, excluded: Map<String, Array<Span>>): Bool {
+		for (file => src in _sources) if (OccurrenceScan.referencedInRange(
+			src, name, 0, src.length, excluded[file] ?? [], matchMaskFor(file, src)
+		))
+			return true;
 		return false;
 	}
 
