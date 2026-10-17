@@ -276,7 +276,7 @@ class WriterLowering {
 
 	/**
 	 * Generated fields that are not `WriterRule`s: one `<writeFn>OpenRight` per Pratt rule (see
-	 * `openRightField`). `Build.buildWriter` appends them after `WriterCodegen.emit`.
+	 * `WriterPrattLowering.openRightField`). `Build.buildWriter` appends them after `WriterCodegen.emit`.
 	 */
 	public final extraFields: Array<Field> = [];
 
@@ -299,7 +299,9 @@ class WriterLowering {
 			shape: shape,
 			ctx: ctx,
 			ruleValueCT: ruleValueCT,
-			writeFnFor: writeFnFor
+			writeFnFor: writeFnFor,
+			ruleCtorPath: ruleCtorPath,
+			branchExtraArgs: branchExtraArgs
 		};
 		_bodyPolicy = {
 			shape: shape,
@@ -410,7 +412,8 @@ class WriterLowering {
 		// go-to-def works, no string typo can survive compile.
 		final preWriteFn: Null<Expr> = fmtReadCall(node, 'preWrite');
 		final body: Expr = preWriteFn != null ? wrapWithPreWrite(preWriteFn, rawBody, fnName, typePath) : rawBody;
-		if (node.kind == Alt && hasPrattBranch(node)) extraFields.push(openRightField(node, typePath, fnName, valueCT));
+		if (node.kind == Alt && hasPrattBranch(node))
+			extraFields.push(WriterPrattLowering.openRightField(_pratt, node, typePath, fnName, valueCT));
 		return [
 			{
 				fnName: fnName,
@@ -1462,103 +1465,6 @@ class WriterLowering {
 	private function writeFnFor(refName: String): String {
 		final simple: String = simpleName(refName);
 		return isTriviaBearing(refName) ? 'write${simple}T' : 'write$simple';
-	}
-
-	/**
-	 * `<writeFn>OpenRight(value, ctx): Int` — the lowest operator precedence that, written straight
-	 * after `value` (itself written at `ctx`), would be read as part of `value` rather than applied to
-	 * it: `WriterPrattLowering.OPEN_NONE` when nothing can be, because `value` ends in a token or in a
-	 * pair of its own.
-	 *
-	 * Only the right spine is walked. An infix node that `ctx` parenthesises is closed; otherwise its
-	 * right operand is parsed at `pratt.rightPrec`, so anything binding at least that tightly would join
-	 * it, and the operand itself may be open further down. A ternary's `else` takes a whole expression, so a
-	 * bare one is open at 0, and so is a keyword atom over a whole expression (`untyped e`, `cast e`, `return
-	 * e` — `keywordAtomOverWholeExpr`). For every symmetric operator this never says more than its own
-	 * precedence already did; it is the ASYMMETRIC ones (`x -> b`, `a in b`, `@:infix(op, prec, assoc,
-	 * rightPrec)`) and the ternary that bind tight on the left and run on to the right, and a left
-	 * operand ending in one needs a pair however tightly its root binds (`(x -> b) + c`, `(cast a) + b`).
-	 */
-	private function openRightField(node: ShapeNode, typePath: String, fnName: String, valueCT: ComplexType): Field {
-		final helperName: String = WriterPrattLowering.openRightFnName(fnName);
-		final none: Int = WriterPrattLowering.OPEN_NONE;
-		final pos: Position = Context.currentPos();
-		final cases: Array<Case> = [];
-		for (branch in node.children) {
-			final branchCase: Null<Case> = openRightCase(branch, typePath, helperName, pos);
-			if (branchCase != null) cases.push(branchCase);
-		}
-		final dispatch: Expr = { expr: ESwitch(macro value, cases, macro $v{none}), pos: pos };
-		return {
-			name: helperName,
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'value', type: valueCT }, { name: 'ctx', type: macro :Int }],
-				ret: macro :Int,
-				expr: macro return $dispatch
-			}),
-			pos: pos
-		};
-	}
-
-	/**
-	 * The `openRightField` case of `branch`, a constructor of `typePath`: a ternary is open at its own precedence, an infix
-	 * node whose right operand is of this rule as far as that operand is (`helperName` asked of it), a keyword atom over a
-	 * whole expression (`atomOpenCase`) at 0. Null for a branch nothing can be read into the right of.
-	 */
-	private function openRightCase(branch: ShapeNode, typePath: String, helperName: String, pos: Position): Null<Case> {
-		final none: Int = WriterPrattLowering.OPEN_NONE;
-		final prec: Null<Int> = branch.annotations[AnnotationKeys.PRATT_PREC];
-		final tPrec: Null<Int> = branch.annotations[AnnotationKeys.TERNARY_PREC];
-		final children: Array<ShapeNode> = branch.children;
-		final arity: Int = children.length + branchExtraArgs(branch);
-		final ctorRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(typePath, branch.annotations[AnnotationKeys.BASE_CTOR]));
-		if (prec == null && tPrec == null) return atomOpenCase(branch, typePath, arity, ctorRef, pos);
-		final body: Expr = if (tPrec != null)
-			macro $v{tPrec} < ctx ? $v{none} : 0
-		else {
-			final right: ShapeNode = children[1];
-			final rightRef: Null<String> = right.kind == Ref ? right.annotations[AnnotationKeys.BASE_REF] : null;
-			// A right operand of another rule (`a is T`) ends in that rule's own syntax.
-			if (rightRef == null || simpleName(rightRef) != simpleName(typePath)) return null;
-			final rightPrec: Int = branch.annotations[AnnotationKeys.PRATT_RIGHT_PREC];
-			macro $v{prec} < ctx ? $v{none} : {
-				final _o: Int = $i{helperName}(_r, $v{rightPrec});
-				_o < $v{rightPrec} ? _o : $v{rightPrec};
-			};
-		};
-		final args: Array<Expr> = [for (i in 0...arity) tPrec == null && i == 1 ? macro _r : macro _];
-		return { values: [{ expr: ECall(ctorRef, args), pos: pos }], expr: body, guard: null };
-	}
-
-	/**
-	 * The `openRightField` case of a branch of no precedence: a keyword atom whose whole operand is an unbracketed expression
-	 * of this rule (`untyped e`, `cast e`, `return e`) takes everything to its right — unless, under
-	 * `@:fmt(atomOperandWhen(…))`, a listed atom ends the operand (`cast (x : Int)`). Null for any other branch.
-	 */
-	private function atomOpenCase(branch: ShapeNode, typePath: String, arity: Int, ctorRef: Expr, pos: Position): Null<Case> {
-		if (!keywordAtomOverWholeExpr(branch, typePath)) return null;
-		final none: Int = WriterPrattLowering.OPEN_NONE;
-		final atomWhen: Array<String> = branch.fmtReadStringArgs('atomOperandWhen') ?? [];
-		final listed: Expr = { expr: EArrayDecl([for (n in atomWhen) macro $v{n}]), pos: pos };
-		final atomBody: Expr = atomWhen.length == 0 ? macro 0 : macro $listed.contains(Type.enumConstructor(_r)) ? $v{none} : 0;
-		final atomArgs: Array<Expr> = [for (i in 0...arity) i == 0 && atomWhen.length > 0 ? macro _r : macro _];
-		return { values: [{ expr: ECall(ctorRef, atomArgs), pos: pos }], expr: atomBody, guard: null };
-	}
-
-	/**
-	 * Whether `branch` is a keyword atom whose one child is a whole expression of `typePath` (unless
-	 * an `@:fmt(atomOperandWhen)` atom ends it — `openRightField` asks that at run time) with
-	 * nothing after it — the operand parsed at the loosest precedence (`Lowering.lowerKwRefBranch`
-	 * without `@:fmt(atomOperand)`), so anything written after the atom joins that operand.
-	 */
-	private static function keywordAtomOverWholeExpr(branch: ShapeNode, typePath: String): Bool {
-		final children: Array<ShapeNode> = branch.children;
-		if (children.length != 1 || branch.annotations.get(AnnotationKeys.KW_LEAD_TEXT) == null) return false;
-		if (branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT) != null || branch.fmtHasFlag('atomOperand')) return false;
-		final only: ShapeNode = children[0];
-		final ref: Null<String> = only.kind == Ref ? only.annotations.get(AnnotationKeys.BASE_REF) : null;
-		return ref != null && simpleName(ref) == simpleName(typePath);
 	}
 
 	/** Paired `*T` ComplexType in the synth module for bearing rules; plain TPath otherwise. */
