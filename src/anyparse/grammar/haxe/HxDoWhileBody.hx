@@ -19,6 +19,9 @@ package anyparse.grammar.haxe;
  * - `ExprBody` — bare HxExpr with `@:trailOpt(';')`; the optional
  *   `;` covers both `do foo(); while(c);` (legacy) and
  *   `do $block while(c);` / `do a++ while(c);` (new sole-blockers).
+ *   The `;` is parse leniency only: Haxe 4.3.7 rejects it (`Expected
+ *   while`), so `@:fmt(trailOptParseOnly)` keeps the plain writer
+ *   from ever emitting it.
  */
 @:peg
 enum HxDoWhileBody {
@@ -31,7 +34,7 @@ enum HxDoWhileBody {
 
 	@:kw('do') InnerDoWhile(inner: HxDoWhileStmt);
 
-	@:trailOpt(';')
+	@:trailOpt(';') @:fmt(trailOptParseOnly)
 	ExprBody(expr: HxExpr);
 
 }

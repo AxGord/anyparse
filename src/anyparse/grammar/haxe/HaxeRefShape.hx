@@ -333,6 +333,7 @@ final class HaxeRefShape {
 				'IfStmt',
 				'IfExpr',
 				'WhileStmt',
+				'WhileExpr',
 				'DoWhileStmt',
 				'DoWhileExpr',
 				'ForStmt',

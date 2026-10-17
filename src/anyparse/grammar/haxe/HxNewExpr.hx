@@ -19,7 +19,9 @@ package anyparse.grammar.haxe;
  * `params` carries the optional angle-bracketed type-parameter list for `new Map<K, V>()`.
  * Byte-twin of `HxTypeRef.params` — the same `@:optional @:lead('<') @:trail('>') @:sep(',')`
  * shape over `Array<HxType>`; an empty Star degrades to no output via the standard
- * optional-Star Lowering path.
+ * optional-Star Lowering path. `@:queryTypeArgs` makes the projected `NewExpr` record how many
+ * of its leading children these are (`QueryNode.typeArgCount`), so a pattern matcher unifies
+ * them apart from the value arguments.
  *
  * The argument list reuses the sep-peek Star field pattern of `HxFnDecl.params` and
  * `HxExpr.Call`. It carries `@:trivia` so the args' Star collects per-element `Trivial<HxExpr>`
@@ -39,7 +41,8 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxNewExpr = {
 	var type: HxNewTypeName;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var params: Null<Array<HxType>>;
+	@:optional @:queryTypeArgs @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'),
+		groupRestProbe) var params: Null<Array<HxType>>;
 	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), trailingCommaRemovable,
 		wrapRules('callParameterWrap'), ignoreSourceNewlinesForWrap, groupRestProbe, complexItems) var args: Array<HxExpr>;
 };

@@ -3180,9 +3180,8 @@ decided the question; it may not become a record of runs.
   to `ParenGuard` as a hole (`Rewrite.isNameCapture`). The guard's premise that an illegal pair fails to parse is false
   after `new`: `new (A)()` parses as a call of an identifier `new`, so the type name looked both wrappable and
   unfaithful and `new $C()` came back as `new(A)()` (`new Zz${C}()` as `new Zz(A)()`). A name capture is one identifier
-  or a dotted path, which no operator around it can re-read, so leaving it bare is exact rather than a guess. NOT fixed,
-  recorded as a limit in `cli-query-tool.md`: a value metavariable in `new $C($a)` also binds a TYPE argument, because
-  the projection puts both in one child list — branch `feat/infra-N5`
+  or a dotted path, which no operator around it can re-read, so leaving it bare is exact rather than a guess (the
+  type-argument capture recorded here as a limit is fixed by N9, below) — branch `feat/infra-N5`
 - `try` and a braced block join the search-only kind-equivalence (`TryCatchStmt` / `TryCatchStmtBare` / `TryExpr`,
   `BlockStmt` / `BlockExpr`): a pattern parses through the Stmt attempt first, so `try $p.parseFile($s) catch
   (exception: Exception) null` rooted at `TryCatchStmtBare` and matched no initializer, argument or `return` — the 21
@@ -3250,6 +3249,31 @@ decided the question; it may not become a record of runs.
   signature answered for it and `foreach(ok)` was proposed for a `(v:Int, ?w:Int) -> Bool` literal Haxe 4.3.7
   rejects. `LoopScan.capturedByClosure` takes the two kind sets it reads instead of a whole `LoopSeams`, so
   `prefer-range-loop`'s bundle passes as it is — branch `feat/infra-N8`
+- the PLAIN writer wrote `do i++; while (c)` for a do-while with an expression body, statement and expression form
+  alike, which Haxe 4.3.7 rejects (`Expected while`; the trivia writer reproduced the source). `HxDoWhileBody.ExprBody`'s
+  `@:trailOpt(';')` is parse leniency for the legacy spelling only, so it carries `@:fmt(trailOptParseOnly)`: the plain
+  Case-3 writer emits nothing for it, the trivia writer still writes what the source wrote — branch `feat/infra-N9`
+- `x = function n() { return 1; } trace(x());` and the `var` form did not parse, though Haxe 4.3.7 runs both:
+  `endsWithCloseBrace` and `_stmtExprNoSemiAt` had the anonymous `FnExpr` arm and no `NamedFnExpr` one. Both now read a
+  named literal's BLOCK body as `}`-terminated; its EXPRESSION body answers the body's own verdict at every depth,
+  without the anonymous arm's byte-parity `nested ||` relaxation (`x = function n() return 1 trace(x());` is `Missing ;`).
+  The plain writer therefore drops the optional `;` after `var g = function n() { … }` exactly as it does after the
+  anonymous spelling — branch `feat/infra-N9`
+- `branchKinds` (cyclomatic decision points; `prefer-local-function`'s conditional-evaluation stop;
+  `join-single-use-local`'s field-chain refusal) lacked `WhileExpr` while `ForExpr` was in it, so a `while` comprehension
+  or lambda body counted nothing and a binding under one was hoisted. Added; `ShapeVocabTest` now pins every
+  `ShapeVocab.loopKinds` / `conditionalKinds` member into the list. `join-single-use-local` cannot change: its loop
+  barrier (`ShapeVocab.loopKinds`) already refused a read under `WhileExpr` — branch `feat/infra-N9`
+- a value metavariable bound a constructor's TYPE arguments: the projection lists `new Map<String, Int>()`'s
+  `(Named String) (Named Int)` as children beside the value arguments, and the matcher unified one flat list, so
+  `new $C($b, $a)` silently rewrote it to `new Map(Int, String)`. The grammar tags the field (`HxNewExpr.params`
+  `@:queryTypeArgs`), the walker records how many children lead (`QueryNode.typeArgCount`), and the matcher unifies
+  the two runs apart, one star allowed per run (`new $T<...>(...)` is now a valid pattern). Children are unchanged —
+  `uses` keeps reading those `Named` nodes, and `NominalTypes.writtenConstruction` reads the count instead of
+  re-deriving the split from the separators between the children (its scan deleted). A pattern that writes no type
+  arguments constrains none, as the type slot does, so `new $T(...)` still counts every construction; `apq rewrite`
+  refuses such a match on a construction that writes some (`Match.unwritten`): no metavariable holds them, so the
+  splice would drop them — branch `feat/infra-N9`
 - the two `stripAnsi` copies disagreed: `LintFixSafePass` removed every CSI sequence, `TestTranscript` only an SGR
   colour code (`ESC[<digits;>m`) → one `SourceText.stripAnsi`, the CSI-wide reading. A transcript row behind an
   erase-line (`ESC[2K`, what a progress printer redraws with) kept its escape, failed the indent-anchored row

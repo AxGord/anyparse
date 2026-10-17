@@ -300,6 +300,23 @@ class CondBranchSplitTest extends Test {
 		Assert.equals('Public', runKinds.join(','), 'the modifier must survive the commented-out `#else`');
 	}
 
+	/**
+	 * A node the projection rebuilds keeps what the walker recorded on it: a construction whose
+	 * lambda argument holds a `#if` block is rebuilt, and its type-argument count (and type slot)
+	 * must survive, or every reader of `typeArgCount` takes the `<Int>` for a value argument.
+	 */
+	@:pin('control')
+	@:killer('M-CONDBRANCH-TYPE-ARGS-DROPPED')
+	public function testARebuiltNodeKeepsItsTypeArgumentCount(): Void {
+		final src: String = fn('new Box<Int>(() -> {\n\t\t\t#if A\n\t\t\ta();\n\t\t\t#else\n\t\t\tb();\n\t\t\t#end\n\t\t});');
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final plain: QueryNode = plugin.parseFile(src);
+		final projected: QueryNode = plugin.projectBranchAware(plain, src);
+		Assert.isFalse(plain == projected, 'the fixture must make the projection rebuild the construction');
+		final made: Null<QueryNode> = firstOfKind(projected, 'NewExpr');
+		Assert.equals(1, made?.typeArgCount);
+	}
+
 	/** The statements of `body` inside a class + function, so a region lands in a `BlockBody`. */
 	private static inline function fn(body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';

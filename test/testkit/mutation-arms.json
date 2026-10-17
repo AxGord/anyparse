@@ -21909,8 +21909,8 @@
 			"name": "M-CONSTRUCTION-CTOR-GAP",
 			"type": "anyparse.query.NominalTypes",
 			"method": "writtenConstruction",
-			"find": "if (gap.indexOf('(') >= 0) {",
-			"replace": "if (false) {",
+			"find": "for (k in 0...node.typeArgCount) {",
+			"replace": "for (k in 0...node.children.length) {",
 			"note": "the constructor's arguments are read as the type's"
 		},
 		{
@@ -22298,6 +22298,94 @@
 			"find": "for (k in BinderScan.binderKinds(shape)) if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k",
 			"replace": "for (k in BinderScan.binderKinds(shape)) k",
 			"note": "a local function counts as a shadowing binder rather than as the callee it is, so `p -> ok(p)` over a local `function ok` is never reduced"
+		},
+		{
+			"name": "M-DOWHILE-PLAIN-SEMI",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefParts",
+			"find": "} else if (branch.fmtHasFlag('trailOptParseOnly')) {",
+			"replace": "} else if (false) {",
+			"note": "the plain writer emits `do i++; while (c)` again, which Haxe rejects (`Expected while`)"
+		},
+		{
+			"name": "M-NAMED-FN-STMT-NO-ARM",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "stmtExprNoSemiAtField",
+			"find": "\t\t\tcaseBind(HX_EXPR, 'NamedFnExpr', [0 => '_f'], namedFnBodySwitch),\n",
+			"replace": "",
+			"note": "`x = function n() { return 1; } trace(x());` no longer parses: the named literal's `}` does not end the statement"
+		},
+		{
+			"name": "M-NAMED-FN-NOT-BRACE-ENDED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "endsWithCloseBraceField",
+			"find": "\t\t\tcaseBind(HX_EXPR, 'NamedFnExpr', [0 => '_f'], fnBodySwitch),\n",
+			"replace": "",
+			"note": "`var g = function n() { … }` keeps a `;` the anonymous spelling drops: the var-rhs gate reads the named literal as not brace-ended"
+		},
+		{
+			"name": "M-NAMED-FN-EXPR-BODY-RELAXED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "stmtExprNoSemiAtField",
+			"find": "caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], at(ident('_e'), macro true))",
+			"replace": "caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], macro true)",
+			"note": "a named literal's EXPRESSION body ends its statement with no `;`, so `x = function n() return 1 trace(x());` (Haxe: `Missing ;`) parses"
+		},
+		{
+			"name": "M-VOCAB-WHILE-EXPR-NOT-BRANCH",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "'WhileStmt',\n\t\t\t\t'WhileExpr',\n\t\t\t\t'DoWhileStmt',\n\t\t\t\t'DoWhileExpr',",
+			"replace": "'WhileStmt',\n\t\t\t\t'DoWhileStmt',\n\t\t\t\t'DoWhileExpr',",
+			"note": "a `while` comprehension or lambda body is no decision point: complexity counts nothing for it and a binding under it is hoisted"
+		},
+		{
+			"name": "M-MATCH-ONE-FLAT-RUN",
+			"type": "anyparse.query.Matcher",
+			"method": "unifyChildren",
+			"find": "final pTypes: Int = pattern.typeArgCount;\n\t\tfinal iTypes: Int = input.typeArgCount;",
+			"replace": "final pTypes: Int = 0;\n\t\tfinal iTypes: Int = 0;",
+			"note": "type and value arguments are one flat run again: `new $C($a, $b)` binds the TYPE arguments of `new Map<String, Int>()`"
+		},
+		{
+			"name": "M-MATCH-UNWRITTEN-DROPPED",
+			"type": "anyparse.query.Matcher",
+			"method": "unifyChildren",
+			"find": "if (at != null) unwritten.push(at);",
+			"replace": "if (at != null) unwritten.remove(at);",
+			"note": "a match on type arguments the pattern did not write is not recorded, so `rewrite` drops `<Int>` from `new Box<Int>(1)`"
+		},
+		{
+			"name": "M-REWRITE-UNWRITTEN-IGNORED",
+			"type": "anyparse.query.Rewrite",
+			"method": "rewrite",
+			"find": "for (m in accepted) for (at in m.unwritten) {",
+			"replace": "for (m in accepted) for (at in m.unwritten.slice(0, 0)) {",
+			"note": "`rewrite` splices over a construction whose type arguments no metavariable holds, dropping them"
+		},
+		{
+			"name": "M-WALK-TYPE-ARGS-UNCOUNTED",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "seqTypeArgCount",
+			"find": "rule.children.find(f -> f.hasMeta(QUERY_TYPE_ARGS_META))",
+			"replace": "rule.children.find(f -> false)",
+			"note": "the walker records no type-argument count, so the matcher sees one flat child run"
+		},
+		{
+			"name": "M-STAR-ONE-PER-LIST",
+			"type": "anyparse.query.Pattern",
+			"method": "checkNode",
+			"find": "if (stars(kids, 0, split) > 1 || stars(kids, split, kids.length) > 1) return TWO_STARS_REFUSAL;",
+			"replace": "if (stars(kids, 0, kids.length) > 1) return TWO_STARS_REFUSAL;",
+			"note": "`new $T<...>(...)` is refused again although its two stars sit in two runs"
+		},
+		{
+			"name": "M-CONDBRANCH-TYPE-ARGS-DROPPED",
+			"type": "anyparse.query.CondBranchProjection",
+			"method": "projectBranches",
+			"find": "node.span, node.type, node.typeArgCount)",
+			"replace": "node.span, node.type)",
+			"note": "a node the branch projection rebuilds loses its type-argument count"
 		},
 		{
 			"name": "M-SUBTYPE-ARGS-SUBSTITUTED",
