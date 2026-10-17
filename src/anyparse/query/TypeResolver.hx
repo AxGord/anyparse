@@ -932,6 +932,28 @@ final class TypeResolver {
 		return null;
 	}
 
+	/**
+	 * Whether the parameter binding at `bindingFrom` has a body type that DIFFERS from its
+	 * written type source `T`, so copying the source verbatim as a read's type would be
+	 * wrong. Three forms qualify: an OPTIONAL parameter with no default (`?p:T`, an
+	 * `optionalParamKind` node with no child) and any `= null`-default parameter
+	 * (`bindingIsNullInitialised`) are `Null<T>`; a REST parameter (`...p:T`, a
+	 * `restParamKind` node) is `haxe.Rest<T>`. A required param, and an optional / required
+	 * param with a NON-null default, keep `T` and are safe to copy. Public because
+	 * `ExtractMethod --member` copies a written type into a parameter and must ask the same.
+	 */
+	public static function paramTypeSourceUnsafe(tree: QueryNode, shape: RefShape, bindingFrom: Int): Bool {
+		final optKind: Null<String> = shape.optionalParamKind;
+		final optNode: Null<QueryNode> = optKind == null ? null : innermostDeclCovering(tree, [optKind], bindingFrom);
+		if (optNode != null && optNode.children.length == 0) return true;
+		final paramKinds: Null<Array<String>> = shape.paramKinds;
+		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
+		if (paramKinds != null && nullLiteralKind != null && bindingIsNullInitialised(tree, bindingFrom, paramKinds, nullLiteralKind))
+			return true;
+		final restKind: Null<String> = shape.restParamKind;
+		return restKind != null && innermostDeclCovering(tree, [restKind], bindingFrom) != null;
+	}
+
 	/** Whether `outer` covers `inner` — the containment a tree's spans state between ancestor and descendant. */
 	private static inline function covers(outer: Null<Span>, inner: Span): Bool {
 		return outer != null && outer.from <= inner.from && inner.to <= outer.to;
@@ -1127,27 +1149,6 @@ final class TypeResolver {
 		}
 		walk(tree);
 		return count;
-	}
-
-	/**
-	 * Whether the parameter binding at `bindingFrom` has a body type that DIFFERS from its
-	 * written type source `T`, so copying the source verbatim as a read's type would be
-	 * wrong. Three forms qualify: an OPTIONAL parameter with no default (`?p:T`, an
-	 * `optionalParamKind` node with no child) and any `= null`-default parameter
-	 * (`bindingIsNullInitialised`) are `Null<T>`; a REST parameter (`...p:T`, a
-	 * `restParamKind` node) is `haxe.Rest<T>`. A required param, and an optional / required
-	 * param with a NON-null default, keep `T` and are safe to copy.
-	 */
-	private static function paramTypeSourceUnsafe(tree: QueryNode, shape: RefShape, bindingFrom: Int): Bool {
-		final optKind: Null<String> = shape.optionalParamKind;
-		final optNode: Null<QueryNode> = optKind == null ? null : innermostDeclCovering(tree, [optKind], bindingFrom);
-		if (optNode != null && optNode.children.length == 0) return true;
-		final paramKinds: Null<Array<String>> = shape.paramKinds;
-		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
-		if (paramKinds != null && nullLiteralKind != null && bindingIsNullInitialised(tree, bindingFrom, paramKinds, nullLiteralKind))
-			return true;
-		final restKind: Null<String> = shape.restParamKind;
-		return restKind != null && innermostDeclCovering(tree, [restKind], bindingFrom) != null;
 	}
 
 	/**

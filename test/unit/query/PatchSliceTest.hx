@@ -101,6 +101,61 @@ class PatchSliceTest extends Test {
 	}
 
 	/**
+	 * The same remedy through the MEMBER's own address. A declaration's doc is trivia before
+	 * its node, so a fragment widened over it did not occur in `FnMember:b` and the refusal's
+	 * advice could only be followed through the enclosing type. A fragment the declaration does
+	 * not hold is now looked for in its own doc block too.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-OWN-DOC-UNSEARCHED')
+	public function testInsertAheadOfTheDocBlockThroughTheMemberAccepted(): Void {
+		final source: String = 'class C {\n\tfunction a() {}\n\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		final expected: String = 'class C {\n\tfunction a() {}\n\n\tfunction c() {}\n\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		assertPatch(
+			source, BySelector('FnMember:b'), '/**\n * About b.\n */\nfunction b() {}',
+			'function c() {}\n\n/**\n * About b.\n */\nfunction b() {}', expected
+		);
+	}
+
+	/** A TYPE's own doc is reachable through `ClassDecl:<T>` the same way — it used to need `comment-rewrite`. */
+	@:pin('control')
+	@:killer('M-PATCH-OWN-DOC-UNSEARCHED')
+	public function testATypeDocIsReachableThroughItsOwnAddress(): Void {
+		final source: String = '/**\n * About T.\n */\nclass T {}\n';
+		assertPatch(
+			source, BySelector('ClassDecl:T'), ' * About T.', ' * About the type T.', source.replace('About T.', 'About the type T.')
+		);
+	}
+
+	/**
+	 * The doc is searched only for a fragment the declaration does not hold, so a fragment that
+	 * occurs once in the body and again in the doc text stays unique and edits the body.
+	 */
+	public function testAFragmentTheDeclarationHoldsIgnoresItsDoc(): Void {
+		final source: String = 'class C {\n\t/**\n\t * Calls go().\n\t */\n\tfunction b() {\n\t\tgo();\n\t}\n}\n';
+		assertPatch(source, BySelector('FnMember:b'), 'go();', 'run();', source.replace('\t\tgo();', '\t\trun();'));
+	}
+
+	/**
+	 * `final class C` projects as `FinalDecl(ClassForm C)`, and the nameless wrapper is the node its
+	 * doc sits above. The guard read the owner's name off that wrapper, found none and dropped the
+	 * watch, so a `typedef` inserted ahead of a documented `final class` took the doc at rc 0.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-DOC-OWNER-WRAPPER-BLIND')
+	public function testInsertAheadOfADocumentedFinalClassRefused(): Void {
+		final source: String = '/**\n * Doc of C.\n */\nfinal class C {}\n';
+		switch Patch.patchNode(
+			source, BySelector('ClassDecl:C'), 'final class C {}', 'typedef T = Int;\n\nfinal class C {}', false, new HaxeQueryPlugin()
+		) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('moves the `/**` block above `C` onto `T`', message);
+		}
+	}
+
+	/**
 	 * An ordinary in-place edit under a doc does NOT repeat the fragment's opening line ahead of
 	 * itself, so the guard stays out of its way. Green at base by construction — the guard did
 	 * not exist — and it is what pins the refusal to the insert-ahead shape alone.

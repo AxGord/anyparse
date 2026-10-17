@@ -169,6 +169,25 @@ class ReplaceNodeSliceTest extends Test {
 		assertReplace(source, BySelector('TypedefDecl:T'), 'typedef T = {\n\tfinal a:Int;\n\tfinal b:Int;\n}', expected);
 	}
 
+	/**
+	 * A whole TYPE through `ClassDecl:<Name>`, the shape the op notes once called unreliable (a
+	 * mangled leading doc, then a `final` the span left behind). Neither reproduces since the
+	 * final-wrapper fold: an identity replace of every type declaration in two real trees (TM 1114
+	 * types, anyparse 2199, with and without the doc in the new text) comes back byte-identical.
+	 * This pins the composite: a documented, annotated `final class` beside a second type, its
+	 * replacement copied as `source --select` prints it, with one member added.
+	 */
+	public function testWholeFinalClassReplaceKeepsItsDocAndNeighbour(): Void {
+		final source: String =
+			'/**\n * Doc of C.\n */\n@:keep\nfinal class C {\n\t// note\n\tfunction a() {}\n}\n\n/** Doc of D. */\nclass D {}\n';
+		final expected: String = '/**\n * Doc of C.\n */\n@:keep\nfinal class C {\n\t// note\n\tfunction a() {}\n\n\tfunction b() {}\n}\n\n'
+			+ '/** Doc of D. */\nclass D {}\n';
+		assertReplace(
+			source, BySelector('ClassDecl:C'), '@:keep\nfinal class C {\n\t// note\n\tfunction a() {}\n\n\tfunction b() {}\n}', expected
+		);
+		assertReplace(source, BySelector('ClassDecl:C'), '@:keep\nfinal class C {\n\t// note\n\tfunction a() {}\n}', source);
+	}
+
 	private function assertReplace(
 		source: String, target: ReplaceTarget, newSource: String, expected: String, reformat: Bool = false
 	): Void {

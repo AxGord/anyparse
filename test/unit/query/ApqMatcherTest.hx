@@ -114,6 +114,44 @@ class ApqMatcherTest extends Test {
 		Assert.isTrue(names.contains('local'), '$$v must bind local var — got ${names.join(',')}');
 	}
 
+	/**
+	 * A `try` is a statement or a value, and a pattern parses through the Stmt attempt first,
+	 * so `try $p.parseFile($s) catch (exception: Exception) null` rooted at `TryCatchStmtBare`
+	 * and matched no `final r = try …`, no `return try …` and no argument — the very sites a
+	 * parse-or-null sweep is about. The search-only equivalence relates the three kinds, and a
+	 * braced body relates `BlockStmt` to `BlockExpr`.
+	 */
+	@:pin('control')
+	@:killer('M-SEARCH-TRY-EXPR-UNRELATED')
+	public function testTryPatternMatchesEveryPosition(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source: String = 'class X {
+		static function f(p:P, s:String) {
+			try p.parseFile(s) catch (exception:Exception) null;
+			final r = try p.parseFile(s) catch (exception:Exception) null;
+			use(try p.parseFile(s) catch (exception:Exception) null);
+			return try p.parseFile(s) catch (exception:Exception) null;
+		}
+		static function g(p:P) {
+			try {
+				p.run();
+			} catch (exception:Exception) {
+				log();
+			}
+			final q = try {
+				p.run();
+			} catch (exception:Exception) {
+				log();
+			};
+		}
+	}';
+		final tree: QueryNode = plugin.parseFile(source);
+		final bare: Array<Match> = Matcher.search(plugin.parsePattern("try $p.parseFile($s) catch (exception: Exception) null"), tree);
+		Assert.equals(4, bare.length, 'the statement, the initializer, the argument and the return value must all match');
+		final braced: Array<Match> = Matcher.search(plugin.parsePattern("try { $p.run(); } catch ($e: $T) { log(); }"), tree);
+		Assert.equals(2, braced.length, 'a braced try must match as a statement and as a value');
+	}
+
 	public function testFnDeclPatternMatchesEveryPosition(): Void {
 		// B0 red-green: a Haxe `function` declaration surfaces as five
 		// position/modifier-specific kinds — module `FnDecl`, member `FnMember`,

@@ -7,6 +7,7 @@ import anyparse.query.Pattern.PatternStar;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -68,11 +69,18 @@ final class Rewrite {
 			lastTo = m.span.to;
 		}
 
+		// Under a kind-equivalence one pattern can match a construct in two positions whose spans
+		// END differently: a statement `try … catch (e) null;` owns its `;`, the same `try` as a
+		// value does not. One template cannot be right for both, so when the matches disagree each
+		// expansion is aligned to its own site's terminator. Matches of one shape are left alone.
+		final trailers: Array<String> = [for (m in accepted) trailer(source, m.node)];
+		final mixed: Bool = trailers.exists(t -> t != trailers[0]);
 		final edits: Array<GuardedEdit> = [];
-		for (m in accepted) {
+		for (k => m in accepted) {
 			final expansion: Null<Expansion> = expandTemplate(replacementText, source, m.bindings);
 			if (expansion == null) return Err('replacement references an unknown or non-integer metavariable');
-			edits.push({ span: m.span, text: expansion.text, holes: expansion.holes });
+			final aligned: Expansion = mixed ? alignTrailer(expansion, trailers[k], trailers) : expansion;
+			edits.push({ span: m.span, text: aligned.text, holes: aligned.holes });
 		}
 		// A template is written in AST terms (`$A * 2` reads "the capture, times
 		// two") but expands as TEXT, and text has no precedence. `ParenGuard`
@@ -123,10 +131,11 @@ final class Rewrite {
 			if (i + 1 < n && template.fastCodeAt(i + 1) == '{'.code) {
 				final close: Int = template.indexOf('}', i + 2);
 				if (close < 0) return null;
-				final braced: Null<String> = expandSpec(template.substring(i + 2, close), source, bindings);
+				final spec: String = template.substring(i + 2, close);
+				final braced: Null<String> = expandSpec(spec, source, bindings);
 				if (braced == null) return null;
 				buf.add(braced);
-				holes.push(new Span(written, written + braced.length));
+				if (!isNameCapture(specName(spec), bindings)) holes.push(new Span(written, written + braced.length));
 				written += braced.length;
 				i = close + 1;
 				continue;
@@ -139,10 +148,11 @@ final class Rewrite {
 				i++;
 				continue;
 			}
-			final bare: Null<String> = metavarSource(template.substring(i + 1, j), source, bindings);
+			final bareName: String = template.substring(i + 1, j);
+			final bare: Null<String> = metavarSource(bareName, source, bindings);
 			if (bare == null) return null;
 			buf.add(bare);
-			holes.push(new Span(written, written + bare.length));
+			if (!isNameCapture(bareName, bindings)) holes.push(new Span(written, written + bare.length));
 			written += bare.length;
 			i = j;
 		}
@@ -152,8 +162,7 @@ final class Rewrite {
 	/** `name` (verbatim) | `name+N` / `name-N` (integer shift). */
 	private static function expandSpec(spec: String, source: String, bindings: Map<String, QueryNode>): Null<String> {
 		final plus: Int = spec.indexOf('+');
-		final minus: Int = spec.indexOf('-');
-		final opAt: Int = plus >= 0 ? plus : minus;
+		final opAt: Int = shiftAt(spec);
 		if (opAt <= 0) return metavarSource(spec, source, bindings);
 		final num: Null<Int> = Std.parseInt(spec.substring(opAt + 1));
 		if (num == null) return null;
@@ -174,6 +183,62 @@ final class Rewrite {
 		if (node.kind == 'NameOnly') return node.name;
 		final span: Null<Span> = node.span;
 		return span == null ? node.name : SourceSlice.slice(source, span);
+	}
+
+	/** Where a `${name+N}` / `${name-N}` spec's shift operator sits, or a value `<= 0` for a plain `${name}`. */
+	private static function shiftAt(spec: String): Int {
+		final plus: Int = spec.indexOf('+');
+		return plus >= 0 ? plus : spec.indexOf('-');
+	}
+
+	/** The metavariable a `${…}` spec names — the whole spec, or the part before its shift operator. */
+	private static function specName(spec: String): String {
+		final opAt: Int = shiftAt(spec);
+		return opAt <= 0 ? spec : spec.substring(0, opAt);
+	}
+
+	/**
+	 * Whether `name` captured a NAME slot (`new $C()`, `final $x = …`, `a.$f`) rather than a
+	 * subtree. Such a splice is one identifier (or a dotted path) and never a hole `ParenGuard`
+	 * should weigh: an identifier cannot be re-read by an operator around it, and the guard's
+	 * premise that an illegal pair fails to parse does not hold everywhere a name sits —
+	 * `new (A)()` parses, as a call of an identifier `new`, so a type name after `new` looked
+	 * both wrappable and unfaithful and came back as `new(A)()`.
+	 */
+	private static function isNameCapture(name: String, bindings: Map<String, QueryNode>): Bool {
+		return bindings[name]?.kind == 'NameOnly';
+	}
+
+	/**
+	 * What a matched node's span carries past its last child — a statement's terminator (`;` after
+	 * a `try … catch (e) null`), nothing for the same construct used as a value. Empty for a leaf.
+	 */
+	private static function trailer(source: String, node: QueryNode): String {
+		final span: Null<Span> = node.span;
+		final last: Null<QueryNode> = node.children.length == 0 ? null : node.children[node.children.length - 1];
+		final lastSpan: Null<Span> = last?.span;
+		return if (span == null || lastSpan == null)
+			''
+		else if (lastSpan.to > span.to)
+			''
+		else
+			source.substring(lastSpan.to, span.to).trim();
+	}
+
+	/**
+	 * `expansion` fitted to a site whose span ends in `own`, given the trailers every match carries.
+	 * A site that owns a terminator the template did not write gets it appended; a site that owns
+	 * none drops one the template wrote for the OTHER sites. Both edits touch template text only:
+	 * a terminator inside a spliced capture is never stripped.
+	 */
+	private static function alignTrailer(expansion: Expansion, own: String, trailers: Array<String>): Expansion {
+		final text: String = expansion.text.rtrim();
+		if (own != '') return text.endsWith(own) ? expansion : { text: text + own, holes: expansion.holes };
+		for (t in trailers) if (t != '' && text.endsWith(t)) {
+			final cut: Int = text.length - t.length;
+			if (!expansion.holes.exists(h -> h.to > cut)) return { text: text.substring(0, cut).rtrim(), holes: expansion.holes };
+		}
+		return expansion;
 	}
 
 }

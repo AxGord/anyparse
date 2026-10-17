@@ -3176,3 +3176,48 @@ decided the question; it may not become a record of runs.
   non-hub members at every hub count tried, and that component holds every mutable field); the rest of
   `CompilerFacts`, `ReachGraph`, `FactsEscapes`, `TypedFactsMacro` (one table's caches, the graph's growth state, the
   escape walk, the record writer: every remaining member reads the same fields) — branch `feat/infra-C2`
+- `apq rewrite` never hands a NAME-slot capture (`new $C()`, `final $x = …`, `a.$f`: the matcher's `NameOnly` binding)
+  to `ParenGuard` as a hole (`Rewrite.isNameCapture`). The guard's premise that an illegal pair fails to parse is false
+  after `new`: `new (A)()` parses as a call of an identifier `new`, so the type name looked both wrappable and
+  unfaithful and `new $C()` came back as `new(A)()` (`new Zz${C}()` as `new Zz(A)()`). A name capture is one identifier
+  or a dotted path, which no operator around it can re-read, so leaving it bare is exact rather than a guess. NOT fixed,
+  recorded as a limit in `cli-query-tool.md`: a value metavariable in `new $C($a)` also binds a TYPE argument, because
+  the projection puts both in one child list — branch `feat/infra-N5`
+- `try` and a braced block join the search-only kind-equivalence (`TryCatchStmt` / `TryCatchStmtBare` / `TryExpr`,
+  `BlockStmt` / `BlockExpr`): a pattern parses through the Stmt attempt first, so `try $p.parseFile($s) catch
+  (exception: Exception) null` rooted at `TryCatchStmtBare` and matched no initializer, argument or `return` — the 21
+  sites a parse-or-null sweep was about, reported as 0 hits. The value form's children are the bare statement's, so
+  the kinds alone make the shapes unify; `if` / `switch` are left out, their statement branches are `ExprStmt`-wrapped
+  and their value branches are not. A statement owns its `;` and a value does not, so `Rewrite` now fits each expansion
+  to its own site's terminator when the matches of one rewrite END differently (`Matcher.Match.node` + `trailer` /
+  `alignTrailer`); matches that end alike are spliced exactly as before. Haxe 4.3.7: `final t:Int = foo(1);;` is
+  `Expected }`, so the double terminator the unaligned splice produced does not compile — branch `feat/infra-N5`
+- `patch` looks for a fragment the addressed declaration does not hold in that declaration's OWN leading doc block too
+  (`ElementSpan.docExtendedSpan(…, docOnly = true)`), and only then: a fragment found in the declaration is matched
+  there alone, so every payload that applied before applies identically and none turns ambiguous. The doc-orphan
+  refusal told the caller to widen an insert-ahead fragment over the doc, which the refused address could not do (the
+  doc is trivia outside the node), so the advice needed a second, wider address; a type's doc needed
+  `comment-rewrite`. The insert-ahead itself stays a REFUSAL rather than being relocated above the doc: six
+  `PatchSliceTest` cases pin that design, and the remedy now costs one widened fragment on the same address. The
+  guard also reads a declaration's name through its nameless folding wrapper (`Patch.declName` →
+  `RefactorSupport.typeDeclOf`): `final class C` is `FinalDecl(ClassForm C)`, the wrapper carried no name, every
+  watch on such a class was dropped, and a `typedef` inserted ahead of a documented `final class` took its doc at rc 0
+  — branch `feat/infra-N5`
+- `replace-node --select 'ClassDecl:<Name>'` (reported unreliable by the consolidation agents, and so documented in
+  the hxq skill: a mangled leading doc, a `final` left behind) does NOT reproduce on main `fa06ac46a`: an identity
+  replace of every module-level type declaration with the text `source --select` prints, and again with its doc,
+  comes back byte-identical over TM `1d1ba147` (1114 types) and anyparse `src` (2199), and a CLI sample of 27 TM
+  files is identical too; the `final` half was fixed by the final-wrapper fold (`bf7c68763`). Pinned by
+  `ReplaceNodeSliceTest#testWholeFinalClassReplaceKeepsItsDocAndNeighbour`; nothing to fix — branch `feat/infra-N5`
+- `extract-method --member` extracts into a new PRIVATE member placed after the one holding the run, for a caller
+  that must not leave the work inside the function (C1: a closure's branches count toward its enclosing function).
+  Its parameters are the function's locals the run reads, typed by what their DECLARATIONS write
+  minus the parameters whose written type is not the type their body reads (`TypeResolver.paramTypeSourceUnsafe`,
+  the test `identDeclaredTypeSource` already applied, now public so both ask one place), never by inference; the return value is the closure mode's, typed the same way. Positive
+  whitelist, because a parameter is a copy and nothing here type-checks: a local the function assigns ANYWHERE is
+  refused (a write through a closure the run calls would miss the copy — the shape `--member` would otherwise
+  silently change), and so is a local whose written type is not its read type (`?o:T` reads `Null<T>`, rest reads
+  `haxe.Rest<T>`) or has none; a constructor, a host with type parameters (not projected, so read off the header: the
+  name must be followed by `(`), a `macro` / `extern` host and a taken member name are refused too. Checked by
+  compiling the result: `run`/`twice` before and after the extraction print the same values under Haxe 4.3.7
+  `--interp` — branch `feat/infra-N5`

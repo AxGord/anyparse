@@ -98,7 +98,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * consumer. The residual gap — no pattern reaches a `final function` or a local `inline
 	 * function` — is left open on purpose: closing it needs a rewrite-safe split, not a wider
 	 * constant. The groups also stay per-keyword (`var $v = 0` must not match a `final` binding),
-	 * and expression-position forms are outside the criterion.
+	 * and `try` / a braced block relate a statement to the value of the same shape (`if` does not:
+	 * its statement branches are `ExprStmt`-wrapped); `docs/decisions.md` has why, and the `;`.
 	 *
 	 * One asymmetry is kept because the alternative is worse: a module-level `final` matches AS
 	 * the `VarForm`, whose span starts after the `final` keyword, so a rewrite through it
@@ -109,7 +110,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	private static final SEARCH_KIND_EQUIVALENCE: KindEquivalence = new KindEquivalence([
 		['VarDecl', 'VarMember', 'VarStmt'],
 		['FnDecl', 'FnMember', 'LocalFnStmt'],
-		['VarForm', 'FinalMember', 'FinalStmt']
+		['VarForm', 'FinalMember', 'FinalStmt'],
+		['TryCatchStmt', 'TryCatchStmtBare', 'TryExpr'],
+		['BlockStmt', 'BlockExpr']
 	]);
 
 	/**

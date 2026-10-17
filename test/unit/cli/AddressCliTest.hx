@@ -8,6 +8,8 @@ import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * End-to-end tests for the shared addressing flags on the mutation ops:
  * `--select` / `--match` / `--nth`, the `--kind` lift, valueless
@@ -86,6 +88,36 @@ class AddressCliTest extends Test {
 		final rc: Int = Cli.run(['remove-element', path, '3', '--write']);
 		Assert.equals(0, rc);
 		Assert.isTrue(File.getContent(path).indexOf('dead') < 0);
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `remove-element --kind` lifts a `--match` to its enclosing node of the kind and removes
+	 * exactly that: without it the match removes the call ARGUMENT `g(1)`, while
+	 * `--kind ExprStmt` takes the `trace(...)` statement it sits in. The position form
+	 * narrows to the innermost node of the kind at the cursor the same way.
+	 */
+	@:pin('control')
+	@:killer('M-REMOVE-ELEMENT-KIND-IGNORED')
+	public function testRemoveElementKindLift(): Void {
+		#if (sys || nodejs)
+		final fixture: String = 'class C {\n\tfunction f():Int {\n\t\ttrace(g(1));\n\t\treturn 2;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Int {\n\t\treturn 2;\n\t}\n}\n';
+		final path: String = CliFixture.write('addr_rk', fixture);
+		Assert.equals(0, Cli.run(['remove-element', path, '--match', 'g($$a)', '--write']));
+		Assert.equals(fixture.replace('trace(g(1))', 'trace()'), File.getContent(path));
+		File.saveContent(path, fixture);
+		Assert.equals(0, Cli.run(['remove-element', path, '--match', 'g($$a)', '--kind', 'ExprStmt', '--write']));
+		Assert.equals(expected, File.getContent(path));
+		File.saveContent(path, fixture);
+		Assert.equals(0, Cli.run(['remove-element', path, '3:10', '--kind', 'ExprStmt', '--write']));
+		Assert.equals(expected, File.getContent(path));
+		File.saveContent(path, fixture);
+		Assert.notEquals(0, Cli.run(['remove-element', path, '--match', 'g($$a)', '--kind', 'SwitchStmt', '--write']));
+		Assert.equals(fixture, File.getContent(path));
 		FileSystem.deleteFile(path);
 		#else
 		Assert.pass('non-sys target');
