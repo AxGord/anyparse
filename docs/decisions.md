@@ -3488,3 +3488,18 @@ decided the question; it may not become a record of runs.
   `addEdge` expand already. The module-level case has no such reader. The fold unions
   the bodies' edges, which is sound; it is left until a tree measures a call site a split would bind — branch
   `feat/infra-N13`
+- `member-order` gains an opt-in, SPACING-ONLY option `separateInlineSubgroup` (default OFF, user request 2026-10-17
+  from TM `FileListItemGrid`, where `--fix` deleted the blank between `private static inline final CATEGORY_TAG_BOTTOM`
+  and `private static final SHARED_WITH_ME_ICON_TEXT`): an `inline` and a non-`inline` FIELD of one rank, both
+  unconditional and neither comment-led, want exactly one blank line between them instead of none. One predicate
+  (`MemberSpacing.inlineSubgroupBoundary`) answers for all four readers — the report (`spacingViolation` via
+  `firstSpacingIssue`), the spacing-only fallback (`emitSpacingOnly`), and both rebuild joins (`separatorBetween` in
+  `joinMembers` and `buildConditionalRegion`) — so report and fix read the gap the same way, and the option is resolved
+  from the file being linted on BOTH paths (`run` per entry, `fix` off its violations' file). Scope choices: unconditional
+  pairs only, because the inline-leads sub-order (`subRank`) is a key of plain members alone and inside an `#if` block
+  inline and non-inline members interleave freely; fields only, because same-rank methods keep their separators untouched
+  and the rebuild already blank-separates every method; a comment-led slot keeps its exemption (a blank before a doc is
+  never demanded or stripped, the writer keeps one after it); the order is untouched, so the content-ranking gates stay
+  option-independent and the `movableArglessNew` argument for them still holds (the report path reads no ORDER option).
+  `fixWalk` / `emitReorder` now take the two options as one `FixOptions` record instead of a growing parameter list —
+  branch `feat/infra-N16`

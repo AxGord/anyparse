@@ -22885,6 +22885,94 @@
 			"find": "|null|override|",
 			"replace": "|null|operator|overload|override|",
 			"note": "a `var` name refuses `operator` / `overload` too, and a module declaring one under a `#if` for an older Haxe skip-parses"
+		},
+		{
+			"name": "M-MO-INLINE-BOUNDARY-OFF",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "inlineSubgroupBoundary",
+			"find": "return separateInline &&",
+			"replace": "return false &&",
+			"note": "`separateInlineSubgroup` reads no boundary at all, so the option is accepted and does nothing: the blank it asks for is still reported as a gap inside one rank group, and a glued boundary is never flagged"
+		},
+		{
+			"name": "M-MO-INLINE-OPTION-IGNORED",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "inlineSubgroupBoundary",
+			"find": "return separateInline && a.condition",
+			"replace": "return a.condition",
+			"note": "the inline-subgroup blank is demanded whatever the config says, so every project (the option's default is OFF) gets its tight constant groups split"
+		},
+		{
+			"name": "M-MO-INLINE-CONDITIONAL-BOUNDARY",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "inlineSubgroupBoundary",
+			"find": "separateInline && a.condition == null && b.condition == null && ",
+			"replace": "separateInline && ",
+			"note": "a boundary is read inside an `#if` block too, where inline and non-inline members carry no sub-order and interleave freely"
+		},
+		{
+			"name": "M-MO-INLINE-SEPARATOR-DROPPED",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "separatorBetween",
+			"find": " || inlineSubgroupBoundary(prev, next, separateInline)",
+			"replace": "",
+			"note": "the reorder rebuild joins the inline subgroup and the rest with a bare newline, so a reordered type comes out without the blank the check then demands"
+		},
+		{
+			"name": "M-MO-INLINE-REPORT-UNREAD",
+			"type": "anyparse.check.MemberOrder",
+			"method": "run",
+			"find": "final separateInline: Bool = optionOn(entry.file, 'separateInlineSubgroup');",
+			"replace": "final separateInline: Bool = false;",
+			"note": "the REPORT path ignores the option, so it flags the very blank the option asks for while the fix path inserts it"
+		},
+		{
+			"name": "M-MO-INLINE-FIX-UNREAD",
+			"type": "anyparse.check.MemberOrder",
+			"method": "fix",
+			"find": "final separateInline: Bool = violations.length > 0 && optionOn(violations[0].file, 'separateInlineSubgroup');",
+			"replace": "final separateInline: Bool = false;",
+			"note": "the FIX path ignores the option, so a boundary finding re-derives as no issue there and is never fixed"
+		},
+		{
+			"name": "M-MO-INLINE-MESSAGE-AS-RANK",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "firstSpacingIssue",
+			"find": "else if (members[i].rank != members[i + 1].rank)",
+			"replace": "else if (true)",
+			"note": "a missing blank at the inline-subgroup boundary is reported as a missing RANK-group blank, naming a boundary that is not there"
+		},
+		{
+			"name": "M-MO-INLINE-BOUNDARY-BEFORE-EXEMPTIONS",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "spacingViolation",
+			"find": "else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull\n\telse if (inlineSubgroupBoundary(a, b, separateInline))\n\t\tblanks != 1 ? 1 : null",
+			"replace": "else if (inlineSubgroupBoundary(a, b, separateInline))\n\t\tblanks != 1 ? 1 : null\n\telse if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull",
+			"note": "the boundary is asked before the non-field and comment-led exemptions, so a same-rank method pair and a doc-commented field are demanded a blank they never were"
+		},
+		{
+			"name": "M-MO-INLINE-BOUNDARY-AT-LEAST-ONE",
+			"type": "anyparse.check.MemberSpacing",
+			"method": "spacingViolation",
+			"find": "else if (inlineSubgroupBoundary(a, b, separateInline))\n\t\tblanks != 1 ? 1 : null",
+			"replace": "else if (inlineSubgroupBoundary(a, b, separateInline))\n\t\tblanks == 0 ? 1 : null",
+			"note": "the boundary wants AT LEAST one blank instead of exactly one, so two blank lines there are left standing"
+		},
+		{
+			"name": "M-MO-INLINE-CONDITIONAL-REBUILD-UNREAD",
+			"type": "anyparse.check.MemberOrder",
+			"method": "buildConditionalRegion",
+			"find": "MemberSpacing.separatorBetween(prevMember, m, source, separateInline)",
+			"replace": "MemberSpacing.separatorBetween(prevMember, m, source, false)",
+			"note": "the `#if`-region rebuild ignores the option, so a type with any conditional member loses the inline-subgroup blank on reorder"
+		},
+		{
+			"name": "M-MO-INLINE-SPACING-ONLY-UNREAD",
+			"type": "anyparse.check.MemberOrder",
+			"method": "emitReorder",
+			"find": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, options.separateInline);",
+			"replace": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, false);",
+			"note": "the spacing-only fallback of a pinned container ignores the option, so its glued boundary is reported for ever and never fixed"
 		}
 	]
 }
