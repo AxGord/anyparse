@@ -6595,6 +6595,14 @@
 			"note": "a field read does not bring its declared type into reach, so a conversion of the value read runs unseen"
 		},
 		{
+			"name": "M-REACH-INFERRED-ANON-METHOD",
+			"type": "anyparse.query.ReachGraph",
+			"method": "inferredFrom",
+			"find": "\n\t\t\t.concat(MemberKinds.FIELD_MEMBER_KINDS);",
+			"replace": ";",
+			"note": "a structure's `function` field is not found in its own text, so reading one puts every abstract in reach and admits every conversion wherever code runs"
+		},
+		{
 			"name": "M-REACH-INFERRED-MEMBER",
 			"type": "anyparse.query.AbstractReach",
 			"method": "settle",
@@ -10334,11 +10342,67 @@
 			"note": "a type's metadata is the first configuration's only, so an `@:autoBuild` another configuration sees is lost"
 		},
 		{
+			"name": "M-FACTS-FIXED-CAPTURE",
+			"type": "anyparse.check.FactsBindings",
+			"method": "fixedAt",
+			"find": "case Slot(callee, index): oracle.constructorArgumentClosed(callee, index);",
+			"replace": "case Slot(_, _): false;",
+			"note": "no constructor capture counts as fixed, so a capture typed closed stays report-only"
+		},
+		{
+			"name": "M-FACTS-FIXED-LOOP",
+			"type": "anyparse.check.FactsBindings",
+			"method": "fixedAt",
+			"find": "return iteratesClosedCall(oracle, file, decl, shape);",
+			"replace": "return false;",
+			"note": "no loop binder counts as fixed, so a binder over a call with a closed result stays report-only"
+		},
+		{
+			"name": "M-FACTS-FIXED-LOOP-ANY",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "callResultClosed",
+			"find": "return calls.length > 0 && calls.foreach(c -> closedResult(c.target));",
+			"replace": "return true;",
+			"note": "every loop binder counts as fixed, so one over a local or a generic call a later call typed is rewritten and no longer compiles"
+		},
+		{
+			"name": "M-FACTS-CTOR-EVERY",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "constructorArgumentClosed",
+			"find": "\t\t\t\t\tcase _:\n\t\t\t\t\t\treturn false;\n",
+			"replace": "\t\t\t\t\tcase _:\n",
+			"note": "a constructor of the name typed by an enum parameter is ignored once another is closed, so the name alone decides which enum the pattern is of"
+		},
+		{
+			"name": "M-FACTS-CTOR-ARITY",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "constructorArgumentClosed",
+			"find": "\t\t\t\t\tcase Named(_, _):\n\t\t\t\t\tcase Function(args, _) if (index >= args.length):\n",
+			"replace": "",
+			"note": "a same-named constructor taking no argument, or fewer, refuses the capture though a pattern with that argument cannot be of it"
+		},
+		{
+			"name": "M-FACTS-CLOSED-PARAMETER",
+			"type": "anyparse.check.FactsTypeTree",
+			"method": "isClosed",
+			"find": "case Unknown, Parameter(_): false;",
+			"replace": "case Unknown: false;\n\t\t\tcase Parameter(_): true;",
+			"note": "a type parameter counts as closed, so a capture or a loop result a parameter types is rewritten while a monomorph may stand for it"
+		},
+		{
+			"name": "M-FACTS-FIXED-ANY-BINDER",
+			"type": "anyparse.check.PreferStaticExtension",
+			"method": "factsVerdict",
+			"find": "if (decl == null || !FactsBindings.fixedAt(oracle, file, root, decl, s.shape)) return Verdict.UnresolvedReceiver;",
+			"replace": "if (decl == null) return Verdict.UnresolvedReceiver;",
+			"note": "every inferred binding is asked of the facts, so a receiver a later call typed is rewritten and no longer compiles"
+		},
+		{
 			"name": "M-PSE-FACTS-INFERRED",
 			"type": "anyparse.check.PreferStaticExtension",
 			"method": "factsVerdict",
-			"find": "if (binding == null || chain.declaredTypeSources[binding] == null) return Verdict.UnresolvedReceiver;",
-			"replace": "",
+			"find": "if (chain.declaredTypeSources[binding] == null) {",
+			"replace": "if (false) {",
 			"note": "an unannotated local, whose type the rewritten call itself may have bound, is typed by the facts"
 		},
 		{
@@ -10384,7 +10448,7 @@
 			"name": "M-PSE-FACTS-OVERLOAD",
 			"type": "anyparse.check.StaticExtensionFacts",
 			"method": "firstParam",
-			"find": " || field.overloads.exists(n -> n > 0)",
+			"find": "\n\t\t\t|| field.overloads.exists(n -> n > 0)",
 			"replace": "",
 			"note": "an overloaded static is judged by its first signature, the only one the facts field records"
 		},

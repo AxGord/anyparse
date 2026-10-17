@@ -162,6 +162,67 @@ class PreferStaticExtensionFactsTest extends Test {
 		+ '\tstatic function main() {\n\t\tfinal b:Null<Base> = mk();\n\t\tfinal c:Base = new Base();\n'
 		+ '\t\tSys.println(Util.f(b)); // facts\n\t\tSys.println(Util.f(c)); // structural\n\t\tSys.println(Zeta.g());\n\t}\n}\n';
 
+	/**
+	 * Receivers whose type the compiler fixed when it bound them, or did not: a constructor pattern's capture typed closed
+	 * (`capture`, and `closed` in a generic enum) or by the enum's parameter (`generic`, over a `var g = Box(null)`), a loop's
+	 * binder over a call with a closed result (`loop`) or over a local (`mono`) or a generic call (`generic call`), and a
+	 * lambda's parameter (`lambda`); and a capture of a constructor whose name a generic enum's constructor shares (`shared`)
+	 * or one taking no argument does (`arity`).
+	 */
+	private static final BINDER_MAIN: String = [
+		'enum K {',
+		'\tName(s:String);',
+		'}',
+		'enum G<T> {',
+		'\tBox(v:T);',
+		'\tText(s:String);',
+		'}',
+		'enum L {',
+		'\tSame(s:String);',
+		'}',
+		'enum M<T> {',
+		'\tSame(v:T);',
+		'}',
+		'enum P {',
+		'\tWord(s:String);',
+		'}',
+		'enum Q {',
+		'\tWord;',
+		'}',
+		'class Main {',
+		'\tstatic function mk() return " a b ";',
+		'',
+		'\tstatic function main() {',
+		'\t\tfinal l: L = Same(" e ");',
+		'\t\tswitch l {',
+		'\t\t\tcase Same(s): Sys.println(StringTools.trim(s)); // shared',
+		'\t\t}',
+		'\t\tfinal w: P = P.Word(" f ");',
+		'\t\tswitch w {',
+		'\t\t\tcase Word(s): Sys.println(StringTools.trim(s)); // arity',
+		'\t\t}',
+		'\t\tfinal k: K = Name(" a ");',
+		'\t\tswitch k {',
+		'\t\t\tcase Name(s): Sys.println(StringTools.trim(s)); // capture',
+		'\t\t}',
+		'\t\tvar g = Box(null);',
+		'\t\tg = Text(" b ");',
+		'\t\tswitch g {',
+		'\t\t\tcase Box(v): Sys.println(StringTools.trim(v)); // generic',
+		'\t\t\tcase Text(s): Sys.println(StringTools.trim(s)); // closed',
+		'\t\t}',
+		'\t\tfor (p in mk().split(" ")) Sys.println(StringTools.trim(p)); // loop',
+		'\t\tvar xs = [];',
+		'\t\tfor (x in xs) Sys.println(StringTools.trim(x)); // mono',
+		'\t\txs.push(" c ");',
+		'\t\tfinal list: List<String> = new List();',
+		'\t\tfor (y in Lambda.array(list)) Sys.println(StringTools.trim(y)); // generic call',
+		'\t\tLambda.iter([" d "], z -> Sys.println(StringTools.trim(z))); // lambda',
+		'\t}',
+		'}',
+		''
+	].join('\n');
+
 	@:pin('control') @:killer('M-PSE-FACTS-OFF') @:killer('M-PSE-FACTS-NULL')
 	public function testAReceiverOnlyTheFactsTypeIsRewritten(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]]);
@@ -230,6 +291,32 @@ class PreferStaticExtensionFactsTest extends Test {
 		final seen: Null<Map<String, String>> = verdicts([[]]);
 		if (seen == null) return;
 		Assert.equals('report', seen['inferred'], '$seen');
+	}
+
+	/**
+	 * A binder the compiler typed when it bound it — a capture of a constructor argument typed closed, a loop's binder over a
+	 * call whose signature's result is closed — is asked of the facts though nothing writes its type (N24). A constructor of
+	 * the same name taking no argument is not one the pattern can be of (`arity`).
+	 */
+	@:pin('control') @:killer('M-FACTS-FIXED-CAPTURE') @:killer('M-FACTS-FIXED-LOOP') @:killer('M-FACTS-CTOR-ARITY')
+	public function testABinderTheCompilerTypedWhenItBoundItIsRewritten(): Void {
+		final seen: Null<Map<String, String>> = verdicts([[]], BINDER_MAIN, BINDER_MAIN);
+		if (seen == null) return;
+		for (site in ['capture', 'closed', 'loop', 'arity']) Assert.equals('fix', seen[site], '$site: $seen');
+	}
+
+	/**
+	 * A binder whose type a later call may have bound stays report-only: a capture the enum's parameter types, a loop over a
+	 * local or over a generic call, a lambda's parameter — and a capture of a constructor name a generic enum's constructor
+	 * shares, as the name alone does not say which enum the pattern is of. Rewritten, `generic` and `mono` no longer compile
+	 * (Haxe 4.3.7: `String should be { trim : () -> Unknown<0> }`).
+	 */
+	@:pin('control') @:killer('M-FACTS-CLOSED-PARAMETER') @:killer('M-FACTS-FIXED-ANY-BINDER') @:killer('M-FACTS-FIXED-LOOP-ANY')
+	@:killer('M-FACTS-CTOR-EVERY')
+	public function testABinderALaterCallMayHaveTypedIsNotRewritten(): Void {
+		final seen: Null<Map<String, String>> = verdicts([[]], BINDER_MAIN, BINDER_MAIN);
+		if (seen == null) return;
+		for (site in ['generic', 'mono', 'generic call', 'lambda', 'shared']) Assert.equals('report', seen[site], '$site: $seen');
 	}
 
 	/** Pinned as a guard: the agreement is `CompilerFacts.typeOfExpressionAt`'s, which `FactsTypeOracleTest` pins. */
@@ -452,6 +539,49 @@ class PreferStaticExtensionFactsTest extends Test {
 			'Util.g(i)',
 			'Util.d(dy)',
 			'Util.d(mo)'
+		]) Assert.isTrue(after.indexOf(kept) >= 0, '$kept\n$after');
+		Assert.equals(before, HaxeSpawn.run(['check.hxml'], dir, 1 << 20).out, 'the program prints what it printed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `--fix` end to end over `BINDER_MAIN`: the binders the compiler typed when it bound them are rewritten, and the
+	 * program prints what it printed.
+	 */
+	@:pin('guard')
+	public function testTheRewrittenBindersPrintWhatTheyPrinted(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeTree('pse_facts_binders', [
+			{ name: 'Main.hx', source: BINDER_MAIN },
+			{ name: 'check.hxml', source: BUILD },
+			{
+				name: 'apqlint.json',
+				source: '{"compilerOracle":"check.hxml","rules":{"prefer-static-extension":{"types":["StringTools"]}}}'
+			}
+		]);
+		if (!CompilerOracle.typecheck('check.hxml', dir).match(Confirmed)) {
+			CliFixture.removeDir(dir);
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		CliFixture.captureStderr(() -> Cli.run(['fmt', '--write', '$dir/Main.hx']));
+		final before: String = HaxeSpawn.run(['check.hxml'], dir, 1 << 20).out;
+		final err: String = CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-static-extension', dir]));
+		final after: String = File.getContent('$dir/Main.hx');
+		for (rewritten in [
+			'case Name(s): Sys.println(s.trim());',
+			'case Text(s): Sys.println(s.trim());',
+			'case Word(s): Sys.println(s.trim());',
+			'Sys.println(p.trim());'
+		]) Assert.isTrue(after.indexOf(rewritten) >= 0, '$rewritten\n$after\n$err');
+		for (kept in [
+			'StringTools.trim(v)',
+			'StringTools.trim(x)',
+			'StringTools.trim(y)',
+			'StringTools.trim(z)'
 		]) Assert.isTrue(after.indexOf(kept) >= 0, '$kept\n$after');
 		Assert.equals(before, HaxeSpawn.run(['check.hxml'], dir, 1 << 20).out, 'the program prints what it printed');
 		CliFixture.removeDir(dir);

@@ -1021,6 +1021,11 @@ final class ReachGraph {
 	 * The code of the member `r` names, as far as it can give the member a type: the words it spells (a construction,
 	 * a cast, an annotation), the members it reads (`memberUses`), and the abstracts its syntax builds
 	 * (`literalAbstracts`). Null when the file does not parse or does not declare that member.
+	 *
+	 * The member is looked for among every kind the index records one under (`MemberKinds.FIELD_MEMBER_KINDS`), a
+	 * structure's `function` field included: `signatureWords` sends one there because its return type is not a data
+	 * field's annotation, and a null answer here makes every type in reach (`AbstractReach.inferred`), so a structure
+	 * like `Iterator`'s `next` read anywhere admitted every conversion of every abstract wherever code runs.
 	 */
 	private function inferredFrom(r: InferredRef): Null<{ words: Array<String>, reads: Array<MemberRead> }> {
 		final key: String = '${r.file}:${r.type}.${r.member}';
@@ -1031,7 +1036,8 @@ final class ReachGraph {
 			final text: String = source;
 			tree = ParseGate.parseOrNull(_scope.plugin, text);
 		}
-		final kinds: Array<String> = (_scope.shape.functionKinds ?? []).concat(_scope.shape.fieldDeclKinds ?? []);
+		final kinds: Array<String> = (_scope.shape.functionKinds ?? []).concat(_scope.shape.fieldDeclKinds ?? [])
+			.concat(MemberKinds.FIELD_MEMBER_KINDS);
 		var member: Null<QueryNode> = null;
 		function find(node: QueryNode, inType: Bool): Void {
 			if (member != null) return;

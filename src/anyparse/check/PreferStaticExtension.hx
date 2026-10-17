@@ -95,8 +95,10 @@ using Lambda;
  *    that no same-name member exists.
  *  - `R` unresolved, or no index at all → a REPORT-ONLY finding with its own message — unless the
  *    receiver is an identifier whose declaration WRITES its type (`Null<String>`, which the walk does
- *    not unwrap) and the compiler facts prove the rewrite (`factsVerdict`): then FIXABLE, or DROPPED
- *    when they prove a same-name member or a `Dynamic` receiver.
+ *    not unwrap), or whose type the facts prove fixed when it was bound (a constructor pattern's capture
+ *    typed closed, a loop's binder over a call with a closed result — `FactsBindings.fixedAt`),
+ *    and the compiler facts prove the rewrite (`factsVerdict`): then FIXABLE, or DROPPED when they prove
+ *    a same-name member or a `Dynamic` receiver.
  *
  * ## The conflicting-`using` gate
  *
@@ -553,9 +555,12 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	/**
 	 * The verdict of the compiler's facts on a receiver the structural walk left unresolved (`StaticExtensionFacts`), or
 	 * null to DROP the site when they prove a same-name member or a `Dynamic` receiver. Only an identifier bound to a
-	 * declaration with a WRITTEN type is asked: that type is fixed before the call is typed, where an inferred one may be the
-	 * very type the call's parameter bound, and at the extension form it would not be bound yet. A bare self-reference is not
-	 * asked either — its meaning differs inside an abstract. No facts (no oracle configured, or declined) keeps report-only.
+	 * declaration whose type is fixed before the call is typed is asked: one that WRITES its type, or one the facts prove
+	 * the compiler fixed when it bound it (`FactsBindings.fixedAt`: a constructor pattern's capture typed closed, a
+	 * loop's binder over a call with a closed result). Any other inferred type may be the very type the call's parameter
+	 * bound, and at the extension form it would not be bound yet: `x.trim()` on a monomorph types as a structure with a
+	 * `trim` field, which the value then fails to unify with (Haxe 4.3.7). A bare self-reference is not asked either — its
+	 * meaning differs inside an abstract. No facts (no oracle configured, or declined) keeps report-only.
 	 */
 	private static function factsVerdict(
 		call: QueryNode, recv: QueryNode, root: QueryNode, s: Seams, chain: ChainTypeContext, source: String, file: String, module: String,
@@ -568,9 +573,12 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// the type the compiler gave a binding it inferred may have been bound by this very argument, and an extension call
 		// on a type not bound yet dispatches on whatever the receiver turns out to be at run time
 		final binding: Null<Int> = TypeResolver.identBindingFrom(recv, root, s.shape);
-		if (binding == null || chain.declaredTypeSources[binding] == null) return Verdict.UnresolvedReceiver;
-		final oracle: Null<FactsTypeOracle> = FactsTypeOracle.forFix(plugin, file, source);
-		if (oracle == null) return Verdict.UnresolvedReceiver;
+		final oracle: Null<FactsTypeOracle> = binding == null ? null : FactsTypeOracle.forFix(plugin, file, source);
+		if (binding == null || oracle == null) return Verdict.UnresolvedReceiver;
+		if (chain.declaredTypeSources[binding] == null) {
+			final decl: Null<QueryNode> = TypeResolver.bindingNodeFrom(recv.name ?? '', recvSpan, root, s.shape);
+			if (decl == null || !FactsBindings.fixedAt(oracle, file, root, decl, s.shape)) return Verdict.UnresolvedReceiver;
+		}
 		return switch StaticExtensionFacts.judge(oracle, file, callSpan, recvSpan, module, method, usings) {
 			case Proven: Verdict.Fixable;
 			case Shadowed, DynamicReceiver: null;
