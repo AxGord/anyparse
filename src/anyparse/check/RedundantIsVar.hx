@@ -78,10 +78,6 @@ final class RedundantIsVar implements Check implements DefaultOff implements Ris
 	private static inline final MACRO_DECLINE: String =
 		'a build macro reaches the owner and may generate an access to the field, which only a compiler oracle can rule out';
 
-
-	/** The accessor slots that leave a property without storage of its own unless `@:isVar` grants it. */
-	private static final STORAGELESS_SLOTS: Array<String> = ['get', 'set', 'never'];
-
 	/** Whether a compiler oracle verifies the fix, which is what admits a macro-built owner's edit. */
 	private var _oracleRelaxed: Bool = false;
 
@@ -188,7 +184,7 @@ final class RedundantIsVar implements Check implements DefaultOff implements Ris
 			MemberKinds.META_KINDS.contains(n.kind) && n.name == IS_VAR_META && n.children.length == 0
 		)?.span;
 		final access: Null<{ read: String, write: String }> = AccessorClauseText.accessorClause(source, span);
-		return metaSpan != null && access != null && STORAGELESS_SLOTS.contains(access.read) && STORAGELESS_SLOTS.contains(access.write)
+		return metaSpan != null && access != null && AccessorClauseText.storageless(access)
 			&& CtorFieldFold.declInitializer(member, shape) == null
 			? { name: name, meta: metaSpan }
 			: null;

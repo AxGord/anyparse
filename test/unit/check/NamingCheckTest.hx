@@ -515,6 +515,82 @@ class NamingCheckTest extends NamingCheckTestBase {
 		Assert.isFalse(first == new HaxeNamingSupport().policyFor('pkg/a/C.hx'));
 	}
 
+	/**
+	 * A6 (a): a private property with no storage of its own - both accessors `get` / `set` / `never`, no `@:isVar` - is a
+	 * method in disguise, so the private-FIELD `_` prefix does not govern it: neither spelling is reported, and a name
+	 * camelCase does not admit still is, under the property's own rule. A slot that names storage (`null`), an `@:isVar`,
+	 * or a modifier run whose `#if` region could hide one keeps the private-field rule, and a public property keeps the
+	 * public-field rule.
+	 */
+	@:pin('control')
+	@:killer('M-NAMING-PROPERTY-MODS-NONE', 'M-NAMING-STORAGELESS-ISVAR', 'M-NAMING-STORAGELESS-REGION', 'M-ACCESSOR-STORAGELESS-TRUE',
+		'M-NAMING-STORAGELESS-RULE-PUBLIC')
+	public function testAStoragelessPrivatePropertyIsExemptFromTheFieldPrefix(): Void {
+		final src: String = 'class C {\n\tprivate var active(get, never):Bool;\n\tprivate var _shown(get, set):Bool;\n'
+			+ '\t@:isVar private var stored(get, set):Bool;\n\tprivate var nullable(get, null):Bool;\n\t#if js @:isVar #end private var '
+			+ 'hidden(get, never):Bool;\n\tprivate var Bad_Name(get, never):Bool;\n\tpublic var _exposed(get, never):Bool;\n}';
+		final messages: Array<String> = [for (v in CheckFixture.violations(new Naming(), src)) v.message];
+		Assert.equals([
+			"private field _ prefix: 'stored'",
+			"private field _ prefix: 'nullable'",
+			"private field _ prefix: 'hidden'",
+			"camelCase storage-less property: 'Bad_Name'",
+			"camelCase public field: '_exposed'"
+		].join(' | '), messages.join(' | '));
+	}
+
+	/**
+	 * A6 (b): a public static read-only property - `(get, never)`, no storage - reads as a static constant, so the
+	 * static-final rule governs it: UPPER_SNAKE or camelCase. A clause with a write accessor or a storage slot, an
+	 * `@:isVar`, or an instance property stays a public field.
+	 */
+	@:pin('control')
+	@:killer('M-NAMING-PROPERTY-MODS-NONE', 'M-NAMING-READONLY-IGNORES-WRITE', 'M-NAMING-READONLY-RULE-INSTANCE',
+		'M-ACCESSOR-STORAGELESS-TRUE')
+	public function testAPublicStaticReadOnlyPropertyTakesTheConstantPolicy(): Void {
+		final src: String = 'class C {\n\tpublic static var LIBRARY_PATH(get, never):String;\n'
+			+ '\tpublic static var libraryRoot(get, never):String;\n\tpublic static var SETTABLE_PATH(get, set):String;\n'
+			+ '\tpublic static var STORED_PATH(default, never):String;\n\t@:isVar public static var VAR_PATH(get, never):String;\n'
+			+ '\tpublic var INSTANCE_PATH(get, never):String;\n\tpublic static var Bad_Path(get, never):String;\n}';
+		final messages: Array<String> = [for (v in CheckFixture.violations(new Naming(), src)) v.message];
+		Assert.equals([
+			"camelCase public field: 'SETTABLE_PATH'",
+			"camelCase public field: 'STORED_PATH'",
+			"camelCase public field: 'VAR_PATH'",
+			"camelCase public field: 'INSTANCE_PATH'",
+			"UPPER_SNAKE or camelCase static read-only property: 'Bad_Path'"
+		].join(' | '), messages.join(' | '));
+	}
+
+	/**
+	 * The (b) finding's autofix is the ordinary member rename, and a static property's accessors live beside it, so that
+	 * rename refuses as rename-unsafe exactly as it does for any accessor-backed property - no edit, the reason recorded.
+	 */
+	public function testAStaticReadOnlyPropertyFixRefusesAsAccessorBacked(): Void {
+		final src: String = 'class C {\n\tpublic static var _libraryPath(get, never):String;\n\n'
+			+ '\tprivate static function get__libraryPath():String return "";\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
+		Assert.equals(1, vs.length);
+		Assert.stringContains('static read-only property', vs[0].message);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
+		Assert.stringContains('rename-unsafe', vs[0].declineReason ?? '');
+	}
+
+	/**
+	 * A policy loaded from a `checkstyle.json` states its own member rules and never selects on the property modifiers
+	 * the projection confers, so a private storage-less property stays under its `MemberName` regex.
+	 */
+	public function testACheckstylePolicyStillGovernsAStoragelessProperty(): Void {
+		final policy: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"MemberName","props":{"format":"^_[a-z][a-zA-Z0-9]*$","tokens":["PRIVATE"]}}]}'
+		);
+		final src: String = 'class C {\n\tprivate var active(get, never):Bool;\n}';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final decls: Array<NamedDecl> = new HaxeNamingSupport().project(plugin.parseFile(src), Naming.propertyFacts(plugin, src));
+		Assert.equals(1, Naming.violationsFor('C.hx', decls, policy).length);
+	}
+
 	/** A `MemberName` + `MethodName` pair over checkstyle's own default format, stating `ignoreExtern`. */
 	private function externAwarePolicy(ignoreExtern: Bool): NamingPolicy {
 		return CheckstyleConfigLoader.load(
