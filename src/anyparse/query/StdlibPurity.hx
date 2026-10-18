@@ -20,6 +20,9 @@ import anyparse.query.GrammarPlugin.RefShape;
 @:nullSafety(Strict)
 final class StdlibPurity {
 
+	/** The one effect-free `String` method that is not transparent: it answers a FRESH, mutable array. */
+	private static inline final SPLIT_METHOD: String = 'split';
+
 	/**
 	 * Simple `Type.method` names of stdlib STATIC functions that are REFERENTIALLY TRANSPARENT: no side effect, the same
 	 * answer for the same arguments, and a result with no identity of its own (a number, a `Bool`, a `String`, or the
@@ -119,9 +122,6 @@ final class StdlibPurity {
 		'toString'
 	];
 
-	/** The one effect-free `String` method that is not transparent: it answers a FRESH, mutable array. */
-	private static inline final SPLIT_METHOD: String = 'split';
-
 	/**
 	 * Whether `callNode`'s CALLEE is a referentially transparent stdlib function: two calls with the same arguments may
 	 * be computed once, and a discarded one dropped. It answers for the callee ONLY — the arguments are the caller's
@@ -134,7 +134,7 @@ final class StdlibPurity {
 		return calleePurity(callNode, tree, shape, declaredTypes, index) == StdCallPurity.Transparent;
 	}
 
-	/** Whether `callNode`'s CALLEE is a side-effect-free stdlib function — a discarded call to it may go. Callee only, like `isTransparentCallee`. */
+	/** Whether `callNode`'s CALLEE is a side-effect-free stdlib function (a discarded call may go); callee only. */
 	public static function isEffectFreeCallee(
 		callNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
 	): Bool {
@@ -171,8 +171,12 @@ final class StdlibPurity {
 		}
 		if (!TRANSPARENT_STRING_METHODS.contains(method) && method != SPLIT_METHOD) return null;
 		final from: Null<Int> = TypeResolver.identBindingFrom(receiver, tree, shape);
-		if (from == null || declaredTypes[from] != 'String' || NominalTypes.shadowedByNonStdType(index, 'String')) return null;
-		return method == SPLIT_METHOD ? StdCallPurity.EffectFree : StdCallPurity.Transparent;
+		return if (from == null || declaredTypes[from] != 'String' || NominalTypes.shadowedByNonStdType(index, 'String'))
+			null
+		else if (method == SPLIT_METHOD)
+			StdCallPurity.EffectFree
+		else
+			StdCallPurity.Transparent;
 	}
 
 }

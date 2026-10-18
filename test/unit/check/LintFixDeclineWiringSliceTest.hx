@@ -49,6 +49,9 @@ import utest.Test;
 @:access(anyparse.query.Cli)
 class LintFixDeclineWiringSliceTest extends Test {
 
+	/** The sentence `ArmCheck`'s safe arm writes on a finding it leaves to its risky arm — and how the arm recognises one. */
+	public static inline final ARM_HAND_OFF: String = 'the risky arm owns this finding';
+
 	/** `unused-local` on a declaration that IS a brace-less `if` body — the shape the guard refuses. */
 	private static final REFUSED: String =
 		'package p;\n\nclass C {\n\tpublic function f(c: Bool): Void {\n\t\tif (c) var y: Int = 1;\n\t}\n\n}\n';
@@ -69,9 +72,6 @@ class LintFixDeclineWiringSliceTest extends Test {
 	/** Canonical under compiled defaults, with one string literal a hand-built edit set can straddle. */
 	private static final OVERLAP_SOURCE: String =
 		'package p;\n\nclass C {\n\n\tpublic function f():String {\n\t\treturn "aaa";\n\t}\n\n}\n';
-
-	/** The sentence `ArmCheck`'s safe arm writes on a finding it leaves to its risky arm — and how the arm recognises one. */
-	public static inline final ARM_HAND_OFF: String = 'the risky arm owns this finding';
 
 	/**
 	 * The guard's refusal is the rule's ledger row, and it carries the guard's own sentence.
@@ -606,7 +606,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 *
 	 * The rule runs in the safe loop too, which counts all five findings in `reported` and declines the two its risky
 	 * arm owns as hand-offs. Before the fix the arm's tallies were folded in as if the rule were new to the ledger: the
-	 * two hand-offs reached `reported` a second time (7 of 5 real findings) and `declined` a second time, and the
+	 * two hand-offs reached `reported` a second time and `declined` a second time, and the
 	 * hand-off sentence stood beside the arm's own. Now the hand-offs are taken back out and the arm's answer — one
 	 * named refusal, one silent — replaces them.
 	 */
@@ -634,8 +634,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	}
 
 	/**
-	 * A `RiskyArm` rule whose arm LANDED: the hand-offs it fixed are no declines at all, so the row reads "3 of 5".
-	 * Before the fix it read "5 of 7" — the two fixed findings declined by the safe arm AND reported again by the arm.
+	 * A `RiskyArm` rule whose arm LANDED: the hand-offs it fixed are no declines at all, and only the safe arm's own
+	 * declines are left. Before the fix the two fixed findings were declined by the safe arm AND reported again by the arm.
 	 */
 	@:pin('control') @:killer('M-ARM-LEDGER-REPORTED-TWICE', 'M-ARM-LEDGER-HANDOFF-KEPT')
 	public function testARiskyArmRuleThatLandedDeclinesOnlyWhatItLeft(): Void {

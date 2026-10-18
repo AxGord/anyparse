@@ -1223,11 +1223,14 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ORPHAN-ACCESSOR-REPORT-SCOPE,M-MAPVALUE-SUBTYPE-REPORT-INDEX,M-TYPEDTHROW-CATCH-REPORT-ONLY',
 			'unit.check.CrossScopeSoundnessTest#testTheScopeHalfHoldingAReflectiveStringDoesNotMatter :: control :: '
 				+ 'M-REFLECTION-SCOPE-PROJECT-ONLY',
-			'unit.check.DeadNullCoalescingTest#testBoolLocalProofKeepsNoFixUnderNullSafety :: control :: M-DNC-UNSEEN-DROPPED,M-NSG-GATE-NEVER,M-DNC-DECLINED-FIXED',
-			'unit.check.DeadNullCoalescingTest#testDirectGuardKeepsTheFixUnderNullSafety :: control :: M-DSN-UNSEEN-ALL,M-NSG-VISIBLE-IGNORED',
+			'unit.check.DeadNullCoalescingTest#testBoolLocalProofKeepsNoFixUnderNullSafety :: control :: '
+				+ 'M-DNC-UNSEEN-DROPPED,M-NSG-GATE-NEVER,M-DNC-DECLINED-FIXED',
+			'unit.check.DeadNullCoalescingTest#testDirectGuardKeepsTheFixUnderNullSafety :: control :: '
+				+ 'M-DSN-UNSEEN-ALL,M-NSG-VISIBLE-IGNORED',
 			'unit.check.DeadNullCoalescingTest#testLoopBinderShadowsTheOuterProof :: control :: M-NULLFLOW-BINDER-BLIND',
 			'unit.check.DeadNullGuardTest#testBoolAliasProofKeepsTheFixWithoutNullSafety :: control :: M-DSN-NULLSAFE-ALWAYS',
-			'unit.check.DeadNullGuardTest#testEveryUnseenProofKeepsNoFixUnderNullSafety :: control :: M-DNG-UNSEEN-DROPPED,M-NSG-GATE-NEVER,M-DNG-DECLINED-FIXED',
+			'unit.check.DeadNullGuardTest#testEveryUnseenProofKeepsNoFixUnderNullSafety :: control :: '
+				+ 'M-DNG-UNSEEN-DROPPED,M-NSG-GATE-NEVER,M-DNG-DECLINED-FIXED',
 			'unit.check.DeadNullGuardTest#testVisibleProofKeepsTheFixUnderNullSafety :: control :: M-DSN-UNSEEN-ALL,M-NSG-VISIBLE-IGNORED',
 			'unit.check.DeadSafeNavTest#testAliasProofKeepsNoFixUnderNullSafety :: control :: M-DSN-UNSEEN-DROPPED',
 			'unit.check.DeadSafeNavTest#testAssignmentInsideACallKeepsTheFix :: control :: M-DSN-OWNS-NONE',
@@ -1308,9 +1311,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ExplicitTypeCheckTest#testMacroFunctionWithUnprovenReturnDeclines :: control :: M-EXPLICIT-TYPE-MACRO-ANY-RETURN',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
-			'unit.check.ExtractRepeatedExpressionTest#testEffectFreeButNotTransparentCallExcluded :: control :: M-STD-EFFECT-FREE-AS-TRANSPARENT',
+			'unit.check.ExtractRepeatedExpressionTest#testEffectFreeButNotTransparentCallExcluded :: control :: '
+				+ 'M-STD-EFFECT-FREE-AS-TRANSPARENT',
 			'unit.check.ExtractRepeatedExpressionTest#testProjectShadowOfAStdTypeExcluded :: control :: M-STD-SHADOW-IGNORED',
-			'unit.check.ExtractRepeatedExpressionTest#testStringMethodAndPathStaticAreTransparent :: control :: M-STD-SPLIT-TRANSPARENT,M-PURE-STRING-METHOD-OFF',
+			'unit.check.ExtractRepeatedExpressionTest#testStringMethodAndPathStaticAreTransparent :: control :: '
+				+ 'M-STD-SPLIT-TRANSPARENT,M-PURE-STRING-METHOD-OFF',
 			'unit.check.FactsFixGateE2ETest#testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-REFLECTIVE-BUILDS,M-REFLECTIVE-REACH,M-REFLECTIVE-WARN,M-ESCAPES-FACTS-UNMATCHED',
 			'unit.check.FactsFixGateE2ETest#testAComputedMemberNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-HOLDERS-BUILDS,M-HOLDERS-REACH,M-HOLDERS-WARN,M-HOLDERS-READ',
 			'unit.check.FactsFixGateE2ETest#testAMapHandedToMethodsThatKeepNothingLosesItsKeyUnderTheTruth :: control :: '
@@ -1554,11 +1559,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.LintFixDeclineWiringSliceTest#testAGuardRefusedFindingCostsItsRuleNothingElse :: control :: M-LINTFIX-GUARD-SPLIT-NONE',
 			'unit.check.LintFixDeclineWiringSliceTest#testARefusedFindingCostsItsRuleNothingElse :: control :: M-LINTFIX-FINDING-SPLIT-NONE',
 			'unit.check.LintFixDeclineWiringSliceTest#testARefusedRuleCostsOnlyItsOwnEdits :: control :: M-LINTFIX-BLAME-SITE-ALWAYS',
-			'unit.check.LintFixDeclineWiringSliceTest#testARiskyArmRuleCountsEachFindingOnceWhenTheArmDeclines :: control :: M-ARM-LEDGER-REPORTED-TWICE,M-ARM-LEDGER-HANDOFF-KEPT',
+			'unit.check.LintFixDeclineWiringSliceTest#testARiskyArmRuleCountsEachFindingOnceWhenTheArmDeclines :: control :: '
+				+ 'M-ARM-LEDGER-REPORTED-TWICE,M-ARM-LEDGER-HANDOFF-KEPT',
 			'unit.check.LintFixDeclineWiringSliceTest#testARiskyArmRuleIsNeverListedAsAbsent :: control :: M-LEDGER-ARM-LISTED-ABSENT',
-			'unit.check.LintFixDeclineWiringSliceTest#testARiskyArmRuleThatLandedDeclinesOnlyWhatItLeft :: control :: M-ARM-LEDGER-REPORTED-TWICE,M-ARM-LEDGER-HANDOFF-KEPT',
+			'unit.check.LintFixDeclineWiringSliceTest#testARiskyArmRuleThatLandedDeclinesOnlyWhatItLeft :: control :: '
+				+ 'M-ARM-LEDGER-REPORTED-TWICE,M-ARM-LEDGER-HANDOFF-KEPT',
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
-			'unit.check.LintFixDeclineWiringSliceTest#testHandOffsStayDeclinedWithoutTheRiskyPhase :: control :: M-ARM-LEDGER-HANDOFF-UNRECORDED,M-ARM-LEDGER-ARM-BLIND',
+			'unit.check.LintFixDeclineWiringSliceTest#testHandOffsStayDeclinedWithoutTheRiskyPhase :: control :: '
+				+ 'M-ARM-LEDGER-HANDOFF-UNRECORDED,M-ARM-LEDGER-ARM-BLIND',
 			'unit.check.LintFixSafeRevertContinuesTest#testANarrowedRevertKeepsTheGoodSafeEditAndTheVerifiedOnes :: control :: '
 				+ 'M-SAFE-REVERT-ABORTS,M-SAFE-REVERT-EDITS-COUNTED,M-SAFE-REVERT-FILES-COUNTED,M-SAFE-REVERT-EXIT-OK',
 			'unit.check.LintFixSafeRevertContinuesTest#testRiskyAndOracleAssistedFixesLandAfterAWholeWaveSafeRevert :: control :: '

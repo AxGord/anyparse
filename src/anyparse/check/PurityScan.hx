@@ -32,10 +32,8 @@ using Lambda;
  *
  * A safe skeleton kind (`RefactorSupport.isSafeKind` — the syntactic core, reused rather than
  * restated), a field or index READ whose resolvable first hop is not a property getter, and a
- * call whose callee is a referentially transparent stdlib function
- * (`StdlibPurity.isTransparentCallee`: the positive table of pure statics, and the `String`
- * methods on a binding declared `String`). Everything else — an instance call, a local-function
- * call, a complex-receiver call — is unproven and therefore impure.
+ * call whose callee is a referentially transparent stdlib function (`StdlibPurity`). Everything
+ * else — an instance call, a local-function call, a complex-receiver call — is impure.
  *
  * A BARE identifier is a safe skeleton kind with one exception: unqualified inside its own type
  * it may be a property read, which is a `get_p()` call. That one is asked of the SYMBOL INDEX and

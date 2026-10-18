@@ -24735,8 +24735,8 @@
 			"name": "M-STD-SPLIT-TRANSPARENT",
 			"type": "anyparse.query.StdlibPurity",
 			"method": "calleePurity",
-			"find": "return method == SPLIT_METHOD ? StdCallPurity.EffectFree : StdCallPurity.Transparent;",
-			"replace": "return StdCallPurity.Transparent;",
+			"find": "else if (method == SPLIT_METHOD)",
+			"replace": "else if (false)",
 			"note": "`s.split(\",\")` counts as transparent, so three calls are hoisted into ONE mutable array shared by every former call site"
 		},
 		{

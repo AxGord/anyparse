@@ -85,14 +85,14 @@ final class NullSafetyGate {
 		'--next'
 	];
 
-	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
-	private final _resolveConfig: Null<(String) -> LintConfig>;
-
 	/** Every oracle hxml read so far, by path; null for one that could not be read. */
 	private final _hxmlText: Map<String, Null<String>> = [];
 
 	/** `buildMayEnableNullSafety`'s verdict per config directory. */
 	private final _buildMay: Map<String, Bool> = [];
+
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private final _resolveConfig: Null<(String) -> LintConfig>;
 
 	public function new(resolveConfig: Null<(String) -> LintConfig>) {
 		_resolveConfig = resolveConfig;

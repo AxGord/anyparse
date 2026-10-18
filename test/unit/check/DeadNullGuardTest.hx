@@ -742,10 +742,12 @@ class DeadNullGuardTest extends Test {
 			'final v: Null<String> = node; if (node == null) return other; return other.length > 0 && v != null ? v : other;'
 		));
 		assertUnseenDeclined(nullSafeString(
-			'if (other.length > 0) { if (node == null) return other; } else { return other; } return other.length > 1 && node != null ? node : other;'
+			'if (other.length > 0) { if (node == null) return other; } else { return other; } '
+			+ 'return other.length > 1 && node != null ? node : other;'
 		));
 		assertUnseenDeclined(nullSafeString(
-			'try { if (node == null) return other; } catch (e: haxe.Exception) { return other; } return other.length > 1 && node != null ? node : other;'
+			'try { if (node == null) return other; } catch (e: haxe.Exception) { return other; } '
+			+ 'return other.length > 1 && node != null ? node : other;'
 		));
 	}
 
