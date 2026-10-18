@@ -23244,6 +23244,158 @@
 			"note": "a ceiling at or below the rule's threshold is read as a tighter limit instead of being refused"
 		},
 		{
+			"name": "M-OVERSIZED-CONST-COUNTED",
+			"type": "anyparse.check.OversizedType",
+			"method": "checkType",
+			"find": "final names: Array<String> = [for (i => m in all) if (!constant[i]) m.node.name ?? ''];",
+			"replace": "final names: Array<String> = [for (i => m in all) m.node.name ?? ''];",
+			"note": "the constants count toward the member total again"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-LINES-COUNTED",
+			"type": "anyparse.check.OversizedType",
+			"method": "checkType",
+			"find": "final lines: Int = extent - constantLines(source, span.from, all, constant);",
+			"replace": "final lines: Int = extent;",
+			"note": "the lines of the constants count toward the line extent again"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-REGION-OWN-LINES",
+			"type": "anyparse.check.OversizedType",
+			"method": "constantLines",
+			"find": "final owned: Int = newlinesIn(source, previousEnd, span.to);",
+			"replace": "final owned: Int = newlinesIn(source, span.from, span.to) + 1;",
+			"note": "a constant owns only its own lines, so its doc comment and the blank lines above it count as behaviour"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-SHARED-LINE",
+			"type": "anyparse.check.OversizedType",
+			"method": "constantLines",
+			"find": "lines += shared && owned > 0 ? owned - 1 : owned;",
+			"replace": "lines += owned;",
+			"note": "a line a constant shares with a behaviour member is dropped with the constant"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-NEEDS-STATIC",
+			"type": "anyparse.check.OversizedType",
+			"method": "isConstant",
+			"find": "if (run.exists(m -> m.kind == seams.staticKind)) {",
+			"replace": "if (true) {",
+			"note": "an instance final of a literal is read as a constant"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-STATIC-VAR",
+			"type": "anyparse.check.OversizedType",
+			"method": "isConstant",
+			"find": "if (!seams.finalFieldKinds.contains(node.kind) || init == null) return false;",
+			"replace": "if (init == null) return false;",
+			"note": "a static var (state) is read as a constant"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-INLINE-PROOF",
+			"type": "anyparse.check.OversizedType",
+			"method": "isConstant",
+			"find": "return compilerFolds || ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName);",
+			"replace": "return ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName);",
+			"note": "the inline modifier is no longer the compiler's proof, so an inline final the compiler folds from a call counts"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-ANY-STATIC-FINAL",
+			"type": "anyparse.check.OversizedType",
+			"method": "isConstant",
+			"find": "return compilerFolds || ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName);",
+			"replace": "return true;",
+			"note": "every static final with an initializer is a constant, a run-time call included"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-ACCESSOR",
+			"type": "anyparse.check.OversizedType",
+			"method": "isConstant",
+			"find": "if (span == null || kit.accessors.exists(span.from)) return false;",
+			"replace": "if (span == null) return false;",
+			"note": "a property of an enum abstract is read as an enum value"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-ANY-ENUM-HOST",
+			"type": "anyparse.check.OversizedType",
+			"method": "isConstant",
+			"find": "if (!EnumAbstractForms.isValue(span, kit.valueStarts)) return false;",
+			"replace": "",
+			"note": "a non-static field of ANY type is read as an enum value"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-NO-ENUM-VALUES",
+			"type": "anyparse.check.OversizedType",
+			"method": "isConstant",
+			"find": "if (!EnumAbstractForms.isValue(span, kit.valueStarts)) return false;",
+			"replace": "return false;",
+			"note": "the values of an @:enum abstract count as members again"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-ENUM-VALUE-NEEDS-INIT",
+			"type": "anyparse.check.OversizedType",
+			"method": "isConstant",
+			"find": "(init == null || ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName))",
+			"replace": "(init != null && ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName))",
+			"note": "an implicit enum value (no initializer) counts as a member"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-NAME-NOT-CONSTANT",
+			"type": "anyparse.check.OversizedType",
+			"method": "namesOnlyConstants",
+			"find": "if (!flags[i]) return false;",
+			"replace": "",
+			"note": "a reference to a non-constant member of the type is read as a constant one"
+		},
+		{
+			"name": "M-OVERSIZED-CONST-NAME-UNDECLARED",
+			"type": "anyparse.check.OversizedType",
+			"method": "namesOnlyConstants",
+			"find": "return named;",
+			"replace": "return true;",
+			"note": "a name the type does not declare (an import, an inherited or module-level symbol) is read as a constant"
+		},
+		{
+			"name": "M-CONST-EXPR-NO-NAMES",
+			"type": "anyparse.check.ConstantFieldScan",
+			"method": "isConstantExpression",
+			"find": "if (node.kind == seams.identKind) return name != null && isConstantName(name);",
+			"replace": "if (node.kind == seams.identKind) return false;",
+			"note": "a reference to another constant is never constant"
+		},
+		{
+			"name": "M-CONST-EXPR-NO-OPERATORS",
+			"type": "anyparse.check.ConstantFieldScan",
+			"method": "isConstantExpression",
+			"find": "final grouping: Bool = seams.operatorKinds.contains(node.kind) || node.kind == seams.parenKind;",
+			"replace": "final grouping: Bool = node.kind == seams.parenKind;",
+			"note": "an operator over constants is not folded"
+		},
+		{
+			"name": "M-CONST-EXPR-NO-PARENS",
+			"type": "anyparse.check.ConstantFieldScan",
+			"method": "isConstantExpression",
+			"find": "final grouping: Bool = seams.operatorKinds.contains(node.kind) || node.kind == seams.parenKind;",
+			"replace": "final grouping: Bool = seams.operatorKinds.contains(node.kind);",
+			"note": "a parenthesised constant is not seen through"
+		},
+		{
+			"name": "M-CONST-EXPR-ANY-OPERAND",
+			"type": "anyparse.check.ConstantFieldScan",
+			"method": "isConstantExpression",
+			"find": "node.children.foreach(c -> isConstantExpression(c, source, seams, isConstantName))",
+			"replace": "node.children.exists(c -> isConstantExpression(c, source, seams, isConstantName))",
+			"note": "an operator with ONE constant operand is read as constant"
+		},
+		{
+			"name": "M-CONST-EXPR-INTERPOLATED",
+			"type": "anyparse.check.ConstantFieldScan",
+			"method": "isConstantLiteral",
+			"find": "return seams.stringLiteralKinds.contains(init.kind) && fold?.literalOf(init, source) != null;",
+			"replace": "return seams.stringLiteralKinds.contains(init.kind);",
+			"note": "an interpolated string is read as a plain literal"
+		},
+		{
 			"name": "M-MO-INLINE-BOUNDARY-OFF",
 			"type": "anyparse.check.MemberSpacing",
 			"method": "inlineSubgroupBoundary",

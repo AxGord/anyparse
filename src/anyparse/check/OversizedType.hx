@@ -4,12 +4,15 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
+import anyparse.check.ConstantFieldScan.ConstantFieldSeams;
 import anyparse.query.CallGraph;
 import anyparse.query.Clusters;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
+import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -32,7 +35,7 @@ using StringTools;
  *   `RefShape.memberDeclKinds`, recursing into `#if` conditional-compilation
  *   blocks (`RefShape.conditionalMemberKind`) so guarded members count too;
  *   modifier siblings are not members and are not counted.
- * - **line extent** — the number of source lines the type's span covers.
+ * - **line extent** — the number of source lines the type's span covers; neither counts a CONSTANT (`isConstant`, `constantLines`).
  *
  * ## The interface carve-out
  *
@@ -139,7 +142,7 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	}
 
 	public function description(): String {
-		return 'a type with too many members or lines — a decomposition candidate';
+		return 'a type with too many behaviour members or lines (constants are not counted) — a decomposition candidate';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -168,6 +171,7 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 				maxMembers: maxMembers,
 				maxLines: maxLines,
 				granted: grants.granted,
+				constants: constantClassifier(plugin, entry.source, tree),
 				noSeam: typeName -> {
 					final built: CallGraph = graph ?? CallGraph.build([entry], plugin);
 					graph = built;
@@ -249,9 +253,13 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		final grant: Null<OversizedGrant> = cfg.granted.find(g -> g.name == name);
 		final maxMembers: Int = grant?.members ?? cfg.maxMembers;
 		final maxLines: Int = grant?.lines ?? cfg.maxLines;
-		final names: Array<String> = memberNames(type, cfg);
+		final all: Array<MemberAt> = membersOf(type, cfg);
+		final extent: Int = lineExtent(source, span);
+		// Leaving the constants out only ever LOWERS both measurements, so a type within both limits is never classified.
+		final constant: Array<Bool> = all.length > maxMembers || extent > maxLines ? cfg.constants(all) : [for (_ in all) false];
+		final names: Array<String> = [for (i => m in all) if (!constant[i]) m.node.name ?? ''];
 		final members: Int = names.length;
-		final lines: Int = lineExtent(source, span);
+		final lines: Int = extent - constantLines(source, span.from, all, constant);
 		final over: Array<String> = [];
 		if (members > maxMembers && !contractFacade(members, cfg.dictated(name, names), maxMembers))
 			over.push('$members$MEMBERS_UNIT$maxMembers)');
@@ -436,30 +444,158 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	}
 
 	/**
-	 * The NAMES of the member declarations among `parent`'s children, in document order, recursing into `#if`
-	 * conditional-compilation blocks so guarded members count too — an `#if` and its `#else` branches ALL count (a
-	 * source-size metric measures what is written, not one compiled configuration). Modifier siblings (visibility /
-	 * static runs preceding a member) are separate nodes whose kinds are not in `memberKinds`, so they are never counted.
+	 * The member declarations among `parent`'s children, in document order, each with the node whose DIRECT
+	 * child it is (the modifier run before it is read there), recursing into `#if` conditional-compilation blocks
+	 * so guarded members count too — an `#if` and its `#else` branches ALL count (a source-size metric measures
+	 * what is written, not one compiled configuration). Modifier siblings (visibility / static runs preceding a
+	 * member) are separate nodes whose kinds are not in `memberKinds`, so they are never counted.
 	 *
-	 * The LENGTH is the member metric; the names themselves feed the interface carve-out. A nameless member projects as
-	 * the empty string, which no interface can declare, so it counts toward the total and never toward the dictated share.
+	 * The behaviour members among them are the member metric; their names feed the interface carve-out. A
+	 * nameless member projects as the empty string, which no interface can declare, so it counts toward the
+	 * total and never toward the dictated share.
 	 */
-	private static function memberNames(parent: QueryNode, cfg: OversizedCfg): Array<String> {
-		final names: Array<String> = [];
+	private static function membersOf(parent: QueryNode, cfg: OversizedCfg): Array<MemberAt> {
+		final out: Array<MemberAt> = [];
 		for (child in parent.children) {
 			if (cfg.conditionalKind != null && child.kind == cfg.conditionalKind)
-				for (nested in memberNames(child, cfg)) names.push(nested);
+				for (nested in membersOf(child, cfg)) out.push(nested);
 			else if (cfg.memberKinds.contains(child.kind))
-				names.push(child.name ?? '');
+				out.push({ node: child, host: parent });
 		}
-		return names;
+		return out;
 	}
 
 	/** The number of source lines `span` covers — newlines in the slice + 1. */
 	private static function lineExtent(source: String, span: Span): Int {
-		var lines: Int = 1;
-		for (i in span.from ... span.to) if (source.fastCodeAt(i) == '\n'.code) lines++;
+		return newlinesIn(source, span.from, span.to) + 1;
+	}
+
+	/** The number of line breaks in `source` from `from` (inclusive) to `to` (exclusive). */
+	private static function newlinesIn(source: String, from: Int, to: Int): Int {
+		var count: Int = 0;
+		for (i in from ... to) if (source.fastCodeAt(i) == '\n'.code) count++;
+		return count;
+	}
+
+	/**
+	 * How many of a type's lines belong to its CONSTANTS — the line half of A13, kept in step with the member
+	 * half: a constant is neither a member nor lines of the type.
+	 *
+	 * Every line of the type belongs to the member that ENDS it: the lines after the previous member's last line
+	 * (after the header line, for the first member) through this member's own last line. A member therefore owns
+	 * its doc comment, its annotations and the blank lines and section comments written above it, which in a
+	 * table are the table's. A constant's lines are left out, except a last line a behaviour member also starts
+	 * on — there is behaviour on that line. The header line and what follows the last member (the closing brace)
+	 * always count, so a type with no constant gets 0 here and its line extent is exactly what it was.
+	 */
+	private static function constantLines(source: String, typeFrom: Int, members: Array<MemberAt>, constant: Array<Bool>): Int {
+		var lines: Int = 0;
+		var previousEnd: Int = typeFrom;
+		for (i => member in members) {
+			final span: Null<Span> = member.node.span;
+			if (span == null) continue;
+			if (constant[i]) {
+				final next: Null<Span> = i + 1 < members.length && !constant[i + 1] ? members[i + 1].node.span : null;
+				final owned: Int = newlinesIn(source, previousEnd, span.to);
+				final shared: Bool = next != null && newlinesIn(source, span.to, next.from) == 0;
+				lines += shared && owned > 0 ? owned - 1 : owned;
+			}
+			previousEnd = span.to;
+		}
 		return lines;
+	}
+
+	/**
+	 * The constant classifier of ONE file, for `OversizedCfg.constants`. Lazy: a file where no type is over a
+	 * threshold never builds the accessor map or walks for enum-abstract hosts. When the grammar leaves a seam
+	 * the whitelist needs unset, nothing is a constant and every member counts — a constant this rule cannot
+	 * prove is counted, never dropped.
+	 */
+	private static function constantClassifier(plugin: GrammarPlugin, source: String, tree: QueryNode): (Array<MemberAt>) -> Array<Bool> {
+		var kit: Null<ConstantKit> = null;
+		return members -> {
+			final built: Null<ConstantKit> = kit ?? constantKit(plugin, source, tree);
+			kit = built;
+			built == null ? [for (_ in members) false] : constantFlags(members, source, built);
+		};
+	}
+
+	/** What `isConstant` reads for one file, or null when the grammar or the plugin cannot answer it. */
+	private static function constantKit(plugin: GrammarPlugin, source: String, tree: QueryNode): Null<ConstantKit> {
+		final seams: Null<ConstantFieldSeams> = ConstantFieldScan.seams(plugin);
+		final info: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return seams == null || info == null ? null : {
+			seams: seams,
+			leading: CheckScan.modifierKinds(plugin.refShape()).concat(seams.metaKinds),
+			accessors: info.propertyAccessors(source),
+			valueStarts: EnumAbstractForms.valueStarts(plugin, tree)
+		};
+	}
+
+	/**
+	 * Which of `members` are CONSTANTS — the declarations the size of a type does not count (A13, the user's
+	 * decision of 2026-10-18: a type's size is its behaviour, and a table of constants is not a decomposition
+	 * candidate). Read to a fixpoint, because a constant may be written in terms of another one declared anywhere
+	 * in the type: a member joins once its initializer is constant given the members already in, and the loop ends
+	 * on a pass that adds none — so a reference cycle stays out.
+	 */
+	private static function constantFlags(members: Array<MemberAt>, source: String, kit: ConstantKit): Array<Bool> {
+		final flags: Array<Bool> = [for (_ in members) false];
+		final isConstantName: (String) -> Bool = name -> namesOnlyConstants(members, flags, name);
+		var grew: Bool = true;
+		while (grew) {
+			grew = false;
+			for (i => member in members) if (!flags[i] && isConstant(member, source, kit, isConstantName)) {
+				flags[i] = true;
+				grew = true;
+			}
+		}
+		return flags;
+	}
+
+	/**
+	 * Whether `name` names at least one of `members`, and only ones already `flags`ged constant — what an
+	 * identifier in a constant's initializer has to resolve to. A name the type does not declare is an import, a
+	 * module-level or an inherited symbol this rule does not resolve, so it proves nothing.
+	 */
+	private static function namesOnlyConstants(members: Array<MemberAt>, flags: Array<Bool>, name: String): Bool {
+		var named: Bool = false;
+		for (i => member in members) if (member.node.name == name) {
+			if (!flags[i]) return false;
+			named = true;
+		}
+		return named;
+	}
+
+	/**
+	 * Whether ONE member is a constant, read as a POSITIVE whitelist — anything it does not name is behaviour (or
+	 * state) and counts, exactly as before N41:
+	 *
+	 * - a `static` FINAL field with an initializer and no accessor clause whose value is known: either it is
+	 *   `inline` — Haxe's own proof, since the compiler refuses `inline` on an initializer it cannot fold — or
+	 *   its initializer is one `ConstantFieldScan.isConstantExpression` accepts;
+	 * - a non-`static` field of an `@:enum abstract` (`EnumAbstractForms`; an `enum abstract` is no container of
+	 *   this rule at all) with no accessor clause and either no initializer (an implicit value) or a constant one.
+	 *
+	 * Not a constant: a `static var`, `inline` or not (the user's whitelist names finals); an instance `final`; a
+	 * property; a function; and a `static final` initialized by a call, a field access, a cast, an allocation, an
+	 * interpolated string, `null`, or a name that is not a constant of this type.
+	 */
+	private static function isConstant(member: MemberAt, source: String, kit: ConstantKit, isConstantName: (String) -> Bool): Bool {
+		final node: QueryNode = member.node;
+		final span: Null<Span> = node.span;
+		final seams: ConstantFieldSeams = kit.seams;
+		if (span == null || kit.accessors.exists(span.from)) return false;
+		final run: Array<QueryNode> = MemberKinds.precedingModifiers(node, member.host, kit.leading);
+		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(node);
+		if (run.exists(m -> m.kind == seams.staticKind)) {
+			if (!seams.finalFieldKinds.contains(node.kind) || init == null) return false;
+			final compilerFolds: Bool = run.exists(m -> m.kind == seams.inlineKind);
+			return compilerFolds || ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName);
+		}
+		if (!EnumAbstractForms.isValue(span, kit.valueStarts)) return false;
+		final field: Bool = seams.finalFieldKinds.contains(node.kind) || seams.mutableFieldKinds.contains(node.kind);
+		return field && (init == null || ConstantFieldScan.isConstantExpression(init, source, seams, isConstantName));
 	}
 
 	/**
@@ -559,8 +695,29 @@ private typedef OversizedCfg = {
 	final maxMembers: Int;
 	final maxLines: Int;
 	final granted: Array<OversizedGrant>;
+	final constants: (Array<MemberAt>) -> Array<Bool>;
 	final noSeam: (String) -> Bool;
 	final dictated: (String, Array<String>) -> Null<Int>;
+};
+
+/** One member declaration of a type, with the node whose DIRECT child it is — the type, or a `#if` region in it. */
+private typedef MemberAt = {
+	final node: QueryNode;
+	final host: QueryNode;
+};
+
+/** What `OversizedType.isConstant` reads for one file — resolved once, on the first type that needs it. */
+private typedef ConstantKit = {
+	final seams: ConstantFieldSeams;
+
+	/** The kinds a member's leading run may hold (modifiers and annotations) — where its `static` / `inline` sit. */
+	final leading: Array<String>;
+
+	/** `TypeInfoProvider.propertyAccessors`: the span starts of the members that carry an accessor clause. */
+	final accessors: Map<Int, Bool>;
+
+	/** `EnumAbstractForms.valueStarts`: the span starts of the members of an `@:enum abstract`. */
+	final valueStarts: Array<Int>;
 };
 
 /**

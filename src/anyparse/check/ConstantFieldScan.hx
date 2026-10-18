@@ -6,6 +6,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -65,6 +66,8 @@ final class ConstantFieldScan {
 			stringLiteralKinds: shape.stringLiteralKinds ?? [],
 			numericKinds: shape.numericLiteralKinds ?? [],
 			negationKind: shape.negationKind,
+			operatorKinds: shape.numericOperatorKinds ?? [],
+			parenKind: shape.parenKind,
 			stringFold: plugin.stringFoldSupport()
 		};
 	}
@@ -85,6 +88,44 @@ final class ConstantFieldScan {
 	public static function isScalarLiteral(init: QueryNode, seams: ConstantFieldSeams): Bool {
 		return seams.literalKinds.contains(init.kind) || seams.negationKind != null && init.kind == seams.negationKind
 			&& init.children.length == 1 && seams.numericKinds.contains(init.children[0].kind);
+	}
+
+	/**
+	 * Whether `init` is a value the compiler knows and every reader would share: an
+	 * `inlineConstantLiteralKinds` literal, a `negationKind` over a numeric one, or a PLAIN string
+	 * literal. `literalOf` is what makes the string arm safe — it answers null for an interpolated
+	 * literal, so `'${UUID.uuid()}: close'` refuses exactly like a call in value position.
+	 *
+	 * Moved here from `StaticConstant` (N41), where it was private, so `oversized-type` asks the same
+	 * question rather than writing a second literal test of its own.
+	 */
+	public static function isConstantLiteral(init: QueryNode, source: String, seams: ConstantFieldSeams): Bool {
+		if (isScalarLiteral(init, seams)) return true;
+		final fold: Null<StringFoldSupport> = seams.stringFold;
+		return seams.stringLiteralKinds.contains(init.kind) && fold?.literalOf(init, source) != null;
+	}
+
+	/**
+	 * Whether `node` is a compile-time constant EXPRESSION, read as a POSITIVE whitelist: an
+	 * `isConstantLiteral` literal; an `operatorKinds` operator or a `parenKind` group whose every
+	 * operand is one; or an `identKind` reference whose name `isConstantName` accepts. Which names
+	 * are constants is the caller's question — this module resolves no names, and a caller that
+	 * cannot answer passes `_ -> false`.
+	 *
+	 * Everything else answers false, so a shape this list does not name is never a constant: a
+	 * call, a field access, a cast, an allocation, an interpolated string, `null`. Haxe folds some
+	 * of those (`Std.int(3.5)` is an `inline` initializer it accepts), and a caller that wants the
+	 * compiler's own answer reads the `inline` modifier, which Haxe refuses on any initializer it
+	 * cannot fold.
+	 */
+	public static function isConstantExpression(
+		node: QueryNode, source: String, seams: ConstantFieldSeams, isConstantName: (String) -> Bool
+	): Bool {
+		if (isConstantLiteral(node, source, seams)) return true;
+		final name: Null<String> = node.name;
+		if (node.kind == seams.identKind) return name != null && isConstantName(name);
+		final grouping: Bool = seams.operatorKinds.contains(node.kind) || node.kind == seams.parenKind;
+		return grouping && node.children.length > 0 && node.children.foreach(c -> isConstantExpression(c, source, seams, isConstantName));
 	}
 
 	/**
@@ -149,5 +190,15 @@ typedef ConstantFieldSeams = {
 	final stringLiteralKinds: Array<String>;
 	final numericKinds: Array<String>;
 	final negationKind: Null<String>;
+
+	/**
+	 * `RefShape.numericOperatorKinds` — the operators `isConstantExpression` folds over constant
+	 * operands (arithmetic, relational, bitwise, shift, unary `-` / `~`); empty when unset.
+	 */
+	final operatorKinds: Array<String>;
+
+	/** `RefShape.parenKind` — a grouping `isConstantExpression` sees through; null when unset. */
+	final parenKind: Null<String>;
+
 	final stringFold: Null<StringFoldSupport>;
 };
