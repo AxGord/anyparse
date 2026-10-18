@@ -205,6 +205,23 @@ typedef NamedDecl = {
 }
 
 /**
+ * What a property member's accessor clause says about its storage, as the caller of `NamingSupport.project` reads it
+ * off the source. A clause that cannot be read answers `false` twice, which keeps every reading a grammar gives a
+ * property without the facts.
+ */
+typedef PropertyClause = {
+	/**
+	 * Neither accessor names a storage slot (in Haxe: each is `get` / `set` / `never`, never `default` / `null`). Not yet
+	 * proof of no storage: an annotation in the modifier run (`@:isVar`) can still grant one, and that is the grammar's
+	 * to ask.
+	 */
+	final storageless: Bool;
+
+	/** `storageless`, and the write accessor admits no write at all (`never`). */
+	final readOnly: Bool;
+};
+
+/**
  * One framework's INVOCATION contract: the root type whose subtypes the framework drives, and the
  * member names it reaches BY NAME with no call written anywhere in the project.
  *
@@ -247,12 +264,13 @@ interface NamingSupport {
 	 *
 	 * `properties` answers, on first call, the span starts of the members that declare a property
 	 * accessor clause (`TypeInfoProvider.propertyAccessors`, the grammar-AST fact the tree projection
-	 * drops). A grammar needs it where a projected kind alone cannot tell two categories apart - in
-	 * Haxe, a value of an `enum abstract` from a property declared beside it. A thunk, so a file that
-	 * never asks pays nothing; null when the caller holds no type facts, and an implementation then
-	 * keeps the reading it gives without them.
+	 * drops), each with what the clause says about storage (`PropertyClause`). A grammar needs it where
+	 * a projected kind alone cannot tell two categories apart - in Haxe, a value of an `enum abstract`
+	 * from a property declared beside it - and where the clause decides which rule names a property. A
+	 * thunk, so a file that never asks pays nothing; null when the caller holds no type facts, and an
+	 * implementation then keeps the reading it gives without them.
 	 */
-	public function project(tree: QueryNode, ?properties: () -> Map<Int, Bool>): Array<NamedDecl>;
+	public function project(tree: QueryNode, ?properties: () -> Map<Int, PropertyClause>): Array<NamedDecl>;
 
 	/**
 	 * The effective naming policy for the file at `path`: a discovered project

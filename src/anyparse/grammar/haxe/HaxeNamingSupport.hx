@@ -7,6 +7,7 @@ import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.NamingPolicy.PropertyClause;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -188,7 +189,7 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	public function new() {}
 
-	public function project(tree: QueryNode, ?properties: () -> Map<Int, Bool>): Array<NamedDecl> {
+	public function project(tree: QueryNode, ?properties: () -> Map<Int, PropertyClause>): Array<NamedDecl> {
 		final out: Array<NamedDecl> = [];
 		walk(tree, [], {
 			typeName: null,
@@ -271,6 +272,28 @@ final class HaxeNamingSupport implements NamingSupport {
 				// taken — `_height` next to an inherited `height` is the shape that found this: the
 				// stripped name collides, and the constant's own siblings are UPPER_SNAKE anyway.
 				normalizeAlt: HaxeIdentifierCase.upperSnakeConstant
+			},
+			{
+				category: NamingCategory.Field,
+				requireMods: ['public', 'static', HaxePropertyStorage.READ_ONLY_MOD],
+				forbidMods: [],
+				format: new EReg("^([A-Z][A-Z0-9_]*|[a-z][a-zA-Z0-9]*)$", ''),
+				label: 'UPPER_SNAKE or camelCase static read-only property',
+				// A6 (b): a public static `(get, never)` with no storage reads as a constant, so it takes the static-final
+				// rule's format and both of its corrections.
+				normalize: HaxeIdentifierCase.stripUnderscorePrefix,
+				normalizeAlt: HaxeIdentifierCase.upperSnakeConstant
+			},
+			{
+				category: NamingCategory.Field,
+				requireMods: [HaxePropertyStorage.STORAGELESS_MOD],
+				forbidMods: ['public', 'static'],
+				format: new EReg("^_?[a-z][a-zA-Z0-9]*$", ''),
+				label: 'camelCase storage-less property',
+				// A6 (a): a private property with no storage is a method in disguise, and the `_` marks a private FIELD, so
+				// the prefix is neither required nor forbidden here. The correction is the public field's: only a leading
+				// underscore is derivable, and every other spelling stays report-only.
+				normalize: HaxeIdentifierCase.stripUnderscorePrefix
 			},
 			{
 				category: NamingCategory.Field,
@@ -463,8 +486,14 @@ final class HaxeNamingSupport implements NamingSupport {
 		if (parent != null && parent.kind == 'EnumAbstractDecl' && isEnumAbstractValue(node, mods, enclosing.properties))
 			category = NamingCategory.EnumValue;
 		final name: Null<String> = node.name;
-		if (category != null && name != null)
-			out.push(namedDeclOf(node, parent, ancestors, category, name, mods, structural, enclosing.typeName, enclosing.rtti));
+		if (category != null && name != null) {
+			// Re-bound: the call below ends the narrowing of a `var`.
+			final kind: NamingCategory = category;
+			final declMods: Array<String> = mods.concat(HaxePropertyStorage.modsOf(
+				node, kind, inherited == null, enclosing.properties, () -> leadingRun(node, ancestors, NamingCategory.Field)
+			));
+			out.push(namedDeclOf(node, parent, ancestors, kind, name, declMods, structural, enclosing.typeName, enclosing.rtti));
+		}
 		// A type decl becomes the enclosing type of its descendants — its name is
 		// on the node carrying category Type (the inner ClassForm for a final
 		// class, the flattened AbstractClassDecl for an abstract class).
@@ -635,31 +664,39 @@ final class HaxeNamingSupport implements NamingSupport {
 	private static function metaInRun(
 		node: QueryNode, ancestors: Array<QueryNode>, target: NamingCategory, ?metaName: String, ?except: String
 	): Bool {
+		return leadingRun(
+			node, ancestors, target
+		).exists(sibling -> isMetaKind(sibling.kind) && (metaName == null ? sibling.name != except : sibling.name == metaName));
+	}
+
+	/**
+	 * The siblings making up `node`'s leading run, nearest first: the modifiers, the annotations and the conditional
+	 * regions it crosses, continuing one level out from inside a region - the walk `metaInRun` describes, which reads its
+	 * answer off this list. A region the run crosses is listed itself, so a caller can tell a run every build sees from
+	 * one that steps over a `#if`.
+	 */
+	private static function leadingRun(node: QueryNode, ancestors: Array<QueryNode>, target: NamingCategory): Array<QueryNode> {
+		final run: Array<QueryNode> = [];
 		var subject: QueryNode = node;
 		var depth: Int = ancestors.length - 1;
 		while (depth >= 0) {
 			final parent: QueryNode = ancestors[depth];
-			final inRegion: Bool = parent.kind == 'Conditional';
 			final siblings: Array<QueryNode> = parent.children;
 			var i: Int = siblings.indexOf(subject) - 1;
 			while (i >= 0) {
 				final sibling: QueryNode = siblings[i];
-				i--;
 				final kind: String = sibling.kind;
-				if (isMetaKind(kind)) {
-					if (metaName == null ? sibling.name != except : sibling.name == metaName) return true;
-					continue;
-				}
-				final crossable: Bool = kind == 'Conditional' ? !holdsRunTarget(sibling, target) : MOD_KIND_TO_NAME.exists(kind);
-				if (crossable) continue;
-				if (!inRegion) return false;
-				break;
+				final crossable: Bool = isMetaKind(kind)
+					|| (kind == 'Conditional' ? !holdsRunTarget(sibling, target) : MOD_KIND_TO_NAME.exists(kind));
+				if (!crossable) break;
+				run.push(sibling);
+				i--;
 			}
-			if (!inRegion) return false;
+			if (parent.kind != 'Conditional') return run;
 			subject = parent;
 			depth--;
 		}
-		return false;
+		return run;
 	}
 
 	/**
@@ -893,7 +930,9 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * Without `properties` the caller holds no type facts, and every such member stays a value - the
 	 * reading this projection gave before it could tell them apart.
 	 */
-	private static function isEnumAbstractValue(node: QueryNode, mods: Array<String>, properties: Null<() -> Map<Int, Bool>>): Bool {
+	private static function isEnumAbstractValue(
+		node: QueryNode, mods: Array<String>, properties: Null<() -> Map<Int, PropertyClause>>
+	): Bool {
 		if (node.kind != 'FinalMember' && node.kind != 'VarMember') return false;
 		if (properties == null) return true;
 		final span: Null<Span> = node.span;
@@ -926,5 +965,5 @@ private typedef Enclosing = {
 	final typeName: Null<String>;
 	final rtti: Bool;
 	final isExtern: Bool;
-	final properties: Null<() -> Map<Int, Bool>>;
+	final properties: Null<() -> Map<Int, PropertyClause>>;
 };
