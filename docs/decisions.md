@@ -3931,3 +3931,16 @@ decided the question; it may not become a record of runs.
   chain, a `while` condition and two joined arms compile — exactly `nonNullVisible`'s positive list. Rejected: dropping
   the finding (the guard IS dead at run time; `dead-safe-nav` keeps its finding the same way), and dropping
   `RiskyFix` for `dead-null-guard` (the net still guards the control-flow rewrites) — branch `feat/infra-N36`
+- N36 (4) — `hxq lint src --fix` over all anyparse src died at node's default heap (N25: OOM at 2371 s). Measured
+  in-process (heapUsed after a forced GC at every pass and phase end, sampling heap profiles; RSS was useless on a
+  swapping shared box): no per-pass leak — a 337-file run's live set was flat at 2.1-2.3 GB over 12 passes and the
+  risky / oracle-assisted / follow-up phases — but the run kept, for its whole length, every text it ever PARSED:
+  `CachingGrammarPlugin`'s memos are keyed by content, so every superseded version of a file and every speculative
+  text `BodySlotGuard` splices to judge one check's edit set stayed parsed, with its `RefsCache` index. →
+  `retainSources(live)` drops every content-keyed memo not keyed by a current source (and the refs index of each
+  dropped tree); `applyLintPass` calls it at each pass head and before each file's fixes. Full src, default heap,
+  the N25 input: completes (2361 s), output byte-identical to N25's 16 GB run; forced-GC live at pass-1 end
+  3152 -> 1783 MB with the per-file prune. Rejected: not memoising speculative parses at all (a `GrammarPlugin` has no
+  "transient parse" seam, and the canonical gate re-parses the same spliced text right after the guard, so the memo
+  is worth keeping for the length of one file); an LRU bound (a size is a guess, the pass boundary is a fact) —
+  branch `feat/infra-N36`
