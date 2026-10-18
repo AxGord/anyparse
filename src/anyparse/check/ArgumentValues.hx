@@ -6,6 +6,7 @@ import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.TypeInfoProvider;
+import anyparse.runtime.SortedOffsets;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -55,6 +56,9 @@ final class ArgumentValues {
 
 	/** File -> its declarations' written types (`typeSourcesOf`). */
 	private final _typeSources: Map<String, Map<Int, String>> = [];
+
+	/** File -> the offsets `typeSourcesOf` answers for, ascending (`annotationOf`). */
+	private final _typeSourceOffsets: Map<String, Array<Int>> = [];
 
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
@@ -237,10 +241,18 @@ final class ArgumentValues {
 		final span: Null<Span> = decl.span;
 		if (span == null) return null;
 		final sources: Map<Int, String> = typeSourcesOf(file);
-		var best: Int = -1;
-		for (at in sources.keys()) if (at >= span.from && at < span.to && (best < 0 || at < best)) best = at;
+		final best: Int = SortedOffsets.firstIn(typeSourceOffsetsOf(file, sources), span.from, span.to);
 		final written: Null<String> = best < 0 ? null : sources[best];
 		return written == null ? null : ~/\s+/g.replace(written, '');
+	}
+
+	private function typeSourceOffsetsOf(file: String, sources: Map<Int, String>): Array<Int> {
+		final known: Null<Array<Int>> = _typeSourceOffsets[file];
+		if (known != null) return known;
+		final offsets: Array<Int> = [for (at in sources.keys()) at];
+		offsets.sort(Reflect.compare);
+		_typeSourceOffsets[file] = offsets;
+		return offsets;
 	}
 
 	/** The written types of every annotated declaration of `file`, by binding offset (`TypeInfoProvider.declaredTypeSources`). */

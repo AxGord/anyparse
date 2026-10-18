@@ -1068,6 +1068,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.runtime.InputTest',
 		'unit.runtime.ParseErrorTest',
 		'unit.runtime.SameItemsTest',
+		'unit.runtime.SortedOffsetsTest',
 		'unit.runtime.SpanTest'
 	];
 
@@ -4642,7 +4643,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-COND-ALTERNATIVE-REGIONS,M-COND-ALTERNATIVE-SPLIT',
 			'unit.runtime.SameItemsTest#testDifferentLengthsDiffer :: guard :: ',
 			'unit.runtime.SameItemsTest#testEqualItemsInOrderAreTheSame :: guard :: ',
-			'unit.runtime.SameItemsTest#testSameLengthDifferentItemsDiffer :: control :: M-SAMEITEMS-LENGTH-ONLY'
+			'unit.runtime.SameItemsTest#testSameLengthDifferentItemsDiffer :: control :: M-SAMEITEMS-LENGTH-ONLY',
+			'unit.runtime.SortedOffsetsTest#testAnOffsetBelowTheRangeIsNotInIt :: control :: M-SORTED-OFFSETS-LOWER-BLIND',
+			'unit.runtime.SortedOffsetsTest#testTheLowerBoundIsInclusive :: guard :: ',
+			'unit.runtime.SortedOffsetsTest#testTheUpperBoundIsExclusive :: control :: M-SORTED-OFFSETS-UPPER-BLIND'
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -7861,7 +7865,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-NULLFLOW-MEMO-TYPES-BLIND',
 			'M-NULLFLOW-MEMO-SOURCE-BLIND',
 			'M-NULLFLOW-MEMO-NOT-FORGOTTEN',
-			'M-SAMEITEMS-LENGTH-ONLY'
+			'M-SAMEITEMS-LENGTH-ONLY',
+			'M-SORTED-OFFSETS-LOWER-BLIND',
+			'M-SORTED-OFFSETS-UPPER-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

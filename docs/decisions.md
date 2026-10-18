@@ -4056,3 +4056,10 @@ decided the question; it may not become a record of runs.
   deleted. TM `--all` 13.96 -> 13.58 s; live heap at exit +43 MB (775 -> 818). Rejected: a copy per visit (+260 MB
   live); fanning one walk out to every consumer at once (the rules run one after another, each over all files; a
   shared walk would have to hold the other rules' callbacks and violations) — branch `feat/infra-N37`
+- N37 (3) — two linear lookups in `thread-safety`'s hot path: `ArgumentValues.annotationOf` read the written type of
+  a declaration by scanning EVERY key of the file's offset -> type map (an `IntMap.keys()` array built per call) for the
+  smallest one inside the declaration's span, and `AllocationSets.fileOf` scanned every call-graph node per question.
+  → the offsets are sorted once per file and answered by binary search (`SortedOffsets.firstIn`, runtime/, the
+  smallest offset in `[from, to)` — the same answer); `fileOf` remembers each owner's answer for the run, like the
+  class's other per-run memos (the graph does not change under it). `--rule thread-safety` 4.35 -> 4.06 s, `--all`
+  13.41 -> 13.17 s — branch `feat/infra-N37`

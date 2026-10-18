@@ -25330,6 +25330,22 @@
 			"find": "for (i => item in a) if (item != b[i]) return false;",
 			"replace": "{}",
 			"note": "two arrays of one length count as the same whatever they hold"
+		},
+		{
+			"name": "M-SORTED-OFFSETS-LOWER-BLIND",
+			"type": "anyparse.runtime.SortedOffsets",
+			"method": "firstIn",
+			"find": "if (sorted[mid] < from) lo = mid + 1 else hi = mid;",
+			"replace": "hi = mid;",
+			"note": "the search never moves past an offset below the range, so the first offset of the array answers"
+		},
+		{
+			"name": "M-SORTED-OFFSETS-UPPER-BLIND",
+			"type": "anyparse.runtime.SortedOffsets",
+			"method": "firstIn",
+			"find": "return lo < sorted.length && sorted[lo] < to ? sorted[lo] : -1;",
+			"replace": "return lo < sorted.length ? sorted[lo] : -1;",
+			"note": "an offset at or past the upper bound answers, so ArgumentValues reads the written type of the NEXT declaration"
 		}
 	]
 }

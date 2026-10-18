@@ -32,6 +32,9 @@ final class AllocationSets {
 	/** Each file -> the type names its imports bind (`importsOf`). */
 	private final _imports: Map<String, FileImports> = [];
 
+	/** Each owner type -> the file `fileOf` answered for it. */
+	private final _ownerFiles: Map<String, Null<String>> = [];
+
 	private final _graph: CallGraph;
 	private final _sites: LockSites;
 	private final _shape: RefShape;
@@ -168,8 +171,14 @@ final class AllocationSets {
 
 	/** The file declaring the type `owner`, as the file of one of its functions; null when the graph holds none. */
 	private function fileOf(owner: String): Null<String> {
-		for (node in _graph.nodes) if (node.typeName == owner) return node.file;
-		return null;
+		if (_ownerFiles.exists(owner)) return _ownerFiles[owner];
+		var found: Null<String> = null;
+		for (node in _graph.nodes) if (node.typeName == owner) {
+			found = node.file;
+			break;
+		}
+		_ownerFiles[owner] = found;
+		return found;
 	}
 
 	/**
