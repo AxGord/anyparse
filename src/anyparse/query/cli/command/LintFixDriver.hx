@@ -297,7 +297,7 @@ final class LintFixDriver {
 		// Only this pass's texts may be asked about again; every superseded version, and every
 		// speculative text an earlier pass parsed to judge one check's edits, would otherwise stay
 		// memoised for the rest of the run.
-		cached.retainSources([for (entry in files) entry.source]);
+		cached.retainSources(passSources(files, []));
 		// a file an earlier pass rewrote no longer holds the text the compile's facts describe
 		cached.compilerFactsEdited(changedFiles, originals);
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
@@ -363,7 +363,7 @@ final class LintFixDriver {
 			if (fileViolations.length == 0) continue;
 			// The previous file's speculative parses go before this one makes its own: within one
 			// pass they are what grows, one edit set per check per file.
-			cached.retainSources([for (other in files) other.source].concat([for (other in active) other.source]));
+			cached.retainSources(passSources(files, active));
 			final groups: Array<RuleEdits> = collectFileLintEdits(entry.source, fileViolations, checks, cached, index);
 			if (contributedEdits(groups).length == 0) {
 				ledgerFileLintEdits(ledger, groups, passes == 1, checks);
@@ -1259,6 +1259,13 @@ final class LintFixDriver {
 		changedFiles.resize(0);
 		for (file in stillChanged) changedFiles.push(file);
 		return takenBack;
+	}
+
+	/** The texts a pass may still ask about: every file's current source, and the active subset's. */
+	private static function passSources(
+		files: Array<{ file: String, source: String }>, active: Array<{ file: String, source: String }>
+	): Array<String> {
+		return [for (entry in files) entry.source].concat([for (entry in active) entry.source]);
 	}
 
 }
