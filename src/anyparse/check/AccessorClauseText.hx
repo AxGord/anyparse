@@ -27,12 +27,29 @@ using StringTools;
 @:nullSafety(Strict)
 final class AccessorClauseText {
 
+	/** The accessor that admits no access at all. */
+	private static inline final NEVER_ACCESSOR: String = 'never';
+
+	/**
+	 * The accessor identifiers that give a property no storage of its own: a call through `get_` / `set_`, or no access at
+	 * all. Haxe makes a property physical when either accessor is `default` / `null` or it carries `@:isVar` (4.3.7: a
+	 * `(get, never)` getter reading its own name is "not a real variable"), so a clause whose two slots both come from this
+	 * list has storage only when `@:isVar` grants it. A positive list: `dynamic`, and any spelling not here, is not
+	 * proven storage-less.
+	 */
+	private static final STORAGELESS_ACCESSORS: Array<String> = ['get', 'set', 'never'];
+
+	/** Whether the write accessor of `clause` is `never` - no write from anywhere, the declaring type included. */
+	public static inline function writesNever(clause: AccessorClause): Bool {
+		return clause.write == NEVER_ACCESSOR;
+	}
+
 	/**
 	 * The two accessor identifiers of a property's `(read, write)` clause, read from the
 	 * source right after the field name — or null when the member is a plain field (no `(`
 	 * clause) or the clause is malformed. `span.from` is at the `var` keyword.
 	 */
-	public static function accessorClause(source: String, span: Span): Null<{ read: String, write: String }> {
+	public static function accessorClause(source: String, span: Span): Null<AccessorClause> {
 		final open: Int = accessorParenOpen(source, span);
 		if (open < 0) return null;
 		final n: Int = source.length;
@@ -78,6 +95,22 @@ final class AccessorClauseText {
 		return afterName < 0 || paren == null ? null : new Span(afterName, paren.to);
 	}
 
+	/**
+	 * Whether neither slot of `clause` names a storage slot (see `STORAGELESS_ACCESSORS`). The `@:isVar` half of the
+	 * question is the caller's: the annotation sits in the member's modifier run, not in the clause.
+	 */
+	public static function storageless(clause: AccessorClause): Bool {
+		return STORAGELESS_ACCESSORS.contains(clause.read) && STORAGELESS_ACCESSORS.contains(clause.write);
+	}
+
+	/**
+	 * `accessorClause` for the property whose `var` keyword starts at `from` - the key the span-indexed type facts
+	 * (`TypeInfoProvider.propertyAccessors`) carry. Only that start is read, so no member span is needed.
+	 */
+	public static function accessorClauseAt(source: String, from: Int): Null<AccessorClause> {
+		return accessorClause(source, new Span(from, from));
+	}
+
 	/** Whether `c` is a space or a tab (a line-internal separator, newline excluded). */
 	private static inline function isHorizontalSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code;
@@ -121,3 +154,6 @@ final class AccessorClauseText {
 	}
 
 }
+
+/** The two accessor identifiers of a property's `(read, write)` clause, as written. */
+typedef AccessorClause = { read: String, write: String };

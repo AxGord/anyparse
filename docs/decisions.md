@@ -4085,3 +4085,36 @@ decided the question; it may not become a record of runs.
   900 lines); exempting a type from the line limit only when it is ALL constants (a mixed type would then measure its
   table as behaviour, the inconsistency the member half was fixed for). `StaticConstant.isConstantLiteral` moved to
   `ConstantFieldScan` (the one literal test both rules ask) — branch `feat/infra-N41`
+- N40 — `swallowed-exception` reported `catch (exception:Exception) { threw = true; }` whose `threw` the code after the
+  try reads (TM `ApplicationSettingsLibraryPathTest.hx:117, 222`): the failure became a value the function acts on, so
+  nothing was swallowed (user decision 2026-10-18, A10). → exempt a catch body that is POSITIVELY an outcome record:
+  every statement an expression statement assigning (plain `=`) a constant (`MemberKinds.isMovableLiteral`: a literal
+  or a negated number, reading nothing) to an identifier `Refs` binds to a `localDeclKinds` declaration, and each such
+  local read — a `Read` hit of the SAME binding — in a later statement of a statement list
+  (`ControlFlowSupport.blockKinds`) enclosing the try, inside the innermost function around it
+  (`ShapeVocab.functionLikeKinds`). Everything else keeps today's verdict: a field, a parameter, a loop or catch variable; a computed value or
+  a compound assignment; a call or a nested statement in the body; a local read only before the try (a back edge
+  through a loop is a path, but not one this proves), only in another arm of a branch the try sits in, or only through
+  another declaration of its name; a read only outside the closure the try sits in (the closure runs whenever it is
+  called). A first draft also required the declaration inside that function: its arm survived — the bounded read
+  already rejects the closure case — and a captured local read after the try INSIDE the closure is a real outcome, so
+  it went. The exception referenced in the
+  body was already "handled", so `err = exception;` needed nothing new. No per-check binder: the write and the reads
+  are `Refs.find` hits — branch `feat/infra-N40`
+- N39 A6 — the built-in policy named every property by the FIELD rules: `private var active(get, never)` was told to
+  take the private-field `_`, and `public static var LIBRARY_PATH(get, never)` to be camelCase (11 + 3 TM sites). The
+  user's rule reserves `_` for private FIELDS, not methods, and a property with no storage is a method in disguise;
+  a static read-only one is read like a constant. → the user decided (2026-10-18): a private storage-less property is
+  exempt from the prefix (`camelCase storage-less property`, `_` neither required nor forbidden — forbidding it would
+  have added three report-only TM findings the decision did not ask for), and a public static `(get, never)` takes the
+  static-final format. Storage-less is a POSITIVE proof (Haxe 4.3.7: a `(get, never)` getter reading its own name is
+  "not a real variable"; `@:isVar` or a `default` / `null` slot gives storage; `(never, never)` does not compile):
+  both slots in `AccessorClauseText.STORAGELESS_ACCESSORS` (moved there from `RedundantIsVar`, which now asks
+  `storageless`), no `@:isVar` in the leading run, and a run crossing no `#if` region (`HaxeNamingSupport.leadingRun`,
+  which `metaInRun` now reads its answer off). Anything unproven keeps the field rule. The facts reach the projection
+  through the existing `NamingSupport.project` thunk, widened from "has a clause" to a `PropertyClause`; the grammar
+  confers the neutral modifiers `storageless` / `readOnly` and the built-in rules select on them, so a checkstyle
+  policy (which never names them) is unchanged. The (b) fix is the ordinary rename machinery — a static property's
+  accessors are always beside it, so it refuses as rename-unsafe; no new engine. Rejected: recategorising the
+  property as a Method or Constant (it would move checkstyle's `MemberName` jurisdiction and every consumer that
+  reads the category: hoist, privatize, the cross-file arms) — branch `feat/infra-N39`
