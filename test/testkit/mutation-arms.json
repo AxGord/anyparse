@@ -24858,7 +24858,7 @@
 			"method": "insertSorted",
 			"find": "entries.sort((a, b) -> Reflect.compare(a.key, b.key));",
 			"replace": "",
-			"note": "entries given out of order are placed in the order given, so a later gap swallows an earlier entry"
+			"note": "entries sharing a gap keep the order they were given in, so `['b', 'a']` into an empty array stays unsorted"
 		},
 		{
 			"name": "M-SORTED-SPLITS-DOC",
@@ -24867,6 +24867,14 @@
 			"find": "ElementSpan.docExtendedSpan(source, existing[gap].span, regions, true).from",
 			"replace": "existing[gap].span.from",
 			"note": "an entry lands between the next element and its doc, which then documents the entry"
+		},
+		{
+			"name": "M-REMOVE-COMMA-LINE-KEPT",
+			"type": "anyparse.query.ElementSpan",
+			"method": "elementCut",
+			"find": "? lineExtendedSpan(source, commaExtendedSpan(source, span))",
+			"replace": "? commaExtendedSpan(source, span)",
+			"note": "removing a one-per-line element leaves its indentation and line break behind, a blank line inside the list"
 		}
 	]
 }

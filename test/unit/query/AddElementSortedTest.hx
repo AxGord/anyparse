@@ -15,8 +15,6 @@ import utest.Test;
 class AddElementSortedTest extends Test {
 
 	/** Two entries, given out of order, each land in their own gap. */
-	@:pin('control')
-	@:killer('M-SORTED-UNSORTED-ENTRIES')
 	public function testEachEntryLandsAtItsSortedPosition(): Void {
 		assertSorted(list("'a', 'c', 'e'"), "'d', 'b'", list("'a', 'b', 'c', 'd', 'e'"));
 	}
@@ -31,7 +29,11 @@ class AddElementSortedTest extends Test {
 		assertSorted(list("'a', 'b'"), "'Z'", list("'Z', 'a', 'b'"));
 	}
 
-	/** An empty array takes the entries in order. */
+	/**
+	 * An empty array takes the entries in order — one gap, so the order is the sort's, not the argument's.
+	 */
+	@:pin('control')
+	@:killer('M-SORTED-UNSORTED-ENTRIES')
 	public function testEmptyArray(): Void {
 		assertSorted(list(''), "'b', 'a'", list("'a', 'b'"));
 	}

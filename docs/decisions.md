@@ -3934,3 +3934,7 @@ decided the question; it may not become a record of runs.
   element now follows the existing separator and takes it over (`'b', 'x',`), also past trailing comments.
   `NamingCrossRenameTest.testTheOracleRunRenamesAndRevertsTheMiss` needed a NEW miss for the oracle to revert, since
   the aliased import it used is renamed now: a typedef alias of a class read as a bare VALUE — branch `feat/infra-N35`
+- N35 (2c) — `remove-element` of a comma-list element that holds a WHOLE line of a one-per-line list (`'x',` with
+  its comma) left the line's indentation and break behind — a blank line inside the array, kept by the writer as
+  trivia (met removing a pin from `TestDiscoveryParityTest`). `ElementSpan.elementCut` now line-extends the
+  comma-extended cut (`lineExtendedSpan` changes nothing when the cut does not own its line) — branch `feat/infra-N35`

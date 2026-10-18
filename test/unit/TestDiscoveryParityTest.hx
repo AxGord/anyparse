@@ -3321,7 +3321,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.AddElementSliceTest#testInsertBeforeAFinalClassAddressedThroughItsForm :: control :: M-LIFT-FINAL-WRAPPER-SKIPPED',
 			'unit.query.AddElementSortedTest#testConcatenatedEntriesSortByTheirValue :: control :: M-SORTED-NO-CONCAT',
 			'unit.query.AddElementSortedTest#testDuplicateIsRefused :: control :: M-SORTED-DUP-UNCHECKED',
-			'unit.query.AddElementSortedTest#testEachEntryLandsAtItsSortedPosition :: control :: M-SORTED-UNSORTED-ENTRIES',
+			'unit.query.AddElementSortedTest#testEmptyArray :: control :: M-SORTED-UNSORTED-ENTRIES',
 			'unit.query.AddElementSortedTest#testEntryLandsAboveTheNextElementsDoc :: control :: M-SORTED-SPLITS-DOC',
 			'unit.query.AddElementSortedTest#testEscapedOrInterpolatedEntryIsRefused :: control :: M-SORTED-RAW-ESCAPES',
 			'unit.query.AddElementSortedTest#testNonArrayContainerIsRefused :: control :: M-SORTED-ANY-CONTAINER',
@@ -4460,6 +4460,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RefShapeKindProjectionTest#testEveryProjectedKindIsOneSomeSourceEmits :: control :: M-ELLIPSIS-STMT-TOKEN-STALE',
 			'unit.query.RemoveElementSliceTest#testRemoveFinalClassTakesItsFinal :: control :: '
 				+ 'M-DECLSPAN-FINAL-WRAPPER-BLIND,M-LIFT-FINAL-WRAPPER-SKIPPED',
+			'unit.query.RemoveElementSliceTest#testRemoveOnePerLineElementTakesItsLine :: control :: ' + 'M-REMOVE-COMMA-LINE-KEPT',
 			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 				+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
@@ -7725,7 +7726,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-SORTED-RAW-ESCAPES',
 			'M-SORTED-NO-CONCAT',
 			'M-SORTED-UNSORTED-ENTRIES',
-			'M-SORTED-SPLITS-DOC'
+			'M-SORTED-SPLITS-DOC',
+			'M-REMOVE-COMMA-LINE-KEPT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

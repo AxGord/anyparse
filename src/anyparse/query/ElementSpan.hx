@@ -557,8 +557,12 @@ final class ElementSpan {
 		var isComma: Bool = adjacentToComma(source, span);
 		if (!isComma && parent != null) isComma = MemberKinds.COMMA_CONTAINER_KINDS.contains(parent.kind);
 
-		// A comma list has no blank separators, so only the line branch gives one back.
-		final cut: Span = isComma ? commaExtendedSpan(source, span) : blankExtendedSpan(source, lineExtendedSpan(source, span));
+		// A comma list has no blank separators, so only the line branch gives one back. An element that
+		// held a whole line of a one-per-line list (`'x',` with its comma) takes the line with it: the cut
+		// used to leave the line's indentation and break behind, a blank line the writer keeps as trivia.
+		final cut: Span = isComma
+			? lineExtendedSpan(source, commaExtendedSpan(source, span))
+			: blankExtendedSpan(source, lineExtendedSpan(source, span));
 		return { span: cut, doc: span.from < group.from, annotations: annotationPrefixCount(node, parent) };
 	}
 
