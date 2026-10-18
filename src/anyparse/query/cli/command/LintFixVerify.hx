@@ -141,7 +141,7 @@ final class LintFixVerify {
 					coverage: verified.coverage
 				};
 				for (f in verified.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
-				ledgerRiskyTallies(ledger, verified);
+				ledgerRiskyTallies(ledger, verified, [for (c in riskyChecks) if (c is RiskyArm) c.id()]);
 				// The three clauses in a local, so the sentence above keeps the shape it had: the
 				// declined / excluded / bisect tails are each empty on an ordinary run, and spelled
 				// inline they push the segment past the line width.
@@ -183,11 +183,31 @@ final class LintFixVerify {
 	 * Reached only from a phase that actually RAN its checks. `declined` also stays a
 	 * once-per-run count here, which is what keeps it comparable with `reported`; the risky phase
 	 * runs once by construction, so it needs no equivalent of the safe loop's `countDeclines`.
+	 *
+	 * `armRules` are the `RiskyArm` rules among them, and their findings are NOT new to the ledger: such a rule ran in
+	 * the safe loop too, which counted every one of its findings in `reported` and declined the ones its risky arm owns
+	 * as hand-offs (`RuleFixOutcome.handedOff`). So an arm's tallies add no `reported`, and the hand-offs are taken back
+	 * out of `declined` and `reasons` first — the arm's own verdict, landed or declined, is the one that stands. Adding
+	 * both counted each such finding twice in `reported`, and twice in `declined` wherever the arm landed nothing.
 	 */
-	public static function ledgerRiskyTallies(ledger: Map<String, RuleFixOutcome>, verified: FixVerifyResult): Void {
+	public static function ledgerRiskyTallies(
+		ledger: Map<String, RuleFixOutcome>, verified: FixVerifyResult, armRules: Array<String>
+	): Void {
+		for (rule in armRules) {
+			final entry: Null<RuleFixOutcome> = ledger[rule];
+			if (entry == null) continue;
+			entry.declined -= entry.handedOff;
+			for (handed in entry.handedOffReasons) {
+				final row: Null<{ text: String, count: Int }> = entry.reasons.find(r -> r.text == handed.text);
+				if (row != null) row.count -= handed.count;
+			}
+			entry.reasons = entry.reasons.filter(r -> r.count > 0);
+			entry.handedOff = 0;
+			entry.handedOffReasons = [];
+		}
 		for (tally in verified.tallies) {
 			final entry: RuleFixOutcome = LintFixDriver.ledgerFor(ledger, tally.rule);
-			entry.reported += tally.findings;
+			if (!armRules.contains(tally.rule)) entry.reported += tally.findings;
 			entry.edits += tally.edits;
 			if (tally.edits != 0) continue;
 			entry.declined += tally.findings;

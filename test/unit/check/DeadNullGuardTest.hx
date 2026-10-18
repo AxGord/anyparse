@@ -3,10 +3,12 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.DeadNullGuard;
 import anyparse.check.Linter;
+import anyparse.check.NullSafetyGate;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import unit.CheckFixture;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -723,6 +725,56 @@ class DeadNullGuardTest extends Test {
 		Assert.isTrue(Std.isOfType(check, RiskyFix), 'dead-null-guard removals are oracle-verified');
 	}
 
+	/**
+	 * Every proof Haxe 4.3.7's null-safety does not narrow through keeps its finding with a decline reason and no edit; each
+	 * shape below, its guard dropped, fails with `Cannot return nullable value` (probed). First the N25 self-fix shape
+	 * (`FactsView`): `reads = node != null && …` proves `node`, but dropping the guard of `reads && node != null ? node : x`
+	 * did not compile, and only the oracle's revert stopped it. Then a plain Bool local, an alias copy, a lone surviving
+	 * `if` arm and a `try` body.
+	 */
+	@:pin('control') @:killer('M-DNG-UNSEEN-DROPPED', 'M-NSG-GATE-NEVER', 'M-DNG-DECLINED-FIXED')
+	public function testEveryUnseenProofKeepsNoFixUnderNullSafety(): Void {
+		assertUnseenDeclined(
+			nullSafeString('final reads: Bool = node != null && node.length > 1; return reads && node != null ? node : other;')
+		);
+		assertUnseenDeclined(nullSafeString('final ok: Bool = node != null; return ok && node != null ? node : other;'));
+		assertUnseenDeclined(nullSafeString(
+			'final v: Null<String> = node; if (node == null) return other; return other.length > 0 && v != null ? v : other;'
+		));
+		assertUnseenDeclined(nullSafeString(
+			'if (other.length > 0) { if (node == null) return other; } else { return other; } return other.length > 1 && node != null ? node : other;'
+		));
+		assertUnseenDeclined(nullSafeString(
+			'try { if (node == null) return other; } catch (e: haxe.Exception) { return other; } return other.length > 1 && node != null ? node : other;'
+		));
+	}
+
+	/** The controls: a nested guard and an early exit are narrowings the compiler performs too, so the guard still goes. */
+	@:pin('control') @:killer('M-DSN-UNSEEN-ALL', 'M-NSG-VISIBLE-IGNORED')
+	public function testVisibleProofKeepsTheFixUnderNullSafety(): Void {
+		assertVisibleFixed(nullSafeString('if (node != null) return other.length > 1 && node != null ? node : other; return other;'));
+		assertVisibleFixed(nullSafeString('if (node == null) return other; return other.length > 1 && node != null ? node : other;'));
+	}
+
+	/** Without null-safety — no `@:nullSafety`, a project with no oracle build — nothing typechecks the narrowing: the fix stays. */
+	@:pin('control') @:killer('M-DSN-NULLSAFE-ALWAYS')
+	public function testBoolAliasProofKeepsTheFixWithoutNullSafety(): Void {
+		#if (sys || nodejs)
+		final src: String = 'class C { function f(node:Null<String>, other:String):String {'
+			+ ' final reads = node != null && node.length > 1; return reads && node != null ? node : other; } }';
+		final dir: String = CliFixture.writeDir('dngplain', [{ name: 'apqlint.json', source: '{}' }]);
+		final check: DeadNullGuard = new DeadNullGuard();
+		final files: Array<{ file: String, source: String }> = [{ file: '$dir/C.hx', source: src }];
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
+		CliFixture.removeDir(dir);
+		Assert.equals(1, vs.length);
+		Assert.isNull(vs[0].declineReason, 'nothing judges the narrowing here');
+		Assert.equals(1, CheckFixture.fixIn(check, files, vs).length, 'so the guard is dropped');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** A self-contained module: a non-null `Foo` local `x`, plus a `cond()` helper, wrapping `body`. */
 	private function wrapFoo(body: String): String {
 		return 'class Foo {\n\tpublic function new() {}\n\tpublic function g():Void {}\n}\n\n@:nullSafety(Strict)\nclass C {\n'
@@ -771,6 +823,29 @@ class DeadNullGuardTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violationsIn(new DeadNullGuard(), CheckFixture.withStd(src));
+	}
+
+	/** `src` reports one dead guard whose proof the compiler does not follow: a decline reason and no edit. */
+	private function assertUnseenDeclined(src: String): Void {
+		final check: DeadNullGuard = new DeadNullGuard();
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
+		Assert.equals(1, vs.length, 'the dead guard is still reported: $src');
+		Assert.isTrue(vs[0].declineReason?.indexOf(NullSafetyGate.UNSEEN_PROOF) == 0, 'and says why it gets no fix: $src');
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length, 'no removal the compiler would reject: $src');
+	}
+
+	/** `src` reports one dead guard whose proof the compiler follows: no decline, and the guard goes. */
+	private function assertVisibleFixed(src: String): Void {
+		final check: DeadNullGuard = new DeadNullGuard();
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
+		Assert.equals(1, vs.length, src);
+		Assert.isNull(vs[0].declineReason, src);
+		Assert.equals(1, CheckFixture.fixOf(check, src, vs).length, 'the guard is removed: $src');
+	}
+
+	/** `body` as the body of a strictly null-safe method over a nullable `node` and a `String` fallback. */
+	private static function nullSafeString(body: String): String {
+		return '@:nullSafety(Strict) class C { static function f(node: Null<String>, other: String): String { $body } }';
 	}
 
 }

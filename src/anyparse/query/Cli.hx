@@ -347,6 +347,12 @@ typedef FmtRunResult = {
  *
  * `gateRefusalLines` renders it, in a block of its own under the ledger: an edit-set count and a
  * finding count are different quantities and one header cannot total both.
+ *
+ * `handedOff` / `handedOffReasons` are the share of `declined` / `reasons` that a `RiskyArm` rule's SAFE arm declined
+ * only because its risky arm owns the finding (`riskyArmFindings` / `riskyCrossFileFindings`). They stay in the row
+ * as declines while the risky phase never runs — the run then fixed nothing for those findings — and are taken back
+ * out by `LintFixVerify.ledgerRiskyTallies` when it does run, because the arm's own tallies then answer for the very
+ * same findings and counting both was counting each of them twice.
  */
 typedef RuleFixOutcome = {
 	var reported: Int;
@@ -354,4 +360,6 @@ typedef RuleFixOutcome = {
 	var edits: Int;
 	var reasons: Array<{ text: String, count: Int }>;
 	var refusals: Array<{ text: String, count: Int }>;
+	var handedOff: Int;
+	var handedOffReasons: Array<{ text: String, count: Int }>;
 };

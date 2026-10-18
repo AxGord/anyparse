@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.StdlibPurity;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -31,9 +32,10 @@ using Lambda;
  *
  * A safe skeleton kind (`RefactorSupport.isSafeKind` — the syntactic core, reused rather than
  * restated), a field or index READ whose resolvable first hop is not a property getter, and a
- * provably-pure stdlib call (a `Math` / `Std` / `StringTools` static, minus the
- * non-deterministic members). Everything else — an instance call, a local-function call, a
- * complex-receiver call — is unproven and therefore impure.
+ * call whose callee is a referentially transparent stdlib function
+ * (`StdlibPurity.isTransparentCallee`: the positive table of pure statics, and the `String`
+ * methods on a binding declared `String`). Everything else — an instance call, a local-function
+ * call, a complex-receiver call — is unproven and therefore impure.
  *
  * A BARE identifier is a safe skeleton kind with one exception: unqualified inside its own type
  * it may be a property read, which is a `get_p()` call. That one is asked of the SYMBOL INDEX and
@@ -52,15 +54,6 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class PurityScan {
-
-	/**
-	 * Simple receiver names whose static methods are pure (referentially transparent) stdlib
-	 * operations, so a call on one may be computed once — or dropped.
-	 */
-	private static final PURE_CALL_RECEIVERS: Array<String> = ['Math', 'Std', 'StringTools'];
-
-	/** Members on a `PURE_CALL_RECEIVERS` receiver that are NOT pure (non-deterministic). */
-	private static final IMPURE_MEMBERS: Array<String> = ['random'];
 
 	/**
 	 * The per-file context `isPure` threads through its walk, or null when the grammar leaves the
@@ -109,30 +102,14 @@ final class PurityScan {
 	}
 
 	/**
-	 * The index-free half of `isPureCall`, for a caller that has a grammar but no symbol index:
-	 * whether `call`'s callee is a `Recv.method` field access where `Recv` is a bare identifier in
-	 * `PURE_CALL_RECEIVERS` and `method` is not an `IMPURE_MEMBERS` name. It answers for the CALL
-	 * NODE ONLY — the arguments are the caller's business, so a caller that walks a subtree must
-	 * recurse into them itself (`Std.int(Math.random())` has a pure callee and an impure argument).
-	 */
-	public static function isPureStdlibCall(call: QueryNode, fieldAccessKind: String, identKind: String): Bool {
-		if (call.children.length < 1) return false;
-		final callee: QueryNode = call.children[0];
-		if (callee.kind != fieldAccessKind || callee.children.length != 1) return false;
-		final method: Null<String> = callee.name;
-		if (method == null || IMPURE_MEMBERS.contains(method)) return false;
-		final recv: QueryNode = callee.children[0];
-		return recv.kind == identKind && recv.name != null && PURE_CALL_RECEIVERS.contains(recv.name);
-	}
-
-	/**
-	 * Whether a `callKind` node is a provably-pure stdlib call — its callee is a `Recv.method`
-	 * field access where `Recv` is a bare identifier in `PURE_CALL_RECEIVERS` and `method` is not
-	 * an `IMPURE_MEMBERS` name. Any other callee (an instance method, a local function, a complex
-	 * receiver) is unproven and therefore impure.
+	 * Whether a `callKind` node's callee is a referentially transparent stdlib function — the one
+	 * table `StdlibPurity` holds, so this scan and the deletion predicates
+	 * (`TypeResolver.isDeletionPure`) can never disagree about which `Math` / `Std` / `StringTools` /
+	 * `Path` statics and `String` methods are pure. Any other callee (an instance method, a local
+	 * function, a complex receiver) is unproven and therefore impure.
 	 */
 	private static inline function isPureCall(call: QueryNode, ctx: PurityCtx): Bool {
-		return isPureStdlibCall(call, ctx.fieldAccessKind, ctx.identKind);
+		return StdlibPurity.isTransparentCallee(call, ctx.root, ctx.shape, ctx.declaredTypes, ctx.index);
 	}
 
 	/**

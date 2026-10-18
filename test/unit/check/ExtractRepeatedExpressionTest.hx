@@ -77,6 +77,56 @@ class ExtractRepeatedExpressionTest extends Test {
 		Assert.equals(0, violations('class C { function m() { u(Std.random(10)); u(Std.random(10)); u(Std.random(10)); } }').length);
 	}
 
+	/**
+	 * Effect-free is not transparent. A `StringTools` iterator is a fresh, STATEFUL object per call — one shared by
+	 * three loops is drained by the first — and `Date.now()` reads the clock. The scan's own `Math` / `Std` /
+	 * `StringTools` list took every member but `random`, so it hoisted the iterator; the one stdlib table
+	 * (`TypeResolver`) keeps both out of the transparent set.
+	 */
+	@:pin('control') @:killer('M-STD-EFFECT-FREE-AS-TRANSPARENT')
+	public function testEffectFreeButNotTransparentCallExcluded(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C { function m(s:String) { k(StringTools.iterator(s)); k(StringTools.iterator(s)); k(StringTools.iterator(s)); } }'
+			).length,
+			'a fresh iterator per call'
+		);
+		Assert.equals(0, violations('class C { function m() { k(Date.now()); k(Date.now()); k(Date.now()); } }').length, 'the clock');
+	}
+
+	/**
+	 * A `String` method on a binding declared `String` and a `Path` static are pure stdlib calls too, and the scan
+	 * now sees them through the same table the deletion predicates read — its own list knew neither. `split` answers a
+	 * fresh mutable array, so it is not hoisted.
+	 */
+	@:pin('control') @:killer('M-STD-SPLIT-TRANSPARENT', 'M-PURE-STRING-METHOD-OFF')
+	public function testStringMethodAndPathStaticAreTransparent(): Void {
+		final upper: Array<Violation> =
+			violations('class C { function m(s:String) { k(s.toUpperCase()); k(s.toUpperCase()); k(s.toUpperCase()); } }');
+		Assert.equals(1, upper.length, 'a String method on a String binding');
+		final path: Array<Violation> = violations(
+			'import haxe.io.Path; class C { function m(p:String) { k(Path.directory(p)); k(Path.directory(p)); k(Path.directory(p)); } }'
+		);
+		Assert.equals(1, path.length, 'a Path static');
+		Assert.equals(
+			0, violations('class C { function m(s:String) { k(s.split(",")); k(s.split(",")); k(s.split(",")); } }').length,
+			'a fresh array per split'
+		);
+	}
+
+	/** A project type named like the std one is not the std one: its `int` may do anything. */
+	@:pin('control') @:killer('M-STD-SHADOW-IGNORED')
+	public function testProjectShadowOfAStdTypeExcluded(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class Std { public static function int(v:Float):Int return 0; } class C { function m(v:Float) {'
+				+ ' s(Std.int(v)); s(Std.int(v)); s(Std.int(v)); } }'
+			).length
+		);
+	}
+
 	public function testMutuallyExclusiveBranchesExcluded(): Void {
 		// One occurrence per exclusive switch case — only one runs, so a shared local is pointless.
 		Assert.equals(

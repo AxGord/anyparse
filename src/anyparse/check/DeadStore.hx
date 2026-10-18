@@ -68,7 +68,6 @@ private typedef FixCtx = {
 	var assignKind: Null<String>;
 	var mutableDeclKinds: Array<String>;
 	var declTypeChildKinds: Array<String>;
-	var fieldAccessKind: Null<String>;
 	var emptyFlagKinds: Array<String>;
 	var declaredTypes: Map<Int, String>;
 	var index: Null<SymbolIndex>;
@@ -238,7 +237,6 @@ final class DeadStore implements Check {
 					mutableDeclKinds: mutableDeclKinds,
 					declTypeChildKinds: shape.declTypeChildKinds ?? [],
 					emptyFlagKinds: flow != null ? flow.emptyFlagKinds() : [],
-					fieldAccessKind: shape.fieldAccessKind,
 					declaredTypes: provider != null ? provider.declaredTypes(source) : [],
 					index: index,
 					flagged: RunScan.spanKeys(violations)
@@ -278,10 +276,7 @@ final class DeadStore implements Check {
 		if (ctx.mutableDeclKinds.contains(kind) && isFlagged(ctx, node)) {
 			final init: Null<QueryNode> = NullFlow.declInit(node, ctx.declTypeChildKinds);
 			final initSpan: Null<Span> = init?.span;
-			if (
-				init != null && initSpan != null
-				&& rhsSafeToDelete(init, ctx.root, ctx.shape, ctx.declaredTypes, ctx.index, ctx.fieldAccessKind)
-			) {
+			if (init != null && initSpan != null && rhsSafeToDelete(init, ctx.root, ctx.shape, ctx.declaredTypes, ctx.index)) {
 				final strip: Null<Span> = initializerStripSpan(ctx.source, initSpan);
 				if (strip != null) edits.push({ span: strip, text: '' });
 			}
@@ -293,7 +288,7 @@ final class DeadStore implements Check {
 				final stmtSpan: Null<Span> = stmt.span;
 				if (
 					expr.kind == ctx.assignKind && isFlagged(ctx, expr) && expr.children.length >= 2 && stmtSpan != null
-					&& rhsSafeToDelete(expr.children[1], ctx.root, ctx.shape, ctx.declaredTypes, ctx.index, ctx.fieldAccessKind)
+					&& rhsSafeToDelete(expr.children[1], ctx.root, ctx.shape, ctx.declaredTypes, ctx.index)
 				)
 					deletions.push({ span: ElementSpan.lineExtendedSpan(ctx.source, stmtSpan), text: '' });
 			}
@@ -655,31 +650,21 @@ final class DeadStore implements Check {
 
 	/**
 	 * Whether deleting an assignment / initializer whose right-hand side is `rhs` cannot drop a side
-	 * effect. Three allowances: `rhs` is side-effect-free by shape
-	 * (`RefactorSupport.isSideEffectFree`); it is a provably-pure stdlib call
-	 * (`PurityScan.isPureStdlibCall`) whose every argument is itself safe to delete — the argument
-	 * walk is what refuses `Std.int(Math.random())`, whose callee is pure but whose argument is not;
-	 * or — with a type index — it is a single field read the index proves reads a plain field rather
-	 * than a property getter (the allowance `unused-local` uses). Deleting is stricter than hoisting,
-	 * so `PurityScan.isPure` is deliberately NOT used whole: its optimistic reading of an unresolved
-	 * receiver as a plain field is safe for a caller that computes the expression once, and not for
-	 * one that drops it. Only the call predicate, which needs no index and makes no such assumption,
-	 * is borrowed.
+	 * effect: `rhs` is side-effect-free by shape (`RefactorSupport.isSideEffectFree`), or — with a type
+	 * index — `TypeResolver.isDeletionPure` proves it, the predicate `unused-local` deletes by: a plain
+	 * (non-getter) field read, a side-effect-free stdlib call whose every argument is itself
+	 * deletion-pure (the argument walk is what refuses `Std.int(Math.random())`, whose callee is pure
+	 * but whose argument is not), an array literal of such elements, or a paren / unchecked cast of
+	 * one. Deleting is stricter than hoisting, so `PurityScan.isPure` is deliberately NOT used: its
+	 * optimistic reading of an unresolved receiver as a plain field is safe for a caller that computes
+	 * the expression once, and not for one that drops it. Without an index nothing beyond the shape is
+	 * proven — not even a stdlib call, whose proof needs to know no project type shadows its receiver.
 	 */
 	private static function rhsSafeToDelete(
-		rhs: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>,
-		fieldAccessKind: Null<String>
+		rhs: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>
 	): Bool {
-		if (MemberKinds.isSideEffectFree(rhs, shape)) return true;
-		if (fieldAccessKind == null) return false;
-		final faKind: String = fieldAccessKind;
-		final identKind: Null<String> = shape.identKind;
-		final callKind: Null<String> = shape.callKind;
-		if (identKind == null || (callKind == null || rhs.kind != callKind || !PurityScan.isPureStdlibCall(rhs, faKind, identKind)))
-			return index != null && rhs.kind == faKind && TypeResolver.isPlainFieldRead(rhs, root, shape, declaredTypes, index);
-		for (i in 1...rhs.children.length) if (!rhsSafeToDelete(rhs.children[i], root, shape, declaredTypes, index, fieldAccessKind))
-			return false;
-		return true;
+		return MemberKinds.isSideEffectFree(rhs, shape) || index != null
+			&& TypeResolver.isDeletionPure(rhs, root, shape, declaredTypes, index);
 	}
 
 }
