@@ -4248,3 +4248,51 @@ decided the question; it may not become a record of runs.
   `CliArgs.langNames`, the CODE-grammar registry whose Haxe-sized floors `RefShapeKindProjectionTest` applies —
   `JsonQueryPluginTest` checks its declared kinds against its projection instead. Not done: `patch`, `move-elements`,
   `--sorted` over objects by key, a key containing `>` in a selector — branch `feat/infra-N47`
+- N48 — how a call binds its arguments is ONE model, Haxe's (`ArgumentSlots`), and the argument types it is decided by
+  come from the SHARED walk. (1) `ArgumentSlots.runs`: every way a call may bind, greedy and never backtracking as
+  4.3.7 binds (`f(?a:Int, ?b:String, c:Int)` called `f(1)` is an error, not `c = 1`), over a THREE-valued fit
+  (`Fits` / `Misfits` / `MayFit`): a misfit skips an optional parameter, an undecided fit is followed both ways, a run
+  that cannot compile is dropped — so the answer is a superset of the compiler's (Haxe refuses some skips into a rest
+  parameter the model keeps, `e(?n:Int, ...r:String)` called `e('a', 'b')`). It replaces `ArgumentValues.maySkip` /
+  `sameWrittenType`, which only knew "every optional parameter an argument reaches is written with its own type".
+  (2) The fit is a POSITIVE whitelist (`ArgumentTypes`): two core types (`RefShape.coreValueTypes`, each one no indexed
+  type bears the name of) fit when equal or widening (`Int` to `Float`, probed) and misfit otherwise; `null` fits an
+  optional parameter; the same plain name written in one file, no type parameter of it on either side, fits; EVERY other
+  pair may fit — an abstract may take a `String` through `@:from` (openfl `TextFormatAlign` does), so a non-core
+  parameter never misfits. A `Null<…>` peels on both sides (4.3.7: a `Null<Int>` binds `?f:Float`). (3) The argument
+  types are `NominalTypes.typeWalk` over a fourth host (the call graph's tables: literals, annotations, a local's
+  initializer, a field of the enclosing chain, a static off a type name) plus a NEW arc every host may answer,
+  `TypingHost.arithmetic` (the binary `coreValueTypes.arithmeticKinds` and the negation; `Int` unless an operand is
+  `Float` or the operator is `Div`, probed with `$type`); the three existing hosts answer none. (4) A valuation char
+  now stands for a SET of atoms (`t` `f` `n` `v`, a known string) — a value of several, or a string, spelled by a
+  private-use char interned per `ArgumentValues` — and `EdgeConditions.carried` cuts a site only when, for some tested
+  parameter, NO atom it may hold passes every fact there; another instance reading an unknown char reads it as
+  undecided (`MustHeld`). (5) A `New` edge binds like a call (an inherited constructor takes the subtype's `new`), and
+  a site with no function node (a field initializer, `<init>`) is found in the file tree. (6) A `null` handed to a
+  parameter with a default holds the DEFAULT (4.3.7 on interp / js / cpp: `f(s:String = 'a')` called `f(null)` holds
+  `'a'`) — the old valuation answered `null`, a real unsoundness. (7) A string literal is an atom only for a parameter
+  a string affix guard of the callee tests (`p.endsWith('.svg')`, `RefShape.stringAffixTests`), where the call is
+  provably the std `StringTools` one: the receiver written as the core string type, and the `using` the file binds the
+  method to (`ValueNameBinding.bindingUsing`, the last one whose module is unread or declares it, every later one read)
+  is `StringTools` with no indexed type of that name — printable ASCII literals only, which every target compares
+  alike. Rejected: tabling std `UInt` as a core number (its arithmetic is `@:op`-typed, two `#if` declarations), and
+  reading openfl's `TextFormatAlign` (a library under three `#if` variants the thread-safety graph does not index):
+  those leave TM's `RoundedTextInput.new` key open at six call sites. Measured on TM 1d1ba147: the `withinBatch = true`
+  every `addCloudAction3Validated` / `addCloudActionValidated` call passes is now read (`-1`, `FSUtil.*`, `timestamp`
+  typed), so the `batchLock` re-acquire under the batch lock is cut, and `RootCauseFold` turns two real-long B holds
+  (`updateCloudActionsByFileSystem`, `moveCloudFileBlocked`) into info: their only uncovered long call was that
+  infeasible one — branch `feat/infra-N48`
+- N48 — the operand binder types an untyped lambda by a callee declared ANYWHERE the index reads (`OperandCallees`):
+  a bare call to a member of the file (as before), to a local function, to an inherited instance member; `recv.m(…)`
+  off a value (instance) or a type name (static); `new T(…)` (the closure's constructor); a static extension whose first
+  parameter is the receiver's own type. The parameter list is the index's (`MemberInfo.paramSkippableFrom` /
+  `paramRest`, computed by `CallGraphNames.paramsBy`, which `paramsOf` now delegates to — `SymbolIndexMembers`'s own
+  `paramTypeSourcesOf` deleted), read where the callee is written (`Located.host`: the declaring file and its type
+  parameters, `DeclaredNullity.headTierIn`). Generic substitution is by NAME at the part the lambda takes
+  (`Located.bindings`, read in `ExpectationHost.part`), never by rewriting the text: the receiver's annotation or the
+  `new`'s written type arguments bind the declaring type's parameters only when that type declares the member itself;
+  the method's own type parameters shadow them; a std `Iterable<A>` parameter of the method's own `A` binds `A` to the
+  element of a std iterable handed to it (`RefShape.iterableElementTypeParams`: `Array`, `List`, `Iterable`, the value
+  of a `Map` — 4.3.7 has no `iter` for a `haxe.ds.Vector`). Still unproven: a skippable parameter at or before the
+  lambda's (4.3.7 types it against that one first), an overload, a macro, a `#if` twin, a type parameter nothing binds,
+  an unannotated receiver, a supertype's parameters — branch `feat/infra-N48`

@@ -39,7 +39,8 @@ private typedef SiteFact = {
  *   only where `c` is false).
  * - The condition, read through parentheses, `!`, an `&&` that holds (or an `||` that fails) on that side, is a read
  *   or call of a `mainThreadChecks` entry (the edge the graph records at exactly that expression), a tracked parameter
- *   read bare or compared with `null`, a `final` local bound once to such a condition, or `v != null` / `v == null` of a
+ *   read bare, compared with `null` or tested by a string affix guard (`ArgumentValues.stringPredicate`), a `final`
+ *   local bound once to such a condition, or `v != null` / `v == null` of a
  *   `final` local written once as
  *   `check ? null : new T()` (or the arms swapped): the `new` arm is never null, so the test is the check's answer.
  */

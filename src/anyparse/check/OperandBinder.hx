@@ -38,7 +38,8 @@ using Lambda;
  *  - a lambda's parameter written with no type: the parameter of the function type the lambda is
  *    expected to be, read by the expected-type engine every typer shares (`ExpectedTypes`, over
  *    `EXPECTATION`) — through a declaration's or an assigned binding's annotation, a function's written
- *    result, an anonymous structure's field and the parameter of a bare call to a member of this file.
+ *    result, an anonymous structure's field and the parameter of a callee the call selects, where the
+ *    callee is written and with the type parameters the call binds there (`OperandCallees`).
  *
  * Everything else is `Unknown`: an inherited member, a receiver no rule above types, a member whose
  * type is not written. A built-in candidate among several drops out of a `Bound` answer, since it can
