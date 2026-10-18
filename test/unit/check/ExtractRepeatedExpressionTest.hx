@@ -241,6 +241,183 @@ class ExtractRepeatedExpressionTest extends Test {
 		}
 	}
 
+	/**
+	 * A write of an operand between two occurrences makes them different values — `i++` and `--i` here. The group is cut
+	 * at the write's EFFECT point: the occurrences on either side are separate runs, and a run of fewer than three is no
+	 * finding. The twins keep the threshold run whole: a write before every occurrence, three after the write, another
+	 * local written in between.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACT-REPEAT-WRITE-SPLIT')
+	public function testAnIncrementBetweenOccurrencesSplitsTheGroup(): Void {
+		for (write in ['i++;', '--i;', '++i;', 'i--;'])
+			Assert.equals(
+				0, violations('class C { function m() { var i = 0; k(Std.int(i)); $write k(Std.int(i)); k(Std.int(i)); } }').length, write
+			);
+		Assert.equals(1, violations('class C { function m() { var i = 0; i++; k(Std.int(i)); k(Std.int(i)); k(Std.int(i)); } }').length);
+		Assert.equals(
+			1, violations('class C { function m() { var i = 0; var j = 0; k(Std.int(i)); j++; k(Std.int(i)); k(Std.int(i)); } }').length
+		);
+		final split: Array<Violation> = violations(
+			'class C { function m() {'
+			+ ' var i = 0; k(Std.int(i)); k(Std.int(i)); k(Std.int(i)); i++; k(Std.int(i)); k(Std.int(i)); k(Std.int(i)); } }'
+		);
+		Assert.equals(2, split.length, 'three before the write and three after it are two runs');
+	}
+
+	/**
+	 * A plain and a compound assignment are writes too, a parenthesised target included, and a write takes effect at
+	 * the END of its node: `i = Std.int(i) + 1` reads `i` first and writes it after, so the occurrence inside its own
+	 * right-hand side and the two after it are not one value.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACT-REPEAT-WRITE-EFFECT', 'M-WRITE-SITES-PAREN-TARGET')
+	public function testAnAssignmentBetweenOccurrencesSplitsTheGroup(): Void {
+		for (write in ['i = 5;', 'i += 2;', 'i *= 2;', '(i) -= 1;'])
+			Assert.equals(
+				0, violations('class C { function m() { var i = 1; k(Std.int(i)); $write k(Std.int(i)); k(Std.int(i)); } }').length, write
+			);
+		Assert.equals(0, violations('class C { function m() { var i = 1.5; i = Std.int(i) + 1; k(Std.int(i)); k(Std.int(i)); } }').length);
+		Assert.equals(
+			1, violations('class C { function m() { var i = 1.5; var j = Std.int(i) + 1; k(Std.int(i)); k(Std.int(i)); } }').length
+		);
+		final other: String = 'class C { function m() { var i = 1; var j = 1; k(Std.int(i)); (j) -= 1; k(Std.int(i)); k(Std.int(i)); } }';
+		Assert.equals(1, violations(other).length, 'a parenthesised write of another local');
+	}
+
+	/**
+	 * A write of the field an occurrence reads — through `this.` or bare — and a write of a path below the occurrence's
+	 * root (`a.b = …` under `a.b.c`) split the group as well: the root's storage changed.
+	 */
+	@:pin('control')
+	@:killer('M-WRITE-SITES-SELF-FIELD', 'M-WRITE-SITES-MEMBER-TARGET', 'M-WRITE-SITES-INDEX-TARGET', 'M-WRITE-SITES-CAST-TARGET')
+	public function testAFieldWriteBetweenOccurrencesSplitsTheGroup(): Void {
+		for (write in [
+			'this.a = null;',
+			'a = null;',
+			'a.b = null;',
+			'a.b.c = null;',
+			'cast(a, A).b = null;'
+		]) Assert.equals(0, violations('class C { var a:A; function m() { k(a.b.c); $write k(a.b.c); k(a.b.c); } }').length, write);
+		Assert.equals(1, violations('class C { var a:A; var z:A; function m() { k(a.b.c); this.z = null; k(a.b.c); k(a.b.c); } }').length);
+		final indexed: String = 'class C { var a:A; var zs:Array<A>; function m() { k(a.b.c); zs[0] = null; k(a.b.c); k(a.b.c); } }';
+		Assert.equals(1, violations(indexed).length, 'an index write of another member');
+		final sibling: String = 'class C { var a:A; function m() { k(a.b.c); cast(a, A).z = null; k(a.b.c); k(a.b.c); } }';
+		Assert.equals(1, violations(sibling).length, 'a write of a sibling member through a cast');
+	}
+
+	/**
+	 * A group that IS an access chain holds a reference: a write below it (`a.b.c.d = …` under `a.b.c`) changes what
+	 * the reference points at, never the reference. A value COMPUTED from the chain (`Std.int(a.b)`) is a different
+	 * matter — what is below it is what it is computed from.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACT-REPEAT-REFERENCE-READ')
+	public function testAWriteBelowAChainKeepsItsReference(): Void {
+		Assert.equals(1, violations('class C { var a:A; function m() { k(a.b.c); a.b.c.d = null; k(a.b.c); k(a.b.c); } }').length);
+		Assert.equals(
+			0, violations('class C { var a:A; function m() { k(Std.int(a.b)); a.b.c = 1; k(Std.int(a.b)); k(Std.int(a.b)); } }').length
+		);
+	}
+
+	/** A write inside a macro reification is code the macro EMITS, which runs nothing where it is written. */
+	@:pin('control')
+	@:killer('M-WRITE-SITES-MACRO-EMIT')
+	public function testAWriteInAMacroReificationIsNoWrite(): Void {
+		final src: String = 'class C { function m() { var i = 0; k(Std.int(i)); final e = macro i = 5; k(Std.int(i)); k(Std.int(i)); } }';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/** A write whose target has no root the binder can name (`f().x = …`) is assumed to write every operand. */
+	@:pin('control')
+	@:killer('M-EXTRACT-REPEAT-UNKNOWN-WRITE')
+	public function testAWriteOfAnUnnamedTargetSplitsTheGroup(): Void {
+		Assert.equals(0, violations('class C { var a:A; function m() { k(a.b.c); f().x = null; k(a.b.c); k(a.b.c); } }').length);
+	}
+
+	/**
+	 * A write inside a nested function — a lambda or a local function — runs whenever that function is called, which
+	 * no position in the body decides; nor does one in a SIBLING closure, which a call inside a lambda body may run.
+	 * The group dies whole. A write in the body that DECLARES the local cannot run while a closure reading it executes,
+	 * so it leaves the closure's group alone.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACT-REPEAT-CLOSURE-WRITE')
+	public function testAWriteInAClosureKillsTheGroup(): Void {
+		for (closure in [
+			'final bump = () -> i++;',
+			'function bump() i += 1;',
+			'final bump = function() { i = 0; };'
+		])
+			Assert.equals(
+				0,
+				violations('class C { function m() { var i = 0; $closure k(Std.int(i)); bump(); k(Std.int(i)); k(Std.int(i)); } }').length,
+				closure
+			);
+		final sibling: String = 'class C { function m() { var i = 0; final bump = () -> i++; '
+			+ 'final g = () -> { k(Std.int(i)); bump(); k(Std.int(i)); k(Std.int(i)); }; } }';
+		Assert.equals(0, violations(sibling).length, 'a call in a lambda may run a sibling closure that writes the captured local');
+		final outer: String =
+			'class C { function m() { var i = 0; final g = () -> { k(Std.int(i)); k(Std.int(i)); k(Std.int(i)); }; i++; } }';
+		Assert.equals(1, violations(outer).length, 'the declaring body writes it while no call of the lambda is running');
+	}
+
+	/**
+	 * A loop's back edge carries a write that sits textually AFTER every occurrence round to the next iteration's
+	 * occurrences, so the value the first one computed is stale there — unless the statement list the shared `final`
+	 * would go into is itself inside that loop, where every iteration recomputes it. In the loop's condition it is not.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACT-REPEAT-BACK-EDGE')
+	public function testAWriteCarriedRoundALoopSplitsTheGroup(): Void {
+		Assert.equals(
+			0,
+			violations('class C { function m() { var i = 0; k(Std.int(i)); k(Std.int(i)); while (c()) { k(Std.int(i)); i++; } } }').length
+		);
+		Assert.equals(
+			0, violations('class C { function m() { var i = 0; while (Std.int(i) < 3) { k(Std.int(i)); k(Std.int(i)); i++; } } }').length
+		);
+		Assert.equals(
+			0,
+			violations('class C { function m() { var i = 0; do { k(Std.int(i)); k(Std.int(i)); i++; } while (Std.int(i) < 3); } }').length
+		);
+		Assert.equals(
+			1,
+			violations('class C { function m() { var i = 0; while (c()) { k(Std.int(i)); k(Std.int(i)); k(Std.int(i)); i++; } } }').length
+		);
+	}
+
+	/**
+	 * Occurrences whose operands bind to DIFFERENT declarations are different values however alike they read: three
+	 * comprehensions each with its own binder, a redeclared local. Each binding is a group of its own.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACT-REPEAT-REBIND')
+	public function testOperandsBoundToDifferentDeclarationsAreSeparateGroups(): Void {
+		final comprehensions: String = 'class C { function m(xs:Array<Float>) { '
+			+ 'final a = [for (x in xs) Std.int(x)]; final b = [for (x in xs) Std.int(x)]; final c = [for (x in xs) Std.int(x)]; } }';
+		Assert.equals(0, violations(comprehensions).length);
+		Assert.equals(
+			0, violations('class C { function m() { var x = 1.5; k(Std.int(x)); k(Std.int(x)); var x = 2.5; k(Std.int(x)); } }').length
+		);
+		Assert.equals(
+			1,
+			violations('class C { function m(xs:Array<Float>) { for (x in xs) { k(Std.int(x)); k(Std.int(x)); k(Std.int(x)); } } }').length
+		);
+	}
+
+	/**
+	 * The target of a write is the storage it replaces, not one more reading of the value: two reads and an
+	 * assignment of the same chain are two occurrences, whatever the operator. Three reads before it still report.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACT-REPEAT-TARGET-COUNTED')
+	public function testAWriteTargetIsNoOccurrence(): Void {
+		for (write in ['a.b.c = 5;', 'a.b.c += 5;', 'a.b.c++;'])
+			Assert.equals(0, violations('class C { var a:A; function m() { k(a.b.c); k(a.b.c); $write } }').length, write);
+		Assert.equals(1, violations('class C { var a:A; function m() { k(a.b.c); k(a.b.c); k(a.b.c); a.b.c = 5; } }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new ExtractRepeatedExpression(), src);
 	}

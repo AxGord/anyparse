@@ -4012,3 +4012,20 @@ decided the question; it may not become a record of runs.
   "transient parse" seam, and the canonical gate re-parses the same spliced text right after the guard, so the memo
   is worth keeping for the length of one file); an LRU bound (a size is a guess, the pass boundary is a fact) —
   branch `feat/infra-N36`
+- N38 — `extract-repeated-expression` grouped occurrences by SPELLING alone, so `Std.int(i)` across `i++`,
+  `source.charCodeAt(i)` in a `while (…) i++` loop and three comprehensions each binding their own `line` were one
+  "repeated value" (anyparse 7 sites, TM `SystemData.line.charAt(0)` with `line` reassigned in a loop). → a shared
+  write layer, `WriteSites` (query/): every `RefShape.writeParentKinds` node with its target as an access PATH rooted
+  at `Refs.bindingAt`'s binding — member, index, parenthesis and cast steps walked, `this.x` rooted at `x` under any
+  binding, macro reification skipped, a target with no nameable root a NULL path that writes everything (positive).
+  The rule buckets occurrences by the paths they read (a different binding is a different value), drops a bucket a
+  write in a nested or sibling closure can reach, cuts at every overlapping write's EFFECT point (node end: the
+  right-hand side is read first), drops a run a loop back edge carries a write into unless the statement list the
+  `final` would go into is inside that loop, and no longer counts a write TARGET as an occurrence. Overlap is
+  prefix-either-way over paths, except a write BELOW a group that is itself the chain (`a.b.c.d =` under `a.b.c`):
+  same reference. Measured: root-only matching (any write rooted at the same local) killed real TM findings
+  (`layoutItem.displayObject.width` across `layoutItem.displayObject.x =`), hence paths. Rejected: `Refs`' own
+  `Write` hits as the only write fact (they classify an identifier DIRECTLY at child 0 only — `(i) += 1`, `a.b = …`
+  are reads there); killing a whole group at its first write (a run of three on either side is still one value); a
+  member written in ANOTHER body through a call (not modelled — the purity rule already reads field chains as pure
+  across calls) — branch `feat/infra-N38`

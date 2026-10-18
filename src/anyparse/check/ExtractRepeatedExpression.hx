@@ -10,6 +10,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
+import anyparse.query.WriteSites;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -70,10 +71,38 @@ using Lambda;
  *   VALUE elsewhere (an argument, a receiver, a right-hand side) still groups normally — and
  *   the callee's own RECEIVER is still a candidate, so a genuinely repeated value inside a
  *   repeated call surfaces in its own right (`a.b.c` out of `a.b.c.d(…)`).
+ * - **Write target.** The target of an assignment, compound assignment or increment (`a.b.c` in `a.b.c = v`,
+ *   `RefShape.writeParentKinds`' first child) is descended into but never counted either: it is the storage the
+ *   write replaces, not a value a `final` could hold — and it would join the reads before its own write as one
+ *   more "occurrence" of a value it is about to change. Its receiver (`a.b`) is still a read.
  * - **Subsumed sub-expressions.** A repeated sub-expression whose every occurrence
  *   nests inside an occurrence of an equally- or more-frequent larger repeated
  *   expression is dropped, so a chain reports at its maximal form (`a.b.c()` once,
  *   not also `a.b.c` and `a.b`) — unless the shorter form also recurs on its own.
+ *
+ * ## Same value
+ *
+ * Spelled alike is not enough: the occurrences of one group must read ONE value, which an operand written between
+ * two of them breaks. Each group is checked against the shared binder and write facts (`Refs` through
+ * `WriteSites`), positively — what cannot be placed counts as a write:
+ *
+ * - **Binding.** Occurrences whose operands bind DIFFERENT declarations (a comprehension binder each, a redeclared
+ *   local) are separate groups; one whose operand the binder names nothing for is no group at all.
+ * - **A write between two occurrences** — an assignment in any operator spelling, `++` / `--`, a parenthesised,
+ *   cast, member or index target on an operand's path (`(i) += 1`, `a.b = …` under `a.b.c`, `this.x` for a bare
+ *   `x`), or a target with no nameable root (`f().x = …`) — cuts the group there, at the write's EFFECT point (the
+ *   end of its node: `i = Std.int(i) + 1` reads first). Each side is a run of its own and must reach the threshold
+ *   alone. A sibling path (`a.x = …` under `a.y`) is no write of it, and neither is one below a group that IS the
+ *   chain (`a.b.c.d = …` under `a.b.c`: the same reference).
+ * - **A loop's back edge.** A write later in a loop than an occurrence it holds still reaches that occurrence on the
+ *   next iteration, so the run is dropped unless the statement list a shared `final` would go into lies inside that
+ *   loop, where each iteration recomputes it — never when an occurrence is the loop's condition.
+ * - **A write that runs elsewhere** — inside a function nested in the body, or, for a local the body captures, in a
+ *   closure other than the one declaring it (a call the body makes may run it) — kills the group whole: no position
+ *   decides when it runs. A write in the declaring body cannot run while a closure reading the local does.
+ *
+ * Not modelled: a MEMBER written by another body, which a call between occurrences may reach — the same assumption
+ * the purity rule makes when it reads a field chain as pure across calls.
  *
  * ## Grammar-agnostic
  *
@@ -128,10 +157,14 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 		final functionUnitKinds: Array<String> = ShapeVocab.functionLikeKinds(shape);
 		final exclusiveConditionalKinds: Array<String> = (shape.branchConditionKinds ?? []).concat(shape.switchKinds ?? []);
 		final index: SymbolIndex = IndexScope.report(files, plugin);
+		final loopKinds: Array<String> = ShapeVocab.loopKinds(shape);
+		final blockKinds: Array<String> = plugin.controlFlowSupport()?.blockKinds() ?? [];
 		return RunScan.collect(files, plugin, (entry, root, violations) -> {
 			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, entry.source, root, index);
 			if (purity == null) return;
 			final resolved: PurityCtx = purity;
+			final units: Array<QueryNode> = [];
+			collectUnits(root, functionUnitKinds, units);
 			final ctx: Ctx = {
 				fieldAccessKind: faK,
 				callKind: callK,
@@ -139,10 +172,14 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 				functionUnitKinds: functionUnitKinds,
 				exclusiveConditionalKinds: exclusiveConditionalKinds,
 				opaqueKinds: shape.opaqueKinds ?? [],
-				purity: resolved
+				purity: resolved,
+				shape: shape,
+				tree: root,
+				units: units,
+				loopKinds: loopKinds,
+				blockKinds: blockKinds,
+				writes: null
 			};
-			final units: Array<QueryNode> = [];
-			collectUnits(root, functionUnitKinds, units);
 			for (unit in units) analyzeUnit(violations, entry.file, entry.source, unit, ctx);
 		});
 	}
@@ -163,6 +200,22 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 	/** Whether `outer` strictly contains `inner` (covers it and is not the identical span). */
 	private static inline function strictlyContains(outer: Span, inner: Span): Bool {
 		return outer.from <= inner.from && inner.to <= outer.to && (outer.from < inner.from || inner.to < outer.to);
+	}
+
+	/** Whether `span` holds the byte at `offset`. */
+	private static inline function holds(span: Null<Span>, offset: Int): Bool {
+		return span != null && span.from <= offset && offset < span.to;
+	}
+
+	/** Whether `node`'s span covers `span`. */
+	private static inline function covers(node: QueryNode, span: Null<Span>): Bool {
+		final outer: Null<Span> = node.span;
+		return outer != null && span != null && outer.from <= span.from && span.to <= outer.to;
+	}
+
+	/** Whether `inner` is a node other than `outer` inside `outer`'s span. */
+	private static inline function strictlyWithin(inner: QueryNode, outer: QueryNode): Bool {
+		return inner != outer && covers(outer, inner.span);
 	}
 
 	/** Every function / lambda node in `node`'s subtree — each is an independent body unit. */
@@ -196,9 +249,8 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 			final rep: QueryNode = exact[0].node;
 			if (!isNonTrivial(rep, ctx)) continue;
 			if (!PurityScan.isPure(rep, ctx.purity)) continue;
-			if (allPairsExclusive(exact)) continue;
-			exact.sort((a, b) -> a.span.from - b.span.from);
-			kept.push({ render: text, occ: exact });
+			for (run in sameValueRuns(exact, unit, ctx)) if (run.length >= MIN_OCCURRENCES && !allPairsExclusive(run))
+				kept.push({ render: text, occ: run });
 		}
 		for (g in dropSubsumed(kept)) {
 			final first: Candidate = g.occ[0];
@@ -217,15 +269,15 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 	 * normalized text, span and branch path) to `out`. Descent stops at a nested
 	 * function / lambda unit and at a macro-reification subtree. Entering a branch
 	 * child (index >= 1) of an `if` / `switch` pushes that branch onto `path`, so a
-	 * candidate records which mutually-exclusive branches it lives in. The CALLEE child of a call
-	 * (`isCallee`) is descended into but never recorded — see the class doc's position rule.
+	 * candidate records which mutually-exclusive branches it lives in. The CALLEE child of a call and the TARGET of a
+	 * write (`uncounted`) are descended into but never recorded — see the class doc's position rules.
 	 */
 	private static function collect(
-		node: QueryNode, source: String, ctx: Ctx, path: Array<BranchStep>, out: Array<Candidate>, isRoot: Bool, isCallee: Bool = false
+		node: QueryNode, source: String, ctx: Ctx, path: Array<BranchStep>, out: Array<Candidate>, isRoot: Bool, uncounted: Bool = false
 	): Void {
 		if (!isRoot && (ctx.functionUnitKinds.contains(node.kind) || ctx.opaqueKinds.contains(node.kind))) return;
 		final span: Null<Span> = node.span;
-		if (!isRoot && !isCallee && span != null && ctx.candidateKinds.contains(node.kind)) {
+		if (!isRoot && !uncounted && span != null && ctx.candidateKinds.contains(node.kind)) {
 			final s: Span = span;
 			out.push({
 				node: node,
@@ -237,14 +289,14 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 		final condKey: Null<String> = span != null && ctx.exclusiveConditionalKinds.contains(node.kind) ? '${span.from}:${span.to}' : null;
 		for (i in 0...node.children.length) {
 			final child: QueryNode = node.children[i];
-			final childIsCallee: Bool = node.kind == ctx.callKind && i == 0;
+			final childUncounted: Bool = i == 0 && (node.kind == ctx.callKind || ctx.shape.writeParentKinds.contains(node.kind));
 			if (condKey != null && i >= 1) {
 				final k: String = condKey;
 				path.push({ key: k, idx: i });
-				collect(child, source, ctx, path, out, false, childIsCallee);
+				collect(child, source, ctx, path, out, false, childUncounted);
 				path.pop();
 			} else {
-				collect(child, source, ctx, path, out, false, childIsCallee);
+				collect(child, source, ctx, path, out, false, childUncounted);
 			}
 		}
 	}
@@ -281,6 +333,162 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 	private static function mutuallyExclusive(a: Array<BranchStep>, b: Array<BranchStep>): Bool {
 		for (sa in a) for (sb in b) if (sa.key == sb.key && sa.idx != sb.idx) return true;
 		return false;
+	}
+
+	/**
+	 * `occ` — one render-exact group whose purity is settled — cut into the runs that read ONE value (the class doc's
+	 * "Same value"), each sorted by position: bucketed by the declarations its operands bind, a bucket dropped whole
+	 * when some write of an operand runs where no position in `unit` decides when, then cut at every write of an
+	 * operand between two occurrences, and a run dropped when a loop's back edge carries a write into it.
+	 */
+	private static function sameValueRuns(occ: Array<Candidate>, unit: QueryNode, ctx: Ctx): Array<Array<Candidate>> {
+		final out: Array<Array<Candidate>> = [];
+		for (bucket in bindingBuckets(occ, ctx)) if (bucket.occ.length >= MIN_OCCURRENCES) {
+			final writes: Null<Array<WriteSite>> = ownWrites(bucket, unit, ctx);
+			if (writes != null)
+				for (run in splitAtWrites(bucket.occ, writes))
+					if (run.length >= MIN_OCCURRENCES && !carriedRound(run, writes, unit, ctx)) out.push(run);
+		}
+		return out;
+	}
+
+	/**
+	 * `occ` bucketed by the paths of what each occurrence reads (`WriteSites.readPaths`) — occurrences spelled alike whose
+	 * operands bind DIFFERENT declarations (three comprehensions, each with its own binder) are different values. Empty
+	 * when the binder names nothing for some operand: no write can be proven not to reach it.
+	 */
+	private static function bindingBuckets(occ: Array<Candidate>, ctx: Ctx): Array<BindingBucket> {
+		final out: Array<BindingBucket> = [];
+		for (c in occ) {
+			final read: Null<Array<String>> = WriteSites.readPaths(c.node, ctx.tree, ctx.shape);
+			if (read == null) return [];
+			final paths: Array<String> = read;
+			final signature: String = paths.join(',');
+			final bucket: Null<BindingBucket> = out.find(b -> b.signature == signature);
+			if (bucket == null)
+				out.push({
+					signature: signature,
+					paths: paths,
+					own: WriteSites.accessPath(c.node, ctx.tree, ctx.shape),
+					occ: [c]
+				});
+			else
+				bucket.occ.push(c);
+		}
+		for (b in out) b.occ.sort((x, y) -> x.span.from - y.span.from);
+		return out;
+	}
+
+	/**
+	 * The writes that may change a value `bucket` reads (`WriteSites.mayOverlap`; the group's own chain, when it is
+	 * one, read as a reference) that `unit`'s own body performs — or null when one runs at a time no position in
+	 * `unit` decides: inside a function nested in `unit` (it runs whenever it is called), or, for a local `unit`
+	 * captures, in a closure other than the body that declares it (a call `unit` makes may run it). A write of the
+	 * declaring body itself cannot run while `unit` does, and a member written in another body is outside what the
+	 * rule models (the class doc's "Same value"). A write no path names (`WriteSite.path` null) writes every operand.
+	 */
+	private static function ownWrites(bucket: BindingBucket, unit: QueryNode, ctx: Ctx): Null<Array<WriteSite>> {
+		final out: Array<WriteSite> = [];
+		for (w in writesOf(ctx)) {
+			final written: Null<String> = w.path;
+			if (written != null && !bucket.paths.exists(p -> WriteSites.mayOverlap(written, p, p == bucket.own))) continue;
+			final body: Null<QueryNode> = innermostUnitAt(w.effect - 1, ctx.units);
+			if (body == unit)
+				out.push(w);
+			else if (body != null && (strictlyWithin(body, unit) || capturedWriteElsewhere(written, body, ctx)))
+				return null;
+		}
+		return out;
+	}
+
+	/**
+	 * Whether a write of `written` in `body` (a body outside the analyzed one) writes a LOCAL some other body declares —
+	 * a binding declared inside a function unit. A member's declaration sits in no unit: a write of it in another body
+	 * is outside what the rule models.
+	 */
+	private static function capturedWriteElsewhere(written: Null<String>, body: QueryNode, ctx: Ctx): Bool {
+		final binding: Int = written == null ? -1 : WriteSites.rootBinding(written);
+		if (binding < 0) return false;
+		final declaring: Null<QueryNode> = innermostUnitAt(binding, ctx.units);
+		return declaring != null && declaring != body;
+	}
+
+	/** `sorted` cut before every occurrence some write in `writes` takes effect ahead of, since the previous one. */
+	private static function splitAtWrites(sorted: Array<Candidate>, writes: Array<WriteSite>): Array<Array<Candidate>> {
+		final runs: Array<Array<Candidate>> = [[sorted[0]]];
+		for (k in 1...sorted.length) {
+			final prev: Int = sorted[k - 1].span.from;
+			final cur: Int = sorted[k].span.from;
+			if (writes.exists(w -> prev < w.effect && w.effect <= cur))
+				runs.push([sorted[k]]);
+			else
+				runs[runs.length - 1].push(sorted[k]);
+		}
+		return runs;
+	}
+
+	/**
+	 * Whether a loop's back edge carries one of `writes` into `run`: the loop holds the write and an occurrence, and
+	 * the statement list a shared `final` would go into (`hoistBlock`) is not inside that loop — so no iteration
+	 * recomputes the value before the occurrence reads it again. Positive: with no such list, every such loop carries.
+	 */
+	private static function carriedRound(run: Array<Candidate>, writes: Array<WriteSite>, unit: QueryNode, ctx: Ctx): Bool {
+		final home: Null<QueryNode> = hoistBlock(run, unit, ctx);
+		inline function recomputed(loop: QueryNode): Bool {
+			return home != null && home != loop && covers(loop, home.span);
+		}
+		for (w in writes)
+			for (loop in ancestorsOf(unit, w.effect - 1))
+				if (ctx.loopKinds.contains(loop.kind) && !recomputed(loop) && run.exists(c -> covers(loop, c.span))) return true;
+		return false;
+	}
+
+	/** The innermost `blockKinds` node holding every occurrence of `run` — the statement list a shared `final` goes into. */
+	private static function hoistBlock(run: Array<Candidate>, unit: QueryNode, ctx: Ctx): Null<QueryNode> {
+		var common: Array<QueryNode> = ancestorsOf(unit, run[0].span.from);
+		for (c in run) {
+			final chain: Array<QueryNode> = ancestorsOf(unit, c.span.from);
+			var n: Int = 0;
+			while (n < common.length && n < chain.length && common[n] == chain[n]) n++;
+			common = common.slice(0, n);
+		}
+		var i: Int = common.length - 1;
+		while (i >= 0 && !ctx.blockKinds.contains(common[i].kind)) i--;
+		return i >= 0 ? common[i] : null;
+	}
+
+	/** The nodes from `root` down whose span holds `offset`, outermost first. */
+	private static function ancestorsOf(root: QueryNode, offset: Int): Array<QueryNode> {
+		final out: Array<QueryNode> = [];
+		var node: Null<QueryNode> = root;
+		while (node != null) {
+			out.push(node);
+			node = node.children.find(c -> holds(c.span, offset));
+		}
+		return out;
+	}
+
+	/** The smallest function unit whose span holds `offset`, or null when none does. */
+	private static function innermostUnitAt(offset: Int, units: Array<QueryNode>): Null<QueryNode> {
+		var best: Null<QueryNode> = null;
+		var bestLength: Int = 0;
+		for (u in units) {
+			final s: Null<Span> = u.span;
+			if (s != null && holds(s, offset) && (best == null || s.to - s.from < bestLength)) {
+				best = u;
+				bestLength = s.to - s.from;
+			}
+		}
+		return best;
+	}
+
+	/** The file's writes (`WriteSites.of`), collected the first time a group asks. */
+	private static function writesOf(ctx: Ctx): Array<WriteSite> {
+		final known: Null<Array<WriteSite>> = ctx.writes;
+		if (known != null) return known;
+		final all: Array<WriteSite> = WriteSites.of(ctx.tree, ctx.shape);
+		ctx.writes = all;
+		return all;
 	}
 
 	/** Drop a group whose every occurrence nests inside an equally- or more-frequent larger group's occurrence. */
@@ -380,4 +588,29 @@ private typedef Ctx = {
 	var exclusiveConditionalKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var purity: PurityCtx;
+	var shape: RefShape;
+
+	/** The file's tree — what `Refs` binds the operands against. */
+	var tree: QueryNode;
+
+	/** Every function unit of the file (`collectUnits`): a write's body, and a binding's declaring one, is the smallest holding it. */
+	var units: Array<QueryNode>;
+	var loopKinds: Array<String>;
+
+	/** `ControlFlowSupport.blockKinds`: the statement lists a shared `final` can go into. */
+	var blockKinds: Array<String>;
+
+	/** The file's writes once a group has asked for them (`writesOf`). */
+	var writes: Null<Array<WriteSite>>;
+}
+
+/**
+ * Occurrences of one group whose operands bind the same declarations: the joined paths, the paths, the group's own
+ * access path when it is a chain (`WriteSites.accessPath`), the occurrences by position.
+ */
+private typedef BindingBucket = {
+	var signature: String;
+	var paths: Array<String>;
+	var own: Null<String>;
+	var occ: Array<Candidate>;
 }

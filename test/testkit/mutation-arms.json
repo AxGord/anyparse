@@ -1078,6 +1078,116 @@
 			"note": "every norm bucket stays one group, so occurrences whose literals differ are still counted as one repeated expression and the message quotes a spelling the reported span does not carry"
 		},
 		{
+			"name": "M-EXTRACT-REPEAT-WRITE-SPLIT",
+			"type": "anyparse.check.ExtractRepeatedExpression",
+			"method": "splitAtWrites",
+			"force": "[sorted]",
+			"note": "a write of an operand between two occurrences no longer cuts the group, so `k(Std.int(i)); i++; k(Std.int(i)); k(Std.int(i));` is reported as one value"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-WRITE-EFFECT",
+			"type": "anyparse.query.WriteSites",
+			"method": "collect",
+			"find": "effect: span.to",
+			"replace": "effect: span.from",
+			"note": "a write takes effect where its node STARTS, so `i = Std.int(i) + 1` followed by two more reads is one value although the read inside it precedes the write"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-UNKNOWN-WRITE",
+			"type": "anyparse.check.ExtractRepeatedExpression",
+			"method": "ownWrites",
+			"find": "if (written != null && !bucket.paths",
+			"replace": "if (written == null || !bucket.paths",
+			"note": "a write whose target no key names (`f().x = …`) is taken to write nothing instead of every operand"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-CLOSURE-WRITE",
+			"type": "anyparse.check.ExtractRepeatedExpression",
+			"method": "ownWrites",
+			"find": "return null;",
+			"replace": "continue;",
+			"note": "a write inside a nested or sibling closure, which runs whenever that closure is called, no longer kills the group"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-BACK-EDGE",
+			"type": "anyparse.check.ExtractRepeatedExpression",
+			"method": "carriedRound",
+			"force": "false",
+			"note": "a write later in a loop than an occurrence is not carried round the back edge, so the occurrences after the loop and the next iteration's read are one value"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-REBIND",
+			"type": "anyparse.check.ExtractRepeatedExpression",
+			"method": "bindingBuckets",
+			"find": "paths.join(',')",
+			"replace": "''",
+			"note": "occurrences whose operands bind different declarations (three comprehension binders) stay one group"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-TARGET-COUNTED",
+			"type": "anyparse.check.ExtractRepeatedExpression",
+			"method": "collect",
+			"find": "(node.kind == ctx.callKind || ctx.shape.writeParentKinds.contains(node.kind))",
+			"replace": "node.kind == ctx.callKind",
+			"note": "a write target counts as an occurrence, so two reads of `a.b.c` and the assignment that replaces it are reported as three readings of one value"
+		},
+		{
+			"name": "M-WRITE-SITES-SELF-FIELD",
+			"type": "anyparse.query.WriteSites",
+			"method": "pathOf",
+			"find": "joined('$memberName@$ANY_BINDING', below)",
+			"replace": "joined('$memberName@-1', below)",
+			"note": "`this.a = …` is keyed by the self reference instead of the member it writes, so it no longer reaches a bare `a` read"
+		},
+		{
+			"name": "M-WRITE-SITES-MEMBER-TARGET",
+			"type": "anyparse.query.WriteSites",
+			"method": "pathOf",
+			"find": "else if (memberName == null)",
+			"replace": "else if (true)",
+			"note": "a member target is not walked to its root, so `this.z = …` is a write no key names and kills an unrelated group"
+		},
+		{
+			"name": "M-WRITE-SITES-INDEX-TARGET",
+			"type": "anyparse.query.WriteSites",
+			"method": "pathOf",
+			"find": "pathOf(inner, tree, shape, joined(ANY_ELEMENT, below))",
+			"replace": "null",
+			"note": "an index target is not walked to its root, so `zs[0] = …` is a write no key names and kills an unrelated group"
+		},
+		{
+			"name": "M-WRITE-SITES-PAREN-TARGET",
+			"type": "anyparse.query.WriteSites",
+			"method": "pathOf",
+			"find": "if (node.kind == shape.parenKind || isCast(node, shape))",
+			"replace": "if (isCast(node, shape))",
+			"note": "a parenthesised target is not walked to its root, so `(j) -= 1` is a write no key names and kills an unrelated group"
+		},
+		{
+			"name": "M-WRITE-SITES-CAST-TARGET",
+			"type": "anyparse.query.WriteSites",
+			"method": "pathOf",
+			"find": "if (node.kind == shape.parenKind || isCast(node, shape))",
+			"replace": "if (node.kind == shape.parenKind)",
+			"note": "a cast target is not walked to its operand, so `cast(a, A).z = …` is a write no path names and kills an unrelated group"
+		},
+		{
+			"name": "M-WRITE-SITES-MACRO-EMIT",
+			"type": "anyparse.query.WriteSites",
+			"method": "collect",
+			"find": "if (!emitted && span != null",
+			"replace": "if (span != null",
+			"note": "a write inside a macro reification, which emits code and runs nothing, counts as a write and cuts the group"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-REFERENCE-READ",
+			"type": "anyparse.check.ExtractRepeatedExpression",
+			"method": "ownWrites",
+			"find": "p == bucket.own",
+			"replace": "false",
+			"note": "a write BELOW a chain the group itself is (`a.b.c.d = …` under `a.b.c`) is taken to change the reference the chain holds"
+		},
+		{
 			"name": "M-OPAQUE-REGION-TRIVIA-KEPT",
 			"type": "anyparse.query.SourceComments",
 			"method": "trimTrivia",
