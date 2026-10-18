@@ -25348,6 +25348,78 @@
 			"note": "an offset at or past the upper bound answers, so ArgumentValues reads the written type of the NEXT declaration"
 		},
 		{
+			"name": "M-SWALLOW-OUTCOME-COMPOUND",
+			"type": "anyparse.check.SwallowedException",
+			"method": "outcomeLocal",
+			"find": "assign.kind != shape.assignKind",
+			"replace": "!shape.writeParentKinds.contains(assign.kind)",
+			"note": "a compound assignment of a constant (`threw += 1;`) counts as recording an outcome, though it reads the local it writes"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-VALUE",
+			"type": "anyparse.check.SwallowedException",
+			"method": "outcomeLocal",
+			"find": " || !MemberKinds.isMovableLiteral(assign.children[1], shape)",
+			"replace": "",
+			"note": "any value counts as a recorded outcome, so `threw = compute();` and `threw = other;` hide a handler that runs code"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-DECL-KIND",
+			"type": "anyparse.check.SwallowedException",
+			"method": "outcomeLocal",
+			"find": "decl != null && (shape.localDeclKinds ?? []).contains(decl.kind)",
+			"replace": "decl != null",
+			"note": "a parameter of the enclosing function counts as an outcome local"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-FN-BOUND",
+			"type": "anyparse.check.SwallowedException",
+			"method": "readAfter",
+			"find": "for (k in fnAt + 1...ancestors.length - 1)",
+			"replace": "for (k in 0...ancestors.length - 1)",
+			"note": "a read after the CLOSURE the try sits in counts as reading the outcome, though the closure runs whenever it is called"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-EVERY-STMT",
+			"type": "anyparse.check.SwallowedException",
+			"method": "recordsOutcome",
+			"find": "if (hit == null || !readAfter(hit, tree, ancestors, fnAt, scan)) return false;",
+			"replace": "if (hit == null || !readAfter(hit, tree, ancestors, fnAt, scan)) return false;\n\t\tbreak;",
+			"note": "only the FIRST statement of the body is checked, so a call or an unread second local after it rides along"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-READ-KIND",
+			"type": "anyparse.check.SwallowedException",
+			"method": "readAfter",
+			"find": "h.kind == RefKind.Read",
+			"replace": "h.kind != RefKind.Decl",
+			"note": "a WRITE of the local after the try counts as reading the outcome"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-READ-BINDING",
+			"type": "anyparse.check.SwallowedException",
+			"method": "readAfter",
+			"find": " && h.bindingSpan?.from == binding.from",
+			"replace": "",
+			"note": "a read of the same NAME bound to another declaration counts as reading the outcome"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-READ-AFTER",
+			"type": "anyparse.check.SwallowedException",
+			"method": "readAfter",
+			"find": "r.from >= childSpan.to && ",
+			"replace": "",
+			"note": "a read BEFORE the try counts as reading the outcome after it"
+		},
+		{
+			"name": "M-SWALLOW-OUTCOME-STMT-LIST",
+			"type": "anyparse.check.SwallowedException",
+			"method": "readAfter",
+			"find": "scan.statementListKinds.contains(ancestors[k].kind) && ",
+			"replace": "",
+			"note": "a read in the other arm of the branch the try sits in counts, though it follows the try in the text and on no path"
+		},
+		{
 			"name": "M-NAMING-PROPERTY-MODS-NONE",
 			"type": "anyparse.grammar.haxe.HaxePropertyStorage",
 			"method": "modsOf",

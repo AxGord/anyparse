@@ -4067,6 +4067,22 @@ decided the question; it may not become a record of runs.
   time, testing every character against the directive markers (`Array.contains`). → it jumps from one marker to the
   next with `indexOf` (a directive can start only at a marker; the non-code regions are skipped exactly as before, at
   the marker's offset instead of at every offset). `--all` 13.24 -> 13.11 s — branch `feat/infra-N37`
+- N40 — `swallowed-exception` reported `catch (exception:Exception) { threw = true; }` whose `threw` the code after the
+  try reads (TM `ApplicationSettingsLibraryPathTest.hx:117, 222`): the failure became a value the function acts on, so
+  nothing was swallowed (user decision 2026-10-18, A10). → exempt a catch body that is POSITIVELY an outcome record:
+  every statement an expression statement assigning (plain `=`) a constant (`MemberKinds.isMovableLiteral`: a literal
+  or a negated number, reading nothing) to an identifier `Refs` binds to a `localDeclKinds` declaration, and each such
+  local read — a `Read` hit of the SAME binding — in a later statement of a statement list
+  (`ControlFlowSupport.blockKinds`) enclosing the try, inside the innermost function around it
+  (`ShapeVocab.functionLikeKinds`). Everything else keeps today's verdict: a field, a parameter, a loop or catch variable; a computed value or
+  a compound assignment; a call or a nested statement in the body; a local read only before the try (a back edge
+  through a loop is a path, but not one this proves), only in another arm of a branch the try sits in, or only through
+  another declaration of its name; a read only outside the closure the try sits in (the closure runs whenever it is
+  called). A first draft also required the declaration inside that function: its arm survived — the bounded read
+  already rejects the closure case — and a captured local read after the try INSIDE the closure is a real outcome, so
+  it went. The exception referenced in the
+  body was already "handled", so `err = exception;` needed nothing new. No per-check binder: the write and the reads
+  are `Refs.find` hits — branch `feat/infra-N40`
 - N39 A6 — the built-in policy named every property by the FIELD rules: `private var active(get, never)` was told to
   take the private-field `_`, and `public static var LIBRARY_PATH(get, never)` to be camelCase (11 + 3 TM sites). The
   user's rule reserves `_` for private FIELDS, not methods, and a property with no storage is a method in disguise;
