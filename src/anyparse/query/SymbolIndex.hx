@@ -149,6 +149,15 @@ typedef MemberInfo = {
 	var paramTypeSources: Array<Null<String>>;
 
 	/**
+	 * The position of the first parameter a call may leave out — `?p`, or one carrying a default value — the count for none
+	 * (`CallGraphNames.DeclaredParams.skippableFrom`): where a call's arguments stop binding by position alone.
+	 */
+	var paramSkippableFrom: Int;
+
+	/** True when the member's last parameter is a rest parameter, which takes every argument from its position on. */
+	var paramRest: Bool;
+
+	/**
 	 * The member's EXPLICIT visibility keyword as WRITTEN (`public` / `private`), or null
 	 * when its modifier run carries none. Drives cross-file override-visibility resolution.
 	 */

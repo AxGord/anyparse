@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.query.CallGraphNames;
+import anyparse.query.CallGraphNames.DeclaredParams;
 import anyparse.query.CasePatterns;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.ExpectedTypes;
@@ -9,11 +10,15 @@ import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -67,11 +72,11 @@ final class OperandBinder {
 	};
 
 	/**
-	 * The binder's answers to the expected-type engine (`ExpectedTypes`): each a type written in THIS file, with the offset it
-	 * is written at, so it binds with the type parameters in scope there (`writtenTier`). A declaration's annotation, an
-	 * assigned binding's, a function's written result, the parameter of a bare call to a member of this file
-	 * (`argumentType`), an anonymous structure's field. No container element: the binder holds no proof that a written
-	 * `Array` is the standard one whose element it would read.
+	 * The binder's answers to the expected-type engine (`ExpectedTypes`): each a type with where it is written — this file
+	 * or the one declaring a callee, at an offset, so it binds with the type parameters in scope there, a type parameter the
+	 * call binds read as what binds it (`locatedTier`). A declaration's annotation, an assigned binding's, a function's
+	 * written result, the parameter of a callee the call selects (`argumentType`), an anonymous structure's field. No
+	 * container element: the binder holds no proof that a written `Array` is the standard one whose element it would read.
 	 */
 	private static final EXPECTATION: ExpectationHost<Located, OperandBinder> = {
 		declared: (holder, b) -> b.annotationOf(holder.span?.from),
@@ -81,7 +86,12 @@ final class OperandBinder {
 		element: (_, _) -> null,
 		field: (outer, name, b) -> b.anonField(outer, name),
 		read: (written, b) -> b._index.typeSyntax(written.text),
-		part: (of, text, _) -> {text: text, at: of.at }
+		part: (of, text, _) -> {
+			text: text,
+			at: of.at,
+			host: of.host,
+			bindings: of.bindings
+		}
 	};
 
 	/** The binding offsets whose unannotated type the walk is reading right now (`TypingHost.reading`). */
@@ -298,30 +308,29 @@ final class OperandBinder {
 		);
 		final at: Int = lambda.children.filter(c -> (_shape.paramKinds ?? []).contains(c.kind)).indexOf(param);
 		final written: Null<Located> = types == null || at < 0 ? null : types[at];
-		return written == null ? null : writtenTier(written.text, written.at);
+		return written == null ? null : locatedTier(written);
 	}
 
 	/**
-	 * The parameter the argument `at` of `call` binds — for a bare call to a member this file declares once, whose written
-	 * signature is the one every call selects (no `@:overload`: 4.3.7 retypes the lambda against the next signature when the
-	 * first fails): its written type, at the member's declaration, so the callee's type parameters are in scope there. Every
-	 * argument from a rest parameter's position on binds that parameter. Null where a parameter before the one bound may be
-	 * skipped (optional, or carrying a default value: 4.3.7 tries the lambda against it first), and for every other callee —
-	 * a local function, a member of another file, an inherited one, a construction (follow-ups: those need the declaration's
-	 * parameter list read where it is written).
+	 * The parameter the argument `at` of the call or construction `call` binds: its written type where the callee declares it,
+	 * the type parameters the call binds there (`calleeParams`) — every argument from a rest parameter's position on binding
+	 * that parameter. Null where that parameter, or one before it, may be skipped (optional, or carrying a default value:
+	 * 4.3.7 tries the lambda against it first), and for a callee `calleeParams` does not read.
 	 */
 	private function argumentType(call: QueryNode, at: Int): Null<Located> {
-		if (call.kind != _shape.callKind || call.children.length == 0) return null;
-		final fn: Null<QueryNode> = hitOf(call.children[0])?.bindingNode;
-		final member: Null<MemberInfo> = fn == null || !_fnKinds.contains(fn.kind) ? null : memberAt(fn);
-		final fnFrom: Null<Int> = fn?.span?.from;
-		if (fn == null || member == null || fnFrom == null) return null;
-		if (!selectsItsSignature(member)) return null;
-		final params: DeclaredParams = CallGraphNames.paramsOf(fn, _annotations, _shape);
+		final callee: Null<CalleeParams> = calleeParams(call);
+		if (callee == null) return null;
+		final params: DeclaredParams = callee.params;
+		final index: Int = at + callee.shift;
 		// a rest parameter takes every argument from its position on
-		final bound: Int = params.rest ? Std.int(Math.min(at, params.params.length - 1)) : at;
+		final bound: Int = params.rest ? Std.int(Math.min(index, params.params.length - 1)) : index;
 		final written: Null<String> = bound < params.params.length ? params.params[bound] : null;
-		return written == null || bound >= params.skippableFrom ? null : { text: written, at: fnFrom };
+		return written == null || bound >= params.skippableFrom ? null : {
+			text: written,
+			at: callee.at,
+			host: callee.host,
+			bindings: callee.bindings
+		};
 	}
 
 	/**
@@ -351,7 +360,12 @@ final class OperandBinder {
 	private function anonField(outer: Located, name: String): Null<Located> {
 		final peeled: String = NominalTypes.unwrapNullable(outer.text.trim(), _wrappers, _index.typeSyntax);
 		final written: Null<String> = CallGraphNames.anonFieldTypeSource(_index.typeSyntax(peeled), name);
-		return written == null ? null : { text: written, at: outer.at };
+		return written == null ? null : {
+			text: written,
+			at: outer.at,
+			host: outer.host,
+			bindings: outer.bindings
+		};
 	}
 
 	/**
@@ -532,10 +546,287 @@ final class OperandBinder {
 		return !m.hasOverloadMeta && !m.isMacro;
 	}
 
+	/** What the type `written` binds to where it is written (`Located`): a type parameter the call binds read as what binds it. */
+	private function locatedTier(written: Located): Tier {
+		final bound: Null<Located> = written.bindings?.get(StringTools.trim(written.text));
+		if (bound != null) return locatedTier(bound);
+		final host: Null<WrittenHost> = written.host;
+		return host == null
+			? writtenTier(written.text, written.at)
+			: DeclaredNullity.headTierIn(written.text, host.file, written.at, _index, host.params, _wrappers, _builtins);
+	}
+
+	/**
+	 * The parameter list the call or construction `call` selects, where it is declared, with the type parameters the call
+	 * binds there — for a callee of ONE signature (no `@:overload`, no macro, no `#if` twin): a bare call to a member of this
+	 * file, to a local function, or to a member the enclosing type inherits; `recv.m(…)` on a receiver of one declaration —
+	 * a static off a type name, an instance member off a value, a static extension the file's `using`s supply —; `new T(…)`.
+	 * Null for every other callee.
+	 */
+	private function calleeParams(call: QueryNode): Null<CalleeParams> {
+		if (call.kind == _shape.newExprKind) return constructionParams(call);
+		if (call.kind != _shape.callKind || call.children.length == 0) return null;
+		final callee: QueryNode = call.children[0];
+		if (_identKinds.contains(callee.kind)) return bareCallParams(callee);
+		final name: Null<String> = callee.name;
+		return name == null || callee.kind != _shape.fieldAccessKind || callee.children.length != 1
+			? null
+			: memberCallParams(callee.children[0], name, call);
+	}
+
+	/**
+	 * A bare call `f(…)`: a member this file declares whose signature every call selects, a local function, or — bound by no
+	 * declaration of this file — an instance member the enclosing type inherits (a supertype's static is not in scope bare).
+	 */
+	private function bareCallParams(ident: QueryNode): Null<CalleeParams> {
+		final hit: Null<RefHit> = hitOf(ident);
+		final fn: Null<QueryNode> = hit?.bindingNode;
+		if (bindsHere(hit)) {
+			if (fn == null) return null;
+			final member: Null<MemberInfo> = _fnKinds.contains(fn.kind) ? memberAt(fn) : null;
+			final local: Bool = ShapeVocab.localFunctionScopeKinds(_shape).contains(fn.kind);
+			return local || member != null && selectsItsSignature(member) ? localParams(fn) : null;
+		}
+		final name: Null<String> = ident.name;
+		final span: Null<Span> = ident.span;
+		if (name == null || span == null) return null;
+		final at: Span = span;
+		if (bindsHere(TypeResolver.resolveBindingHit(name, at, _tree, _shape))) return null;
+		final owner: Null<ResolvedType> = capturedBetween(name, at, null) ? null : enclosingDeclaration(at);
+		final declared: Null<HostedMembers> = owner == null ? null : declarationOf(owner, name);
+		return declared == null || declared.members.exists(m -> m.isStatic) ? null : memberParams(declared, [], 0, []);
+	}
+
+	/** The parameters the function `fn` of this file writes, at its declaration, so its type parameters are in scope there. */
+	private function localParams(fn: QueryNode): Null<CalleeParams> {
+		final from: Null<Int> = fn.span?.from;
+		return from == null ? null : {
+			params: CallGraphNames.paramsOf(fn, _annotations, _shape),
+			at: from,
+			host: null,
+			shift: 0,
+			bindings: []
+		};
+	}
+
+	/**
+	 * `recv.m(…)` on a receiver of one declaration: its member `m` — a static off a type name (its own type parameters bound by
+	 * the arguments, `methodBindings`), an instance member off a value (the receiver's written type arguments bound to its
+	 * type's, `ownerBindings`) — or, where the declaration's closure provably declares no `m`, the static extension the
+	 * file's `using`s supply (`extensionParams`).
+	 */
+	private function memberCallParams(receiver: QueryNode, name: String, call: QueryNode): Null<CalleeParams> {
+		final value: Null<Array<ResolvedType>> = switch tierOf(receiver) {
+			case Bound(decls): decls;
+			case _: null;
+		};
+		final owners: Null<Array<ResolvedType>> = value ?? receiverDecls(receiver);
+		if (owners == null || owners.length != 1) return null;
+		final owner: ResolvedType = owners[0];
+		final onType: Bool = value == null;
+		if (_index.members.declarationLacksMember(owner, name)) return onType ? null : extensionParams(owner, receiver, name);
+		final declared: Null<HostedMembers> = declarationOf(owner, name);
+		if (declared == null || declared.members.exists(m -> m.isStatic != onType)) return null;
+		return onType
+			? memberParams(declared, [], 0, methodBindings(declared, call.children.slice(1)))
+			: memberParams(declared, ownerBindings(receiver, owner, declared.host), 0, []);
+	}
+
+	/**
+	 * `new T(…)`: the constructor `T`'s closure declares, the type arguments `new` writes bound to `T`'s parameters when `T`
+	 * declares it itself.
+	 */
+	private function constructionParams(node: QueryNode): Null<CalleeParams> {
+		final at: Null<Span> = node.span;
+		final name: Null<String> = node.name;
+		if (at == null || name == null) return null;
+		final owners: Null<Array<ResolvedType>> = switch writtenTier(name, at.from) {
+			case Bound(decls) if (decls.length == 1): decls;
+			case _: null;
+		};
+		if (owners == null) return null;
+		final owner: ResolvedType = owners[0];
+		final declared: Null<HostedMembers> = declarationOf(owner, _shape.constructorName ?? 'new');
+		if (declared == null || declared.members.exists(m -> m.isStatic)) return null;
+		final args: Array<String> = [
+			for (i in 0...node.typeArgCount) {
+				final span: Null<Span> = node.children[i].span;
+				span == null ? '' : _source.substring(span.from, span.to);
+			}
+		];
+		final bindings: Map<String, Located> = sameDeclaration(owner, declared.host)
+			? bindAll(owner.type.typeParamNames, args, at.from)
+			: [];
+		return memberParams(declared, bindings, 0, []);
+	}
+
+	/**
+	 * The parameters of the one member `declared` holds, a function of one signature, where its type declares it: `bindings`
+	 * binds its type's parameters (the method's own shadowing them), `own` the method's own; `shift` parameters come before
+	 * the first argument's.
+	 */
+	private function memberParams(
+		declared: HostedMembers, bindings: Map<String, Located>, shift: Int, own: Map<String, Located>
+	): Null<CalleeParams> {
+		final host: ResolvedType = declared.host;
+		if (
+			declared.members.length != 1 || _index.sourceOf(host.file.file) == null
+			|| host.type.typeParamArity != host.type.typeParamNames.length
+		)
+			return null;
+		final m: MemberInfo = declared.members[0];
+		if (!typedByItsReturn(m) || m.isOverload || m.guarded || !_fnKinds.contains(m.kind)) return null;
+		final kept: Map<String, Located> = [for (k => v in bindings) if (!m.typeParamNames.contains(k)) k => v];
+		for (k => v in own) kept[k] = v;
+		return {
+			params: { params: m.paramTypeSources, skippableFrom: m.paramSkippableFrom, rest: m.paramRest },
+			at: m.declFrom,
+			host: host.file.file == _file ? null : { file: host.file, params: host.type.typeParamNames.concat(m.typeParamNames) },
+			shift: shift,
+			bindings: kept
+		};
+	}
+
+	/**
+	 * The type arguments the receiver `receiver` is written with — a binding this file declares with an annotation naming as
+	 * many as `owner` has parameters — bound to `owner`'s parameters, when `host`, the type declaring the member called, is
+	 * `owner` itself: what a supertype's parameters are is what `owner` extends it with, which this does not follow.
+	 */
+	private function ownerBindings(receiver: QueryNode, owner: ResolvedType, host: ResolvedType): Map<String, Located> {
+		final written: Null<Located> = writtenSourceOf(receiver);
+		final args: Null<Array<String>> = written == null
+			? null
+			: _index.typeSyntax(NominalTypes.unwrapNullable(StringTools.trim(written.text), _wrappers, _index.typeSyntax))?.argumentTexts();
+		return written == null || args == null || !sameDeclaration(owner, host) ? [] : bindAll(owner.type.typeParamNames, args, written.at);
+	}
+
+	/**
+	 * `recv.m(…)` through the static extension the file's `using`s supply (`ValueNameBinding.extensionDeclaration`, as
+	 * `extensionTier` reads it): its parameters past the first, which takes the receiver — a first parameter written as
+	 * `owner` itself, or as the std `Iterable` of one of the method's own type parameters over a receiver written as a std
+	 * iterable (`iterableBinding`), which binds that parameter.
+	 */
+	private function extensionParams(owner: ResolvedType, receiver: QueryNode, name: String): Null<CalleeParams> {
+		final usings: Null<Array<String>> = _usings();
+		if (usings == null || !_index.members.declarationFreeOfExtensionTypes(owner)) return null;
+		final declared: Null<HostedMembers> = _index.values.extensionDeclaration(usings, name);
+		if (declared == null || declared.members.length != 1) return null;
+		final host: ResolvedType = declared.host;
+		final m: MemberInfo = declared.members[0];
+		final first: Null<String> = m.firstParamTypeSource;
+		if (first == null || host.type.typeParamArity != host.type.typeParamNames.length) return null;
+		final element: Null<Map<String, Located>> = iterableBinding(first, host, m, writtenSourceOf(receiver));
+		final params: Array<String> = host.type.typeParamNames.concat(m.typeParamNames);
+		final exact: Bool = switch DeclaredNullity.headTierIn(first, host.file, m.declFrom, _index, params, _wrappers, _builtins) {
+			case Bound(decls):
+				decls.length == 1 && sameDeclaration(decls[0], owner);
+			case _: false;
+		};
+		return element == null && !exact ? null : memberParams(declared, [], 1, element ?? []);
+	}
+
+	/**
+	 * What a static call binds its callee's own type parameters to: each written as the std `Iterable` of one of them, over an
+	 * argument written as a std iterable (`iterableBinding`) — every such parameter agreeing. Empty for any other method.
+	 */
+	private function methodBindings(declared: HostedMembers, args: Array<QueryNode>): Map<String, Located> {
+		final out: Map<String, Located> = [];
+		if (declared.members.length != 1) return out;
+		final m: MemberInfo = declared.members[0];
+		final dropped: Array<String> = [];
+		for (i in 0...Std.int(Math.min(args.length, m.paramTypeSources.length))) {
+			final written: Null<String> = m.paramTypeSources[i];
+			final found: Null<Map<String, Located>> = written == null
+				? null
+				: iterableBinding(written, declared.host, m, writtenSourceOf(args[i]));
+			if (found != null) for (k => v in found) {
+				final known: Null<Located> = out[k];
+				if (known != null && (known.text != v.text || known.at != v.at)) dropped.push(k);
+				out[k] = v;
+			}
+		}
+		for (k in dropped) out.remove(k);
+		return out;
+	}
+
+	/**
+	 * The type parameter of `m` (declared on `host`) a parameter written `written` binds when an argument written `given` is
+	 * handed to it: `written` the std `Iterable` of one of `m`'s own type parameters (`RefShape.iterableTypeName`), `given` a
+	 * std type that unifies with an `Iterable` (`RefShape.iterableElementTypeParams`: 4.3.7 types `Lambda.iter(xs, c -> …)`'s
+	 * `c` as the element of an `Array`, a `List`, an `Iterable` and the value of a `Map` — and has no `iter` for a
+	 * `haxe.ds.Vector`) — the parameter bound to that element, where `given` writes it. Null otherwise.
+	 */
+	private function iterableBinding(written: String, host: ResolvedType, m: MemberInfo, given: Null<Located>): Null<Map<String, Located>> {
+		final iterable: Null<String> = _shape.iterableTypeName;
+		final elements: Map<String, Int> = _shape.iterableElementTypeParams ?? [];
+		final param: Null<TypeSyntax> = _index.typeSyntax(StringTools.trim(written));
+		if (iterable == null || given == null || param == null) return null;
+		final element: Null<String> = switch param.shape {
+			case Nominal(path, [arg]) if (stdNamed(path, host.file.file, iterable) && m.typeParamNames.contains(StringTools.trim(arg.text))):
+				StringTools.trim(arg.text);
+			case _: null;
+		};
+		final peeled: String = NominalTypes.unwrapNullable(StringTools.trim(given.text), _wrappers, _index.typeSyntax);
+		final arg: Null<TypeSyntax> = _index.typeSyntax(peeled);
+		final args: Null<Array<String>> = arg?.argumentTexts();
+		final path: Null<String> = arg == null ? null : NominalTypes.outerPathOf(peeled, [], _index.typeSyntax);
+		if (element == null || args == null || path == null) return null;
+		for (name => i in elements) if (i < args.length && stdNamed(path, _file, name)) {
+			final bound: Located = { text: args[i], at: given.at };
+			return [element => bound];
+		}
+		return null;
+	}
+
+	/** Whether the type `path` written in `file` binds to the std declaration of the type named `name`. */
+	private function stdNamed(path: String, file: String, name: String): Bool {
+		return _index.stdDeclarationOf(path, file)?.type.name == name;
+	}
+
+	/** The annotation of the binding the identifier `node` reads, where this file writes it; null for any other expression. */
+	private function writtenSourceOf(node: QueryNode): Null<Located> {
+		final from: Null<Int> = hitOf(node)?.bindingSpan?.from;
+		return annotationOf(from);
+	}
+
+	/** `names[i]` bound to `args[i]`, written in this file at `at`; empty when the counts differ. */
+	private static function bindAll(names: Array<String>, args: Array<String>, at: Int): Map<String, Located> {
+		final out: Map<String, Located> = [];
+		if (names.length == args.length) for (i in 0...names.length) {
+			final bound: Located = { text: args[i], at: at };
+			out[names[i]] = bound;
+		}
+		return out;
+	}
+
 }
 
-/** A type written in the binder's file and the offset it is written at, which says what type parameters are in scope. */
+/**
+ * A type and where it is written: at `at` of the binder's file, or — `host` set — of the file declaring a callee, whose
+ * type parameters in scope there `host` names; a type parameter `bindings` holds is the type the call binds it to.
+ */
 private typedef Located = {
 	final text: String;
 	final at: Int;
+	@:optional final host: WrittenHost;
+	@:optional final bindings: Map<String, Located>;
+}
+
+/** The file of the index a type is written in, and the type parameters in scope where it is. */
+private typedef WrittenHost = {
+	final file: FileInfo;
+	final params: Array<String>;
+}
+
+/**
+ * The parameter list a call selects (`OperandBinder.calleeParams`): where it is written (`at` of the binder's file, or of
+ * `host`'s), the type parameters the call binds there, and how many parameters come before the first argument's (a static
+ * extension's receiver).
+ */
+private typedef CalleeParams = {
+	final params: DeclaredParams;
+	final at: Int;
+	final host: Null<WrittenHost>;
+	final shift: Int;
+	final bindings: Map<String, Located>;
 }

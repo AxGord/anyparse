@@ -673,8 +673,10 @@ final class PinsCheckAToO {
 		'unit.check.OperandTypingTest#testAGuardedUsingLeavesTheExtensionUnproven :: control :: M-BINDER-EXTENSION-GUARDED-USING',
 		'unit.check.OperandTypingTest#testALambdaAfterASkippableParameterIsUnproven :: control :: '
 			+ 'M-BINDER-ARGUMENT-SKIPPABLE,M-TS-SKIP-DEFAULT',
+		'unit.check.OperandTypingTest#testALambdaTakesTheParameterOfACalleeDeclaredElsewhere :: control :: M-BINDER-CALLEE-MEMBER-OFF,M-BINDER-CALLEE-NEW-OFF,M-BINDER-CALLEE-INHERITED-OFF,M-BINDER-CALLEE-LOCAL-OFF,M-BINDER-OWNER-BINDINGS-OFF,M-BINDER-LOCATED-HOST-OFF',
 		'unit.check.OperandTypingTest#testAStaticOfTheFieldsNameOutranksTheResolver :: control :: '
 			+ 'M-BINDER-RESOLVE-USING-SHADOW,M-USING-DECLS-AMBIENT',
+		'unit.check.OperandTypingTest#testAStdIterableBindsTheElementOfWhatIsHandedToIt :: control :: M-BINDER-ITERABLE-OFF,M-BINDER-ITERABLE-ANY-TYPE',
 		'unit.check.OperandTypingTest#testASupertypeStaticReadBareIsNotTheSupertypes :: control :: M-BINDER-INHERITED-STATIC',
 		'unit.check.OperandTypingTest#testAUsedAliasLeavesTheExtensionUnproven :: control :: M-USING-HOSTS-ALIAS',
 		'unit.check.OperandTypingTest#testAnExtensionOfAnotherFirstParameterIsUnproven :: control :: M-BINDER-EXTENSION-FIRST-PARAM',
@@ -694,6 +696,7 @@ final class PinsCheckAToO {
 		'unit.check.OperandTypingTest#testEveryTypeOfAUsedModuleBringsItsExtensions :: control :: M-USING-HOSTS-MODULE',
 		'unit.check.OperandTypingTest#testTheLastUsingDeclaringTheExtensionWins :: control :: M-BINDER-EXTENSION-LAST-USING',
 		'unit.check.OperandTypingTest#testTheReceiversOwnUsingOutranksTheFiles :: control :: M-BINDER-EXTENSION-ATUSING',
+		'unit.check.OperandTypingTest#testWhatTheCallDoesNotBindStaysUnproven :: control :: M-BINDER-METHOD-SHADOWS-OFF,M-BINDER-CALLEE-OVERLOAD',
 		'unit.check.OperatorOverloadGateTest#testDefaultLastAsksTheOperatorItWrites :: control :: '
 			+ 'M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND,M-NEGCOND-DEFAULT-LAST-EQ-UNASKED',
 		'unit.check.OperatorOverloadGateTest#testInvertTernarySkipsOverloadedNot :: control :: M-NEGCOND-OVERLOAD-BLIND',

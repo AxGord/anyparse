@@ -2553,6 +2553,18 @@ typedef RefShape = {
 	@:optional var stringAffixTests: { module: String, suffix: String, prefix: String };
 
 	/**
+	 * The std structure a value is iterable as (Haxe `Iterable`), and the std types that unify with it, each by the type
+	 * parameter that is its element there — what binds `A` when such a value is handed to a parameter written as that
+	 * structure of a type parameter (`Lambda.iter<A>(it:Iterable<A>, …)`). Proved on Haxe 4.3.7: `Lambda.iter(xs, c -> …)`
+	 * types `c` as the element of an `Array<T>` (0), a `List<T>` (0), an `Iterable<T>` (0) and the VALUE of a `Map<K, V>`
+	 * (1); a `haxe.ds.Vector` has no `iter` (it is no `Iterable`), and an `Iterator` is none either. Optional; unset binds
+	 * nothing.
+	 */
+	@:optional var iterableTypeName: String;
+
+	@:optional var iterableElementTypeParams: Map<String, Int>;
+
+	/**
 	 * The array-literal node kind (Haxe `ArrayExpr`, whose children are the element
 	 * expressions) — the `explicit-local-type` autofix annotates a local whose
 	 * initializer is a NON-EMPTY array literal of one KNOWN literal element type as

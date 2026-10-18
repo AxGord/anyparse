@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.CallGraphNames.DeclaredParams;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndexBuilder.MemberSeams;
@@ -89,6 +90,9 @@ final class SymbolIndexMembers {
 						final typeKey: Int = typeInfoKeyOf(child, sp);
 						final init: Null<QueryNode> = initializerOf(child, seams);
 						final initSpan: Null<Span> = init?.span;
+						final params: DeclaredParams = CallGraphNames.paramsBy(
+							child, typeSources, seams.paramKinds, seams.annotationKinds, seams.optionalParamKind, seams.restParamKind
+						);
 						out.push({
 							name: memberName,
 							hasGetter: accessors[typeKey] ?? false,
@@ -100,7 +104,9 @@ final class SymbolIndexMembers {
 							typeSource: typeSources[typeKey],
 							typeParamNames: typeParams[typeKey] ?? [],
 							firstParamTypeSource: firstParamTypeSourceOf(child, typeSources, seams.paramKinds),
-							paramTypeSources: paramTypeSourcesOf(child, typeSources, seams.paramKinds),
+							paramTypeSources: params.params,
+							paramSkippableFrom: params.skippableFrom,
+							paramRest: params.rest,
 							visibility: runVisibility,
 							isOverride: runOverride,
 							kind: child.kind,
@@ -195,6 +201,8 @@ final class SymbolIndexMembers {
 			extensionExcludingMetaNames: shape.execution?.extensionExcludingMetaNames ?? [],
 			conditionalKind: shape.conditionalMemberKind,
 			paramKinds: shape.paramKinds ?? [],
+			optionalParamKind: shape.optionalParamKind,
+			restParamKind: shape.restParamKind,
 			functionKinds: shape.functionKinds ?? [],
 			fieldKinds: shape.fieldDeclKinds ?? [],
 			annotationKinds: shape.typeAnnotationKinds ?? []
@@ -216,15 +224,6 @@ final class SymbolIndexMembers {
 		if (decl == null || decl.name != member.name) return own.from;
 		final declSpan: Null<Span> = decl.span;
 		return declSpan == null ? own.from : declSpan.from;
-	}
-
-	/** The written types of every parameter of `member`, in order, `null` for one written without a type. */
-	private static function paramTypeSourcesOf(
-		member: QueryNode, typeSources: Map<Int, String>, paramKinds: Array<String>
-	): Array<Null<String>> {
-		return [
-			for (c in member.children) if (paramKinds.contains(c.kind)) c.span == null ? null : typeSources[c.span.from]
-		];
 	}
 
 	/** Whether `node` is an annotation under which the language calls the member implicitly (`MemberSeams.implicitCallMetaNames`). */

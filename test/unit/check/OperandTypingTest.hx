@@ -557,6 +557,122 @@ class OperandTypingTest extends Test {
 		return { file: '${useName(route, t)}.hx', source: '$out}\n' };
 	}
 
+	/**
+	 * A callee declared in ANOTHER file types the lambda as one of this file does — each shape compiled on Haxe 4.3.7, whose
+	 * `$type` of `c` is `Use` in every one (`v-N48-hx/b1`): an instance member off a value, a static off its type, a
+	 * constructor, a member the enclosing type inherits, a local function, a generic type's member and constructor with the
+	 * type arguments the receiver's annotation or the `new` writes.
+	 */
+	@:pin('control')
+	@:killer('M-BINDER-CALLEE-MEMBER-OFF', 'M-BINDER-CALLEE-NEW-OFF', 'M-BINDER-CALLEE-INHERITED-OFF', 'M-BINDER-CALLEE-LOCAL-OFF')
+	@:killer('M-BINDER-OWNER-BINDINGS-OFF', 'M-BINDER-LOCATED-HOST-OFF')
+	public function testALambdaTakesTheParameterOfACalleeDeclaredElsewhere(): Void {
+		final other: { file: String, source: String } = {
+			file: 'Other.hx',
+			source: 'class Other {\n\tpublic function new() {}\n\n\tpublic function each(cb:(c:Use)->Void):Void {}\n\n'
+				+ '\tpublic static function stat(cb:(c:Use)->Void):Void {}\n\n\tpublic function priv(cb:(c:Item)->Void):Void {}\n}\n\n'
+				+ 'private class Item {\n\tpublic var on(get, never):Bool;\n\n\tinline function get_on():Bool\n\t\treturn true;\n}\n'
+		};
+		final maker: { file: String, source: String } = {
+			file: 'Maker.hx',
+			source: 'class Maker {\n\tpublic function new(cb:(c:Use)->Void) {}\n}\n'
+		};
+		final box: { file: String, source: String } = {
+			file: 'Box.hx',
+			source: 'class Box<T> {\n\tpublic function new(?cb:(c:T)->Void) {}\n\n\tpublic function each(cb:(c:T)->Void):Void {}\n}\n'
+		};
+		final holder: { file: String, source: String } = {
+			file: 'Holder.hx',
+			source: 'class Holder<T> {\n\tpublic function new(cb:(c:T)->Void) {}\n}\n'
+		};
+		final uses: Array<{ name: String, body: String }> = [
+			{ name: 'member', body: 'final o:Other = new Other();\n\t\to.each(c -> trace(!c.on ? 1 : 2));' },
+			{ name: 'static', body: 'Other.stat(c -> trace(!c.on ? 1 : 2));' },
+			{ name: 'where the callee writes it', body: 'final o:Other = new Other();\n\t\to.priv(c -> trace(!c.on ? 1 : 2));' },
+			{ name: 'new', body: 'new Maker(c -> trace(!c.on ? 1 : 2));' },
+			{ name: 'local', body: 'function loc(cb:(c:Use)->Void):Void {}\n\t\tloc(c -> trace(!c.on ? 1 : 2));' },
+			{ name: 'generic member', body: 'final b:Box<Use> = new Box();\n\t\tb.each(c -> trace(!c.on ? 1 : 2));' },
+			{ name: 'generic new', body: 'new Holder<Use>(c -> trace(!c.on ? 1 : 2));' }
+		];
+		for (u in uses) Assert.isTrue(inverts([other, maker, box, holder, lambdaUse('', u.body)]), u.name);
+		final base: { file: String, source: String } = {
+			file: 'Base.hx',
+			source: 'class Base {\n\tpublic function new() {}\n\n\tpublic function inherited(cb:(c:Use)->Void):Void {}\n}\n'
+		};
+		final sub: { file: String, source: String } = {
+			file: 'Use.hx',
+			source: 'class Use extends Base {\n\tpublic var on(get, never):Bool;\n\n\tinline function get_on():Bool\n\t\treturn true;\n\n'
+				+ '\tfunction f():Void {\n\t\tinherited(c -> trace(!c.on ? 1 : 2));\n\t}\n}\n'
+		};
+		Assert.isTrue(inverts([base, sub]), 'inherited');
+	}
+
+	/**
+	 * What the call does not bind stays unproven: a type parameter the method declares itself, shadowing the type's (4.3.7:
+	 * `Unknown<0>`), a receiver written with no type arguments, a member `@:overload` offers another signature of.
+	 */
+	@:pin('control') @:killer('M-BINDER-METHOD-SHADOWS-OFF', 'M-BINDER-CALLEE-OVERLOAD')
+	public function testWhatTheCallDoesNotBindStaysUnproven(): Void {
+		final box: { file: String, source: String } = {
+			file: 'Box.hx',
+			source: 'class Box<T> {\n\tpublic function new() {}\n\n\tpublic function each(cb:(c:T)->Void):Void {}\n\n'
+				+ '\tpublic function shadow<T>(cb:(c:T)->Void):Void {}\n\n'
+				+ '\t@:overload(function(cb:(c:Int)->Void):Void {})\n\tpublic function over(cb:(c:T)->Void):Void {}\n}\n'
+		};
+		Assert.isFalse(inverts([
+			box,
+			lambdaUse('', 'final b:Box<Use> = new Box();\n\t\tb.shadow(c -> trace(!c.on ? 1 : 2));')
+		]), 'shadow');
+		Assert.isFalse(inverts([
+			box,
+			lambdaUse('', 'final b = new Box();\n\t\tb.each(c -> trace(!c.on ? 1 : 2));')
+		]), 'unwritten');
+		Assert.isFalse(inverts([
+			box,
+			lambdaUse('', 'final b:Box<Use> = new Box();\n\t\tb.over(c -> trace(!c.on ? 1 : 2));')
+		]), 'overload');
+	}
+
+	/**
+	 * A std `Iterable` of the method's own type parameter binds it to the element of a std iterable handed to it — the
+	 * receiver of `using Lambda`'s `xs.iter(…)`, the argument of `Lambda.iter(xs, …)` (4.3.7: `c` is `Use` for an `Array`,
+	 * a `List`, an `Iterable` and the value of a `Map`; a `haxe.ds.Vector` is no `Iterable`).
+	 */
+	@:pin('control') @:killer('M-BINDER-ITERABLE-OFF', 'M-BINDER-ITERABLE-ANY-TYPE')
+	public function testAStdIterableBindsTheElementOfWhatIsHandedToIt(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no installed Haxe std on this machine');
+			return;
+		}
+		final std: Array<{ file: String, source: String }> = [
+			{
+				file: QueryTestHelpers.stdPath('Lambda.hx'),
+				source: 'class Lambda {\n\tpublic static function iter<A>(it:Iterable<A>, f:(a:A)->Void):Void {}\n}\n'
+			},
+			{ file: QueryTestHelpers.stdPath('StdTypes.hx'), source: 'typedef Iterable<T> = {\n\tfunction iterator():Iterator<T>;\n}\n' },
+			{ file: QueryTestHelpers.stdPath('Array.hx'), source: 'extern class Array<T> {\n\tfunction new():Void;\n}\n' },
+			{
+				file: QueryTestHelpers.stdPath('haxe/ds/Vector.hx'),
+				source: 'package haxe.ds;\n\nextern class Vector<T> {\n\tfunction new(n:Int):Void;\n}\n'
+			}
+		];
+		function lambdaFile(body: String): { file: String, source: String } {
+			final f: { file: String, source: String } = lambdaUse('', body);
+			return { file: f.file, source: 'using Lambda;\n\n' + f.source };
+		}
+		Assert.isTrue(inverts(std.concat([lambdaFile('final xs:Array<Use> = [];\n\t\txs.iter(c -> trace(!c.on ? 1 : 2));')])), 'extension');
+		Assert.isTrue(inverts(std.concat([
+			lambdaFile('final xs:Array<Use> = [];\n\t\tLambda.iter(xs, c -> trace(!c.on ? 1 : 2));')
+		])), 'static');
+		Assert.isFalse(inverts(std.concat([
+			lambdaFile('final v:haxe.ds.Vector<Use> = new haxe.ds.Vector(1);\n\t\tLambda.iter(v, c -> trace(!c.on ? 1 : 2));')
+		])), 'a Vector is no Iterable');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }
 
 /** One operand position: a function body whose `@` the route's operand replaces. */

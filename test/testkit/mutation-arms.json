@@ -21453,7 +21453,7 @@
 		{
 			"name": "M-TS-SKIP-DEFAULT",
 			"type": "anyparse.query.CallGraphNames",
-			"method": "paramsOf",
+			"method": "paramsBy",
 			"find": "&& !params[skippable].children.exists(c -> !annotationKinds.contains(c.kind))",
 			"replace": "",
 			"note": "a parameter with a default value is not skippable"
@@ -25184,16 +25184,16 @@
 			"name": "M-BINDER-ARGUMENT-REST",
 			"type": "anyparse.check.OperandBinder",
 			"method": "argumentType",
-			"find": "params.rest ? Std.int(Math.min(at, params.params.length - 1)) : at",
-			"replace": "at",
+			"find": "params.rest ? Std.int(Math.min(index, params.params.length - 1)) : index",
+			"replace": "index",
 			"note": "an argument past a rest parameter's position binds no parameter"
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-SKIPPABLE",
 			"type": "anyparse.check.OperandBinder",
 			"method": "argumentType",
-			"find": "written == null || bound >= params.skippableFrom ? null",
-			"replace": "written == null ? null",
+			"find": "written == null || bound >= params.skippableFrom",
+			"replace": "written == null",
 			"note": "a lambda after an optional or defaulted parameter is typed by the parameter at its position, which the call may have skipped"
 		},
 		{
@@ -25216,8 +25216,8 @@
 			"name": "M-BINDER-ARGUMENT-SCOPE",
 			"type": "anyparse.check.OperandBinder",
 			"method": "argumentType",
-			"find": "{ text: written, at: fnFrom }",
-			"replace": "{ text: written, at: call.span?.from ?? fnFrom }",
+			"find": "at: callee.at,",
+			"replace": "at: call.span?.from ?? callee.at,",
 			"note": "a callee parameter is bound where the CALL is, so the callee's own type parameter binds a namesake class"
 		},
 		{
@@ -26388,6 +26388,86 @@
 			"find": "return arithmetic == null || !isArithmetic(node, shape) ? null : arithmeticType(node, shape, host, ctx, arithmetic);",
 			"replace": "return null;",
 			"note": "arithmetic is untyped by the shared walk"
+		},
+		{
+			"name": "M-BINDER-CALLEE-MEMBER-OFF",
+			"type": "anyparse.check.OperandBinder",
+			"method": "calleeParams",
+			"find": ": memberCallParams(callee.children[0], name, call);",
+			"replace": ": null;",
+			"note": "`recv.m(…)` selects no parameter list, so a lambda handed to a member of another file stays untyped"
+		},
+		{
+			"name": "M-BINDER-CALLEE-NEW-OFF",
+			"type": "anyparse.check.OperandBinder",
+			"method": "calleeParams",
+			"find": "if (call.kind == _shape.newExprKind) return constructionParams(call);",
+			"replace": "if (call.kind == _shape.newExprKind) return null;",
+			"note": "a construction selects no parameter list, so a lambda handed to a constructor stays untyped"
+		},
+		{
+			"name": "M-BINDER-CALLEE-INHERITED-OFF",
+			"type": "anyparse.check.OperandBinder",
+			"method": "bareCallParams",
+			"find": "return declared == null || declared.members.exists(m -> m.isStatic) ? null : memberParams(declared, [], 0, []);",
+			"replace": "return null;",
+			"note": "a bare call to an inherited member selects no parameter list"
+		},
+		{
+			"name": "M-BINDER-CALLEE-LOCAL-OFF",
+			"type": "anyparse.check.OperandBinder",
+			"method": "bareCallParams",
+			"find": "final local: Bool = ShapeVocab.localFunctionScopeKinds(_shape).contains(fn.kind);",
+			"replace": "final local: Bool = false;",
+			"note": "a call to a local function selects no parameter list"
+		},
+		{
+			"name": "M-BINDER-OWNER-BINDINGS-OFF",
+			"type": "anyparse.check.OperandBinder",
+			"method": "memberCallParams",
+			"find": ": memberParams(declared, ownerBindings(receiver, owner, declared.host), 0, []);",
+			"replace": ": memberParams(declared, [], 0, []);",
+			"note": "the receiver's type arguments bind nothing, so `Box<Use>.each`'s `T` stays unbound"
+		},
+		{
+			"name": "M-BINDER-LOCATED-HOST-OFF",
+			"type": "anyparse.check.OperandBinder",
+			"method": "locatedTier",
+			"find": "final host: Null<WrittenHost> = written.host;",
+			"replace": "final host: Null<WrittenHost> = null;",
+			"note": "a callee's parameter type is bound in the calling file, where the callee's private type means nothing"
+		},
+		{
+			"name": "M-BINDER-METHOD-SHADOWS-OFF",
+			"type": "anyparse.check.OperandBinder",
+			"method": "memberParams",
+			"find": "if (!m.typeParamNames.contains(k)) k => v",
+			"replace": "k => v",
+			"note": "a method's own type parameter does not shadow its type's, so `Box<Use>.shadow<T>` reads `T` as `Use`"
+		},
+		{
+			"name": "M-BINDER-CALLEE-OVERLOAD",
+			"type": "anyparse.check.OperandBinder",
+			"method": "memberParams",
+			"find": "if (!typedByItsReturn(m) || m.isOverload",
+			"replace": "if (m.isOverload",
+			"note": "an `@:overload` member of another file is read by its written signature, which the call may not select"
+		},
+		{
+			"name": "M-BINDER-ITERABLE-OFF",
+			"type": "anyparse.check.OperandBinder",
+			"method": "iterableBinding",
+			"find": "final iterable: Null<String> = _shape.iterableTypeName;",
+			"replace": "final iterable: Null<String> = null;",
+			"note": "a std Iterable parameter binds nothing, so `xs.iter(c -> …)`'s `c` stays untyped"
+		},
+		{
+			"name": "M-BINDER-ITERABLE-ANY-TYPE",
+			"type": "anyparse.check.OperandBinder",
+			"method": "iterableBinding",
+			"find": "if (i < args.length && stdNamed(path, _file, name))",
+			"replace": "if (i < args.length)",
+			"note": "any generic type binds an Iterable's element, a haxe.ds.Vector included"
 		}
 	]
 }

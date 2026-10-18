@@ -69,6 +69,11 @@ typedef MemberSeams = {
 	final extensionExcludingMetaNames: Array<String>;
 	final conditionalKind: Null<String>;
 	final paramKinds: Array<String>;
+
+	/** The optional and the rest parameter kinds (`RefShape.optionalParamKind`, `restParamKind`), null for a grammar naming none. */
+	final optionalParamKind: Null<String>;
+
+	final restParamKind: Null<String>;
 	final functionKinds: Array<String>;
 
 	/** The FIELD member kinds (`RefShape.fieldDeclKinds`) — the only members an initializer is recorded for. */
