@@ -86,19 +86,32 @@ class ThreadSafetyRegistersTest extends Test {
 		#end
 	}
 
-	#if (sys || nodejs)
-	/** A class `A` whose `handler` calls a short sink once, with `members`, beside a dispatcher `D`. */
-	private static function run(members: String, ?config: String): Array<Violation> {
-		return ThreadSafetyCheckTest.violations(config ?? CONFIG, [
-			ThreadSafetyCheckTest.MUTEX,
-			'class Runner { public static function create(fn:()->Void):Void {} }',
-			DISPATCHER,
-			'class A { static function handler(e:String):Void FileSystem.stat(e); $members }'
-		]);
+	/**
+	 * A `registers` entry naming a project member (`Req.success`, TM's `APIRequest2.success`) is the project's word on that
+	 * member, as a `runsOnce` one is: a loop around the registration repeats nothing (N46 E1). A bare name speaks for the
+	 * runtime's registrations only, and a project member it names stays a call that may run its value per item.
+	 */
+	@:pin('control') @:killer('M-TS-REGISTER-MEMBER')
+	public function testAProjectMemberEntryRegisters(): Void {
+		#if (sys || nodejs)
+		final members: String =
+			'public static function main():Void { final rs:Array<Req> = [new Req(), new Req()]; for (r in rs) r.success(handler); }';
+		Assert.same(
+			['info A A.handler | FileSystem.stat'],
+			graded(run(members, StringTools.replace(CONFIG, '"registers":["addEventListener"]', '"registers":["Req.success"]')))
+		);
+		Assert.same(
+			['info A A.handler | FileSystem.stat', 'warning A A.main | for (r in rs)'],
+			graded(run(members, StringTools.replace(CONFIG, '"registers":["addEventListener"]', '"registers":["success"]'))), 'a bare name'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
 	}
 
-	/** The findings of `found` with data as `<severity> <family> <member> | <subject>`, sorted. */
-	private static function graded(found: Array<Violation>): Array<String> {
+	#if (sys || nodejs)
+	/** The findings of `found` with data as `<severity> <family> <member> | <subject>`, sorted (read by other tests too). */
+	public static function graded(found: Array<Violation>): Array<String> {
 		final out: Array<String> = [
 			for (v in found) {
 				final data: Null<FindingData> = v.data;
@@ -107,6 +120,18 @@ class ThreadSafetyRegistersTest extends Test {
 		];
 		out.sort(Reflect.compare);
 		return out;
+	}
+
+	/** A class `A` whose `handler` calls a short sink once, with `members`, beside a dispatcher `D`. */
+	private static function run(members: String, ?config: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(config ?? CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			DISPATCHER,
+			'class Req { final _fns:Array<String->Void> = []; public function new() {} '
+			+ 'public function success(fn:String->Void):Void _fns.push(fn); }',
+			'class A { static function handler(e:String):Void FileSystem.stat(e); $members }'
+		]);
 	}
 	#end
 
