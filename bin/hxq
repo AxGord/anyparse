@@ -76,6 +76,23 @@ else
         here="$wt_top/bin"
     fi
 
+    # A worktree of THIS repository with no engine of its own must not fall
+    # back to the shared one: the stale check below compares the shared
+    # binary with the MAIN src/, so the fallback rebuilt bin/apq.js under
+    # every process running it (twice in one night, from agents that forgot
+    # HXQ_BIN). Such a caller wants its own build anyway — the worktree's
+    # src/ is what it edits — so refuse and say how to get one.
+    if [ -n "$wt_top" ] && [ "$wt_top/bin" != "$here" ]; then
+        wt_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+        here_common=$(git -C "$here/.." rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+        if [ -n "$wt_common" ] && [ "$wt_common" = "$here_common" ]; then
+            echo "hxq: $wt_top is a worktree of $(cd -P "$here/.." && pwd) with no engine of its own;" >&2
+            echo "hxq: refusing to run (and possibly rebuild) the shared $here/apq.js from here." >&2
+            echo "hxq: build a private one (tools/worker-build.sh <dir>) and set HXQ_BIN=<dir>/apq.js." >&2
+            exit 1
+        fi
+    fi
+
     js="$here/apq.js"
 
     if [ ! -f "$js" ]; then
