@@ -181,6 +181,15 @@ if ! command -v hxq > /dev/null 2>&1; then
     echo "suite-shard.sh: hxq is not on PATH — 'apq shard-plan' computes the whole shard plan" >&2
     exit 2
 fi
+# The shard plan and the summaries come from `hxq`. A private runner
+# (`--bin`, built by tools/worker-build.sh) has its engine beside it: use
+# that, so a worker's suite never falls back to the shared bin/apq.js —
+# which the shim refuses from an engine-less worktree, and which a stale
+# check would otherwise rebuild under every process running it.
+if [ -z "${HXQ_BIN:-}" ] && [ "$test_js" != "$repo/bin/test.js" ] && [ -f "$(dirname "$test_js")/apq.js" ]; then
+    HXQ_BIN="$(cd -P "$(dirname "$test_js")" && pwd)/apq.js"
+    export HXQ_BIN
+fi
 
 # Scratch-directory lifecycle — creation, the startup sweep for what a
 # SIGKILL left behind, and the predicate that keeps a sibling's live run
