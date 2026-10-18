@@ -9,6 +9,7 @@ import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.TypeSyntax;
+import anyparse.runtime.Span;
 import haxe.exceptions.NotImplementedException;
 
 /**
@@ -62,6 +63,10 @@ final class UntypedPlugin implements GrammarPlugin {
 	}
 
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String> {
+		throw new NotImplementedException();
+	}
+
+	public function layoutSplice(source: String, edits: Array<{ span: Span, text: String }>): Null<String> {
 		throw new NotImplementedException();
 	}
 

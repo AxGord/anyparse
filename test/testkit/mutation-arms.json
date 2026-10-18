@@ -26190,6 +26190,140 @@
 			"find": "listed(edge, lists.registerMemberIds, []) || ",
 			"replace": "",
 			"note": "a registers entry naming a project member is ignored for repetition, as a bare name is"
+		},
+		{
+			"name": "M-JSON-ROOT-UNTIGHTENED",
+			"type": "anyparse.grammar.json.JsonProjection",
+			"method": "tight",
+			"force": "value",
+			"note": "the root value keeps the span the parser gives it, which starts at offset 0 over the document's leading whitespace, so the writer finds no delimiter at the root's first byte"
+		},
+		{
+			"name": "M-JSON-DIRTY-NEVER",
+			"type": "anyparse.grammar.json.JsonLayoutWriter",
+			"method": "isDirty",
+			"force": "false",
+			"note": "no gap counts as touched by an edit, so an appended entry keeps the raw ` ` after its `,` and a deletion leaves the doubled space it closed up"
+		},
+		{
+			"name": "M-JSON-TOUCH-IGNORED",
+			"type": "anyparse.grammar.json.JsonLayoutWriter",
+			"method": "isDirty",
+			"find": "|| ((mark.from == mark.to || gap.from == gap.to) && mark.from <= gap.to && gap.from <= mark.to)",
+			"replace": "",
+			"note": "only an OVERLAPPING mark touches a gap: the empty gaps around the first entry of an empty container are never re-derived, so it stays `[\"x\"]` under an expanded parent"
+		},
+		{
+			"name": "M-JSON-NOTHING-NEW",
+			"type": "anyparse.grammar.json.JsonLayoutWriter",
+			"method": "isNew",
+			"force": "false",
+			"note": "no node counts as introduced by an edit, so a new object is written as an existing one with every gap touched — inline, whatever its sibling's shape"
+		},
+		{
+			"name": "M-JSON-STYLE-ALWAYS-EXPANDED",
+			"type": "anyparse.grammar.json.JsonLayoutWriter",
+			"method": "expandedOf",
+			"find": "return if (kept.length > 0)",
+			"replace": "return if (true) true else if (kept.length > 0)",
+			"note": "every touched container is laid out one entry per line, so an entry appended to an inline array breaks it open"
+		},
+		{
+			"name": "M-JSON-EMPTY-INLINE",
+			"type": "anyparse.grammar.json.JsonLayoutWriter",
+			"method": "expandedOf",
+			"find": "parentExpanded;",
+			"replace": "false;",
+			"note": "a container with no untouched gap is inline instead of following its parent, so the first entry of an empty array under an expanded object stays on the array's line"
+		},
+		{
+			"name": "M-JSON-NEW-MODEL-IGNORED",
+			"type": "anyparse.grammar.json.JsonLayoutWriter",
+			"method": "writeNew",
+			"find": "final shaped: Null<QueryNode> = model != null && model.kind == node.kind && model.children.length > 0 ? model : null;",
+			"replace": "final shaped: Null<QueryNode> = null;",
+			"note": "a new container never looks at its nearest sibling, so a new object beside an inline one comes out expanded"
+		},
+		{
+			"name": "M-JSON-KEYSEP-DEFAULT",
+			"type": "anyparse.grammar.json.JsonLayoutWriter",
+			"method": "keySepOf",
+			"force": "{ before: '', after: ' ' }",
+			"note": "a new member's `:` always takes the default spacing, so a document written `\"a\" : 1` gains a `\"b\": 2`"
+		},
+		{
+			"name": "M-JSON-INDENT-DEFAULT",
+			"type": "anyparse.grammar.json.JsonLayoutWriter",
+			"method": "indentUnit",
+			"force": "'\\t'",
+			"note": "the indent unit is always a tab, so a line an edit adds to a two-space document is indented by a tab"
+		},
+		{
+			"name": "M-JSON-LINE-END-LF",
+			"type": "anyparse.grammar.json.JsonLayoutWriter",
+			"method": "lineEndOf",
+			"force": "'\\n'",
+			"note": "every line an edit adds ends in LF, so a CRLF document gains mixed line ends"
+		},
+		{
+			"name": "M-JSON-MARKS-UNSHIFTED",
+			"type": "anyparse.grammar.json.JsonLayoutWriter",
+			"method": "marksOf",
+			"find": "delta += edit.text.length - (edit.span.to - edit.span.from);",
+			"replace": "",
+			"note": "each edit's footprint is placed at its offset in the ORIGINAL document, so a second insert's mark misses the entry it introduced"
+		},
+		{
+			"name": "M-QUERY-NAME-IGNORED",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "lowerNameSeq",
+			"find": "if (tagged != null) {",
+			"replace": "if (false) {",
+			"note": "a `@:queryName` field names nothing, so a JSON object member projects unnamed and `Member:<key>` matches no node"
+		},
+		{
+			"name": "M-LAYOUT-SPLICE-BYPASSED",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "canonicalize",
+			"find": "plugin.layoutSplice(source, edits) ?? applyEdits(source, edits)",
+			"replace": "applyEdits(source, edits)",
+			"note": "a format-preserving grammar's edits are spliced raw, so an entry appended to a one-per-line JSON array lands as `, x` on the previous line"
+		},
+		{
+			"name": "M-PICK-PLUGIN-FOR-IGNORES-PATH",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "pickPluginFor",
+			"force": "pickPlugin(lang)",
+			"note": "the file's extension is ignored, so the `--lang haxe` the shim prepends parses a `.json` file as Haxe and every JSON edit is refused"
+		},
+		{
+			"name": "M-COMMA-CONTAINER-KINDS-UNREAD",
+			"type": "anyparse.query.AddElement",
+			"method": "addElement",
+			"find": "isComma = (plugin.refShape().commaContainerKinds ?? []).contains(parent.kind);",
+			"replace": "isComma = false;",
+			"note": "a sole entry has no adjacent `,`, and the container kind is no longer asked, so an insert after it is joined by a newline instead of a `,` and the result does not parse"
+		},
+		{
+			"name": "M-JSON-LITERAL-NONE",
+			"type": "anyparse.grammar.json.JsonStringFold",
+			"method": "literalOf",
+			"force": "null",
+			"note": "no JSON string reads as a literal, so `--sorted` refuses every JSON array as holding no constant strings"
+		},
+		{
+			"name": "M-JSON-REGIONS-NONE",
+			"type": "anyparse.grammar.json.JsonQueryPlugin",
+			"method": "lexicalRegions",
+			"force": "[]",
+			"note": "the JSON grammar reports no string region, so every byte of a key or a string value reads as code"
+		},
+		{
+			"name": "M-JSON-PATTERN-NO-METAVAR",
+			"type": "anyparse.grammar.json.JsonQueryPlugin",
+			"method": "metavars",
+			"force": "node",
+			"note": "a `\"$x\"` string in a pattern stays a string, so a JSON pattern can hold no metavariable"
 		}
 	]
 }

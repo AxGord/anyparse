@@ -374,6 +374,10 @@ final class PinsQueryAndRuntime {
 		'unit.query.IndexScopeTest#testTheReportIndexIsBuiltOncePerFileSet :: control :: M-INDEX-MEMO-OFF,M-INDEXSCOPE-HOST-IGNORED',
 		'unit.query.IndexScopeTest#testTheReportWriteIndexIsBuiltOncePerFileSet :: control :: M-WRITE-INDEX-MEMO-OFF',
 		'unit.query.IndexScopeTest#testWithoutAScopeEveryQuestionSharesTheReportBuild :: control :: M-INDEXSCOPE-RESOLUTION-OWN-BUILD',
+		'unit.query.JsonQueryPluginTest#testAMemberIsNamedByItsKey :: control :: M-QUERY-NAME-IGNORED',
+		'unit.query.JsonQueryPluginTest#testAPatternStringCanBeAMetavariable :: control :: M-JSON-PATTERN-NO-METAVAR',
+		'unit.query.JsonQueryPluginTest#testTheLexicalRegionsAreTheStrings :: control :: M-JSON-REGIONS-NONE',
+		'unit.query.JsonQueryPluginTest#testTheRootSpanIsTight :: control :: M-JSON-ROOT-UNTIGHTENED',
 		'unit.query.LintBaselineTest#testAFindingThatONLYMOVEDIsNotNew :: control :: M-LINT-BASELINE-NO-SUBTRACTION',
 		'unit.query.LintBaselineTest#testAFindingWithDataKeysByItsIdentity :: control :: '
 			+ 'M-BASELINE-DATA-IGNORED,M-LINTDIFF-DATA-IGNORED,M-LINTFORMAT-NO-DATA',

@@ -16,9 +16,16 @@ package anyparse.grammar.json;
  * The `var ... ;` form is used here (instead of the terser
  * `field:Type,` form) because Haxe only accepts field-level metadata
  * on the long form.
+ *
+ * `@:spanned('Member')` and `@:queryName` are read by the SPAN pipeline alone: the span parser
+ * (`JValueSpanParser`) gives each entry its own span, from the key's opening quote to the
+ * value's last byte, and the query walker (`JsonQueryWalker`) projects it as a `Member` node
+ * NAMED by its decoded key — what `--select 'Member:rules'` addresses. The plain parser, the
+ * writer and the transform ignore both.
  */
 @:peg
+@:spanned('Member')
 typedef JEntry = {
-	var key: JStringLit;
+	@:queryName var key: JStringLit;
 	@:lead(':') var value: JValue;
 }

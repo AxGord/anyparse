@@ -19,6 +19,7 @@ import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.runtime.Span;
 import haxe.io.Path;
 
 /**
@@ -564,6 +565,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function typeRefShape(): TypeRefShape return _inner.typeRefShape();
 
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String> return _inner.writeRoundTrip(source, optsJson);
+
+	public function layoutSplice(source: String, edits: Array<{ span: Span, text: String }>): Null<String>
+		return _inner.layoutSplice(source, edits);
 
 	/**
 	 * Memoised by `optsJson` — a width-aware check asks per FILE, and a lint run

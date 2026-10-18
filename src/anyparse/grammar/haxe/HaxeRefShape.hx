@@ -995,6 +995,17 @@ final class HaxeRefShape {
 			arrayTypeNames: ['Array'],
 			objectLiteralKind: 'ObjectLit',
 			trailingCommaHostKinds: ['ArrayExpr', 'ObjectLit', 'Anon', 'Call', 'NewExpr', 'MetaCall'],
+			commaContainerKinds: ['ArrayExpr', 'ObjectLit', 'Call', 'NewExpr'],
+			delimitedContainerKinds: [
+				'ArrayExpr',
+				'ObjectLit',
+				'Call',
+				'NewExpr',
+				'BlockBody',
+				'BlockStmt',
+				'SwitchStmtBare',
+				'SwitchExprBare'
+			],
 			mandatoryTrailingCommaChildKinds: ['ExtendsField'],
 			negationKind: 'Neg',
 			objectFieldKind: 'Field',

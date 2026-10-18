@@ -98,6 +98,14 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	private static inline final QUERY_TYPE_META: String = ':queryType';
 
 	/**
+	 * Grammar opt-in on a String field of a `@:spanned` `Seq`: the field NAMES the node, ahead of the
+	 * conventional `name` / `type` / `varName` slots. The JSON grammar tags `JEntry.key`, so an object
+	 * member projects as `Member` named by its decoded key — the name `--select 'Member:rules'` matches.
+	 * Without it a struct whose identifying field has any other name projects unnamed.
+	 */
+	private static inline final QUERY_NAME_META: String = ':queryName';
+
+	/**
 	 * Grammar opt-in on a `type` field — or on any other field holding the one type a
 	 * node is ABOUT, such as an abstract's underlying type: project it into the ENCLOSING
 	 * addressable node's `QueryNode.type` SLOT, leaving that node's children exactly as they were.
@@ -630,12 +638,18 @@ class QueryWalkerLowering extends PairedShapeLowering {
 
 	private function lowerNameSeq(node: ShapeNode): Expr {
 		final out: Array<Expr> = [];
+		// A field the grammar TAGS as the name names the node whatever the field is called — a JSON object
+		// entry is named by its `key`. Positive: the tag is the whole criterion, and a tagged field that is
+		// no String cannot be a name, so it stops the build rather than being skipped.
+		final tagged: Null<ShapeNode> = node.children.find(f -> f.hasMeta(QUERY_NAME_META));
+		if (tagged != null) {
+			if (!isStringSlot(tagged)) Context.error('@:queryName field "${fieldNameOf(tagged)}" is not a String', Context.currentPos());
+			final named: Expr = field(ident('v'), fieldNameOf(tagged));
+			return macro return ($named: String);
+		}
 		for (slot in NAME_STRING_SLOTS) {
 			final f: Null<ShapeNode> = seqField(node, slot);
-			if (f == null) continue;
-			final ref: Null<String> = refOf(f);
-			final isString: Bool = ref != null ? isStringTerminal(ref) : f.kind == Terminal && isStringShape(f);
-			if (!isString) continue;
+			if (f == null || !isStringSlot(f)) continue;
 			final access: Expr = field(ident('v'), slot);
 			out.push(macro if ($access != null) return ($access: String));
 		}
@@ -651,6 +665,12 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		}
 		out.push(macro return null);
 		return block(out);
+	}
+
+	/** Whether the `Seq` field `f` holds a String — a `Ref` to a String terminal, or an inline String terminal. */
+	private function isStringSlot(f: ShapeNode): Bool {
+		final ref: Null<String> = refOf(f);
+		return ref != null ? isStringTerminal(ref) : f.kind == Terminal && isStringShape(f);
 	}
 
 	/** `case Ctor(...): return <first non-null arg name>;` for a wrapper ctor, `case Ctor(...):` (fall to null) otherwise. */

@@ -259,6 +259,25 @@ is left alone and reported by position; conditions are never simplified, so `(mo
 becomes `mobile`. Retiring a define is a one-time procedure rather than a standing policy, which is
 why it is an op and not a lint rule.
 
+**JSON files are edited by the same ops** — `add-element` (`--after` / `--before` / `--append`
+/ `--sorted`), `remove-element`, `replace-node`, and read by `ast` / `source`. A `.json` path
+selects the `json` grammar plugin whatever `--lang` says. The selector vocabulary is the JSON
+grammar's: `JObject`, `Member:<key>` (an object entry, named by its key), `JArray`,
+`JString:<value>` (named by its decoded value), `JNumber`, `JBool`, `JNull`; a `--match`
+pattern is a JSON value whose `"$x"` strings are metavariables. The writer PRESERVES the
+file: an edit changes its own lines only, and a new entry or member is laid out like its
+siblings (one per line or inline, the document's indent unit and line end, the siblings' `:`
+spacing):
+
+```sh
+hxq add-element apqlint.json --append --select 'Member:thread-safety > JObject > Member:registers > JArray' \
+    '"api.APIRequest2.success"' --write
+hxq remove-element apqlint.json --select 'Member:spawns > JArray > JString:api.APIRequest2.success' --write
+hxq add-element test/testkit/mutation-arms.json --append --select 'Member:arms > JArray' - --write <<'EOF'
+{"name": "M-X", "type": "anyparse.query.Foo", "method": "bar", "force": "null", "note": "…"}
+EOF
+```
+
 ### File creation & formatting
 
 The create-side and whole-file counterparts of the insert ops — a new file gets the same

@@ -4256,3 +4256,26 @@ decided the question; it may not become a record of runs.
   chain (N46). The residue it would close: FileIO's own wrappers (`read`, `write`, `modificationTime`, …) forward their
   `onDone` PARAMETER to `run`, which no edge records, so a callback handed to one runs in its registrar's context — right
   from the main thread, wrong from a worker — branch `feat/infra-N49`
+- N47 — JSON editing goes through the EXISTING ops, not a second engine. (1) A `json` `GrammarPlugin`
+  (`JsonQueryPlugin`) whose tree is the GENERATED query walker's (`JsonQueryWalker`, `Build.buildQueryWalker` over a new
+  span parser `JValueSpanParser`), so the kinds are the grammar's ctor names — `JObject` / `JArray` / `JString` /
+  `JNumber` / `JBool` / `JNull` — plus `Member` (`JEntry` gains `@:spanned('Member')`). A member is named by its key
+  through a new walker opt-in, `@:queryName` on a `@:spanned` Seq's String field (`QueryWalkerLowering.lowerNameSeq`;
+  positive: a tagged non-String stops the build); `JString` is named by its decoded value. Rejected: a hand-written
+  projection over the paired `*S` types — the synthesised `spans.Pairs` module does not exist when a module importing it
+  is loaded, and the walker is the one projection mechanism the Haxe plugin already uses. `JNumber` / `JBool` stay
+  unnamed: naming a terminal ctor by its text would rename Haxe's literal nodes too. (2) A FORMAT-PRESERVING writer
+  (`JsonLayoutWriter`): delimiters from `JsonFormat`, scalars and keys from their spans, gaps verbatim, so
+  `writeRoundTrip` is the identity on every parseable document and the canonical gate never refuses one. The edit
+  layout cannot live in `writeRoundTrip` (after a splice nothing tells a new node from an old one), so
+  `CanonicalEdit.canonicalize` asks a new seam first, `GrammarPlugin.layoutSplice(source, edits)`: null for a writer
+  that re-emits (Haxe — byte-identical), else the spliced text with each node inside an edit's footprint laid out like
+  its nearest same-kind sibling (else its container's shape) and each gap the footprint touches re-derived from the
+  container's untouched gaps. Indent unit and line end are the document's. (3) MOVED, not copied: the engine-held Haxe
+  lists `MemberKinds.COMMA_CONTAINER_KINDS` and `AddElement.EXPR_CONTAINER_KINDS` become `RefShape.commaContainerKinds`
+  / `delimitedContainerKinds` (Haxe values unchanged); `trailingCommaHostKinds` was NOT reused, because a Haxe anon
+  type separates `var` fields with `;`. (4) A `.json` path selects the json plugin whatever `--lang` says
+  (`CliArgs.pickPluginFor`), because the `hxq` shim prepends `--lang haxe` to every call; `json` stays out of
+  `CliArgs.langNames`, the CODE-grammar registry whose Haxe-sized floors `RefShapeKindProjectionTest` applies —
+  `JsonQueryPluginTest` checks its declared kinds against its projection instead. Not done: `patch`, `move-elements`,
+  `--sorted` over objects by key, a key containing `>` in a selector — branch `feat/infra-N47`
