@@ -69,6 +69,10 @@ final class NominalTypes {
 		bound: (from, c) -> c.chain.declaredTypeSources[from] ?? c.declaredTypes[from],
 		initializer: (_, use, c) -> localInitializer(use, c.root, c.shape, c.chain.declaredTypeSources),
 		loopElement: forBindingElementTypeSource,
+		// the index resolves no call to a declaration (its call arc is the tabled statics), so it reads no callee's parameter
+		// a lambda could take its type from, and its currency spells a type parameter as a bare name its own later lookups
+		// would resolve package-blind: an untyped lambda parameter stays unknown here (`ExpectedTypes`)
+		parameter: null,
 		unbound: (_, _) -> null,
 		access: indexAccess,
 		element: null,
@@ -971,7 +975,8 @@ final class NominalTypes {
 	/**
 	 * `typeWalk`'s identifier: the type its binding is written with; else — for a binding written with no type, under the
 	 * host's ONE cycle guard (`reading`: `for (x in x)`, a local whose initializer reads itself) — the type of the
-	 * expression initialising it or the element of the loop binding it; for a name binding no value, what it names.
+	 * expression initialising it, the element of the loop binding it or, for a lambda's parameter, the parameter of the
+	 * function type the lambda is expected to be (`TypingHost.parameter`); for a name binding no value, what it names.
 	 */
 	private static function identifierType<T, C>(ident: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
 		final from: Null<Int> = host.binding(ident, ctx);
@@ -981,7 +986,10 @@ final class NominalTypes {
 		if (written != null || reading.contains(from)) return written;
 		reading.push(from);
 		final init: Null<QueryNode> = host.initializer(from, ident, ctx);
-		final held: Null<T> = init == null ? host.loopElement(from, ctx) : typeWalk(init, shape, host, ctx);
+		final parameter: Null<(from:Int, use:QueryNode, ctx:C) -> Null<T>> = host.parameter;
+		final held: Null<T> = init != null
+			? typeWalk(init, shape, host, ctx)
+			: host.loopElement(from, ctx) ?? (parameter == null ? null : parameter(from, ident, ctx));
 		reading.pop();
 		return held;
 	}
@@ -1110,6 +1118,12 @@ typedef TypingHost<T, C> = {
 
 	/** The element the loop binder at `from` binds, read off what the loop iterates. */
 	final loopElement: (from:Int, ctx:C) -> Null<T>;
+
+	/**
+	 * The type the lambda parameter at `from`, written with no type and read at `use`, takes from the function type the
+	 * lambda is expected to be (`ExpectedTypes.lambdaParamTypes`); null for a host typing none.
+	 */
+	final parameter: Null<(from:Int, use:QueryNode, ctx:C) -> Null<T>>;
 
 	/** What the identifier `ident`, which binds no value, names. */
 	final unbound: (ident:QueryNode, ctx:C) -> Null<T>;

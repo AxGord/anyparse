@@ -3900,6 +3900,74 @@ decided the question; it may not become a record of runs.
   members" in a WHOLE-scope run: 1 renamed by N26, 2 correct refusals, 2 owner-name ambiguities):
   `isPrivateMemberConfined(?ownerFile)` passes the declaring file to `hasSubtype`, so only edges resolving to the owner's
   own declaration count (both naming paths pass it; other callers unchanged) — branch `feat/infra-N27`
+- N35 (1) — `rename --scope` / `CrossRename.crossRenameType` missed five type-reference positions, found by renaming
+  each type of a haxe-typechecked census fixture (simple and qualified spellings of every position) and compiling.
+  The struct extension `{ > T, … }` is fixed in the SHARED projection, not in the op: `typeRefShape` lists
+  `ExtendsField` (the walk-path node names its type) and `QueryWalkerLowering.typeRefsDescendCore` emits the head of
+  a nominal reference `Seq` reached through a `type` slot (`isNominalRefRule`), which is how `> T` nested in an
+  annotation (`Array<{ > T, }>`) projected its field types and never `T` — so `uses` / `blast` / `mentions` /
+  `move-member`'s carry see it too. The rest is the op's own walk, each matched WHOLE against a path, never by last
+  segment: a dotted path in ANY expression position (`var c = pkg.T;`; it was matched only as a receiver) unless its
+  root identifier is a value binding of the file; an import whose path runs THROUGH the type's absolute module path
+  (`import pkg.T.f;`, `import pkg.T.*;`) and an alias import's path (decoded by `ModuleScan.aliasTargetOf`, the one
+  decoder); access grants by the TYPE path. Haxe 4.3.7, compile-checked: `@:access(p.Sub)` grants a sub-module type
+  `Sub` of `p.M`, `@:access(p.M.Sub)` and `@:access(p.M)` grant nothing, and a simple `@:access(C)` does not resolve
+  through `import p.C` — and a stale grant COMPILES, so this was the one silent miss. The grant metas are
+  `RefShape.takesPrivateAccessMetaName` + `AllowGrants.TAG`; a metadata argument of any other meta (`@:op(T + T)`)
+  is untouched. Left on purpose: a BARE type name in value position (`var c = T;`, `Std.isOfType(x, T)`) —
+  unqualified, it is a nullary enum constructor or an inherited member as far as a by-name walk knows; it stays a
+  loud compile error the advisory names — branch `feat/infra-N35`
+- N35 (2) — `add-element --before --select 'ClassDecl:X'` on ANY `final class` spliced between `final` and `class`
+  ("result does not parse"; the doc and `@:nullSafety` of the report were incidental): the selector resolves the
+  inner form, and only `remove-element` lifted it to the `FinalDecl` wrapper (a private `liftedHit`). MOVED to
+  `ElementSpan.liftedElementAt` / `liftedElement` (+ `ElementHit`), the RemoveElement copy deleted, `add-element`
+  calls it; `RefactorSupport.elementAtFrom` now has that one caller — branch `feat/infra-N35`
+- N35 (3) — no op inserted into a sorted list. → `add-element --sorted` (`AddElement.insertSorted`), a mode, not an
+  op: same address as `--append` (the array), same canonical writer-emit. Entries are split by the PARSER (spliced
+  at the array's front in a probe, read back as children), never by scanning the argument. POSITIVE: every element
+  a constant string (`StringFoldSupport.literalOf`, or a `concatKind` of them) whose raw content holds no `\` and no
+  `$` (raw text = value); the existing list strictly ascending in code-unit order (`TestDiscovery.compareStrings`);
+  a present entry refused. `--append` stays the explicit unsorted form. JSON: no `GrammarPlugin` exists for the JSON
+  grammar, so `mutation-arms.json` is out of reach of every op — branch `feat/infra-N35`
+- N35 (2b) — `add-element --append` onto an array written WITH a trailing comma (`[…, 'b',]`) spliced `, x` after
+  that comma (`,, x`, "result does not parse"; met appending to `TestDiscoveryParityTest`'s deferred-arm census). The
+  element now follows the existing separator and takes it over (`'b', 'x',`), also past trailing comments.
+  `NamingCrossRenameTest.testTheOracleRunRenamesAndRevertsTheMiss` needed a NEW miss for the oracle to revert, since
+  the aliased import it used is renamed now: a typedef alias of a class read as a bare VALUE — branch `feat/infra-N35`
+- N35 (2c) — `remove-element` of a comma-list element that holds a WHOLE line of a one-per-line list (`'x',` with
+  its comma) left the line's indentation and break behind — a blank line inside the array, kept by the writer as
+  trivia (met removing a pin from `TestDiscoveryParityTest`). `ElementSpan.elementCut` now line-extends the
+  comma-extended cut (`lineExtendedSpan` changes nothing when the cut does not own its line) — branch `feat/infra-N35`
+- N32 — ONE expected-type engine. The only typer of an untyped lambda parameter was a closure of `CallGraphEdges`
+  (`expectedAt` / `returnExpectation` / `typeLambdaParams`), in the graph's keyed currency, so the shared walk
+  (`NominalTypes.typeWalk`) answered Unknown for one and TM `FileSystemItemData.hx:330 !child.folder` (an inline-getter
+  property, no compiler-facts site) stayed refused. → `query.ExpectedTypes`: the LADDER (parentheses, ternary / `if` /
+  `switch` arms, the value a block ends with, array element, map value, object-literal field, a lambda's body, `return`
+  — an untyped lambda's from its own expectation —, a declaration written with a type, an assignment, a call or `new`
+  argument) moved verbatim, generic over a host currency `W` behind `ExpectationHost<W, C>` (declared / assigned /
+  returned / argument — the callee's parameter type at an argument position — / element / field / read / part), plus
+  `lambdaParamTypes` and `lineageOf` for a typer whose walk keeps no lineage. Every rung proved on 4.3.7 with `$type` of
+  the untyped parameter (`v-N32-hx/ladder`, `fixture`). `TypingHost.parameter` is the walk's new arc (asked after the
+  initializer and the loop element). Hosts: the CALL GRAPH pre-types a lambda's parameters into `typeSources` through the
+  engine as its walk reaches the lambda (its answers unchanged: throughParams substitution of the receiver's type
+  arguments, `mayShift`, rest, overloads — all-rules byte-identical on anyparse and TM-now), so its `parameter` is null;
+  the OPERAND BINDER answers in a `Located` currency (a type written in this file + the offset it is written at, bound
+  there by `DeclaredNullity.headTier`, so a type parameter in scope there — the callee's own `<T>`, the enclosing type's —
+  answers Unknown by construction: 4.3.7 binds `gen(new FlagOn(), c -> …)`'s `c` to `FlagOn`, never a class named `T`):
+  a declaration's / an assigned binding's annotation, a function's written result, an anonymous structure's field, and
+  the parameter of a BARE call to a member of this file. POSITIVE whitelist there: one declaration of the name in its
+  type (a `#if` twin is another build's signature), no `@:overload` (4.3.7 retypes the lambda against the next
+  signature when the first fails — `Foo has no field m`, then `Bar`), no skippable parameter before the bound one (an
+  optional or defaulted one: 4.3.7 tries the lambda against it first, `Unknown<0>`), a rest parameter binding every
+  argument from its position (4.3.7: the element type); a `Dynamic` parameter or a macro's `Expr` is no function type.
+  The INDEX host (`INDEX_HOST`) answers null: it resolves no call to a declaration, and its currency spells a type
+  parameter as a bare name its own later lookups would resolve package-blind. Not covered (follow-up): a member of
+  another file / an inherited member / `recv.m(…)` / a local function / a construction (need the declaration's
+  parameter list — optional and rest flags — read where it is written: `MemberInfo` carries `paramTypeSources` only),
+  generic substitution in the binder (`Array<T>.map`, `Lambda.iter`, a `forEachChild<T>`), a typedef alias of a function
+  type, a container element (no proof a written `Array` is the standard one), and a `BlockExpr` argument (4.3.7 types it;
+  the grammar names no block-expression kind for the ladder). `CallGraphNames.paramsOf` splits the node half out of
+  `declaredParams` (the binder holds the node) — branch `feat/infra-N32`
 - N36 (1) — `PurityScan` kept its own stdlib list (`Math` / `Std` / `StringTools`, every member but `random`) beside
   `TypeResolver.isPureStdlibCall`'s enumerated one. → ONE owner, `anyparse.query.StdlibPurity`, a POSITIVE whitelist on
   both axes (the functions enumerated against the Haxe 4.3.7 std source; the callee resolved — a receiver root bound to

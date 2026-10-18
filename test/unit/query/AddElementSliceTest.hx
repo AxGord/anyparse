@@ -126,6 +126,21 @@ class AddElementSliceTest extends Test {
 		assertAppend(source, 3, 11, '1', true, expected);
 	}
 
+	/**
+	 * Appending to an array written WITH a trailing comma: the new element takes the trailing separator
+	 * over. The splice used to add its own `,` after the existing one, `,, 'c'`, which does not parse (N35,
+	 * found appending to `TestDiscoveryParityTest`'s deferred-arm census).
+	 */
+	public function testAppendToArrayWithTrailingComma(): Void {
+		final source: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t];\n}\n';
+		final expected: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t\t\'c\',\n\t];\n}\n';
+		assertAppend(source, 2, 33, "'c'", false, expected);
+		assertAppend(
+			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\',];\n}\n', 2, 33, "'c'", false,
+			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\', \'c\',];\n}\n'
+		);
+	}
+
 	/** --append: add a call argument by pointing at the callee (resolves the Call, not the ExprStmt). */
 	public function testAppendCallArgument(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tfoo(x);\n\t}\n}\n';
@@ -426,6 +441,19 @@ class AddElementSliceTest extends Test {
 		final expected: String =
 			'class C {\n\tfunction f():Void {\n\t\tfinal o = {\n\t\t\ta: 1 /* about a */,\n\t\t\tc: 3,\n\t\t\tb: 2\n\t\t};\n\t}\n}\n';
 		assertAdd(source, 4, 4, After, 'c: 3', true, expected);
+	}
+
+	/**
+	 * `--before` a documented, annotated `final class` addressed the way `--select 'ClassDecl:X'` resolves
+	 * it: the cursor is on the inner form's `class` token. The insert lands above the doc, not between
+	 * `final` and `class` (N35: "result does not parse"); `--after` and `remove-element` already lifted.
+	 */
+	@:pin('control')
+	@:killer('M-LIFT-FINAL-WRAPPER-SKIPPED')
+	public function testInsertBeforeAFinalClassAddressedThroughItsForm(): Void {
+		final source: String = 'package p;\n\n/**\n * Doc.\n */\n@:nullSafety(Strict)\nfinal class X {}\n';
+		final expected: String = 'package p;\n\ntypedef Z = Int;\n\n/**\n * Doc.\n */\n@:nullSafety(Strict)\nfinal class X {}\n';
+		assertAdd(source, 7, 7, Before, 'typedef Z = Int;', false, expected);
 	}
 
 	private function assertAppend(source: String, line: Int, col: Int, code: String, reformat: Bool, expected: String): Void {

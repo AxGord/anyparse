@@ -486,6 +486,28 @@ final class ElementSpan {
 	}
 
 	/**
+	 * The element whose first token holds `cursor` (`RefactorSupport.elementAtFrom`) with its parent, lifted
+	 * past a folding `final` wrapper (`liftedElement`) — the target every sibling-element op (`add-element`
+	 * `--after` / `--before`, `remove-element`) acts on. Null when no element's first token holds the cursor.
+	 */
+	public static function liftedElementAt(tree: QueryNode, source: String, cursor: Int): Null<ElementHit> {
+		final hit: Null<ElementHit> = RefactorSupport.elementAtFrom(tree, source, cursor);
+		return hit == null ? null : liftedElement(tree, hit.node);
+	}
+
+	/**
+	 * `node` with its parent, lifted to the wrapper when it is a `final class`'s inner form
+	 * (`foldingWrapperOf`). An address resolves the inner form, whose span starts AFTER `final`: cutting it
+	 * left the `final` to glue onto the next declaration, and inserting before it landed between `final` and
+	 * `class`, which does not parse.
+	 */
+	public static function liftedElement(tree: QueryNode, node: QueryNode): ElementHit {
+		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
+		final wrapper: Null<QueryNode> = parent == null ? null : foldingWrapperOf(node, parent);
+		return wrapper == null ? { node: node, parent: parent } : { node: wrapper, parent: TreePath.parentOf(tree, wrapper) };
+	}
+
+	/**
 	 * A once-per-call lazy `lexicalRegions` memo over `source`.
 	 *
 	 * The scan is O(file) and every consumer asks it of the same source, but
@@ -535,8 +557,12 @@ final class ElementSpan {
 		var isComma: Bool = adjacentToComma(source, span);
 		if (!isComma && parent != null) isComma = MemberKinds.COMMA_CONTAINER_KINDS.contains(parent.kind);
 
-		// A comma list has no blank separators, so only the line branch gives one back.
-		final cut: Span = isComma ? commaExtendedSpan(source, span) : blankExtendedSpan(source, lineExtendedSpan(source, span));
+		// A comma list has no blank separators, so only the line branch gives one back. An element that
+		// held a whole line of a one-per-line list (`'x',` with its comma) takes the line with it: the cut
+		// used to leave the line's indentation and break behind, a blank line the writer keeps as trivia.
+		final cut: Span = isComma
+			? lineExtendedSpan(source, commaExtendedSpan(source, span))
+			: blankExtendedSpan(source, lineExtendedSpan(source, span));
 		return { span: cut, doc: span.from < group.from, annotations: annotationPrefixCount(node, parent) };
 	}
 
@@ -697,3 +723,9 @@ final class ElementSpan {
 	}
 
 }
+
+/** An element a sibling-element op acts on, with the container it sits in (null for the root). */
+typedef ElementHit = {
+	node: QueryNode,
+	parent: Null<QueryNode>
+};

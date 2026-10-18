@@ -8,11 +8,12 @@ import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
 using StringTools;
 
 /**
  * Parsed options for `apq add-element` — `lang`, `write` / `reformat`, the insertion address (`afterSpec`
- * / `beforeSpec` / `appendSpec`, plus `selectExpr` / `matchExpr` / `nth`), and the element source (`code`
+ * / `beforeSpec` / `appendSpec` / `sortedSpec`, plus `selectExpr` / `matchExpr` / `nth`), and the element source (`code`
  * or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
@@ -23,6 +24,7 @@ typedef AddElementOpts = {
 	var afterSpec: Null<String>;
 	var beforeSpec: Null<String>;
 	var appendSpec: Null<String>;
+	var sortedSpec: Null<String>;
 	var selectExpr: Null<String>;
 	var matchExpr: Null<String>;
 	var nth: Null<Int>;
@@ -69,6 +71,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 			afterSpec: null,
 			beforeSpec: null,
 			appendSpec: null,
+			sortedSpec: null,
 			selectExpr: null,
 			matchExpr: null,
 			nth: null,
@@ -107,7 +110,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		final file: Null<String> = o.file;
 		if (file == null || code == null) {
 			CliIo.stderr(
-				'apq add-element: expected <file> (--after | --before | --append) (<line>[:<col>] '
+				'apq add-element: expected <file> (--after | --before | --append | --sorted) (<line>[:<col>] '
 				+ "| --select '<sel>' | --match '<pattern>') (<code> | --from-file <path> | -)\n"
 			);
 			printAddElementUsage();
@@ -116,10 +119,11 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		final afterSpec: Null<String> = o.afterSpec;
 		final beforeSpec: Null<String> = o.beforeSpec;
 		final appendSpec: Null<String> = o.appendSpec;
-		// Exactly one of --after / --before / --append must be given.
-		final targetCount: Int = (afterSpec != null ? 1 : 0) + (beforeSpec != null ? 1 : 0) + (appendSpec != null ? 1 : 0);
+		final sortedSpec: Null<String> = o.sortedSpec;
+		// Exactly one of --after / --before / --append / --sorted must be given.
+		final targetCount: Int = [afterSpec, beforeSpec, appendSpec, sortedSpec].count(spec -> spec != null);
 		if (targetCount != 1) {
-			CliIo.stderr('apq add-element: provide exactly one of --after, --before, or --append\n');
+			CliIo.stderr('apq add-element: provide exactly one of --after, --before, --append, or --sorted\n');
 			return EXIT_USAGE;
 		}
 
@@ -127,7 +131,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		// `cast` commits the narrowing the analyzer can't prove across the
 		// struct-field rebind. An empty spec = valueless mode flag — the
 		// address comes from --select / --match instead.
-		final posSpec: String = afterSpec ?? beforeSpec ?? (cast appendSpec: String);
+		final posSpec: String = afterSpec ?? beforeSpec ?? appendSpec ?? (cast sortedSpec: String);
 		final atSpec: Null<String> = posSpec == '' ? null : posSpec;
 		if (atSpec == null && o.selectExpr == null && o.matchExpr == null) {
 			CliIo.stderr("apq add-element: no target address — give a position or --select '<sel>' / --match '<pattern>'\n");
@@ -145,16 +149,19 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		final pos: Null<Position> = CliEdit.resolveAddressPos('add-element', source, plugin, atSpec, o.selectExpr, o.matchExpr, o.nth);
 		if (pos == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
-		final result: EditResult = appendSpec != null
-			? AddElement.appendElement(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson)
-			: AddElement.addElement(source, pos.line, pos.col, afterSpec != null ? After : Before, codeStr, o.reformat, plugin, optsJson);
+		final result: EditResult = if (appendSpec != null)
+			AddElement.appendElement(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson)
+		else if (sortedSpec != null)
+			AddElement.insertSorted(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson)
+		else
+			AddElement.addElement(source, pos.line, pos.col, afterSpec != null ? After : Before, codeStr, o.reformat, plugin, optsJson);
 		return CliEdit.finishEdit('add-element', filePath, o.write, result, fix);
 	}
 
 	private static function printAddElementUsage(): Void {
 		CliIo.sysPrint(
-			"Usage: apq add-element <file> (--after | --before | --append) (<l>[:<c>] | --select '<sel>' | --match '<pattern>') ("
-			+ '<code> | --from-file <path> | -) [options]\n'
+			'Usage: apq add-element <file> (--after | --before | --append | --sorted) (<l>[:<c>] '
+			+ '| --select \'<sel>\' | --match \'<pattern>\') (<code> | --from-file <path> | -) [options]\n'
 		);
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Insert <code> as a new element into a list-shaped slot. With --after / --before,\n');
@@ -162,7 +169,10 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		CliIo.sysPrint('a switch, an array / object / call-argument element). With --append, it is\n');
 		CliIo.sysPrint('the CONTAINER itself (block / array / object / call / new / class / switch); the\n');
 		CliIo.sysPrint('element is added as the last child — which also works on an empty container that\n');
-		CliIo.sysPrint('has no sibling to point at. The slot separator (comma or newline) is added\n');
+		CliIo.sysPrint('has no sibling to point at. With --sorted, it is an ARRAY of constant strings kept\n');
+		CliIo.sysPrint('sorted (code-unit order, no duplicates); each string entry of <code> (one, or a comma\n');
+		CliIo.sysPrint('list) lands at its sorted position; --append is the unsorted form. The slot\n');
+		CliIo.sysPrint('separator (comma or newline) is added\n');
 		CliIo.sysPrint('automatically; the element is writer-formatted + re-parse-validated. The element\n');
 		CliIo.sysPrint('text may be inline, from --from-file, or stdin when it is the literal `-`.\n');
 		CliIo.sysPrint('\n');
@@ -183,6 +193,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		CliIo.sysPrint('  --after [<l>[:<c>]]   Insert after the addressed sibling element\n');
 		CliIo.sysPrint('  --before [<l>[:<c>]]  Insert before the addressed sibling element\n');
 		CliIo.sysPrint('  --append [<l>[:<c>]]  Append as the last child of the addressed container\n');
+		CliIo.sysPrint('  --sorted [<l>[:<c>]]  Insert string entries at their sorted positions in the addressed array\n');
 		CliIo.sysPrint('  --from-file <path> Read the element text from a file instead of the argument\n');
 		CliIo.sysPrint('  --write           Overwrite the file in place (default: print to stdout)\n');
 		CliIo.sysPrint('  --reformat        Canonicalise the whole file if it is not already canonical\n');
@@ -198,6 +209,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		var afterSpec: Null<String> = null;
 		var beforeSpec: Null<String> = null;
 		var appendSpec: Null<String> = null;
+		var sortedSpec: Null<String> = null;
 		var selectExpr: Null<String> = null;
 		var matchExpr: Null<String> = null;
 		var nth: Null<Int> = null;
@@ -220,6 +232,8 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 					beforeSpec = isPosToken(args, i) ? args[++i] : '';
 				case '--append':
 					appendSpec = isPosToken(args, i) ? args[++i] : '';
+				case '--sorted':
+					sortedSpec = isPosToken(args, i) ? args[++i] : '';
 				case '--select':
 					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
@@ -258,6 +272,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 			afterSpec: afterSpec,
 			beforeSpec: beforeSpec,
 			appendSpec: appendSpec,
+			sortedSpec: sortedSpec,
 			selectExpr: selectExpr,
 			matchExpr: matchExpr,
 			nth: nth,

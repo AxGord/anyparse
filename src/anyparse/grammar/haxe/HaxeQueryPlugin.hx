@@ -332,10 +332,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		//    return types and type-param constraints (`Named`), `extends`
 		//    / `implements` heritage (a `Named` child of the clause), and
 		//    `new T(...)` (`NewExpr`).
+		//  - `ExtendsField` — a struct extension `{ > T, … }`, which names
+		//    its type in the node's own name slot like `Named` does (its type
+		//    ARGUMENTS are `TypeRef` children). Missing it made `uses` blind
+		//    to the extension and `rename --scope` leave it dangling.
 		// Listing them here only widens the `Uses` walker (kind-filtered);
 		// the `parseFile` tree and `ast`/`search`/`refs`/`meta` are
 		// untouched — zero regression by construction.
-		return { typeRefKinds: ['TypeRef', 'Named', 'NewExpr'] };
+		return { typeRefKinds: ['TypeRef', 'Named', 'NewExpr', 'ExtendsField'] };
 	}
 
 	/**
