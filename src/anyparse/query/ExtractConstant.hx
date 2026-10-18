@@ -141,6 +141,51 @@ final class ExtractConstant {
 	}
 
 	/**
+	 * Build the constants-module source: append `memberText` to the existing
+	 * `moduleSource` (refused on a duplicate `name` member or a missing
+	 * `moduleClass` type), or create a fresh `final class` module holding that
+	 * member plus a private constructor. Returns the module source or an `Err`. Shared with
+	 * `ExtractConstantTo`, the addressed mode, which hands it the receiving type of any module.
+	 */
+	public static function buildModuleSource(
+		moduleExists: Bool, moduleSource: Null<String>, modulePkg: String, moduleClass: String, modulePath: String, name: String,
+		memberText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+	): EditResult {
+		if (!moduleExists) return switch NewFile.create({
+			className: moduleClass,
+			pkg: modulePkg,
+			fields: [memberText, 'private function new() {}']
+		}, plugin, optsJson).result {
+			case Ok(text): Ok(text);
+			case Err(message): Err('module: $message');
+		};
+
+		if (moduleSource == null) return Err('module "$modulePath" is marked existing but no source was provided');
+		final existing: String = moduleSource;
+		final mtree: QueryNode = switch ParseGate.parse(plugin, existing, 'module "$modulePath"') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
+		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(mtree, moduleClass);
+		if (decl == null) return Err('module "$modulePath" has no unique type "$moduleClass"');
+		final declNN: TypeDeclMatch = decl;
+		final shape: RefShape = plugin.refShape();
+		if (MemberBranchScan.declaresMemberNamed(declNN, shape, existing, name, plugin.lexicalRegions.bind(existing)))
+			return Err('module "$moduleClass" already has a member named "$name"');
+		// Splice the constant into the constants rank (before the first member) rather than
+		// appending — an appended `public static final` after the holder's `private new()`
+		// would sit out of canonical member order. Empty module (no member): fall back to append.
+		final insertAt: Int = firstMemberStart(existing, declNN, shape, plugin.lexicalRegions(existing));
+		return insertAt < 0
+			? AddMember.addMember(existing, moduleClass, memberText, reformat, plugin, optsJson)
+			: CanonicalEdit.canonicalize(
+				existing,
+				[{ span: new Span(insertAt, insertAt), text: '$memberText\n' }],
+				reformat, plugin, optsJson
+			);
+	}
+
+	/**
 	 * Spans of every plain string literal whose content is `literal` anywhere under `typeNode` —
 	 * whichever way the grammar spells its quotes, and interpolating literals excluded (an
 	 * `${ … }` / `$name` part makes the literal a runtime concatenation, not a constant).
@@ -185,50 +230,6 @@ final class ExtractConstant {
 			return ElementSpan.docExtendedSpan(source, group, regions).from;
 		}
 		return -1;
-	}
-
-	/**
-	 * Build the constants-module source: append `memberText` to the existing
-	 * `moduleSource` (refused on a duplicate `name` member or a missing
-	 * `moduleClass` type), or create a fresh `final class` module holding that
-	 * member plus a private constructor. Returns the module source or an `Err`.
-	 */
-	private static function buildModuleSource(
-		moduleExists: Bool, moduleSource: Null<String>, modulePkg: String, moduleClass: String, modulePath: String, name: String,
-		memberText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
-	): EditResult {
-		if (!moduleExists) return switch NewFile.create({
-			className: moduleClass,
-			pkg: modulePkg,
-			fields: [memberText, 'private function new() {}']
-		}, plugin, optsJson).result {
-			case Ok(text): Ok(text);
-			case Err(message): Err('module: $message');
-		};
-
-		if (moduleSource == null) return Err('module "$modulePath" is marked existing but no source was provided');
-		final existing: String = moduleSource;
-		final mtree: QueryNode = switch ParseGate.parse(plugin, existing, 'module "$modulePath"') {
-			case Unparsed(message): return Err(message);
-			case Parsed(parsed): parsed;
-		};
-		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(mtree, moduleClass);
-		if (decl == null) return Err('module "$modulePath" has no unique type "$moduleClass"');
-		final declNN: TypeDeclMatch = decl;
-		final shape: RefShape = plugin.refShape();
-		if (MemberBranchScan.declaresMemberNamed(declNN, shape, existing, name, plugin.lexicalRegions.bind(existing)))
-			return Err('module "$moduleClass" already has a member named "$name"');
-		// Splice the constant into the constants rank (before the first member) rather than
-		// appending — an appended `public static final` after the holder's `private new()`
-		// would sit out of canonical member order. Empty module (no member): fall back to append.
-		final insertAt: Int = firstMemberStart(existing, declNN, shape, plugin.lexicalRegions(existing));
-		return insertAt < 0
-			? AddMember.addMember(existing, moduleClass, memberText, reformat, plugin, optsJson)
-			: CanonicalEdit.canonicalize(
-				existing,
-				[{ span: new Span(insertAt, insertAt), text: '$memberText\n' }],
-				reformat, plugin, optsJson
-			);
 	}
 
 	/**

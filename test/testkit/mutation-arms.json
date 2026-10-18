@@ -20421,7 +20421,7 @@
 			"name": "M-TS-STD-SUPER",
 			"type": "anyparse.query.StdTypes",
 			"method": "lookUp",
-			"find": "if (resolved != null) lookUp(plugin, resolved, member, depth + 1, seen, found);",
+			"find": "if (resolved != null) lookUp(plugin, resolved, member, depth + 1, seen, found, guarded);",
 			"replace": "",
 			"note": "a std member a superclass declares is never found"
 		},
@@ -23083,8 +23083,8 @@
 			"name": "M-CARRY-USING-UNUSED",
 			"type": "anyparse.query.DependencyCarry",
 			"method": "usingLinesToCarry",
-			"find": "if (methods != null && !OccurrenceScan.usingExtensionCalled(declText, imp.raw, methods)) continue;",
-			"replace": "if (methods == null && declText == '') continue;",
+			"find": "if (methods != null && !OccurrenceScan.usingExtensionCalled(declText, imp.raw, methods, at -> memberBound(declSpan.from + at)))",
+			"replace": "if (methods == null && declText == '')",
 			"note": "a `using` whose extensions the moved code calls none of is carried anyway"
 		},
 		{
@@ -25132,9 +25132,9 @@
 		{
 			"name": "M-REMOVE-COMMA-LINE-KEPT",
 			"type": "anyparse.query.ElementSpan",
-			"method": "elementCut",
-			"find": "? lineExtendedSpan(source, commaExtendedSpan(source, span))",
-			"replace": "? commaExtendedSpan(source, span)",
+			"method": "commaListCut",
+			"find": "return lineExtendedSpan(source, commaExtendedSpan(source, span));",
+			"replace": "return commaExtendedSpan(source, span);",
 			"note": "removing a one-per-line element leaves its indentation and line break behind, a blank line inside the list"
 		},
 		{
@@ -25816,6 +25816,308 @@
 			"find": "if (prep.srcInfo.moduleFields.exists(f -> f.name == name) && prep.srcFile != prep.destFile)",
 			"replace": "if (false)",
 			"note": "a module-level value of the source module is not refused for what it is"
+		},
+		{
+			"name": "M-WRITE-DIR-UNCREATED",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "stageWrite",
+			"find": "createMissingDirectories(Path.directory(target), created);",
+			"replace": "",
+			"note": "a write into a missing directory no longer creates it"
+		},
+		{
+			"name": "M-WRITE-DIR-KEPT",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "removeCreatedDirectories",
+			"find": "while (k-- > 0) try FileSystem.deleteDirectory(created[k])",
+			"replace": "while (k-- > 0 && k < 0) try FileSystem.deleteDirectory(created[k])",
+			"note": "a change set that is not written keeps the directories it created"
+		},
+		{
+			"name": "M-USING-MEMBER-FIRST-OFF",
+			"type": "anyparse.query.OccurrenceScan",
+			"method": "methodCalledInSource",
+			"find": "if (!qualifiedBySkip(at - 1) && (memberBound == null || !memberBound(at))) return true;",
+			"replace": "if (!qualifiedBySkip(at - 1)) return true;",
+			"note": "a `.method` call binding a member of its receiver's type counts as an extension use again"
+		},
+		{
+			"name": "M-UNUSED-USING-NO-DOOR",
+			"type": "anyparse.check.UnusedImport",
+			"method": "addUsingViolation",
+			"find": "OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods, scan.memberBound)",
+			"replace": "OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods)",
+			"note": "unused-import stops asking the member-first door"
+		},
+		{
+			"name": "M-CARRY-USING-DOOR-OFFSET",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "usingLinesToCarry",
+			"find": "at -> memberBound(declSpan.from + at)",
+			"replace": "memberBound",
+			"note": "the carry asks the door at declaration-relative offsets"
+		},
+		{
+			"name": "M-MEMBER-BINDS-STATIC",
+			"type": "anyparse.query.MemberLookup",
+			"method": "instanceMemberBinds",
+			"find": "declared.members.foreach(m -> !m.isStatic && !m.guarded)",
+			"replace": "declared.members.foreach(m -> !m.guarded)",
+			"note": "a static of the name reads as shadowing the extension"
+		},
+		{
+			"name": "M-MEMBER-BINDS-GUARDED",
+			"type": "anyparse.query.MemberLookup",
+			"method": "instanceMemberBinds",
+			"find": "declared.members.foreach(m -> !m.isStatic && !m.guarded)",
+			"replace": "declared.members.foreach(m -> !m.isStatic)",
+			"note": "a member under `#if` reads as binding in every build"
+		},
+		{
+			"name": "M-MEMBER-BINDS-HOST-GUARDED",
+			"type": "anyparse.query.MemberLookup",
+			"method": "instanceMemberBinds",
+			"find": "return declared != null && !declared.host.type.guarded && declared.members",
+			"replace": "return declared != null && declared.members",
+			"note": "a declaring type under `#if` reads as declaring the member in every build"
+		},
+		{
+			"name": "M-STD-MEMBER-STATIC",
+			"type": "anyparse.query.StdTypes",
+			"method": "declaresInstanceMember",
+			"find": "found.length > 0 && found.foreach(f -> !f.isStatic && !f.guarded);",
+			"replace": "found.length > 0 && found.foreach(f -> !f.guarded);",
+			"note": "a static std member reads as an instance one"
+		},
+		{
+			"name": "M-STD-MEMBER-VIA-GUARD",
+			"type": "anyparse.query.StdTypes",
+			"method": "lookUp",
+			"find": "final guarded: Bool = viaGuard || t.guarded;",
+			"replace": "final guarded: Bool = viaGuard;",
+			"note": "a std member reached through a guarded typedef reads as unguarded"
+		},
+		{
+			"name": "M-STD-MEMBER-ANY-CANDIDATE",
+			"type": "anyparse.query.StdTypes",
+			"method": "declaresInstanceMember",
+			"find": "candidates.length > 0 && candidates.foreach(module -> {",
+			"replace": "candidates.length > 0 && candidates.exists(module -> {",
+			"note": "one std module of a simple name proving the member is enough"
+		},
+		{
+			"name": "M-MEMBER-DOOR-SHADOW",
+			"type": "anyparse.check.CheckScan",
+			"method": "memberBoundAccesses",
+			"find": "!NominalTypes.shadowedByNonStdType(resolved, nominal) && StdTypes.declaresInstanceMember(plugin, nominal, name)",
+			"replace": "StdTypes.declaresInstanceMember(plugin, nominal, name)",
+			"note": "the std listing answers for a name a project type takes"
+		},
+		{
+			"name": "M-EXTRACT-TO-DECL-TYPE-DROPPED",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "constantType",
+			"find": "final typeSpan: Null<Span> = declType?.span;",
+			"replace": "final typeSpan: Null<Span> = null;",
+			"note": "a moved declaration initializer loses its declared type, so a constant whose value is no bare literal reaches the destination untyped"
+		},
+		{
+			"name": "M-EXTRACT-TO-ALWAYS-BARE",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "intoOtherModule",
+			"find": "final bare: Bool = !wildcard && RefactorSupport.bareNameResolves(destType, module, ModuleScan.packageOf(tree));",
+			"replace": "final bare: Bool = true;",
+			"note": "the source never gains the import, so a reference from another package names a type it cannot see"
+		},
+		{
+			"name": "M-EXTRACT-TO-WILDCARD-IGNORED",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "intoOtherModule",
+			"find": "final bare: Bool = !wildcard && ",
+			"replace": "final bare: Bool = ",
+			"note": "a same-package reference relies on the bare name although a wildcard import of the source may shadow it"
+		},
+		{
+			"name": "M-EXTRACT-TO-NEVER-INLINE",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "movability",
+			"find": "final inlined: Bool = scalar && ConstantFieldScan.isConstantScalarInitializer(init, plugin);",
+			"replace": "final inlined: Bool = false;",
+			"note": "a scalar literal moves into a plain static final, so a parameter default it replaces no longer folds"
+		},
+		{
+			"name": "M-EXTRACT-TO-ALWAYS-INLINE",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "movability",
+			"find": "final inlined: Bool = scalar && ConstantFieldScan.isConstantScalarInitializer(init, plugin);",
+			"replace": "final inlined: Bool = scalar;",
+			"note": "every constant expression is made inline, beyond what inline-constant proves the compiler folds"
+		},
+		{
+			"name": "M-EXTRACT-TO-ALWAYS-PUBLIC",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "intoSameFile",
+			"find": "final visibility: String = enclosing == destType ? 'private' : 'public';",
+			"replace": "final visibility: String = 'public';",
+			"note": "a constant the enclosing type keeps for itself is exported"
+		},
+		{
+			"name": "M-EXTRACT-TO-SHARED-IGNORED",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "movability",
+			"find": "if (!scalar && !shared)",
+			"replace": "if (false)",
+			"note": "an array literal moves into one shared static instance without the caller asserting that no reader mutates it"
+		},
+		{
+			"name": "M-EXTRACT-TO-ANY-AGGREGATE",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "isConstantAggregate",
+			"find": "? node.children.foreach(constant)",
+			"replace": "? true",
+			"note": "an array literal holding a non-constant element moves as a constant"
+		},
+		{
+			"name": "M-EXTRACT-TO-READS-UNCHECKED",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "movability",
+			"find": "final read: Null<QueryNode> = firstContextRead(init, shape);",
+			"replace": "final read: Null<QueryNode> = null;",
+			"note": "an expression reading a local is refused only as a non-constant, without the name it reads"
+		},
+		{
+			"name": "M-EXTRACT-TO-META-POSITION",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "positionRefusal",
+			"find": "if (MemberKinds.META_KINDS.contains(node.kind)) return",
+			"replace": "if (false) return",
+			"note": "a metadata argument becomes a constant reference, where the metadata needs a literal"
+		},
+		{
+			"name": "M-EXTRACT-TO-CASE-PATTERN",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "positionRefusal",
+			"find": "if (pattern)",
+			"replace": "if (false)",
+			"note": "a case pattern literal becomes a reference, which the match reads as a capture or a constant of another kind"
+		},
+		{
+			"name": "M-EXTRACT-TO-PARAM-DEFAULT",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "movability",
+			"find": "return inParam && !inlined",
+			"replace": "return false",
+			"note": "a parameter default is replaced by a constant that does not fold"
+		},
+		{
+			"name": "M-EXTRACT-TO-SHADOW-UNCHECKED",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "localShadow",
+			"force": "null",
+			"note": "a local named like the receiving type takes the new reference"
+		},
+		{
+			"name": "M-EXTRACT-TO-REBIND-UNCHECKED",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "rebindingRefusal",
+			"force": "null",
+			"note": "an import or type of the source that binds the receiving type name takes the new reference"
+		},
+		{
+			"name": "M-EXTRACT-TO-ANY-HOST",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "hostRefusal",
+			"find": "return hosts.contains(decl.kind) || hosts.contains(decl.nameNode.kind)",
+			"replace": "return true",
+			"note": "an interface or other non-class type is handed a static final"
+		},
+		{
+			"name": "M-EXTRACT-TO-UNSEEN-TYPE",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "constantType",
+			"find": "final unseen: Null<String> = request.dest == null ? null : firstUnseenType(declType, plugin);",
+			"replace": "final unseen: Null<String> = null;",
+			"note": "a declared project type travels into a module that may not see it"
+		},
+		{
+			"name": "M-EXTRACT-CONSTANT-ADDRESSED-UNROUTED",
+			"type": "anyparse.query.cli.command.ExtractConstantCommand",
+			"method": "runExtractConstant",
+			"find": "if (args.exists(a -> ADDRESSED_FLAGS.contains(a))) return ExtractConstantToMode.run(args);",
+			"replace": "",
+			"note": "the addressed flags reach the literal modes, which reject them"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-DOC-STAYS",
+			"type": "anyparse.query.MoveElements",
+			"method": "sliceSpan",
+			"find": "final from: Int = ElementSpan.docExtendedSpan(source, spanOf(moved[0]), regions, true).from;",
+			"replace": "final from: Int = spanOf(moved[0]).from;",
+			"note": "the slice leaves its first element's doc behind, where it documents the next element"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-RANGE-UNCHECKED",
+			"type": "anyparse.query.MoveElements",
+			"method": "planOf",
+			"find": "if (request.first < 1 || request.last < request.first || request.last > elements.length)",
+			"replace": "if (false)",
+			"note": "a range past the array moves a shorter slice than asked, or none"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-READS-UNCHECKED",
+			"type": "anyparse.query.MoveElements",
+			"method": "elementRefusal",
+			"find": "final read: Null<QueryNode> = ExtractConstantTo.firstContextRead(element, shape);",
+			"replace": "final read: Null<QueryNode> = null;",
+			"note": "an element reading a local moves where that local does not exist"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-UNSEEN-TYPE",
+			"type": "anyparse.query.MoveElements",
+			"method": "elementRefusal",
+			"find": "final unseen: Null<String> = crossModule ? ExtractConstantTo.firstUnseenType(element, plugin) : null;",
+			"replace": "final unseen: Null<String> = null;",
+			"note": "an element naming a project type moves into a module that may not see it"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-NESTS-UNCHECKED",
+			"type": "anyparse.query.MoveElements",
+			"method": "planOf",
+			"find": "return request.destSource == null && nests(array, target)",
+			"replace": "return false",
+			"note": "a slice is moved into its own array"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-TARGET-POSITION",
+			"type": "anyparse.query.MoveElements",
+			"method": "planOf",
+			"find": "if (request.target.at != null) return Left(",
+			"replace": "if (false) return Left(",
+			"note": "a target position is resolved after the cut, where it points at other code"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-SOURCE-UNVERIFIED",
+			"type": "anyparse.query.MoveElements",
+			"method": "verify",
+			"find": "if (sourceAfter == null || !sameSequence(sourceAfter, expectedSource))",
+			"replace": "if (false)",
+			"note": "a source that did not lose exactly the slice passes the check"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-ORDER-UNVERIFIED",
+			"type": "anyparse.query.MoveElements",
+			"method": "verify",
+			"find": "if (!request.sorted)",
+			"replace": "if (false)",
+			"note": "an append that lost the slice order passes the check as a multiset"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-DRY-RUN-UNROUTED",
+			"type": "anyparse.query.cli.command.MoveElementsCommand",
+			"method": "runMoveElements",
+			"find": "if (o.dryRun) {",
+			"replace": "if (false) {",
+			"note": "--dry-run prints the two previews instead of the entries and their digest"
 		}
 	]
 }

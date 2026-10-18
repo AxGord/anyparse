@@ -36,6 +36,7 @@ import anyparse.query.cli.command.MakeFinalCommand;
 import anyparse.query.cli.command.MentionsCommand;
 import anyparse.query.cli.command.MetaCommand;
 import anyparse.query.cli.command.MoveCommand;
+import anyparse.query.cli.command.MoveElementsCommand;
 import anyparse.query.cli.command.MoveMemberCommand;
 import anyparse.query.cli.command.MoveToHelperCommand;
 import anyparse.query.cli.command.MutationSchemaCommand;
@@ -146,6 +147,7 @@ final class CliRegistry {
 			new AddImportCommand(),
 			new AddMetaCommand(),
 			new AddElementCommand(),
+			new MoveElementsCommand(),
 			new ReplaceNodeCommand(),
 			new PatchCommand(),
 			new RemoveElementCommand(),

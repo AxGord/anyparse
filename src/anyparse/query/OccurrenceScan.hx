@@ -227,8 +227,14 @@ final class OccurrenceScan {
 	 * referenced bare, so every occurrence of it is dot-qualified — which makes
 	 * `Limit.MAX` on a `using a.b.Limit` a fully-qualified STATIC access reaching
 	 * the type through no import at all, not the extension call the `using` enables.
+	 *
+	 * `memberBound`, when given, excludes an occurrence at whose offset it answers
+	 * true: an access proven to bind a member of its receiver's type
+	 * (`CheckScan.memberBoundAccesses`), which no static extension reaches.
 	 */
-	public static function methodCalledInSource(source: String, name: String, skipReceiver: String = ''): Bool {
+	public static function methodCalledInSource(
+		source: String, name: String, skipReceiver: String = '', ?memberBound: (Int) -> Bool
+	): Bool {
 		final len: Int = name.length;
 		if (len == 0) return false;
 		final skip: String = skipReceiver;
@@ -245,7 +251,7 @@ final class OccurrenceScan {
 			if (at == 0 || source.fastCodeAt(at - 1) != '.'.code) continue;
 			final afterIdx: Int = at + len;
 			if (afterIdx < source.length && SourceText.isIdentChar(source.fastCodeAt(afterIdx))) continue;
-			if (!qualifiedBySkip(at - 1)) return true;
+			if (!qualifiedBySkip(at - 1) && (memberBound == null || !memberBound(at))) return true;
 		}
 	}
 
@@ -393,12 +399,14 @@ final class OccurrenceScan {
 	/**
 	 * Whether `source` calls an extension method the statement `using <raw>` brings, `methods` being the statement's method
 	 * set (`GrammarPlugin.knownExtensionMethods`, or the members of the module a scope declares): a `.method` occurrence,
-	 * a `<Bound>.method` static access excluded — that one reaches the type through no extension. The one test
-	 * `unused-import` deletes a `using` by and a move leaves one behind by.
+	 * a `<Bound>.method` static access excluded — that one reaches the type through no extension — and so is one
+	 * `memberBound` answers true for: Haxe binds a member of the receiver's type before any extension, so `a.concat(b)` on
+	 * an `Array` needs no `using Lambda` (`CheckScan.memberBoundAccesses`, the member-first door). The one test
+	 * `unused-import` deletes a `using` by and a move leaves one behind by, so both pass the same door.
 	 */
-	public static function usingExtensionCalled(source: String, raw: String, methods: Array<String>): Bool {
+	public static function usingExtensionCalled(source: String, raw: String, methods: Array<String>, ?memberBound: (Int) -> Bool): Bool {
 		final bound: String = SourceText.lastSegment(raw);
-		return methods.exists(m -> methodCalledInSource(source, m, bound));
+		return methods.exists(m -> methodCalledInSource(source, m, bound, memberBound));
 	}
 
 	/**
