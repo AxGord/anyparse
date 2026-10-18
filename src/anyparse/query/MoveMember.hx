@@ -15,6 +15,7 @@ import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import haxe.ds.Either;
 
 using StringTools;
 using Lambda;
@@ -133,7 +134,18 @@ typedef MovePrep = {
 	var shape: RefShape;
 }
 
-private enum PrepResult {
+/** `MoveMember.destinationOf`'s answer: the destination type's file, declaration, text and tree. */
+private typedef ResolvedDest = {
+	var file: String;
+	var decl: TypeDeclMatch;
+	var source: String;
+	var tree: QueryNode;
+}
+
+/**
+ * `resolveMove`'s answer: the resolved move, or the refusal.
+ */
+enum PrepResult {
 
 	POk(prep: MovePrep);
 	PErr(message: String);
@@ -445,14 +457,43 @@ final class MoveMember {
 		return FOk(found);
 	}
 
+	/** The destination of a move: the one declaration of `destTypeName` under scope, with its file's text and tree. */
+	private static function destinationOf(
+		scopeFiles: Array<{ file: String, source: String }>, trees: Map<String, QueryNode>, sourceOf: Map<String, String>,
+		destTypeName: String
+	): Either<String, ResolvedDest> {
+		final destHit: Null<{ file: String, decl: TypeDeclMatch }> = switch findTypeAcrossScope(scopeFiles, trees, destTypeName) {
+			case FErr(message): return Left(message);
+			case FOk(hit): hit;
+		};
+		if (destHit == null) return Left('no type "$destTypeName" declared under scope');
+		final destSource: Null<String> = sourceOf[destHit.file];
+		if (destSource == null) return Left('destination file ${destHit.file} is not in the scope file set');
+		final destTree: Null<QueryNode> = trees[destHit.file];
+		if (destTree == null) return Left('destination file ${destHit.file} is not indexed');
+		// Re-bound: Strict does not carry a narrowed local into an anonymous struct literal.
+		final source: String = destSource;
+		final tree: QueryNode = destTree;
+		return Right({
+			file: destHit.file,
+			decl: destHit.decl,
+			source: source,
+			tree: tree
+		});
+	}
+
 	/**
 	 * Resolve endpoints and run every guard: source type + member (must be
 	 * static), unique same-package destination without a name collision,
 	 * parseable scope, no `using` / static import of the source type.
+	 *
+	 * `helper` is `move-to-helper`'s resolution (`MoveToHelper`): the destination holds STATIC members only, so no instance
+	 * field travels with the moved methods (they read the source through their new first parameter) and an instance move may
+	 * cross packages (nothing routes through a via field).
 	 */
 	private static function resolveMove(
 		srcFile: String, srcTypeName: String, memberNames: Array<String>, destTypeName: String, closure: Bool,
-		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin
+		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, helper: Bool = false
 	): PrepResult {
 		final index: SymbolIndex = IndexScope.over(scopeFiles, plugin);
 		// Whole-scope on purpose, and NOT the per-name question the check layer asks. What makes it
@@ -476,17 +517,16 @@ final class MoveMember {
 		if (srcTree == null) return PErr('source file $srcFile is not indexed');
 		final srcDecl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(srcTree, srcTypeName);
 		if (srcDecl == null) return PErr('no unique type "$srcTypeName" in $srcFile');
-		final destHit: Null<{ file: String, decl: TypeDeclMatch }> = switch findTypeAcrossScope(scopeFiles, trees, destTypeName) {
-			case FErr(message): return PErr(message);
-			case FOk(hit): hit;
+		final destHit: ResolvedDest = switch destinationOf(scopeFiles, trees, sourceOf, destTypeName) {
+			case Left(message): return PErr(message);
+			case Right(dest): dest;
 		};
-		if (destHit == null) return PErr('no type "$destTypeName" declared under scope');
-		final destSource: Null<String> = sourceOf[destHit.file];
-		if (destSource == null) return PErr('destination file ${destHit.file} is not in the scope file set');
-		final destTree: Null<QueryNode> = trees[destHit.file];
-		if (destTree == null) return PErr('destination file ${destHit.file} is not indexed');
+		final destSource: String = destHit.source;
+		final destTree: QueryNode = destHit.tree;
 		final called: Array<String> = closure ? expandInstanceCallClosure(srcDecl, srcTree, srcSource, memberNames, plugin) : memberNames;
-		final fieldsAdded: Array<String> = ownedFieldClosure(srcDecl, srcTree, srcSource, called, destHit.decl, destSource, trees, plugin);
+		final fieldsAdded: Array<String> = helper
+			? []
+			: ownedFieldClosure(srcDecl, srcTree, srcSource, called, destHit.decl, destSource, trees, plugin);
 		final effectiveNames: Array<String> = called.concat(fieldsAdded);
 		final closureAdded: Array<String> = [for (name in called) if (!memberNames.contains(name)) name];
 		final moved: Array<MovedMember> = [];
@@ -498,7 +538,7 @@ final class MoveMember {
 		final srcInfo: Null<FileInfo> = index.fileInfo(srcFile);
 		final destInfo: Null<FileInfo> = index.fileInfo(destHit.file);
 		if (srcInfo == null || destInfo == null) return PErr('scope files are not indexed');
-		final pkgErr: Null<String> = crossPackageStaticGuard(srcInfo, destInfo, moved);
+		final pkgErr: Null<String> = helper ? null : crossPackageStaticGuard(srcInfo, destInfo, moved);
 		if (pkgErr != null) return PErr(pkgErr);
 		final guard: Null<String> = scopeGuardError(scopeFiles, index, srcTypeName, memberNames, destTypeName);
 		if (guard != null) return PErr(guard);
@@ -672,15 +712,24 @@ final class MoveMember {
 	 * identifier chain, never an arbitrary expression.
 	 */
 	private static function qualifyEdit(hit: BareHit, qualifier: String): { span: Span, text: String } {
-		final interp: Null<Span> = hit.interp;
+		return nameQualifyEdit(hit.offset, hit.interp, hit.m.name, qualifier);
+	}
+
+	/**
+	 * `qualifyEdit` for any bare reference of `name` at `offset` — `interp` its whole `$name` span when it is a braceless
+	 * interpolation, null otherwise. `move-to-helper` qualifies a member that is not moving (`<param>.x`, `Src.x`) with it.
+	 */
+	private static function nameQualifyEdit(
+		offset: Int, interp: Null<Span>, name: String, qualifier: String
+	): { span: Span, text: String } {
 		return interp == null
 			? {
-				span: new Span(hit.offset, hit.offset),
+				span: new Span(offset, offset),
 				text: qualifier
 			}
 			: {
 				span: interp,
-				text: '$${$qualifier${hit.m.name}}'
+				text: '$${$qualifier$name}'
 			};
 	}
 
@@ -852,18 +901,24 @@ final class MoveMember {
 	 * file's unguarded `using` statements, all through `MoveSymbol`'s own
 	 * carry; give a rewritten caller file in another package an import of
 	 * the destination type.
+	 *
+	 * `extraDecls` are further declarations of the source file landing in the destination with the members (the private
+	 * types `move-to-helper` carries), whose dependencies are carried the same way; `travelling` names the types making that
+	 * trip, which the destination then declares itself and so are no dependency to import.
 	 */
 	private static function pushImportEdits(
 		prep: MovePrep, typeRefShape: TypeRefShape, callerFilesNeedingImport: Array<String>, plugin: GrammarPlugin,
-		editsByFile: Map<String, Array<{ span: Span, text: String }>>
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, ?extraDecls: Array<{ span: Span, name: String }>,
+		?travelling: Array<String>
 	): Null<String> {
 		// Ready TEXT, not `ImportInfo`: this used to spell the statement itself, and `raw` is the
 		// ALIAS for an alias one — the moment an alias dependency became carriable it would have
 		// emitted `import D;` here while `MoveSymbol` emitted the same wrong line separately.
 		final carried: Array<String> = [];
-		for (m in prep.moved) switch DependencyCarry.dependencyImportLinesToCarry(
-			prep.srcSource, m.group.groupSpan, prep.srcInfo, prep.destInfo, prep.destSource, prep.index, plugin, typeRefShape,
-			prep.srcTypeName
+		final decls: Array<{ span: Span, name: String }> =
+			[for (m in prep.moved) { span: m.group.groupSpan, name: prep.srcTypeName }].concat(extraDecls ?? []);
+		for (d in decls) switch DependencyCarry.dependencyImportLinesToCarry(
+			prep.srcSource, d.span, prep.srcInfo, prep.destInfo, prep.destSource, prep.index, plugin, typeRefShape, d.name, travelling
 		) {
 			case CarryErr(message):
 				return message;
@@ -996,6 +1051,21 @@ final class MoveMember {
 	 * destination. Returns the message, or null when clear.
 	 */
 	private static function moveGuardError(prep: MovePrep, captures: Array<String>): Null<String> {
+		final unresolved: Null<String> = resolutionGuardError(prep, captures);
+		return if (unresolved != null)
+			unresolved
+		else if (prep.moved.exists(m -> !m.isStatic) && thisInsideCuts(prep))
+			'a moved body references "this", which would re-bind to "${prep.destTypeName}" — rewrite to bare member access first'
+		else
+			null;
+	}
+
+	/**
+	 * The half of `moveGuardError` every member move owes whatever it does with `this`: a moved name a
+	 * conditional-compilation region hides or a case pattern captures, and a member of the source's inheritance family
+	 * (`inheritanceRefusal`). `move-to-helper` asks this alone — its moved bodies keep `this` as their first parameter.
+	 */
+	private static function resolutionGuardError(prep: MovePrep, captures: Array<String>): Null<String> {
 		// Every caller rewrite here rests on `Refs` seeing the whole occurrence set, and an
 		// unparsed conditional-compilation region projects no nodes — a call written inside one
 		// keeps naming the source type after the member has left it.
@@ -1009,13 +1079,7 @@ final class MoveMember {
 		for (m in prep.moved) if (captures.contains(m.name))
 			return 'a switch case pattern in ${prep.srcFile} binds "${m.name}" — reference resolution cannot tell the '
 				+ 'capture from the member; rename the capture first';
-		final inherited: Null<String> = inheritanceRefusal(prep);
-		return if (inherited != null)
-			inherited
-		else if (prep.moved.exists(m -> !m.isStatic) && thisInsideCuts(prep))
-			'a moved body references "this", which would re-bind to "${prep.destTypeName}" — rewrite to bare member access first'
-		else
-			null;
+		return inheritanceRefusal(prep);
 	}
 
 	/**
@@ -1532,7 +1596,7 @@ final class MoveMember {
  * aborts the move with a message; `FOk(null)` means "not found" (the
  * caller words that error).
  */
-private enum FindTypeResult {
+enum FindTypeResult {
 
 	FOk(hit: Null<{ file: String, decl: TypeDeclMatch }>);
 	FErr(message: String);

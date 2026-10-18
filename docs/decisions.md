@@ -4133,3 +4133,33 @@ decided the question; it may not become a record of runs.
   sides, classes 977 -> 979 (the two new ones). Rejected: one assertion per part (a different assertion set, and
   a partition could leave an entry in no part); comparing the arm census SORTED so it could take `--sorted` inserts
   (drops the order the assertion pins today — a user decision, not a refactor) — branch `feat/infra-N42`
+- N20 — no op could take a member that READS its type's state out of the type: `move-member` refuses `this` in a moved
+  body, and `--scaffold` mirrors the fields the body reads onto the destination, a copy where the member needs the live
+  object (N13 split `CallGraph.collectEdges` by a refs script, `hxq new --raw` and remove/patch ops). → `move-to-helper`
+  (`MoveToHelper`, `MoveToHelperRefs`, `MoveToHelperTypes`, `MoveToHelperArms`, `MoveToHelperCommand`): the members
+  become statics of a helper taking the source as an explicit first parameter. It is built ON `move-member`'s machinery,
+  not beside it — the same resolution (`MoveMember.resolveMove` in a `helper` mode: no field travels, an instance move may
+  cross packages), the same inheritance / `#if` / capture guards (`resolutionGuardError`, split out of `moveGuardError`
+  without its `this` refusal), the same static-caller passes, promotion, `@:access` grant, destination assembly and
+  import carry (`pushImportEdits` gained the extra declarations it carries and the names TRAVELLING, which
+  `DependencyCarry.dependencyNames` no longer prices as dependencies), `MoveMemberReceivers` for receiver-qualified
+  callers and `Refs` for every bare reference; nothing re-derives a binding from text. ACCESS: `@:access(<pkg>.<Src>)`
+  on the helper side (the moved member, or the helper type for two or more), not `@:allow(<Helper>)` on the source: the
+  grant sits on the code that needs it, the source's declaration is untouched, and it is `move-member`'s existing rule;
+  compile-probed on 4.3.7 it also covers an inherited private field read through a subtype receiver (`@:access(a.Sub)`
+  reads `Base`'s private `bp`) and a write of a `(default, null)` property. The grant is taken BY NAME (any receiver of a
+  non-public member's name, or an inherited one), because a method may read another instance's private field (`o.x`);
+  a same-named member of an unrelated type only over-grants. REFUSALS, positive: an unbound lower-case name is resolved
+  only as an inherited member (`<param>.x`), a package root of a type path, a module-static wildcard name (which the
+  carry moves), `trace` or the pattern wildcard `_`; everything else — including a field import `import p.M.f`, which the
+  carry does not move, and a module-level value of the source module — is refused naming the reference. A property
+  accessor is refused because inside `get_x` the bare `x` is the physical field and `<param>.x` would call the accessor
+  again; an instance field because a static helper holds no state; a function-value use because a static method has no
+  bound form. ARMS: hxq has no op that edits `test/testkit/mutation-arms.json`, so `--arms` prints a HINT (retarget a
+  moved member's arm; flag an arm whose `find` no longer cuts its member, measured with `Patch.locate`, the matcher
+  `tools/mutation-arm.sh` applies) instead of editing it. Rewriting the finds and replaces themselves is left as a gap:
+  a `replace` is the author's text and can name a member the move qualified. Proof on a copy of 3fb1637a4 (N13's start):
+  after `set-modifier -private` on `ParsedEntry` (which the op refused as a private type both sides name), one
+  `move-to-helper CallGraph.hx collectEdges --to CallGraphEdges --param g` wrote `CallGraphEdges` equal to N13's
+  hand-made one modulo the method's name, its doc and the `@:access` seat, compiled first time; 131 arm retargets
+  (N13's 131) — branch `feat/infra-N20`

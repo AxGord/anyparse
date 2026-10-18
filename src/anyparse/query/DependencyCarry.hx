@@ -80,7 +80,7 @@ final class DependencyCarry {
 	 */
 	public static function dependencyImportLinesToCarry(
 		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, destSource: String, index: SymbolIndex,
-		plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String
+		plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String, ?travelling: Array<String>
 	): CarryResult {
 		// The type-ref projection and the grammar shape are built ONCE here and threaded down: the
 		// dependency walk and the `using` carry both read them, and a plugin without a parse cache (which
@@ -88,7 +88,9 @@ final class DependencyCarry {
 		// struct for each.
 		final tree: QueryNode = plugin.parseFileTypeRefs(source);
 		final shape: RefShape = plugin.refShape();
-		final depNames: Array<String> = dependencyNames(tree, shape, source, declSpan, cursorInfo, plugin, typeRefShape, typeName);
+		final depNames: Array<String> = dependencyNames(
+			tree, shape, source, declSpan, cursorInfo, plugin, typeRefShape, typeName, travelling
+		);
 		// One copy of the file list for the whole carry — `allFiles()` copies, and the binding walk
 		// runs once per dependency name on each side.
 		final files: Array<FileInfo> = index.allFiles();
@@ -886,7 +888,7 @@ final class DependencyCarry {
 	 */
 	private static function dependencyNames(
 		tree: QueryNode, shape: RefShape, source: String, declSpan: Span, cursorInfo: FileInfo, plugin: GrammarPlugin,
-		typeRefShape: TypeRefShape, typeName: String
+		typeRefShape: TypeRefShape, typeName: String, travelling: Null<Array<String>>
 	): Array<String> {
 		final refs: Array<NameSpan> = [];
 		collectDependencyNames(tree, declSpan, typeRefShape, typeName, refs);
@@ -898,7 +900,9 @@ final class DependencyCarry {
 		final out: Array<String> = [];
 		for (ref in refs) {
 			final shadowed: Bool = shadows.exists(s -> s.name == ref.name && ref.span.from >= s.span.from && ref.span.to <= s.span.to);
-			if (!shadowed && !out.contains(ref.name)) out.push(ref.name);
+			// A name `travelling` lists is a declaration making the same trip, which the destination declares itself afterwards.
+			final travels: Bool = travelling != null && travelling.contains(ref.name);
+			if (!shadowed && !travels && !out.contains(ref.name)) out.push(ref.name);
 		}
 		return out;
 	}

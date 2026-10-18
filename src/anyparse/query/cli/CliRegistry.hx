@@ -37,6 +37,7 @@ import anyparse.query.cli.command.MentionsCommand;
 import anyparse.query.cli.command.MetaCommand;
 import anyparse.query.cli.command.MoveCommand;
 import anyparse.query.cli.command.MoveMemberCommand;
+import anyparse.query.cli.command.MoveToHelperCommand;
 import anyparse.query.cli.command.MutationSchemaCommand;
 import anyparse.query.cli.command.MutationVerdictCommand;
 import anyparse.query.cli.command.NewCommand;
@@ -114,6 +115,7 @@ final class CliRegistry {
 			new RenameCommand(),
 			new MoveCommand(),
 			new MoveMemberCommand(),
+			new MoveToHelperCommand(),
 			new ExtractInterfaceCommand(),
 			new PullUpCommand(),
 			new PushDownCommand(),

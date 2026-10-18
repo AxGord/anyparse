@@ -88,6 +88,32 @@ final class MoveCommand implements CliCommand {
 		}
 	}
 
+	/**
+	 * The change carried to the writer's fixed point under `opts` — `canonicalMoveChange` once the file it rewrites is known
+	 * canonical, and a module an op CREATES (`move-to-helper`'s new helper) unconditionally: it has no prior form to keep.
+	 */
+	public static function fixedPointChange(cmd: String, change: MoveChange, plugin: GrammarPlugin, opts: Null<String>): MoveChange {
+		// The FIXED POINT, not one round trip — the same loop `apq fmt` and
+		// `RefactorSupport.canonicalize` run, and for the same recorded reason: a writer whose
+		// output is not its own fixed point leaves the file one pass short of where the next
+		// `fmt --list` looks, which is the very symptom this gate exists to remove.
+		final fixed: FormatFixedPointResult = try FormatFixedPoint.run(
+			text -> plugin.writeRoundTrip(text, opts), change.newSource
+		) catch (exception: CommentLossException) {
+			// The one failure worth a word: the writer refuses to drop an author's comment
+			// rather than emitting lossy output. Keeping the raw splice is right for a span
+			// splice (the move's own re-parse already validated it), but silence here would
+			// leave a file `fmt --list` flags with nothing said about why.
+			CliIo.stderr(
+				'apq $cmd: ${change.file} kept the raw splice — canonicalising it would lose the comment '
+				+ '`${exception.comment}`; run `apq fmt --list` on it\n'
+			);
+			return change;
+		}
+		final canon: Null<String> = fixed.text;
+		return fixed.converged && canon != null ? { file: change.file, newSource: canon } : change;
+	}
+
 	private static inline function moveParseExit(code: Int): MoveOpts {
 		return {
 			lang: '',
@@ -303,25 +329,7 @@ final class MoveCommand implements CliCommand {
 		if (original == null) return change;
 		final opts: Null<String> = CliArgs.discoverFormatConfig(change.file);
 		if (!CanonicalEdit.isWriterCanonical(original, plugin, opts)) return change;
-		// The FIXED POINT, not one round trip — the same loop `apq fmt` and
-		// `RefactorSupport.canonicalize` run, and for the same recorded reason: a writer whose
-		// output is not its own fixed point leaves the file one pass short of where the next
-		// `fmt --list` looks, which is the very symptom this gate exists to remove.
-		final fixed: FormatFixedPointResult = try FormatFixedPoint.run(
-			text -> plugin.writeRoundTrip(text, opts), change.newSource
-		) catch (exception: CommentLossException) {
-			// The one failure worth a word: the writer refuses to drop an author's comment
-			// rather than emitting lossy output. Keeping the raw splice is right for a span
-			// splice (the move's own re-parse already validated it), but silence here would
-			// leave a file `fmt --list` flags with nothing said about why.
-			CliIo.stderr(
-				'apq $cmd: ${change.file} kept the raw splice — canonicalising it would lose the comment '
-				+ '`${exception.comment}`; run `apq fmt --list` on it\n'
-			);
-			return change;
-		}
-		final canon: Null<String> = fixed.text;
-		return fixed.converged && canon != null ? { file: change.file, newSource: canon } : change;
+		return fixedPointChange(cmd, change, plugin, opts);
 	}
 
 }
