@@ -2,11 +2,16 @@ package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan.ElementHit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
+import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
+import haxe.ds.Either;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -80,6 +85,12 @@ enum InsertSide {
 @:nullSafety(Strict)
 final class AddElement {
 
+	/** The refusal of an empty element text, which every insert mode shares. */
+	private static inline final EMPTY_ELEMENT: String = 'add-element requires a non-empty element text';
+
+	/** The label a parse failure of the edited source is reported under. */
+	private static inline final SOURCE_LABEL: String = 'source';
+
 	/**
 	 * Expression / block / switch container kinds whose source ENDS at their
 	 * own closing delimiter, so back-scanning whitespace from `span.to`
@@ -113,9 +124,9 @@ final class AddElement {
 		source: String, line: Int, col: Int, side: InsertSide, code: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
 		final trimmed: String = code.trim();
-		if (trimmed.length == 0) return Err('add-element requires a non-empty element text');
+		if (trimmed.length == 0) return Err(EMPTY_ELEMENT);
 
-		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, SOURCE_LABEL) {
 			case Unparsed(message): return Err(message);
 			case Parsed(parsed): parsed;
 		};
@@ -123,7 +134,9 @@ final class AddElement {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(tree, source, cursor);
+		// A `final class` addressed through its inner form is lifted to the wrapper: inserting `--before`
+		// the form landed between `final` and `class`.
+		final hit: Null<ElementHit> = ElementSpan.liftedElementAt(tree, source, cursor);
 		if (hit == null)
 			return Err(
 				'position $line:$col'
@@ -187,7 +200,7 @@ final class AddElement {
 		// greedy — the element goes first and the break after it, so what followed (that doc above all)
 		// stays at the start of a line instead of trailing the element's last token: `} /** doc *\/`.
 		final afterText: String = SourceText.startsItsLine(source, after) ? '$trimmed\n' : '\n$trimmed';
-		final edit: { span: Span, text: String } = switch side {
+		final edit: Splice = switch side {
 			case After:
 				{ span: new Span(after, after), text: isComma ? ', $trimmed' : afterText };
 			case Before:
@@ -233,9 +246,9 @@ final class AddElement {
 		source: String, line: Int, col: Int, code: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
 		final trimmed: String = code.trim();
-		if (trimmed.length == 0) return Err('add-element requires a non-empty element text');
+		if (trimmed.length == 0) return Err(EMPTY_ELEMENT);
 
-		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, SOURCE_LABEL) {
 			case Unparsed(message): return Err(message);
 			case Parsed(parsed): parsed;
 		};
@@ -253,6 +266,54 @@ final class AddElement {
 		return containerSpan == null
 			? Err('the container at $line:$col has no source span')
 			: computeAppendEdit(source, line, col, containerSpan, container.kind, trimmed, reformat, plugin, optsJson);
+	}
+
+	/**
+	 * Insert the STRING entries `code` — one element or a comma list of them, as `appendElement` takes —
+	 * into the array literal whose first token is at `line:col`, each at its SORTED position: code-unit
+	 * order, the order a generated registry sorts in. A hand-kept sorted list then gains entries without
+	 * anyone working out where each one goes; `appendElement` is the explicit unsorted form.
+	 *
+	 * Positive by construction: the container must be the grammar's array literal
+	 * (`RefShape.arrayLiteralKind`), and every element, existing and new, a CONSTANT string —
+	 * a plain literal or a concatenation of them (`sortKeyOf`) — so the order compares string VALUES.
+	 * The existing elements must already be strictly ascending, and an entry the list already holds is
+	 * refused: a list that is not a sorted set is never reordered or doubled behind the caller's back.
+	 *
+	 * The entries are split by the PARSER, never by scanning `code` (`parsedEntries`). Each lands before
+	 * the first existing element whose key sorts after it — clear of that element's leading doc, as
+	 * `addElement` `Before` does — or after the last one; entries sharing a gap keep their own order.
+	 */
+	public static function insertSorted(
+		source: String, line: Int, col: Int, code: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+	): EditResult {
+		final trimmed: String = withoutTrailingComma(code.trim());
+		if (trimmed.length == 0) return Err(EMPTY_ELEMENT);
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, SOURCE_LABEL) {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
+		final arrayKind: Null<String> = plugin.refShape().arrayLiteralKind;
+		final fold: Null<StringFoldSupport> = plugin.stringFoldSupport();
+		if (arrayKind == null || fold == null) return Err('--sorted needs a grammar that names its array literal and its string literals');
+		final container: Null<QueryNode> = findContainerAt(tree, source, Span.offsetOf(source, line, col));
+		final containerSpan: Null<Span> = container?.span;
+		if (container == null || containerSpan == null || container.kind != arrayKind)
+			return Err('position $line:$col is not on the first token of an array literal — --sorted inserts into an array');
+
+		final existing: Array<SortedEntry> = switch sortedElements(container, source, fold) {
+			case Left(message): return Err(message);
+			case Right(elements): elements;
+		};
+		final entries: Array<SortedEntry> =
+			switch parsedEntries(source, containerSpan, existing.length, trimmed, plugin, arrayKind, fold) {
+				case Left(message): return Err(message);
+				case Right(parsed): parsed;
+			};
+		entries.sort((a, b) -> Reflect.compare(a.key, b.key));
+		for (i => entry in entries) if (existing.exists(e -> e.key == entry.key) || (i > 0 && entries[i - 1].key == entry.key))
+			return Err('${entry.text} is already in the list');
+		return CanonicalEdit.canonicalize(source, gapEdits(source, containerSpan, existing, entries, plugin), reformat, plugin, optsJson);
 	}
 
 	/**
@@ -313,6 +374,11 @@ final class AddElement {
 	 */
 	private static inline function cursorInFirstToken(source: String, from: Int, cursor: Int): Bool {
 		return cursor >= from && cursor <= SourceText.firstTokenEnd(source, from);
+	}
+
+	/** Whether `code` opens a brace / bracket / parenthesis container — the last content byte of an EMPTY one. */
+	private static inline function isOpenDelimiter(code: Int): Bool {
+		return code == '{'.code || code == '['.code || code == '('.code;
 	}
 
 	private static function braceLessBodySlot(parent: Null<QueryNode>, element: QueryNode, plugin: GrammarPlugin): Bool {
@@ -432,7 +498,7 @@ final class AddElement {
 		final lastContent: Int = scan.lastContent;
 		final afterComments: Int = scan.afterComments;
 		final lastCode: Int = lastContent >= containerSpan.from ? source.fastCodeAt(lastContent) : -1;
-		final empty: Bool = lastCode == '{'.code || lastCode == '['.code || lastCode == '('.code || lastContent < containerSpan.from;
+		final empty: Bool = isOpenDelimiter(lastCode) || lastContent < containerSpan.from;
 
 		final isComma: Bool = MemberKinds.COMMA_CONTAINER_KINDS.contains(containerKind);
 		// Same statement-into-comma-list refusal as the sibling insert path: a
@@ -443,14 +509,11 @@ final class AddElement {
 				+ 'to append a STATEMENT to the enclosing block, point --append at the block, not the call'
 			);
 		final at: Int = lastContent + 1;
+		// A comma list written WITH a trailing separator (`['a', 'b',]`) already ends on its `,`: the new
+		// element follows it and takes the trailing separator over, instead of doubling it (`,, x`).
+		final trailingSeparator: Bool = isComma && !empty && lastCode == ','.code;
 		if (afterComments < 0) {
-			final text: String = if (empty)
-				trimmed
-			else if (isComma)
-				', $trimmed'
-			else
-				'\n$trimmed';
-			final edit: { span: Span, text: String } = { span: new Span(at, at), text: text };
+			final edit: Splice = { span: new Span(at, at), text: appendedText(trimmed, empty, trailingSeparator, isComma) };
 			return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 		}
 
@@ -458,10 +521,163 @@ final class AddElement {
 		// The separator has to stay attached to that element — a `,` written after a
 		// LINE comment would be swallowed by it — and the new element goes on its own
 		// line past the last comment, so neither splice lands in comment text.
-		final edits: Array<{ span: Span, text: String }> = [];
-		if (!empty && isComma) edits.push({ span: new Span(at, at), text: ',' });
-		edits.push({ span: new Span(afterComments, afterComments), text: '\n$trimmed' });
+		final edits: Array<Splice> = [];
+		if (!empty && isComma && !trailingSeparator) edits.push({ span: new Span(at, at), text: ',' });
+		edits.push({ span: new Span(afterComments, afterComments), text: trailingSeparator ? '\n$trimmed,' : '\n$trimmed' });
 		return CanonicalEdit.canonicalize(source, edits, reformat, plugin, optsJson);
 	}
 
+	/**
+	 * The text `computeAppendEdit` splices right after a container's last content byte: the element bare
+	 * into an empty container, after the existing trailing separator (and taking it over), after a new `,`,
+	 * or on a line of its own.
+	 */
+	private static function appendedText(trimmed: String, empty: Bool, trailingSeparator: Bool, isComma: Bool): String {
+		return if (empty)
+			trimmed
+		else if (trailingSeparator)
+			' $trimmed,'
+		else if (isComma)
+			', $trimmed'
+		else
+			'\n$trimmed';
+	}
+
+	/**
+	 * The elements of the array `container` as sorted-list entries, or `Left` naming why it is no sorted
+	 * set: an element that is no constant string, or one that does not sort strictly after the one before.
+	 */
+	private static function sortedElements(
+		container: QueryNode, source: String, fold: StringFoldSupport
+	): Either<String, Array<SortedEntry>> {
+		final out: Array<SortedEntry> = [];
+		for (child in container.children) {
+			final entry: Null<SortedEntry> = sortedEntryOf(child, source, fold);
+			if (entry == null)
+				return Left('${elementText(child, source)} is not a constant string — --sorted orders string entries only; use --append');
+			final last: Null<SortedEntry> = out.length == 0 ? null : out[out.length - 1];
+			if (last != null && last.key >= entry.key)
+				return Left(
+					'the array is not sorted without duplicates (${last.text} before ${entry.text}'
+					+ ') — --sorted keeps a sorted set; use --append'
+				);
+			out.push(entry);
+		}
+		return Right(out);
+	}
+
+	/**
+	 * One splice per gap of `existing` that receives entries, the gap's entries joined in order: before the
+	 * first existing element sorting after them — clear of that element's leading doc, as `addElement`
+	 * `Before` does — after the last element, or into the empty array at `containerSpan`.
+	 */
+	private static function gapEdits(
+		source: String, containerSpan: Span, existing: Array<SortedEntry>, entries: Array<SortedEntry>, plugin: GrammarPlugin
+	): Array<Splice> {
+		final byGap: Array<Array<String>> = [for (_ in 0...existing.length + 1) []];
+		for (entry in entries) {
+			final at: Int = existing.findIndex(e -> e.key > entry.key);
+			byGap[at < 0 ? existing.length : at].push(entry.text);
+		}
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		return [
+			for (gap => batch in byGap) if (batch.length > 0) {
+				final joined: String = batch.join(', ');
+				final at: Int = if (existing.length == 0)
+					SourceText.firstTokenEnd(source, containerSpan.from)
+				else if (gap == existing.length)
+					existing[gap - 1].span.to
+				else
+					ElementSpan.docExtendedSpan(source, existing[gap].span, regions, true).from;
+				final text: String = if (existing.length == 0)
+					joined
+				else if (gap == existing.length)
+					', $joined'
+				else
+					'$joined, ';
+				{ span: new Span(at, at), text: text };
+			}
+		];
+	}
+
+	/**
+	 * The new entries of `insertSorted`, split by the parser: `trimmed` is spliced at the FRONT of the
+	 * array at `containerSpan` (which holds `existingCount` elements) in a probe text, the probe is parsed,
+	 * and the array's leading children past the old count are read back with their source. `Left` names
+	 * why that failed — the probe does not parse, an entry is no constant string, or nothing was added.
+	 */
+	private static function parsedEntries(
+		source: String, containerSpan: Span, existingCount: Int, trimmed: String, plugin: GrammarPlugin, arrayKind: String,
+		fold: StringFoldSupport
+	): Either<String, Array<SortedEntry>> {
+		final open: Int = SourceText.firstTokenEnd(source, containerSpan.from);
+		final probe: String = source.substring(0, open) + trimmed + (existingCount > 0 ? ', ' : '') + source.substring(open);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, probe);
+		final array: Null<QueryNode> = tree == null ? null : nodeAt(tree, containerSpan.from, arrayKind);
+		if (array == null) return Left('the entries do not parse as elements of the array: $trimmed');
+		final added: Int = array.children.length - existingCount;
+		if (added <= 0) return Left('the entries add no element to the array: $trimmed');
+		final out: Array<SortedEntry> = [];
+		for (child in array.children.slice(0, added)) {
+			final entry: Null<SortedEntry> = sortedEntryOf(child, probe, fold);
+			if (entry == null) return Left('${elementText(child, probe)} is not a constant string — --sorted inserts string entries only');
+			out.push(entry);
+		}
+		return Right(out);
+	}
+
+	/** The node of `kind` starting at `from` in `tree`, or null. */
+	private static function nodeAt(tree: QueryNode, from: Int, kind: String): Null<QueryNode> {
+		if (tree.kind == kind && tree.span?.from == from) return tree;
+		for (c in tree.children) {
+			final hit: Null<QueryNode> = nodeAt(c, from, kind);
+			if (hit != null) return hit;
+		}
+		return null;
+	}
+
+	/** `node` as a sorted-list entry — its sort key, span and source text — or null when it is no constant string (`sortKeyOf`). */
+	private static function sortedEntryOf(node: QueryNode, source: String, fold: StringFoldSupport): Null<SortedEntry> {
+		final span: Null<Span> = node.span;
+		final key: Null<String> = sortKeyOf(node, source, fold);
+		return span == null || key == null ? null : { key: key, span: span, text: source.substring(span.from, span.to) };
+	}
+
+	/**
+	 * The string VALUE of a constant string element: a plain literal (`StringFoldSupport.literalOf`) or a
+	 * concatenation of them (`StringFoldSupport.concatKind`), the spelling an entry too wide for its line
+	 * takes. Null for anything else — and for content holding a `\` or a `$`, whose raw text is not its value
+	 * (an escape, an interpolation), so its position would be a guess.
+	 */
+	private static function sortKeyOf(node: QueryNode, source: String, fold: StringFoldSupport): Null<String> {
+		final literal: Null<StringLiteral> = fold.literalOf(node, source);
+		if (literal != null) return literal.content.contains('\\') || literal.content.contains('$$') ? null : literal.content;
+		if (node.kind != fold.concatKind() || node.children.length != 2) return null;
+		final left: Null<String> = sortKeyOf(node.children[0], source, fold);
+		if (left == null) return null;
+		final right: Null<String> = sortKeyOf(node.children[1], source, fold);
+		return right == null ? null : '$left$right';
+	}
+
+	/** The source text of `node`, for a diagnostic. */
+	private static function elementText(node: QueryNode, source: String): String {
+		final span: Null<Span> = node.span;
+		return span == null ? node.kind : source.substring(span.from, span.to);
+	}
+
+	/** `text` without one trailing `,` — an entry list copied out of an array keeps its separator. */
+	private static function withoutTrailingComma(text: String): String {
+		return text.endsWith(',') ? text.substr(0, text.length - 1).rtrim() : text;
+	}
+
 }
+
+/** One element of a sorted string list (`AddElement.insertSorted`): its string value, its span and its source text. */
+private typedef SortedEntry = {
+	final key: String;
+	final span: Span;
+	final text: String;
+}
+
+/** One splice of an insert: the text `CanonicalEdit.canonicalize` puts at `span`. */
+private typedef Splice = { span: Span, text: String };

@@ -391,7 +391,9 @@ final class NamingCrossRenameTest extends Test {
 
 	/**
 	 * End to end through `lint --fix` with a compiler oracle: the typedef rename lands in both files; the
-	 * one an aliased import makes the engine miss is rejected by the compiler and bisected out, alone.
+	 * one read as a bare VALUE (`final c = JSON_RECT;`, the position the type engine leaves to the compiler) is
+	 * rejected by the compiler and bisected out, alone. Before N35 the miss was an aliased import's path, which
+	 * the engine now renames.
 	 */
 	@:pin('control')
 	@:killer('M-RISKYARM-CROSS-NOT-VERIFIED', 'M-XVERIFY-NO-BISECT')
@@ -409,8 +411,8 @@ final class NamingCrossRenameTest extends Test {
 		CliFixture.removeDir(dir);
 		Assert.stringContains('typedef JsonPoint', types);
 		Assert.stringContains('pkg.T.JsonPoint', main);
-		Assert.stringContains('typedef JSON_RECT', types, 'the alias-import miss is reverted');
-		Assert.stringContains('JR', main);
+		Assert.stringContains('typedef JSON_RECT', types, 'the bare-value miss is reverted');
+		Assert.stringContains('= JSON_RECT;', main);
 		Assert.isTrue(compiles, 'the tree still builds');
 		#else
 		Assert.pass('non-sys target');
@@ -482,9 +484,9 @@ final class NamingCrossRenameTest extends Test {
 		return plugin;
 	}
 
-	/** The oracle project's module: two typedefs, the second read through an aliased import the type engine does not follow. */
+	/** The oracle project's module: two typedefs, the second an alias of a class that `Main` reads as a bare VALUE. */
 	private static final ORACLE_TYPES: String =
-		'package pkg;\n\nclass T {}\n\ntypedef JSON_POINT = {\n\tx:Int\n}\n\ntypedef JSON_RECT = {\n\tw:Int\n}\n';
+		'package pkg;\n\nclass T {}\n\ntypedef JSON_POINT = {\n\tx:Int\n}\n\ntypedef JSON_RECT = T;\n';
 
 	#if (sys || nodejs)
 	/** A project directory: `pkg/T.hx`, a `Main` the oracle compiles that reads both typedefs, and `config` as its `apqlint.json`. */
@@ -497,8 +499,8 @@ final class NamingCrossRenameTest extends Test {
 		File.saveContent('$dir/pkg/T.hx', ORACLE_TYPES);
 		File.saveContent(
 			'$dir/Main.hx',
-			'import pkg.T.JSON_RECT as JR;\n\nclass Main {\n\tstatic function main() {\n\t\tfinal p:pkg.T.JSON_POINT = {x: 1};\n'
-			+ '\t\tfinal r:JR = {w: 2};\n\t\ttrace(p.x + r.w);\n\t}\n}\n'
+			'import pkg.T.JSON_RECT;\n\nclass Main {\n\tstatic function main() {\n\t\tfinal p:pkg.T.JSON_POINT = {x: 1};\n'
+			+ '\t\tfinal c:Class<Dynamic> = JSON_RECT;\n\t\ttrace(p.x, c);\n\t}\n}\n'
 		);
 		return dir;
 	}

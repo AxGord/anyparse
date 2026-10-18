@@ -71,6 +71,18 @@ class ApqUsesTest extends Test {
 		Assert.isTrue(hits.length >= 1, 'extends heritage expected, got ${describe(hits)}');
 	}
 
+	@:pin('control')
+	@:killer('M-XREN-EXTENDS-KIND-DROPPED')
+	public function testStructExtensionIsATypeRef(): Void {
+		// `{ > T, … }` names `T` in the `ExtendsField` node's own name slot: before N35 the kind was
+		// missing from `typeRefShape`, so `uses` (and `rename --scope`) never saw the extension.
+		final hits: Array<UsesHit> = usesIn('typedef X = { > HxVarDecl, var y:Int; } class Y { var z:{ > pkg.HxVarDecl, }; }', 'HxVarDecl');
+		Assert.equals(1, hits.length, 'the simple struct extension expected, got ${describe(hits)}');
+		Assert.equals(
+			1, Uses.find('pkg.HxVarDecl', treeOf('class Y { var z:{ > pkg.HxVarDecl, }; }'), new HaxeQueryPlugin().typeRefShape()).length
+		);
+	}
+
 	public function testNewExpr(): Void {
 		final hits: Array<UsesHit> = usesIn('class X { static function a() { var n = new HxVarDecl(); } }', 'HxVarDecl');
 		Assert.isTrue(hits.length >= 1, 'new T() expected, got ${describe(hits)}');

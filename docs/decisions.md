@@ -3900,6 +3900,44 @@ decided the question; it may not become a record of runs.
   members" in a WHOLE-scope run: 1 renamed by N26, 2 correct refusals, 2 owner-name ambiguities):
   `isPrivateMemberConfined(?ownerFile)` passes the declaring file to `hasSubtype`, so only edges resolving to the owner's
   own declaration count (both naming paths pass it; other callers unchanged) — branch `feat/infra-N27`
+- N35 (1) — `rename --scope` / `CrossRename.crossRenameType` missed five type-reference positions, found by renaming
+  each type of a haxe-typechecked census fixture (simple and qualified spellings of every position) and compiling.
+  The struct extension `{ > T, … }` is fixed in the SHARED projection, not in the op: `typeRefShape` lists
+  `ExtendsField` (the walk-path node names its type) and `QueryWalkerLowering.typeRefsDescendCore` emits the head of
+  a nominal reference `Seq` reached through a `type` slot (`isNominalRefRule`), which is how `> T` nested in an
+  annotation (`Array<{ > T, }>`) projected its field types and never `T` — so `uses` / `blast` / `mentions` /
+  `move-member`'s carry see it too. The rest is the op's own walk, each matched WHOLE against a path, never by last
+  segment: a dotted path in ANY expression position (`var c = pkg.T;`; it was matched only as a receiver) unless its
+  root identifier is a value binding of the file; an import whose path runs THROUGH the type's absolute module path
+  (`import pkg.T.f;`, `import pkg.T.*;`) and an alias import's path (decoded by `ModuleScan.aliasTargetOf`, the one
+  decoder); access grants by the TYPE path. Haxe 4.3.7, compile-checked: `@:access(p.Sub)` grants a sub-module type
+  `Sub` of `p.M`, `@:access(p.M.Sub)` and `@:access(p.M)` grant nothing, and a simple `@:access(C)` does not resolve
+  through `import p.C` — and a stale grant COMPILES, so this was the one silent miss. The grant metas are
+  `RefShape.takesPrivateAccessMetaName` + `AllowGrants.TAG`; a metadata argument of any other meta (`@:op(T + T)`)
+  is untouched. Left on purpose: a BARE type name in value position (`var c = T;`, `Std.isOfType(x, T)`) —
+  unqualified, it is a nullary enum constructor or an inherited member as far as a by-name walk knows; it stays a
+  loud compile error the advisory names — branch `feat/infra-N35`
+- N35 (2) — `add-element --before --select 'ClassDecl:X'` on ANY `final class` spliced between `final` and `class`
+  ("result does not parse"; the doc and `@:nullSafety` of the report were incidental): the selector resolves the
+  inner form, and only `remove-element` lifted it to the `FinalDecl` wrapper (a private `liftedHit`). MOVED to
+  `ElementSpan.liftedElementAt` / `liftedElement` (+ `ElementHit`), the RemoveElement copy deleted, `add-element`
+  calls it; `RefactorSupport.elementAtFrom` now has that one caller — branch `feat/infra-N35`
+- N35 (3) — no op inserted into a sorted list. → `add-element --sorted` (`AddElement.insertSorted`), a mode, not an
+  op: same address as `--append` (the array), same canonical writer-emit. Entries are split by the PARSER (spliced
+  at the array's front in a probe, read back as children), never by scanning the argument. POSITIVE: every element
+  a constant string (`StringFoldSupport.literalOf`, or a `concatKind` of them) whose raw content holds no `\` and no
+  `$` (raw text = value); the existing list strictly ascending in code-unit order (`TestDiscovery.compareStrings`);
+  a present entry refused. `--append` stays the explicit unsorted form. JSON: no `GrammarPlugin` exists for the JSON
+  grammar, so `mutation-arms.json` is out of reach of every op — branch `feat/infra-N35`
+- N35 (2b) — `add-element --append` onto an array written WITH a trailing comma (`[…, 'b',]`) spliced `, x` after
+  that comma (`,, x`, "result does not parse"; met appending to `TestDiscoveryParityTest`'s deferred-arm census). The
+  element now follows the existing separator and takes it over (`'b', 'x',`), also past trailing comments.
+  `NamingCrossRenameTest.testTheOracleRunRenamesAndRevertsTheMiss` needed a NEW miss for the oracle to revert, since
+  the aliased import it used is renamed now: a typedef alias of a class read as a bare VALUE — branch `feat/infra-N35`
+- N35 (2c) — `remove-element` of a comma-list element that holds a WHOLE line of a one-per-line list (`'x',` with
+  its comma) left the line's indentation and break behind — a blank line inside the array, kept by the writer as
+  trivia (met removing a pin from `TestDiscoveryParityTest`). `ElementSpan.elementCut` now line-extends the
+  comma-extended cut (`lineExtendedSpan` changes nothing when the cut does not own its line) — branch `feat/infra-N35`
 - N32 — ONE expected-type engine. The only typer of an untyped lambda parameter was a closure of `CallGraphEdges`
   (`expectedAt` / `returnExpectation` / `typeLambdaParams`), in the graph's keyed currency, so the shared walk
   (`NominalTypes.typeWalk`) answered Unknown for one and TM `FileSystemItemData.hx:330 !child.folder` (an inline-getter

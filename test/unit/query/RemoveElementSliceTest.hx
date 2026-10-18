@@ -33,7 +33,7 @@ class RemoveElementSliceTest extends Test {
 	 * `final abstract class Y` at rc 0.
 	 */
 	@:pin('control')
-	@:killer('M-DECLSPAN-FINAL-WRAPPER-BLIND')
+	@:killer('M-DECLSPAN-FINAL-WRAPPER-BLIND', 'M-LIFT-FINAL-WRAPPER-SKIPPED')
 	public function testRemoveFinalClassTakesItsFinal(): Void {
 		final source: String = 'final class X {}\n\nabstract class Y {}\n';
 		assertRemove(source, 1, 7, false, 'abstract class Y {}\n');
@@ -48,6 +48,19 @@ class RemoveElementSliceTest extends Test {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [1, 2, 3];\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [2, 3];\n\t}\n}\n';
 		assertRemove(source, 3, 12, true, expected);
+	}
+
+	/**
+	 * An element that holds a whole line of a one-per-line list takes the line: removing the middle entry
+	 * of a multi-line array used to leave its line's indentation behind as a blank line inside the array,
+	 * which the writer keeps as trivia (N35, met re-registering a pin in `TestDiscoveryParityTest`).
+	 */
+	@:pin('control')
+	@:killer('M-REMOVE-COMMA-LINE-KEPT')
+	public function testRemoveOnePerLineElementTakesItsLine(): Void {
+		final source: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t\t\'c\'\n\t];\n}\n';
+		final expected: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'c\'\n\t];\n}\n';
+		assertRemove(source, 4, 3, false, expected);
 	}
 
 	/** Remove the last element — its leading comma goes with it. */

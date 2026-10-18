@@ -302,7 +302,29 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		return switch child.kind {
 			case Ref:
 				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
-				_typeRefRules.contains(ref) ? [call(typeRefsFnName(ref), [access, ident('into'), ident('_s')])] : [];
+				final refs: Expr = call(typeRefsFnName(ref), [access, ident('into'), ident('_s')]);
+				// A NOMINAL reference written directly in a `type` slot — a `Seq` carrying its own `name`
+				// (`HxTypeRef`, the `> T` of `HxAnonField.ExtendsField(type: HxTypeRef)`) — emits its head
+				// here: its `_typeRefs` lowering skips `name` like every `Seq`'s, because the usual way in is
+				// `HxType.Named(ref: HxTypeRef)`, whose arm emits the head itself. Reached through a `type`
+				// slot nobody did, and a struct extension nested in an annotation (`Array<{ > T, }>`)
+				// projected its fields' types and never `T` (N35).
+				final rule: Null<ShapeNode> = _shape.rules[ref];
+				final nominal: Bool = fieldNameOf(child) == PairedShapeLowering.TYPE_FIELD && rule != null
+					&& seqField(rule, PairedShapeLowering.NAME_FIELD) != null;
+				final head: Null<Expr> = nominal ? nameOfValue(child, access) : null;
+				if (!_typeRefRules.contains(ref))
+					[]
+				else if (head == null)
+					[refs]
+				else
+					[
+						macro {
+							final _nm: Null<String> = $head;
+							if (_nm != null) into.push(new anyparse.query.QueryNode($v{TYPE_REF_KIND}, _nm, [], _s));
+						},
+						refs
+					];
 			case Star:
 				final loopVar: String = '_r$depth';
 				final body: Array<Expr> = typeRefsDescend(child.children[0], ident(loopVar), depth + 1);
@@ -324,7 +346,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		for (node in _shape.rules) for (child in node.children) {
 			// An Alt's children are ctors, whose own children are the args.
 			final args: Array<ShapeNode> = node.kind == Alt ? child.children : [child];
-			for (arg in args) if (fieldNameOf(arg) == 'type') {
+			for (arg in args) if (fieldNameOf(arg) == PairedShapeLowering.TYPE_FIELD) {
 				final ref: Null<String> = refOf(arg);
 				if (ref != null && !isTerminalRule(ref) && !_typeRefSeeds.contains(ref)) _typeRefSeeds.push(ref);
 			}
@@ -437,9 +459,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 */
 	private function seqFieldDescent(child: ShapeNode, intoName: String, typeOutName: String, fallbackSpan: Null<Expr>): Array<Expr> {
 		final name: String = fieldNameOf(child);
-		if (name == 'name') return [];
+		if (name == PairedShapeLowering.NAME_FIELD) return [];
 		final access: Expr = field(ident('v'), name);
-		if (name != 'type') {
+		if (name != PairedShapeLowering.TYPE_FIELD) {
 			final walked: Array<Expr> = descend(child, access, intoName, typeOutName, 0);
 			if (!child.hasMeta(QUERY_TYPE_SLOT_META)) return walked;
 			if (!isOptional(child)) return walked.concat(typeSlotFill(child, access, typeOutName));
@@ -668,7 +690,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 					return block([bind].concat(typeRefsDescend(envelope, field(ident('v'), PairedShapeLowering.ENVELOPE_FIELD), 0)));
 				final out: Array<Expr> = [bind];
 				for (child in node.children)
-					if (fieldNameOf(child) != 'name')
+					if (fieldNameOf(child) != PairedShapeLowering.NAME_FIELD)
 						for (e in typeRefsDescend(child, field(ident('v'), fieldNameOf(child)), 0)) out.push(e);
 				block(out);
 			case Star:
