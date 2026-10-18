@@ -6,8 +6,6 @@ import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.SpliceFact;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Where a fact of a node RUNS, read off the node alone: in the node's own range (`placed`), at the
  * sites of the inlined call that spliced it in (`spliceOf`), or where the expression macro that

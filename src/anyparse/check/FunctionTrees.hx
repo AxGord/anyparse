@@ -6,8 +6,6 @@ import anyparse.query.QueryNode;
 import anyparse.query.TreePath;
 import anyparse.runtime.Span;
 
-using Lambda;
-
 /** The function nodes of a call graph, found in the branch-aware tree of their file, each tree projected once. */
 @:nullSafety(Strict)
 final class FunctionTrees {

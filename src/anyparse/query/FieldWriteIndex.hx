@@ -9,7 +9,6 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 
 using Lambda;
-using StringTools;
 
 /**
  * One resolved field write: `owner`.`field` written at `(file, span)`. The owner

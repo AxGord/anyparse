@@ -16,7 +16,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * Flags two shapes that collapse a statement-position `switch` assigning in every arm into a single

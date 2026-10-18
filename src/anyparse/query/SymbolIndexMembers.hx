@@ -5,8 +5,6 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndexBuilder.MemberSeams;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * The MEMBER half of `SymbolIndexBuilder`'s extraction: one type body walked into its
  * `MemberInfo` records — every member with its modifier run, annotations, written types and

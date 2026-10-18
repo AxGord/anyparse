@@ -2,8 +2,6 @@ package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
 
-using Lambda;
-
 /**
  * Remove an `import` / `using` statement by its module path — the by-name
  * convenience over the cursor-based `RemoveElement`, sister to `add-import`,

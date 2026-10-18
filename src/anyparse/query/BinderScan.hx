@@ -1,8 +1,5 @@
 package anyparse.query;
 
-using StringTools;
-using Lambda;
-
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 

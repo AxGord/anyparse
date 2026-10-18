@@ -18,7 +18,6 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * Flags a `for`-in loop that iterates a collection ONLY to count it — `var i = 0;` immediately

@@ -12,7 +12,6 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
 using StringTools;
-using Lambda;
 
 /**
  * Flags a key-value `for` loop that discards its key with `_` — `for (_ => v in m)`

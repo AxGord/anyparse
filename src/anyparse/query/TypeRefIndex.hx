@@ -6,7 +6,6 @@ import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 
-using StringTools;
 using Lambda;
 
 /**

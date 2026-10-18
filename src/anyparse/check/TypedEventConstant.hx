@@ -21,7 +21,6 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * Retypes an event class's `String` event-type constant to the project's TYPED event-type abstract —

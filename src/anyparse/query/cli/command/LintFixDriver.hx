@@ -21,7 +21,6 @@ import anyparse.query.cli.command.LintFixVerify.AssistedOutcome;
 import anyparse.query.cli.command.LintFixVerify.RiskyFixOutcome;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

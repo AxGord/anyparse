@@ -16,8 +16,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Flags an INDEXED `for` whose index is never anything but an index into the collection it
  * counts — `for (i in 0...X.length)` where every mention of `i` sits inside an `X[i]` — which

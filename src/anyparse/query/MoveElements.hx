@@ -8,7 +8,6 @@ import anyparse.runtime.Span;
 import haxe.crypto.Md5;
 import haxe.ds.Either;
 
-using Lambda;
 using StringTools;
 
 /**

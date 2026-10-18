@@ -6,7 +6,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /** A resolved parameter to fold into the object: its name, type source, and node. */

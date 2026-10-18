@@ -16,7 +16,6 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * Flags a `Map` read / write spelled as a method call where index access is idiomatic —

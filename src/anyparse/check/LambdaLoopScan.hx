@@ -25,7 +25,6 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * The shape engine behind `prefer-exists`, `prefer-foreach` and `prefer-count`: a `for` loop whose

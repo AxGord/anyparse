@@ -2,8 +2,6 @@ package anyparse.core;
 
 import anyparse.format.IndentChar;
 
-using Lambda;
-
 /**
  * Resolves every `Doc.BreakCommit` before the collapse pass and the emit render see the Doc.
  *

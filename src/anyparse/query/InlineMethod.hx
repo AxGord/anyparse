@@ -5,7 +5,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
 using StringTools;
-using Lambda;
 
 /**
  * Inline a method / function into its call sites — the method analog of

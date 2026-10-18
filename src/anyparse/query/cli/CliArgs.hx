@@ -1,7 +1,6 @@
 package anyparse.query.cli;
 
 using StringTools;
-using Lambda;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SourceText;

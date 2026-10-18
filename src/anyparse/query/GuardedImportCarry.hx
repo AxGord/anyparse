@@ -9,7 +9,6 @@ import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.runtime.Span;
 
 using StringTools;
-using Lambda;
 
 /**
  * The `#if`-guarded half of the `move` family's dependency-import carry.

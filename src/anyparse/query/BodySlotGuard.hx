@@ -5,7 +5,6 @@ import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using Lambda;
 using StringTools;
 
 /**

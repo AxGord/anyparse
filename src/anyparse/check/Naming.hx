@@ -29,7 +29,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

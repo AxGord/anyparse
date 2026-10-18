@@ -25,7 +25,6 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import anyparse.query.ExitCode.*;
 
-using StringTools;
 using Lambda;
 
 /**

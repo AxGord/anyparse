@@ -3,7 +3,6 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

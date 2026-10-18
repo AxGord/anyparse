@@ -10,8 +10,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
-using Lambda;
-
 /**
  * Flags a null-safe access (`a?.b`) whose receiver is already non-null **by flow**
  * on every path reaching it — the `?.` can never short-circuit, so a plain `.` is

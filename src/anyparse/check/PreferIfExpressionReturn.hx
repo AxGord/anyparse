@@ -16,7 +16,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * Flags an `if / else if / … / else` CHAIN whose EVERY branch is a valued `return`,

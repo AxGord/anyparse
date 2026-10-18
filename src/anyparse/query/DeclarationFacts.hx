@@ -1,7 +1,5 @@
 package anyparse.query;
 
-using Lambda;
-
 /**
  * What a `CallGraph` reads off the declarations of the functions and abstracts it holds, keyed by function
  * node id or type name: the facts a receiver, an argument or a literal is typed with.

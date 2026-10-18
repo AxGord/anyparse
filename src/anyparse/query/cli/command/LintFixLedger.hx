@@ -3,7 +3,6 @@ package anyparse.query.cli.command;
 import anyparse.check.Check;
 import anyparse.query.Cli.RuleFixOutcome;
 
-using StringTools;
 using Lambda;
 
 /**
