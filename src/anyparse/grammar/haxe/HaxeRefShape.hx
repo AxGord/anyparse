@@ -995,10 +995,10 @@ final class HaxeRefShape {
 				names: ['Bool', 'String', 'Int', 'Float'],
 				widens: ['Int' => ['Float']],
 				integer: 'Int',
-				real: 'Float',
-				arithmeticKinds: ['Add', 'Sub', 'Mul', 'Div', 'Mod'],
-				realArithmeticKinds: ['Div']
+				real: 'Float'
 			},
+			arithmeticKinds: ['Add', 'Sub', 'Mul', 'Div', 'Mod'],
+			realArithmeticKinds: ['Div'],
 			stringAffixTests: { module: 'StringTools', suffix: 'endsWith', prefix: 'startsWith' },
 			iterableTypeName: 'Iterable',
 			iterableElementTypeParams: ['Array' => 0, 'List' => 0, 'Iterable' => 0, 'Map' => 1],

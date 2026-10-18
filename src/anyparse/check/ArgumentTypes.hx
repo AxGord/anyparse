@@ -33,7 +33,7 @@ private typedef ArgumentScope = {
  * (`NominalTypes.typeWalk`); this is its resolution over the call graph (`HOST`), answering a written type: a literal's
  * core type, a local's or a parameter's annotation (a local written with none by its initializer), a field of the
  * enclosing type's chain read bare or off the self reference, a static field read off a type name, and arithmetic over core
- * numbers (`RefShape.coreValueTypes`). Everything else is untyped.
+ * numbers (`RefShape.coreValueTypes`, `arithmeticKinds`). Everything else is untyped.
  *
  * A positive whitelist for the fit: two core types (each one no indexed type of its name shadows) fit when they are the same
  * or one widens to the other and misfit otherwise; `null` fits a parameter a call may leave out; the same plain type name
@@ -214,13 +214,13 @@ final class ArgumentTypes {
 	}
 
 	/**
-	 * The core number arithmetic over `operands` yields (`RefShape.coreValueTypes`): the integer type when every operand is
+	 * The core number arithmetic over `operands` yields (`RefShape.arithmeticKinds`): the integer type when every operand is
 	 * one and `node`'s operator keeps it, the real type when every operand is a core number; null otherwise.
 	 */
 	private function arithmeticType(node: QueryNode, operands: Array<WrittenType>): Null<WrittenType> {
 		final core: Null<CoreValueTypes> = _shape.coreValueTypes;
 		if (core == null) return null;
-		var integral: Bool = !core.realArithmeticKinds.contains(node.kind);
+		var integral: Bool = !(_shape.realArithmeticKinds ?? []).contains(node.kind);
 		for (o in operands) {
 			final name: Null<String> = coreName(o.text);
 			if (name != core.integer && name != core.real) return null;

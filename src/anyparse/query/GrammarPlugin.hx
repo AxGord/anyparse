@@ -2538,12 +2538,21 @@ typedef RefShape = {
 	 * (`ArgumentSlots`): `names` are types each of which means the one built-in type in every file that declares no type
 	 * of that name (Haxe `Bool`, `String`, `Int`, `Float`), two of which unify only when they are the same or `widens`
 	 * says so (`Int` to `Float`, proved on Haxe 4.3.7: `f(?x:Float, ?s:String)` called `f(1)` binds `x`, called `f(true)`
-	 * skips both). `arithmeticKinds` are the operators whose result over core numbers is the `integer` type when every
-	 * operand is one and the operator is not one of `realArithmeticKinds`, the `real` type otherwise (`Int / Int` is a
-	 * `Float`); `negationKind` keeps its operand's type. Every other type — an abstract converting through `@:from` /
-	 * `@:to`, a type parameter, `Dynamic` — is undecided. Optional; unset decides nothing.
+	 * skips both); arithmetic over core numbers (`arithmeticKinds`) yields the `integer` type or the `real` one. Every
+	 * other type — an abstract converting through `@:from` / `@:to`, a type parameter, `Dynamic` — is undecided.
+	 * Optional; unset decides nothing.
 	 */
 	@:optional var coreValueTypes: CoreValueTypes;
+
+	/**
+	 * The binary operators whose result over core numbers (`coreValueTypes`) is a core number: the `integer` type when
+	 * every operand is one and the operator is not one of `realArithmeticKinds`, the `real` type otherwise (Haxe 4.3.7
+	 * `$type`: `Int + Int`, `Int % Int` are `Int`, `Int / Int` and any `Float` operand `Float`); `negationKind` keeps its
+	 * operand's type. Optional; unset types no arithmetic.
+	 */
+	@:optional var arithmeticKinds: Array<String>;
+
+	@:optional var realArithmeticKinds: Array<String>;
 
 	/**
 	 * The static extensions that test the ends of a string, as a guard over a string the analysis knows is decided:
@@ -3508,8 +3517,6 @@ typedef CoreValueTypes = {
 	final widens: Map<String, Array<String>>;
 	final integer: String;
 	final real: String;
-	final arithmeticKinds: Array<String>;
-	final realArithmeticKinds: Array<String>;
 }
 
 /** The execution facts of `RefShape` (`RefShape.execution`): what runs code no call site names, and what reach may assume. */

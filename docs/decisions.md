@@ -4262,7 +4262,7 @@ decided the question; it may not become a record of runs.
   parameter never misfits. A `Null<…>` peels on both sides (4.3.7: a `Null<Int>` binds `?f:Float`). (3) The argument
   types are `NominalTypes.typeWalk` over a fourth host (the call graph's tables: literals, annotations, a local's
   initializer, a field of the enclosing chain, a static off a type name) plus a NEW arc every host may answer,
-  `TypingHost.arithmetic` (the binary `coreValueTypes.arithmeticKinds` and the negation; `Int` unless an operand is
+  `TypingHost.arithmetic` (the binary `RefShape.arithmeticKinds` and the negation; `Int` unless an operand is
   `Float` or the operator is `Div`, probed with `$type`); the three existing hosts answer none. (4) A valuation char
   now stands for a SET of atoms (`t` `f` `n` `v`, a known string) — a value of several, or a string, spelled by a
   private-use char interned per `ArgumentValues` — and `EdgeConditions.carried` cuts a site only when, for some tested
