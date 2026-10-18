@@ -1945,14 +1945,27 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OversizedTypeCheckTest#testACeilingLessGrantIsRefusedWithAMigrationMessage :: control :: '
 				+ 'M-OVERSIZED-LEGACY-GRANT,M-OVERSIZED-PROBLEM-SILENT',
 			'unit.check.OversizedTypeCheckTest#testACeilingNotAboveTheThresholdIsRefused :: control :: M-OVERSIZED-CEILING-AT-THRESHOLD',
+			'unit.check.OversizedTypeCheckTest#testAConstantTableIsNotReported :: control :: M-OVERSIZED-CONST-COUNTED',
 			'unit.check.OversizedTypeCheckTest#testAGrantWithoutAReasonIsRefused :: control :: M-OVERSIZED-GRANT-REASONLESS',
+			'unit.check.OversizedTypeCheckTest#testALineAConstantSharesWithBehaviourCounts :: control :: M-OVERSIZED-CONST-SHARED-LINE',
 			'unit.check.OversizedTypeCheckTest#testAMalformedGrantIsRefused :: control :: '
 				+ 'M-OVERSIZED-GRANT-NAME,M-OVERSIZED-CLAUSE-ORDER,M-OVERSIZED-CLAUSE-REPEATED,M-OVERSIZED-CEILING-DIGITS',
+			'unit.check.OversizedTypeCheckTest#testAMixedTypeKeepsItsBehaviourCount :: control :: M-OVERSIZED-CONST-COUNTED',
 			'unit.check.OversizedTypeCheckTest#testARefusedGrantIsReportedOncePerRun :: control :: M-OVERSIZED-PROBLEM-ONCE',
 			'unit.check.OversizedTypeCheckTest#testAnUngrantedDimensionKeepsTheThreshold :: control :: M-OVERSIZED-UNGRANTED-DIMENSION',
+			'unit.check.OversizedTypeCheckTest#testEveryConstantShapeIsUncounted :: control :: '
+				+ 'M-OVERSIZED-CONST-INLINE-PROOF,M-CONST-EXPR-NO-OPERATORS,M-CONST-EXPR-NO-PARENS,'
+				+ 'M-CONST-EXPR-NO-NAMES,M-OVERSIZED-CONST-NO-ENUM-VALUES,M-OVERSIZED-CONST-ENUM-VALUE-NEEDS-INIT',
+			'unit.check.OversizedTypeCheckTest#testEveryNonConstantShapeCounts :: control :: '
+				+ 'M-OVERSIZED-CONST-NEEDS-STATIC,M-OVERSIZED-CONST-STATIC-VAR,M-OVERSIZED-CONST-ANY-STATIC-FINAL,'
+				+ 'M-OVERSIZED-CONST-ACCESSOR,M-OVERSIZED-CONST-ANY-ENUM-HOST,M-OVERSIZED-CONST-NAME-NOT-CONSTANT,'
+				+ 'M-OVERSIZED-CONST-NAME-UNDECLARED,M-CONST-EXPR-ANY-OPERAND,M-CONST-EXPR-INTERPOLATED',
 			'unit.check.OversizedTypeCheckTest#testGrantPastItsCeilingReportsTheTypeAgain :: control :: '
 				+ 'M-OVERSIZED-GRANT-UNBOUNDED,M-OVERSIZED-BEYOND-UNNAMED',
 			'unit.check.OversizedTypeCheckTest#testLineCeilingIsJudgedOnItsOwn :: control :: M-OVERSIZED-GRANT-LINES-UNBOUNDED',
+			'unit.check.OversizedTypeCheckTest#testTheLinesOfAConstantAreNotCounted :: control :: '
+				+ 'M-OVERSIZED-CONST-LINES-COUNTED,M-OVERSIZED-CONST-REGION-OWN-LINES',
+			'unit.check.OversizedTypeCheckTest#testTheLinesOfBehaviourStillCount :: control :: M-OVERSIZED-CONST-LINES-COUNTED',
 			'unit.check.OversizedTypeCheckTest#testTwoGrantsForOneTypeAreBothRefused :: control :: M-OVERSIZED-DUPLICATE-GRANT',
 			'unit.check.OwnedTypesCheckTest#testANameNoTierBindsIsNotReported :: control :: M-OWNED-FREE-REPORTED',
 			'unit.check.OwnedTypesCheckTest#testAQualifiedExpressionIsAMention :: control :: M-OWNED-QUALIFIED-EXPR-IGNORED',
@@ -7611,6 +7624,25 @@ class TestDiscoveryParityTest extends Test {
 			'M-OVERSIZED-CEILING-DIGITS',
 			'M-OVERSIZED-DUPLICATE-GRANT',
 			'M-OVERSIZED-CEILING-AT-THRESHOLD',
+			'M-OVERSIZED-CONST-COUNTED',
+			'M-OVERSIZED-CONST-LINES-COUNTED',
+			'M-OVERSIZED-CONST-REGION-OWN-LINES',
+			'M-OVERSIZED-CONST-SHARED-LINE',
+			'M-OVERSIZED-CONST-NEEDS-STATIC',
+			'M-OVERSIZED-CONST-STATIC-VAR',
+			'M-OVERSIZED-CONST-INLINE-PROOF',
+			'M-OVERSIZED-CONST-ANY-STATIC-FINAL',
+			'M-OVERSIZED-CONST-ACCESSOR',
+			'M-OVERSIZED-CONST-ANY-ENUM-HOST',
+			'M-OVERSIZED-CONST-NO-ENUM-VALUES',
+			'M-OVERSIZED-CONST-ENUM-VALUE-NEEDS-INIT',
+			'M-OVERSIZED-CONST-NAME-NOT-CONSTANT',
+			'M-OVERSIZED-CONST-NAME-UNDECLARED',
+			'M-CONST-EXPR-NO-NAMES',
+			'M-CONST-EXPR-NO-OPERATORS',
+			'M-CONST-EXPR-NO-PARENS',
+			'M-CONST-EXPR-ANY-OPERAND',
+			'M-CONST-EXPR-INTERPOLATED',
 			'M-MO-INLINE-BOUNDARY-OFF',
 			'M-MO-INLINE-OPTION-IGNORED',
 			'M-MO-INLINE-CONDITIONAL-BOUNDARY',

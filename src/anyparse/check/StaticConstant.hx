@@ -12,7 +12,6 @@ import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
-import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -259,7 +258,7 @@ final class StaticConstant implements Check implements DefaultOff {
 		final owner: Null<String> = container.name;
 		if (name == null || span == null || owner == null) return;
 		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
-		if (init == null || !isConstantLiteral(init, ctx.source, ctx.seams)) return;
+		if (init == null || !ConstantFieldScan.isConstantLiteral(init, ctx.source, ctx.seams)) return;
 		if (MemberWriteScan.writtenInRange(ctx.source, name, span, 0, ctx.source.length)) return;
 		if (ReflectionScan.runtimeName(ctx.reflected, name)) return;
 		if (memberAccessedInFile(ctx.source, name, span)) return;
@@ -278,18 +277,6 @@ final class StaticConstant implements Check implements DefaultOff {
 			severity: Severity.Info,
 			message: 'field \'$name\' is a compile-time literal, identical in every instance; use static'
 		});
-	}
-
-	/**
-	 * Whether `init` is a value the compiler knows and every instance would share: an
-	 * `inlineConstantLiteralKinds` literal, a `negationKind` over a numeric one, or a PLAIN string
-	 * literal. `literalOf` is what makes the string arm safe — it answers null for an interpolated
-	 * literal, so `'${UUID.uuid()}: close'` refuses exactly like a call in value position.
-	 */
-	private static function isConstantLiteral(init: QueryNode, source: String, seams: ConstantFieldSeams): Bool {
-		if (ConstantFieldScan.isScalarLiteral(init, seams)) return true;
-		final fold: Null<StringFoldSupport> = seams.stringFold;
-		return seams.stringLiteralKinds.contains(init.kind) && fold?.literalOf(init, source) != null;
 	}
 
 	/**

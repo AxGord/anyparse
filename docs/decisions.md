@@ -4067,6 +4067,24 @@ decided the question; it may not become a record of runs.
   time, testing every character against the directive markers (`Array.contains`). → it jumps from one marker to the
   next with `indexOf` (a directive can start only at a marker; the non-code regions are skipped exactly as before, at
   the marker's offset instead of at every offset). `--all` 13.24 -> 13.11 s — branch `feat/infra-N37`
+- N41 (A13) — `oversized-type` counted every member, so a table of constants (TM `Colors`: 87 `static inline final`
+  colours; `Dimensions`: 142 plus a constructor) was reported as a decomposition candidate that no member-reference
+  seam could ever split. → the user's decision (2026-10-18): the size of a type is its BEHAVIOUR, so a constant is
+  neither a member nor lines of its type. A constant is a positive whitelist (`OversizedType.isConstant`): a `static`
+  final field, no accessor clause, with an initializer that is `inline` (Haxe's own proof: it refuses `inline` on an
+  initializer it cannot fold — verified on 4.3.7, `Std.int(3.5)` accepted, `new Array()` / `[1]` / `O.S` refused) or
+  that `ConstantFieldScan.isConstantExpression` accepts (a scalar or plain string literal, an operator or a paren over
+  constants, a name of another constant of the same type, read to a fixpoint); and a non-`static` field of an `@:enum
+  abstract` (an implicit value or a constant one). A `static var` (even `inline`: the whitelist names finals), a
+  property, an instance field, a function, a `static final` built by a call / field access / cast / allocation /
+  interpolation / `null`, or a name the type does not declare count as before. LINES: every line of a type belongs to
+  the member that ends it (after the previous member's last line, or the header line, through its own last line), so a
+  constant takes its doc, its annotations and the blank lines above it; a constant's lines are not counted, except a
+  last line a behaviour member also starts on. Rejected: subtracting only a constant's own lines (a documented table
+  then still measures its docs and blank lines as behaviour — a pure table of 900 constants with one-line docs reads
+  900 lines); exempting a type from the line limit only when it is ALL constants (a mixed type would then measure its
+  table as behaviour, the inconsistency the member half was fixed for). `StaticConstant.isConstantLiteral` moved to
+  `ConstantFieldScan` (the one literal test both rules ask) — branch `feat/infra-N41`
 - N40 — `swallowed-exception` reported `catch (exception:Exception) { threw = true; }` whose `threw` the code after the
   try reads (TM `ApplicationSettingsLibraryPathTest.hx:117, 222`): the failure became a value the function acts on, so
   nothing was swallowed (user decision 2026-10-18, A10). → exempt a catch body that is POSITIVELY an outcome record:

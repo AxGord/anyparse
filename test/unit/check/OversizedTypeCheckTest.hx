@@ -460,6 +460,152 @@ class OversizedTypeCheckTest extends Test {
 	}
 
 	/**
+	 * A CONSTANT TABLE is not a decomposition candidate (A13, the user's decision of 2026-10-18): the
+	 * size of a type counts its BEHAVIOUR, so the shape of TM's `Colors` (nothing but `static inline
+	 * final` colours) and `Dimensions` (142 of them plus a constructor) is one member here, not 61.
+	 */
+	@:pin('control')
+	@:killer('M-OVERSIZED-CONST-COUNTED')
+	public function testAConstantTableIsNotReported(): Void {
+		final consts: Array<String> = [
+			for (i in 0...60) '\tpublic static inline final C$i:UInt = 0x${i.hex(6)};'
+		];
+		Assert.equals(0, violations('class C {\n${consts.join('\n')}\n\tpublic function new() {}\n}').length);
+	}
+
+	/**
+	 * Every shape the constant whitelist admits, each one added to a type that is exactly AT the
+	 * member limit, so a shape the rule counted would tip it over: a literal of every kind, a plain
+	 * string, operators and parentheses over constants, a reference to another constant of the
+	 * same type, an `inline` field whose initializer only the compiler folds (`inline` is refused
+	 * on anything it cannot), and the values of an `@:enum abstract`, with or without one.
+	 */
+	@:pin('control')
+	@:killer('M-OVERSIZED-CONST-INLINE-PROOF', 'M-CONST-EXPR-NO-OPERATORS', 'M-CONST-EXPR-NO-PARENS', 'M-CONST-EXPR-NO-NAMES',
+		'M-OVERSIZED-CONST-NO-ENUM-VALUES', 'M-OVERSIZED-CONST-ENUM-VALUE-NEEDS-INIT')
+	public function testEveryConstantShapeIsUncounted(): Void {
+		final shapes: Array<String> = [
+			'static final K = 1;',
+			'static final K = -2;',
+			'static final K = 0xFF;',
+			'static final K = 1.5;',
+			'static final K = true;',
+			'static final K = "s";',
+			"static final K = 'plain';",
+			'public static final K:Int = 3;',
+			'@:keep static final K = 1;',
+			'static final K = (3 + 4) * 2;',
+			'static final K = 1 << 4 | 0x0F;',
+			"static final K = 'a' + 'b';",
+			'static final K = 1;\n\tstatic final L = K * 2;',
+			'static final L = K + 1;\n\tstatic final K = 2;',
+			'static inline final K = Std.int(Other.X * 1.5);',
+			'#if debug\n\tstatic final K = 1;\n\t#end'
+		];
+		for (shape in shapes) Assert.equals(0, violations(atLimit(shape)).length, shape);
+		final values: Array<String> = ['var A = 1;', 'var A;', 'final A = 2;', 'public static inline final A = 3;'];
+		for (value in values) Assert.equals(0, violations(enumAtLimit(value)).length, value);
+	}
+
+	/**
+	 * The whitelist is POSITIVE: everything it does not name is behaviour (or state) and counts, as
+	 * before. Each shape is added to a type exactly at the limit and must tip it over, by as many
+	 * members as it declares. A `static var` is state; an instance `final` is state; a property, a
+	 * call, an allocation, a field access, a cast, `null`, an interpolated string and a reference to
+	 * anything but a constant of the same type are not whitelisted; and outside an enum abstract a
+	 * non-static field is no enum value.
+	 */
+	@:pin('control')
+	@:killer('M-OVERSIZED-CONST-NEEDS-STATIC', 'M-OVERSIZED-CONST-STATIC-VAR', 'M-OVERSIZED-CONST-ANY-STATIC-FINAL',
+		'M-OVERSIZED-CONST-ACCESSOR', 'M-OVERSIZED-CONST-ANY-ENUM-HOST', 'M-OVERSIZED-CONST-NAME-NOT-CONSTANT',
+		'M-OVERSIZED-CONST-NAME-UNDECLARED', 'M-CONST-EXPR-ANY-OPERAND', 'M-CONST-EXPR-INTERPOLATED')
+	public function testEveryNonConstantShapeCounts(): Void {
+		final shapes: Array<String> = [
+			'static var K = 1;',
+			'final K = 1;',
+			'static final K = Std.int(3.5);',
+			'static final K = [1, 2];',
+			'static final K = Other.X;',
+			'static final K = cast 1;',
+			'static final K = null;',
+			"static final K = 'a${Other.X}';",
+			'static final K = Undeclared + 1;',
+			'static final K:Int;',
+			'function k():Int { return 1; }',
+			'static inline var K = 1;'
+		];
+		for (shape in shapes) {
+			final vs: Array<Violation> = violations(atLimit(shape));
+			Assert.equals(1, vs.length, shape);
+			if (vs.length == 1) Assert.isTrue(vs[0].message.contains('51 members (max 50)'), '$shape: ${vs[0].message}');
+		}
+		for (pair in [
+			'static var V = 1;\n\tstatic final K = V + 1;',
+			'static var V = 1;\n\tstatic final K = 1 + (V);'
+		]) {
+			final vs: Array<Violation> = violations(atLimit(pair));
+			Assert.isTrue(vs.length == 1 && vs[0].message.contains('52 members (max 50)'), pair);
+		}
+		for (value in ['var A(get, never):Int;', 'static var A = 1;', 'var A = Std.int(1.5);']) {
+			final vs: Array<Violation> = violations(enumAtLimit(value));
+			Assert.isTrue(vs.length == 1 && vs[0].message.contains('51 members (max 50)'), value);
+		}
+		final plain: Array<Violation> = violations(enumAtLimit('var A = 1;').replace('@:enum ', ''));
+		Assert.isTrue(plain.length == 1 && plain[0].message.contains('51 members (max 50)'), 'a plain abstract has no enum values');
+	}
+
+	/**
+	 * A type MIXING behaviour and constants keeps its behaviour count: 51 fields of state plus 30
+	 * constants is 51 members, and the finding says so.
+	 */
+	@:pin('control')
+	@:killer('M-OVERSIZED-CONST-COUNTED')
+	public function testAMixedTypeKeepsItsBehaviourCount(): Void {
+		final consts: String = [for (i in 0...30) '\tstatic inline final K$i = $i;'].join('\n');
+		final vs: Array<Violation> = violations(classWithMembers(51).replace('class C {', 'class C {\n$consts'));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("type 'C' has 51 members (max 50)"), vs[0].message);
+	}
+
+	/**
+	 * The LINE limit follows the member count: every line of a type belongs to the member it ends
+	 * (its doc, its annotations and the blank lines since the previous member), and the lines of a
+	 * constant are not counted. 60 documented constants and a constructor are 123 lines and 3 of
+	 * behaviour (header, constructor, closing brace).
+	 */
+	@:pin('control')
+	@:killer('M-OVERSIZED-CONST-LINES-COUNTED', 'M-OVERSIZED-CONST-REGION-OWN-LINES')
+	public function testTheLinesOfAConstantAreNotCounted(): Void {
+		Assert.equals(0, granted([], documentedTable(0), LINES_50).length);
+	}
+
+	/**
+	 * The lines left are the behaviour's own, counted exactly: the same table plus 49 one-line
+	 * methods (and the constructor) is 172 lines, 120 of them the table's, so 52 count.
+	 */
+	@:pin('control')
+	@:killer('M-OVERSIZED-CONST-LINES-COUNTED')
+	public function testTheLinesOfBehaviourStillCount(): Void {
+		final vs: Array<Violation> = granted([], documentedTable(49), LINES_50);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("type 'C' has 52 lines (max 50)"), vs[0].message);
+	}
+
+	/**
+	 * A line a constant SHARES with a behaviour member counts: behaviour is on it. 48 method lines,
+	 * one line holding a constant and a method, the header and the closing brace are 51.
+	 */
+	@:pin('control')
+	@:killer('M-OVERSIZED-CONST-SHARED-LINE')
+	public function testALineAConstantSharesWithBehaviourCounts(): Void {
+		final methods: String = [for (i in 0...48) '\tfunction m$i():Void {}'].join('\n');
+		final src: String = 'class C {\n$methods\n\tstatic inline final K = 1; function g():Void {}\n}';
+		final vs: Array<Violation> = granted([], src, LINES_50);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("type 'C' has 51 lines (max 50)"), vs[0].message);
+	}
+
+	/**
 	 * Run the check over `files` through a plugin that HOSTS a resolution index built from them —
 	 * the shape a real `lint` run has, and the one the interface carve-out needs. The bare
 	 * `HaxeQueryPlugin` every other case here uses is not a `SymbolIndexHost`, so the carve-out
@@ -551,6 +697,26 @@ class OversizedTypeCheckTest extends Test {
 					'\tfunction m$i():Int { return m${low + (i - low + 1) % (high - low)}(); }';
 				}
 			].join('\n') + '\n}';
+	}
+
+	/** A class named `C` with exactly 50 field members — AT the member limit — and `extra` declared after them. */
+	private static function atLimit(extra: String): String {
+		return classWithMembers(50).replace('\n}', '\n\t$extra\n}');
+	}
+
+	/** An `@:enum abstract` named `C` with exactly 50 methods — AT the member limit — and `value` declared after them. */
+	private static function enumAtLimit(value: String): String {
+		final methods: String = [for (i in 0...50) '\tpublic function m$i():Int { return this; }'].join('\n');
+		return '@:enum abstract C(Int) {\n$methods\n\t$value\n}';
+	}
+
+	/** A class named `C`: 60 constants, each under a one-line doc, then `methods` one-line methods. */
+	private static function documentedTable(methods: Int): String {
+		final consts: String = [
+			for (i in 0...60) '\t/** Constant $i. */\n\tpublic static inline final K$i:Int = $i;'
+		].join('\n');
+		final fns: String = [for (i in 0...methods) '\n\tfunction m$i():Void {}'].join('');
+		return 'class C {\n$consts$fns\n\tpublic function new() {}\n}';
 	}
 
 }
