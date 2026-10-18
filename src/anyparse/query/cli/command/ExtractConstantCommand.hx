@@ -22,6 +22,9 @@ final class ExtractConstantCommand implements CliCommand {
 
 	private static inline final SHORT_LITERAL_LEN: Int = 4;
 
+	/** The flags that select the addressed mode (`ExtractConstantToMode`) over the two literal modes. */
+	private static final ADDRESSED_FLAGS: Array<String> = ['--select', '--match', '--to'];
+
 	public function new() {}
 
 	public function name(): String {
@@ -29,7 +32,7 @@ final class ExtractConstantCommand implements CliCommand {
 	}
 
 	public function summary(): String {
-		return 'Replace a repeated single-quoted literal with a named constant';
+		return 'Move a literal, or one addressed constant expression, into a named constant';
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -41,6 +44,7 @@ final class ExtractConstantCommand implements CliCommand {
 	}
 
 	private static function runExtractConstant(args: Array<String>): Int {
+		if (args.exists(a -> ADDRESSED_FLAGS.contains(a))) return ExtractConstantToMode.run(args);
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -217,6 +221,10 @@ final class ExtractConstantCommand implements CliCommand {
 		CliIo.sysPrint(
 			"       apq extract-constant <scope...> --into <module.hx> --name <NAME> --literal '<text>' [--reformat] [--write]\n"
 		);
+		CliIo.sysPrint(
+			"       apq extract-constant <file> (<l>[:<c>] | --select '<sel>' | --match '<pattern>') --name <NAME>\n"
+			+ '            (--to <Type> | --into <module.hx> [--to <Type>]) [--shared] [--annotate <Type>] [--reformat] [--write]\n'
+		);
 		CliUsage.printOptionsWriteLangHelp();
 		CliIo.sysPrint('Single-file mode (--type): replace every plain single-quoted string\n');
 		CliIo.sysPrint('literal equal to <text> inside <Type> with a reference to a fresh\n');
@@ -235,6 +243,16 @@ final class ExtractConstantCommand implements CliCommand {
 		CliIo.sysPrint('Deciding the occurrences are the SAME concept is the caller\'s judgement.\n');
 		CliIo.sysPrint('An invalid / colliding <NAME>, a missing type or module, or a literal\n');
 		CliIo.sysPrint('that does not occur exits non-zero with nothing written. Rewrites re-parse.\n');
+		CliIo.sysPrint('Addressed mode (--select / --match / a position, with --to or --into): move\n');
+		CliIo.sysPrint('ONE expression — or the initializer of the local / field declaration the address\n');
+		CliIo.sysPrint('names — into a `static final <NAME>` of <Type> (in this file) or of the module\n');
+		CliIo.sysPrint('<module.hx> (created when absent), leaving `<Type>.<NAME>` and the import behind.\n');
+		CliIo.sysPrint('It must read no local, `this` or member and be a compile-time constant (a literal,\n');
+		CliIo.sysPrint('an operator or parentheses over literals); an array / object literal of them only\n');
+		CliIo.sysPrint('with --shared (no reader mutates the one shared instance). A scalar literal becomes\n');
+		CliIo.sysPrint('`static inline final`. Refused in metadata, a case pattern, a non-inline parameter\n');
+		CliIo.sysPrint('default, and where `<Type>` would bind something else. The declared type is carried\n');
+		CliIo.sysPrint('when the destination can see it; --annotate spells it otherwise.\n');
 	}
 
 }
