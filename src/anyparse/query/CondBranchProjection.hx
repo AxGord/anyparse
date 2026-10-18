@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.runtime.SameItems;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -134,7 +135,7 @@ final class CondBranchProjection {
 		if (kids.length == 0) return node;
 		final projected: Array<QueryNode> = [for (k in kids) projectBranches(k, source, seams)];
 		final rebuilt: Array<QueryNode> = seams.blockKinds.contains(node.kind) ? splitBlockChildren(projected, source, seams) : projected;
-		return sameNodes(kids, rebuilt) ? node : new QueryNode(node.kind, node.name, rebuilt, node.span, node.type, node.typeArgCount);
+		return SameItems.of(kids, rebuilt) ? node : new QueryNode(node.kind, node.name, rebuilt, node.span, node.type, node.typeArgCount);
 	}
 
 	/**
@@ -229,13 +230,6 @@ final class CondBranchProjection {
 	/** Whether `pos` falls inside any of the `tokens` half-open ranges. */
 	private static function inAnyToken(pos: Int, tokens: Array<{ from: Int, to: Int, isLine: Bool }>): Bool {
 		return tokens.exists(tok -> pos >= tok.from && pos < tok.to);
-	}
-
-	/** Whether `a` and `b` hold the same node INSTANCES in the same order — the shared-subtree test. */
-	private static function sameNodes(a: Array<QueryNode>, b: Array<QueryNode>): Bool {
-		if (a.length != b.length) return false;
-		for (i in 0...a.length) if (a[i] != b[i]) return false;
-		return true;
 	}
 
 }

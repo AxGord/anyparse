@@ -25274,6 +25274,62 @@
 			"find": "case EConst(CIdent(name)): name == BranchOutlining.ALT_LOCAL;",
 			"replace": "case EConst(CIdent(_)): false;",
 			"note": "the outer trial of a moved nested trial returns _alt and stays inline"
+		},
+		{
+			"name": "M-NULLFLOW-FROZEN-STALE",
+			"type": "anyparse.check.NullFlow",
+			"method": "frozenFacts",
+			"find": "if (last != null && lastFacts != null && sameReadState(last, state)) return lastFacts;",
+			"replace": "if (last != null && lastFacts != null) return lastFacts;",
+			"note": "a recording walk hands every visit the facts it froze first, so the replay answers what the state held at the first visit of the unit"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-SEED-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "analyze",
+			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
+			"replace": "if (cache == null || declaredNullable != null || typeSources != null) {",
+			"note": "a seeded walk is answered from the seedless recording and loses every MaybeNull the seed makes"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-DECLARED-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "analyze",
+			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
+			"replace": "if (cache == null || seed != null || typeSources != null) {",
+			"note": "a declaredNullable walk is answered from the seedless recording and loses the annotation seed"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-TYPES-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "analyze",
+			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
+			"replace": "if (cache == null || seed != null || declaredNullable != null) {",
+			"note": "a walk given the written types is answered from the recording made without them, so a non-null predicate call no longer narrows"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-SOURCE-BLIND",
+			"type": "anyparse.query.RefsCache",
+			"method": "nullFlowVisits",
+			"find": "if (known != null) return known.source == source ? known.visits : record();",
+			"replace": "if (known != null) return known.visits;",
+			"note": "a tree asked about with another source is answered from the recording made over the first"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-NOT-FORGOTTEN",
+			"type": "anyparse.query.RefsCache",
+			"method": "forget",
+			"find": "_nullFlowVisits.remove(tree);",
+			"replace": "{}",
+			"note": "forget keeps the recording, so a pass that re-reads a superseded tree replays it and the memory N36 releases stays held"
+		},
+		{
+			"name": "M-SAMEITEMS-LENGTH-ONLY",
+			"type": "anyparse.runtime.SameItems",
+			"method": "of",
+			"find": "for (i => item in a) if (item != b[i]) return false;",
+			"replace": "{}",
+			"note": "two arrays of one length count as the same whatever they hold"
 		}
 	]
 }

@@ -255,6 +255,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.NarrowLocalScopeCheckTest',
 		'unit.check.NoUnderscorePrefixCheckTest',
 		'unit.check.NullDereferenceTest',
+		'unit.check.NullFlowReplayTest',
 		'unit.check.NullFlowScanTest',
 		'unit.check.NullableSourceResolutionScopeTest',
 		'unit.check.NullableSwitchMissingNullCheckTest',
@@ -1066,6 +1067,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.runtime.CommonPrefixTest',
 		'unit.runtime.InputTest',
 		'unit.runtime.ParseErrorTest',
+		'unit.runtime.SameItemsTest',
 		'unit.runtime.SpanTest'
 	];
 
@@ -1731,6 +1733,12 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-LINT-SUPERSEDES-IGNORED,M-NUP-SUPERSEDES-NONE',
 			'unit.check.NoUnderscorePrefixCheckTest#testRefusedStripDeclaresItsReason :: control :: M-NUP-DECLINE-SILENT',
 			'unit.check.NoUnderscorePrefixCheckTest#testTheFixerSeesTheBindingOnce :: control :: M-FIXDRIVER-SUPERSEDES-IGNORED',
+			'unit.check.NullFlowReplayTest#testADeclaredNullableWalkIsNeverReplayed :: control :: M-NULLFLOW-MEMO-DECLARED-BLIND',
+			'unit.check.NullFlowReplayTest#testARecordingIsKeptForItsOwnSourceOnly :: control :: M-NULLFLOW-MEMO-SOURCE-BLIND',
+			'unit.check.NullFlowReplayTest#testAReplayAnswersWhatTheLiveWalkAnswered :: control :: M-NULLFLOW-FROZEN-STALE',
+			'unit.check.NullFlowReplayTest#testASeededWalkIsNeverReplayed :: control :: M-NULLFLOW-MEMO-SEED-BLIND',
+			'unit.check.NullFlowReplayTest#testATypeSourcesWalkIsNeverReplayed :: control :: M-NULLFLOW-MEMO-TYPES-BLIND',
+			'unit.check.NullFlowReplayTest#testForgetDropsTheRecording :: control :: M-NULLFLOW-MEMO-NOT-FORGOTTEN',
 			'unit.check.NullableSourceResolutionScopeTest#testExcludedArrayPopStaysUnseeded :: control :: M-NULLABLE-INDEX-EXCLUSION',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
@@ -4631,7 +4639,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ValueNameBindingTest#testAnUnlistedImportIsTheOneACallMayBeRoutedThrough :: control :: '
 				+ 'M-MACRO-VALUE-UNLISTED,M-MACRO-EXTENSIONS-ONLY',
 			'unit.query.ValueNameBindingTest#testAnotherRegionOfTheSameConditionIsAnAlternative :: control :: '
-				+ 'M-COND-ALTERNATIVE-REGIONS,M-COND-ALTERNATIVE-SPLIT'
+				+ 'M-COND-ALTERNATIVE-REGIONS,M-COND-ALTERNATIVE-SPLIT',
+			'unit.runtime.SameItemsTest#testDifferentLengthsDiffer :: guard :: ',
+			'unit.runtime.SameItemsTest#testEqualItemsInOrderAreTheSame :: guard :: ',
+			'unit.runtime.SameItemsTest#testSameLengthDifferentItemsDiffer :: control :: M-SAMEITEMS-LENGTH-ONLY'
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -7843,7 +7854,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-OUTLINE-NULLABLE-RETURN-BLIND',
 			'M-OUTLINE-CONSTANT-AS-CTOR',
 			'M-OUTLINE-UNTYPED-CAPTURE',
-			'M-OUTLINE-NESTED-ALT-BLIND'
+			'M-OUTLINE-NESTED-ALT-BLIND',
+			'M-NULLFLOW-FROZEN-STALE',
+			'M-NULLFLOW-MEMO-SEED-BLIND',
+			'M-NULLFLOW-MEMO-DECLARED-BLIND',
+			'M-NULLFLOW-MEMO-TYPES-BLIND',
+			'M-NULLFLOW-MEMO-SOURCE-BLIND',
+			'M-NULLFLOW-MEMO-NOT-FORGOTTEN',
+			'M-SAMEITEMS-LENGTH-ONLY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

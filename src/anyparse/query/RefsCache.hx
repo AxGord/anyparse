@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.NullFlow.NullFlowVisit;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.TypeResolver.NullSafetyScope;
@@ -39,6 +40,9 @@ final class RefsCache {
 	/** Tree -> `<metaName>\t<disableArg>` -> its `@:nullSafety` scopes (`TypeResolver.collectNullSafetyScopes`). */
 	private final _nullSafetyScopes: Map<QueryNode, Map<String, Array<NullSafetyScope>>> = [];
 
+	/** Tree -> the source it was walked over and the recorded visits of its seedless `NullFlow.analyze` walk. */
+	private final _nullFlowVisits: Map<QueryNode, { source: String, visits: Array<NullFlowVisit> }> = [];
+
 	public function new() {}
 
 	/** Drop every memo built for one of `trees` — trees the caller's own caches no longer hold, so no query can name them again. */
@@ -47,6 +51,7 @@ final class RefsCache {
 			_byTree.remove(tree);
 			_bindings.remove(tree);
 			_nullSafetyScopes.remove(tree);
+			_nullFlowVisits.remove(tree);
 		}
 	}
 
@@ -87,6 +92,19 @@ final class RefsCache {
 		final built: Array<NullSafetyScope> = build();
 		byKey[key] = built;
 		return built;
+	}
+
+	/**
+	 * The recorded visits of the seedless `NullFlow.analyze` walk over `tree`, built by `record` on the first question
+	 * and kept for the run. A tree asked about with a different `source` than it was recorded over is not memoised:
+	 * that answer is built and handed back, and the first recording stays.
+	 */
+	public function nullFlowVisits(tree: QueryNode, source: String, record: () -> Array<NullFlowVisit>): Array<NullFlowVisit> {
+		final known: Null<{ source: String, visits: Array<NullFlowVisit> }> = _nullFlowVisits[tree];
+		if (known != null) return known.source == source ? known.visits : record();
+		final visits: Array<NullFlowVisit> = record();
+		_nullFlowVisits[tree] = { source: source, visits: visits };
+		return visits;
 	}
 
 	/**

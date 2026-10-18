@@ -4045,3 +4045,14 @@ decided the question; it may not become a record of runs.
   so a first-set guard cannot skip them, and skipping the inner throw alone measured no gain); a node flag
   (`--no-sparkplug` slows everything that is not the parser; a codegen fix is portable and needs no shim) — branch
   `feat/infra-N37`
+- N37 (2) — `NullFlow.analyze` ran once per consumer per file: eight consumers, six of them (`always-null-comparison`,
+  `dead-null-guard`, `dead-safe-nav`, `dead-null-coalescing`, `null-dereference`, `possible-null-dereference`) with no
+  seed, no `declaredNullable`, no `typeSources` — the same walk six times. → a seedless walk over a tree the run's
+  `RefsCache` holds is recorded once (`RefsCache.nullFlowVisits`, dropped by `forget` with the tree's other memos)
+  and replayed to every consumer in the recorded order; each visit's facts are frozen over a copy of the state, and
+  consecutive visits under an unchanged state share one copy (TM: 318k visits, 17k copies). A walk any of the three
+  parameters changes is never answered from the recording. `SameItems.of` (runtime/) is the shared array equality it
+  needed; `CondBranchProjection.sameNodes` and `FoldStringLiterals.sameBoundaries` were the same function and are
+  deleted. TM `--all` 13.96 -> 13.58 s; live heap at exit +43 MB (775 -> 818). Rejected: a copy per visit (+260 MB
+  live); fanning one walk out to every consumer at once (the rules run one after another, each over all files; a
+  shared walk would have to hold the other rules' callbacks and violations) — branch `feat/infra-N37`
