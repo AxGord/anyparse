@@ -14,6 +14,7 @@ import anyparse.query.ImplicitSites.ImplicitSite;
 import anyparse.query.ImplicitSites.SiteFamily;
 import anyparse.query.MemberReach.ReachUnknown;
 import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
@@ -77,6 +78,12 @@ final class ReachGraph {
 	 * the same members, and a conversion read off the facts may stand at every flow of a body.
 	 */
 	private final _owned: Map<String, Array<OwnedId>> = [];
+
+	/**
+	 * Placeholder id -> the canonical paths (`TypeNameBinding.canonicalPath`) of the types whose implicitly-called member it
+	 * stands for (`idsOf`): which of the types sharing its simple name `loadHomes` reads.
+	 */
+	private final _homes: Map<String, Array<String>> = [];
 
 	private final _scope: ReachProject;
 	private final _maxLibraryFiles: Int;
@@ -477,6 +484,60 @@ final class ReachGraph {
 	}
 
 	/**
+	 * Add the files declaring the type the external `node` is a member of, and those declaring its supertypes (`loadType`):
+	 * the one site of its simple name — or, where several declarations share that name, those of the types the
+	 * placeholder stands for (`idsOf`), each by its canonical path (`TypeRefIndex.names`' `declsAt`): every copy of it on
+	 * every class path, and no type of another path that bears the name. A declaring file that does not parse is a blind spot.
+	 */
+	public function loadHomes(g: CallGraph, node: FnNode): Null<ReachUnknown> {
+		final type: Null<String> = node.typeName;
+		if (type == null) return null;
+		final homes: Array<String> = _scope.siteOf(type) == null ? _homes[node.id] ?? [] : [];
+		final seen: Array<String> = [type];
+		if (homes.length == 0) return loadType(g, type, []);
+		for (path in homes) for (d in _scope.index.refs.names.declsAt(path)) {
+			final file: String = d.file.file;
+			final budget: Null<ReachUnknown> = loadFile(g, file);
+			if (budget != null) return budget;
+			if (g.skippedFiles.contains(file)) return SkipParse(file);
+			for (s in d.type.supertypes) {
+				final up: Null<ReachUnknown> = loadType(g, s, seen);
+				if (up != null) return up;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Whether the graph node `node` is the member of ONE type wherever its simple name is declared: every declaration of the
+	 * name is a copy of one canonical path (`TypeNameBinding.canonicalPath`) — the std `sys.net.Host` and a library's own,
+	 * on two class paths, of which a build compiles one — and the node holds each copy's code of the member. Each copy's
+	 * file is in the graph and declares the member itself, with a body the node folds (`CallGraph.declarationsOf`) or as
+	 * extern target code that runs nothing of the program (`LibraryCalls.externQuiet`). Reading the union of the bodies then
+	 * answers for the copy a build compiles; types of two paths sharing the name are two types, and answer false.
+	 */
+	public function oneTypeEverywhere(g: CallGraph, node: FnNode): Bool {
+		final type: Null<String> = node.typeName;
+		final name: Null<String> = node.name;
+		if (type == null || name == null) return false;
+		final copies: Array<ResolvedType> = [
+			for (d in _scope.index.refs.resolvedDeclsNamed(type)) if (!CallGraphNames.selfAlias(d.type)) d
+		];
+		final paths: Array<String> = [];
+		for (d in copies) {
+			final path: String = TypeNameBinding.canonicalPath(d);
+			if (!paths.contains(path)) paths.push(path);
+		}
+		if (paths.length != 1) return false;
+		final folded: Array<String> = [for (d in g.declarationsOf(node.id)) CallGraphNames.normalizePath(d.file)];
+		return copies.foreach(
+			d ->
+				g.treeOf(d.file.file) != null && d.type.members.exists(m -> m.name == name)
+				&& (folded.contains(CallGraphNames.normalizePath(d.file.file)) || d.type.isExtern && library.externQuiet(g, type, name))
+		);
+	}
+
+	/**
 	 * Add the library files declaring a subtype of `type` that spell `member` — the overrides a dispatch on
 	 * `type` can reach — and the file of each superclass off `type`'s chain a subtype inherits the member from, which
 	 * no file of the subtype spells (`CallGraph.virtualTargets`). The budget refusal of the first file past the cap is
@@ -817,6 +878,12 @@ final class ReachGraph {
 				? init
 				: g.memberOnChain(c.type, c.member);
 			final id: String = declared ?? placeholder(g, c.type, c.member == CallGraph.INIT_NAME ? ctorName : c.member);
+			// the placeholder stands for this candidate's type, whichever namesakes the index also holds (`loadHomes`)
+			if (declared == null) {
+				final homes: Array<String> = _homes[id] ?? [];
+				if (!homes.contains(c.path)) homes.push(c.path);
+				_homes[id] = homes;
+			}
 			if (held.exists(id)) continue;
 			out.push(id);
 			held[id] = true;
@@ -1347,11 +1414,13 @@ final class ReachGraph {
 		final abstractKinds: Array<String> = _scope.shape.underlyingThisTypeKinds ?? [];
 		final out: Array<ImplicitCandidate> = [];
 		for (fi in _scope.index.allFiles()) for (t in fi.types) {
+			final path: String = TypeNameBinding.canonicalPath({ file: fi, type: t });
 			for (m in t.members) if (functionKinds.contains(m.kind)) {
 				final add: CandidateFamily -> Void = family -> out.push({
 					type: t.name,
 					member: m.name,
 					file: fi.file,
+					path: path,
 					family: family,
 					isAbstract: abstractKinds.contains(t.kind),
 					isExtern: t.isExtern
@@ -1374,6 +1443,7 @@ final class ReachGraph {
 				type: t.name,
 				member: t.members.exists(m -> m.name == ctorName) ? ctorName : CallGraph.INIT_NAME,
 				file: fi.file,
+				path: path,
 				family: LiteralMember,
 				isAbstract: abstractKinds.contains(t.kind),
 				isExtern: t.isExtern
@@ -1508,6 +1578,9 @@ private typedef ImplicitCandidate = {
 	var type: String;
 	var member: String;
 	var file: String;
+
+	/** The canonical path of the declaring type (`TypeNameBinding.canonicalPath`): which type of its simple name it is. */
+	var path: String;
 	var family: CandidateFamily;
 
 	/** Whether the declaring type is an abstract (its members are static calls) / an extern (target code may make one). */

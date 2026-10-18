@@ -106,6 +106,12 @@ enum ReachUnknown {
 	/** A value shared at `shared` of `file` meets code at `culprit` of `culpritFile` that may change it through another name. */
 	Aliased(file: String, shared: Span, culpritFile: String, culprit: Span);
 
+	/**
+	 * A value shared at `shared` of `file` meets the library code `member` (a graph node id, `Type.name`) the walk cannot
+	 * read — no declaration of it the index holds, or its type's files do not load — which may change it through another name.
+	 */
+	AliasedUnread(file: String, shared: Span, member: String);
+
 	/** Reached code hands text to the target language. */
 	NativeCode(file: String, span: Span);
 
@@ -671,8 +677,8 @@ final class MemberReach {
 		final callees: Array<CallEdge> = [];
 		final culprit: Null<Span> = regionCulprit(file, tree, source, fn, region, callees);
 		if (culprit != null) return Unknown(Aliased(file, shared, file, culprit));
-		final change: Null<Occurrence> = reachedArrayChange(g, file, tree, region, callees);
-		return change == null ? Proven : Unknown(Aliased(file, shared, change.file, change.span));
+		final change: Null<ReachUnknown> = reachedArrayChange(g, file, tree, region, callees, shared);
+		return change == null ? Proven : Unknown(change);
 	}
 
 	/**
@@ -825,6 +831,8 @@ final class MemberReach {
 			case Escape(file, span): 'its value is shared at ${at(file, span)}';
 			case Aliased(file, shared, culpritFile, culprit):
 				'its value is shared at ${at(file, shared)} and code at ${at(culpritFile, culprit)} may change it';
+			case AliasedUnread(file, shared, member):
+				'its value is shared at ${at(file, shared)} and library code `$member` the walk cannot read may change it';
 			case NativeCode(file, span): 'target-language code at ${at(file, span)}';
 			case Unmodelled(file, span, kind): 'a `$kind` the analysis does not model at ${at(file, span)}';
 			case Ambiguous(typeName): 'more than one type is named `$typeName`';
@@ -1233,7 +1241,8 @@ final class MemberReach {
 	}
 
 	/**
-	 * Where code the region runs can change ANY array, or null when none can: the invocations `callees` resolved for it
+	 * Why the value shared at `shared` of `file` may be changed by code the region runs — where that code can change ANY
+	 * array, or the library code it cannot read — or null when none can: the invocations `callees` resolved for it
 	 * (`regionCulprit`) and every function the language may call IMPLICITLY from an operator, conversion, index, string
 	 * conversion, iteration or literal construction it may spell. Walks what those functions reach — calls, overrides,
 	 * accessors, function values, implicit calls — into library bodies as the main walk does; an array change on anything
@@ -1242,8 +1251,8 @@ final class MemberReach {
 	 * that is not `ExecutionShape.pureLibraryCalls` all count as a change.
 	 */
 	private function reachedArrayChange(
-		g: CallGraph, file: String, tree: QueryNode, region: Span, callees: Array<CallEdge>
-	): Null<Occurrence> {
+		g: CallGraph, file: String, tree: QueryNode, region: Span, callees: Array<CallEdge>, shared: Span
+	): Null<ReachUnknown> {
 		final queue: Array<String> = [];
 		final seen: Map<String, Bool> = [];
 		final sites: Array<ImplicitSite> = sitesOf(g, file, [region]);
@@ -1263,14 +1272,14 @@ final class MemberReach {
 		admitAll();
 		for (e in callees) {
 			final unknown: Null<Occurrence> = followEdge(g, e, push);
-			if (unknown != null) return unknown;
+			if (unknown != null) return Aliased(file, shared, unknown.file, unknown.span);
 		}
 		var qi: Int = 0;
 		while (qi < queue.length) {
-			if (qi >= _maxVisited) return { file: '', span: new Span(0, 0) };
+			if (qi >= _maxVisited) return Budget('the walk visited more than $_maxVisited functions');
 			final id: String = queue[qi++];
 			final found: Null<FnNode> = g.node(id);
-			if (found == null) return { file: '', span: new Span(0, 0) };
+			if (found == null) return AliasedUnread(file, shared, id);
 			var node: FnNode = found;
 			if (node.isExternal) {
 				final target: ImplicitTarget = libraryBody(g, node, false);
@@ -1278,7 +1287,7 @@ final class MemberReach {
 					case Harmless:
 						continue;
 					case Opaque:
-						return { file: node.file, span: new Span(0, 0) };
+						return AliasedUnread(file, shared, id);
 					case Body(body):
 						node = body;
 						// the placeholder upgraded in place IS this id; another declaration found for it may be seen already
@@ -1286,10 +1295,10 @@ final class MemberReach {
 						seen[body.id] = true;
 				}
 			}
-			if (bodyNotItsSource(g, node)) return { file: node.file, span: node.span ?? new Span(0, 0) };
+			if (bodyNotItsSource(g, node)) return Aliased(file, shared, node.file, node.span ?? new Span(0, 0));
 			final syntaxBefore: Bool = _syntaxEntered;
 			final change: Null<Occurrence> = reachedChangeIn(g, node, push, sites);
-			if (change != null) return change;
+			if (change != null) return Aliased(file, shared, change.file, change.span);
 			if (enterBody(g, node) || _syntaxEntered != syntaxBefore) admitAll();
 		}
 		return null;
@@ -1400,7 +1409,8 @@ final class MemberReach {
 
 	/**
 	 * Whether `node` may be another type's member than the one its body is: its type's simple name has several
-	 * declarations, unless, where the facts are the truth, every one of them is the one type the builds typed
+	 * declarations that are no copies of one type all folded into it (`ReachGraph.oneTypeEverywhere`), unless,
+	 * where the facts are the truth, every one of them is the one type the builds typed
 	 * (`FactsView.soleType`), only one type the builds typed declares a member so named (`FactsView.soleMember`), the
 	 * node reads the name as one of them (`CallGraphFacts.qualify`), or it is code no call names by such a member — a
 	 * nested function, a field-initializer run — read through its facts as theirs (`ownTypes`).
@@ -1409,6 +1419,8 @@ final class MemberReach {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
 		if (type == null || g.types.declarationCount(type) <= 1 || g.facts?.qualified.exists(node.id) == true) return false;
+		// copies of one type on several class paths, every one's code folded into the node, are no other type's
+		if (_g.oneTypeEverywhere(g, node)) return false;
 		final facts: Null<FactsView> = _scope.facts;
 		return facts == null || facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null)
 			&& ownTypes(g, node) == null;
@@ -1485,13 +1497,16 @@ final class MemberReach {
 		return touched ? made : null;
 	}
 
-	/** What the external `node` stands for once its library file is read: harmless, a body to walk, or nothing the walk can see. */
+	/**
+	 * What the external `node` stands for once the files of its type are read
+	 * (`ReachGraph.loadHomes`): harmless, a body to walk, or nothing the walk can see.
+	 */
 	private function libraryBody(g: CallGraph, node: FnNode, mutatorsToo: Bool): ImplicitTarget {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
 		if (type == null || name == null) return Opaque;
 		if (_g.library.runsNoUserCode(g, type, name, mutatorsToo)) return Harmless;
-		if (_g.loadType(g, type, []) != null) return Opaque;
+		if (_g.loadHomes(g, node) != null) return Opaque;
 		final resolved: Null<String> = g.memberOnChain(type, name);
 		final loaded: Null<FnNode> = resolved == null ? null : g.node(resolved);
 		return loaded == null || loaded.isExternal ? Opaque : Body(loaded);
@@ -1703,7 +1718,7 @@ final class MemberReach {
 	private function libraryBodyOf(g: CallGraph, node: FnNode): Null<FnNode> {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
-		if (type == null || name == null || _g.loadType(g, type, []) != null) return null;
+		if (type == null || name == null || _g.loadHomes(g, node) != null) return null;
 		final resolved: Null<String> = g.memberOnChain(type, name);
 		final loaded: Null<FnNode> = resolved == null ? null : g.node(resolved);
 		return loaded == null || loaded.isExternal ? null : loaded;
