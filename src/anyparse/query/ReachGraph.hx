@@ -511,9 +511,9 @@ final class ReachGraph {
 	/**
 	 * Whether the graph node `node` is the member of ONE type wherever its simple name is declared: every declaration of the
 	 * name is a copy of one canonical path (`TypeNameBinding.canonicalPath`) — the std `sys.net.Host` and a library's own,
-	 * on two class paths, of which a build compiles one — and the node holds each copy's code of the member. Each copy's
-	 * file is in the graph and declares the member itself, with a body the node folds (`CallGraph.declarationsOf`) or as
-	 * extern target code that runs nothing of the program (`LibraryCalls.externQuiet`). Reading the union of the bodies then
+	 * on two class paths, of which a build compiles one — and the node holds each copy's code of the member: it folds a
+	 * declaration of every copy's file (`CallGraph.declarationsOf`), which therefore declares the member itself, and an
+	 * extern copy's target code runs nothing of the program (`LibraryCalls.externQuiet`). Reading the union of the bodies then
 	 * answers for the copy a build compiles; types of two paths sharing the name are two types, and answer false.
 	 */
 	public function oneTypeEverywhere(g: CallGraph, node: FnNode): Bool {
@@ -530,10 +530,9 @@ final class ReachGraph {
 		}
 		if (paths.length != 1) return false;
 		final folded: Array<String> = [for (d in g.declarationsOf(node.id)) CallGraphNames.normalizePath(d.file)];
+		// an extern copy's declaration folds as one with no body: what runs there is target code, which must run nothing of ours
 		return copies.foreach(
-			d ->
-				g.treeOf(d.file.file) != null && d.type.members.exists(m -> m.name == name)
-				&& (folded.contains(CallGraphNames.normalizePath(d.file.file)) || d.type.isExtern && library.externQuiet(g, type, name))
+			d -> folded.contains(CallGraphNames.normalizePath(d.file.file)) && (!d.type.isExtern || library.externQuiet(g, type, name))
 		);
 	}
 

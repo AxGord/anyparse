@@ -26260,6 +26260,62 @@
 			"method": "metavars",
 			"force": "node",
 			"note": "a `\"$x\"` string in a pattern stays a string, so a JSON pattern can hold no metavariable"
+		},
+		{
+			"name": "M-REACH-HOMES-RECORDED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "idsOf",
+			"find": "if (declared == null) {",
+			"replace": "if (declared == null && false) {",
+			"note": "a placeholder records no type it stands for, so a name several declarations share loads none of them and the walk refuses as code it did not read"
+		},
+		{
+			"name": "M-REACH-LIBRARY-HOMES",
+			"type": "anyparse.query.MemberReach",
+			"method": "libraryBodyOf",
+			"find": "_g.loadHomes(g, node) != null",
+			"replace": "_g.loadType(g, type, []) != null",
+			"note": "an external node loads its type by simple name alone, which several declarations of it leave unread"
+		},
+		{
+			"name": "M-REACH-ONE-TYPE-PATHS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "oneTypeEverywhere",
+			"find": "if (paths.length != 1) return false;",
+			"replace": "",
+			"note": "(soundness) types of two packages sharing a simple name answer as copies of one type"
+		},
+		{
+			"name": "M-REACH-ONE-TYPE-FOLDED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "oneTypeEverywhere",
+			"find": "d -> folded.contains(CallGraphNames.normalizePath(d.file.file)) && ",
+			"replace": "d -> ",
+			"note": "(soundness) a copy inheriting the member, whose code no declaration of the node is, answers through the other copies' bodies"
+		},
+		{
+			"name": "M-REACH-ONE-TYPE-EXTERN",
+			"type": "anyparse.query.ReachGraph",
+			"method": "oneTypeEverywhere",
+			"find": " && (!d.type.isExtern || library.externQuiet(g, type, name))",
+			"replace": "",
+			"note": "(soundness) an extern copy's target code is taken to run nothing of the program, an override below it included"
+		},
+		{
+			"name": "M-REACH-SHARED-ONE-TYPE",
+			"type": "anyparse.query.MemberReach",
+			"method": "sharedName",
+			"find": "if (_g.oneTypeEverywhere(g, node)) return false;",
+			"replace": "",
+			"note": "(precision) copies of one type on two class paths stay a name two types share"
+		},
+		{
+			"name": "M-REACH-UNREAD-NAMED",
+			"type": "anyparse.query.MemberReach",
+			"method": "reachedArrayChange",
+			"find": "case Opaque:\n\t\t\t\t\t\treturn AliasedUnread(file, shared, id);",
+			"replace": "case Opaque:\n\t\t\t\t\t\treturn Aliased(file, shared, '', new Span(0, 0));",
+			"note": "library code the walk cannot read is refused as code at no file, naming no member"
 		}
 	]
 }

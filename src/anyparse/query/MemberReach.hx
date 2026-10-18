@@ -1506,10 +1506,8 @@ final class MemberReach {
 		final name: Null<String> = node.name;
 		if (type == null || name == null) return Opaque;
 		if (_g.library.runsNoUserCode(g, type, name, mutatorsToo)) return Harmless;
-		if (_g.loadHomes(g, node) != null) return Opaque;
-		final resolved: Null<String> = g.memberOnChain(type, name);
-		final loaded: Null<FnNode> = resolved == null ? null : g.node(resolved);
-		return loaded == null || loaded.isExternal ? Opaque : Body(loaded);
+		final loaded: Null<FnNode> = libraryBodyOf(g, node);
+		return loaded == null ? Opaque : Body(loaded);
 	}
 
 	/**
@@ -1712,7 +1710,8 @@ final class MemberReach {
 	}
 
 	/**
-	 * The body the external `node` stands for once its library file is read, or null when there is none to walk: no
+	 * The body the external `node` stands for once the files of its type are
+	 * read (`ReachGraph.loadHomes`), or null when there is none to walk: no
 	 * declaration with a body found, or a type the graph cannot load.
 	 */
 	private function libraryBodyOf(g: CallGraph, node: FnNode): Null<FnNode> {
