@@ -777,7 +777,8 @@ final class NominalTypes {
 
 	/**
 	 * `valueTypeNominal`'s deep-mode twin: `valueTypeSourceDeep`'s written type source, reduced to
-	 * its outer nominal.
+	 * its outer nominal; with no source, the type a construction makes — the node itself, or the one
+	 * initialising the local it reads (`initializingConstruction`).
 	 *
 	 * `asReceiver` peels a member-TRANSPARENT wrapper off first (`Null<String>` -> `String`), and is
 	 * set ONLY where the answer is about to seed a member lookup. It is deliberately NOT the default:
@@ -791,7 +792,7 @@ final class NominalTypes {
 	): Null<String> {
 		final source: Null<String> = valueTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, seen);
 		return if (source == null)
-			constructedNominal(node, shape)
+			constructedNominal(initializingConstruction(node, root, shape, chain.declaredTypeSources), shape)
 		else if (asReceiver)
 			outerNominalOf(
 				memberLookupReceiverSource(source, shape.memberTransparentWrapperTypeNames ?? [], chain.typeSyntax), chain.typeSyntax
@@ -807,6 +808,24 @@ final class NominalTypes {
 	private static function constructedNominal(node: QueryNode, shape: RefShape): Null<String> {
 		final written: Null<String> = node.kind == shape.newExprKind ? node.name : null;
 		return written == null ? null : SourceText.lastSegment(written);
+	}
+
+	/**
+	 * The construction a local written with no type holds, for an identifier reading one — followed through the locals
+	 * initialised by one another (`final b = a`): Haxe infers the local's type from its initializer
+	 * (`localInitializer`), and the source walk types no construction. Any other node is itself; one whose initializer
+	 * chain ends in no construction answers that last node, which `constructedNominal` then types as nothing.
+	 */
+	private static function initializingConstruction(
+		node: QueryNode, root: QueryNode, shape: RefShape, annotations: Map<Int, String>
+	): QueryNode {
+		var held: QueryNode = node;
+		while (held.kind == shape.identKind) {
+			final init: Null<QueryNode> = localInitializer(held, root, shape, annotations);
+			if (init == null) return held;
+			held = init;
+		}
+		return held;
 	}
 
 	/**

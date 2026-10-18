@@ -367,17 +367,24 @@ access `T.x`, a class value `T`, a qualified `pkg.T`. An identifier the scope bi
 
 **What a written name means** is asked of the shared resolvers, never re-derived — the rule exists to keep consumers on
 those layers, so it may not grow a resolver of its own. A simple name goes through `TypeRefIndex.names.tierOf` (`TypeNameBinding`), the
-compiler's resolution order: `Bound` to the owned declaration is reported, `Bound` to another one (a same-named type
-of another package) is not, `Free` (no tier binds the name; only a built-in can) is not, and `Unknown` (a tier could
-bind it to something the index does not hold — an import of an unindexed module, a `#if`-guarded import) IS
-reported: a reach nobody proved absent is a reach. A qualified spelling goes through `TypeRefIndex.resolveTypeRefAll`
+compiler's resolution order, asked AT the use site so that a `#if`-guarded import decides a use inside its own branch
+(only the builds holding the import compile it): `Bound` to the owned declaration is reported, `Bound` to another one
+(a same-named type of another package) is not, `Free` (no tier binds the name; only a built-in can) is not, and
+`Unknown` (a tier could bind it to something the index does not hold — an import of an unindexed module, a guarded
+import against what the other builds bind) IS reported: a reach nobody proved absent is a reach. The one exception is
+an `Unknown` whose every candidate is read (`TypeNameBinding.unknownCandidates`: a guarded import's type and what the
+builds without it bind, each an indexed declaration or a type outside the index read by its path): it is reported only
+when one candidate is the owned type — an outside one by its last segment. A candidate nothing reads (an unindexed
+module, which may carry any sub-type) keeps the whole name open, and reported. A qualified spelling goes through `TypeRefIndex.resolveTypeRefAll`
 (root-relative and module-relative); one that resolves to nothing is reported when its last segment is the owned name.
 
 **Members.** A `members` path is `<type path>.<member>`. A STATIC member is reached only through a type receiver
 resolved as above — that type itself: Haxe resolves no static through a subtype (`Class<B> has no field make`, 4.3.7)
-nor through a value. A receiver whose meaning is `Unknown` is reported; that is the ONE case a name match alone
-reports. An INSTANCE member is reached through a receiver the shared typer types (`CheckScan.typeNominalResolver` over
-`NominalTypes.expressionTypeNominal`, member-lookup position), its member looked up through the receiver type's
+nor through a value. A receiver whose meaning is `Unknown` is reported unless its candidates are all read and none is
+the owned type (above); that is the ONE case a name match alone reports. An INSTANCE member is reached through a
+receiver the shared typer types (`CheckScan.typeNominalResolver` over `NominalTypes.expressionTypeNominal`,
+member-lookup position — a local written with no type is typed by the construction initialising it, followed through
+`final b = a`), its member looked up through the receiver type's
 supertypes (`ConfiguredTypes.memberOf`), so a subtype's receiver counts. `T.new` is construction: `new T(…)` of that
 type exactly.
 
@@ -389,8 +396,10 @@ included, while naming a sub-type owns only that type's body. The module declari
 **Limits, named.** Not seen: an unqualified call of an inherited member from inside a subtype; a constructor run
 through `super(…)` or through a subtype's `new`; an instance member reached through a receiver the typer leaves
 untyped (`Dynamic`, or any value the shared typer cannot follow) — matching instance members by name alone would report
-every same-named method of every type. A value of an owned type that flows WITHOUT the type being spelled (an
-inferred local, a field read off another type) is not a mention: the rule reports what the source writes.
+every same-named method of every type — this includes a local inferred from anything but a construction (a call, a
+ternary, a field read: `final x = make(); x.open()`). A value of an owned type that flows WITHOUT the type being
+spelled (an inferred local, a field read off another type) is not a TYPE mention: the rule reports what the source
+writes.
 
 **A baseline is how a project adopts it.** Declaring a boundary the code already crosses reports every crossing at
 once; `apq lint <scope> --rule owned-types --baseline <path>` records today's set and reports only what a later change
