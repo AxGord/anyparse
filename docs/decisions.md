@@ -4248,3 +4248,26 @@ decided the question; it may not become a record of runs.
   `CliArgs.langNames`, the CODE-grammar registry whose Haxe-sized floors `RefShapeKindProjectionTest` applies —
   `JsonQueryPluginTest` checks its declared kinds against its projection instead. Not done: `patch`, `move-elements`,
   `--sorted` over objects by key, a key containing `>` in a selector — branch `feat/infra-N47`
+- N50 — the reach walk reads a library type by its CANONICAL PATH where its simple name is shared, and only COPIES of
+  one path answer as one type. (1) An implicitly-called member's placeholder (`ReachGraph.idsOf`) records the canonical
+  path (`TypeNameBinding.canonicalPath`) of each candidate type it stands for; reading the external node
+  (`ReachGraph.loadHomes`, called by the one `MemberReach.libraryBodyOf` — `libraryBody` now delegates to it instead of
+  repeating it) loads the one site of the simple name as before, and where several declarations share it, every
+  declaration at each recorded path (`TypeNameBinding.declsAt`) with its supertypes — no namesake of another path. It
+  loaded nothing there: `siteOf` answers null for a shared name, so `Host.toString` (std `sys/net/Host.hx` and
+  `hxnodejs/src/sys/net/Host.hx`, which every hxcpp landing conversion of an untyped value admits) stayed Opaque. (2) A
+  graph node of a name declared more than once is no `sharedName` when every declaration is a copy of ONE canonical path
+  and the node folds a declaration of every copy's file, an extern copy also running nothing of the program
+  (`ReachGraph.oneTypeEverywhere`, `LibraryCalls.externQuiet`): a build compiles one copy (the class path the compiler searches
+  first — probed on 4.3.7: of two `-cp` holding `sys/net/Host.hx`, the one given LAST), and the union of the copies' bodies answers for whichever it is. A positive list: two
+  paths sharing a name stay shared (their members fold by simple name, and a type inheriting the member is not in the
+  node), a copy whose member the node holds no declaration of stays shared. Rejected for now: keying the graph's nodes by
+  canonical path — `CallGraph`, `CallGraphTypes` and the facts layer key by simple name throughout (`CallGraphImports`
+  keys a library type apart only beside a PROJECT namesake), so two-package namesakes (TM `Grid`, openfl/lime
+  `Rectangle`) still answer shared; and loading by path rather than by name changes no answer today (a name of two paths
+  stays shared either way) — it keeps the walk from reading, and budgeting, another type's files. (3) What the walk cannot
+  read is named: `MemberReach.reachedArrayChange` answers the `ReachUnknown` itself, an Opaque library node or a node the
+  graph lacks as `AliasedUnread(file, shared, member)` ("library code `Rectangle.new` the walk cannot read") and the
+  visit budget as `Budget`, where all three read "code at library code the run did not read". anyparse src
+  prefer-keyvalue-loop: 39 such refusals -> 0 with and without the oracle, all 39 still declined by the next culprit the
+  walk now reaches (std `haxe/Exception.hx`, project `toString`s) — branch `feat/infra-N50`

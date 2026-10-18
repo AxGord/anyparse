@@ -5763,8 +5763,8 @@
 			"name": "M-REACH-IMPLICIT-ARRAY-CHANGE",
 			"type": "anyparse.query.MemberReach",
 			"method": "answerLocal",
-			"find": "final change: Null<Occurrence> = reachedArrayChange(g, file, tree, region, callees);",
-			"replace": "final change: Null<Occurrence> = null;",
+			"find": "final change: Null<ReachUnknown> = reachedArrayChange(g, file, tree, region, callees, shared);",
+			"replace": "final change: Null<ReachUnknown> = null;",
 			"note": "a shared collection's region is proven although the functions it calls, or those the language calls implicitly, change arrays"
 		},
 		{
@@ -9258,8 +9258,8 @@
 			"name": "M-REACH-CALLEE-WALK",
 			"type": "anyparse.query.MemberReach",
 			"method": "answerLocal",
-			"find": "reachedArrayChange(g, file, tree, region, callees);",
-			"replace": "reachedArrayChange(g, file, tree, region, []);",
+			"find": "reachedArrayChange(g, file, tree, region, callees, shared);",
+			"replace": "reachedArrayChange(g, file, tree, region, [], shared);",
 			"note": "what a shared collection's region calls is admitted unwalked, so a callee growing any array proves"
 		},
 		{
