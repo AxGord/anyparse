@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.AccessorClauseText.AccessorClause;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
@@ -21,6 +22,7 @@ import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.NamingPolicy.PropertyClause;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -464,19 +466,23 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 
 	/**
 	 * The property facts `NamingSupport.project` asks for, read off `source` the first time the projection
-	 * needs them (`TypeInfoProvider.propertyAccessors`, through the plugin's own memo), or null for a
-	 * grammar with no type info. Every projection this check and its rename paths make goes through here,
-	 * so a declaration has ONE category whichever of them asks.
+	 * needs them, or null for a grammar with no type info: WHICH members declare an accessor clause is the
+	 * grammar fact `TypeInfoProvider.propertyAccessors` (through the plugin's own memo), and what each clause
+	 * says about storage is `AccessorClauseText`'s reading of it (`propertyClauseAt`). Every projection this
+	 * check and its rename paths make goes through here, so a declaration has ONE category and ONE modifier
+	 * set whichever of them asks.
 	 */
-	public static function propertyFacts(plugin: GrammarPlugin, source: String): Null<() -> Map<Int, Bool>> {
+	public static function propertyFacts(plugin: GrammarPlugin, source: String): Null<() -> Map<Int, PropertyClause>> {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		if (provider == null) return null;
 		final known: TypeInfoProvider = provider;
-		var memo: Null<Map<Int, Bool>> = null;
+		var memo: Null<Map<Int, PropertyClause>> = null;
 		return () -> {
-			final held: Null<Map<Int, Bool>> = memo;
+			final held: Null<Map<Int, PropertyClause>> = memo;
 			if (held != null) return held;
-			final read: Map<Int, Bool> = known.propertyAccessors(source);
+			final read: Map<Int, PropertyClause> = [
+				for (from in known.propertyAccessors(source).keys()) from => propertyClauseAt(source, from)
+			];
 			memo = read;
 			return read;
 		};
@@ -574,6 +580,18 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 		if (newName != null && newName != name && rule.format.match(newName)) return newName;
 		if (say != null) say(RenameRefusal.NORMALIZER_DECLINED);
 		return null;
+	}
+
+	/**
+	 * What the accessor clause of the property whose declaration starts at `from` says about storage. A clause
+	 * `AccessorClauseText` cannot read says nothing - both answers false - so the projection keeps the reading it gives
+	 * a property without facts.
+	 */
+	private static function propertyClauseAt(source: String, from: Int): PropertyClause {
+		final clause: Null<AccessorClause> = AccessorClauseText.accessorClauseAt(source, from);
+		if (clause == null) return { storageless: false, readOnly: false };
+		final storageless: Bool = AccessorClauseText.storageless(clause);
+		return { storageless: storageless, readOnly: storageless && AccessorClauseText.writesNever(clause) };
 	}
 
 }

@@ -4083,3 +4083,20 @@ decided the question; it may not become a record of runs.
   it went. The exception referenced in the
   body was already "handled", so `err = exception;` needed nothing new. No per-check binder: the write and the reads
   are `Refs.find` hits — branch `feat/infra-N40`
+- N39 A6 — the built-in policy named every property by the FIELD rules: `private var active(get, never)` was told to
+  take the private-field `_`, and `public static var LIBRARY_PATH(get, never)` to be camelCase (11 + 3 TM sites). The
+  user's rule reserves `_` for private FIELDS, not methods, and a property with no storage is a method in disguise;
+  a static read-only one is read like a constant. → the user decided (2026-10-18): a private storage-less property is
+  exempt from the prefix (`camelCase storage-less property`, `_` neither required nor forbidden — forbidding it would
+  have added three report-only TM findings the decision did not ask for), and a public static `(get, never)` takes the
+  static-final format. Storage-less is a POSITIVE proof (Haxe 4.3.7: a `(get, never)` getter reading its own name is
+  "not a real variable"; `@:isVar` or a `default` / `null` slot gives storage; `(never, never)` does not compile):
+  both slots in `AccessorClauseText.STORAGELESS_ACCESSORS` (moved there from `RedundantIsVar`, which now asks
+  `storageless`), no `@:isVar` in the leading run, and a run crossing no `#if` region (`HaxeNamingSupport.leadingRun`,
+  which `metaInRun` now reads its answer off). Anything unproven keeps the field rule. The facts reach the projection
+  through the existing `NamingSupport.project` thunk, widened from "has a clause" to a `PropertyClause`; the grammar
+  confers the neutral modifiers `storageless` / `readOnly` and the built-in rules select on them, so a checkstyle
+  policy (which never names them) is unchanged. The (b) fix is the ordinary rename machinery — a static property's
+  accessors are always beside it, so it refuses as rename-unsafe; no new engine. Rejected: recategorising the
+  property as a Method or Constant (it would move checkstyle's `MemberName` jurisdiction and every consumer that
+  reads the category: hoist, privatize, the cross-file arms) — branch `feat/infra-N39`

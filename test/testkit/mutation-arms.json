@@ -4345,7 +4345,7 @@
 			"name": "M-ISVAR-SLOTS-ANY",
 			"type": "anyparse.check.RedundantIsVar",
 			"method": "candidateOf",
-			"find": "STORAGELESS_SLOTS.contains(access.read) && STORAGELESS_SLOTS.contains(access.write)",
+			"find": "AccessorClauseText.storageless(access)",
 			"replace": "true",
 			"note": "every accessor slot counts as storageless, so an @:isVar over a `default` / `null` slot that has storage anyway is reported"
 		},
@@ -25418,6 +25418,60 @@
 			"find": "scan.statementListKinds.contains(ancestors[k].kind) && ",
 			"replace": "",
 			"note": "a read in the other arm of the branch the try sits in counts, though it follows the try in the text and on no path"
+		},
+		{
+			"name": "M-NAMING-PROPERTY-MODS-NONE",
+			"type": "anyparse.grammar.haxe.HaxePropertyStorage",
+			"method": "modsOf",
+			"force": "[]",
+			"note": "no property earns a storage modifier, so a storage-less private property needs the `_` again and a static read-only one is a camelCase public field"
+		},
+		{
+			"name": "M-NAMING-STORAGELESS-ISVAR",
+			"type": "anyparse.grammar.haxe.HaxePropertyStorage",
+			"method": "grantsStorage",
+			"find": "node.kind == CONDITIONAL_KIND || MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META",
+			"replace": "node.kind == CONDITIONAL_KIND",
+			"note": "an `@:isVar` property counts as storage-less, so its storage escapes the private-field rule"
+		},
+		{
+			"name": "M-NAMING-STORAGELESS-REGION",
+			"type": "anyparse.grammar.haxe.HaxePropertyStorage",
+			"method": "grantsStorage",
+			"find": "node.kind == CONDITIONAL_KIND || MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META",
+			"replace": "MemberKinds.META_KINDS.contains(node.kind) && node.name == IS_VAR_META",
+			"note": "a run that steps over a `#if` region counts as proven, so an `@:isVar` one build sees there is missed"
+		},
+		{
+			"name": "M-ACCESSOR-STORAGELESS-TRUE",
+			"type": "anyparse.check.AccessorClauseText",
+			"method": "storageless",
+			"force": "true",
+			"note": "every accessor clause counts as storage-less, so a `null` / `default` slot leaves the field rules too"
+		},
+		{
+			"name": "M-NAMING-STORAGELESS-RULE-PUBLIC",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "defaults",
+			"find": "requireMods: [HaxePropertyStorage.STORAGELESS_MOD],\nforbidMods: ['public', 'static'],",
+			"replace": "requireMods: [HaxePropertyStorage.STORAGELESS_MOD],\nforbidMods: ['static'],",
+			"note": "the storage-less property rule reaches a PUBLIC property, whose `_` the public-field rule rejects"
+		},
+		{
+			"name": "M-NAMING-READONLY-IGNORES-WRITE",
+			"type": "anyparse.check.Naming",
+			"method": "propertyClauseAt",
+			"find": "storageless && AccessorClauseText.writesNever(clause)",
+			"replace": "storageless",
+			"note": "a `(get, set)` property reads as read-only, so a public static one takes the constant format"
+		},
+		{
+			"name": "M-NAMING-READONLY-RULE-INSTANCE",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "defaults",
+			"find": "requireMods: ['public', 'static', HaxePropertyStorage.READ_ONLY_MOD],",
+			"replace": "requireMods: ['public', HaxePropertyStorage.READ_ONLY_MOD],",
+			"note": "an INSTANCE read-only property takes the static-final format too"
 		}
 	]
 }

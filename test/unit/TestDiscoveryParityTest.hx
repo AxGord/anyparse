@@ -1698,6 +1698,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-CONFINEMENT-REPORT-INDEX-RENAME',
 			'unit.check.NamingCheckMemberFixTest#testReflectionCallOutsideReportScopeRefusesRename :: control :: '
 				+ 'M-REFLECTION-REPORT-INDEX-RENAME',
+			'unit.check.NamingCheckTest#testAPublicStaticReadOnlyPropertyTakesTheConstantPolicy :: control :: M-NAMING-PROPERTY-MODS-NONE,M-NAMING-READONLY-IGNORES-WRITE,M-NAMING-READONLY-RULE-INSTANCE,M-ACCESSOR-STORAGELESS-TRUE',
+			'unit.check.NamingCheckTest#testAStoragelessPrivatePropertyIsExemptFromTheFieldPrefix :: control :: M-NAMING-PROPERTY-MODS-NONE,M-NAMING-STORAGELESS-ISVAR,M-NAMING-STORAGELESS-REGION,M-ACCESSOR-STORAGELESS-TRUE,M-NAMING-STORAGELESS-RULE-PUBLIC',
 			'unit.check.NamingCheckTest#testEnumAbstractPropertyAndStaticTakeTheMemberPolicy :: control :: '
 				+ 'M-NAMING-ENUMVALUE-PROPERTY,M-NAMING-ENUMVALUE-STATIC,M-NAMING-PROPERTY-FACTS-NULL',
 			'unit.check.NamingCrossRenameTest#testANamesakesSubtypesDoNotUnconfineAPrivate :: control :: M-CONFINED-NO-OWNER-FILE',
@@ -7886,7 +7888,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-SWALLOW-OUTCOME-READ-KIND',
 			'M-SWALLOW-OUTCOME-READ-BINDING',
 			'M-SWALLOW-OUTCOME-READ-AFTER',
-			'M-SWALLOW-OUTCOME-STMT-LIST'
+			'M-SWALLOW-OUTCOME-STMT-LIST',
+			'M-NAMING-PROPERTY-MODS-NONE',
+			'M-NAMING-STORAGELESS-ISVAR',
+			'M-NAMING-STORAGELESS-REGION',
+			'M-ACCESSOR-STORAGELESS-TRUE',
+			'M-NAMING-STORAGELESS-RULE-PUBLIC',
+			'M-NAMING-READONLY-IGNORES-WRITE',
+			'M-NAMING-READONLY-RULE-INSTANCE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
