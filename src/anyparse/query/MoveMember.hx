@@ -1507,8 +1507,8 @@ final class MoveMember {
 			if (decls.length != 1 || seen.contains(name)) return true;
 			seen.push(name);
 			final decl: TypeDeclInfo = decls[0];
-			if (!interfacesResolve(decl.interfaces)) return false;
-			return decl.supertypes.foreach(sup -> !(!decl.interfaces.contains(sup) && !chainInterfacesResolve(sup, seen)));
+			return interfacesResolve(decl.interfaces)
+				&& decl.supertypes.foreach(sup -> decl.interfaces.contains(sup) || chainInterfacesResolve(sup, seen));
 		}
 		for (m in prep.moved) if (!m.isStatic) {
 			final head: String = 'cannot move "${m.name}" out of "$src"';

@@ -32,6 +32,7 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
 import anyparse.query.ExitCode.*;
+import anyparse.query.cli.CliArgs.ResolvedInputs;
 
 using StringTools;
 using Lambda;
@@ -193,7 +194,7 @@ final class LintCommand implements CliCommand {
 		final checks: Null<Array<Check>> = resolveLintChecks(o.ruleFilters);
 		if (checks == null) return EXIT_USAGE;
 
-		final io = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq lint: ${CliArgs.quotedSpecs(o.inputSpecs)} matched no .hx files\n');
@@ -1277,7 +1278,7 @@ final class LintCommand implements CliCommand {
 	 * tree) gets the summary, which for one rule is a by-file breakdown.
 	 */
 	public static inline function summarises(shown: Int, format: String, forced: Null<Bool>, threshold: Int): Bool {
-		return format == FORMAT_TEXT && (forced != null ? forced : threshold > 0 && shown > threshold);
+		return format == FORMAT_TEXT && (forced ?? (threshold > 0 && shown > threshold));
 	}
 
 	/** The stderr line that closes a summarised report: why it is a summary, and the ways to the full list. */

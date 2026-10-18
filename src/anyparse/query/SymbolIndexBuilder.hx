@@ -544,9 +544,9 @@ final class SymbolIndexBuilder {
 	 * other member is scanned with the write walker, so a write hidden in a `#if` branch counts too.
 	 */
 	private static function memberRebindsThis(node: QueryNode, shape: RefShape): Bool {
-		if (node.kind != 'FnMember') return node.children.exists(c -> memberRebindsThis(c, shape));
-		if (node.name == 'new') return false;
-		return Refs.find('this', node, shape).exists(h -> h.kind == RefKind.Write);
+		return node.kind != 'FnMember'
+			? node.children.exists(c -> memberRebindsThis(c, shape))
+			: node.name != 'new' && Refs.find('this', node, shape).exists(h -> h.kind == RefKind.Write);
 	}
 
 	/**

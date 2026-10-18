@@ -884,7 +884,7 @@ final class MemberReach {
 		if (_scope.facts?.truth != true || facts == null) return [];
 		final key: String = CallGraphNames.normalizePath(file);
 		// every declaration the node folds is its code: a range meeting any of them may run what its facts filed off it
-		final out: Array<String> = [
+		return [
 			for (id in facts.faceted.keys()) if (
 				g.declarationsOf(id)
 					.exists(
@@ -893,7 +893,6 @@ final class MemberReach {
 			)
 				id
 		];
-		return out;
 	}
 
 	/**

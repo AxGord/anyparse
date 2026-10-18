@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
+import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliContext;
 import haxe.Exception;
 
@@ -74,7 +75,7 @@ final class SymbolsCommand implements CliCommand {
 			return EXIT_USAGE;
 		}
 
-		final io = CliArgs.resolveInputPaths(lang, inputSpecs);
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq symbols: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');

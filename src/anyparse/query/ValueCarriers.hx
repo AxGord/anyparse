@@ -143,8 +143,7 @@ final class ValueCarriers {
 		if (decl == null || (_scope.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return false;
 		// what the value holds is typed only when every argument is: `Array<Dynamic>` holds anything
 		final args: Array<String> = NominalTypes.typeArgumentSourcesOf(source, _scope.plugin.typeSyntax) ?? [];
-		if (args.length < decl.typeParamNames.length) return false;
-		return args.foreach(a -> !(!primitive(a) && !typedNominal(a)));
+		return args.length >= decl.typeParamNames.length && args.foreach(a -> primitive(a) || typedNominal(a));
 	}
 
 	/** Whether `type` is one of the language's primitive value types — a literal's, or one that cannot be null. */

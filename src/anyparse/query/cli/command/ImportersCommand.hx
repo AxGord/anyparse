@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
+import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliContext;
 import haxe.Exception;
 
@@ -73,7 +74,7 @@ final class ImportersCommand implements CliCommand {
 		}
 
 		final modulePath: String = module;
-		final io = CliArgs.resolveInputPaths(lang, inputSpecs);
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq importers: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');

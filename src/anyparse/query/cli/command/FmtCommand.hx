@@ -8,6 +8,7 @@ import anyparse.query.ExitCode.*;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.OrphanContinuation;
+import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -143,7 +144,7 @@ final class FmtCommand implements CliCommand {
 			return { exit: EXIT_USAGE, summary: '' };
 		}
 
-		final io = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq fmt: ${CliArgs.quotedSpecs(o.inputSpecs)} matched no .hx files\n');

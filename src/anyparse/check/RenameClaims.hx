@@ -57,8 +57,8 @@ final class RenameClaims {
 	 * with no index to prove a hierarchy with, defers to nothing.
 	 */
 	public function defers(owner: Null<String>, newName: String, index: Null<SymbolIndex>): Bool {
-		if (owner == null || index == null) return false;
-		return ledger(index).exists(c -> c.newName == newName && !index.subtypes.unrelatedClasses(owner, c.owner));
+		return owner != null && index != null
+			&& ledger(index).exists(c -> c.newName == newName && !index.subtypes.unrelatedClasses(owner, c.owner));
 	}
 
 	/**

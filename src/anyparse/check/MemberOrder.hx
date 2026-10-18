@@ -279,7 +279,12 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * member of a content-ranked block -1 when the block leads its rank, 1 when it trails the plain members.
 	 */
 	private static inline function blockStep(m: OrderedMember, ordinal: Null<Int>, plan: SortPlan): Int {
-		return ordinal == null ? 0 : leadsRank(m, plan) ? -1 : 1;
+		return if (ordinal == null)
+			0
+		else if (leadsRank(m, plan))
+			-1
+		else
+			1;
 	}
 
 	/**

@@ -714,7 +714,8 @@ final class OracleGeneration {
 			? OracleGenerationLock.holdExclusive(lock, run.me, run.deadline)
 			: OracleGenerationLock.holdShared(
 				lock, run.me, run.deadline
-			) catch (exception: Exception) 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: ${exception.message}';
+			) catch (exception: Exception) 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: '
+			+ exception.message;
 	}
 
 	/**

@@ -9,6 +9,7 @@ import anyparse.check.LongLockExplain.LongLockReport;
 import anyparse.check.Severity;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
+import haxe.DynamicAccess;
 import haxe.Json;
 
 using Lambda;
@@ -112,10 +113,10 @@ final class LintFormat {
 		final indexes: Map<String, LineIndex> = [];
 		final records: Array<Dynamic> = [
 			for (v in violations) {
-				final record: Dynamic = recordOf(v, indexFor(v.file, sourceOf, indexes));
+				final record: DynamicAccess<Null<String>> = recordOf(v, indexFor(v.file, sourceOf, indexes));
 				if (addressOf != null) {
 					final address: Null<String> = addressOf(v);
-					if (address != null) Reflect.setField(record, 'address', address);
+					if (address != null) record['address'] = address;
 				}
 				record;
 			}
@@ -135,8 +136,8 @@ final class LintFormat {
 			],
 			mainShort: [
 				for (t in longLocks.mainShort) {
-					final record: Dynamic = siteRecord(t.lock, t.file, t.span, t.holder, indexFor(t.file, sourceOf, indexes));
-					Reflect.setField(record, 'quiet', t.quiet);
+					final record: DynamicAccess<Bool> = siteRecord(t.lock, t.file, t.span, t.holder, indexFor(t.file, sourceOf, indexes));
+					record['quiet'] = t.quiet;
 					record;
 				}
 			],

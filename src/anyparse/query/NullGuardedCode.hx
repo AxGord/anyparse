@@ -298,10 +298,11 @@ final class NullGuardedCode {
 	private function invocationsHandNull(id: String, index: Int, count: Int): Bool {
 		final facts: FactsIndex = gathered();
 		for (call in facts.calls[id] ?? []) if (call.access != STATIC_ACCESS || !handsNull(call.at, index, count)) return false;
-		for (read in facts.fields[id] ?? []) if (!read.fact.write && read.fact.use != COMPARE) {
-			if (read.fact.use != VALUE || read.fact.held || !neverCalled(read.node, read.fact.at, 0)) return false;
-		}
-		return true;
+		return (facts.fields[id] ?? []).foreach(
+			read ->
+				!(!read.fact.write && read.fact.use != COMPARE
+				&& (read.fact.use != VALUE || read.fact.held || !neverCalled(read.node, read.fact.at, 0)))
+		);
 	}
 
 	/**

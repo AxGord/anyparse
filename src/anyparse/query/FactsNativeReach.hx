@@ -65,7 +65,7 @@ final class FactsNativeReach {
 		if (n.natives.length == 0) return true;
 		final self: Null<String> = selfOf(id);
 		final locals: Array<{ name: String, type: String }> = localsOf(id);
-		return n.natives.foreach(x -> !(!handed(x, hand) || !reach(id, n.owner, self, locals, x.code, x.computed, hand)));
+		return n.natives.foreach(x -> handed(x, hand) && reach(id, n.owner, self, locals, x.code, x.computed, hand));
 	}
 
 	/**
