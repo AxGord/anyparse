@@ -4225,3 +4225,34 @@ decided the question; it may not become a record of runs.
   an aggregate's immutability from its uses (a read passed to any call is unknowable), moving type-naming elements
   across modules with carried imports (needs the destination's binding ladder — `DependencyCarry` — not worth it for
   data lists) — branch `feat/infra-N43`
+- N49 — thread-safety callback model. (1) `spawns` said "every function value handed to the call runs on a new thread"
+  for EVERY argument, while TM's `FileIO.readAndProcess(path, process, onDone)` runs `process` on the I/O worker and
+  `onDone` on the main thread, so `onDone` handlers (`DrillPitchImageCacheItem.cacheReadHandler`) were worker
+  callbacks and a false background origin kept the key `B|CloudDatabase.getFolderLastCloudActionAction2|…_batchMutex`.
+  A `spawns` item may now be an object `{"call": <pattern>, "main": [<position>…], "evidence": "…"}`
+  (`ThreadSafetyOptions.SpawnArguments`); the plain string keeps its meaning. A value at a `main` position runs as a
+  `marshals` call's value does — MAIN context (`ThreadSafety.callbackContext`), once per post (`CallRepetition.marshalled`)
+  — through ONE predicate, `ThreadStates.runsOnMain`; it stays out of the registrar's lock window and repetition as
+  every `spawns` value does (the call is still in `spawnIds`). The position is the WRITTEN one, recorded on the `Ref`
+  edge by `CallGraphEdges.scanArgs` (`CallEdge.argument`, `ArgumentPosition`); it counts only where the callee is
+  proven to bind the parameter there (`CallGraphKeys.bindsItsPosition`, new, beside `mayShift`): the run declares the
+  callee and its declarations read their parameters alike (`paramTypesOf`: an `@:overload` is none), no optional the
+  language may skip shifts it (Haxe binds by type when a call writes fewer arguments than it declares), and it is no rest
+  parameter. Everything else falls back to the plain entry: an argument no `main` names, an edge with no recorded
+  position (the compiler facts' edges, a `dynamic` member's derived calls), a library callee. A malformed object naming
+  its `call` is said and KEPT as a plain entry (what the call meant before the form existed), one naming none is dropped
+  and said. Rejected: a `worker` list beside `main` (an unnamed argument already keeps the plain verdict, BG), the
+  object form in `marshals` / `registers` (no consumer). (2) N46 E1: `CallRepetition.registered` required a runtime call
+  for every `registers` entry, while `ThreadStates.runsHere` honoured a project member — the two disagreed. A
+  `Type.member` entry is now the project's word on that member for repetition too, exactly as a dotted `runsOnce` entry
+  already was (`ChainLists.registerMemberIds`); a bare name still speaks for the runtime's calls only (the `Hub.addEventListener`
+  decision above stands). (3) N46 E2 NOT done: tying quiet->loud to `runsHere` would keep quiet a value handed to an
+  ordinary call, and `runsHere`'s "runs here" is an over-approximation that is conservative for a lock window (more in
+  the window) but UNSOUND for quietness — a plain call may store the value and run it later from the frame loop, loud.
+  Proving "runs synchronously" needs a parameter-flow summary of the callee (E3's machinery); no list says it today
+  (`iterates` is about repetition, `runsOnce` says "now or later"). (4) N46 E3 NOT done: a forwarding summary needs
+  parameter dataflow (which parameter a function hands where, through `.bind` partial application and stored fields)
+  that the graph does not keep — `ArgumentValues` is the layer that would own it; TM measured 0 B/C/D findings on such a
+  chain (N46). The residue it would close: FileIO's own wrappers (`read`, `write`, `modificationTime`, …) forward their
+  `onDone` PARAMETER to `run`, which no edge records, so a callback handed to one runs in its registrar's context — right
+  from the main thread, wrong from a worker — branch `feat/infra-N49`

@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.grammar.json.JEntry;
 import anyparse.grammar.json.JValue;
 import anyparse.runtime.EditDistance;
 import haxe.Exception;
@@ -19,11 +20,23 @@ typedef BoundedRepeatEntry = {
 }
 
 /**
+ * One well-formed object entry of `spawns`, as written: the call, and the positions of its arguments (from 0, a receiver
+ * not counted) whose function value it runs on the main thread later rather than on another thread.
+ */
+typedef SpawnArguments = {
+	final call: String;
+	final main: Array<Int>;
+}
+
+/**
  * ONE chain's `thread-safety` options, read and checked in one place: every key the rule knows, each of the shape it
  * needs, and a line in `problems` for everything the read leaves out — a key no option has, a value of the wrong shape,
  * a list item or a `boundedRepeats` entry dropped — so a malformed config never reads as a quiet one.
  *
- * Shapes. A LIST (`LIST_KEYS`) is an array of strings, a non-string item dropped with a note; a FLAG (`FLAG_KEYS`) is
+ * Shapes. A LIST (`LIST_KEYS`) is an array of strings, a non-string item dropped with a note — but `spawns`,
+ * whose item may also be an object `{"call": <pattern>, "main": [<argument position>…]}` (positions from 0,
+ * a receiver not counted; an optional `evidence` string read by people), one the read cannot keep whole said
+ * and kept as a plain entry when it names its call (`SpawnArguments`); a FLAG (`FLAG_KEYS`) is
  * `true` or `false`; `repeatBudgetMs` a positive number; `boundedRepeats` an array of objects, each with a `site`
  * string naming one member (no pattern), a positive `max`, a positive `costMs`,
  * an optional `call` and `loop` string and an optional `evidence` string (read
@@ -66,6 +79,11 @@ final class ThreadSafetyOptions {
 	public static final FLAG_KEYS: Array<String> = ['closedWorld', 'compilerFacts'];
 
 	private static inline final BUDGET_KEY: String = 'repeatBudgetMs';
+	private static inline final SPAWNS_KEY: String = 'spawns';
+
+	/** The largest argument position a `spawns` object entry may name: no call writes more arguments. */
+	private static inline final MAX_POSITION: Float = 255;
+
 	private static inline final BOUNDED_KEY: String = 'boundedRepeats';
 
 	/** The keys every rule takes, which the linter reads itself when well-formed (`LintDocuments.parseRule`). */
@@ -76,6 +94,9 @@ final class ThreadSafetyOptions {
 
 	/** The well-formed `boundedRepeats` entries. */
 	public final boundedRepeats: Array<BoundedRepeatEntry> = [];
+
+	/** The well-formed object entries of `spawns`; each one's `call` is in `list('spawns')` too. */
+	public final spawnArguments: Array<SpawnArguments> = [];
 
 	/**
 	 * The call patterns of the well-formed `nonBlocking` entries — each written `<pattern> <evidence>`, the evidence
@@ -137,6 +158,7 @@ final class ThreadSafetyOptions {
 		for (key in FLAG_KEYS) parts.push('$key=${flag(key)}');
 		parts.push('$BUDGET_KEY=$repeatBudgetMs');
 		for (b in boundedRepeats) parts.push('${b.site}>${b.call}@${b.loop}:${b.max}x${b.costMs}');
+		for (s in spawnArguments) parts.push('${s.call}>main:${s.main.join(',')}');
 		return parts.join('\t');
 	}
 
@@ -146,7 +168,9 @@ final class ThreadSafetyOptions {
 		for (key in config.optionKeys(RULE)) {
 			final value: Null<JValue> = config.jsonOption(RULE, key);
 			if (value == null) continue;
-			if (LIST_KEYS.contains(key))
+			if (key == SPAWNS_KEY)
+				_lists[key] = readSpawns(value);
+			else if (LIST_KEYS.contains(key))
 				_lists[key] = readList(key, value);
 			else if (FLAG_KEYS.contains(key))
 				readFlag(key, value);
@@ -175,6 +199,74 @@ final class ThreadSafetyOptions {
 				problems.push('option "$key" is not an array of strings — ignored');
 		}
 		return out;
+	}
+
+	/**
+	 * The calls of `spawns` written `value`: each string, and the `call` of each object entry (`readSpawnEntry`); every
+	 * item of another shape dropped and said.
+	 */
+	private function readSpawns(value: JValue): Array<String> {
+		final items: Array<JValue> = switch value {
+			case JArray(items): items;
+			case _:
+				problems.push('option "$SPAWNS_KEY" is not an array of strings or objects — ignored');
+				[];
+		};
+		final out: Array<String> = [];
+		var skipped: Int = 0;
+		for (i => item in items) switch item {
+			case JString(v):
+				out.push(v);
+			case JObject(fields):
+				final call: Null<String> = readSpawnEntry(i, fields);
+				if (call != null) out.push(call);
+			case _:
+				skipped++;
+		}
+		if (skipped > 0) problems.push('option "$SPAWNS_KEY" ignored $skipped value(s) that are not strings or objects');
+		return out;
+	}
+
+	/**
+	 * The call the object entry `spawns[i]` written `fields` names — `call`, the positions `main` and an optional `evidence`
+	 * read by people — its `main` positions recorded (`spawnArguments`) when the entry is well-formed. One the read cannot
+	 * keep whole is said: naming its call, it stays a plain entry, what the call meant before the form existed; naming
+	 * none, it is dropped (null).
+	 */
+	private function readSpawnEntry(i: Int, fields: Array<JEntry>): Null<String> {
+		var call: Null<String> = null;
+		var main: Null<Array<Int>> = null;
+		final wrong: Array<String> = [];
+		for (field in fields) switch [field.key, field.value] {
+			case ['call', JString(v)]:
+				call = v;
+			case ['main', JArray(items)]:
+				main = positions(items);
+				if (main == null) wrong.push('"main" is not an array of argument positions');
+			case ['evidence', JString(_)]:
+			case ['call' | 'evidence', _]:
+				wrong.push('"${field.key}" is not a string');
+			case ['main', _]:
+				wrong.push('"main" is not an array of argument positions');
+			case _:
+				wrong.push('unknown key "${field.key}"');
+		}
+		final named: Null<String> = call;
+		final at: Null<Array<Int>> = main;
+		if (named == null) {
+			problems.push('$SPAWNS_KEY[$i] dropped: ${wrong.length > 0 ? wrong.join(', ') : 'it names no "call"'}');
+			return null;
+		}
+		if (wrong.length == 0 && (at == null || at.length == 0)) wrong.push('it names no "main" position');
+		if (wrong.length > 0)
+			problems.push('$SPAWNS_KEY[$i] "$named": ${wrong.join(', ')} — kept as a plain entry');
+		else if (at != null) {
+			// re-bound: strict null-safety does not carry a narrowed local into a structure literal
+			final kept: String = named;
+			final onMain: Array<Int> = at;
+			spawnArguments.push({ call: kept, main: onMain });
+		}
+		return named;
 	}
 
 	/** Records the FLAG option `key` written `value`, a value that is not a boolean dropped and said. */
@@ -280,6 +372,20 @@ final class ThreadSafetyOptions {
 	private static function firstSpace(text: String): Int {
 		for (i in 0...text.length) if (text.isSpace(i)) return i;
 		return -1;
+	}
+
+	/** The argument positions `items` write — each a whole number from 0 —; null when one is anything else. */
+	private static function positions(items: Array<JValue>): Null<Array<Int>> {
+		final out: Array<Int> = [];
+		for (item in items) switch item {
+			case JNumber(v):
+				final at: Float = (v: Float);
+				if (!(at >= 0 && Math.ffloor(at) == at && at <= MAX_POSITION)) return null;
+				out.push(Std.int(at));
+			case _:
+				return null;
+		}
+		return out;
 	}
 
 }
