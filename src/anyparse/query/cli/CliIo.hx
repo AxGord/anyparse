@@ -4,6 +4,7 @@ using StringTools;
 using Lambda;
 
 import haxe.Exception;
+import haxe.io.Path;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -284,14 +285,23 @@ final class CliIo {
 	 * originals are gone. It is the narrow half of the window — a rename into a directory
 	 * this process has just created a file in — while the whole of ENOSPC, EACCES and a
 	 * read-only target is decided in the staging loop above it.
+	 *
+	 * A member whose directory does not exist yet gets it, the way `mkdir -p` does: the ops that
+	 * CREATE a module (`new`, `extract-interface --out`, `extract-superclass --out`) name a path in
+	 * a package directory nobody has made, and every one of them used to die on `ENOENT` for the
+	 * staging temporary. The directories belong to the change set, so a set that is not written
+	 * takes back the ones it made (`removeCreatedDirectories`), and a set that fails part way
+	 * leaves only the ones a committed member now lives in.
 	 */
 	public static function writeFiles(writes: Array<{ path: String, content: String }>): Void {
 		#if (sys || nodejs)
 		final staged: Array<StagedWrite> = [];
+		final created: Array<String> = [];
 		try {
-			for (w in writes) staged.push(stageWrite(w.path, w.content));
+			for (w in writes) staged.push(stageWrite(w.path, w.content, created));
 		} catch (failure: WriteFailure) {
 			for (pending in staged) discardStage(pending.staged);
+			removeCreatedDirectories(created);
 			throw failure;
 		}
 		for (i in 0...staged.length) try commitStagedWrite(staged[i]) catch (failure: WriteFailure) {
@@ -300,6 +310,7 @@ final class CliIo {
 			// would otherwise leave a `.apq-tmp` beside every remaining member of the set, which
 			// is the one thing the suffix's own doc treats as a killed-process artefact.
 			for (j in i + 1...staged.length) discardStage(staged[j].staged);
+			removeCreatedDirectories(created);
 			throw failure;
 		}
 		#else
@@ -393,7 +404,7 @@ final class CliIo {
 	 * since both used to truncate the same target, but the failure is now a spurious `ENOENT` on
 	 * the loser rather than interleaved bytes.
 	 */
-	private static function stageWrite(path: String, content: String): StagedWrite {
+	private static function stageWrite(path: String, content: String, created: Array<String>): StagedWrite {
 		// INSIDE the try, both of them: a `fullPath` that throws (the file vanishing between the
 		// two calls) would otherwise escape as a bare `Exception`, miss `run`'s WriteFailure-only
 		// catch, and produce exactly the raw host trace this seat exists to remove.
@@ -414,6 +425,7 @@ final class CliIo {
 				FileSystem.stat(target).mode & PERMISSION_BITS;
 			} else
 				null;
+			createMissingDirectories(Path.directory(target), created);
 			File.saveContent(staged, content);
 			// NODE ONLY, and the doc above says so: `sys.FileSystem` has no chmod, so a target
 			// without `js.node.Fs` cannot put the mode back and a staged write there resets it to
@@ -461,6 +473,38 @@ final class CliIo {
 		} catch (exception: Exception) { // noqa: swallowed-exception
 			// Deliberately swallowed — see the doc above: this runs only while a `WriteFailure` is
 			// already on its way out, and a cleanup that cannot finish must not replace it.
+		}
+	}
+	/**
+	 * Create every directory `dir` is missing, outermost first, and record each one in `created` — so the change set
+	 * owning them can take them back (`removeCreatedDirectories`). One at a time on purpose: a recursive create that
+	 * fails half way (a FILE standing where a directory must go) would leave directories nobody recorded.
+	 */
+	private static function createMissingDirectories(dir: String, created: Array<String>): Void {
+		final missing: Array<String> = [];
+		var at: String = dir;
+		while (at != '' && !FileSystem.exists(at)) {
+			missing.unshift(at);
+			final parent: String = Path.directory(at);
+			if (parent == at) break;
+			at = parent;
+		}
+		for (d in missing) {
+			FileSystem.createDirectory(d);
+			created.push(d);
+		}
+	}
+
+	/**
+	 * Remove the directories a change set created, innermost first, leaving any that holds a file: what a committed
+	 * member now lives in survives, everything staged only for a member that was not written goes.
+	 *
+	 * Best effort for the reason `discardStage` is: every caller is already reporting a write failure.
+	 */
+	private static function removeCreatedDirectories(created: Array<String>): Void {
+		var k: Int = created.length;
+		while (k-- > 0) try FileSystem.deleteDirectory(created[k]) catch (exception: Exception) { // noqa: swallowed-exception
+			// A directory that still holds a file is the one case expected here, and it must stay.
 		}
 	}
 	#end

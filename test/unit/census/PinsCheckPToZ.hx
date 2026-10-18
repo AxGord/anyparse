@@ -1041,7 +1041,17 @@ final class PinsCheckPToZ {
 		'unit.check.UsingInsertRefusalTest#testCoveredAnchorRefusesAndAppendsNothing :: control :: M-USING-INSERT-COVERED-SILENT',
 		'unit.check.UsingInsertRefusalTest#testStaticExtensionCoveredAnchorRefuses :: control :: M-PSE-USING-INSERT-SILENT',
 		'unit.check.UsingInsertRefusalTest#testStaticExtensionUncoveredAnchorAppendsOneEdit :: guard :: ',
-		'unit.check.UsingInsertRefusalTest#testUncoveredAnchorStillInserts :: guard :: '
+		'unit.check.UsingInsertRefusalTest#testUncoveredAnchorStillInserts :: guard :: ',
+		'unit.check.UsingMemberFirstParityTest#testAGuardedMemberKeepsTheUsing :: control :: M-MEMBER-BINDS-GUARDED',
+		'unit.check.UsingMemberFirstParityTest#testAProjectTypeSharingTheStdNameKeepsTheUsing :: control :: M-MEMBER-DOOR-SHADOW',
+		'unit.check.UsingMemberFirstParityTest#testAStaticOfTheNameKeepsTheUsing :: control :: M-MEMBER-BINDS-STATIC',
+		'unit.check.UsingMemberFirstParityTest#testAStdMemberCallNeedsNoUsing :: control :: M-USING-MEMBER-FIRST-OFF',
+		'unit.check.UsingMemberFirstParityTest#testATypeDeclaredPerBranchKeepsTheUsing :: control :: M-MEMBER-BINDS-HOST-GUARDED',
+		'unit.check.UsingMemberFirstParityTest#testAnInheritedMemberCallNeedsNoUsing :: control :: M-USING-MEMBER-FIRST-OFF',
+		'unit.check.UsingMemberFirstParityTest#testAnOwnMemberCallNeedsNoUsing :: control :: '
+			+ 'M-USING-MEMBER-FIRST-OFF,M-UNUSED-USING-NO-DOOR,M-CARRY-USING-DOOR-OFFSET',
+		'unit.check.UsingMemberFirstParityTest#testTheStdListingProvesOnlyAnUnguardedInstanceMember :: control :: '
+			+ 'M-STD-MEMBER-STATIC,M-STD-MEMBER-VIA-GUARD,M-STD-MEMBER-ANY-CANDIDATE'
 	];
 
 }

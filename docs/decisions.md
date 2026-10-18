@@ -4153,3 +4153,75 @@ decided the question; it may not become a record of runs.
   argument runs on the worker: `APIRequest2.success`, `FileIO.readAndProcess`'s `onDone`). `A|GpuRenderPipeline.
   acquireGlContext|untyped.__cpp__` relabelled `real-short` (a GL context bind; reported by design, project native code
   is blocking unless `nonBlocking` names it) — branch `feat/infra-N45`
+- N20 — no op could take a member that READS its type's state out of the type: `move-member` refuses `this` in a moved
+  body, and `--scaffold` mirrors the fields the body reads onto the destination, a copy where the member needs the live
+  object (N13 split `CallGraph.collectEdges` by a refs script, `hxq new --raw` and remove/patch ops). → `move-to-helper`
+  (`MoveToHelper`, `MoveToHelperRefs`, `MoveToHelperTypes`, `MoveToHelperArms`, `MoveToHelperCommand`): the members
+  become statics of a helper taking the source as an explicit first parameter. It is built ON `move-member`'s machinery,
+  not beside it — the same resolution (`MoveMember.resolveMove` in a `helper` mode: no field travels, an instance move may
+  cross packages), the same inheritance / `#if` / capture guards (`resolutionGuardError`, split out of `moveGuardError`
+  without its `this` refusal), the same static-caller passes, promotion, `@:access` grant, destination assembly and
+  import carry (`pushImportEdits` gained the extra declarations it carries and the names TRAVELLING, which
+  `DependencyCarry.dependencyNames` no longer prices as dependencies), `MoveMemberReceivers` for receiver-qualified
+  callers and `Refs` for every bare reference; nothing re-derives a binding from text. ACCESS: `@:access(<pkg>.<Src>)`
+  on the helper side (the moved member, or the helper type for two or more), not `@:allow(<Helper>)` on the source: the
+  grant sits on the code that needs it, the source's declaration is untouched, and it is `move-member`'s existing rule;
+  compile-probed on 4.3.7 it also covers an inherited private field read through a subtype receiver (`@:access(a.Sub)`
+  reads `Base`'s private `bp`) and a write of a `(default, null)` property. The grant is taken BY NAME (any receiver of a
+  non-public member's name, or an inherited one), because a method may read another instance's private field (`o.x`);
+  a same-named member of an unrelated type only over-grants. REFUSALS, positive: an unbound lower-case name is resolved
+  only as an inherited member (`<param>.x`), a package root of a type path, a module-static wildcard name (which the
+  carry moves), `trace` or the pattern wildcard `_`; everything else — including a field import `import p.M.f`, which the
+  carry does not move, and a module-level value of the source module — is refused naming the reference. A property
+  accessor is refused because inside `get_x` the bare `x` is the physical field and `<param>.x` would call the accessor
+  again; an instance field because a static helper holds no state; a function-value use because a static method has no
+  bound form. ARMS: hxq has no op that edits `test/testkit/mutation-arms.json`, so `--arms` prints a HINT (retarget a
+  moved member's arm; flag an arm whose `find` no longer cuts its member, measured with `Patch.locate`, the matcher
+  `tools/mutation-arm.sh` applies) instead of editing it. Rewriting the finds and replaces themselves is left as a gap:
+  a `replace` is the author's text and can name a member the move qualified. Proof on a copy of 3fb1637a4 (N13's start):
+  after `set-modifier -private` on `ParsedEntry` (which the op refused as a private type both sides name), one
+  `move-to-helper CallGraph.hx collectEdges --to CallGraphEdges --param g` wrote `CallGraphEdges` equal to N13's
+  hand-made one modulo the method's name, its doc and the `@:access` seat, compiled first time; 131 arm retargets
+  (N13's 131) — branch `feat/infra-N20`
+- N44 — two op bugs N42 met. (1) `hxq new <path>` into a directory that does not exist died on `ENOENT … <path>.apq-tmp`,
+  and so did `extract-interface --out` / `extract-superclass --out`: the three file-CREATING ops all write through
+  `CliIo.writeFiles`, whose staging temporary sits beside the target. → the writer creates the missing directories
+  (`mkdir -p`, the conventional generator behaviour; the path already names the package, and refusing would only make
+  every caller run a `mkdir` first), one at a time and recorded, so a change set that is not written takes back the
+  ones it made, and one that fails part way leaves only those a committed member lives in. Every other op writes a file
+  that exists (`move` needs an existing destination module: its own contract, not the writer's). Rejected: a refusal
+  naming the missing directory (consistent, but it moves the same `mkdir` onto every caller for no safety gain — the
+  write is still `--write`-gated and prints the path). (2)+(3) `move-member` carried a `using Lambda;` beside
+  `a.concat(b)` on an `Array`, and `unused-import` kept the same statement, both on the TEXT scan
+  `OccurrenceScan.usingExtensionCalled`: a `.concat` occurrence counted as a possible `Lambda.concat`. Haxe 4.3.7
+  resolves a member of the receiver's type first (`[1].concat(list)` under `using Lambda` reads `haxe.ds.List<Int>
+  should be Array<Int>`; an own or inherited instance `tag():Int` beats a `using E` `tag(d):String` — `Int should be
+  String`; a STATIC `tag` of the receiver's type does NOT, the extension binds). → the scan takes a member-first door,
+  `CheckScan.memberBoundAccesses`: an occurrence that is the name of a member access whose receiver the checks' typer
+  types (`typeNominalResolver`, receiver mode) and whose type provably declares an unguarded INSTANCE member of that name
+  on ONE declaration (`MemberLookup.instanceMemberBinds`, new; the std listing `StdTypes.declaresInstanceMember` for a
+  type no index holds, unless a project type takes the name) is no extension use. Both consumers pass the same door, so
+  the two answers cannot disagree (`UsingMemberFirstParityTest` runs both on each input). Positive whitelist: an
+  untyped receiver, an unresolved or ambiguous type, a static, a `#if`-guarded member or declaring type, a source
+  that does not parse, an occurrence no member access names (a comment, a string) keep the `using`. Not done: which of
+  SEVERAL `using`s an extension call binds (`ValueNameBinding.extensionDeclaration` walks them, but only once the
+  receiver is proven to LACK the member, and its null is "unproven", not "none") — a call on an unproven receiver still
+  keeps every `using` whose module declares the name — branch `feat/infra-N44`
+- N43 — two ops N42 had to script around. (1) `extract-constant` gains an ADDRESSED mode (`ExtractConstantTo`, CLI
+  `ExtractConstantToMode`) instead of a new op: the literal modes stay, and the destination machinery is the one
+  `--into` already had (`ExtractConstant.buildModuleSource`, now public). What moves is a POSITIVE whitelist read from
+  the shared layers: no name read (`ExtractConstantTo.firstContextRead`, shared with `move-elements`), a compile-time
+  constant by `ConstantFieldScan.isConstantExpression`, `inline` by `isConstantScalarInitializer` (the `inline-constant`
+  proof). An array / object literal is NOT a constant — a static final is one shared instance where the local was a
+  fresh one per evaluation — so it moves only under `--shared`, an operator assertion like `resolve-define
+  --undefined`, never inferred. Types visible from another module = a dotted path or a std top-level type (`StdTypes`);
+  anything else is refused and `--annotate` spells it. The import follows `RefactorSupport.bareNameResolves`, plus an
+  explicit import whenever the source has a wildcard import that could shadow the bare name. (2) `move-elements`
+  (`MoveElements`) cuts a slice with ONE span (`ElementSpan.commaListCut`, the comma half of `elementCut`, now shared)
+  — per-element cuts collide when two elements share a line — and inserts through `AddElement.appendElement` /
+  `insertSorted`, so the sorted-list rules are not copied. The target is addressed by selector / pattern only (a
+  position does not survive the cut). The result is re-read and compared before it is returned (old minus slice, old
+  plus slice); the digest the dry run prints is the MD5 of the whitespace-collapsed entry texts. Rejected: inferring
+  an aggregate's immutability from its uses (a read passed to any call is unknowable), moving type-naming elements
+  across modules with carried imports (needs the destination's binding ladder — `DependencyCarry` — not worth it for
+  data lists) — branch `feat/infra-N43`

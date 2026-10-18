@@ -5,6 +5,7 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.query.Cli;
+import anyparse.query.cli.CliIo;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -126,6 +127,58 @@ final class CliAtomicWriteSliceTest extends Test {
 		FileSystem.createDirectory('$dir/D.hx.apq-tmp');
 		Assert.notEquals(0, Cli.run(['fmt', '$dir/D.hx', '--write']));
 		Assert.equals(DRIFTED, File.getContent('$dir/D.hx'), 'the target keeps every byte it had');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A module written into a directory that does not exist yet gets the directory, the way `mkdir -p` does: `new`,
+	 * `extract-interface --out` and `extract-superclass --out` — the ops that create a file — all write through
+	 * `writeFiles`, so all three now create the missing ancestors, and every other op writes a file that is already there.
+	 *
+	 * RED at base: each one died on `ENOENT … <path>.apq-tmp` and wrote nothing (N42 met it on `hxq new` of a fresh
+	 * package directory).
+	 */
+	@:pin('control') @:killer('M-WRITE-DIR-UNCREATED')
+	public function testAWriteIntoAMissingDirectoryCreatesIt(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class C {\n\n\tpublic function new() {}\n\n\tpublic function f():Int {\n\t\treturn 1;\n\t}\n\n}\n';
+		final dir: String = CliFixture.writeDir('apq_stage_mkdir', [{ name: 'C.hx', source: source }]);
+		Assert.equals(0, Cli.run(['new', '$dir/a/b/Fresh.hx', '--kind', 'class', '--write']));
+		Assert.isTrue(FileSystem.exists('$dir/a/b/Fresh.hx'), '`new` creates the missing directories');
+		Assert.equals(0, Cli.run(['extract-interface', '$dir/C.hx', 'IC', '--out', '$dir/i/IC.hx', '--write']));
+		Assert.isTrue(FileSystem.exists('$dir/i/IC.hx'), '`extract-interface --out` does too');
+		Assert.equals(0, stagedLeftovers('$dir/a/b'), 'and leaves no staging temporary there');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A change set that is not written takes back the directories it created for itself: one member needing `n1/n2`,
+	 * another whose staging slot is blocked by a directory, and the run leaves neither the files nor `n1` behind.
+	 *
+	 * GREEN AT BASE BY CONSTRUCTION — the base never created a directory, it failed on the first member instead. Proved by
+	 * MUTATION: dropping the directory cleanup from the staging failure path leaves `n1` behind and flips this test.
+	 */
+	@:pin('control') @:killer('M-WRITE-DIR-KEPT')
+	public function testAFailedChangeSetRemovesTheDirectoriesItCreated(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('apq_stage_mkdir_undo', [{ name: 'D.hx', source: DRIFTED }]);
+		FileSystem.createDirectory('$dir/D.hx.apq-tmp');
+		final failed: Bool = try {
+			CliIo.writeFiles([
+				{ path: '$dir/n1/n2/A.hx', content: 'class A {}\n' },
+				{ path: '$dir/D.hx', content: 'class D {}\n' }
+			]);
+			false;
+		} catch (exception: haxe.Exception) true;
+		Assert.isTrue(failed, 'the blocked member fails the set');
+		Assert.isFalse(FileSystem.exists('$dir/n1'), 'and the directories staged for the other member are gone');
+		Assert.equals(DRIFTED, File.getContent('$dir/D.hx'), 'the blocked target keeps every byte it had');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.CheckScan;
 import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
@@ -80,7 +81,7 @@ final class DependencyCarry {
 	 */
 	public static function dependencyImportLinesToCarry(
 		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, destSource: String, index: SymbolIndex,
-		plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String
+		plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String, ?travelling: Array<String>
 	): CarryResult {
 		// The type-ref projection and the grammar shape are built ONCE here and threaded down: the
 		// dependency walk and the `using` carry both read them, and a plugin without a parse cache (which
@@ -88,7 +89,9 @@ final class DependencyCarry {
 		// struct for each.
 		final tree: QueryNode = plugin.parseFileTypeRefs(source);
 		final shape: RefShape = plugin.refShape();
-		final depNames: Array<String> = dependencyNames(tree, shape, source, declSpan, cursorInfo, plugin, typeRefShape, typeName);
+		final depNames: Array<String> = dependencyNames(
+			tree, shape, source, declSpan, cursorInfo, plugin, typeRefShape, typeName, travelling
+		);
 		// One copy of the file list for the whole carry — `allFiles()` copies, and the binding walk
 		// runs once per dependency name on each side.
 		final files: Array<FileInfo> = index.allFiles();
@@ -182,7 +185,7 @@ final class DependencyCarry {
 		if (wildRefusal != null) return CarryErr(wildRefusal);
 		for (group in guarded) carried.push(GuardedImportCarry.blockText(group.condition, group.lines, shape));
 		return CarryOk(usingLinesToCarry(
-			source, tree, ShapeVocab.memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried, plugin
+			source, tree, ShapeVocab.memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, index, carried, plugin
 		));
 	}
 
@@ -822,8 +825,10 @@ final class DependencyCarry {
 	 * Carried unless proven unneeded, with two conditions the tree can answer: a static extension is
 	 * invoked as `expr.method(...)`, so a declaration holding no member access at all can need none,
 	 * which keeps the line off the pure-data moves; and when the module's method set is KNOWN, a body
-	 * calling none of them needs none either (`using Lambda;` beside a body that only calls `trim`). It
-	 * never guesses WHICH extension a body uses — an unlistable module's line is carried.
+	 * calling none of them needs none either (`using Lambda;` beside a body that only calls `trim`) — and a
+	 * call that binds a MEMBER of its receiver's type is none of them (`a.concat(b)` on an `Array`), through
+	 * the member-first door `unused-import` asks too (`CheckScan.memberBoundAccesses`). It never guesses WHICH
+	 * extension a body uses — an unlistable module's line is carried, and so is a call whose receiver is unproven.
 	 *
 	 * A `#if`-guarded statement is skipped for the reason every other carry skips one: it binds under
 	 * its own flag and under no other, and an unconditional line at the destination does not reproduce
@@ -831,11 +836,14 @@ final class DependencyCarry {
 	 */
 	private static function usingLinesToCarry(
 		source: String, tree: QueryNode, accessKinds: Array<String>, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo,
-		destSource: String, files: Array<FileInfo>, carried: Array<String>, plugin: GrammarPlugin
+		destSource: String, index: SymbolIndex, carried: Array<String>, plugin: GrammarPlugin
 	): Array<String> {
 		if (!declHasMemberAccess(tree, declSpan, accessKinds)) return carried;
+		final files: Array<FileInfo> = index.allFiles();
 		final destRegions: Array<LexRegion> = plugin.lexicalRegions(destSource);
 		final declText: String = source.substring(declSpan.from, declSpan.to);
+		// The door answers offsets of the whole source; `declText` starts at `declSpan.from`.
+		final memberBound: (Int) -> Bool = CheckScan.memberBoundAccesses(source, plugin, cursorInfo.file, index);
 		for (imp in cursorInfo.imports) if (!imp.guarded && imp.kind == ImportKind.Using) {
 			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
 			if (path == null) continue;
@@ -843,7 +851,8 @@ final class DependencyCarry {
 			// module the scope declares, whose members the index carries in full) and the moved code calls none of them —
 			// the verdict `unused-import` would give the carried line. A set that cannot be listed keeps the line.
 			final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? moduleMemberNames(files, path);
-			if (methods != null && !OccurrenceScan.usingExtensionCalled(declText, imp.raw, methods)) continue;
+			if (methods != null && !OccurrenceScan.usingExtensionCalled(declText, imp.raw, methods, at -> memberBound(declSpan.from + at)))
+				continue;
 			// `!other.guarded` is what makes this the right question. A guarded statement is a rung of SOME
 			// build's ladder and of no other, so a `#if js using StringTools; #end` at the destination
 			// satisfies nothing for the default configuration — without the filter the move writes both
@@ -886,7 +895,7 @@ final class DependencyCarry {
 	 */
 	private static function dependencyNames(
 		tree: QueryNode, shape: RefShape, source: String, declSpan: Span, cursorInfo: FileInfo, plugin: GrammarPlugin,
-		typeRefShape: TypeRefShape, typeName: String
+		typeRefShape: TypeRefShape, typeName: String, travelling: Null<Array<String>>
 	): Array<String> {
 		final refs: Array<NameSpan> = [];
 		collectDependencyNames(tree, declSpan, typeRefShape, typeName, refs);
@@ -898,7 +907,9 @@ final class DependencyCarry {
 		final out: Array<String> = [];
 		for (ref in refs) {
 			final shadowed: Bool = shadows.exists(s -> s.name == ref.name && ref.span.from >= s.span.from && ref.span.to <= s.span.to);
-			if (!shadowed && !out.contains(ref.name)) out.push(ref.name);
+			// A name `travelling` lists is a declaration making the same trip, which the destination declares itself afterwards.
+			final travels: Bool = travelling != null && travelling.contains(ref.name);
+			if (!shadowed && !travels && !out.contains(ref.name)) out.push(ref.name);
 		}
 		return out;
 	}
