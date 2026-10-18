@@ -63,7 +63,9 @@ final class CanonicalEdit {
 	 *     `lint --fix` — which shares this gate — has no such flag, so the
 	 *     refusal message leads with `apq fmt --write`, the remedy every
 	 *     caller's user can reach.
-	 *  2. Splice the caller's edits (raw text) into the source.
+	 *  2. Splice the caller's edits (raw text) into the source — or, for a
+	 *     FORMAT-PRESERVING grammar, have it lay them in the way the source
+	 *     around them is laid out (`GrammarPlugin.layoutSplice`).
 	 *  3. Re-emit the WHOLE spliced file through `writeRoundTrip` (the
 	 *     trivia / comment-preserving pipeline) until the output stops
 	 *     changing — `FormatFixedPoint.run`, the loop `apq fmt` owns. This
@@ -110,7 +112,13 @@ final class CanonicalEdit {
 				);
 		}
 
-		final spliced: String = applyEdits(source, edits);
+		// A FORMAT-PRESERVING grammar lays the edits in itself (`GrammarPlugin.layoutSplice`): its writer hands every source
+		// back unchanged, so the fixed point below would keep the raw splice, layout and all. A re-emitting grammar answers
+		// null and gets the raw splice, which the fixed point then formats.
+		final spliced: String = try plugin.layoutSplice(source, edits) ?? applyEdits(source, edits) catch (exception: ParseError) return Err(
+			'result does not parse: $exception'
+		)
+		catch (exception: Exception) return Err('result does not parse: ${exception.message}');
 
 		// Every question about the EDIT rather than about the writer — see `editRefusal`.
 		final refused: Null<String> = editRefusal(source, edits, spliced, plugin, carried);

@@ -145,7 +145,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(o.lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPluginFor(o.lang, filePath));
 		final pos: Null<Position> = CliEdit.resolveAddressPos('add-element', source, plugin, atSpec, o.selectExpr, o.matchExpr, o.nth);
 		if (pos == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);

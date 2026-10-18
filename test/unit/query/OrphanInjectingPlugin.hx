@@ -10,6 +10,7 @@ import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.TypeSyntax;
+import anyparse.runtime.Span;
 
 using StringTools;
 
@@ -74,6 +75,10 @@ final class OrphanInjectingPlugin implements GrammarPlugin {
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String> {
 		final written: Null<String> = _inner.writeRoundTrip(source, optsJson);
 		return written == null ? null : written.replace(_from, _to);
+	}
+
+	public function layoutSplice(source: String, edits: Array<{ span: Span, text: String }>): Null<String> {
+		return _inner.layoutSplice(source, edits);
 	}
 
 	public function layoutMetrics(?optsJson: String): Null<LayoutMetrics> {

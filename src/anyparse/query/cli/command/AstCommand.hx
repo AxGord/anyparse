@@ -97,7 +97,7 @@ final class AstCommand implements CliCommand {
 			CliIo.stderr('apq ast: <file>, --code, and --stdin are mutually exclusive\n');
 			return EXIT_USAGE;
 		}
-		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
+		final plugin: GrammarPlugin = CliArgs.pickPluginFor(o.lang, o.file);
 		// Capture nullable struct fields into locals so Strict narrows them;
 		// the source/label resolution then branches once and narrows `file`
 		// in its own arm. File label drives error / hit-location prefixes —

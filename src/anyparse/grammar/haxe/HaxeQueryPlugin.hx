@@ -26,6 +26,7 @@ import anyparse.query.TypeSyntax;
 import anyparse.runtime.BodySkip;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Parser;
+import anyparse.runtime.Span;
 import anyparse.runtime.StringInput;
 import haxe.Exception;
 
@@ -272,6 +273,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		final lost: Null<String> = CommentInventory.firstMissing(source, written, HaxeLexicalRegions.scanComments);
 		if (lost != null) throw new CommentLossException(lost);
 		return written;
+	}
+
+	/** Null: the Haxe writer re-emits the whole file, so `CanonicalEdit.canonicalize` formats the raw splice itself. */
+	public function layoutSplice(source: String, edits: Array<{ span: Span, text: String }>): Null<String> {
+		return null;
 	}
 
 	public function layoutMetrics(?optsJson: String): Null<LayoutMetrics> {
