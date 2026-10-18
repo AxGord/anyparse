@@ -227,7 +227,8 @@ final class DeferredArms {
 		'M-RESERVED-VAR-NAME :: anyparse.grammar.haxe.HxVarNameLit#MetaCall:@:re',
 		'M-RESERVED-FN-NAME :: anyparse.grammar.haxe.HxFnNameLit#MetaCall:@:re',
 		'M-RESERVED-VERSIONED-REFUSED :: anyparse.grammar.haxe.HxVarNameLit#MetaCall:@:re',
-		'M-XREN-EXTENDS-HEAD-UNEMITTED :: anyparse.macro.QueryWalkerLowering#typeRefsDescendCore'
+		'M-XREN-EXTENDS-HEAD-UNEMITTED :: anyparse.macro.QueryWalkerLowering#typeRefsDescendCore',
+		'M-QUERY-NAME-IGNORED :: anyparse.macro.QueryWalkerLowering#lowerNameSeq'
 	];
 
 }

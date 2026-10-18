@@ -113,7 +113,7 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 			CliIo.stderr('apq remove-element: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPluginFor(lang, filePath));
 		// A selector naming a bare modifier keyword is NOT an element address. It resolves to the
 		// same offset a position on that keyword does, and the cursor convention then reads it as
 		// the declaration's first token — so `--select 'Private'` deleted the whole declaration at

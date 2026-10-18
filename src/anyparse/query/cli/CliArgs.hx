@@ -3,6 +3,7 @@ package anyparse.query.cli;
 using StringTools;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.query.SourceText;
 import anyparse.query.cli.CliArgs.ExpandedInputs;
 import anyparse.query.cli.CliArgs.PositionalScan;
@@ -31,6 +32,12 @@ final class CliArgs {
 
 	/** The maximum 32-bit signed integer — a null-span sort sentinel and the unbounded `--top` / `--all` count. */
 	public static inline final MAX_INT: Int = 0x7FFFFFFF;
+
+	/** The `--lang` of the JSON grammar plugin. */
+	public static inline final JSON_LANG: String = 'json';
+
+	/** The file extension `pickPluginFor` routes to the JSON grammar. */
+	private static inline final JSON_EXTENSION: String = '.json';
 
 	/**
 	 * The nearest ancestor `hxformat.json` content for `filePath`, or null. Thin alias
@@ -128,11 +135,15 @@ final class CliArgs {
 	}
 
 	/**
-	 * Every `--lang` the CLI can dispatch - the grammar-plugin registry, enumerable so a
+	 * Every CODE-grammar `--lang` the CLI can dispatch - the registry of
+	 * plugins whose `RefShape` carries a code kind vocabulary, enumerable so a
 	 * whole-registry check (`RefShapeKindProjectionTest`) covers a plugin added here without
 	 * being taught its name. That test calls `pickPlugin` for every name here, so a name declared here and
 	 * not constructed there fails the suite. `pickPlugin` itself stays switch-only: it is the construction
 	 * site, never gated on this list, so a plugin constructed there is never refused for being absent here.
+	 * The DATA grammar `json` (`JSON_LANG`) is constructed there and deliberately absent: its shape declares
+	 * only its two container kinds and the string kind, which the registry check's Haxe-sized floors would
+	 * reject as a shrunken vocabulary; `JsonQueryPluginTest` holds those against its own projection instead.
 	 */
 	public static function langNames(): Array<String> {
 		return ['haxe'];
@@ -141,8 +152,22 @@ final class CliArgs {
 	public static function pickPlugin(lang: String): GrammarPlugin {
 		return switch lang {
 			case 'haxe': new HaxeQueryPlugin();
+			case JSON_LANG: new JsonQueryPlugin();
 			case _: throw new UsageFailure('no grammar plugin for --lang "$lang"');
 		};
+	}
+
+	/**
+	 * The plugin for the FILE at `path` (null: no file — source from `--code`
+	 * / stdin): a `.json` file is the `json` grammar's whatever `lang` says,
+	 * every other file `lang`'s (`pickPlugin`). The `hxq` shim prepends `--lang haxe` to every
+	 * command, so the extension is the only signal an agent's `hxq add-element arms.json …` carries;
+	 * an explicit `--lang json` reaches the same plugin through `pickPlugin`. The edit and read
+	 * commands that work on JSON (`add-element`, `remove-element`, `replace-node`, `ast`, `source`)
+	 * pick through here.
+	 */
+	public static function pickPluginFor(lang: String, path: Null<String>): GrammarPlugin {
+		return pickPlugin(path != null && path.toLowerCase().endsWith(JSON_EXTENSION) ? JSON_LANG : lang);
 	}
 
 	/**

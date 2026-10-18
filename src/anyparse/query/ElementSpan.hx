@@ -93,7 +93,7 @@ final class ElementSpan {
 	 * `AddElement`. `parent` gives the sibling context `declGroupSpan` and
 	 * the comma check need. The deletion span is the decl group, extended to
 	 * swallow ONE separating comma when the slot is a comma list (a comma
-	 * adjacent in source, or `parent` is a `COMMA_CONTAINER_KINDS`) — else
+	 * adjacent in source, or `parent` is a `RefShape.commaContainerKinds` kind) — else
 	 * (statement / case / member / import lists) just the group, since each
 	 * element is self-terminated and the whole-file re-emit fixes residual
 	 * whitespace. Funnels through `canonicalize` with an empty replacement,
@@ -341,7 +341,7 @@ final class ElementSpan {
 	 * Is the element at `span` immediately adjacent to a `,` — the next
 	 * non-whitespace byte after `span.to`, or the previous before `span.from`,
 	 * is a comma? True ⇒ the element sits in a comma-separated list (catches a
-	 * comma container not in `COMMA_CONTAINER_KINDS`, for any list with at
+	 * comma container the grammar does not list in `RefShape.commaContainerKinds`, for any list with at
 	 * least two elements). Shared by `add-element` and `deleteNode`.
 	 */
 	public static function adjacentToComma(source: String, span: Span): Bool {
@@ -386,10 +386,11 @@ final class ElementSpan {
 		if (targets.length == 0) return Err('no node to remove');
 		final edits: Array<{ span: Span, text: String }> = [];
 		final regionsOf: () -> Array<LexRegion> = lazyRegions(source, plugin);
+		final commaKinds: Array<String> = plugin.refShape().commaContainerKinds ?? [];
 		for (target in targets) {
 			final nodeSpan: Null<Span> = target.node.span;
 			if (nodeSpan == null) return Err('the node to remove has no source span');
-			edits.push({ span: elementCut(source, target.node, target.parent, nodeSpan, withDoc, regionsOf).span, text: '' });
+			edits.push({ span: elementCut(source, target.node, target.parent, nodeSpan, withDoc, regionsOf, commaKinds).span, text: '' });
 		}
 		// A target nested in another — a member and the region holding it, two nested regions — is
 		// dropped in favour of the outer one, which removes it anyway. `isContainedEdit` is the same
@@ -538,7 +539,8 @@ final class ElementSpan {
 	 * span for the message would have been a second, worse copy of this one.
 	 */
 	public static function elementCut(
-		source: String, node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span, withDoc: Bool, regionsOf: () -> Array<LexRegion>
+		source: String, node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span, withDoc: Bool, regionsOf: () -> Array<LexRegion>,
+		commaKinds: Array<String>
 	): { span: Span, doc: Bool, annotations: Int } {
 		final group: Span = trailingTrimmedSpan(source, declGroupSpan(node, parent, nodeSpan), regionsOf);
 		// A declaration's doc comment is trivia OUTSIDE its node span, so the group span
@@ -555,7 +557,7 @@ final class ElementSpan {
 		final span: Span = withDoc && !isAnnotationElement(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;
 
 		var isComma: Bool = adjacentToComma(source, span);
-		if (!isComma && parent != null) isComma = MemberKinds.COMMA_CONTAINER_KINDS.contains(parent.kind);
+		if (!isComma && parent != null) isComma = commaKinds.contains(parent.kind);
 
 		// A comma list has no blank separators, so only the line branch gives one back. An element that
 		// held a whole line of a one-per-line list (`'x',` with its comma) takes the line with it: the cut
@@ -591,7 +593,7 @@ final class ElementSpan {
 		source: String, node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span, withDoc: Bool, plugin: GrammarPlugin
 	): String {
 		final cut: { span: Span, doc: Bool, annotations: Int } = elementCut(
-			source, node, parent, nodeSpan, withDoc, lazyRegions(source, plugin)
+			source, node, parent, nodeSpan, withDoc, lazyRegions(source, plugin), plugin.refShape().commaContainerKinds ?? []
 		);
 		final subject: QueryNode = cutSubject(node, parent);
 		// A wrapper that folds a type's modifier in reads as the declaration it names (`ClassDecl X`).
