@@ -214,7 +214,7 @@ indentation ignored (a multi-line fragment copied from the dedented `source --se
 output works as-is), and must occur exactly once within the node.
 
 `add-element --sorted` inserts STRING entries into a hand-kept sorted list — a registry such as
-`TestDiscoveryParityTest`'s class and pin lists — each at its sorted position, so nobody works out
+`TestDiscoveryParityTest`'s class list or a pin census part in `test/unit/census/` — each at its sorted position, so nobody works out
 where an entry goes or edits the file with a script: `hxq add-element T.hx --sorted --select
 'FinalMember:REGISTERED_CLASSES >> ArrayExpr' "'unit.a.XTest', 'unit.b.YTest'" --write`. The address is
 the ARRAY (as for `--append`); `<code>` is one entry or a comma list of them, split by the parser.
