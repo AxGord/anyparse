@@ -4279,6 +4279,26 @@ decided the question; it may not become a record of runs.
   `CliArgs.langNames`, the CODE-grammar registry whose Haxe-sized floors `RefShapeKindProjectionTest` applies —
   `JsonQueryPluginTest` checks its declared kinds against its projection instead. Not done: `patch`, `move-elements`,
   `--sorted` over objects by key, a key containing `>` in a selector — branch `feat/infra-N47`
+- N58 — `owned-types` asks the binding AT the use site and reads an `Unknown`'s candidates; the deep typer types a local
+  from the construction initialising it. (1) D1 (TM `CrashDumper.hx:171`, `CleanExit.exit(1)` reported as `Sys.exit`):
+  `OwnedTypes.typesNamed` called `tierOf(name, info)` with no offset, so a `#if sys` import of an INDEXED module was never
+  co-guarded with the `#if sys` use beside it — the other build's strict package tier read an unindexed `a.Tool` and
+  the name went `Unknown`, which the static-member check matched by member name alone. Fix: the offset is passed (the
+  memo is per name, per site only in a file holding a guarded import — `coGuarded` reads the file's own statements
+  only); and `TypeNameBinding.unknownCandidates` (new, beside `tierOf`) names what an `Unknown` may be when each
+  candidate is read — `bothBuilds` now merges the guarded statement's binding with the rest's (`Answer.Either`), where
+  it used to drop both into `Unreadable(null)`. The rule reports such a name only when a candidate is the owned type: an
+  indexed one by identity, one outside the index by its last segment (the reading an unresolved dotted spelling already
+  got). Any candidate nothing reads — an import of a module outside the index, which may carry any sub-type, a skipped
+  file, an unbounded ambient chain — keeps the name open and reported (fail-closed). The candidates are a separate query
+  rather than a payload of `Tier.Unknown`: `Tier` is constructed and matched in ~35 places (`OperandBinder` builds its
+  own `Unknown`s) that never read candidates, and `tierOf`'s answer is unchanged for every caller. (2) D2 (recall):
+  `final x = new Box(); x.open()` was missed while `new Box().open()` and an annotated local were seen —
+  `valueNominalDeep` fell back to `constructedNominal` for the `new` node itself only. Now it follows an identifier
+  through `localInitializer` (the same un-annotated-local reading the source walk uses), local to local, to the
+  construction. Kept at the NOMINAL level: the source walk still types no construction (`new Box(item)` is a `Box<Item>`
+  nothing spells), and an initializer that is a call is not followed (no new arc, documented in the instance-member
+  limits) — branch `feat/infra-N58`
 
 ## N51 (2026-10-19): add-meta by entry, add-import reads the project index, two re-checks
 

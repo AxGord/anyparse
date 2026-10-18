@@ -7,6 +7,7 @@ import anyparse.check.OwnedTypes;
 import anyparse.check.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.StdResolver;
 import utest.Assert;
 import utest.Test;
 
@@ -29,6 +30,13 @@ class OwnedTypesCheckTest extends Test {
 	private static final TYPE_CONFIG: String = '{"ownedTypes":[{"types":["a.Owned"],"owners":["own.**"],"why":"the a layer owns it"}]}';
 	private static final ALL_CONFIG: String = '{"ownedTypes":[{"types":["a.Owned"],"members":["a.Owned.make","a.Owned.run",'
 		+ '"a.Owned.new"],"owners":["own.**"],"why":"the a layer owns it"}]}';
+	private static final TOOL: FixtureFile = {
+		file: 'c/Tool.hx',
+		source: 'package c;\n\nclass Tool {\n\tpublic static function make(): Void {}\n}\n'
+	};
+
+	/** The same tool as a type of the users' own package `b`, which its package tier binds. */
+	private static final LOCAL_TOOL: FixtureFile = { file: 'b/Tool.hx', source: TOOL.source.replace('package c;', 'package b;') };
 
 	public function testEveryTypePositionIsReported(): Void {
 		final user: String = 'package b;\n\nimport a.Owned;\n\nclass User {\n\tvar f: Owned;\n\tvar g: Array<Owned>;\n\n'
@@ -151,6 +159,57 @@ class OwnedTypesCheckTest extends Test {
 		Assert.same([7, 9], linesIn(user, memberConfig('a.Owned.new')));
 	}
 
+	/**
+	 * A `#if`-guarded import of an indexed module binds the name for a use inside its own branch, which only the builds
+	 * holding the import compile: the receiver is that type, not an unknown one, so a same-named static of the owned type
+	 * is not reached. An import of a module outside the index written after it may still bind the name, and is reported.
+	 */
+	@:pin('control') @:killer('M-OWNED-TIER-NO-USE-SITE') @:killer('M-OWNED-MEMO-IGNORES-SITE')
+	public function testAGuardedImportBindsAUseInItsOwnBranch(): Void {
+		final user: String = 'package b;\n\n#if sys\nimport c.Tool;\n#end\n\nclass User {\n\tfunction m(): Void {\n\t\t#if sys\n'
+			+ '\t\tTool.make();\n\t\t#end\n\t}\n}\n';
+		Assert.same([], linesWith(user, [TOOL], memberConfig('a.Owned.make')));
+		final unindexed: String = user.replace('#end\n\nclass', '#end\nimport gone.Mod;\n\nclass');
+		Assert.same([11], linesWith(unindexed, [TOOL], memberConfig('a.Owned.make')));
+		// the builds without the import compile the second call too, and what `Tool` is there nothing here reads
+		final both: String = user.replace('#end\n\t}', '#end\n\t\tTool.make();\n\t}');
+		Assert.same([12], linesWith(both, [TOOL], memberConfig('a.Owned.make')));
+	}
+
+	/**
+	 * A use outside a guarded import's branch binds one type on the builds holding the import and another on the rest: the
+	 * receiver is unknown, and reported only when the owned type is among the types it may be.
+	 */
+	@:pin('control') @:killer('M-OWNED-CANDIDATES-IGNORED') @:killer('M-BINDING-EITHER-DROPS-GUARDED')
+	public function testAnUnknownReceiverIsReportedOnlyWhenACandidateIsOwned(): Void {
+		final user: String =
+			'package b;\n\n#if sys\nimport c.Tool;\n#end\n\nclass User {\n\tfunction m(): Void {\n\t\tTool.make();\n\t}\n}\n';
+		Assert.same([], linesWith(user, [TOOL, LOCAL_TOOL], memberConfig('a.Owned.make')));
+		final owned: String = user.replace('import c.Tool;\n', 'import c.Tool;\n#else\nimport a.Owned as Tool;\n');
+		Assert.same([11], linesWith(owned, [TOOL, LOCAL_TOOL], memberConfig('a.Owned.make')));
+	}
+
+	/** A candidate outside the index — a std type the alias of a guarded import names — is the owned type by its path. */
+	@:pin('control') @:killer('M-OWNED-OUTSIDE-CANDIDATE-IGNORED')
+	public function testAnOutsideCandidateIsMatchedByItsPath(): Void {
+		if (StdResolver.stdDir() == null) {
+			Assert.pass('no std discovered');
+			return;
+		}
+		final user: String = 'package b;\n\n#if sys\nimport c.Tool;\n#else\nimport Sys as Tool;\n#end\n\nclass User {\n'
+			+ '\tfunction m(): Void {\n\t\tTool.exit(1);\n\t}\n}\n';
+		Assert.same([11], linesWith(user, [TOOL, LOCAL_TOOL], memberConfig('Sys.exit')));
+		Assert.same([], linesWith(user.replace('import Sys as', 'import haxe.Timer as'), [TOOL, LOCAL_TOOL], memberConfig('Sys.exit')));
+	}
+
+	/** A local written with no type holds the type its construction makes — followed through a local initialised by it. */
+	@:pin('control') @:killer('M-NOMINAL-LOCAL-CONSTRUCTION') @:killer('M-NOMINAL-INITIALIZER-ONE-STEP')
+	public function testALocalInitialisedByAConstructionIsTyped(): Void {
+		final user: String = 'package b;\n\nimport a.Owned;\nimport other.Owned as Else;\n\nclass User {\n\tfunction m(): Void {\n'
+			+ '\t\tfinal o = new Owned();\n\t\to.run();\n\t\tfinal p = o;\n\t\tp.run();\n\t\tfinal e = new Else();\n\t\te.run();\n\t}\n}\n';
+		Assert.same([9, 11], linesIn(user, memberConfig('a.Owned.run')));
+	}
+
 	@:pin('control') @:killer('M-OWNED-SKIP-REASON-NULL')
 	public function testNoDeclarationIsInert(): Void {
 		Assert.same([], linesIn('package b;\n\nimport a.Owned;\n\nclass User {}\n', '{}'));
@@ -220,6 +279,14 @@ class OwnedTypesCheckTest extends Test {
 		return [for (v in violationsOf(user, config)) lineOf(user, v.span?.from ?? 0)];
 	}
 
+	/** The 1-based line of every finding in `user`, the fixture project holding `extra` beside it. */
+	private static function linesWith(user: String, extra: Array<FixtureFile>, config: String): Array<Int> {
+		final vs: Array<Violation> = collected([{ file: 'b/User.hx', source: user }].concat(
+			extra
+		), config).filter(v -> v.file == 'b/User.hx');
+		return [for (v in vs) lineOf(user, v.span?.from ?? 0)];
+	}
+
 	private static function lineOf(source: String, offset: Int): Int {
 		return source.substr(0, offset).split('\n').length;
 	}
@@ -238,3 +305,6 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 }
+
+/** One source file of a fixture project. */
+private typedef FixtureFile = { file: String, source: String };

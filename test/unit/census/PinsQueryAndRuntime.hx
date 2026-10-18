@@ -1289,6 +1289,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.TypeNameBindingTest#testAUseOutsideTheGuardedRegionIsUnknown :: control :: M-BINDING-STRICT-UNREAD-PASS',
 		'unit.query.TypeNameBindingTest#testAWildcardBindsMainTypesOnly :: control :: M-BINDING-SUBTYPES-VISIBLE',
 		'unit.query.TypeNameBindingTest#testAnImportLineListsTheNonPrivateTypesItBinds :: control :: M-BINDING-PRIVATE-VISIBLE',
+		'unit.query.TypeNameBindingTest#testAnUnknownCarriesTheCandidatesItReads :: control :: '
+			+ 'M-BINDING-EITHER-DROPS-REST,M-BINDING-EITHER-DROPS-GUARDED,M-BINDING-EITHER-OPEN-READ,M-BINDING-CANDIDATES-OWN-TYPE',
 		'unit.query.TypeNameBindingTest#testAnUnreadableModuleImportIsUnknown :: control :: M-BINDING-UNINDEXED-MODULE-FREE',
 		'unit.query.TypeNameBindingTest#testBindingsListEveryBuildsType :: control :: '
 			+ 'M-TS-GUARDED-IMPORT,M-TS-WILD-MAYBE,M-BINDINGS-UNREADABLE-SUBTYPE,M-TS-WILD-GUARDED',

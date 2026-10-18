@@ -304,6 +304,25 @@ class TypeNameBindingTest extends Test {
 		Assert.equals('Unknown', tierText(index, 'T', 'p/Main.hx'), 'the two builds bind `b.T` and `p.T`');
 	}
 
+	/**
+	 * What an `Unknown` may be when every candidate is read (`unknownCandidates`): both builds' bindings of a guarded import
+	 * against another; none to offer when the other build's binding is unread, nor for a name a module declares itself.
+	 */
+	@:pin('control') @:killer('M-BINDING-EITHER-DROPS-REST') @:killer('M-BINDING-EITHER-DROPS-GUARDED') @:killer('M-BINDING-EITHER-OPEN-READ')
+	@:killer('M-BINDING-CANDIDATES-OWN-TYPE')
+	public function testAnUnknownCarriesTheCandidatesItReads(): Void {
+		final index: SymbolIndex = indexOf([
+			'b/T.hx' => 'package b;\n\n#if useA\nimport a.T;\n#end\n\nclass T {}\n',
+			'p/T.hx' => 'package p;\n\nclass T {}\n',
+			'p/Main.hx' => 'package p;\n\n#if useB\nimport b.T;\n#end\n\nclass Main {}\n',
+			'a/T.hx' => 'package a;\n\nclass T {}\n',
+			'Main.hx' => '#if useA\nimport a.T;\n#end\n\nclass Main {\n\tvar t:T;\n}\n'
+		]);
+		Assert.equals('b/T.hx#T | p/T.hx#T', candidatesText(index, 'T', 'p/Main.hx'), 'the two builds bind `b.T` and `p.T`');
+		Assert.equals('open', candidatesText(index, 'T', 'Main.hx'), 'the other build binds a toplevel `T` nothing here reads');
+		Assert.equals('open', candidatesText(index, 'T', 'b/T.hx'), 'the module declares `T`: it is bound, whatever it imports');
+	}
+
 	@:pin('control')
 	@:killer('M-BINDING-STRICT-OUTSIDE')
 	public function testAGuardedImportAgainstAStdTypeIsUnknown(): Void {
@@ -364,6 +383,21 @@ class TypeNameBindingTest extends Test {
 			case Unknown: 'Unknown';
 			case Free: 'Free';
 		};
+	}
+
+	/** The candidates an `Unknown` of `name` in `from` carries (`unknownCandidates`), each `file#Type` or its path; else `open`. */
+	private static function candidatesText(index: SymbolIndex, name: String, from: String): String {
+		final fi: Null<FileInfo> = index.fileInfo(from);
+		if (fi == null) throw new Exception('the fixture must index $from');
+		final targets: Null<Array<NameTarget>> = index.refs.names.unknownCandidates(name, fi);
+		return targets == null
+			? 'open'
+			: [
+				for (t in targets) switch t {
+					case InIndex(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
+					case OutOfIndex(path): path;
+				}
+			].join(' | ');
 	}
 
 	/**
