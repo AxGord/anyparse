@@ -662,6 +662,7 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyExhaustiveTest#testARunThatMayMissAWriteReadsNoMemberAsHoldingValues :: control :: M-TS-EXH-PARTIAL',
 		'unit.check.ThreadSafetyExhaustiveTest#testASubjectTheFunctionBindsIsNoMember :: control :: M-TS-EXH-SUBJECT-BOUND',
 		'unit.check.ThreadSafetyExhaustiveTest#testAValueNoCaseNamesReachesIt :: control :: M-TS-EXH-ALL-NAMED',
+		'unit.check.ThreadSafetyExhaustiveTest#testAWriteElsewhereWritesTheMemberOnlyWhereItMay :: control :: M-TS-EXH-WRITES-ANY',
 		'unit.check.ThreadSafetyExhaustiveTest#testAnAbstractNameDeclaredTwiceIsNotRead :: control :: M-TS-EXH-COLLISION',
 		'unit.check.ThreadSafetyExhaustiveTest#testMembersBuildingOtherValuesOpenTheAbstract :: control :: '
 			+ 'M-TS-EXH-FROM,M-TS-EXH-CTOR,M-TS-EXH-NORET',

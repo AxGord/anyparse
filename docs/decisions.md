@@ -4133,6 +4133,26 @@ decided the question; it may not become a record of runs.
   sides, classes 977 -> 979 (the two new ones). Rejected: one assertion per part (a different assertion set, and
   a partition could leave an entry in no part); comparing the arm census SORTED so it could take `--sorted` inserts
   (drops the order the assertion pins today — a user decision, not a refactor) — branch `feat/infra-N42`
+- N45 — thread-safety false positives on TM e58762ed (all five false keys of `truth-1d1ba147.json`, plus its one
+  unknown). `C|FileList.reload|FolderWatcher._mutex`: `ExhaustiveSwitches` already models the catch-all of a switch
+  over a closed enum abstract (`FileListViewType`), but `storedHolds` counted EVERY write of the member's NAME, and TM's
+  `Form.get_data` writes a computed name reflectively (`result.setField(formGroup.field, …)` on a fresh `{}`), which
+  `FieldWrites.of` files under every name → `FileListSelect.viewType` "might hold any value". → a write counts only where
+  `FieldWrites.mayWrite(site, owner)` says it may write the member's field — the shared answer the lock layer already
+  uses: a reflective write only where `ReflectiveReach.placeOf` lets it reach the owner (a fresh structure reaches no
+  class; a `Dynamic` target any), a write off another receiver always, an own write only where the running type's
+  declaration of the name is the owner's. RED on 3c761cde2 (`testAWriteElsewhereWritesTheMemberOnlyWhereItMay`, 2 of
+  3 asserts). Left reported, not soundly fixable: `A|RoundedTextInput.new|Assets.getBitmapData` (`ArgumentValues.bind`
+  binds no `new`; binding the TM sites needs Haxe's optional-argument skipping by unification on arithmetic, foreign
+  constants and openfl's `TextFormatAlign`, whose `@:from fromString(String)` makes a String literal unify with
+  `textAlign`; the branch is `endsWith('.svg')` and valuations hold no string values); `B|StandardFileSystem.listFolder`
+  (the try body runs `FileSystemItemData`'s inline accessors, and `get_master` THROWS — `FileSystemItemData.hx:185`;
+  the catch is dead only by a data invariant); `B|CloudDatabase.new` (`ownConstructorHold` refuses the super call into
+  the LIBRARY constructor `EventDispatcher.new`, which runs with `this` before the hold — library bodies unread);
+  `B|CloudDatabase.getFolderLastCloudActionAction2` (worker origins through `spawns` entries that do not say which
+  argument runs on the worker: `APIRequest2.success`, `FileIO.readAndProcess`'s `onDone`). `A|GpuRenderPipeline.
+  acquireGlContext|untyped.__cpp__` relabelled `real-short` (a GL context bind; reported by design, project native code
+  is blocking unless `nonBlocking` names it) — branch `feat/infra-N45`
 - N20 — no op could take a member that READS its type's state out of the type: `move-member` refuses `this` in a moved
   body, and `--scaffold` mirrors the fields the body reads onto the destination, a copy where the member needs the live
   object (N13 split `CallGraph.collectEdges` by a refs script, `hxq new --raw` and remove/patch ops). → `move-to-helper`

@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.FieldWrites.FieldWriteSite;
 import anyparse.check.HeldTrees.HeldDecl;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
@@ -21,7 +22,8 @@ using Lambda;
  *   function of it with a written return type naming it is the abstract alone and hands back only its values (through
  *   `switch` arms, `?:`, parentheses and blocks), one with no written return type hands back nothing;
  * - the member HOLDS only values (`holdsValues`): through its getter, or through its initializer — with none, the default
- *   `0` of a counting abstract that has a `0` value — and every assignment to a field of its name in the project; a value
+ *   `0` of a counting abstract that has a `0` value — and every write in the project that may write it (`FieldWrites.mayWrite`:
+ *   a write of its name off any other receiver, a reflective one that may reach its type); a value
  *   is a value constant (never a static field of the abstract), a parameter written as the abstract that every call of
  *   its function hands a value (`callersPassValues`), a member holding only values, or a call converted by a `@:from`
  *   function.
@@ -354,7 +356,8 @@ final class ExhaustiveSwitches {
 		if (field == null || field.children.length > 1) return false;
 		final init: Null<QueryNode> = field.children.length == 1 ? field.children[0] : null;
 		final starts: Bool = init == null ? closed.zeroIsValue : valueExpr(init, { file: decl.file, fn: null, owner: owner }, closed);
-		final assigned: Bool = writesTo(member).foreach(w -> assignsValue(w, closed));
+		// a write that cannot reach this field (a computed name on a fresh structure, another type's own field) writes nothing here
+		final assigned: Bool = writesTo(member).foreach(w -> !_writes.mayWrite(w.site, owner) || assignsValue(w, closed));
 		return starts && assigned;
 	}
 
@@ -536,7 +539,9 @@ final class ExhaustiveSwitches {
 	private function writesTo(name: String): Array<WriteSite> {
 		final known: Null<Array<WriteSite>> = _writesOf[name];
 		if (known != null) return known;
-		final sites: Array<WriteSite> = [for (w in _writes.of(name)) { node: w.write, at: contextOf(w.file, w.write) }];
+		final sites: Array<WriteSite> = [
+			for (w in _writes.of(name)) { node: w.write, at: contextOf(w.file, w.write), site: w }
+		];
 		_writesOf[name] = sites;
 		return sites;
 	}
@@ -603,4 +608,7 @@ private typedef ValueContext = {
 private typedef WriteSite = {
 	final node: QueryNode;
 	final at: ValueContext;
+
+	/** The write as `FieldWrites` records it: what `FieldWrites.mayWrite` asks whether it may write a given type's field. */
+	final site: FieldWriteSite;
 }
