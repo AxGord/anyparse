@@ -63,12 +63,6 @@ using StringTools;
 @:access(anyparse.query.AddParam)
 final class MoveToHelper {
 
-	/** The member modifiers whose meaning a static helper cannot keep. */
-	private static final REFUSED_MODIFIERS: Array<String> = ['Dynamic', 'Macro', 'Extern', 'Overload'];
-
-	/** The metadata spellings of the same. */
-	private static final REFUSED_METAS: Array<String> = ['@:macro', '@:overload'];
-
 	/**
 	 * Move `memberNames` of `srcTypeName` (declared in `srcFile`) into the static helper `helperName`: the type of that
 	 * name under scope when there is one, else a new `final class` created at `helperFile` (default: beside the source).
@@ -119,6 +113,10 @@ final class MoveToHelper {
 		if (carryError != null) return Err(carryError);
 		MoveMember.pushEndpointImports(prep, edits.editsByFile, edits.movedTextEdits, plugin);
 		parameterTypeImport(prep, edits, plugin);
+		edits.advisory.push(
+			'imports of ${prep.srcFile} that only the moved code used are not removed — `hxq lint ${prep.srcFile} --rule unused-import '
+			+ '--fix` drops them'
+		);
 		return MoveMember.applyAndValidate(edits.editsByFile, prep.sourceOf, plugin, memberNames.join(', '), edits.advisory);
 	}
 
@@ -133,7 +131,7 @@ final class MoveToHelper {
 
 	/**
 	 * The scope the move runs over: the given one when it declares `helperName` already, else the given one plus the NEW
-	 * helper module — `package <src pkg>;`, the source type's `@:nullSafety` grant if it has one, an empty `final class`.
+	 * helper module — `package <src pkg>;`, the source type's null-safety grant if it has one, an empty `final class`.
 	 * A new helper lands at `helperFile`, or beside the source as `<Helper>.hx`; a path the scope already holds is refused,
 	 * since that module exists and does not declare the helper.
 	 */
@@ -164,23 +162,23 @@ final class MoveToHelper {
 		if (scopeFiles.exists(e -> e.file == path)) return Left('$path exists and declares no type "$helperName"');
 		final pkg: String = ModuleScan.packageOf(srcTree);
 		final header: String = pkg == '' ? 'package;' : 'package $pkg;';
-		final nullSafety: Null<String> = nullSafetyGrant(srcSource, srcTree, srcDecl);
+		final nullSafety: Null<String> = nullSafetyGrant(srcSource, srcTree, srcDecl, plugin.refShape().nullSafetyMetaName);
 		final meta: String = nullSafety == null ? '' : '$nullSafety\n';
 		final doc: String =
 			'/**\n * Static helpers taken out of `$srcTypeName`: each reads the `$srcTypeName` it is handed as its first parameter.\n */\n';
 		return Right(scopeFiles.concat([{ file: path, source: '$header\n\n$doc${meta}final class $helperName {}\n' }]));
 	}
 
-	/** The source text of the `@:nullSafety(...)` entry the source type carries, or null. */
-	private static function nullSafetyGrant(source: String, tree: QueryNode, decl: TypeDeclMatch): Null<String> {
+	/** The source text of the null-safety entry (`RefShape.nullSafetyMetaName`) the source type carries, or null. */
+	private static function nullSafetyGrant(source: String, tree: QueryNode, decl: TypeDeclMatch, metaName: Null<String>): Null<String> {
 		final declSpan: Null<Span> = decl.declNode.span;
-		if (declSpan == null) return null;
+		if (declSpan == null || metaName == null) return null;
 		final runStart: Int = ElementSpan.declRunStart(decl.declNode, tree, declSpan);
 		for (c in tree.children) {
 			final span: Null<Span> = c.span;
 			if (span != null && span.from >= runStart && span.to <= declSpan.from && MemberKinds.META_KINDS.contains(c.kind)) {
 				final text: String = source.substring(span.from, span.to);
-				if (text.startsWith('@:nullSafety')) return text;
+				if (text.startsWith(metaName)) return text;
 			}
 		}
 		return null;
@@ -270,10 +268,20 @@ final class MoveToHelper {
 	/** Why one moved member cannot become a static of the helper, or null. */
 	private static function memberRefusalOf(prep: MovePrep, m: MovedMember): Null<String> {
 		final head: String = 'cannot move "${m.name}" into a static helper';
+		// The member modifiers and the annotation whose meaning a static helper cannot keep, as the grammar names them.
+		final refusedKinds: Array<String> = [
+			for (k in [
+				prep.shape.dynamicModifierKind,
+				prep.shape.macroModifierKind,
+				prep.shape.externModifierKind,
+				prep.shape.overloadModifierKind
+			]) if (k != null) k
+		];
+		final overloadMeta: Null<String> = prep.shape.signatureOverloadMetaName;
 		final refusedModifier: Null<QueryNode> = m.group.modifiers.find(
 			mod ->
-				REFUSED_MODIFIERS.contains(mod.kind)
-				|| (MemberKinds.META_KINDS.contains(mod.kind) && REFUSED_METAS.exists(meta -> metaText(prep, mod).startsWith(meta)))
+				refusedKinds.contains(mod.kind)
+				|| (overloadMeta != null && MemberKinds.META_KINDS.contains(mod.kind) && metaText(prep, mod).startsWith(overloadMeta))
 		);
 		if (refusedModifier != null)
 			return '$head: it is declared `${metaText(prep, refusedModifier)}`, a meaning a static member does not keep';

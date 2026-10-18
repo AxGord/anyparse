@@ -1096,12 +1096,15 @@ final class PinsQueryAndRuntime {
 		'unit.query.MoveSymbolSliceTest#testPrivateSiblingMainTypeIsNotABinding :: control :: M-MOVE-PRIVATE-SIBLING-BINDS',
 		'unit.query.MoveSymbolSliceTest#testTheDestinationCollisionScanReadsTheDestinationsOwnComments :: control :: '
 			+ 'M-MOVE-NAMESCAN-FULLSTOP-BLIND',
+		'unit.query.MoveToHelperSliceTest#testABoundMemberIsRefused :: control :: M-HELPER-RECEIVER-VALUE-ALLOWED',
 		'unit.query.MoveToHelperSliceTest#testADynamicMemberIsRefused :: control :: M-HELPER-MODIFIER-ALLOWED',
 		'unit.query.MoveToHelperSliceTest#testAGenericSourceIsRefused :: control :: M-HELPER-GENERIC-ALLOWED',
 		'unit.query.MoveToHelperSliceTest#testAHelperIsCreatedAndEveryReferenceIsRewritten :: control :: '
 			+ 'M-HELPER-THIS-KEPT,M-HELPER-MEMBER-UNQUALIFIED,M-HELPER-NO-GRANT,M-HELPER-FIELDS-TRAVEL',
 		'unit.query.MoveToHelperSliceTest#testAMacroMemberIsRefused :: control :: M-HELPER-MODIFIER-ALLOWED',
+		'unit.query.MoveToHelperSliceTest#testAMemberASubtypeOverridesIsRefused :: control :: M-MOVE-OVERRIDDEN-MEMBER',
 		'unit.query.MoveToHelperSliceTest#testAMemberPassedAsAFunctionValueIsRefused :: control :: M-HELPER-VALUE-USE-ALLOWED',
+		'unit.query.MoveToHelperSliceTest#testAModuleLevelValueIsRefused :: control :: M-HELPER-MODULE-VALUE-ALLOWED',
 		'unit.query.MoveToHelperSliceTest#testANonClassSourceIsRefused :: control :: M-HELPER-NON-CLASS-ALLOWED',
 		'unit.query.MoveToHelperSliceTest#testAParameterNameTheMovedCodeSpellsIsRefused :: control :: M-HELPER-PARAM-CLASH-UNCHECKED',
 		'unit.query.MoveToHelperSliceTest#testAPrivateTypeTheStayingCodeNamesIsRefused :: control :: M-HELPER-SHARED-TYPE-ALLOWED',
@@ -1109,6 +1112,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.MoveToHelperSliceTest#testASubtypesBareCallIsRewritten :: control :: M-HELPER-SUBTYPE-CALLERS-SKIPPED',
 		'unit.query.MoveToHelperSliceTest#testASuperAccessIsRefused :: control :: M-HELPER-SUPER-ALLOWED',
 		'unit.query.MoveToHelperSliceTest#testAnInstanceFieldIsRefused :: control :: M-HELPER-FIELD-ALLOWED',
+		'unit.query.MoveToHelperSliceTest#testAnInterfaceImplementationIsRefused :: control :: M-MOVE-IMPLEMENTATION',
+		'unit.query.MoveToHelperSliceTest#testAnOverrideIsRefused :: control :: M-MOVE-OVERRIDE-MEMBER',
 		'unit.query.MoveToHelperSliceTest#testAnUnresolvedReferenceIsRefused :: control :: M-HELPER-UNRESOLVED-ALLOWED',
 		'unit.query.MoveToHelperSliceTest#testNestedCallsKeepTheOuterCallFirst :: control :: M-HELPER-CALL-ORDER',
 		'unit.query.MoveToHelperSliceTest#testTheArmHintRetargetsAndFlagsAStaleFind :: control :: '

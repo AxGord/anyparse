@@ -254,6 +254,8 @@ class MoveToHelperSliceTest extends Test {
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }]), 'it is declared `macro`');
 	}
 
+	@:pin('control')
+	@:killer('M-MOVE-OVERRIDE-MEMBER')
 	public function testAnOverrideIsRefused(): Void {
 		final base: String = 'package a;\n\nclass Base {\n\tpublic function f(): Int {\n\t\treturn 1;\n\t}\n}\n';
 		final src: String = 'package a;\n\nclass Src extends Base {\n\tpublic function new() {}\n\n\toverride public function f(): Int {\n'
@@ -261,6 +263,8 @@ class MoveToHelperSliceTest extends Test {
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }, { file: 'a/Base.hx', source: base }]), 'it overrides');
 	}
 
+	@:pin('control')
+	@:killer('M-MOVE-OVERRIDDEN-MEMBER')
 	public function testAMemberASubtypeOverridesIsRefused(): Void {
 		final src: String =
 			'package a;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function f(): Int {\n\t\treturn 1;\n\t}\n}\n';
@@ -268,6 +272,8 @@ class MoveToHelperSliceTest extends Test {
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }, { file: 'a/Sub.hx', source: sub }]), 'a subtype of "Src" declares it');
 	}
 
+	@:pin('control')
+	@:killer('M-MOVE-IMPLEMENTATION')
 	public function testAnInterfaceImplementationIsRefused(): Void {
 		final iface: String = 'package a;\n\ninterface I {\n\tfunction f(): Int;\n}\n';
 		final src: String =
@@ -286,6 +292,8 @@ class MoveToHelperSliceTest extends Test {
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }]), '"f" is used as a function value at a/Src.hx:11:18');
 	}
 
+	@:pin('control')
+	@:killer('M-HELPER-RECEIVER-VALUE-ALLOWED')
 	public function testABoundMemberIsRefused(): Void {
 		final src: String = 'package a;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function f(x: Int): Int {\n\t\treturn x;\n\t}\n\n'
 			+ '\tpublic function g(): () -> Int {\n\t\treturn this.f.bind(1);\n\t}\n}\n';
@@ -309,6 +317,8 @@ class MoveToHelperSliceTest extends Test {
 		refused(move('f', 'Ops', [{ file: 'a/Src.hx', source: src }]), 'cannot resolve "farValue" at a/Src.hx:7:10');
 	}
 
+	@:pin('control')
+	@:killer('M-HELPER-MODULE-VALUE-ALLOWED')
 	public function testAModuleLevelValueIsRefused(): Void {
 		final src: String = 'package a;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function f(): Int {\n\t\treturn helper();\n\t}\n}\n\n'
 			+ 'function helper(): Int {\n\treturn 1;\n}\n';

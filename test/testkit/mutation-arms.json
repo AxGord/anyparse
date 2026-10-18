@@ -25800,6 +25800,22 @@
 			"find": "final write: Bool = flags.contains('--write') && !flags.contains('--dry-run');",
 			"replace": "final write: Bool = flags.contains('--write') || flags.contains('--dry-run');",
 			"note": "a dry run writes the files it was only asked to print"
+		},
+		{
+			"name": "M-HELPER-RECEIVER-VALUE-ALLOWED",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "receiverCallRewrite",
+			"find": "if (open < 0) return valueUse(edits.prep.srcTypeName, h.m.name, where(h.file, source, h.at));",
+			"replace": "if (false) return valueUse(edits.prep.srcTypeName, h.m.name, where(h.file, source, h.at));",
+			"note": "a moved member reached through a receiver as a function value (`this.f.bind(1)`) is rewritten as though it were called"
+		},
+		{
+			"name": "M-HELPER-MODULE-VALUE-ALLOWED",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "rewriteMovedRef",
+			"find": "if (prep.srcInfo.moduleFields.exists(f -> f.name == name) && prep.srcFile != prep.destFile)",
+			"replace": "if (false)",
+			"note": "a module-level value of the source module is not refused for what it is"
 		}
 	]
 }
