@@ -25733,8 +25733,8 @@
 			"name": "M-HELPER-MODIFIER-ALLOWED",
 			"type": "anyparse.query.MoveToHelper",
 			"method": "memberRefusalOf",
-			"find": "if (refusedModifier != null)",
-			"replace": "if (false)",
+			"find": "refusedKinds.contains(mod.kind)",
+			"replace": "false",
 			"note": "a `dynamic` / `macro` member moves into a static helper, which keeps neither meaning"
 		},
 		{
