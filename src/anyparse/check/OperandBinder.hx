@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.query.CallGraphNames;
 import anyparse.query.CasePatterns;
 import anyparse.query.DeclaredNullity;
+import anyparse.query.ExpectedTypes;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.NominalTypes;
@@ -15,6 +16,7 @@ import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -31,7 +33,11 @@ using Lambda;
  *  - `recv.m` and `recv.m(…)`: the receiver's own declarations (typed the same way, or a type name
  *    for a static access), then `m` as each of them DECLARES it — its type or its return type, bound
  *    in the declaring file with the owner's and the method's type parameters shadowing;
- *  - a construction `new T(…)`: the type it writes, here.
+ *  - a construction `new T(…)`: the type it writes, here;
+ *  - a lambda's parameter written with no type: the parameter of the function type the lambda is
+ *    expected to be, read by the expected-type engine every typer shares (`ExpectedTypes`, over
+ *    `EXPECTATION`) — through a declaration's or an assigned binding's annotation, a function's written
+ *    result, an anonymous structure's field and the parameter of a bare call to a member of this file.
  *
  * Everything else is `Unknown`: an inherited member, a receiver no rule above types, a member whose
  * type is not written. A built-in candidate among several drops out of a `Bound` answer, since it can
@@ -50,12 +56,31 @@ final class OperandBinder {
 		bound: (from, b) -> b._annotations.exists(from) ? b._declared.writtenHeadTier(from, b._wrappers, b._builtins) : null,
 		initializer: (_, use, b) -> b.initializerOf(use),
 		loopElement: (_, _) -> null,
+		parameter: (_, use, b) -> b.lambdaParamTier(use),
 		unbound: (ident, b) -> b.inheritedTier(ident, false),
 		access: (node, b) -> b.accessTier(node),
 		element: null,
 		call: (node, b) -> b.callTier(node),
 		construction: (node, b) -> b.constructionTier(node),
 		reading: b -> b._reading
+	};
+
+	/**
+	 * The binder's answers to the expected-type engine (`ExpectedTypes`): each a type written in THIS file, with the offset it
+	 * is written at, so it binds with the type parameters in scope there (`writtenTier`). A declaration's annotation, an
+	 * assigned binding's, a function's written result, the parameter of a bare call to a member of this file
+	 * (`argumentType`), an anonymous structure's field. No container element: the binder holds no proof that a written
+	 * `Array` is the standard one whose element it would read.
+	 */
+	private static final EXPECTATION: ExpectationHost<Located, OperandBinder> = {
+		declared: (holder, b) -> b.annotationOf(holder.span?.from),
+		assigned: (target, b) -> b.annotationOf(b.hitOf(target)?.bindingSpan?.from),
+		returned: (fn, b) -> b.returnOf(fn),
+		argument: (call, at, _, b) -> b.argumentType(call, at),
+		element: (_, _) -> null,
+		field: (outer, name, b) -> b.anonField(outer, name),
+		read: (written, b) -> b._index.typeSyntax(written.text),
+		part: (of, text, _) -> {text: text, at: of.at }
 	};
 
 	/** The binding offsets whose unannotated type the walk is reading right now (`TypingHost.reading`). */
@@ -71,6 +96,9 @@ final class OperandBinder {
 	private final _wrappers: Array<String>;
 	private final _identKinds: Array<String>;
 	private final _fnKinds: Array<String>;
+
+	/** The expectation ladder (`ExpectedTypes`) an untyped lambda parameter is typed by. */
+	private final _expectation: ExpectedTypes;
 
 	/** This file's written type annotations by binding offset (`TypeInfoProvider.declaredTypeSources`). */
 	private final _annotations: Map<Int, String>;
@@ -94,6 +122,7 @@ final class OperandBinder {
 			for (kind in [shape.identKind, shape.stringInterpIdentKind]) if (kind != null) kind
 		];
 		_fnKinds = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		_expectation = new ExpectedTypes(shape);
 		_annotations = provider.declaredTypeSources(source);
 		_usings = usings;
 	}
@@ -236,17 +265,92 @@ final class OperandBinder {
 		final fn: Null<QueryNode> = hit?.bindingNode;
 		if (!bindsHere(hit)) return inheritedTier(callee, true);
 		if (from == null || fn == null) return Unknown;
-		final declaration: QueryNode = fn;
-		final member: Null<MemberInfo> = _index.fileInfo(_file)?.types.flatMap(t -> t.members)
-			.find(m -> m.declFrom == declaration.span?.from);
+		final member: Null<MemberInfo> = memberAt(fn);
 		return if (member != null && !typedByItsReturn(member))
 			Unknown
-		else if (_fnKinds.contains(declaration.kind))
-			_declared.headTier(
-				CallGraphNames.returnSourceOf(declaration, _source, _shape.typeAnnotationKinds ?? []), from, _wrappers, _builtins
-			)
+		else if (_fnKinds.contains(fn.kind))
+			_declared.headTier(CallGraphNames.returnSourceOf(fn, _source, _shape.typeAnnotationKinds ?? []), from, _wrappers, _builtins)
 		else
 			Unknown;
+	}
+
+	/** The member of this file whose declaration is the node `fn`, or null for a function no type of the file declares as one. */
+	private function memberAt(fn: QueryNode): Null<MemberInfo> {
+		final from: Null<Int> = fn.span?.from;
+		return from == null ? null : _index.fileInfo(_file)?.types.flatMap(t -> t.members).find(m -> m.declFrom == from);
+	}
+
+	/**
+	 * The lambda parameter `use` reads, written with no type: the parameter of the function type the lambda is expected to be
+	 * (`ExpectedTypes.lambdaParamTypes` over `EXPECTATION`), bound where that type is written. Null for every other binding,
+	 * and where the lambda's expected type is not proven.
+	 */
+	private function lambdaParamTier(use: QueryNode): Null<Tier> {
+		final param: Null<QueryNode> = hitOf(use)?.bindingNode;
+		if (param == null || !(_shape.paramKinds ?? []).contains(param.kind)) return null;
+		final found: Null<Lineage> = ExpectedTypes.lineageOf(_tree, param);
+		final depth: Int = found == null ? 0 : found.nodes.length;
+		if (found == null || depth == 0 || !_expectation.isLambda(found.nodes[depth - 1])) return null;
+		final lambda: QueryNode = found.nodes[depth - 1];
+		final types: Null<Array<Located>> = _expectation.lambdaParamTypes(
+			lambda, found.nodes.slice(0, depth - 1), found.indices.slice(0, depth - 1), EXPECTATION, this
+		);
+		final at: Int = lambda.children.filter(c -> (_shape.paramKinds ?? []).contains(c.kind)).indexOf(param);
+		final written: Null<Located> = types == null || at < 0 ? null : types[at];
+		return written == null ? null : writtenTier(written.text, written.at);
+	}
+
+	/**
+	 * The parameter the argument `at` of `call` binds — for a bare call to a member this file declares once, whose written
+	 * signature is the one every call selects (no `@:overload`: 4.3.7 retypes the lambda against the next signature when the
+	 * first fails): its written type, at the member's declaration, so the callee's type parameters are in scope there. Every
+	 * argument from a rest parameter's position on binds that parameter. Null where a parameter before the one bound may be
+	 * skipped (optional, or carrying a default value: 4.3.7 tries the lambda against it first), and for every other callee —
+	 * a local function, a member of another file, an inherited one, a construction (follow-ups: those need the declaration's
+	 * parameter list read where it is written).
+	 */
+	private function argumentType(call: QueryNode, at: Int): Null<Located> {
+		if (call.kind != _shape.callKind || call.children.length == 0) return null;
+		final fn: Null<QueryNode> = hitOf(call.children[0])?.bindingNode;
+		final member: Null<MemberInfo> = fn == null || !_fnKinds.contains(fn.kind) ? null : memberAt(fn);
+		final fnFrom: Null<Int> = fn?.span?.from;
+		if (fn == null || member == null || fnFrom == null) return null;
+		if (!selectsItsSignature(member)) return null;
+		final params: DeclaredParams = CallGraphNames.paramsOf(fn, _annotations, _shape);
+		// a rest parameter takes every argument from its position on
+		final bound: Int = params.rest ? Std.int(Math.min(at, params.params.length - 1)) : at;
+		final written: Null<String> = bound < params.params.length ? params.params[bound] : null;
+		return written == null || bound >= params.skippableFrom ? null : { text: written, at: fnFrom };
+	}
+
+	/**
+	 * Whether a call to `m`, a member of this file, selects the signature its declaration writes: the one declaration of the
+	 * name in its type (a `#if` twin is another build's signature), carrying no `@:overload`. A macro's parameters are
+	 * expressions and a type parameter binds to nothing in scope, so neither types a lambda by construction.
+	 */
+	private function selectsItsSignature(m: MemberInfo): Bool {
+		final owner: Null<TypeDeclInfo> = _index.fileInfo(_file)?.types.find(t -> t.members.contains(m));
+		return owner != null && owner.members.filter(o -> o.name == m.name).length == 1 && !m.hasOverloadMeta;
+	}
+
+	/** The annotation this file writes for the binding at `from`, at that offset; null for none. */
+	private function annotationOf(from: Null<Int>): Null<Located> {
+		final written: Null<String> = from == null ? null : _annotations[from];
+		return from == null || written == null ? null : { text: written, at: from };
+	}
+
+	/** The result type the function or lambda `fn` of this file writes, at its declaration; null for none. */
+	private function returnOf(fn: QueryNode): Null<Located> {
+		final from: Null<Int> = fn.span?.from;
+		final written: Null<String> = CallGraphNames.returnSourceOf(fn, _source, _shape.typeAnnotationKinds ?? []);
+		return from == null || written == null ? null : { text: written, at: from };
+	}
+
+	/** The field `name` of `outer` when that is an anonymous structure (a `Null<…>` peeled), where `outer` is written. */
+	private function anonField(outer: Located, name: String): Null<Located> {
+		final peeled: String = NominalTypes.unwrapNullable(outer.text.trim(), _wrappers, _index.typeSyntax);
+		final written: Null<String> = CallGraphNames.anonFieldTypeSource(_index.typeSyntax(peeled), name);
+		return written == null ? null : { text: written, at: outer.at };
 	}
 
 	/**
@@ -427,4 +531,10 @@ final class OperandBinder {
 		return !m.hasOverloadMeta && !m.isMacro;
 	}
 
+}
+
+/** A type written in the binder's file and the offset it is written at, which says what type parameters are in scope. */
+private typedef Located = {
+	final text: String;
+	final at: Int;
 }

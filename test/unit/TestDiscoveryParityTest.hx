@@ -1724,16 +1724,27 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OperandBindingTest#testToStringIdentReceiverOfIndexedClassIsProven :: control :: M-TOSTRING-IDENT-CUT',
 			'unit.check.OperandBindingTest#testUndecidedCaptureShadowsTheOuterBinding :: control :: M-OPERAND-CASE-CAPTURE',
 			'unit.check.OperandBindingTest#testWildcardOverUnindexedPackageOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-WILDCARD-FREE',
+			'unit.check.OperandTypingTest#testACalleeWhoseSignatureTheCallMayNotSelectIsUnproven :: control :: '
+				+ 'M-BINDER-ARGUMENT-OVERLOAD,M-BINDER-ARGUMENT-TWIN',
+			'unit.check.OperandTypingTest#testACalleesTypeParameterTypesNoLambda :: control :: M-BINDER-ARGUMENT-SCOPE',
 			'unit.check.OperandTypingTest#testAFixAsksTheRunsOperatorTable :: control :: M-FOLD-FIX-REPORT-INDEX,M-PIEC-FIX-REPORT-INDEX,M-PIEC-RUN-SELECTION',
 			'unit.check.OperandTypingTest#testAGuardedUsingLeavesTheExtensionUnproven :: control :: M-BINDER-EXTENSION-GUARDED-USING',
+			'unit.check.OperandTypingTest#testALambdaAfterASkippableParameterIsUnproven :: control :: '
+				+ 'M-BINDER-ARGUMENT-SKIPPABLE,M-TS-SKIP-DEFAULT',
 			'unit.check.OperandTypingTest#testAStaticOfTheFieldsNameOutranksTheResolver :: control :: M-BINDER-RESOLVE-USING-SHADOW,M-USING-DECLS-AMBIENT',
 			'unit.check.OperandTypingTest#testASupertypeStaticReadBareIsNotTheSupertypes :: control :: M-BINDER-INHERITED-STATIC',
 			'unit.check.OperandTypingTest#testAUsedAliasLeavesTheExtensionUnproven :: control :: M-USING-HOSTS-ALIAS',
 			'unit.check.OperandTypingTest#testAnExtensionOfAnotherFirstParameterIsUnproven :: control :: M-BINDER-EXTENSION-FIRST-PARAM',
 			'unit.check.OperandTypingTest#testAnInheritedMemberPastAnUnreadSupertypeIsUnproven :: control :: M-BINDER-CLOSURE-UNRESOLVED',
 			'unit.check.OperandTypingTest#testAnUnreadLaterUsingLeavesTheExtensionUnproven :: control :: M-BINDER-EXTENSION-UNINDEXED',
+			'unit.check.OperandTypingTest#testAnUntypedLambdaParameterTakesTheCalleesParameterType :: control :: '
+				+ 'M-BINDER-LAMBDA-PARAM-CUT,M-WALK-LAMBDA-PARAM-CUT,M-BINDER-ARGUMENT-CUT',
 			'unit.check.OperandTypingTest#testEveryConcatenationUserAnswersTheSameOnTheSameOperand :: control :: M-BINDER-INITIALIZER-CUT,M-BINDER-EXTENSION-CUT,M-BINDER-RESOLVE-CUT',
 			'unit.check.OperandTypingTest#testEveryEqualityUserAnswersTheSameOnTheSameOperand :: control :: M-BINDER-INITIALIZER-CUT',
+			'unit.check.OperandTypingTest#testEveryExpectationTypesTheLambdaParameter :: control :: '
+				+ 'M-BINDER-LAMBDA-PARAM-CUT,M-BINDER-ANNOTATION-CUT,M-BINDER-RETURN-CUT,M-BINDER-FIELD-CUT,M-BINDER-ARGUMENT-CUT,'
+				+ 'M-GRAPH-LITERAL-ARGUMENT,M-GRAPH-LITERAL-ARMS,M-GRAPH-LITERAL-RETURN,M-GRAPH-LITERAL-LAMBDA,M-GRAPH-LITERAL-FIELD,'
+				+ 'M-TS-LAMBDA-NULL,M-BINDER-ARGUMENT-REST',
 			'unit.check.OperandTypingTest#testEveryNegationFormAnswersTheSameOnTheSameOperand :: control :: M-BINDER-INITIALIZER-CUT,M-BINDER-SELF-CUT,M-BINDER-INHERITED-CUT,M-BINDER-EXTENSION-CUT,M-BINDER-RESOLVE-CUT',
 			'unit.check.OperandTypingTest#testEveryTypeOfAUsedModuleBringsItsExtensions :: control :: M-USING-HOSTS-MODULE',
 			'unit.check.OperandTypingTest#testTheLastUsingDeclaringTheExtensionWins :: control :: M-BINDER-EXTENSION-LAST-USING',
@@ -7682,7 +7693,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-RISKYARM-CROSS-NOT-VERIFIED',
 			'M-XVERIFY-NO-BISECT',
 			'M-CONFINED-NO-OWNER-FILE',
-			'M-XRENAME-STRING-TYPES-ONLY'
+			'M-XRENAME-STRING-TYPES-ONLY',
+			'M-BINDER-LAMBDA-PARAM-CUT',
+			'M-WALK-LAMBDA-PARAM-CUT',
+			'M-BINDER-ARGUMENT-CUT',
+			'M-BINDER-ANNOTATION-CUT',
+			'M-BINDER-RETURN-CUT',
+			'M-BINDER-FIELD-CUT',
+			'M-BINDER-ARGUMENT-REST',
+			'M-BINDER-ARGUMENT-SKIPPABLE',
+			'M-BINDER-ARGUMENT-OVERLOAD',
+			'M-BINDER-ARGUMENT-TWIN',
+			'M-BINDER-ARGUMENT-SCOPE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
