@@ -361,6 +361,9 @@ final class LintFixDriver {
 		for (entry in active) if (!touchedThisPass.contains(entry.file)) {
 			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
 			if (fileViolations.length == 0) continue;
+			// The previous file's speculative parses go before this one makes its own: within one
+			// pass they are what grows, one edit set per check per file.
+			cached.retainSources([for (other in files) other.source].concat([for (other in active) other.source]));
 			final groups: Array<RuleEdits> = collectFileLintEdits(entry.source, fileViolations, checks, cached, index);
 			if (contributedEdits(groups).length == 0) {
 				ledgerFileLintEdits(ledger, groups, passes == 1, checks);

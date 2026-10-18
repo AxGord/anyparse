@@ -700,7 +700,8 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * A content key never answers stale — it simply never meets its source again — so in a `--fix` run these memos grew
 	 * with every text the run ever parsed: each rewritten version of a file, and every speculative text a guard parsed
 	 * to judge one check's edits (`BodySlotGuard` splices and parses each check's edit set). `LintFixDriver.applyLintPass`
-	 * calls it at the head of every pass with that pass's sources, so an unchanged file keeps its parse, its tree
+	 * calls it at the head of every pass and again before each file's fixes, with
+	 * the pass's current sources, so an unchanged file keeps its parse, its tree
 	 * identity included; a source outside `live` that is asked for again is re-parsed, which is correct, only slower.
 	 * The resolution library lives in the process-scoped `SharedParseTier` and is not touched.
 	 */
