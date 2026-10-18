@@ -83,7 +83,7 @@ using StringTools;
  *    in `RefShape.staticMethodReturns` (`Context.resolvePath` → `String`, `Context.currentPos`
  *    → `haxe.macro.Expr.Position`, `Date.now` → `Date`) — the receiver a genuine TYPE
  *    reference (its root ident binds to no local / parameter / field), unshadowed by a
- *    same-named indexed project type. Mirrors `TypeResolver.isPureStdlibCall`'s receiver
+ *    same-named indexed project type. Mirrors `StdlibPurity.calleePurity`'s receiver
  *    resolution; the arguments are irrelevant, the return being fixed. This is the ONLY
  *    structural route inside a macro function, where the display oracle is blind. A method
  *    absent from the table (a generic / inference-dependent return) stays report-only.

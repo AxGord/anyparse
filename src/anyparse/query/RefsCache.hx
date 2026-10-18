@@ -41,6 +41,15 @@ final class RefsCache {
 
 	public function new() {}
 
+	/** Drop every memo built for one of `trees` — trees the caller's own caches no longer hold, so no query can name them again. */
+	public function forget(trees: Array<QueryNode>): Void {
+		for (tree in trees) {
+			_byTree.remove(tree);
+			_bindings.remove(tree);
+			_nullSafetyScopes.remove(tree);
+		}
+	}
+
 	/**
 	 * Every reference / declaration of `name` in `tree`, resolved against
 	 * the memoized full-tree index — a copy, safe for the caller to mutate.

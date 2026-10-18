@@ -9,6 +9,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
+import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.query.cli.command.LintFixDriver;
 import anyparse.query.cli.command.LintFixLedger;
@@ -47,6 +48,9 @@ import utest.Test;
  */
 @:access(anyparse.query.Cli)
 class LintFixDeclineWiringSliceTest extends Test {
+
+	/** The sentence `ArmCheck`'s safe arm writes on a finding it leaves to its risky arm — and how the arm recognises one. */
+	public static inline final ARM_HAND_OFF: String = 'the risky arm owns this finding';
 
 	/** `unused-local` on a declaration that IS a brace-less `if` body — the shape the guard refuses. */
 	private static final REFUSED: String =
@@ -90,7 +94,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
 			REFUSED, own, [check], plugin, CheckFixture.index(files, plugin)
 		);
-		LintFixDriver.ledgerFileLintEdits(ledger, groups, true);
+		LintFixDriver.ledgerFileLintEdits(ledger, groups, true, []);
 		final edits: Array<{ span: Span, text: String }> = LintFixDriver.contributedEdits(groups);
 		Assert.equals(0, edits.length, 'the guard drops the check edits');
 		final row: Null<RuleFixOutcome> = ledger['unused-local'];
@@ -174,7 +178,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
 			REFUSED, own, [check], plugin, CheckFixture.index(files, plugin)
 		);
-		LintFixDriver.ledgerFileLintEdits(ledger, groups, false);
+		LintFixDriver.ledgerFileLintEdits(ledger, groups, false, []);
 		final edits: Array<{ span: Span, text: String }> = LintFixDriver.contributedEdits(groups);
 		Assert.equals(0, edits.length, 'the guard drops the check edits on this pass too');
 		final row: Null<RuleFixOutcome> = ledger['unused-local'];
@@ -477,7 +481,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		final ledger: Map<String, RuleFixOutcome> = [];
 		LintFixDriver.ledgerFileLintEdits(
-			ledger, LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, CheckFixture.index(files, plugin)), true
+			ledger, LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, CheckFixture.index(files, plugin)), true, []
 		);
 		final row: Null<RuleFixOutcome> = ledger['unused-local'];
 		if (row == null) {
@@ -512,7 +516,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	public function testARiskyRulesTalliesBecomeItsLedgerRow(): Void {
 		#if (sys || nodejs)
 		final ledger: Map<String, RuleFixOutcome> = [];
-		LintFixVerify.ledgerRiskyTallies(ledger, riskyResult());
+		LintFixVerify.ledgerRiskyTallies(ledger, riskyResult(), []);
 		final row: Null<RuleFixOutcome> = ledger['avoid-dynamic'];
 		if (row == null) {
 			Assert.fail('the risky rule has no ledger row');
@@ -545,7 +549,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	public function testTheRiskyDisclaimerIsOnlyForAPhaseThatDidNotRun(): Void {
 		#if (sys || nodejs)
 		final ledger: Map<String, RuleFixOutcome> = [];
-		LintFixVerify.ledgerRiskyTallies(ledger, riskyResult());
+		LintFixVerify.ledgerRiskyTallies(ledger, riskyResult(), []);
 		final declared: Map<String, String> = [];
 		final absent: String = LintFixLedger.unfixedFixLedger(ledger, declared, [], ['avoid-dynamic']).join('');
 		Assert.isTrue(absent.indexOf('the risky-fix path never ran them this run') != -1, 'a phase that did not run says so: $absent');
@@ -578,7 +582,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	public function testACheckSOwnDeclineReasonsTakeOnlyTheirShareOfTheLedgerRow(): Void {
 		#if (sys || nodejs)
 		final ledger: Map<String, RuleFixOutcome> = [];
-		LintFixVerify.ledgerRiskyTallies(ledger, checkSpokenResult());
+		LintFixVerify.ledgerRiskyTallies(ledger, checkSpokenResult(), []);
 		final row: Null<RuleFixOutcome> = ledger['shorten-type-ref'];
 		if (row == null) {
 			Assert.fail('the risky rule has no ledger row');
@@ -592,6 +596,103 @@ class LintFixDeclineWiringSliceTest extends Test {
 			{ text: 'report-only: the shorter spelling is unproven', count: 5 },
 			{ text: 'the compiler oracle does not compile this file', count: 2 }
 		], row.reasons);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A `RiskyArm` rule whose arm landed nothing: each finding is counted ONCE, under the arm's verdict.
+	 *
+	 * The rule runs in the safe loop too, which counts all five findings in `reported` and declines the two its risky
+	 * arm owns as hand-offs. Before the fix the arm's tallies were folded in as if the rule were new to the ledger: the
+	 * two hand-offs reached `reported` a second time and `declined` a second time, and the
+	 * hand-off sentence stood beside the arm's own. Now the hand-offs are taken back out and the arm's answer — one
+	 * named refusal, one silent — replaces them.
+	 */
+	@:pin('control') @:killer('M-ARM-LEDGER-REPORTED-TWICE', 'M-ARM-LEDGER-HANDOFF-KEPT')
+	public function testARiskyArmRuleCountsEachFindingOnceWhenTheArmDeclines(): Void {
+		#if (sys || nodejs)
+		final ledger: Map<String, RuleFixOutcome> = armPassOne();
+		LintFixVerify.ledgerRiskyTallies(ledger, armResult(0, [{ text: 'the new name is taken', count: 1 }]), ['arm-rule']);
+		final row: Null<RuleFixOutcome> = ledger['arm-rule'];
+		if (row == null) {
+			Assert.fail('the arm rule has no ledger row');
+			return;
+		}
+		Assert.equals(5, row.reported, 'the safe loop counted every finding once; the arm adds none');
+		Assert.equals(5, row.declined, 'the two hand-offs are the arm\'s two declines, not two more');
+		Assert.same([
+			{ text: 'truly declined', count: 1 },
+			{ text: 'the new name is taken', count: 1 }
+		], row.reasons);
+		final lines: String = LintFixLedger.unfixedFixLedger(ledger, [], [], []).join('');
+		Assert.isTrue(lines.indexOf('arm-rule 5:') != -1, 'every reported finding got no edit, and the row says so: $lines');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A `RiskyArm` rule whose arm LANDED: the hand-offs it fixed are no declines at all, and only the safe arm's own
+	 * declines are left. Before the fix the two fixed findings were declined by the safe arm AND reported again by the arm.
+	 */
+	@:pin('control') @:killer('M-ARM-LEDGER-REPORTED-TWICE', 'M-ARM-LEDGER-HANDOFF-KEPT')
+	public function testARiskyArmRuleThatLandedDeclinesOnlyWhatItLeft(): Void {
+		#if (sys || nodejs)
+		final ledger: Map<String, RuleFixOutcome> = armPassOne();
+		LintFixVerify.ledgerRiskyTallies(ledger, armResult(2, []), ['arm-rule']);
+		final row: Null<RuleFixOutcome> = ledger['arm-rule'];
+		if (row == null) {
+			Assert.fail('the arm rule has no ledger row');
+			return;
+		}
+		Assert.equals(5, row.reported);
+		Assert.equals(3, row.declined, 'the three findings the safe arm declined for its own reasons');
+		Assert.equals(2, row.edits, 'and the arm\'s landed edits');
+		Assert.same([{ text: 'truly declined', count: 1 }], row.reasons);
+		final lines: String = LintFixLedger.unfixedFixLedger(ledger, [], [], []).join('');
+		Assert.isTrue(lines.indexOf('arm-rule 3 of 5:') != -1, lines);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The hand-offs stay declines while the risky phase never answers for them — a run with no oracle, or one whose
+	 * phase did not run, fixed nothing for those findings, and the safe arm's sentence is the only word on them.
+	 */
+	@:pin('control') @:killer('M-ARM-LEDGER-HANDOFF-UNRECORDED', 'M-ARM-LEDGER-ARM-BLIND')
+	public function testHandOffsStayDeclinedWithoutTheRiskyPhase(): Void {
+		#if (sys || nodejs)
+		final ledger: Map<String, RuleFixOutcome> = armPassOne();
+		final row: Null<RuleFixOutcome> = ledger['arm-rule'];
+		if (row == null) {
+			Assert.fail('the arm rule has no ledger row');
+			return;
+		}
+		Assert.equals(5, row.declined);
+		Assert.equals(2, row.handedOff, 'the two findings the risky arm owns are recorded as hand-offs');
+		Assert.same([{ text: ARM_HAND_OFF, count: 2 }], row.handedOffReasons);
+		Assert.same([{ text: ARM_HAND_OFF, count: 2 }, { text: 'truly declined', count: 1 }], row.reasons);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A `RiskyArm` rule is never "absent from this ledger": it runs in the safe loop, whose row is right there. The footer
+	 * used to name every risky check of a run whose risky phase did not run, the arm rule included — beside its own row —
+	 * and the census counted it among the rules "never asked".
+	 */
+	@:pin('control') @:killer('M-LEDGER-ARM-LISTED-ABSENT')
+	public function testARiskyArmRuleIsNeverListedAsAbsent(): Void {
+		#if (sys || nodejs)
+		final arm: ArmCheck = new ArmCheck();
+		final lines: String = LintFixLedger.ledgerLines(armPassOne(), [arm], [arm], [], false, 1, false).join('');
+		Assert.isTrue(lines.indexOf('arm-rule 5:') != -1, 'the rule has its row: $lines');
+		Assert.isTrue(lines.indexOf('absent from this ledger') == -1, 'and is not disclaimed beside it: $lines');
+		Assert.isTrue(lines.indexOf('0 were never asked') != -1, 'nor counted as never asked: $lines');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -641,7 +742,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 			refusal: null
 		};
 		final ledger: Map<String, RuleFixOutcome> = [];
-		LintFixDriver.ledgerFileLintEdits(ledger, [group], true);
+		LintFixDriver.ledgerFileLintEdits(ledger, [group], true, []);
 		final row: Null<RuleFixOutcome> = ledger['a-rule'];
 		if (row == null) {
 			Assert.fail('the rule has no ledger row');
@@ -674,7 +775,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 			refusal: null
 		};
 		final ledger: Map<String, RuleFixOutcome> = [];
-		LintFixDriver.ledgerFileLintEdits(ledger, [group], true);
+		LintFixDriver.ledgerFileLintEdits(ledger, [group], true, []);
 		final row: Null<RuleFixOutcome> = ledger['quiet-rule'];
 		if (row == null) {
 			Assert.fail('the rule has no ledger row');
@@ -716,7 +817,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 				overlapped: false,
 				refusal: null
 			}
-		], true);
+		], true, []);
 		final clause: String = 'land through `crossFileFix`';
 		final withSeam: String = LintFixLedger.unfixedFixLedger(ledger, [], [], [], ['cross-file-rule']).join('');
 		Assert.isTrue(withSeam.indexOf(clause) != -1, 'the row says where the rule\'s edits actually go: $withSeam');
@@ -736,7 +837,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 				overlapped: false,
 				refusal: null
 			}
-		], true);
+		], true, []);
 		final spoken: String = LintFixLedger.unfixedFixLedger(reasoning, [], [], [], ['cross-file-rule']).join('');
 		Assert.isTrue(spoken.indexOf('this call is shadowed') != -1, spoken);
 		Assert.isTrue(spoken.indexOf(clause) == -1, 'a rule that named its own gate is not told its edits went elsewhere: $spoken');
@@ -1077,7 +1178,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final ledger: Map<String, RuleFixOutcome> = [];
 		final groups: Array<RuleEdits> =
 			LintFixDriver.collectFileLintEdits(source, own, [check], plugin, CheckFixture.index(files, plugin));
-		LintFixDriver.ledgerFileLintEdits(ledger, groups, true);
+		LintFixDriver.ledgerFileLintEdits(ledger, groups, true, []);
 		final written: String = CanonicalEdit.applyEdits(source, LintFixDriver.contributedEdits(groups));
 		// ONE assertion over both halves, so neither can be satisfied alone.
 		Assert.isTrue(
@@ -1089,6 +1190,114 @@ class LintFixDeclineWiringSliceTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	/**
+	 * The safe loop's pass 1 over `arm-rule`'s five findings in one file, as the driver records it: `reported` filled by
+	 * `applyLintPass`, then one group with no edit, so all five are declined — two of them hand-offs `ArmCheck`'s risky
+	 * arm owns, one with a reason of its own, two silent.
+	 */
+	private static function armPassOne(): Map<String, RuleFixOutcome> {
+		final ledger: Map<String, RuleFixOutcome> = [];
+		LintFixDriver.ledgerFor(ledger, 'arm-rule').reported = 5;
+		final findings: Array<Violation> = [
+			for (reason in [ARM_HAND_OFF, ARM_HAND_OFF, 'truly declined', null, null]) armFinding(reason)
+		];
+		LintFixDriver.ledgerFileLintEdits(ledger, [
+			{
+				rule: 'arm-rule',
+				findings: findings,
+				carried: [],
+				edits: [],
+				overlapped: false,
+				refusal: null
+			}
+		], true, [new ArmCheck()]);
+		return ledger;
+	}
+
+	/** The risky phase's answer for `arm-rule`'s two arm-owned findings in `A.hx`: `edits` landed, `declineReasons` its own words. */
+	private static function armResult(edits: Int, declineReasons: Array<{ text: String, count: Int }>): FixVerifyResult {
+		return {
+			baseline: Confirmed,
+			applied: edits > 0 ? ['A.hx'] : [],
+			appliedEdits: edits,
+			excluded: [],
+			reverted: [],
+			partials: [],
+			declined: [],
+			coverageUnknown: null,
+			coverage: null,
+			tallies: [
+				{
+					rule: 'arm-rule',
+					file: 'A.hx',
+					findings: 2,
+					edits: edits,
+					declineReasons: declineReasons
+				}
+			]
+		};
+	}
+
+	/** One `arm-rule` finding in `A.hx` whose safe arm declined it for `reason`. */
+	private static function armFinding(reason: Null<String>): Violation {
+		return {
+			file: 'A.hx',
+			span: null,
+			rule: 'arm-rule',
+			severity: Severity.Info,
+			message: 'an arm finding',
+			declineReason: reason
+		};
+	}
+
+}
+
+/**
+ * A `RiskyArm` rule reduced to its ledger contract: its risky arm owns exactly the findings carrying `ARM_HAND_OFF`.
+ * Nothing here is ever run or fixed — the ledger asks only which findings the arm claims.
+ */
+private class ArmCheck implements Check implements RiskyArm {
+
+	public function new() {}
+
+	public function id(): String {
+		return 'arm-rule';
+	}
+
+	public function description(): String {
+		return 'a rule whose risky arm owns some of its findings';
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return [];
+	}
+
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [];
+	}
+
+	public function riskyArmFindings(violations: Array<Violation>): Array<Violation> {
+		return violations.filter(v -> v.declineReason == LintFixDeclineWiringSliceTest.ARM_HAND_OFF);
+	}
+
+	public function riskyFix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [];
+	}
+
+	public function riskyCrossFileFindings(violations: Array<Violation>): Array<Violation> {
+		return [];
+	}
+
+	public function riskyCrossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<RiskyCrossFileEdit> {
+		return [];
 	}
 
 }

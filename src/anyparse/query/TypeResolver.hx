@@ -26,80 +26,6 @@ using StringTools;
 final class TypeResolver {
 
 	/**
-	 * Simple `Type.method` names of stdlib STATIC functions that are provably
-	 * side-effect-free — a discarded call to one cannot change observable
-	 * behaviour, so `unused-local`'s autofix may delete a dead binding whose
-	 * initializer is such a call. Explicitly enumerated (not "every method
-	 * except"), so a future impure addition is never auto-trusted. `Math.random`
-	 * / `Std.random` are deliberately ABSENT — they advance PRNG state (a side
-	 * effect); every I/O-bearing type (`Sys`, `File`, ...) is out entirely.
-	 *
-	 * PURITY is NOT derivable from a declaration — a signature never states
-	 * side-effect freedom — so, unlike the extension-method and static-return
-	 * tables now derived from the std sources via `StdResolver`, this list is
-	 * intrinsic semantic knowledge and stays hand-maintained.
-	 */
-	private static final PURE_STDLIB_STATIC_FUNCS: Array<String> = [
-		'Date.now',
-		'Date.fromTime',
-		'Date.fromString',
-		'Std.string',
-		'Std.int',
-		'Std.parseInt',
-		'Std.parseFloat',
-		'Std.isOfType',
-		'Std.downcast',
-		'Math.abs',
-		'Math.min',
-		'Math.max',
-		'Math.floor',
-		'Math.ceil',
-		'Math.round',
-		'Math.fround',
-		'Math.ffloor',
-		'Math.fceil',
-		'Math.sqrt',
-		'Math.pow',
-		'Math.sin',
-		'Math.cos',
-		'Math.tan',
-		'Math.asin',
-		'Math.acos',
-		'Math.atan',
-		'Math.atan2',
-		'Math.exp',
-		'Math.log',
-		'Math.isNaN',
-		'Math.isFinite',
-		'StringTools.trim',
-		'StringTools.ltrim',
-		'StringTools.rtrim',
-		'StringTools.lpad',
-		'StringTools.rpad',
-		'StringTools.replace',
-		'StringTools.startsWith',
-		'StringTools.endsWith',
-		'StringTools.contains',
-		'StringTools.isSpace',
-		'StringTools.hex',
-		'StringTools.urlEncode',
-		'StringTools.urlDecode',
-		'StringTools.htmlEscape',
-		'StringTools.htmlUnescape',
-		'StringTools.fastCodeAt',
-		'StringTools.isEof',
-		'Path.join',
-		'Path.directory',
-		'Path.extension',
-		'Path.withoutExtension',
-		'Path.withoutDirectory',
-		'Path.normalize',
-		'Path.addTrailingSlash',
-		'Path.removeTrailingSlash',
-		'Path.isAbsolute'
-	];
-
-	/**
 	 * The innermost type declaration whose span contains `faSpan` — the whole match, for a consumer
 	 * that needs the declaration's KIND or its node rather than the name `enclosingTypeName` answers
 	 * with: what a bare `this` denotes at a position depends on which kind of type hosts it.
@@ -277,50 +203,15 @@ final class TypeResolver {
 	}
 
 	/**
-	 * Whether `callNode` is a call to a provably-pure stdlib function: a STATIC one, or a method of a `String`.
-	 * A `String` method qualifies on an identifier DECLARED `String` (`declaredTypes` at its binding — a
-	 * `Null<String>` reads `Null` and is refused) when no project type shadows `String`; an instance field wins
-	 * over a `using` extension of the same name, so the method IS the std one, and a null receiver's throw is the
-	 * exposure `isPlainFieldRead` already accepts. A static one requires: the callee is a field access `Type.method` whose flattened
-	 * `Type.method` names a `PURE_STDLIB_STATIC_FUNCS` entry; the receiver is a
-	 * genuine type / package reference (its root identifier binds to NO local —
-	 * a same-named local would make it a value call, not a static one); no
-	 * project type shadows the simple type name (`index.refs.declaringFiles` empty);
-	 * and every argument is itself `isDeletionPure`. A discarded such call has no
-	 * observable effect, so a dead local bound to one is safe to delete. Any
-	 * deviation keeps the conservative default (the binding is kept).
+	 * Whether `callNode` is a call to a provably side-effect-free stdlib function whose every argument is itself
+	 * `isDeletionPure` — a discarded such call has no observable effect, so a dead local bound to one is safe to
+	 * delete. The callee half is `StdlibPurity.isEffectFreeCallee`, the one stdlib purity table; any deviation keeps the
+	 * conservative default (the binding is kept).
 	 */
 	public static function isPureStdlibCall(
 		callNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
 	): Bool {
-		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
-		if (fieldAccessKind == null || callNode.children.length == 0) return false;
-		final callee: QueryNode = callNode.children[0];
-		if (callee.kind != fieldAccessKind || callee.children.length != 1) return false;
-		final method: String = callee.name ?? '';
-		final receiver: QueryNode = callee.children[0];
-		final typeName: Null<String> = receiver.name;
-		// Every instance method of the std `String`: an immutable value, so each only reads its receiver. A local, not a
-		// member, for this type's member budget.
-		final stringMethods: Array<String> = [
-			'charAt',
-			'charCodeAt',
-			'indexOf',
-			'lastIndexOf',
-			'split',
-			'substr',
-			'substring',
-			'toLowerCase',
-			'toUpperCase',
-			'toString'
-		];
-		inline function onStringBinding(): Bool {
-			final from: Null<Int> = identBindingFrom(receiver, tree, shape);
-			return from != null && declaredTypes[from] == 'String' && !NominalTypes.shadowedByNonStdType(index, 'String');
-		}
-		final pureStatic: Bool = typeName != null && PURE_STDLIB_STATIC_FUNCS.contains('$typeName.$method')
-			&& receiverRootIsUnboundType(receiver, tree, shape) && index.refs.declaringFiles(typeName).length == 0;
-		if (!pureStatic && !(stringMethods.contains(method) && onStringBinding())) return false;
+		if (!StdlibPurity.isEffectFreeCallee(callNode, tree, shape, declaredTypes, index)) return false;
 		for (i in 1...callNode.children.length) if (!isDeletionPure(callNode.children[i], tree, shape, declaredTypes, index)) return false;
 		return true;
 	}
@@ -352,7 +243,7 @@ final class TypeResolver {
 	 * Whether `receiver` is a genuine TYPE reference — its ROOT identifier (walking down any
 	 * `pkg.Type` field-access chain) binds to NO value: a local / parameter / field of the same
 	 * name would make the access an INSTANCE access, not a static one. Shared by
-	 * `isPureStdlibCall` and `ExplicitLocalType`'s static-method-return arm. False when the
+	 * `StdlibPurity` and `ExplicitLocalType`'s static-method-return arm. False when the
 	 * `fieldAccessKind` / `identKind` seams are unset, the root is not a bare identifier, or it
 	 * resolves to a value binding.
 	 */

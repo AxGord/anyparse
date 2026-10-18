@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.NullFlowScan.IdentOperand;
 import anyparse.query.DeclaredNullity;
@@ -26,11 +27,24 @@ import anyparse.runtime.Span;
  * Conservative throughout (see `NullFlow`): every uncertainty collapses to
  * `Unknown`, so only a genuinely dead fallback is reported. `Severity.Info`;
  * `fix` unwraps to the left operand, the same rewrite `redundant-null-coalescing` applies (sound whenever the proven flow facts hold).
+ * Under null-safety (`NullSafetyGate`) the compiler must see the proof too: dropping the fallback of an operand narrowed
+ * only through a Bool local, an alias or a lone surviving `if` arm leaves `Cannot return nullable value`, so such a
+ * finding keeps a `declineReason` and gets no edit (`NullFacts.nonNullVisible`).
  */
 @:nullSafety(Strict)
-final class DeadNullCoalescing implements Check {
+final class DeadNullCoalescing implements Check implements ConfigAware {
+
+	/** What dropping a fallback whose proof the compiler's null-safety does not share would do (`NullSafetyGate`). */
+	private static inline final UNSEEN_CONSEQUENCE: String = ', so dropping the fallback would not compile';
+
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'dead-null-coalescing';
@@ -48,6 +62,7 @@ final class DeadNullCoalescing implements Check {
 		final coalKind: String = nullCoalesceKind;
 		final ident: String = identKind;
 		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
+		final gate: NullSafetyGate = new NullSafetyGate(_resolveConfig);
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, root, typed, violations) -> {
 			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, plugin.typeSyntax, index);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
@@ -56,12 +71,14 @@ final class DeadNullCoalescing implements Check {
 				if (left == null) return;
 				// Owned by `redundant-null-coalescing` when the declared type proves it.
 				if (TypeResolver.isProvablyNonNull(left.operand, root, shape, types)) return;
-				if (facts.nonNull(left.name)) violations.push({
+				if (!facts.nonNull(left.name)) return;
+				violations.push({
 					file: entry.file,
 					span: left.span,
 					rule: 'dead-null-coalescing',
 					severity: Severity.Info,
-					message: 'right operand is dead — left operand is already non-null on this path'
+					message: 'right operand is dead — left operand is already non-null on this path',
+					declineReason: gate.unseenProofReason(entry.file, root, left.span, shape, facts, left.name, UNSEEN_CONSEQUENCE)
 				});
 			});
 		});
@@ -74,7 +91,7 @@ final class DeadNullCoalescing implements Check {
 		final nullCoalesceKind: Null<String> = shape.nullCoalesceKind;
 		if (nullCoalesceKind == null) return [];
 		final coalKind: String = nullCoalesceKind;
-		return CheckScan.applyBySpan(plugin, source, violations, [coalKind], (node, span) -> {
+		return CheckScan.applyBySpan(plugin, source, violations.filter(v -> v.declineReason == null), [coalKind], (node, span) -> {
 			if (node.children.length != 2) return null;
 			final left: QueryNode = node.children[0];
 			final leftSpan: Null<Span> = left.span;

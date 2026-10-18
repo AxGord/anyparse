@@ -486,7 +486,9 @@ class LintFixFixedPointCliTest extends Test {
 			declined: declined,
 			edits: edits,
 			reasons: reasons ?? [],
-			refusals: refusals ?? []
+			refusals: refusals ?? [],
+			handedOff: 0,
+			handedOffReasons: []
 		};
 	}
 

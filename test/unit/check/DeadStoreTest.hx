@@ -111,6 +111,28 @@ class DeadStoreTest extends Test {
 		assertNoFix('class C { function f(a:Int):Int { var w = compute(); w = a; return w; } }');
 	}
 
+	/**
+	 * The dead-store fix deletes by the same predicate `unused-local` does (`TypeResolver.isDeletionPure`): a `String`
+	 * method on a `String` binding and an effect-free `Date.now()` are droppable too. Its own walk borrowed
+	 * `PurityScan`'s `Math` / `Std` / `StringTools` list and refused both.
+	 */
+	@:pin('control') @:killer('M-DEADSTORE-OWN-PURITY')
+	public function testFixStripsStringMethodAndClockInitializers(): Void {
+		assertFix(
+			'class C { function f(s:String):String { var x:String = s.toUpperCase(); x = s; return x; } }', 'var x:String;', 'toUpperCase'
+		);
+		assertFix('class C { function f():Date { var d:Date = Date.now(); d = null; return d; } }', 'var d:Date;', 'Date.now()');
+	}
+
+	/** A project type named `Std` is not the std one: its `int` may do anything, so the store stays. */
+	@:pin('control') @:killer('M-STD-SHADOW-IGNORED')
+	public function testFixRefusesAProjectShadowOfAStdType(): Void {
+		assertNoFix(
+			'class Std { public static function int(v:Float):Int return 0; } class C { function f(v:Float):Int {'
+			+ ' var x:Int = Std.int(v); x = 2; return x; } }'
+		);
+	}
+
 	public function testReassignedInitFlagged(): Void {
 		// The initializer is overwritten before any read — one dead store (the init).
 		Assert.equals(1, violations('class C { function f():Int { var x = 1; x = 2; return x; } }').length);

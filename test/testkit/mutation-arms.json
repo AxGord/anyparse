@@ -9361,11 +9361,10 @@
 		},
 		{
 			"name": "M-DSN-NULLSAFE-ALWAYS",
-			"type": "anyparse.check.DeadSafeNav",
-			"method": "run",
-			"find": "final nullSafe: Bool = buildNullSafe",
-			"replace": "final nullSafe: Bool = true || buildNullSafe",
-			"note": "plain code is treated as null-checked, so a runtime-sound Bool-local proof loses its fix where nothing typechecks it"
+			"type": "anyparse.check.NullSafetyGate",
+			"method": "mayBeOn",
+			"force": "true",
+			"note": "plain code is treated as null-checked, so a runtime-sound Bool-local proof loses its fix (dead-safe-nav, dead-null-guard, dead-null-coalescing) where nothing typechecks it"
 		},
 		{
 			"name": "M-DSN-JOIN-EITHER",
@@ -9393,21 +9392,21 @@
 		},
 		{
 			"name": "M-DSN-MACRO-BLIND",
-			"type": "anyparse.check.DeadSafeNav",
+			"type": "anyparse.check.NullSafetyGate",
 			"method": "buildMayEnableNullSafety",
 			"force": "false",
 			"note": "a project-wide `--macro nullSafety` in the oracle hxml is ignored, so a meta-free module gets the `.` rewrite its build rejects"
 		},
 		{
 			"name": "M-DSN-HXML-ALWAYS-ON",
-			"type": "anyparse.check.DeadSafeNav",
+			"type": "anyparse.check.NullSafetyGate",
 			"method": "buildMayEnableNullSafety",
 			"force": "true",
 			"note": "every oracle build reads as enabling null-safety, so a plain project loses the runtime-sound fix"
 		},
 		{
 			"name": "M-DSN-HXML-COMMENT-READ",
-			"type": "anyparse.check.DeadSafeNav",
+			"type": "anyparse.check.NullSafetyGate",
 			"method": "buildMayEnableNullSafety",
 			"find": "if (line == '' || line.startsWith('#')) continue;",
 			"replace": "if (line == '') continue;",
@@ -9415,7 +9414,7 @@
 		},
 		{
 			"name": "M-DSN-HXML-LIB-PLAIN",
-			"type": "anyparse.check.DeadSafeNav",
+			"type": "anyparse.check.NullSafetyGate",
 			"method": "buildMayEnableNullSafety",
 			"find": "} else if (line.startsWith('-') && !PLAIN_HXML_FLAGS.contains(line.split(' ')[0]))",
 			"replace": "} else if (line.startsWith('-') && !line.startsWith('-lib') && !PLAIN_HXML_FLAGS.contains(line.split(' ')[0]))",
@@ -9423,7 +9422,7 @@
 		},
 		{
 			"name": "M-DSN-HXML-INCLUDE-SKIPPED",
-			"type": "anyparse.check.DeadSafeNav",
+			"type": "anyparse.check.NullSafetyGate",
 			"method": "buildMayEnableNullSafety",
 			"find": "mayEnable(LintDocuments.resolveAgainstConfigDir(base, line), base, depth + 1)",
 			"replace": "false",
@@ -9431,7 +9430,7 @@
 		},
 		{
 			"name": "M-DSN-HXML-UNREADABLE-PLAIN",
-			"type": "anyparse.check.DeadSafeNav",
+			"type": "anyparse.check.NullSafetyGate",
 			"method": "buildMayEnableNullSafety",
 			"find": "if (text == null) return true;",
 			"replace": "if (text == null) return false;",
@@ -24039,10 +24038,10 @@
 		},
 		{
 			"name": "M-PURE-STRING-METHOD-OFF",
-			"type": "anyparse.query.TypeResolver",
-			"method": "isPureStdlibCall",
-			"find": "if (!pureStatic && !(stringMethods.contains(method) && onStringBinding())) return false;",
-			"replace": "if (!pureStatic) return false;",
+			"type": "anyparse.query.StdlibPurity",
+			"method": "calleePurity",
+			"find": "if (!TRANSPARENT_STRING_METHODS.contains(method) && method != SPLIT_METHOD) return null;",
+			"replace": "return null;",
 			"note": "a String method on a String final is not pure, so the dead `CHARSET.toUpperCase()` constant stays undeletable"
 		},
 		{
@@ -24958,6 +24957,141 @@
 			"find": "{ text: written, at: fnFrom }",
 			"replace": "{ text: written, at: call.span?.from ?? fnFrom }",
 			"note": "a callee parameter is bound where the CALL is, so the callee's own type parameter binds a namesake class"
+		},
+		{
+			"name": "M-STD-EFFECT-FREE-AS-TRANSPARENT",
+			"type": "anyparse.query.StdlibPurity",
+			"method": "isTransparentCallee",
+			"find": "== StdCallPurity.Transparent;",
+			"replace": "!= null;",
+			"note": "an effect-free stdlib call counts as transparent, so extract-repeated-expression hoists one `StringTools.iterator(s)` for three loops (the first drains it) and one `Date.now()` for three clock reads"
+		},
+		{
+			"name": "M-STD-SPLIT-TRANSPARENT",
+			"type": "anyparse.query.StdlibPurity",
+			"method": "calleePurity",
+			"find": "else if (method == SPLIT_METHOD)",
+			"replace": "else if (false)",
+			"note": "`s.split(\",\")` counts as transparent, so three calls are hoisted into ONE mutable array shared by every former call site"
+		},
+		{
+			"name": "M-STD-SHADOW-IGNORED",
+			"type": "anyparse.query.StdlibPurity",
+			"method": "calleePurity",
+			"find": "&& index.refs.declaringFiles(typeName).length == 0",
+			"replace": "",
+			"note": "a project type named `Std` passes for the std one, so its arbitrary `Std.int` is hoisted and a dead store of it deleted"
+		},
+		{
+			"name": "M-DEADSTORE-OWN-PURITY",
+			"type": "anyparse.check.DeadStore",
+			"method": "rhsSafeToDelete",
+			"find": "&& TypeResolver.isDeletionPure(rhs, root, shape, declaredTypes, index);",
+			"replace": "&& false;",
+			"note": "the dead-store fix proves nothing beyond the shape, so a dead `s.toUpperCase()` / `Date.now()` / `Std.int(v)` store stays"
+		},
+		{
+			"name": "M-DNG-UNSEEN-DROPPED",
+			"type": "anyparse.check.DeadNullGuard",
+			"method": "run",
+			"find": "declineReason: gate.unseenProofReason(entry.file, root, compared.span, shape, facts, compared.name, UNSEEN_CONSEQUENCE)",
+			"replace": "declineReason: null",
+			"note": "a guard proven only through a Bool local / alias / lone if-arm / try is offered for removal under null-safety, so `return reads ? node : other` fails `Cannot return nullable value` (the N25 FactsView revert)"
+		},
+		{
+			"name": "M-DNG-DECLINED-FIXED",
+			"type": "anyparse.check.DeadNullGuard",
+			"method": "fix",
+			"find": "violations.filter(v -> v.declineReason == null)",
+			"replace": "violations",
+			"note": "a declined dead guard is removed anyway, so the build-breaking edit reaches the oracle net again"
+		},
+		{
+			"name": "M-DNC-UNSEEN-DROPPED",
+			"type": "anyparse.check.DeadNullCoalescing",
+			"method": "run",
+			"find": "declineReason: gate.unseenProofReason(entry.file, root, left.span, shape, facts, left.name, UNSEEN_CONSEQUENCE)",
+			"replace": "declineReason: null",
+			"note": "a `??` proven only through a Bool local is unwrapped under null-safety by a SAFE fix, and `return node` breaks the build with no net"
+		},
+		{
+			"name": "M-DNC-DECLINED-FIXED",
+			"type": "anyparse.check.DeadNullCoalescing",
+			"method": "fix",
+			"find": "violations.filter(v -> v.declineReason == null)",
+			"replace": "violations",
+			"note": "a declined dead fallback is unwrapped anyway, so the build-breaking safe fix lands"
+		},
+		{
+			"name": "M-NSG-GATE-NEVER",
+			"type": "anyparse.check.NullSafetyGate",
+			"method": "mayBeOn",
+			"force": "false",
+			"note": "null-safety is never on, so every unseen proof keeps its rewrite and the three checks break a @:nullSafety build"
+		},
+		{
+			"name": "M-NSG-VISIBLE-IGNORED",
+			"type": "anyparse.check.NullSafetyGate",
+			"method": "unseenProofReason",
+			"find": "return facts.nonNullVisible(name) || !mayBeOn",
+			"replace": "return !mayBeOn",
+			"note": "a proof the compiler follows counts as unseen too, so a nested-guard / early-exit removal the compiler accepts is declined"
+		},
+		{
+			"name": "M-ARM-LEDGER-REPORTED-TWICE",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "ledgerRiskyTallies",
+			"find": "if (!armRules.contains(tally.rule)) entry.reported += tally.findings;",
+			"replace": "entry.reported += tally.findings;",
+			"note": "a RiskyArm rule's arm findings reach `reported` a second time (the safe loop counted them), so the row reads 5 of 7 for five findings"
+		},
+		{
+			"name": "M-ARM-LEDGER-HANDOFF-KEPT",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "ledgerRiskyTallies",
+			"find": "entry.declined -= entry.handedOff;",
+			"replace": "entry.declined -= 0;",
+			"note": "the safe arm's hand-off declines stay beside the arm's own verdict, so each arm finding is declined twice, or declined although the arm fixed it"
+		},
+		{
+			"name": "M-ARM-LEDGER-HANDOFF-UNRECORDED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "noteHandOff",
+			"find": "entry.handedOff++;",
+			"replace": "entry.handedOff += 0;",
+			"note": "no hand-off is recorded, so the risky phase has nothing to take back and the arm findings are declined twice"
+		},
+		{
+			"name": "M-ARM-LEDGER-ARM-BLIND",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "ledgerFileLintEdits",
+			"find": "arm.riskyArmFindings(group.findings).concat(arm.riskyCrossFileFindings(group.findings))",
+			"replace": "[]",
+			"note": "the safe loop does not ask the RiskyArm which findings its arm owns, so no hand-off is ever recorded"
+		},
+		{
+			"name": "M-LEDGER-ARM-LISTED-ABSENT",
+			"type": "anyparse.query.cli.command.LintFixLedger",
+			"method": "ledgerLines",
+			"find": "if (!(c is RiskyArm)) c.id()",
+			"replace": "c.id()",
+			"note": "a RiskyArm rule is footnoted as absent from the ledger (and counted never asked) beside its own row"
+		},
+		{
+			"name": "M-RETAIN-SOURCES-KEEPS-ALL",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "staleKeys",
+			"find": "if (!keep.exists(source)) source]",
+			"replace": "if (false) source]",
+			"note": "nothing is ever dropped, so a --fix run keeps every superseded and speculative parse for the rest of the run (the N25 self-fix OOM at the default heap)"
+		},
+		{
+			"name": "M-RETAIN-SOURCES-DROPS-LIVE",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "retainSources",
+			"find": "final keep: Map<String, Bool> = [for (source in live) source => true];",
+			"replace": "final keep: Map<String, Bool> = [];",
+			"note": "the live sources are dropped too, so every pass re-parses every file and an unchanged file loses its tree identity across passes"
 		}
 	]
 }

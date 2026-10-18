@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.NullFlowScan.IdentOperand;
@@ -30,18 +31,31 @@ import anyparse.runtime.Span;
  * back-edge, a closure-captured name, a macro subtree — collapses to `Unknown`,
  * so the check reports only a genuinely dead guard, never a load-bearing one.
  *
- * `Severity.Info`. The removal is `RiskyFix`: a flow-dead guard can still be compiler-load-bearing (`@:nullSafety` narrowing
- * cannot see a fact laundered through a Bool local, e.g. `final ok = x != null && flag; if (ok) x.f`), so the fix lands only
- * through the oracle typecheck-and-revert pipeline. `fix` conservatively drops the dead guard where a safe span rewrite
- * exists — unwrap / delete a sole-condition `if`, or drop a conjunct / disjunct from a
- * homogeneous `&&` / `||` chain — and refuses (leaves a finding) everywhere else. Its
+ * `Severity.Info`. A flow-dead guard can still be compiler-load-bearing: `@:nullSafety` narrows only through the forms
+ * `NullFacts.nonNullVisible` lists, never through a fact laundered through a Bool local
+ * (`final reads = x != null && flag; return reads && x != null ? x : y`), an alias copy, or what a lone surviving `if` arm
+ * or a `try` proved. Where null-safety may be on (`NullSafetyGate`) such a guard keeps its finding with a
+ * `declineReason` and no edit — removing it would leave `Cannot return nullable value`. The removal stays `RiskyFix`, so
+ * every edit it does make lands only through the oracle typecheck-and-revert pipeline. `fix` conservatively drops the
+ * dead guard where a safe span rewrite exists — unwrap / delete a sole-condition `if`, or drop a conjunct / disjunct
+ * from a homogeneous `&&` / `||` chain — and refuses (leaves a finding) everywhere else. Its
  * proof is FLOW-based (`NullFlow`), never declared-type trust, so a default-null parameter
  * — which the declared prover now exempts too — reaches this check only when flow narrows it.
  */
 @:nullSafety(Strict)
-final class DeadNullGuard implements Check implements RiskyFix {
+final class DeadNullGuard implements Check implements RiskyFix implements ConfigAware {
+
+	/** What removing a guard whose proof the compiler's null-safety does not share would do (`NullSafetyGate`). */
+	private static inline final UNSEEN_CONSEQUENCE: String = ', so removing the guard would not compile';
+
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'dead-null-guard';
@@ -55,6 +69,7 @@ final class DeadNullGuard implements Check implements RiskyFix {
 		final shape: RefShape = plugin.refShape();
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
+		final gate: NullSafetyGate = new NullSafetyGate(_resolveConfig);
 		return RunScan.collectWith(files, plugin, NullFlowScan.seamsOf(shape), (entry, root, s, violations) -> {
 			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, provider, plugin.typeSyntax, index);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
@@ -64,12 +79,14 @@ final class DeadNullGuard implements Check implements RiskyFix {
 				// predicate it reports on, so a value-typed operand the null-comparison variant
 				// declines falls to this check's flow proof instead of between the two.
 				if (TypeResolver.isProvablyNonNullAtNullComparison(compared.operand, root, shape, types)) return;
-				if (facts.nonNull(compared.name)) violations.push({
+				if (!facts.nonNull(compared.name)) return;
+				violations.push({
 					file: entry.file,
 					span: compared.span,
 					rule: 'dead-null-guard',
 					severity: Severity.Info,
-					message: 'null check is redundant — operand is already non-null on this path'
+					message: 'null check is redundant — operand is already non-null on this path',
+					declineReason: gate.unseenProofReason(entry.file, root, compared.span, shape, facts, compared.name, UNSEEN_CONSEQUENCE)
 				});
 			});
 		});
@@ -78,7 +95,7 @@ final class DeadNullGuard implements Check implements RiskyFix {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return CheckScan.simplifyNullComparisonFixes(plugin, source, violations);
+		return CheckScan.simplifyNullComparisonFixes(plugin, source, violations.filter(v -> v.declineReason == null));
 	}
 
 }

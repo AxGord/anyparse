@@ -3968,3 +3968,47 @@ decided the question; it may not become a record of runs.
   type, a container element (no proof a written `Array` is the standard one), and a `BlockExpr` argument (4.3.7 types it;
   the grammar names no block-expression kind for the ladder). `CallGraphNames.paramsOf` splits the node half out of
   `declaredParams` (the binder holds the node) — branch `feat/infra-N32`
+- N36 (1) — `PurityScan` kept its own stdlib list (`Math` / `Std` / `StringTools`, every member but `random`) beside
+  `TypeResolver.isPureStdlibCall`'s enumerated one. → ONE owner, `anyparse.query.StdlibPurity`, a POSITIVE whitelist on
+  both axes (the functions enumerated against the Haxe 4.3.7 std source; the callee resolved — a receiver root bound to
+  no value, no project type declaring the simple name, a `String` method only on a binding declared `String`). Two
+  levels, because hoisting and deleting ask different questions: `Transparent` (computable once and droppable — the
+  old merged list plus `Std.is` / `Std.instance` / `StringTools.unsafeCodeAt` / `quoteUnixArg` / `quoteWinArg`, and the
+  `String` methods but `split`) for `PurityScan`, `EffectFree` on top (`Date.now` / `fromTime` / `fromString`, the two
+  `StringTools` iterators, `split`: a clock or a FRESH object per call) for the deletion predicate. The scan's negative
+  list had admitted `StringTools.iterator` — hoisting one stateful iterator for three loops — and any project type named
+  `Std`. `dead-store`'s fix deleted through its own walk over the scan's list; it now deletes by
+  `TypeResolver.isDeletionPure`, the predicate `unused-local` uses. Residual, NOT changed (deletions would be behaviour
+  deltas the task did not ask for): `Std.string` runs a user `toString`, `Date.fromString` / `StringTools.urlDecode` can
+  throw, and a LIBRARY type (not a project one) named like a std type passes the shadow test — branch `feat/infra-N36`
+- N36 (2) — a `RiskyArm` rule's risky tallies were folded into the ledger as if the rule were new to it: its findings
+  reached `reported` a second time (the safe loop had counted them on pass 1) and `declined` a second time (the safe arm
+  had declined them as hand-offs). → the safe loop records which declines are HAND-OFFS (`RuleFixOutcome.handedOff`,
+  asked of the check's own `riskyArmFindings` / `riskyCrossFileFindings`), and `ledgerRiskyTallies` takes exactly that
+  share back out and adds no `reported` for an arm rule, so the arm's own verdict is the one that stands. Rejected:
+  matching the hand-off by its decline SENTENCE — `naming` writes `NOT_A_MEMBER` on class findings its arm does not own
+  too. A run whose risky phase never ran keeps the hand-offs as declines, and the "absent from this ledger" footer no
+  longer names a `RiskyArm` rule, which always has a row of its own — branch `feat/infra-N36`
+- N36 (3) — `dead-null-guard` trusted every `NullFlow` fact, so `reads && node != null ? node : x` with
+  `reads = node != null && …` lost its guard and failed `Cannot return nullable value` (the oracle reverted it in N25);
+  `dead-null-coalescing` did the same as a SAFE fix with no net at all. → the `dead-safe-nav` answer, MOVED rather than
+  copied: `NullSafetyGate` (its oracle-hxml reading, the `@:nullSafety` scope test and the `nonNullVisible` decision)
+  is asked by all three, and under null-safety a proof the compiler does not follow keeps its finding with a
+  `declineReason` and no edit. Probed on Haxe 4.3.7, guard dropped: a Bool local, a Bool alias of a conjunction, an
+  alias copy, a lone surviving `if` arm and a `try` body fail; a nested guard, an early exit, an assignment, a `&&`
+  chain, a `while` condition and two joined arms compile — exactly `nonNullVisible`'s positive list. Rejected: dropping
+  the finding (the guard IS dead at run time; `dead-safe-nav` keeps its finding the same way), and dropping
+  `RiskyFix` for `dead-null-guard` (the net still guards the control-flow rewrites) — branch `feat/infra-N36`
+- N36 (4) — `hxq lint src --fix` over all anyparse src died at node's default heap (N25: OOM at 2371 s). Measured
+  in-process (heapUsed after a forced GC at every pass and phase end, sampling heap profiles; RSS was useless on a
+  swapping shared box): no per-pass leak — a 337-file run's live set was flat at 2.1-2.3 GB over 12 passes and the
+  risky / oracle-assisted / follow-up phases — but the run kept, for its whole length, every text it ever PARSED:
+  `CachingGrammarPlugin`'s memos are keyed by content, so every superseded version of a file and every speculative
+  text `BodySlotGuard` splices to judge one check's edit set stayed parsed, with its `RefsCache` index. →
+  `retainSources(live)` drops every content-keyed memo not keyed by a current source (and the refs index of each
+  dropped tree); `applyLintPass` calls it at each pass head and before each file's fixes. Full src, default heap,
+  the N25 input: completes (2361 s), output byte-identical to N25's 16 GB run; forced-GC live at pass-1 end
+  3152 -> 1783 MB with the per-file prune. Rejected: not memoising speculative parses at all (a `GrammarPlugin` has no
+  "transient parse" seam, and the canonical gate re-parses the same spliced text right after the guard, so the memo
+  is worth keeping for the length of one file); an LRU bound (a size is a guess, the pass boundary is a fact) —
+  branch `feat/infra-N36`

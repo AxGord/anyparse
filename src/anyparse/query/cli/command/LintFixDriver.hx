@@ -294,6 +294,10 @@ final class LintFixDriver {
 		// answers a tree that no longer exists — while the plugin behind the decorator reads the
 		// chain from disk fresh, so the stale memo is a SECOND answer for the same file.
 		cached.invalidateAmbientChain();
+		// Only this pass's texts may be asked about again; every superseded version, and every
+		// speculative text an earlier pass parsed to judge one check's edits, would otherwise stay
+		// memoised for the rest of the run.
+		cached.retainSources(passSources(files, []));
 		// a file an earlier pass rewrote no longer holds the text the compile's facts describe
 		cached.compilerFactsEdited(changedFiles, originals);
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
@@ -357,9 +361,12 @@ final class LintFixDriver {
 		for (entry in active) if (!touchedThisPass.contains(entry.file)) {
 			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
 			if (fileViolations.length == 0) continue;
+			// The previous file's speculative parses go before this one makes its own: within one
+			// pass they are what grows, one edit set per check per file.
+			cached.retainSources(passSources(files, active));
 			final groups: Array<RuleEdits> = collectFileLintEdits(entry.source, fileViolations, checks, cached, index);
 			if (contributedEdits(groups).length == 0) {
-				ledgerFileLintEdits(ledger, groups, passes == 1);
+				ledgerFileLintEdits(ledger, groups, passes == 1, checks);
 				continue;
 			}
 			var settled: Null<{ text: String, rewrites: Null<Int> }> = null;
@@ -396,7 +403,7 @@ final class LintFixDriver {
 			}
 			// AFTER the gate, never during collection: a check whose edits the writer refuses achieved
 			// nothing, and counting them as `edits` there claimed the rule had fixed those findings.
-			ledgerFileLintEdits(ledger, groups, passes == 1);
+			ledgerFileLintEdits(ledger, groups, passes == 1, checks);
 			if (settled != null) {
 				final landed: Int = commitLintPassFile(entry, groups, settled, notedRewrites, changedFiles, nextActive);
 				countEdits(editsOf, entry.file, landed);
@@ -835,11 +842,19 @@ final class LintFixDriver {
 	 * gives every group that produced edits the file-level refusal instead, so none of them reaches
 	 * this row claiming an edit.
 	 */
-	public static function ledgerFileLintEdits(ledger: Map<String, RuleFixOutcome>, groups: Array<RuleEdits>, countDeclines: Bool): Void {
-		for (group in groups)
+	public static function ledgerFileLintEdits(
+		ledger: Map<String, RuleFixOutcome>, groups: Array<RuleEdits>, countDeclines: Bool, checks: Array<Check>
+	): Void {
+		for (group in groups) {
+			final check: Null<Check> = checks.find(c -> c.id() == group.rule);
+			final arm: Null<RiskyArm> = check is RiskyArm ? cast check : null;
+			final handedOff: Array<Violation> = arm == null
+				? []
+				: arm.riskyArmFindings(group.findings).concat(arm.riskyCrossFileFindings(group.findings));
 			noteFixOutcome(
-				ledger, group.rule, group.findings, group.refusal == null ? group.edits.length : 0, countDeclines, group.refusal
+				ledger, group.rule, group.findings, group.refusal == null ? group.edits.length : 0, countDeclines, handedOff, group.refusal
 			);
+		}
 	}
 
 	/**
@@ -855,7 +870,9 @@ final class LintFixDriver {
 			declined: 0,
 			edits: 0,
 			reasons: [],
-			refusals: []
+			refusals: [],
+			handedOff: 0,
+			handedOffReasons: []
 		};
 		ledger[rule] = created;
 		return created;
@@ -878,12 +895,13 @@ final class LintFixDriver {
 	 * observed.
 	 */
 	private static function noteFixOutcome(
-		ledger: Map<String, RuleFixOutcome>, rule: String, own: Array<Violation>, editCount: Int, countDeclines: Bool, ?refusal: String
+		ledger: Map<String, RuleFixOutcome>, rule: String, own: Array<Violation>, editCount: Int, countDeclines: Bool,
+		handedOff: Array<Violation>, ?refusal: String
 	): Void {
 		final entry: RuleFixOutcome = ledgerFor(ledger, rule);
 		entry.edits += editCount;
 		if (editCount != 0) {
-			notePartialDeclines(entry, own, countDeclines);
+			notePartialDeclines(entry, own, countDeclines, handedOff);
 			return;
 		}
 		// EVERY pass, and counted in EDIT SETS rather than findings — the whole point of it having a
@@ -901,7 +919,18 @@ final class LintFixDriver {
 		for (v in own) {
 			final reason: Null<String> = refusal ?? v.declineReason;
 			if (reason != null) bumpReason(entry.reasons, reason, 1);
+			if (handedOff.contains(v)) noteHandOff(entry, reason);
 		}
+	}
+
+	/**
+	 * Record that one finding `declined` just counted was a hand-off — the safe arm of a `RiskyArm` rule leaving it to the
+	 * risky arm, under `reason` (null when it said nothing) — so `LintFixVerify.ledgerRiskyTallies` can take exactly that
+	 * share back out once the risky arm answers for the finding itself.
+	 */
+	private static function noteHandOff(entry: RuleFixOutcome, reason: Null<String>): Void {
+		entry.handedOff++;
+		if (reason != null) bumpReason(entry.handedOffReasons, reason, 1);
 	}
 
 	/**
@@ -918,13 +947,16 @@ final class LintFixDriver {
 	 * free to fix three findings with one span. `Violation.declineReason` is the only evidence that
 	 * a specific finding was refused, which is exactly what makes writing it the check's job.
 	 */
-	private static function notePartialDeclines(entry: RuleFixOutcome, own: Array<Violation>, countDeclines: Bool): Void {
+	private static function notePartialDeclines(
+		entry: RuleFixOutcome, own: Array<Violation>, countDeclines: Bool, handedOff: Array<Violation>
+	): Void {
 		if (!countDeclines) return;
 		for (v in own) {
 			final reason: Null<String> = v.declineReason;
 			if (reason == null) continue;
 			entry.declined++;
 			bumpReason(entry.reasons, reason, 1);
+			if (handedOff.contains(v)) noteHandOff(entry, reason);
 		}
 	}
 
@@ -1227,6 +1259,13 @@ final class LintFixDriver {
 		changedFiles.resize(0);
 		for (file in stillChanged) changedFiles.push(file);
 		return takenBack;
+	}
+
+	/** The texts a pass may still ask about: every file's current source, and the active subset's. */
+	private static function passSources(
+		files: Array<{ file: String, source: String }>, active: Array<{ file: String, source: String }>
+	): Array<String> {
+		return [for (entry in files) entry.source].concat([for (entry in active) entry.source]);
 	}
 
 }

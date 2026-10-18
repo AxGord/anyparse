@@ -243,8 +243,10 @@ final class LintFixLedger {
 		// of hundreds of fixes that said nothing about its own declines is the incident behind it.
 		if (fixedCount == 0 && !verbose) return [];
 		// Empty when the risky phase RAN: its rules then have rows of their own here, and the
-		// footer that names them as absent would contradict the row three lines above it.
-		final riskyIds: Array<String> = riskyLedgered ? [] : [for (c in risky) c.id()];
+		// footer that names them as absent would contradict the row three lines above it. A
+		// `RiskyArm` rule is never absent either way: it runs in the safe loop as well, whose row
+		// counts its arm's findings as hand-off declines until the risky phase answers for them.
+		final riskyIds: Array<String> = riskyLedgered ? [] : [for (c in risky) if (!(c is RiskyArm)) c.id()];
 		riskyIds.sort((a, b) -> Reflect.compare(a, b));
 		final oracleIds: Array<String> = [for (c in oracleAssisted) c.id()];
 		final reasons: Map<String, String> = [

@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.DeadNullCoalescing;
 import anyparse.check.Linter;
+import anyparse.check.NullSafetyGate;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
@@ -106,6 +107,34 @@ class DeadNullCoalescingTest extends Test {
 	 */
 	public function testEarlyReturnNarrowing(): Void {
 		Assert.equals(1, violations('class C { function f(?x:String) { if (x == null) return; var n = x ?? "d"; } }').length);
+	}
+
+	/**
+	 * A `??` whose left operand only a Bool local proves non-null: Haxe 4.3.7's null-safety does not narrow through it, so
+	 * `return node ?? other` rewritten to `return node` fails with `Cannot return nullable value of Null<String> as String`
+	 * (probed). It was a SAFE fix with no net at all — the one rewrite in this family that broke a build outright.
+	 */
+	@:pin('control') @:killer('M-DNC-UNSEEN-DROPPED', 'M-NSG-GATE-NEVER', 'M-DNC-DECLINED-FIXED')
+	public function testBoolLocalProofKeepsNoFixUnderNullSafety(): Void {
+		final src: String = '@:nullSafety(Strict) class C { static function f(node: Null<String>, other: String): String {'
+			+ ' final ok: Bool = node != null; if (ok) return node ?? other; return other; } }';
+		final check: DeadNullCoalescing = new DeadNullCoalescing();
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
+		Assert.equals(1, vs.length, 'the dead fallback is still reported');
+		Assert.isTrue(vs[0].declineReason?.indexOf(NullSafetyGate.UNSEEN_PROOF) == 0, 'and says why it gets no fix');
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length, 'no unwrap the compiler would reject');
+	}
+
+	/** The control: a direct guard is a narrowing the compiler performs, so the fallback still goes under null-safety. */
+	@:pin('control') @:killer('M-DSN-UNSEEN-ALL', 'M-NSG-VISIBLE-IGNORED')
+	public function testDirectGuardKeepsTheFixUnderNullSafety(): Void {
+		final src: String = '@:nullSafety(Strict) class C { static function f(node: Null<String>, other: String): String {'
+			+ ' if (node != null) return node ?? other; return other; } }';
+		final check: DeadNullCoalescing = new DeadNullCoalescing();
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
+		Assert.equals(1, vs.length);
+		Assert.isNull(vs[0].declineReason);
+		Assert.equals(1, CheckFixture.fixOf(check, src, vs).length, 'the fallback is dropped');
 	}
 
 	private function violations(src: String): Array<Violation> {
