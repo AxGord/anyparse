@@ -25624,6 +25624,14 @@
 			"find": "requireMods: ['public', 'static', HaxePropertyStorage.READ_ONLY_MOD],",
 			"replace": "requireMods: ['public', HaxePropertyStorage.READ_ONLY_MOD],",
 			"note": "an INSTANCE read-only property takes the static-final format too"
+		},
+		{
+			"name": "M-TS-EXH-WRITES-ANY",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "storedHolds",
+			"find": "!_writes.mayWrite(w.site, owner) || assignsValue(w, closed)",
+			"replace": "assignsValue(w, closed)",
+			"note": "every write of the member's name counts, whatever object it may reach"
 		}
 	]
 }

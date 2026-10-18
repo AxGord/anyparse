@@ -280,6 +280,28 @@ class ThreadSafetyExhaustiveTest extends Test {
 		#end
 	}
 
+	/**
+	 * A write of the member's name writes the member only where it may (`FieldWrites.mayWrite`): a reflective write of a
+	 * computed name on a fresh structure reaches no object of the member's type, nor does an own write of a field another
+	 * type declares; one on a `Dynamic` may be any object's (TM's `Form.get_data`, `result.setField(formGroup.field, …)` on a
+	 * fresh `{}`, kept `FileList.reload`'s catch-all over `FileListSelect.viewType` a path).
+	 */
+	@:pin('control') @:killer('M-TS-EXH-WRITES-ANY')
+	public function testAWriteElsewhereWritesTheMemberOnlyWhereItMay(): Void {
+		#if (sys || nodejs)
+		final dead: String = 'switch mode { case A: step(); case B: step(); case _: throw "x"; }';
+		final fresh: String =
+			'class F { public static function data(k:String):Dynamic { final r:Dynamic = {}; Reflect.setField(r, k, 9); return r; } }';
+		final other: String = 'class G { var mode:Int = 0; public function new() {} public function load(d:Dynamic):Void mode = d; }';
+		final any: String = 'class F { public static function data(o:Dynamic, k:String):Void Reflect.setField(o, k, 9); }';
+		Assert.same([], leaks(run(CLOSED, 'V', dead, '', ' = A', '', [fresh])), 'a computed name on a fresh structure');
+		Assert.same([], leaks(run(CLOSED, 'V', dead, '', ' = A', '', [other])), 'a field of that name another type declares');
+		Assert.same(['S.work'], leaks(run(CLOSED, 'V', dead, '', ' = A', '', [any])), 'a computed name on a dynamic value');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** `run`, with `S.mode` an `@:isVar` property read through a getter `members` declare. */
 	private static function runIsVar(held: String, members: String): Array<Violation> {
