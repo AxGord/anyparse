@@ -2380,6 +2380,16 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StructuralConformanceProofTest#testTypeParameterStructureMemberStillPins :: control :: M-STRUCT-TYPEPARAM-CLOSED',
 			'unit.check.StructuralConformanceProofTest#testUnresolvableStructureMemberTypeRefutes :: control :: M-STRUCT-UNRESOLVED-OPEN',
 			'unit.check.StructuralConformanceProofTest#testUnresolvableSupertypeSuppliesNoMember :: control :: M-STRUCT-DECLARES-LOOSE',
+			'unit.check.SwallowedExceptionCheckTest#testAssignedFieldOrParameterStillFlagged :: control :: M-SWALLOW-OUTCOME-DECL-KIND',
+			'unit.check.SwallowedExceptionCheckTest#testCallInTheBodyStillFlagged :: control :: M-SWALLOW-OUTCOME-EVERY-STMT',
+			'unit.check.SwallowedExceptionCheckTest#testComputedValueStillFlagged :: control :: '
+				+ 'M-SWALLOW-OUTCOME-COMPOUND,M-SWALLOW-OUTCOME-VALUE',
+			'unit.check.SwallowedExceptionCheckTest#testFlagNotReadAfterTheTryStillFlagged :: control :: '
+				+ 'M-SWALLOW-OUTCOME-READ-KIND,M-SWALLOW-OUTCOME-READ-AFTER',
+			'unit.check.SwallowedExceptionCheckTest#testOutcomeLocalCapturedFromTheEnclosingFunctionStillFlagged :: control :: '
+				+ 'M-SWALLOW-OUTCOME-FN-FLOOR',
+			'unit.check.SwallowedExceptionCheckTest#testReadInASiblingBranchStillFlagged :: control :: M-SWALLOW-OUTCOME-STMT-LIST',
+			'unit.check.SwallowedExceptionCheckTest#testReadOfAnotherBindingStillFlagged :: control :: M-SWALLOW-OUTCOME-READ-BINDING',
 			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
 			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
 			'unit.check.ThreadSafetyAllocationTest#testAComputedReflectiveWriteMakesTheFieldUnknown :: control :: '
@@ -7867,7 +7877,16 @@ class TestDiscoveryParityTest extends Test {
 			'M-NULLFLOW-MEMO-NOT-FORGOTTEN',
 			'M-SAMEITEMS-LENGTH-ONLY',
 			'M-SORTED-OFFSETS-LOWER-BLIND',
-			'M-SORTED-OFFSETS-UPPER-BLIND'
+			'M-SORTED-OFFSETS-UPPER-BLIND',
+			'M-SWALLOW-OUTCOME-COMPOUND',
+			'M-SWALLOW-OUTCOME-VALUE',
+			'M-SWALLOW-OUTCOME-DECL-KIND',
+			'M-SWALLOW-OUTCOME-FN-FLOOR',
+			'M-SWALLOW-OUTCOME-EVERY-STMT',
+			'M-SWALLOW-OUTCOME-READ-KIND',
+			'M-SWALLOW-OUTCOME-READ-BINDING',
+			'M-SWALLOW-OUTCOME-READ-AFTER',
+			'M-SWALLOW-OUTCOME-STMT-LIST'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
