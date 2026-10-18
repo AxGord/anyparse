@@ -85,7 +85,6 @@ final class PinsGrammarAndCli {
 		'unit.grammar.JsonLayoutWriterTest#testADeletionClosesItsGap :: control :: M-JSON-DIRTY-NEVER',
 		'unit.grammar.JsonLayoutWriterTest#testANewMemberTakesItsSiblingsKeySpacing :: control :: M-JSON-KEYSEP-DEFAULT',
 		'unit.grammar.JsonLayoutWriterTest#testANewObjectTakesItsSiblingsShape :: control :: M-JSON-NEW-MODEL-IGNORED,M-JSON-NOTHING-NEW',
-		'unit.grammar.JsonLayoutWriterTest#testAnAppendedEntryTakesItsOwnLine :: control :: M-JSON-DIRTY-NEVER',
 		'unit.grammar.JsonLayoutWriterTest#testAnEmptyContainerFollowsItsParent :: control :: M-JSON-EMPTY-INLINE,M-JSON-TOUCH-IGNORED',
 		'unit.grammar.JsonLayoutWriterTest#testAnInlineArrayStaysInline :: control :: M-JSON-STYLE-ALWAYS-EXPANDED',
 		'unit.grammar.JsonLayoutWriterTest#testTheIndentUnitIsTheDocuments :: control :: M-JSON-INDENT-DEFAULT',

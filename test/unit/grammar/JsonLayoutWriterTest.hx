@@ -59,8 +59,6 @@ class JsonLayoutWriterTest extends Test {
 	}
 
 	/** An entry appended to a one-per-line array takes a line of its own at its siblings' indentation. */
-	@:killer('M-JSON-DIRTY-NEVER')
-	@:pin('control')
 	public function testAnAppendedEntryTakesItsOwnLine(): Void {
 		final source: String = '{\n\t"r": [\n\t\t"a"\n\t]\n}\n';
 		Assert.equals('{\n\t"r": [\n\t\t"a",\n\t\t"b"\n\t]\n}\n', insertAfter(source, '"a"', ', "b"'));
