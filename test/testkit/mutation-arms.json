@@ -26260,6 +26260,29 @@
 			"method": "metavars",
 			"force": "node",
 			"note": "a `\"$x\"` string in a pattern stays a string, so a JSON pattern can hold no metavariable"
+		},
+		{
+			"name": "M-ADDMETA-SAME-ARGS",
+			"type": "anyparse.query.AddMeta",
+			"method": "addMeta",
+			"find": " && sameEntry(source, sibling, text)",
+			"replace": "",
+			"note": "a duplicate is judged by the entry NAME again, so a second `@:access(...)` with another argument is refused although Haxe allows several"
+		},
+		{
+			"name": "M-ADDMETA-ENTRY-NEVER-SAME",
+			"type": "anyparse.query.AddMeta",
+			"method": "sameEntry",
+			"force": "false",
+			"note": "no entry ever equals the one being added, so the exact repeat of an annotation is added a second time"
+		},
+		{
+			"name": "M-ADDIMPORT-CLI-BLIND-SEAT",
+			"type": "anyparse.query.cli.command.AddImportCommand",
+			"method": "runAddImport",
+			"find": "ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source)",
+			"replace": "CliArgs.pickPlugin(lang)",
+			"note": "the op reads the file with no project resolution scope, so the insert seat takes every wildcard for a run boundary and places the import where the import-order rule does not"
 		}
 	]
 }

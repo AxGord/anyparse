@@ -4248,3 +4248,19 @@ decided the question; it may not become a record of runs.
   `CliArgs.langNames`, the CODE-grammar registry whose Haxe-sized floors `RefShapeKindProjectionTest` applies —
   `JsonQueryPluginTest` checks its declared kinds against its projection instead. Not done: `patch`, `move-elements`,
   `--sorted` over objects by key, a key containing `>` in a selector — branch `feat/infra-N47`
+
+## N51 (2026-10-19): add-meta by entry, add-import reads the project index, two re-checks
+
+- `add-meta` refuses only an EXACT repeat of the entry (name AND arguments, whitespace runs folded; `AddMeta.sameEntry`).
+  Haxe allows several `@:access(...)` on one declaration, and the old name-only refusal made a second one impossible.
+  A sibling without a span counts as the same (refusal side of the doubt).
+- `add-import` placed `haxe.ds.Either` between `LexRegion` and `MoveMemberFields.*`. Not a second comparator: the seat IS
+  `ImportOrder.insertionFor`, but its wildcard gate needs the host's resolution index and the CLI op built its plugin with none,
+  so every wildcard was a run boundary there while `import-order` (which has the index) read it as a member. The op now wraps
+  its plugin through `cli.ProjectResolution.hostFor` (nearest `apqlint.json`, the scope `lint` builds through
+  `LintCommand.resolutionThunk`, read lazily - only a header with a wildcard asks). Other single-file ops still pass no scope;
+  they place no imports through the gate-aware seat except `move-*`/materialisers, which hold their own hosts.
+- Re-check of the August F20 side findings: `dead-store` on a value read only through a closure capture does NOT reproduce
+  (arrow, local function, `.map` lambda, capture before and after the store, loop capture: no finding; the one control store is
+  still reported; the pins are `DeadStoreCheckTest.testClosureUseExcluded`). `tools/bench-ab.sh` still hard-wired the repo-root
+  `hxformat.json`: it now takes `--config <path>`.

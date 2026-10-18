@@ -630,7 +630,7 @@ final class LintCommand implements CliCommand {
 	 * Reading the `files` array live keeps the report portion current across `--fix` passes; the
 	 * library portion is immutable.
 	 */
-	private static function resolutionThunk(
+	public static function resolutionThunk(
 		files: Array<{ file: String, source: String }>, roots: Array<String>, libNames: Array<String>, stdEnabled: Bool
 	): Null<ResolutionScope> {
 		final declared: Bool = roots.length > 0 || libNames.length > 0;
