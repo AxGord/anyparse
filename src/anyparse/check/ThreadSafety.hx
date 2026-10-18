@@ -34,7 +34,9 @@ using StringTools;
  * still held where an exception leaves the function that took it; (d) two locks taken in opposite orders on the main
  * thread and on a background one (`LockOrder`).
  *
- * Context propagation (`ThreadStates`): graph roots start MAIN; a callback passed to a `spawns` target runs BG, one
+ * Context propagation (`ThreadStates`): graph roots start MAIN; a callback passed to a `spawns` target runs BG — but
+ * one at an argument position an object entry of `spawns` names `main` (`{"call": "FileIO.readAndProcess", "main":
+ * [2]}`), which runs MAIN later where the call is proven to bind that parameter (`ThreadStates.runsOnMain`) —, one
  * passed to a `marshals` target runs MAIN, any other inherits its registrar's context. A node nothing reached is
  * ASSUMED main. A call runs only where the code around it lets it (`EdgeConditions`); a value stored into a `dynamic`
  * member runs where the member runs (`deriveStoredCalls`). Sinks inside a `marshals` function are its own machinery.
@@ -48,8 +50,9 @@ using StringTools;
  * Configured per project in `apqlint.json` under `"thread-safety"` (inert without any option), read and checked by
  * `ThreadSafetyOptions`, which says every option it drops. The sinks are POSITIVE: the grammar's blocking library calls
  * (`ExecutionShape.blockingLibraryCalls`) and the project's natives (`ProjectNatives`) apply wherever the rule runs,
- * `sinks` adds to them and `nonBlocking` waives one on evidence, a run saying once which applied; `sinks`, `spawns`,
- * `marshals` and `throwers` (`ThrowReach`) are call patterns, matched by their last two dot-segments (`Type.*` covers a
+ * `sinks` adds to them and `nonBlocking` waives one on evidence, a run saying once which applied; `sinks`,
+ * `spawns`, `marshals` and `throwers` (`ThrowReach`) are call patterns (a `spawns` item may be an object
+ * naming one, `ThreadSafetyOptions.SpawnArguments`), matched by their last two dot-segments (`Type.*` covers a
  * type); a `lockPairs` entry is `<lock pattern>/<unlock member name>`, and a lock WRAPPER's call takes or gives its
  * lock with no entry of its own; `quietRoots` are handlers that block on purpose — the main thread
  * is QUIET in them while no loud main-thread code calls them (`settleContexts`), and a hold only
@@ -60,8 +63,9 @@ using StringTools;
  * a '/'-bounded path-segment run before the graph is built; `shortSinks` are the sinks one call of which waits briefly,
  * `compilerFacts: true` builds the graph through the run's compiler facts when it has them
  * (`ThreadGraph.build`) — the ONE graph of the run, so for every file once any chain asks;
- * `iterates` the calls running a function value handed to them once per element, and `registers` the calls keeping one to
- * run later, once per event however often it was registered, and `runsOnce` the calls running one at most once per
+ * `iterates` the calls running a function value handed to them once per element, and `registers` the calls
+ * keeping one to run later, once per event however often it was registered (a bare name the runtime's only, a
+ * `Type.member` entry that member, a project one too), and `runsOnce` the calls running one at most once per
  * call — a value handed to any other call may repeat (`CallRepetition`); `sharedLocks` are the `lockPairs` take
  * members taking their lock shared — a lock only ever taken through them never waits (`QuietLocks`); `nonThrowing` are
  * the calls that never throw, so a `catch` around nothing else runs no call (`DeadCatches`).
@@ -461,13 +465,15 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			iterateNames: [for (p in iterates) if (p.indexOf('.') < 0) p],
 			registerIds: matchAll(graph, registers),
 			registerNames: [for (p in registers) if (p.indexOf('.') < 0) p],
+			registerMemberIds: matchAll(graph, dotted(registers)),
 			// a bare name speaks for the runtime's calls only (`CallRepetition.runsOnce`), never a project member of that name
-			runsOnceIds: matchAll(graph, [for (p in runsOnce) if (p.indexOf('.') >= 0) p]),
+			runsOnceIds: matchAll(graph, dotted(runsOnce)),
 			runsOnceNames: [for (p in runsOnce) if (p.indexOf('.') < 0) p],
 			sharedIds: matchAll(graph, option('sharedLocks')),
 			nonThrowingIds: matchAll(graph, nonThrowing),
 			nonThrowingNames: [for (p in nonThrowing) if (p.indexOf('.') < 0) p],
 			spawnIds: matchAll(graph, option('spawns')),
+			mainArguments: mainArguments(graph, options),
 			marshalIds: matchAll(graph, option('marshals')),
 			quietIds: matchAll(graph, option('quietRoots')),
 			reentrantIds: matchAll(graph, option('reentrantLocks')),
@@ -502,6 +508,22 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final result: Array<String> = [];
 		for (p in patterns) for (id in graph.matchIds(p)) if (!result.contains(id)) result.push(id);
 		return result;
+	}
+
+	/** The `Type.member` entries of `patterns` — each naming its type —, a bare member name left out. */
+	private static function dotted(patterns: Array<String>): Array<String> {
+		return [for (p in patterns) if (p.indexOf('.') >= 0) p];
+	}
+
+	/** Each call target a `spawns` object entry of `options` names in `graph` -> the union of the `main` positions naming it. */
+	private static function mainArguments(graph: CallGraph, options: ThreadSafetyOptions): Map<String, Array<Int>> {
+		final out: Map<String, Array<Int>> = [];
+		for (entry in options.spawnArguments) for (id in graph.matchIds(entry.call)) {
+			final known: Array<Int> = out[id] ?? [];
+			for (at in entry.main) if (!known.contains(at)) known.push(at);
+			out[id] = known;
+		}
+		return out;
 	}
 
 	/** Every well-formed `lockPairs` entry as the graph's lock ids, each paired with the same type's unlock member. */
@@ -554,13 +576,16 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	/**
-	 * The context a callback `edge` registers from `ctx` runs in: a `spawns` target's BG, a `marshals` target's MAIN,
-	 * any other the registrar's own — quiet never among them: a callback runs later, from whatever invokes it.
+	 * The context a callback `edge` of `graph` registers from `ctx` runs in: a `spawns` target's BG — MAIN at an argument
+	 * its object entry names `main` (`ThreadStates.runsOnMain`) —, a `marshals` target's MAIN, any other the registrar's
+	 * own — quiet never among them: a callback runs later, from whatever invokes it.
 	 */
-	private static function callbackContext(edge: CallEdge, lists: ChainLists, ctx: Int): Int {
+	private static function callbackContext(graph: CallGraph, edge: CallEdge, lists: ChainLists, ctx: Int): Int {
 		final via: Null<String> = edge.via;
 		final loud: Int = (ctx & CTX_QUIET != 0 ? CTX_MAIN : 0) | (ctx & (CTX_MAIN | CTX_BG));
-		return if (via != null && lists.spawnIds.contains(via))
+		return if (ThreadStates.runsOnMain(graph, edge, lists))
+			CTX_MAIN
+		else if (via != null && lists.spawnIds.contains(via))
 			CTX_BG
 		else if (via != null && lists.marshalIds.contains(via))
 			CTX_MAIN
@@ -580,7 +605,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		var roots: Array<String> = quiet;
 		while (true) {
 			final states: ThreadStates = new ThreadStates(
-				graph, conditions, roots, (e, ctx) -> callbackContext(e, listsOf(e.file), ctx), inertRef, seedable
+				graph, conditions, roots, (e, ctx) -> callbackContext(graph, e, listsOf(e.file), ctx), inertRef, seedable
 			);
 			final loud: Array<String> = [
 				for (q in roots) if (graph.inEdges(q).exists(e -> e.kind.isInvocation() && states.edgeContext(e) & CTX_MAIN != 0)) q

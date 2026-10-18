@@ -832,6 +832,7 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyReflectiveSealTest#testWhatAWriteStoresUnsealsOnlyTheLocksOfItsType :: control :: '
 			+ 'M-TS-STORED-MEMBER-TYPE,M-TS-STORED-MARKED,M-TS-STORED-TYPED-NOTICE',
 		'unit.check.ThreadSafetyRegistersTest#testALoopAboveTheRegistrarRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
+		'unit.check.ThreadSafetyRegistersTest#testAProjectMemberEntryRegisters :: control :: M-TS-REGISTER-MEMBER',
 		'unit.check.ThreadSafetyRegistersTest#testARegistrationInALoopRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 		'unit.check.ThreadSafetyRegistersTest#testTheOwnerIsNeverUpARegistration :: control :: M-TS-REGISTER-OWNER',
 		'unit.check.ThreadSafetyRepetitionTest#testABareRunsOnceNameSaysNothingOfProjectCode :: control :: '
@@ -874,6 +875,12 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyRootCauseTest#testTwoCallsReachingOneSinkAreTwoWays :: control :: M-TS-FOLD-SAME-WAY,M-TS-FOLD-PARTS-ONCE',
 		'unit.check.ThreadSafetyRootCauseTest#testTwoTakesSharingAFindingDoNotCoverEachOther :: control :: M-TS-FOLD-SELF',
 		'unit.check.ThreadSafetyRootCauseTest#testUnnamedLocksNeverCoverEachOther :: control :: M-TS-FOLD-UNNAMED-SAME',
+		'unit.check.ThreadSafetySpawnArgumentsTest#testAMainArgumentRepeatsPerPost :: control :: M-TS-SPAWN-MAIN-REPEAT',
+		'unit.check.ThreadSafetySpawnArgumentsTest#testAMainArgumentRunsOnTheMainThread :: control :: '
+			+ 'M-TS-SPAWN-MAIN-ARG,M-TS-SPAWN-MAIN-CONTEXT,M-TS-SPAWN-ARG-POSITION',
+		'unit.check.ThreadSafetySpawnArgumentsTest#testAMalformedObjectEntryIsSaid :: control :: M-TS-OPT-SPAWN-OBJECT',
+		'unit.check.ThreadSafetySpawnArgumentsTest#testAPositionAnOptionalMayShiftRunsAsThePlainEntry :: control :: M-TS-SPAWN-MAIN-SHIFT',
+		'unit.check.ThreadSafetySpawnArgumentsTest#testAnOverloadedCallRunsAsThePlainEntry :: control :: M-TS-SPAWN-MAIN-SIGNATURE',
 		'unit.check.ThreadSafetyUnnamedLockTest#testAnUnnamedLockNoMainThreadTakesStallsNoOne :: control :: M-TS-UNNAMED-PAIR',
 		'unit.check.ThreadSafetyUnnamedLockTest#testAnotherPairOfTheSameClassStallsTheMainThread :: control :: M-TS-UNNAMED-BY-PAIR',
 		'unit.check.ThreadSafetyWaiterTest#testAHoldOnlyTheMainThreadRunsIsNoStall :: control :: '

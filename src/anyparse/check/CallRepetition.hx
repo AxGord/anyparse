@@ -17,7 +17,8 @@ using Lambda;
  * directly or through other functions.
  *
  * Positive: a value handed to a call repeats unless its chain lists the call as running it at most once (`runsOnce`),
- * keeping it to run per event (`registers`, the runtime's own — a registration into project code is not), running it on
+ * keeping it to run per event (`registers`: by a bare name the runtime's own — a registration into
+ * project code is not —, by a `Type.member` entry that member, a project one included), running it on
  * another thread (`spawns`, `marshals`) or never (`neverInvokes`); `iterates` names a call that repeats it whatever else
  * lists it. A value stored, or handed to a call the graph resolves to nothing, repeats.
  *
@@ -137,18 +138,23 @@ final class CallRepetition {
 
 	/**
 	 * Whether the `Ref` edge `edge` hands its value to a call that keeps it to run later, once per event however often it
-	 * was registered: one its chain's `registers` names, the runtime's own — a call into a function with a body in the
-	 * run's files keeps the value in project code, which runs it from a call the graph cannot follow, as often as it
-	 * likes. The value then runs as a run of its own, and nothing up its registration repeats it.
+	 * was registered: one a `Type.member` entry of its chain's `registers` names — the project's word on that member, a
+	 * project one included —, or one a bare name names that is the runtime's own: a bare name says nothing of a project
+	 * function of that name, which keeps the value in project code and runs it from a call the graph cannot follow, as often
+	 * as it likes. The value then runs as a run of its own, and nothing up its registration repeats it.
 	 */
 	public function registered(edge: CallEdge): Bool {
 		final lists: ChainLists = _listsOf(edge.file);
-		return listed(edge, lists.registerIds, lists.registerNames) && runtimeCall(edge);
+		return listed(edge, lists.registerMemberIds, []) || listed(edge, lists.registerIds, lists.registerNames) && runtimeCall(edge);
 	}
 
-	/** Whether the `Ref` edge `edge` hands its value to a call its chain's `marshals` names: it runs on the main thread once per post. */
+	/**
+	 * Whether the `Ref` edge `edge` hands its value to a call its chain's `marshals` names, or to a `spawns` call at an
+	 * argument its object entry names `main` (`ThreadStates.runsOnMain`): it runs on the main thread once per post.
+	 */
 	public function marshalled(edge: CallEdge): Bool {
-		return edge.kind == Ref && _listsOf(edge.file).marshalIds.contains(edge.via ?? '');
+		final lists: ChainLists = _listsOf(edge.file);
+		return edge.kind == Ref && (lists.marshalIds.contains(edge.via ?? '') || ThreadStates.runsOnMain(_graph, edge, lists));
 	}
 
 	/**

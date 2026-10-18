@@ -21,9 +21,12 @@ final class PinsQueryAndRuntime {
 		'unit.query.AddElementSortedTest#testEscapedOrInterpolatedEntryIsRefused :: control :: M-SORTED-RAW-ESCAPES',
 		'unit.query.AddElementSortedTest#testNonArrayContainerIsRefused :: control :: M-SORTED-ANY-CONTAINER',
 		'unit.query.AddElementSortedTest#testUnsortedListIsRefused :: control :: M-SORTED-ORDER-UNCHECKED',
+		'unit.query.AddImportSliceTest#testCliSeatReadsTheWildcardAsRunMember :: control :: M-ADDIMPORT-CLI-BLIND-SEAT',
 		'unit.query.AddMetaSliceTest#testCliWritesTheEntry :: control :: M-ADDMETA-CLI-UNROUTED',
 		'unit.query.AddMetaSliceTest#testFinalClassWrapperIsLifted :: control :: M-ADDMETA-NO-WRAPPER-CLIMB',
 		'unit.query.AddMetaSliceTest#testGuardedTypeKeepsTheEntryInsideTheGuard :: control :: M-ADDMETA-LOOSE-WRAPPER-CLIMB',
+		'unit.query.AddMetaSliceTest#testSameNameWithDifferentArgsAdded :: control :: M-ADDMETA-SAME-ARGS',
+		'unit.query.AddMetaSliceTest#testSameNameWithSameArgsRefused :: control :: M-ADDMETA-ENTRY-NEVER-SAME',
 		'unit.query.AddMetaSliceTest#testTypeEntryLandsBelowTheDoc :: control :: M-ADDMETA-ZERO-WIDTH-INSERT',
 		'unit.query.AddParamSliceTest#testASignatureThatNoLongerFitsComesBackCanonical :: control :: M-SIGNATURE-EDIT-RAW-SPLICE',
 		'unit.query.AddressTest#testAModuleLevelNodeIsAddressedFromTheRootNotByOrdinal :: control :: M-ADDRESS-NO-ROOT-ANCHOR',
@@ -1294,6 +1297,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.TypeNameBindingTest#testAUseOutsideTheGuardedRegionIsUnknown :: control :: M-BINDING-STRICT-UNREAD-PASS',
 		'unit.query.TypeNameBindingTest#testAWildcardBindsMainTypesOnly :: control :: M-BINDING-SUBTYPES-VISIBLE',
 		'unit.query.TypeNameBindingTest#testAnImportLineListsTheNonPrivateTypesItBinds :: control :: M-BINDING-PRIVATE-VISIBLE',
+		'unit.query.TypeNameBindingTest#testAnUnknownCarriesTheCandidatesItReads :: control :: '
+			+ 'M-BINDING-EITHER-DROPS-REST,M-BINDING-EITHER-DROPS-GUARDED,M-BINDING-EITHER-OPEN-READ,M-BINDING-CANDIDATES-OWN-TYPE',
 		'unit.query.TypeNameBindingTest#testAnUnreadableModuleImportIsUnknown :: control :: M-BINDING-UNINDEXED-MODULE-FREE',
 		'unit.query.TypeNameBindingTest#testBindingsListEveryBuildsType :: control :: '
 			+ 'M-TS-GUARDED-IMPORT,M-TS-WILD-MAYBE,M-BINDINGS-UNREADABLE-SUBTYPE,M-TS-WILD-GUARDED',

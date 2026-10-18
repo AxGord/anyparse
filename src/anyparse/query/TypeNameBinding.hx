@@ -17,7 +17,10 @@ enum Tier {
 	/** The tier binds the name, to these declarations. */
 	Bound(decls: Array<ResolvedType>);
 
-	/** The tier COULD bind the name but what it binds to is not in the index, so no lower tier may answer. */
+	/**
+	 * The tier COULD bind the name but what it binds to is not in the index, so no lower tier may answer. What it may bind,
+	 * when each candidate is read, is `TypeNameBinding.unknownCandidates`.
+	 */
 	Unknown;
 
 	/**
@@ -168,8 +171,23 @@ final class TypeNameBinding {
 		if (own.length > 0) return Bound([for (t in own) { file: fi, type: t }]);
 		return switch explicitFrom(name, fi, orderOf(fi, at), 0, false) {
 			case Decls(decls): Bound(decls);
-			case Unreadable(_): Unknown;
+			case Unreadable(_), Either(_): Unknown;
 			case Outside(_), Pass: Free;
+		};
+	}
+
+	/**
+	 * The types `name`, written in `fi` (at offset `at` when the caller knows where), may bind to where `tierOf` answers
+	 * `Unknown` and every one of them is read: a `#if`-guarded statement's binding beside what the order binds on the builds
+	 * without it, a build that binds nothing adding none (`bothBuilds`). Null when the order may bind something nothing here
+	 * reads — an import of a module outside the index, a skipped file, an unbounded ambient chain — and for a name `tierOf`
+	 * answers `Bound` or `Free`.
+	 */
+	public function unknownCandidates(name: String, fi: FileInfo, ?at: Int): Null<Array<NameTarget>> {
+		if (fi.types.exists(t -> t.name == name)) return null;
+		return switch explicitFrom(name, fi, orderOf(fi, at), 0, false) {
+			case Either(targets): targets;
+			case _: null;
 		};
 	}
 
@@ -306,10 +324,10 @@ final class TypeNameBinding {
 			final guarded: Bool = imp.guarded && !coGuarded(imp, fi, order.use);
 			switch statementAnswer(name, imp) {
 				case Pass:
-				case Decls(decls) if (guarded):
-					return bothBuilds(decls, explicitFrom(name, fi, order, i + 1, true));
+				case answer if (guarded):
+					return bothBuilds(answer, explicitFrom(name, fi, order, i + 1, true));
 				case answer:
-					return guarded ? Unreadable(null) : answer;
+					return answer;
 			}
 		}
 		if (!fi.ambientImportsBounded) return Unreadable(null);
@@ -329,10 +347,10 @@ final class TypeNameBinding {
 			final guarded: Bool = w.guarded && !coGuarded(w, fi, order.use);
 			switch wildcardAnswer(name, SourceText.parentPath(w.raw)) {
 				case Pass:
-				case Decls(decls) if (guarded):
-					return bothBuilds(decls, wildcardFrom(name, fi, order, i + 1, true));
+				case answer if (guarded):
+					return bothBuilds(answer, wildcardFrom(name, fi, order, i + 1, true));
 				case answer:
-					return guarded ? Unreadable(null) : answer;
+					return answer;
 			}
 		}
 		return packageAnswer(name, fi.pkg, strict);
@@ -545,8 +563,10 @@ final class TypeNameBinding {
 		return switch answer {
 			case Decls(decls): InIndex(decls);
 			case Outside(path): OutOfIndex(path);
-			case Unreadable(path): path == null ? null : OutOfIndex(path);
-			case Pass: null;
+			case Unreadable(path):
+				path == null ? null : OutOfIndex(path);
+			// an `Either` is made only by a guarded statement against the rest of the order, and no tier read here is one
+			case Either(_), Pass: null;
 		};
 	}
 
@@ -560,15 +580,32 @@ final class TypeNameBinding {
 	}
 
 	/**
-	 * A `#if`-guarded statement binds `decls` in the builds that compile it; `rest` is what the order answers in
-	 * the builds that do not. One answer only when the other builds bind the same declarations or nothing at all
-	 * — a build in which the name binds nothing does not compile a use of it.
+	 * A `#if`-guarded statement answers `guarded` in the builds that compile it; `rest` is what the order answers in the
+	 * builds that do not. One binding only when the statement binds declarations and the other builds bind the same ones or
+	 * nothing at all — a build in which the name binds nothing does not compile a use of it; otherwise the bindings of both
+	 * (`Either`), or `Unreadable` when either may be something nothing here reads.
 	 */
-	private static function bothBuilds(decls: Array<ResolvedType>, rest: Answer): Answer {
-		return switch rest {
-			case Pass: Decls(decls);
-			case Decls(other) if (sameDecls(decls, other)): Decls(decls);
-			case _: Unreadable(null);
+	private static function bothBuilds(guarded: Answer, rest: Answer): Answer {
+		switch [guarded, rest] {
+			case [Decls(_), Pass]:
+				return guarded;
+			case [Decls(decls), Decls(other)] if (sameDecls(decls, other)):
+				return guarded;
+			case _:
+		}
+		final mine: Null<Array<NameTarget>> = targetsOf(guarded);
+		final theirs: Null<Array<NameTarget>> = targetsOf(rest);
+		return mine == null || theirs == null ? Unreadable(null) : Either(mine.concat(theirs));
+	}
+
+	/** Every type `answer` binds the name to, each read; none for `Pass`; null when it may be something nothing here reads. */
+	private static function targetsOf(answer: Answer): Null<Array<NameTarget>> {
+		return switch answer {
+			case Pass: [];
+			case Decls(decls): [InIndex(decls)];
+			case Outside(path): [OutOfIndex(path)];
+			case Either(targets): targets;
+			case Unreadable(_): null;
 		};
 	}
 
@@ -661,6 +698,9 @@ private enum Answer {
 
 	/** It binds the name to a declaration the index does not hold — a built-in, a std or library type — at `path`. */
 	Outside(path: String);
+
+	/** It binds the name to one of `targets` on different builds — a `#if`-guarded statement's against the rest's — each read. */
+	Either(targets: Array<NameTarget>);
 
 	/**
 	 * It may bind the name to something nothing here can read, so no lower tier may answer: at `path` when the statement

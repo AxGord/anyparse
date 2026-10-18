@@ -76,8 +76,10 @@ final class AddMeta {
 
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, hostNN);
 		final run: Array<QueryNode> = prefixRun(parent, hostNN);
-		for (sibling in run) if (MemberKinds.META_KINDS.contains(sibling.kind) && sibling.name == nameNN)
-			return Err('already annotated: $nameNN');
+		for (sibling in run) if (
+			MemberKinds.META_KINDS.contains(sibling.kind) && sibling.name == nameNN && sameEntry(source, sibling, text)
+		)
+			return Err('already annotated: $text');
 
 		final edit: Null<{ span: Span, text: String }> = runEdit(source, run, hostNN, text);
 		return edit == null
@@ -94,6 +96,10 @@ final class AddMeta {
 	public static function entryEdit(source: String, tree: QueryNode, decl: QueryNode, text: String): Null<{ span: Span, text: String }> {
 		final host: Null<QueryNode> = declarationHost(tree, decl);
 		return host == null ? null : runEdit(source, prefixRun(TreePath.parentOf(tree, host), host), host, text);
+	}
+
+	private static inline function foldSpaces(text: String): String {
+		return ~/\s+/g.replace(text.trim(), ' ');
 	}
 
 	/**
@@ -198,6 +204,16 @@ final class AddMeta {
 		final lineStart: Int = i;
 		while (i < at && (source.charAt(i) == ' ' || source.charAt(i) == '\t')) i++;
 		return source.substring(lineStart, i);
+	}
+
+	/**
+	 * Whether the entry `sibling` spells is the entry `text` — the whole `@:name(args)`, whitespace runs folded. Haxe allows
+	 * several entries of one name (`@:access(a.B) @:access(c.D)`), so only an exact repeat is a duplicate; a sibling the
+	 * grammar gave no span cannot be compared and counts as the same, the refusal side of the doubt.
+	 */
+	private static function sameEntry(source: String, sibling: QueryNode, text: String): Bool {
+		final span: Null<Span> = sibling.span;
+		return span == null || foldSpaces(source.substring(span.from, span.to)) == foldSpaces(text);
 	}
 
 }
