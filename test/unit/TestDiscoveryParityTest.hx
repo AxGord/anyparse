@@ -1013,6 +1013,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.MoveMemberSliceTest',
 		'unit.query.MoveMemberSplitSliceTest',
 		'unit.query.MoveSymbolSliceTest',
+		'unit.query.MoveToHelperSliceTest',
 		'unit.query.MutationSchemaTest',
 		'unit.query.MutationVerdictTest',
 		'unit.query.NameMentionScanTest',

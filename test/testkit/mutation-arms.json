@@ -22828,8 +22828,8 @@
 			"name": "M-OWNED-FIELDS-OFF",
 			"type": "anyparse.query.MoveMember",
 			"method": "resolveMove",
-			"find": "final fieldsAdded: Array<String> = ownedFieldClosure(srcDecl, srcTree, srcSource, called, destHit.decl, destSource, trees, plugin);",
-			"replace": "final fieldsAdded: Array<String> = [];",
+			"find": ": ownedFieldClosure(srcDecl, srcTree, srcSource, called, destHit.decl, destSource, trees, plugin);",
+			"replace": ": [];",
 			"note": "the fields only the moved group reads stay behind, and the move refuses as \"shared mutable state\""
 		},
 		{
@@ -25624,6 +25624,198 @@
 			"find": "requireMods: ['public', 'static', HaxePropertyStorage.READ_ONLY_MOD],",
 			"replace": "requireMods: ['public', HaxePropertyStorage.READ_ONLY_MOD],",
 			"note": "an INSTANCE read-only property takes the static-final format too"
+		},
+		{
+			"name": "M-HELPER-THIS-KEPT",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "rewriteMovedRef",
+			"find": "edits.movedTextEdits.push({ span: hit.span, text: hit.interpolated ? '$$${edits.param}' : edits.param });",
+			"replace": "",
+			"note": "a bare `this` in a moved body is left standing, so the static helper reads a `this` it does not have"
+		},
+		{
+			"name": "M-HELPER-MEMBER-UNQUALIFIED",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "memberRef",
+			"find": "edits.movedTextEdits.push(qualifiedRef(hit, isStatic ? '${prep.srcTypeName}.' : '${edits.param}.'));",
+			"replace": "",
+			"note": "a moved body's bare read of a member staying on the source is left bare instead of `<param>.x` / `Src.x`"
+		},
+		{
+			"name": "M-HELPER-NO-GRANT",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "grantFor",
+			"find": "edits.accessMembers.push(host.name);",
+			"replace": "return;",
+			"note": "a moved body reading a private member of the source gets no `@:access` grant"
+		},
+		{
+			"name": "M-HELPER-FIELDS-TRAVEL",
+			"type": "anyparse.query.MoveMember",
+			"method": "resolveMove",
+			"find": "helper\n\t\t\t? []",
+			"replace": "false\n\t\t\t? []",
+			"note": "the fields only the moved methods touch move into the static helper as instance fields, although the methods read them through their parameter"
+		},
+		{
+			"name": "M-HELPER-CONSTANT-STAYS",
+			"type": "anyparse.query.MoveToHelper",
+			"method": "resolveWithConstants",
+			"find": "final more: Array<String> = onlyMovedConstants(prep, plugin);",
+			"replace": "final more: Array<String> = [];",
+			"note": "a private constant only the moved members read stays behind on the source"
+		},
+		{
+			"name": "M-HELPER-TYPE-STAYS",
+			"type": "anyparse.query.MoveToHelperTypes",
+			"method": "carriedTypes",
+			"find": "return Right([for (c in carried) c.type]);",
+			"replace": "return Right([]);",
+			"note": "a private type only the moved code names stays in the source module, where the helper module cannot see it"
+		},
+		{
+			"name": "M-HELPER-TRAVELLING-IMPORTED",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "dependencyNames",
+			"find": "final travels: Bool = travelling != null && travelling.contains(ref.name);",
+			"replace": "final travels: Bool = false;",
+			"note": "a type travelling with the move is still priced as a dependency to import, and the carry refuses it as unreachable"
+		},
+		{
+			"name": "M-HELPER-CALL-ORDER",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "rewrite",
+			"find": "calls.sort((a, b) -> a.length - b.length);",
+			"replace": "",
+			"note": "call rewrites inserting at one offset are pushed outermost first, so `a.self().add(1)` comes out with its heads swapped"
+		},
+		{
+			"name": "M-HELPER-SUBTYPE-CALLERS-SKIPPED",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "rewrite",
+			"find": "final subtypeError: Null<String> = subtypeBareCallers(edits, indexes, calls);",
+			"replace": "final subtypeError: Null<String> = null;",
+			"note": "a subtype's bare call of an inherited moved member is left calling a member its supertype no longer declares"
+		},
+		{
+			"name": "M-HELPER-ARM-RETARGET-NONE",
+			"type": "anyparse.query.MoveToHelperArms",
+			"method": "hints",
+			"find": "out.push('arm ${arm.name}: retarget \"${arm.type}#${arm.method}\" -> \"$helperFqn#${arm.method}\"');",
+			"replace": "",
+			"note": "an arm addressing a moved member is not reported for retargeting"
+		},
+		{
+			"name": "M-HELPER-ARM-STALE-NONE",
+			"type": "anyparse.query.MoveToHelperArms",
+			"method": "hints",
+			"find": "if (missing != null) out.push(",
+			"replace": "if (false) out.push(",
+			"note": "an arm whose find the rewrite changed is not flagged"
+		},
+		{
+			"name": "M-HELPER-ACCESSOR-ALLOWED",
+			"type": "anyparse.query.MoveToHelper",
+			"method": "accessedProperty",
+			"find": "return (isGet ? member.hasGetter : member.hasSetter) ? property : null;",
+			"replace": "return null;",
+			"note": "a property accessor moves into the helper, where `<param>.p` calls the accessor it used to implement"
+		},
+		{
+			"name": "M-HELPER-FIELD-ALLOWED",
+			"type": "anyparse.query.MoveToHelper",
+			"method": "memberRefusalOf",
+			"find": "if (MemberKinds.isDataFieldKind(m.group.member.kind))",
+			"replace": "if (false)",
+			"note": "an instance field is not refused for what it is"
+		},
+		{
+			"name": "M-HELPER-MODIFIER-ALLOWED",
+			"type": "anyparse.query.MoveToHelper",
+			"method": "memberRefusalOf",
+			"find": "refusedKinds.contains(mod.kind)",
+			"replace": "false",
+			"note": "a `dynamic` / `macro` member moves into a static helper, which keeps neither meaning"
+		},
+		{
+			"name": "M-HELPER-VALUE-USE-ALLOWED",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "callRewrite",
+			"find": "if (placed == null || open < 0) return valueUse(edits.prep.srcTypeName, m.name, where(file, source, offset));",
+			"replace": "if (placed == null) return valueUse(edits.prep.srcTypeName, m.name, where(file, source, offset));",
+			"note": "a moved member passed as a function value is rewritten as though it were called"
+		},
+		{
+			"name": "M-HELPER-SUPER-ALLOWED",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "rewriteMovedRef",
+			"find": "if (name == 'super')",
+			"replace": "if (false)",
+			"note": "a `super` access is not refused for what it is"
+		},
+		{
+			"name": "M-HELPER-UNRESOLVED-ALLOWED",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "rewriteMovedRef",
+			"find": "if (wildcardBound(prep, name)) return null;",
+			"replace": "if (true) return null;",
+			"note": "a name nothing in scope binds is left as it is, though it may be a member of a supertype the index cannot see"
+		},
+		{
+			"name": "M-HELPER-SHARED-TYPE-ALLOWED",
+			"type": "anyparse.query.MoveToHelperTypes",
+			"method": "carriedTypes",
+			"find": "for (c in candidates) if (!carried.contains(c) && c.refs.exists(travels))",
+			"replace": "for (c in candidates) if (false)",
+			"note": "a private type the staying code names too is not refused for what it is"
+		},
+		{
+			"name": "M-HELPER-PARAM-CLASH-UNCHECKED",
+			"type": "anyparse.query.MoveToHelper",
+			"method": "refusalOf",
+			"find": "final clash: Null<String> = parameterClash(prep, paramName);",
+			"replace": "final clash: Null<String> = null;",
+			"note": "a parameter name the moved code already spells is taken, and the local shadows it"
+		},
+		{
+			"name": "M-HELPER-GENERIC-ALLOWED",
+			"type": "anyparse.query.MoveToHelper",
+			"method": "refusalOf",
+			"find": "if (info != null && info.typeParamArity > 0)",
+			"replace": "if (false)",
+			"note": "a generic source moves with a parameter type missing its type parameters"
+		},
+		{
+			"name": "M-HELPER-NON-CLASS-ALLOWED",
+			"type": "anyparse.query.MoveToHelper",
+			"method": "refusalOf",
+			"find": "if (!(prep.shape.classDeclKinds ?? ['ClassDecl']).contains(srcKind))",
+			"replace": "if (false)",
+			"note": "an abstract's member moves into a helper, where `this` is no longer its underlying value"
+		},
+		{
+			"name": "M-HELPER-DRY-RUN-WRITES",
+			"type": "anyparse.query.cli.command.MoveToHelperCommand",
+			"method": "emit",
+			"find": "final write: Bool = flags.contains('--write') && !flags.contains('--dry-run');",
+			"replace": "final write: Bool = flags.contains('--write') || flags.contains('--dry-run');",
+			"note": "a dry run writes the files it was only asked to print"
+		},
+		{
+			"name": "M-HELPER-RECEIVER-VALUE-ALLOWED",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "receiverCallRewrite",
+			"find": "if (open < 0) return valueUse(edits.prep.srcTypeName, h.m.name, where(h.file, source, h.at));",
+			"replace": "if (false) return valueUse(edits.prep.srcTypeName, h.m.name, where(h.file, source, h.at));",
+			"note": "a moved member reached through a receiver as a function value (`this.f.bind(1)`) is rewritten as though it were called"
+		},
+		{
+			"name": "M-HELPER-MODULE-VALUE-ALLOWED",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "rewriteMovedRef",
+			"find": "if (prep.srcInfo.moduleFields.exists(f -> f.name == name) && prep.srcFile != prep.destFile)",
+			"replace": "if (false)",
+			"note": "a module-level value of the source module is not refused for what it is"
 		},
 		{
 			"name": "M-WRITE-DIR-UNCREATED",
