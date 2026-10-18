@@ -92,27 +92,6 @@ final class AddElement {
 	private static inline final SOURCE_LABEL: String = 'source';
 
 	/**
-	 * Expression / block / switch container kinds whose source ENDS at their
-	 * own closing delimiter, so back-scanning whitespace from `span.to`
-	 * reliably lands on that delimiter. Type-decl bodies (class / interface /
-	 * abstract / enum / typedef-anon, incl. `final class`) are NOT listed
-	 * here — they are recognised through `RefactorSupport.typeDeclOf`, which
-	 * is final-aware. Param lists are deliberately absent: they are embedded
-	 * in a larger decl whose `span.to` is the body brace, not the param `)`,
-	 * so container-append cannot target them.
-	 */
-	private static final EXPR_CONTAINER_KINDS: Array<String> = [
-		'ArrayExpr',
-		'ObjectLit',
-		'Call',
-		'NewExpr',
-		'BlockBody',
-		'BlockStmt',
-		'SwitchStmtBare',
-		'SwitchExprBare'
-	];
-
-	/**
 	 * Insert `code` as a new sibling element on `side` of the element whose
 	 * first token is at `line:col` in `source`. `reformat` opts into a
 	 * whole-file canonicalisation when the source is not already
@@ -153,7 +132,7 @@ final class AddElement {
 		// the decl it precedes). A non-decl element keeps its own span.
 		final span: Span = ElementSpan.declGroupSpan(element, parent, elemSpan);
 		var isComma: Bool = ElementSpan.adjacentToComma(source, span);
-		if (!isComma && parent != null) isComma = MemberKinds.COMMA_CONTAINER_KINDS.contains(parent.kind);
+		if (!isComma && parent != null) isComma = (plugin.refShape().commaContainerKinds ?? []).contains(parent.kind);
 
 		// A `;`-terminated element can never belong to a comma-separated list —
 		// the cursor resolved to a call-argument / array / object slot while the
@@ -223,7 +202,7 @@ final class AddElement {
 	 *
 	 * A container is any node whose source ends at its own closing delimiter:
 	 * an `ArrayExpr` / `ObjectLit` / `Call` / `NewExpr` / block / switch
-	 * (see `EXPR_CONTAINER_KINDS`), or a type-decl body resolved via
+	 * (the grammar's `RefShape.delimitedContainerKinds`), or a type-decl body resolved via
 	 * `RefactorSupport.typeDeclOf` (final-aware). The first pre-order node at
 	 * the cursor that qualifies is taken — so a `foo(x);` statement resolves
 	 * to its `Call`, not the wrapping `ExprStmt`.
@@ -234,8 +213,8 @@ final class AddElement {
 	 * trivia past the brace), then back again over whitespace AND whole
 	 * comment tokens to the last content byte. If that byte is an opening
 	 * delimiter the container is empty and the element is spliced bare;
-	 * otherwise it is joined with the slot separator (`,` for
-	 * `COMMA_CONTAINER_KINDS`, a newline otherwise). When trailing comments
+	 * otherwise it is joined with the slot separator (`,` for a
+	 * `RefShape.commaContainerKinds` kind, a newline otherwise). When trailing comments
 	 * were skipped the separator stays glued to the last element and the new
 	 * element is spliced on its own line PAST them, so nothing is ever written
 	 * into comment text. The whole-file re-emit formats + re-parse-validates
@@ -256,7 +235,7 @@ final class AddElement {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final container: Null<QueryNode> = findContainerAt(tree, source, cursor);
+		final container: Null<QueryNode> = findContainerAt(tree, source, cursor, plugin.refShape());
 		if (container == null)
 			return Err(
 				'position $line:$col'
@@ -296,7 +275,7 @@ final class AddElement {
 		final arrayKind: Null<String> = plugin.refShape().arrayLiteralKind;
 		final fold: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		if (arrayKind == null || fold == null) return Err('--sorted needs a grammar that names its array literal and its string literals');
-		final container: Null<QueryNode> = findContainerAt(tree, source, Span.offsetOf(source, line, col));
+		final container: Null<QueryNode> = findContainerAt(tree, source, Span.offsetOf(source, line, col), plugin.refShape());
 		final containerSpan: Null<Span> = container?.span;
 		if (container == null || containerSpan == null || container.kind != arrayKind)
 			return Err('position $line:$col is not on the first token of an array literal — --sorted inserts into an array');
@@ -364,8 +343,8 @@ final class AddElement {
 		return trimmedHeld.endsWith(';') || trimmedHeld.endsWith('}') ? held : '$held;';
 	}
 
-	private static inline function isContainer(node: QueryNode): Bool {
-		return EXPR_CONTAINER_KINDS.contains(node.kind) || RefactorSupport.typeDeclOf(node) != null;
+	private static inline function isContainer(node: QueryNode, shape: RefShape): Bool {
+		return (shape.delimitedContainerKinds ?? []).contains(node.kind) || RefactorSupport.typeDeclOf(node) != null;
 	}
 
 	/**
@@ -403,12 +382,12 @@ final class AddElement {
 	 * first-token tolerance (not an exact `span.from == cursor`) forgives a column landing
 	 * one past the opening `{` / inside a callee name. Null when no container qualifies.
 	 */
-	private static function findContainerAt(tree: QueryNode, source: String, cursor: Int): Null<QueryNode> {
+	private static function findContainerAt(tree: QueryNode, source: String, cursor: Int, shape: RefShape): Null<QueryNode> {
 		var best: Null<QueryNode> = null;
 		var bestFrom: Int = -1;
 		function walk(node: QueryNode): Void {
 			final sp: Null<Span> = node.span;
-			if (sp != null && sp.from > bestFrom && cursorInFirstToken(source, sp.from, cursor) && isContainer(node)) {
+			if (sp != null && sp.from > bestFrom && cursorInFirstToken(source, sp.from, cursor) && isContainer(node, shape)) {
 				best = node;
 				bestFrom = sp.from;
 			}
@@ -500,7 +479,7 @@ final class AddElement {
 		final lastCode: Int = lastContent >= containerSpan.from ? source.fastCodeAt(lastContent) : -1;
 		final empty: Bool = isOpenDelimiter(lastCode) || lastContent < containerSpan.from;
 
-		final isComma: Bool = MemberKinds.COMMA_CONTAINER_KINDS.contains(containerKind);
+		final isComma: Bool = (plugin.refShape().commaContainerKinds ?? []).contains(containerKind);
 		// Same statement-into-comma-list refusal as the sibling insert path: a
 		// `;`-terminated element never belongs in call arguments / array / object.
 		if (isComma && trimmed.endsWith(';'))

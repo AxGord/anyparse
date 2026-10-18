@@ -6,6 +6,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.runtime.Span;
 
 /**
  * Plugin contract for a grammar that the query engine can operate on.
@@ -181,6 +182,20 @@ interface GrammarPlugin {
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String>;
 
 	/**
+	 * The edit set `edits` laid into `source` by a FORMAT-PRESERVING writer, or null for a grammar whose
+	 * writer RE-EMITS the whole file — the shape `CanonicalEdit.canonicalize` then finishes itself, by
+	 * splicing the raw texts and running the writer to its fixed point.
+	 *
+	 * A grammar answers here when its writer keeps the file's own layout rather than imposing one:
+	 * `writeRoundTrip` hands every parseable source back unchanged, so the fixed point would leave a
+	 * spliced text exactly as spliced — an element appended to a one-per-line list as `, x` on the
+	 * previous line. The answer is the spliced document with what the edits introduced laid out the way
+	 * the surrounding source is, and every byte outside their reach untouched (JSON:
+	 * `JsonLayoutWriter.layout`). Throws the parser's `ParseError` when the splice does not parse.
+	 */
+	public function layoutSplice(source: String, edits: Array<{ span: Span, text: String }>): Null<String>;
+
+	/**
 	 * Optional: the layout numbers the writer would use for `optsJson` — the
 	 * target line width and the column width of one indent character. Lets a check
 	 * reason about how wide a construct may be BEFORE paying for a
@@ -298,11 +313,10 @@ interface GrammarPlugin {
 	 * `BodySlotGuard` / `Patch`, which use it to decide that a slot holding only a comment is
 	 * empty. A grammar that HAS comments must answer them here.
 	 *
-	 * There is deliberately NO default implementation, and today no way for one to be missing: this
-	 * is an abstract interface member and `Cli.pickPlugin` knows exactly one `--lang`. The `ar`,
-	 * `json` and `sexpr` grammars ship a parser and a writer but no `GrammarPlugin` at all, so the
-	 * question does not reach them — none of the region consumers can be pointed at those grammars
-	 * in the first place. The hazard is a FUTURE plugin author satisfying the compiler with `[]`
+	 * There is deliberately NO default implementation, and no way for one to be missing: this is an abstract interface member.
+	 * `CliArgs.pickPlugin` knows two `--lang`s: `haxe`, and `json`, whose answer is every string literal (keys included) read off
+	 * its own parse, since JSON has no comment. The `ar` and `sexpr` grammars ship a parser and a writer but no `GrammarPlugin`
+	 * at all, so the question does not reach them. The hazard is a FUTURE plugin author satisfying the compiler with `[]`
 	 * because it is the cheapest thing that type-checks, and the paragraph above is what that author
 	 * has to read past.
 	 *
@@ -2562,6 +2576,28 @@ typedef RefShape = {
 	 * whitelist by one shape.
 	 */
 	@:optional var objectLiteralKind: String;
+
+	/**
+	 * The DELIMITED container kinds — nodes whose source ends at their own closing delimiter and whose
+	 * children are entries a new one can be appended to. `add-element --append` addresses one
+	 * (`AddElement.appendElement`, which finds the closer by scanning back from the span's end). Haxe:
+	 * the array / object literals, a call and `new T(...)`, a block and the brace-bodied switches; type
+	 * bodies are recognised separately (`RefactorSupport.typeDeclOf`). JSON: `Array` and `Object`.
+	 * Optional; unset leaves `--append` with the type bodies only.
+	 */
+	@:optional var delimitedContainerKinds: Array<String>;
+
+	/**
+	 * The COMMA container kinds — the delimited containers whose entries are separated by `,`, so an
+	 * insert next to an entry splices `, x` and a removal takes one `,` with the entry
+	 * (`AddElement`, `ElementSpan.elementCut`). Read where an entry's separator cannot be seen in the
+	 * source, a single-entry list; with two or more entries the adjacent `,` already answers. A subset
+	 * of `trailingCommaHostKinds` that is NOT that list: a Haxe anonymous structure type accepts a
+	 * trailing `,` after a `name:Type` field but separates `var` fields with `;`, so the shape alone
+	 * cannot say which an insert needs. Haxe: `ArrayExpr`, `ObjectLit`, `Call`, `NewExpr`. JSON:
+	 * `Array`, `Object`. Optional; unset makes only an adjacent `,` count.
+	 */
+	@:optional var commaContainerKinds: Array<String>;
 
 	/**
 	 * Node kinds whose span ENDS with the closing delimiter of a comma-separated list

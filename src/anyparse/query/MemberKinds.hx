@@ -100,17 +100,6 @@ final class MemberKinds {
 	];
 
 	/**
-	 * Expression-list container kinds whose direct children are
-	 * comma-separated. When an element's parent is one of these, an insert
-	 * joins with a `,` and a remove swallows one. `Call` / `NewExpr` carry a
-	 * leading non-element child (callee / constructed type), harmless here
-	 * because the targeted element is an actual argument, never the callee.
-	 * Shared by `add-element` (insert) and `deleteNode` (remove) so the two
-	 * agree on which slots are comma lists.
-	 */
-	public static final COMMA_CONTAINER_KINDS: Array<String> = ['ArrayExpr', 'ObjectLit', 'Call', 'NewExpr'];
-
-	/**
 	 * The sibling node kinds `@:meta` annotations project to: `Meta` for the
 	 * paren-less `@:name`, `MetaCall` for `@:name(args)`, `PlainMeta` for the
 	 * verbatim raw catch-all (mirrors the grammar's `metaShape().metaKinds`).

@@ -137,7 +137,7 @@ final class SourceCommand implements CliCommand {
 	public static function resolveNodeLineBounds(
 		path: String, content: String, lang: String, selectExpr: Null<String>, atSpec: Null<String>
 	): Null<LineRange> {
-		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
+		final plugin: GrammarPlugin = CliArgs.pickPluginFor(lang, path);
 		final tree: QueryNode = try plugin.parseFile(content) catch (exception: Exception) {
 			CliIo.stderr('apq source: $path does not parse: ${exception.message}\n');
 			return null;

@@ -116,7 +116,7 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 			CliIo.stderr('apq replace-node: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(o.lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPluginFor(o.lang, filePath));
 		final target: Null<ReplaceTarget> = CliEdit.resolveEditTarget(
 			'replace-node', source, filePath, plugin, o.selectExpr, o.matchExpr, o.atSpec, o.nth, o.kind
 		);
