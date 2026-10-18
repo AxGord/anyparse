@@ -255,6 +255,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.NarrowLocalScopeCheckTest',
 		'unit.check.NoUnderscorePrefixCheckTest',
 		'unit.check.NullDereferenceTest',
+		'unit.check.NullFlowReplayTest',
 		'unit.check.NullFlowScanTest',
 		'unit.check.NullableSourceResolutionScopeTest',
 		'unit.check.NullableSwitchMissingNullCheckTest',
@@ -891,6 +892,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.ProbeTypedefTrivia',
 		'unit.grammar.haxe.TriviaScanSliceTest',
 		'unit.lowering.BeforeLeadingCommentSlotTest',
+		'unit.lowering.BranchOutliningTest',
 		'unit.lowering.FmtFlagOwnershipTest',
 		'unit.lowering.GeneratedLexicalScanSecondGrammarTest',
 		'unit.lowering.RegexFirstBytesTest',
@@ -1065,6 +1067,8 @@ class TestDiscoveryParityTest extends Test {
 		'unit.runtime.CommonPrefixTest',
 		'unit.runtime.InputTest',
 		'unit.runtime.ParseErrorTest',
+		'unit.runtime.SameItemsTest',
+		'unit.runtime.SortedOffsetsTest',
 		'unit.runtime.SpanTest'
 	];
 
@@ -1730,6 +1734,12 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-LINT-SUPERSEDES-IGNORED,M-NUP-SUPERSEDES-NONE',
 			'unit.check.NoUnderscorePrefixCheckTest#testRefusedStripDeclaresItsReason :: control :: M-NUP-DECLINE-SILENT',
 			'unit.check.NoUnderscorePrefixCheckTest#testTheFixerSeesTheBindingOnce :: control :: M-FIXDRIVER-SUPERSEDES-IGNORED',
+			'unit.check.NullFlowReplayTest#testADeclaredNullableWalkIsNeverReplayed :: control :: M-NULLFLOW-MEMO-DECLARED-BLIND',
+			'unit.check.NullFlowReplayTest#testARecordingIsKeptForItsOwnSourceOnly :: control :: M-NULLFLOW-MEMO-SOURCE-BLIND',
+			'unit.check.NullFlowReplayTest#testAReplayAnswersWhatTheLiveWalkAnswered :: control :: M-NULLFLOW-FROZEN-STALE',
+			'unit.check.NullFlowReplayTest#testASeededWalkIsNeverReplayed :: control :: M-NULLFLOW-MEMO-SEED-BLIND',
+			'unit.check.NullFlowReplayTest#testATypeSourcesWalkIsNeverReplayed :: control :: M-NULLFLOW-MEMO-TYPES-BLIND',
+			'unit.check.NullFlowReplayTest#testForgetDropsTheRecording :: control :: M-NULLFLOW-MEMO-NOT-FORGOTTEN',
 			'unit.check.NullableSourceResolutionScopeTest#testExcludedArrayPopStaysUnseeded :: control :: M-NULLABLE-INDEX-EXCLUSION',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
@@ -3357,6 +3367,19 @@ class TestDiscoveryParityTest extends Test {
 			'unit.lowering.BeforeLeadingCommentSlotTest#testAMultilineGapCommentReachesTheOutput :: control :: '
 				+ 'M-BEFORE-LEADING-COMMENT-DROP',
 			'unit.lowering.BeforeLeadingCommentSlotTest#testAOneLineGapCommentIsCarriedUpstream :: guard :: ',
+			'unit.lowering.BranchOutliningTest#testABreakLeavingTheTrialKeepsItInline :: control :: M-OUTLINE-BREAK-BLIND',
+			'unit.lowering.BranchOutliningTest#testABreakOfALoopInsideTheTrialMoves :: guard :: ',
+			'unit.lowering.BranchOutliningTest#testAForOverAPatternKeepsTheTrialInline :: control :: M-OUTLINE-FOR-PATTERN-BLIND',
+			'unit.lowering.BranchOutliningTest#testANestedTrialMovesFirstAndTheOuterOneFollows :: control :: M-OUTLINE-NESTED-ALT-BLIND',
+			'unit.lowering.BranchOutliningTest#testAReturnOfAConstantKeepsTheTrialInline :: control :: M-OUTLINE-CONSTANT-AS-CTOR',
+			'unit.lowering.BranchOutliningTest#testAReturnThatMayBeNullKeepsTheTrialInline :: control :: M-OUTLINE-NULLABLE-RETURN-BLIND',
+			'unit.lowering.BranchOutliningTest#testASwitchKeepsTheTrialInline :: control :: M-OUTLINE-SWITCH-BLIND',
+			'unit.lowering.BranchOutliningTest#testATrialReadingARuleLocalMovesIntoAHelper :: control :: M-OUTLINE-OFF',
+			'unit.lowering.BranchOutliningTest#testATrialsOwnLocalIsNotCaptured :: guard :: ',
+			'unit.lowering.BranchOutliningTest#testATryThatIsNotATrialIsLeftAlone :: guard :: ',
+			'unit.lowering.BranchOutliningTest#testAWriteToARuleLocalKeepsTheTrialInline :: control :: M-OUTLINE-WRITE-BLIND',
+			'unit.lowering.BranchOutliningTest#testAnUntypedRuleLocalKeepsTheTrialInline :: control :: M-OUTLINE-UNTYPED-CAPTURE',
+			'unit.lowering.BranchOutliningTest#testDisagreeingDeclarationsKeepTheTrialInline :: guard :: ',
 			'unit.lowering.StarBlockEndedWsRewindSitesTest#testAConditionalBodyKeepsTheStatementAfterASwallowedTerminator :: control :: '
 				+ 'M-PEB-WS-REWIND-TRYPARSE-OFF',
 			'unit.lowering.StarBlockEndedWsRewindSitesTest#testAConditionalBodyWithAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
@@ -4617,7 +4640,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ValueNameBindingTest#testAnUnlistedImportIsTheOneACallMayBeRoutedThrough :: control :: '
 				+ 'M-MACRO-VALUE-UNLISTED,M-MACRO-EXTENSIONS-ONLY',
 			'unit.query.ValueNameBindingTest#testAnotherRegionOfTheSameConditionIsAnAlternative :: control :: '
-				+ 'M-COND-ALTERNATIVE-REGIONS,M-COND-ALTERNATIVE-SPLIT'
+				+ 'M-COND-ALTERNATIVE-REGIONS,M-COND-ALTERNATIVE-SPLIT',
+			'unit.runtime.SameItemsTest#testDifferentLengthsDiffer :: guard :: ',
+			'unit.runtime.SameItemsTest#testEqualItemsInOrderAreTheSame :: guard :: ',
+			'unit.runtime.SameItemsTest#testSameLengthDifferentItemsDiffer :: control :: M-SAMEITEMS-LENGTH-ONLY',
+			'unit.runtime.SortedOffsetsTest#testAnOffsetBelowTheRangeIsNotInIt :: control :: M-SORTED-OFFSETS-LOWER-BLIND',
+			'unit.runtime.SortedOffsetsTest#testTheLowerBoundIsInclusive :: guard :: ',
+			'unit.runtime.SortedOffsetsTest#testTheUpperBoundIsExclusive :: control :: M-SORTED-OFFSETS-UPPER-BLIND'
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -7820,7 +7849,25 @@ class TestDiscoveryParityTest extends Test {
 			'M-ARM-LEDGER-ARM-BLIND',
 			'M-LEDGER-ARM-LISTED-ABSENT',
 			'M-RETAIN-SOURCES-KEEPS-ALL',
-			'M-RETAIN-SOURCES-DROPS-LIVE'
+			'M-RETAIN-SOURCES-DROPS-LIVE',
+			'M-OUTLINE-OFF',
+			'M-OUTLINE-WRITE-BLIND',
+			'M-OUTLINE-BREAK-BLIND',
+			'M-OUTLINE-SWITCH-BLIND',
+			'M-OUTLINE-FOR-PATTERN-BLIND',
+			'M-OUTLINE-NULLABLE-RETURN-BLIND',
+			'M-OUTLINE-CONSTANT-AS-CTOR',
+			'M-OUTLINE-UNTYPED-CAPTURE',
+			'M-OUTLINE-NESTED-ALT-BLIND',
+			'M-NULLFLOW-FROZEN-STALE',
+			'M-NULLFLOW-MEMO-SEED-BLIND',
+			'M-NULLFLOW-MEMO-DECLARED-BLIND',
+			'M-NULLFLOW-MEMO-TYPES-BLIND',
+			'M-NULLFLOW-MEMO-SOURCE-BLIND',
+			'M-NULLFLOW-MEMO-NOT-FORGOTTEN',
+			'M-SAMEITEMS-LENGTH-ONLY',
+			'M-SORTED-OFFSETS-LOWER-BLIND',
+			'M-SORTED-OFFSETS-UPPER-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

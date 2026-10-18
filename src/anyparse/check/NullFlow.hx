@@ -7,9 +7,11 @@ import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.RefsCache;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.TypeResolver;
+import anyparse.runtime.SameItems;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -43,6 +45,15 @@ typedef NullFacts = {
 	var isMaybeNull: String -> Bool;
 	var indexPresent: QueryNode -> Bool;
 }
+
+/**
+ * One consumer visit of a seedless `NullFlow.analyze` walk, kept for replay: the node, and the facts that held at its
+ * entry, frozen. `RefsCache.nullFlowVisits` holds a tree's list for the run.
+ */
+typedef NullFlowVisit = {
+	node: QueryNode,
+	facts: NullFacts
+};
 
 /**
  * The per-path fact lattice carried through a `NullFlow` walk: the set of names
@@ -212,6 +223,14 @@ private typedef FlowCtx = {
 	 */
 	var declaredNullable: Null<QueryNode -> Bool>;
 	var visit: (QueryNode, NullFacts) -> Void;
+
+	/** True while `analyze` records a walk for replay: each visit's facts are then frozen, not read off the running state. */
+	var recording: Bool;
+
+	/** The last state a recording walk froze, and the facts built over it — handed out again while the state is unchanged. */
+	var frozen: Null<FlowState>;
+
+	var frozenFacts: Null<NullFacts>;
 }
 
 /**
@@ -370,8 +389,11 @@ final class NullFlow {
 	 * `nullableFlowExcludedCalls` exists: a parameter's nullability is a contract with CALLERS, and
 	 * this walk is caller-blind, so the dominant idiom — a `Null<T>` argument valid under a mode a
 	 * companion argument establishes (`f(subdivide: Bool, info: Null<Info>)`) — is safe by a
-	 * relational invariant no name-keyed flow can model; seeding parameters adds almost nothing but
-	 * that shape.
+	 * relational invariant no name-keyed flow can model; seeding parameters adds almost nothing but that shape.
+	 *
+	 * A walk with no seed, no `declaredNullable` and no `typeSources` is the same walk for every consumer that asks it,
+	 * so when the shape carries the run's `RefsCache` its visits are recorded once per tree — each visit's facts frozen
+	 * over a copy of the state (`frozenFacts`) — and every call replays them to its own `visit` in the recorded order.
 	 */
 	public static function analyze(
 		root: QueryNode, shape: RefShape, source: String, visit: (QueryNode, NullFacts) -> Void, ?seed: (QueryNode) -> Bool,
@@ -380,13 +402,17 @@ final class NullFlow {
 		final identKind: Null<String> = shape.identKind;
 		if (identKind == null) return;
 		final id: String = identKind;
-		final predicates: Array<NonNullPredicate> = typeSources == null ? [] : nonNullPredicates(root, shape, id, typeSources);
-		final written: Map<Int, String> = typeSources ?? [];
-		final argType: QueryNode -> Null<String> = arg -> TypeResolver.identDeclaredTypeSource(arg, shape, root, () -> written, false);
-		forEachFunctionUnit(
-			root, shape,
-			(body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit, seed, declaredNullable, predicates, argType)
-		);
+		final cache: Null<RefsCache> = shape.refsCache;
+		if (cache == null || seed != null || declaredNullable != null || typeSources != null) {
+			walkUnits(root, shape, source, id, visit, seed, declaredNullable, typeSources, false);
+			return;
+		}
+		final recorded: Array<NullFlowVisit> = cache.nullFlowVisits(root, source, () -> {
+			final visits: Array<NullFlowVisit> = [];
+			walkUnits(root, shape, source, id, (node, facts) -> visits.push({ node: node, facts: facts }), null, null, null, true);
+			return visits;
+		});
+		for (v in recorded) visit(v.node, v.facts);
 	}
 
 	/**
@@ -595,6 +621,24 @@ final class NullFlow {
 	}
 
 	/**
+	 * The walk behind `analyze`: every function unit of `root`, its consumer `visit` called at each node. `recording` freezes
+	 * the facts each visit receives (`frozenFacts`), for a walk whose visits are kept and replayed.
+	 */
+	private static function walkUnits(
+		root: QueryNode, shape: RefShape, source: String, identKind: String, visit: (QueryNode, NullFacts) -> Void,
+		seed: Null<(QueryNode) -> Bool>, declaredNullable: Null<(QueryNode) -> Bool>, typeSources: Null<Map<Int, String>>, recording: Bool
+	): Void {
+		final predicates: Array<NonNullPredicate> = typeSources == null ? [] : nonNullPredicates(root, shape, identKind, typeSources);
+		final written: Map<Int, String> = typeSources ?? [];
+		final argType: QueryNode -> Null<String> = arg -> TypeResolver.identDeclaredTypeSource(arg, shape, root, () -> written, false);
+		forEachFunctionUnit(
+			root, shape,
+			(body, paramNames) ->
+				analyzeBody(body, shape, source, identKind, paramNames, visit, seed, declaredNullable, predicates, argType, recording)
+		);
+	}
+
+	/**
 	 * The file's NON-NULL PREDICATES: member functions whose truth proves an argument non-null, so a
 	 * guard `if (!check(item)) return;` narrows `item` like `if (item == null) return;` would. A
 	 * positive whitelist, every clause of which a call site must be able to rely on:
@@ -762,7 +806,7 @@ final class NullFlow {
 	private static function analyzeBody(
 		body: QueryNode, shape: RefShape, source: String, identKind: String, paramNames: Array<String>,
 		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>, declaredNullable: Null<(QueryNode) -> Bool>,
-		predicates: Array<NonNullPredicate>, argType: QueryNode -> Null<String>
+		predicates: Array<NonNullPredicate>, argType: QueryNode -> Null<String>, recording: Bool
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final nestedFnKinds: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
@@ -815,7 +859,10 @@ final class NullFlow {
 			source: source,
 			nullableSourceRhs: seed,
 			declaredNullable: declaredNullable,
-			visit: visit
+			visit: visit,
+			recording: recording,
+			frozen: null,
+			frozenFacts: null
 		};
 		final state: FlowState = emptyState();
 		walk(body, state, ctx);
@@ -1107,7 +1154,33 @@ final class NullFlow {
 
 	/** Fire the consumer callback at `node` with the facts holding in `state`. */
 	private static function visitNode(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
-		final facts: NullFacts = {
+		ctx.visit(node, ctx.recording ? frozenFacts(state, ctx) : factsOver(state, ctx));
+	}
+
+	/**
+	 * The facts of a recording walk at the current point, over a copy of the arrays they read, so a replay answers what the
+	 * running state answered here. Consecutive visits under an unchanged state share one copy and one facts object.
+	 */
+	private static function frozenFacts(state: FlowState, ctx: FlowCtx): NullFacts {
+		final last: Null<FlowState> = ctx.frozen;
+		final lastFacts: Null<NullFacts> = ctx.frozenFacts;
+		if (last != null && lastFacts != null && sameReadState(last, state)) return lastFacts;
+		final copy: FlowState = copyState(state);
+		final facts: NullFacts = factsOver(copy, ctx);
+		ctx.frozen = copy;
+		ctx.frozenFacts = facts;
+		return facts;
+	}
+
+	/** Whether `a` and `b` hold the same items in every array a `NullFacts` reads (`factsOver`, `indexPresentIn`). */
+	private static function sameReadState(a: FlowState, b: FlowState): Bool {
+		return SameItems.of(a.nonNull, b.nonNull) && SameItems.of(a.unseen, b.unseen) && SameItems.of(a.known, b.known)
+			&& SameItems.of(a.maybe, b.maybe) && SameItems.of(a.present, b.present);
+	}
+
+	/** The facts `state` answers for the unit `ctx` walks. */
+	private static function factsOver(state: FlowState, ctx: FlowCtx): NullFacts {
+		return {
 			nonNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.nonNull.contains(n),
 			nonNullVisible: n ->
 				ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.nonNull.contains(n) && !state.unseen.contains(n),
@@ -1115,7 +1188,6 @@ final class NullFlow {
 			isMaybeNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.maybe.contains(n),
 			indexPresent: n -> indexPresentIn(n, state, ctx)
 		};
-		ctx.visit(node, facts);
 	}
 
 	/**

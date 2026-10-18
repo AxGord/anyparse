@@ -25202,6 +25202,150 @@
 			"find": "final keep: Map<String, Bool> = [for (source in live) source => true];",
 			"replace": "final keep: Map<String, Bool> = [];",
 			"note": "the live sources are dropped too, so every pass re-parses every file and an unchanged file loses its tree identity across passes"
+		},
+		{
+			"name": "M-OUTLINE-OFF",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "rewrite",
+			"find": "if (!isTrial(mapped)) return mapped;",
+			"replace": "return mapped;",
+			"note": "no trial is moved: every enum-branch trial stays inline in its rule and BranchOutliningTest reads the unchanged body"
+		},
+		{
+			"name": "M-OUTLINE-WRITE-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "written",
+			"find": "refuse('a write to the rule local $name');",
+			"replace": "{}",
+			"note": "a trial that writes a rule local is moved, so the helper writes its own copy and the rule never sees the write"
+		},
+		{
+			"name": "M-OUTLINE-BREAK-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "walk",
+			"find": "if (_loops == 0) refuse('a break / continue that leaves the trial');",
+			"replace": "{}",
+			"note": "a break that leaves the trial is moved into a helper, where it has no loop to target"
+		},
+		{
+			"name": "M-OUTLINE-SWITCH-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "walk",
+			"find": "refuse('a switch');",
+			"replace": "ExprTools.iter(e, walk);",
+			"note": "a trial holding a switch is moved although its pattern bindings are not scoped"
+		},
+		{
+			"name": "M-OUTLINE-FOR-PATTERN-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "walk",
+			"find": "refuse('a for over a non-identifier pattern');",
+			"replace": "ExprTools.iter(e, walk);",
+			"note": "a for over a key-value pattern is moved although its bindings are not scoped"
+		},
+		{
+			"name": "M-OUTLINE-NULLABLE-RETURN-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "walk",
+			"find": "if (_fns == 0 && !cannotBeNull(value)) refuse('a return whose value may be null');",
+			"replace": "{}",
+			"note": "a return that may hand back null is moved, and the call site reads that null as a failed trial and tries the next branch"
+		},
+		{
+			"name": "M-OUTLINE-CONSTANT-AS-CTOR",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "isCtorName",
+			"find": "first <= 'Z'.code && name.toUpperCase() != name",
+			"replace": "first <= 'Z'.code",
+			"note": "an all-capitals constant counts as a constructor, so its possibly-null value is returned through a helper"
+		},
+		{
+			"name": "M-OUTLINE-UNTYPED-CAPTURE",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "rewrite",
+			"find": "if (type == null) {",
+			"replace": "if (false) {",
+			"note": "a captured rule local with no single declared type becomes a helper parameter without a type"
+		},
+		{
+			"name": "M-OUTLINE-NESTED-ALT-BLIND",
+			"type": "anyparse.macro.BranchOutlining",
+			"method": "cannotBeNull",
+			"find": "case EConst(CIdent(name)): name == BranchOutlining.ALT_LOCAL;",
+			"replace": "case EConst(CIdent(_)): false;",
+			"note": "the outer trial of a moved nested trial returns _alt and stays inline"
+		},
+		{
+			"name": "M-NULLFLOW-FROZEN-STALE",
+			"type": "anyparse.check.NullFlow",
+			"method": "frozenFacts",
+			"find": "if (last != null && lastFacts != null && sameReadState(last, state)) return lastFacts;",
+			"replace": "if (last != null && lastFacts != null) return lastFacts;",
+			"note": "a recording walk hands every visit the facts it froze first, so the replay answers what the state held at the first visit of the unit"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-SEED-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "analyze",
+			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
+			"replace": "if (cache == null || declaredNullable != null || typeSources != null) {",
+			"note": "a seeded walk is answered from the seedless recording and loses every MaybeNull the seed makes"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-DECLARED-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "analyze",
+			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
+			"replace": "if (cache == null || seed != null || typeSources != null) {",
+			"note": "a declaredNullable walk is answered from the seedless recording and loses the annotation seed"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-TYPES-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "analyze",
+			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
+			"replace": "if (cache == null || seed != null || declaredNullable != null) {",
+			"note": "a walk given the written types is answered from the recording made without them, so a non-null predicate call no longer narrows"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-SOURCE-BLIND",
+			"type": "anyparse.query.RefsCache",
+			"method": "nullFlowVisits",
+			"find": "if (known != null) return known.source == source ? known.visits : record();",
+			"replace": "if (known != null) return known.visits;",
+			"note": "a tree asked about with another source is answered from the recording made over the first"
+		},
+		{
+			"name": "M-NULLFLOW-MEMO-NOT-FORGOTTEN",
+			"type": "anyparse.query.RefsCache",
+			"method": "forget",
+			"find": "_nullFlowVisits.remove(tree);",
+			"replace": "{}",
+			"note": "forget keeps the recording, so a pass that re-reads a superseded tree replays it and the memory N36 releases stays held"
+		},
+		{
+			"name": "M-SAMEITEMS-LENGTH-ONLY",
+			"type": "anyparse.runtime.SameItems",
+			"method": "of",
+			"find": "for (i => item in a) if (item != b[i]) return false;",
+			"replace": "{}",
+			"note": "two arrays of one length count as the same whatever they hold"
+		},
+		{
+			"name": "M-SORTED-OFFSETS-LOWER-BLIND",
+			"type": "anyparse.runtime.SortedOffsets",
+			"method": "firstIn",
+			"find": "lo = mid + 1",
+			"replace": "hi = mid",
+			"note": "the search never moves past an offset below the range, so the first offset of the array answers"
+		},
+		{
+			"name": "M-SORTED-OFFSETS-UPPER-BLIND",
+			"type": "anyparse.runtime.SortedOffsets",
+			"method": "firstIn",
+			"find": "return lo < sorted.length && sorted[lo] < to ? sorted[lo] : -1;",
+			"replace": "return lo < sorted.length ? sorted[lo] : -1;",
+			"note": "an offset at or past the upper bound answers, so ArgumentValues reads the written type of the NEXT declaration"
 		}
 	]
 }

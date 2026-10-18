@@ -74,15 +74,21 @@ final class CondDirectives {
 		final keywords: DirectiveKeywords = declaredKeywords(ifKeyword, shape);
 		final regions: Array<Span> = SourceComments.collectNonCodeRegions(regions());
 		final out: Array<CondDirective> = [];
+		final markers: Array<String> = [];
+		for (code in keywords.markers) if (!markers.contains(String.fromCharCode(code))) markers.push(String.fromCharCode(code));
 		var region: Int = 0;
 		var i: Int = 0;
 		while (i < source.length) {
+			// Only a marker byte can start a directive, so the scan jumps from one to the next.
+			final at: Int = nextMarker(source, i, markers);
+			if (at < 0) break;
+			i = at;
 			while (region < regions.length && regions[region].to <= i) region++;
 			if (region < regions.length && i >= regions[region].from) {
 				i = regions[region].to;
 				continue;
 			}
-			final keyword: Null<String> = keywords.markers.contains(source.fastCodeAt(i)) ? keywordAt(source, i, keywords.all) : null;
+			final keyword: Null<String> = keywordAt(source, i, keywords.all);
 			if (keyword == null) {
 				i++;
 				continue;
@@ -440,6 +446,16 @@ final class CondDirectives {
 			if (!SourceText.isIdentStartChar(source.fastCodeAt(i + 1))) return i;
 			i += 2;
 		}
+	}
+
+	/** The first offset at or after `from` holding one of `markers`, -1 when none follows. */
+	private static function nextMarker(source: String, from: Int, markers: Array<String>): Int {
+		var first: Int = -1;
+		for (marker in markers) {
+			final at: Int = source.indexOf(marker, from);
+			if (at >= 0 && (first < 0 || at < first)) first = at;
+		}
+		return first;
 	}
 
 }

@@ -15,6 +15,7 @@ import anyparse.query.SourceText;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.SameItems;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -555,11 +556,11 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		// The back-off below only ever ADDS groups, so a plan that does not strictly
 		// MERGE can be refused here without paying for a single writer render.
 		if (filled.length >= current && !overLong(ctx, decomposition.editSpan)) return null;
-		if (sameBoundaries(filled, decomposition.current)) return null;
+		if (SameItems.of(filled, decomposition.current)) return null;
 		final result: Null<Settled> = settle(ctx, decomposition, filled, planned.budget);
 		if (result == null) return null;
 		final settled: Settled = result;
-		if (sameBoundaries(settled.groups, decomposition.current)) return null;
+		if (SameItems.of(settled.groups, decomposition.current)) return null;
 		final groups: Int = settled.groups.length;
 		if (groups >= current && !overLong(ctx, decomposition.editSpan)) return null;
 		final width: Null<WidthPair> = settled.width;
@@ -622,7 +623,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 */
 	private static function unwrapped(ctx: PlanContext, decomposition: Decomposition, filled: Array<Int>, budget: Int): Null<Plan> {
 		final span: Span = decomposition.editSpan;
-		if (!sameBoundaries(filled, decomposition.current) || !overLong(ctx, span)) return { groups: filled, budget: budget };
+		if (!SameItems.of(filled, decomposition.current) || !overLong(ctx, span)) return { groups: filled, budget: budget };
 		final own: Int = ctx.metrics.lineWidth - columnWidth(ctx, SourceText.lineStartAt(ctx.source, span.from), span.from)
 			- GROUP_JOIN.length + 1;
 		if (own >= budget) return { groups: filled, budget: budget };
@@ -656,7 +657,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			final reduced: Int = Std.int(Math.min(budget - (width.written - ctx.metrics.lineWidth), rendered.widest - 1));
 			if (reduced <= 0) break;
 			final next: Null<Array<Int>> = fill(ctx, decomposition, reduced);
-			if (next == null || sameBoundaries(next, groups)) break;
+			if (next == null || SameItems.of(next, groups)) break;
 			final nextRendered: Null<Rendered> = joinGroups(ctx, decomposition, next);
 			if (nextRendered == null) break;
 			final nextWidth: Null<WidthPair> = renderedWidth(ctx, span, nextRendered.text);
@@ -1099,13 +1100,6 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			text.add(part);
 		}
 		return { text: text.toString(), widest: widest };
-	}
-
-	/** Whether two group partitions cut the segment list at the same places. */
-	private static function sameBoundaries(a: Array<Int>, b: Array<Int>): Bool {
-		if (a.length != b.length) return false;
-		for (i in 0...a.length) if (a[i] != b[i]) return false;
-		return true;
 	}
 
 	/**

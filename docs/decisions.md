@@ -4029,3 +4029,41 @@ decided the question; it may not become a record of runs.
   are reads there); killing a whole group at its first write (a run of three on either side is still one value); a
   member written in ANOTHER body through a call (not modelled — the purity rule already reads field chains as pure
   across calls) — branch `feat/infra-N38`
+- N37 (1) — the parse was ~2.9 s of a 17 s `lint --all` (TM + its libraries, 13.6 M chars), and ~1.6 s of that was ONE
+  failed probe, `HxStatement.CondSemiAssignStmt`, tried before every expression statement. The throw is not the cost
+  (~0.2 us at any depth, measured; a lookahead guard that skips the inner throw gained nothing): `sample(1)` showed
+  the main thread in `Code::GetBytecodeOffsetForBaselinePC` / `GetBaselinePCForBytecodeOffset` — V8 unwinding through
+  a Sparkplug (baseline) frame maps PC <-> bytecode offset by a LINEAR scan from the function's start, and the Alt
+  dispatchers (`parseHxStatementS` ~600 JS lines, `parseHxExprSAtomCore` ~950) catch their late branches tens of KB
+  in: ~20 us per failed late trial. `--no-sparkplug` confirms it (parse 2.9 -> 0.8 s) but costs the rest of the run.
+  → `BranchOutlining`, codegen pass 4: every `Lowering.tryBranch` trial becomes a static helper `<rule>Alt<k>(ctx,
+  <captured typed locals>)` answering its value or `null`; the rule keeps a call per branch. Positive whitelist
+  (typed read-only captures, no `break`/`continue` leaving the trial, no `switch`, every `return` non-null by shape);
+  on today's grammars 756 helpers, none declined. Every grammar's parser gets it (plain, span, trivia, binary). Parse
+  2.9 -> 0.75 s, the 6519 lint-corpus parse trees and error messages identical, `--all` 16.9 -> 13.8 s. Rejected:
+  first-token lookahead before the hot probes (the probes fail at their SECOND token or later — after a whole atom —
+  so a first-set guard cannot skip them, and skipping the inner throw alone measured no gain); a node flag
+  (`--no-sparkplug` slows everything that is not the parser; a codegen fix is portable and needs no shim) — branch
+  `feat/infra-N37`
+- N37 (2) — `NullFlow.analyze` ran once per consumer per file: eight consumers, six of them (`always-null-comparison`,
+  `dead-null-guard`, `dead-safe-nav`, `dead-null-coalescing`, `null-dereference`, `possible-null-dereference`) with no
+  seed, no `declaredNullable`, no `typeSources` — the same walk six times. → a seedless walk over a tree the run's
+  `RefsCache` holds is recorded once (`RefsCache.nullFlowVisits`, dropped by `forget` with the tree's other memos)
+  and replayed to every consumer in the recorded order; each visit's facts are frozen over a copy of the state, and
+  consecutive visits under an unchanged state share one copy (TM: 318k visits, 17k copies). A walk any of the three
+  parameters changes is never answered from the recording. `SameItems.of` (runtime/) is the shared array equality it
+  needed; `CondBranchProjection.sameNodes` and `FoldStringLiterals.sameBoundaries` were the same function and are
+  deleted. TM `--all` 13.96 -> 13.58 s; live heap at exit +43 MB (775 -> 818). Rejected: a copy per visit (+260 MB
+  live); fanning one walk out to every consumer at once (the rules run one after another, each over all files; a
+  shared walk would have to hold the other rules' callbacks and violations) — branch `feat/infra-N37`
+- N37 (3) — two linear lookups in `thread-safety`'s hot path: `ArgumentValues.annotationOf` read the written type of
+  a declaration by scanning EVERY key of the file's offset -> type map (an `IntMap.keys()` array built per call) for the
+  smallest one inside the declaration's span, and `AllocationSets.fileOf` scanned every call-graph node per question.
+  → the offsets are sorted once per file and answered by binary search (`SortedOffsets.firstIn`, runtime/, the
+  smallest offset in `[from, to)` — the same answer); `fileOf` remembers each owner's answer for the run, like the
+  class's other per-run memos (the graph does not change under it). `--rule thread-safety` 4.35 -> 4.06 s, `--all`
+  13.41 -> 13.17 s — branch `feat/infra-N37`
+- N37 (4) — `CondDirectives.scan`, read by fifteen callers per file, stepped through the source one character at a
+  time, testing every character against the directive markers (`Array.contains`). → it jumps from one marker to the
+  next with `indexOf` (a directive can start only at a marker; the non-code regions are skipped exactly as before, at
+  the marker's offset instead of at every offset). `--all` 13.24 -> 13.11 s — branch `feat/infra-N37`

@@ -262,9 +262,12 @@ class Lowering {
 		dumpDispatch(_shape.rules, _starGates);
 		#end
 		if (_ctx.spans) for (rule in rules) if (spanRuleNames.exists(rule.fnName)) rule.body = instrumentSpans(rule.body);
+		// After span instrumentation, so a helper's body already carries the span
+		// argument its trial builds and receives the rule's `_start` as a copy.
+		final outlined: Array<GeneratedRule> = BranchOutlining.outline(rules);
 		// After span instrumentation: the memo shell returns a value the raw
 		// rule already built, so it must not gain a second span argument.
-		return _memoFns.length == 0 ? rules : [for (rule in rules) for (r in memoize(rule)) r];
+		return _memoFns.length == 0 ? outlined : [for (rule in outlined) for (r in memoize(rule)) r];
 	}
 
 	/**
@@ -587,7 +590,7 @@ class Lowering {
 			final _savedPos: Int = ctx.pos;
 			try
 				$body
-			catch (_e: anyparse.runtime.ParseError)
+			catch (_branchFail: anyparse.runtime.ParseError)
 				ctx.pos = _savedPos;
 		};
 	}
