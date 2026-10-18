@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.CallGraph.ArgumentPosition;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.ParsedEntry;
 import anyparse.query.CallGraph.UnresolvedReason;
@@ -877,22 +878,25 @@ final class CallGraphEdges {
 
 		/**
 		 * A `Ref` edge to the method `ref` names, plus one to each override an instance reference may dispatch to; each
-		 * marked with the `dynamic` member `storedInto` when the value is assigned to one.
+		 * marked with the `dynamic` member `storedInto` when the value is assigned to one, and with where the call `via`
+		 * writes it (`argument`) when it is an argument.
 		 */
 		function refEdges(
-			from: String, ref: MethodRef, via: Null<String>, span: Null<Span>, ?storedInto: String, ?viaMember: String
+			from: String, ref: MethodRef, via: Null<String>, span: Null<Span>, ?storedInto: String, ?viaMember: String,
+			?argument: ArgumentPosition
 		): Void {
 			// a module-level function's use bound per build names exactly the bodies it may run
 			final bodies: Null<Array<String>> = ref.bodies;
 			if (bodies != null) {
-				for (body in bodies) g.addEdge(from, body, Ref, via, file, span, null, null, null, null, storedInto, viaMember, true);
+				for (body in bodies)
+					g.addEdge(from, body, Ref, via, file, span, null, null, null, null, storedInto, viaMember, argument, true);
 				return;
 			}
-			g.addEdge(from, ref.id, Ref, via, file, span, ref.dispatch, null, null, null, storedInto, viaMember);
+			g.addEdge(from, ref.id, Ref, via, file, span, ref.dispatch, null, null, null, storedInto, viaMember, argument);
 			final dispatch: Null<String> = ref.dispatch;
 			final name: Null<String> = g.nodes[ref.id]?.name;
 			if (dispatch != null && name != null) for (v in g.virtualTargets(dispatch, name))
-				g.addEdge(from, v, Ref, via, file, span, dispatch, null, null, null, storedInto, viaMember);
+				g.addEdge(from, v, Ref, via, file, span, dispatch, null, null, null, storedInto, viaMember, argument);
 		}
 
 		/** The `dynamic` method the assignment target `target` names, when the graph holds its body; null for any other target. */
@@ -1019,25 +1023,27 @@ final class CallGraphEdges {
 
 		/**
 		 * The function values `args` (from `first` on) hand the callee
-		 * `calleeId`, written `calleeName`: lambdas, method values, `.bind` results, both ternary arms.
+		 * `calleeId`, written `calleeName`: lambdas, method values, `.bind` results, both ternary arms — each marked with where
+		 * the call writes it (`ArgumentPosition`, counted from `first`).
 		 */
 		function scanArgs(
 			args: Array<QueryNode>, first: Int, calleeId: Null<String>, calleeName: Null<String>, currentType: Null<String>
 		): Void {
 			final from: String = frameId(currentType);
-			function refArg(argRaw: QueryNode): Void {
+			function refArg(argRaw: QueryNode, at: ArgumentPosition): Void {
 				final arg: QueryNode = unwrap(argRaw);
 				// a ternary-valued argument hands BOTH branch function-values to
 				// the callee — each branch is a callback in its own right
 				if (ternaryKind != null && arg.kind == ternaryKind && arg.children.length == 3) {
-					refArg(arg.children[1]);
-					refArg(arg.children[2]);
+					refArg(arg.children[1], at);
+					refArg(arg.children[2], at);
 					return;
 				}
 				final argSpan: Null<Span> = arg.span;
 				if (argSpan != null && lambdaKinds.contains(arg.kind)) {
 					final lambdaId: Null<String> = entry.fnBySpanFrom[argSpan.from];
-					if (lambdaId != null) g.addEdge(from, lambdaId, Ref, calleeId, file, argSpan, null, null, null, null, null, calleeName);
+					if (lambdaId != null)
+						g.addEdge(from, lambdaId, Ref, calleeId, file, argSpan, null, null, null, null, null, calleeName, at);
 					return;
 				}
 				if (arg.kind == callKind && arg.children.length > 0) {
@@ -1045,7 +1051,7 @@ final class CallGraphEdges {
 					if (isAccessKind(inner.kind) && inner.name == 'bind' && inner.children.length > 0) {
 						final ref: Null<MethodRef> = methodRef(inner.children[0], currentType);
 						if (ref != null && argSpan != null) {
-							refEdges(from, ref, calleeId, argSpan, null, calleeName);
+							refEdges(from, ref, calleeId, argSpan, null, calleeName, at);
 							consumedBindCalls.push(argSpan.from);
 						}
 					}
@@ -1054,11 +1060,11 @@ final class CallGraphEdges {
 				if (arg.kind != identKind && !isAccessKind(arg.kind)) return;
 				final ref: Null<MethodRef> = methodRef(arg, currentType);
 				if (ref != null)
-					refEdges(from, ref, calleeId, argSpan, null, calleeName);
+					refEdges(from, ref, calleeId, argSpan, null, calleeName, at);
 				else
 					untypedMethodRead(arg, currentType);
 			}
-			for (i in first ... args.length) refArg(args[i]);
+			for (i in first ... args.length) refArg(args[i], { index: i - first, count: args.length - first });
 		}
 
 		/**

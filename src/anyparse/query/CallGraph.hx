@@ -100,6 +100,21 @@ typedef CallEdge = {
 	 * in `x.removeEventListener(t, handler)`), set whether or not the graph resolves the call. Null on every other edge.
 	 */
 	@:optional var viaMember: Null<String>;
+
+	/**
+	 * For a `Ref` edge whose value is an argument of a call, where the call writes it (`ArgumentPosition`), set whether or
+	 * not the graph resolves the call; null on every other edge, and on one the compiler facts add or a stored value derives.
+	 */
+	@:optional var argument: Null<ArgumentPosition>;
+}
+
+/**
+ * Where a call writes an argument: its position among the arguments the call writes (`index`, from 0, a receiver not
+ * counted) and how many it writes (`count`) — which parameter it binds is the callee's (`CallGraphKeys.bindsItsPosition`).
+ */
+typedef ArgumentPosition = {
+	final index: Int;
+	final count: Int;
 }
 
 /**
@@ -800,7 +815,8 @@ final class CallGraph {
 	 */
 	private function addEdge(
 		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String,
-		?receiverField: String, ?typed: String, ?inlined: Bool, ?storedInto: String, ?viaMember: String, exact: Bool = false
+		?receiverField: String, ?typed: String, ?inlined: Bool, ?storedInto: String, ?viaMember: String, ?argument: ArgumentPosition,
+		exact: Bool = false
 	): Void {
 		final edge: CallEdge = {
 			from: from,
@@ -816,6 +832,7 @@ final class CallGraph {
 		if (inlined == true) edge.inlined = true;
 		if (storedInto != null) edge.storedInto = storedInto;
 		if (viaMember != null) edge.viaMember = viaMember;
+		if (argument != null) edge.argument = argument;
 		// a faceted function's syntax still records every edge it names, which the facts only add to — unless they are the
 		// truth: then its edge at a site they type is dropped (`CallGraphFacts.holdsBack`)
 		for (e in [edge].concat(exact ? [] : [for (body in _bodies[to] ?? []) retargeted(edge, body)])) if (facts?.holdsBack(e) != true)
@@ -873,6 +890,7 @@ final class CallGraph {
 		if (edge.inlined != null) out.inlined = edge.inlined;
 		if (edge.storedInto != null) out.storedInto = edge.storedInto;
 		if (edge.viaMember != null) out.viaMember = edge.viaMember;
+		if (edge.argument != null) out.argument = edge.argument;
 		return out;
 	}
 

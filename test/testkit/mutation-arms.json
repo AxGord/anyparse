@@ -6046,7 +6046,7 @@
 			"name": "M-GRAPH-REF-OVERRIDES",
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
-			"find": "if (dispatch != null && name != null) for (v in g.virtualTargets(dispatch, name))\n\t\t\t\tg.addEdge(from, v, Ref, via, file, span, dispatch, null, null, null, storedInto, viaMember);",
+			"find": "if (dispatch != null && name != null) for (v in g.virtualTargets(dispatch, name))\n\t\t\t\tg.addEdge(from, v, Ref, via, file, span, dispatch, null, null, null, storedInto, viaMember, argument);",
 			"replace": "",
 			"note": "a method value reaches only the static type's method, never an override"
 		},
@@ -26126,6 +26126,70 @@
 			"find": "if (o.dryRun) {",
 			"replace": "if (false) {",
 			"note": "--dry-run prints the two previews instead of the entries and their digest"
+		},
+		{
+			"name": "M-TS-SPAWN-MAIN-ARG",
+			"type": "anyparse.check.ThreadStates",
+			"method": "runsOnMain",
+			"find": "named != null && named.contains(at.index)",
+			"replace": "named != null && false",
+			"note": "a spawns object entry's main positions run on a worker like every other argument"
+		},
+		{
+			"name": "M-TS-SPAWN-MAIN-CONTEXT",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "callbackContext",
+			"find": "return if (ThreadStates.runsOnMain(graph, edge, lists))",
+			"replace": "return if (false)",
+			"note": "a value at a main position takes the spawn's background context"
+		},
+		{
+			"name": "M-TS-SPAWN-MAIN-REPEAT",
+			"type": "anyparse.check.CallRepetition",
+			"method": "marshalled",
+			"find": " || ThreadStates.runsOnMain(_graph, edge, lists)",
+			"replace": "",
+			"note": "a value run on the main thread at a main position is not one marshalled per post: a worker loop posting it runs as once"
+		},
+		{
+			"name": "M-TS-SPAWN-MAIN-SHIFT",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "bindsItsPosition",
+			"find": "return index < own && !mayShift(g, id, index, count);",
+			"replace": "return index < own;",
+			"note": "an argument a skipped optional may shift onto a later parameter is taken at its written position"
+		},
+		{
+			"name": "M-TS-SPAWN-MAIN-SIGNATURE",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "bindsItsPosition",
+			"find": "if (params == null) return false;",
+			"replace": "if (params == null) return true;",
+			"note": "a call two signatures may answer is taken to bind each argument at its position"
+		},
+		{
+			"name": "M-TS-SPAWN-ARG-POSITION",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "{ index: i - first, count: args.length - first }",
+			"replace": "{ index: i, count: args.length }",
+			"note": "an argument position counts the callee child too"
+		},
+		{
+			"name": "M-TS-OPT-SPAWN-OBJECT",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readSpawnEntry",
+			"find": "problems.push('$SPAWNS_KEY[$i] \"$named\": ${wrong.join(', ')} — kept as a plain entry');",
+			"replace": "{}",
+			"note": "a malformed spawns object entry is kept as a plain one without a word"
+		},
+		{
+			"name": "M-TS-REGISTER-MEMBER",
+			"type": "anyparse.check.CallRepetition",
+			"method": "registered",
+			"find": "listed(edge, lists.registerMemberIds, []) || ",
+			"replace": "",
+			"note": "a registers entry naming a project member is ignored for repetition, as a bare name is"
 		},
 		{
 			"name": "M-JSON-ROOT-UNTIGHTENED",
