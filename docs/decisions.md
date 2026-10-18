@@ -4063,3 +4063,7 @@ decided the question; it may not become a record of runs.
   smallest offset in `[from, to)` — the same answer); `fileOf` remembers each owner's answer for the run, like the
   class's other per-run memos (the graph does not change under it). `--rule thread-safety` 4.35 -> 4.06 s, `--all`
   13.41 -> 13.17 s — branch `feat/infra-N37`
+- N37 (4) — `CondDirectives.scan`, read by fifteen callers per file, stepped through the source one character at a
+  time, testing every character against the directive markers (`Array.contains`). → it jumps from one marker to the
+  next with `indexOf` (a directive can start only at a marker; the non-code regions are skipped exactly as before, at
+  the marker's offset instead of at every offset). `--all` 13.24 -> 13.11 s — branch `feat/infra-N37`
