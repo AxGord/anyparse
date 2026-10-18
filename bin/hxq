@@ -178,13 +178,20 @@ if [ "${HXQ_QUIET:-}" != "1" ] && [ -d "$src_root" ]; then
     fi
 fi
 
+# Node flags. A 64 MB young generation (V8's default is 16 MB) collects less
+# often and promotes fewer short-lived objects: measured 2026-10-18 on TM
+# (N37) at -1.6% on `lint --all` and -2.6% on `lint --fix` for +5% RSS
+# (1.80 -> 1.89 GB). HXQ_NODE_FLAGS replaces the default; set it empty to
+# run node with none.
+node_flags="${HXQ_NODE_FLAGS---max-semi-space-size=64}"
+
 # With no user args, just run the binary (prints usage); otherwise inject
 # `--lang haxe` after the subcommand so `hxq <cmd> [opts] <file>` targets
 # the Haxe grammar.
 if [ "$#" -eq 0 ]; then
-    exec node "$binary"
+    exec node $node_flags "$binary"
 fi
 
 cmd="$1"
 shift
-exec node "$binary" "$cmd" --lang haxe "$@"
+exec node $node_flags "$binary" "$cmd" --lang haxe "$@"
