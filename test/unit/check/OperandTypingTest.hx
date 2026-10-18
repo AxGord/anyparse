@@ -80,6 +80,12 @@ class OperandTypingTest extends Test {
 		source: 'class Opener {\n\tpublic function new() {}\n\n\tpublic function open():Bool {\n\t\treturn true;\n\t}\n}\n'
 	};
 
+	/** A class whose `on` is the overloading `Flag`. */
+	private static final FLAG_ON: { file: String, source: String } = {
+		file: 'FlagOn.hx',
+		source: 'class FlagOn {\n\tpublic var on:Flag;\n\n\tpublic function new() {}\n}\n'
+	};
+
 	/** The negation family over a `Bool` operand — accepted — and a `Flag` one — refused. */
 	@:pin('control')
 	@:killer('M-BINDER-INITIALIZER-CUT', 'M-BINDER-SELF-CUT', 'M-BINDER-INHERITED-CUT', 'M-BINDER-EXTENSION-CUT')
@@ -305,6 +311,114 @@ class OperandTypingTest extends Test {
 	}
 
 	/**
+	 * An untyped lambda parameter takes the parameter of the function type the lambda is expected to be (`ExpectedTypes`):
+	 * TM's `forEachChild(child -> … !child.folder …)` shape — an abstract's member taking `(child:Use)->Void`, called bare,
+	 * and a property read through an inline getter. `Bool` inverts, `Flag` does not; 4.3.7 types `child` as `Use`.
+	 */
+	@:pin('control') @:killer('M-BINDER-LAMBDA-PARAM-CUT', 'M-WALK-LAMBDA-PARAM-CUT', 'M-BINDER-ARGUMENT-CUT')
+	public function testAnUntypedLambdaParameterTakesTheCalleesParameterType(): Void {
+		final ab: String = 'abstract Use(Holder) {\n\tpublic var on(get, never):Bool;\n\n\tpublic var flag(get, never):Flag;\n\n'
+			+ '\tinline function get_on():Bool\n\t\treturn true;\n\n\tinline function get_flag():Flag\n\t\treturn true;\n\n'
+			+ '\tpublic inline function forEachChild(callback:(child:Use)->Void):Void {}\n\n\tpublic function f():Void {\n'
+			+ '\t\tforEachChild(child -> trace(!child.@ ? 1 : 2));\n\t}\n}\n';
+		Assert.isTrue(inverts([{ file: 'Use.hx', source: ab.replace('@', 'on') }]));
+		Assert.isFalse(inverts([{ file: 'Use.hx', source: ab.replace('@', 'flag') }]));
+	}
+
+	/**
+	 * Every rung of the expectation ladder carries the expected function type down to the lambda, each proved on 4.3.7
+	 * (`$type(c)` is `Use` in every one): a call argument, parentheses, a ternary's and an `if`'s arm, a `switch` arm and the
+	 * value its block ends with, a declaration written with a type, an assignment, a `return`, a lambda's body, an untyped
+	 * lambda's `return`, an object-literal field, a `Null<…>` function type and a rest parameter.
+	 */
+	@:pin('control')
+	@:killer('M-BINDER-LAMBDA-PARAM-CUT', 'M-BINDER-ANNOTATION-CUT', 'M-BINDER-RETURN-CUT', 'M-BINDER-FIELD-CUT', 'M-BINDER-ARGUMENT-CUT')
+	@:killer('M-GRAPH-LITERAL-ARGUMENT', 'M-GRAPH-LITERAL-ARMS', 'M-GRAPH-LITERAL-RETURN', 'M-GRAPH-LITERAL-LAMBDA',
+		'M-GRAPH-LITERAL-FIELD')
+	@:killer('M-TS-LAMBDA-NULL', 'M-BINDER-ARGUMENT-REST')
+	public function testEveryExpectationTypesTheLambdaParameter(): Void {
+		final shapes: Array<{ name: String, members: String, body: String }> = [
+			{ name: 'argument', members: '', body: 'each(c -> trace(!c.on ? 1 : 2));' },
+			{ name: 'paren', members: '', body: 'each((c -> trace(!c.on ? 1 : 2)));' },
+			{ name: 'ternary', members: '', body: 'each(x > 0 ? c -> trace(!c.on ? 1 : 2) : c -> trace(0));' },
+			{ name: 'if', members: '', body: 'each(if (x > 0) c -> trace(!c.on ? 1 : 2) else c -> trace(0));' },
+			{
+				name: 'switch',
+				members: '',
+				body: 'each(switch x {\n\t\t\tcase 0: {\n\t\t\t\t\ttrace(x);\n\t\t\t\t\tc -> trace(!c.on ? 1 : 2);\n\t\t\t\t}\n'
+					+ '\t\t\tcase _: c -> trace(0);\n\t\t});'
+			},
+			{ name: 'declaration', members: '', body: 'final g:(c:Use)->Void = c -> trace(!c.on ? 1 : 2);' },
+			{ name: 'assignment', members: '', body: 'var g:(c:Use)->Void = null;\n\t\tg = c -> trace(!c.on ? 1 : 2);' },
+			{ name: 'return', members: '\tfunction mk():(c:Use)->Int {\n\t\treturn c -> !c.on ? 1 : 2;\n\t}\n\n', body: '' },
+			{ name: 'body', members: '', body: 'final g:(a:Int)->((c:Use)->Int) = a -> c -> !c.on ? 1 : 2;' },
+			{
+				name: 'lambda return',
+				members: '',
+				body: 'final g:(a:Int)->((c:Use)->Int) = a -> {\n\t\t\treturn c -> !c.on ? 1 : 2;\n\t\t};'
+			},
+			{ name: 'field', members: '', body: 'final s:{ cb:(c:Use)->Int } = { cb: c -> !c.on ? 1 : 2 };' },
+			{ name: 'nullable', members: '', body: 'final g:Null<(c:Use)->Int> = c -> !c.on ? 1 : 2;' },
+			{ name: 'rest', members: '', body: 'rest(c -> trace(0), c -> trace(!c.on ? 1 : 2));' }
+		];
+		for (s in shapes) Assert.isTrue(inverts([lambdaUse(s.members, s.body)]), s.name);
+		// the overloading `Flag` read through the same rung is refused: the parameter is TYPED, not merely accepted
+		Assert.isFalse(inverts([lambdaUse('', 'each(c -> trace(!c.flag ? 1 : 2));')]));
+	}
+
+	/**
+	 * A parameter before the one a lambda would bind may be skipped — optional, or carrying a default value — and 4.3.7 tries
+	 * the lambda against it first: `opt(?a:(c:Use)->Int, cb:(c:FlagOn)->Void)` called with a `Void` lambda reports `c` as
+	 * `Use`, then binds it to `cb` as `FlagOn`, whose `on` is the overloading `Flag`. Unproven; a required one before it is not
+	 * skipped.
+	 */
+	@:pin('control') @:killer('M-BINDER-ARGUMENT-SKIPPABLE', 'M-TS-SKIP-DEFAULT')
+	public function testALambdaAfterASkippableParameterIsUnproven(): Void {
+		final opt: String = '\tfunction opt(?a:(c:Use)->Int, cb:(c:FlagOn)->Void):Void {}\n\n';
+		Assert.isFalse(inverts([FLAG_ON, lambdaUse(opt, 'opt(c -> trace(!c.on ? 1 : 2));')]));
+		final deflt: String = '\tfunction deflt(a:(c:Use)->Int = null, cb:(c:FlagOn)->Void):Void {}\n\n';
+		Assert.isFalse(inverts([FLAG_ON, lambdaUse(deflt, 'deflt(c -> trace(!c.on ? 1 : 2));')]));
+		Assert.isTrue(inverts([
+			lambdaUse('\tfunction req(a:Int, cb:(c:Use)->Void):Void {}\n\n', 'req(1, c -> trace(!c.on ? 1 : 2));')
+		]));
+	}
+
+	/**
+	 * A callee whose written signature the call may not select types no lambda: an `@:overload` (4.3.7 retypes the lambda
+	 * against the next signature when the first fails — `Foo has no field m`, then `Bar`), and a name a `#if` declares twice,
+	 * each build its own signature.
+	 */
+	@:pin('control') @:killer('M-BINDER-ARGUMENT-OVERLOAD', 'M-BINDER-ARGUMENT-TWIN')
+	public function testACalleeWhoseSignatureTheCallMayNotSelectIsUnproven(): Void {
+		final overloaded: String = '\t@:overload(function(cb:(c:FlagOn)->Void):Void {})\n\tfunction one(cb:(c:Use)->Int):Void {}\n\n';
+		Assert.isFalse(inverts([FLAG_ON, lambdaUse(overloaded, 'one(c -> trace(!c.on ? 1 : 2));')]));
+		final flagged: String = '\tfunction two(cb:(c:FlagOn)->Void):Void {}\n';
+		final plain: String = '\tfunction two(cb:(c:Use)->Void):Void {}\n';
+		// either build's signature may be the one a reader picks: both orders are unproven
+		for (twins in [
+			'\t#if foo\n$flagged\t#else\n$plain\t#end\n\n',
+			'\t#if foo\n$plain\t#else\n$flagged\t#end\n\n'
+		]) Assert.isFalse(inverts([FLAG_ON, lambdaUse(twins, 'two(c -> trace(!c.on ? 1 : 2));')]));
+	}
+
+	/**
+	 * A callee's type parameter types no lambda: `gen(new FlagOn(), c -> …)` binds `T` to `FlagOn` (4.3.7), whose `on` is the
+	 * overloading `Flag` — never the class `T` the module also declares. A `Dynamic` parameter is no function type.
+	 */
+	@:pin('control') @:killer('M-BINDER-ARGUMENT-SCOPE')
+	public function testACalleesTypeParameterTypesNoLambda(): Void {
+		final t: { file: String, source: String } = {
+			file: 'T.hx',
+			source: 'class T {\n\tpublic var on:Bool;\n\n\tpublic function new() {}\n}\n'
+		};
+		final gen: String = '\tfunction gen<T>(x:T, cb:(c:T)->Void):Void {}\n\n';
+		Assert.isFalse(inverts([t, FLAG_ON, lambdaUse(gen, 'gen(new FlagOn(), c -> trace(!c.on ? 1 : 2));')]));
+		Assert.isFalse(inverts([
+			lambdaUse('\tfunction dyn(cb:Dynamic):Void {}\n\n', 'dyn(c -> trace(!c.on ? 1 : 2));')
+		]));
+	}
+
+	/**
 	 * Each route's operand under each ask, as one table: every route reaching the built-in type answers what the
 	 * annotated one does, which accepts; every one reaching the overloading type answers what ITS annotated one does,
 	 * which refuses; the unread route refuses for both — and the fold, whose layout finding stands without the proof,
@@ -367,6 +481,19 @@ class OperandTypingTest extends Test {
 		return {
 			file: 'Use.hx',
 			source: '${head}class Use$parent {\n\tfunction f(s:Str, h:Has, x:Int):Int {\n\t\treturn $cond ? 1 : 2;\n\t}\n}\n'
+		};
+	}
+
+	/**
+	 * `Use.hx` for the lambda-parameter tests: `on` reads the built-in `Bool` through an inline getter, `flag` the overloading
+	 * `Flag`; `each` takes `(c:Use)->Void`, `rest` any number of them; `members` beside them, and `body` in one function.
+	 */
+	private static function lambdaUse(members: String, body: String): { file: String, source: String } {
+		return {
+			file: 'Use.hx',
+			source: 'class Use {\n\tpublic var on(get, never):Bool;\n\n\tpublic var flag:Flag;\n\n\tpublic function new() {}\n\n'
+				+ '\tinline function get_on():Bool\n\t\treturn true;\n\n\tfunction each(cb:(c:Use)->Void):Void {}\n\n'
+				+ '\tfunction rest(...cbs:(c:Use)->Void):Void {}\n\n$members\tfunction f(x:Int):Int {\n\t\t$body\n\t\treturn x;\n\t}\n}\n'
 		};
 	}
 

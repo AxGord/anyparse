@@ -6164,25 +6164,25 @@
 		},
 		{
 			"name": "M-GRAPH-LITERAL-ARGUMENT",
-			"type": "anyparse.query.CallGraphEdges",
-			"method": "collect",
-			"find": "} else if ((kind == callKind && index >= 1) || kind == newExprKind) {",
-			"replace": "} else if (false) {",
+			"type": "anyparse.query.ExpectedTypes",
+			"method": "expectedAt",
+			"find": "else if ((kind == _callKind && index >= 1) || kind == _newExprKind)",
+			"replace": "else if (false)",
 			"note": "a literal passed as an argument is never typed by the parameter"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-ELEMENT",
-			"type": "anyparse.query.CallGraphEdges",
-			"method": "collect",
-			"find": "else if (kind == arrayLiteralKind) {",
-			"replace": "else if (false) {",
+			"type": "anyparse.query.ExpectedTypes",
+			"method": "literalExpectation",
+			"find": "if (kind == _arrayLiteralKind) return elementOf(expectedAt(lineage, indices, level - 1, host, ctx), host, ctx);",
+			"replace": "",
 			"note": "a literal inside an array literal is never typed by the element type"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-RETURN",
-			"type": "anyparse.query.CallGraphEdges",
-			"method": "collect",
-			"find": "else if (returnKinds.contains(kind))",
+			"type": "anyparse.query.ExpectedTypes",
+			"method": "expectedAt",
+			"find": "else if (_returnKinds.contains(kind))",
 			"replace": "else if (false)",
 			"note": "a returned literal is never typed by the return type"
 		},
@@ -6380,9 +6380,9 @@
 		},
 		{
 			"name": "M-GRAPH-LITERAL-ARMS",
-			"type": "anyparse.query.CallGraphEdges",
-			"method": "collect",
-			"find": "|| (switchKinds.contains(kind) && index >= 1) || ((kind == caseBranchKind || blockKinds.contains(kind)) && last)",
+			"type": "anyparse.query.ExpectedTypes",
+			"method": "passesThrough",
+			"find": "|| (_switchKinds.contains(kind) && index >= 1) || ((kind == _caseBranchKind || _blockKinds.contains(kind)) && last)",
 			"replace": "",
 			"note": "a literal in a switch / if arm or ending a block is never typed by what encloses it"
 		},
@@ -6396,26 +6396,26 @@
 		},
 		{
 			"name": "M-GRAPH-LITERAL-LAMBDA",
-			"type": "anyparse.query.CallGraphEdges",
-			"method": "collect",
-			"find": "else if (lambdaKinds.contains(kind) && last)",
+			"type": "anyparse.query.ExpectedTypes",
+			"method": "expectedAt",
+			"find": "else if (_lambdaKinds.contains(kind) && last)",
 			"replace": "else if (false)",
 			"note": "a lambda's body is never typed by its function type's return"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-MAP",
-			"type": "anyparse.query.CallGraphEdges",
-			"method": "collect",
-			"find": "} else if (kind == mapEntryKind && index == 1 && level > 0 && lineage[level - 1].kind == arrayLiteralKind) {",
-			"replace": "} else if (false) {",
+			"type": "anyparse.query.ExpectedTypes",
+			"method": "literalExpectation",
+			"find": "if (kind == _mapEntryKind && indices[level] == 1 && parentIs(lineage, level, _arrayLiteralKind))",
+			"replace": "if (false)",
 			"note": "a map literal's value is never typed by the map's value type"
 		},
 		{
 			"name": "M-GRAPH-LITERAL-FIELD",
-			"type": "anyparse.query.CallGraphEdges",
-			"method": "collect",
-			"find": "} else if (kind == objectFieldKind && level > 0 && lineage[level - 1].kind == objectLiteralKind) {",
-			"replace": "} else if (false) {",
+			"type": "anyparse.query.ExpectedTypes",
+			"method": "literalExpectation",
+			"find": "kind == _objectFieldKind && parentIs(lineage, level, _objectLiteralKind)",
+			"replace": "false",
 			"note": "an object literal's field is never typed by the field's declared type"
 		},
 		{
@@ -21263,10 +21263,10 @@
 		},
 		{
 			"name": "M-TS-LAMBDA-ARITY",
-			"type": "anyparse.query.CallGraphEdges",
-			"method": "collect",
-			"find": "if (written.length != params.length) return;",
-			"replace": "if (written.length < params.length) return;",
+			"type": "anyparse.query.ExpectedTypes",
+			"method": "lambdaParamTypes",
+			"find": "case Function(ps, _, _) if (ps.length == count):",
+			"replace": "case Function(ps, _, _) if (ps.length >= count):",
 			"note": "a lambda is typed by a function type of more parameters than it declares"
 		},
 		{
@@ -21279,10 +21279,10 @@
 		},
 		{
 			"name": "M-TS-LAMBDA-NULL",
-			"type": "anyparse.query.CallGraphEdges",
-			"method": "collect",
-			"find": "final written: Array<TypeSyntax> = switch (read?.wrapped(['Null']) ?? read)?.shape {",
-			"replace": "final written: Array<TypeSyntax> = switch read?.shape {",
+			"type": "anyparse.query.ExpectedTypes",
+			"method": "lambdaParamTypes",
+			"find": "return switch (read?.wrapped(['Null']) ?? read)?.shape {",
+			"replace": "return switch read?.shape {",
 			"note": "a nullable function type types no lambda parameter"
 		},
 		{
@@ -21344,17 +21344,17 @@
 		{
 			"name": "M-TS-SKIP-DEFAULT",
 			"type": "anyparse.query.CallGraphNames",
-			"method": "declaredParams",
+			"method": "paramsOf",
 			"find": "&& !params[skippable].children.exists(c -> !annotationKinds.contains(c.kind))",
 			"replace": "",
 			"note": "a parameter with a default value is not skippable"
 		},
 		{
 			"name": "M-TS-SKIP-NEW-ARGS",
-			"type": "anyparse.query.CallGraphEdges",
-			"method": "collect",
-			"find": "kind == callKind ? holder.children.slice(1) : holder.children.slice(holder.typeArgCount);",
-			"replace": "kind == callKind ? holder.children.slice(1) : holder.children;",
+			"type": "anyparse.query.ExpectedTypes",
+			"method": "argumentExpectation",
+			"find": "holder.kind == _callKind ? holder.children.slice(1) : holder.children.slice(holder.typeArgCount);",
+			"replace": "holder.kind == _callKind ? holder.children.slice(1) : holder.children;",
 			"note": "a `new` counts the type arguments it names among its arguments"
 		},
 		{
@@ -24875,6 +24875,89 @@
 			"find": "? lineExtendedSpan(source, commaExtendedSpan(source, span))",
 			"replace": "? commaExtendedSpan(source, span)",
 			"note": "removing a one-per-line element leaves its indentation and line break behind, a blank line inside the list"
+		},
+		{
+			"name": "M-BINDER-LAMBDA-PARAM-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "lambdaParamTier",
+			"force": "null",
+			"note": "an untyped lambda parameter is never typed by the function type the lambda is expected to be"
+		},
+		{
+			"name": "M-WALK-LAMBDA-PARAM-CUT",
+			"type": "anyparse.query.NominalTypes",
+			"method": "identifierType",
+			"find": "host.loopElement(from, ctx) ?? (parameter == null ? null : parameter(from, ident, ctx))",
+			"replace": "host.loopElement(from, ctx)",
+			"note": "the shared walk never asks a host for an untyped lambda parameter"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "argumentType",
+			"force": "null",
+			"note": "a call argument expects no type, so a lambda passed to a member of the file types no parameter"
+		},
+		{
+			"name": "M-BINDER-ANNOTATION-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "annotationOf",
+			"force": "null",
+			"note": "a declaration or an assigned binding written with a function type expects nothing of the lambda it holds"
+		},
+		{
+			"name": "M-BINDER-RETURN-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "returnOf",
+			"force": "null",
+			"note": "a returned lambda is never typed by the function type its function writes as its result"
+		},
+		{
+			"name": "M-BINDER-FIELD-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "anonField",
+			"force": "null",
+			"note": "an object-literal field expects nothing of the lambda it holds"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-REST",
+			"type": "anyparse.check.OperandBinder",
+			"method": "argumentType",
+			"find": "params.rest ? Std.int(Math.min(at, params.params.length - 1)) : at",
+			"replace": "at",
+			"note": "an argument past a rest parameter's position binds no parameter"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-SKIPPABLE",
+			"type": "anyparse.check.OperandBinder",
+			"method": "argumentType",
+			"find": "written == null || bound >= params.skippableFrom ? null",
+			"replace": "written == null ? null",
+			"note": "a lambda after an optional or defaulted parameter is typed by the parameter at its position, which the call may have skipped"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-OVERLOAD",
+			"type": "anyparse.check.OperandBinder",
+			"method": "selectsItsSignature",
+			"find": " && !m.hasOverloadMeta",
+			"replace": "",
+			"note": "a lambda passed to an @:overload member is typed by the written signature the call may not select"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-TWIN",
+			"type": "anyparse.check.OperandBinder",
+			"method": "selectsItsSignature",
+			"find": "owner.members.filter(o -> o.name == m.name).length == 1 && ",
+			"replace": "",
+			"note": "a lambda passed to a member a #if declares twice is typed by one build's signature"
+		},
+		{
+			"name": "M-BINDER-ARGUMENT-SCOPE",
+			"type": "anyparse.check.OperandBinder",
+			"method": "argumentType",
+			"find": "{ text: written, at: fnFrom }",
+			"replace": "{ text: written, at: call.span?.from ?? fnFrom }",
+			"note": "a callee parameter is bound where the CALL is, so the callee's own type parameter binds a namesake class"
 		}
 	]
 }

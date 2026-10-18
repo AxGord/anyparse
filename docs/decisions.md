@@ -3938,3 +3938,33 @@ decided the question; it may not become a record of runs.
   its comma) left the line's indentation and break behind — a blank line inside the array, kept by the writer as
   trivia (met removing a pin from `TestDiscoveryParityTest`). `ElementSpan.elementCut` now line-extends the
   comma-extended cut (`lineExtendedSpan` changes nothing when the cut does not own its line) — branch `feat/infra-N35`
+- N32 — ONE expected-type engine. The only typer of an untyped lambda parameter was a closure of `CallGraphEdges`
+  (`expectedAt` / `returnExpectation` / `typeLambdaParams`), in the graph's keyed currency, so the shared walk
+  (`NominalTypes.typeWalk`) answered Unknown for one and TM `FileSystemItemData.hx:330 !child.folder` (an inline-getter
+  property, no compiler-facts site) stayed refused. → `query.ExpectedTypes`: the LADDER (parentheses, ternary / `if` /
+  `switch` arms, the value a block ends with, array element, map value, object-literal field, a lambda's body, `return`
+  — an untyped lambda's from its own expectation —, a declaration written with a type, an assignment, a call or `new`
+  argument) moved verbatim, generic over a host currency `W` behind `ExpectationHost<W, C>` (declared / assigned /
+  returned / argument — the callee's parameter type at an argument position — / element / field / read / part), plus
+  `lambdaParamTypes` and `lineageOf` for a typer whose walk keeps no lineage. Every rung proved on 4.3.7 with `$type` of
+  the untyped parameter (`v-N32-hx/ladder`, `fixture`). `TypingHost.parameter` is the walk's new arc (asked after the
+  initializer and the loop element). Hosts: the CALL GRAPH pre-types a lambda's parameters into `typeSources` through the
+  engine as its walk reaches the lambda (its answers unchanged: throughParams substitution of the receiver's type
+  arguments, `mayShift`, rest, overloads — all-rules byte-identical on anyparse and TM-now), so its `parameter` is null;
+  the OPERAND BINDER answers in a `Located` currency (a type written in this file + the offset it is written at, bound
+  there by `DeclaredNullity.headTier`, so a type parameter in scope there — the callee's own `<T>`, the enclosing type's —
+  answers Unknown by construction: 4.3.7 binds `gen(new FlagOn(), c -> …)`'s `c` to `FlagOn`, never a class named `T`):
+  a declaration's / an assigned binding's annotation, a function's written result, an anonymous structure's field, and
+  the parameter of a BARE call to a member of this file. POSITIVE whitelist there: one declaration of the name in its
+  type (a `#if` twin is another build's signature), no `@:overload` (4.3.7 retypes the lambda against the next
+  signature when the first fails — `Foo has no field m`, then `Bar`), no skippable parameter before the bound one (an
+  optional or defaulted one: 4.3.7 tries the lambda against it first, `Unknown<0>`), a rest parameter binding every
+  argument from its position (4.3.7: the element type); a `Dynamic` parameter or a macro's `Expr` is no function type.
+  The INDEX host (`INDEX_HOST`) answers null: it resolves no call to a declaration, and its currency spells a type
+  parameter as a bare name its own later lookups would resolve package-blind. Not covered (follow-up): a member of
+  another file / an inherited member / `recv.m(…)` / a local function / a construction (need the declaration's
+  parameter list — optional and rest flags — read where it is written: `MemberInfo` carries `paramTypeSources` only),
+  generic substitution in the binder (`Array<T>.map`, `Lambda.iter`, a `forEachChild<T>`), a typedef alias of a function
+  type, a container element (no proof a written `Array` is the standard one), and a `BlockExpr` argument (4.3.7 types it;
+  the grammar names no block-expression kind for the ladder). `CallGraphNames.paramsOf` splits the node half out of
+  `declaredParams` (the binder holds the node) — branch `feat/infra-N32`

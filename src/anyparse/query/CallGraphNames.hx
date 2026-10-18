@@ -95,12 +95,18 @@ final class CallGraphNames {
 	 */
 	public static function declaredParams(
 		tree: QueryNode, source: String, from: Int, shape: RefShape, provider: Null<TypeInfoProvider>
-	): Null<{ params: Array<Null<String>>, rest: Bool, skippableFrom: Int }> {
-		final paramKinds: Array<String> = shape.paramKinds ?? [];
+	): Null<DeclaredParams> {
 		final found: Null<QueryNode> = functionNodeAt(tree, from, shape.functionKinds ?? []);
-		if (found == null) return null;
-		final sources: Map<Int, String> = provider?.declaredTypeSources(source) ?? [];
-		final params: Array<QueryNode> = [for (c in found.children) if (paramKinds.contains(c.kind)) c];
+		return found == null ? null : paramsOf(found, provider?.declaredTypeSources(source) ?? [], shape);
+	}
+
+	/**
+	 * `declaredParams` of the function node `fn` itself, its file's written annotations `sources` keyed by binding offset
+	 * (`TypeInfoProvider.declaredTypeSources`).
+	 */
+	public static function paramsOf(fn: QueryNode, sources: Map<Int, String>, shape: RefShape): DeclaredParams {
+		final paramKinds: Array<String> = shape.paramKinds ?? [];
+		final params: Array<QueryNode> = [for (c in fn.children) if (paramKinds.contains(c.kind)) c];
 		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
 		final optionalKind: Null<String> = shape.optionalParamKind;
 		// `?p` and `p = v` alike are skippable; a grammar naming no optional kind may skip any
@@ -171,4 +177,16 @@ final class CallGraphNames {
 		};
 	}
 
+}
+
+/** A function's parameters as its declaration writes them (`CallGraphNames.paramsOf`). */
+typedef DeclaredParams = {
+	/** The written type of each parameter, in order; null for one written without a type. */
+	final params: Array<Null<String>>;
+
+	/** Whether the last parameter is a rest parameter. */
+	final rest: Bool;
+
+	/** The position of the first parameter a call may skip — optional or carrying a default value; the count for none. */
+	final skippableFrom: Int;
 }

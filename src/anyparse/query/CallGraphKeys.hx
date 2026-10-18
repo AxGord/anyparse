@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraphImports.WrittenIn;
+import anyparse.query.CallGraphNames.DeclaredParams;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.ValueNameBinding.ImportedStatics;
@@ -386,7 +387,7 @@ final class CallGraphKeys {
 		final unkeyed: Array<String> = g.types.generics.typeParamsOf(n.typeName ?? '').concat(g._facts.typeParams[id] ?? []);
 		for (d in declared) {
 			final entry: Null<{ tree: QueryNode, source: String }> = g._entries[CallGraphNames.normalizePath(d.file)];
-			final read: Null<{ params: Array<Null<String>>, rest: Bool, skippableFrom: Int }> = entry == null
+			final read: Null<DeclaredParams> = entry == null
 				? null
 				: CallGraphNames.declaredParams(entry.tree, entry.source, d.span.from, g._shape, g._provider);
 			if (read == null) return null;
