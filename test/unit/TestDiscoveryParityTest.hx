@@ -4460,7 +4460,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RefShapeKindProjectionTest#testEveryProjectedKindIsOneSomeSourceEmits :: control :: M-ELLIPSIS-STMT-TOKEN-STALE',
 			'unit.query.RemoveElementSliceTest#testRemoveFinalClassTakesItsFinal :: control :: '
 				+ 'M-DECLSPAN-FINAL-WRAPPER-BLIND,M-LIFT-FINAL-WRAPPER-SKIPPED',
-			'unit.query.RemoveElementSliceTest#testRemoveOnePerLineElementTakesItsLine :: control :: ' + 'M-REMOVE-COMMA-LINE-KEPT',
+			'unit.query.RemoveElementSliceTest#testRemoveOnePerLineElementTakesItsLine :: control :: M-REMOVE-COMMA-LINE-KEPT',
 			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 				+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
