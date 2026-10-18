@@ -98,6 +98,10 @@ final class AddMeta {
 		return host == null ? null : runEdit(source, prefixRun(TreePath.parentOf(tree, host), host), host, text);
 	}
 
+	private static inline function foldSpaces(text: String): String {
+		return ~/\s+/g.replace(text.trim(), ' ');
+	}
+
 	/**
 	 * The `@:name` / `@name` an entry declares, or null when `text` is not one.
 	 * Only the NAME is validated: the argument list is spliced verbatim and the
@@ -210,10 +214,6 @@ final class AddMeta {
 	private static function sameEntry(source: String, sibling: QueryNode, text: String): Bool {
 		final span: Null<Span> = sibling.span;
 		return span == null || foldSpaces(source.substring(span.from, span.to)) == foldSpaces(text);
-	}
-
-	private static inline function foldSpaces(text: String): String {
-		return ~/\s+/g.replace(text.trim(), ' ');
 	}
 
 }

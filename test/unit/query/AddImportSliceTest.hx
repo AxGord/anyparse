@@ -217,6 +217,35 @@ class AddImportSliceTest extends Test {
 		assertAdd(source, 'q.*', false, expected);
 	}
 
+	#if (sys || nodejs)
+	/**
+	 * The CLI op places a fresh import where the `import-order` rule reads the block: a field wildcard the project index proves
+	 * order-free is a MEMBER of the run, so `z.Z` follows the whole `a.*` block instead of stopping behind `a.B`, where the
+	 * wildcard-blind seat (no resolution scope on the op's plugin) cut the run in two and took the earlier piece. Killed by
+	 * arm `M-ADDIMPORT-CLI-BLIND-SEAT`.
+	 */
+	@:pin('control')
+	@:killer('M-ADDIMPORT-CLI-BLIND-SEAT')
+	public function testCliSeatReadsTheWildcardAsRunMember(): Void {
+		final module: (String, String) -> String = (pkg, name) -> 'package $pkg;\n\nclass $name {}\n';
+		final head: String = 'package q;\n\nimport a.A;\nimport a.B;\nimport a.Fields.*;\nimport a.G;\nimport a.H;\n';
+		final tail: String = '\nfinal class Target {\n\n\tfunction f():Void {}\n\n}\n';
+		final dir: String = CliFixture.writeTree('addimportseat', [
+			{ name: 'apqlint.json', source: '{"resolutionRoots": ["src"], "resolutionStd": false}\n' },
+			{ name: 'src/a/A.hx', source: module('a', 'A') },
+			{ name: 'src/a/B.hx', source: module('a', 'B') },
+			{ name: 'src/a/G.hx', source: module('a', 'G') },
+			{ name: 'src/a/H.hx', source: module('a', 'H') },
+			{ name: 'src/a/Fields.hx', source: 'package a;\n\nclass Fields {\n\n\tpublic static function fld():Void {}\n\n}\n' },
+			{ name: 'src/q/Target.hx', source: head + tail }
+		]);
+		final target: String = '$dir/src/q/Target.hx';
+		Assert.equals(0, Cli.run(['add-import', target, 'z.Z', '--write']));
+		Assert.equals('${head}import z.Z;\n$tail', File.getContent(target));
+		CliFixture.removeDir(dir);
+	}
+	#end
+
 	private function assertAdd(source: String, path: String, isUsing: Bool, expected: String, reformat: Bool = false): Void {
 		final result: EditResult = addOf(source, path, isUsing, reformat);
 		switch result {
@@ -252,34 +281,5 @@ class AddImportSliceTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return AddImport.addImport(source, path, isUsing, reformat, plugin);
 	}
-
-	#if (sys || nodejs)
-	/**
-	 * The CLI op places a fresh import where the `import-order` rule reads the block: a field wildcard the project index proves
-	 * order-free is a MEMBER of the run, so `z.Z` follows the whole `a.*` block instead of stopping behind `a.B`, where the
-	 * wildcard-blind seat (no resolution scope on the op's plugin) cut the run in two and took the earlier piece. Killed by
-	 * arm `M-ADDIMPORT-CLI-BLIND-SEAT`.
-	 */
-	@:pin('control')
-	@:killer('M-ADDIMPORT-CLI-BLIND-SEAT')
-	public function testCliSeatReadsTheWildcardAsRunMember(): Void {
-		final module: (String, String) -> String = (pkg, name) -> 'package $pkg;\n\nclass $name {}\n';
-		final head: String = 'package q;\n\nimport a.A;\nimport a.B;\nimport a.Fields.*;\nimport a.G;\nimport a.H;\n';
-		final tail: String = '\nfinal class Target {\n\n\tfunction f():Void {}\n\n}\n';
-		final dir: String = CliFixture.writeTree('addimportseat', [
-			{ name: 'apqlint.json', source: '{"resolutionRoots": ["src"], "resolutionStd": false}\n' },
-			{ name: 'src/a/A.hx', source: module('a', 'A') },
-			{ name: 'src/a/B.hx', source: module('a', 'B') },
-			{ name: 'src/a/G.hx', source: module('a', 'G') },
-			{ name: 'src/a/H.hx', source: module('a', 'H') },
-			{ name: 'src/a/Fields.hx', source: 'package a;\n\nclass Fields {\n\n\tpublic static function fld():Void {}\n\n}\n' },
-			{ name: 'src/q/Target.hx', source: head + tail }
-		]);
-		final target: String = '$dir/src/q/Target.hx';
-		Assert.equals(0, Cli.run(['add-import', target, 'z.Z', '--write']));
-		Assert.equals(head + 'import z.Z;\n' + tail, File.getContent(target));
-		CliFixture.removeDir(dir);
-	}
-	#end
 
 }
