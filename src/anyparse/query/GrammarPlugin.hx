@@ -2520,6 +2520,25 @@ typedef RefShape = {
 	@:optional var literalTypeNames: Map<String, String>;
 
 	/**
+	 * The language's core value types, as a typer decides which parameter a call binds an argument to by them
+	 * (`ArgumentSlots`): `names` are types each of which means the one built-in type in every file that declares no type
+	 * of that name (Haxe `Bool`, `String`, `Int`, `Float`), two of which unify only when they are the same or `widens`
+	 * says so (`Int` to `Float`, proved on Haxe 4.3.7: `f(?x:Float, ?s:String)` called `f(1)` binds `x`, called `f(true)`
+	 * skips both). `arithmeticKinds` are the operators whose result over core numbers is the `integer` type when every
+	 * operand is one and the operator is not one of `realArithmeticKinds`, the `real` type otherwise (`Int / Int` is a
+	 * `Float`); `negationKind` keeps its operand's type. Every other type — an abstract converting through `@:from` /
+	 * `@:to`, a type parameter, `Dynamic` — is undecided. Optional; unset decides nothing.
+	 */
+	@:optional var coreValueTypes: CoreValueTypes;
+
+	/**
+	 * The static extensions that test the ends of a string, as a guard over a string the analysis knows is decided:
+	 * `module` declares them (Haxe `StringTools`), `suffix` tests the end (`endsWith`), `prefix` the start
+	 * (`startsWith`). Optional; unset decides no such guard.
+	 */
+	@:optional var stringAffixTests: { module: String, suffix: String, prefix: String };
+
+	/**
 	 * The array-literal node kind (Haxe `ArrayExpr`, whose children are the element
 	 * expressions) — the `explicit-local-type` autofix annotates a local whose
 	 * initializer is a NON-EMPTY array literal of one KNOWN literal element type as
@@ -3433,6 +3452,16 @@ typedef RefShape = {
 	 * precedence. Optional; unset suppresses nothing.
 	 */
 	@:optional var parenOpaqueSubtreeKinds: Array<String>;
+}
+
+/** The language's core value types (`RefShape.coreValueTypes`, which says what each field means). */
+typedef CoreValueTypes = {
+	final names: Array<String>;
+	final widens: Map<String, Array<String>>;
+	final integer: String;
+	final real: String;
+	final arithmeticKinds: Array<String>;
+	final realArithmeticKinds: Array<String>;
 }
 
 /** The execution facts of `RefShape` (`RefShape.execution`): what runs code no call site names, and what reach may assume. */

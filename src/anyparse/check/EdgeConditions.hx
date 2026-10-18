@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.ArgumentValues.AffixTest;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
@@ -12,12 +13,14 @@ using Lambda;
 /**
  * One thing a condition guarding a call site fixes there: a parameter of the function (`param`, its index among the
  * function's `tracked` ones), or the main-thread check (`param` = `EdgeConditions.MAIN_CHECK`), is `value` — or, for a
- * null test (`nullTest`), the parameter is null exactly when `value` is true.
+ * null test (`nullTest`), the parameter is null exactly when `value` is true; for a string affix guard (`test`), the
+ * parameter's string passes it exactly when `value` is true.
  */
 private typedef SiteFact = {
 	final param: Int;
 	final value: Bool;
 	final nullTest: Bool;
+	@:optional final test: AffixTest;
 }
 
 /**
@@ -108,23 +111,26 @@ final class EdgeConditions {
 
 	/**
 	 * The context the call `edge` runs in when its function runs on `ctx` under `valuation`: 0 when a condition around
-	 * it is false there, `ctx` narrowed to the main thread (or to the others) inside a main-thread check, `ctx` itself
-	 * otherwise.
+	 * it is false there — for each parameter the conditions test, no value its valuation holds passes them all —, `ctx`
+	 * narrowed to the main thread (or to the others) inside a main-thread check, `ctx` itself otherwise.
 	 */
 	public function carried(edge: CallEdge, valuation: String, ctx: Int): Int {
 		final dead: Null<(CallEdge) -> Bool> = _dead;
 		if (dead != null && dead(edge)) return 0;
 		var mask: Int = MAIN_BITS | ThreadSafety.CTX_BG;
+		final byParam: Map<Int, Array<SiteFact>> = [];
 		for (fact in siteFacts(edge)) {
 			if (fact.param == MAIN_CHECK) {
 				mask &= fact.value ? MAIN_BITS : ThreadSafety.CTX_BG;
 				continue;
 			}
-			final known: String = valuation.charAt(fact.param);
-			if (known == ArgumentValues.UNKNOWN) continue;
-			final isNull: Bool = known == ArgumentValues.NULL;
-			final isBool: Bool = known == ArgumentValues.TRUE || known == ArgumentValues.FALSE;
-			if (fact.nullTest ? isNull != fact.value : isBool && (known == ArgumentValues.TRUE) != fact.value) return 0;
+			final list: Array<SiteFact> = byParam[fact.param] ?? [];
+			list.push(fact);
+			byParam[fact.param] = list;
+		}
+		for (param => facts in byParam) {
+			final atoms: Null<Array<String>> = _values.atomsOf(valuation.charAt(param));
+			if (atoms != null && !atoms.exists(a -> facts.foreach(f -> admits(a, f)))) return 0;
 		}
 		return ctx & mask;
 	}
@@ -199,6 +205,15 @@ final class EdgeConditions {
 			final bound: Null<QueryNode> = finalLocalInit(cond, fnId);
 			if (bound != null) return factsOf(bound, value, fnId, file);
 		}
+		final affix: Null<AffixTest> = _values.stringPredicate(fnId, cond);
+		if (affix != null) return [
+			{
+				param: affix.param,
+				value: value,
+				nullTest: false,
+				test: affix
+			}
+		];
 		return isMainCheck(cond, fnId, file) ? [{ param: MAIN_CHECK, value: value, nullTest: false }] : [];
 	}
 
@@ -251,6 +266,21 @@ final class EdgeConditions {
 			&& _graph.outEdges(fnId).exists(
 				e -> e.kind.isInvocation() && checks.contains(e.to) && e.span != null && e.span.from == span.from && e.span.to == span.to
 			);
+	}
+
+	/**
+	 * Whether a parameter holding the atom `atom` (`ArgumentValues.atomsOf`) may pass `fact`: a null test by whether it is
+	 * `null`, a `Bool` condition by its `Bool`, a string affix guard by its string — and any atom that says nothing of what
+	 * the fact tests passes.
+	 */
+	private static function admits(atom: String, fact: SiteFact): Bool {
+		final test: Null<AffixTest> = fact.test;
+		if (fact.nullTest) return ArgumentValues.isNullAtom(atom) == fact.value;
+		if (test != null) {
+			final s: Null<String> = ArgumentValues.stringOf(atom);
+			return s == null || (test.suffix ? StringTools.endsWith(s, test.text) : StringTools.startsWith(s, test.text)) == fact.value;
+		}
+		return atom == ArgumentValues.TRUE ? fact.value : atom != ArgumentValues.FALSE || !fact.value;
 	}
 
 }

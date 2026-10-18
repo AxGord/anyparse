@@ -427,4 +427,130 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 	#end
 
+	/** A `Bool` handed to a constructor decides its branches as one handed to a method does (`new W(false)`). */
+	@:pin('control') @:killer('M-TS-NEW-UNBOUND')
+	public function testAConstructionArgumentDecidesTheConstructorsBranch(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class W { public function new(sleep:Bool) if (sleep) Sys.sleep(1); }',
+			'class A { public static function main():Void { new W(false); Runner.create(() -> new W(true)); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A type declaring no constructor is built by its supertype's, with the arguments `new` hands it. */
+	@:pin('control') @:killer('M-TS-NEW-UNBOUND')
+	public function testAnInheritedConstructorTakesTheArgumentsOfItsSupertypes(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class W { public function new(sleep:Bool) if (sleep) Sys.sleep(1); }',
+			'class V extends W {}',
+			'class A { public static function main():Void new V(false); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A `null` handed to a parameter with a default leaves it the default (4.3.7: `f(s:String = 'x')` called `f(null)`). */
+	@:pin('control') @:killer('M-TS-NULL-DEFAULT-UNREAD')
+	public function testANullArgumentToAParameterWithADefaultLeavesTheDefault(): Void {
+		#if (sys || nodejs)
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.save -> Sys.sleep'], sleepFindings('', [
+			'class W { public static function save(s:String = \'x\'):Void if (s != null) Sys.sleep(1); }',
+			'class A { public static function main():Void W.save(null); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An argument the shared walk types — arithmetic over a static constant of another type and a local — binds the
+	 * parameter of its own type, so the optional `String` after it stays out.
+	 */
+	@:pin('control') @:killer('M-WALK-ARITHMETIC-OFF', 'M-ARGTYPE-STATIC-OFF')
+	public function testAnArgumentTypedByArithmeticBindsItsOwnParameter(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class K { public static inline final WIDTH:Int = 3; }',
+			'class W { public static function make(?w:Float, ?hint:String):Void if (hint != null) Sys.sleep(1); }',
+			'class A { public static function main():Void { final n:Int = 2; W.make(K.WIDTH * n - 1); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The string a call hands a parameter its callee's affix guard tests decides that guard: `.svg` ends with `.svg`. */
+	@:pin('control') @:killer('M-TS-AFFIX-UNREAD', 'M-TS-STRING-ATOM-OFF')
+	public function testAStringTheCalleesAffixGuardTestsDecidesIt(): Void {
+		#if (sys || nodejs)
+		final callee: String = 'using StringTools;\nclass W { public static function show(?hint:String):Void '
+			+ 'if (hint != null) { if (!hint.endsWith(\'.svg\')) Sys.sleep(1); } }';
+		Assert.same([], sleepFindings('', [
+			callee,
+			'class A { public static function main():Void { W.show(\'a.svg\'); W.show(); } }'
+		]));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.show -> Sys.sleep'], sleepFindings('', [
+			callee,
+			'class A { public static function main():Void W.show(\'a.png\'); }'
+		]), 'another string');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A later `using` that may bind the affix method itself leaves the guard undecided. */
+	@:pin('control') @:killer('M-TS-AFFIX-USINGS-UNCHECKED')
+	public function testAStringAffixGuardAnotherUsingMayBindDecidesNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.show -> Sys.sleep'], sleepFindings('', [
+			'class Text { public static function endsWith(s:String, e:String):Bool return false; }',
+			'using StringTools;\nusing Text;\nclass W { public static function show(?hint:String):Void '
+			+ 'if (hint != null) { if (!hint.endsWith(\'.svg\')) Sys.sleep(1); } }',
+			'class A { public static function main():Void W.show(\'a.svg\'); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An abstract may take a `String` through `@:from` (`openfl.text.TextFormatAlign`), so a string literal may bind it or
+	 * skip it: the `String` after it may stay `null` (4.3.7 binds `align`), and the branch a `null` takes runs.
+	 */
+	@:pin('control') @:killer('M-ARGFIT-UNKNOWN-MISFITS')
+	public function testAnArgumentAnAbstractMayTakeLeavesBothBindings(): Void {
+		#if (sys || nodejs)
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', [
+			'abstract Align(Null<Int>) { @:from static function ofText(s:String):Align return null; }',
+			'class W { public static function make(?align:Align, ?hint:String):Void if (hint == null) Sys.sleep(1); }',
+			'class A { public static function main():Void W.make(\'x\'); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Every way a call may bind decides a guard together: the literal binds the abstract (the `String` stays `null`) or the
+	 * `String` (an `.svg`), and neither way runs the branch.
+	 */
+	@:pin('control') @:killer('M-TS-ARG-SETS-UNKNOWN')
+	public function testEveryWayACallMayBindDecidesTogether(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'abstract Align(Null<Int>) { @:from static function ofText(s:String):Align return null; }',
+			'using StringTools;\nclass W { public static function make(?align:Align, ?hint:String, quiet:Bool = true):Void '
+			+ 'if (hint != null) { if (!hint.endsWith(\'.svg\')) Sys.sleep(1); } }',
+			'class A { public static function main():Void W.make(\'a.svg\', false); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }
