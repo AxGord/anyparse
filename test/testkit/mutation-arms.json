@@ -26324,6 +26324,14 @@
 			"method": "metavars",
 			"force": "node",
 			"note": "a `\"$x\"` string in a pattern stays a string, so a JSON pattern can hold no metavariable"
+		},
+		{
+			"name": "M-PAREN-BROKEN-CHAIN-PINNED",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefWrapHardFlatten",
+			"find": "|| anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0",
+			"replace": "|| false",
+			"note": "an expression paren around a `+`/`-` chain an operand already broke pins that chain flat again when no `expressionWrapping` rule is set, so every continuation line renders at column 0 and the next write re-indents it"
 		}
 	]
 }

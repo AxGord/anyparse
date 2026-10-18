@@ -424,6 +424,10 @@ final class WriterKwRefLowering {
 		final keepOpenGate: Expr = wrapOpenNewlineExpr != null
 			? macro ($wrapOpenNewlineExpr && anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0)
 			: macro false;
+		// A pure `+`/`-` chain is pinned flat (`HardFlatten`) on the open side only while it CAN be one line: an
+		// operand that already broke (an array its rule lays out one item per line) leaves hardlines a force-flat
+		// region renders as bare newlines at column 0. Such a chain opens as it does under an `expressionWrapping`
+		// rule — the paren's indent and the chain's own breaks, still behind the paren's width probe.
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			final _wrapInner: anyparse.core.Doc = $innerDoc;
@@ -449,6 +453,7 @@ final class WriterKwRefLowering {
 						: anyparse.format.wrap.WrapList.isPureOpAddSubChain(_wrapInner)
 							? (
 								anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+									|| anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0
 									? _dfle(opt.lineWidth + 1, _dc([
 										$leadDoc,
 										_dn(_cols, _dc([_dhl(), _wrapInner])),

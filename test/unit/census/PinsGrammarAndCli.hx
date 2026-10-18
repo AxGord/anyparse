@@ -219,6 +219,8 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxElseIfOptionsTest#testElseIfNextOnlyLastLevelKeepsFirstLevelInline :: control :: M-KEEP-ELSEIF-NEXT-OFF',
 		'unit.grammar.haxe.HxExprForGuardGlueSliceTest#testArrowForForBlockGluesTheWholeSpine :: control :: M-STRICT-HEAD-DELIM-OFF',
 		'unit.grammar.haxe.HxExprForGuardGlueSliceTest#testArrowForIfBlockGluesTheWholeSpine :: control :: M-STRICT-HEAD-DELIM-OFF',
+		'unit.grammar.haxe.HxExprParenBrokenChainTest#testABrokenChainOpensAtItsIndent :: control :: M-PAREN-BROKEN-CHAIN-PINNED',
+		'unit.grammar.haxe.HxExprParenBrokenChainTest#testOneWriteIsAFixedPointAcrossTheBoundary :: control :: M-PAREN-BROKEN-CHAIN-PINNED',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testCallArgumentListBreaksInsteadOfTheFirstParen :: control :: '
 			+ 'M-PAREN-LIST-BREAK',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testChainProbeKeepsBreakingItsOwnLink :: control :: M-PAREN-CHAIN-PREDICTS',
