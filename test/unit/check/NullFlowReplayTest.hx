@@ -137,7 +137,7 @@ final class NullFlowReplayTest extends Test {
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(FLOW);
 		final first: Array<NullFlowVisit> = [];
 		final second: Array<NullFlowVisit> = [];
-		cache.nullFlowVisits(tree, FLOW, () -> first);
+		Assert.equals(first, cache.nullFlowVisits(tree, FLOW, () -> first));
 		cache.forget([tree]);
 		Assert.equals(second, cache.nullFlowVisits(tree, FLOW, () -> second));
 	}

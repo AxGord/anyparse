@@ -416,24 +416,6 @@ final class NullFlow {
 	}
 
 	/**
-	 * The walk behind `analyze`: every function unit of `root`, its consumer `visit` called at each node. `recording` freezes
-	 * the facts each visit receives (`frozenFacts`), for a walk whose visits are kept and replayed.
-	 */
-	private static function walkUnits(
-		root: QueryNode, shape: RefShape, source: String, identKind: String, visit: (QueryNode, NullFacts) -> Void,
-		seed: Null<(QueryNode) -> Bool>, declaredNullable: Null<(QueryNode) -> Bool>, typeSources: Null<Map<Int, String>>, recording: Bool
-	): Void {
-		final predicates: Array<NonNullPredicate> = typeSources == null ? [] : nonNullPredicates(root, shape, identKind, typeSources);
-		final written: Map<Int, String> = typeSources ?? [];
-		final argType: QueryNode -> Null<String> = arg -> TypeResolver.identDeclaredTypeSource(arg, shape, root, () -> written, false);
-		forEachFunctionUnit(
-			root, shape,
-			(body, paramNames) ->
-				analyzeBody(body, shape, source, identKind, paramNames, visit, seed, declaredNullable, predicates, argType, recording)
-		);
-	}
-
-	/**
 	 * The initializer expression of a local declaration node, or null when it has
 	 * none. A declaration's initializer is its LAST child — a top-level
 	 * anonymous-struct type annotation also projects as a child
@@ -636,6 +618,24 @@ final class NullFlow {
 			aliases: [],
 			present: []
 		};
+	}
+
+	/**
+	 * The walk behind `analyze`: every function unit of `root`, its consumer `visit` called at each node. `recording` freezes
+	 * the facts each visit receives (`frozenFacts`), for a walk whose visits are kept and replayed.
+	 */
+	private static function walkUnits(
+		root: QueryNode, shape: RefShape, source: String, identKind: String, visit: (QueryNode, NullFacts) -> Void,
+		seed: Null<(QueryNode) -> Bool>, declaredNullable: Null<(QueryNode) -> Bool>, typeSources: Null<Map<Int, String>>, recording: Bool
+	): Void {
+		final predicates: Array<NonNullPredicate> = typeSources == null ? [] : nonNullPredicates(root, shape, identKind, typeSources);
+		final written: Map<Int, String> = typeSources ?? [];
+		final argType: QueryNode -> Null<String> = arg -> TypeResolver.identDeclaredTypeSource(arg, shape, root, () -> written, false);
+		forEachFunctionUnit(
+			root, shape,
+			(body, paramNames) ->
+				analyzeBody(body, shape, source, identKind, paramNames, visit, seed, declaredNullable, predicates, argType, recording)
+		);
 	}
 
 	/**

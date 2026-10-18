@@ -182,15 +182,7 @@ private final class TrialScan {
 						declare(name);
 					case _:
 				}
-				final loops: Int = _loops;
-				_loops = 0;
-				_fns++;
-				_scopes.push([for (arg in f.args) arg.name]);
-				for (arg in f.args) walk(arg.value);
-				walk(f.expr);
-				_scopes.pop();
-				_fns--;
-				_loops = loops;
+				nested(f);
 			case EFor({ expr: EBinop(OpIn, { expr: EConst(CIdent(v)) }, it) }, body):
 				walk(it);
 				_scopes.push([v]);
@@ -230,6 +222,19 @@ private final class TrialScan {
 	private function refuse(why: String): Void {
 		ok = false;
 		refusal = why;
+	}
+
+	/** A function inside the trial: its own scope, no loop of the trial around it, and its `return`s are its own. */
+	private function nested(f: Function): Void {
+		final loops: Int = _loops;
+		_loops = 0;
+		_fns++;
+		_scopes.push([for (arg in f.args) arg.name]);
+		for (arg in f.args) walk(arg.value);
+		walk(f.expr);
+		_scopes.pop();
+		_fns--;
+		_loops = loops;
 	}
 
 	private function loop(body: Expr): Void {
