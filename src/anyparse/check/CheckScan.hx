@@ -19,6 +19,7 @@ import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
+import anyparse.query.StdTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.ParseError;
@@ -360,6 +361,38 @@ final class CheckScan {
 			typeSyntax: plugin.typeSyntax
 		};
 		return node -> NominalTypes.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain, asReceiver);
+	}
+
+	/**
+	 * The member-first half of every `using` verdict (`OccurrenceScan.usingExtensionCalled`): for the offset of a method
+	 * NAME in `source`, whether the member access spelling it (`recv.name`) provably binds an instance member of its
+	 * receiver's type — which Haxe resolves before any static extension, so no `using` is involved there. 4.3.7: under
+	 * `using Lambda`, `[1].concat(list)` is `Array.concat` and reads `haxe.ds.List<Int> should be Array<Int>`.
+	 *
+	 * The receiver is typed by the checks' own door (`typeNominalResolver`, receiver mode) and the member is proved on ONE
+	 * declaration (`MemberLookup.instanceMemberBinds`); the std listing answers for a type no index holds
+	 * (`StdTypes.declaresInstanceMember`) unless a project type takes the name. False — the occurrence may be an extension
+	 * call — for an offset no member access names, a source that does not parse, a receiver the typer leaves untyped, and
+	 * every proof that fails. Parsed and typed on the first offset asked, once: most `using` verdicts never ask.
+	 */
+	public static function memberBoundAccesses(
+		source: String, plugin: GrammarPlugin, file: String, index: Null<SymbolIndex>
+	): (Int) -> Bool {
+		final door: Array<MemberAccessDoor> = [];
+		return at -> {
+			if (door.length == 0) door.push(memberAccessDoor(source, plugin, file, index));
+			final access: Null<QueryNode> = door[0].accesses[at];
+			final typeOf: Null<(QueryNode) -> Null<String>> = door[0].typeOf;
+			final name: Null<String> = access?.name;
+			if (access == null || typeOf == null || name == null || access.children.length == 0) return false;
+			final nominal: Null<String> = try typeOf(access.children[0]) catch (exception: Exception) null;
+			if (nominal == null) return false;
+			final resolved: Null<SymbolIndex> = door[0].index;
+			final indexed: Null<Bool> = resolved?.members.instanceMemberBinds(nominal, name, file, at);
+			return indexed ?? (
+				!NominalTypes.shadowedByNonStdType(resolved, nominal) && StdTypes.declaresInstanceMember(plugin, nominal, name)
+			);
+		};
 	}
 
 	/**
@@ -917,6 +950,39 @@ final class CheckScan {
 			: whole;
 	}
 
+	/**
+	 * What `memberBoundAccesses` reads, built once: every member access of `source` keyed by the offset of the name it
+	 * spells (`collectNamedAccesses`), the receiver typer, and the index its member proofs ask — the typer's own, so a
+	 * receiver is typed and proved against the same declarations.
+	 */
+	private static function memberAccessDoor(
+		source: String, plugin: GrammarPlugin, file: String, index: Null<SymbolIndex>
+	): MemberAccessDoor {
+		final accesses: Map<Int, QueryNode> = [];
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
+		if (tree == null) return { accesses: accesses, typeOf: null, index: null };
+		collectNamedAccesses(tree, source, ShapeVocab.memberAccessKinds(plugin.refShape()), accesses);
+		return {
+			accesses: accesses,
+			typeOf: typeNominalResolver(source, plugin, tree, file, index, true),
+			index: IndexScope.resolutionIndexOf(plugin) ?? index
+		};
+	}
+
+	/**
+	 * Every member access under `node` into `out`, keyed by the offset its NAME starts at — `span.to` less the name, kept
+	 * only where the source there spells the name, so an offset `OccurrenceScan` found by text maps to the node exactly.
+	 */
+	private static function collectNamedAccesses(node: QueryNode, source: String, kinds: Array<String>, out: Map<Int, QueryNode>): Void {
+		final span: Null<Span> = node.span;
+		final name: Null<String> = node.name;
+		if (span != null && name != null && kinds.contains(node.kind) && span.to >= name.length) {
+			final at: Int = span.to - name.length;
+			if (source.substr(at, name.length) == name) out[at] = node;
+		}
+		for (c in node.children) collectNamedAccesses(c, source, kinds, out);
+	}
+
 }
 
 /**
@@ -963,4 +1029,15 @@ typedef NegationSeams = {
 	final andKind: Null<String>;
 	final orKind: Null<String>;
 	final andLowerPrecedenceKinds: Array<String>;
+};
+
+/**
+ * The once-built state behind `CheckScan.memberBoundAccesses`: the member accesses of one source by the offset of
+ * their name, the receiver typer (null for a grammar without type information or a source that does not parse), and
+ * the index the member proofs ask.
+ */
+private typedef MemberAccessDoor = {
+	final accesses: Map<Int, QueryNode>;
+	final typeOf: Null<(QueryNode) -> Null<String>>;
+	final index: Null<SymbolIndex>;
 };

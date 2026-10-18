@@ -20421,7 +20421,7 @@
 			"name": "M-TS-STD-SUPER",
 			"type": "anyparse.query.StdTypes",
 			"method": "lookUp",
-			"find": "if (resolved != null) lookUp(plugin, resolved, member, depth + 1, seen, found);",
+			"find": "if (resolved != null) lookUp(plugin, resolved, member, depth + 1, seen, found, guarded);",
 			"replace": "",
 			"note": "a std member a superclass declares is never found"
 		},
@@ -23083,8 +23083,8 @@
 			"name": "M-CARRY-USING-UNUSED",
 			"type": "anyparse.query.DependencyCarry",
 			"method": "usingLinesToCarry",
-			"find": "if (methods != null && !OccurrenceScan.usingExtensionCalled(declText, imp.raw, methods)) continue;",
-			"replace": "if (methods == null && declText == '') continue;",
+			"find": "if (methods != null && !OccurrenceScan.usingExtensionCalled(declText, imp.raw, methods, at -> memberBound(declSpan.from + at)))",
+			"replace": "if (methods == null && declText == '')",
 			"note": "a `using` whose extensions the moved code calls none of is carried anyway"
 		},
 		{
@@ -25624,6 +25624,102 @@
 			"find": "requireMods: ['public', 'static', HaxePropertyStorage.READ_ONLY_MOD],",
 			"replace": "requireMods: ['public', HaxePropertyStorage.READ_ONLY_MOD],",
 			"note": "an INSTANCE read-only property takes the static-final format too"
+		},
+		{
+			"name": "M-WRITE-DIR-UNCREATED",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "stageWrite",
+			"find": "createMissingDirectories(Path.directory(target), created);",
+			"replace": "",
+			"note": "a write into a missing directory no longer creates it"
+		},
+		{
+			"name": "M-WRITE-DIR-KEPT",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "removeCreatedDirectories",
+			"find": "while (k-- > 0) try FileSystem.deleteDirectory(created[k])",
+			"replace": "while (k-- > 0 && k < 0) try FileSystem.deleteDirectory(created[k])",
+			"note": "a change set that is not written keeps the directories it created"
+		},
+		{
+			"name": "M-USING-MEMBER-FIRST-OFF",
+			"type": "anyparse.query.OccurrenceScan",
+			"method": "methodCalledInSource",
+			"find": "if (!qualifiedBySkip(at - 1) && (memberBound == null || !memberBound(at))) return true;",
+			"replace": "if (!qualifiedBySkip(at - 1)) return true;",
+			"note": "a `.method` call binding a member of its receiver's type counts as an extension use again"
+		},
+		{
+			"name": "M-UNUSED-USING-NO-DOOR",
+			"type": "anyparse.check.UnusedImport",
+			"method": "addUsingViolation",
+			"find": "OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods, scan.memberBound)",
+			"replace": "OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods)",
+			"note": "unused-import stops asking the member-first door"
+		},
+		{
+			"name": "M-CARRY-USING-DOOR-OFFSET",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "usingLinesToCarry",
+			"find": "at -> memberBound(declSpan.from + at)",
+			"replace": "memberBound",
+			"note": "the carry asks the door at declaration-relative offsets"
+		},
+		{
+			"name": "M-MEMBER-BINDS-STATIC",
+			"type": "anyparse.query.MemberLookup",
+			"method": "instanceMemberBinds",
+			"find": "declared.members.foreach(m -> !m.isStatic && !m.guarded)",
+			"replace": "declared.members.foreach(m -> !m.guarded)",
+			"note": "a static of the name reads as shadowing the extension"
+		},
+		{
+			"name": "M-MEMBER-BINDS-GUARDED",
+			"type": "anyparse.query.MemberLookup",
+			"method": "instanceMemberBinds",
+			"find": "declared.members.foreach(m -> !m.isStatic && !m.guarded)",
+			"replace": "declared.members.foreach(m -> !m.isStatic)",
+			"note": "a member under `#if` reads as binding in every build"
+		},
+		{
+			"name": "M-MEMBER-BINDS-HOST-GUARDED",
+			"type": "anyparse.query.MemberLookup",
+			"method": "instanceMemberBinds",
+			"find": "return declared != null && !declared.host.type.guarded && declared.members",
+			"replace": "return declared != null && declared.members",
+			"note": "a declaring type under `#if` reads as declaring the member in every build"
+		},
+		{
+			"name": "M-STD-MEMBER-STATIC",
+			"type": "anyparse.query.StdTypes",
+			"method": "declaresInstanceMember",
+			"find": "found.length > 0 && found.foreach(f -> !f.isStatic && !f.guarded);",
+			"replace": "found.length > 0 && found.foreach(f -> !f.guarded);",
+			"note": "a static std member reads as an instance one"
+		},
+		{
+			"name": "M-STD-MEMBER-VIA-GUARD",
+			"type": "anyparse.query.StdTypes",
+			"method": "lookUp",
+			"find": "final guarded: Bool = viaGuard || t.guarded;",
+			"replace": "final guarded: Bool = viaGuard;",
+			"note": "a std member reached through a guarded typedef reads as unguarded"
+		},
+		{
+			"name": "M-STD-MEMBER-ANY-CANDIDATE",
+			"type": "anyparse.query.StdTypes",
+			"method": "declaresInstanceMember",
+			"find": "candidates.length > 0 && candidates.foreach(module -> {",
+			"replace": "candidates.length > 0 && candidates.exists(module -> {",
+			"note": "one std module of a simple name proving the member is enough"
+		},
+		{
+			"name": "M-MEMBER-DOOR-SHADOW",
+			"type": "anyparse.check.CheckScan",
+			"method": "memberBoundAccesses",
+			"find": "!NominalTypes.shadowedByNonStdType(resolved, nominal) && StdTypes.declaresInstanceMember(plugin, nominal, name)",
+			"replace": "StdTypes.declaresInstanceMember(plugin, nominal, name)",
+			"note": "the std listing answers for a name a project type takes"
 		},
 		{
 			"name": "M-EXTRACT-TO-DECL-TYPE-DROPPED",

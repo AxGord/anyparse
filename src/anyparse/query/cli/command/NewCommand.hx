@@ -252,7 +252,9 @@ final class NewCommand implements CliCommand {
 		CliIo.sysPrint('Assemble a NEW module and canonicalise it through the writer (parses-or-\n');
 		CliIo.sysPrint('fails, byte-canonical, atomic). The path must not already exist — modify\n');
 		CliIo.sysPrint('an existing file with the structural ops / apq fmt. An unparseable result\n');
-		CliIo.sysPrint('(e.g. a malformed @@ body) exits non-zero with nothing written.\n');
+		CliIo.sysPrint('(e.g. a malformed @@ body) exits non-zero with nothing written. A missing\n');
+		CliIo.sysPrint('directory on the path is created (mkdir -p), and removed again when the\n');
+		CliIo.sysPrint('write fails.\n');
 	}
 
 	private static function parseNewArgs(args: Array<String>): NewOpts {

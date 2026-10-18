@@ -139,7 +139,7 @@ Eleven ops take `--fix` beside `--write` — `patch`, `replace-node`, `add-membe
 
 | command | synopsis | contract beyond `--help` |
 |---|---|---|
-| `new` | `apq new <path> (--class \| --implements <iface> \| --kind <k> \| --raw -) [--extends <T>]... [--open] [--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]... [--bodies -] [--write]` | CREATE-ONLY — an existing path is refused (`… already exists (create-only; use the ops / fmt to modify)`); parses-or-rejects, byte-canonical, atomic; `--implements` slices each interface signature and carries the imports it needs; `--raw -` is the validated equivalent of a raw write for any shape no `--kind` covers |
+| `new` | `apq new <path> (--class \| --implements <iface> \| --kind <k> \| --raw -) [--extends <T>]... [--open] [--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]... [--bodies -] [--write]` | CREATE-ONLY — an existing path is refused (`… already exists (create-only; use the ops / fmt to modify)`); parses-or-rejects, byte-canonical, atomic; `--implements` slices each interface signature and carries the imports it needs; `--raw -` is the validated equivalent of a raw write for any shape no `--kind` covers; a missing directory on the path is created (`mkdir -p`, as for `extract-interface` / `extract-superclass --out`: every write goes through `CliIo.writeFiles`), and a write that fails removes the directories it made |
 | `fmt` | `apq fmt <file/dir/glob>... [--write] [--list] [--verify] [--one-pass]` | § "`apq fmt`: canonicalise source through the writer" |
 
 ## Contracts the per-command help does not state
