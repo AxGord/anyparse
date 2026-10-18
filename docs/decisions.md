@@ -4118,3 +4118,18 @@ decided the question; it may not become a record of runs.
   accessors are always beside it, so it refuses as rename-unsafe; no new engine. Rejected: recategorising the
   property as a Method or Constant (it would move checkstyle's `MemberName` jurisdiction and every consumer that
   reads the category: hoist, privatize, the cross-file arms) — branch `feat/infra-N39`
+- N42 — `TestDiscoveryParityTest` was 8193 lines, past its own `oversized-type` grant (7850), because every task
+  appended to its inline lists. → split by concern, the SAME assertions: `TestDiscoveryParityTest` keeps the
+  registration (`REGISTERED_CLASSES`, the base classes, the dead-fixture and discovery-only pins; `tools/suite-shard.sh`
+  still counts `REGISTERED_CLASSES` there); `PinCensusParityTest` takes the pin census, `ArmCensusParityTest` the arm
+  and deferred-arm censuses (methods moved with `move-member`, names unchanged). The lists became `public static
+  final` data in `unit.census`, cut so every part stays well under the default 2000-line limit with no grant: the
+  SORTED pin census by sorted range (`PinsCheckAToO` < `'unit.check.P'` <= `PinsCheckPToZ` < `'unit.cli.'` <=
+  `PinsGrammarAndCli` < `'unit.query.'` <= `PinsQueryAndRuntime`, concatenated in that order, each part addressable by
+  `add-element --sorted --select 'FinalMember:PINS >> ArrayExpr'`); the DECLARATION-ORDERED arm census in thirds
+  (`DeclaredArms1..3`, appends go to the last part, a fourth part when it nears the limit); `DeferredArms`; the shared
+  `diffedMsg` in `CensusDiff`. The grant is gone. Proof: the expected list of each of the 10 assertions digests to the
+  same entry sequence before and after (sha1 over the folded string values), suite 17287 tests / 63601 assertions both
+  sides, classes 977 -> 979 (the two new ones). Rejected: one assertion per part (a different assertion set, and
+  a partition could leave an entry in no part); comparing the arm census SORTED so it could take `--sorted` inserts
+  (drops the order the assertion pins today — a user decision, not a refactor) — branch `feat/infra-N42`

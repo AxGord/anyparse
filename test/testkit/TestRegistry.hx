@@ -19,7 +19,8 @@ package testkit;
  *  - `arms()` — every mutation arm `mutation-arms.json` declares, with the
  *    member it cuts and how.
  *
- * `unit.TestDiscoveryParityTest` pins all six.
+ * `unit.TestDiscoveryParityTest` pins `classNames()`, `deadTests()` and `baseClasses()` (and so `addAll`),
+ * `unit.PinCensusParityTest` `pins()`, and `unit.ArmCensusParityTest` `arms()` and `deferredArms()`.
  */
 @:build(testkit.TestDiscovery.build())
 final class TestRegistry {}
