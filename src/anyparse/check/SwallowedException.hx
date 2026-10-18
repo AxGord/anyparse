@@ -36,8 +36,8 @@ using StringTools;
  *    convention);
  *  - never references that variable in the body (`OccurrenceScan.referencedInRange`: looking at it is handling it);
  *  - contains no `controlExitKinds` node (`MemberKinds.subtreeContainsKind`: a rethrow, or a `return` fallback);
- *  - does not record the failure as an OUTCOME (`recordsOutcome`): a body that only assigns constants to locals of the
- *    enclosing function, each read after the try (`threw = true;` then `assert(!threw)`), turned the failure into a
+ *  - does not record the failure as an OUTCOME (`recordsOutcome`): a body that only assigns constants to locals, each
+ *    read after the try in the function around it (`threw = true;` then `assert(!threw)`), turned the failure into a
  *    value the code acts on.
  *
  * An EMPTY catch block (`catch (e) {}`) is left to the `empty-block` check; the two never both fire on the same clause.
@@ -135,9 +135,9 @@ final class SwallowedException implements Check implements NoAutofix {
 
 	/**
 	 * Whether the catch `body` records the failure as an OUTCOME the function goes on to act on: every statement of it
-	 * assigns a constant to a local of the function enclosing the try, declared before the try (`outcomeLocal`), and each
-	 * of those locals is read after the try (`readAfter`). `catch (exception:Exception) { threw = true; }` followed by
-	 * `assert(!threw, …)` has handled the exception — the failure became a value the code acts on.
+	 * assigns a constant to a local the catch sees (`outcomeLocal`), and each of those locals is read after the try
+	 * (`readAfter`). `catch (exception:Exception) { threw = true; }` followed by `assert(!threw, …)` has handled the
+	 * exception — the failure became a value the code acts on.
 	 *
 	 * POSITIVE: an empty statement list, a statement of any other shape, a target that is no such local, a value that is
 	 * not a constant, a local no read after the try binds, a try outside every function, all answer false — today's verdict.
@@ -147,10 +147,8 @@ final class SwallowedException implements Check implements NoAutofix {
 		var fnAt: Int = ancestors.length - 1;
 		while (fnAt >= 0 && !scan.functionKinds.contains(ancestors[fnAt].kind)) fnAt--;
 		if (fnAt < 0 || body.children.length == 0) return false;
-		final fnSpan: Null<Span> = ancestors[fnAt].span;
-		if (fnSpan == null) return false;
 		for (stmt in body.children) {
-			final hit: Null<RefHit> = outcomeLocal(stmt, tree, fnSpan.from, scan.shape);
+			final hit: Null<RefHit> = outcomeLocal(stmt, tree, scan.shape);
 			if (hit == null || !readAfter(hit, tree, ancestors, fnAt, scan)) return false;
 		}
 		return true;
@@ -158,11 +156,11 @@ final class SwallowedException implements Check implements NoAutofix {
 
 	/**
 	 * The write hit of the local `stmt` assigns, when `stmt` is exactly an expression statement assigning (plain `=`) a
-	 * constant (`MemberKinds.isMovableLiteral`: it reads nothing) to an identifier bound to a `localDeclKinds` declaration
-	 * starting at or after `floor` — inside the function enclosing the try; one the catch can see lies before the try. A
-	 * parameter, a field, a loop or catch variable is no such declaration. Null for anything else.
+	 * constant (`MemberKinds.isMovableLiteral`: it reads nothing) to an identifier bound to a `localDeclKinds` declaration —
+	 * one the catch can see, so it lies before the try. A parameter, a field, a loop or catch variable is no such
+	 * declaration. Null for anything else.
 	 */
-	private static function outcomeLocal(stmt: QueryNode, tree: QueryNode, floor: Int, shape: RefShape): Null<RefHit> {
+	private static function outcomeLocal(stmt: QueryNode, tree: QueryNode, shape: RefShape): Null<RefHit> {
 		final assign: Null<QueryNode> = stmt.kind == shape.exprStatementKind && stmt.children.length == 1 ? stmt.children[0] : null;
 		if (assign == null || assign.kind != shape.assignKind || assign.children.length != 2) return null;
 		final target: QueryNode = assign.children[0];
@@ -172,15 +170,15 @@ final class SwallowedException implements Check implements NoAutofix {
 			return null;
 		final hit: Null<RefHit> = Refs.find(name, tree, shape).find(h -> h.kind == RefKind.Write && h.span.from == span.from);
 		final decl: Null<QueryNode> = hit?.bindingNode;
-		final declSpan: Null<Span> = hit?.bindingSpan;
-		return decl != null && declSpan != null && (shape.localDeclKinds ?? []).contains(decl.kind) && declSpan.from >= floor ? hit : null;
+		return decl != null && (shape.localDeclKinds ?? []).contains(decl.kind) ? hit : null;
 	}
 
 	/**
 	 * Whether a read of the local `write` assigns, bound to the same declaration, follows the try on some path: it lies in a
-	 * LATER statement of a statement list enclosing the try, inside the function at `ancestors[fnAt]`. A read in another
-	 * arm of a branch the try sits in, or before the try in a loop around it, does not count — the second is a path, but
-	 * not one this proves.
+	 * LATER statement of a statement list enclosing the try, inside the innermost function around it (`ancestors[fnAt]`) —
+	 * the code after a closure the try sits in runs whenever the closure is not, so it does not count. Neither does a read
+	 * in another arm of a branch the try sits in, nor one before the try in a loop around it (that one is a path, but not
+	 * one this proves).
 	 */
 	private static function readAfter(write: RefHit, tree: QueryNode, ancestors: Array<QueryNode>, fnAt: Int, scan: CatchScan): Bool {
 		final binding: Null<Span> = write.bindingSpan;

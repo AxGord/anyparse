@@ -2386,10 +2386,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-SWALLOW-OUTCOME-COMPOUND,M-SWALLOW-OUTCOME-VALUE',
 			'unit.check.SwallowedExceptionCheckTest#testFlagNotReadAfterTheTryStillFlagged :: control :: '
 				+ 'M-SWALLOW-OUTCOME-READ-KIND,M-SWALLOW-OUTCOME-READ-AFTER',
-			'unit.check.SwallowedExceptionCheckTest#testOutcomeLocalCapturedFromTheEnclosingFunctionStillFlagged :: control :: '
-				+ 'M-SWALLOW-OUTCOME-FN-FLOOR',
 			'unit.check.SwallowedExceptionCheckTest#testReadInASiblingBranchStillFlagged :: control :: M-SWALLOW-OUTCOME-STMT-LIST',
 			'unit.check.SwallowedExceptionCheckTest#testReadOfAnotherBindingStillFlagged :: control :: M-SWALLOW-OUTCOME-READ-BINDING',
+			'unit.check.SwallowedExceptionCheckTest#testReadOnlyAfterTheEnclosingClosureStillFlagged :: control :: '
+				+ 'M-SWALLOW-OUTCOME-FN-BOUND',
 			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
 			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
 			'unit.check.ThreadSafetyAllocationTest#testAComputedReflectiveWriteMakesTheFieldUnknown :: control :: '
@@ -7881,7 +7881,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-SWALLOW-OUTCOME-COMPOUND',
 			'M-SWALLOW-OUTCOME-VALUE',
 			'M-SWALLOW-OUTCOME-DECL-KIND',
-			'M-SWALLOW-OUTCOME-FN-FLOOR',
+			'M-SWALLOW-OUTCOME-FN-BOUND',
 			'M-SWALLOW-OUTCOME-EVERY-STMT',
 			'M-SWALLOW-OUTCOME-READ-KIND',
 			'M-SWALLOW-OUTCOME-READ-BINDING',

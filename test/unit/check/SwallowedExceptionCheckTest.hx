@@ -224,15 +224,28 @@ class SwallowedExceptionCheckTest extends Test {
 		);
 	}
 
-	/** A local of the enclosing function, set from a closure: when the closure runs, the read after it is not ordered with it. */
+	/**
+	 * A read after the closure the try sits in: the closure runs whenever it is called, so that read is not ordered after it.
+	 */
 	@:pin('control')
-	@:killer('M-SWALLOW-OUTCOME-FN-FLOOR')
-	public function testOutcomeLocalCapturedFromTheEnclosingFunctionStillFlagged(): Void {
+	@:killer('M-SWALLOW-OUTCOME-FN-BOUND')
+	public function testReadOnlyAfterTheEnclosingClosureStillFlagged(): Void {
 		Assert.equals(
 			1,
 			violations(
 				'class C { function f() { var failed = false;'
 				+ ' h(() -> { try { g(); } catch (exception:Exception) { failed = true; } }); trace(failed); } }'
+			).length
+		);
+	}
+
+	/** A local captured by the closure the try sits in, read after the try inside that closure: an outcome like any other. */
+	public function testCapturedLocalReadAfterTheTryInsideTheClosureNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f() { var failed = false;'
+				+ ' h(() -> { try { g(); } catch (exception:Exception) { failed = true; } trace(failed); }); } }'
 			).length
 		);
 	}

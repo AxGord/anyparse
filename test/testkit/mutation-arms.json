@@ -25372,12 +25372,12 @@
 			"note": "a parameter of the enclosing function counts as an outcome local"
 		},
 		{
-			"name": "M-SWALLOW-OUTCOME-FN-FLOOR",
+			"name": "M-SWALLOW-OUTCOME-FN-BOUND",
 			"type": "anyparse.check.SwallowedException",
-			"method": "outcomeLocal",
-			"find": " && declSpan.from >= floor",
-			"replace": "",
-			"note": "a local of an OUTER function, set from a closure the try sits in, counts as an outcome the code after the closure reads"
+			"method": "readAfter",
+			"find": "for (k in fnAt + 1...ancestors.length - 1)",
+			"replace": "for (k in 0...ancestors.length - 1)",
+			"note": "a read after the CLOSURE the try sits in counts as reading the outcome, though the closure runs whenever it is called"
 		},
 		{
 			"name": "M-SWALLOW-OUTCOME-EVERY-STMT",
