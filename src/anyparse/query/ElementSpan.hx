@@ -560,10 +560,18 @@ final class ElementSpan {
 		// A comma list has no blank separators, so only the line branch gives one back. An element that
 		// held a whole line of a one-per-line list (`'x',` with its comma) takes the line with it: the cut
 		// used to leave the line's indentation and break behind, a blank line the writer keeps as trivia.
-		final cut: Span = isComma
-			? lineExtendedSpan(source, commaExtendedSpan(source, span))
-			: blankExtendedSpan(source, lineExtendedSpan(source, span));
+		final cut: Span = isComma ? commaListCut(source, span) : blankExtendedSpan(source, lineExtendedSpan(source, span));
 		return { span: cut, doc: span.from < group.from, annotations: annotationPrefixCount(node, parent) };
+	}
+
+	/**
+	 * The span removing `span` — one element of a comma list, or a contiguous run of them — takes with its
+	 * separator: ONE comma (the trailing one, else the leading one, `commaExtendedSpan`) and, when that leaves
+	 * its line empty, the whole line. The comma half of `elementCut`, published for `MoveElements`, which cuts a
+	 * run of elements as one span: two adjacent element cuts on one line would collide.
+	 */
+	public static function commaListCut(source: String, span: Span): Span {
+		return lineExtendedSpan(source, commaExtendedSpan(source, span));
 	}
 
 	/**
