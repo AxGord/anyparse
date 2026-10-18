@@ -24723,6 +24723,150 @@
 			"find": "isType && stringNamesIt(decl.name, ctx)",
 			"replace": "stringNamesIt(decl.name, ctx)",
 			"note": "a literal spelling an enum-abstract value's name (data) refuses its rename"
+		},
+		{
+			"name": "M-XREN-EXTENDS-HEAD-UNEMITTED",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "typeRefsDescendCore",
+			"find": "final head: Null<Expr> = nominal ? nameOfValue(child, access) : null;",
+			"replace": "final head: Null<Expr> = null;",
+			"note": "a nominal reference reached through a `type` slot emits no head again, so a struct extension nested in an annotation (`Array<{ > T, }>`) projects its fields' types and never `T`"
+		},
+		{
+			"name": "M-XREN-EXTENDS-KIND-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "typeRefShape",
+			"find": "'NewExpr', 'ExtendsField']",
+			"replace": "'NewExpr']",
+			"note": "the `ExtendsField` node is no type reference again, so `uses` and `rename --scope` are blind to a typedef's `> T`"
+		},
+		{
+			"name": "M-XREN-QUALIFIED-PATH-UNREAD",
+			"type": "anyparse.query.CrossRename",
+			"method": "collectOccurrences",
+			"find": "add(qualifiedPathOffset(source, node, typeName, paths));",
+			"replace": "",
+			"note": "no dotted path is matched against the qualified spellings, neither a VALUE `pkg.T` nor a receiver `pkg.Mod.CONST`"
+		},
+		{
+			"name": "M-XREN-SHADOWED-ROOT-BLIND",
+			"type": "anyparse.query.CrossRename",
+			"method": "qualifiedPathOffset",
+			"find": "paths.shadowedRoots.contains(rootSpan.from)",
+			"replace": "false",
+			"note": "a dotted path rooted in a LOCAL that spells the package (`final p = {C: 1}; p.C`) is renamed as the type"
+		},
+		{
+			"name": "M-XREN-GRANT-UNREAD",
+			"type": "anyparse.query.CrossRename",
+			"method": "collectOccurrences",
+			"find": "for (arg in children) add(grantOffset(source, arg, typeName, paths.grant));",
+			"replace": "for (arg in children) add(-1);",
+			"note": "no access grant is renamed, so `@:access(p.Sub)` keeps granting a type that no longer exists - and compiles"
+		},
+		{
+			"name": "M-XREN-GRANT-MODULE-PATH",
+			"type": "anyparse.query.CrossRename",
+			"method": "pathsOf",
+			"find": "grant: module.pkg == '' ? typeName : '${module.pkg}.$typeName',",
+			"replace": "grant: typeName == module.base ? module.path : '${module.path}.$typeName',",
+			"note": "a grant is matched by the MODULE path, which the compiler grants nothing for, so a sub-module type's `@:access(p.Sub)` is left behind"
+		},
+		{
+			"name": "M-XREN-GRANT-ANY-META",
+			"type": "anyparse.query.CrossRename",
+			"method": "collectOccurrences",
+			"find": "paths.grantMetas.contains(node.name ?? '')",
+			"replace": "true",
+			"note": "every metadata argument spelling the type's path is renamed, a forwarded FIELD `@:forward(R)` included"
+		},
+		{
+			"name": "M-XREN-THROUGH-IMPORT-UNREAD",
+			"type": "anyparse.query.CrossRename",
+			"method": "collectOccurrences",
+			"find": "add(throughOffset(source, span, importedPath(node, source, refShape), paths.absolute, typeName));",
+			"replace": "",
+			"note": "an import whose path runs THROUGH the type (`import p.C.K;`, `import p.C.*;`) or an alias import's path is left on the old name"
+		},
+		{
+			"name": "M-XREN-THROUGH-NO-DOT",
+			"type": "anyparse.query.CrossRename",
+			"method": "throughOffset",
+			"find": "!path.startsWith('$prefix.')",
+			"replace": "!path.startsWith(prefix)",
+			"note": "an import through a LONGER name the type's path prefixes (`import p.Cx.K;`) is cut as if it ran through the type"
+		},
+		{
+			"name": "M-XREN-ALIAS-NAME-READ",
+			"type": "anyparse.query.CrossRename",
+			"method": "importedPath",
+			"find": "ModuleScan.aliasTargetOf(source.substring(span.from, span.to))",
+			"replace": "node.name ?? ''",
+			"note": "an alias import is read by its ALIAS, so its path keeps the old name"
+		},
+		{
+			"name": "M-LIFT-FINAL-WRAPPER-SKIPPED",
+			"type": "anyparse.query.ElementSpan",
+			"method": "liftedElement",
+			"find": "return wrapper == null ? { node: node, parent: parent } : { node: wrapper, parent: TreePath.parentOf(tree, wrapper) };",
+			"replace": "return { node: node, parent: parent };",
+			"note": "a `final class` addressed through its form is not lifted: `--before` splices between `final` and `class`, a removal leaves the `final` behind"
+		},
+		{
+			"name": "M-SORTED-ORDER-UNCHECKED",
+			"type": "anyparse.query.AddElement",
+			"method": "sortedElements",
+			"find": "last != null && last.key >= entry.key",
+			"replace": "false",
+			"note": "an unsorted list is accepted and entries land between elements in no order"
+		},
+		{
+			"name": "M-SORTED-DUP-UNCHECKED",
+			"type": "anyparse.query.AddElement",
+			"method": "insertSorted",
+			"find": "existing.exists(e -> e.key == entry.key) || (i > 0 && entries[i - 1].key == entry.key)",
+			"replace": "false",
+			"note": "an entry already present, or given twice, is inserted again"
+		},
+		{
+			"name": "M-SORTED-ANY-CONTAINER",
+			"type": "anyparse.query.AddElement",
+			"method": "insertSorted",
+			"find": " || container.kind != arrayKind",
+			"replace": "",
+			"note": "a call's arguments or any other container are 'sorted' into"
+		},
+		{
+			"name": "M-SORTED-RAW-ESCAPES",
+			"type": "anyparse.query.AddElement",
+			"method": "sortKeyOf",
+			"find": "literal.content.contains('\\\\') || literal.content.contains('$$') ? null : literal.content",
+			"replace": "literal.content",
+			"note": "an escaped or interpolated literal sorts by its RAW text, which is not its value"
+		},
+		{
+			"name": "M-SORTED-NO-CONCAT",
+			"type": "anyparse.query.AddElement",
+			"method": "sortKeyOf",
+			"find": "if (node.kind != fold.concatKind() || node.children.length != 2) return null;",
+			"replace": "if (true) return null;",
+			"note": "a concatenated entry - the spelling of an over-wide one - is no constant string, so a pin list refuses every insert"
+		},
+		{
+			"name": "M-SORTED-UNSORTED-ENTRIES",
+			"type": "anyparse.query.AddElement",
+			"method": "insertSorted",
+			"find": "entries.sort((a, b) -> Reflect.compare(a.key, b.key));",
+			"replace": "",
+			"note": "entries given out of order are placed in the order given, so a later gap swallows an earlier entry"
+		},
+		{
+			"name": "M-SORTED-SPLITS-DOC",
+			"type": "anyparse.query.AddElement",
+			"method": "gapEdits",
+			"find": "ElementSpan.docExtendedSpan(source, existing[gap].span, regions, true).from",
+			"replace": "existing[gap].span.from",
+			"note": "an entry lands between the next element and its doc, which then documents the entry"
 		}
 	]
 }

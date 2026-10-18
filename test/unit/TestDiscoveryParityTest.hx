@@ -900,6 +900,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.lowering.StarSepStartsElementTest',
 		'unit.lowering.WriterFamilyCtxBundleTest',
 		'unit.query.AddElementSliceTest',
+		'unit.query.AddElementSortedTest',
 		'unit.query.AddImportSliceTest',
 		'unit.query.AddMemberSliceTest',
 		'unit.query.AddMetaSliceTest',
@@ -953,6 +954,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.CondResolveTest',
 		'unit.query.CreatingFixContractTest',
 		'unit.query.CrossRenameMemberSliceTest',
+		'unit.query.CrossRenamePositionTest',
 		'unit.query.CrossRenameSliceTest',
 		'unit.query.DeclarationQueriesTest',
 		'unit.query.DeclarationsReadTest',
@@ -3316,6 +3318,14 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PEB-WS-REWIND-OFF',
 			'unit.lowering.StarBlockEndedWsRewindTest#testAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
 			'unit.lowering.StarBlockEndedWsRewindTest#testTheShapeThePredicateAnswersForNeedsNoRewind :: guard :: ',
+			'unit.query.AddElementSliceTest#testInsertBeforeAFinalClassAddressedThroughItsForm :: control :: M-LIFT-FINAL-WRAPPER-SKIPPED',
+			'unit.query.AddElementSortedTest#testConcatenatedEntriesSortByTheirValue :: control :: M-SORTED-NO-CONCAT',
+			'unit.query.AddElementSortedTest#testDuplicateIsRefused :: control :: M-SORTED-DUP-UNCHECKED',
+			'unit.query.AddElementSortedTest#testEachEntryLandsAtItsSortedPosition :: control :: M-SORTED-UNSORTED-ENTRIES',
+			'unit.query.AddElementSortedTest#testEntryLandsAboveTheNextElementsDoc :: control :: M-SORTED-SPLITS-DOC',
+			'unit.query.AddElementSortedTest#testEscapedOrInterpolatedEntryIsRefused :: control :: M-SORTED-RAW-ESCAPES',
+			'unit.query.AddElementSortedTest#testNonArrayContainerIsRefused :: control :: M-SORTED-ANY-CONTAINER',
+			'unit.query.AddElementSortedTest#testUnsortedListIsRefused :: control :: M-SORTED-ORDER-UNCHECKED',
 			'unit.query.AddMetaSliceTest#testCliWritesTheEntry :: control :: M-ADDMETA-CLI-UNROUTED',
 			'unit.query.AddMetaSliceTest#testFinalClassWrapperIsLifted :: control :: M-ADDMETA-NO-WRAPPER-CLIMB',
 			'unit.query.AddMetaSliceTest#testGuardedTypeKeepsTheEntryInsideTheGuard :: control :: M-ADDMETA-LOOSE-WRAPPER-CLIMB',
@@ -3358,6 +3368,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ApqUsesTest#testQualifiedSpellingsAcrossTypePositions :: control :: M-USES-EXACT-ONLY',
 			'unit.query.ApqUsesTest#testQualifiedSubModuleTypeIsFoundBySimpleName :: control :: M-USES-EXACT-ONLY',
 			'unit.query.ApqUsesTest#testQualifiedTailMatchesOnlyOnASegmentBoundary :: control :: M-USES-TAIL-SUBSTRING',
+			'unit.query.ApqUsesTest#testStructExtensionIsATypeRef :: control :: M-XREN-EXTENDS-KIND-DROPPED',
 			'unit.query.BodySlotGuardSliceTest#testAllowsAuthoredBodyThatTakesInTheNextStatement :: control :: M-BODYSLOT-AUTHORED-NEVER',
 			'unit.query.BodySlotGuardSliceTest#testAllowsHeaderRewriteOfBracelessConstruct :: control :: M-BODYSLOT-LIMIT-EDIT-END',
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
@@ -3569,6 +3580,19 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CreatingFixContractTest#testACreateSettlesItsTextAtTheWriterFixedPoint :: guard :: ',
 			'unit.query.CreatingFixContractTest#testAPassSeesTheChainAPreviousPassWrote :: control :: M-AMBIENT-CHAIN-STALE',
 			'unit.query.CreatingFixContractTest#testDeletingACreatedFileToleratesOneAlreadyGone :: guard :: ',
+			'unit.query.CrossRenamePositionTest#testAccessGrantOfARootTypeRenames :: control :: M-XREN-GRANT-UNREAD',
+			'unit.query.CrossRenamePositionTest#testAccessGrantOfASubModuleTypeNamesItsTypePath :: control :: '
+				+ 'M-XREN-GRANT-UNREAD,M-XREN-GRANT-MODULE-PATH',
+			'unit.query.CrossRenamePositionTest#testAliasedImportPathRenames :: control :: '
+				+ 'M-XREN-ALIAS-NAME-READ,M-XREN-THROUGH-IMPORT-UNREAD',
+			'unit.query.CrossRenamePositionTest#testImportThroughAnotherModuleIsNotRenamed :: control :: M-XREN-THROUGH-NO-DOT',
+			'unit.query.CrossRenamePositionTest#testImportThroughTheTypeRenames :: control :: M-XREN-THROUGH-IMPORT-UNREAD',
+			'unit.query.CrossRenamePositionTest#testNonGrantMetadataIsNotRenamed :: control :: M-XREN-GRANT-ANY-META',
+			'unit.query.CrossRenamePositionTest#testQualifiedStructExtensionRenames :: control :: M-XREN-EXTENDS-KIND-DROPPED',
+			'unit.query.CrossRenamePositionTest#testQualifiedValueRenames :: control :: M-XREN-QUALIFIED-PATH-UNREAD',
+			'unit.query.CrossRenamePositionTest#testShadowedPackageRootIsNotRenamed :: control :: M-XREN-SHADOWED-ROOT-BLIND',
+			'unit.query.CrossRenamePositionTest#testStructExtensionRenames :: control :: '
+				+ 'M-XREN-EXTENDS-HEAD-UNEMITTED,M-XREN-EXTENDS-KIND-DROPPED',
 			'unit.query.DeclarationQueriesTest#testAMemberIsHostedWhereItsDeclarationIs :: control :: M-HOST-UNIQUE',
 			'unit.query.DeclarationQueriesTest#testASubtypeChainPassesItsArgumentsInItsOwnTerms :: control :: '
 				+ 'M-SUBTYPE-ARGS-SUBSTITUTED,M-SUBTYPE-ARGS-ARITY,M-GRAPH-INHERITED-ARGS',
@@ -4434,7 +4458,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredTokenIsOneTheParserCaptures :: control :: '
 				+ 'M-AND-OPERATOR-TEXT-STALE,M-CONSTRUCTOR-NAME-PADDED',
 			'unit.query.RefShapeKindProjectionTest#testEveryProjectedKindIsOneSomeSourceEmits :: control :: M-ELLIPSIS-STMT-TOKEN-STALE',
-			'unit.query.RemoveElementSliceTest#testRemoveFinalClassTakesItsFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
+			'unit.query.RemoveElementSliceTest#testRemoveFinalClassTakesItsFinal :: control :: '
+				+ 'M-DECLSPAN-FINAL-WRAPPER-BLIND,M-LIFT-FINAL-WRAPPER-SKIPPED',
 			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 				+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
@@ -7682,7 +7707,25 @@ class TestDiscoveryParityTest extends Test {
 			'M-RISKYARM-CROSS-NOT-VERIFIED',
 			'M-XVERIFY-NO-BISECT',
 			'M-CONFINED-NO-OWNER-FILE',
-			'M-XRENAME-STRING-TYPES-ONLY'
+			'M-XRENAME-STRING-TYPES-ONLY',
+			'M-XREN-EXTENDS-HEAD-UNEMITTED',
+			'M-XREN-EXTENDS-KIND-DROPPED',
+			'M-XREN-QUALIFIED-PATH-UNREAD',
+			'M-XREN-SHADOWED-ROOT-BLIND',
+			'M-XREN-GRANT-UNREAD',
+			'M-XREN-GRANT-MODULE-PATH',
+			'M-XREN-GRANT-ANY-META',
+			'M-XREN-THROUGH-IMPORT-UNREAD',
+			'M-XREN-THROUGH-NO-DOT',
+			'M-XREN-ALIAS-NAME-READ',
+			'M-LIFT-FINAL-WRAPPER-SKIPPED',
+			'M-SORTED-ORDER-UNCHECKED',
+			'M-SORTED-DUP-UNCHECKED',
+			'M-SORTED-ANY-CONTAINER',
+			'M-SORTED-RAW-ESCAPES',
+			'M-SORTED-NO-CONCAT',
+			'M-SORTED-UNSORTED-ENTRIES',
+			'M-SORTED-SPLITS-DOC'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -7918,6 +7961,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-RESERVED-VAR-NAME :: anyparse.grammar.haxe.HxVarNameLit#MetaCall:@:re',
 			'M-RESERVED-FN-NAME :: anyparse.grammar.haxe.HxFnNameLit#MetaCall:@:re',
 			'M-RESERVED-VERSIONED-REFUSED :: anyparse.grammar.haxe.HxVarNameLit#MetaCall:@:re',
+			'M-XREN-EXTENDS-HEAD-UNEMITTED :: anyparse.macro.QueryWalkerLowering#typeRefsDescendCore',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

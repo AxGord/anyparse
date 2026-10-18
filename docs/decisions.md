@@ -3900,3 +3900,32 @@ decided the question; it may not become a record of runs.
   members" in a WHOLE-scope run: 1 renamed by N26, 2 correct refusals, 2 owner-name ambiguities):
   `isPrivateMemberConfined(?ownerFile)` passes the declaring file to `hasSubtype`, so only edges resolving to the owner's
   own declaration count (both naming paths pass it; other callers unchanged) — branch `feat/infra-N27`
+- N35 (1) — `rename --scope` / `CrossRename.crossRenameType` missed five type-reference positions, found by renaming
+  each type of a haxe-typechecked census fixture (simple and qualified spellings of every position) and compiling.
+  The struct extension `{ > T, … }` is fixed in the SHARED projection, not in the op: `typeRefShape` lists
+  `ExtendsField` (the walk-path node names its type) and `QueryWalkerLowering.typeRefsDescendCore` emits the head of
+  a nominal reference `Seq` reached through a `type` slot (`isNominalRefRule`), which is how `> T` nested in an
+  annotation (`Array<{ > T, }>`) projected its field types and never `T` — so `uses` / `blast` / `mentions` /
+  `move-member`'s carry see it too. The rest is the op's own walk, each matched WHOLE against a path, never by last
+  segment: a dotted path in ANY expression position (`var c = pkg.T;`; it was matched only as a receiver) unless its
+  root identifier is a value binding of the file; an import whose path runs THROUGH the type's absolute module path
+  (`import pkg.T.f;`, `import pkg.T.*;`) and an alias import's path (decoded by `ModuleScan.aliasTargetOf`, the one
+  decoder); access grants by the TYPE path. Haxe 4.3.7, compile-checked: `@:access(p.Sub)` grants a sub-module type
+  `Sub` of `p.M`, `@:access(p.M.Sub)` and `@:access(p.M)` grant nothing, and a simple `@:access(C)` does not resolve
+  through `import p.C` — and a stale grant COMPILES, so this was the one silent miss. The grant metas are
+  `RefShape.takesPrivateAccessMetaName` + `AllowGrants.TAG`; a metadata argument of any other meta (`@:op(T + T)`)
+  is untouched. Left on purpose: a BARE type name in value position (`var c = T;`, `Std.isOfType(x, T)`) —
+  unqualified, it is a nullary enum constructor or an inherited member as far as a by-name walk knows; it stays a
+  loud compile error the advisory names — branch `feat/infra-N35`
+- N35 (2) — `add-element --before --select 'ClassDecl:X'` on ANY `final class` spliced between `final` and `class`
+  ("result does not parse"; the doc and `@:nullSafety` of the report were incidental): the selector resolves the
+  inner form, and only `remove-element` lifted it to the `FinalDecl` wrapper (a private `liftedHit`). MOVED to
+  `ElementSpan.liftedElementAt` / `liftedElement` (+ `ElementHit`), the RemoveElement copy deleted, `add-element`
+  calls it; `RefactorSupport.elementAtFrom` now has that one caller — branch `feat/infra-N35`
+- N35 (3) — no op inserted into a sorted list. → `add-element --sorted` (`AddElement.insertSorted`), a mode, not an
+  op: same address as `--append` (the array), same canonical writer-emit. Entries are split by the PARSER (spliced
+  at the array's front in a probe, read back as children), never by scanning the argument. POSITIVE: every element
+  a constant string (`StringFoldSupport.literalOf`, or a `concatKind` of them) whose raw content holds no `\` and no
+  `$` (raw text = value); the existing list strictly ascending in code-unit order (`TestDiscovery.compareStrings`);
+  a present entry refused. `--append` stays the explicit unsorted form. JSON: no `GrammarPlugin` exists for the JSON
+  grammar, so `mutation-arms.json` is out of reach of every op — branch `feat/infra-N35`

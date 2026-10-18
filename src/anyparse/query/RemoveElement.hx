@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ElementSpan.ElementHit;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.runtime.Span;
 
@@ -54,7 +55,7 @@ final class RemoveElement {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final hit: Null<ElementHit> = elementAt(tree, source, cursor);
+		final hit: Null<ElementHit> = ElementSpan.liftedElementAt(tree, source, cursor);
 		return hit == null
 			? Err(
 				'position $line:$col'
@@ -72,7 +73,7 @@ final class RemoveElement {
 	 * own CACHING plugin: the parse here is then the parse the edit makes.
 	 */
 	public static function describeRemoval(source: String, line: Int, col: Int, plugin: GrammarPlugin, withDoc: Bool = true): Null<String> {
-		return describeHit(source, plugin, withDoc, tree -> elementAt(tree, source, Span.offsetOf(source, line, col)));
+		return describeHit(source, plugin, withDoc, tree -> ElementSpan.liftedElementAt(tree, source, Span.offsetOf(source, line, col)));
 	}
 
 	/**
@@ -85,7 +86,7 @@ final class RemoveElement {
 	 * an address the first-token convention cannot express, since the match does not start the
 	 * statement. The node is not re-derived from its first token: that reading picks the
 	 * OUTERMOST element starting there, which is exactly what naming a kind overrides. A
-	 * `final class`'s inner form is still lifted to its wrapper, for the reason `elementAt` gives.
+	 * `final class`'s inner form is still lifted to its wrapper (`ElementSpan.liftedElement`).
 	 */
 	public static function removeTarget(
 		source: String, target: ReplaceTarget, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true, ?optsJson: String
@@ -98,7 +99,7 @@ final class RemoveElement {
 			case Resolved(n): n;
 			case Failed(message): return Err(message);
 		};
-		final hit: ElementHit = liftedHit(tree, node);
+		final hit: ElementHit = ElementSpan.liftedElement(tree, node);
 		return ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
 	}
 
@@ -108,27 +109,10 @@ final class RemoveElement {
 	): Null<String> {
 		return describeHit(
 			source, plugin, withDoc, tree -> switch ReplaceNode.resolveTarget(source, tree, target, plugin) {
-				case Resolved(n): liftedHit(tree, n);
+				case Resolved(n): ElementSpan.liftedElement(tree, n);
 				case Failed(_): null;
 			}
 		);
-	}
-
-	/**
-	 * The element at `cursor` with its parent — lifted to the wrapper when it is a `final class`'s
-	 * inner form, whose own span leaves the wrapper's `final` behind to glue onto the NEXT declaration
-	 * (`final abstract class Y`). Both the removal and its description read it, so they name one cut.
-	 */
-	private static function elementAt(tree: QueryNode, source: String, cursor: Int): Null<ElementHit> {
-		final hit: Null<ElementHit> = RefactorSupport.elementAtFrom(tree, source, cursor);
-		return hit == null ? null : liftedHit(tree, hit.node);
-	}
-
-	/** The element `node` names with its parent, lifted to a folding `final` wrapper as `elementAt` does. */
-	private static function liftedHit(tree: QueryNode, node: QueryNode): ElementHit {
-		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
-		final wrapper: Null<QueryNode> = parent == null ? null : ElementSpan.foldingWrapperOf(node, parent);
-		return wrapper == null ? { node: node, parent: parent } : { node: wrapper, parent: TreePath.parentOf(tree, wrapper) };
 	}
 
 	/** The cut description for the element `find` picks out of the parsed source, or null. */
@@ -144,9 +128,3 @@ final class RemoveElement {
 	}
 
 }
-
-/** An element the removal cuts, with the container it is cut from (null for the root). */
-private typedef ElementHit = {
-	node: QueryNode,
-	parent: Null<QueryNode>
-};

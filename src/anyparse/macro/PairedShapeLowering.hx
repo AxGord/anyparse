@@ -40,6 +40,12 @@ class PairedShapeLowering {
 	/** Struct field whose presence makes a `Seq` a transparent envelope - the walk descends it and ignores the rest. */
 	public static inline final ENVELOPE_FIELD: String = 'node';
 
+	/** The field a grammar rule names a TYPE slot with — the seed of the query walker's `_typeRefs` projection. */
+	public static inline final TYPE_FIELD: String = 'type';
+
+	/** The field a `Seq` rule carries its own NAME in — the slot the query walker leaves to `_nameOf`. */
+	public static inline final NAME_FIELD: String = 'name';
+
 	/** Grammar opt-out of `Seq` transparency: `@:spanned('<Kind>')` gives the struct `_kind` + `_span` and its own node. */
 	public static inline final SPANNED_META: String = ':spanned';
 

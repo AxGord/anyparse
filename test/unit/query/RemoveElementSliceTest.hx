@@ -33,7 +33,7 @@ class RemoveElementSliceTest extends Test {
 	 * `final abstract class Y` at rc 0.
 	 */
 	@:pin('control')
-	@:killer('M-DECLSPAN-FINAL-WRAPPER-BLIND')
+	@:killer('M-DECLSPAN-FINAL-WRAPPER-BLIND', 'M-LIFT-FINAL-WRAPPER-SKIPPED')
 	public function testRemoveFinalClassTakesItsFinal(): Void {
 		final source: String = 'final class X {}\n\nabstract class Y {}\n';
 		assertRemove(source, 1, 7, false, 'abstract class Y {}\n');
