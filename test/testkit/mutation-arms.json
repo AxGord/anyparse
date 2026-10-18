@@ -25198,7 +25198,7 @@
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-OVERLOAD",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "selectsItsSignature",
 			"find": " && !m.hasOverloadMeta",
 			"replace": "",
@@ -25206,7 +25206,7 @@
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-TWIN",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "selectsItsSignature",
 			"find": "owner.members.filter(o -> o.name == m.name).length == 1 && ",
 			"replace": "",
@@ -26343,11 +26343,11 @@
 		},
 		{
 			"name": "M-TS-AFFIX-USINGS-UNCHECKED",
-			"type": "anyparse.check.ArgumentValues",
-			"method": "affixResolves",
-			"find": "if (hosts == null || hosts.exists(\n\t\t\t\th -> h.type.hasBuild || h.type.hasAutoBuild || h.type.members.exists(m -> m.name == method && m.isStatic)\n\t\t\t))\n\t\t\t\treturn false;",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "bindingUsing",
+			"find": "if (hosts.exists(h -> h.type.members.exists(m -> extendsAs(m, method)))) return { path: path, hosts: hosts };",
 			"replace": "",
-			"note": "a later `using` declaring the affix method itself is not read, so its guard is decided by StringTools"
+			"note": "a later `using` declaring the affix method itself is passed over, so its guard is decided by StringTools"
 		},
 		{
 			"name": "M-TS-ARG-SETS-UNKNOWN",
@@ -26384,49 +26384,49 @@
 		{
 			"name": "M-WALK-ARITHMETIC-OFF",
 			"type": "anyparse.query.NominalTypes",
-			"method": "typeWalk",
-			"find": "return arithmetic == null || !isArithmetic(node, shape) ? null : arithmeticType(node, shape, host, ctx, arithmetic);",
+			"method": "arithmeticType",
+			"find": "if (arithmetic == null || !isArithmetic(node, shape)) return null;",
 			"replace": "return null;",
 			"note": "arithmetic is untyped by the shared walk"
 		},
 		{
 			"name": "M-BINDER-CALLEE-MEMBER-OFF",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "calleeParams",
-			"find": ": memberCallParams(callee.children[0], name, call);",
+			"find": ": memberCallParams(binder, callee.children[0], name, call);",
 			"replace": ": null;",
 			"note": "`recv.m(…)` selects no parameter list, so a lambda handed to a member of another file stays untyped"
 		},
 		{
 			"name": "M-BINDER-CALLEE-NEW-OFF",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "calleeParams",
-			"find": "if (call.kind == _shape.newExprKind) return constructionParams(call);",
-			"replace": "if (call.kind == _shape.newExprKind) return null;",
+			"find": "if (call.kind == binder._shape.newExprKind) return constructionParams(binder, call);",
+			"replace": "if (call.kind == binder._shape.newExprKind) return null;",
 			"note": "a construction selects no parameter list, so a lambda handed to a constructor stays untyped"
 		},
 		{
 			"name": "M-BINDER-CALLEE-INHERITED-OFF",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "bareCallParams",
-			"find": "return declared == null || declared.members.exists(m -> m.isStatic) ? null : memberParams(declared, [], 0, []);",
-			"replace": "return null;",
+			"find": "? null : memberParams(binder, declared, [], 0, []);",
+			"replace": "? null : null;",
 			"note": "a bare call to an inherited member selects no parameter list"
 		},
 		{
 			"name": "M-BINDER-CALLEE-LOCAL-OFF",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "bareCallParams",
-			"find": "final local: Bool = ShapeVocab.localFunctionScopeKinds(_shape).contains(fn.kind);",
+			"find": "final local: Bool = ShapeVocab.localFunctionScopeKinds(binder._shape).contains(fn.kind);",
 			"replace": "final local: Bool = false;",
 			"note": "a call to a local function selects no parameter list"
 		},
 		{
 			"name": "M-BINDER-OWNER-BINDINGS-OFF",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "memberCallParams",
-			"find": ": memberParams(declared, ownerBindings(receiver, owner, declared.host), 0, []);",
-			"replace": ": memberParams(declared, [], 0, []);",
+			"find": ": memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);",
+			"replace": ": memberParams(binder, declared, [], 0, []);",
 			"note": "the receiver's type arguments bind nothing, so `Box<Use>.each`'s `T` stays unbound"
 		},
 		{
@@ -26439,7 +26439,7 @@
 		},
 		{
 			"name": "M-BINDER-METHOD-SHADOWS-OFF",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "memberParams",
 			"find": "if (!m.typeParamNames.contains(k)) k => v",
 			"replace": "k => v",
@@ -26447,25 +26447,25 @@
 		},
 		{
 			"name": "M-BINDER-CALLEE-OVERLOAD",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "memberParams",
-			"find": "if (!typedByItsReturn(m) || m.isOverload",
+			"find": "if (!OperandBinder.typedByItsReturn(m) || m.isOverload",
 			"replace": "if (m.isOverload",
 			"note": "an `@:overload` member of another file is read by its written signature, which the call may not select"
 		},
 		{
 			"name": "M-BINDER-ITERABLE-OFF",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "iterableBinding",
-			"find": "final iterable: Null<String> = _shape.iterableTypeName;",
+			"find": "final iterable: Null<String> = binder._shape.iterableTypeName;",
 			"replace": "final iterable: Null<String> = null;",
 			"note": "a std Iterable parameter binds nothing, so `xs.iter(c -> …)`'s `c` stays untyped"
 		},
 		{
 			"name": "M-BINDER-ITERABLE-ANY-TYPE",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "iterableBinding",
-			"find": "if (i < args.length && stdNamed(path, _file, name))",
+			"find": "if (i < args.length && stdNamed(binder, path, binder._file, name))",
 			"replace": "if (i < args.length)",
 			"note": "any generic type binds an Iterable's element, a haxe.ds.Vector included"
 		}

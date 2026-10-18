@@ -10,8 +10,6 @@ import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.StdResolver;
-import anyparse.query.SymbolIndex.ImportInfo;
-import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.runtime.Span;
 
@@ -368,28 +366,17 @@ final class ArgumentValues {
 	}
 
 	/**
-	 * Whether a call `recv.method(…)` on a string in `file` runs the static extension `module` declares: walking back from
-	 * the last `using` of the file — none guarded, none from an ambient import file —, every module before it must be one the
-	 * index reads, built by no macro, declaring no static `method`; and `module` must be the std one (a module the index
-	 * cannot read, no indexed type bearing its name, or one read from the std).
+	 * Whether a call `recv.method(…)` on a string in `file` runs the static extension `module` declares: the `using` the
+	 * file binds it to (`ValueNameBinding.bindingUsing`) is `module`'s, and that is the std one — a module the index cannot
+	 * read where no indexed type bears its name, or one read from the std.
 	 */
 	private function affixResolves(file: String, method: String, module: String): Bool {
 		final held: Null<HeldFile> = _graph.types.heldFile(file);
-		if (held == null || held.info.ambientImports.exists(g -> g.imports.exists(i -> i.kind == ImportKind.Using))) return false;
-		final usings: Array<ImportInfo> = held.info.imports.filter(i -> i.kind == ImportKind.Using);
-		var k: Int = usings.length;
-		while (k-- > 0) {
-			final u: ImportInfo = usings[k];
-			if (u.guarded) return false;
-			final hosts: Null<Array<ResolvedType>> = held.index.values.usingHosts(u.raw);
-			if (u.raw == module)
-				return hosts == null ? _graph.types.declarationCount(module) == 0 : hosts.foreach(h -> StdResolver.isStdFile(h.file.file));
-			if (hosts == null || hosts.exists(
-				h -> h.type.hasBuild || h.type.hasAutoBuild || h.type.members.exists(m -> m.name == method && m.isStatic)
-			))
-				return false;
-		}
-		return false;
+		if (held == null) return false;
+		final bound: Null<{ path: String, hosts: Null<Array<ResolvedType>> }> = held.index.values.bindingUsing(held.info, method);
+		if (bound == null || bound.path != module) return false;
+		final hosts: Null<Array<ResolvedType>> = bound.hosts;
+		return hosts == null ? _graph.types.declarationCount(module) == 0 : hosts.foreach(h -> StdResolver.isStdFile(h.file.file));
 	}
 
 	/** The name of the core string type: the type the grammar's string literals have. */
