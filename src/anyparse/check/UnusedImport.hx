@@ -20,14 +20,17 @@ using Lambda;
  * does not count at all — the file's own import statements, plus its comment regions, since a
  * comment resolves no type. `commentRegions` is the same comment list under its OTHER job: a `.`
  * inside a comment qualifies nothing, so the dotted-tail test has to know where comments are
- * even for an occurrence outside them. Both hoisted once per file.
+ * even for an occurrence outside them. Both hoisted once per file. `memberBound` is the file's
+ * member-first door (`CheckScan.memberBoundAccesses`), which the `using` arm asks of each
+ * extension-shaped occurrence; it parses and types the file only when first asked.
  */
 private typedef FileScan = {
 	file: String,
 	source: String,
 	excluded: Array<Span>,
 	commentRegions: Array<Span>,
-	matchMask: Array<Span>
+	matchMask: Array<Span>,
+	memberBound: (Int) -> Bool
 };
 
 /**
@@ -88,7 +91,9 @@ private typedef FileScan = {
  *    unverifiable `Info`.
  *  - `using pkg.Mod;` — in use when its bound name is referenced (a static /
  *    type use such as `StringTools.fastCodeAt`) OR one of the extension
- *    methods it provides is called as `.method(`. Verified-unused when the
+ *    methods it provides is called as `.method(` — one binding a MEMBER of its
+ *    receiver's type excluded, since Haxe resolves that before any extension
+ *    (`CheckScan.memberBoundAccesses`, the door `move-member` asks too). Verified-unused when the
  *    module's methods are known (`knownExtensionMethods`, a `Warning` that
  *    `--fix` deletes); an unknown module stays an `Info`. See
  *    `addUsingViolation`.
@@ -208,7 +213,7 @@ final class UnusedImport implements Check {
 		final reportMembersByModule: Map<String, Array<String>> = membersByModule(index);
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
-			final scans: Null<Array<FileScan>> = readerScans(info, sourceOf, plugin);
+			final scans: Null<Array<FileScan>> = readerScans(info, sourceOf, plugin, index);
 			if (scans == null) continue;
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
@@ -272,13 +277,15 @@ final class UnusedImport implements Check {
 	 * modules under its directory and never by its own text, which is nothing but those statements —
 	 * judged against itself every one reads as dead and `fix` deletes a load-bearing import.
 	 */
-	private static function readerScans(info: FileInfo, sourceOf: Map<String, String>, plugin: GrammarPlugin): Null<Array<FileScan>> {
+	private static function readerScans(
+		info: FileInfo, sourceOf: Map<String, String>, plugin: GrammarPlugin, index: SymbolIndex
+	): Null<Array<FileScan>> {
 		final governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance(info.file);
 		return if (governance == null)
-			[scanOf(info.file, sourceOf[info.file] ?? '', plugin, info.imports)]
+			[scanOf(info.file, sourceOf[info.file] ?? '', plugin, info.imports, index)]
 		else if (governance.bounded)
 			[
-				for (governed in governance.governs) scanOf(governed.file, governed.source, plugin, [])
+				for (governed in governance.governs) scanOf(governed.file, governed.source, plugin, [], index)
 			]
 		else
 			null;
@@ -295,7 +302,9 @@ final class UnusedImport implements Check {
 	 * list, and passing none only makes the used-test more GENEROUS — the direction a verdict whose
 	 * fix deletes the statement must err in.
 	 */
-	private static function scanOf(file: String, source: String, plugin: GrammarPlugin, imports: Array<ImportInfo>): FileScan {
+	private static function scanOf(
+		file: String, source: String, plugin: GrammarPlugin, imports: Array<ImportInfo>, index: SymbolIndex
+	): FileScan {
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final comments: Array<Span> = SourceComments.collectCommentRegions(regions);
 		return {
@@ -303,7 +312,8 @@ final class UnusedImport implements Check {
 			source: source,
 			excluded: [for (imp in imports) imp.span].concat(comments),
 			commentRegions: comments,
-			matchMask: [for (r in regions) if (r.kind == LexRegionKind.RegexLit) new Span(r.from, r.to)]
+			matchMask: [for (r in regions) if (r.kind == LexRegionKind.RegexLit) new Span(r.from, r.to)],
+			memberBound: CheckScan.memberBoundAccesses(source, plugin, file, index)
 		};
 	}
 
@@ -459,7 +469,7 @@ final class UnusedImport implements Check {
 			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': $MSG_USING_UNTRACKED', DECLINE_USING_UNTRACKED));
 			return;
 		}
-		if (scans.exists(scan -> OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods))) return;
+		if (scans.exists(scan -> OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods, scan.memberBound))) return;
 		out.push(make(file, imp, Severity.Warning, 'unused using \'${imp.raw}\''));
 	}
 

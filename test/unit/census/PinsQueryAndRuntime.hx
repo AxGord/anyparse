@@ -199,6 +199,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.CaseCaptureTest#testRenameMovesEveryAlternative :: control :: M-RENAME-DECL-SELF,M-BINDING-FROM-DECL-SELF',
 		'unit.query.CaseCaptureTest#testRenameRefusesAnUndecidedCapture :: control :: M-RENAME-UNDECIDED',
 		'unit.query.ChangeSigSliceTest#testAReorderThatMovesTheBreakComesBackCanonical :: control :: M-SIGNATURE-EDIT-RAW-SPLICE',
+		'unit.query.CliAtomicWriteSliceTest#testAFailedChangeSetRemovesTheDirectoriesItCreated :: control :: M-WRITE-DIR-KEPT',
+		'unit.query.CliAtomicWriteSliceTest#testAWriteIntoAMissingDirectoryCreatesIt :: control :: M-WRITE-DIR-UNCREATED',
 		'unit.query.CodepointIndexTest#testAWideCodepointCountsTwoNativeUnits :: control :: M-CODEPOINT-NATIVE,M-CODEPOINT-BACK',
 		'unit.query.CommentOwnerGuardSliceTest#testACarryDeclarationThatDoesNotHoldIsNotARefusal :: control :: M-COMMENT-CARRY-REFUSES',
 		'unit.query.CommentOwnerGuardSliceTest#testACommentThatKeepsItsPlaceUnderACarryIsAccepted :: control :: M-CARRY-CROSSING-ANY-SIDE',

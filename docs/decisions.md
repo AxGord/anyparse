@@ -4133,3 +4133,27 @@ decided the question; it may not become a record of runs.
   sides, classes 977 -> 979 (the two new ones). Rejected: one assertion per part (a different assertion set, and
   a partition could leave an entry in no part); comparing the arm census SORTED so it could take `--sorted` inserts
   (drops the order the assertion pins today — a user decision, not a refactor) — branch `feat/infra-N42`
+- N44 — two op bugs N42 met. (1) `hxq new <path>` into a directory that does not exist died on `ENOENT … <path>.apq-tmp`,
+  and so did `extract-interface --out` / `extract-superclass --out`: the three file-CREATING ops all write through
+  `CliIo.writeFiles`, whose staging temporary sits beside the target. → the writer creates the missing directories
+  (`mkdir -p`, the conventional generator behaviour; the path already names the package, and refusing would only make
+  every caller run a `mkdir` first), one at a time and recorded, so a change set that is not written takes back the
+  ones it made, and one that fails part way leaves only those a committed member lives in. Every other op writes a file
+  that exists (`move` needs an existing destination module: its own contract, not the writer's). Rejected: a refusal
+  naming the missing directory (consistent, but it moves the same `mkdir` onto every caller for no safety gain — the
+  write is still `--write`-gated and prints the path). (2)+(3) `move-member` carried a `using Lambda;` beside
+  `a.concat(b)` on an `Array`, and `unused-import` kept the same statement, both on the TEXT scan
+  `OccurrenceScan.usingExtensionCalled`: a `.concat` occurrence counted as a possible `Lambda.concat`. Haxe 4.3.7
+  resolves a member of the receiver's type first (`[1].concat(list)` under `using Lambda` reads `haxe.ds.List<Int>
+  should be Array<Int>`; an own or inherited instance `tag():Int` beats a `using E` `tag(d):String` — `Int should be
+  String`; a STATIC `tag` of the receiver's type does NOT, the extension binds). → the scan takes a member-first door,
+  `CheckScan.memberBoundAccesses`: an occurrence that is the name of a member access whose receiver the checks' typer
+  types (`typeNominalResolver`, receiver mode) and whose type provably declares an unguarded INSTANCE member of that name
+  on ONE declaration (`MemberLookup.instanceMemberBinds`, new; the std listing `StdTypes.declaresInstanceMember` for a
+  type no index holds, unless a project type takes the name) is no extension use. Both consumers pass the same door, so
+  the two answers cannot disagree (`UsingMemberFirstParityTest` runs both on each input). Positive whitelist: an
+  untyped receiver, an unresolved or ambiguous type, a static, a `#if`-guarded member or declaring type, a source
+  that does not parse, an occurrence no member access names (a comment, a string) keep the `using`. Not done: which of
+  SEVERAL `using`s an extension call binds (`ValueNameBinding.extensionDeclaration` walks them, but only once the
+  receiver is proven to LACK the member, and its null is "unproven", not "none") — a call on an unproven receiver still
+  keeps every `using` whose module declares the name — branch `feat/infra-N44`

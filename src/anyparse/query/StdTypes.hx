@@ -52,7 +52,7 @@ final class StdTypes {
 		final modules: Map<String, Array<String>> = listed();
 		final candidates: Array<String> = typeName.indexOf('.') >= 0 ? [typeName] : modules[typeName] ?? [];
 		final found: Array<StdMember> = [];
-		for (module in candidates) lookUp(plugin, module, member, 0, [], found);
+		for (module in candidates) lookUp(plugin, module, member, 0, [], found, false);
 		if (found.length == 0) return null;
 		final first: StdMember = found[0];
 		final agree: Bool = found.foreach(
@@ -76,6 +76,23 @@ final class StdTypes {
 	public static function fieldOf(plugin: GrammarPlugin, typeName: String, member: String): Null<String> {
 		final m: Null<StdMember> = memberOf(plugin, typeName, member);
 		return m != null && !m.isFunction ? m.type : null;
+	}
+
+	/**
+	 * Whether the std type `typeName` (a simple name, or a module path) provably declares `member` as an INSTANCE member,
+	 * itself or through its supertypes and typedef targets — `MemberLookup.instanceMemberBinds` for a receiver whose type
+	 * the index does not hold. Stricter than `memberOf`, which unions every std type of a simple name: here EVERY std
+	 * module the name may mean must prove it (`Map` is the toplevel typedef and `haxe.ds.Map`, and both reach
+	 * `haxe.ds.Map.exists`), and every declaration found must be a non-static one reached through no `#if` — neither
+	 * guarded itself nor on or behind a guarded type (`haxe.http.HttpJs` is declared under `#if js`).
+	 */
+	public static function declaresInstanceMember(plugin: GrammarPlugin, typeName: String, member: String): Bool {
+		final candidates: Array<String> = typeName.indexOf('.') >= 0 ? [typeName] : listed()[typeName] ?? [];
+		return candidates.length > 0 && candidates.foreach(module -> {
+			final found: Array<StdMember> = [];
+			lookUp(plugin, module, member, 0, [], found, false);
+			found.length > 0 && found.foreach(f -> !f.isStatic && !f.guarded);
+		});
 	}
 
 	/**
@@ -126,9 +143,13 @@ final class StdTypes {
 		return info?.types;
 	}
 
-	/** Push into `found` what `member` of the type at `path` is, or, when it declares none, what its supertypes and typedef targets do. */
+	/**
+	 * Push into `found` what `member` of the type at `path` is, or, when it declares none, what its supertypes and typedef
+	 * targets do. `viaGuard`: the walk reached `path` through a type under `#if`, which marks everything found from it
+	 * `guarded`.
+	 */
 	private static function lookUp(
-		plugin: GrammarPlugin, path: String, member: String, depth: Int, seen: Array<String>, found: Array<StdMember>
+		plugin: GrammarPlugin, path: String, member: String, depth: Int, seen: Array<String>, found: Array<StdMember>, viaGuard: Bool
 	): Void {
 		if (depth > MAX_DEPTH || seen.contains(path)) return;
 		seen.push(path);
@@ -137,27 +158,30 @@ final class StdTypes {
 		final simple: String = SourceText.lastSegment(path);
 		final fnKinds: Array<String> = plugin.refShape().functionKinds ?? [];
 		for (t in info.types) if (t.name == simple) {
+			final guarded: Bool = viaGuard || t.guarded;
 			final declared: Array<MemberInfo> = t.members.filter(m -> m.name == member);
-			for (m in declared) found.push(described(plugin, info, m, fnKinds.contains(m.kind)));
+			for (m in declared) found.push(described(plugin, info, m, fnKinds.contains(m.kind), guarded));
 			if (declared.length > 0) continue;
 			final next: Array<String> = t.supertypesRaw.copy();
 			final alias: Null<String> = t.aliasTargetRaw;
 			if (alias != null) next.push(alias);
 			for (n in next) {
 				final resolved: Null<String> = resolve(plugin, info, n);
-				if (resolved != null) lookUp(plugin, resolved, member, depth + 1, seen, found);
+				if (resolved != null) lookUp(plugin, resolved, member, depth + 1, seen, found, guarded);
 			}
 		}
 	}
 
-	/** The member `m` of a type in `info`, its written type resolved there. */
-	private static function described(plugin: GrammarPlugin, info: FileInfo, m: MemberInfo, isFunction: Bool): StdMember {
+	/** The member `m` of a type in `info`, its written type resolved there; `viaGuard` as `lookUp` reads it. */
+	private static function described(plugin: GrammarPlugin, info: FileInfo, m: MemberInfo, isFunction: Bool, viaGuard: Bool): StdMember {
 		final written: Null<String> = isFunction ? m.returnSource : m.typeSource;
 		return {
 			type: written == null ? null : resolve(plugin, info, written),
 			isFunction: isFunction,
 			hasGetter: m.hasGetter,
-			hasSetter: m.hasSetter
+			hasSetter: m.hasSetter,
+			isStatic: m.isStatic,
+			guarded: viaGuard || m.guarded
 		};
 	}
 
@@ -248,11 +272,14 @@ final class StdTypes {
 
 /**
  * What a std member is (`StdTypes.memberOf`): the module path of the type it returns
- * or holds (null when that does not resolve), and whether a getter or a setter runs.
+ * or holds (null when that does not resolve), whether a getter or a setter runs, and
+ * whether it is static or sits under a `#if`.
  */
 typedef StdMember = {
 	var type: Null<String>;
 	var isFunction: Bool;
 	var hasGetter: Bool;
 	var hasSetter: Bool;
+	var isStatic: Bool;
+	var guarded: Bool;
 }

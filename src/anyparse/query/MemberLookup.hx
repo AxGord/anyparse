@@ -428,6 +428,27 @@ final class MemberLookup {
 	}
 
 	/**
+	 * Whether `recv.member` on a receiver of type `typeName` (written in `fromFile` at `at`) provably binds an INSTANCE
+	 * member of that type or of its closure — which Haxe resolves before any static extension, so no `using` is consulted
+	 * there. The precise, acting-direction companion of `memberShadowsExtension`: the type is pinned to ONE declaration
+	 * (`resolveStartType`), never unioned across namesakes, because a caller DROPPING a `using` on a true must not be
+	 * answered by a type the receiver is not.
+	 *
+	 * 4.3.7: under `using E`, `d.tag()` binds `D`'s own or an inherited instance `tag` (`Int should be String` where the
+	 * extension returns `String`), while a STATIC `tag` of `D` shadows nothing — the extension binds. So a static, a
+	 * declaration under `#if` (it binds in some builds only) or a declaring type under `#if` answers false.
+	 *
+	 * Null when `typeName` does not resolve to one declaration — the caller may hold another source of declarations
+	 * (the std listing, `StdTypes.declaresInstanceMember`); false when it resolves and the proof fails.
+	 */
+	public function instanceMemberBinds(typeName: String, member: String, fromFile: Null<String>, ?at: Int): Null<Bool> {
+		final start: Null<ResolvedType> = _refs.resolveStartType(typeName, fromFile, at);
+		if (start == null) return null;
+		final declared: Null<HostedMembers> = declaringMember(start, member);
+		return declared != null && !declared.host.type.guarded && declared.members.foreach(m -> !m.isStatic && !m.guarded);
+	}
+
+	/**
 	 * EVERY declaration of `member` on `typeName`. A type declares one member more than once only
 	 * when the declarations sit in different branches of a `#if` region, so they are ONE logical
 	 * member: rewriting a single branch leaves every other build target with accesses that no

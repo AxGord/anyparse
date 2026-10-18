@@ -445,6 +445,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.UnusedReturnValueTest',
 		'unit.check.UsingDeclineAttributionTest',
 		'unit.check.UsingInsertRefusalTest',
+		'unit.check.UsingMemberFirstParityTest',
 		'unit.check.WhileTrueConditionCheckTest',
 		'unit.cli.AddressCliTest',
 		'unit.cli.ApqAstTypeRefsCliTest',
