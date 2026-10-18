@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.LockTaint.ChainLists;
 import anyparse.query.CallGraph;
+import anyparse.query.CallGraphKeys;
 
 using Lambda;
 
@@ -250,6 +251,21 @@ final class ThreadStates {
 	 */
 	public static inline function runsWith(e: CallEdge, inertRef: (CallEdge) -> Bool): Bool {
 		return e.kind.isInvocation() || e.kind == Ref && !inertRef(e);
+	}
+
+	/**
+	 * Whether the `Ref` edge `e` of `graph` hands its value to a `spawns` call at an argument position the call's object
+	 * entry names `main` (`ChainLists.mainArguments`): the call runs that value on the main thread later, as a `marshals`
+	 * call runs its value. Only where the call is proven to bind the parameter at that position
+	 * (`CallGraphKeys.bindsItsPosition`); a value whose position the graph did not record, or a call whose signature leaves
+	 * the binding open, runs as the plain entry says.
+	 */
+	public static function runsOnMain(graph: CallGraph, e: CallEdge, lists: ChainLists): Bool {
+		final via: Null<String> = e.via;
+		final at: Null<ArgumentPosition> = e.argument;
+		final named: Null<Array<Int>> = via == null ? null : lists.mainArguments[via];
+		return e.kind == Ref && via != null && at != null && named != null && named.contains(at.index)
+			&& CallGraphKeys.bindsItsPosition(graph, via, at.index, at.count);
 	}
 
 	/** A `mainPath` as text, its last `cap` hops after `...` when it is longer. */

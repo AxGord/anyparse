@@ -253,6 +253,19 @@ final class CallGraphKeys {
 	}
 
 	/**
+	 * Whether the argument at `index` of a call passing `count` arguments to `id` of `g` binds the parameter at its position
+	 * for sure: `id`'s declarations the run holds read their parameters alike (`paramTypesOf`), none it may skip shifts the
+	 * argument (`mayShift`), and the position is a parameter of its own, before any rest parameter. A function the run
+	 * declares nowhere — the index reads only a library member's first parameter — proves no position.
+	 */
+	public static function bindsItsPosition(g: CallGraph, id: String, index: Int, count: Int): Bool {
+		final params: Null<Array<Null<String>>> = g.declarationsOf(id).length == 0 ? null : paramTypesOf(g, id);
+		if (params == null) return false;
+		final own: Int = g._facts.restParams.exists(id) ? params.length - 1 : params.length;
+		return index < own && !mayShift(g, id, index, count);
+	}
+
+	/**
 	 * The node of `g` of the static `member` of `owner` an import binds: its declaration, or a placeholder for one the graph
 	 * has not loaded or one a type whose chain the index does not hold may declare; null for a static that is no function.
 	 */
