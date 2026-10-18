@@ -368,17 +368,16 @@ class OperandTypingTest extends Test {
 
 	/**
 	 * A parameter before the one a lambda would bind may be skipped — optional, or carrying a default value — and 4.3.7 tries
-	 * the lambda against it first (`$type(c)` reports `Unknown<0>`, then the type it settles on): unproven. A required one
-	 * before it is not skipped.
+	 * the lambda against it first: `opt(?a:(c:Use)->Int, cb:(c:FlagOn)->Void)` called with a `Void` lambda reports `c` as
+	 * `Use`, then binds it to `cb` as `FlagOn`, whose `on` is the overloading `Flag`. Unproven; a required one before it is not
+	 * skipped.
 	 */
 	@:pin('control') @:killer('M-BINDER-ARGUMENT-SKIPPABLE', 'M-TS-SKIP-DEFAULT')
 	public function testALambdaAfterASkippableParameterIsUnproven(): Void {
-		Assert.isFalse(inverts([
-			lambdaUse('\tfunction opt(?a:Int, cb:(c:Use)->Void):Void {}\n\n', 'opt(c -> trace(!c.on ? 1 : 2));')
-		]));
-		Assert.isFalse(inverts([
-			lambdaUse('\tfunction deflt(a:Int = 1, cb:(c:Use)->Void):Void {}\n\n', 'deflt(c -> trace(!c.on ? 1 : 2));')
-		]));
+		final opt: String = '\tfunction opt(?a:(c:Use)->Int, cb:(c:FlagOn)->Void):Void {}\n\n';
+		Assert.isFalse(inverts([FLAG_ON, lambdaUse(opt, 'opt(c -> trace(!c.on ? 1 : 2));')]));
+		final deflt: String = '\tfunction deflt(a:(c:Use)->Int = null, cb:(c:FlagOn)->Void):Void {}\n\n';
+		Assert.isFalse(inverts([FLAG_ON, lambdaUse(deflt, 'deflt(c -> trace(!c.on ? 1 : 2));')]));
 		Assert.isTrue(inverts([
 			lambdaUse('\tfunction req(a:Int, cb:(c:Use)->Void):Void {}\n\n', 'req(1, c -> trace(!c.on ? 1 : 2));')
 		]));
@@ -395,8 +394,11 @@ class OperandTypingTest extends Test {
 		Assert.isFalse(inverts([FLAG_ON, lambdaUse(overloaded, 'one(c -> trace(!c.on ? 1 : 2));')]));
 		final flagged: String = '\tfunction two(cb:(c:FlagOn)->Void):Void {}\n';
 		final plain: String = '\tfunction two(cb:(c:Use)->Void):Void {}\n';
-		final twins: String = '\t#if foo\n$flagged\t#else\n$plain\t#end\n\n';
-		Assert.isFalse(inverts([FLAG_ON, lambdaUse(twins, 'two(c -> trace(!c.on ? 1 : 2));')]));
+		// either build's signature may be the one a reader picks: both orders are unproven
+		for (twins in [
+			'\t#if foo\n$flagged\t#else\n$plain\t#end\n\n',
+			'\t#if foo\n$plain\t#else\n$flagged\t#end\n\n'
+		]) Assert.isFalse(inverts([FLAG_ON, lambdaUse(twins, 'two(c -> trace(!c.on ? 1 : 2));')]));
 	}
 
 	/**
