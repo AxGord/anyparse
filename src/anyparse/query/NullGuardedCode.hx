@@ -300,8 +300,8 @@ final class NullGuardedCode {
 		for (call in facts.calls[id] ?? []) if (call.access != STATIC_ACCESS || !handsNull(call.at, index, count)) return false;
 		return (facts.fields[id] ?? []).foreach(
 			read ->
-				!(!read.fact.write && read.fact.use != COMPARE
-				&& (read.fact.use != VALUE || read.fact.held || !neverCalled(read.node, read.fact.at, 0)))
+				read.fact.write || read.fact.use == COMPARE || read.fact.use == VALUE && !read.fact.held
+				&& neverCalled(read.node, read.fact.at, 0)
 		);
 	}
 
