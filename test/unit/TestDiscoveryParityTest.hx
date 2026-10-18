@@ -1312,20 +1312,25 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ExplicitTypeCheckTest#testFixMacroFunctionTernaryAndContextError :: control :: M-EXPLICIT-TYPE-MACRO-NO-COMPANION',
 			'unit.check.ExplicitTypeCheckTest#testMacroFunctionShadowedContextDeclines :: control :: M-EXPLICIT-TYPE-MACRO-SHADOW',
 			'unit.check.ExplicitTypeCheckTest#testMacroFunctionWithUnprovenReturnDeclines :: control :: M-EXPLICIT-TYPE-MACRO-ANY-RETURN',
-			'unit.check.ExtractRepeatedExpressionTest#testAFieldWriteBetweenOccurrencesSplitsTheGroup :: control :: M-WRITE-SITES-SELF-FIELD,M-WRITE-SITES-MEMBER-TARGET,M-WRITE-SITES-INDEX-TARGET,M-WRITE-SITES-CAST-TARGET',
+			'unit.check.ExtractRepeatedExpressionTest#testAFieldWriteBetweenOccurrencesSplitsTheGroup :: control :: '
+				+ 'M-WRITE-SITES-SELF-FIELD,M-WRITE-SITES-MEMBER-TARGET,M-WRITE-SITES-INDEX-TARGET,M-WRITE-SITES-CAST-TARGET',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.ExtractRepeatedExpressionTest#testAWriteBelowAChainKeepsItsReference :: control :: M-EXTRACT-REPEAT-REFERENCE-READ',
 			'unit.check.ExtractRepeatedExpressionTest#testAWriteCarriedRoundALoopSplitsTheGroup :: control :: M-EXTRACT-REPEAT-BACK-EDGE',
 			'unit.check.ExtractRepeatedExpressionTest#testAWriteInAClosureKillsTheGroup :: control :: M-EXTRACT-REPEAT-CLOSURE-WRITE',
 			'unit.check.ExtractRepeatedExpressionTest#testAWriteInAMacroReificationIsNoWrite :: control :: M-WRITE-SITES-MACRO-EMIT',
-			'unit.check.ExtractRepeatedExpressionTest#testAWriteOfAnUnnamedTargetSplitsTheGroup :: control :: M-EXTRACT-REPEAT-UNKNOWN-WRITE',
+			'unit.check.ExtractRepeatedExpressionTest#testAWriteOfAnUnnamedTargetSplitsTheGroup :: control :: '
+				+ 'M-EXTRACT-REPEAT-UNKNOWN-WRITE',
 			'unit.check.ExtractRepeatedExpressionTest#testAWriteTargetIsNoOccurrence :: control :: M-EXTRACT-REPEAT-TARGET-COUNTED',
-			'unit.check.ExtractRepeatedExpressionTest#testAnAssignmentBetweenOccurrencesSplitsTheGroup :: control :: M-EXTRACT-REPEAT-WRITE-EFFECT,M-WRITE-SITES-PAREN-TARGET',
-			'unit.check.ExtractRepeatedExpressionTest#testAnIncrementBetweenOccurrencesSplitsTheGroup :: control :: M-EXTRACT-REPEAT-WRITE-SPLIT',
+			'unit.check.ExtractRepeatedExpressionTest#testAnAssignmentBetweenOccurrencesSplitsTheGroup :: control :: '
+				+ 'M-EXTRACT-REPEAT-WRITE-EFFECT,M-WRITE-SITES-PAREN-TARGET',
+			'unit.check.ExtractRepeatedExpressionTest#testAnIncrementBetweenOccurrencesSplitsTheGroup :: control :: '
+				+ 'M-EXTRACT-REPEAT-WRITE-SPLIT',
 			'unit.check.ExtractRepeatedExpressionTest#testEffectFreeButNotTransparentCallExcluded :: control :: '
 				+ 'M-STD-EFFECT-FREE-AS-TRANSPARENT',
-			'unit.check.ExtractRepeatedExpressionTest#testOperandsBoundToDifferentDeclarationsAreSeparateGroups :: control :: M-EXTRACT-REPEAT-REBIND',
+			'unit.check.ExtractRepeatedExpressionTest#testOperandsBoundToDifferentDeclarationsAreSeparateGroups :: control :: '
+				+ 'M-EXTRACT-REPEAT-REBIND',
 			'unit.check.ExtractRepeatedExpressionTest#testProjectShadowOfAStdTypeExcluded :: control :: M-STD-SHADOW-IGNORED',
 			'unit.check.ExtractRepeatedExpressionTest#testStringMethodAndPathStaticAreTransparent :: control :: '
 				+ 'M-STD-SPLIT-TRANSPARENT,M-PURE-STRING-METHOD-OFF',
