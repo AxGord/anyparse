@@ -209,7 +209,7 @@ class Codegen {
 			name: rule.fnName,
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: args,
+				args: args.concat(rule.extraArgs),
 				ret: rule.returnCT,
 				expr: rule.body
 			}),

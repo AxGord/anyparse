@@ -1,6 +1,5 @@
 package anyparse.macro;
 
-#if macro
 import haxe.macro.Expr;
 
 /**
@@ -31,14 +30,20 @@ class GeneratedRule {
 	public final eregs: Array<EregSpec>;
 	public final hasMinPrec: Bool;
 
+	/** Parameters after `ctx` — the rule locals a `BranchOutlining` helper receives as copies. */
+	public final extraArgs: Array<FunctionArg>;
+
 	public var body: Expr;
 
-	public function new(fnName: String, returnCT: ComplexType, body: Expr, eregs: Array<EregSpec>, hasMinPrec: Bool = false) {
+	public function new(
+		fnName: String, returnCT: ComplexType, body: Expr, eregs: Array<EregSpec>, hasMinPrec: Bool = false, ?extraArgs: Array<FunctionArg>
+	) {
 		this.fnName = fnName;
 		this.returnCT = returnCT;
 		this.body = body;
 		this.eregs = eregs;
 		this.hasMinPrec = hasMinPrec;
+		this.extraArgs = extraArgs ?? [];
 	}
 
 }
@@ -54,4 +59,3 @@ typedef EregSpec = {
 	/** Regex source without surrounding slashes or `^` anchor. */
 	pattern: String
 };
-#end

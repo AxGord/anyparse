@@ -891,6 +891,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.ProbeTypedefTrivia',
 		'unit.grammar.haxe.TriviaScanSliceTest',
 		'unit.lowering.BeforeLeadingCommentSlotTest',
+		'unit.lowering.BranchOutliningTest',
 		'unit.lowering.FmtFlagOwnershipTest',
 		'unit.lowering.GeneratedLexicalScanSecondGrammarTest',
 		'unit.lowering.RegexFirstBytesTest',
@@ -3357,6 +3358,19 @@ class TestDiscoveryParityTest extends Test {
 			'unit.lowering.BeforeLeadingCommentSlotTest#testAMultilineGapCommentReachesTheOutput :: control :: '
 				+ 'M-BEFORE-LEADING-COMMENT-DROP',
 			'unit.lowering.BeforeLeadingCommentSlotTest#testAOneLineGapCommentIsCarriedUpstream :: guard :: ',
+			'unit.lowering.BranchOutliningTest#testABreakLeavingTheTrialKeepsItInline :: control :: M-OUTLINE-BREAK-BLIND',
+			'unit.lowering.BranchOutliningTest#testABreakOfALoopInsideTheTrialMoves :: guard :: ',
+			'unit.lowering.BranchOutliningTest#testAForOverAPatternKeepsTheTrialInline :: control :: M-OUTLINE-FOR-PATTERN-BLIND',
+			'unit.lowering.BranchOutliningTest#testANestedTrialMovesFirstAndTheOuterOneFollows :: control :: M-OUTLINE-NESTED-ALT-BLIND',
+			'unit.lowering.BranchOutliningTest#testAReturnOfAConstantKeepsTheTrialInline :: control :: M-OUTLINE-CONSTANT-AS-CTOR',
+			'unit.lowering.BranchOutliningTest#testAReturnThatMayBeNullKeepsTheTrialInline :: control :: M-OUTLINE-NULLABLE-RETURN-BLIND',
+			'unit.lowering.BranchOutliningTest#testASwitchKeepsTheTrialInline :: control :: M-OUTLINE-SWITCH-BLIND',
+			'unit.lowering.BranchOutliningTest#testATrialReadingARuleLocalMovesIntoAHelper :: control :: M-OUTLINE-OFF',
+			'unit.lowering.BranchOutliningTest#testATrialsOwnLocalIsNotCaptured :: guard :: ',
+			'unit.lowering.BranchOutliningTest#testATryThatIsNotATrialIsLeftAlone :: guard :: ',
+			'unit.lowering.BranchOutliningTest#testAWriteToARuleLocalKeepsTheTrialInline :: control :: M-OUTLINE-WRITE-BLIND',
+			'unit.lowering.BranchOutliningTest#testAnUntypedRuleLocalKeepsTheTrialInline :: control :: M-OUTLINE-UNTYPED-CAPTURE',
+			'unit.lowering.BranchOutliningTest#testDisagreeingDeclarationsKeepTheTrialInline :: guard :: ',
 			'unit.lowering.StarBlockEndedWsRewindSitesTest#testAConditionalBodyKeepsTheStatementAfterASwallowedTerminator :: control :: '
 				+ 'M-PEB-WS-REWIND-TRYPARSE-OFF',
 			'unit.lowering.StarBlockEndedWsRewindSitesTest#testAConditionalBodyWithAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
@@ -7820,7 +7834,16 @@ class TestDiscoveryParityTest extends Test {
 			'M-ARM-LEDGER-ARM-BLIND',
 			'M-LEDGER-ARM-LISTED-ABSENT',
 			'M-RETAIN-SOURCES-KEEPS-ALL',
-			'M-RETAIN-SOURCES-DROPS-LIVE'
+			'M-RETAIN-SOURCES-DROPS-LIVE',
+			'M-OUTLINE-OFF',
+			'M-OUTLINE-WRITE-BLIND',
+			'M-OUTLINE-BREAK-BLIND',
+			'M-OUTLINE-SWITCH-BLIND',
+			'M-OUTLINE-FOR-PATTERN-BLIND',
+			'M-OUTLINE-NULLABLE-RETURN-BLIND',
+			'M-OUTLINE-CONSTANT-AS-CTOR',
+			'M-OUTLINE-UNTYPED-CAPTURE',
+			'M-OUTLINE-NESTED-ALT-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
