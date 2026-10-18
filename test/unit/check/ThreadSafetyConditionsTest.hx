@@ -553,4 +553,17 @@ class ThreadSafetyConditionsTest extends Test {
 		#end
 	}
 
+	/** A construction in a field's initializer binds its arguments too, though no function the tree holds runs it. */
+	@:pin('control') @:killer('M-TS-INIT-SITE-UNREAD')
+	public function testAFieldInitializersConstructionBindsItsArguments(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'class W { public function new(sleep:Bool) if (sleep) Sys.sleep(1); }',
+			'class A { final w:W = new W(false); public function new() {} public static function main():Void new A(); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

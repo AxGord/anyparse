@@ -558,6 +558,7 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyConditionsTest#testABoolLiteralArgumentDecidesTheCalleesBranch :: control :: '
 			+ 'M-TS-ARG-UNBOUND,M-TS-STATES-UNCONDITIONED',
 		'unit.check.ThreadSafetyConditionsTest#testAConstructionArgumentDecidesTheConstructorsBranch :: control :: M-TS-NEW-UNBOUND',
+		'unit.check.ThreadSafetyConditionsTest#testAFieldInitializersConstructionBindsItsArguments :: control :: M-TS-INIT-SITE-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testAFinalLocalDecidesOnlyTheReadsItBinds :: control :: M-TS-COND-LOCAL-ANY-BLOCK',
 		'unit.check.ThreadSafetyConditionsTest#testAHandlerHandedToANeverInvokesTargetRunsNowhereFromThere :: control :: '
 			+ 'M-TS-NEVER-INVOKES-BY-TARGET',

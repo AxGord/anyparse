@@ -265,7 +265,8 @@ final class ArgumentValues {
 	 */
 	private function argumentsAt(edge: CallEdge): Null<Array<QueryNode>> {
 		final span: Null<Span> = edge.span;
-		var node: Null<QueryNode> = _trees.ofEdge(edge);
+		// a field's initializer runs in no function the tree holds (`<init>`): its site is found in the file
+		var node: Null<QueryNode> = _trees.ofEdge(edge) ?? _trees.ofFile(edge.file);
 		if (span == null) return null;
 		while (node != null) {
 			final at: Null<Span> = node.span;

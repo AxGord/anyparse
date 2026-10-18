@@ -26468,6 +26468,14 @@
 			"find": "if (i < args.length && stdNamed(binder, path, binder._file, name))",
 			"replace": "if (i < args.length)",
 			"note": "any generic type binds an Iterable's element, a haxe.ds.Vector included"
+		},
+		{
+			"name": "M-TS-INIT-SITE-UNREAD",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "argumentsAt",
+			"find": "_trees.ofEdge(edge) ?? _trees.ofFile(edge.file)",
+			"replace": "_trees.ofEdge(edge)",
+			"note": "a call or construction in a field initializer hands nothing known, since no function the tree holds runs it"
 		}
 	]
 }
