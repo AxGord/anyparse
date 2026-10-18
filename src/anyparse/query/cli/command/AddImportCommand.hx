@@ -3,6 +3,7 @@ package anyparse.query.cli.command;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.ProjectResolution;
 import haxe.Exception;
 
 using StringTools;
@@ -99,7 +100,7 @@ final class AddImportCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
+		final plugin: GrammarPlugin = ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source);
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = AddImport.addImport(source, pathStr, isUsing, reformat, plugin, optsJson);
 		final op: String = 'add-import';
