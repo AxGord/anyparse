@@ -3420,8 +3420,8 @@
 			"name": "M-AMBIENT-IMPORT-BAND",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "explicitFrom",
-			"find": "case Decls(decls) if (guarded):",
-			"replace": "case Decls(decls) if (true):",
+			"find": "case answer if (guarded):",
+			"replace": "case answer if (guarded || answer.match(Decls(_))):",
 			"note": "every explicit binding is weighed against the tiers below it as if it held in one build only, so the precedence collapses: an explicit import no longer outranks a wildcard one, the module's own statements no longer outrank the chain, a nearer ambient source no longer outranks a farther one, and an ambient binding no longer outranks a same-package namesake"
 		},
 		{
@@ -6046,7 +6046,7 @@
 			"name": "M-GRAPH-REF-OVERRIDES",
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
-			"find": "if (dispatch != null && name != null) for (v in g.virtualTargets(dispatch, name))\n\t\t\t\tg.addEdge(from, v, Ref, via, file, span, dispatch, null, null, null, storedInto, viaMember);",
+			"find": "if (dispatch != null && name != null) for (v in g.virtualTargets(dispatch, name))\n\t\t\t\tg.addEdge(from, v, Ref, via, file, span, dispatch, null, null, null, storedInto, viaMember, argument);",
 			"replace": "",
 			"note": "a method value reaches only the static type's method, never an override"
 		},
@@ -9929,8 +9929,8 @@
 			"name": "M-BINDING-GUARDED-OTHER-BUILD",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "bothBuilds",
-			"find": "case Pass: Decls(decls);",
-			"replace": "case Pass: Unreadable(null);",
+			"find": "case [Decls(_), Pass]:",
+			"replace": "case [Decls(_), Pass] if (false):",
 			"note": "a guarded statement is unknown even where no other build binds the name"
 		},
 		{
@@ -21774,14 +21774,14 @@
 			"type": "anyparse.check.OwnedTypes",
 			"method": "typesNamed",
 			"find": "case Free: null;",
-			"replace": "case Free: [];",
+			"replace": "case Free: { decls: [], outside: [], open: true };",
 			"note": "a name no resolution tier binds, which only a built-in can be, is reported as an unknown mention"
 		},
 		{
 			"name": "M-OWNED-UNKNOWN-SILENT",
 			"type": "anyparse.check.OwnedTypes",
 			"method": "typesNamed",
-			"find": "case Unknown: [];",
+			"find": "case Unknown: denotedBy(names.unknownCandidates(spelled, scan.info, at));",
 			"replace": "case Unknown: null;",
 			"note": "a name a tier could bind to something the index does not hold reads as provably another type, and the reach goes unreported"
 		},
@@ -21789,8 +21789,8 @@
 			"name": "M-OWNED-BOUND-BY-NAME",
 			"type": "anyparse.check.OwnedTypes",
 			"method": "typeSubjectsDenoted",
-			"find": "return candidates.filter(s -> s.keys.exists(k -> keys.contains(k)));",
-			"replace": "return candidates;",
+			"find": "candidates.filter(s -> denotes(scan, named, s))",
+			"replace": "candidates",
 			"note": "a name bound to a same-named type of another package is reported as the owned type"
 		},
 		{
@@ -21829,8 +21829,8 @@
 			"name": "M-OWNED-CTOR-ANY-TYPE",
 			"type": "anyparse.check.OwnedTypes",
 			"method": "visitNew",
-			"find": "(made.length == 0 || made.exists(t -> s.keys.contains(scan.index.refs.seenKey(t))))",
-			"replace": "true",
+			"find": "made != null && denotes(scan, made, s)",
+			"replace": "made != null",
 			"note": "constructing a same-named type of another package is reported as constructing the owned one"
 		},
 		{
@@ -21845,8 +21845,8 @@
 			"name": "M-OWNED-STATIC-UNKNOWN-SILENT",
 			"type": "anyparse.check.OwnedTypes",
 			"method": "reaches",
-			"find": "if (types.length == 0) return true;",
-			"replace": "if (types.length == 0) return false;",
+			"find": "return named != null && denotes(scan, named, subject);",
+			"replace": "return named != null && !named.open && denotes(scan, named, subject);",
 			"note": "a static reached through a receiver whose meaning is unknown goes unreported"
 		},
 		{
@@ -21861,8 +21861,8 @@
 			"name": "M-OWNED-STATIC-THROUGH-SUBTYPE",
 			"type": "anyparse.check.OwnedTypes",
 			"method": "reaches",
-			"find": "if (subject.isStatic) return types.exists(t -> subject.keys.contains(scan.index.refs.seenKey(t)));",
-			"replace": "",
+			"find": "if (subject.isStatic) {",
+			"replace": "if (false) {",
 			"note": "a static reached through a subtype of its type is reported, a reach Haxe itself rejects (`Class<B> has no field`)"
 		},
 		{
@@ -22098,7 +22098,7 @@
 			"name": "M-NOMINAL-CONSTRUCTED",
 			"type": "anyparse.query.NominalTypes",
 			"method": "valueNominalDeep",
-			"find": "constructedNominal(node, shape)",
+			"find": "constructedNominal(initializingConstruction(node, root, shape, chain.declaredTypeSources), shape)",
 			"replace": "null",
 			"note": "a construction `new T()` types as nothing in the deep walk"
 		},
@@ -26128,6 +26128,70 @@
 			"note": "--dry-run prints the two previews instead of the entries and their digest"
 		},
 		{
+			"name": "M-TS-SPAWN-MAIN-ARG",
+			"type": "anyparse.check.ThreadStates",
+			"method": "runsOnMain",
+			"find": "named != null && named.contains(at.index)",
+			"replace": "named != null && false",
+			"note": "a spawns object entry's main positions run on a worker like every other argument"
+		},
+		{
+			"name": "M-TS-SPAWN-MAIN-CONTEXT",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "callbackContext",
+			"find": "return if (ThreadStates.runsOnMain(graph, edge, lists))",
+			"replace": "return if (false)",
+			"note": "a value at a main position takes the spawn's background context"
+		},
+		{
+			"name": "M-TS-SPAWN-MAIN-REPEAT",
+			"type": "anyparse.check.CallRepetition",
+			"method": "marshalled",
+			"find": " || ThreadStates.runsOnMain(_graph, edge, lists)",
+			"replace": "",
+			"note": "a value run on the main thread at a main position is not one marshalled per post: a worker loop posting it runs as once"
+		},
+		{
+			"name": "M-TS-SPAWN-MAIN-SHIFT",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "bindsItsPosition",
+			"find": "return index < own && !mayShift(g, id, index, count);",
+			"replace": "return index < own;",
+			"note": "an argument a skipped optional may shift onto a later parameter is taken at its written position"
+		},
+		{
+			"name": "M-TS-SPAWN-MAIN-SIGNATURE",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "bindsItsPosition",
+			"find": "if (params == null) return false;",
+			"replace": "if (params == null) return true;",
+			"note": "a call two signatures may answer is taken to bind each argument at its position"
+		},
+		{
+			"name": "M-TS-SPAWN-ARG-POSITION",
+			"type": "anyparse.query.CallGraphEdges",
+			"method": "collect",
+			"find": "{ index: i - first, count: args.length - first }",
+			"replace": "{ index: i, count: args.length }",
+			"note": "an argument position counts the callee child too"
+		},
+		{
+			"name": "M-TS-OPT-SPAWN-OBJECT",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readSpawnEntry",
+			"find": "problems.push('$SPAWNS_KEY[$i] \"$named\": ${wrong.join(', ')} — kept as a plain entry');",
+			"replace": "{}",
+			"note": "a malformed spawns object entry is kept as a plain one without a word"
+		},
+		{
+			"name": "M-TS-REGISTER-MEMBER",
+			"type": "anyparse.check.CallRepetition",
+			"method": "registered",
+			"find": "listed(edge, lists.registerMemberIds, []) || ",
+			"replace": "",
+			"note": "a registers entry naming a project member is ignored for repetition, as a bare name is"
+		},
+		{
 			"name": "M-JSON-ROOT-UNTIGHTENED",
 			"type": "anyparse.grammar.json.JsonProjection",
 			"method": "tight",
@@ -26260,6 +26324,109 @@
 			"method": "metavars",
 			"force": "node",
 			"note": "a `\"$x\"` string in a pattern stays a string, so a JSON pattern can hold no metavariable"
+		},
+		{
+			"name": "M-OWNED-TIER-NO-USE-SITE",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "typesNamed",
+			"find": "names.tierOf(spelled, scan.info, at)",
+			"replace": "names.tierOf(spelled, scan.info)",
+			"note": "a simple name is resolved with no use site, so a #if-guarded import never decides a use inside its own branch and the receiver reads as unknown"
+		},
+		{
+			"name": "M-OWNED-MEMO-IGNORES-SITE",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "typesNamed",
+			"find": "final key: String = scan.guardedImports ? '$spelled@$at' : spelled;",
+			"replace": "final key: String = spelled;",
+			"note": "a file holding a guarded import answers every use of a name as its first use did, whichever #if branch each sits in"
+		},
+		{
+			"name": "M-OWNED-CANDIDATES-IGNORED",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "typesNamed",
+			"find": "denotedBy(names.unknownCandidates(spelled, scan.info, at))",
+			"replace": "denotedBy(null)",
+			"note": "an Unknown name whose every candidate is read and none is owned is still reported, by the member name alone"
+		},
+		{
+			"name": "M-OWNED-OUTSIDE-CANDIDATE-IGNORED",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "denotes",
+			"find": "|| named.outside.exists(path -> SourceText.lastSegment(path) == subject.simple)",
+			"replace": "",
+			"note": "a candidate outside the index — a std type a guarded alias names — is never the owned type"
+		},
+		{
+			"name": "M-BINDING-EITHER-DROPS-REST",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bothBuilds",
+			"find": "Either(mine.concat(theirs))",
+			"replace": "Either(mine)",
+			"note": "a guarded statement's candidates leave out what the builds without it bind"
+		},
+		{
+			"name": "M-BINDING-EITHER-DROPS-GUARDED",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bothBuilds",
+			"find": "Either(mine.concat(theirs))",
+			"replace": "Either(theirs)",
+			"note": "a guarded statement's candidates leave out what the statement itself binds"
+		},
+		{
+			"name": "M-BINDING-EITHER-OPEN-READ",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bothBuilds",
+			"find": "mine == null || theirs == null ? Unreadable(null) : Either(mine.concat(theirs))",
+			"replace": "mine == null ? Unreadable(null) : Either(mine.concat(theirs ?? []))",
+			"note": "the other builds' binding nothing reads is dropped from the candidates instead of leaving them open"
+		},
+		{
+			"name": "M-BINDING-CANDIDATES-OWN-TYPE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "unknownCandidates",
+			"find": "if (fi.types.exists(t -> t.name == name)) return null;",
+			"replace": "",
+			"note": "a name the module declares itself is given the candidates its imports bind, although its own type outranks them"
+		},
+		{
+			"name": "M-NOMINAL-LOCAL-CONSTRUCTION",
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueNominalDeep",
+			"find": "constructedNominal(initializingConstruction(node, root, shape, chain.declaredTypeSources), shape)",
+			"replace": "constructedNominal(node, shape)",
+			"note": "a local written with no type and initialised by a construction stays untyped"
+		},
+		{
+			"name": "M-NOMINAL-INITIALIZER-ONE-STEP",
+			"type": "anyparse.query.NominalTypes",
+			"method": "initializingConstruction",
+			"find": "while (held.kind == shape.identKind) {",
+			"replace": "if (held.kind == shape.identKind) {",
+			"note": "a local initialised by another local that holds a construction stays untyped"
+		},
+		{
+			"name": "M-ADDMETA-SAME-ARGS",
+			"type": "anyparse.query.AddMeta",
+			"method": "addMeta",
+			"find": " && sameEntry(source, sibling, text)",
+			"replace": "",
+			"note": "a duplicate is judged by the entry NAME again, so a second `@:access(...)` with another argument is refused although Haxe allows several"
+		},
+		{
+			"name": "M-ADDMETA-ENTRY-NEVER-SAME",
+			"type": "anyparse.query.AddMeta",
+			"method": "sameEntry",
+			"force": "false",
+			"note": "no entry ever equals the one being added, so the exact repeat of an annotation is added a second time"
+		},
+		{
+			"name": "M-ADDIMPORT-CLI-BLIND-SEAT",
+			"type": "anyparse.query.cli.command.AddImportCommand",
+			"method": "runAddImport",
+			"find": "ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source)",
+			"replace": "CliArgs.pickPlugin(lang)",
+			"note": "the op reads the file with no project resolution scope, so the insert seat takes every wildcard for a run boundary and places the import where the import-order rule does not"
 		},
 		{
 			"name": "M-REACH-HOMES-RECORDED",

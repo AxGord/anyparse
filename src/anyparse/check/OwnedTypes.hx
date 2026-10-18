@@ -63,8 +63,14 @@ typedef FileScan = {
 	/** Each name a type subject may be written under in the file (`OwnedTypes.spellingsOf`). */
 	final spellings: Map<String, Array<OwnedSubject>>;
 
-	/** `TypeNameBinding.tierOf`'s answer per simple name, asked once per file. */
-	final tiers: Map<String, Tier>;
+	/**
+	 * What each simple name denotes (`OwnedTypes.typesNamed`), asked once per file — once per site in a file holding a
+	 * `#if`-guarded import, whose own branch decides it.
+	 */
+	final denoted: Map<String, Null<Denoted>>;
+
+	/** Whether the file writes a `#if`-guarded import, so a use site's branch decides what a name binds. */
+	final guardedImports: Bool;
 
 	/** `from:to:label` of every finding made, so a site two steps see is reported once. */
 	final reported: Array<String>;
@@ -75,6 +81,16 @@ typedef FileScan = {
 	var typer: Null<(QueryNode) -> Null<String>>;
 
 	var typerBuilt: Bool;
+}
+
+/**
+ * What a written type name denotes (`OwnedTypes.typesNamed`): the declarations of the index and the paths of types outside
+ * it that it may be, or `open` when it may be something nothing here reads.
+ */
+typedef Denoted = {
+	final decls: Array<ResolvedType>;
+	final outside: Array<String>;
+	final open: Bool;
 }
 
 /**
@@ -89,16 +105,19 @@ typedef FileScan = {
  * expression naming it (`T.x`, a class value `T`, a qualified `p.T`).
  *
  * What a written name means is asked of the SHARED resolvers only — this rule is the guard of exactly that principle,
- * so it grows no resolver of its own. A simple name goes through `TypeNameBinding.tierOf`: `Bound` to the owned
- * declaration is reported; `Bound` elsewhere and `Free` are not; `Unknown` is REPORTED, because an unproved reach is a
- * reach. A qualified spelling goes through `TypeRefIndex.resolveTypeRefAll`; one that resolves to nothing is reported
- * when its last segment is the owned name. An identifier the scope binds to a value is no type.
+ * so it grows no resolver of its own. A simple name goes through `TypeNameBinding.tierOf`, asked AT the use site, so a
+ * `#if`-guarded import decides a use inside its own branch: `Bound` to the owned declaration is reported; `Bound`
+ * elsewhere and `Free` are not; `Unknown` is REPORTED, because an unproved reach is a reach — unless every type it may be
+ * is read (`TypeNameBinding.unknownCandidates`) and none is the owned one. A qualified spelling goes through
+ * `TypeRefIndex.resolveTypeRefAll`; one that resolves to nothing is reported when its last segment is the owned name. An
+ * identifier the scope binds to a value is no type.
  *
- * A STATIC member is reached through a type receiver resolved the same way — that type itself, since Haxe resolves
- * no static through a subtype; a receiver whose meaning is `Unknown` is reported — the one name-only report. An
- * INSTANCE member is reached through a receiver the shared typer types (`CheckScan.typeNominalResolver` over
- * `NominalTypes.expressionTypeNominal`), its member looked up through the supertypes by `ConfiguredTypes.memberOf`;
- * an untyped receiver is not reported. `new T(…)` reaches `T.new`.
+ * A STATIC member is reached through a type receiver resolved the same way — that type itself, since Haxe resolves no
+ * static through a subtype; a receiver whose meaning is `Unknown` with no readable candidate set is reported — the one
+ * name-only report. An INSTANCE member is reached through a receiver the shared typer types
+ * (`CheckScan.typeNominalResolver` over `NominalTypes.expressionTypeNominal`, which types a local written with no type
+ * by the construction initialising it), its member looked up through the supertypes by `ConfiguredTypes.memberOf`; an untyped receiver
+ * is not reported. `new T(…)` reaches `T.new`.
  *
  * Owners are globs over qualified names (`Glob.qualifiedNames`, the syntax of `reflectiveClasses`), matched against
  * the module a mention is written in and the qualified path of the type declaration enclosing it. The module declaring
@@ -188,7 +207,8 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 			shape: plugin.refShape(),
 			subjects: subjects,
 			spellings: spellingsOf(subjects, info),
-			tiers: [],
+			denoted: [],
+			guardedImports: info.imports.exists(i -> i.guarded),
 			reported: [],
 			out: out,
 			typer: null,
@@ -199,7 +219,7 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 		if (typeTree != null)
 			for (name => candidates in scan.spellings)
 				for (hit in Uses.find(name, typeTree, plugin.typeRefShape(), true))
-					for (s in typeSubjectsDenoted(scan, hit.name, candidates)) report(scan, s, hit.span);
+					for (s in typeSubjectsDenoted(scan, hit.name, candidates, hit.span.from)) report(scan, s, hit.span);
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree != null) walk(scan, tree, tree);
 	}
@@ -257,7 +277,7 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 		else
 			null;
 		if (spelled != null && !valueBound(scan, tree, spelled.split('.')[0], span))
-			for (s in typeSubjectsDenoted(scan, spelled, candidates)) report(scan, s, span);
+			for (s in typeSubjectsDenoted(scan, spelled, candidates, span.from)) report(scan, s, span);
 	}
 
 	/** A field access naming an owned member, reported when its receiver reaches the owned declaration (`reaches`). */
@@ -268,8 +288,8 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 	/** A `new` of a type whose construction is owned (`T.new`) — that type exactly, never a same-named one elsewhere. */
 	private function visitNew(scan: FileScan, name: String, span: Span): Void {
 		for (s in scan.subjects) if (s.member == CONSTRUCTOR && SourceText.lastSegment(name) == s.simple) {
-			final made: Null<Array<ResolvedType>> = typesNamed(scan, name);
-			if (made != null && (made.length == 0 || made.exists(t -> s.keys.contains(scan.index.refs.seenKey(t))))) report(scan, s, span);
+			final made: Null<Denoted> = typesNamed(scan, name, span.from);
+			if (made != null && denotes(scan, made, s)) report(scan, s, span);
 		}
 	}
 
@@ -360,19 +380,21 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 	/**
 	 * Whether the access of `subject`'s member on `receiver` reaches the owned declaration: a static through
 	 * the type the receiver names (`receiverTypes`), an instance member through the type the shared typer
-	 * gives it (`typedReceiver`). Either answering EMPTY — a receiver whose meaning is unknown — is reported.
+	 * gives it (`typedReceiver`). A receiver whose meaning is unknown is reported — a static's only when the owned type
+	 * may be among what it denotes (`denotes`).
 	 */
 	private static function reaches(scan: FileScan, tree: QueryNode, subject: OwnedSubject, receiver: QueryNode): Bool {
 		final member: Null<String> = subject.member;
 		if (member == null) return false;
-		final types: Null<Array<ResolvedType>> = subject.isStatic
-			? receiverTypes(scan, tree, receiver)
-			: typedReceiver(scan, tree, receiver, subject);
-		if (types == null) return false;
-		// An unknown receiver is the one name-only report.
-		if (types.length == 0) return true;
 		// A static is reached only through its own type: Haxe resolves no static through a subtype (`Class<B> has no field`).
-		if (subject.isStatic) return types.exists(t -> subject.keys.contains(scan.index.refs.seenKey(t)));
+		if (subject.isStatic) {
+			final named: Null<Denoted> = receiverTypes(scan, tree, receiver);
+			return named != null && denotes(scan, named, subject);
+		}
+		final types: Null<Array<ResolvedType>> = typedReceiver(scan, tree, receiver, subject);
+		if (types == null) return false;
+		// An untyped receiver of the owned type's own name is unknown rather than another type.
+		if (types.length == 0) return true;
 		return types.exists(t -> {
 			final found: Null<OwnedMember> = ConfiguredTypes.memberOf(scan.index, t, member);
 			found != null && subject.keys.contains(scan.index.refs.seenKey(found.owner));
@@ -398,8 +420,8 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 			null;
 	}
 
-	/** The type declarations a TYPE receiver denotes (`typesNamed`); null for a receiver that is no path or is a value. */
-	private static function receiverTypes(scan: FileScan, tree: QueryNode, receiver: QueryNode): Null<Array<ResolvedType>> {
+	/** What a TYPE receiver denotes (`typesNamed`); null for a receiver that is no path or is a value. */
+	private static function receiverTypes(scan: FileScan, tree: QueryNode, receiver: QueryNode): Null<Denoted> {
 		final path: Null<Array<String>> = pathOf(scan, receiver);
 		final span: Null<Span> = receiver.span;
 		return if (path == null || span == null)
@@ -407,7 +429,7 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 		else if (valueBound(scan, tree, path[0], span))
 			null
 		else
-			typesNamed(scan, path.join('.'));
+			typesNamed(scan, path.join('.'), span.from);
 	}
 
 	/** The shared typer's nominal for `receiver` in member-lookup position, the typer built on the first question. */
@@ -427,34 +449,67 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 	}
 
 	/**
-	 * The type declarations `spelled` names from `info` as a TYPE: a simple name through the compiler's resolution order
-	 * (`TypeNameBinding.tierOf`, memoised per file), a dotted one through `TypeRefIndex.resolveTypeRefAll`. Null when it
-	 * provably names no type here (`Free`); EMPTY when what it names is unknown — `Unknown`, or a dotted spelling nothing
-	 * resolves — which every caller reads as a reach to report.
+	 * What `spelled` names from `info` as a TYPE, written at offset `at`: a simple name through the compiler's resolution
+	 * order (`TypeNameBinding.tierOf` at the use site, memoised per file), a dotted one through
+	 * `TypeRefIndex.resolveTypeRefAll`. Null when it provably names no type here (`Free`). For an `Unknown` simple name, the
+	 * candidates it may be when every one is read (`TypeNameBinding.unknownCandidates`), else `open` — as for a dotted
+	 * spelling nothing resolves.
 	 */
-	private static function typesNamed(scan: FileScan, spelled: String): Null<Array<ResolvedType>> {
-		if (spelled.indexOf('.') >= 0) return scan.index.refs.resolveTypeRefAll(spelled, scan.info);
-		final tier: Tier = scan.tiers[spelled] ?? scan.index.refs.names.tierOf(spelled, scan.info);
-		scan.tiers[spelled] = tier;
-		return switch tier {
-			case Bound(decls): decls;
-			case Unknown: [];
+	private static function typesNamed(scan: FileScan, spelled: String, at: Int): Null<Denoted> {
+		if (spelled.indexOf('.') >= 0) {
+			final decls: Array<ResolvedType> = scan.index.refs.resolveTypeRefAll(spelled, scan.info);
+			return { decls: decls, outside: [], open: decls.length == 0 };
+		}
+		final key: String = scan.guardedImports ? '$spelled@$at' : spelled;
+		if (scan.denoted.exists(key)) return scan.denoted[key];
+		final names: TypeNameBinding = scan.index.refs.names;
+		final named: Null<Denoted> = switch names.tierOf(spelled, scan.info, at) {
+			case Bound(decls): { decls: decls, outside: [], open: false };
+			case Unknown: denotedBy(names.unknownCandidates(spelled, scan.info, at));
 			case Free: null;
 		};
+		scan.denoted[key] = named;
+		return named;
 	}
 
 	/**
-	 * Which of `candidates` — the type subjects `spelled` may be written for — it denotes: those whose declaration it
-	 * resolves to; every candidate when what it names is unknown, though for a dotted spelling only one whose last
+	 * Which of `candidates` — the type subjects `spelled`, written at offset `at`, may be written for — it denotes: those
+	 * it may be (`denotes`); every candidate when what it names is open, though for a dotted spelling only one whose last
 	 * segment is the subject's own name; none when it provably names another type, or none.
 	 */
-	private static function typeSubjectsDenoted(scan: FileScan, spelled: String, candidates: Array<OwnedSubject>): Array<OwnedSubject> {
-		final named: Null<Array<ResolvedType>> = typesNamed(scan, spelled);
-		if (named == null) return [];
-		if (named.length <= 0)
-			return spelled.indexOf('.') < 0 ? candidates : candidates.filter(s -> SourceText.lastSegment(spelled) == s.simple);
-		final keys: Array<String> = [for (t in named) scan.index.refs.seenKey(t)];
-		return candidates.filter(s -> s.keys.exists(k -> keys.contains(k)));
+	private static function typeSubjectsDenoted(
+		scan: FileScan, spelled: String, candidates: Array<OwnedSubject>, at: Int
+	): Array<OwnedSubject> {
+		final named: Null<Denoted> = typesNamed(scan, spelled, at);
+		return if (named == null)
+			[]
+		else if (named.open && spelled.indexOf('.') >= 0)
+			candidates.filter(s -> SourceText.lastSegment(spelled) == s.simple)
+		else
+			candidates.filter(s -> denotes(scan, named, s));
+	}
+
+	/**
+	 * Whether what a name denotes may be `subject`'s type: it is open, or one of its declarations is the subject's, or one of
+	 * its outside paths ends in the subject's name — the reading a dotted spelling nothing resolves gets.
+	 */
+	private static function denotes(scan: FileScan, named: Denoted, subject: OwnedSubject): Bool {
+		return named.open || named.decls.exists(t -> subject.keys.contains(scan.index.refs.seenKey(t)))
+			|| named.outside.exists(path -> SourceText.lastSegment(path) == subject.simple);
+	}
+
+	/** What an `Unknown` name denotes: the candidates `targets` it may be, each read; open when they are null. */
+	private static function denotedBy(targets: Null<Array<NameTarget>>): Denoted {
+		if (targets == null) return { decls: [], outside: [], open: true };
+		final decls: Array<ResolvedType> = [];
+		final outside: Array<String> = [];
+		for (t in targets) switch t {
+			case InIndex(found):
+				for (d in found) decls.push(d);
+			case OutOfIndex(path):
+				outside.push(path);
+		}
+		return { decls: decls, outside: outside, open: false };
 	}
 
 	/**

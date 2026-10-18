@@ -174,7 +174,7 @@ The native twin is `tools/bench-hxcpp.hxml`. Point `HXCPP_COMPILE_CACHE` at a pe
 
 ```sh
 HXCPP_COMPILE_CACHE=~/.hxcpp_cache haxe tools/bench-hxcpp.hxml   # -> bin/parse-prof-cpp/ParseProf
-TM_SRC=<other-tree>/src tools/bench-ab.sh tparse tools/bench-corpus.txt 9 6 \
+TM_SRC=<other-tree>/src tools/bench-ab.sh [--config <other-tree>/hxformat.json] tparse tools/bench-corpus.txt 9 6 \
   js:bin/parse-prof.js cpp:bin/parse-prof-cpp/ParseProf
 ```
 

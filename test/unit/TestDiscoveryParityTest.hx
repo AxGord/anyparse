@@ -416,6 +416,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyRepetitionTest',
 		'unit.check.ThreadSafetyRethrowTest',
 		'unit.check.ThreadSafetyRootCauseTest',
+		'unit.check.ThreadSafetySpawnArgumentsTest',
 		'unit.check.ThreadSafetyUnnamedLockTest',
 		'unit.check.ThreadSafetyWaiterTest',
 		'unit.check.ThreadSafetyWindowTest',

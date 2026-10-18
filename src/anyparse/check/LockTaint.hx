@@ -51,6 +51,12 @@ typedef ChainLists = {
 	final registerNames: Array<String>;
 
 	/**
+	 * The call targets a `Type.member` entry of `registers` names: the project's word on that member, a project one
+	 * included, where a bare name speaks for the runtime's calls only (`CallRepetition.registered`).
+	 */
+	final registerMemberIds: Array<String>;
+
+	/**
 	 * The call targets a `Type.member` entry of `runsOnce` names running a function value handed to them at most once
 	 * per call, now or later: the one positive answer that a value handed to a call does not repeat (`CallRepetition`).
 	 */
@@ -71,6 +77,12 @@ typedef ChainLists = {
 	/** The bare `nonThrowing` names, for a call the graph resolves to nothing. */
 	final nonThrowingNames: Array<String>;
 	final spawnIds: Array<String>;
+
+	/**
+	 * Each call target a `spawns` object entry names -> the positions of its arguments whose function value it runs on
+	 * the main thread later instead (`ThreadStates.runsOnMain`).
+	 */
+	final mainArguments: Map<String, Array<Int>>;
 	final marshalIds: Array<String>;
 	final quietIds: Array<String>;
 

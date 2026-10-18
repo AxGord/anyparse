@@ -4225,6 +4225,37 @@ decided the question; it may not become a record of runs.
   an aggregate's immutability from its uses (a read passed to any call is unknowable), moving type-naming elements
   across modules with carried imports (needs the destination's binding ladder — `DependencyCarry` — not worth it for
   data lists) — branch `feat/infra-N43`
+- N49 — thread-safety callback model. (1) `spawns` said "every function value handed to the call runs on a new thread"
+  for EVERY argument, while TM's `FileIO.readAndProcess(path, process, onDone)` runs `process` on the I/O worker and
+  `onDone` on the main thread, so `onDone` handlers (`DrillPitchImageCacheItem.cacheReadHandler`) were worker
+  callbacks and a false background origin kept the key `B|CloudDatabase.getFolderLastCloudActionAction2|…_batchMutex`.
+  A `spawns` item may now be an object `{"call": <pattern>, "main": [<position>…], "evidence": "…"}`
+  (`ThreadSafetyOptions.SpawnArguments`); the plain string keeps its meaning. A value at a `main` position runs as a
+  `marshals` call's value does — MAIN context (`ThreadSafety.callbackContext`), once per post (`CallRepetition.marshalled`)
+  — through ONE predicate, `ThreadStates.runsOnMain`; it stays out of the registrar's lock window and repetition as
+  every `spawns` value does (the call is still in `spawnIds`). The position is the WRITTEN one, recorded on the `Ref`
+  edge by `CallGraphEdges.scanArgs` (`CallEdge.argument`, `ArgumentPosition`); it counts only where the callee is
+  proven to bind the parameter there (`CallGraphKeys.bindsItsPosition`, new, beside `mayShift`): the run declares the
+  callee and its declarations read their parameters alike (`paramTypesOf`: an `@:overload` is none), no optional the
+  language may skip shifts it (Haxe binds by type when a call writes fewer arguments than it declares), and it is no rest
+  parameter. Everything else falls back to the plain entry: an argument no `main` names, an edge with no recorded
+  position (the compiler facts' edges, a `dynamic` member's derived calls), a library callee. A malformed object naming
+  its `call` is said and KEPT as a plain entry (what the call meant before the form existed), one naming none is dropped
+  and said. Rejected: a `worker` list beside `main` (an unnamed argument already keeps the plain verdict, BG), the
+  object form in `marshals` / `registers` (no consumer). (2) N46 E1: `CallRepetition.registered` required a runtime call
+  for every `registers` entry, while `ThreadStates.runsHere` honoured a project member — the two disagreed. A
+  `Type.member` entry is now the project's word on that member for repetition too, exactly as a dotted `runsOnce` entry
+  already was (`ChainLists.registerMemberIds`); a bare name still speaks for the runtime's calls only (the `Hub.addEventListener`
+  decision above stands). (3) N46 E2 NOT done: tying quiet->loud to `runsHere` would keep quiet a value handed to an
+  ordinary call, and `runsHere`'s "runs here" is an over-approximation that is conservative for a lock window (more in
+  the window) but UNSOUND for quietness — a plain call may store the value and run it later from the frame loop, loud.
+  Proving "runs synchronously" needs a parameter-flow summary of the callee (E3's machinery); no list says it today
+  (`iterates` is about repetition, `runsOnce` says "now or later"). (4) N46 E3 NOT done: a forwarding summary needs
+  parameter dataflow (which parameter a function hands where, through `.bind` partial application and stored fields)
+  that the graph does not keep — `ArgumentValues` is the layer that would own it; TM measured 0 B/C/D findings on such a
+  chain (N46). The residue it would close: FileIO's own wrappers (`read`, `write`, `modificationTime`, …) forward their
+  `onDone` PARAMETER to `run`, which no edge records, so a callback handed to one runs in its registrar's context — right
+  from the main thread, wrong from a worker — branch `feat/infra-N49`
 - N47 — JSON editing goes through the EXISTING ops, not a second engine. (1) A `json` `GrammarPlugin`
   (`JsonQueryPlugin`) whose tree is the GENERATED query walker's (`JsonQueryWalker`, `Build.buildQueryWalker` over a new
   span parser `JValueSpanParser`), so the kinds are the grammar's ctor names — `JObject` / `JArray` / `JString` /
@@ -4248,6 +4279,42 @@ decided the question; it may not become a record of runs.
   `CliArgs.langNames`, the CODE-grammar registry whose Haxe-sized floors `RefShapeKindProjectionTest` applies —
   `JsonQueryPluginTest` checks its declared kinds against its projection instead. Not done: `patch`, `move-elements`,
   `--sorted` over objects by key, a key containing `>` in a selector — branch `feat/infra-N47`
+- N58 — `owned-types` asks the binding AT the use site and reads an `Unknown`'s candidates; the deep typer types a local
+  from the construction initialising it. (1) D1 (TM `CrashDumper.hx:171`, `CleanExit.exit(1)` reported as `Sys.exit`):
+  `OwnedTypes.typesNamed` called `tierOf(name, info)` with no offset, so a `#if sys` import of an INDEXED module was never
+  co-guarded with the `#if sys` use beside it — the other build's strict package tier read an unindexed `a.Tool` and
+  the name went `Unknown`, which the static-member check matched by member name alone. Fix: the offset is passed (the
+  memo is per name, per site only in a file holding a guarded import — `coGuarded` reads the file's own statements
+  only); and `TypeNameBinding.unknownCandidates` (new, beside `tierOf`) names what an `Unknown` may be when each
+  candidate is read — `bothBuilds` now merges the guarded statement's binding with the rest's (`Answer.Either`), where
+  it used to drop both into `Unreadable(null)`. The rule reports such a name only when a candidate is the owned type: an
+  indexed one by identity, one outside the index by its last segment (the reading an unresolved dotted spelling already
+  got). Any candidate nothing reads — an import of a module outside the index, which may carry any sub-type, a skipped
+  file, an unbounded ambient chain — keeps the name open and reported (fail-closed). The candidates are a separate query
+  rather than a payload of `Tier.Unknown`: `Tier` is constructed and matched in ~35 places (`OperandBinder` builds its
+  own `Unknown`s) that never read candidates, and `tierOf`'s answer is unchanged for every caller. (2) D2 (recall):
+  `final x = new Box(); x.open()` was missed while `new Box().open()` and an annotated local were seen —
+  `valueNominalDeep` fell back to `constructedNominal` for the `new` node itself only. Now it follows an identifier
+  through `localInitializer` (the same un-annotated-local reading the source walk uses), local to local, to the
+  construction. Kept at the NOMINAL level: the source walk still types no construction (`new Box(item)` is a `Box<Item>`
+  nothing spells), and an initializer that is a call is not followed (no new arc, documented in the instance-member
+  limits) — branch `feat/infra-N58`
+
+## N51 (2026-10-19): add-meta by entry, add-import reads the project index, two re-checks
+
+- `add-meta` refuses only an EXACT repeat of the entry (name AND arguments, whitespace runs folded; `AddMeta.sameEntry`).
+  Haxe allows several `@:access(...)` on one declaration, and the old name-only refusal made a second one impossible.
+  A sibling without a span counts as the same (refusal side of the doubt).
+- `add-import` placed `haxe.ds.Either` between `LexRegion` and `MoveMemberFields.*`. Not a second comparator: the seat IS
+  `ImportOrder.insertionFor`, but its wildcard gate needs the host's resolution index and the CLI op built its plugin with none,
+  so every wildcard was a run boundary there while `import-order` (which has the index) read it as a member. The op now wraps
+  its plugin through `cli.ProjectResolution.hostFor` (nearest `apqlint.json`, the scope `lint` builds through
+  `LintCommand.resolutionThunk`, read lazily - only a header with a wildcard asks). Other single-file ops still pass no scope;
+  they place no imports through the gate-aware seat except `move-*`/materialisers, which hold their own hosts.
+- Re-check of the August F20 side findings: `dead-store` on a value read only through a closure capture does NOT reproduce
+  (arrow, local function, `.map` lambda, capture before and after the store, loop capture: no finding; the one control store is
+  still reported; the pins are `DeadStoreCheckTest.testClosureUseExcluded`). `tools/bench-ab.sh` still hard-wired the repo-root
+  `hxformat.json`: it now takes `--config <path>`.
 - N50 — the reach walk reads a library type by its CANONICAL PATH where its simple name is shared, and only COPIES of
   one path answer as one type. (1) An implicitly-called member's placeholder (`ReachGraph.idsOf`) records the canonical
   path (`TypeNameBinding.canonicalPath`) of each candidate type it stands for; reading the external node
