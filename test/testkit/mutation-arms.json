@@ -2595,24 +2595,24 @@
 			"name": "M-ELEMENT-LOOP-UNSTABLE",
 			"type": "anyparse.check.ElementLoopRewrite",
 			"method": "bodyAdmitsElementLoop",
-			"find": "\t\tif (!LoopScan.usedOnlyAsStableCollection(h.body, h.collection, sizeMember, core)) return false;\n",
-			"replace": "",
+			"find": "return LoopScan.usedOnlyAsStableCollection(h.body, h.collection, sizeMember, core) &&",
+			"replace": "return true &&",
 			"note": "a write to X[i] or a push onto X no longer declines, so an element-loop rewrite assigns to a copy or follows the growth a bounded range ignored"
 		},
 		{
 			"name": "M-ELEMENT-LOOP-REBIND",
 			"type": "anyparse.check.ElementLoopRewrite",
 			"method": "bodyAdmitsElementLoop",
-			"find": "\t\tif (LoopScan.bindsName(h.body, h.index, core) || LoopScan.bindsName(h.body, h.collection, core)) return false;\n",
-			"replace": "",
+			"find": ["!LoopScan.bindsName(h.body, h.index, core)", "!LoopScan.bindsName(h.body, h.collection, core)"],
+			"replace": ["true", "true"],
 			"note": "an X[i] under a nested binder of i is re-spelled as the outer element, and a body reaching the collection as this.X is rewritten"
 		},
 		{
 			"name": "M-ELEMENT-LOOP-CLOSURE",
 			"type": "anyparse.check.ElementLoopRewrite",
 			"method": "bodyAdmitsElementLoop",
-			"find": "return !LoopScan.capturedByClosure(h.body, source, h.collection, core);",
-			"replace": "return true;",
+			"find": "&& !LoopScan.capturedByClosure(h.body, source, h.collection, core);",
+			"replace": "&& true;",
 			"note": "an X[i] read inside a closure becomes the binder, so a closure run after the loop sees the element of its iteration instead of the slot as it is then"
 		},
 		{
@@ -3737,8 +3737,8 @@
 			"type": "anyparse.check.OracleGeneration",
 			"method": "hold",
 			"note": "every run takes every generation exclusively, so one agent's long --fix run blocks every other lint over a tree nobody regenerates",
-			"find": "return OracleGenerationLock.holdShared(lock, run.me, run.deadline);",
-			"replace": "return OracleGenerationLock.holdExclusive(lock, run.me, run.deadline);"
+			"find": ": OracleGenerationLock.holdShared(\n\t\t\t\tlock, run.me, run.deadline",
+			"replace": ": OracleGenerationLock.holdExclusive(\n\t\t\t\tlock, run.me, run.deadline"
 		},
 		{
 			"name": "M-GENERATE-WRITER-IGNORES-READERS",
@@ -3975,8 +3975,8 @@
 			"name": "M-GENERATE-READ-ONLY-ROOT-THROWS",
 			"type": "anyparse.check.OracleGeneration",
 			"method": "hold",
-			"find": "return 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: ${exception.message}';",
-			"replace": "throw exception;",
+			"find": "catch (exception: Exception) 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: '\n\t\t\t+ exception.message;",
+			"replace": "catch (exception: Exception) throw exception;",
 			"note": "a generation root where the state cannot be created crashes the run instead of making its configurations unavailable"
 		},
 		{
@@ -4203,8 +4203,8 @@
 			"name": "M-FIAD-PROVEN-EXPOSED",
 			"type": "anyparse.check.FieldInitAtDeclaration",
 			"method": "crossingProven",
-			"find": "host.reachBuilds() == null || MemberKinds.fieldExposed(tree, member, container, plugin, shape)",
-			"replace": "host.reachBuilds() == null",
+			"find": "?.reachBuilds() == null || MemberKinds.fieldExposed(tree, member, container, plugin, shape)",
+			"replace": "?.reachBuilds() == null",
 			"note": "a public field crosses too, though code outside the project may read it before the base constructor returns"
 		},
 		{
@@ -4939,8 +4939,8 @@
 			"name": "M-REACH-ESCAPE-ARGUMENT",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "classify",
-			"find": "\t\treturn { touch: false, escape: true };\n",
-			"replace": "\t\treturn { touch: false, escape: false };\n",
+			"find": "{ touch: false, escape: true };",
+			"replace": "{ touch: false, escape: false };",
 			"note": "the member's value handed out as an argument is not an escape, so an alias changed by code that never names it is missed"
 		},
 		{
@@ -5072,8 +5072,8 @@
 			"name": "M-REACH-LIB-REFLECT-UNRELATED",
 			"type": "anyparse.query.ValueCarriers",
 			"method": "relation",
-			"find": "? Carries : CannotCarry;",
-			"replace": "? Carries : MayCarry;",
+			"find": "\telse\n\t\t\tCannotCarry;",
+			"replace": "\telse\n\t\t\tMayCarry;",
 			"note": "(precision) a library read of an unrelated type's same-named field blocks every proof"
 		},
 		{
@@ -5197,8 +5197,8 @@
 			"name": "M-ESCAPE-ANY",
 			"type": "anyparse.query.ValueEscapes",
 			"method": "compute",
-			"find": "return { types: out, raw: false, ids: null };",
-			"replace": "return { types: null, raw: false, ids: null };",
+			"find": "? { types: out, raw: false, ids: null } :",
+			"replace": "? { types: null, raw: false, ids: null } :",
 			"note": "(precision) every instance may be anywhere, so no receiver ever rules out an owner"
 		},
 		{
@@ -5291,8 +5291,8 @@
 			"name": "M-ESCAPE-P-TYPED-ARGS",
 			"type": "anyparse.query.ValueCarriers",
 			"method": "typedNominal",
-			"find": "for (a in args) if (!primitive(a) && !typedNominal(a)) return false;",
-			"replace": "if (args.length > 0) return false;",
+			"find": "&& args.foreach(a -> primitive(a) || typedNominal(a));",
+			"replace": "&& args.length == 0;",
 			"note": "(precision) a container of a class is untyped, so an Array<C> holding this is an exit"
 		},
 		{
@@ -5362,16 +5362,16 @@
 			"name": "M-CARRY-TYPED-ARGS",
 			"type": "anyparse.query.ValueCarriers",
 			"method": "typedNominal",
-			"find": "for (a in args) if (!primitive(a) && !typedNominal(a)) return false;",
-			"replace": "",
+			"find": "&& args.foreach(a -> primitive(a) || typedNominal(a));",
+			"replace": "&& true;",
 			"note": "an Array<Dynamic> position keeps what it holds typed, so a C put in one reaches an unrelated position"
 		},
 		{
 			"name": "M-CARRY-TYPED-ARITY",
 			"type": "anyparse.query.ValueCarriers",
 			"method": "typedNominal",
-			"find": "if (args.length < decl.typeParamNames.length) return false;",
-			"replace": "",
+			"find": "return args.length >= decl.typeParamNames.length &&",
+			"replace": "return true &&",
 			"note": "a container written without its arguments - an alias of Array<Dynamic> - is typed"
 		},
 		{
@@ -5844,8 +5844,8 @@
 			"name": "M-REACH-NOT-A-MEMBER",
 			"type": "anyparse.query.MemberReach",
 			"method": "mayMutateNamed",
-			"find": "if (graph().types.declaringTypeOf(ownerName, name) == null)",
-			"replace": "if (false)",
+			"find": "return graph().types.declaringTypeOf(ownerName, name) == null",
+			"replace": "return false",
 			"note": "a name the enclosing type does not declare (an imported static) is asked about as a member of that type"
 		},
 		{
@@ -6310,8 +6310,8 @@
 			"name": "M-REACH-INDEX-IMPLICIT",
 			"type": "anyparse.query.ReachGraph",
 			"method": "counts",
-			"find": "return _scope.sources.exists(c.file) || inPlay(c);",
-			"replace": "return _scope.sources.exists(c.file);",
+			"find": " : _scope.sources.exists(c.file) || inPlay(c);",
+			"replace": " : _scope.sources.exists(c.file);",
 			"note": "an implicitly-called member of a library file never read is not a candidate, so its toString runs unseen"
 		},
 		{
@@ -6350,8 +6350,8 @@
 			"name": "M-GRAPH-IMPORT-UNLISTED",
 			"type": "anyparse.query.ValueNameBinding",
 			"method": "staticOf",
-			"find": "\t\treturn { owner: owner, decls: decls, member: member };",
-			"replace": "\t\treturn decls.exists(d -> d.type.members.exists(m -> m.name == member && m.isStatic)) ? { owner: owner, decls: decls, member: member } : null;",
+			"find": ": { owner: owner, decls: decls, member: member };",
+			"replace": ": decls.exists(d -> d.type.members.exists(m -> m.name == member && m.isStatic)) ? { owner: owner, decls: decls, member: member } : null;",
 			"note": "an explicit static import the index does not list binds nothing, so the call is taken for an enum constructor"
 		},
 		{
@@ -6454,8 +6454,8 @@
 			"name": "M-REACH-IMPLICIT-WRITTEN",
 			"type": "anyparse.query.ReachGraph",
 			"method": "counts",
-			"find": "return _scope.sources.exists(c.file) || inPlay(c);",
-			"replace": "return true;",
+			"find": " : _scope.sources.exists(c.file) || inPlay(c);",
+			"replace": " : true;",
 			"note": "(precision) every implicit member the index declares is a candidate, whether or not any code names its type"
 		},
 		{
@@ -6582,8 +6582,8 @@
 			"name": "M-REACH-ABSTRACT-VISIBLE",
 			"type": "anyparse.query.ReachGraph",
 			"method": "counts",
-			"find": "if (c.isAbstract) return visibleAbstracts().exists(c.type);",
-			"replace": "if (c.isAbstract) return false;",
+			"find": "c.isAbstract ? visibleAbstracts().exists(c.type) :",
+			"replace": "c.isAbstract ? false :",
 			"note": "no library abstract's implicitly-called member counts, so a conversion of a value read off a library field runs unseen"
 		},
 		{
@@ -6821,8 +6821,8 @@
 			"name": "M-FACTS-TRUTH-WIRED",
 			"type": "anyparse.query.FactsView",
 			"method": "of",
-			"find": "return new FactsView(table, scope, namesExactly(table, configurations));",
-			"replace": "return new FactsView(table, scope, false);",
+			"find": " : new FactsView(table, scope, namesExactly(table, configurations));",
+			"replace": " : new FactsView(table, scope, false);",
 			"note": "(precision) the facts are never the truth, even under the whole list of their builds"
 		},
 		{
@@ -7537,8 +7537,8 @@
 			"name": "M-REACH-UNREAD-READ-FAMILIES",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "? typed.concat([SiteFamily.Index, SiteFamily.Operator(''), SiteFamily.Literal])",
-			"replace": "? typed",
+			"find": "typed.concat([SiteFamily.Index, SiteFamily.Operator(''), SiteFamily.Literal])",
+			"replace": "typed",
 			"note": "library code not read yet runs no operator of a type the index declares nowhere"
 		},
 		{
@@ -7632,8 +7632,8 @@
 			"name": "M-GRAPH-READ-DECLARED",
 			"type": "anyparse.query.ReachGraph",
 			"method": "readOwners",
-			"find": "if (declared == null || !declared.exists(t -> g.types.memberOnChain(t, name) != null)) return declared;",
-			"replace": "",
+			"find": "return declared == null || !declared.exists(t -> g.types.memberOnChain(t, name) != null)",
+			"replace": "return false",
 			"note": "an escaped type declaring the name hides that the static type's own read is a static extension or a generated member"
 		},
 		{
@@ -7728,7 +7728,7 @@
 			"name": "M-FACTS-REFLECT-NAME",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "reflection",
-			"find": "literal = ',\"n\":' + Json.stringify(s);",
+			"find": "literal = ',\"n\":${Json.stringify(s)}';",
 			"replace": "literal = '';",
 			"note": "a reflected literal name is dropped, so every reflection site reads as computed"
 		},
@@ -7752,7 +7752,7 @@
 			"name": "M-FACTS-TYPE-PARAMETER",
 			"type": "anyparse.check.TypedFactsTypeStrings",
 			"method": "instString",
-			"find": "return isParam ? '$' + path : path + paramString(params, depth);",
+			"find": "return isParam ? '$$$path' : path + paramString(params, depth);",
 			"replace": "return path + paramString(params, depth);",
 			"note": "a type parameter prints as a class path"
 		},
@@ -7876,8 +7876,8 @@
 			"name": "M-FACTS-GENERIC",
 			"type": "anyparse.check.TypedFactsMacro",
 			"method": "moduleType",
-			"find": "case KTypeParameter(_) | KMacroType | KGenericBuild | KExpr(_):",
-			"replace": "case KGenericInstance(_, _) | KTypeParameter(_) | KMacroType | KGenericBuild | KExpr(_):",
+			"find": "case KTypeParameter(_), KMacroType, KGenericBuild, KExpr(_):",
+			"replace": "case KGenericInstance(_, _), KTypeParameter(_), KMacroType, KGenericBuild, KExpr(_):",
 			"note": "a @:generic instance is skipped"
 		},
 		{
@@ -7900,8 +7900,8 @@
 			"name": "M-FACTS-FIELD-VALUE",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "calledKind",
-			"find": "return _host.replaceable(targetName, cf) ? 'fieldValue' : kind;",
-			"replace": "return kind;",
+			"find": "'fieldValue'",
+			"replace": "kind",
 			"note": "a call of a field value names the field as a fixed body"
 		},
 		{
@@ -8082,7 +8082,7 @@
 			"name": "M-FACTS-REACH-SPLICE",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "case InlineSite | MacroExpansion: !truth;",
+			"find": "case InlineSite, MacroExpansion: !truth;",
 			"replace": "case InlineSite: false;\n\t\t\tcase MacroExpansion: true;",
 			"note": "a body with an inlined call is read through its facts, whose spliced facts sit at the callee and are missed by a range question"
 		},
@@ -8090,7 +8090,7 @@
 			"name": "M-FACTS-TRUTH-SPLICE",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "case InlineSite | MacroExpansion: !truth;",
+			"find": "case InlineSite, MacroExpansion: !truth;",
 			"replace": "case InlineSite: true;\n\t\t\tcase MacroExpansion: !truth;",
 			"note": "(precision) under the whole list of builds a body an inlined function was spliced into keeps its syntax, which admits every conversion in play"
 		},
@@ -8098,7 +8098,7 @@
 			"name": "M-FACTS-TRUTH-SPLICE-ALWAYS",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "case InlineSite | MacroExpansion: !truth;",
+			"find": "case InlineSite, MacroExpansion: !truth;",
 			"replace": "case InlineSite: false;\n\t\t\tcase MacroExpansion: !truth;",
 			"note": "a body an inlined function was spliced into is read through its facts with no list of builds, where a range question cannot take the spliced facts"
 		},
@@ -8258,8 +8258,8 @@
 			"name": "M-GRAPH-FACTS-INLINED-SITE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "record",
-			"find": "own == null ? [] : [own.span]",
-			"replace": "[]",
+			"find": "[own.span];",
+			"replace": "[];",
 			"note": "(precision) an inlined call runs anywhere in its caller, not where it was called"
 		},
 		{
@@ -8442,8 +8442,8 @@
 			"name": "M-FACTS-TEXT-JOINED-SPLICES",
 			"type": "anyparse.query.FactsProvenance",
 			"method": "joined",
-			"find": "return spliced(p.span.to) || siteSpells(n, p, p.span.from, p.span.to, member, body) || accessEnds(n, p.span.to, member);",
-			"replace": "return siteSpells(n, p, p.span.from, p.span.to, member, body);",
+			"find": "? spliced(p.span.to) || siteSpells(n, p, p.span.from, p.span.to, member, body) || accessEnds(n, p.span.to, member)",
+			"replace": "? siteSpells(n, p, p.span.from, p.span.to, member, body)",
 			"note": "a range the compiler joined from two inlined bodies is no text's"
 		},
 		{
@@ -8458,7 +8458,7 @@
 			"name": "M-GRAPH-ADOPT-UNRECORDED",
 			"type": "anyparse.query.CallGraph",
 			"method": "addFiles",
-			"find": "if (reading != null) reading.recordAdopted(this, adopted);",
+			"find": "reading?.recordAdopted(this, adopted);",
 			"replace": "",
 			"note": "a method a build macro made is a node with no facts recorded, so neither what it runs nor what it touches is seen"
 		},
@@ -8642,8 +8642,8 @@
 			"name": "M-FACTS-USE",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "visit",
-			"find": "fieldFact(e, receiver, fa, false, ',' + useText(use));",
-			"replace": "fieldFact(e, receiver, fa, false, ',' + useText(Value));",
+			"find": "fieldFact(e, receiver, fa, false, ',${useText(use)}');",
+			"replace": "fieldFact(e, receiver, fa, false, ',${useText(Value)}');",
 			"note": "every field read is used as a value, so no read says it only calls, indexes or compares"
 		},
 		{
@@ -8690,8 +8690,8 @@
 			"name": "M-FACTS-RECEIVER-BLOCK",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "receiverCall",
-			"find": "if (at.file != around.file || at.min != around.min || at.max != around.max) return null;",
-			"replace": "",
+			"find": "return at.file != around.file || at.min != around.min || at.max != around.max",
+			"replace": "return false",
 			"note": "a local the inlined method's own code names `_this` counts as the compiler's receiver binding, so an argument it keeps reads as the receiver of a call of the array's own method"
 		},
 		{
@@ -8952,7 +8952,7 @@
 			"name": "M-FACTS-STATICS-TYPEDEF",
 			"type": "anyparse.check.TypedFactsTypeStrings",
 			"method": "typeString",
-			"find": "StringTools.endsWith(name, '>') ? name : name + paramString(params, depth);",
+			"find": "name.endsWith('>') ? name : name + paramString(params, depth);",
 			"replace": "name + paramString(params, depth);",
 			"note": "the typedef of an enum's statics is printed with arguments after its name (`Enum<pack.E><?>`), which the type grammar does not read"
 		},
@@ -9306,7 +9306,8 @@
 			"name": "M-FACTS-NEVER-EARLY",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "startsFactsEarly",
-			"force": "false",
+			"find": "return fix && scoped && oracles > 0 && !noOracle && !narrowed;",
+			"replace": "return false;",
 			"note": "no run starts its facts compiles ahead, so they follow the first check that asks instead of overlapping the checks"
 		},
 		{
@@ -9711,8 +9712,8 @@
 			"name": "M-BINDING-UNINDEXED-IMPORT-FREE",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "statementAnswer",
-			"find": "if (outside == null) return Unreadable(bound);",
-			"replace": "if (outside == null) return Pass;",
+			"find": "if (outside == null)\n\t\t\tUnreadable(bound)",
+			"replace": "if (outside == null)\n\t\t\tPass",
 			"note": "an import or alias of a module nothing can read is taken to declare nothing, so it falls through to the package tier"
 		},
 		{
@@ -9873,8 +9874,8 @@
 			"name": "M-HAXELIB-BATCH-COUNT-IGNORED",
 			"type": "anyparse.query.HaxelibResolver",
 			"method": "rootsFrom",
-			"find": "if (lines.length != count) return null;",
-			"replace": "",
+			"find": "return lines.length != count ? null : lines;",
+			"replace": "return lines;",
 			"note": "a multi-name `haxelib libpath` answer missing a line is read positionally, so every library after the gap takes its neighbour's root"
 		},
 		{
@@ -10014,8 +10015,8 @@
 			"name": "M-FACTS-ORACLE-AGREE",
 			"type": "anyparse.check.FactsTypeOracle",
 			"method": "agreed",
-			"find": "if (types.length > 1) return Declined('the oracle configurations type it differently: ${types.join(' / ')}');",
-			"replace": "",
+			"find": "else if (types.length > 1)",
+			"replace": "else if (false)",
 			"note": "the first of two types the configurations disagree on is answered, so an annotation is right in one build and wrong in the other"
 		},
 		{
@@ -10168,7 +10169,7 @@
 			"name": "M-JOURNAL-OPAQUE",
 			"type": "anyparse.query.EditStep",
 			"method": "alignment",
-			"find": "same = StringTools.fastCodeAt(spliced, solid[i]) == StringTools.fastCodeAt(after, settled[i]);",
+			"find": "same = spliced.fastCodeAt(solid[i]) == after.fastCodeAt(settled[i]);",
 			"replace": "same = true;",
 			"note": "a settled text that differs from its splice in more than whitespace is aligned as if it did not"
 		},
@@ -10653,8 +10654,8 @@
 			"name": "M-OPERAND-LOCAL-MACRO",
 			"type": "anyparse.check.OperandBinder",
 			"method": "localCallTier",
-			"find": "if (member != null && !typedByItsReturn(member)) return Unknown;",
-			"replace": "",
+			"find": "return if (member != null && !typedByItsReturn(member))",
+			"replace": "return if (false)",
 			"note": "an unqualified call to the file's own macro or overloaded member is typed by its written return"
 		},
 		{
@@ -11419,8 +11420,8 @@
 			"name": "M-GRAPH-RECEIVER-PROPERTY",
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
-			"find": "|| g.types.propertyOnChain(owner, name) != null) return null;",
-			"replace": ") return null;",
+			"find": "|| !g.types.fieldOnChain(owner, name) || g.types.propertyOnChain(owner, name) != null",
+			"replace": "|| !g.types.fieldOnChain(owner, name)",
 			"note": "a property with a getter names one stored lock, though the getter may hand back any other"
 		},
 		{
@@ -12035,8 +12036,8 @@
 			"name": "M-GRAPH-BOUND-LOCAL-SCOPE",
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
-			"find": "return bindsLocally(bound) ? bound : MEMBER_SCOPE;",
-			"replace": "return MEMBER_SCOPE;",
+			"find": "bindsLocally(bound) ? bound : MEMBER_SCOPE",
+			"replace": "MEMBER_SCOPE",
 			"note": "a parameter's type is read in the enclosing type's scope, so a function's own bounded `T` is taken for the class's"
 		},
 		{
@@ -12126,7 +12127,8 @@
 			"name": "M-LINT-SUMMARY-NEVER",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "summarises",
-			"force": "false",
+			"find": "return format == FORMAT_TEXT && (forced ?? (threshold > 0 && shown > threshold));",
+			"replace": "return false;",
 			"note": "a text report over its threshold, or asked for --summary, still lists every finding"
 		},
 		{
@@ -12659,16 +12661,16 @@
 			"name": "M-COND-VALUES-TEXT",
 			"type": "anyparse.query.CondValue",
 			"method": "textOrder",
-			"find": "return Ordered(a < b ? -1 : a > b ? 1 : 0);",
-			"replace": "return Undecided;",
+			"find": " : Ordered(a < b ? -1 : a > b ? 1 : 0);",
+			"replace": " : Undecided;",
 			"note": "two strings have no order, so `lime >= \"8.0.0\"` stays undecided"
 		},
 		{
 			"name": "M-COND-VALUES-UNDEFINED",
 			"type": "anyparse.query.CondValue",
 			"method": "order",
-			"find": "case [Undefined, _] | [_, Undefined]: Never;",
-			"replace": "case [Undefined, _] | [_, Undefined]: Undecided;",
+			"find": "case [Undefined, _], [_, Undefined], [Set, Truth(_)], [Truth(_), Set]: Never;",
+			"replace": "case [Undefined, _], [_, Undefined]: Undecided;\n\t\t\tcase [Set, Truth(_)], [Truth(_), Set]: Never;",
 			"note": "a comparison of an undefined define is undecided, where the compiler makes it false and `!=` true"
 		},
 		{
@@ -12906,16 +12908,16 @@
 			"name": "M-FACTS-CALL-OPERAND",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "dynamicOperand",
-			"find": "return ',\"o\":${q(sourceType(first))}' + (exactObject(first) ? ',\"x\":true' : '');",
-			"replace": "return '';",
+			"find": "\t: ',\"o\":${q(sourceType(first))}' + (exactObject(first) ? ',\"x\":true' : '');",
+			"replace": "\t: '';",
 			"note": "a call handing a value to a `Dynamic` parameter records none of it, so a conversion an inlined body spliced in from another file converts a value of any type (TM's `StringBuf.add` in `EReg.replace`)"
 		},
 		{
 			"name": "M-FACTS-CALL-OPERAND-LEAF",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "dynamicOperand",
-			"find": "return ',\"o\":${q(sourceType(first))}'",
-			"replace": "final leaves: Array<TypedExpr> = [];\n\t\tTypedFactsShapes.collectLeaves(first, leaves);\n\t\treturn ',\"o\":${q(sourceType(leaves[0]))}'",
+			"find": "',\"o\":${q(sourceType(first))}'",
+			"replace": "',\"o\":' + q(sourceType({\n\t\t\t\tfinal leaves: Array<TypedExpr> = [];\n\t\t\t\tTypedFactsShapes.collectLeaves(first, leaves);\n\t\t\t\tleaves[0];\n\t\t\t}))",
 			"note": "the first leaf of a value handed to a `Dynamic` parameter is the value, so `Std.string(c ? new Plain() : d)` converts a `Plain` only"
 		},
 		{
@@ -13130,7 +13132,7 @@
 			"name": "M-GRAPH-INIT-RECORD",
 			"type": "anyparse.query.CallGraph",
 			"method": "addFiles",
-			"find": "if (reading != null) reading.recordInitializers(this, [for (id in _initFiles.keys()) id]);",
+			"find": "reading?.recordInitializers(this, [for (id in _initFiles.keys()) id]);",
 			"replace": "",
 			"note": "(precision) a field initializer is read by its syntax, which admits every implicitly-called member"
 		},
@@ -13263,24 +13265,24 @@
 			"name": "M-ESCAPES-FACTS-DECLARED-NONE",
 			"type": "anyparse.query.FactsEscapes",
 			"method": "anyClass",
-			"find": "if (fact != null && !escapeInstance(id, fact, [])) {",
-			"replace": "if (false) {",
+			"find": "if (fact == null || escapeInstance(id, fact, [])) continue;",
+			"replace": "if (true) continue;",
 			"note": "a class the project declares a computed name may make is taken never to be made, so what it holds stays in the type system"
 		},
 		{
 			"name": "M-ESCAPES-FACTS-DECLARED-SUBTYPES",
 			"type": "anyparse.query.FactsEscapes",
 			"method": "anyClass",
-			"find": "!escapeInstance(id, fact, [])",
-			"replace": "!escapeType(Named(id, []))",
+			"find": "escapeInstance(id, fact, [])",
+			"replace": "escapeType(Named(id, []))",
 			"note": "(precision) a declared class stands for its subtypes too, so a subtype the declaration leaves out is taken to be made by a computed name"
 		},
 		{
 			"name": "M-ESCAPES-FACTS-DECLARED-PRODUCED",
 			"type": "anyparse.query.FactsEscapes",
 			"method": "produced",
-			"find": "if (r.isValue || name == null) return anyClass(",
-			"replace": "if (r.isValue || name == null) return refuse(",
+			"find": "return r.isValue || name == null\n\t\t\t? anyClass(",
+			"replace": "return r.isValue || name == null\n\t\t\t? refuse(",
 			"note": "(precision) a computed name, or a producer read as a value, makes a class value of any class whatever the project declares"
 		},
 		{
@@ -13375,8 +13377,8 @@
 			"name": "M-NATIVE-SITE-BLIND",
 			"type": "anyparse.query.NativeSiteReach",
 			"method": "judge",
-			"find": "return Hands(into.types, into.values, _native.classesNamed(words));",
-			"replace": "return Blind;",
+			"find": "? Hands(into.types, into.values, _native.classesNamed(words)) : Blind;",
+			"replace": "? Blind : Blind;",
 			"note": "(precision) every native site is a blind spot under the truth, whatever it is handed and names"
 		},
 		{
@@ -13455,8 +13457,8 @@
 			"name": "M-NATIVE-CLASSES-NAMED",
 			"type": "anyparse.query.NativeSiteReach",
 			"method": "judge",
-			"find": "return Hands(into.types, into.values, _native.classesNamed(words));",
-			"replace": "return Hands(into.types, into.values, []);",
+			"find": "? Hands(into.types, into.values, _native.classesNamed(words)) : Blind;",
+			"replace": "? Hands(into.types, into.values, []) : Blind;",
 			"note": "target code naming a class is taken to run none of its statics or its constructor"
 		},
 		{
@@ -13525,7 +13527,7 @@
 			"name": "M-FACTS-EXPANSION-PLACED",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "case InlineSite | MacroExpansion: !truth;",
+			"find": "case InlineSite, MacroExpansion: !truth;",
 			"replace": "case InlineSite: !truth;\n\t\t\tcase MacroExpansion: true;",
 			"note": "an expression macro's expansion leaves facts with no place under the truth too, so its body keeps the syntax"
 		},
@@ -13613,8 +13615,8 @@
 			"name": "M-VALUE-ARG-WRITTEN",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "unwrittenParameter",
-			"find": "if (hits.exists(h -> h.kind == Write && h.bindingSpan?.from == binding.from && h.bindingSpan?.to == binding.to)) return null;",
-			"replace": "",
+			"find": "else if (hits.exists(h -> h.kind == Write && h.bindingSpan?.from == binding.from && h.bindingSpan?.to == binding.to))",
+			"replace": "else if (false)",
 			"note": "a parameter its method assigns holds only what the invocations hand it"
 		},
 		{
@@ -13669,8 +13671,8 @@
 			"name": "M-VALUE-STORED-UNTYPED",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "readStored",
-			"find": "if (left && !untypedStores(name, hierarchy, out)) return null;",
-			"replace": "",
+			"find": "return if (left && !untypedStores(name, hierarchy, out))",
+			"replace": "return if (false)",
 			"note": "an object that left the type system is taken to have its dynamic field written only where a typed write names it"
 		},
 		{
@@ -13749,8 +13751,8 @@
 			"name": "M-VALUE-CTOR-ROUTE",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "readArguments",
-			"find": "? constructedWith(typed[0], method.index, method.count, declared)",
-			"replace": "? invokedWith(typed[0], fnName, method.index, method.count)",
+			"find": "constructedWith(typed[0], method.index, method.count, declared)",
+			"replace": "invokedWith(typed[0], fnName, method.index, method.count)",
 			"note": "a constructor's parameter holds what its call facts hand it, of which a `new` records none"
 		},
 		{
@@ -13765,8 +13767,8 @@
 			"name": "M-VALUE-CTOR-ARGUMENT",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "argumentFunction",
-			"find": "if (where == null || !(shape.lambdaKinds ?? []).contains(value.kind)) return null;",
-			"replace": "if (where == null) return null;",
+			"find": "else if (where == null || !(shape.lambdaKinds ?? []).contains(value.kind))\n\t\t\tnull",
+			"replace": "else if (where == null)\n\t\t\tnull",
 			"note": "a construction's argument of any shape is read as the function written there"
 		},
 		{
@@ -13781,8 +13783,8 @@
 			"name": "M-VALUE-CTOR-ARITY",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "argumentFunction",
-			"find": "return arity == null || parameterCount(value) == arity ? [where] : [];",
-			"replace": "return [where];",
+			"find": "else if (arity == null || parameterCount(value) == arity)",
+			"replace": "else if (true)",
 			"note": "a function expression of another arity than the parameter's is taken to bind it"
 		},
 		{
@@ -13845,8 +13847,8 @@
 			"name": "M-METHODS-HOLD-CLASSLESS",
 			"type": "anyparse.query.FactsMethodValues",
 			"method": "mayHold",
-			"find": "case Named(CATCH_ALL | ANY, _) | Structure(_): left;",
-			"replace": "case Named(CATCH_ALL | ANY, _) | Structure(_): true;",
+			"find": "case Named(CATCH_ALL | ANY, _), Structure(_): left;",
+			"replace": "case Named(CATCH_ALL | ANY, _), Structure(_): true;",
 			"note": "a value of no class may hold an object of a class that never escaped"
 		},
 		{
@@ -14013,8 +14015,8 @@
 			"name": "M-REFLECTED-HOLDERS-ACCESSORS",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedIds",
-			"find": "if (owners.contains(id) || accessors.exists(p -> StringTools.startsWith(member, p)))",
-			"replace": "if (owners.contains(id))",
+			"find": "if (owners.contains(id) || accessors.exists(p -> member.startsWith(p))) {",
+			"replace": "if (owners.contains(id)) {",
 			"note": "a property access by a computed name runs no accessor of an undeclared class"
 		},
 		{
@@ -14045,16 +14047,16 @@
 			"name": "M-CLASSLESS-STRUCTURE",
 			"type": "anyparse.query.FactsView",
 			"method": "classlessType",
-			"find": "case Structure(_): true;",
-			"replace": "case Structure(_): false;",
+			"find": "case Structure(_), Named(CATCH_ALL, []): true;",
+			"replace": "case Structure(_): false;\n\t\t\tcase Named(CATCH_ALL, []): true;",
 			"note": "(precision) a value of a structure type may be an object of any class"
 		},
 		{
 			"name": "M-CLASSLESS-CATCH-ALL",
 			"type": "anyparse.query.FactsView",
 			"method": "classlessType",
-			"find": "case Named(CATCH_ALL, []): true;",
-			"replace": "case Named(CATCH_ALL, []): false;",
+			"find": "case Structure(_), Named(CATCH_ALL, []): true;",
+			"replace": "case Structure(_): true;\n\t\t\tcase Named(CATCH_ALL, []): false;",
 			"note": "(precision) a value of the catch-all may be an object of any class, escaped or not"
 		},
 		{
@@ -14259,7 +14261,7 @@
 			"name": "M-FACTS-SPLICED-REFLECTION-FROM",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "at",
-			"find": "incomplete(from == null ? 'reflection-unattributed' : 'reflection-from:' + from.id);",
+			"find": "incomplete(from == null ? 'reflection-unattributed' : 'reflection-from:${from.id}');",
 			"replace": "incomplete('reflection-unattributed');",
 			"note": "(precision) the facts never name the method a spliced reflective fact lies in, so no such body is read"
 		},
@@ -14475,7 +14477,7 @@
 			"name": "M-FACTS-HELD-LOCAL",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "heldValue",
-			"find": "case TField(_, _) | TLocal(_): true;",
+			"find": "case TField(_, _), TLocal(_): true;",
 			"replace": "case TField(_, _): true;",
 			"note": "a local initialized with another local is walked as a value, so the first local's value escapes there"
 		},
@@ -14834,8 +14836,8 @@
 			"name": "M-GUARDED-NEVER-CALLED",
 			"type": "anyparse.query.NullGuardedCode",
 			"method": "invocationsHandNull",
-			"find": "if (read.fact.use != VALUE || read.fact.held || !neverCalled(read.node, read.fact.at, 0)) return false;",
-			"replace": "if (read.fact.use != VALUE || read.fact.held) return false;",
+			"find": "&& neverCalled(read.node, read.fact.at, 0)",
+			"replace": "&& true",
 			"note": "(soundness) a method read as a value is never invoked through it"
 		},
 		{
@@ -14866,7 +14868,7 @@
 			"name": "M-GUARDED-CONTAINER",
 			"type": "anyparse.query.NullGuardedCode",
 			"method": "containerSealed",
-			"find": "if (declared == null || !declared.types.foreach(t -> container(t))) return false;",
+			"find": "if (declared == null || !declared.types.foreach(container)) return false;",
 			"replace": "if (declared == null) return false;",
 			"note": "(soundness) an element store of an abstract with an `@:arrayAccess` of its own stores like an `Array`"
 		},
@@ -14913,8 +14915,8 @@
 			"name": "M-GUARDED-OBTAINED",
 			"type": "anyparse.query.NullGuardedCode",
 			"method": "staticInvocations",
-			"find": "if (_methods().obtainedUntyped(name, hierarchy, _escapedTypes(), _bindings, true)) return false;",
-			"replace": "// cut",
+			"find": "!_methods().obtainedUntyped(name, hierarchy, _escapedTypes(), _bindings, true) && ",
+			"replace": "",
 			"note": "(soundness) a method read by its name through reflection is invoked only by its typed calls"
 		},
 		{
@@ -15363,8 +15365,8 @@
 			"name": "M-HOIST-VALUES-BLIND",
 			"type": "anyparse.check.HoistCommonImport",
 			"method": "hoistableOf",
-			"find": "if (!ImportBindings.bindsNoValue(binding)) return null;",
-			"replace": "if (false && !ImportBindings.bindsNoValue(binding)) return null;",
+			"find": "return if (!ImportBindings.bindsNoValue(binding))\n\t\t\tnull",
+			"replace": "return if (false && !ImportBindings.bindsNoValue(binding))\n\t\t\tnull",
 			"note": "an enum import is hoisted into the ambient source, where its constructors outrank a module's own field imports in either order"
 		},
 		{
@@ -15458,7 +15460,7 @@
 			"name": "M-FACTS-UNPLACED-UNKNOWN",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "case StaleForeign | Unknown(_): true;",
+			"find": "case StaleForeign, Unknown(_): true;",
 			"replace": "case StaleForeign: true;\n\t\t\tcase Unknown(_): false;",
 			"note": "the markers that leave a fact without a place are a negative list again, so a node carrying one no reader knows is read through its facts"
 		},
@@ -15617,7 +15619,7 @@
 			"name": "M-SHARD-FILTER-SLICE-UNSORTED",
 			"type": "anyparse.query.ShardFilter",
 			"method": "selected",
-			"find": "sorted.sort((a, b) -> a < b ? -1 : a > b ? 1 : 0);",
+			"find": "sorted.sort((a, b) -> if (a < b)\n\t\t\t-1\n\t\telse if (a > b)\n\t\t\t1\n\t\telse\n\t\t\t0);",
 			"replace": "",
 			"note": "a slice is cut from the names in the order the runner lists them, so two processes listing them differently can run a test twice or never"
 		},
@@ -15713,8 +15715,8 @@
 			"name": "M-ESCAPES-FACTS-CTOR-SHAPE",
 			"type": "anyparse.query.FactsEscapes",
 			"method": "constructorEscapes",
-			"find": "case Unknown | Parameter(_) | Structure(_): refuse('the constructor `$id.$name` has a type that is no function and no enum');",
-			"replace": "case Unknown | Parameter(_) | Structure(_): true;",
+			"find": "case Unknown, Parameter(_), Structure(_): refuse('the constructor `$id.$name` has a type that is no function and no enum');",
+			"replace": "case Unknown, Parameter(_), Structure(_): true;",
 			"note": "a constructor whose type reads as no function and no enum holds nothing, whatever it holds"
 		},
 		{
@@ -15745,15 +15747,15 @@
 			"name": "M-FACTS-TEXT-MARKER-UNKNOWN",
 			"type": "anyparse.query.FactsProvenance",
 			"method": "factsOnText",
-			"find": "case StaleForeign | Unknown(_): true;",
-			"replace": "case StaleForeign: true;\n\t\t\tcase Unknown(_): false;",
+			"find": "case StaleForeign, Unknown(_): true;",
+			"replace": "case StaleForeign: true;\n\t\t\t\tcase Unknown(_): false;",
 			"note": "a body carrying a marker no reader names is its text, though a fact of it may lie where no position shows"
 		},
 		{
 			"name": "M-FACTS-WITHIN-MARKER-UNKNOWN",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "lostWhere",
-			"find": "case StaleForeign | Unknown(_): true;",
+			"find": "case StaleForeign, Unknown(_): true;",
 			"replace": "case StaleForeign: true;\n\t\t\t\tcase Unknown(_): false;",
 			"note": "a range question meeting a node carrying a marker no reader names takes its facts as placed"
 		},
@@ -15761,8 +15763,8 @@
 			"name": "M-FACTS-NESTED-OWNER-NONE",
 			"type": "anyparse.query.FactsView",
 			"method": "nestedOwner",
-			"find": "return typedIn(declared[0].file, type);",
-			"replace": "return null;",
+			"find": "\t: typedIn(declared[0].file, type);",
+			"replace": "\t: null;",
 			"note": "(precision) a function nested in a type of a shared name is never its file's type's code: entered by its name alone, it stays Ambiguous"
 		},
 		{
@@ -15785,8 +15787,8 @@
 			"name": "M-REACH-OWN-TYPES-INIT-NONE",
 			"type": "anyparse.query.MemberReach",
 			"method": "ownTypes",
-			"find": "return facts.initializerOwners(type);",
-			"replace": "return null;",
+			"find": " : facts.initializerOwners(type);",
+			"replace": " : null;",
 			"note": "(precision) the field initializers of a name several typed types share stay Ambiguous though each is read through its facts"
 		},
 		{
@@ -16144,7 +16146,7 @@
 			"name": "M-NATIVE-LITERAL-CODE",
 			"type": "anyparse.query.FactsNativeReach",
 			"method": "handed",
-			"find": "final literal: Bool = code != null && !StringTools.startsWith(code, x.name + '.');",
+			"find": "final literal: Bool = code != null && !code.startsWith('${x.name}.');",
 			"replace": "final literal: Bool = false;",
 			"note": "(precision) the string literal a native site's code is is taken to be a value of a place that may hold any"
 		},
@@ -16152,7 +16154,7 @@
 			"name": "M-NATIVE-LITERAL-CHAIN",
 			"type": "anyparse.query.FactsNativeReach",
 			"method": "handed",
-			"find": "final literal: Bool = code != null && !StringTools.startsWith(code, x.name + '.');",
+			"find": "final literal: Bool = code != null && !code.startsWith('${x.name}.');",
 			"replace": "final literal: Bool = code != null;",
 			"note": "the first value a call through a chain of target names hands is skipped as if it were the code"
 		},
@@ -16344,16 +16346,16 @@
 			"name": "M-SITES-LANDING-KEEPING-PLACE",
 			"type": "anyparse.query.ImplicitSites",
 			"method": "mayConvertAt",
-			"find": "if ((_shape.catchAllTypeNames ?? []).contains(place) || (_shape.nonNullableTypeNames ?? []).contains(place)) return false;",
-			"replace": "",
+			"find": "!(_shape.catchAllTypeNames ?? []).contains(place) && !(_shape.nonNullableTypeNames ?? []).contains(place)",
+			"replace": "true",
 			"note": "(precision) a value put at a place of a catch-all or of a primitive other than the string type is converted to a string"
 		},
 		{
 			"name": "M-SITES-LANDING-CLASS-PLACE",
 			"type": "anyparse.query.ImplicitSites",
 			"method": "mayConvertAt",
-			"find": "return (_shape.arrayTypeNames ?? []).contains(place) || !_index.resolvesToPlainNominal(place);",
-			"replace": "return true;",
+			"find": "((_shape.arrayTypeNames ?? []).contains(place) || !_index.resolvesToPlainNominal(place))",
+			"replace": "true",
 			"note": "(precision) a value put at a place of a class is converted to a string"
 		},
 		{
@@ -17361,8 +17363,8 @@
 			"name": "M-TS-DOM-EXITS-IGNORED",
 			"type": "anyparse.check.MustHeld",
 			"method": "leavesFirst",
-			"find": "return returns.contains(last.kind) || (_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site);",
-			"replace": "return false;",
+			"find": "&& (returns.contains(last.kind) || (_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site));",
+			"replace": "&& false;",
 			"note": "a give on a path that returns at once still kills the lock"
 		},
 		{
@@ -17745,8 +17747,8 @@
 			"name": "M-TS-SHARED-OFF",
 			"type": "anyparse.check.LockTaint",
 			"method": "blocks",
-			"find": "if (quiet.never(edge)) return false;",
-			"replace": "if (false && quiet.never(edge)) return false;",
+			"find": "return !quiet.never(edge) &&",
+			"replace": "return true &&",
 			"note": "a take that never waits still blocks"
 		},
 		{
@@ -17825,16 +17827,16 @@
 			"name": "M-TS-RETHROW-ANY-NAME",
 			"type": "anyparse.check.ThrowReach",
 			"method": "throwsAny",
-			"find": "return _throwKinds.contains(node.kind) || node.children.exists(throwsAny);",
-			"replace": "return _throwKinds.contains(node.kind) && node.children.length == 1 && node.children[0].kind == _shape.identKind || node.children.exists(throwsAny);",
+			"find": "(_throwKinds.contains(node.kind) || node.children.exists(throwsAny));",
+			"replace": "(_throwKinds.contains(node.kind) && node.children.length == 1 && node.children[0].kind == _shape.identKind || node.children.exists(throwsAny));",
 			"note": "only a throw of a bare name in a catch counts as letting the exception go on"
 		},
 		{
 			"name": "M-TS-RETHROW-NESTED",
 			"type": "anyparse.check.ThrowReach",
 			"method": "throwsAny",
-			"find": "if (_nestedFnKinds.contains(node.kind)) return false;",
-			"replace": "",
+			"find": "return !_nestedFnKinds.contains(node.kind) && (",
+			"replace": "return (",
 			"note": "a rethrow inside a lambda the catch builds counts"
 		},
 		{
@@ -17849,8 +17851,8 @@
 			"name": "M-TS-ALLOC-OFF",
 			"type": "anyparse.check.AllocationSets",
 			"method": "dispatches",
-			"find": "if (classes == null || edge.dispatchType == null && edge.kind != New) return true;",
-			"replace": "if (classes == null || edge.kind == New || edge.kind != New) return true;",
+			"find": "return classes == null || edge.dispatchType == null && edge.kind != New\n\t\t\t? true",
+			"replace": "return classes == null || edge.kind == New || edge.kind != New\n\t\t\t? true",
 			"note": "every override of a dispatch runs whatever the receiver was built as"
 		},
 		{
@@ -17865,8 +17867,8 @@
 			"name": "M-TS-ALLOC-DECLARED",
 			"type": "anyparse.check.AllocationSets",
 			"method": "declared",
-			"find": "return decl.children.length == 0 ? [] : constructed(decl.children[0], file);",
-			"replace": "return [];",
+			"find": "constructed(decl.children[0], file);",
+			"replace": "[];",
 			"note": "a field's declared value adds no class"
 		},
 		{
@@ -17889,8 +17891,8 @@
 			"name": "M-TS-ALLOC-ALIAS",
 			"type": "anyparse.check.AllocationSets",
 			"method": "constructedClass",
-			"find": "if (imports.aliases.contains(simple)) return null;",
-			"replace": "",
+			"find": "return if (imports.aliases.contains(simple))",
+			"replace": "return if (false)",
 			"note": "a `new` through an import alias names the project class of the alias's name"
 		},
 		{
@@ -18119,8 +18121,8 @@
 			"name": "M-TS-STATES-IGNORED",
 			"type": "anyparse.check.MainRepeats",
 			"method": "runsFrom",
-			"find": "return _conditions.carried(e, valuation, ThreadSafety.CTX_MAIN) == 0 ? null",
-			"replace": "return false ? null",
+			"find": "else if (_conditions.carried(e, valuation, ThreadSafety.CTX_MAIN) == 0)",
+			"replace": "else if (false)",
 			"note": "a call a condition rules out under the caller's valuation still carries repetition"
 		},
 		{
@@ -18310,8 +18312,8 @@
 			"name": "M-TS-EXH-OPTIONAL",
 			"type": "anyparse.check.ExhaustiveSwitches",
 			"method": "parameterOf",
-			"find": "if (param.kind == _shape.optionalParamKind)\n\t\t\toptional",
-			"replace": "if (param.kind == _shape.optionalParamKind)\n\t\t\ttrue",
+			"find": "? optional",
+			"replace": "? true",
 			"note": "an optional parameter, null when left out, holds a value"
 		},
 		{
@@ -18531,8 +18533,8 @@
 			"name": "M-TS-BOUND-UNDER",
 			"type": "anyparse.check.CallRepetition",
 			"method": "repeatedUnder",
-			"find": "return !boundedOnce(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))));",
-			"replace": "return sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))).length > 0;",
+			"find": "!boundedOnce(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))))",
+			"replace": "sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))).length > 0",
 			"note": "a bounded repetition under a lock still repeats"
 		},
 		{
@@ -18723,8 +18725,8 @@
 			"name": "M-TS-SHORT-REGISTERED-NOTE",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "shortNote",
-			"find": "registered ? CostNote.ShortRegisteredCall : CostNote.ShortMainCall;",
-			"replace": "CostNote.ShortMainCall;",
+			"find": "CostNote.ShortRegisteredCall",
+			"replace": "CostNote.ShortMainCall",
 			"note": "a short call run once per event of a registration claims every caller up to the entry point"
 		},
 		{
@@ -18825,8 +18827,8 @@
 			"name": "M-TS-HELPER-HANDOFF",
 			"type": "anyparse.check.HoldGrade",
 			"method": "handsOff",
-			"find": "a.untraced || calls.length == 0) return false;",
-			"replace": "a.untraced || a.inner != null || calls.length == 0) return false;",
+			"find": "!a.untraced && calls.length != 0",
+			"replace": "!a.untraced && a.inner == null && calls.length != 0",
 			"note": "a hold a helper call opens never hands its lock off, however its caller leaves it held"
 		},
 		{
@@ -19009,8 +19011,8 @@
 			"name": "M-TS-SAME-LOCAL-ROOT",
 			"type": "anyparse.check.MustHeld",
 			"method": "localRoot",
-			"find": "return declared.length == 1 && !BareNames.writes(fn, name, _shape) ? member == null ? name : '$name.$member' : null;",
-			"replace": "return null;",
+			"find": "return if (declared.length != 1 || BareNames.writes(fn, name, _shape))",
+			"replace": "return if (true)",
 			"note": "a take and a give on one member of a local or parameter name no one object"
 		},
 		{
@@ -19623,8 +19625,8 @@
 			"name": "M-TS-REFLECT-MAYWRITE",
 			"type": "anyparse.check.FieldWrites",
 			"method": "mayWrite",
-			"find": "if (site.reflective) return reaches == null || reaches.contains(owner);",
-			"replace": "",
+			"find": "return site.reflective",
+			"replace": "return false",
 			"note": "a reflective write may write any type's field whatever it reaches"
 		},
 		{
@@ -19766,8 +19768,8 @@
 			"name": "M-TS-STORED-CATCH-ALL",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "valueTypes",
-			"find": "if (written != null && !catchAll(written)) return typedAs(file, written);",
-			"replace": "if (written != null) return typedAs(file, written);",
+			"find": "else if (written != null && !catchAll(written))\n\t\t\ttypedAs(file, written)",
+			"replace": "else if (written != null)\n\t\t\ttypedAs(file, written)",
 			"note": "a value declared `Dynamic` or `Any` is taken at its word, so a parameter so declared is never followed into its calls (R3 M4)"
 		},
 		{
@@ -19790,8 +19792,8 @@
 			"name": "M-TS-STORED-PARAMETER",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "valueTypes",
-			"find": "return value.kind == _shape.identKind ? parameterTypes(file, value, typer, visiting) : null;",
-			"replace": "return null;",
+			"find": "else if (value.kind == _shape.identKind)",
+			"replace": "else if (false)",
 			"note": "a parameter is never followed into the calls handing it a value (R3 M4)"
 		},
 		{
@@ -19886,8 +19888,8 @@
 			"name": "M-TS-STORED-WRITE-OPERATOR",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "operatorStores",
-			"find": "return written == null ? null : catchAll(written) ? [] : typedAs(file, written);",
-			"replace": "return null;",
+			"find": "return if (written == null)",
+			"replace": "return if (written == null || true)",
 			"note": "a write by an operator to a parameter may store anything (R4 F1)"
 		},
 		{
@@ -19902,16 +19904,16 @@
 			"name": "M-TS-STORED-TYPE-PARAM",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "valueTypes",
-			"find": "if (written != null && typeParameter(file, value, written)) return null;",
-			"replace": "",
+			"find": "return if (written != null && typeParameter(file, value, written))",
+			"replace": "return if (false)",
 			"note": "a value declared of a type parameter named like a class is taken for that class (R4 F3)"
 		},
 		{
 			"name": "M-TS-STORED-CAST-LOCAL",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "valueTypes",
-			"find": "if (written != null && value.kind != _shape.newExprKind && claimed(file, value, typer)) return null;",
-			"replace": "",
+			"find": "else if (written != null && value.kind != _shape.newExprKind && claimed(file, value, typer))",
+			"replace": "else if (false)",
 			"note": "a declared type an unchecked cast or a Dynamic value reached is trusted (R4 F4)"
 		},
 		{
@@ -20318,8 +20320,8 @@
 			"name": "M-TS-STD-SIBLING",
 			"type": "anyparse.query.StdTypes",
 			"method": "resolve",
-			"find": "return modulePaths.exists(sibling) ? sibling : modulePaths.exists(name) ? name : null;",
-			"replace": "return modulePaths.exists(name) ? name : null;",
+			"find": "return if (modulePaths.exists(sibling))",
+			"replace": "return if (false)",
 			"note": "a simple type name a std module writes never resolves to its own package"
 		},
 		{
@@ -20416,8 +20418,8 @@
 			"name": "M-TS-WILD-PROJECT",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "wildcardAnswer",
-			"find": "if (mains != null) {",
-			"replace": "if (mains != null && false) {",
+			"find": "if (mains == null) return switch",
+			"replace": "if (mains == null || true) return switch",
 			"note": "a wildcard of a project package is unsure of the modules the project declares in it"
 		},
 		{
@@ -20472,8 +20474,8 @@
 			"name": "M-TS-DOTTED-TARGET",
 			"type": "anyparse.query.CallGraphImports",
 			"method": "memberIds",
-			"find": "if (query != simple) return [pathKey(query.substring(0, query.length - simple.length + dot)) + member];",
-			"replace": "",
+			"find": "return query != simple",
+			"replace": "return false",
 			"note": "a pkg.Type.method query matches every type of that simple name"
 		},
 		{
@@ -20504,8 +20506,8 @@
 			"name": "M-TS-PLACE-FRESH-NEW",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "freshPlacement",
-			"find": "return { reaches: index.subtypes.supertypeNamesClosure(made), by: 'a fresh $made' };",
-			"replace": "return { reaches: [], by: 'a fresh $made' };",
+			"find": "\t: { reaches: index.subtypes.supertypeNamesClosure(made), by: 'a fresh $made' };",
+			"replace": "\t: { reaches: [], by: 'a fresh $made' };",
 			"note": "a final local bound to a new object of a class declaring a lock member writes no lock member"
 		},
 		{
@@ -20736,16 +20738,16 @@
 			"name": "M-TS-BINDER-PLACED-BY",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "placeOf",
-			"find": "if (reaches != null) return { reaches: reaches, by: capture };",
-			"replace": "if (reaches != null) return { reaches: reaches, by: null };",
+			"find": "return reaches != null ? { reaches: reaches, by: capture } :",
+			"replace": "return reaches != null ? { reaches: reaches, by: null } :",
 			"note": "the run no longer names a capture an enum constructor typed"
 		},
 		{
 			"name": "M-TS-UNSEALED-NOTE",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "+ evidenceOf(blocking, held, graded.taint) + graded.note + unsealed;",
-			"replace": "+ evidenceOf(blocking, held, graded.taint) + graded.note;",
+			"find": "${graded.note}$unsealed'",
+			"replace": "${graded.note}'",
 			"note": "a hold whose lock member a reflective write unsealed no longer says which member and which writers (review R3 M4)"
 		},
 		{
@@ -20927,8 +20929,8 @@
 			"name": "M-TS-IMPORT-STATIC-FIELD",
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
-			"find": "if (imported != null) return memberTypeSource(imported.owner, imported.member);",
-			"replace": "",
+			"find": "return if (imported != null)",
+			"replace": "return if (imported != null && false)",
 			"note": "a static an import binds by its own name, read bare, is not typed (review R4 F7)"
 		},
 		{
@@ -20951,8 +20953,8 @@
 			"name": "M-TS-IMPORT-STATIC-ONE",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "importedStatic",
-			"find": "if (imported.unknown || imported.statics.length != 1) return null;",
-			"replace": "if (imported.statics.length == 0) return null;",
+			"find": "else if (imported.unknown || imported.statics.length != 1)\n\t\t\tnull",
+			"replace": "else if (imported.statics.length == 0)\n\t\t\tnull",
 			"note": "two imports binding the name type it as the first one's"
 		},
 		{
@@ -21311,8 +21313,8 @@
 			"name": "M-TS-STD-CONTAINER",
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
-			"find": "return g.types.imports.isStandard(file, path, standardContainers[SourceText.lastSegment(path)] ?? []) ? element : null;",
-			"replace": "return element;",
+			"find": "else if (g.types.imports.isStandard(file, path, standardContainers[SourceText.lastSegment(path)] ?? []))",
+			"replace": "else if (true)",
 			"note": "a container is read as the std one its simple name spells wherever written (a project List<T> yields T)"
 		},
 		{
@@ -21375,8 +21377,8 @@
 			"name": "M-TS-MODULE-NAME-ALIAS",
 			"type": "anyparse.query.SymbolIndexBuilder",
 			"method": "moduleFieldsOf",
-			"find": "if (kinds.contains(node.kind) && span != null) {",
-			"replace": "if (span != null) {",
+			"find": "if (!kinds.contains(node.kind) || span == null) return;",
+			"replace": "if (span == null) return;",
 			"note": "any named module-level node — an import alias, a type — counts as a value the module declares, hiding the static an import binds"
 		},
 		{
@@ -21391,8 +21393,8 @@
 			"name": "M-VALUES-ENUM-CTOR",
 			"type": "anyparse.query.ValueNameBinding",
 			"method": "staticOf",
-			"find": "\t\tif (decls.exists(d -> d.type.members.exists(m -> m.name == member && _enumConstructorKinds.contains(m.kind)))) return null;\n",
-			"replace": "",
+			"find": "return decls.exists(d -> d.type.members.exists(m -> m.name == member && _enumConstructorKinds.contains(m.kind)))",
+			"replace": "return false",
 			"note": "an import of an enum constructor binds a static"
 		},
 		{
@@ -21455,8 +21457,8 @@
 			"name": "M-BINDINGS-DECLS-AT-SUBTYPE",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "declsAt",
-			"find": "if (mains.length > 0 || path.indexOf('.') < 0) return mains;",
-			"replace": "return mains;",
+			"find": "return mains.length > 0 || path.indexOf('.') < 0 ? mains : [",
+			"replace": "return true ? mains : [",
 			"note": "a sub-type is at no path, so a project sub-type at a std container's spelling reads as the std one"
 		},
 		{
@@ -21583,8 +21585,8 @@
 			"name": "M-TS-SUPER-STATIC-READ",
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
-			"find": "return currentType == null || CallGraphKeys.staticOfSupertype(g, currentType, name)",
-			"replace": "return currentType == null",
+			"find": "else if (currentType == null || CallGraphKeys.staticOfSupertype(g, currentType, name))",
+			"replace": "else if (currentType == null)",
 			"note": "a bare read no import settles is typed by a supertype's static"
 		},
 		{
@@ -22765,16 +22767,16 @@
 			"name": "M-RECEIVER-UNKNOWN-ROUTED",
 			"type": "anyparse.query.MoveMemberReceivers",
 			"method": "receiverVerdict",
-			"find": "if (type == null) return 'its receiver\\'s type is not known';",
-			"replace": "if (type == null) return LEAVE;",
+			"find": "'its receiver\\'s type is not known'",
+			"replace": "LEAVE",
 			"note": "a receiver of no known type is read as someone else's, so a `Dynamic` holding the source keeps calling a member that left"
 		},
 		{
 			"name": "M-RECEIVER-UNRELATED-ROUTED",
 			"type": "anyparse.query.MoveMemberReceivers",
 			"method": "receiverVerdict",
-			"find": "if (classOrInterface(prep, type) && prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return LEAVE;",
-			"replace": "if (classOrInterface(prep, type) && prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return 'unrelated';",
+			"find": "else if (classOrInterface(prep, type) && prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName))\n\t\t\tLEAVE",
+			"replace": "else if (classOrInterface(prep, type) && prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName))\n\t\t\t'unrelated'",
 			"note": "a receiver of an unrelated type declaring a same-named member refuses the move instead of being left alone"
 		},
 		{
@@ -23088,8 +23090,8 @@
 			"name": "M-OVERSIZED-GRANT-NAME",
 			"type": "anyparse.check.OversizedType",
 			"method": "readGrant",
-			"find": "\t\tif (!identifier.match(name)) {\n",
-			"replace": "\t\tif (name.length == 0) {\n",
+			"find": "if (identifier.match(name)) return readCeilings(",
+			"replace": "if (name.length != 0) return readCeilings(",
 			"note": "a grant head naming no identifier (`C<T> <= …`) is accepted"
 		},
 		{
@@ -23815,7 +23817,8 @@
 			"name": "M-BINDER-INITIALIZER-CUT",
 			"type": "anyparse.check.OperandBinder",
 			"method": "initializerOf",
-			"force": "null",
+			"find": "return NominalTypes.localInitializer(use, _tree, _shape, _annotations);",
+			"replace": "return null;",
 			"note": "an unannotated local is no longer typed by its initializer, so an operand it holds goes unproven"
 		},
 		{
