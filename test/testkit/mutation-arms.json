@@ -25367,8 +25367,8 @@
 			"name": "M-SWALLOW-OUTCOME-DECL-KIND",
 			"type": "anyparse.check.SwallowedException",
 			"method": "outcomeLocal",
-			"find": "(shape.localDeclKinds ?? []).contains(decl.kind) && ",
-			"replace": "",
+			"find": "decl != null && (shape.localDeclKinds ?? []).contains(decl.kind)",
+			"replace": "decl != null",
 			"note": "a parameter of the enclosing function counts as an outcome local"
 		},
 		{
