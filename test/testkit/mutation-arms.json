@@ -26361,8 +26361,8 @@
 			"name": "M-TS-AFFIX-UNREAD",
 			"type": "anyparse.check.EdgeConditions",
 			"method": "factsOf",
-			"find": "if (affix != null) return [",
-			"replace": "if (false) return [",
+			"find": "final affix: Null<AffixTest> = _values.stringPredicate(fnId, cond);",
+			"replace": "final affix: Null<AffixTest> = null;",
 			"note": "a string affix guard fixes nothing, so the branch an `.svg` id rules out still runs"
 		},
 		{
@@ -26385,8 +26385,8 @@
 			"name": "M-WALK-ARITHMETIC-OFF",
 			"type": "anyparse.query.NominalTypes",
 			"method": "arithmeticType",
-			"find": "if (arithmetic == null || !isArithmetic(node, shape)) return null;",
-			"replace": "return null;",
+			"find": "final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>> = host.arithmetic;",
+			"replace": "final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>> = null;",
 			"note": "arithmetic is untyped by the shared walk"
 		},
 		{
