@@ -3,11 +3,11 @@ package anyparse.macro;
 #if macro
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
+import anyparse.macro.MacroNames.*;
+import anyparse.macro.WriterLoweringSupport.*;
+import anyparse.macro.WriterPolicyLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.WriterPolicyLowering.*;
-import anyparse.macro.WriterLoweringSupport.*;
-import anyparse.macro.MacroNames.*;
 
 using Lambda;
 using anyparse.macro.MetaInspect;
@@ -856,7 +856,7 @@ final class WriterKwRefLowering {
 			? macro (
 				opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
 					? _dcmz($case3Doc)
-					: (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc)
+					: opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc
 			)
 			: case3Doc;
 	}
@@ -981,8 +981,7 @@ final class WriterKwRefLowering {
 	 */
 	private static function leftOperandCtors(kw: KwRefCtx, refName: String): Array<String> {
 		final rule: Null<ShapeNode> = kw.shape.rules[refName];
-		if (rule == null || rule.kind != Alt) return [];
-		return [
+		return rule == null || rule.kind != Alt ? [] : [
 			for (b in rule.children)
 				if (
 					b.annotations.get(AnnotationKeys.PRATT_PREC) != null || b.annotations.get(AnnotationKeys.POSTFIX_OP) != null

@@ -79,7 +79,7 @@ final class HaxelibResolver {
 		final parsed: Null<HaxelibJson> = try HaxelibJsonParser.parse(haxelibJson) catch (exception: Exception) null;
 		if (parsed == null) return null;
 		final classPathRaw: Null<String> = parsed.classPath;
-		final classPath: String = classPathRaw != null ? StringTools.trim(classPathRaw) : '';
+		final classPath: String = classPathRaw != null ? classPathRaw.trim() : '';
 		return Path.normalize(classPath == '' ? root : Path.join([root, classPath]));
 	}
 
@@ -108,8 +108,7 @@ final class HaxelibResolver {
 	public static function rootsFrom(libpathOutput: Null<String>, count: Int): Null<Array<String>> {
 		if (libpathOutput == null) return null;
 		final lines: Array<String> = [for (line in libpathOutput.split('\n')) if (line.trim() != '') line.trim()];
-		if (lines.length != count) return null;
-		return lines;
+		return lines.length != count ? null : lines;
 	}
 
 	/**

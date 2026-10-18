@@ -509,15 +509,15 @@ final class CtorFieldFold {
 			null
 		else if (!statementCommentFree(source, stmtSpan, targetSpan))
 			null
-		else if (!CtorFieldWrite.ctorTargetIsField(parts.target, fieldFrom, fieldName, container, shape))
-			null
-		else
+		else if (CtorFieldWrite.ctorTargetIsField(parts.target, fieldFrom, fieldName, container, shape))
 			{
 				stmt: stmtSpan,
 				target: targetSpan,
 				param: param,
 				terminator: source.substring(parts.assignSpan.to, parts.stmtSpan.to)
-			};
+			}
+		else
+			null;
 	}
 
 	/**
@@ -679,9 +679,7 @@ final class CtorFieldFold {
 			null
 		else if (OccurrenceScan.referencedInRange(source, fieldName, valueSpan.from, valueSpan.to, []))
 			null
-		else if (!foldRegionCommentFree(source, stmtSpan, condSpan, targetSpan, valueSpan, sole ? stmtSpan.to : firstSpan.to))
-			null
-		else
+		else if (foldRegionCommentFree(source, stmtSpan, condSpan, targetSpan, valueSpan, sole ? stmtSpan.to : firstSpan.to))
 			{
 				ifStmt: stmtSpan,
 				assignStmt: firstSpan,
@@ -690,7 +688,9 @@ final class CtorFieldFold {
 				value: valueSpan,
 				sole: sole,
 				terminator: source.substring(parts.assignSpan.to, firstSpan.to)
-			};
+			}
+		else
+			null;
 	}
 
 	/** Whether `node`'s subtree holds a `#if…#end` region of any projection (`isConditionalKind`). */

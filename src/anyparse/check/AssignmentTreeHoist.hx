@@ -327,48 +327,13 @@ final class AssignmentTreeHoist {
 	): Null<UnitValue> {
 		final head: Null<BranchValues> = branchValues(branches, ref, source, s, carried);
 		final lent: Null<UnitValue> = verbatimUnit(fallback, source);
-		if (head == null || lent == null) return null;
-		return {
+		return head == null || lent == null ? null : {
 			text: IfExpressionChain.buildValue(head.built, lent.text),
 			kept: head.kept.concat(lent.kept),
 			gaps: head.gaps.concat(seatGaps(head.seats, null)),
 			atom: null,
 			leafCount: head.leafCount
 		};
-	}
-
-	/**
-	 * The values of a chain's NON-terminal branches — each a hoistable unit (`unitValue`) under its
-	 * verbatim condition — with the spans they copy, the comment slots their nested chains open, and
-	 * one seat per branch for `seatGaps`. Null when a branch is not a hoistable unit, or holds an
-	 * else-less conditional the ` else ` emitted after its value would re-parent onto (see
-	 * `ifChainValue`).
-	 */
-	private static function branchValues(
-		branches: Array<{ cond: QueryNode, stmt: QueryNode }>, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried
-	): Null<BranchValues> {
-		final out: BranchValues = {
-			built: [],
-			kept: [],
-			gaps: [],
-			seats: [],
-			leafCount: 0
-		};
-		for (b in branches) {
-			if (IfExpressionChain.holdsElseLessConditional(b.stmt, s.conditionalKinds)) return null;
-			final unit: Null<UnitValue> = unitValue(b.stmt, ref, source, s, carried);
-			if (unit == null) return null;
-			final condSrc: Null<String> = slice(source, b.cond);
-			if (condSrc == null) return null;
-			out.built.push({ cond: condSrc, value: unit.text });
-			final condSpan: Null<Span> = b.cond.span;
-			if (condSpan != null) out.kept.push(condSpan);
-			for (k in unit.kept) out.kept.push(k);
-			for (g in unit.gaps) out.gaps.push(g);
-			out.seats.push({ cond: condSpan, atom: unit.atom });
-			out.leafCount += unit.leafCount;
-		}
-		return out;
 	}
 
 	/**
@@ -412,7 +377,6 @@ final class AssignmentTreeHoist {
 		for (pair in tail.pairs) if (IfExpressionChain.holdsElseLessConditional(pair.value, s.conditionalKinds)) return 0;
 		return IfExpressionChain.isElseLessConditional(tail.terminal, s.conditionalKinds) ? 0 : tail.pairs.length;
 	}
-
 
 	/**
 	 * Whether any branch / terminal of `chain` is a nested switch / if construct
@@ -560,6 +524,40 @@ final class AssignmentTreeHoist {
 		return s.switchKinds != null;
 	}
 
+	/**
+	 * The values of a chain's NON-terminal branches — each a hoistable unit (`unitValue`) under its
+	 * verbatim condition — with the spans they copy, the comment slots their nested chains open, and
+	 * one seat per branch for `seatGaps`. Null when a branch is not a hoistable unit, or holds an
+	 * else-less conditional the ` else ` emitted after its value would re-parent onto (see
+	 * `ifChainValue`).
+	 */
+	private static function branchValues(
+		branches: Array<{ cond: QueryNode, stmt: QueryNode }>, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried
+	): Null<BranchValues> {
+		final out: BranchValues = {
+			built: [],
+			kept: [],
+			gaps: [],
+			seats: [],
+			leafCount: 0
+		};
+		for (b in branches) {
+			if (IfExpressionChain.holdsElseLessConditional(b.stmt, s.conditionalKinds)) return null;
+			final unit: Null<UnitValue> = unitValue(b.stmt, ref, source, s, carried);
+			if (unit == null) return null;
+			final condSrc: Null<String> = slice(source, b.cond);
+			if (condSrc == null) return null;
+			out.built.push({ cond: condSrc, value: unit.text });
+			final condSpan: Null<Span> = b.cond.span;
+			if (condSpan != null) out.kept.push(condSpan);
+			for (k in unit.kept) out.kept.push(k);
+			for (g in unit.gaps) out.gaps.push(g);
+			out.seats.push({ cond: condSpan, atom: unit.atom });
+			out.leafCount += unit.leafCount;
+		}
+		return out;
+	}
+
 	/** The terminal branch's plain-assign r-value node, or null when the terminal is not a plain assignment. */
 	private static function terminalRvalue(chain: IfChain, s: TreeSeams): Null<QueryNode> {
 		return plainAssign(chain.terminal, s)?.children[1];
@@ -604,9 +602,9 @@ final class AssignmentTreeHoist {
 	 */
 	private static function seatGaps(parts: Array<{ cond: Null<Span>, atom: Null<Span> }>, terminalSpan: Null<Span>): Array<CarryGap> {
 		final seats: Array<CarrySeat> = [];
-		for (i in 0...parts.length) {
-			final cond: Null<Span> = parts[i].cond;
-			final atom: Null<Span> = parts[i].atom;
+		for (i => part in parts) {
+			final cond: Null<Span> = part.cond;
+			final atom: Null<Span> = part.atom;
 			final next: Null<Span> = i + 1 < parts.length ? parts[i + 1].cond : terminalSpan;
 			if (cond == null || atom == null || next == null) continue;
 			// Re-bind: a narrowed Null<T> does not carry its narrowing into a struct literal.
@@ -668,7 +666,10 @@ typedef LvalueRef = {
 	var lvalue: Null<QueryNode>;
 }
 
-/** A chain's non-terminal branches as `branchValues` builds them: the `(cond, value)` texts, the copied spans, the comment slots, one seat per branch, and the leaf-assignment count. */
+/**
+ * A chain's non-terminal branches as `branchValues` builds them: the `(cond, value)` texts,
+ * the copied spans, the comment slots, one seat per branch, and the leaf-assignment count.
+ */
 private typedef BranchValues = {
 	var built: Array<{ cond: String, value: String }>;
 	var kept: Array<Span>;

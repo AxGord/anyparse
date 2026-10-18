@@ -48,6 +48,9 @@ final class UncheckedConversions {
 	/** hxcpp's C pointer type: a `cpp.Star<T>` is a `T *`, whatever its declaration reads as (`converts`). */
 	private static inline final POINTER: String = 'cpp.Star';
 
+	/** Whether some build keeps what lands at a place of a type, by the type as the facts spell it (`keeps`). */
+	private final _kept: Map<String, Bool> = [];
+
 	private final _table: CompilerFacts;
 
 	/** The primitive types' ids: a value of one is no object. */
@@ -55,9 +58,6 @@ final class UncheckedConversions {
 
 	/** The built-in array's ids: a value of one holds its elements and runs no code of its own. */
 	private final _arrays: Array<String>;
-
-	/** Whether some build keeps what lands at a place of a type, by the type as the facts spell it (`keeps`). */
-	private final _kept: Map<String, Bool> = [];
 
 	public function new(table: CompilerFacts, inert: Array<String>, arrays: Array<String>) {
 		_table = table;
@@ -261,6 +261,11 @@ final class UncheckedConversions {
 		};
 	}
 
+	/** Whether the typed type `fact` is a core value type: one the compiler represents itself, no value of which is null. */
+	private static inline function coreValue(fact: TypeFact): Bool {
+		return fact.kind == 'abstract' && fact.meta.contains(CORE_TYPE) && fact.meta.contains(NOT_NULL);
+	}
+
 	/**
 	 * The types a value of the typed type `fact` is one of where it lands: what an alias aliases, what an abstract other than a
 	 * core value type wraps; null for any other type, a value of which is its own.
@@ -271,11 +276,6 @@ final class UncheckedConversions {
 			case 'abstract' if (!coreValue(fact)): fact.underlying;
 			case _: null;
 		};
-	}
-
-	/** Whether the typed type `fact` is a core value type: one the compiler represents itself, no value of which is null. */
-	private static inline function coreValue(fact: TypeFact): Bool {
-		return fact.kind == 'abstract' && fact.meta.contains(CORE_TYPE) && fact.meta.contains(NOT_NULL);
 	}
 
 	/** `t` without the nullable wrappers around it. */

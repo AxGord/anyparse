@@ -675,6 +675,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return out;
 	}
 
+	/** `GrammarPlugin` — `HxTypeSyntax` documents how each spelling reads. */
+	public function typeSyntax(typeSource: String): Null<TypeSyntax> {
+		return HxTypeSyntax.of(typeSource);
+	}
+
 	/**
 	 * Lazily extract + cache the `using`-eligible method names of `modulePath`
 	 * from the std source, or null when std / the module file is absent.
@@ -723,7 +728,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	private static function readStdModule(dir: String, modulePath: String): Null<String> {
 		#if (sys || nodejs)
 		final file: String = haxe.io.Path.join([dir, '${modulePath.split('.').join('/')}.hx']);
-		return !sys.FileSystem.exists(file) ? null : try sys.io.File.getContent(file) catch (exception: Exception) null;
+		return sys.FileSystem.exists(file) ? try sys.io.File.getContent(file) catch (exception: Exception) null : null;
 		#else
 		return null;
 		#end
@@ -779,11 +784,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	/** Whether `fn` declares at least one parameter (a `Required` / `Optional` / `Rest` child) — the `using`-eligibility gate. */
 	private static function hasParam(fn: QueryNode): Bool {
 		return fn.children.exists(c -> c.kind == 'Required' || c.kind == 'Optional' || c.kind == 'Rest');
-	}
-
-	/** `GrammarPlugin` — `HxTypeSyntax` documents how each spelling reads. */
-	public function typeSyntax(typeSource: String): Null<TypeSyntax> {
-		return HxTypeSyntax.of(typeSource);
 	}
 
 	/** The package a projected module tree declares, empty for a root-package module. */

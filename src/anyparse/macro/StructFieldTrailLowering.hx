@@ -2,9 +2,9 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.macro.TriviaSlotNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.TriviaSlotNames.*;
 
 using anyparse.macro.MetaInspect;
 

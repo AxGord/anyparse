@@ -1,9 +1,10 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
+import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliContext;
 import anyparse.query.format.Text;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 
@@ -85,7 +86,7 @@ final class CommentRewriteCommand implements CliCommand {
 
 		final findStr: String = find;
 		final replaceStr: String = replace;
-		final io = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq comment-rewrite: ${CliArgs.quotedSpecs(o.inputSpecs)} matched no .hx files\n');

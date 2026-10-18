@@ -61,7 +61,7 @@ final class EditDistance {
 		if (aLen == 0) return bLen;
 		if (bLen == 0) return aLen;
 		var previous: Array<Int> = [for (j in 0...bLen + 1) j];
-		var current: Array<Int> = [for (j in 0...bLen + 1) 0];
+		var current: Array<Int> = [for (_ in 0...bLen + 1) 0];
 		for (i in 1...aLen + 1) {
 			current[0] = i;
 			final ai: Int = a.fastCodeAt(i - 1);

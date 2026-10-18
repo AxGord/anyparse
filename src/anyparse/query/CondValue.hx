@@ -45,11 +45,11 @@ private enum CondOrder {
 @:nullSafety(Strict)
 final class CondValues {
 
-	/** A number `float_of_string` and the target read alike: decimal digits, optionally a fraction. */
-	private static final DECIMAL: EReg = ~/^[0-9]+(\.[0-9]+)?$/;
-
 	/** The last code of ASCII, whose strings order alike byte by byte and code unit by code unit. */
 	private static inline final ASCII_LAST: Int = 0x7f;
+
+	/** A number `float_of_string` and the target read alike: decimal digits, optionally a fraction. */
+	private static final DECIMAL: EReg = ~/^[0-9]+(\.[0-9]+)?$/;
 
 	/** A version part `int_of_string` reads as this number: decimal digits, few enough for any integer. */
 	private static final SMALL_DIGITS: EReg = ~/^[0-9]{1,9}$/;
@@ -61,7 +61,7 @@ final class CondValues {
 			case Undefined: false;
 			case Truth(b): b;
 			case Number(n): n != 0;
-			case Text(_) | Version(_, _) | Set: true;
+			case Text(_), Version(_, _), Set: true;
 		};
 	}
 
@@ -122,16 +122,15 @@ final class CondValues {
 		final pair: Null<{ left: CondValue, right: CondValue }> = converted(left, right);
 		if (pair == null) return Undecided;
 		return switch [pair.left, pair.right] {
-			case [Undefined, _] | [_, Undefined]: Never;
-			case [Set, Truth(_)] | [Truth(_), Set]: Never;
-			case [Set, _] | [_, Set]: Undecided;
+			case [Undefined, _], [_, Undefined], [Set, Truth(_)], [Truth(_), Set]: Never;
+			case [Set, _], [_, Set]: Undecided;
 			case [Number(a), Number(b)]: Ordered(a < b ? -1 : a > b ? 1 : 0);
 			case [Text(a), Text(b)]: textOrder(a, b);
 			case [Truth(a), Truth(b)]: Ordered(a == b ? 0 : a ? 1 : -1);
 			case [Version(r1, p1), Version(r2, p2)]:
 				versionOrder(r1, p1, r2, p2);
 			// the compiler's `Cannot compare` error: no build compiles the condition
-			case [Text(_), Number(_)] | [Number(_), Text(_)] | [_, Version(_, _)] | [Version(_, _), _]: Undecided;
+			case [Text(_), Number(_)], [Number(_), Text(_)], [_, Version(_, _)], [Version(_, _), _]: Undecided;
 			case _: Never;
 		};
 	}
@@ -143,7 +142,7 @@ final class CondValues {
 	 */
 	private static function converted(left: CondValue, right: CondValue): Null<{ left: CondValue, right: CondValue }> {
 		return switch [left, right] {
-			case [Set, Number(_) | Version(_, _)] | [Number(_) | Version(_, _), Set]: null;
+			case [Set, Number(_) | Version(_, _)], [Number(_) | Version(_, _), Set]: null;
 			case [Text(s), Number(_)]:
 				final n: Null<CondValue> = number(s);
 				n == null ? null : { left: n, right: right };
@@ -162,8 +161,7 @@ final class CondValues {
 
 	/** The byte order OCaml's `compare` gives two strings, where it is the target's: both ASCII. */
 	private static function textOrder(a: String, b: String): CondOrder {
-		if (!ascii(a) || !ascii(b)) return Undecided;
-		return Ordered(a < b ? -1 : a > b ? 1 : 0);
+		return !ascii(a) || !ascii(b) ? Undecided : Ordered(a < b ? -1 : a > b ? 1 : 0);
 	}
 
 	/** SemVer precedence (`Semver.compare_version`): the release, then no pre-release above any, then the pre-releases. */

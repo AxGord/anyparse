@@ -399,10 +399,9 @@ final class BodySlotGuard {
 			var next: Null<QueryNode> = null;
 			for (child in node.children) {
 				final span: Null<Span> = child.span;
-				if (span != null && span.from <= from && span.to >= to) {
-					next = child;
-					break;
-				}
+				if (span == null || span.from > from || span.to < to) continue;
+				next = child;
+				break;
 			}
 			if (next == null) break;
 			if (host || at.kinds.contains(next.kind)) owned = next.span;

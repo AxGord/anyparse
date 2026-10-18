@@ -390,15 +390,15 @@ final class CanonicalEdit {
 		// `.from` (splice order diverges across targets), and a same-point tie with an
 		// earlier insert (relative order is sort-stability-dependent).
 		if (e.from == e.to) {
-			for (j in 0...edits.length) if (j != i) {
-				final o: Span = edits[j].span;
+			for (j => edit in edits) if (j != i) {
+				final o: Span = edit.span;
 				if (o.from < o.to && o.from <= e.from && e.from < o.to) return true;
 				if (o.from == o.to && o.from == e.from && j < i) return true;
 			}
 			return false;
 		}
-		for (j in 0...edits.length) if (j != i) {
-			final o: Span = edits[j].span;
+		for (j => edit in edits) if (j != i) {
+			final o: Span = edit.span;
 			final contains: Bool = o.from <= e.from && e.to <= o.to;
 			final strictlyBigger: Bool = o.from < e.from || e.to < o.to;
 			if (contains && (strictlyBigger || j < i)) return true;

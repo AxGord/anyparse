@@ -54,6 +54,11 @@ final class RegionTerminator {
 		return prev != null && prevSpan != null && emptySpan != null && terminatorAt(prev, prevSpan, source, shape) == emptySpan.from;
 	}
 
+	private static inline function isRegion(node: QueryNode, shape: RefShape): Bool {
+		final kind: Null<String> = shape.conditionalMemberKind;
+		return kind != null && node.kind == kind;
+	}
+
 	/** The offset of the terminator directly after region `node`, or -1. */
 	private static function terminatorAt(node: QueryNode, span: Span, source: String, shape: RefShape): Int {
 		final term: Null<String> = shape.statementTerminator;
@@ -61,11 +66,6 @@ final class RegionTerminator {
 		var at: Int = span.to;
 		while (at < source.length && source.isSpace(at)) at++;
 		return source.substr(at, term.length) == term ? at : -1;
-	}
-
-	private static inline function isRegion(node: QueryNode, shape: RefShape): Bool {
-		final kind: Null<String> = shape.conditionalMemberKind;
-		return kind != null && node.kind == kind;
 	}
 
 }

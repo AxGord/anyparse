@@ -2,10 +2,10 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
-import haxe.macro.Context;
-import haxe.macro.Expr;
 import anyparse.macro.WriterCascadeLowering.*;
 import anyparse.macro.WriterLoweringSupport.*;
+import haxe.macro.Context;
+import haxe.macro.Expr;
 
 using Lambda;
 using anyparse.macro.MetaInspect;
@@ -1166,18 +1166,17 @@ final class WriterCtorBlankLowering {
 			} else {
 				{ expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos };
 			};
-			final body: Expr = if (!tagged)
-				macro false;
-			else {
+			final body: Expr = if (tagged) {
 				anyTagged = true;
 				final argNode: ShapeNode = branch.children[0];
 				final argTypeName: Null<String> = argNode.annotations[AnnotationKeys.BASE_REF];
 				final inner: Null<Expr> = argTypeName == null ? null : buildMultilinePredicate(cb, argTypeName, macro _v);
 				inner ?? macro false;
-			};
+			} else
+				macro false;
 			cases.push({ values: [pattern], guard: null, expr: body });
 		}
-		return !anyTagged ? null : { expr: ESwitch(accessExpr, cases, null), pos: pos };
+		return anyTagged ? { expr: ESwitch(accessExpr, cases, null), pos: pos } : null;
 	}
 
 	/**

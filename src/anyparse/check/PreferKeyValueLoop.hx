@@ -17,6 +17,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -292,7 +293,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		final declared: Null<String> = m.declTypeSource;
 		if (declared == null) return true;
 		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(collectionType, typeSyntax);
-		return args != null && args.length == ARRAY_TYPE_ARGUMENTS && StringTools.trim(args[0]) == StringTools.trim(declared);
+		return args != null && args.length == ARRAY_TYPE_ARGUMENTS && StringTools.trim(args[0]) == declared.trim();
 	}
 
 	/**

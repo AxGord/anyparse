@@ -207,15 +207,15 @@ final class CommentOwnerGuard {
 	}> {
 		var code: Null<Span> = null;
 		var hoisted: Bool = false;
-		for (k in 0...spans.length) {
-			final codeFirstInSource: Bool = spans[k].to <= hit.token.from;
+		for (k => span in spans) {
+			final codeFirstInSource: Bool = span.to <= hit.token.from;
 			if (codeFirstInSource == (placed[k].to <= hit.at)) continue;
 			final was: Null<Span> = code;
 			if (was == null) {
-				code = spans[k];
+				code = span;
 				hoisted = codeFirstInSource;
 			} else
-				code = new Span(was.from < spans[k].from ? was.from : spans[k].from, was.to > spans[k].to ? was.to : spans[k].to);
+				code = new Span(was.from < span.from ? was.from : span.from, was.to > span.to ? was.to : span.to);
 		}
 		final crossed: Null<Span> = code;
 		return crossed == null ? null : { code: crossed, hoisted: hoisted };

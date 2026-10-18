@@ -26,15 +26,6 @@ using Lambda;
 @:nullSafety(Strict)
 final class FactsProvenance {
 
-	/** The fact kinds of a type's own function body, as opposed to a function nested in one. */
-	private static final OWN_BODY_KINDS: Array<String> = ['method', 'ctor'];
-
-	/**
-	 * The metadata of an abstract's field the compiler calls where the text writes an operator, a conversion, an index
-	 * access or a field no declaration names, and never the field's name.
-	 */
-	private static final IMPLICITLY_CALLED_META: Array<String> = [':op', ':from', ':to', ':arrayAccess', ':resolve'];
-
 	/** The kind of an abstract's implementation class (`TypeFact.kind`). */
 	private static inline final IMPL_KIND: String = 'impl';
 
@@ -52,6 +43,15 @@ final class FactsProvenance {
 
 	/** The flow of a value handed to a call as an argument (`FlowFact.via`). */
 	private static inline final ARG_FLOW: String = 'arg';
+
+	/** The fact kinds of a type's own function body, as opposed to a function nested in one. */
+	private static final OWN_BODY_KINDS: Array<String> = ['method', 'ctor'];
+
+	/**
+	 * The metadata of an abstract's field the compiler calls where the text writes an operator, a conversion, an index
+	 * access or a field no declaration names, and never the field's name.
+	 */
+	private static final IMPLICITLY_CALLED_META: Array<String> = [':op', ':from', ':to', ':arrayAccess', ':resolve'];
 
 	private final _view: FactsView;
 	private final _scope: ReachProject;
@@ -136,6 +136,11 @@ final class FactsProvenance {
 		return files.length > 0 && ids.length > 0 && textual(g, type, files, ids);
 	}
 
+	/** The name of a constructor (`RefShape.constructorName`). */
+	private inline function constructorName(): String {
+		return _scope.shape.constructorName ?? 'new';
+	}
+
 	/**
 	 * `typeIsItsText` of the typed types `ids`, which the graph calls `type`, against its declarations of the index in
 	 * `files`: one, or one per build where each build reads its own copy (a source it generates into its own directory). The
@@ -181,8 +186,7 @@ final class FactsProvenance {
 		if (!typed.fields.foreach(f -> declaredAlike(typed, f, declared))) return false;
 		final table: CompilerFacts = _view._table;
 		final key: String = table.keyOf(file);
-		for (nodeId in table.nodeIdsOf(typed.id)) {
-			if (!table.buildsTyping(nodeId).exists(b -> builds.contains(b))) continue;
+		for (nodeId in table.nodeIdsOf(typed.id)) if (table.buildsTyping(nodeId).exists(b -> builds.contains(b))) {
 			final n: Null<FactNode> = table.nodeAsBuiltBy(nodeId, builds);
 			if (n == null || !nodeOnText(n, typed, declared, key, source, tree, builds)) return false;
 		}
@@ -257,7 +261,8 @@ final class FactsProvenance {
 	/**
 	 * Where the initializer `n` is wholly the inlined call of a method the declaration's text `body` calls, the test of a
 	 * position being in the body of such a method — called by name, through the property it is an accessor of, by the
-	 * construct the compiler calls it for (`implicitlyCalled`), or, an abstract's constructor, by a construction of it: the compiler types such an initializer as the callee's
+	 * construct the compiler calls it for (`implicitlyCalled`), or, an abstract's constructor,
+	 * by a construction of it: the compiler types such an initializer as the callee's
 	 * spliced code, at the callee's positions, and records no call; a build of another initializer — a `#if` operand
 	 * more — splices the body of another such method. Null for any other node.
 	 */
@@ -289,18 +294,6 @@ final class FactsProvenance {
 	}
 
 	/**
-	 * Whether the typed constructor `n` is one the compiler made for a class the text gives none: it calls its super's —
-	 * handing it its own parameters, every such flow at the constructor's own range — and does nothing else: no
-	 * construction, field access, other flow, conversion, iteration, reflection, native code or function.
-	 */
-	private static function madeConstructor(n: FactNode): Bool {
-		final own: (FactPos) -> Bool = p -> p.file == n.at.file && p.span.from == n.at.span.from && p.span.to == n.at.span.to;
-		return n.kind == 'ctor' && n.calls.foreach(c -> c.access == SUPER) && n.news.length == 0 && n.fields.length == 0
-			&& n.elementWrites.length == 0 && n.flows.foreach(f -> f.via == ARG_FLOW && own(f.at)) && n.strings.length == 0
-			&& n.iterations.length == 0 && n.reflection.length == 0 && n.natives.length == 0 && n.fns.length == 0;
-	}
-
-	/**
 	 * Whether every fact of the typed body `n` sits on `body`'s text as its own — as `factsMatch` asks, save that what an
 	 * inlined method spliced in, positioned in that method's declared range (`FactSites.spliceOf`), in the body of a
 	 * method `n` is wholly the inlined call of (`outer`, `inlinedWhole`)
@@ -327,8 +320,8 @@ final class FactsProvenance {
 		// macro expanded carries its own (`ExpansionFact`), and is the text's only where a call the text writes built it
 		if (FactMarkers.carries(
 			n, m -> switch m {
-				case StaleForeign | Unknown(_): true;
-				case InlineSite | MacroExpansion | ReflectionInlined | ReflectionUnattributed | ReflectionFrom(_): false;
+				case StaleForeign, Unknown(_): true;
+				case InlineSite, MacroExpansion, ReflectionInlined, ReflectionUnattributed, ReflectionFrom(_): false;
 			}
 		))
 			return false;
@@ -430,11 +423,10 @@ final class FactsProvenance {
 		}
 		if (name == null) return spliced(p.span.from) && spliced(p.span.to);
 		final member: String = name;
-		if (spliced(p.span.from)) {
-			return spliced(p.span.to) || siteSpells(n, p, p.span.from, p.span.to, member, body) || accessEnds(n, p.span.to, member);
-		}
-		return spliced(p.span.to)
-			&& (siteSpells(n, p, p.span.to, p.span.from, member, body) || accessEnds(n, p.span.from + member.length, member));
+		return spliced(p.span.from)
+			? spliced(p.span.to) || siteSpells(n, p, p.span.from, p.span.to, member, body) || accessEnds(n, p.span.to, member)
+			: spliced(p.span.to)
+				&& (siteSpells(n, p, p.span.to, p.span.from, member, body) || accessEnds(n, p.span.from + member.length, member));
 	}
 
 	/**
@@ -447,19 +439,6 @@ final class FactsProvenance {
 			final text: Null<String> = s.body.span.from < end && end <= s.body.span.to ? _view._table.sourceOf(s.body.file) : null;
 			text != null && FactText.endsAccess(text, end, name);
 		});
-	}
-
-	/**
-	 * Whether the offset `other` of the range `p`, whose offset `spliced` lies in the code an inlined call spliced into `n`,
-	 * lies in a site of that call in `body` whose text spells the member `name`.
-	 */
-	private static function siteSpells(n: FactNode, p: FactPos, spliced: Int, other: Int, name: String, body: BodyText): Bool {
-		return n.splices.exists(s ->
-			s.body.file == p.file && s.body.span.from <= spliced && spliced <= s.body.span.to && s.sites.exists(site -> {
-				final at: FactPos = { file: n.at.file, span: site };
-				site.from <= other && other <= site.to && body.holds(at) && body.mentions(at, name);
-			})
-		);
 	}
 
 	/**
@@ -484,11 +463,6 @@ final class FactsProvenance {
 		);
 	}
 
-	/** Whether the range `outer` holds `p`; false for none. */
-	private static function holds(outer: Null<FactPos>, p: FactPos): Bool {
-		return outer != null && outer.file == p.file && outer.span.from <= p.span.from && p.span.to <= outer.span.to;
-	}
-
 	/** The member the text spells for the call `c`: an accessor's property; null for a call of no field. */
 	private function calledName(c: CallFact): Null<String> {
 		final target: Null<String> = c.target;
@@ -509,7 +483,8 @@ final class FactsProvenance {
 	/**
 	 * Whether the call `c` sits on `body`'s text as its own: a call of a value or of a local or native function where the
 	 * text holds it, a super constructor's where it spells `super`, and a field's where it spells the field — the property,
-	 * for an accessor, or the accessor itself, `new` for an abstract's constructor (`memberOf`) — or is a lowered loop running an iteration call (`iterationCalls`), the
+	 * for an accessor, or the accessor itself, `new` for an abstract's constructor
+	 * (`memberOf`) — or is a lowered loop running an iteration call (`iterationCalls`), the
 	 * construct the compiler calls an abstract's field for (`implicitlyCalled`), or a call of a function that runs no project
 	 * code (`runsNoCode`).
 	 */
@@ -550,11 +525,6 @@ final class FactsProvenance {
 		return field != null && field.meta.exists(m -> IMPLICITLY_CALLED_META.contains(m));
 	}
 
-	/** The name of a constructor (`RefShape.constructorName`). */
-	private inline function constructorName(): String {
-		return _scope.shape.constructorName ?? 'new';
-	}
-
 	/** Whether every fact of the typed body `n` sits on `body`'s text as its own (see `bodyIsSource`). */
 	private function factsMatch(n: FactNode, body: BodyText): Bool {
 		return !n.generated && n.incomplete.length <= 0 && n.natives.length <= 0 && !n.reflection.exists(r -> r.isValue)
@@ -581,6 +551,36 @@ final class FactsProvenance {
 			if (!body.mentions(c.at, spelled) && !(body.lowered(c.at) && iterationCalls.contains(member))) return false;
 		}
 		return true;
+	}
+
+	/**
+	 * Whether the typed constructor `n` is one the compiler made for a class the text gives none: it calls its super's —
+	 * handing it its own parameters, every such flow at the constructor's own range — and does nothing else: no
+	 * construction, field access, other flow, conversion, iteration, reflection, native code or function.
+	 */
+	private static function madeConstructor(n: FactNode): Bool {
+		final own: (FactPos) -> Bool = p -> p.file == n.at.file && p.span.from == n.at.span.from && p.span.to == n.at.span.to;
+		return n.kind == 'ctor' && n.calls.foreach(c -> c.access == SUPER) && n.news.length == 0 && n.fields.length == 0
+			&& n.elementWrites.length == 0 && n.flows.foreach(f -> f.via == ARG_FLOW && own(f.at)) && n.strings.length == 0
+			&& n.iterations.length == 0 && n.reflection.length == 0 && n.natives.length == 0 && n.fns.length == 0;
+	}
+
+	/**
+	 * Whether the offset `other` of the range `p`, whose offset `spliced` lies in the code an inlined call spliced into `n`,
+	 * lies in a site of that call in `body` whose text spells the member `name`.
+	 */
+	private static function siteSpells(n: FactNode, p: FactPos, spliced: Int, other: Int, name: String, body: BodyText): Bool {
+		return n.splices.exists(s ->
+			s.body.file == p.file && s.body.span.from <= spliced && spliced <= s.body.span.to && s.sites.exists(site -> {
+				final at: FactPos = { file: n.at.file, span: site };
+				site.from <= other && other <= site.to && body.holds(at) && body.mentions(at, name);
+			})
+		);
+	}
+
+	/** Whether the range `outer` holds `p`; false for none. */
+	private static function holds(outer: Null<FactPos>, p: FactPos): Bool {
+		return outer != null && outer.file == p.file && outer.span.from <= p.span.from && p.span.to <= outer.span.to;
 	}
 
 	/** The field a node id names (`pack.Type.field`, `pack.Type.field~n` for a further overload). */
@@ -830,7 +830,7 @@ private final class BodyText {
 	/** The end of `span` of `source` without the whitespace after the node: the compiler's position of an expression has none. */
 	private static function trimmedEnd(source: String, span: Span): Int {
 		var end: Int = span.to;
-		while (end > span.from && StringTools.isSpace(source, end - 1)) end--;
+		while (end > span.from && source.isSpace(end - 1)) end--;
 		return end;
 	}
 
@@ -848,20 +848,19 @@ private final class BodyText {
 @:nullSafety(Strict)
 private final class Interpolation {
 
-	/** The escapes read, by the character after the backslash. */
-	private static final ESCAPES: Array<Int> = ['n'.code, 'r'.code, 't'.code, '\\'.code, '"'.code, '\''.code];
-
 	/** The first code UTF-8 writes in two bytes, the first it writes in three, and the bytes a basic-plane code takes at most. */
 	private static inline final TWO_BYTES: Int = 0x80;
 
 	private static inline final THREE_BYTES: Int = 0x800;
-
 	private static inline final MAX_WIDTH: Int = 3;
 
 	/** The first and the last code unit of a surrogate pair: a character past the basic plane. */
 	private static inline final SURROGATE_FIRST: Int = 0xd800;
 
 	private static inline final SURROGATE_LAST: Int = 0xdfff;
+
+	/** The escapes read, by the character after the backslash. */
+	private static final ESCAPES: Array<Int> = ['n'.code, 'r'.code, 't'.code, '\\'.code, '"'.code, '\''.code];
 
 	/** The string's range, quotes included. */
 	public final span: Span;
@@ -897,7 +896,12 @@ private final class Interpolation {
 			if (code != '\\'.code) {
 				chars.push(code);
 				at.push(span.from + i);
-				final width: Int = code < TWO_BYTES ? 1 : code < THREE_BYTES ? 2 : MAX_WIDTH;
+				final width: Int = if (code < TWO_BYTES)
+					1
+				else if (code < THREE_BYTES)
+					2
+				else
+					MAX_WIDTH;
 				widths.push(width);
 				if (width > 1) shifted = true;
 				i++;

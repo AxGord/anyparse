@@ -587,7 +587,7 @@ final class SwitchChain {
 	/** Whether `pairs` tests exactly the `known` discriminants, positionally — the uniform-tuple gate. */
 	private static function sameDiscriminants(known: Array<QueryNode>, pairs: Array<EqPair>, source: String): Bool {
 		if (pairs.length != known.length) return false;
-		for (i in 0...pairs.length) if (!MemberKinds.sameSource(known[i], pairs[i].disc, source)) return false;
+		for (i => pair in pairs) if (!MemberKinds.sameSource(known[i], pair.disc, source)) return false;
 		return true;
 	}
 

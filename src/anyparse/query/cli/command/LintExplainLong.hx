@@ -37,7 +37,8 @@ final class LintExplainLong {
 		final report: Null<LongLockReport> = explainer?.longLocks;
 		if (explainer != null && report == null)
 			CliIo.stderr(
-				'apq lint: --explain-long: thread-safety explained nothing — no file was left to analyse: none configures `sinks`, or `exclude` dropped every one\n'
+				'apq lint: --explain-long: thread-safety explained nothing — no file was left to analyse: none configures `sinks`, or '
+				+ '`exclude` dropped every one\n'
 			);
 		return { report: report };
 	}

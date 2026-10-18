@@ -22,7 +22,10 @@ private typedef OwnedFinding = {
 	final path: Array<String>;
 }
 
-/** How the main thread repeats calls: where (`repetition`), which of its states may run more than once (`main`), and the edges it runs (`runs`). */
+/**
+ * How the main thread repeats calls: where (`repetition`), which of its
+ * states may run more than once (`main`), and the edges it runs (`runs`).
+ */
 typedef MainRepetition = {
 	final repetition: CallRepetition;
 	final main: MainRepeats;
@@ -38,6 +41,11 @@ typedef MainRepetition = {
  */
 @:nullSafety(Strict)
 final class MainSinkReport {
+
+	/** `<file>:<offset>` of the site of `edge`. */
+	public static inline function siteKey(edge: CallEdge): String {
+		return '${edge.file}:${edge.span?.from ?? -1}';
+	}
 
 	/**
 	 * Each of finding (a) over `graph`, under the plain `taints` and the costed `costs`, into `violations`. A call long
@@ -116,7 +124,10 @@ final class MainSinkReport {
 		return reportedBy;
 	}
 
-	/** Drops from `reportedBy` each warning a directive silences (`suppressed`): it reports no sink call, so a hold long only by one stays. */
+	/**
+	 * Drops from `reportedBy` each warning a directive silences (`suppressed`):
+	 * it reports no sink call, so a hold long only by one stays.
+	 */
 	private static function dropSilenced(reportedBy: Map<String, Violation>, suppressed: (Violation) -> Bool): Void {
 		for (k in [for (k => v in reportedBy) if (suppressed(v)) k]) reportedBy.remove(k);
 	}
@@ -172,12 +183,6 @@ final class MainSinkReport {
 			if (named.length > 0) kept.message += ' — with ${[for (n in named) '"$n"'].join(', ')} on the same way, reported here';
 		}
 	}
-
-	/** `<file>:<offset>` of the site of `edge`. */
-	public static inline function siteKey(edge: CallEdge): String {
-		return '${edge.file}:${edge.span?.from ?? -1}';
-	}
-
 
 	/**
 	 * The functions the main thread runs (`runs`) only from inside a sink's own body: every call into one comes from a
@@ -399,8 +404,10 @@ final class MainSinkReport {
 			ErrorPaths.note(error)
 		else if (bounded.length > 0)
 			boundedNote(bounded)
+		else if (registered)
+			CostNote.ShortRegisteredCall
 		else
-			registered ? CostNote.ShortRegisteredCall : CostNote.ShortMainCall;
+			CostNote.ShortMainCall;
 	}
 
 	/**
@@ -438,7 +445,8 @@ final class MainSinkReport {
 			span: edge.span,
 			rule: 'thread-safety',
 			severity: warn ? Severity.Warning : Severity.Info,
-			message: 'main thread reaches blocking $named$also: ${ThreadStates.chainText(path, ThreadSafety.CHAIN_CAP)} -> ${sinks.join(ThreadSafety.SUBJECT_SEPARATOR)}$note',
+			message: 'main thread reaches blocking $named$also: ${ThreadStates.chainText(path, ThreadSafety.CHAIN_CAP)} -> '
+				+ '${sinks.join(ThreadSafety.SUBJECT_SEPARATOR)}$note',
 			data: {
 				family: FindingFamily.MainSink,
 				member: ThreadSafety.memberOf(graph, edge.from),
@@ -509,8 +517,9 @@ final class MainSinkReport {
 	private static function fill(owned: OwnedFinding): Void {
 		final sorted: Array<String> = ThreadSafety.sortedIds(owned.sinks);
 		owned.sinks = sorted;
-		owned.finding.message = 'main thread repeats short blocking ${[for (t in sorted) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR)}'
-			+ ' at this call: ${ThreadStates.chainText(owned.path, ThreadSafety.CHAIN_CAP)} -> ${sorted.join(ThreadSafety.SUBJECT_SEPARATOR)}';
+		owned.finding.message = 'main thread repeats short blocking ' + [for (t in sorted) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR)
+			+ ' at this call: ${ThreadStates.chainText(owned.path, ThreadSafety.CHAIN_CAP)} -> '
+			+ sorted.join(ThreadSafety.SUBJECT_SEPARATOR);
 		final data: Null<FindingData> = owned.finding.data;
 		if (data != null) data.chain = owned.path.concat(sorted);
 	}

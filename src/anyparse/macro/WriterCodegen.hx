@@ -1,10 +1,10 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.macro.MacroNames.*;
+import anyparse.macro.WriterOptFanout.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.WriterOptFanout.*;
-import anyparse.macro.MacroNames.*;
 
 /**
  * Pass 4W of the macro pipeline — writer codegen.

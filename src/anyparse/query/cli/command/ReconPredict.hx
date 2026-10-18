@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.cli.CliArgs;
@@ -9,7 +10,6 @@ import anyparse.query.cli.command.ReconCommand.ReconWalkResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;
@@ -288,17 +288,17 @@ final class ReconPredict {
 	 */
 	private static function reconRegressionParse(plugin: GrammarPlugin, source: String): ReconCurrentParse {
 		try {
-			return !plugin.reconParse(source)
+			return plugin.reconParse(source)
 				? {
-					unwired: true,
-					ok: false,
+					unwired: false,
+					ok: true,
 					line: 0,
 					col: 0,
 					msg: ''
 				}
 				: {
-					unwired: false,
-					ok: true,
+					unwired: true,
+					ok: false,
 					line: 0,
 					col: 0,
 					msg: ''
@@ -670,8 +670,8 @@ final class ReconPredict {
 		hits.sort((a, b) -> b.count - a.count);
 		for (h in hits) CliIo.sysPrint('${h.path} :: ${h.count} match${h.count == 1 ? '' : 'es'}\n');
 		CliIo.sysPrint(
-			'--- candidates: ${hits.length} file${CliIo.plural(hits.length)} matched ($totalHits total hit${CliIo.plural(totalHits)} across '
-			+ '${walk.records.length} skip-parse file${CliIo.plural(walk.records.length)}) ---\n'
+			'--- candidates: ${hits.length} file${CliIo.plural(hits.length)} matched ($totalHits total hit${CliIo.plural(totalHits)}'
+			+ ' across ${walk.records.length} skip-parse file${CliIo.plural(walk.records.length)}) ---\n'
 		);
 		return hits.length == 0 ? EXIT_RUNTIME : EXIT_OK;
 	}

@@ -7,9 +7,6 @@ import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.ResolvedType;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -382,23 +379,6 @@ final class UsingScan {
 	}
 
 	/**
-	 * Whether a `using` declaration spelling `name` brings `module` into scope: an exact match, or —
-	 * for a SIMPLE `module` — a qualified path ending in it, since both reach the same module. The
-	 * one place that comparison is made, so the presence test and the scope test cannot drift apart
-	 * on which declaration counts.
-	 */
-	private static function bindsModule(name: Null<String>, module: String): Bool {
-		return name != null && (name == module || (module.indexOf('.') == -1 && name.endsWith('.$module')));
-	}
-
-	/** The unmemoised body of `conflictingUsing` — one pass over the file's other `using` declarations. */
-	private static function conflictScan(
-		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>
-	): Bool {
-		return usingConflict(usings, module, method, plugin, symbols) != UsingConflict.Clear;
-	}
-
-	/**
 	 * What the `using`s other than `module` say about `method`: `Clear` when each is proven to supply no such extension,
 	 * `Conflict` when one may, `Unresolved` when one names a module this cannot read.
 	 *
@@ -428,6 +408,42 @@ final class UsingScan {
 		return plugin.knownExtensionMethods(module) != null ? verdict : worse(verdict, supplied(module, module, method, symbols, file));
 	}
 
+	/**
+	 * The `using` paths a static-extension call is resolved against (`ValueNameBinding.extensionDeclaration`), in declaration
+	 * order — or null when one sits under a `#if` region other than an accepted whole-body guard: in a build defining it that
+	 * `using` is in scope, and declared later it would bind the call instead.
+	 */
+	public static function extensionUsings(header: UsingHeader): Null<Array<String>> {
+		return header.guardedUsings.length > 0 ? null : usingModules(header);
+	}
+
+	/** The graver of two verdicts. */
+	private static inline function worse(a: UsingConflict, b: UsingConflict): UsingConflict {
+		return if (a == UsingConflict.Conflict || b == UsingConflict.Conflict)
+			UsingConflict.Conflict
+		else if (a == UsingConflict.Unresolved || b == UsingConflict.Unresolved)
+			UsingConflict.Unresolved
+		else
+			UsingConflict.Clear;
+	}
+
+	/**
+	 * Whether a `using` declaration spelling `name` brings `module` into scope: an exact match, or —
+	 * for a SIMPLE `module` — a qualified path ending in it, since both reach the same module. The
+	 * one place that comparison is made, so the presence test and the scope test cannot drift apart
+	 * on which declaration counts.
+	 */
+	private static function bindsModule(name: Null<String>, module: String): Bool {
+		return name != null && (name == module || (module.indexOf('.') == -1 && name.endsWith('.$module')));
+	}
+
+	/** The unmemoised body of `conflictingUsing` — one pass over the file's other `using` declarations. */
+	private static function conflictScan(
+		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>
+	): Bool {
+		return usingConflict(usings, module, method, plugin, symbols) != UsingConflict.Clear;
+	}
+
 	/** What `using <path>` supplies of `method` besides `module` itself, through the index. */
 	private static function supplied(
 		path: String, module: String, method: String, symbols: () -> Null<SymbolIndex>, ?file: String
@@ -448,13 +464,6 @@ final class UsingScan {
 			if (host.hasBuild || host.hasAutoBuild) verdict = UsingConflict.Unresolved;
 		}
 		return verdict;
-	}
-
-	/** The graver of two verdicts. */
-	private static inline function worse(a: UsingConflict, b: UsingConflict): UsingConflict {
-		return a == UsingConflict.Conflict || b == UsingConflict.Conflict
-			? UsingConflict.Conflict
-			: a == UsingConflict.Unresolved || b == UsingConflict.Unresolved ? UsingConflict.Unresolved : UsingConflict.Clear;
 	}
 
 	/**
@@ -557,15 +566,6 @@ final class UsingScan {
 			if (span != null) anchor = span;
 		}
 		return anchor;
-	}
-
-	/**
-	 * The `using` paths a static-extension call is resolved against (`ValueNameBinding.extensionDeclaration`), in declaration
-	 * order — or null when one sits under a `#if` region other than an accepted whole-body guard: in a build defining it that
-	 * `using` is in scope, and declared later it would bind the call instead.
-	 */
-	public static function extensionUsings(header: UsingHeader): Null<Array<String>> {
-		return header.guardedUsings.length > 0 ? null : usingModules(header);
 	}
 
 }

@@ -90,7 +90,12 @@ final class PhaseTimings {
 	public static function report(write: (String) -> Void): Void {
 		if (!enabled) return;
 		final ordered: Array<PhaseRow> = rows.copy();
-		ordered.sort((a, b) -> a.firstAt < b.firstAt ? -1 : a.firstAt > b.firstAt ? 1 : 0);
+		ordered.sort((a, b) -> if (a.firstAt < b.firstAt)
+			-1
+		else if (a.firstAt > b.firstAt)
+			1
+		else
+			0);
 		write('apq timings: ${seconds(Timer.stamp() - origin)} wall since start${cpuNote()}\n');
 		for (row in ordered)
 			write(

@@ -404,14 +404,14 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final body: QueryNode = forNode.children[1];
 		if (body.kind != core.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS) return null;
 		final incr: QueryNode = body.children[body.children.length - 1];
-		return !isPostIncrementOf(incr, counter, source, s) ? null : {
+		return isPostIncrementOf(incr, counter, source, s) ? {
 			counter: counter,
 			binder: binder,
 			collection: collection,
 			iterable: iterable,
 			body: body,
 			incr: incr
-		};
+		} : null;
 	}
 
 	/**

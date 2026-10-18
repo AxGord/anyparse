@@ -659,7 +659,10 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		return edits;
 	}
 
-	/** The offset in `text`, a written map type, of its type-parameter list's `<` (`TypeSyntax.argumentsOpen`), or -1 when it carries none. */
+	/**
+	 * The offset in `text`, a written map type, of its type-parameter
+	 * list's `<` (`TypeSyntax.argumentsOpen`), or -1 when it carries none.
+	 */
 	private static function typeParameterOpen(text: String, seams: Seams): Int {
 		final type: Null<TypeSyntax> = seams.typeSyntax(text);
 		final open: Int = type == null ? -1 : type.argumentsOpen();

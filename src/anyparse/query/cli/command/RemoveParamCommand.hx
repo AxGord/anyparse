@@ -1,12 +1,12 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RemoveParam;
 import anyparse.query.SourceText;
 import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 

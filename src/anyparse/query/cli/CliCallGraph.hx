@@ -59,7 +59,7 @@ final class CliCallGraph {
 	public static function parseEdgeKinds(cmd: String, value: String): Null<Array<EdgeKind>> {
 		final result: Array<EdgeKind> = [];
 		for (part in value.split(',')) {
-			final token: String = StringTools.trim(part);
+			final token: String = part.trim();
 			final kind: Null<EdgeKind> = switch token {
 				case 'call': Call;
 				case 'ref': Ref;

@@ -114,6 +114,12 @@ final class TypeNameBinding {
 	/** File path -> its `#if` directive marks (`CondBranchPath.scan`), read on the first question about the file. */
 	private final _branches: Map<String, CondBranchIndex> = [];
 
+	/**
+	 * `splitPath` per import path, null included: `statementAnswer` reads every import of a file once per NAME the
+	 * file asks about, and split the same path anew each time (~0.25 s of a TM `lint --all`). Read only here.
+	 */
+	private final _importPaths: Map<String, Null<ImportPath>> = [];
+
 	/** Every indexed file, handed over by the owning `TypeRefIndex`. */
 	private final _files: Array<FileInfo>;
 
@@ -128,12 +134,6 @@ final class TypeNameBinding {
 
 	/** The tables `tables` builds on the first question. */
 	private var _tables: Null<Tables> = null;
-
-	/**
-	 * `splitPath` per import path, null included: `statementAnswer` reads every import of a file once per NAME the
-	 * file asks about, and split the same path anew each time (~0.25 s of a TM `lint --all`). Read only here.
-	 */
-	private final _importPaths: Map<String, Null<ImportPath>> = [];
 
 	/**
 	 * Built by the owning `TypeRefIndex` over the same files; `sources` are their texts, read for a use site's `#if` branch.
@@ -233,8 +233,7 @@ final class TypeNameBinding {
 		final mains: Array<ResolvedType> = [
 			for (f in tables().modules[path] ?? []) for (t in f.types) if (t.isMain && t.name == last) { file: f, type: t }
 		];
-		if (mains.length > 0 || path.indexOf('.') < 0) return mains;
-		return [
+		return mains.length > 0 || path.indexOf('.') < 0 ? mains : [
 			for (f in tables()
 				.modules[SourceText.parentPath(path)] ?? []) for (t in f.types) if (!t.isMain && t.name == last) { file: f, type: t }
 		];
@@ -255,8 +254,7 @@ final class TypeNameBinding {
 		if (split == null) return null;
 		if (split.rest.length > 1) return [];
 		final files: Array<FileInfo> = tables().modules[split.module] ?? [];
-		if (files.length == 0) return null;
-		return typesIn(files, split.rest.length == 0 ? null : split.rest[0], false);
+		return files.length == 0 ? null : typesIn(files, split.rest.length == 0 ? null : split.rest[0], false);
 	}
 
 	/**
@@ -352,7 +350,12 @@ final class TypeNameBinding {
 		final split: Null<ImportPath> = path == null ? null : importPathOf(path);
 		if (split == null) return Unreadable(null);
 		if (split.rest.length > 1 || (!aliased && split.rest.length == 1 && split.rest[0] != name)) return Pass;
-		final wanted: String = split.rest.length == 1 ? split.rest[0] : aliased ? SourceText.lastSegment(split.module) : name;
+		final wanted: String = if (split.rest.length == 1)
+			split.rest[0]
+		else if (aliased)
+			SourceText.lastSegment(split.module)
+		else
+			name;
 		// An alias of a module names its main type, and one whose module declares none names nothing that is known.
 		final missing: Answer = aliased && split.rest.length == 0 ? Unreadable(null) : Pass;
 		final files: Array<FileInfo> = tables().modules[split.module] ?? [];
@@ -362,8 +365,12 @@ final class TypeNameBinding {
 		}
 		final outside: Null<Array<TypeDeclInfo>> = outsideTypes(split.module, wanted);
 		final bound: String = pathIn(split.module, wanted);
-		if (outside == null) return Unreadable(bound);
-		return outside.exists(t -> t.name == wanted && !t.isPrivate) ? Outside(bound) : missing;
+		return if (outside == null)
+			Unreadable(bound)
+		else if (outside.exists(t -> t.name == wanted && !t.isPrivate))
+			Outside(bound)
+		else
+			missing;
 	}
 
 	/**
@@ -389,15 +396,13 @@ final class TypeNameBinding {
 	private function wildcardAnswer(name: String, pkg: String): Answer {
 		if (splitPath(pkg) != null) return Pass;
 		final mains: Null<Array<ResolvedType>> = wildcardTypes(pkg);
-		if (mains != null) {
-			final named: Array<ResolvedType> = mains.filter(m -> m.type.name == name);
-			return named.length > 0 ? Decls(named) : Pass;
-		}
-		return switch StdTypes.declaresModule(pkg, name) {
+		if (mains == null) return switch StdTypes.declaresModule(pkg, name) {
 			case false: Pass;
 			case true: declaresMain(outsideTypes('$pkg.$name', name), name, '$pkg.$name') ?? Unreadable('$pkg.$name');
 			case null: Unreadable('$pkg.$name');
 		};
+		final named: Array<ResolvedType> = mains.filter(m -> m.type.name == name);
+		return named.length > 0 ? Decls(named) : Pass;
 	}
 
 	/**
@@ -443,7 +448,7 @@ final class TypeNameBinding {
 			: null;
 		if (scoped != null) return scoped;
 		final std: Null<Array<TypeDeclInfo>> = StdTypes.moduleTypes(_plugin, module);
-		return std == null ? null : std.filter(t -> t.name == name);
+		return std?.filter(t -> t.name == name);
 	}
 
 	/**
@@ -476,29 +481,12 @@ final class TypeNameBinding {
 		return use != null && fi.imports.indexOf(imp) >= 0 && CondBranchPath.within(use, branchPathAt(fi, imp.span.from));
 	}
 
-	/** Whether the statement `imp` names the type `answer` binds by its own path — the path written, or an alias's target. */
-	private static function namesItsType(imp: ImportInfo, answer: Answer): Bool {
-		final written: Null<String> = imp.kind == ImportKind.Alias ? imp.aliasTarget : imp.raw;
-		return switch answer {
-			case Unreadable(path), Outside(path):
-				path != null && path == written;
-			case _: false;
-		};
-	}
-
-	/** The path an import of module `module` names its type `name` by: the module's own for its main type. */
-	private static inline function pathIn(module: String, name: String): String {
-		return name == SourceText.lastSegment(module) ? module : '$module.$name';
-	}
-
-	/** What one tier's answer binds a name to: none for `Pass`, nor for an unreadable tier that names no path. */
-	private static function bindingOf(answer: Answer): Null<NameTarget> {
-		return switch answer {
-			case Decls(decls): InIndex(decls);
-			case Outside(path): OutOfIndex(path);
-			case Unreadable(path): path == null ? null : OutOfIndex(path);
-			case Pass: null;
-		};
+	/** `splitPath(path)`, memoised for this binding (`_importPaths`). */
+	private function importPathOf(path: String): Null<ImportPath> {
+		if (_importPaths.exists(path)) return _importPaths[path];
+		final split: Null<ImportPath> = splitPath(path);
+		_importPaths[path] = split;
+		return split;
 	}
 
 	/**
@@ -537,6 +525,31 @@ final class TypeNameBinding {
 		return null;
 	}
 
+	/** The path an import of module `module` names its type `name` by: the module's own for its main type. */
+	private static inline function pathIn(module: String, name: String): String {
+		return name == SourceText.lastSegment(module) ? module : '$module.$name';
+	}
+
+	/** Whether the statement `imp` names the type `answer` binds by its own path — the path written, or an alias's target. */
+	private static function namesItsType(imp: ImportInfo, answer: Answer): Bool {
+		final written: Null<String> = imp.kind == ImportKind.Alias ? imp.aliasTarget : imp.raw;
+		return switch answer {
+			case Unreadable(path), Outside(path):
+				path != null && path == written;
+			case _: false;
+		};
+	}
+
+	/** What one tier's answer binds a name to: none for `Pass`, nor for an unreadable tier that names no path. */
+	private static function bindingOf(answer: Answer): Null<NameTarget> {
+		return switch answer {
+			case Decls(decls): InIndex(decls);
+			case Outside(path): OutOfIndex(path);
+			case Unreadable(path): path == null ? null : OutOfIndex(path);
+			case Pass: null;
+		};
+	}
+
 	/** Whether `segment` names a package: lower-case after any leading underscores, as the compiler tells one. */
 	private static function isPackageSegment(segment: String): Bool {
 		var i: Int = 0;
@@ -564,7 +577,12 @@ final class TypeNameBinding {
 	 * not; null unread.
 	 */
 	private static function declaresMain(types: Null<Array<TypeDeclInfo>>, name: String, path: String): Null<Answer> {
-		return types == null ? null : types.exists(t -> t.name == name && t.isMain && !t.isPrivate) ? Outside(path) : Pass;
+		return if (types == null)
+			null
+		else if (types.exists(t -> t.name == name && t.isMain && !t.isPrivate))
+			Outside(path)
+		else
+			Pass;
 	}
 
 	/** The non-private types `files` declare — named `name` unless it is null, main types only when `mainOnly`. */
@@ -583,14 +601,6 @@ final class TypeNameBinding {
 			return out;
 		}
 		return keys(a).join('|') == keys(b).join('|');
-	}
-
-	/** `splitPath(path)`, memoised for this binding (`_importPaths`). */
-	private function importPathOf(path: String): Null<ImportPath> {
-		if (_importPaths.exists(path)) return _importPaths[path];
-		final split: Null<ImportPath> = splitPath(path);
-		_importPaths[path] = split;
-		return split;
 	}
 
 }

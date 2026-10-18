@@ -58,13 +58,12 @@ final class BackingFieldRefs {
 		final span: Null<Span> = node.span;
 		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return false;
 		if (node.kind == shape.plainCasePatternKind) return false;
-		if (FieldRefScan.writeTargetField(node, shape) == field) {
-			if (node.kind != shape.assignKind) return true;
-			for (i in 1...node.children.length) if (hasExternalRead(node.children[i], field, exclude, shape)) return true;
-			return false;
-		}
-		return FieldRefScan.fieldRefName(node, shape) == field
-			|| node.children.exists(child -> hasExternalRead(child, field, exclude, shape));
+		if (FieldRefScan.writeTargetField(node, shape) != field)
+			return FieldRefScan.fieldRefName(node, shape) == field
+				|| node.children.exists(child -> hasExternalRead(child, field, exclude, shape));
+		if (node.kind != shape.assignKind) return true;
+		for (i in 1...node.children.length) if (hasExternalRead(node.children[i], field, exclude, shape)) return true;
+		return false;
 	}
 
 	/**
@@ -189,14 +188,13 @@ final class BackingFieldRefs {
 		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return true;
 		if (node == allowStmt) return true;
 		if (
-			node.kind == shape.exprStatementKind && node.children.length == 1
-			&& FieldRefScan.writeTargetField(node.children[0], shape) == field
-		) {
-			out.push(node);
-			return node.children[0].children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out, shape));
-		}
-		return FieldRefScan.writeTargetField(node, shape) != field
-			&& node.children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out, shape));
+			node.kind != shape.exprStatementKind || node.children.length != 1
+			|| FieldRefScan.writeTargetField(node.children[0], shape) != field
+		)
+			return FieldRefScan.writeTargetField(node, shape) != field
+				&& node.children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out, shape));
+		out.push(node);
+		return node.children[0].children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out, shape));
 	}
 
 	/**

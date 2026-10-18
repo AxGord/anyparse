@@ -401,8 +401,9 @@ final class CallGraphEdges {
 			receiverSource: Null<String>, receiverType: String, member: String, currentType: Null<String>
 		): Null<String> {
 			final declared: Null<String> = memberTypeSource(receiverType, member);
-			if (declared == null) return null;
-			return throughParams(declared, g.types.declaringTypeOf(receiverType, member), receiverSource, receiverType, currentType);
+			return declared == null
+				? null
+				: throughParams(declared, g.types.declaringTypeOf(receiverType, member), receiverSource, receiverType, currentType);
 		}
 
 		/**
@@ -439,8 +440,12 @@ final class CallGraphEdges {
 			final element: Null<String> = NominalTypes.elementTypeSourceOf(
 				container, params ?? elementParams, transparentWrappers, g._plugin.typeSyntax
 			);
-			if (path == null || element == null) return null;
-			return g.types.imports.isStandard(file, path, standardContainers[SourceText.lastSegment(path)] ?? []) ? element : null;
+			return if (path == null || element == null)
+				null
+			else if (g.types.imports.isStandard(file, path, standardContainers[SourceText.lastSegment(path)] ?? []))
+				element
+			else
+				null;
 		}
 
 		/**
@@ -529,22 +534,28 @@ final class CallGraphEdges {
 				if (name == selfText) return MEMBER_SCOPE;
 				if (span == null) return null;
 				final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
-				if (bound != null && bound >= 0) return bindsLocally(bound) ? bound : MEMBER_SCOPE;
-				return CallGraphNames.isTypeLike(name) ? null : MEMBER_SCOPE;
+				return if (bound != null && bound >= 0)
+					bindsLocally(bound) ? bound : MEMBER_SCOPE
+				else if (CallGraphNames.isTypeLike(name))
+					null
+				else
+					MEMBER_SCOPE;
 			}
 			if (isAccessKind(expr.kind) && name != null && expr.children.length > 0)
 				return typeNameReceiver(expr.children[0]) != null ? null : typeScopeOf(expr.children[0], currentType);
 			if (indexKind != null && expr.kind == indexKind && expr.children.length > 0) return typeScopeOf(expr.children[0], currentType);
-			if (expr.kind == callKind && expr.children.length > 0) {
-				final callee: QueryNode = unwrap(expr.children[0]);
-				if (isAccessKind(callee.kind) && callee.children.length > 0) return typeScopeOf(callee.children[0], currentType);
-				final target: Null<String> = callTargetOf(expr, currentType)?.target;
-				final declaredAt: Null<Span> = target == null ? null : g.nodes[target]?.span;
-				if (target == null || declaredAt == null) return null;
-				// a local function's return type is written inside the functions enclosing it; a member's, on the member
-				return target.contains('#') ? declaredAt.from : MEMBER_SCOPE;
-			}
-			return null;
+			if (expr.kind != callKind || expr.children.length <= 0) return null;
+			final callee: QueryNode = unwrap(expr.children[0]);
+			if (isAccessKind(callee.kind) && callee.children.length > 0) return typeScopeOf(callee.children[0], currentType);
+			final target: Null<String> = callTargetOf(expr, currentType)?.target;
+			final declaredAt: Null<Span> = target == null ? null : g.nodes[target]?.span;
+			return if (target == null || declaredAt == null)
+				null
+			// a local function's return type is written inside the functions enclosing it; a member's, on the member
+			else if (target.contains('#'))
+				declaredAt.from
+			else
+				MEMBER_SCOPE;
 		}
 
 		// the graph's resolution for the ONE structural walk (`NominalTypes.typeWalk`), set right below `typeSourceOf`'s arms
@@ -582,11 +593,13 @@ final class CallGraphEdges {
 			final imported: Null<{ owner: String, member: String }> = CallGraphKeys.importedStatic(
 				g, importedOf(name, span.from), name, currentType
 			);
-			if (imported != null) return memberTypeSource(imported.owner, imported.member);
+			return if (imported != null)
+				memberTypeSource(imported.owner, imported.member)
 			// a supertype's static is not in scope bare
-			return currentType == null || CallGraphKeys.staticOfSupertype(g, currentType, name)
-				? null
-				: memberTypeThrough(null, currentType, name, currentType);
+			else if (currentType == null || CallGraphKeys.staticOfSupertype(g, currentType, name))
+				null
+			else
+				memberTypeThrough(null, currentType, name, currentType);
 		}
 
 		/** `typeSourceOf` for a field access: a static member read off a type name no local shadows, else the receiver's member. */
@@ -781,8 +794,9 @@ final class CallGraphEdges {
 				owner = base == null || base.isDynamic ? null : base.typeName;
 			}
 			// a property with an accessor hands back whatever its getter returns, not one stored object
-			if (owner == null || !g.types.fieldOnChain(owner, name) || g.types.propertyOnChain(owner, name) != null) return null;
-			return '${g.types.declaringTypeOf(owner, name) ?? owner}.$name';
+			return owner == null || !g.types.fieldOnChain(owner, name) || g.types.propertyOnChain(owner, name) != null
+				? null
+				: '${g.types.declaringTypeOf(owner, name) ?? owner}.$name';
 		}
 
 		/**
@@ -852,10 +866,12 @@ final class CallGraphEdges {
 			if (recv == null || recv.isDynamic) return null;
 			final resolved: Null<String> = g.memberOnChain(recv.typeName, name);
 			final dispatch: Null<String> = recv.isValue ? recv.typeName : null;
-			if (resolved != null) return { id: resolved, dispatch: dispatch };
-			return g.types.functionOnChain(recv.typeName, name) || !g.types.chainFullyIndexed(recv.typeName)
-				? { id: g.externalNode(g.types.declaringTypeOf(recv.typeName, name) ?? recv.typeName, name), dispatch: dispatch }
-				: null;
+			return if (resolved != null)
+				{ id: resolved, dispatch: dispatch }
+			else if (g.types.functionOnChain(recv.typeName, name) || !g.types.chainFullyIndexed(recv.typeName))
+				{ id: g.externalNode(g.types.declaringTypeOf(recv.typeName, name) ?? recv.typeName, name), dispatch: dispatch }
+			else
+				null;
 		}
 
 		function methodValue(argRaw: QueryNode, currentType: Null<String>): Null<String> {
@@ -972,7 +988,7 @@ final class CallGraphEdges {
 		function storedField(recv: QueryNode, field: String, currentType: Null<String>): Bool {
 			final declared: Null<String> = typeSourceOf(recv, currentType);
 			if (declared == null) return false;
-			final peeled: String = NominalTypes.unwrapNullable(StringTools.trim(declared), transparentWrappers, g._plugin.typeSyntax);
+			final peeled: String = NominalTypes.unwrapNullable(declared.trim(), transparentWrappers, g._plugin.typeSyntax);
 			final outer: Null<String> = NominalTypes.outerNominalOf(peeled, g._plugin.typeSyntax);
 			final anon: Null<String> = outer == null ? peeled : g.types.resolveAlias(outer);
 			final fieldType: Null<String> = if (anon == peeled)
@@ -1170,7 +1186,8 @@ final class CallGraphEdges {
 						} else {
 							final field: Null<String> = receiverField(callee.children[0], currentType);
 							for (recv in each) {
-								// each type the receiver may be — a name this file or one whose declaration typed it wrote (`readFrom`) may be
+								// each type the receiver may be — a name this file or one
+								// whose declaration typed it wrote (`readFrom`) may be
 								// another type there — resolves the call on its own, whatever the others declare
 								final alternates: Array<String> = g.types.imports.alternateTypesIn([file].concat(readFrom), recv.typeName);
 								for (t in CallGraphKeys.apartFrom(g.types.imports, keyedApart, recv.typeName)) if (!alternates.contains(t))
@@ -1262,11 +1279,15 @@ final class CallGraphEdges {
 			final span: Null<Span> = lineage[at].span;
 			final id: Null<String> = span == null ? null : entry.fnBySpanFrom[span.from];
 			final declared: Null<String> = id == null ? null : g._facts.returns[id];
-			if (declared != null || !lambdaKinds.contains(lineage[at].kind)) return declared;
-			return CallGraphNames.functionReturnSource(g._plugin.typeSyntax(expected(at - 1, currentType) ?? ''));
+			return declared != null || !lambdaKinds.contains(lineage[at].kind)
+				? declared
+				: CallGraphNames.functionReturnSource(g._plugin.typeSyntax(expected(at - 1, currentType) ?? ''));
 		}
 
-		/** The written type of field `field` of a value written `outer`: an inline anonymous structure's, or a typedef's or class's member. */
+		/**
+		 * The written type of field `field` of a value written `outer`: an
+		 * inline anonymous structure's, or a typedef's or class's member.
+		 */
 		function fieldTypeSource(outer: String, field: String, currentType: Null<String>): Null<String> {
 			final peeled: String = NominalTypes.unwrapNullable(outer.trim(), transparentWrappers, g._plugin.typeSyntax);
 			final written: Null<String> = CallGraphNames.anonFieldTypeSource(g._plugin.typeSyntax(peeled), field);

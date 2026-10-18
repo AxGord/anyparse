@@ -308,8 +308,8 @@ final class RedundantElse implements Check {
 	 * needs resolution this check does not have, and the wrong direction here is a build failure.
 	 */
 	private static function narrowingLapses(ifNode: QueryNode, elseNode: QueryNode, seams: Seams, narrowed: Array<String>): Bool {
-		if (narrowed.length == 0 || !subtreeHasKind(ifNode.children[1], seams.resetKinds)) return false;
-		return narrowed.exists(subject -> dereferences(elseNode, subject, seams));
+		return narrowed.length != 0 && subtreeHasKind(ifNode.children[1], seams.resetKinds)
+			&& narrowed.exists(subject -> dereferences(elseNode, subject, seams));
 	}
 
 	/** Whether `node`'s subtree holds a node of one of `kinds`. */
@@ -319,8 +319,8 @@ final class RedundantElse implements Check {
 
 	/** Whether `node`'s subtree reads a member off `subject` — a field access whose receiver is that subject. */
 	private static function dereferences(node: QueryNode, subject: String, seams: Seams): Bool {
-		if (node.kind == seams.fieldAccessKind && node.children.length > 0 && receiverName(node.children[0], seams) == subject) return true;
-		return node.children.exists(child -> dereferences(child, subject, seams));
+		return node.kind == seams.fieldAccessKind && node.children.length > 0 && receiverName(node.children[0], seams) == subject
+			|| node.children.exists(child -> dereferences(child, subject, seams));
 	}
 
 	/** The node kinds that drop a field's non-null narrowing where the compiler cannot see through them: a call or a write. */

@@ -1,11 +1,11 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliUsage;
 import anyparse.query.cli.PostWriteFix;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 

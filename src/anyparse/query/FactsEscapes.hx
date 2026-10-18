@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.check.FactsTypeTree;
-import anyparse.check.FactsTypeTree.FactsType;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.FlowFact;
@@ -68,9 +67,6 @@ final class FactsEscapes {
 	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
 	private static inline final INLINED: String = 'inlined';
 
-	/** The classes whose members are reflection (`TypedFactsProbe`). */
-	private static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
-
 	/** The flow of an unchecked cast (`FlowFact.via`). */
 	private static inline final CAST: String = 'cast';
 
@@ -89,6 +85,9 @@ final class FactsEscapes {
 	/** The type of an abstract as a value: its statics, which its implementation class holds. */
 	private static inline final ABSTRACT_VALUE: String = 'Abstract';
 
+	/** The classes whose members are reflection (`TypedFactsProbe`). */
+	private static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
+
 	/** The kinds of a typed type a place keeps the nominal type of what it holds by (`TypeFact.kind`). */
 	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface', 'enum'];
 
@@ -97,10 +96,6 @@ final class FactsEscapes {
 
 	/** Why the escapes are not known, once something says so (`compute`). */
 	public var failure(default, null): Null<String> = null;
-
-	private final _view: FactsView;
-	private final _table: CompilerFacts;
-	private final _scope: ReachProject;
 
 	/** The escaped types, by the graph's name (`FactsView.graphType`). */
 	private final _out: Array<String> = [];
@@ -123,6 +118,10 @@ final class FactsEscapes {
 	/** The type strings already escaped (`escape`). */
 	private final _escaped: Map<String, Bool> = [];
 
+	private final _view: FactsView;
+	private final _table: CompilerFacts;
+	private final _scope: ReachProject;
+
 	/** The primitive types' ids: a value of one is no object. */
 	private final _inert: Array<String>;
 
@@ -132,14 +131,14 @@ final class FactsEscapes {
 	/** What target-language code reaches escapes (`escape`, `escapeType`). */
 	private final _hand: NativeHand;
 
+	/** The types each type parameter is bound to (`FactsInstances`), read off the facts on first need. */
+	private final _instances: FactsInstances;
+
 	/**
 	 * Whether every class the project declares a class value made from an unreadable name may be of (`declaredClasses`)
 	 * has escaped already: null until first asked, then the answer.
 	 */
 	private var _declaredEscaped: Null<Bool> = null;
-
-	/** The types each type parameter is bound to (`FactsInstances`), read off the facts on first need. */
-	private final _instances: FactsInstances;
 
 	public function new(view: FactsView, scope: ReachProject) {
 		_view = view;
@@ -149,6 +148,16 @@ final class FactsEscapes {
 		_native = view.nativeReach();
 		_instances = new FactsInstances(_table);
 		_hand = { escape: escape, escapeType: escapeType, refuse: refuse };
+	}
+
+	/** The escaped types `compute` found, by their typed id rather than the graph's name. */
+	public inline function typedIds(): Array<String> {
+		return _typed;
+	}
+
+	/** The function types of the function values `compute` found escaping (`_functions`). */
+	public inline function functionTypes(): Array<FactsType> {
+		return _functions;
 	}
 
 	/** The escaped types (see the type doc), by the graph's name, or null for any; `failure` then says why. */
@@ -162,11 +171,6 @@ final class FactsEscapes {
 		return _out;
 	}
 
-	/** The escaped types `compute` found, by their typed id rather than the graph's name. */
-	public inline function typedIds(): Array<String> {
-		return _typed;
-	}
-
 	/**
 	 * The types a value of the type parameter `path` (`pack.Type.T`, `method.T`) may have (`FactsInstances.boundTo`): those some
 	 * instantiation binds it to. Null when they are not known: a type the facts hold does not read, or an instantiation
@@ -174,13 +178,12 @@ final class FactsEscapes {
 	 */
 	public function parameterTypes(path: String): Null<Array<FactsType>> {
 		final bound: Null<Map<String, FactsType>> = _instances.boundTo(path);
-		if (_instances.unread || _instances.unresolved(path)) return null;
-		return bound == null ? [] : [for (t in bound) t];
-	}
-
-	/** The function types of the function values `compute` found escaping (`_functions`). */
-	public inline function functionTypes(): Array<FactsType> {
-		return _functions;
+		return if (_instances.unread || _instances.unresolved(path))
+			null
+		else if (bound == null)
+			[]
+		else
+			[for (t in bound) t];
 	}
 
 	/**
@@ -192,8 +195,7 @@ final class FactsEscapes {
 		if (made == null) return refuse('the facts of `$id` lie in a file whose text the table no longer has');
 		final n: FactNode = made;
 		final lost: Null<String> = FactMarkers.lossReason(id, n, harmlessReflection);
-		if (lost != null) return refuse(lost);
-		return _native.nodeEscapes(id, n, _hand) && handEscapes(n);
+		return lost != null ? refuse(lost) : _native.nodeEscapes(id, n, _hand) && handEscapes(n);
 	}
 
 	/**
@@ -208,8 +210,7 @@ final class FactsEscapes {
 			final receiver: Null<String> = c.receiver;
 			if (byName(c.access) && receiver != null && !escape(receiver)) return false;
 		}
-		for (r in n.reflection) if (!produced(r)) return false;
-		return true;
+		return n.reflection.foreach(produced);
 	}
 
 	/**
@@ -219,14 +220,6 @@ final class FactsEscapes {
 	 */
 	private function flowLeaves(f: FlowFact): Bool {
 		return (f.via == CAST || !keepsNominal(f.to)) && !(f.via != CAST && functionTyped(f.from) && functionTyped(f.to));
-	}
-
-	/**
-	 * Whether a field access `access` (`FieldFact.access`, `CallFact.access`) lets its receiver go: a method read as a value,
-	 * which the bound function carries, and a field reached by name on it (untyped code), which may be any of its fields.
-	 */
-	private static inline function byName(access: String): Bool {
-		return access == CLOSURE || access == DYNAMIC_ACCESS;
 	}
 
 	/**
@@ -262,31 +255,11 @@ final class FactsEscapes {
 		_declaredEscaped = true;
 		for (id in declaredClasses(_table, globs)) {
 			final fact: Null<TypeFact> = _table.type(id);
-			if (fact != null && !escapeInstance(id, fact, [])) {
-				_declaredEscaped = false;
-				return false;
-			}
+			if (fact == null || escapeInstance(id, fact, [])) continue;
+			_declaredEscaped = false;
+			return false;
 		}
 		return true;
-	}
-
-	/** The typed classes of `table` (`CLASS_KINDS`) whose qualified name one of `globs` matches (`Glob.qualifiedNames`). */
-	private static function declaredClasses(table: CompilerFacts, globs: Array<String>): Array<String> {
-		final patterns: Array<EReg> = globs.map(Glob.qualifiedNames);
-		return [
-			for (id in table.typeIds()) {
-				final fact: Null<TypeFact> = table.type(id);
-				if (fact != null && CLASS_KINDS.contains(fact.kind) && patterns.exists(p -> p.match(id))) id;
-			}
-		];
-	}
-
-	/**
-	 * The globs of `globs` (`LintConfig.reflectiveClasses`) that match no class `table` holds (`declaredClasses`): a
-	 * declaration naming nothing the builds typed, a misspelling or a class long gone.
-	 */
-	public static function unmatchedGlobs(table: CompilerFacts, globs: Array<String>): Array<String> {
-		return [for (g in globs) if (declaredClasses(table, [g]).length == 0) g];
 	}
 
 	/**
@@ -303,8 +276,9 @@ final class FactsEscapes {
 		final field: Null<FieldDeclFact> = declaredField(target);
 		if (field == null || !producer(field)) return true;
 		final name: Null<String> = r.name;
-		if (r.isValue || name == null) return anyClass('`$target` makes a class value of a name computed at run time in `${r.holder}`');
-		return _table.type(name) == null || escapeType(Named(name, []));
+		return r.isValue || name == null
+			? anyClass('`$target` makes a class value of a name computed at run time in `${r.holder}`')
+			: _table.type(name) == null || escapeType(Named(name, []));
 	}
 
 	/** The field `target` (`pack.Type.field`) names, as its type declares it; null when no build typed one. */
@@ -320,8 +294,7 @@ final class FactsEscapes {
 	private function producer(f: FieldDeclFact): Bool {
 		final classValue: Null<String> = _scope.shape.execution?.classValueTypeName;
 		final string: Null<String> = (_scope.shape.literalTypeNames ?? [])[(_scope.shape.stringLiteralKinds ?? [])[0] ?? ''];
-		if (classValue == null || string == null) return false;
-		return f.types.exists(t -> switch FactsTypeTree.read(t) {
+		return classValue != null && string != null && f.types.exists(t -> switch FactsTypeTree.read(t) {
 			case Function(args, Named(result, _)):
 				result == classValue && args.exists(a -> switch a.type {
 					case Named(name, []): name == string;
@@ -378,22 +351,6 @@ final class FactsEscapes {
 		};
 	}
 
-	/** Whether the type `text` is a function type, nullable or not: a value of it is a function value, which holds no object. */
-	private static function functionTyped(text: String): Bool {
-		return switch FactsTypeTree.read(text) {
-			case Function(_, _) | Named(NULLABLE, [Function(_, _)]): true;
-			case _: false;
-		};
-	}
-
-	/** Whether the type `text` is a type parameter, nullable or not: an extern handed a value there gives it back as one. */
-	private static function typeParameter(text: String): Bool {
-		return switch FactsTypeTree.read(text) {
-			case Parameter(_) | Named(NULLABLE, [Parameter(_)]): true;
-			case _: false;
-		};
-	}
-
 	/** `escapeType` of the type string `text`, read once. */
 	private function escape(text: String): Bool {
 		if (_escaped.exists(text)) return true;
@@ -413,7 +370,7 @@ final class FactsEscapes {
 				// target code, which hands back only what it was handed and makes no program object (see the type doc)
 				return true;
 			case Parameter(path):
-				final key: String = Std.string(t);
+				final key: String = '$t';
 				if (_done.exists(key)) return true;
 				_done[key] = true;
 				// a value of a type parameter has a type some instantiation binds it to
@@ -426,7 +383,7 @@ final class FactsEscapes {
 				return true;
 			case Function(_, _):
 				// a function value holds no object a name reaches, but it is itself a value of no known place now
-				final key: String = Std.string(t);
+				final key: String = '$t';
 				if (!_functionKeys.exists(key)) {
 					_functionKeys[key] = true;
 					_functions.push(t);
@@ -445,7 +402,7 @@ final class FactsEscapes {
 				return impl == null || escapeType(Named(impl, []));
 			case Named(id, args):
 				if (inert(id)) return true;
-				final key: String = Std.string(t);
+				final key: String = '$t';
 				if (_done.exists(key)) return true;
 				_done[key] = true;
 				final fact: Null<TypeFact> = _table.type(id);
@@ -454,7 +411,7 @@ final class FactsEscapes {
 				if (!args.foreach(escapeType)) return false;
 				final bound: Map<String, FactsType> = bindings(id, fact, args);
 				return switch fact.kind {
-					case 'class' | 'interface' | 'impl': escapeClass(id, fact, bound);
+					case 'class', 'interface', 'impl': escapeClass(id, fact, bound);
 					case 'enum': fact.constructors.foreach(c -> constructorEscapes(id, c.name, c.type, bound));
 					case 'abstract': within(fact.underlying, bound);
 					case 'typedef': within(fact.targets, bound);
@@ -475,7 +432,7 @@ final class FactsEscapes {
 				held.foreach(a -> escapeType(substitute(a.type, bound)));
 			// a constructor of no arguments is a value of its enum, which holds nothing
 			case Named(_, _): true;
-			case Unknown | Parameter(_) | Structure(_): refuse('the constructor `$id.$name` has a type that is no function and no enum');
+			case Unknown, Parameter(_), Structure(_): refuse('the constructor `$id.$name` has a type that is no function and no enum');
 		};
 	}
 
@@ -534,6 +491,25 @@ final class FactsEscapes {
 		return true;
 	}
 
+	/** Whether the typed type `id` is a primitive: a value of it is no object. */
+	private function inert(id: String): Bool {
+		return id.indexOf('.') < 0 && _inert.contains(id);
+	}
+
+	/** Record why the escapes are not known: false, for the caller to answer. */
+	private function refuse(reason: String): Bool {
+		if (failure == null) failure = reason;
+		return false;
+	}
+
+	/**
+	 * The globs of `globs` (`LintConfig.reflectiveClasses`) that match no class `table` holds (`declaredClasses`): a
+	 * declaration naming nothing the builds typed, a misspelling or a class long gone.
+	 */
+	public static function unmatchedGlobs(table: CompilerFacts, globs: Array<String>): Array<String> {
+		return [for (g in globs) if (declaredClasses(table, [g]).length == 0) g];
+	}
+
 	/** The arguments `args` of the typed type `id` (`fact`), by the path a type parameter of it is spelled with (`$id.T`). */
 	public static function bindings(id: String, fact: TypeFact, args: Array<FactsType>): Map<String, FactsType> {
 		final out: Map<String, FactsType> = [];
@@ -566,15 +542,39 @@ final class FactsEscapes {
 		return out;
 	}
 
-	/** Whether the typed type `id` is a primitive: a value of it is no object. */
-	private function inert(id: String): Bool {
-		return id.indexOf('.') < 0 && _inert.contains(id);
+	/**
+	 * Whether a field access `access` (`FieldFact.access`, `CallFact.access`) lets its receiver go: a method read as a value,
+	 * which the bound function carries, and a field reached by name on it (untyped code), which may be any of its fields.
+	 */
+	private static inline function byName(access: String): Bool {
+		return access == CLOSURE || access == DYNAMIC_ACCESS;
 	}
 
-	/** Record why the escapes are not known: false, for the caller to answer. */
-	private function refuse(reason: String): Bool {
-		if (failure == null) failure = reason;
-		return false;
+	/** The typed classes of `table` (`CLASS_KINDS`) whose qualified name one of `globs` matches (`Glob.qualifiedNames`). */
+	private static function declaredClasses(table: CompilerFacts, globs: Array<String>): Array<String> {
+		final patterns: Array<EReg> = globs.map(Glob.qualifiedNames);
+		return [
+			for (id in table.typeIds()) {
+				final fact: Null<TypeFact> = table.type(id);
+				if (fact != null && CLASS_KINDS.contains(fact.kind) && patterns.exists(p -> p.match(id))) id;
+			}
+		];
+	}
+
+	/** Whether the type `text` is a function type, nullable or not: a value of it is a function value, which holds no object. */
+	private static function functionTyped(text: String): Bool {
+		return switch FactsTypeTree.read(text) {
+			case Function(_, _), Named(NULLABLE, [Function(_, _)]): true;
+			case _: false;
+		};
+	}
+
+	/** Whether the type `text` is a type parameter, nullable or not: an extern handed a value there gives it back as one. */
+	private static function typeParameter(text: String): Bool {
+		return switch FactsTypeTree.read(text) {
+			case Parameter(_), Named(NULLABLE, [Parameter(_)]): true;
+			case _: false;
+		};
 	}
 
 }

@@ -210,8 +210,7 @@ final class CasePatternSeparator implements Check implements DefaultOff implemen
 
 	/** Whether `branch` carries a TOP-LEVEL or-pattern — the comma style's finding. */
 	private static function hasOrPattern(seams: SeparatorSeams, branch: QueryNode): Bool {
-		for (pattern in CasePatternScan.patternRun(seams.scan, branch)) if (orRootOf(seams, pattern) != null) return true;
-		return false;
+		return CasePatternScan.patternRun(seams.scan, branch).exists(pattern -> orRootOf(seams, pattern) != null);
 	}
 
 	/** The or-pattern `pattern` wraps DIRECTLY, or null when it wraps anything else. */

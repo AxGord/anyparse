@@ -292,7 +292,7 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 	private static function emitRuns(
 		conjuncts: Array<QueryNode>, chainKind: String, stack: Array<QueryNode>, source: String, s: Seams, out: Array<NullRun>
 	): Array<Bool> {
-		final covered: Array<Bool> = [for (i in 0...conjuncts.length) false];
+		final covered: Array<Bool> = [for (_ in 0...conjuncts.length) false];
 		if (inInlineFunction(stack, s)) return covered;
 		final compKind: String = chainKind == s.andKind ? s.notEqKind : s.eqKind;
 		final operands: Array<Null<QueryNode>> = [for (c in conjuncts) nullCompOperand(c, compKind, s)];

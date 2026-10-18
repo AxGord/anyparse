@@ -1,10 +1,10 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.BuildFailure.BuildFailureResult;
+import anyparse.query.ExitCode.*;
 import anyparse.query.MutationVerdict.MutationVerdictResult;
 import anyparse.query.cli.CliContext;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 
@@ -102,11 +102,12 @@ final class MutationVerdictCommand implements CliCommand {
 			CliIo.stderr('apq mutation-verdict: --build reads one build log (got ${logPaths.length})\n');
 			return EXIT_USAGE;
 		}
-		final raws: Array<String> = [];
-		for (path in logPaths) raws.push(try CliIo.readFile(path) catch (exception: Exception) {
-			CliIo.stderr('apq mutation-verdict: read failed: ${exception.message}\n');
-			return EXIT_RUNTIME;
-		});
+		final raws: Array<String> = [
+			for (path in logPaths) try CliIo.readFile(path) catch (exception: Exception) {
+				CliIo.stderr('apq mutation-verdict: read failed: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			}
+		];
 		final raw: String = raws[0];
 		if (buildLog) {
 			final failure: BuildFailureResult = BuildFailure.classify(raw);

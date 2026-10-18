@@ -78,21 +78,6 @@ final class ProjectCoverage {
 		#end
 	}
 
-	/**
-	 * Whether `exclude` names `file`: an entry, its leading and trailing `/` trimmed, occurs in the path as a run of
-	 * whole `/`-bounded segments (`src/tests` drops `src/tests/A.hx`, never `src/testsuite/A.hx`).
-	 */
-	public static function excluded(file: String, exclude: Array<String>): Bool {
-		final wrapped: String = '/' + file.replace('\\', '/') + '/';
-		for (p in exclude) {
-			var trimmed: String = p;
-			while (trimmed.startsWith('/')) trimmed = trimmed.substring(1);
-			while (trimmed.endsWith('/')) trimmed = trimmed.substring(0, trimmed.length - 1);
-			if (trimmed.length > 0 && wrapped.indexOf('/$trimmed/') != -1) return true;
-		}
-		return false;
-	}
-
 	#if (sys || nodejs)
 	/**
 	 * Whether every `.hx` file of the project `document` declares is a run file, those `skip` answers for left out — asked
@@ -140,5 +125,20 @@ final class ProjectCoverage {
 		return found;
 	}
 	#end
+
+	/**
+	 * Whether `exclude` names `file`: an entry, its leading and trailing `/` trimmed, occurs in the path as a run of
+	 * whole `/`-bounded segments (`src/tests` drops `src/tests/A.hx`, never `src/testsuite/A.hx`).
+	 */
+	public static function excluded(file: String, exclude: Array<String>): Bool {
+		final wrapped: String = '/' + file.replace('\\', '/') + '/';
+		for (p in exclude) {
+			var trimmed: String = p;
+			while (trimmed.startsWith('/')) trimmed = trimmed.substring(1);
+			while (trimmed.endsWith('/')) trimmed = trimmed.substring(0, trimmed.length - 1);
+			if (trimmed.length > 0 && wrapped.indexOf('/$trimmed/') != -1) return true;
+		}
+		return false;
+	}
 
 }

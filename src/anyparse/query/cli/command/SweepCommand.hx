@@ -1,12 +1,12 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.command.SweepCorpus.SweepCorpusResult;
 import anyparse.query.format.json.SweepFixture;
 import anyparse.query.format.json.SweepSnapshot;
 import anyparse.query.format.json.SweepSnapshotParser;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;
@@ -105,6 +105,99 @@ final class SweepCommand implements CliCommand {
 			// per-entry via the null checks above, unchanged)
 		}
 		return out;
+	}
+
+	/**
+	 * The "there is no snapshot to read" diagnostic for the totals path — the
+	 * sibling of `sweepDiffNoBaseline`, which the `--diff` path already had.
+	 *
+	 * `apq sweep` REPORTS a corpus run; it never performs one. The totals are
+	 * written by the corpus harness inside `bin/test.js`, which needs
+	 * `ANYPARSE_HXFORMAT_FORK`. So in a tree where that has not run yet EVERY sweep
+	 * form fails, `--save` included — there is nothing to copy — and running a
+	 * plain `sweep` first does not seed it either, because a plain `sweep` reads
+	 * the very same file. The old line named only the path, which reads as a
+	 * corrupt JSON rather than as a file nobody has written yet; a batch protocol
+	 * grew a "run a plain sweep first" step off that misreading, and it never
+	 * worked.
+	 */
+	public static function sweepNoSnapshot(path: String, savePath: Null<String>, prev: Bool = false): String {
+		final head: String = if (prev)
+			'apq sweep: --prev $path: '
+		else if (savePath == null)
+			'apq sweep: '
+		else
+			'apq sweep: --save $savePath has nothing to copy: ';
+		// A `--prev` path is a BASELINE the user named, not the harness's own snapshot, so the
+		// remedy is `--save`, never the corpus run. Pointing at `node bin/test.js` there both
+		// blamed the wrong thing and contradicted the totals printed one line above — which
+		// only print when the harness HAS run.
+		return if (sweepSnapshotExists(path))
+			'$head$path exists but is not a sweep snapshot — malformed JSON, or no pass / fail / skip-parse totals.'
+				+ ' Re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to rewrite it\n'
+		else if (prev)
+			'${head}no snapshot at $path — a `--prev` baseline is one you saved, not one the corpus harness writes.'
+				+ ' Create it with `apq sweep --save $path` on the tree you want to compare against\n'
+		else
+			'${head}no corpus snapshot at $path — this tree has not run the corpus harness yet, and `sweep` only READS what that'
+				+ ' run writes (a plain `sweep` first reads the same file, so it does not seed it). Run `node bin/test.js` under'
+				+ ' $$ANYPARSE_HXFORMAT_FORK, then re-run this command\n';
+	}
+
+	/**
+	 * Why `--diff` has no baseline, as the line the caller prints — and the remedy that
+	 * matches the actual cause.
+	 *
+	 * `loadSweepFixtureStatus` fails soft: an ABSENT file, a malformed one and one holding
+	 * no `fixtures` array all come back as the same empty map. The single message this
+	 * used to print named the last of the three, so the common case — a fresh worktree
+	 * whose first corpus run has not rotated a baseline into existence yet — sent the
+	 * reader looking for a corrupt snapshot that was never written. `exists` is what tells
+	 * the two apart, and the auto-rotated default gets the extra sentence its provenance
+	 * needs: the harness copies the PREVIOUS snapshot over it before each write, so the
+	 * first sweep in a tree leaves it absent by construction and only the second creates it.
+	 */
+	public static function sweepDiffNoBaseline(prevPath: String, exists: Bool, autoRotated: Bool): String {
+		final cause: String = exists
+			? 'carries no readable `fixtures` array — malformed JSON, an older snapshot format, or a wrong-typed entry'
+			: 'does not exist';
+		final remedy: String = if (exists)
+			' — re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to rewrite it'
+		else if (autoRotated)
+			' — the corpus harness creates it by ROTATION, copying the previous `bin/.last-sweep.json` over it before each write, so '
+				+ 'the FIRST sweep in a tree leaves it absent and only the SECOND one makes a comparison possible. For a baseline that can '
+				+ 'fail against a CHANGE, save one before the change (`apq sweep --save <path>`) and pass it (`apq sweep --diff <path>`)'
+		else
+			' — save one with `apq sweep --save <path>` after a sweep of the tree you want to compare against';
+		return 'apq sweep: --diff: $prevPath $cause$remedy\n';
+	}
+
+	/**
+	 * What a `0 fixtures changed` off the DEFAULT baseline is worth, printed next to it.
+	 *
+	 * `bin/.prev-sweep.json` is not a baseline anybody chose: the corpus harness overwrites
+	 * it with the preceding run's snapshot before every write. So `--diff` with no path
+	 * compares the last TWO runs of the same tree — and when both of them ran after the edit
+	 * under test, which is the whole of a fresh worktree's history, 0 is the only answer it
+	 * can give. That line has been quoted as a slice gate; it is not one, and a gate that
+	 * cannot fail has to say so rather than print a pass.
+	 */
+	public static function sweepDiffAutoRotatedNote(prevPath: String): String {
+		return 'apq sweep: --diff: $prevPath is the AUTO-ROTATED baseline — the corpus harness overwrites it with the PREVIOUS run\'s'
+			+ ' snapshot before every write, so this compared the last two runs of this tree, not a change against its base. If both'
+			+ ' of those runs measured the same sources, 0 was the only possible answer. For a gate that can fail, snapshot before the'
+			+ ' change (`apq sweep --save <path>`) and compare with `apq sweep --diff <path>`.\n';
+	}
+
+	/**
+	 * The snapshot's fixture key as the diff maps it. Snapshots record paths
+	 * rooted at the FORK (`test/testcases/<subdir>/<name>`) while the recon
+	 * walker reports them rooted at the corpus directory, so the prefix comes
+	 * off here and both sides key the same way.
+	 */
+	public static function normaliseFixtureKey(path: String): String {
+		final corpusPrefix: String = 'test/testcases/';
+		return path.startsWith(corpusPrefix) ? path.substr(corpusPrefix.length) : path;
 	}
 
 	/**
@@ -296,88 +389,6 @@ final class SweepCommand implements CliCommand {
 	}
 
 	/**
-	 * The "there is no snapshot to read" diagnostic for the totals path — the
-	 * sibling of `sweepDiffNoBaseline`, which the `--diff` path already had.
-	 *
-	 * `apq sweep` REPORTS a corpus run; it never performs one. The totals are
-	 * written by the corpus harness inside `bin/test.js`, which needs
-	 * `ANYPARSE_HXFORMAT_FORK`. So in a tree where that has not run yet EVERY sweep
-	 * form fails, `--save` included — there is nothing to copy — and running a
-	 * plain `sweep` first does not seed it either, because a plain `sweep` reads
-	 * the very same file. The old line named only the path, which reads as a
-	 * corrupt JSON rather than as a file nobody has written yet; a batch protocol
-	 * grew a "run a plain sweep first" step off that misreading, and it never
-	 * worked.
-	 */
-	public static function sweepNoSnapshot(path: String, savePath: Null<String>, prev: Bool = false): String {
-		final head: String = if (prev)
-			'apq sweep: --prev $path: '
-		else if (savePath == null)
-			'apq sweep: '
-		else
-			'apq sweep: --save $savePath has nothing to copy: ';
-		// A `--prev` path is a BASELINE the user named, not the harness's own snapshot, so the
-		// remedy is `--save`, never the corpus run. Pointing at `node bin/test.js` there both
-		// blamed the wrong thing and contradicted the totals printed one line above — which
-		// only print when the harness HAS run.
-		return if (sweepSnapshotExists(path))
-			'$head$path exists but is not a sweep snapshot — malformed JSON, or no pass / fail / skip-parse totals.'
-				+ ' Re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to rewrite it\n'
-		else if (prev)
-			'${head}no snapshot at $path — a `--prev` baseline is one you saved, not one the corpus harness writes.'
-				+ ' Create it with `apq sweep --save $path` on the tree you want to compare against\n'
-		else
-			'${head}no corpus snapshot at $path — this tree has not run the corpus harness yet, and `sweep` only READS what that'
-				+ ' run writes (a plain `sweep` first reads the same file, so it does not seed it). Run `node bin/test.js` under'
-				+ ' $$ANYPARSE_HXFORMAT_FORK, then re-run this command\n';
-	}
-
-	/**
-	 * Why `--diff` has no baseline, as the line the caller prints — and the remedy that
-	 * matches the actual cause.
-	 *
-	 * `loadSweepFixtureStatus` fails soft: an ABSENT file, a malformed one and one holding
-	 * no `fixtures` array all come back as the same empty map. The single message this
-	 * used to print named the last of the three, so the common case — a fresh worktree
-	 * whose first corpus run has not rotated a baseline into existence yet — sent the
-	 * reader looking for a corrupt snapshot that was never written. `exists` is what tells
-	 * the two apart, and the auto-rotated default gets the extra sentence its provenance
-	 * needs: the harness copies the PREVIOUS snapshot over it before each write, so the
-	 * first sweep in a tree leaves it absent by construction and only the second creates it.
-	 */
-	public static function sweepDiffNoBaseline(prevPath: String, exists: Bool, autoRotated: Bool): String {
-		final cause: String = exists
-			? 'carries no readable `fixtures` array — malformed JSON, an older snapshot format, or a wrong-typed entry'
-			: 'does not exist';
-		final remedy: String = if (exists)
-			' — re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to rewrite it'
-		else if (autoRotated)
-			' — the corpus harness creates it by ROTATION, copying the previous `bin/.last-sweep.json` over it before each write, so '
-				+ 'the FIRST sweep in a tree leaves it absent and only the SECOND one makes a comparison possible. For a baseline that can '
-				+ 'fail against a CHANGE, save one before the change (`apq sweep --save <path>`) and pass it (`apq sweep --diff <path>`)'
-		else
-			' — save one with `apq sweep --save <path>` after a sweep of the tree you want to compare against';
-		return 'apq sweep: --diff: $prevPath $cause$remedy\n';
-	}
-
-	/**
-	 * What a `0 fixtures changed` off the DEFAULT baseline is worth, printed next to it.
-	 *
-	 * `bin/.prev-sweep.json` is not a baseline anybody chose: the corpus harness overwrites
-	 * it with the preceding run's snapshot before every write. So `--diff` with no path
-	 * compares the last TWO runs of the same tree — and when both of them ran after the edit
-	 * under test, which is the whole of a fresh worktree's history, 0 is the only answer it
-	 * can give. That line has been quoted as a slice gate; it is not one, and a gate that
-	 * cannot fail has to say so rather than print a pass.
-	 */
-	public static function sweepDiffAutoRotatedNote(prevPath: String): String {
-		return 'apq sweep: --diff: $prevPath is the AUTO-ROTATED baseline — the corpus harness overwrites it with the PREVIOUS run\'s'
-			+ ' snapshot before every write, so this compared the last two runs of this tree, not a change against its base. If both'
-			+ ' of those runs measured the same sources, 0 was the only possible answer. For a gate that can fail, snapshot before the'
-			+ ' change (`apq sweep --save <path>`) and compare with `apq sweep --diff <path>`.\n';
-	}
-
-	/**
 	 * `--run`: re-derive the census from the corpus on disk instead of reading
 	 * the snapshot a `node bin/test.js` left behind. Prints the same totals
 	 * line the reader prints, so the two are directly comparable; `--diff`
@@ -454,17 +465,6 @@ final class SweepCommand implements CliCommand {
 	}
 
 	/**
-	 * The snapshot's fixture key as the diff maps it. Snapshots record paths
-	 * rooted at the FORK (`test/testcases/<subdir>/<name>`) while the recon
-	 * walker reports them rooted at the corpus directory, so the prefix comes
-	 * off here and both sides key the same way.
-	 */
-	public static function normaliseFixtureKey(path: String): String {
-		final corpusPrefix: String = 'test/testcases/';
-		return path.startsWith(corpusPrefix) ? path.substr(corpusPrefix.length) : path;
-	}
-
-	/**
 	 * Read `path` (`bin/.last-sweep.json` / a `--prev`/`--diff` snapshot) into
 	 * the six-int `SweepTotals`, via the declared `SweepSnapshot` schema.
 	 * Returns null when the file is missing, the JSON is malformed, OR a
@@ -475,9 +475,8 @@ final class SweepCommand implements CliCommand {
 	 * absent, matching the pre-schema Reflect-based reader.
 	 */
 	private static function loadSweepJson(path: String): Null<SweepTotals> {
-		return !sys.FileSystem.exists(path)
-			? null
-			: try {
+		return sys.FileSystem.exists(path)
+			? try {
 				final raw: String = sys.io.File.getContent(path);
 				final snapshot: SweepSnapshot = SweepSnapshotParser.parse(raw);
 				final pass: Null<Int> = snapshot.pass;
@@ -492,7 +491,8 @@ final class SweepCommand implements CliCommand {
 					skipConfig: snapshot.skipConfig ?? 0,
 					skipMalformed: snapshot.skipMalformed ?? 0
 				};
-			} catch (_: Exception) null;
+			} catch (_: Exception) null
+			: null;
 	}
 
 	private static inline function sweepSigned(n: Int): String return n > 0 ? '+$n' : '$n';

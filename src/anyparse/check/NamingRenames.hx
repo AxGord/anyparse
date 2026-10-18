@@ -1293,8 +1293,7 @@ final class NamingRenames {
 	): Array<Span> {
 		if (exclusive.length == 0) return [];
 		final out: Array<Span> = [];
-		for (h in Refs.find(newName, tree, shape)) {
-			if (h.kind != RefKind.Decl) continue;
+		for (h in Refs.find(newName, tree, shape)) if (h.kind == RefKind.Decl) {
 			final off: Int = SourceText.identTokenOffset(source, h.span, newName);
 			if (off < 0 || !OccurrenceScan.offsetWithinAny(off, exclusive)) continue;
 			for (occ in Rename.renameOccurrences(source, tree, h.span.from, shape)) if (!out.exists(s -> s.from == occ.from)) out.push(occ);

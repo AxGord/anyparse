@@ -25,6 +25,9 @@ final class CallGraphTypes {
 	/** What each file's imports and `using`s bring into scope by simple name. */
 	public final imports: CallGraphImports;
 
+	/** What each type's modifiers and metadata say: extern, built by a macro, constructed from a literal, forwarding. */
+	public final meta: TypeMetaFacts;
+
 	/** Type name -> the names of its STATIC members — a bare call to one of those is not an implicit-`this` dispatch. */
 	private final _staticMembers: Map<String, Array<String>> = [];
 
@@ -63,9 +66,6 @@ final class CallGraphTypes {
 
 	/** The files whose declarations the tables hold, each with the index entry it was read from. */
 	private final _files: Map<String, HeldFile> = [];
-
-	/** What each type's modifiers and metadata say: extern, built by a macro, constructed from a literal, forwarding. */
-	public final meta: TypeMetaFacts;
 
 	/** The type parameters each type declares, and the arguments its supertypes are given. */
 	public final generics: CallGraphGenerics = new CallGraphGenerics();
@@ -119,7 +119,6 @@ final class CallGraphTypes {
 	public inline function heldFile(file: String): Null<HeldFile> {
 		return _files[CallGraphNames.normalizePath(file)];
 	}
-
 
 	/** Whether any indexed type declares a STATIC function named `name`. */
 	public inline function hasStaticFunctionNamed(name: String): Bool {
@@ -362,6 +361,12 @@ final class CallGraphTypes {
 		};
 	}
 
+	public static function unionInto(map: Map<String, Array<String>>, key: String, values: Array<String>): Void {
+		final list: Array<String> = map[key] ?? [];
+		for (v in values) if (!list.contains(v)) list.push(v);
+		map[key] = list;
+	}
+
 	/** `a` when `b` spells the same, else null: two declarations that type something differently type it as neither. */
 	private static inline function agreed(a: Null<String>, b: Null<String>): Null<String> {
 		return a == b ? a : null;
@@ -375,12 +380,6 @@ final class CallGraphTypes {
 	/** Every entry of `a`, then each of `b` it lacks. */
 	private static function union(a: Array<String>, b: Array<String>): Array<String> {
 		return a.concat([for (x in b) if (!a.contains(x)) x]);
-	}
-
-	public static function unionInto(map: Map<String, Array<String>>, key: String, values: Array<String>): Void {
-		final list: Array<String> = map[key] ?? [];
-		for (v in values) if (!list.contains(v)) list.push(v);
-		map[key] = list;
 	}
 
 }

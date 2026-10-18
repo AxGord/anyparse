@@ -1,9 +1,9 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.macro.ParseDispatchLowering.*;
 import haxe.macro.Expr;
 import haxe.macro.ExprTools;
-import anyparse.macro.ParseDispatchLowering.*;
 
 /**
  * Pass 3 — the span-argument instrumentation of an emitted rule body.

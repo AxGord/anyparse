@@ -538,9 +538,6 @@ final class CompilerFacts {
 	 */
 	private final _madeFrom: Map<String, Array<String>> = [];
 
-	/** The files the node being made has read so far (`indexOf`), while one is being made. */
-	private var _reading: Null<Map<String, Bool>> = null;
-
 	private final _types: Map<String, TypeFact> = [];
 	private final _typeHomes: Map<String, Array<HomeRecord>> = [];
 	private final _supers: Map<String, Array<String>> = [];
@@ -554,21 +551,33 @@ final class CompilerFacts {
 	private final _originals: Map<String, String> = [];
 
 	private final _dumps: Array<DumpFiles> = [];
+	private final _read: (String) -> Null<String>;
+	private final _key: (String) -> String;
+
+	/** The files the node being made has read so far (`indexOf`), while one is being made. */
+	private var _reading: Null<Map<String, Bool>> = null;
 
 	/** Typed type id -> the ids of its field nodes (`nodeIdsOf`), built on first need and dropped by `add`. */
 	private var _byOwner: Null<Map<String, Array<String>>> = null;
 
-	private final _read: (String) -> Null<String>;
-	private final _key: (String) -> String;
-
 	private function new(read: (String) -> Null<String>, key: (String) -> String) {
-		this._read = read;
-		this._key = key;
+		_read = read;
+		_key = key;
 	}
 
 	/** The table key of `file`: what a fact's `FactPos.file` spells it as. */
 	public inline function keyOf(file: String): String {
 		return _key(file);
+	}
+
+	/** The id of every node some configuration typed: every function and initializer, nested ones included. */
+	public inline function nodeIds(): Iterator<String> {
+		return _nodeLines.keys();
+	}
+
+	/** The id of every type some configuration typed. */
+	public inline function typeIds(): Iterator<String> {
+		return _types.keys();
 	}
 
 	/**
@@ -679,11 +688,6 @@ final class CompilerFacts {
 		return made;
 	}
 
-	/** The id of every node some configuration typed: every function and initializer, nested ones included. */
-	public inline function nodeIds(): Iterator<String> {
-		return _nodeLines.keys();
-	}
-
 	/**
 	 * The ids of the nodes of the typed type `typeId`'s fields — each field's body or initializer, its further overloads,
 	 * its static initializer (`__init__`) — a macro-generated one among them, whichever file it lies in; not the functions
@@ -727,28 +731,6 @@ final class CompilerFacts {
 		return out;
 	}
 
-	/**
-	 * The node `id` of the file keyed `home`: unioned over every configuration — save what configurations typed of it in
-	 * another file where it has a range of its own, a copy of its type each build reads from its own (`typeHomes`): that
-	 * copy is a declaration of its own, asked by its own file's ranges, and its code, at its own positions, is no code of
-	 * a range here. The node is then placed in `home`, not in the first build's copy. A body a macro placed elsewhere, which
-	 * no range holds, stays.
-	 */
-	private function homedIn(id: String, home: String): Null<FactNode> {
-		final lines: Array<NodeLine> = _nodeLines[id] ?? [];
-		function own(l: NodeLine): Bool {
-			return l.home == home || !(_nodeFiles[l.home] ?? []).exists(r -> r.id == id);
-		}
-		if (lines.foreach(own)) return node(id);
-		final key: String = '$id@$home';
-		if (_builtCache.exists(key)) return _builtCache[key];
-		// a line homed here first: the node is placed where the first line places it
-		final kept: Array<NodeLine> = [for (l in lines) if (l.home == home) l].concat([for (l in lines) if (l.home != home && own(l)) l]);
-		final made: Null<FactNode> = kept.length == 0 ? null : materializeAs(BUILT_ENTRY + key, id, kept);
-		_builtCache[key] = made;
-		return made;
-	}
-
 	/** The innermost node of `file` whose range contains `span`; null when no configuration typed code there. */
 	public function nodeAt(file: String, span: Span): Null<FactNode> {
 		final containing: Array<FactNode> = nodesAround(file, span);
@@ -788,7 +770,7 @@ final class CompilerFacts {
 	public function typeOfExpressionAt(file: String, span: Span): Null<String> {
 		final source: Null<String> = sourceOf(_key(file));
 		if (source == null) return null;
-		final text: String = StringTools.trim(source.substring(span.from, span.to));
+		final text: String = source.substring(span.from, span.to).trim();
 		final seen: Array<String> = [];
 		final bare: Bool = FactText.bare(text);
 		for (n in nodesAround(file, span)) for (site in FactText.typedSites(n, bare)) {
@@ -823,11 +805,6 @@ final class CompilerFacts {
 	/** The type `id` (`pack.Name`); null when no configuration typed it. */
 	public function type(id: String): Null<TypeFact> {
 		return _types[id];
-	}
-
-	/** The id of every type some configuration typed. */
-	public inline function typeIds(): Iterator<String> {
-		return _types.keys();
 	}
 
 	/**
@@ -900,6 +877,93 @@ final class CompilerFacts {
 				files.paths[record.i] = dump.file(record.path);
 			}
 		}
+	}
+
+	/**
+	 * The nodes of `file` whose range contains `span` — or, when `touching`,
+	 * meets it — outermost first; none when the file cannot be read.
+	 */
+	public function nodesAround(file: String, span: Span, ?touching: Bool): Array<FactNode> {
+		final home: String = _key(file);
+		final index: Null<CodepointIndex> = indexOf(home);
+		if (index == null) return [];
+		final from: Int = index.toCodepoint(span.from);
+		final to: Int = index.toCodepoint(span.to);
+		final meets: (NodeRange) -> Bool = touching == true ? r -> r.min < to && from < r.max : r -> r.min <= from && to <= r.max;
+		final ranges: Array<NodeRange> = [for (r in _nodeFiles[home] ?? []) if (meets(r)) r];
+		ranges.sort((a, b) -> a.min != b.min ? a.min - b.min : b.max - a.max);
+		final out: Array<FactNode> = [];
+		for (r in ranges) {
+			final made: Null<FactNode> = homedIn(r.id, home);
+			if (made != null) out.push(made);
+		}
+		return out;
+	}
+
+	/**
+	 * The facts `pick` takes from the nodes of `file` meeting `span` that lie inside it; a node wholly inside `span`
+	 * gives all of them, wherever the compiler placed them. Null — Unknown — when one of those nodes cannot say where
+	 * some of its facts run (`callsIn`). With `spliced`, a node an inlined function was spliced into (`inline-site-unknown`)
+	 * gives, beside those inside `span`, each fact it holds outside its own range (`placed`) that may run in `span`: one
+	 * a splice brought (`spliceOf`) when a site of that splice meets `span` and the method is not `harmless` — it runs no
+	 * project code, and the `inlined` call of it answers for all it does — one an expression macro's expansion brought
+	 * (`expansionOf`) when a site it runs at (`expansionSites`) meets `span`, and one neither brought wherever it lies, since
+	 * it may run anywhere in the node. Without `spliced`, what a macro expanded into stays Unknown, and so, always, do facts
+	 * lost to a stale file.
+	 */
+	public function within<F>(
+		file: String, span: Span, pick: (FactNode) -> Array<F>, at: (F) -> FactPos, spliced: Bool = false,
+		?harmless: (callee:String) -> Bool
+	): Null<Array<F>> {
+		final key: String = _key(file);
+		final dropped: (callee:String) -> Bool = harmless ?? callee -> false;
+		final out: Array<F> = [];
+		for (n in nodesAround(file, span, true)) {
+			if (lostWhere(n)) return null;
+			final whole: Bool = inside(key, span, n.at);
+			final splice: Bool = FactMarkers.carries(n, m -> m.match(InlineSite));
+			final expanded: Bool = FactMarkers.carries(n, m -> m.match(MacroExpansion));
+			if (!whole && !spliced && (expanded || splice)) return null;
+			for (fact in pick(n)) {
+				final where: FactPos = at(fact);
+				if (splice && spliced && !FactSites.placed(n, where) ? runsIn(n, where, span, dropped) : whole || inside(key, span, where))
+					out.push(fact);
+			}
+		}
+		return out;
+	}
+
+	/** The source of the file keyed `file` when it is the text the compile read, read once; null otherwise. */
+	public function sourceOf(file: String): Null<String> {
+		if (_sources.exists(file)) return _sources[file];
+		final read: Null<String> = _stale.exists(file) ? null : _read(file);
+		final expected: Null<String> = _expected[file];
+		// facts of a text other than the one on disk describe no position in it: the file's facts are absent
+		final source: Null<String> = read == null || expected == null || FactText.contentHash(read) == expected ? read : null;
+		_sources[file] = source;
+		return source;
+	}
+
+	/**
+	 * The node `id` of the file keyed `home`: unioned over every configuration — save what configurations typed of it in
+	 * another file where it has a range of its own, a copy of its type each build reads from its own (`typeHomes`): that
+	 * copy is a declaration of its own, asked by its own file's ranges, and its code, at its own positions, is no code of
+	 * a range here. The node is then placed in `home`, not in the first build's copy. A body a macro placed elsewhere, which
+	 * no range holds, stays.
+	 */
+	private function homedIn(id: String, home: String): Null<FactNode> {
+		final lines: Array<NodeLine> = _nodeLines[id] ?? [];
+		function own(l: NodeLine): Bool {
+			return l.home == home || !(_nodeFiles[l.home] ?? []).exists(r -> r.id == id);
+		}
+		if (lines.foreach(own)) return node(id);
+		final key: String = '$id@$home';
+		if (_builtCache.exists(key)) return _builtCache[key];
+		// a line homed here first: the node is placed where the first line places it
+		final kept: Array<NodeLine> = [for (l in lines) if (l.home == home) l].concat([for (l in lines) if (l.home != home && own(l)) l]);
+		final made: Null<FactNode> = kept.length == 0 ? null : materializeAs(BUILT_ENTRY + key, id, kept);
+		_builtCache[key] = made;
+		return made;
 	}
 
 	private function addNode(line: String, index: Int, dump: FactsDump): Void {
@@ -985,21 +1049,6 @@ final class CompilerFacts {
 			same.builds.push(build);
 	}
 
-	/** The declared field a type record's field record `f` describes, as one configuration recorded it. */
-	private static function declaredField(f: FieldRecord): FieldDeclFact {
-		return {
-			name: f.n,
-			kind: f.k,
-			kinds: [f.k],
-			type: f.t,
-			isStatic: f.s ?? false,
-			meta: f.meta ?? [],
-			code: f.code ?? [],
-			types: [f.t],
-			overloads: [f.over ?? 0]
-		};
-	}
-
 	private function link(child: String, parent: String): Void {
 		final up: Array<String> = _supers[child] ?? [];
 		_supers[child] = up;
@@ -1009,97 +1058,8 @@ final class CompilerFacts {
 		if (!down.contains(child)) down.push(child);
 	}
 
-	/**
-	 * The nodes of `file` whose range contains `span` — or, when `touching`,
-	 * meets it — outermost first; none when the file cannot be read.
-	 */
-	public function nodesAround(file: String, span: Span, ?touching: Bool): Array<FactNode> {
-		final home: String = _key(file);
-		final index: Null<CodepointIndex> = indexOf(home);
-		if (index == null) return [];
-		final from: Int = index.toCodepoint(span.from);
-		final to: Int = index.toCodepoint(span.to);
-		final meets: (NodeRange) -> Bool = touching == true ? r -> r.min < to && from < r.max : r -> r.min <= from && to <= r.max;
-		final ranges: Array<NodeRange> = [for (r in _nodeFiles[home] ?? []) if (meets(r)) r];
-		ranges.sort((a, b) -> a.min != b.min ? a.min - b.min : b.max - a.max);
-		final out: Array<FactNode> = [];
-		for (r in ranges) {
-			final made: Null<FactNode> = homedIn(r.id, home);
-			if (made != null) out.push(made);
-		}
-		return out;
-	}
-
 	private function same(at: Null<FactPos>, file: String, span: Span): Bool {
 		return at != null && at.file == _key(file) && at.span.from == span.from && at.span.to == span.to;
-	}
-
-	/**
-	 * The facts `pick` takes from the nodes of `file` meeting `span` that lie inside it; a node wholly inside `span`
-	 * gives all of them, wherever the compiler placed them. Null — Unknown — when one of those nodes cannot say where
-	 * some of its facts run (`callsIn`). With `spliced`, a node an inlined function was spliced into (`inline-site-unknown`)
-	 * gives, beside those inside `span`, each fact it holds outside its own range (`placed`) that may run in `span`: one
-	 * a splice brought (`spliceOf`) when a site of that splice meets `span` and the method is not `harmless` — it runs no
-	 * project code, and the `inlined` call of it answers for all it does — one an expression macro's expansion brought
-	 * (`expansionOf`) when a site it runs at (`expansionSites`) meets `span`, and one neither brought wherever it lies, since
-	 * it may run anywhere in the node. Without `spliced`, what a macro expanded into stays Unknown, and so, always, do facts
-	 * lost to a stale file.
-	 */
-	public function within<F>(
-		file: String, span: Span, pick: (FactNode) -> Array<F>, at: (F) -> FactPos, spliced: Bool = false,
-		?harmless: (callee:String) -> Bool
-	): Null<Array<F>> {
-		final key: String = _key(file);
-		final dropped: (callee:String) -> Bool = harmless ?? callee -> false;
-		final out: Array<F> = [];
-		for (n in nodesAround(file, span, true)) {
-			if (lostWhere(n)) return null;
-			final whole: Bool = inside(key, span, n.at);
-			final splice: Bool = FactMarkers.carries(n, m -> m.match(InlineSite));
-			final expanded: Bool = FactMarkers.carries(n, m -> m.match(MacroExpansion));
-			if (!whole && !spliced && (expanded || splice)) return null;
-			for (fact in pick(n)) {
-				final where: FactPos = at(fact);
-				if (splice && spliced && !FactSites.placed(n, where) ? runsIn(n, where, span, dropped) : whole || inside(key, span, where))
-					out.push(fact);
-			}
-		}
-		return out;
-	}
-
-	/**
-	 * Whether `n` holds a fact lost with its file, which runs where no position says, or a marker no reader knows,
-	 * which may say the same.
-	 */
-	private static function lostWhere(n: FactNode): Bool {
-		return FactMarkers.carries(
-			n, m -> switch m {
-				case StaleForeign | Unknown(_): true;
-				case InlineSite | MacroExpansion | ReflectionInlined | ReflectionUnattributed | ReflectionFrom(_): false;
-			}
-		);
-	}
-
-	/** Whether `where` lies in the file keyed `key`, inside `span`. */
-	private static inline function inside(key: String, span: Span, where: FactPos): Bool {
-		return where.file == key && span.from <= where.span.from && where.span.to <= span.to;
-	}
-
-	/** Whether one of `sites` meets `span`. */
-	private static inline function meets(sites: Array<Span>, span: Span): Bool {
-		return sites.exists(s -> s.from < span.to && span.from < s.to);
-	}
-
-	/**
-	 * Whether the fact `n` holds at `where`, outside its own range, may run in `span` (`within`): a splice's when a site of
-	 * it meets `span` and its method is not `dropped`, an expansion's when a site it runs at does, any other's always.
-	 */
-	private static function runsIn(n: FactNode, where: FactPos, span: Span, dropped: (callee:String) -> Bool): Bool {
-		final splice: Null<SpliceFact> = FactSites.spliceOf(n, where);
-		if (splice != null) return !dropped(splice.callee) && meets(splice.sites, span);
-		final expansion: Null<ExpansionFact> = FactSites.expansionOf(n, where);
-		final sites: Null<Array<Span>> = expansion == null ? null : FactSites.expansionSites(n, expansion);
-		return sites == null || meets(sites, span);
 	}
 
 	private function indexOf(file: String): Null<CodepointIndex> {
@@ -1110,17 +1070,6 @@ final class CompilerFacts {
 		final index: Null<CodepointIndex> = source == null ? null : CodepointIndex.of(source);
 		_indexes[file] = index;
 		return index;
-	}
-
-	/** The source of the file keyed `file` when it is the text the compile read, read once; null otherwise. */
-	public function sourceOf(file: String): Null<String> {
-		if (_sources.exists(file)) return _sources[file];
-		final read: Null<String> = _stale.exists(file) ? null : _read(file);
-		final expected: Null<String> = _expected[file];
-		// facts of a text other than the one on disk describe no position in it: the file's facts are absent
-		final source: Null<String> = read == null || expected == null || FactText.contentHash(read) == expected ? read : null;
-		_sources[file] = source;
-		return source;
 	}
 
 	/** `p` of a record homed in `home`, in `Span` units; null when its file cannot be read or is not announced. */
@@ -1189,7 +1138,7 @@ final class CompilerFacts {
 		}
 		// a fact is identified by its resolved text, so the same site from two configurations is one fact
 		function fresh(category: String, fact: Any, where: FactPos): Bool {
-			final identity: String = category + ' ' + where.file + ' ' + where.span.from + ' ' + where.span.to + ' ' + Json.stringify(fact);
+			final identity: String = '$category ${where.file} ${where.span.from} ${where.span.to} ${Json.stringify(fact)}';
 			if (seen.exists(identity)) return false;
 			seen[identity] = true;
 			return true;
@@ -1222,6 +1171,56 @@ final class CompilerFacts {
 	public static function baseId(type: String): String {
 		final open: Int = type.indexOf('<');
 		return open < 0 ? type : type.substr(0, open);
+	}
+
+	/** Whether `where` lies in the file keyed `key`, inside `span`. */
+	private static inline function inside(key: String, span: Span, where: FactPos): Bool {
+		return where.file == key && span.from <= where.span.from && where.span.to <= span.to;
+	}
+
+	/** Whether one of `sites` meets `span`. */
+	private static inline function meets(sites: Array<Span>, span: Span): Bool {
+		return sites.exists(s -> s.from < span.to && span.from < s.to);
+	}
+
+	/** The declared field a type record's field record `f` describes, as one configuration recorded it. */
+	private static function declaredField(f: FieldRecord): FieldDeclFact {
+		return {
+			name: f.n,
+			kind: f.k,
+			kinds: [f.k],
+			type: f.t,
+			isStatic: f.s ?? false,
+			meta: f.meta ?? [],
+			code: f.code ?? [],
+			types: [f.t],
+			overloads: [f.over ?? 0]
+		};
+	}
+
+	/**
+	 * Whether `n` holds a fact lost with its file, which runs where no position says, or a marker no reader knows,
+	 * which may say the same.
+	 */
+	private static function lostWhere(n: FactNode): Bool {
+		return FactMarkers.carries(
+			n, m -> switch m {
+				case StaleForeign, Unknown(_): true;
+				case InlineSite, MacroExpansion, ReflectionInlined, ReflectionUnattributed, ReflectionFrom(_): false;
+			}
+		);
+	}
+
+	/**
+	 * Whether the fact `n` holds at `where`, outside its own range, may run in `span` (`within`): a splice's when a site of
+	 * it meets `span` and its method is not `dropped`, an expansion's when a site it runs at does, any other's always.
+	 */
+	private static function runsIn(n: FactNode, where: FactPos, span: Span, dropped: (callee:String) -> Bool): Bool {
+		final splice: Null<SpliceFact> = FactSites.spliceOf(n, where);
+		if (splice != null) return !dropped(splice.callee) && meets(splice.sites, span);
+		final expansion: Null<ExpansionFact> = FactSites.expansionOf(n, where);
+		final sites: Null<Array<Span>> = expansion == null ? null : FactSites.expansionSites(n, expansion);
+		return sites == null || meets(sites, span);
 	}
 
 	/** The kind of the facts record `line` (`{"k":"<kind>",…}`), or an empty one when it names none. */

@@ -1,11 +1,11 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ExitCode.*;
 import anyparse.query.NewFile.NewFileResult;
 import anyparse.query.NewFile.NewFileSpec;
 import anyparse.query.cli.CliContext;
 import haxe.io.Path;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;
@@ -68,27 +68,6 @@ final class NewCommand implements CliCommand {
 		printNewUsage();
 	}
 
-	private static inline function newParseExit(code: Int): NewOpts {
-		return {
-			lang: '',
-			write: false,
-			asClass: false,
-			open: false,
-			raw: false,
-			kind: 'class',
-			iface: null,
-			underlying: null,
-			bodiesArg: null,
-			bodiesFromFile: null,
-			extendsList: [],
-			fromList: [],
-			toList: [],
-			fields: [],
-			path: null,
-			errExit: code
-		};
-	}
-
 	/**
 	 * `apq new <path> (--class | --implements <iface>) [--field <m>]...
 	 * [--bodies -] [--write]` — create a new module deterministically: derive
@@ -124,6 +103,27 @@ final class NewCommand implements CliCommand {
 		return '';
 	}
 
+	private static inline function newParseExit(code: Int): NewOpts {
+		return {
+			lang: '',
+			write: false,
+			asClass: false,
+			open: false,
+			raw: false,
+			kind: 'class',
+			iface: null,
+			underlying: null,
+			bodiesArg: null,
+			bodiesFromFile: null,
+			extendsList: [],
+			fromList: [],
+			toList: [],
+			fields: [],
+			path: null,
+			errExit: code
+		};
+	}
+
 	/**
 	 * Resolve an `--implements` argument to the interface's source plus the
 	 * import the new file needs. A qualified `pkg.Name` maps to
@@ -155,7 +155,7 @@ final class NewCommand implements CliCommand {
 			}
 			if (srcRoot == null) return null;
 			final file: String = '${srcRoot + iface.split('.').join('/')}.hx';
-			return !FileSystem.exists(file) ? null : { source: CliIo.readFile(file), ifaceModule: iface, simple: simple };
+			return FileSystem.exists(file) ? { source: CliIo.readFile(file), ifaceModule: iface, simple: simple } : null;
 		}
 		final file: String = '${Path.directory(FileSystem.absolutePath(newPath))}/$iface.hx';
 		if (!FileSystem.exists(file)) return null;

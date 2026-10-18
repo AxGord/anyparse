@@ -45,6 +45,11 @@ final class ReachHazards {
 		return kind == _shape.fieldAccessKind || kind == _shape.nullSafeAccessKind || kind == _shape.forceFieldAccessKind;
 	}
 
+	/** Drop what was computed for `file`, whose text changed. */
+	public inline function forget(file: String): Void {
+		_byFile.remove(file);
+	}
+
 	/** Every call node in `tree` inside `span`. */
 	public function callsIn(tree: QueryNode, span: Span): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
@@ -56,11 +61,6 @@ final class ReachHazards {
 		}
 		walk(tree);
 		return out;
-	}
-
-	/** Drop what was computed for `file`, whose text changed. */
-	public function forget(file: String): Void {
-		_byFile.remove(file);
 	}
 
 	/** The hazards of `tree` (the text of `file` is `source`) inside `span`, in document order. */

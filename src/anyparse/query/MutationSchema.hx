@@ -119,15 +119,16 @@ final class MutationSchema {
 	 * a module the build embeds as text. Fields of the type and not a class of their own: a module whose
 	 * types are all behind `#if macro` must still contribute no type to a build that is not one.
 	 */
-	private static final SWITCH_FIELDS: String = '\n\tprivate static var __mutActive: Null<Int>;\n' + '\t#if macro\n'
-		+ '\tprivate static var __mutReached: Null<Array<Int>>;\n' + '\t#end\n\n' + '\tpublic static function $SWITCH(id: Int): Bool {\n'
-		+ '\t\tvar active: Null<Int> = __mutActive;\n' + '\t\tif (active == null) {\n'
-		+ '\t\t\tfinal raw: Null<String> = Sys.getEnv(\'$ACTIVE_VAR\');\n' + '\t\t\tactive = raw == null ? 0 : Std.parseInt(raw) ?? 0;\n'
-		+ '\t\t\t__mutActive = active;\n' + '\t\t}\n' + '\t\t#if macro\n'
-		+ '\t\tfinal log: Null<String> = Sys.getEnv(\'$MACRO_LOG_VAR\');\n' + '\t\tfinal reached: Array<Int> = __mutReached ?? [];\n'
-		+ '\t\t__mutReached = reached;\n' + '\t\tif (log != null && !reached.contains(id)) {\n' + '\t\t\treached.push(id);\n'
-		+ '\t\t\tfinal out: sys.io.FileOutput = sys.io.File.append(log);\n' + '\t\t\tout.writeString(\'$$id\\n\');\n'
-		+ '\t\t\tout.close();\n' + '\t\t}\n' + '\t\t#end\n' + '\t\treturn active == id;\n' + '\t}\n';
+	private static final SWITCH_FIELDS: String = '\n\tprivate static var __mutActive: Null<Int>;\n\t#if macro\n'
+		+ '\tprivate static var __mutReached: Null<Array<Int>>;\n\t#end\n\n\tpublic static function '
+		+ '$SWITCH(id: Int): Bool {\n\t\tvar active: Null<Int> = __mutActive;\n'
+		+ '\t\tif (active == null) {\n\t\t\tfinal raw: Null<String> = Sys.getEnv(\'$ACTIVE_VAR\');\n'
+		+ '\t\t\tactive = raw == null ? 0 : Std.parseInt(raw) ?? 0;\n\t\t\t__mutActive = active;\n'
+		+ '\t\t}\n\t\t#if macro\n\t\tfinal log: Null<String> = Sys.getEnv(\'$MACRO_LOG_VAR\');\n'
+		+ '\t\tfinal reached: Array<Int> = __mutReached ?? [];\n\t\t__mutReached = reached;\n'
+		+ '\t\tif (log != null && !reached.contains(id)) {\n\t\t\treached.push(id);\n\t\t\tfinal out: '
+		+ 'sys.io.FileOutput = sys.io.File.append(log);\n\t\t\tout.writeString(\'$$id\\n\');\n'
+		+ '\t\t\tout.close();\n\t\t}\n\t\t#end\n\t\treturn active == id;\n\t}\n';
 
 	/** The modifiers a copy keeps (`Override` is dropped: the copy overrides nothing). */
 	private static final KEPT_MODIFIERS: Array<String> = ['Public', 'Private', 'Static', 'Inline', 'Dynamic', 'Final'];
@@ -172,15 +173,14 @@ final class MutationSchema {
 		final typed: Array<Int> = [];
 		for (arm in arms) {
 			final offset: Int = switchAt[arm.id] ?? -1;
-			if (offset >= 0 && !skips.exists(arm.id) && !typed.contains(offset)) {
-				typed.push(offset);
-				ordered.push({
-					at: offset,
-					text: SWITCH_FIELDS,
-					id: 0,
-					role: Switch
-				});
-			}
+			if (offset < 0 || skips.exists(arm.id) || typed.contains(offset)) continue;
+			typed.push(offset);
+			ordered.push({
+				at: offset,
+				text: SWITCH_FIELDS,
+				id: 0,
+				role: Switch
+			});
 		}
 		// stable: two inserts at one offset keep the order they were pushed in
 		haxe.ds.ArraySort.sort(ordered, (a, b) -> a.at - b.at);
@@ -298,28 +298,28 @@ final class MutationSchema {
 		var owner: Null<QueryNode> = parent;
 		while (owner != null && !TYPE_KINDS.contains(owner.kind)) owner = parentOf(tree, owner);
 		final closing: Int = closingBrace(source, owner);
-		if (closing < span.to) return Refused('no type body to hold the switch');
-		return Method({
-			name: name,
-			span: span,
-			bodyOpen: bodySpan.from,
-			modifiers: modifiers,
-			params: [
-				for (child in member.children) if (PARAM_KINDS.contains(child.kind))
-					(child.kind == 'Rest' ? '...' : '') + (child.name ?? '')
-			],
-			copyAt: parent == owner ? closing : span.to,
-			closing: closing,
-			owner: owner?.name ?? ''
-		});
+		return closing < span.to
+			? Refused('no type body to hold the switch')
+			: Method({
+				name: name,
+				span: span,
+				bodyOpen: bodySpan.from,
+				modifiers: modifiers,
+				params: [
+					for (child in member.children) if (PARAM_KINDS.contains(child.kind))
+						(child.kind == 'Rest' ? '...' : '') + (child.name ?? '')
+				],
+				copyAt: parent == owner ? closing : span.to,
+				closing: closing,
+				owner: owner?.name ?? ''
+			});
 	}
 
 	/** Whether a copy keeps `modifier`. */
 	private static function keeps(modifier: QueryNode): Bool {
-		return if (modifier.kind == 'Meta' || modifier.kind == 'MetaCall')
-			!DROPPED_METAS.contains(modifier.name ?? '')
-		else
-			KEPT_MODIFIERS.contains(modifier.kind);
+		return modifier.kind == 'Meta' || modifier.kind == 'MetaCall'
+			? !DROPPED_METAS.contains(modifier.name ?? '')
+			: KEPT_MODIFIERS.contains(modifier.kind);
 	}
 
 	/** The modifiers and metadata right before `member` among `parent`'s children, in source order. */

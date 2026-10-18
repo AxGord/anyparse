@@ -3,12 +3,12 @@ package anyparse.query.cli;
 import anyparse.check.CheckScan;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ElementSpan;
+import anyparse.query.ExitCode.*;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.ReplaceNode;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 /**
  * The edit pipeline every mutating `apq` command ends in: resolve the address

@@ -118,8 +118,8 @@ final class DeadCatches {
 	 * function and no member of the running type holds (a type, a package). A receiver that is a value is not read.
 	 */
 	private function staticCallee(file: String, callee: QueryNode): Bool {
-		if (callee.kind == _shape.identKind) return true;
-		return callee.kind == _shape.fieldAccessKind && callee.children.length == 1 && staticPath(file, callee.children[0]);
+		return callee.kind == _shape.identKind || callee.kind == _shape.fieldAccessKind && callee.children.length == 1
+			&& staticPath(file, callee.children[0]);
 	}
 
 	/** Whether `node` of `file` is a static path: a name no binding or member holds, or a field read off one. */

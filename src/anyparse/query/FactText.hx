@@ -6,12 +6,22 @@ import anyparse.query.CompilerFacts.FactPos;
 import haxe.Json;
 import haxe.io.Bytes;
 
+using StringTools;
+
 /**
  * The text side of the compiler facts: reading a facts line without parsing it, the content hash a facts file records
  * per file, and whether a fact the compiler placed at a source range is about the expression written there.
  */
 @:nullSafety(Strict)
 final class FactText {
+
+	/** The `NODE_HEAD` groups of a node's range. */
+	private static inline final HEAD_MIN: Int = 3;
+
+	private static inline final HEAD_MAX: Int = 4;
+
+	/** The length of an accessor's `get_`/`set_` prefix. */
+	private static inline final ACCESSOR_PREFIX: Int = 4;
 
 	/** The prefix every node line starts with, which the writer guarantees: id, home file, range. */
 	private static final NODE_HEAD: EReg = ~/^\{"k":"node","id":("(?:[^"\\]|\\.)*"),"f":("(?:[^"\\]|\\.)*"),"p":\[(\d+),(\d+)\]/;
@@ -22,28 +32,19 @@ final class FactText {
 	/** A bare identifier. */
 	private static final IDENTIFIER: EReg = ~/^[A-Za-z_][A-Za-z0-9_]*$/;
 
-	/** The `NODE_HEAD` groups of a node's range. */
-	private static inline final HEAD_MIN: Int = 3;
-
-	private static inline final HEAD_MAX: Int = 4;
-
-	/** The length of an accessor's `get_`/`set_` prefix. */
-	private static inline final ACCESSOR_PREFIX: Int = 4;
-
 	/**
 	 * The head of a node line — id, home file as written, range — whether it holds a foreign position, and whether its
 	 * body was generated; null for a line that is not one.
 	 */
 	public static function nodeHead(line: String): Null<NodeHead> {
-		if (!NODE_HEAD.match(line)) return null;
-		return {
+		return NODE_HEAD.match(line) ? {
 			id: Json.parse(NODE_HEAD.matched(1)),
 			file: Json.parse(NODE_HEAD.matched(2)),
 			min: Std.parseInt(NODE_HEAD.matched(HEAD_MIN)) ?? 0,
 			max: Std.parseInt(NODE_HEAD.matched(HEAD_MAX)) ?? 0,
 			foreign: FOREIGN_POSITION.match(line),
 			generated: line.indexOf(',"gen":true') >= 0 || line.indexOf(',"gi":true') >= 0 || line.indexOf(',"inl":') >= 0
-		};
+		} : null;
 	}
 
 	/** The `len:md5` of `source` as UTF-8, the hash the facts file records for each file it homes a record in. */
@@ -54,11 +55,7 @@ final class FactText {
 
 	/** A line the table keeps, detached from the dump it was cut from so the dump's text can be freed. */
 	public static function detached(line: String): String {
-		#if js
-		return js.Syntax.code('(" " + {0}).slice(1)', line);
-		#else
-		return line;
-		#end
+		return #if js js.Syntax.code('(" " + {0}).slice(1)', line) #else line #end;
 	}
 
 	/** Whether `text` is a bare identifier. */
@@ -93,9 +90,9 @@ final class FactText {
 	public static function mentions(text: String, name: String): Bool {
 		var from: Int = text.indexOf(name);
 		while (from >= 0) {
-			final before: Int = from == 0 ? ' '.code : StringTools.fastCodeAt(text, from - 1);
+			final before: Int = from == 0 ? ' '.code : text.fastCodeAt(from - 1);
 			final end: Int = from + name.length;
-			final after: Int = end >= text.length ? ' '.code : StringTools.fastCodeAt(text, end);
+			final after: Int = end >= text.length ? ' '.code : text.fastCodeAt(end);
 			if (!isWordChar(before) && !isWordChar(after)) return true;
 			from = text.indexOf(name, from + 1);
 		}
@@ -106,10 +103,10 @@ final class FactText {
 	public static function spellsCall(text: String, name: String): Bool {
 		var from: Int = text.indexOf(name);
 		while (from >= 0) {
-			final before: Int = from == 0 ? ' '.code : StringTools.fastCodeAt(text, from - 1);
+			final before: Int = from == 0 ? ' '.code : text.fastCodeAt(from - 1);
 			var next: Int = from + name.length;
-			while (next < text.length && StringTools.isSpace(text, next)) next++;
-			if (!isWordChar(before) && next < text.length && StringTools.fastCodeAt(text, next) == '('.code) return true;
+			while (next < text.length && text.isSpace(next)) next++;
+			if (!isWordChar(before) && next < text.length && text.fastCodeAt(next) == '('.code) return true;
 			from = text.indexOf(name, from + 1);
 		}
 		return false;
@@ -123,14 +120,14 @@ final class FactText {
 		var from: Int = text.indexOf(name);
 		while (from >= 0) {
 			final end: Int = from + name.length;
-			final bounded: Bool = (from == 0 || !isWordChar(StringTools.fastCodeAt(text, from - 1)))
-				&& (end >= text.length || !isWordChar(StringTools.fastCodeAt(text, end)));
+			final bounded: Bool = (from == 0 || !isWordChar(text.fastCodeAt(from - 1)))
+				&& (end >= text.length || !isWordChar(text.fastCodeAt(end)));
 			var before: Int = from - 1;
-			while (before >= 0 && StringTools.isSpace(text, before)) before--;
+			while (before >= 0 && text.isSpace(before)) before--;
 			final start: Int = before + 1 - keyword.length;
 			if (
 				bounded && before < from - 1 && start >= 0 && text.substring(start, before + 1) == keyword
-				&& (start == 0 || !isWordChar(StringTools.fastCodeAt(text, start - 1)))
+				&& (start == 0 || !isWordChar(text.fastCodeAt(start - 1)))
 			)
 				return true;
 			from = text.indexOf(name, from + 1);
@@ -145,10 +142,10 @@ final class FactText {
 	public static function endsAccess(text: String, end: Int, name: String): Bool {
 		final from: Int = end - name.length;
 		if (from <= 0 || end > text.length || text.substring(from, end) != name) return false;
-		if (end < text.length && isWordChar(StringTools.fastCodeAt(text, end))) return false;
+		if (end < text.length && isWordChar(text.fastCodeAt(end))) return false;
 		var dot: Int = from - 1;
-		while (dot > 0 && StringTools.isSpace(text, dot)) dot--;
-		return StringTools.fastCodeAt(text, dot) == '.'.code;
+		while (dot > 0 && text.isSpace(dot)) dot--;
+		return text.fastCodeAt(dot) == '.'.code;
 	}
 
 	/** The name a call site's text spells for what it calls — an accessor's property, a local function's binder — or null. */
@@ -157,7 +154,7 @@ final class FactText {
 		if (target == null || c.access == 'local' || c.access == 'value') return null;
 		if (c.access == 'super') return 'super';
 		final name: String = SourceText.lastSegment(target);
-		return StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_') ? name.substr(ACCESSOR_PREFIX) : name;
+		return name.startsWith('get_') || name.startsWith('set_') ? name.substr(ACCESSOR_PREFIX) : name;
 	}
 
 	private static function isWordChar(c: Int): Bool {

@@ -228,10 +228,10 @@ final class OccurrenceScan {
 	 * `Limit.MAX` on a `using a.b.Limit` a fully-qualified STATIC access reaching
 	 * the type through no import at all, not the extension call the `using` enables.
 	 */
-	public static function methodCalledInSource(source: String, name: String, ?skipReceiver: String): Bool {
+	public static function methodCalledInSource(source: String, name: String, skipReceiver: String = ''): Bool {
 		final len: Int = name.length;
 		if (len == 0) return false;
-		final skip: String = skipReceiver ?? '';
+		final skip: String = skipReceiver;
 		inline function qualifiedBySkip(dotAt: Int): Bool {
 			final start: Int = dotAt - skip.length;
 			return skip.length > 0 && start >= 0 && source.substr(start, skip.length) == skip
@@ -388,6 +388,17 @@ final class OccurrenceScan {
 			if (found != null) return found;
 		}
 		return null;
+	}
+
+	/**
+	 * Whether `source` calls an extension method the statement `using <raw>` brings, `methods` being the statement's method
+	 * set (`GrammarPlugin.knownExtensionMethods`, or the members of the module a scope declares): a `.method` occurrence,
+	 * a `<Bound>.method` static access excluded — that one reaches the type through no extension. The one test
+	 * `unused-import` deletes a `using` by and a move leaves one behind by.
+	 */
+	public static function usingExtensionCalled(source: String, raw: String, methods: Array<String>): Bool {
+		final bound: String = SourceText.lastSegment(raw);
+		return methods.exists(m -> methodCalledInSource(source, m, bound));
 	}
 
 	/**
@@ -623,17 +634,6 @@ final class OccurrenceScan {
 	private static function onImportLine(source: String, at: Int): Bool {
 		final head: String = source.substring(SourceText.lineStartOf(source, at), at).ltrim();
 		return head.startsWith('import ') || head.startsWith('using ');
-	}
-
-	/**
-	 * Whether `source` calls an extension method the statement `using <raw>` brings, `methods` being the statement's method
-	 * set (`GrammarPlugin.knownExtensionMethods`, or the members of the module a scope declares): a `.method` occurrence,
-	 * a `<Bound>.method` static access excluded — that one reaches the type through no extension. The one test
-	 * `unused-import` deletes a `using` by and a move leaves one behind by.
-	 */
-	public static function usingExtensionCalled(source: String, raw: String, methods: Array<String>): Bool {
-		final bound: String = SourceText.lastSegment(raw);
-		return methods.exists(m -> methodCalledInSource(source, m, bound));
 	}
 
 }

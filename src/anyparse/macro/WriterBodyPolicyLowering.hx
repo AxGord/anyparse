@@ -3,10 +3,10 @@ package anyparse.macro;
 #if macro
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
+import anyparse.macro.WriterLoweringSupport.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
-import anyparse.macro.WriterLoweringSupport.*;
 
 using StringTools;
 using Lambda;
@@ -777,7 +777,7 @@ final class WriterBodyPolicyLowering {
 		final tests: { same: Null<Expr>, next: Null<Expr> } = buildElseSwitchTests(bp, opts);
 		final esSame: Null<Expr> = tests.same;
 		final esNext: Null<Expr> = tests.next;
-		final elseSwitchPolicy: Expr = esSame == null ? policyFlag : macro ($esSame ? $samePat : ($esNext ? $nextPat : $policyFlag));
+		final elseSwitchPolicy: Expr = esSame == null ? policyFlag : macro ($esSame ? $samePat : $esNext ? $nextPat : $policyFlag);
 		final policySwitch: Expr = { expr: ESwitch(elseSwitchPolicy, policyCases, sameLayoutExpr), pos: Context.currentPos() };
 		final outerCases: Array<Case> = [];
 		if (ifStmtPattern != null) {

@@ -98,6 +98,11 @@ final class OperandBinder {
 		_usings = usings;
 	}
 
+	/** What the type `written` at offset `at` of this file binds to, with the type parameters in scope there. */
+	public inline function writtenTier(written: Null<String>, at: Int): Tier {
+		return _declared.headTier(written, at, _wrappers, _builtins);
+	}
+
 	/**
 	 * What a type NAME written in this file — at offset `at` when known — binds to
 	 * at the file's top level, tier by tier; `Unknown` when the file is not indexed.
@@ -107,14 +112,41 @@ final class OperandBinder {
 		return fi == null ? Unknown : _index.refs.names.tierOf(name, fi, at);
 	}
 
-	/** What the type `written` at offset `at` of this file binds to, with the type parameters in scope there. */
-	public inline function writtenTier(written: Null<String>, at: Int): Tier {
-		return _declared.headTier(written, at, _wrappers, _builtins);
-	}
-
 	/** What `operand`'s declared type binds to: the shared walk over this file's binding resolution (`HOST`). */
 	public function tierOf(operand: QueryNode): Tier {
 		return NominalTypes.typeWalk(operand, _shape, HOST, this) ?? Unknown;
+	}
+
+	/**
+	 * The declarations of the receiver's type: what an operand receiver binds to, or — for an
+	 * upper-initial name no binding in this file claims — the type that name binds to, for a static
+	 * access. Null when neither is proven, including a built-in receiver whose declaration the index
+	 * does not hold.
+	 */
+	public function receiverDecls(receiver: QueryNode): Null<Array<ResolvedType>> {
+		switch tierOf(receiver) {
+			case Bound(decls):
+				return decls;
+			case Free:
+				return null;
+			case Unknown:
+		}
+		final name: Null<String> = receiver.name;
+		final hit: Null<RefHit> = hitOf(receiver);
+		final fi: Null<FileInfo> = _index.fileInfo(_file);
+		if (name == null || fi == null || !_identKinds.contains(receiver.kind) || !SourceText.isUpperInitial(name)) return null;
+		if (bindsHere(hit)) return null;
+		return switch _index.refs.names.tierOf(name, fi, receiver.span?.from) {
+			case Bound(decls): decls;
+			case _: null;
+		};
+	}
+
+	/**
+	 * The expression initialising the unannotated local `use` reads: the local holds ITS type (`NominalTypes.localInitializer`).
+	 */
+	private inline function initializerOf(use: QueryNode): Null<QueryNode> {
+		return NominalTypes.localInitializer(use, _tree, _shape, _annotations);
 	}
 
 	/** `recv.m` read: the member as the receiver's declarations declare it. */
@@ -131,13 +163,6 @@ final class OperandBinder {
 		return name == null || callee.kind != _shape.fieldAccessKind || callee.children.length != 1
 			? Unknown
 			: memberTier(callee.children[0], name, true);
-	}
-
-	/**
-	 * The expression initialising the unannotated local `use` reads: the local holds ITS type (`NominalTypes.localInitializer`).
-	 */
-	private function initializerOf(use: QueryNode): Null<QueryNode> {
-		return NominalTypes.localInitializer(use, _tree, _shape, _annotations);
 	}
 
 	/**
@@ -195,9 +220,8 @@ final class OperandBinder {
 			final span: Null<Span> = node.span;
 			if (span == null || at.from < span.from || at.to > span.to) return span == null && node.children.exists(walk);
 			final inside: Bool = from >= span.from && from < span.to;
-			if (node.kind == branchKind && !inside && CasePatterns.scan(node, _shape, []).idents.exists(ident -> ident.name == name))
-				return true;
-			return node.children.exists(walk);
+			return node.kind == branchKind && !inside && CasePatterns.scan(node, _shape, []).idents.exists(ident -> ident.name == name)
+				|| node.children.exists(walk);
 		}
 		return walk(_tree);
 	}
@@ -215,12 +239,14 @@ final class OperandBinder {
 		final declaration: QueryNode = fn;
 		final member: Null<MemberInfo> = _index.fileInfo(_file)?.types.flatMap(t -> t.members)
 			.find(m -> m.declFrom == declaration.span?.from);
-		if (member != null && !typedByItsReturn(member)) return Unknown;
-		return _fnKinds.contains(declaration.kind)
-			? _declared.headTier(
+		return if (member != null && !typedByItsReturn(member))
+			Unknown
+		else if (_fnKinds.contains(declaration.kind))
+			_declared.headTier(
 				CallGraphNames.returnSourceOf(declaration, _source, _shape.typeAnnotationKinds ?? []), from, _wrappers, _builtins
 			)
-			: Unknown;
+		else
+			Unknown;
 	}
 
 	/**
@@ -354,50 +380,6 @@ final class OperandBinder {
 			: boundMembers(resolvers, owner, true);
 	}
 
-	/** Whether `a` and `b` are the one declaration: the same file, the same type at the same offset. */
-	private static inline function sameDeclaration(a: ResolvedType, b: ResolvedType): Bool {
-		return a.file.file == b.file.file && a.type.name == b.type.name && a.type.span.from == b.type.span.from;
-	}
-
-	/** Whether the reference walk's `hit` binds its name to a declaration of this file — a hit may name nothing. */
-	private static inline function bindsHere(hit: Null<RefHit>): Bool {
-		return hit != null && (hit.bindingSpan != null || hit.bindingNode != null);
-	}
-
-	/**
-	 * Whether a call to `m` has the type its written return type names: not when `@:overload` offers
-	 * other signatures to select, nor for a macro, whose written return is the `Expr` it builds rather
-	 * than the type of the expression the call site receives.
-	 */
-	private static inline function typedByItsReturn(m: MemberInfo): Bool {
-		return !m.hasOverloadMeta && !m.isMacro;
-	}
-
-	/**
-	 * The declarations of the receiver's type: what an operand receiver binds to, or — for an
-	 * upper-initial name no binding in this file claims — the type that name binds to, for a static
-	 * access. Null when neither is proven, including a built-in receiver whose declaration the index
-	 * does not hold.
-	 */
-	public function receiverDecls(receiver: QueryNode): Null<Array<ResolvedType>> {
-		switch tierOf(receiver) {
-			case Bound(decls):
-				return decls;
-			case Free:
-				return null;
-			case Unknown:
-		}
-		final name: Null<String> = receiver.name;
-		final hit: Null<RefHit> = hitOf(receiver);
-		final fi: Null<FileInfo> = _index.fileInfo(_file);
-		if (name == null || fi == null || !_identKinds.contains(receiver.kind) || !SourceText.isUpperInitial(name)) return null;
-		if (bindsHere(hit)) return null;
-		return switch _index.refs.names.tierOf(name, fi, receiver.span?.from) {
-			case Bound(decls): decls;
-			case _: null;
-		};
-	}
-
 	/**
 	 * THE way a rule obtains the binder of one file — the operator-overload gate (`OperatorSelection.typingFor`),
 	 * `redundant-tostring` and `prefer-bind` alike: over `index`, the grammar's type information and its built-in type
@@ -424,6 +406,25 @@ final class OperandBinder {
 		final out: Array<String> = [for (name in shape.literalTypeNames ?? []) name];
 		for (name in shape.nonNullableTypeNames ?? []) if (!out.contains(name)) out.push(name);
 		return out;
+	}
+
+	/** Whether `a` and `b` are the one declaration: the same file, the same type at the same offset. */
+	private static inline function sameDeclaration(a: ResolvedType, b: ResolvedType): Bool {
+		return a.file.file == b.file.file && a.type.name == b.type.name && a.type.span.from == b.type.span.from;
+	}
+
+	/** Whether the reference walk's `hit` binds its name to a declaration of this file — a hit may name nothing. */
+	private static inline function bindsHere(hit: Null<RefHit>): Bool {
+		return hit != null && (hit.bindingSpan != null || hit.bindingNode != null);
+	}
+
+	/**
+	 * Whether a call to `m` has the type its written return type names: not when `@:overload` offers
+	 * other signatures to select, nor for a macro, whose written return is the `Expr` it builds rather
+	 * than the type of the expression the call site receives.
+	 */
+	private static inline function typedByItsReturn(m: MemberInfo): Bool {
+		return !m.hasOverloadMeta && !m.isMacro;
 	}
 
 }

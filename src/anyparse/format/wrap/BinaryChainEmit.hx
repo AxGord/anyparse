@@ -5,6 +5,7 @@ import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -320,6 +321,17 @@ final class BinaryChainEmit {
 	}
 
 	/**
+	 * True iff any operand `Doc` is a top-level function call
+	 * (`DocMeasure.operandIsCall`). The ω-opbool-reeval gate mirrors fork
+	 * `hasSimpleCallParamBreaksBetween` (an inner `POpen` that wrapped); a chain
+	 * with NO call operand can never have a callParameter wrap to re-evaluate
+	 * after, so the marker is skipped (byte-inert).
+	 */
+	private static inline function containsCallOperand(items: Array<Doc>): Bool {
+		return items.exists(DocMeasure.operandIsCall);
+	}
+
+	/**
 	 * Recursive helper that builds the `IfWidthExceeds + IfBreak` tree
 	 * for chain-emit's cascade-with-thresholds layout. Sister of
 	 * `WrapList.buildThresholdTree` but emits chain shapes
@@ -391,17 +403,6 @@ final class BinaryChainEmit {
 	}
 
 	/**
-	 * True iff any operand `Doc` is a top-level function call
-	 * (`DocMeasure.operandIsCall`). The ω-opbool-reeval gate mirrors fork
-	 * `hasSimpleCallParamBreaksBetween` (an inner `POpen` that wrapped); a chain
-	 * with NO call operand can never have a callParameter wrap to re-evaluate
-	 * after, so the marker is skipped (byte-inert).
-	 */
-	private static function containsCallOperand(items: Array<Doc>): Bool {
-		return items.exists(it -> DocMeasure.operandIsCall(it));
-	}
-
-	/**
 	 * True iff a NON-FIRST operand's flat text contains a thin-arrow `->`
 	 * (an arrow lambda absorbing the overflow). The keep-flat unwrap probe
 	 * (`IfNaturalFirstLineFitsOpenDelim`) faithfully mirrors the fork ONLY
@@ -445,9 +446,7 @@ final class BinaryChainEmit {
 	private static function leadingOperandOpensDelim(item0: Doc, parenOnly: Bool = false): Bool {
 		return switch item0 {
 			case Text(s):
-				s.length > 0
-					&& (StringTools.fastCodeAt(s, 0) == '('.code || !parenOnly
-						&& (StringTools.fastCodeAt(s, 0) == '['.code || StringTools.fastCodeAt(s, 0) == '{'.code));
+				s.length > 0 && (s.fastCodeAt(0) == '('.code || !parenOnly && (s.fastCodeAt(0) == '['.code || s.fastCodeAt(0) == '{'.code));
 			case Concat(arr):
 				var hit: Bool = false;
 				var done: Bool = false;
@@ -570,8 +569,8 @@ final class BinaryChainEmit {
 
 	private static function shapeNoWrap(items: Array<Doc>, ops: Array<String>): Doc {
 		final inner: Array<Doc> = [items[0]];
-		for (i in 0...ops.length) {
-			inner.push(Text(' ${ops[i]} '));
+		for (i => op in ops) {
+			inner.push(Text(' ${op} '));
 			inner.push(items[i + 1]);
 		}
 		return Concat(inner);
@@ -667,7 +666,7 @@ final class BinaryChainEmit {
 		final tail: Array<Doc> = [];
 		switch location {
 			case BeforeLast:
-				for (i in 0...ops.length) {
+				for (i => op in ops) {
 					// ω-ternary-cuddled-braces: `cuddleLast` glues the FINAL gap —
 					// the operator rides the previous operand's own closing line
 					// (` : {`) instead of opening a continuation line of its own.
@@ -675,7 +674,7 @@ final class BinaryChainEmit {
 					// dropped `Line`, so the knob-off path is the pre-knob Concat.
 					final cuddled: Bool = cuddleLast && i == ops.length - 1;
 					if (!cuddled) tail.push(Line('\n'));
-					tail.push(Text(cuddled ? ' ${ops[i]} ' : '${ops[i]} '));
+					tail.push(Text(cuddled ? ' ${op} ' : '${op} '));
 					tail.push(items[i + 1]);
 				}
 				return Concat([items[0], Nest(cols, Concat(tail))]);
@@ -717,20 +716,20 @@ final class BinaryChainEmit {
 		final inner: Array<Doc> = [OptHardlineSkipAtOpenDelim, items[0]];
 		switch location {
 			case AfterLast:
-				for (i in 0...ops.length) {
-					inner.push(Text(' ${ops[i]}'));
+				for (i => op in ops) {
+					inner.push(Text(' ${op}'));
 					inner.push(Line('\n'));
 					inner.push(items[i + 1]);
 				}
 			case BeforeLast:
-				for (i in 0...ops.length) {
+				for (i => op in ops) {
 					// ω-ternary-cuddled-braces, sister of the `OnePerLineAfterFirst`
 					// arm: the final gap glues when `cuddleLast`. Same one dropped
 					// `Line` — this shaper differs only in breaking before the FIRST
 					// operand as well, which the cuddle never touches.
 					final cuddled: Bool = cuddleLast && i == ops.length - 1;
 					if (!cuddled) inner.push(Line('\n'));
-					inner.push(Text(cuddled ? ' ${ops[i]} ' : '${ops[i]} '));
+					inner.push(Text(cuddled ? ' ${op} ' : '${op} '));
 					inner.push(items[i + 1]);
 				}
 		}
@@ -772,7 +771,7 @@ final class BinaryChainEmit {
 		final enriched: Array<Doc> = switch location {
 			case BeforeLast:
 				final acc: Array<Doc> = [items[0]];
-				for (i in 0...ops.length) acc.push(Concat([Text('${ops[i]} '), items[i + 1]]));
+				for (i => op in ops) acc.push(Concat([Text('${op} '), items[i + 1]]));
 				acc;
 			case AfterLast:
 				final acc: Array<Doc> = [for (i in 0...ops.length) Concat([items[i], Text(' ${ops[i]}')])];

@@ -37,6 +37,15 @@ using Lambda;
 final class DependencyCarry {
 
 	/**
+	 * The simple names an `import <holder's module>.*;` binds (`staticNamesOf`: its MAIN type's statics, `enum abstract`
+	 * values and enum constructors) — what `move-member --keep-bare` must prove no other reference of the file it adds that
+	 * wildcard to spells.
+	 */
+	public static inline function wildcardBoundNames(holder: FileInfo, shape: RefShape): Array<String> {
+		return staticNamesOf(holder, shape);
+	}
+
+	/**
 	 * The explicit statements the moved decl's body depends on that the
 	 * destination lacks. A dependency name `D` is a reference INSIDE the
 	 * decl's span that is either a TYPE POSITION or the upper-initial
@@ -252,15 +261,6 @@ final class DependencyCarry {
 				for (h in hits[name] ?? [])
 					if (h.kind != RefKind.Decl && h.bindingSpan == null) { name: name, span: h.span, interpolated: h.interpolated }
 		];
-	}
-
-	/**
-	 * The simple names an `import <holder's module>.*;` binds (`staticNamesOf`: its MAIN type's statics, `enum abstract`
-	 * values and enum constructors) — what `move-member --keep-bare` must prove no other reference of the file it adds that
-	 * wildcard to spells.
-	 */
-	public static inline function wildcardBoundNames(holder: FileInfo, shape: RefShape): Array<String> {
-		return staticNamesOf(holder, shape);
 	}
 
 	/** Whether `info`'s file already declares the unguarded module-static wildcard `import <module>.*;`. */
@@ -1160,7 +1160,10 @@ final class DependencyCarry {
 		for (c in node.children) collectBareMentions(c, declSpan, identKind, candidates, out);
 	}
 
-	/** Every member name of every type the scope's module `module` declares — a `using`'s method set — or null when the scope holds no such module. */
+	/**
+	 * Every member name of every type the scope's module `module` declares —
+	 * a `using`'s method set — or null when the scope holds no such module.
+	 */
 	private static function moduleMemberNames(files: Array<FileInfo>, module: String): Null<Array<String>> {
 		final info: Null<FileInfo> = files.find(f -> f.module == module);
 		return info == null ? null : [for (t in info.types) for (m in t.members) m.name];

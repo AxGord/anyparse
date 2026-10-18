@@ -52,10 +52,9 @@ final class UnknownField {
 			// Distance 0 is a case-only difference, which is never a
 			// closer call than itself — take it and stop scanning.
 			if (d == 0) return candidate;
-			if (d < bestDistance) {
-				bestDistance = d;
-				best = candidate;
-			}
+			if (d >= bestDistance) continue;
+			bestDistance = d;
+			best = candidate;
 		}
 		return best;
 	}

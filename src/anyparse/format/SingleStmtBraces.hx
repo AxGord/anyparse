@@ -607,9 +607,7 @@ class SingleStmtBraces {
 		if (Reflect.isEnumValue(v)) {
 			final e: EnumValue = cast v;
 			final ctor: String = Type.enumConstructor(e);
-			if (ctor == 'IfStmt' || ctor == 'IfExpr' || ctor.startsWith('Cond')) return true;
-			for (p in Type.enumParameters(e)) if (containsIf(p)) return true;
-			return false;
+			return ctor == 'IfStmt' || ctor == 'IfExpr' || ctor.startsWith('Cond') || Type.enumParameters(e).exists(containsIf);
 		}
 		if (!Std.isOfType(v, Array)) return Reflect.isObject(v) && Reflect.fields(v).exists(f -> containsIf(Reflect.field(v, f)));
 		final arr: Array<Dynamic> = v;

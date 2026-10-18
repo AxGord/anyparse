@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -29,6 +30,12 @@ final class ValueCarriers {
 	 */
 	public var metIncomplete(default, null): Bool = false;
 
+	/**
+	 * The types whose instances may have escaped the type system by their typed ids (`ValueEscapes.escapedIds`), where the
+	 * compiler facts say; null for any, or where they do not.
+	 */
+	public var escapedIds: () -> Null<Array<String>> = () -> null;
+
 	/** Type -> whether every subtype of it is one the index lists (`complete`), settled on first need. */
 	private final _completeByType: Map<String, Bool> = [];
 
@@ -48,12 +55,6 @@ final class ValueCarriers {
 
 	private var _completeMemo: Null<Bool> = null;
 
-	/**
-	 * The types whose instances may have escaped the type system by their typed ids (`ValueEscapes.escapedIds`), where the
-	 * compiler facts say; null for any, or where they do not.
-	 */
-	public var escapedIds: () -> Null<Array<String>> = () -> null;
-
 	public function new(scope: ReachProject, complete: () -> Bool, escaped: () -> Null<Array<String>>, buildsListed: Bool) {
 		_scope = scope;
 		_complete = complete;
@@ -62,19 +63,18 @@ final class ValueCarriers {
 	}
 
 	/** Start a new question: nothing met yet. */
-	public function startQuestion(): Void {
+	public inline function startQuestion(): Void {
 		metIncomplete = false;
 	}
 
 	/** Drop what was settled over the project's text, which changed. */
-	public function forget(): Void {
+	public inline function forget(): Void {
 		_completeByType.clear();
 	}
 
 	/** Whether the index holds every type the run's builds compile, so a subtype it does not list does not exist. */
 	public function classpathComplete(): Bool {
-		final held: Null<Bool> = _completeMemo;
-		final answer: Bool = held ?? _complete();
+		final answer: Bool = _completeMemo ?? _complete();
 		_completeMemo = answer;
 		if (!answer) metIncomplete = true;
 		return answer;
@@ -87,8 +87,7 @@ final class ValueCarriers {
 	 * own supertypes, not the whole run.
 	 */
 	public function subtypesKnown(type: String): Bool {
-		if (classpathComplete()) return true;
-		return _buildsListed && _scope.provenance()?.subtypesIndexed(type) == true;
+		return classpathComplete() || _buildsListed && _scope.provenance()?.subtypesIndexed(type) == true;
 	}
 
 	/**
@@ -137,24 +136,20 @@ final class ValueCarriers {
 	 */
 	public function typedNominal(type: String): Bool {
 		final source: String = NominalTypes.unwrapNullable(
-			StringTools.trim(type), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
+			type.trim(), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
 		);
 		final nominal: Null<String> = nominalOf(source);
 		final decl: Null<TypeDeclInfo> = nominal == null ? null : declarationOf(nominal);
 		if (decl == null || (_scope.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return false;
 		// what the value holds is typed only when every argument is: `Array<Dynamic>` holds anything
 		final args: Array<String> = NominalTypes.typeArgumentSourcesOf(source, _scope.plugin.typeSyntax) ?? [];
-		if (args.length < decl.typeParamNames.length) return false;
-		for (a in args) if (!primitive(a) && !typedNominal(a)) return false;
-		return true;
+		return args.length >= decl.typeParamNames.length && args.foreach(a -> primitive(a) || typedNominal(a));
 	}
 
 	/** Whether `type` is one of the language's primitive value types — a literal's, or one that cannot be null. */
 	public function primitive(type: String): Bool {
 		final nominal: Null<String> = NominalTypes.outerNominalOf(
-			NominalTypes.unwrapNullable(
-				StringTools.trim(type), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
-			),
+			NominalTypes.unwrapNullable(type.trim(), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax),
 			_scope.plugin.typeSyntax
 		);
 		if (nominal == null) return false;
@@ -171,8 +166,12 @@ final class ValueCarriers {
 	public function relation(type: Null<String>, owner: String): CarryRelation {
 		final values: Null<Array<String>> = type == null ? null : valueTypes(type);
 		final owners: Null<Array<String>> = declaredValueTypes(owner);
-		if (values == null || owners == null) return MayCarry;
-		return values.exists(t -> owners.contains(t)) ? Carries : CannotCarry;
+		return if (values == null || owners == null)
+			MayCarry
+		else if (values.exists(t -> owners.contains(t)))
+			Carries
+		else
+			CannotCarry;
 	}
 
 	/**
@@ -180,7 +179,7 @@ final class ValueCarriers {
 	 * function type, a catch-all, the class-value type, a name not declared exactly once.
 	 */
 	private function nominalOf(type: String): Null<String> {
-		var t: Null<String> = NominalTypes.outerNominalOf(StringTools.trim(type), _scope.plugin.typeSyntax);
+		var t: Null<String> = NominalTypes.outerNominalOf(type.trim(), _scope.plugin.typeSyntax);
 		final seen: Array<String> = [];
 		while (t != null) {
 			final current: String = t;

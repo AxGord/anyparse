@@ -262,7 +262,7 @@ final class CompilerOracle {
 	private static function remembered(
 		memo: OracleRunMemo, oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
 	): Array<Null<OracleOutcome>> {
-		return PhaseTimings.measure('oracle typecheck', () -> rememberedTimed(memo, oracles, stopAfterFailure, verbose));
+		return PhaseTimings.measure('oracle typecheck', rememberedTimed.bind(memo, oracles, stopAfterFailure, verbose));
 	}
 
 	/** `remembered`, untimed. */
@@ -405,9 +405,9 @@ final class CompilerOracle {
 	 * could not be asked is no failure here — or the length when there is none.
 	 */
 	private static function firstHeldFailure(oracles: Array<OracleConfig>, held: Array<Null<OracleOutcome>>): Int {
-		for (i in 0...oracles.length) {
+		for (i => oracle in oracles) {
 			final outcome: Null<OracleOutcome> = held[i];
-			if (oracles[i].unavailable == null && outcome != null && !outcome.match(Confirmed)) return i;
+			if (oracle.unavailable == null && outcome != null && !outcome.match(Confirmed)) return i;
 		}
 		return oracles.length;
 	}

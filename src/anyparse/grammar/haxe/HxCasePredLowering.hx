@@ -2,9 +2,9 @@ package anyparse.grammar.haxe;
 
 #if macro
 import anyparse.macro.AstPredLowering;
+import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.MacroNames.*;
 
 /**
  * The SWITCH-CASE half of the Haxe grammar's AST-predicate tables.

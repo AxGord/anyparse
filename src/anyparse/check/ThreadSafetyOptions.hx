@@ -4,6 +4,8 @@ import anyparse.grammar.json.JValue;
 import anyparse.runtime.EditDistance;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * One well-formed `boundedRepeats` entry, as written: the member, the
  * call or loop header it narrows to, the bound and the cost of a turn.
@@ -63,11 +65,11 @@ final class ThreadSafetyOptions {
 	/** The keys holding `true` or `false`. */
 	public static final FLAG_KEYS: Array<String> = ['closedWorld', 'compilerFacts'];
 
-	/** The keys every rule takes, which the linter reads itself when well-formed (`LintDocuments.parseRule`). */
-	private static final LIFTED_KEYS: Array<String> = ['enabled', 'severity'];
-
 	private static inline final BUDGET_KEY: String = 'repeatBudgetMs';
 	private static inline final BOUNDED_KEY: String = 'boundedRepeats';
+
+	/** The keys every rule takes, which the linter reads itself when well-formed (`LintDocuments.parseRule`). */
+	private static final LIFTED_KEYS: Array<String> = ['enabled', 'severity'];
 
 	/** What the read left out, one line each, by key. */
 	public final problems: Array<String> = [];
@@ -87,14 +89,14 @@ final class ThreadSafetyOptions {
 	/** Whether the chain writes any option for the rule at all, well-formed or not: one that does is a config to report on. */
 	public final declared: Bool;
 
-	/** The option keys the chain writes, well-formed or not. */
-	private final _written: Array<String>;
-
 	/** Each LIST key -> its strings; a key absent or dropped holds none. */
 	private final _lists: Map<String, Array<String>> = [];
 
 	/** Each FLAG key -> its value; a key absent or dropped is false. */
 	private final _flags: Map<String, Bool> = [];
+
+	/** The option keys the chain writes, well-formed or not. */
+	private final _written: Array<String>;
 
 	private function new(config: LintConfig) {
 		_written = config.optionKeys(RULE);
@@ -103,7 +105,7 @@ final class ThreadSafetyOptions {
 		for (pair in list('lockPairs')) if (pair.lastIndexOf('/') <= 0)
 			problems.push('malformed lockPairs entry "$pair" — expected "<lock pattern>/<unlock member>"');
 		for (entry in list('nonBlocking')) {
-			final written: String = StringTools.trim(entry);
+			final written: String = entry.trim();
 			final cut: Int = firstSpace(written);
 			if (cut > 0)
 				nonBlocking.push(written.substring(0, cut))
@@ -112,15 +114,15 @@ final class ThreadSafetyOptions {
 		}
 	}
 
+	/** Whether the chain writes the option `key`, whatever its shape. */
+	public inline function wrote(key: String): Bool {
+		return _written.contains(key);
+	}
+
 	/** The strings of the LIST option `key` (`LIST_KEYS`); none when it is absent or was dropped. */
 	public function list(key: String): Array<String> {
 		if (!LIST_KEYS.contains(key)) throw new Exception('thread-safety: "$key" is no list option');
 		return _lists[key] ?? [];
-	}
-
-	/** Whether the chain writes the option `key`, whatever its shape. */
-	public inline function wrote(key: String): Bool {
-		return _written.contains(key);
 	}
 
 	/** The FLAG option `key` (`FLAG_KEYS`); false when it is absent or was dropped. */
@@ -131,7 +133,7 @@ final class ThreadSafetyOptions {
 
 	/** Every option this read keeps, as one string: two reads keeping the same options have the same signature. */
 	public function signature(): String {
-		final parts: Array<String> = [for (key in LIST_KEYS) key + '=' + list(key).join('\n')];
+		final parts: Array<String> = [for (key in LIST_KEYS) '$key=' + list(key).join('\n')];
 		for (key in FLAG_KEYS) parts.push('$key=${flag(key)}');
 		parts.push('$BUDGET_KEY=$repeatBudgetMs');
 		for (b in boundedRepeats) parts.push('${b.site}>${b.call}@${b.loop}:${b.max}x${b.costMs}');
@@ -236,13 +238,13 @@ final class ThreadSafetyOptions {
 				if (wrong.length > 0)
 					problems.push('$BOUNDED_KEY[$i] dropped: ${wrong.join(', ')}');
 				else if (siteName == null)
-					problems.push(dropped + 'it names no "site"');
+					problems.push('${dropped}it names no "site"');
 				else if (siteName.indexOf('*') >= 0)
-					problems.push(dropped + '"site" is a pattern, not one member');
+					problems.push('$dropped"site" is a pattern, not one member');
 				else if (bound == null || !(bound > 0))
-					problems.push(dropped + '"max" is not a positive number');
+					problems.push('$dropped"max" is not a positive number');
 				else if (turn == null || !(turn > 0))
-					problems.push(dropped + '"costMs" is not a positive number');
+					problems.push('$dropped"costMs" is not a positive number');
 				else {
 					// re-bound: strict null-safety does not carry a narrowed local into a structure literal
 					final named: String = siteName;
@@ -276,7 +278,7 @@ final class ThreadSafetyOptions {
 
 	/** The index of the first whitespace character of `text`; -1 when it has none. */
 	private static function firstSpace(text: String): Int {
-		for (i in 0...text.length) if (StringTools.isSpace(text, i)) return i;
+		for (i in 0...text.length) if (text.isSpace(i)) return i;
 		return -1;
 	}
 

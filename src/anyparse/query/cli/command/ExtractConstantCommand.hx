@@ -1,8 +1,8 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliContext;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;
@@ -163,13 +163,13 @@ final class ExtractConstantCommand implements CliCommand {
 		];
 
 		final moduleExists: Bool = FileSystem.exists(intoPath);
-		final moduleSource: Null<String> = if (!moduleExists)
-			null
-		else
+		final moduleSource: Null<String> = if (moduleExists)
 			try CliIo.readFile(intoPath) catch (exception: Exception) {
 				CliIo.stderr('apq extract-constant: $intoPath: ${exception.message}\n');
 				return EXIT_RUNTIME;
-			};
+			}
+		else
+			null;
 		final modulePkg: String = NewCommand.derivePackage(intoPath);
 		final moduleClass: String = NewCommand.newFileClassName(intoPath);
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(intoPath);

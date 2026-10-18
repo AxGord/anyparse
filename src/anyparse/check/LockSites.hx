@@ -245,6 +245,11 @@ final class LockSites {
 		return FieldWrites.accessKind(kind, _shape);
 	}
 
+	/** Whether `node` names a member of the running object: a bare name, or a member read off `this`. */
+	public inline function readsOwnMember(node: QueryNode): Bool {
+		return FieldWrites.ownMemberRead(node, _shape);
+	}
+
 	/** The lock `edge` is made on: a wrapper call's lock, else its receiver's member when that member is sealed, else null. */
 	public function lockOf(edge: CallEdge): Null<String> {
 		final site: Null<String> = siteKey(edge);
@@ -290,11 +295,6 @@ final class LockSites {
 	public function isStaticLock(lock: String): Bool {
 		final dot: Int = lock.lastIndexOf('.');
 		return dot > 0 && _graph.types.isStatic(lock.substring(0, dot), lock.substring(dot + 1));
-	}
-
-	/** Whether `node` names a member of the running object: a bare name, or a member read off `this`. */
-	public inline function readsOwnMember(node: QueryNode): Bool {
-		return FieldWrites.ownMemberRead(node, _shape);
 	}
 
 	/** The callee expression of the call `edge` sits at, found by its exact span in the branch-aware tree. */
@@ -378,7 +378,8 @@ final class LockSites {
 	/**
 	 * Whether the hold is its owner's constructor taking an INSTANCE lock of the object under construction, which never
 	 * leaves it: nowhere in the constructor a function value made, a method of its own type dispatched (on `this`,
-	 * written or implicit), the superclass constructor run, or `this` handed to anything — so no other thread can reach the lock while the constructor runs.
+	 * written or implicit), the superclass constructor run, or `this` handed to
+	 * anything — so no other thread can reach the lock while the constructor runs.
 	 */
 	private function ownConstructorHold(edge: CallEdge, lock: String, body: QueryNode): Bool {
 		final fn: Null<FnNode> = _graph.node(edge.from);
@@ -565,8 +566,8 @@ final class LockSites {
 	/** Whether `call` works a named lock on every path of `fn`: in, for a take; out, for a give. */
 	private function onEveryPath(walker: LockWindow, fn: QueryNode, call: LockCall, takes: Bool): Bool {
 		final at: Null<Span> = call.edge.span;
-		if (at == null || lockOf(call.edge) == null) return false;
-		return takes ? walker.runsOnEveryPath(fn, at.from) : walker.releasesOnEveryPath(fn, [at.from]);
+		return at != null && lockOf(call.edge) != null
+			&& (takes ? walker.runsOnEveryPath(fn, at.from) : walker.releasesOnEveryPath(fn, [at.from]));
 	}
 
 	/**
@@ -751,8 +752,8 @@ private class WrapperOps {
 		function runsOther(node: QueryNode): Bool {
 			if (node != fn && kinds.nested.contains(node.kind)) return false;
 			final at: Null<Span> = node.span;
-			if ((node.kind == shape.callKind || node.kind == shape.newExprKind) && !sites.contains(LockReleasers.callKey(at))) return true;
-			return node.children.exists(runsOther);
+			return (node.kind == shape.callKind || node.kind == shape.newExprKind) && !sites.contains(LockReleasers.callKey(at))
+				|| node.children.exists(runsOther);
 		}
 		return !runsOther(fn);
 	}
@@ -778,7 +779,10 @@ private class WrapperOps {
 		};
 	}
 
-	/** Whether every invocation of the function `id` is a plain call, and there is one: a dispatch may run another override, taking nothing. */
+	/**
+	 * Whether every invocation of the function `id` is a plain call, and
+	 * there is one: a dispatch may run another override, taking nothing.
+	 */
 	public static function plainCallsOnly(graph: CallGraph, id: String): Bool {
 		final into: Array<CallEdge> = [for (e in graph.inEdges(id)) if (e.kind.isInvocation()) e];
 		return into.length > 0 && into.foreach(e -> e.kind == Call);

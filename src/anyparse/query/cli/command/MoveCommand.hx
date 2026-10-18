@@ -60,6 +60,34 @@ final class MoveCommand implements CliCommand {
 		printMoveUsage();
 	}
 
+	public static function emitMoveResult(
+		cmd: String, result: MoveResult, cursorFile: String, destFile: String, write: Bool, plugin: GrammarPlugin
+	): Int {
+		switch result {
+			case Ok(rawChanges, advisory):
+				// Only the WRITE path consumes `newSource`; a preview prints file names and a
+				// count, so canonicalising there would pay two writer passes per changed file
+				// for nothing observable.
+				final changes: Array<MoveChange> = write ? [for (c in rawChanges) canonicalMoveChange(cmd, c, plugin)] : rawChanges;
+				if (write) {
+					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
+					CliIo.stderr('apq $cmd: wrote ${changes.length} file(s)\n');
+				} else {
+					for (c in changes) {
+						final tag: String = c.file == cursorFile || c.file == destFile ? 'moved' : 'updated';
+						CliIo.sysPrint('${c.file}: $tag\n');
+					}
+					CliIo.sysPrint('total: ${changes.length} file(s)\n');
+					CliIo.stderr('apq $cmd: NOTHING written — this is a preview; re-run with --write to apply\n');
+				}
+				if (advisory != null) CliIo.stderr('apq $cmd: $advisory\n');
+				return EXIT_OK;
+			case Err(message):
+				CliIo.stderr('apq $cmd: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
 	private static inline function moveParseExit(code: Int): MoveOpts {
 		return {
 			lang: '',
@@ -240,34 +268,6 @@ final class MoveCommand implements CliCommand {
 		CliIo.stderr('apq move: --scope <dir> is required (imports are fixed across the scope)\n');
 		printMoveUsage();
 		return moveParseExit(EXIT_USAGE);
-	}
-
-	public static function emitMoveResult(
-		cmd: String, result: MoveResult, cursorFile: String, destFile: String, write: Bool, plugin: GrammarPlugin
-	): Int {
-		switch result {
-			case Ok(rawChanges, advisory):
-				// Only the WRITE path consumes `newSource`; a preview prints file names and a
-				// count, so canonicalising there would pay two writer passes per changed file
-				// for nothing observable.
-				final changes: Array<MoveChange> = write ? [for (c in rawChanges) canonicalMoveChange(cmd, c, plugin)] : rawChanges;
-				if (write) {
-					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
-					CliIo.stderr('apq $cmd: wrote ${changes.length} file(s)\n');
-				} else {
-					for (c in changes) {
-						final tag: String = c.file == cursorFile || c.file == destFile ? 'moved' : 'updated';
-						CliIo.sysPrint('${c.file}: $tag\n');
-					}
-					CliIo.sysPrint('total: ${changes.length} file(s)\n');
-					CliIo.stderr('apq $cmd: NOTHING written — this is a preview; re-run with --write to apply\n');
-				}
-				if (advisory != null) CliIo.stderr('apq $cmd: $advisory\n');
-				return EXIT_OK;
-			case Err(message):
-				CliIo.stderr('apq $cmd: $message\n');
-				return EXIT_RUNTIME;
-		}
 	}
 
 	/**

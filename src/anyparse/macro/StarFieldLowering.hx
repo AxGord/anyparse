@@ -2,12 +2,12 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.macro.ParseDispatchLowering.*;
+import anyparse.macro.StarLoopLowering.*;
 import anyparse.macro.StructSeqLowering.StructSeqCtx;
+import anyparse.macro.TriviaSlotNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.StarLoopLowering.*;
-import anyparse.macro.TriviaSlotNames.*;
-import anyparse.macro.ParseDispatchLowering.*;
 
 using anyparse.macro.MetaInspect;
 

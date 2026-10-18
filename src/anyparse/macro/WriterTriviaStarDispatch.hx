@@ -2,12 +2,12 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.macro.MacroNames.*;
+import anyparse.macro.WriterCascadeLowering.*;
+import anyparse.macro.WriterLoweringSupport.*;
+import anyparse.macro.WriterPolicyLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.WriterCascadeLowering.*;
-import anyparse.macro.WriterPolicyLowering.*;
-import anyparse.macro.WriterLoweringSupport.*;
-import anyparse.macro.MacroNames.*;
 
 using Lambda;
 using anyparse.macro.MetaInspect;
@@ -44,6 +44,36 @@ using anyparse.macro.MetaInspect;
 @:access(anyparse.macro.WriterBlankLowering, anyparse.macro.WriterCascadeLowering, anyparse.macro.WriterLoweringSupport,
 	anyparse.macro.WriterPolicyLowering)
 final class WriterTriviaStarDispatch {
+
+	/**
+	 * ω-if-leader-case-symmetry: the case-UNIT flattener. A `#if`-guarded case
+	 * region is ONE Star element whose Doc carries directive hardlines (flat
+	 * width `-1`), so without this predicate the region could only FOLLOW a
+	 * sibling's break, never LEAD one; it expands the region into its inner
+	 * case elements, and both channels of the pre-pass then judge each one on
+	 * its own.
+	 */
+	private static inline function caseSiblingUnitsFnExpr(
+		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
+	): Null<Expr> {
+		return casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseSiblingUnits');
+	}
+
+	/**
+	 * ω-case-sibling-symmetry widened: the STRUCTURAL verdict, answering what
+	 * the flat-width measurement cannot — whether a unit sits below its label
+	 * for reasons of SHAPE (a multi-statement body, a single statement the
+	 * flat-refusal gate rejects, or a label-splice region, whose shared body
+	 * always renders below the labels it was split from). One `true` in the
+	 * expanded unit list decides the whole switch, so the pre-pass short-
+	 * circuits to `BodyFit.SIBLING_FORCE_BREAK` and never runs the measuring
+	 * loop at all.
+	 */
+	private static inline function caseSiblingStructuralFnExpr(
+		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
+	): Null<Expr> {
+		return casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseUnitStructuralBreak');
+	}
 
 	/**
 	 * Trivia close-peek (`@:trail`) Star dispatch (the `if (closeText != null)`
@@ -773,36 +803,6 @@ final class WriterTriviaStarDispatch {
 	}
 
 	/**
-	 * ω-if-leader-case-symmetry: the case-UNIT flattener. A `#if`-guarded case
-	 * region is ONE Star element whose Doc carries directive hardlines (flat
-	 * width `-1`), so without this predicate the region could only FOLLOW a
-	 * sibling's break, never LEAD one; it expands the region into its inner
-	 * case elements, and both channels of the pre-pass then judge each one on
-	 * its own.
-	 */
-	private static inline function caseSiblingUnitsFnExpr(
-		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
-	): Null<Expr> {
-		return casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseSiblingUnits');
-	}
-
-	/**
-	 * ω-case-sibling-symmetry widened: the STRUCTURAL verdict, answering what
-	 * the flat-width measurement cannot — whether a unit sits below its label
-	 * for reasons of SHAPE (a multi-statement body, a single statement the
-	 * flat-refusal gate rejects, or a label-splice region, whose shared body
-	 * always renders below the labels it was split from). One `true` in the
-	 * expanded unit list decides the whole switch, so the pre-pass short-
-	 * circuits to `BodyFit.SIBLING_FORCE_BREAK` and never runs the measuring
-	 * loop at all.
-	 */
-	private static inline function caseSiblingStructuralFnExpr(
-		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
-	): Null<Expr> {
-		return casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseUnitStructuralBreak');
-	}
-
-	/**
 	 * omega-case-body-controlflow-glue: the CONTROL-FLOW verdict — whether a
 	 * unit holds exactly one body statement and that statement is keyword-led
 	 * control flow. Paired with the pre-pass's own `flatLength == -1`
@@ -812,9 +812,9 @@ final class WriterTriviaStarDispatch {
 	private static function caseSiblingControlFlowFnExpr(
 		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
 	): Null<Expr> {
-		return !elemBodyStarHasFlag(tc, elemRefName, 'refuseGlueOnControlFlowRoot')
-			? null
-			: casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseUnitControlFlowBody');
+		return elemBodyStarHasFlag(tc, elemRefName, 'refuseGlueOnControlFlowRoot')
+			? casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseUnitControlFlowBody')
+			: null;
 	}
 
 	/**

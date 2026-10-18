@@ -221,10 +221,10 @@ final class Metavar {
 	public static function decodePlaceholderName(ident: String): Null<String> {
 		return if (!ident.startsWith(PLACEHOLDER_PREFIX))
 			null
-		else if (!ident.endsWith(PLACEHOLDER_SUFFIX))
-			null
+		else if (ident.endsWith(PLACEHOLDER_SUFFIX))
+			ident.substring(PLACEHOLDER_PREFIX.length, ident.length - PLACEHOLDER_SUFFIX.length)
 		else
-			ident.substring(PLACEHOLDER_PREFIX.length, ident.length - PLACEHOLDER_SUFFIX.length);
+			null;
 	}
 
 	/**
@@ -491,7 +491,7 @@ final class PatternStar {
 
 	/** True when `root` contains at least one star — the gate every text-producing op consults. */
 	public static function contains(root: QueryNode): Bool {
-		return root.kind == KIND || root.children.exists(c -> contains(c));
+		return root.kind == KIND || root.children.exists(contains);
 	}
 
 	private static function checkNode(node: QueryNode): Null<String> {

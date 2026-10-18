@@ -355,7 +355,7 @@ final class CondQuery {
 	 * produce, and rejecting it left the branch reporting nothing at all.
 	 */
 	private static function isSymbolName(name: String): Bool {
-		return name.length != 0 && name.split('.').foreach(segment -> SourceText.isIdentifier(segment));
+		return name.length != 0 && name.split('.').foreach(SourceText.isIdentifier);
 	}
 
 	/**

@@ -248,6 +248,11 @@ final class CondRegionLiveness {
 		return span == null ? null : evaluateFacts(source.substring(span.from, span.to), facts);
 	}
 
+	/** Three-valued negation: an unknown operand stays unknown. */
+	private static inline function notOf(value: Null<Bool>): Null<Bool> {
+		return value == null ? null : !value;
+	}
+
 	/**
 	 * The offsets that decide whether every byte of `spans` is live.
 	 *
@@ -285,11 +290,6 @@ final class CondRegionLiveness {
 				j++;
 		}
 		return out;
-	}
-
-	/** Three-valued negation: an unknown operand stays unknown. */
-	private static function notOf(value: Null<Bool>): Null<Bool> {
-		return value == null ? null : !value;
 	}
 
 	/** Three-valued conjunction: false wins over unknown, and true needs BOTH proved. */
@@ -423,17 +423,14 @@ final class CondRegionLiveness {
 			final from: Int = cursor.pos;
 			cursor.pos = flagEnd(text, cursor.pos);
 			final flag: String = text.substring(from, cursor.pos);
-			if (flag == VERSION_CALL && openParen(text, cursor)) return parseVersion(text, cursor);
-			return flagValue(flag, facts);
+			return flag == VERSION_CALL && openParen(text, cursor) ? parseVersion(text, cursor) : flagValue(flag, facts);
 		}
 		if (code == '"'.code || code == '\''.code) {
 			final from: Int = cursor.pos;
 			cursor.pos = quotedEnd(text, cursor.pos);
-			if (cursor.pos < 0) {
-				cursor.ok = false;
-				return null;
-			}
-			return CondValues.text(text.substring(from + 1, cursor.pos - 1));
+			if (cursor.pos >= 0) return CondValues.text(text.substring(from + 1, cursor.pos - 1));
+			cursor.ok = false;
+			return null;
 		}
 		if (code >= '0'.code && code <= '9'.code) {
 			final from: Int = cursor.pos;
@@ -477,11 +474,9 @@ final class CondRegionLiveness {
 		}
 		cursor.pos = end;
 		final raw: String = text.substring(from + 1, end - 1);
-		if (!closeParen(text, cursor)) {
-			cursor.ok = false;
-			return null;
-		}
-		return raw.indexOf('\\') >= 0 ? null : CondValues.version(raw);
+		if (closeParen(text, cursor)) return raw.indexOf('\\') >= 0 ? null : CondValues.version(raw);
+		cursor.ok = false;
+		return null;
 	}
 
 	/** Consume a `(` at the cursor (after spaces), reporting whether one was there; the cursor stays put when not. */

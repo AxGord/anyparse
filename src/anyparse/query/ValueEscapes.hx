@@ -105,17 +105,6 @@ final class ValueEscapes {
 		return _read?.parameterTypes(path);
 	}
 
-	/** The answer, computed once. */
-	private function answered(): EscapeAnswer {
-		var answer: Null<EscapeAnswer> = _answer;
-		if (answer == null) {
-			answer = compute();
-			_answer = answer;
-		}
-		if (answer.raw) onRaw();
-		return answer;
-	}
-
 	/** Drop the answer: the project's text changed. */
 	public function forget(): Void {
 		_answer = null;
@@ -125,6 +114,17 @@ final class ValueEscapes {
 	/** Whether a value stored in a position declared `type` keeps a nominal type the analysis follows (`ValueCarriers.typedNominal`). */
 	private inline function typedPosition(type: String): Bool {
 		return _carriers.typedNominal(type);
+	}
+
+	/** The answer, computed once. */
+	private function answered(): EscapeAnswer {
+		var answer: Null<EscapeAnswer> = _answer;
+		if (answer == null) {
+			answer = compute();
+			_answer = answer;
+		}
+		if (answer.raw) onRaw();
+		return answer;
 	}
 
 	/**
@@ -174,8 +174,7 @@ final class ValueEscapes {
 			final ended: Null<EscapeAnswer> = fileEscapes(g, f.file, f.source, escape);
 			if (ended != null) return ended;
 		}
-		if (!namedClasses(g, escape)) return { types: null, raw: false, ids: null };
-		return { types: out, raw: false, ids: null };
+		return namedClasses(g, escape) ? { types: out, raw: false, ids: null } : { types: null, raw: false, ids: null };
 	}
 
 	/** `compute` under the truth: what the facts' own reading (`FactsEscapes`) answers. */
@@ -386,14 +385,12 @@ final class ValueEscapes {
 				final enclosing: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name;
 				return enclosing == null ? null : g.types.memberOnChain(enclosing, name)?.typeSource;
 			}
-			if (_hazards.isAccess(target.kind) && target.children.length > 0 && name != null) {
-				final receiver: QueryNode = target.children[0];
-				final owner: Null<String> = isTypeName(receiver)
-					? SourceText.lastSegment(RefactorSupport.flattenPath(receiver))
-					: typeOf(receiver);
-				return owner == null ? null : g.types.memberOnChain(owner, name)?.typeSource;
-			}
-			return null;
+			if (!_hazards.isAccess(target.kind) || target.children.length <= 0 || name == null) return null;
+			final receiver: QueryNode = target.children[0];
+			final owner: Null<String> = isTypeName(receiver)
+				? SourceText.lastSegment(RefactorSupport.flattenPath(receiver))
+				: typeOf(receiver);
+			return owner == null ? null : g.types.memberOnChain(owner, name)?.typeSource;
 		}
 		function value(raw: QueryNode): Void {
 			if (!ok) return;
@@ -538,8 +535,7 @@ final class ValueEscapes {
 			final span: Null<Span> = written?.span;
 			if (span == null || !typedPosition(source.substring(span.from, span.to))) return false;
 			// an override of a library member returns into the library code that calls it
-			for (s in g.types.supertypesOf(type)) if (g.types.memberOnChain(s, name) != null && libraryMember(s, name)) return false;
-			return true;
+			return g.types.supertypesOf(type).foreach(s -> !(g.types.memberOnChain(s, name) != null && libraryMember(s, name)));
 		}
 		function walk(node: QueryNode, fn: Null<QueryNode>): Void {
 			if (!ok) return;
@@ -608,7 +604,7 @@ final class ValueEscapes {
 				final name: Null<String> = node.name;
 				final named: Bool = name != null && producers.contains(name)
 					&& (node.kind == _shape.identKind || _hazards.isAccess(node.kind));
-				if (named && !(parent?.kind == _shape.callKind && index == 0)) ok = false;
+				if (named && (parent?.kind != _shape.callKind || index != 0)) ok = false;
 				if (named && parent != null && parent.kind == _shape.callKind && index == 0) for (arg in parent.children.slice(1)) {
 					final literal: Null<String> = stringFold.literalOf(arg, text)?.content;
 					if (literal == null) {

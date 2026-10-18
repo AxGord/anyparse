@@ -29,15 +29,15 @@ final class AllocationSets {
 	/** Each field id -> its sealed allocation set, null when it has none. */
 	private final _fields: Map<String, Null<Array<String>>> = [];
 
+	/** Each file -> the type names its imports bind (`importsOf`). */
+	private final _imports: Map<String, FileImports> = [];
+
 	private final _graph: CallGraph;
 	private final _sites: LockSites;
 	private final _shape: RefShape;
 
 	/** The run's field writes. */
 	private final _writes: FieldWrites;
-
-	/** Each file -> the type names its imports bind (`importsOf`). */
-	private final _imports: Map<String, FileImports> = [];
 
 	public function new(graph: CallGraph, plugin: GrammarPlugin, sites: LockSites, writes: FieldWrites) {
 		_graph = graph;
@@ -61,8 +61,7 @@ final class AllocationSets {
 			? callee.children[0]
 			: null;
 		final field: Null<String> = edge.receiverField;
-		if (receiver == null || field == null || !_sites.readsOwnMember(receiver)) return null;
-		return fieldClasses(field)?.join(SEPARATOR);
+		return receiver == null || field == null || !_sites.readsOwnMember(receiver) ? null : fieldClasses(field)?.join(SEPARATOR);
 	}
 
 	/**
@@ -70,8 +69,9 @@ final class AllocationSets {
 	 * dispatched one or a construction when some class of them resolves to it (`resolves`).
 	 */
 	public function dispatches(edge: CallEdge, classes: Null<String>): Bool {
-		if (classes == null || edge.dispatchType == null && edge.kind != New) return true;
-		return classes.split(SEPARATOR).exists(c -> resolves(c, edge));
+		return classes == null || edge.dispatchType == null && edge.kind != New
+			? true
+			: classes.split(SEPARATOR).exists(c -> resolves(c, edge));
 	}
 
 	/** The classes of `classes` the dispatched call `edge` runs its target on: the target's own running object. */
@@ -79,19 +79,6 @@ final class AllocationSets {
 		if (classes == null) return null;
 		final kept: Array<String> = classes.split(SEPARATOR).filter(c -> resolves(c, edge));
 		return kept.length == 0 ? null : kept.join(SEPARATOR);
-	}
-
-	/** The class the `new` at the site of the construction `edge` names; null when the tree cannot place it. */
-	private function constructedAt(edge: CallEdge): Null<String> {
-		final at: Null<Span> = edge.span;
-		var node: Null<QueryNode> = at == null ? null : _graph.treeOf(edge.file);
-		while (node != null && at != null) {
-			final span: Null<Span> = node.span;
-			if (node.kind == _shape.newExprKind && span != null && span.from == at.from && span.to == at.to)
-				return constructed(node, edge.file)?.join(SEPARATOR);
-			node = node.children.find(c -> c.span != null && c.span.from <= at.from && c.span.to >= at.to);
-		}
-		return null;
 	}
 
 	/**
@@ -123,6 +110,19 @@ final class AllocationSets {
 		return answer;
 	}
 
+	/** The class the `new` at the site of the construction `edge` names; null when the tree cannot place it. */
+	private function constructedAt(edge: CallEdge): Null<String> {
+		final at: Null<Span> = edge.span;
+		var node: Null<QueryNode> = at == null ? null : _graph.treeOf(edge.file);
+		while (node != null && at != null) {
+			final span: Null<Span> = node.span;
+			if (node.kind == _shape.newExprKind && span != null && span.from == at.from && span.to == at.to)
+				return constructed(node, edge.file)?.join(SEPARATOR);
+			node = node.children.find(c -> c.span != null && c.span.from <= at.from && c.span.to >= at.to);
+		}
+		return null;
+	}
+
 	/**
 	 * Whether the class `c` resolves the method `edge` dispatches to `edge.to`. A class the index holds no declaration of
 	 * is a library's (`constructedClass` lets no other undeclared name into a set), which cannot inherit a project type:
@@ -146,8 +146,12 @@ final class AllocationSets {
 		if (file == null) return null;
 		final tree: Null<QueryNode> = _graph.treeOf(file);
 		final decl: Null<QueryNode> = tree == null ? null : declarationAt(tree, info.declFrom);
-		if (decl == null || decl.children.length > 1) return null;
-		return decl.children.length == 0 ? [] : constructed(decl.children[0], file);
+		return if (decl == null || decl.children.length > 1)
+			null
+		else if (decl.children.length == 0)
+			[]
+		else
+			constructed(decl.children[0], file);
 	}
 
 	/** The node of `tree` starting at `from` that declares a member; null when none does. */
@@ -204,9 +208,14 @@ final class AllocationSets {
 		if (name == null) return null;
 		final simple: String = CallGraphNames.lastSegments(name, 1);
 		final imports: FileImports = importsOf(file);
-		if (imports.aliases.contains(simple)) return null;
-		if (_graph.types.declarationCount(simple) > 0) return simple;
-		return _writes.complete && (name.indexOf('.') >= 0 || imports.named.contains(simple)) ? simple : null;
+		return if (imports.aliases.contains(simple))
+			null
+		else if (_graph.types.declarationCount(simple) > 0)
+			simple
+		else if (_writes.complete && (name.indexOf('.') >= 0 || imports.named.contains(simple)))
+			simple
+		else
+			null;
 	}
 
 	/**

@@ -197,8 +197,9 @@ final class SetModifier {
 		while (declIndex < siblings.length && ElementSpan.isDeclPrefixSibling(siblings[declIndex])) declIndex++;
 		if (declIndex >= siblings.length) return Refused('no declaration follows the modifiers at $line:$col');
 		final coreSpan: Null<Span> = siblings[declIndex].span;
-		if (coreSpan == null) return Refused('the ${siblings[declIndex].kind} declaration has no source span');
-		return Located({ siblings: siblings, index: declIndex, coreFrom: coreSpan.from });
+		return coreSpan == null
+			? Refused('the ${siblings[declIndex].kind} declaration has no source span')
+			: Located({ siblings: siblings, index: declIndex, coreFrom: coreSpan.from });
 	}
 
 	/**

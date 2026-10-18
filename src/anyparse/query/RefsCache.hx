@@ -51,6 +51,36 @@ final class RefsCache {
 	}
 
 	/**
+	 * The binding of the reference or declaration of `name` starting at `from` in `tree`: the offset its binding starts at,
+	 * -1 for one that binds nothing, null when no hit of `name` starts there. Read off the memoized index (`indexFor`),
+	 * one offset table per name, built on its first question.
+	 */
+	public function bindingAt(name: String, from: Int, tree: QueryNode, shape: RefShape): Null<Int> {
+		final byName: Map<String, Map<Int, Int>> = _bindings[tree] ?? [];
+		_bindings[tree] = byName;
+		final known: Null<Map<Int, Int>> = byName[name];
+		if (known != null) return known[from];
+		final built: Map<Int, Int> = offsetTable(indexFor(tree, shape)[name] ?? []);
+		byName[name] = built;
+		return built[from];
+	}
+
+	/**
+	 * The `@:nullSafety` scopes of `tree` under `key` (the meta name and its disable argument), built by `build` on the
+	 * first question and kept for the run like every index here. The array is never handed to a caller that writes it:
+	 * `TypeResolver` only iterates it.
+	 */
+	public function nullSafetyScopes(tree: QueryNode, key: String, build: () -> Array<NullSafetyScope>): Array<NullSafetyScope> {
+		final byKey: Map<String, Array<NullSafetyScope>> = _nullSafetyScopes[tree] ?? [];
+		_nullSafetyScopes[tree] = byKey;
+		final known: Null<Array<NullSafetyScope>> = byKey[key];
+		if (known != null) return known;
+		final built: Array<NullSafetyScope> = build();
+		byKey[key] = built;
+		return built;
+	}
+
+	/**
 	 * The per-name hit index for `tree`, built on first access via one
 	 * `Refs.findMulti` primed with every name found in the tree. Keyed by tree
 	 * identity ONLY — correct while each tree is queried under a single shape
@@ -64,21 +94,6 @@ final class RefsCache {
 		final idx: Map<String, Array<RefHit>> = Refs.findMulti(names, tree, shape);
 		_byTree[tree] = idx;
 		return idx;
-	}
-
-	/**
-	 * The binding of the reference or declaration of `name` starting at `from` in `tree`: the offset its binding starts at,
-	 * -1 for one that binds nothing, null when no hit of `name` starts there. Read off the memoized index (`indexFor`),
-	 * one offset table per name, built on its first question.
-	 */
-	public function bindingAt(name: String, from: Int, tree: QueryNode, shape: RefShape): Null<Int> {
-		final byName: Map<String, Map<Int, Int>> = _bindings[tree] ?? [];
-		_bindings[tree] = byName;
-		final known: Null<Map<Int, Int>> = byName[name];
-		if (known != null) return known[from];
-		final built: Map<Int, Int> = offsetTable(indexFor(tree, shape)[name] ?? []);
-		byName[name] = built;
-		return built[from];
 	}
 
 	/** Each hit's start -> its binding's start, -1 for a hit that binds nothing (`bindingAt`). */
@@ -97,21 +112,6 @@ final class RefsCache {
 		final n: Null<String> = node.name;
 		if (n != null) out.push(n);
 		for (c in node.children) collectNames(c, out);
-	}
-
-	/**
-	 * The `@:nullSafety` scopes of `tree` under `key` (the meta name and its disable argument), built by `build` on the
-	 * first question and kept for the run like every index here. The array is never handed to a caller that writes it:
-	 * `TypeResolver` only iterates it.
-	 */
-	public function nullSafetyScopes(tree: QueryNode, key: String, build: () -> Array<NullSafetyScope>): Array<NullSafetyScope> {
-		final byKey: Map<String, Array<NullSafetyScope>> = _nullSafetyScopes[tree] ?? [];
-		_nullSafetyScopes[tree] = byKey;
-		final known: Null<Array<NullSafetyScope>> = byKey[key];
-		if (known != null) return known;
-		final built: Array<NullSafetyScope> = build();
-		byKey[key] = built;
-		return built;
 	}
 
 }

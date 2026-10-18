@@ -161,6 +161,40 @@ final class MainRepeats {
 		}
 	}
 
+	/**
+	 * Whether `id` is code the runtime runs once per program: the entry
+	 * point, or a type's static initializers (`CallGraph.STATIC_INIT_NAME`).
+	 */
+	private function runsOnceAtStart(id: String): Bool {
+		final name: Null<String> = _graph.node(id)?.name;
+		return name == ThreadSafety.ENTRY_POINT || name == CallGraph.STATIC_INIT_NAME;
+	}
+
+	/**
+	 * The valuation the edge `e` enters its target under from its function's state `valuation` on the main thread: the
+	 * values a call hands down (`EdgeConditions.bind`), nothing known for a registered callback; null when a condition
+	 * around it rules it out there.
+	 */
+	private function runsFrom(e: CallEdge, valuation: String): Null<String> {
+		return if (e.kind == Ref)
+			_conditions.unknown(e.to)
+		else if (_conditions.carried(e, valuation, ThreadSafety.CTX_MAIN) == 0)
+			null
+		else
+			_conditions.bind(e, valuation);
+	}
+
+	/** The valuations of the main-thread states of `id`. */
+	private function mainStates(id: String): Array<String> {
+		return [
+			for (s in _states.statesOf(id)) if (s.ctx & ThreadSafety.CTX_MAIN != 0) s.valuation
+		];
+	}
+
+	private static inline function key(id: String, valuation: String): String {
+		return '$id|$valuation';
+	}
+
 	/** `e` an owner of the call `path` walks down to, once, by a way through a value handed on or not (`handed`). */
 	private static function own(owners: Array<RepeatOwner>, e: CallEdge, path: Array<String>, handed: Bool): Void {
 		if (!owners.exists(o -> o.edge == e)) owners.push({ edge: e, path: path, handed: handed });
@@ -186,34 +220,6 @@ final class MainRepeats {
 			Reflect.compare(a.edge.to, b.edge.to);
 	}
 
-	/** Whether `id` is code the runtime runs once per program: the entry point, or a type's static initializers (`CallGraph.STATIC_INIT_NAME`). */
-	private function runsOnceAtStart(id: String): Bool {
-		final name: Null<String> = _graph.node(id)?.name;
-		return name == ThreadSafety.ENTRY_POINT || name == CallGraph.STATIC_INIT_NAME;
-	}
-
-
-	/**
-	 * The valuation the edge `e` enters its target under from its function's state `valuation` on the main thread: the
-	 * values a call hands down (`EdgeConditions.bind`), nothing known for a registered callback; null when a condition
-	 * around it rules it out there.
-	 */
-	private function runsFrom(e: CallEdge, valuation: String): Null<String> {
-		if (e.kind == Ref) return _conditions.unknown(e.to);
-		return _conditions.carried(e, valuation, ThreadSafety.CTX_MAIN) == 0 ? null : _conditions.bind(e, valuation);
-	}
-
-	/** The valuations of the main-thread states of `id`. */
-	private function mainStates(id: String): Array<String> {
-		return [
-			for (s in _states.statesOf(id)) if (s.ctx & ThreadSafety.CTX_MAIN != 0) s.valuation
-		];
-	}
-
-	private static inline function key(id: String, valuation: String): String {
-		return '$id|$valuation';
-	}
-
 	/** Whether `way` binds more than `known` does: more turns, a worse turn, or an entry it does not name. */
 	private static function worse(way: BoundedWay, known: Null<BoundedWay>): Bool {
 		return known == null || way.turns > known.turns || way.cost > known.cost || way.entries.exists(e -> !known.entries.contains(e));
@@ -221,8 +227,7 @@ final class MainRepeats {
 
 	/** The worst of `way` and `known` on every count: the most turns, the worst turn, every entry of both. */
 	private static function merged(way: BoundedWay, known: Null<BoundedWay>): BoundedWay {
-		if (known == null) return way;
-		return {
+		return known == null ? way : {
 			turns: Math.max(way.turns, known.turns),
 			cost: Math.max(way.cost, known.cost),
 			entries: known.entries.concat([for (e in way.entries) if (!known.entries.contains(e)) e])

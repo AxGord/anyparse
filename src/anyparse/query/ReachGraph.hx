@@ -18,6 +18,7 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -71,6 +72,12 @@ final class ReachGraph {
 	/** `file:Type.member` -> what that member's code can give it a type (`inferredFrom`), read on first demand. */
 	private final _inferred: Map<String, Null<{ words: Array<String>, reads: Array<MemberRead> }>> = [];
 
+	/**
+	 * A site's family, operand types and owners -> what it may run (`ownedIdsAt`), dropped with `_implicit`: two sites alike run
+	 * the same members, and a conversion read off the facts may stand at every flow of a body.
+	 */
+	private final _owned: Map<String, Array<OwnedId>> = [];
+
 	private final _scope: ReachProject;
 	private final _maxLibraryFiles: Int;
 
@@ -84,12 +91,6 @@ final class ReachGraph {
 
 	/** The always-admitted implicitly-called functions (`alwaysIds`), dropped whenever the graph grows or the question enters new code. */
 	private var _implicit: Null<Array<String>> = null;
-
-	/**
-	 * A site's family, operand types and owners -> what it may run (`ownedIdsAt`), dropped with `_implicit`: two sites alike run
-	 * the same members, and a conversion read off the facts may stand at every flow of a body.
-	 */
-	private final _owned: Map<String, Array<OwnedId>> = [];
 
 	/** The implicitly-called members the index declares, computed on first demand. */
 	private var _indexImplicit: Null<Array<ImplicitCandidate>> = null;
@@ -132,12 +133,6 @@ final class ReachGraph {
 		_entered.clear();
 		_reach = null;
 		dropImplicit();
-	}
-
-	/** Drop what was computed of the implicitly-called members the graph or the code entered may run (`_implicit`, `_owned`). */
-	private function dropImplicit(): Void {
-		_implicit = null;
-		_owned.clear();
 	}
 
 	/**
@@ -336,65 +331,6 @@ final class ReachGraph {
 	}
 
 	/**
-	 * Read by its syntax alone, an operand of the site `at` whose static type names a type the index declares nowhere, or
-	 * null: its implicitly-called members are no candidate the index holds, so the "any type" its unknown type is read as
-	 * (`typesAt`) does not stand for them. A value of the language's own — a primitive (`ValueCarriers.primitive`), the
-	 * catch-all, a built-in collection the shape describes (`RefShape.arrayTypeNames`, `ExecutionShape.mapTypeNames`) — or of
-	 * a type not written as a name (a structure, a function type) names none.
-	 */
-	private function undeclaredOperand(at: ImplicitSite): Null<String> {
-		// the language's own: its catch-all, and the built-in collections whose implicit members the shape describes
-		final builtIn: Array<String> = (_scope.shape.catchAllTypeNames ?? []).concat(_scope.shape.arrayTypeNames ?? [])
-			.concat(_scope.shape.execution?.mapTypeNames ?? []);
-		final wrappers: Array<String> = _scope.shape.memberTransparentWrapperTypeNames ?? [];
-		for (t in at.types) if (t != null && !carriers.primitive(t)) {
-			final nominal: Null<String> = NominalTypes.outerNominalOf(
-				NominalTypes.unwrapNullable(StringTools.trim(t), wrappers, _scope.plugin.typeSyntax), _scope.plugin.typeSyntax
-			);
-			if (nominal != null && !builtIn.contains(nominal) && !_scope.declaresAnywhere(nominal)) return nominal;
-		}
-		return null;
-	}
-
-	/**
-	 * Whether a value of a type not known may be of the typed type `id`, whose text the index does not hold, as an implicit
-	 * candidate of the index's is in play (`inPlay`): it is extern, the project may make an instance by reflection, or its
-	 * simple name or a subtype's is spelled in the code the index reads.
-	 */
-	private function textlessInPlay(facts: FactsView, id: String): Bool {
-		return facts.type(id)?.isExtern == true || reflectiveProducers().exists(p -> mentioned(p.name, p.file))
-			|| mentioned(facts.graphType(id), null) || facts.subtypesOf(id).exists(sub -> mentioned(facts.graphType(sub), null));
-	}
-
-	/**
-	 * The members an implicit call of the site family `family` runs, as the compiler facts spell them
-	 * (`FactsView.implicitUnheld`) — the index's candidates of that family (`indexImplicit`, `matches`): a string conversion's
-	 * methods by name, an iteration's, a type's constructor where it is built from a literal, and a method marked as one an
-	 * operator, an index access or a conversion calls.
-	 */
-	private function implicitMembers(family: SiteFamily): ImplicitMembers {
-		final execution: Null<ExecutionShape> = _scope.shape.execution;
-		final text: Array<String> = execution?.stringConversionMethodNames ?? [];
-		inline function described(
-			names: Array<String>, metas: Array<String>, typeMetas: Array<String>, externInline: Bool
-		): ImplicitMembers {
-			return {
-				names: names,
-				metas: metas,
-				typeMetas: typeMetas,
-				externInline: externInline
-			};
-		}
-		return switch family {
-			// a conversion the target runs calls the target's own method, never an extern's inline one
-			case Text: described(text, [], [], false);
-			case Iteration: described([for (n in execution?.implicitCallNames ?? []) if (!text.contains(n)) n], [], [], true);
-			case Literal: described([], [], bare(execution?.implicitConstructionTypeMetaNames), true);
-			case Index | Operator(_): described([], bare(execution?.implicitCallMetaNames), [], true);
-		};
-	}
-
-	/**
 	 * The implicitly-called functions the site `at` may run (`idsAt`), each with the typed type it is the member of when
 	 * the facts name it (`ownedTypesAt`): which of the types sharing its type's simple name runs it — one entry for each of
 	 * them that declares the member. One with no owner is reached by its simple name alone.
@@ -406,29 +342,6 @@ final class ReachGraph {
 		final read: Array<OwnedId> = ownedIdsRead(g, at);
 		_owned[key] = read;
 		return read;
-	}
-
-	/** `ownedIdsAt`, computed. */
-	private function ownedIdsRead(g: CallGraph, at: ImplicitSite): Array<OwnedId> {
-		final owned: Null<Map<String, Null<Array<String>>>> = ownedTypesAt(g, at);
-		final scope: Null<Array<String>> = owned == null ? typesAt(g, at) : [for (t in owned.keys()) t];
-		final view: Null<FactsView> = _scope.facts;
-		final out: Array<OwnedId> = [];
-		function add(id: String, owner: Null<String>): Void {
-			if (!out.exists(o -> o.id == id && o.owner == owner)) out.push({ id: id, owner: owner });
-		}
-		for (c in indexImplicit()) if (matches(c.family, at.family) && (scope == null ? counts(c) : scope.contains(c.type))) {
-			final id: String = idsOf(g, [c])[0];
-			final owners: Null<Array<String>> = owned == null ? null : owned[c.type];
-			if (owners == null || view == null) {
-				add(id, null);
-				continue;
-			}
-			final facts: FactsView = view;
-			// a type of the name that declares no such member runs none of the others'
-			for (o in owners) if (facts.type(o)?.fields.exists(f -> facts.graphMember(o, f.name) == c.member) == true) add(id, o);
-		}
-		return out;
 	}
 
 	/**
@@ -598,24 +511,6 @@ final class ReachGraph {
 	}
 
 	/**
-	 * The superclass of `sub`, off `type`'s own chain, that the index says declares the `member` `sub` runs: the first on
-	 * its superclass chain declaring one, when `sub` declares none itself. Null otherwise.
-	 */
-	private function inheritedFrom(g: CallGraph, type: String, sub: String, member: String): Null<String> {
-		if (g.types.declaringTypeOf(sub, member) == sub) return null;
-		final seen: Array<String> = [sub];
-		var at: Null<String> = g.types.superclassOf(sub);
-		while (at != null && !seen.contains(at)) {
-			final holder: String = at;
-			if (g.types.declaringTypeOf(holder, member) == holder)
-				return g.types.firstOnChain(type, t -> t == holder) == null ? holder : null;
-			seen.push(holder);
-			at = g.types.superclassOf(holder);
-		}
-		return null;
-	}
-
-	/**
 	 * Whether any supertype on `typeName`'s chain, itself included, carries a build macro — written on it, or recorded by
 	 * the compiler facts, which also see one a supertype's `@:autoBuild` or a global macro applies; the site of the first
 	 * one found.
@@ -740,6 +635,175 @@ final class ReachGraph {
 		return decl != null && (_scope.shape.underlyingThisTypeKinds ?? []).contains(decl.kind);
 	}
 
+	public function loadFile(g: CallGraph, file: String): Null<ReachUnknown> {
+		if (!_scope.sources.exists(file) && !_questionFiles.exists(file)) {
+			_questionFiles[file] = true;
+			if (++_questionFileCount > _maxLibraryFiles) return Budget('the walk grew into more than $_maxLibraryFiles library files');
+		}
+		if (g.skippedFiles.contains(file)) return SkipParse(file);
+		if (g.treeOf(file) != null) return null;
+		final source: Null<String> = _scope.sources[file] ?? _scope.index.sourceOf(file);
+		if (source == null) return null;
+		// past a blind spot the answer is not `Proven` whatever the library holds; a path is looked for in what is loaded
+		if (stopGrowing) return Budget('the walk stopped reading library files after a blind spot');
+		g.addFiles([{ file: file, source: source }]);
+		_unresolvedFrom = null;
+		_accessFrom = null;
+		dropImplicit();
+		return null;
+	}
+
+	/**
+	 * Under the truth, what a reflective access by a name it computes may reach on the object it acts on, which
+	 * `receivers` — the fact of it each build recorded (`ReflectionFact.receiver`) — type: the simple names of the types
+	 * whose members it may read, write or call, and their methods, an accessor a property access runs among them, each with
+	 * the typed type it is a member of. The object is an instance of the typed class or interface its type names
+	 * (`FactsView.objectClass`), of a typed subtype of it unless it is an object of exactly that class, and — unless it is
+	 * `this` of a method no code obtains as a value, which only a dispatch on an instance of its class or of a subclass then
+	 * binds (`FactsMethodValues.selfBound`) — of a type whose instances escaped the type system (`ValueCarriers.escapedIds`);
+	 * with each type those extend or implement. An object whose type names no class (`FactsView.classless`: a
+	 * structure, the catch-all) is a structure, whose fields are no class members, or an instance that escaped: of an escaped type alone;
+	 * a structure the code built where it acts on it (`ReflectionFact.receiverFresh`) is of no type at all — both only for an access of a
+	 * field of the object itself (`FactsView.FIELD_ACCESSES`). The methods it may run are, unless the project declares the classes whose
+	 * methods a name computed at run time may obtain (`reflectiveMethodHolders`, `FactsMethodValues.declaredHolders`),
+	 * every one of those types; then only the accessors of any of them, and every method of a declared class each object
+	 * may be of, by its own name, and of the types it extends — its variables stay any. Null — any member of
+	 * any object — when the facts are not the truth, no fact names a receiver, one is of no such type, the escapes are
+	 * not known, or a method it may run is of a type whose text the index does not hold (`FactsView.unheld`) or holds nothing
+	 * of (`FactsView.textless`).
+	 */
+	public function reflectedMembers(g: CallGraph, receivers: Array<ReflectionFact>): Null<ReflectedMembers> {
+		final view: Null<FactsView> = _scope.facts;
+		if (view == null || !view.truth || receivers.length == 0) return null;
+		final facts: FactsView = view;
+		final found: Null<Array<String>> = reflectedObjects(facts, receivers);
+		if (found == null) return null;
+		final objects: Array<String> = found;
+		final typed: Array<String> = objects.copy();
+		for (id in objects) for (sup in facts.supertypesOf(id)) if (!typed.contains(sup)) typed.push(sup);
+		// a method other than an accessor is obtained off an object of a class the project declares (`reflectiveMethodHolders`),
+		// each by its own name, and is one of that class or of a class it extends; an accessor runs off an object of any class
+		final held: Array<String> = methodValues(facts).declaredHolders(objects);
+		final owners: Array<String> = held.copy();
+		for (id in held) for (sup in facts.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);
+		return reflectedIds(g, facts, typed, owners);
+	}
+
+	/** Which methods the program may obtain as values, read off the facts `view` once per text (`FactsMethodValues`). */
+	public function methodValues(view: FactsView): FactsMethodValues {
+		final held: Null<FactsMethodValues> = _methodValues;
+		if (held != null) return held;
+		final made: FactsMethodValues = new FactsMethodValues(view, () -> carriers.escapedIds(), _scope.reflectiveMethodHolders);
+		_methodValues = made;
+		return made;
+	}
+
+	/** Drop what was computed of the implicitly-called members the graph or the code entered may run (`_implicit`, `_owned`). */
+	private function dropImplicit(): Void {
+		_implicit = null;
+		_owned.clear();
+	}
+
+	/**
+	 * Read by its syntax alone, an operand of the site `at` whose static type names a type the index declares nowhere, or
+	 * null: its implicitly-called members are no candidate the index holds, so the "any type" its unknown type is read as
+	 * (`typesAt`) does not stand for them. A value of the language's own — a primitive (`ValueCarriers.primitive`), the
+	 * catch-all, a built-in collection the shape describes (`RefShape.arrayTypeNames`, `ExecutionShape.mapTypeNames`) — or of
+	 * a type not written as a name (a structure, a function type) names none.
+	 */
+	private function undeclaredOperand(at: ImplicitSite): Null<String> {
+		// the language's own: its catch-all, and the built-in collections whose implicit members the shape describes
+		final builtIn: Array<String> = (_scope.shape.catchAllTypeNames ?? []).concat(_scope.shape.arrayTypeNames ?? [])
+			.concat(_scope.shape.execution?.mapTypeNames ?? []);
+		final wrappers: Array<String> = _scope.shape.memberTransparentWrapperTypeNames ?? [];
+		for (t in at.types) if (t != null && !carriers.primitive(t)) {
+			final nominal: Null<String> = NominalTypes.outerNominalOf(
+				NominalTypes.unwrapNullable(StringTools.trim(t), wrappers, _scope.plugin.typeSyntax), _scope.plugin.typeSyntax
+			);
+			if (nominal != null && !builtIn.contains(nominal) && !_scope.declaresAnywhere(nominal)) return nominal;
+		}
+		return null;
+	}
+
+	/**
+	 * Whether a value of a type not known may be of the typed type `id`, whose text the index does not hold, as an implicit
+	 * candidate of the index's is in play (`inPlay`): it is extern, the project may make an instance by reflection, or its
+	 * simple name or a subtype's is spelled in the code the index reads.
+	 */
+	private function textlessInPlay(facts: FactsView, id: String): Bool {
+		return facts.type(id)?.isExtern == true || reflectiveProducers().exists(p -> mentioned(p.name, p.file))
+			|| mentioned(facts.graphType(id), null) || facts.subtypesOf(id).exists(sub -> mentioned(facts.graphType(sub), null));
+	}
+
+	/**
+	 * The members an implicit call of the site family `family` runs, as the compiler facts spell them
+	 * (`FactsView.implicitUnheld`) — the index's candidates of that family (`indexImplicit`, `matches`): a string conversion's
+	 * methods by name, an iteration's, a type's constructor where it is built from a literal, and a method marked as one an
+	 * operator, an index access or a conversion calls.
+	 */
+	private function implicitMembers(family: SiteFamily): ImplicitMembers {
+		final execution: Null<ExecutionShape> = _scope.shape.execution;
+		final text: Array<String> = execution?.stringConversionMethodNames ?? [];
+		inline function described(
+			names: Array<String>, metas: Array<String>, typeMetas: Array<String>, externInline: Bool
+		): ImplicitMembers {
+			return {
+				names: names,
+				metas: metas,
+				typeMetas: typeMetas,
+				externInline: externInline
+			};
+		}
+		return switch family {
+			// a conversion the target runs calls the target's own method, never an extern's inline one
+			case Text: described(text, [], [], false);
+			case Iteration: described([for (n in execution?.implicitCallNames ?? []) if (!text.contains(n)) n], [], [], true);
+			case Literal: described([], [], bare(execution?.implicitConstructionTypeMetaNames), true);
+			case Index, Operator(_): described([], bare(execution?.implicitCallMetaNames), [], true);
+		};
+	}
+
+	/** `ownedIdsAt`, computed. */
+	private function ownedIdsRead(g: CallGraph, at: ImplicitSite): Array<OwnedId> {
+		final owned: Null<Map<String, Null<Array<String>>>> = ownedTypesAt(g, at);
+		final scope: Null<Array<String>> = owned == null ? typesAt(g, at) : [for (t in owned.keys()) t];
+		final view: Null<FactsView> = _scope.facts;
+		final out: Array<OwnedId> = [];
+		function add(id: String, owner: Null<String>): Void {
+			if (!out.exists(o -> o.id == id && o.owner == owner)) out.push({ id: id, owner: owner });
+		}
+		for (c in indexImplicit()) if (matches(c.family, at.family) && (scope == null ? counts(c) : scope.contains(c.type))) {
+			final id: String = idsOf(g, [c])[0];
+			final owners: Null<Array<String>> = owned == null ? null : owned[c.type];
+			if (owners == null || view == null) {
+				add(id, null);
+				continue;
+			}
+			final facts: FactsView = view;
+			// a type of the name that declares no such member runs none of the others'
+			for (o in owners) if (facts.type(o)?.fields.exists(f -> facts.graphMember(o, f.name) == c.member) == true) add(id, o);
+		}
+		return out;
+	}
+
+	/**
+	 * The superclass of `sub`, off `type`'s own chain, that the index says declares the `member` `sub` runs: the first on
+	 * its superclass chain declaring one, when `sub` declares none itself. Null otherwise.
+	 */
+	private function inheritedFrom(g: CallGraph, type: String, sub: String, member: String): Null<String> {
+		if (g.types.declaringTypeOf(sub, member) == sub) return null;
+		final seen: Array<String> = [sub];
+		var at: Null<String> = g.types.superclassOf(sub);
+		while (at != null && !seen.contains(at)) {
+			final holder: String = at;
+			if (g.types.declaringTypeOf(holder, member) == holder)
+				return g.types.firstOnChain(type, t -> t == holder) == null ? holder : null;
+			seen.push(holder);
+			at = g.types.superclassOf(holder);
+		}
+		return null;
+	}
+
 	/** The graph ids of `candidates`, deduped: the declared node, the initializer pseudo-node, or a placeholder the walk reads. */
 	private function idsOf(g: CallGraph, candidates: Array<ImplicitCandidate>): Array<String> {
 		final ctorName: String = _scope.shape.constructorName ?? 'new';
@@ -753,10 +817,9 @@ final class ReachGraph {
 				? init
 				: g.memberOnChain(c.type, c.member);
 			final id: String = declared ?? placeholder(g, c.type, c.member == CallGraph.INIT_NAME ? ctorName : c.member);
-			if (!held.exists(id)) {
-				out.push(id);
-				held[id] = true;
-			}
+			if (held.exists(id)) continue;
+			out.push(id);
+			held[id] = true;
 		}
 		return out;
 	}
@@ -773,8 +836,7 @@ final class ReachGraph {
 	 * static type is written — a project class's always, a library class's when its type is in play (`inPlay`).
 	 */
 	private function counts(c: ImplicitCandidate): Bool {
-		if (c.isAbstract) return visibleAbstracts().exists(c.type);
-		return _scope.sources.exists(c.file) || inPlay(c);
+		return c.isAbstract ? visibleAbstracts().exists(c.type) : _scope.sources.exists(c.file) || inPlay(c);
 	}
 
 	/**
@@ -835,7 +897,7 @@ final class ReachGraph {
 		// noqa: complexity
 		final view: Null<FactsView> = _scope.facts;
 		final owners: Null<Array<Null<String>>> = at.owners;
-		if (view == null || !view.truth || owners == null || !(at.family == Text || at.family == Iteration)) return null;
+		if (view == null || !view.truth || owners == null || at.family != Text && at.family != Iteration) return null;
 		final facts: FactsView = view;
 		final out: Map<String, Null<Array<String>>> = [];
 		function note(name: String, owner: Null<String>): Void {
@@ -885,7 +947,7 @@ final class ReachGraph {
 	 * or an interface declared exactly once.
 	 */
 	private function exactTypes(g: CallGraph, type: String): Null<Array<String>> {
-		final nominal: Null<String> = NominalTypes.outerNominalOf(StringTools.trim(type), _scope.plugin.typeSyntax);
+		final nominal: Null<String> = NominalTypes.outerNominalOf(type.trim(), _scope.plugin.typeSyntax);
 		final decl: Null<TypeDeclInfo> = nominal == null ? null : _scope.declarationOf(nominal);
 		if (nominal == null || decl == null) return null;
 		final declared: TypeDeclInfo = decl;
@@ -906,7 +968,7 @@ final class ReachGraph {
 	private function runtimeTypes(g: CallGraph, type: String, family: SiteFamily, escaped: Bool = true): Null<Array<String>> {
 		// an abstract's own member of the family runs on it — static calls the compiler puts where the static type is it; its
 		// own conversion may convert the value it wraps in turn, as `Any`'s does, which may be anything
-		final own: String = g.types.resolveAlias(NominalTypes.outerNominalOf(StringTools.trim(type), _scope.plugin.typeSyntax) ?? type);
+		final own: String = g.types.resolveAlias(NominalTypes.outerNominalOf(type.trim(), _scope.plugin.typeSyntax) ?? type);
 		if (isAbstract(own) && indexImplicit().exists(c -> c.type == own && matches(c.family, family)))
 			return family == Text ? null : [own];
 		// otherwise the value is one of its value types, which run what they and their supertypes declare
@@ -1013,8 +1075,9 @@ final class ReachGraph {
 		// whether the name is declared at all is the static type's question: an instance that left the type system and
 		// declares it does not make a static extension, or a member a build macro generated, one the index describes
 		final declared: Null<Array<String>> = runtimeTypes(g, type, Literal, false);
-		if (declared == null || !declared.exists(t -> g.types.memberOnChain(t, name) != null)) return declared;
-		return runtimeTypes(g, type, Literal);
+		return declared == null || !declared.exists(t -> g.types.memberOnChain(t, name) != null)
+			? declared
+			: runtimeTypes(g, type, Literal);
 	}
 
 	/**
@@ -1086,10 +1149,9 @@ final class ReachGraph {
 			var inner: Null<QueryNode> = null;
 			for (c in node.children) {
 				final s: Null<Span> = c.span;
-				if (s != null && s.from <= span.from && span.to <= s.to) {
-					inner = c;
-					break;
-				}
+				if (s == null || s.from > span.from || span.to > s.to) continue;
+				inner = c;
+				break;
 			}
 			if (inner == null) return null;
 			final found: QueryNode = inner;
@@ -1189,12 +1251,11 @@ final class ReachGraph {
 					words(into, key, t.name);
 					// a type the declaration does not write is inferred from the member's own code (`inferredFrom`)
 					final written: Null<String> = functionKinds.contains(m.kind) ? m.returnNominal : m.typeSource;
-					if (written == null && m.name != ctorName && !ctorKinds.contains(m.kind)) {
-						final inferredInto: Map<String, Array<InferredRef>> = implicit ? out.inferredType : out.inferredMember;
-						final list: Array<InferredRef> = inferredInto[key] ?? [];
-						list.push({ file: fi.file, type: t.name, member: m.name });
-						inferredInto[key] = list;
-					}
+					if (written != null || m.name == ctorName || ctorKinds.contains(m.kind)) continue;
+					final inferredInto: Map<String, Array<InferredRef>> = implicit ? out.inferredType : out.inferredMember;
+					final list: Array<InferredRef> = inferredInto[key] ?? [];
+					list.push({ file: fi.file, type: t.name, member: m.name });
+					inferredInto[key] = list;
 				}
 			}
 		}
@@ -1322,24 +1383,6 @@ final class ReachGraph {
 		return out;
 	}
 
-	public function loadFile(g: CallGraph, file: String): Null<ReachUnknown> {
-		if (!_scope.sources.exists(file) && !_questionFiles.exists(file)) {
-			_questionFiles[file] = true;
-			if (++_questionFileCount > _maxLibraryFiles) return Budget('the walk grew into more than $_maxLibraryFiles library files');
-		}
-		if (g.skippedFiles.contains(file)) return SkipParse(file);
-		if (g.treeOf(file) != null) return null;
-		final source: Null<String> = _scope.sources[file] ?? _scope.index.sourceOf(file);
-		if (source == null) return null;
-		// past a blind spot the answer is not `Proven` whatever the library holds; a path is looked for in what is loaded
-		if (stopGrowing) return Budget('the walk stopped reading library files after a blind spot');
-		g.addFiles([{ file: file, source: source }]);
-		_unresolvedFrom = null;
-		_accessFrom = null;
-		dropImplicit();
-		return null;
-	}
-
 	/** The first library file of the index that did not parse, a build may compile, and spells one of `words`, or null. */
 	private function unparsedLibraryMentioning(words: Array<String>): Null<String> {
 		for (file in _scope.index.skippedFiles()) if (!_scope.sources.exists(file) && _scope.mayCompile(file)) {
@@ -1347,66 +1390,6 @@ final class ReachGraph {
 			if (source == null || words.exists(w -> RawSourceScan.mentionsWord(source, w))) return file;
 		}
 		return null;
-	}
-
-	/** Whether a member of `family` runs from a site of `site`'s family. */
-	private static function matches(family: CandidateFamily, site: SiteFamily): Bool {
-		return switch [family, site] {
-			case [TextMember, Text], [IterationMember, Iteration], [IndexMember, Index], [LiteralMember, Literal]: true;
-			case [OperatorMember(kinds), Operator(kind)]: kinds.contains(kind);
-			case _: false;
-		};
-	}
-
-	/** Call `visit` with each whole word of `text`, in order. */
-	private static function eachWord(text: String, visit: String -> Void): Void {
-		var i: Int = 0;
-		final n: Int = text.length;
-		while (i < n) {
-			if (!RawSourceScan.isWordChar(StringTools.fastCodeAt(text, i))) {
-				i++;
-				continue;
-			}
-			final from: Int = i;
-			while (i < n && RawSourceScan.isWordChar(StringTools.fastCodeAt(text, i))) i++;
-			visit(text.substring(from, i));
-		}
-	}
-
-	/**
-	 * Under the truth, what a reflective access by a name it computes may reach on the object it acts on, which
-	 * `receivers` — the fact of it each build recorded (`ReflectionFact.receiver`) — type: the simple names of the types
-	 * whose members it may read, write or call, and their methods, an accessor a property access runs among them, each with
-	 * the typed type it is a member of. The object is an instance of the typed class or interface its type names
-	 * (`FactsView.objectClass`), of a typed subtype of it unless it is an object of exactly that class, and — unless it is
-	 * `this` of a method no code obtains as a value, which only a dispatch on an instance of its class or of a subclass then
-	 * binds (`FactsMethodValues.selfBound`) — of a type whose instances escaped the type system (`ValueCarriers.escapedIds`);
-	 * with each type those extend or implement. An object whose type names no class (`FactsView.classless`: a
-	 * structure, the catch-all) is a structure, whose fields are no class members, or an instance that escaped: of an escaped type alone;
-	 * a structure the code built where it acts on it (`ReflectionFact.receiverFresh`) is of no type at all — both only for an access of a
-	 * field of the object itself (`FactsView.FIELD_ACCESSES`). The methods it may run are, unless the project declares the classes whose
-	 * methods a name computed at run time may obtain (`reflectiveMethodHolders`, `FactsMethodValues.declaredHolders`),
-	 * every one of those types; then only the accessors of any of them, and every method of a declared class each object
-	 * may be of, by its own name, and of the types it extends — its variables stay any. Null — any member of
-	 * any object — when the facts are not the truth, no fact names a receiver, one is of no such type, the escapes are
-	 * not known, or a method it may run is of a type whose text the index does not hold (`FactsView.unheld`) or holds nothing
-	 * of (`FactsView.textless`).
-	 */
-	public function reflectedMembers(g: CallGraph, receivers: Array<ReflectionFact>): Null<ReflectedMembers> {
-		final view: Null<FactsView> = _scope.facts;
-		if (view == null || !view.truth || receivers.length == 0) return null;
-		final facts: FactsView = view;
-		final found: Null<Array<String>> = reflectedObjects(facts, receivers);
-		if (found == null) return null;
-		final objects: Array<String> = found;
-		final typed: Array<String> = objects.copy();
-		for (id in objects) for (sup in facts.supertypesOf(id)) if (!typed.contains(sup)) typed.push(sup);
-		// a method other than an accessor is obtained off an object of a class the project declares (`reflectiveMethodHolders`),
-		// each by its own name, and is one of that class or of a class it extends; an accessor runs off an object of any class
-		final held: Array<String> = methodValues(facts).declaredHolders(objects);
-		final owners: Array<String> = held.copy();
-		for (id in held) for (sup in facts.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);
-		return reflectedIds(g, facts, typed, owners);
 	}
 
 	/**
@@ -1463,7 +1446,7 @@ final class ReachGraph {
 			// its methods, and a placeholder runs nothing — an extern's method is target code, the native admission's
 			// (`FactsView.externMethod`)
 			final textless: Bool = facts.unheld(id) || facts.textless(id);
-			for (member in facts.methodsOf(id)) if (owners.contains(id) || accessors.exists(p -> StringTools.startsWith(member, p))) {
+			for (member in facts.methodsOf(id)) if (owners.contains(id) || accessors.exists(p -> member.startsWith(p))) {
 				if (textless && !facts.externMethod(id, member)) return null;
 				ids.push({ id: g.ownMember(type, member) ?? placeholder(g, type, member), owner: id });
 			}
@@ -1471,13 +1454,28 @@ final class ReachGraph {
 		return { types: types, ids: ids };
 	}
 
-	/** Which methods the program may obtain as values, read off the facts `view` once per text (`FactsMethodValues`). */
-	public function methodValues(view: FactsView): FactsMethodValues {
-		final held: Null<FactsMethodValues> = _methodValues;
-		if (held != null) return held;
-		final made: FactsMethodValues = new FactsMethodValues(view, () -> carriers.escapedIds(), _scope.reflectiveMethodHolders);
-		_methodValues = made;
-		return made;
+	/** Whether a member of `family` runs from a site of `site`'s family. */
+	private static function matches(family: CandidateFamily, site: SiteFamily): Bool {
+		return switch [family, site] {
+			case [TextMember, Text], [IterationMember, Iteration], [IndexMember, Index], [LiteralMember, Literal]: true;
+			case [OperatorMember(kinds), Operator(kind)]: kinds.contains(kind);
+			case _: false;
+		};
+	}
+
+	/** Call `visit` with each whole word of `text`, in order. */
+	private static function eachWord(text: String, visit: String -> Void): Void {
+		var i: Int = 0;
+		final n: Int = text.length;
+		while (i < n) {
+			if (!RawSourceScan.isWordChar(text.fastCodeAt(i))) {
+				i++;
+				continue;
+			}
+			final from: Int = i;
+			while (i < n && RawSourceScan.isWordChar(text.fastCodeAt(i))) i++;
+			visit(text.substring(from, i));
+		}
 	}
 
 	/** Metadata names as the compiler facts spell them (`FieldDeclFact.meta`): without the leading `@`. */

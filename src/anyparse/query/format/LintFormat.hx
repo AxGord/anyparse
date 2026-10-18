@@ -9,6 +9,7 @@ import anyparse.check.LongLockExplain.LongLockReport;
 import anyparse.check.Severity;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
+import haxe.DynamicAccess;
 import haxe.Json;
 
 using Lambda;
@@ -31,6 +32,13 @@ final class LintFormat {
 
 	/** Files named, one per line, when a summary covers ONE rule — the by-file breakdown a `--rule` run asks for. */
 	public static inline final SUMMARY_FILES_SINGLE_RULE: Int = 10;
+
+	/**
+	 * The findings a text report lists before summarising when no `reportSummaryThreshold` is declared.
+	 * Sized for a reader rather than a tool: a few screens, and well above what one file's lint yields
+	 * in practice, so a per-file run keeps its list.
+	 */
+	public static inline final DEFAULT_REPORT_SUMMARY_THRESHOLD: Int = 200;
 
 	/** The column an `--explain-long` reason's kind is padded to: the longest kind, `spans-blocking`. */
 	private static inline final LONG_REASON_WIDTH: Int = 14;
@@ -105,10 +113,10 @@ final class LintFormat {
 		final indexes: Map<String, LineIndex> = [];
 		final records: Array<Dynamic> = [
 			for (v in violations) {
-				final record: Dynamic = recordOf(v, indexFor(v.file, sourceOf, indexes));
+				final record: DynamicAccess<Null<String>> = recordOf(v, indexFor(v.file, sourceOf, indexes));
 				if (addressOf != null) {
 					final address: Null<String> = addressOf(v);
-					if (address != null) Reflect.setField(record, 'address', address);
+					if (address != null) record['address'] = address;
 				}
 				record;
 			}
@@ -128,8 +136,8 @@ final class LintFormat {
 			],
 			mainShort: [
 				for (t in longLocks.mainShort) {
-					final record: Dynamic = siteRecord(t.lock, t.file, t.span, t.holder, indexFor(t.file, sourceOf, indexes));
-					Reflect.setField(record, 'quiet', t.quiet);
+					final record: DynamicAccess<Bool> = siteRecord(t.lock, t.file, t.span, t.holder, indexFor(t.file, sourceOf, indexes));
+					record['quiet'] = t.quiet;
 					record;
 				}
 			],
@@ -352,13 +360,6 @@ final class LintFormat {
 		final levels: Array<Severity> = [Severity.Error, Severity.Warning, Severity.Info];
 		return [for (level in levels) if (group.exists(v -> v.severity == level)) level.label()].join('/');
 	}
-
-	/**
-	 * The findings a text report lists before summarising when no `reportSummaryThreshold` is declared.
-	 * Sized for a reader rather than a tool: a few screens, and well above what one file's lint yields
-	 * in practice, so a per-file run keeps its list.
-	 */
-	public static inline final DEFAULT_REPORT_SUMMARY_THRESHOLD: Int = 200;
 
 }
 

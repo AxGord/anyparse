@@ -1,11 +1,11 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.CondResolve;
+import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span.Position;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 

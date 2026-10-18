@@ -180,12 +180,10 @@ final class StaticExtensionFacts {
 		final declared: Array<FieldDeclFact> = (facts.type(owner)?.fields ?? []).filter(f -> f.name == method);
 		if (declared.length != 1) return null;
 		final field: FieldDeclFact = declared[0];
-		if (
-			!field.isStatic || field.kinds.contains(CompilerFacts.MACRO_FIELD_KIND) || field.meta.contains(NO_USING_META)
+		return !field.isStatic || field.kinds.contains(CompilerFacts.MACRO_FIELD_KIND) || field.meta.contains(NO_USING_META)
 			|| field.overloads.exists(n -> n > 0) || field.types.length != 1
-		)
-			return null;
-		return firstParamOf(field.type);
+			? null
+			: firstParamOf(field.type);
 	}
 
 	/**

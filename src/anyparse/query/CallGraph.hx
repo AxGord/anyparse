@@ -391,6 +391,50 @@ final class CallGraph {
 		return _members.keys();
 	}
 
+	/** The innermost function-like node of `file` a declaration of which contains `offset`, or null outside every function. */
+	public inline function functionAt(file: String, offset: Int): Null<String> {
+		return declarationAt(file, offset)?.id;
+	}
+
+	/**
+	 * Every declaration the node `id` stands for, in the order the graph read them: the one its `span` names first, then
+	 * every other the graph folded into it — each of them code the node runs. Empty for a node no text declares: an
+	 * external placeholder, a field-initializer pseudo-node (`initializerFiles`), a method a build macro made.
+	 */
+	public inline function declarationsOf(id: String): Array<FnDeclaration> {
+		return _declarations[id] ?? [];
+	}
+
+	/**
+	 * The files whose field initializers the pseudo-node `id` (`INIT_NAME`
+	 * / `STATIC_INIT_NAME`) runs, in the order the graph read them.
+	 */
+	public inline function initializerFiles(id: String): Array<String> {
+		return _initFiles[id] ?? [];
+	}
+
+	/**
+	 * Every key the type name `written` may mean in `file` (`CallGraphImports.keysOf`): the type the file binds it to, then
+	 * each one a `#if`-guarded statement or a package wildcard may bind it to instead; none when nothing binds it.
+	 */
+	public inline function typeKeysOf(file: String, written: String): Array<String> {
+		return types.imports.keysOf(file, written);
+	}
+
+	/** The paths the type keyed `type` is declared under: its module's, the module's and its own, the package's and its own. */
+	public inline function declaredPathsOf(type: String): Array<String> {
+		return types.imports.declaredPathsOf(type);
+	}
+
+	/**
+	 * Adds an edge a consumer derived from what the graph already holds (`thread-safety`'s calls of a value stored into a
+	 * `dynamic` method, at the member's own call sites): it is indexed as any other, and only the consumer's own graph
+	 * carries it.
+	 */
+	public inline function deriveEdge(edge: CallEdge): Void {
+		indexEdge(edge);
+	}
+
 	/**
 	 * The written bounds of type parameter `name` as `id` sees it: a function, its own or an enclosing one's (a lambda's) or —
 	 * unless `functionsOnly` — its type's; a type, its own (empty if declarations differ). Empty if unbounded, null for none.
@@ -432,11 +476,6 @@ final class CallGraph {
 		return _entries[CallGraphNames.normalizePath(file)]?.source;
 	}
 
-	/** The innermost function-like node of `file` a declaration of which contains `offset`, or null outside every function. */
-	public inline function functionAt(file: String, offset: Int): Null<String> {
-		return declarationAt(file, offset)?.id;
-	}
-
 	/** The innermost declaration of a function-like node in `file` whose span contains `offset`, or null outside every function. */
 	public function declarationAt(file: String, offset: Int): Null<FnDeclaration> {
 		var best: Null<FnDeclaration> = null;
@@ -450,20 +489,6 @@ final class CallGraph {
 	}
 
 	/**
-	 * Every declaration the node `id` stands for, in the order the graph read them: the one its `span` names first, then
-	 * every other the graph folded into it — each of them code the node runs. Empty for a node no text declares: an
-	 * external placeholder, a field-initializer pseudo-node (`initializerFiles`), a method a build macro made.
-	 */
-	public inline function declarationsOf(id: String): Array<FnDeclaration> {
-		return _declarations[id] ?? [];
-	}
-
-	/** The files whose field initializers the pseudo-node `id` (`INIT_NAME` / `STATIC_INIT_NAME`) runs, in the order the graph read them. */
-	public inline function initializerFiles(id: String): Array<String> {
-		return _initFiles[id] ?? [];
-	}
-
-	/**
 	 * Whether a node with a declaration in `file` has one in another file too: taking `file` out of the graph drops that
 	 * node, with every edge the other declaration's code recorded, which re-adding `file` alone does not bring back.
 	 */
@@ -471,8 +496,7 @@ final class CallGraph {
 		final key: String = CallGraphNames.normalizePath(file);
 		for (d in _fileDeclarations[key] ?? []) if (declarationsOf(d.id).exists(o -> CallGraphNames.normalizePath(o.file) != key))
 			return true;
-		for (files in _initFiles) if (files.length > 1 && files.exists(f -> CallGraphNames.normalizePath(f) == key)) return true;
-		return false;
+		return Lambda.exists(_initFiles, files -> files.length > 1 && files.exists(f -> CallGraphNames.normalizePath(f) == key));
 	}
 
 	/**
@@ -521,19 +545,6 @@ final class CallGraph {
 	}
 
 	/**
-	 * Every key the type name `written` may mean in `file` (`CallGraphImports.keysOf`): the type the file binds it to, then
-	 * each one a `#if`-guarded statement or a package wildcard may bind it to instead; none when nothing binds it.
-	 */
-	public inline function typeKeysOf(file: String, written: String): Array<String> {
-		return types.imports.keysOf(file, written);
-	}
-
-	/** The paths the type keyed `type` is declared under: its module's, the module's and its own, the package's and its own. */
-	public inline function declaredPathsOf(type: String): Array<String> {
-		return types.imports.declaredPathsOf(type);
-	}
-
-	/**
 	 * Parse and add `files` the graph does not hold yet: their nodes first, then their
 	 * edges, then the constructor wiring over every file. A file already held (or already
 	 * skipped) is ignored, so a caller may pass a closure that overlaps what it added before.
@@ -571,11 +582,11 @@ final class CallGraph {
 			// a function the facts describe records its syntax's edges alone, none of its unresolved sites (`CallGraphFacts.mute`)
 			final faceted: Map<String, Array<FactNode>> = reading == null ? [] : reading.mute(this, p.file);
 			CallGraphEdges.collect(this, p);
-			if (reading != null) reading.recordMuted(this, faceted);
+			reading?.recordMuted(this, faceted);
 		}
-		if (reading != null) reading.recordAdopted(this, adopted);
+		reading?.recordAdopted(this, adopted);
 		// the field initializers of every type read so far, which the facts read whole once its files are in
-		if (reading != null) reading.recordInitializers(this, [for (id in _initFiles.keys()) id]);
+		reading?.recordInitializers(this, [for (id in _initFiles.keys()) id]);
 		_wiring.markGrownChains(_grownTypes);
 		_wiring.wire((from, to, kind, file, span) -> addEdge(from, to, kind, null, file, span));
 	}
@@ -598,6 +609,64 @@ final class CallGraph {
 		forgetDeclarationsIn(key);
 		forgetNodes(file, removed);
 		purgeSites(key, removed, bodies);
+	}
+
+	/**
+	 * Member lookup on `typeName` walking the supertype chain (BFS, cycle-safe) — also the query-time
+	 * re-resolution a consumer that grew the graph uses for an external target.
+	 */
+	public function memberOnChain(typeName: String, member: String): Null<String> {
+		final owner: Null<String> = types.firstOnChain(typeName, t -> _members[t]?.exists(member) == true);
+		return owner == null ? null : _members[owner]?.get(member);
+	}
+
+	/**
+	 * The virtual dispatch targets of `member` on `typeName`, recomputable after the graph grew: for each transitive loaded
+	 * subtype, the member it declares — or, lacking one, the one it inherits from a superclass off `typeName`'s own chain (a
+	 * class implementing an interface with a method its superclass declares), which a dispatch on `typeName` runs too.
+	 */
+	public function virtualTargets(typeName: String, member: String): Array<String> {
+		final result: Array<String> = [];
+		// sets beside the lists, whose order is the answer: the `contains` scans were quadratic over a wide hierarchy (TM's
+		// display list), and this runs per call site
+		final found: Map<String, Bool> = [];
+		final queue: Array<String> = [typeName];
+		final visited: Map<String, Bool> = [];
+		var qi: Int = 0;
+		while (qi < queue.length) {
+			final t: String = queue[qi++];
+			if (visited.exists(t)) continue;
+			visited[t] = true;
+			for (sub in types.subtypesOf(t)) {
+				queue.push(sub);
+				final hit: Null<String> = _members[sub]?.get(member) ?? inheritedOffChain(typeName, sub, member);
+				if (hit == null || found.exists(hit)) continue;
+				found[hit] = true;
+				result.push(hit);
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * The placeholder for `typeName.member`, a target whose body the graph does not hold (upgraded in place when
+	 * the file declaring it arrives) — or, with
+	 * `interfaceDeclared`, the body-less node standing for an accessor an interface's property implies but never
+	 * declares: a call of it dispatches to the implementations and runs nothing of its own.
+	 */
+	public function externalNode(typeName: String, member: String, interfaceDeclared: Bool = false): String {
+		final id: String = '$typeName.$member';
+		if (!nodes.exists(id)) nodes[id] = {
+			id: id,
+			file: '',
+			typeName: typeName,
+			name: member,
+			span: null,
+			isExternal: !interfaceDeclared,
+			isDynamic: false,
+			isBodyless: interfaceDeclared
+		};
+		return id;
 	}
 
 	/**
@@ -648,44 +717,6 @@ final class CallGraph {
 	}
 
 	/**
-	 * Member lookup on `typeName` walking the supertype chain (BFS, cycle-safe) — also the query-time
-	 * re-resolution a consumer that grew the graph uses for an external target.
-	 */
-	public function memberOnChain(typeName: String, member: String): Null<String> {
-		final owner: Null<String> = types.firstOnChain(typeName, t -> _members[t]?.exists(member) == true);
-		return owner == null ? null : _members[owner]?.get(member);
-	}
-
-	/**
-	 * The virtual dispatch targets of `member` on `typeName`, recomputable after the graph grew: for each transitive loaded
-	 * subtype, the member it declares — or, lacking one, the one it inherits from a superclass off `typeName`'s own chain (a
-	 * class implementing an interface with a method its superclass declares), which a dispatch on `typeName` runs too.
-	 */
-	public function virtualTargets(typeName: String, member: String): Array<String> {
-		final result: Array<String> = [];
-		// sets beside the lists, whose order is the answer: the `contains` scans were quadratic over a wide hierarchy (TM's
-		// display list), and this runs per call site
-		final found: Map<String, Bool> = [];
-		final queue: Array<String> = [typeName];
-		final visited: Map<String, Bool> = [];
-		var qi: Int = 0;
-		while (qi < queue.length) {
-			final t: String = queue[qi++];
-			if (visited.exists(t)) continue;
-			visited[t] = true;
-			for (sub in types.subtypesOf(t)) {
-				queue.push(sub);
-				final hit: Null<String> = _members[sub]?.get(member) ?? inheritedOffChain(typeName, sub, member);
-				if (hit != null && !found.exists(hit)) {
-					found[hit] = true;
-					result.push(hit);
-				}
-			}
-		}
-		return result;
-	}
-
-	/**
 	 * The `member` the superclass chain of `sub` declares first, when that superclass is off `typeName`'s own chain — one on
 	 * it is the dispatched member itself — or null.
 	 */
@@ -700,27 +731,6 @@ final class CallGraph {
 			at = types.superclassOf(holder);
 		}
 		return null;
-	}
-
-	/**
-	 * The placeholder for `typeName.member`, a target whose body the graph does not hold (upgraded in place when
-	 * the file declaring it arrives) — or, with
-	 * `interfaceDeclared`, the body-less node standing for an accessor an interface's property implies but never
-	 * declares: a call of it dispatches to the implementations and runs nothing of its own.
-	 */
-	public function externalNode(typeName: String, member: String, interfaceDeclared: Bool = false): String {
-		final id: String = '$typeName.$member';
-		if (!nodes.exists(id)) nodes[id] = {
-			id: id,
-			file: '',
-			typeName: typeName,
-			name: member,
-			span: null,
-			isExternal: !interfaceDeclared,
-			isDynamic: false,
-			isBodyless: interfaceDeclared
-		};
-		return id;
 	}
 
 	/**
@@ -759,8 +769,7 @@ final class CallGraph {
 		final declared: Null<String> = memberOnChain(typeName, ctorName);
 		if (declared != null) return declared;
 		final owner: Null<String> = types.declaringTypeOf(typeName, ctorName);
-		if (owner == null && types.chainFullyIndexed(typeName)) return null;
-		return externalNode(owner ?? typeName, ctorName);
+		return owner == null && types.chainFullyIndexed(typeName) ? null : externalNode(owner ?? typeName, ctorName);
 	}
 
 	/** Pseudo-node holding calls made from the instance (or, `isStatic`, the static) field initializers of `typeName`. */
@@ -813,35 +822,6 @@ final class CallGraph {
 			indexEdge(e);
 	}
 
-	/** `edge` made into `to`, every other field kept. */
-	private static function retargeted(edge: CallEdge, to: String): CallEdge {
-		final out: CallEdge = {
-			from: edge.from,
-			to: to,
-			kind: edge.kind,
-			via: edge.via,
-			file: edge.file,
-			span: edge.span,
-			dispatchType: edge.dispatchType,
-			receiverField: edge.receiverField
-		};
-		if (edge.spliced != null) out.spliced = edge.spliced;
-		if (edge.typed != null) out.typed = edge.typed;
-		if (edge.inlined != null) out.inlined = edge.inlined;
-		if (edge.storedInto != null) out.storedInto = edge.storedInto;
-		if (edge.viaMember != null) out.viaMember = edge.viaMember;
-		return out;
-	}
-
-	/**
-	 * Adds an edge a consumer derived from what the graph already holds (`thread-safety`'s calls of a value stored into a
-	 * `dynamic` method, at the member's own call sites): it is indexed as any other, and only the consumer's own graph
-	 * carries it.
-	 */
-	public inline function deriveEdge(edge: CallEdge): Void {
-		indexEdge(edge);
-	}
-
 	/** Record `edge` in the edge list and the per-node indexes. */
 	private function indexEdge(edge: CallEdge): Void {
 		edges.push(edge);
@@ -874,6 +854,26 @@ final class CallGraph {
 		final graph: CallGraph = new CallGraph(cached, shape, provider, types, facts == null ? null : new CallGraphFacts(facts), seed);
 		graph.addFiles(files);
 		return graph;
+	}
+
+	/** `edge` made into `to`, every other field kept. */
+	private static function retargeted(edge: CallEdge, to: String): CallEdge {
+		final out: CallEdge = {
+			from: edge.from,
+			to: to,
+			kind: edge.kind,
+			via: edge.via,
+			file: edge.file,
+			span: edge.span,
+			dispatchType: edge.dispatchType,
+			receiverField: edge.receiverField
+		};
+		if (edge.spliced != null) out.spliced = edge.spliced;
+		if (edge.typed != null) out.typed = edge.typed;
+		if (edge.inlined != null) out.inlined = edge.inlined;
+		if (edge.storedInto != null) out.storedInto = edge.storedInto;
+		if (edge.viaMember != null) out.viaMember = edge.viaMember;
+		return out;
 	}
 
 }

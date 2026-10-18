@@ -45,6 +45,12 @@ final class ExhaustiveSwitches {
 	/** The members `holdsValues` is judging: each is assumed to hold only values while it is, so nothing judged then is kept. */
 	private final _judging: Array<String> = [];
 
+	/** Name -> every write in the run to a bare name or a field so named, with where it sits (`writesTo`), filled per name on first use. */
+	private final _writesOf: Map<String, Array<WriteSite>> = [];
+
+	/** `<function id>#<parameter index>` of the parameters `callersPassValues` is judging: each is taken to pass values meanwhile. */
+	private final _passing: Array<String> = [];
+
 	private final _graph: CallGraph;
 	private final _shape: RefShape;
 
@@ -55,9 +61,6 @@ final class ExhaustiveSwitches {
 	private final _metaKinds: Array<String>;
 	private final _typeKinds: Array<String>;
 
-	/** Name -> every write in the run to a bare name or a field so named, with where it sits (`writesTo`), filled per name on first use. */
-	private final _writesOf: Map<String, Array<WriteSite>> = [];
-
 	/** The graph's held trees, and the lookups made in them. */
 	private final _trees: HeldTrees;
 
@@ -66,9 +69,6 @@ final class ExhaustiveSwitches {
 
 	/** Whether code outside the run may call a function of the graph, so what its parameters hold is not the run's to tell. */
 	private final _seedable: (String) -> Bool;
-
-	/** `<function id>#<parameter index>` of the parameters `callersPassValues` is judging: each is taken to pass values meanwhile. */
-	private final _passing: Array<String> = [];
 
 	public function new(graph: CallGraph, plugin: GrammarPlugin, writes: FieldWrites, seedable: (String) -> Bool) {
 		_graph = graph;
@@ -99,9 +99,10 @@ final class ExhaustiveSwitches {
 		if (!_writes.complete || at < 1 || !catchAll(branch)) return false;
 		final closed: Null<ClosedAbstract> = subjectAbstract(fn, fnId, kids[0]);
 		if (closed == null) return false;
-		final named: Array<String> = [];
 		// a guarded case runs only where its guard holds: it names no value for sure
-		for (k in kids.slice(1, at)) if (k.kind == _shape.caseBranchKind && !guarded(k)) for (v in plainValues(k)) named.push(v);
+		final named: Array<String> = [
+			for (k in kids.slice(1, at)) if (k.kind == _shape.caseBranchKind && !guarded(k)) for (v in plainValues(k)) v
+		];
 		return closed.values.foreach(v -> named.contains(v));
 	}
 
@@ -219,13 +220,11 @@ final class ExhaustiveSwitches {
 	private function buildsNoOther(fn: QueryNode, type: String, values: Array<String>): Bool {
 		if (fn.name == (_shape.constructorName ?? 'new')) return false;
 		final declared: Null<QueryNode> = fn.children.find(c -> _typeKinds.contains(c.kind));
-		if (declared == null) {
-			final returns: Array<QueryNode> = [];
-			collectReturns(fn, returns, true);
-			return returns.length == 0;
-		}
-		if (!mentions(declared, type)) return true;
-		return declared.name == type && declared.children.length == 0 && handsBackValuesOnly(fn, values);
+		if (declared != null)
+			return !mentions(declared, type) || declared.name == type && declared.children.length == 0 && handsBackValuesOnly(fn, values);
+		final returns: Array<QueryNode> = [];
+		collectReturns(fn, returns, true);
+		return returns.length == 0;
 	}
 
 	/** Whether every `return` of the function `fn`, outside a function nested in it, hands back one of `values`. */
@@ -249,12 +248,9 @@ final class ExhaustiveSwitches {
 		if (e.kind == _shape.parenKind && e.children.length == 1) return valueOnly(e.children[0], values);
 		if (e.kind == _shape.ternaryKind && e.children.length == 3)
 			return valueOnly(e.children[1], values) && valueOnly(e.children[2], values);
-		if ((_shape.switchKinds ?? []).contains(e.kind)) {
-			final branches: Array<QueryNode> = [for (b in e.children.slice(1)) b];
-			return branches.length > 0
-				&& branches.foreach(b -> b.children.length > 0 && valueOnly(b.children[b.children.length - 1], values));
-		}
-		return false;
+		if (!(_shape.switchKinds ?? []).contains(e.kind)) return false;
+		final branches: Array<QueryNode> = [for (b in e.children.slice(1)) b];
+		return branches.length > 0 && branches.foreach(b -> b.children.length > 0 && valueOnly(b.children[b.children.length - 1], values));
 	}
 
 	/** Whether the case `branch` carries a guard (`case A if (c):`): the parenthesised expression right after its patterns. */
@@ -374,16 +370,17 @@ final class ExhaustiveSwitches {
 		final kind: String = expr.kind;
 		if (kind == _shape.parenKind && kids.length == 1) return valueExpr(kids[0], at, closed);
 		if (kind == _shape.ternaryKind && kids.length == 3) return valueExpr(kids[1], at, closed) && valueExpr(kids[2], at, closed);
-		if ((_shape.switchKinds ?? []).contains(kind)) {
-			final arms: Array<QueryNode> = kids.slice(1);
-			return arms.length > 0
-				&& arms.foreach(b -> b.children.length > 0 && valueExpr(unwrapped(b.children[b.children.length - 1]), at, closed));
-		}
-		if (kind == _shape.nullCoalesceKind && kids.length == 2)
-			return valueExpr(kids[1], at, closed) && (valueExpr(kids[0], at, closed) || parameterOf(kids[0], at, closed, true));
-		if (kind == _shape.identKind) return identValue(expr, at, closed);
-		if (isAccess(kind) && kids.length == 1) return accessValue(expr, at, closed);
-		return kind == _shape.callKind && convertedCall(expr, at, closed);
+		if (!(_shape.switchKinds ?? []).contains(kind)) return if (kind == _shape.nullCoalesceKind && kids.length == 2)
+			valueExpr(kids[1], at, closed) && (valueExpr(kids[0], at, closed) || parameterOf(kids[0], at, closed, true))
+		else if (kind == _shape.identKind)
+			identValue(expr, at, closed)
+		else if (isAccess(kind) && kids.length == 1)
+			accessValue(expr, at, closed)
+		else
+			kind == _shape.callKind && convertedCall(expr, at, closed);
+		final arms: Array<QueryNode> = kids.slice(1);
+		return arms.length > 0
+			&& arms.foreach(b -> b.children.length > 0 && valueExpr(unwrapped(b.children[b.children.length - 1]), at, closed));
 	}
 
 	/** `node` without the expression statement around it, as a `switch` arm's value is written. */
@@ -405,8 +402,7 @@ final class ExhaustiveSwitches {
 		if (named.exists(n -> n.kind != _shape.caseBranchKind)) return parameterOf(read, at, closed, false);
 		final owner: Null<String> = at.owner;
 		final declaring: Null<String> = owner == null ? null : _graph.types.declaringTypeOf(owner, name);
-		if (declaring == null) return closed.values.contains(name);
-		return holdsValues(declaring, name, closed);
+		return declaring == null ? closed.values.contains(name) : holdsValues(declaring, name, closed);
 	}
 
 	/**
@@ -428,8 +424,10 @@ final class ExhaustiveSwitches {
 			owner
 		else if (member != null)
 			member.typeSource
+		else if (_graph.types.declarationCount(via) == 1)
+			via
 		else
-			_graph.types.declarationCount(via) == 1 ? via : null;
+			null;
 		final bare: Null<String> = switch type == null ? null : _typeSyntax(type)?.shape {
 			case Nominal(path, _): path;
 			case _: null;
@@ -453,10 +451,9 @@ final class ExhaustiveSwitches {
 		final declared: Null<QueryNode> = param?.type;
 		if (param == null || declared == null) return false;
 		if (declared.name != closed.name || declared.children.length > 0) return false;
-		final shaped: Bool = if (param.kind == _shape.optionalParamKind)
-			optional
-		else
-			(_shape.paramKinds ?? []).contains(param.kind) && param.kind != _shape.restParamKind && param.children.length == 0;
+		final shaped: Bool = param.kind == _shape.optionalParamKind
+			? optional
+			: (_shape.paramKinds ?? []).contains(param.kind) && param.kind != _shape.restParamKind && param.children.length == 0;
 		return shaped && callersPassValues(fn, param, at.file, closed);
 	}
 
@@ -510,7 +507,6 @@ final class ExhaustiveSwitches {
 		return values == null ? null : { values: values, at: contextOf(edge.file, site) };
 	}
 
-
 	/**
 	 * Whether the call `call` at `at` hands back a value of `closed` through an implicit conversion: the graph resolves
 	 * it, and every target's written return type is one a `@:from` function of the abstract takes (or the type such a
@@ -562,7 +558,10 @@ final class ExhaustiveSwitches {
 		return w.node.kind == _shape.assignKind && w.node.children.length == 2 && valueExpr(w.node.children[1], w.at, closed);
 	}
 
-	/** Whether `expr`, a return of the accessor `getter`, reads the member `member` itself: bare where the getter binds nothing of its name, or off `this`. */
+	/**
+	 * Whether `expr`, a return of the accessor `getter`, reads the member `member`
+	 * itself: bare where the getter binds nothing of its name, or off `this`.
+	 */
 	private function readsOwnField(expr: QueryNode, getter: QueryNode, member: String): Bool {
 		final read: QueryNode = expr.kind == _shape.parenKind && expr.children.length == 1 ? expr.children[0] : expr;
 		return read.name == member && (read.kind == _shape.identKind && BareNames.bindsNothing(getter, member, _shape) || isSelf(read));

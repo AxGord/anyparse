@@ -100,6 +100,14 @@ final class DeclaredNullity {
 	}
 
 	/**
+	 * What the head of the type the binding at `bindingFrom` is WRITTEN with binds to — `headTier` over
+	 * its annotation; `Unknown` for a binding that carries none.
+	 */
+	public inline function writtenHeadTier(bindingFrom: Int, wrappers: Array<String>, builtins: Array<String>): Tier {
+		return headTier(_typeSources[bindingFrom], bindingFrom, wrappers, builtins);
+	}
+
+	/**
 	 * Whether the binding at `bindingFrom` is a basic value type written by its own name AND holds a
 	 * value from its first read: every binding but a FIELD with storage and no initialiser. On a
 	 * dynamic target such a field reads null until something assigns it, whatever its value type —
@@ -131,14 +139,6 @@ final class DeclaredNullity {
 	}
 
 	/**
-	 * What the head of the type the binding at `bindingFrom` is WRITTEN with binds to — `headTier` over
-	 * its annotation; `Unknown` for a binding that carries none.
-	 */
-	public inline function writtenHeadTier(bindingFrom: Int, wrappers: Array<String>, builtins: Array<String>): Tier {
-		return headTier(_typeSources[bindingFrom], bindingFrom, wrappers, builtins);
-	}
-
-	/**
 	 * What the head of the type `written` at offset `at` of this file binds to, in this file's scope and
 	 * in the compiler's resolution order, once any of `wrappers` is peeled off it (`Null<Tag>` -> `Tag`).
 	 * `Unknown` for no type, a head that is not a plain nominal or is still a wrapper, a type parameter
@@ -153,26 +153,6 @@ final class DeclaredNullity {
 		return written == null || params == null || index == null || fi == null
 			? Unknown
 			: headTierIn(written, fi, at, index, params, wrappers, builtins);
-	}
-
-	/**
-	 * `headTier` for a type written in ANY indexed file `fi` — a member's declared type read where it is
-	 * declared — with `params` the type parameters in scope there.
-	 */
-	public static function headTierIn(
-		written: String, fi: SymbolIndex.FileInfo, at: Int, index: SymbolIndex, params: Array<String>, wrappers: Array<String>,
-		builtins: Array<String>
-	): Tier {
-		final head: Null<String> = headPathOf(NominalTypes.unwrapNullable(written.trim(), wrappers, index.typeSyntax), index.typeSyntax);
-		if (head == null || wrappers.contains(head) || params.contains(head)) return Unknown;
-		if (head.indexOf('.') >= 0) {
-			final decls: Array<ResolvedType> = index.resolveTypeRefsFrom(head, fi.file, at);
-			return decls.length == 0 ? Unknown : Bound(decls);
-		}
-		return switch index.refs.names.tierOf(head, fi, at) {
-			case Free if (!builtins.contains(head)): Unknown;
-			case tier: tier;
-		};
 	}
 
 	/**
@@ -266,9 +246,9 @@ final class DeclaredNullity {
 	private function isTypeParamAt(name: String, at: Int): Bool {
 		function declares(node: QueryNode): Bool {
 			final span: Null<Span> = node.span;
-			if (span == null) return node.children.exists(declares);
-			if (at < span.from || at >= span.to) return false;
-			return (_typeParams[span.from] ?? []).contains(name) || node.children.exists(declares);
+			return span == null
+				? node.children.exists(declares)
+				: at >= span.from && at < span.to && ((_typeParams[span.from] ?? []).contains(name) || node.children.exists(declares));
 		}
 		return declares(_root);
 	}
@@ -278,6 +258,24 @@ final class DeclaredNullity {
 		final index: Null<SymbolIndex> = _index();
 		final r: Null<ResolvedType> = index?.refs.findDeclaredType(_file, name);
 		return r?.type.typeParamNames;
+	}
+
+	/**
+	 * `headTier` for a type written in ANY indexed file `fi` — a member's declared type read where it is
+	 * declared — with `params` the type parameters in scope there.
+	 */
+	public static function headTierIn(
+		written: String, fi: SymbolIndex.FileInfo, at: Int, index: SymbolIndex, params: Array<String>, wrappers: Array<String>,
+		builtins: Array<String>
+	): Tier {
+		final head: Null<String> = headPathOf(NominalTypes.unwrapNullable(written.trim(), wrappers, index.typeSyntax), index.typeSyntax);
+		if (head == null || wrappers.contains(head) || params.contains(head)) return Unknown;
+		if (head.indexOf('.') < 0) return switch index.refs.names.tierOf(head, fi, at) {
+			case Free if (!builtins.contains(head)): Unknown;
+			case tier: tier;
+		};
+		final decls: Array<ResolvedType> = index.resolveTypeRefsFrom(head, fi.file, at);
+		return decls.length == 0 ? Unknown : Bound(decls);
 	}
 
 	/**

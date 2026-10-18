@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.check.FactsTypeTree;
-import anyparse.check.FactsTypeTree.FactsType;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.TypeFact;
@@ -52,12 +51,6 @@ final class FactsMethodValues {
 	/** What separates a nested function's id from its parent's (`TypedFactsWalk`): `<parent id>@<offset>`. */
 	private static inline final NESTED_ID: String = '@';
 
-	/** What ends a field node's id before an overload index (`~n`) or a uniqueness suffix (`#n`). */
-	private static final ID_SUFFIXES: Array<String> = ['~', '#'];
-
-	/** The field accesses whose read yields no instance method's value: a static's, an enum constructor's. */
-	private static final VALUELESS_ACCESSES: Array<String> = ['FStatic', 'FEnum'];
-
 	/** The access of a field read off a value of no class (`FieldFact.access`): its value is typed by nothing. */
 	private static inline final DYNAMIC_ACCESS: String = 'FDynamic';
 
@@ -66,6 +59,36 @@ final class FactsMethodValues {
 
 	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
 	private static inline final INLINED: String = 'inlined';
+
+	/** The type of an enum as a value: it holds no instance of a class. */
+	private static inline final ENUM_VALUE: String = 'Enum';
+
+	/** The type of a class as a value: it holds its statics, no instance. */
+	private static inline final CLASS_VALUE: String = 'Class';
+
+	/** The type of an abstract as a value: it holds its statics, no instance. */
+	private static inline final ABSTRACT_VALUE: String = 'Abstract';
+
+	/** The kind of a typed enum (`TypeFact.kind`): its values are no object of a class. */
+	private static inline final ENUM_KIND: String = 'enum';
+
+	/** How deep `mayHold` reads through wrappers and type parameters before it answers that a value may be anything. */
+	private static inline final MAX_DEPTH: Int = 8;
+
+	/** The catch-all type: a value of it is of no class. */
+	private static inline final CATCH_ALL: String = 'Dynamic';
+
+	/** The type any value unifies with: a value of it is of no class. */
+	private static inline final ANY: String = 'Any';
+
+	/** The nullable wrapper: a value of it is what it wraps. */
+	private static inline final NULLABLE: String = 'Null';
+
+	/** What ends a field node's id before an overload index (`~n`) or a uniqueness suffix (`#n`). */
+	private static final ID_SUFFIXES: Array<String> = ['~', '#'];
+
+	/** The field accesses whose read yields no instance method's value: a static's, an enum constructor's. */
+	private static final VALUELESS_ACCESSES: Array<String> = ['FStatic', 'FEnum'];
 
 	/** The field kinds that are methods (`FieldDeclFact.kinds`). */
 	private static final METHOD_KINDS: Array<String> = ['method', 'inline', 'dynamic'];
@@ -124,49 +147,23 @@ final class FactsMethodValues {
 	 */
 	private static final VALUE_RESULTS: Array<String> = ['Void', 'Bool', 'Int', 'Float', 'String'];
 
-	/** The type of an enum as a value: it holds no instance of a class. */
-	private static inline final ENUM_VALUE: String = 'Enum';
-
-	/** The type of a class as a value: it holds its statics, no instance. */
-	private static inline final CLASS_VALUE: String = 'Class';
-
-	/** The type of an abstract as a value: it holds its statics, no instance. */
-	private static inline final ABSTRACT_VALUE: String = 'Abstract';
-
-	/** The kind of a typed enum (`TypeFact.kind`): its values are no object of a class. */
-	private static inline final ENUM_KIND: String = 'enum';
-
-	/** How deep `mayHold` reads through wrappers and type parameters before it answers that a value may be anything. */
-	private static inline final MAX_DEPTH: Int = 8;
-
 	/** The typed kinds a value of which is an object of a class (`TypeFact.kind`). */
 	private static final OBJECT_KINDS: Array<String> = ['class', 'interface'];
-
-	/** The catch-all type: a value of it is of no class. */
-	private static inline final CATCH_ALL: String = 'Dynamic';
-
-	/** The type any value unifies with: a value of it is of no class. */
-	private static inline final ANY: String = 'Any';
-
-	/** The nullable wrapper: a value of it is what it wraps. */
-	private static inline final NULLABLE: String = 'Null';
-
 
 	private final _view: FactsView;
 	private final _table: CompilerFacts;
 
-
 	/** The types whose instances may have escaped the type system by their typed ids, or null for any (`ValueEscapes`). */
 	private final _escaped: () -> Null<Array<String>>;
-
-	/** What every function the builds typed obtains (`scan`), read once. */
-	private var _reads: Null<MethodValueReads> = null;
 
 	/**
 	 * The classes a read by a name computed at run time may obtain a method of (`ReachProject.reflectiveMethodHolders`), as
 	 * the patterns their globs make (`Glob.qualifiedNames`); null for any.
 	 */
 	private final _holders: Null<Array<EReg>>;
+
+	/** What every function the builds typed obtains (`scan`), read once. */
+	private var _reads: Null<MethodValueReads> = null;
 
 	/**
 	 * `holders` are the globs the project declares every class whose methods a read by a computed name may obtain as values
@@ -248,6 +245,11 @@ final class FactsMethodValues {
 		return holders == null ? hierarchy : [for (id in hierarchy) if (holders.exists(p -> p.match(id))) id];
 	}
 
+	/** Why any method's value may be obtained (see the type doc), or null. */
+	public function unknownReason(): Null<String> {
+		return scan().unknown;
+	}
+
 	/**
 	 * Whether a value of the type `t` may be an object of a class `hierarchy` names — of exactly the class it names, when
 	 * `exact` — or, for `statics`, that class itself as a value. A class or an interface, an extern's included, holds an
@@ -269,8 +271,8 @@ final class FactsMethodValues {
 			case Named(CLASS_VALUE | ABSTRACT_VALUE, [Named(id, _)]):
 				statics && hierarchy.contains(id);
 			case Named(CLASS_VALUE | ABSTRACT_VALUE, _): statics;
-			case Named(ENUM_VALUE, _) | Function(_, _): false;
-			case Named(CATCH_ALL | ANY, _) | Structure(_): left;
+			case Named(ENUM_VALUE, _), Function(_, _): false;
+			case Named(CATCH_ALL | ANY, _), Structure(_): left;
 			case Named(id, _):
 				final declared: Null<TypeFact> = _table.type(id);
 				if (declared == null || !declared.alike)
@@ -284,11 +286,6 @@ final class FactsMethodValues {
 				types == null || types.exists(b -> mayHold(b, false, hierarchy, escaped, bound, statics, depth + 1));
 			case Unknown: true;
 		};
-	}
-
-	/** Why any method's value may be obtained (see the type doc), or null. */
-	public function unknownReason(): Null<String> {
-		return scan().unknown;
 	}
 
 	/**
@@ -369,13 +366,6 @@ final class FactsMethodValues {
 		return true;
 	}
 
-	/** Record `read` as one read of a method value named `name`. */
-	private static function addNamed(out: MethodValueReads, name: String, read: MethodValueRead): Void {
-		final list: Array<MethodValueRead> = out.named[name] ?? [];
-		list.push(read);
-		out.named[name] = list;
-	}
-
 	/**
 	 * Whether every reflective body spliced into `n` (`reflection-inlined`) is of a member the facts name
 	 * (`FactsView.splicedReflection`) that reads no member's value (`memberless`): what any other reads is lost with its name.
@@ -383,6 +373,18 @@ final class FactsMethodValues {
 	private function inlinedMemberless(n: FactNode): Bool {
 		final members: Null<Array<String>> = FactsView.splicedReflection(n);
 		return members != null && members.foreach(m -> memberless(_table, m));
+	}
+
+	/**
+	 * Whether a field read through `access` of the field `field` of `owner` may yield an instance method's value: any read
+	 * but a static's or an enum constructor's, an instance read only of a field some build declares a method.
+	 */
+	private function methodRead(access: String, owner: Null<String>, field: String): Bool {
+		if (VALUELESS_ACCESSES.contains(access)) return false;
+		if (access != INSTANCE_ACCESS) return true;
+		final declaring: Null<TypeFact> = owner == null ? null : _table.type(owner);
+		final declared: Null<FieldDeclFact> = declaring?.fields.find(f -> f.name == field);
+		return declared == null || declared.kinds.exists(k -> METHOD_KINDS.contains(k));
 	}
 
 	/**
@@ -404,16 +406,11 @@ final class FactsMethodValues {
 			});
 	}
 
-	/**
-	 * Whether a field read through `access` of the field `field` of `owner` may yield an instance method's value: any read
-	 * but a static's or an enum constructor's, an instance read only of a field some build declares a method.
-	 */
-	private function methodRead(access: String, owner: Null<String>, field: String): Bool {
-		if (VALUELESS_ACCESSES.contains(access)) return false;
-		if (access != INSTANCE_ACCESS) return true;
-		final declaring: Null<TypeFact> = owner == null ? null : _table.type(owner);
-		final declared: Null<FieldDeclFact> = declaring?.fields.find(f -> f.name == field);
-		return declared == null || declared.kinds.exists(k -> METHOD_KINDS.contains(k));
+	/** Record `read` as one read of a method value named `name`. */
+	private static function addNamed(out: MethodValueReads, name: String, read: MethodValueRead): Void {
+		final list: Array<MethodValueRead> = out.named[name] ?? [];
+		list.push(read);
+		out.named[name] = list;
 	}
 
 }

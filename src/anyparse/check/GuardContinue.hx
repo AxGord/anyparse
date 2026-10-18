@@ -15,6 +15,7 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -156,6 +157,10 @@ final class GuardContinue implements Check {
 		return BinderScan.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
 	}
 
+	private static inline function isLoop(node: QueryNode, s: Seams): Bool {
+		return s.statementLoopKinds.contains(node.kind);
+	}
+
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final base: Null<GuardSeams> = GuardScan.seamsOf(plugin);
@@ -268,10 +273,6 @@ final class GuardContinue implements Check {
 		}
 		for (i => c in node.children)
 			indexCandidates(c, root, source, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded));
-	}
-
-	private static inline function isLoop(node: QueryNode, s: Seams): Bool {
-		return s.statementLoopKinds.contains(node.kind);
 	}
 
 	/**
@@ -580,7 +581,7 @@ final class GuardContinue implements Check {
 	): Null<{ span: Span, text: String }> {
 		final cut: Null<GuardSplice> = GuardScan.splice(m, source, s.negation, s.support, types);
 		if (cut == null) return null;
-		final inner: String = StringTools.rtrim(applyRenames(cut.inner, cut.innerFrom, m.renames));
+		final inner: String = applyRenames(cut.inner, cut.innerFrom, m.renames).rtrim();
 		var to: Int = cut.ifSpan.to;
 		final hoisted: StringBuf = new StringBuf();
 		for (t in m.tail) {
@@ -590,7 +591,7 @@ final class GuardContinue implements Check {
 			hoisted.add('\n');
 			to = span.to;
 		}
-		return { span: new Span(cut.ifSpan.from, to), text: '${hoisted.toString()}if (${cut.neg}) continue;$inner' };
+		return { span: new Span(cut.ifSpan.from, to), text: '${hoisted}if (${cut.neg}) continue;$inner' };
 	}
 
 	/**

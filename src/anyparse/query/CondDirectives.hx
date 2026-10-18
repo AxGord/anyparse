@@ -168,7 +168,6 @@ final class CondDirectives {
 		return endsItsLine(source, at);
 	}
 
-
 	/**
 	 * Whether only blanks stand between `at` and the end of its line — the forward half of
 	 * `SourceText.startsItsLine`, which has no twin there.
@@ -214,6 +213,41 @@ final class CondDirectives {
 		var text: String = condition;
 		while (isBalancedParenWrapped(text)) text = text.substring(1, text.length - 1).trim();
 		return text;
+	}
+
+	/**
+	 * Whether `keyword` carries a condition. The declared CLOSER never does — checked first, because
+	 * a closer spelled `#endif` would otherwise satisfy the branch test below. The opener always does;
+	 * a branch keyword does exactly when it ENDS with the opener's bare word — `#elseif` does, `#else`
+	 * does not. That is the shape of the branch keyword in every C-preprocessor-descended grammar, and
+	 * the only discrimination the declared seams support without a third keyword list. A grammar whose
+	 * branch keyword is spelled otherwise loses its condition span, never its directive.
+	 */
+	public static function takesCondition(keyword: String, ifKeyword: String, endKeyword: Null<String>): Bool {
+		return keyword != endKeyword && (keyword == ifKeyword || keyword.endsWith(ifKeyword.substring(1)));
+	}
+
+	/**
+	 * `source`'s directives as a declarations-only parse balances a skipped body against them (`BodySkip`): the
+	 * grammar's opener opens a region, each else keyword starts its next branch, the closer ends it.
+	 */
+	public static function skipMarks(source: String, shape: RefShape, regions: Array<LexRegion>): Array<SkipMark> {
+		final elseKeywords: Array<String> = shape.conditionalElseKeywords ?? [];
+		return [
+			for (directive in scan(source, shape, () -> regions))
+				{
+					from: directive.span.from,
+					to: directive.span.to,
+					role: if (directive.keyword == shape.conditionalIfKeyword)
+						SkipMarkRole.Open
+					else if (directive.keyword == shape.conditionalEndKeyword)
+						SkipMarkRole.Close
+					else if (elseKeywords.contains(directive.keyword))
+						SkipMarkRole.Next
+					else
+						SkipMarkRole.Other
+				}
+		];
 	}
 
 	/** Whether `c` opens a string literal. */
@@ -276,18 +310,6 @@ final class CondDirectives {
 			span: new Span(from, condition == null ? afterKeyword : condition.to),
 			condition: condition
 		};
-	}
-
-	/**
-	 * Whether `keyword` carries a condition. The declared CLOSER never does — checked first, because
-	 * a closer spelled `#endif` would otherwise satisfy the branch test below. The opener always does;
-	 * a branch keyword does exactly when it ENDS with the opener's bare word — `#elseif` does, `#else`
-	 * does not. That is the shape of the branch keyword in every C-preprocessor-descended grammar, and
-	 * the only discrimination the declared seams support without a third keyword list. A grammar whose
-	 * branch keyword is spelled otherwise loses its condition span, never its directive.
-	 */
-	public static function takesCondition(keyword: String, ifKeyword: String, endKeyword: Null<String>): Bool {
-		return keyword != endKeyword && (keyword == ifKeyword || keyword.endsWith(ifKeyword.substring(1)));
 	}
 
 	/**
@@ -418,29 +440,6 @@ final class CondDirectives {
 			if (!SourceText.isIdentStartChar(source.fastCodeAt(i + 1))) return i;
 			i += 2;
 		}
-	}
-
-	/**
-	 * `source`'s directives as a declarations-only parse balances a skipped body against them (`BodySkip`): the
-	 * grammar's opener opens a region, each else keyword starts its next branch, the closer ends it.
-	 */
-	public static function skipMarks(source: String, shape: RefShape, regions: Array<LexRegion>): Array<SkipMark> {
-		final elseKeywords: Array<String> = shape.conditionalElseKeywords ?? [];
-		return [
-			for (directive in scan(source, shape, () -> regions))
-				{
-					from: directive.span.from,
-					to: directive.span.to,
-					role: if (directive.keyword == shape.conditionalIfKeyword)
-						SkipMarkRole.Open
-					else if (directive.keyword == shape.conditionalEndKeyword)
-						SkipMarkRole.Close
-					else if (elseKeywords.contains(directive.keyword))
-						SkipMarkRole.Next
-					else
-						SkipMarkRole.Other
-				}
-		];
 	}
 
 }

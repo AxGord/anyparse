@@ -591,13 +591,17 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 		// wildcard in either order: the addition could retarget a bare name in a module that never
 		// spelled the statement, and the removal hand one to an own import that used to lose it.
 		final binding: Null<ImportBinding> = imp.kind == ImportKind.Using ? bindings.ofUsing(imp.raw) : bindings.ofImport(imp.raw);
-		if (!ImportBindings.bindsNoValue(binding)) return null;
-		return names == null || names.length == 0 ? null : {
-			path: imp.raw,
-			isUsing: imp.kind == ImportKind.Using,
-			simple: simple,
-			names: names
-		};
+		return if (!ImportBindings.bindsNoValue(binding))
+			null
+		else if (names == null || names.length == 0)
+			null
+		else
+			{
+				path: imp.raw,
+				isUsing: imp.kind == ImportKind.Using,
+				simple: simple,
+				names: names
+			};
 	}
 
 }

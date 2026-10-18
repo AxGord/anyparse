@@ -40,6 +40,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.ValueCarriers.CarryRelation;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -346,7 +347,7 @@ final class MemberReach {
 		var escapes: Null<ValueEscapes> = null;
 		final carriers: ValueCarriers = new ValueCarriers(scope, classpathComplete ?? () -> false, () -> {
 			final held: Null<ValueEscapes> = escapes;
-			held == null ? null : held.escaped();
+			held?.escaped();
 		}, configurations != null && configurations.length > 0);
 		_carriers = carriers;
 		_touches = new MemberTouchScan(scope, _hazards, carriers, (file, span) -> {
@@ -385,8 +386,8 @@ final class MemberReach {
 		_metRawRegion = false;
 		_syntaxEntered = false;
 		_carriers.startQuestion();
-		final answer: ReachResult = PhaseTimings.measure('reach answer', () -> answerReach(entry, member, access));
-		final configured: Null<MemberReach> = PhaseTimings.measure('reach escalation', () -> escalation(answer));
+		final answer: ReachResult = PhaseTimings.measure('reach answer', answerReach.bind(entry, member, access));
+		final configured: Null<MemberReach> = PhaseTimings.measure('reach escalation', escalation.bind(answer));
 		return configured == null ? answer : configured.mayReach(entry, member, access);
 	}
 
@@ -425,9 +426,9 @@ final class MemberReach {
 		final owner: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, region.from)?.name;
 		if (owner == null) return Unknown(OutOfScope('`$name` belongs to no type the analysis can name'));
 		final ownerName: String = owner;
-		if (graph().types.declaringTypeOf(ownerName, name) == null)
-			return Unknown(OutOfScope('`$name` is not a member of `$ownerName` or its supertypes — an import or a module-level value'));
-		return mayReach(Region(file, region), { owner: ownerName, name: name, site: at }, Mutate);
+		return graph().types.declaringTypeOf(ownerName, name) == null
+			? Unknown(OutOfScope('`$name` is not a member of `$ownerName` or its supertypes — an import or a module-level value'))
+			: mayReach(Region(file, region), { owner: ownerName, name: name, site: at }, Mutate);
 	}
 
 	/**
@@ -698,8 +699,12 @@ final class MemberReach {
 		if (from == null) return null;
 		final sited: Array<CallEdge> = [for (e in g.outEdges(from)) if (e.file == file && sameSpan(e.span, at)) e];
 		// a faceted body records the site twice, its syntax's edge and its facts', both to the one function
-		if (sited.length == 0 || !sited.foreach(e -> e.kind == Call && e.to == sited[0].to)) return null;
-		return g.unresolved.exists(u -> u.file == file && sameSpan(u.span, at)) ? null : g.node(sited[0].to);
+		return if (sited.length == 0 || !sited.foreach(e -> e.kind == Call && e.to == sited[0].to))
+			null
+		else if (g.unresolved.exists(u -> u.file == file && sameSpan(u.span, at)))
+			null
+		else
+			g.node(sited[0].to);
 	}
 
 	/**
@@ -713,11 +718,9 @@ final class MemberReach {
 		final name: Null<String> = target.name;
 		if (type == null || name == null || target.isExternal || target.isBodyless || target.isDynamic) return false;
 		final g: CallGraph = graph();
-		if (!_projectSources.exists(target.file) || g.types.declarationCount(type) != 1 || !declaredOnce(target.file, type, name))
-			return false;
-		if (g.declarationsOf(target.id).length != 1) return false;
-		if (!_carriers.subtypesKnown(type) || g.virtualTargets(type, name).length > 0 || overriddenInFacts(g, type, name)) return false;
-		return _g.rewrittenBy(type) == null || _scope.provenance()?.bodyIsSource(g, target) == true;
+		return _projectSources.exists(target.file) && g.types.declarationCount(type) == 1 && declaredOnce(target.file, type, name)
+			&& g.declarationsOf(target.id).length == 1 && _carriers.subtypesKnown(type) && !(g.virtualTargets(type, name).length > 0)
+			&& !overriddenInFacts(g, type, name) && (_g.rewrittenBy(type) == null || _scope.provenance()?.bodyIsSource(g, target) == true);
 	}
 
 	/**
@@ -836,7 +839,7 @@ final class MemberReach {
 		final source: Null<String> = _projectSources[file] ?? _g.sourceOf(file) ?? _index.sourceOf(file) ?? _configured?.sourceAt(file);
 		if (span == null || source == null) return file;
 		var line: Int = 1;
-		for (i in 0...span.from) if (StringTools.fastCodeAt(source, i) == '\n'.code) line++;
+		for (i in 0...span.from) if (source.fastCodeAt(i) == '\n'.code) line++;
 		return '$file:$line';
 	}
 
@@ -879,15 +882,17 @@ final class MemberReach {
 	private function splicedInto(g: CallGraph, file: String, spans: Array<Span>): Array<String> {
 		final facts: Null<CallGraphFacts> = g.facts;
 		if (_scope.facts?.truth != true || facts == null) return [];
-		final out: Array<String> = [];
 		final key: String = CallGraphNames.normalizePath(file);
 		// every declaration the node folds is its code: a range meeting any of them may run what its facts filed off it
-		for (id in facts.faceted.keys()) if (
-			g.declarationsOf(id)
-				.exists(d -> CallGraphNames.normalizePath(d.file) == key && spans.exists(s -> d.span.from < s.to && s.from < d.span.to))
-		)
-			out.push(id);
-		return out;
+		return [
+			for (id in facts.faceted.keys()) if (
+				g.declarationsOf(id)
+					.exists(
+						d -> CallGraphNames.normalizePath(d.file) == key && spans.exists(s -> d.span.from < s.to && s.from < d.span.to)
+					)
+			)
+				id
+		];
 	}
 
 	/**
@@ -968,14 +973,6 @@ final class MemberReach {
 		return switch entry {
 			case Region(file, span): hazardsOf(g, file, [span]);
 			case Calls(file, sites): hazardsOf(g, file, [for (s in sites) if (s.span != null) s.span]);
-		};
-	}
-
-	/** The spans of the entry's own code: the region, or each call site. */
-	private static function entrySpans(entry: ReachEntry): Array<Span> {
-		return switch entry {
-			case Region(_, span): [span];
-			case Calls(_, sites): [for (s in sites) if (s.span != null) s.span];
 		};
 	}
 
@@ -1232,8 +1229,7 @@ final class MemberReach {
 		if (decl == null || declSpan == null || fnSpan == null) return false;
 		final d: Span = declSpan;
 		final f: Span = fnSpan;
-		if (d.from < f.from || d.to > f.to) return false;
-		return _touches.localEscape(tree, source, fn, decl, name, region) == null;
+		return d.from >= f.from && d.to <= f.to && _touches.localEscape(tree, source, fn, decl, name, region) == null;
 	}
 
 	/**
@@ -1384,8 +1380,7 @@ final class MemberReach {
 		final written: Null<FnNode> = origin == null ? null : g.node(origin.node);
 		if (origin == null || written == null) return false;
 		final file: String = written.file;
-		if (_scope.facts?.keyOf(file) != origin.file) return false;
-		return benignEdge(g, written, {
+		return _scope.facts?.keyOf(file) == origin.file && benignEdge(g, written, {
 			from: written.id,
 			to: e.to,
 			kind: e.kind,
@@ -1415,8 +1410,8 @@ final class MemberReach {
 		final name: Null<String> = node.name;
 		if (type == null || g.types.declarationCount(type) <= 1 || g.facts?.qualified.exists(node.id) == true) return false;
 		final facts: Null<FactsView> = _scope.facts;
-		if (facts == null) return true;
-		return facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null) && ownTypes(g, node) == null;
+		return facts == null || facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null)
+			&& ownTypes(g, node) == null;
 	}
 
 	/**
@@ -1435,8 +1430,7 @@ final class MemberReach {
 			return nested == null ? null : [nested];
 		}
 		final spans: Null<Array<Occurrence>> = bodySpans(g, node);
-		if (spans == null || !spans.foreach(d -> facts.faceted(g, d.file, d.span, node.id))) return null;
-		return facts.initializerOwners(type);
+		return spans == null || !spans.foreach(d -> facts.faceted(g, d.file, d.span, node.id)) ? null : facts.initializerOwners(type);
 	}
 
 	/**
@@ -1920,7 +1914,7 @@ final class MemberReach {
 					? admission.value.copy()
 					: values.admitted(g, admission.value, called, site.calledAt);
 			}
-			final ids: Array<String> = !site.values ? [] : held ?? typed();
+			final ids: Array<String> = site.values ? held ?? typed() : [];
 			// a set beside the list: a site admitting the whole closure made `ids.contains` quadratic
 			final have: Map<String, Bool> = [for (id in ids) id => true];
 			function admit(id: String): Void {
@@ -2022,9 +2016,12 @@ final class MemberReach {
 			}
 			// code the walk does not read may run an implicitly-called member of a type whose text the index does not hold
 			final typed: Array<SiteFamily> = [SiteFamily.Text, SiteFamily.Iteration];
-			final families: Array<SiteFamily> = read
-				? typed.concat([SiteFamily.Index, SiteFamily.Operator(''), SiteFamily.Literal])
-				: run == null ? typed : [];
+			final families: Array<SiteFamily> = if (read)
+				typed.concat([SiteFamily.Index, SiteFamily.Operator(''), SiteFamily.Literal])
+			else if (run == null)
+				typed
+			else
+				[];
 			final textless: Null<String> = _g.unheldInPlay(families, false);
 			if (textless != null)
 				blind = blind ?? UnresolvedDispatch(
@@ -2423,16 +2420,14 @@ final class MemberReach {
 			span: span
 		};
 		if (resolved != null && g.node(resolved)?.isExternal == false) enqueue(resolved, step);
-		var grown: Null<ReachUnknown> = null;
-		if (!_projectSources.exists(_scope.siteOf(type)?.file ?? '')) grown = _g.loadOverrides(g, type, name);
+		final grown: Null<ReachUnknown> = _projectSources.exists(_scope.siteOf(type)?.file ?? '') ? null : _g.loadOverrides(g, type, name);
 		for (v in g.virtualTargets(type, name)) enqueue(v, step);
 		if (resolved != null && g.node(resolved)?.isExternal == false) return grown;
 		// a type that declares no constructor has a generated one: its initializers, then its superclass's constructor
-		if (resolved == null && name == (_shape.constructorName ?? 'new') && g.types.declarationCount(type) > 0) {
-			for (id in _g.generatedConstructor(g, type)) enqueue(id, step);
-			return grown;
-		}
-		return grown ?? bodyless(g, node.id, type, name, file, span, admitValue);
+		if (resolved != null || name != (_shape.constructorName ?? 'new') || g.types.declarationCount(type) <= 0)
+			return grown ?? bodyless(g, node.id, type, name, file, span, admitValue);
+		for (id in _g.generatedConstructor(g, type)) enqueue(id, step);
+		return grown;
 	}
 
 	/**
@@ -2615,8 +2610,7 @@ final class MemberReach {
 	 */
 	private function handedConverted(g: CallGraph, handed: NativeHands, arrayOwn: Bool): Array<Null<String>> {
 		final types: Null<Array<String>> = handed.types;
-		if (types == null) return [null];
-		return [
+		return types == null ? [null] : [
 			for (t in types) {
 				final converted: String = (arrayOwn ? elementType(t) : null) ?? t;
 				final nominal: String = NominalTypes.outerNominalOf(converted, _scope.plugin.typeSyntax) ?? converted;
@@ -2724,10 +2718,9 @@ final class MemberReach {
 	 * excused.
 	 */
 	private function freshlyConstructed(g: CallGraph, id: String, step: Null<ReachStep>, scan: MemberTouches, member: MemberRef): Bool {
-		if (step == null || !(step.kind == EdgeKind.New.label() || step.kind == REFLECTIVE_CONSTRUCTOR) || scan.notOnSelf.exists(id))
+		if (step == null || step.kind != EdgeKind.New.label() && step.kind != REFLECTIVE_CONSTRUCTOR || scan.notOnSelf.exists(id))
 			return false;
-		if (g.node(id)?.name != (_shape.constructorName ?? 'new')) return false;
-		return g.types.memberOnChain(member.owner, member.name)?.isStatic == false;
+		return g.node(id)?.name == (_shape.constructorName ?? 'new') && g.types.memberOnChain(member.owner, member.name)?.isStatic == false;
 	}
 
 	/** The files of `project` whose text differs from this analysis's, or null when the set of files itself differs. */
@@ -2823,70 +2816,6 @@ final class MemberReach {
 		if (tree == null || source == null || receiver == null) return MayCarry;
 		final owner: String = g.types.declaringTypeOf(member.owner, member.name) ?? member.owner;
 		return _carriers.relation(_g.sites.typeOf(file, tree, source, receiver), owner);
-	}
-
-	/**
-	 * The analysis for one lint run over `file` (whose current text is `source`): the project is the
-	 * report UNION the declared `resolutionRoots` when the run's host declared roots that ALL matched, else
-	 * `file` alone with the scope marked unknown; types resolve through the host's resolution index
-	 * (libraries included) when there is one. Memoised on the host for the rest of the pass.
-	 */
-	public static function forRun(plugin: GrammarPlugin, file: String, source: String): MemberReach {
-		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
-		final scoped: Null<Array<{ file: String, source: String }>> = host?.completeProjectFiles();
-		final project: Array<{ file: String, source: String }> = scoped == null
-			? [{ file: file, source: source }]
-			: [for (f in scoped) f.file == file ? { file: file, source: source } : f];
-		if (scoped != null && !project.exists(f -> f.file == file)) project.push({ file: file, source: source });
-		// an edit applied earlier in the pass to ANY project file makes the memoised graph describe code that is gone:
-		// taken in place when it changed no declaration, else the analysis is rebuilt
-		final memo: Null<MemberReach> = host?.memberReach();
-		final changed: Null<Array<{ file: String, source: String }>> = memo?.changedFiles(project);
-		if (memo != null && changed != null && (changed.length == 0 || memo.refresh(changed))) return memo;
-		final index: SymbolIndex = host?.resolutionIndex() ?? IndexScope.over(project, plugin);
-		// an analysis reading compiler facts escalates on its first question (`escalation`), which probes the builds: their
-		// compiles start now, beside the facts this waits on below, instead of after them
-		host?.reachBuildsAhead();
-		// the resolution scope is what the project declares, not what its builds compile: only the builds can say that no
-		// subtype or override lies outside the index (`configuredFor`)
-		final built: MemberReach = new MemberReach(
-			plugin, project, index, scoped != null, MAX_LIBRARY_FILES, MAX_VISITED, null, () -> false,
-			FactsView.over(host?.compilerFacts())
-		);
-		// the builds are probed only once a question needs them (`escalation`), and read the project's text as it is then
-		if (host != null) {
-			final configure: () -> Null<MemberReach> = configuredFor.bind(plugin, project, scoped != null, host);
-			built._configure = configure;
-			built._reconfigure = configure;
-			built._factsTruthAvailable = built._scope.facts != null;
-			if (scoped != null) host.setMemberReach(built);
-		}
-		return built;
-	}
-
-	/** Whether `inner` lies within `outer`. */
-	private static inline function within(inner: Null<Span>, outer: Span): Bool {
-		return inner != null && outer.from <= inner.from && inner.to <= outer.to;
-	}
-
-	/** Whether the site `span` is exactly `at`. */
-	private static inline function sameSpan(span: Null<Span>, at: Span): Bool {
-		return span != null && span.from == at.from && span.to == at.to;
-	}
-
-	/**
-	 * Whether what the admission `site` lets run may be a function the walk never enters, as it reaches no toucher by an
-	 * edge: a function value (a lambda read by its syntax, a library function such as `Std.string`), a reflectively
-	 * constructed object, any code at all. Such a function may run any implicitly-called member on any value it is handed.
-	 */
-	private static inline function runsUnreadCode(site: AdmissionSite): Bool {
-		return !site.always && (site.values || site.all == true || site.constructors);
-	}
-
-	/** Whether `site` runs nothing but the function values a call of a value of a function type, no `dynamic` method's, may run. */
-	private static inline function onlyValues(site: AdmissionSite): Bool {
-		return site.values && site.called != null && site.stored == null && !site.constructors && site.all != true
-			&& site.names.length == 0 && (site.ids ?? []).length == 0 && (site.owned ?? []).length == 0;
 	}
 
 	/**
@@ -3021,6 +2950,78 @@ final class MemberReach {
 		else
 			out.ids = ids;
 		return out;
+	}
+
+	/**
+	 * The analysis for one lint run over `file` (whose current text is `source`): the project is the
+	 * report UNION the declared `resolutionRoots` when the run's host declared roots that ALL matched, else
+	 * `file` alone with the scope marked unknown; types resolve through the host's resolution index
+	 * (libraries included) when there is one. Memoised on the host for the rest of the pass.
+	 */
+	public static function forRun(plugin: GrammarPlugin, file: String, source: String): MemberReach {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		final scoped: Null<Array<{ file: String, source: String }>> = host?.completeProjectFiles();
+		final project: Array<{ file: String, source: String }> = scoped == null
+			? [{ file: file, source: source }]
+			: [for (f in scoped) f.file == file ? { file: file, source: source } : f];
+		if (scoped != null && !project.exists(f -> f.file == file)) project.push({ file: file, source: source });
+		// an edit applied earlier in the pass to ANY project file makes the memoised graph describe code that is gone:
+		// taken in place when it changed no declaration, else the analysis is rebuilt
+		final memo: Null<MemberReach> = host?.memberReach();
+		final changed: Null<Array<{ file: String, source: String }>> = memo?.changedFiles(project);
+		if (memo != null && changed != null && (changed.length == 0 || memo.refresh(changed))) return memo;
+		final index: SymbolIndex = host?.resolutionIndex() ?? IndexScope.over(project, plugin);
+		// an analysis reading compiler facts escalates on its first question (`escalation`), which probes the builds: their
+		// compiles start now, beside the facts this waits on below, instead of after them
+		host?.reachBuildsAhead();
+		// the resolution scope is what the project declares, not what its builds compile: only the builds can say that no
+		// subtype or override lies outside the index (`configuredFor`)
+		final built: MemberReach = new MemberReach(
+			plugin, project, index, scoped != null, MAX_LIBRARY_FILES, MAX_VISITED, null, () -> false,
+			FactsView.over(host?.compilerFacts())
+		);
+		// the builds are probed only once a question needs them (`escalation`), and read the project's text as it is then
+		if (host != null) {
+			final configure: () -> Null<MemberReach> = configuredFor.bind(plugin, project, scoped != null, host);
+			built._configure = configure;
+			built._reconfigure = configure;
+			built._factsTruthAvailable = built._scope.facts != null;
+			if (scoped != null) host.setMemberReach(built);
+		}
+		return built;
+	}
+
+	/** Whether `inner` lies within `outer`. */
+	private static inline function within(inner: Null<Span>, outer: Span): Bool {
+		return inner != null && outer.from <= inner.from && inner.to <= outer.to;
+	}
+
+	/** Whether the site `span` is exactly `at`. */
+	private static inline function sameSpan(span: Null<Span>, at: Span): Bool {
+		return span != null && span.from == at.from && span.to == at.to;
+	}
+
+	/**
+	 * Whether what the admission `site` lets run may be a function the walk never enters, as it reaches no toucher by an
+	 * edge: a function value (a lambda read by its syntax, a library function such as `Std.string`), a reflectively
+	 * constructed object, any code at all. Such a function may run any implicitly-called member on any value it is handed.
+	 */
+	private static inline function runsUnreadCode(site: AdmissionSite): Bool {
+		return !site.always && (site.values || site.all == true || site.constructors);
+	}
+
+	/** Whether `site` runs nothing but the function values a call of a value of a function type, no `dynamic` method's, may run. */
+	private static inline function onlyValues(site: AdmissionSite): Bool {
+		return site.values && site.called != null && site.stored == null && !site.constructors && site.all != true
+			&& site.names.length == 0 && (site.ids ?? []).length == 0 && (site.owned ?? []).length == 0;
+	}
+
+	/** The spans of the entry's own code: the region, or each call site. */
+	private static function entrySpans(entry: ReachEntry): Array<Span> {
+		return switch entry {
+			case Region(_, span): [span];
+			case Calls(_, sites): [for (s in sites) if (s.span != null) s.span];
+		};
 	}
 
 	/** The tree and text of `file` as the graph holds them, or null when it holds neither. */
@@ -3219,8 +3220,10 @@ private enum ImplicitTarget {
 
 }
 
-/** What the entry runs, as graph facts. `region` is set for a `Region` entry, whose own touches count too. */
-/** What `MemberTouchScan.scan` was asked of the member: the walk asks it again of a node it makes (`MemberReach.qualifiedNode`). */
+/**
+ * What the entry runs, as graph facts. `region` is set for a `Region` entry, whose own touches count too.
+ * What `MemberTouchScan.scan` was asked of the member: the walk asks it again of a node it makes (`MemberReach.qualifiedNode`).
+ */
 private typedef TouchQuestion = {
 	final name: String;
 	final declaring: String;

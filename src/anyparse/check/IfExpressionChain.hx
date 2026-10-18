@@ -178,8 +178,10 @@ final class IfExpressionChain {
 	 * with no final `else` yields no if-expression value on the missing path and is
 	 * rejected. Rule-agnostic: the branch statements are returned raw, not inspected.
 	 */
-	public static function collect(head: QueryNode, ifKinds: Array<String>, blockStmtKind: String, ?minBranches: Int): Null<IfChain> {
-		final min: Int = minBranches ?? MIN_CHAIN_BRANCHES;
+	public static function collect(
+		head: QueryNode, ifKinds: Array<String>, blockStmtKind: String, minBranches: Int = MIN_CHAIN_BRANCHES
+	): Null<IfChain> {
+		final min: Int = minBranches;
 		final branches: Array<{ cond: QueryNode, stmt: QueryNode }> = [];
 		var current: QueryNode = head;
 		while (true) {
@@ -239,9 +241,9 @@ final class IfExpressionChain {
 	 * derive it without a second return value.
 	 */
 	public static function collectCascade(
-		kids: Array<QueryNode>, at: Int, ifKinds: Array<String>, blockStmtKind: String, ?minBranches: Int
+		kids: Array<QueryNode>, at: Int, ifKinds: Array<String>, blockStmtKind: String, minBranches: Int = MIN_CHAIN_BRANCHES
 	): Null<IfChain> {
-		final min: Int = minBranches ?? MIN_CHAIN_BRANCHES;
+		final min: Int = minBranches;
 		final branches: Array<{ cond: QueryNode, stmt: QueryNode }> = [];
 		var i: Int = at;
 		while (i < kids.length) {
@@ -338,10 +340,10 @@ final class IfExpressionChain {
 	 */
 	public static function buildValue(pairs: Array<{ cond: String, value: String }>, terminalValue: String): String {
 		final parts: Array<String> = [];
-		for (i in 0...pairs.length) {
+		for (i => pair in pairs) {
 			if (i > 0) parts.push('else');
-			parts.push('if (${pairs[i].cond})');
-			parts.push(pairs[i].value);
+			parts.push('if (${pair.cond})');
+			parts.push(pair.value);
 		}
 		parts.push('else');
 		parts.push(terminalValue);

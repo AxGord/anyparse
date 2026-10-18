@@ -5,6 +5,8 @@ import anyparse.query.Pattern.Metavar;
 import anyparse.query.Pattern.PatternStar;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Pattern-vs-input structural matcher for `apq search`.
  *
@@ -103,7 +105,7 @@ final class Matcher {
 		final iname: Null<String> = input.name;
 		if (pname == null) {
 			if (iname != null) return false;
-		} else if (StringTools.startsWith(pname, '$')) {
+		} else if (pname.startsWith('$')) {
 			final bare: String = pname.substring(1);
 			if (bare != Metavar.WILDCARD_NAME) {
 				if (iname == null) return false;

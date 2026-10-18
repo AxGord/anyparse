@@ -171,7 +171,7 @@ final class ParenGuard {
 		if (mask == null) return plain;
 
 		final minimal: Array<Bool> = minimize(probe, wrap, mask);
-		return !minimal.contains(true) ? plain : buildVariant(source, edits, minimal, delims).edits;
+		return minimal.contains(true) ? buildVariant(source, edits, minimal, delims).edits : plain;
 	}
 
 	/**
@@ -401,7 +401,7 @@ final class ParenGuard {
 	}
 
 	private static function indexOfSite(sites: Array<Site>, edit: Int, position: Int): Int {
-		for (i in 0...sites.length) if (sites[i].edit == edit && sites[i].position == position) return i;
+		for (i => site in sites) if (site.edit == edit && site.position == position) return i;
 		return 0;
 	}
 

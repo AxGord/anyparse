@@ -15,8 +15,6 @@ import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeResolver;
@@ -323,6 +321,11 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			});
 	}
 
+	/** The path a module-level type is imported by: its module's for the main type, the module's plus its name otherwise. */
+	private static inline function qualifiedPath(d: ResolvedType): String {
+		return d.type.isMain ? d.file.module : '${d.file.module}.${d.type.name}';
+	}
+
 	/**
 	 * Bundle the `RefShape` seams + type provider, or null when a required
 	 * kind / type information is missing (the check is then a no-op).
@@ -466,8 +469,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// the same `w` an unparenthesized site would, and the peeled `(` / `)` fall inside the two
 		// deleted regions, where the comment gate already guards them.
 		final recv: QueryNode = BoolExprShape.unwrapParens(call.children[1], s.parenKind);
-		if (callSpan == null || recv.span == null) return null;
-		return {
+		return callSpan == null || recv.span == null ? null : {
 			typeName: typeName,
 			module: module,
 			method: method,
@@ -512,11 +514,6 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			proven: bound && info.ambientImportsBounded,
 			usings: usings
 		};
-	}
-
-	/** The path a module-level type is imported by: its module's for the main type, the module's plus its name otherwise. */
-	private static inline function qualifiedPath(d: ResolvedType): String {
-		return d.type.isMain ? d.file.module : '${d.file.module}.${d.type.name}';
 	}
 
 	/** The path of every `using` declaration under `node`, whatever region holds it. */

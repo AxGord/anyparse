@@ -76,7 +76,28 @@ final class OracleServerPool {
 	 * started, under `APQ_NO_ORACLE_SERVER`, or when the machine's compile budget cannot hold them all.
 	 */
 	public function start(oracles: Array<OracleConfig>): Void {
-		PhaseTimings.time('oracle servers start', () -> startTimed(oracles));
+		PhaseTimings.time('oracle servers start', startTimed.bind(oracles));
+	}
+
+	/**
+	 * Each of `oracles` typechecked through its server, in order — null for one that has none, whose server stopped
+	 * answering, or whose compile could not be told from a refused connection. Every path the run may write whose text
+	 * moved since the server's last compile is invalidated first. The compiles overlap; none stops another.
+	 */
+	public function compile(oracles: Array<OracleConfig>): Array<Null<HaxeRun>> {
+		return PhaseTimings.measure('oracle warm compile', compileTimed.bind(oracles));
+	}
+
+	/** Whether any server of the pool answers compiles. */
+	public function running(): Bool {
+		return _servers.keys().hasNext();
+	}
+
+	/** End every server and any compile still warming one. */
+	public function stop(): Void {
+		_warming?.cancel();
+		_batch?.cancel();
+		_servers.clear();
 	}
 
 	/** `start`, untimed. */
@@ -102,15 +123,6 @@ final class OracleServerPool {
 		}
 		_warming = HaxeSpawn.startAll(warm, BUFFER, HaxeSpawn.parallelism());
 		#end
-	}
-
-	/**
-	 * Each of `oracles` typechecked through its server, in order — null for one that has none, whose server stopped
-	 * answering, or whose compile could not be told from a refused connection. Every path the run may write whose text
-	 * moved since the server's last compile is invalidated first. The compiles overlap; none stops another.
-	 */
-	public function compile(oracles: Array<OracleConfig>): Array<Null<HaxeRun>> {
-		return PhaseTimings.measure('oracle warm compile', () -> compileTimed(oracles));
 	}
 
 	/** `compile`, untimed. */
@@ -166,23 +178,15 @@ final class OracleServerPool {
 		return out;
 	}
 
-	/** Whether any server of the pool answers compiles. */
-	public function running(): Bool {
-		return _servers.keys().hasNext();
-	}
-
-	/** End every server and any compile still warming one. */
-	public function stop(): Void {
-		_warming?.cancel();
-		_batch?.cancel();
-		_servers.clear();
-	}
-
 	/** The text of every path the run may write, read now; null for one that cannot be read (a deleted file). */
 	private function texts(): Map<String, Null<String>> {
 		final out: Map<String, Null<String>> = [];
 		for (path in _written()) if (!out.exists(path)) out[path] = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
 		return out;
+	}
+
+	private static inline function keyOf(oracle: OracleConfig): String {
+		return OracleDeclaration.oracleKey(oracle);
 	}
 
 	/** The paths whose text in `now` is not the one in `seen` — a path in only one of them included. */
@@ -218,10 +222,6 @@ final class OracleServerPool {
 	private static function refused(run: HaxeRun): Bool {
 		final text: String = run.out + run.err;
 		return run.status == null || text.indexOf('Couldn\'t connect') != -1 || text.indexOf('Could not connect') != -1;
-	}
-
-	private static inline function keyOf(oracle: OracleConfig): String {
-		return OracleDeclaration.oracleKey(oracle);
 	}
 
 }

@@ -2,9 +2,9 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.macro.ParseDispatchLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.ParseDispatchLowering.*;
 
 using anyparse.macro.MetaInspect;
 

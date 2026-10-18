@@ -234,7 +234,6 @@ final class FieldWriteIndex {
 		return _writes.exists(w -> w.owner == type && w.field == field && admits(_thirdParty.exists(w.file), ownerFile));
 	}
 
-
 	/**
 	 * How many resolved writes target `type`.`field` across the file set — the
 	 * exactly-one-write proof `field-init-at-declaration` needs (a movable constructor
@@ -272,7 +271,6 @@ final class FieldWriteIndex {
 		final site: Null<{ file: String, span: Span }> = declarationSite(type, ownerFile);
 		return site == null || writtenExternally(type, field, site.file, site.span, ownerFile);
 	}
-
 
 	/**
 	 * Whether any write to a field named `field` could not be attributed to a concrete
@@ -450,6 +448,12 @@ final class FieldWriteIndex {
 		return new FieldWriteIndex(
 			writes, unresolved, symbols, shape.classDeclKinds ?? [], builtinNames, unwrapNames, rejectNames, typeParams, thirdParty
 		);
+	}
+
+	/** Every indexed type declaration named `name`, across all files. */
+	private static inline function declsNamedIn(index: SymbolIndex, name: String): Array<TypeDeclInfo> {
+		// the index's by-name table, in index order: a scan of every type of every file per write was 4 s of a TM `--fix`
+		return index.refs.declsNamed(name);
 	}
 
 	/**
@@ -683,12 +687,6 @@ final class FieldWriteIndex {
 			found = ts;
 		}
 		return found;
-	}
-
-	/** Every indexed type declaration named `name`, across all files. */
-	private static function declsNamedIn(index: SymbolIndex, name: String): Array<TypeDeclInfo> {
-		// the index's by-name table, in index order: a scan of every type of every file per write was 4 s of a TM `--fix`
-		return index.refs.declsNamed(name);
 	}
 
 	/** Whether the symbol index has a type declaration named `name`. */

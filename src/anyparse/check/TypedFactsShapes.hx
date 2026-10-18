@@ -6,6 +6,8 @@ import haxe.macro.Type;
 import haxe.macro.TypeTools;
 import haxe.macro.TypedExprTools;
 
+using Lambda;
+
 
 /** The shapes of the typed tree `TypedFactsWalk` asks about, answered without walking. */
 @:nullSafety(Strict)
@@ -68,26 +70,6 @@ final class TypedFactsShapes {
 		'Reflect.deleteField' => 1
 	];
 
-	/**
-	 * The target code a native call with the arguments `args` pastes into the output, as the tail of its `native` fact:
-	 * `c`, the text of its first argument when that is a string literal; `cc` when the call carries code (`carrying`) whose
-	 * text is computed; nothing for a call that carries none — a target function handed its arguments.
-	 */
-	public static function nativeCode(args: Array<TypedExpr>, carrying: Bool): String {
-		final text: Null<String> = args.length == 0 ? null : literalText(args[0]);
-		if (text != null) return ',"c":' + Json.stringify(text);
-		return carrying ? ',"cc":true' : '';
-	}
-
-	/** The text of `e` when it is a string literal, through parentheses, metadata and an unchecked cast; null otherwise. */
-	public static function literalText(e: TypedExpr): Null<String> {
-		return switch e.expr {
-			case TConst(TString(s)): s;
-			case TParenthesis(inner) | TMeta(_, inner) | TCast(inner, null): literalText(inner);
-			case _: null;
-		};
-	}
-
 	/** The package of the class every exception the language throws as it is extends (`isException`). */
 	private static inline final EXCEPTION_PACKAGE: String = 'haxe';
 
@@ -98,13 +80,37 @@ final class TypedFactsShapes {
 	private static final FRESH_CLASSES: Array<String> = ['Array', 'haxe.ds._Map.Map_Impl_'];
 
 	/**
+	 * The target code a native call with the arguments `args` pastes into the output, as the tail of its `native` fact:
+	 * `c`, the text of its first argument when that is a string literal; `cc` when the call carries code (`carrying`) whose
+	 * text is computed; nothing for a call that carries none — a target function handed its arguments.
+	 */
+	public static function nativeCode(args: Array<TypedExpr>, carrying: Bool): String {
+		final text: Null<String> = args.length == 0 ? null : literalText(args[0]);
+		return if (text != null)
+			',"c":${Json.stringify(text)}'
+		else if (carrying)
+			',"cc":true'
+		else
+			'';
+	}
+
+	/** The text of `e` when it is a string literal, through parentheses, metadata and an unchecked cast; null otherwise. */
+	public static function literalText(e: TypedExpr): Null<String> {
+		return switch e.expr {
+			case TConst(TString(s)): s;
+			case TParenthesis(inner), TMeta(_, inner), TCast(inner, null): literalText(inner);
+			case _: null;
+		};
+	}
+
+	/**
 	 * The native identifier the chain of field accesses `e` is rooted at, through parentheses and metadata: target code the
 	 * chain spells (`untyped __global__.String`). Null for any other expression, a bare identifier included.
 	 */
 	public static function nativeRoot(e: TypedExpr): Null<TypedExpr> {
 		return switch e.expr {
 			case TField(receiver, _): identRoot(receiver);
-			case TParenthesis(inner) | TMeta(_, inner): nativeRoot(inner);
+			case TParenthesis(inner), TMeta(_, inner): nativeRoot(inner);
 			case _: null;
 		};
 	}
@@ -113,19 +119,9 @@ final class TypedFactsShapes {
 	public static function chainText(e: TypedExpr): String {
 		return switch e.expr {
 			case TIdent(name): name;
-			case TField(receiver, fa): chainText(receiver) + '.' + describe(fa).field;
-			case TParenthesis(inner) | TMeta(_, inner): chainText(inner);
+			case TField(receiver, fa): '${chainText(receiver)}.${describe(fa).field}';
+			case TParenthesis(inner), TMeta(_, inner): chainText(inner);
 			case _: '';
-		};
-	}
-
-	/** The native identifier `e` is, or the chain of field accesses `e` is rooted at; null otherwise. */
-	private static function identRoot(e: TypedExpr): Null<TypedExpr> {
-		return switch e.expr {
-			case TIdent(_): e;
-			case TField(receiver, _): identRoot(receiver);
-			case TParenthesis(inner) | TMeta(_, inner): identRoot(inner);
-			case _: null;
 		};
 	}
 
@@ -142,7 +138,7 @@ final class TypedFactsShapes {
 				for (c in catches) collectLeaves(c.expr, out);
 			case TBlock(exprs) if (exprs.length > 0):
 				collectLeaves(exprs[exprs.length - 1], out);
-			case TParenthesis(inner) | TMeta(_, inner):
+			case TParenthesis(inner), TMeta(_, inner):
 				collectLeaves(inner, out);
 			case _:
 				out.push(e);
@@ -156,13 +152,11 @@ final class TypedFactsShapes {
 	public static function isFresh(e: TypedExpr): Bool {
 		final leaves: Array<TypedExpr> = [];
 		collectLeaves(e, leaves);
-		return Lambda.foreach(
-			leaves, leaf -> switch leaf.expr {
-				case TArrayDecl(_) | TConst(TNull): true;
-				case TNew(c, _, _): FRESH_CLASSES.contains(c.toString());
-				case _: false;
-			}
-		);
+		return leaves.foreach(leaf -> switch leaf.expr {
+			case TArrayDecl(_), TConst(TNull): true;
+			case TNew(c, _, _): FRESH_CLASSES.contains(c.toString());
+			case _: false;
+		});
 	}
 
 	public static function restElement(t: Type): Null<Type> {
@@ -221,7 +215,7 @@ final class TypedFactsShapes {
 		final out: Map<Int, Bool> = [];
 		function scan(e: TypedExpr): Void {
 			switch e.expr {
-				case TBinop(OpAssign | OpAssignOp(_), { expr: TLocal(v) }, _) | TUnop(OpIncrement | OpDecrement, _, { expr: TLocal(v) }):
+				case TBinop(OpAssign | OpAssignOp(_), { expr: TLocal(v) }, _), TUnop(OpIncrement | OpDecrement, _, { expr: TLocal(v) }):
 					out[v.id] = true;
 				case _:
 			}
@@ -229,6 +223,16 @@ final class TypedFactsShapes {
 		}
 		scan(body);
 		return out;
+	}
+
+	/** The native identifier `e` is, or the chain of field accesses `e` is rooted at; null otherwise. */
+	private static function identRoot(e: TypedExpr): Null<TypedExpr> {
+		return switch e.expr {
+			case TIdent(_): e;
+			case TField(receiver, _): identRoot(receiver);
+			case TParenthesis(inner), TMeta(_, inner): identRoot(inner);
+			case _: null;
+		};
 	}
 
 }

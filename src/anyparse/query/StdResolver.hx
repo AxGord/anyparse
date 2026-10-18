@@ -129,7 +129,7 @@ final class StdResolver {
 	 */
 	public static function stdEntryOf(value: String, separator: String, holdsStd: (String) -> Bool): Null<String> {
 		final entries: Array<String> = [
-			for (e in value.split(separator)) if (StringTools.trim(e) != '') StringTools.trim(e)
+			for (e in value.split(separator)) if (e.trim() != '') StringTools.trim(e)
 		];
 		if (entries.length <= 1) return entries.length == 0 ? null : entries[0];
 		for (e in entries) if (holdsStd(e)) return e;
@@ -177,7 +177,7 @@ final class StdResolver {
 	 */
 	public static function isUnder(dir: String, path: String): Bool {
 		final root: String = Path.removeTrailingSlashes(Path.normalize(dir));
-		return root != '' && StringTools.startsWith(Path.normalize(path), '$root/');
+		return root != '' && Path.normalize(path).startsWith('$root/');
 	}
 
 	/**
@@ -190,6 +190,28 @@ final class StdResolver {
 		final installer: String = Path.normalize(Path.join([dir, '..', 'std']));
 		final homebrew: String = Path.normalize(Path.join([dir, '..', 'lib', 'haxe', 'std']));
 		return !exists(installer) && exists(homebrew) ? homebrew : installer;
+	}
+
+	/**
+	 * The std beside the first `haxe` of `bins` — every `haxe` on PATH, in PATH order — that has one: `siblingStdOf` its
+	 * symlink chain resolved (`resolve`), else the places the compiler itself searches from its own spelling
+	 * (`<dir>/../lib/haxe/std`, `<dir>/../share/haxe/std`, `<dir>/std`, as its `-v` `Classpath:` line lists them). Null
+	 * when none `exists`. A `haxe` with no std beside it is a wrapper — a test harness's shim, a version manager's script —
+	 * that hands the build to a compiler later on PATH, whose std is the one read; stopping at it fell through to the known
+	 * locations and indexed whichever install they name first.
+	 */
+	public static function firstSiblingStd(bins: Array<String>, resolve: (String) -> String, exists: (String) -> Bool): Null<String> {
+		for (bin in bins) {
+			final dir: String = Path.directory(bin);
+			final candidates: Array<String> = [
+				siblingStdOf(resolve(bin), exists),
+				Path.normalize(Path.join([dir, '..', 'lib', 'haxe', 'std'])),
+				Path.normalize(Path.join([dir, '..', 'share', 'haxe', 'std'])),
+				Path.normalize(Path.join([dir, 'std']))
+			];
+			for (c in candidates) if (exists(c)) return c;
+		}
+		return null;
 	}
 
 	/**
@@ -227,7 +249,7 @@ final class StdResolver {
 		#if (sys || nodejs)
 		final v: Null<String> = Sys.getEnv('HAXE_STD_PATH');
 		if (v == null) return null;
-		final trimmed: String = StringTools.trim(v);
+		final trimmed: String = v.trim();
 		return trimmed == '' ? null : trimmed;
 		#else
 		return null;
@@ -302,28 +324,6 @@ final class StdResolver {
 	/** Whether `path` exists AND is a directory — the injected `exists` predicate for the real filesystem. */
 	private static function dirExists(path: String): Bool {
 		return #if (sys || nodejs) FileSystem.exists(path) && FileSystem.isDirectory(path) #else false #end;
-	}
-
-	/**
-	 * The std beside the first `haxe` of `bins` — every `haxe` on PATH, in PATH order — that has one: `siblingStdOf` its
-	 * symlink chain resolved (`resolve`), else the places the compiler itself searches from its own spelling
-	 * (`<dir>/../lib/haxe/std`, `<dir>/../share/haxe/std`, `<dir>/std`, as its `-v` `Classpath:` line lists them). Null
-	 * when none `exists`. A `haxe` with no std beside it is a wrapper — a test harness's shim, a version manager's script —
-	 * that hands the build to a compiler later on PATH, whose std is the one read; stopping at it fell through to the known
-	 * locations and indexed whichever install they name first.
-	 */
-	public static function firstSiblingStd(bins: Array<String>, resolve: (String) -> String, exists: (String) -> Bool): Null<String> {
-		for (bin in bins) {
-			final dir: String = Path.directory(bin);
-			final candidates: Array<String> = [
-				siblingStdOf(resolve(bin), exists),
-				Path.normalize(Path.join([dir, '..', 'lib', 'haxe', 'std'])),
-				Path.normalize(Path.join([dir, '..', 'share', 'haxe', 'std'])),
-				Path.normalize(Path.join([dir, 'std']))
-			];
-			for (c in candidates) if (exists(c)) return c;
-		}
-		return null;
 	}
 
 }

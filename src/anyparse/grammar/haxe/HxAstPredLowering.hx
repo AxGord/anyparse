@@ -2,9 +2,9 @@ package anyparse.grammar.haxe;
 
 #if macro
 import anyparse.macro.AstPredLowering;
+import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.MacroNames.*;
 
 /**
  * Haxe-grammar AST-predicate tables — the domain knowledge behind the
@@ -542,7 +542,7 @@ final class HxAstPredLowering extends AstPredLowering {
 			final recThen: Expr = at(field(ident('_s'), 'thenBranch'), macro true);
 			macro {
 				final _el = _s.elseBranch;
-				_el != null ? $recElse : (nested ? true : $recThen);
+				_el != null ? $recElse : nested ? true : $recThen;
 			};
 		}
 		final body: Expr = nullSwitch(ident('e'), macro false, [

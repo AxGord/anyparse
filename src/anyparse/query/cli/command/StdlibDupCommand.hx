@@ -1,10 +1,11 @@
 package anyparse.query.cli.command;
 
 import anyparse.core.TempScratch;
+import anyparse.query.ExitCode.*;
+import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;
@@ -100,7 +101,7 @@ final class StdlibDupCommand implements CliCommand {
 			return EXIT_USAGE;
 		}
 
-		final io = CliArgs.resolveInputPaths(lang, inputSpecs);
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq stdlib-dup: ${CliArgs.quotedSpecs(inputSpecs)} matched no source files\n');

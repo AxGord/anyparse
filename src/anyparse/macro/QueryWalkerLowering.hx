@@ -2,9 +2,9 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.MacroNames.*;
 
 using Lambda;
 using anyparse.macro.MetaInspect;
@@ -493,12 +493,12 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		else
 			refsAware;
 
-		return !optional ? [core] : [
+		return optional ? [
 			block([
 				{ expr: EVars([{ name: '_ty', type: null, expr: access }]), pos: Context.currentPos() },
 				macro if (_ty != null) $core
 			])
-		];
+		] : [core];
 	}
 
 	/**

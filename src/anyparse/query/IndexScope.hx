@@ -154,11 +154,9 @@ final class IndexScope {
 	public static function declarationsOf(file: String, source: String, plugin: GrammarPlugin): Null<FileInfo> {
 		final host: Null<SymbolIndexHost> = hostOf(plugin);
 		if (host != null) return host.declarationsOf(file, source);
-		if (plugin is ParsedRootProvider) {
-			final provider: ParsedRootProvider = cast plugin;
-			return SymbolIndexBuilder.declarationsFromRoot(file, source, provider.parseDeclarationsRoot(source), provider, plugin);
-		}
-		return over([{ file: file, source: source }], plugin).fileInfo(file);
+		if (!(plugin is ParsedRootProvider)) return over([{ file: file, source: source }], plugin).fileInfo(file);
+		final provider: ParsedRootProvider = cast plugin;
+		return SymbolIndexBuilder.declarationsFromRoot(file, source, provider.parseDeclarationsRoot(source), provider, plugin);
 	}
 
 	/** `plugin` as the run's index host, or null for a bare plugin. */

@@ -263,7 +263,7 @@ final class StdlibDifferential {
 		final buf: StringBuf = new StringBuf();
 		final arity: Int = candidate.params.length;
 		buf.add('using StringTools;\n\nclass ${PROBE_CLASS} {\n\n');
-		buf.add('\tstatic final live: Array<Bool> = [${[for (unused in maps) 'true'].join(', ')}];\n\n');
+		buf.add('\tstatic final live: Array<Bool> = [${[for (_ in maps) 'true'].join(', ')}];\n\n');
 		buf.add('\tstatic var inputs: Int = 0;\n\n');
 		buf.add("\tstatic var constant: String = '';\n\n");
 		buf.add('\tstatic var varying: Bool = false;\n\n');

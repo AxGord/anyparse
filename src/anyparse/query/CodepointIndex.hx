@@ -1,5 +1,7 @@
 package anyparse.query;
 
+using StringTools;
+
 /**
  * The map between two ways of counting a position in one source text: in codepoints, which is how the Haxe compiler
  * reports `Position.min`/`max`, and in the target's own string units, which is what an anyparse `Span` counts — UTF-16
@@ -26,8 +28,8 @@ final class CodepointIndex {
 	private final _wideCodepoint: Array<Int>;
 
 	private function new(wideNative: Array<Int>, wideCodepoint: Array<Int>) {
-		this._wideNative = wideNative;
-		this._wideCodepoint = wideCodepoint;
+		_wideNative = wideNative;
+		_wideCodepoint = wideCodepoint;
 	}
 
 	/** The native offset of codepoint offset `codepoint`. */
@@ -48,9 +50,9 @@ final class CodepointIndex {
 		var i: Int = 0;
 		final end: Int = source.length - 1;
 		while (i < end) {
-			final unit: Int = StringTools.fastCodeAt(source, i);
+			final unit: Int = source.fastCodeAt(i);
 			if (unit >= HIGH_FIRST && unit <= HIGH_LAST) {
-				final next: Int = StringTools.fastCodeAt(source, i + 1);
+				final next: Int = source.fastCodeAt(i + 1);
 				if (next >= LOW_FIRST && next <= LOW_LAST) {
 					wideCodepoint.push(i - wideNative.length);
 					wideNative.push(i);

@@ -150,8 +150,7 @@ final class ThrowReach {
 
 	/** Whether `node`'s subtree, outside a nested function, holds a `throw`. */
 	private function throwsAny(node: QueryNode): Bool {
-		if (_nestedFnKinds.contains(node.kind)) return false;
-		return _throwKinds.contains(node.kind) || node.children.exists(throwsAny);
+		return !_nestedFnKinds.contains(node.kind) && (_throwKinds.contains(node.kind) || node.children.exists(throwsAny));
 	}
 
 }

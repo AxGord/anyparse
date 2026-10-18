@@ -6,6 +6,8 @@ import anyparse.query.Scope.ScopeFrame;
 import anyparse.query.Scope.ScopeStack;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Lexical reference / declaration walker for `apq refs`.
  *
@@ -139,22 +141,6 @@ final class Refs {
 	}
 
 	/**
-	 * One walk over `tree` filling `out`, with the switch SUBJECT names resolved alongside: whether a
-	 * `case` capture is decided depends on its subject's declared type (`CaptureIndex`), and the walk
-	 * only tracks the bindings of the names it searches for. A subject name the caller did not ask for is
-	 * searched too and its hits dropped, so every requested name answers as if asked alone.
-	 */
-	private static function walkWithSubjects(
-		tree: QueryNode, shape: RefShape, out: Map<String, Array<RefHit>>, ?skipped: Map<String, Int>
-	): Void {
-		final captures: CaptureIndex = new CaptureIndex(tree, shape);
-		final extra: Array<String> = [for (name in captures.subjectNames()) if (!out.exists(name)) name];
-		for (name in extra) out[name] = [];
-		walkMulti(tree, shape, new ScopeStack(), out, WalkFlags.None, captures, skipped);
-		for (name in extra) out.remove(name);
-	}
-
-	/**
 	 * The offset from which a SELF-SCOPED binder's own name is in scope: the start of the BODY the
 	 * construct opens, or `0` when `node` opens no such binding.
 	 *
@@ -197,8 +183,7 @@ final class Refs {
 	 * re-reading the other.
 	 */
 	public static function readsName(name: String, node: QueryNode, shape: RefShape): Bool {
-		for (h in find(name, node, shape)) if (h.kind != RefKind.Write) return true;
-		return false;
+		return find(name, node, shape).exists(h -> h.kind != RefKind.Write);
 	}
 
 	/**
@@ -261,6 +246,21 @@ final class Refs {
 		return kinds != null && kinds.contains(kind);
 	}
 
+	/**
+	 * One walk over `tree` filling `out`, with the switch SUBJECT names resolved alongside: whether a
+	 * `case` capture is decided depends on its subject's declared type (`CaptureIndex`), and the walk
+	 * only tracks the bindings of the names it searches for. A subject name the caller did not ask for is
+	 * searched too and its hits dropped, so every requested name answers as if asked alone.
+	 */
+	private static function walkWithSubjects(
+		tree: QueryNode, shape: RefShape, out: Map<String, Array<RefHit>>, ?skipped: Map<String, Int>
+	): Void {
+		final captures: CaptureIndex = new CaptureIndex(tree, shape);
+		final extra: Array<String> = [for (name in captures.subjectNames()) if (!out.exists(name)) name];
+		for (name in extra) out[name] = [];
+		walkMulti(tree, shape, new ScopeStack(), out, WalkFlags.None, captures, skipped);
+		for (name in extra) out.remove(name);
+	}
 
 	private static function walkMulti(
 		node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Map<String, Array<RefHit>>, flags: WalkFlags, captures: CaptureIndex,

@@ -20,12 +20,12 @@ final class RuleDeclaration {
 	/** The `prefer-api-idiom` option holding the idiom list. */
 	private static inline final IDIOMS_KEY: String = 'idioms';
 
-	/** The keys an idiom entry may carry. */
-	private static final ENTRY_KEYS: Array<String> = ['type', 'fields', 'method', 'copy', 'subtypes'];
-
 	private static inline final EVENT_BASE_KEY: String = 'eventBase';
 	private static inline final TYPE_ABSTRACT_KEY: String = 'typeAbstract';
 	private static inline final LISTENER_METHODS_KEY: String = 'listenerMethods';
+
+	/** The keys an idiom entry may carry. */
+	private static final ENTRY_KEYS: Array<String> = ['type', 'fields', 'method', 'copy', 'subtypes'];
 
 	/**
 	 * The idiom entries rule `ruleId` declares under `idioms` in `config`, each a well-formed `IdiomSpec`, in declared

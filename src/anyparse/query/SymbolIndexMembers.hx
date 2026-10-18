@@ -176,6 +176,34 @@ final class SymbolIndexMembers {
 	}
 
 	/**
+	 * The `RefShape` kinds `collectMembers` reads, resolved ONCE per run rather than per
+	 * type: the modifier siblings it recognises and the conditional-compilation host kind
+	 * that marks a member `guarded`.
+	 */
+	public static function memberSeamsOf(shape: RefShape): MemberSeams {
+		return {
+			visibilityKinds: shape.visibilityModifierKinds ?? [],
+			overrideKind: shape.overrideModifierKind,
+			staticKind: shape.staticModifierKind,
+			inlineKind: shape.inlineModifierKind,
+			macroKind: shape.macroModifierKind,
+			dynamicKind: shape.dynamicModifierKind,
+			externKind: shape.externModifierKind,
+			overloadKind: shape.overloadModifierKind,
+			operatorMetaName: shape.operatorOverloadMetaName,
+			overloadMetaName: shape.signatureOverloadMetaName,
+			conversionMetaName: shape.execution?.implicitConversionMetaName,
+			implicitCallMetaNames: shape.execution?.implicitCallMetaNames ?? [],
+			extensionExcludingMetaNames: shape.execution?.extensionExcludingMetaNames ?? [],
+			conditionalKind: shape.conditionalMemberKind,
+			paramKinds: shape.paramKinds ?? [],
+			functionKinds: shape.functionKinds ?? [],
+			fieldKinds: shape.fieldDeclKinds ?? [],
+			annotationKinds: shape.typeAnnotationKinds ?? []
+		};
+	}
+
+	/**
 	 * The span offset the four type maps are keyed on for `member` — its own declaration span,
 	 * except for the anon-structure `var` / `final` field kinds, whose declaration sits one node
 	 * deeper (`ANON_WRAPPED_FIELD_KINDS`). The inner node must re-declare the SAME name, so an
@@ -251,34 +279,6 @@ final class SymbolIndexMembers {
 	private static function isConversionMeta(meta: QueryNode, seams: MemberSeams): Bool {
 		final metaName: Null<String> = seams.conversionMetaName;
 		return metaName != null && meta.name == metaName && SymbolIndexBuilder.isMetaNodeKind(meta.kind);
-	}
-
-	/**
-	 * The `RefShape` kinds `collectMembers` reads, resolved ONCE per run rather than per
-	 * type: the modifier siblings it recognises and the conditional-compilation host kind
-	 * that marks a member `guarded`.
-	 */
-	public static function memberSeamsOf(shape: RefShape): MemberSeams {
-		return {
-			visibilityKinds: shape.visibilityModifierKinds ?? [],
-			overrideKind: shape.overrideModifierKind,
-			staticKind: shape.staticModifierKind,
-			inlineKind: shape.inlineModifierKind,
-			macroKind: shape.macroModifierKind,
-			dynamicKind: shape.dynamicModifierKind,
-			externKind: shape.externModifierKind,
-			overloadKind: shape.overloadModifierKind,
-			operatorMetaName: shape.operatorOverloadMetaName,
-			overloadMetaName: shape.signatureOverloadMetaName,
-			conversionMetaName: shape.execution?.implicitConversionMetaName,
-			implicitCallMetaNames: shape.execution?.implicitCallMetaNames ?? [],
-			extensionExcludingMetaNames: shape.execution?.extensionExcludingMetaNames ?? [],
-			conditionalKind: shape.conditionalMemberKind,
-			paramKinds: shape.paramKinds ?? [],
-			functionKinds: shape.functionKinds ?? [],
-			fieldKinds: shape.fieldDeclKinds ?? [],
-			annotationKinds: shape.typeAnnotationKinds ?? []
-		};
 	}
 
 	/**

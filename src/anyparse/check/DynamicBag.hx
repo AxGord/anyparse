@@ -165,7 +165,7 @@ final class DynamicBag {
 		if (parent == null) return false;
 		final kids: Array<QueryNode> = parent.children;
 		var idx: Int = -1;
-		for (i in 0...kids.length) if (kids[i] == member) idx = i;
+		for (i => kid in kids) if (kid == member) idx = i;
 		if (idx < 0) return false;
 		var j: Int = idx - 1;
 		while (j >= 0) {
@@ -404,7 +404,10 @@ final class DynamicBag {
 			null;
 	}
 
-	/** `name` unless it is a transparent wrapper (`RefShape.memberTransparentWrapperTypeNames`), which names no type without its argument. */
+	/**
+	 * `name` unless it is a transparent wrapper
+	 * (`RefShape.memberTransparentWrapperTypeNames`), which names no type without its argument.
+	 */
 	private static function nominalOrNull(name: Null<String>, shape: RefShape): Null<String> {
 		return name == null || (shape.memberTransparentWrapperTypeNames ?? []).contains(name) ? null : name;
 	}

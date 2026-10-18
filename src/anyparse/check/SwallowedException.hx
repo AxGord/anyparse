@@ -116,7 +116,7 @@ final class SwallowedException implements Check implements NoAutofix {
 		if (bodySpan == null) return;
 		if (source.substring(bodySpan.from + 1, bodySpan.to - 1).trim() == '') return;
 		final varName: Null<String> = catchNode.name;
-		if (varName == null || StringTools.startsWith(varName, '_')) return;
+		if (varName == null || varName.startsWith('_')) return;
 		if (OccurrenceScan.referencedInRange(source, varName, bodySpan.from, bodySpan.to, [])) return;
 		for (k in exitKinds) if (MemberKinds.subtreeContainsKind(body, k)) return;
 		out.push({

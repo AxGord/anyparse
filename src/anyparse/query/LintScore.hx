@@ -243,6 +243,11 @@ final class LintScore {
 		}, null, '  ');
 	}
 
+	/** The key of `(family, member, subject)`, each part length-prefixed so no part can run into the next. */
+	private static inline function keyOf(family: String, member: String, subject: String): String {
+		return '${family.length}:$family${member.length}:$member${subject.length}:$subject';
+	}
+
 	/** One table row of `render`. */
 	private static function row(b: LintScoreBucket): Array<String> {
 		return [b.family, '${b.findings}', '${b.keys}'].concat([for (v in VERDICTS) '${b.matched[v] ?? 0}']).concat([
@@ -396,11 +401,6 @@ final class LintScore {
 			recallEntries: recall.length,
 			recallHit: recall.filter(hit).length
 		};
-	}
-
-	/** The key of `(family, member, subject)`, each part length-prefixed so no part can run into the next. */
-	private static inline function keyOf(family: String, member: String, subject: String): String {
-		return '${family.length}:$family${member.length}:$member${subject.length}:$subject';
 	}
 
 }

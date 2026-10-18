@@ -553,7 +553,7 @@ final class MoveMember {
 					return '${entry.file} has "using $path" — moving a member into a type under `using` could '
 						+ 'hijack extension calls, refusing';
 			}
-			for (path in TypeRefIndex.plainImports(info)) if (memberNames.exists(name -> StringTools.endsWith(path, '.$srcTypeName.$name')))
+			for (path in TypeRefIndex.plainImports(info)) if (memberNames.exists(name -> path.endsWith('.$srcTypeName.$name')))
 				return '${entry.file} has a static import "$path" — refusing';
 		}
 		return null;
@@ -1010,10 +1010,12 @@ final class MoveMember {
 			return 'a switch case pattern in ${prep.srcFile} binds "${m.name}" — reference resolution cannot tell the '
 				+ 'capture from the member; rename the capture first';
 		final inherited: Null<String> = inheritanceRefusal(prep);
-		if (inherited != null) return inherited;
-		return prep.moved.exists(m -> !m.isStatic) && thisInsideCuts(prep)
-			? 'a moved body references "this", which would re-bind to "${prep.destTypeName}" — rewrite to bare member access first'
-			: null;
+		return if (inherited != null)
+			inherited
+		else if (prep.moved.exists(m -> !m.isStatic) && thisInsideCuts(prep))
+			'a moved body references "this", which would re-bind to "${prep.destTypeName}" — rewrite to bare member access first'
+		else
+			null;
 	}
 
 	/**
@@ -1139,8 +1141,8 @@ final class MoveMember {
 		if (prep.srcFile == prep.destFile) return '${head}"${prep.destTypeName}" shares the source module';
 		final destMain: Bool = prep.destInfo.types.exists(t -> t.name == prep.destTypeName && t.isMain);
 		if (prep.destDecl.kind != 'ClassDecl' || !destMain)
-			return
-				'${head}"${prep.destTypeName}" is not the main class of its module, and `import <module>.*;` brings in only that class\'s statics';
+			return '$head"${prep.destTypeName}'
+				+ '" is not the main class of its module, and `import <module>.*;` brings in only that class\'s statics';
 		if (!prep.index.subtypes.supertypeChainResolved(prep.srcTypeName))
 			return '${head}the supertypes of "${prep.srcTypeName}" do not resolve in scope, and a static they declare would win';
 		final names: Array<String> = DependencyCarry.wildcardBoundNames(prep.destInfo, prep.shape);
@@ -1364,9 +1366,8 @@ final class MoveMember {
 			);
 		if (state.mutableDeps.length > 0)
 			problems.push(
-				'moved bodies read mutable instance field(s) ${quoted(state.mutableDeps)} — shared mutable state '
-				+ 'cannot be mirrored onto "${prep.destTypeName}"${stayingReadersNote(prep, state.mutableDeps, plugin)}; make them '
-				+ 'final or refactor first'
+				'moved bodies read mutable instance field(s) ${quoted(state.mutableDeps)} — shared mutable state cannot be mirrored onto '
+				+ '"${prep.destTypeName}"${stayingReadersNote(prep, state.mutableDeps, plugin)}; make them final or refactor first'
 			);
 		// A missing final field on the destination is a hard error UNLESS
 		// --scaffold is on, which generates the field + constructor instead.
@@ -1424,7 +1425,7 @@ final class MoveMember {
 		final bodyClose: Null<Int> = RefactorSupport.typeBodyCloseOffset(prep.destSource, prep.destDecl);
 		if (bodyClose == null) return '"${prep.destTypeName}" has no brace body to receive the member';
 		var wsStart: Int = bodyClose;
-		while (wsStart > 0 && SourceText.isSpace(StringTools.fastCodeAt(prep.destSource, wsStart - 1))) wsStart--;
+		while (wsStart > 0 && SourceText.isSpace(prep.destSource.fastCodeAt(wsStart - 1))) wsStart--;
 		final destFrame: String = destPrepend == '' ? '\n\n${blocks.join('\n\n')}\n\n' : '\n\n$destPrepend\n\n${blocks.join('\n\n')}\n\n';
 		ScopeFiles.editsFor(editsByFile, prep.destFile).push({ span: new Span(wsStart, bodyClose), text: destFrame });
 		return null;
@@ -1506,9 +1507,8 @@ final class MoveMember {
 			if (decls.length != 1 || seen.contains(name)) return true;
 			seen.push(name);
 			final decl: TypeDeclInfo = decls[0];
-			if (!interfacesResolve(decl.interfaces)) return false;
-			for (sup in decl.supertypes) if (!decl.interfaces.contains(sup) && !chainInterfacesResolve(sup, seen)) return false;
-			return true;
+			return interfacesResolve(decl.interfaces)
+				&& decl.supertypes.foreach(sup -> decl.interfaces.contains(sup) || chainInterfacesResolve(sup, seen));
 		}
 		for (m in prep.moved) if (!m.isStatic) {
 			final head: String = 'cannot move "${m.name}" out of "$src"';

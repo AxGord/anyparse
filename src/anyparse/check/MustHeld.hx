@@ -150,9 +150,14 @@ final class MustHeld {
 	 */
 	public function takeObject(edge: CallEdge): Null<String> {
 		final lock: Null<String> = _sites.lockOf(edge);
-		if (lock == null) return null;
-		if (_sites.selfTake(edge)) return _sites.isStaticLock(lock) ? STATIC_OBJECT : SELF_OBJECT;
-		return _sites.worksReceiverLock(edge) ? _paths.receiverPath(edge) : null;
+		return if (lock == null)
+			null
+		else if (_sites.selfTake(edge))
+			_sites.isStaticLock(lock) ? STATIC_OBJECT : SELF_OBJECT
+		else if (_sites.worksReceiverLock(edge))
+			_paths.receiverPath(edge)
+		else
+			null;
 	}
 
 	/**
@@ -176,8 +181,7 @@ final class MustHeld {
 	 * or code an unresolved call of it may run can.
 	 */
 	public function mayRelease(lock: String, id: String): Bool {
-		if (_releasers.releasersOf(lock).exists(id)) return true;
-		return _releasers.hazard(lock) && (_releasers.blindIn(id) ?? [0]).length > 0;
+		return _releasers.releasersOf(lock).exists(id) || _releasers.hazard(lock) && (_releasers.blindIn(id) ?? [0]).length > 0;
 	}
 
 	/** What a lock held on `object` in the caller is held on in the callee of `call`; null when nothing says. */
@@ -422,8 +426,8 @@ final class MustHeld {
 		if (span == null || span.from <= at && at < span.to || block.children.length == 0) return false;
 		final returns: Array<String> = ShapeVocab.returnStatementKinds(_shape);
 		final last: QueryNode = block.children[block.children.length - 1];
-		if ((last.span?.from ?? -1) <= site.from) return false;
-		return returns.contains(last.kind) || (_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site);
+		return !((last.span?.from ?? -1) <= site.from)
+			&& (returns.contains(last.kind) || (_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site));
 	}
 
 	/**
@@ -502,19 +506,17 @@ private final class BodyFacts {
 			final inner: Null<Bool> = decided(kids[0], id, valuation);
 			return inner == null ? null : !inner;
 		}
-		if ((kind == _shape.logicalAndKind || kind == _shape.logicalOrKind) && kids.length == 2) {
-			final a: Null<Bool> = decided(kids[0], id, valuation);
-			final b: Null<Bool> = decided(kids[1], id, valuation);
-			final and: Bool = kind == _shape.logicalAndKind;
-			// either side settling the operator settles it; else both sides must be known
-			return if (a == !and || b == !and)
-				!and
-			else if (a != null && b != null)
-				and
-			else
-				null;
-		}
-		return decidedParam(cond, id, valuation);
+		if (kind != _shape.logicalAndKind && kind != _shape.logicalOrKind || kids.length != 2) return decidedParam(cond, id, valuation);
+		final a: Null<Bool> = decided(kids[0], id, valuation);
+		final b: Null<Bool> = decided(kids[1], id, valuation);
+		final and: Bool = kind == _shape.logicalAndKind;
+		// either side settling the operator settles it; else both sides must be known
+		return if (a == !and || b == !and)
+			!and
+		else if (a != null && b != null)
+			and
+		else
+			null;
 	}
 
 	/**
@@ -558,13 +560,23 @@ private final class BodyFacts {
 		if (callee == null || !_sites.isAccess(callee.kind) || callee.children.length == 0) return null;
 		final receiver: QueryNode = callee.children[0];
 		final member: Null<String> = _sites.isAccess(receiver.kind) ? receiver.name : null;
-		final root: Null<QueryNode> = member == null ? receiver : receiver.children.length > 0 ? receiver.children[0] : null;
+		final root: Null<QueryNode> = if (member == null)
+			receiver
+		else if (receiver.children.length > 0)
+			receiver.children[0]
+		else
+			null;
 		final name: Null<String> = root?.name;
 		final fn: Null<QueryNode> = _trees.ofId(edge.from);
 		if (root == null || root.kind != _shape.identKind || name == null || name == _shape.selfReferenceText || fn == null) return null;
 		final declared: Array<QueryNode> = [];
 		BareNames.collectNamed(fn, name, _shape, declared);
-		return declared.length == 1 && !BareNames.writes(fn, name, _shape) ? member == null ? name : '$name.$member' : null;
+		return if (declared.length != 1 || BareNames.writes(fn, name, _shape))
+			null
+		else if (member == null)
+			name
+		else
+			'$name.$member';
 	}
 
 	/** Whether `site` of `file` sits in the body of a `try`, whose `catch` an exception thrown there may land in. */
@@ -585,7 +597,12 @@ private final class BodyFacts {
 		final tracked: Array<String> = _values.tracked(id);
 		final kind: String = cond.kind;
 		final nullTest: Bool = (kind == _shape.eqKind || kind == _shape.notEqKind) && cond.children.length == 2;
-		final read: Null<QueryNode> = kind == _shape.identKind ? cond : nullTest ? _values.nullTested(cond) : null;
+		final read: Null<QueryNode> = if (kind == _shape.identKind)
+			cond
+		else if (nullTest)
+			_values.nullTested(cond)
+		else
+			null;
 		final at: Int = read != null && read.kind == _shape.identKind ? tracked.indexOf(read.name ?? '') : -1;
 		final value: String = at < 0 ? ArgumentValues.UNKNOWN : valuation.charAt(at);
 		if (!nullTest) return switch value {

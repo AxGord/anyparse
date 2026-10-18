@@ -119,18 +119,6 @@ final class ShapeVocab {
 		return union([shape.ifStatementKinds, shape.ifExpressionKinds, one(shape.ternaryKind)]);
 	}
 
-	/** The single seam `kind` as a group of `union`, or null when it is unset. */
-	private static inline function one(kind: Null<String>): Null<Array<String>> {
-		return kind == null ? null : [kind];
-	}
-
-	/** The kinds of `groups` in order, each once; an unset group adds nothing. */
-	private static function union(groups: Array<Null<Array<String>>>): Array<String> {
-		final out: Array<String> = [];
-		for (g in groups) if (g != null) for (k in g) if (!out.contains(k)) out.push(k);
-		return out;
-	}
-
 	/**
 	 * The kinds a MEMBER ACCESS projects as — the node whose receiver child is the head of a
 	 * `Helper.go()`. Read off the shape rather than spelled here, so a second grammar's own spellings
@@ -140,6 +128,18 @@ final class ShapeVocab {
 		final out: Array<String> = [];
 		for (kind in [shape.fieldAccessKind, shape.nullSafeAccessKind, shape.forceFieldAccessKind]) if (kind != null && !out.contains(kind))
 			out.push(kind);
+		return out;
+	}
+
+	/** The single seam `kind` as a group of `union`, or null when it is unset. */
+	private static inline function one(kind: Null<String>): Null<Array<String>> {
+		return kind == null ? null : [kind];
+	}
+
+	/** The kinds of `groups` in order, each once; an unset group adds nothing. */
+	private static function union(groups: Array<Null<Array<String>>>): Array<String> {
+		final out: Array<String> = [];
+		for (g in groups) if (g != null) for (k in g) if (!out.contains(k)) out.push(k);
 		return out;
 	}
 

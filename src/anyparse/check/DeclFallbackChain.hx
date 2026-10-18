@@ -74,17 +74,22 @@ final class DeclFallbackChain {
 		final ifKinds: Null<Array<String>> = tree?.ifKinds;
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		// Split, not `||`-chained: strict null-safety narrows a later `||` operand by the FIRST operand only.
-		if (tree == null || ifKinds == null || mutableKinds == null) return null;
-		if (ifKinds.length == 0 || mutableKinds.length == 0) return null;
-		return support == null || typed == null ? null : {
-			tree: tree,
-			ifKinds: ifKinds,
-			mutableKinds: mutableKinds,
-			continuationKinds: shape.localDeclContinuationKinds ?? [],
-			blockKinds: support.blockKinds(),
-			typed: typed,
-			shape: shape
-		};
+		return if (tree == null || ifKinds == null || mutableKinds == null)
+			null
+		else if (ifKinds.length == 0 || mutableKinds.length == 0)
+			null
+		else if (support == null || typed == null)
+			null
+		else
+			{
+				tree: tree,
+				ifKinds: ifKinds,
+				mutableKinds: mutableKinds,
+				continuationKinds: shape.localDeclContinuationKinds ?? [],
+				blockKinds: support.blockKinds(),
+				typed: typed,
+				shape: shape
+			};
 	}
 
 	/** Every declaration + else-less chain pair under `tree` that meets the gates, in document order. */
@@ -138,18 +143,20 @@ final class DeclFallbackChain {
 		// capture, a nested write, a shadowing declaration.
 		if (Refs.find(name, head, s.shape).length != probe.leafCount) return null;
 		final prefix: Null<{ text: String, keptTo: Int }> = AssignmentTreeHoist.declPrefix(declSpan, init, source);
-		if (prefix == null) return null;
+		return if (prefix == null)
+			null
 		// The prefix is copied in front of ` = <value>;`, so a line comment ending it would swallow the value.
-		if (TryExpressionShape.danglingLineComment(source, new Span(declSpan.from, declSpan.from + prefix.text.length), comments))
-			return null;
-		return {
-			declSpan: declSpan,
-			init: init,
-			branches: branches,
-			prefix: prefix,
-			region: new Span(declSpan.from, headSpan.to),
-			probe: probe
-		};
+		else if (TryExpressionShape.danglingLineComment(source, new Span(declSpan.from, declSpan.from + prefix.text.length), comments))
+			null
+		else
+			{
+				declSpan: declSpan,
+				init: init,
+				branches: branches,
+				prefix: prefix,
+				region: new Span(declSpan.from, headSpan.to),
+				probe: probe
+			};
 	}
 
 }

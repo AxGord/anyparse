@@ -2,6 +2,8 @@ package anyparse.query;
 
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /** One rewrite an `EditJournal` recorded: `edits` spliced into `before`, settled by the writer as `after`. */
 @:nullSafety(Strict)
 final class EditStep {
@@ -62,7 +64,7 @@ final class EditStep {
 		var same: Bool = solid.length == settled.length;
 		var i: Int = 0;
 		while (same && i < solid.length) {
-			same = StringTools.fastCodeAt(spliced, solid[i]) == StringTools.fastCodeAt(after, settled[i]);
+			same = spliced.fastCodeAt(solid[i]) == after.fastCodeAt(settled[i]);
 			i++;
 		}
 		if (!same) {
@@ -75,7 +77,7 @@ final class EditStep {
 	}
 
 	private static function solidPositions(text: String): Array<Int> {
-		return [for (i in 0...text.length) if (!StringTools.isSpace(text, i)) i];
+		return [for (i in 0...text.length) if (!text.isSpace(i)) i];
 	}
 
 	/** The index in `positions` of the first position at or after `at`, or -1. */

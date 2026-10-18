@@ -185,12 +185,12 @@ final class InheritanceMove {
 		final bodyClose: Null<Int> = RefactorSupport.typeBodyCloseOffset(target.source, findTargetDecl(target, targetType));
 		if (bodyClose == null) return Err('"$targetType" has no brace body to receive the member');
 		var wsStart: Int = bodyClose;
-		while (wsStart > 0 && SourceText.isSpace(StringTools.fastCodeAt(target.source, wsStart - 1))) wsStart--;
+		while (wsStart > 0 && SourceText.isSpace(target.source.fastCodeAt(wsStart - 1))) wsStart--;
 		// Preserve the body's padding style: a class whose closing `}` sits on
 		// its own blank-separated line (2+ newlines of trailing whitespace)
 		// keeps a blank before `}`; a tightly-closed body does not.
 		var newlines: Int = 0;
-		for (k in wsStart ... bodyClose) if (StringTools.fastCodeAt(target.source, k) == '\n'.code) newlines++;
+		for (k in wsStart ... bodyClose) if (target.source.fastCodeAt(k) == '\n'.code) newlines++;
 		final insertText: String = newlines >= 2 ? '\n\n$block\n\n' : '\n\n$block\n';
 
 		final changes: Array<MoveChange> = [];

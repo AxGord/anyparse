@@ -89,9 +89,9 @@ class BlockCommentNormalizer {
 		final decoFlags: Array<Bool> = [for (l in lines) isAllStars(l.body)];
 		final last: Int = lines.length - 1;
 		var commonPrefix: Null<String> = null;
-		for (i in 0...lines.length) {
-			final body: String = lines[i].body;
-			final ws: String = lines[i].ws;
+		for (i => line in lines) {
+			final body: String = line.body;
+			final ws: String = line.ws;
 			if (body.length == 0) continue;
 			if (i == 0) continue;
 			// Last line is the structural close (`*\/` or `<content>*\/`),

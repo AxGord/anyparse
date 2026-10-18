@@ -114,39 +114,38 @@ final class MoveSymbol {
 	 * hand, each one a case the op deliberately declines to guess at rather than one it forgot.
 	 */
 	private static final ADVISORY: String = 'verify imports in the destination — a dependency reached through a VALUE position ('
-		+ 'Type.createInstance(Dep, [])), a CONSTRUCTOR PATTERN (case Red:, which no index can tell from a module name) '
-		+ 'or a LOWERCASE receiver (tools.go(), traded away so that every local variable does not reach the collision gate) is not '
-		+ 'auto-detected and may need a manual import. An UPPER-initial static receiver (T.go()) IS priced — carried, or refused when the '
-		+ 'two sides disagree about the name. So is every unguarded `using` of the source FILE the destination lacks, whenever the '
-		+ 'declaration may call one of its extensions: an extension call names only its method, so nothing can tell which `using` '
-		+ 'supplies it — only a module whose extension methods are KNOWN and none of them called stays behind — and a carried one '
-		+ 'whose bound TYPE name collides at the destination is SKIPPED rather than refused. A carried `using` is '
-		+ 'declared FIRST in the destination\'s own `using` run, so Haxe (which tries static extensions in reverse declaration order) '
-		+ 'ranks it LAST: where two `using` modules supply one method name for one type, the MOVED body takes the destination\'s and the '
-		+ 'destination\'s own calls are untouched. That is the deliberate half — the other placement rebinds the destination instead, '
-		+ 'measured q.Other -> q.Ext at rc 0 — and where the destination offers no such seat (a `#if`-guarded run below the anchor, a '
-		+ '`using` sharing its line) the move is REFUSED rather than written in an order picked by accident. A cross-package move repoints '
-		+ 'importers and the source/dest imports; a fully-qualified pkg.Type code reference is refused. The bound-name collision gate '
-		+ 'reads the SCOPE index and REFUSES rather than guesses whenever ONE file can name its binding for a dependency and the other '
-		+ 'cannot — unless the two spell the same import statement for it, or the destination never names it at all. A `#if`-guarded '
-		+ 'destination import is named separately and refused on its own. What is left is the case where NEITHER side is nameable: the '
-		+ 'move proceeds, which is right for the standard library (the same scope in every file) and NOT right for a wildcard of a package '
-		+ 'outside the scope, which is per-file and is the door still open. A dependency reached through a MODULE import (import pkg.Mod; '
-		+ 'binding pkg.Mod.Sub) is carried when the statement that produced the binding is one the index can name. A `#if`-guarded '
-		+ 'statement is carried too, re-emitted at the destination under the condition that guards it at the source and merged into a '
-		+ 'region the destination already spells that condition for. It is REFUSED by name where one condition cannot carry it: two '
-		+ 'different regions binding one name, a statement nested in more than one region, a statement in an `#else` / `#elseif` branch '
-		+ '(whose condition is the negation of the ones above it), and one sharing its line with a directive. A module OUTSIDE '
-		+ '--scope is the one that still produces no nameable binding: the scope is the RESOLUTION index as well as the rewrite '
-		+ 'set, so such a dependency is neither carried nor refused and the destination may need the import written by hand — '
-		+ 'widen --scope to cover the dependency roots. A MODULE import at an importer keeps its statement beside the repointed one '
+		+ 'Type.createInstance(Dep, [])), a CONSTRUCTOR PATTERN (case Red:, which no index can tell from a module name) or a LOWERCASE '
+		+ 'receiver (tools.go(), traded away so that every local variable does not reach the collision gate) is not auto-detected and may '
+		+ 'need a manual import. An UPPER-initial static receiver (T.go()) IS priced — carried, or refused when the two sides disagree '
+		+ 'about the name. So is every unguarded `using` of the source FILE the destination lacks, whenever the declaration may call one '
+		+ 'of its extensions: an extension call names only its method, so nothing can tell which `using` supplies it — only a module whose '
+		+ 'extension methods are KNOWN and none of them called stays behind — and a carried one whose bound TYPE name collides at the '
+		+ 'destination is SKIPPED rather than refused. A carried `using` is declared FIRST in the destination\'s own `using` run, so Haxe ('
+		+ 'which tries static extensions in reverse declaration order) ranks it LAST: where two `using` modules supply one method name for '
+		+ 'one type, the MOVED body takes the destination\'s and the destination\'s own calls are untouched. That is the deliberate half — '
+		+ 'the other placement rebinds the destination instead, measured q.Other -> q.Ext at rc 0 — and where the destination offers no '
+		+ 'such seat (a `#if`-guarded run below the anchor, a `using` sharing its line) the move is REFUSED rather than written in an '
+		+ 'order picked by accident. A cross-package move repoints importers and the source/dest imports; a fully-qualified pkg.Type code '
+		+ 'reference is refused. The bound-name collision gate reads the SCOPE index and REFUSES rather than guesses whenever ONE file can '
+		+ 'name its binding for a dependency and the other cannot — unless the two spell the same import statement for it, or the '
+		+ 'destination never names it at all. A `#if`-guarded destination import is named separately and refused on its own. What is left '
+		+ 'is the case where NEITHER side is nameable: the move proceeds, which is right for the standard library (the same scope in every '
+		+ 'file) and NOT right for a wildcard of a package outside the scope, which is per-file and is the door still open. A dependency '
+		+ 'reached through a MODULE import (import pkg.Mod; binding pkg.Mod.Sub) is carried when the statement that produced the binding '
+		+ 'is one the index can name. A `#if`-guarded statement is carried too, re-emitted at the destination under the condition that '
+		+ 'guards it at the source and merged into a region the destination already spells that condition for. It is REFUSED by name where '
+		+ 'one condition cannot carry it: two different regions binding one name, a statement nested in more than one region, a statement '
+		+ 'in an `#else` / `#elseif` branch (whose condition is the negation of the ones above it), and one sharing its line with a '
+		+ 'directive. A module OUTSIDE --scope is the one that still produces no nameable binding: the scope is the RESOLUTION index as '
+		+ 'well as the rewrite set, so such a dependency is neither carried nor refused and the destination may need the import written by '
+		+ 'hand — widen --scope to cover the dependency roots. A MODULE import at an importer keeps its statement beside the repointed one '
 		+ 'when the source module still declares types that file names. The SOURCE file keeps every import it had, including one the '
-		+ 'departed declaration was the last user of: whether an import is now unused is a whole-file question (a module import binds the '
-		+ 'sibling types of its module, a wildcard binds no single name, and a `using` grants extension methods no name scan sees). Run '
-		+ '`apq lint <file> --rule unused-import --fix`, which answers it with the resolution index — and AUTOFIXES the unguarded '
-		+ 'statements only. A `#if`-guarded import no branch uses IS reported, at `info` severity with "advisory only: delete it by '
-		+ 'hand", so it is hidden unless the run passes --all; re-measured on `#if sys import sys.io.File; #end` with no `File` in the '
-		+ 'file, which is the shape a carried region leaves behind. Read it with --all and delete that copy yourself.';
+		+ 'departed declaration was the last user of: whether an import is now unused is a whole-file question ('
+		+ 'a module import binds the sibling types of its module, a wildcard binds no single name, and a `using` grants extension methods '
+		+ 'no name scan sees). Run `apq lint <file> --rule unused-import --fix`, which answers it with the resolution index — and '
+		+ 'AUTOFIXES the unguarded statements only. A `#if`-guarded import no branch uses IS reported, at `info` severity with "advisory '
+		+ 'only: delete it by hand", so it is hidden unless the run passes --all; re-measured on `#if sys import sys.io.File; #end` with '
+		+ 'no `File` in the file, which is the shape a carried region leaves behind. Read it with --all and delete that copy yourself.';
 
 	/**
 	 * Move the type declaration at `line:col` (in `cursorFile`) into
@@ -443,6 +442,19 @@ final class MoveSymbol {
 	}
 
 	/**
+	 * The `using` half of a carry list, and its complement, split on the keyword `importStatementText`
+	 * writes — an exact test on generated text, not a guess about a user's spelling.
+	 */
+	public static function carriedUsingLines(carried: Array<String>): Array<String> {
+		return carried.filter(line -> line.startsWith('using '));
+	}
+
+	/** The lines of a carry list that are NOT `using` statements. */
+	public static function carriedImportLines(carried: Array<String>): Array<String> {
+		return carried.filter(line -> !line.startsWith('using '));
+	}
+
+	/**
 	 * Fold a merged `#if` region's edit into the ordinary import edit when the two land on the SAME
 	 * offset — which they now can, since a carried region merges on the line after its region's own
 	 * last import and that is exactly where the ordinary anchor sits when the header root IS that
@@ -531,19 +543,6 @@ final class MoveSymbol {
 		if (seat < 0) seat = ordinary;
 		for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && imp.span.from < seat) return -1;
 		return seat;
-	}
-
-	/**
-	 * The `using` half of a carry list, and its complement, split on the keyword `importStatementText`
-	 * writes — an exact test on generated text, not a guess about a user's spelling.
-	 */
-	public static function carriedUsingLines(carried: Array<String>): Array<String> {
-		return carried.filter(line -> line.startsWith('using '));
-	}
-
-	/** The lines of a carry list that are NOT `using` statements. */
-	public static function carriedImportLines(carried: Array<String>): Array<String> {
-		return carried.filter(line -> !line.startsWith('using '));
 	}
 
 	/**

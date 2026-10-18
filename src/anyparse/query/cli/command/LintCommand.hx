@@ -11,8 +11,6 @@ import anyparse.check.OracleDeclaration;
 import anyparse.check.OracleGeneration;
 import anyparse.check.OracleRunMemo;
 import anyparse.check.ReachDefinesProbe;
-import anyparse.check.ReachDefinesProbe.AheadBuilds;
-import anyparse.check.ReachDefinesProbe.DefinesProbe;
 import anyparse.check.Severity;
 import anyparse.check.ThreadSafety;
 import anyparse.check.TypedFactsProbe;
@@ -34,6 +32,7 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
 import anyparse.query.ExitCode.*;
+import anyparse.query.cli.CliArgs.ResolvedInputs;
 
 using StringTools;
 using Lambda;
@@ -154,7 +153,7 @@ final class LintCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		final status: Int = PhaseTimings.measure('lint', () -> runLint(args));
+		final status: Int = PhaseTimings.measure('lint', runLint.bind(args));
 		PhaseTimings.report(CliIo.stderr);
 		return status;
 	}
@@ -195,7 +194,7 @@ final class LintCommand implements CliCommand {
 		final checks: Null<Array<Check>> = resolveLintChecks(o.ruleFilters);
 		if (checks == null) return EXIT_USAGE;
 
-		final io = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq lint: ${CliArgs.quotedSpecs(o.inputSpecs)} matched no .hx files\n');
@@ -339,7 +338,7 @@ final class LintCommand implements CliCommand {
 	 * run nearly always asks and then the compiles overlap the checks; a report or a narrowed run keeps asking on demand,
 	 * where an early start would compile every configuration for nothing.
 	 */
-	public static function startsFactsEarly(scoped: Bool, oracles: Int, noOracle: Bool, narrowed: Bool, fix: Bool): Bool {
+	public static inline function startsFactsEarly(scoped: Bool, oracles: Int, noOracle: Bool, narrowed: Bool, fix: Bool): Bool {
 		return fix && scoped && oracles > 0 && !noOracle && !narrowed;
 	}
 
@@ -535,7 +534,7 @@ final class LintCommand implements CliCommand {
 			declared: resolution.declared,
 			sources: resolution.sources,
 			builds: resolution.builds,
-			facts: () -> read(false),
+			facts: read.bind(false),
 			factsEdited: touched,
 			factsSettled: () -> if (early != null) read(true),
 			buildsAhead: resolution.buildsAhead,
@@ -1171,11 +1170,9 @@ final class LintCommand implements CliCommand {
 			CliIo.stderr('apq lint: --explain-long has no checkstyle form — use --format text or json\n');
 			return lintParseExit(EXIT_USAGE);
 		}
-		if (summary == true && format != FORMAT_TEXT) {
-			CliIo.stderr('apq lint: --summary applies to the text report — --format $format always lists every finding\n');
-			return lintParseExit(EXIT_USAGE);
-		}
-		return listRules ? lintParseExit(runListRules(opts)) : opts;
+		if (summary != true || format == FORMAT_TEXT) return listRules ? lintParseExit(runListRules(opts)) : opts;
+		CliIo.stderr('apq lint: --summary applies to the text report — --format $format always lists every finding\n');
+		return lintParseExit(EXIT_USAGE);
 	}
 
 	/**
@@ -1280,10 +1277,8 @@ final class LintCommand implements CliCommand {
 	 * keeps its list by the same threshold; one that is still over it (a single rule across a whole
 	 * tree) gets the summary, which for one rule is a by-file breakdown.
 	 */
-	public static function summarises(shown: Int, format: String, forced: Null<Bool>, threshold: Int): Bool {
-		if (format != FORMAT_TEXT) return false;
-		if (forced != null) return forced;
-		return threshold > 0 && shown > threshold;
+	public static inline function summarises(shown: Int, format: String, forced: Null<Bool>, threshold: Int): Bool {
+		return format == FORMAT_TEXT && (forced ?? (threshold > 0 && shown > threshold));
 	}
 
 	/** The stderr line that closes a summarised report: why it is a summary, and the ways to the full list. */

@@ -74,6 +74,11 @@ final class FixVerifierCrossFile {
 		return result;
 	}
 
+	/** The revert record for `set`: the file its finding sits in, under `rule`. */
+	private static inline function revertOf(set: RiskyCrossFileEdit, rule: String, cause: FixRevertCause): FixVerifyRevert {
+		return { file: set.violation.file, rule: rule, cause: cause };
+	}
+
 	/**
 	 * Verify `sets` (the arm's answer for `findings`, `rule`'s own) over `files`, writing every decided text
 	 * through `write` and into `files`. The tallies cover EVERY finding in `findings`, the ones the arm refused
@@ -243,8 +248,9 @@ final class FixVerifierCrossFile {
 	private static function candidate(judge: Judge, before: Map<String, String>, indices: Array<Int>): Null<Map<String, String>> {
 		final out: Map<String, String> = [];
 		for (file => source in before) {
-			final edits: Array<{ span: Span, text: String }> = [];
-			for (i in indices) for (slice in judge.sets[i].slices) if (slice.file == file) for (edit in slice.edits) edits.push(edit);
+			final edits: Array<{ span: Span, text: String }> = [
+				for (i in indices) for (slice in judge.sets[i].slices) if (slice.file == file) for (edit in slice.edits) edit
+			];
 			if (edits.length == 0) {
 				out[file] = source;
 				continue;
@@ -258,11 +264,6 @@ final class FixVerifierCrossFile {
 			}
 		}
 		return out;
-	}
-
-	/** The revert record for `set`: the file its finding sits in, under `rule`. */
-	private static inline function revertOf(set: RiskyCrossFileEdit, rule: String, cause: FixRevertCause): FixVerifyRevert {
-		return { file: set.violation.file, rule: rule, cause: cause };
 	}
 
 	/** The number of edits `set` makes across all its files. */

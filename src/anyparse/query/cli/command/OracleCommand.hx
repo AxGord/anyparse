@@ -136,7 +136,8 @@ final class OracleCommand implements CliCommand {
 				CliIo.stderr('apq oracle: no fingerprint for ${OracleDeclaration.describeOracle(oracle)} — the verdict was not recorded\n');
 			else if (fingerprint != null && !stored)
 				CliIo.stderr(
-					'apq oracle: the compile input of ${OracleDeclaration.describeOracle(oracle)} changed during the typecheck — the verdict was not recorded\n'
+					'apq oracle: the compile input of ${OracleDeclaration.describeOracle(oracle)}'
+					+ ' changed during the typecheck — the verdict was not recorded\n'
 				);
 		}
 		CliIo.stderr(verdictSummary(answered));

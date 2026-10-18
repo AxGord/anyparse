@@ -983,9 +983,8 @@ final class FieldInitAtDeclaration implements Check {
 		final annotation: Null<Span> = member.type?.span;
 		final declared: Null<TypeSyntax> = annotation == null ? null : plugin.typeSyntax(source.substring(annotation.from, annotation.to));
 		// An annotation the grammar cannot read proves nothing about the value it holds.
-		if (annotation != null && declared == null) return false;
-		return inertCollection(rhs, plugin, shape) && faultingFieldType(declared, shape) && !coreNameShadowed(host, file, declared)
-			&& !MemberKinds.fieldExposed(tree, member, container, plugin, shape)
+		return (annotation == null || declared != null) && inertCollection(rhs, plugin, shape) && faultingFieldType(declared, shape)
+			&& !coreNameShadowed(host, file, declared) && !MemberKinds.fieldExposed(tree, member, container, plugin, shape)
 			&& !ReflectionScan.runtimeName(ReflectionScan.reflectionSurface(files, plugin), name)
 			&& !readObservableInScope(files, plugin, scope, file, name, span.from);
 	}
@@ -1013,7 +1012,7 @@ final class FieldInitAtDeclaration implements Check {
 		final from: Null<Int> = first?.span?.from;
 		if (name == null || owner == null || value == null || from == null) return false;
 		// no list of builds declared complete: the facts are never the truth, and nothing is asked of them
-		if (host == null || host.reachBuilds() == null || MemberKinds.fieldExposed(tree, member, container, plugin, shape)) return false;
+		if (host?.reachBuilds() == null || MemberKinds.fieldExposed(tree, member, container, plugin, shape)) return false;
 		final ownerName: String = owner;
 		final fieldName: String = name;
 		final field: MemberRef = { owner: ownerName, name: fieldName };

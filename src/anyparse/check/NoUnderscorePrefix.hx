@@ -310,8 +310,8 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	private static function claimedByAnother(candidates: Array<Candidate>, index: Int): Bool {
 		final own: Candidate = candidates[index];
 		final mine: Null<Span> = own.scope;
-		for (i in 0...candidates.length) if (i != index && candidates[i].target == own.target) {
-			final other: Null<Span> = candidates[i].scope;
+		for (i => candidate in candidates) if (i != index && candidate.target == own.target) {
+			final other: Null<Span> = candidate.scope;
 			if (other == null || mine == null) return true;
 			if (mine.from < other.to && other.from < mine.to) return true;
 		}

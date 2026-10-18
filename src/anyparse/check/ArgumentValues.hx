@@ -148,21 +148,6 @@ final class ArgumentValues {
 	}
 
 	/**
-	 * Whether the call `call` of `target` hands it only its written arguments: an instance method, or a static one called
-	 * by its bare name or off its own type's name — never a static extension, which takes the receiver first.
-	 */
-	public static function receiverPassesNothing(graph: CallGraph, shape: RefShape, call: QueryNode, target: String): Bool {
-		final fn: Null<FnNode> = graph.node(target);
-		final type: Null<String> = fn?.typeName;
-		final name: Null<String> = fn?.name;
-		if (fn == null || type == null || name == null) return false;
-		if (!graph.types.isStatic(type, name)) return true;
-		final callee: QueryNode = call.children[0];
-		return callee.kind == shape.identKind || callee.kind == shape.fieldAccessKind && callee.children.length == 1
-			&& callee.children[0].kind == shape.identKind && callee.children[0].name == type;
-	}
-
-	/**
 	 * What the argument `arg` hands a parameter: a `Bool` literal, `null`, a `new` value, or a tracked parameter of the
 	 * caller its `valuation` knows.
 	 */
@@ -319,6 +304,21 @@ final class ArgumentValues {
 		}
 		final name: Null<String> = expr.name;
 		if (expr.kind == _shape.identKind && name != null && !into.contains(name)) into.push(name);
+	}
+
+	/**
+	 * Whether the call `call` of `target` hands it only its written arguments: an instance method, or a static one called
+	 * by its bare name or off its own type's name — never a static extension, which takes the receiver first.
+	 */
+	public static function receiverPassesNothing(graph: CallGraph, shape: RefShape, call: QueryNode, target: String): Bool {
+		final fn: Null<FnNode> = graph.node(target);
+		final type: Null<String> = fn?.typeName;
+		final name: Null<String> = fn?.name;
+		if (fn == null || type == null || name == null) return false;
+		if (!graph.types.isStatic(type, name)) return true;
+		final callee: QueryNode = call.children[0];
+		return callee.kind == shape.identKind || callee.kind == shape.fieldAccessKind && callee.children.length == 1
+			&& callee.children[0].kind == shape.identKind && callee.children[0].name == type;
 	}
 
 	/** The kinds of a value built where it is written, never null: a construction, an object or array literal. */

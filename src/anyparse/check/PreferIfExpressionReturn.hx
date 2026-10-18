@@ -417,12 +417,12 @@ final class PreferIfExpressionReturn implements Check {
 		final prefix: Span = new Span(headReturnSpan.from, pairs[0].value.from);
 		final kept: Array<Span> = [prefix, terminalValue];
 		final seats: Array<CarrySeat> = [];
-		for (i in 0...pairs.length) {
-			kept.push(pairs[i].cond);
-			kept.push(pairs[i].value);
+		for (i => pair in pairs) {
+			kept.push(pair.cond);
+			kept.push(pair.value);
 			seats.push({
-				condEnd: pairs[i].cond.to,
-				value: pairs[i].value,
+				condEnd: pair.cond.to,
+				value: pair.value,
 				nextStart: i + 1 < pairs.length ? pairs[i + 1].cond.from : terminalValue.from
 			});
 		}

@@ -1,5 +1,7 @@
 package anyparse.core;
 
+using StringTools;
+
 /**
  * Process-wide opt-out switches read from the environment.
  *
@@ -19,7 +21,7 @@ final class EnvFlag {
 		#if (sys || nodejs)
 		final raw: Null<String> = Sys.getEnv(name);
 		if (raw == null) return false;
-		final trimmed: String = StringTools.trim(raw);
+		final trimmed: String = raw.trim();
 		return trimmed != '' && trimmed != '0';
 		#else
 		return false;

@@ -3,21 +3,21 @@ package anyparse.macro;
 #if macro
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
+import anyparse.macro.MacroNames.*;
+import anyparse.macro.PrattMeta.*;
+import anyparse.macro.WriterBlankLowering.*;
+import anyparse.macro.WriterBraceSymmetryLowering.*;
+import anyparse.macro.WriterChainLowering.*;
+import anyparse.macro.WriterCondWrapLowering.*;
+import anyparse.macro.WriterCtorPatternLowering.*;
+import anyparse.macro.WriterFieldSepLowering.*;
+import anyparse.macro.WriterLoweringSupport.*;
+import anyparse.macro.WriterPolicyLowering.*;
+import anyparse.macro.WriterRefFieldLowering.*;
+import anyparse.macro.WriterStarEmitLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
-import anyparse.macro.WriterRefFieldLowering.*;
-import anyparse.macro.WriterStarEmitLowering.*;
-import anyparse.macro.WriterFieldSepLowering.*;
-import anyparse.macro.WriterCtorPatternLowering.*;
-import anyparse.macro.WriterCondWrapLowering.*;
-import anyparse.macro.WriterBraceSymmetryLowering.*;
-import anyparse.macro.PrattMeta.*;
-import anyparse.macro.WriterBlankLowering.*;
-import anyparse.macro.WriterPolicyLowering.*;
-import anyparse.macro.WriterLoweringSupport.*;
-import anyparse.macro.WriterChainLowering.*;
-import anyparse.macro.MacroNames.*;
 
 using Lambda;
 using anyparse.macro.MetaInspect;
@@ -226,6 +226,12 @@ class WriterLowering {
 	/** See `_predRootStatic` — the second half of the same build-scoped mirror pair. */
 	private static var _astPredsOnStatic: Bool = false;
 
+	/**
+	 * Generated fields that are not `WriterRule`s: one `<writeFn>OpenRight` per Pratt rule (see
+	 * `WriterPrattLowering.openRightField`). `Build.buildWriter` appends them after `WriterCodegen.emit`.
+	 */
+	public final extraFields: Array<Field> = [];
+
 	private final _shape: ShapeBuilder.ShapeResult;
 	private final _formatInfo: FormatReader.FormatInfo;
 	private final _ctx: LoweringCtx;
@@ -273,12 +279,6 @@ class WriterLowering {
 
 	/** The brace-symmetry family's ctx bundle — see `WriterBraceSymmetryLowering`. */
 	private final _braceSym: anyparse.macro.WriterBraceSymmetryLowering.BraceSymmetryCtx;
-
-	/**
-	 * Generated fields that are not `WriterRule`s: one `<writeFn>OpenRight` per Pratt rule (see
-	 * `WriterPrattLowering.openRightField`). `Build.buildWriter` appends them after `WriterCodegen.emit`.
-	 */
-	public final extraFields: Array<Field> = [];
 
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
 		_shape = shape;

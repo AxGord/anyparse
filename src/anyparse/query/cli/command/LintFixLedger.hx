@@ -154,6 +154,119 @@ final class LintFixLedger {
 	}
 
 	/**
+	 * Which rules this run actually EXERCISED, and — the whole point — which it did not.
+	 *
+	 * The proof every slice of this campaign closes on is `lint --all --fix` over a real tree run
+	 * by two engines, the outputs byte-compared. That is a strong statement about a rule whose fix
+	 * produced an edit and NO statement whatever about one the tree never triggered, and until now
+	 * a run said nothing that told the two apart. It is not a hypothetical gap: `trivial-getter`
+	 * has zero occurrences in every corpus this project owns — anyparse `src test`, the Pony fork
+	 * working tree and its `git HEAD`, the haxe-formatter fork — so a slice touching it could quote
+	 * "the trees are byte-identical" and have proved nothing at all.
+	 *
+	 * Four buckets, all of them read off numbers the ledger already carried: an edit landed, a
+	 * finding came back with no edit, the run never asked the rule at all (`notAsked` — the
+	 * risky-fix set a netless run leaves report-only), nothing was reported. They partition the
+	 * rule set by construction, so the four counts sum to `ruleIds.length` and a reader can check
+	 * the arithmetic on the line itself.
+	 *
+	 * The NAMES printed are the exercised ones rather than the silent ones. That is the SHORT list
+	 * on a real tree and the only short answer there is on a one-file run, where the silent list
+	 * would be nearly every rule id, pure noise; and it is the positive form of the
+	 * claim, so a reader looking for their own rule gets an answer instead of an absence to
+	 * interpret.
+	 */
+	public static function exerciseCensus(
+		ledger: Map<String, RuleFixOutcome>, ruleIds: Array<String>, notAsked: Array<String>
+	): Array<String> {
+		// Partitioned by construction rather than by four counters over one loop: `never` is then a
+		// SUBTRACTION and the four buckets cannot fail to sum to the rule set, which is the one
+		// property the printed line asks its reader to check. It also counts a `notAsked` id that is
+		// not in `ruleIds` at all as neither — `notAsked.length` would have counted it.
+		final asked: Array<String> = [for (id in ruleIds) if (!notAsked.contains(id)) id];
+		final never: Int = ruleIds.length - asked.length;
+		final exercised: Array<String> = [];
+		var reportedOnly: Int = 0;
+		var silent: Int = 0;
+		for (id in asked) {
+			final entry: Null<RuleFixOutcome> = ledger[id];
+			if (entry == null)
+				silent++;
+			else if (entry.edits > 0)
+				exercised.push(id);
+			else
+				reportedOnly++;
+		}
+		exercised.sort((a, b) -> Reflect.compare(a, b));
+		return [
+			'apq lint --fix: rule census — of the ${ruleIds.length} rule(s) this run was given, ${exercised.length} produced an edit, '
+				+ '$reportedOnly reported and got none, $never were never asked, $silent reported nothing at all. Comparing what this run '
+				+ 'wrote against another engine is evidence about the first group and about none of the other three.\n',
+			exercised.length == 0
+				? '  exercised: none — this run rewrote nothing, so it stands as evidence about no rule at all\n'
+				: '  exercised: ${exercised.join(', ')}\n'
+		];
+	}
+
+	/**
+	 * Every line the `--fix` run owes its reader about the rules: what got no edit, then what the
+	 * run exercised at all.
+	 *
+	 * `risky` is passed so a run that could NOT verify its risky rules can name them: a `RiskyFix`
+	 * check is excluded from the safe loop, so on such a run no `Check.fix` of its own is ever
+	 * called and its row would be a silent zero. Naming them is what keeps the block from reading
+	 * as though it LOST the largest rule on the tree, and the summary line above already carries why the phase did not run.
+	 *
+	 * `riskyLedgered` says the opposite happened: the phase ran, `FixVerifier` tallied it, and
+	 * `ledgerRiskyTallies` folded those tallies into rows here. Then the list must be empty, or the
+	 * footer would disclaim a rule whose own row sits three lines above it.
+	 *
+	 * `oracleAssisted` is a third case and was got wrong first time round: such a rule DOES run in
+	 * the safe loop (unless it is risky too), so it has a row either way and
+	 * must not be listed as absent — its extra oracle pass is noted ON that row.
+	 *
+	 * It returns the lines instead of writing them because `CliIo.stderr` is a process write with
+	 * no seam a test can read, and the census is exactly the kind of block a later edit drops
+	 * silently — the composition is the only part of it a pin can hold.
+	 */
+	public static function ledgerLines(
+		ledger: Map<String, RuleFixOutcome>, checks: Array<Check>, risky: Array<Check>, oracleAssisted: Array<Check>, riskyLedgered: Bool,
+		fixedCount: Int, verbose: Bool
+	): Array<String> {
+		// A run that WROTE NOTHING owes this block nothing, and that is the common run: `--fix`
+		// behind a write op is scoped to the lines one edit touched, so it usually
+		// lands no edit, and a block of rule accounting about nothing is noise. Every
+		// sentence here is a statement ABOUT WHAT THE RUN WROTE — which rules produced an edit,
+		// which declined one, which were never asked — so with no edits there is no claim left to
+		// make that the summary line above does not already carry. A PRODUCTIVE run still prints
+		// it in full: that was the whole point of splitting it out of the summary tail, and a run
+		// of hundreds of fixes that said nothing about its own declines is the incident behind it.
+		if (fixedCount == 0 && !verbose) return [];
+		// Empty when the risky phase RAN: its rules then have rows of their own here, and the
+		// footer that names them as absent would contradict the row three lines above it.
+		final riskyIds: Array<String> = riskyLedgered ? [] : [for (c in risky) c.id()];
+		riskyIds.sort((a, b) -> Reflect.compare(a, b));
+		final oracleIds: Array<String> = [for (c in oracleAssisted) c.id()];
+		final reasons: Map<String, String> = [
+			for (c in checks) if (c is NoAutofix) c.id() => (cast c: NoAutofix).noAutofixReason()
+		];
+		// Read off the check objects rather than passed in: the caller has no list of them, and a rule
+		// that gains the seam without touching `Cli` would otherwise keep the wrong verdict silently.
+		final crossFileIds: Array<String> = [for (c in checks) if (c is CrossFileFix) c.id()];
+		final lines: Array<String> = unfixedFixLedger(ledger, reasons, oracleIds, riskyIds, crossFileIds);
+		for (line in exerciseCensus(ledger, [for (c in checks) c.id()], riskyIds)) lines.push(line);
+		return lines;
+	}
+
+	/** Write `ledgerLines` to stderr — the one call that turns the run's rule accounting into output. */
+	public static function printUnfixedLedger(
+		ledger: Map<String, RuleFixOutcome>, checks: Array<Check>, risky: Array<Check>, oracleAssisted: Array<Check>, riskyLedgered: Bool,
+		fixedCount: Int, verbose: Bool
+	): Void {
+		for (line in ledgerLines(ledger, checks, risky, oracleAssisted, riskyLedgered, fixedCount, verbose)) CliIo.stderr(line);
+	}
+
+	/**
 	 * The block naming every rule whose edits the writer-emit gate REFUSED and the ledger above does
 	 * not account for — a refusal that first landed after pass 1, or one whose sentence the
 	 * first-pass reasons never carried.
@@ -288,119 +401,6 @@ final class LintFixLedger {
 		final silent: Int = total - explained;
 		if (silent > 0) out.push('      $silent× — the check declared no reason for these\n');
 		return out;
-	}
-
-	/**
-	 * Which rules this run actually EXERCISED, and — the whole point — which it did not.
-	 *
-	 * The proof every slice of this campaign closes on is `lint --all --fix` over a real tree run
-	 * by two engines, the outputs byte-compared. That is a strong statement about a rule whose fix
-	 * produced an edit and NO statement whatever about one the tree never triggered, and until now
-	 * a run said nothing that told the two apart. It is not a hypothetical gap: `trivial-getter`
-	 * has zero occurrences in every corpus this project owns — anyparse `src test`, the Pony fork
-	 * working tree and its `git HEAD`, the haxe-formatter fork — so a slice touching it could quote
-	 * "the trees are byte-identical" and have proved nothing at all.
-	 *
-	 * Four buckets, all of them read off numbers the ledger already carried: an edit landed, a
-	 * finding came back with no edit, the run never asked the rule at all (`notAsked` — the
-	 * risky-fix set a netless run leaves report-only), nothing was reported. They partition the
-	 * rule set by construction, so the four counts sum to `ruleIds.length` and a reader can check
-	 * the arithmetic on the line itself.
-	 *
-	 * The NAMES printed are the exercised ones rather than the silent ones. That is the SHORT list
-	 * on a real tree and the only short answer there is on a one-file run, where the silent list
-	 * would be nearly every rule id, pure noise; and it is the positive form of the
-	 * claim, so a reader looking for their own rule gets an answer instead of an absence to
-	 * interpret.
-	 */
-	public static function exerciseCensus(
-		ledger: Map<String, RuleFixOutcome>, ruleIds: Array<String>, notAsked: Array<String>
-	): Array<String> {
-		// Partitioned by construction rather than by four counters over one loop: `never` is then a
-		// SUBTRACTION and the four buckets cannot fail to sum to the rule set, which is the one
-		// property the printed line asks its reader to check. It also counts a `notAsked` id that is
-		// not in `ruleIds` at all as neither — `notAsked.length` would have counted it.
-		final asked: Array<String> = [for (id in ruleIds) if (!notAsked.contains(id)) id];
-		final never: Int = ruleIds.length - asked.length;
-		final exercised: Array<String> = [];
-		var reportedOnly: Int = 0;
-		var silent: Int = 0;
-		for (id in asked) {
-			final entry: Null<RuleFixOutcome> = ledger[id];
-			if (entry == null)
-				silent++;
-			else if (entry.edits > 0)
-				exercised.push(id);
-			else
-				reportedOnly++;
-		}
-		exercised.sort((a, b) -> Reflect.compare(a, b));
-		return [
-			'apq lint --fix: rule census — of the ${ruleIds.length} rule(s) this run was given, ${exercised.length} produced an edit, '
-				+ '$reportedOnly reported and got none, $never were never asked, $silent reported nothing at all. Comparing what this run '
-				+ 'wrote against another engine is evidence about the first group and about none of the other three.\n',
-			exercised.length == 0
-				? '  exercised: none — this run rewrote nothing, so it stands as evidence about no rule at all\n'
-				: '  exercised: ${exercised.join(', ')}\n'
-		];
-	}
-
-	/**
-	 * Every line the `--fix` run owes its reader about the rules: what got no edit, then what the
-	 * run exercised at all.
-	 *
-	 * `risky` is passed so a run that could NOT verify its risky rules can name them: a `RiskyFix`
-	 * check is excluded from the safe loop, so on such a run no `Check.fix` of its own is ever
-	 * called and its row would be a silent zero. Naming them is what keeps the block from reading
-	 * as though it LOST the largest rule on the tree, and the summary line above already carries why the phase did not run.
-	 *
-	 * `riskyLedgered` says the opposite happened: the phase ran, `FixVerifier` tallied it, and
-	 * `ledgerRiskyTallies` folded those tallies into rows here. Then the list must be empty, or the
-	 * footer would disclaim a rule whose own row sits three lines above it.
-	 *
-	 * `oracleAssisted` is a third case and was got wrong first time round: such a rule DOES run in
-	 * the safe loop (unless it is risky too), so it has a row either way and
-	 * must not be listed as absent — its extra oracle pass is noted ON that row.
-	 *
-	 * It returns the lines instead of writing them because `CliIo.stderr` is a process write with
-	 * no seam a test can read, and the census is exactly the kind of block a later edit drops
-	 * silently — the composition is the only part of it a pin can hold.
-	 */
-	public static function ledgerLines(
-		ledger: Map<String, RuleFixOutcome>, checks: Array<Check>, risky: Array<Check>, oracleAssisted: Array<Check>, riskyLedgered: Bool,
-		fixedCount: Int, verbose: Bool
-	): Array<String> {
-		// A run that WROTE NOTHING owes this block nothing, and that is the common run: `--fix`
-		// behind a write op is scoped to the lines one edit touched, so it usually
-		// lands no edit, and a block of rule accounting about nothing is noise. Every
-		// sentence here is a statement ABOUT WHAT THE RUN WROTE — which rules produced an edit,
-		// which declined one, which were never asked — so with no edits there is no claim left to
-		// make that the summary line above does not already carry. A PRODUCTIVE run still prints
-		// it in full: that was the whole point of splitting it out of the summary tail, and a run
-		// of hundreds of fixes that said nothing about its own declines is the incident behind it.
-		if (fixedCount == 0 && !verbose) return [];
-		// Empty when the risky phase RAN: its rules then have rows of their own here, and the
-		// footer that names them as absent would contradict the row three lines above it.
-		final riskyIds: Array<String> = riskyLedgered ? [] : [for (c in risky) c.id()];
-		riskyIds.sort((a, b) -> Reflect.compare(a, b));
-		final oracleIds: Array<String> = [for (c in oracleAssisted) c.id()];
-		final reasons: Map<String, String> = [
-			for (c in checks) if (c is NoAutofix) c.id() => (cast c: NoAutofix).noAutofixReason()
-		];
-		// Read off the check objects rather than passed in: the caller has no list of them, and a rule
-		// that gains the seam without touching `Cli` would otherwise keep the wrong verdict silently.
-		final crossFileIds: Array<String> = [for (c in checks) if (c is CrossFileFix) c.id()];
-		final lines: Array<String> = unfixedFixLedger(ledger, reasons, oracleIds, riskyIds, crossFileIds);
-		for (line in exerciseCensus(ledger, [for (c in checks) c.id()], riskyIds)) lines.push(line);
-		return lines;
-	}
-
-	/** Write `ledgerLines` to stderr — the one call that turns the run's rule accounting into output. */
-	public static function printUnfixedLedger(
-		ledger: Map<String, RuleFixOutcome>, checks: Array<Check>, risky: Array<Check>, oracleAssisted: Array<Check>, riskyLedgered: Bool,
-		fixedCount: Int, verbose: Bool
-	): Void {
-		for (line in ledgerLines(ledger, checks, risky, oracleAssisted, riskyLedgered, fixedCount, verbose)) CliIo.stderr(line);
 	}
 	#end
 

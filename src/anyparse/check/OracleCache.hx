@@ -197,11 +197,10 @@ final class OracleCache {
 		final chain: Null<HxmlChain> = scanHxmlChain(root, hxml);
 		if (chain == null) return null;
 		final probe: CompilerProbe = compilerProbe(root, chain.libs);
-		if (!probe.ok) return null;
-		return {
+		return probe.ok ? {
 			fingerprint: md5(buildManifest(root, chain, probe, defines ?? [], memo, walks).join('\n')),
 			roots: [root].concat(chain.classPaths).concat([for (dir in probe.dirs) absolute(root, dir)])
-		};
+		} : null;
 		#else
 		return null;
 		#end
@@ -334,6 +333,20 @@ final class OracleCache {
 	 */
 	public static function md5(data: String): String {
 		return #if nodejs js.node.Crypto.createHash('md5').update(data, 'utf8').digest('hex') #else haxe.crypto.Md5.encode(data) #end;
+	}
+
+	/**
+	 * `store`, but only when the compile input still hashes to `fingerprint` — the fingerprint taken BEFORE the compile.
+	 * A tree that moved while the compiler ran (an editor saving, another run regenerating an hxml) produced a verdict
+	 * about neither state, and filing it under the old fingerprint would hand it to the next run of the old tree. Answers
+	 * whether it stored.
+	 */
+	public static function storeIfUnchanged(
+		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, ?defines: Array<String>, ?memo: Map<String, String>
+	): Bool {
+		if (OracleCache.fingerprint(hxml, cwd, defines, memo) != fingerprint) return false;
+		store(hxml, cwd, fingerprint, outcome, defines);
+		return true;
 	}
 
 	/** The library name of a `-lib` token, with any `:version` suffix stripped. */
@@ -624,19 +637,5 @@ final class OracleCache {
 		return try sys.io.File.getContent(path) catch (_exception: haxe.Exception) null;
 	}
 	#end
-
-	/**
-	 * `store`, but only when the compile input still hashes to `fingerprint` — the fingerprint taken BEFORE the compile.
-	 * A tree that moved while the compiler ran (an editor saving, another run regenerating an hxml) produced a verdict
-	 * about neither state, and filing it under the old fingerprint would hand it to the next run of the old tree. Answers
-	 * whether it stored.
-	 */
-	public static function storeIfUnchanged(
-		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, ?defines: Array<String>, ?memo: Map<String, String>
-	): Bool {
-		if (OracleCache.fingerprint(hxml, cwd, defines, memo) != fingerprint) return false;
-		store(hxml, cwd, fingerprint, outcome, defines);
-		return true;
-	}
 
 }

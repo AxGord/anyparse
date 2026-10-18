@@ -23,34 +23,34 @@ import anyparse.check.TypedFactsTypeStrings.*;
 @:nullSafety(Strict)
 final class TypedFactsMacro {
 
-	/** The facts format version the header line carries. */
-	private static inline final VERSION: Int = 1;
-
-	/** This module: the probe itself is not the build's code. */
-	private static inline final OWN_MODULE: String = 'anyparse.check.TypedFactsMacro';
-
 	/**
 	 * The name the compiler gives the local it binds the receiver of an inlined instance method to, at the spliced body's
 	 * own range, when the receiver is more than a local or a constant: `var _this = this.items`.
 	 */
 	public static inline final INLINED_RECEIVER: String = '_this';
 
+	/** The facts format version the header line carries. */
+	private static inline final VERSION: Int = 1;
+
+	/** This module: the probe itself is not the build's code. */
+	private static inline final OWN_MODULE: String = 'anyparse.check.TypedFactsMacro';
+
+	/** Milliseconds in a second: `Date.getTime` counts the one, `Sys.time` the other. */
+	private static inline final MS_PER_SECOND: Float = 1000;
+
 	private static var installed: Bool = false;
 
 	/** The writer of the compile's facts once the hook first ran (`run`), which every later round of it continues. */
 	private static var current: Null<TypedFactsMacro> = null;
-
-	/** The ids of the types a record was written for (`typeLine`), and the typedefs printed that got one (`printedAliases`). */
-	private final _written: Map<String, Bool> = [];
-
-	/** Milliseconds in a second: `Date.getTime` counts the one, `Sys.time` the other. */
-	private static inline final MS_PER_SECOND: Float = 1000;
 
 	/** When the compile started, in `Sys.time` seconds (`run`). */
 	private static var started: Float = 0;
 
 	/** Nodes written, for the closing record. */
 	public var nodes: Int = 0;
+
+	/** The ids of the types a record was written for (`typeLine`), and the typedefs printed that got one (`printedAliases`). */
+	private final _written: Map<String, Bool> = [];
 
 	private final _files: Map<String, Int> = [];
 	private final _taken: Map<String, Bool> = [];
@@ -74,14 +74,14 @@ final class TypedFactsMacro {
 	private final _macros: Map<String, Array<InlineMethod>> = [];
 	private final _reflectionFiles: Map<String, Bool> = [];
 
-	/** Where the facts go: the file is opened anew for each round of the hook (`run`). */
-	private var _out: FileOutput;
-
 	private var _fileCount: Int = 0;
 	private var _types: Int = 0;
 
+	/** Where the facts go: the file is opened anew for each round of the hook (`run`). */
+	private var _out: FileOutput;
+
 	private function new(out: FileOutput) {
-		this._out = out;
+		_out = out;
 	}
 
 	/** One line. */
@@ -121,13 +121,119 @@ final class TypedFactsMacro {
 		return id;
 	}
 
+	/** Whether the field `target` (`<type>.<field>`) has overloads: a call of it then names the signature it chose. */
+	public function overloaded(target: String): Bool {
+		return _overloaded.exists(target);
+	}
+
+	/** Whether the field `cf` of `owner` holds a replaceable value: a variable, or a `dynamic` method. Decided once per field. */
+	public function replaceable(key: String, cf: Ref<ClassField>): Bool {
+		final known: Null<Bool> = _replaceable[key];
+		if (known != null) return known;
+		final answer: Bool = switch cf.get().kind {
+			case FVar(_, _), FMethod(MethDynamic): true;
+			case FMethod(_): false;
+		};
+		_replaceable[key] = answer;
+		return answer;
+	}
+
+	/**
+	 * Announce `file` as the home of a record: once per file, a `src` record with its UTF-8 length and MD5, read from disk
+	 * now that typing ended — and `changed` when the file was written after the compile started, so the text hashed is
+	 * not provably the one the compile parsed.
+	 */
+	public function noteHome(file: String): Void {
+		if (_homes.exists(file)) return;
+		_homes[file] = true;
+		final bytes: Null<haxe.io.Bytes> = try File.getBytes(file) catch (exception: haxe.Exception) null;
+		if (bytes == null) return;
+		final changed: Bool = writtenSince(file, started);
+		line(
+			'{"k":"src","path":${Json.stringify(file)},"len":${bytes.length},"md5":"${haxe.crypto.Md5.make(bytes).toHex()}"'
+			+ (changed ? ',"changed":true}' : '}')
+		);
+	}
+
+	/**
+	 * Whether the text of `file` spells, at `at`, an access of the member `name`: the whole word after the `.` of a field
+	 * access, spaces between allowed.
+	 */
+	public function spellsAccess(file: String, at: Int, name: String): Bool {
+		if (!_texts.exists(file)) _texts[file] = try File.getContent(file) catch (exception: haxe.Exception) null;
+		final text: Null<String> = _texts[file];
+		if (text == null || at <= 0 || at + name.length > text.length || text.substr(at, name.length) != name) return false;
+		final after: Int = at + name.length;
+		if (after < text.length && isWordCode(StringTools.fastCodeAt(text, after))) return false;
+		var dot: Int = at - 1;
+		while (dot > 0 && StringTools.isSpace(text, dot)) dot--;
+		return StringTools.fastCodeAt(text, dot) == '.'.code;
+	}
+
+	/**
+	 * The `@:genericBuild` class the text at `p`, a construction of the class `built`, constructs, when the compiler
+	 * resolves it, at the type arguments that text writes, to `built`: the text is parsed as a construction, each such class
+	 * of the name it writes — of its package, where it writes one — is resolved at those arguments, and the class the
+	 * compiler's genericBuild of it answers must be `built`. Null for any other construction, a text that does not parse as
+	 * one, or arguments that do not resolve here: the compile resolves them in no module's imports. A construction the
+	 * compiler typed where its text writes one ran the build at those arguments, which a build macro of the kind answers
+	 * again alike — the compiler calls it at each type reference — so asking again types nothing new; where a build macro
+	 * changed the construction, the build at the text's arguments may define a class, whose records a later round of the
+	 * hook writes (`run`), and answers another class than `built`.
+	 */
+	public function genericBuilt(built: Ref<ClassType>, p: Position): Null<String> {
+		final path: Null<TypePath> = _generics.keys().hasNext() ? constructed(p) : null;
+		if (path == null) return null;
+		final written: TypePath = path;
+		final name: String = written.sub ?? written.name;
+		// a construction of the class itself
+		if (name == built.get().name) return null;
+		final printer: haxe.macro.Printer = new haxe.macro.Printer();
+		for (g in _generics[name] ?? []) if (writes(written, g)) {
+			final id: String = typeId(g.pack, g.name);
+			final key: String = id + '<' + [for (t in written.params ?? []) printer.printTypeParam(t)].join(',') + '>';
+			if (!_genericBuilds.exists(key)) _genericBuilds[key] = resolvedClass(g, written.params ?? [], p);
+			if (_genericBuilds[key] == built.toString()) return id;
+		}
+		return null;
+	}
+
+	/** The method declared around `min`–`max` of `file` (the innermost), whose body was spliced from there; null for none. */
+	public function inlineCallee(file: String, min: Int, max: Int): Null<InlineMethod> {
+		return innermost(_inlines[file] ?? [], min, max);
+	}
+
+	/**
+	 * The macro method declared around `min`–`max` of `file` (the innermost), null for none: code an expression macro
+	 * built there and returned, which the compiler keeps at the positions it was built at.
+	 */
+	public function macroCallee(file: String, min: Int, max: Int): Null<InlineMethod> {
+		return innermost(_macros[file] ?? [], min, max);
+	}
+
+	/**
+	 * Whether `file` is the standard `Reflect.hx` or `Type.hx` the compile resolved — a body of reflection inlined from
+	 * there. Compared by resolved path: a project's own `Type.hx` is not one.
+	 */
+	public function reflectionModule(file: String): Bool {
+		final known: Null<Bool> = _reflectionFiles[file];
+		if (known != null) return known;
+		final full: String = canonicalFile(file);
+		final answer: Bool = Lambda.exists(['Reflect.hx', 'Type.hx'], m -> {
+			final resolved: Null<String> = try Context.resolvePath(m) catch (exception: haxe.Exception) null;
+			resolved != null && canonicalFile(resolved) == full;
+		});
+		_reflectionFiles[file] = answer;
+		return answer;
+	}
+
 	private function moduleType(t: ModuleType): Void {
 		switch t {
 			case TClassDecl(r):
 				final c: ClassType = r.get();
 				if (c.module == OWN_MODULE) return;
 				switch c.kind {
-					case KTypeParameter(_) | KMacroType | KGenericBuild | KExpr(_):
+					case KTypeParameter(_), KMacroType, KGenericBuild, KExpr(_):
 						return;
 					case _:
 				}
@@ -252,6 +358,89 @@ final class TypedFactsMacro {
 	}
 
 	/**
+	 * A record for each typedef a type string printed that no module listed — an import alias — until none is left: its
+	 * target may print another.
+	 */
+	private function printedAliases(): Void {
+		var pending: Array<String> = [for (key => r in printedTypedefs) if (!printed(key, r)) key];
+		while (pending.length > 0) {
+			for (key in pending) {
+				final r: Null<Ref<DefType>> = printedTypedefs[key];
+				_written[key] = true;
+				if (r == null) continue;
+				final d: DefType = r.get();
+				typeLine(d.pack, d.name, 'typedef', d.pos, d.params, d.meta.get(), d.isExtern, [',"target":' + q(typeString(d.type, 0))]);
+			}
+			pending = [for (key => r in printedTypedefs) if (!printed(key, r)) key];
+		}
+	}
+
+	/** Whether the typedef `r`, printed under `key`, has a record: one of its own, or the one its module wrote. */
+	private function printed(key: String, r: Ref<DefType>): Bool {
+		return _written.exists(key) || _written.exists(r.toString());
+	}
+
+	/**
+	 * Note, for every class, which fields have overloads and where each method the compiler may splice in is declared:
+	 * an `inline` one, and any other one a call site inlines (`inline f()`, `inline new`) — every method but a macro,
+	 * whose expansion is code of its own, and whose declaration is noted apart (`macroCallee`).
+	 */
+	private function collectFields(t: ModuleType): Void {
+		switch t {
+			case TClassDecl(r):
+				final c: ClassType = r.get();
+				final owner: String = typeId(c.pack, c.name);
+				if (c.kind.match(KGenericBuild)) {
+					final named: Array<ClassType> = _generics[c.name] ?? [];
+					_generics[c.name] = named;
+					named.push(c);
+				}
+				final ctor: Null<ClassField> = c.constructor?.get();
+				final all: Array<ClassField> = c.fields.get().concat(c.statics.get());
+				if (ctor != null) all.push(ctor);
+				for (f in all) {
+					if (f.overloads.get().length > 0) _overloaded['$owner.${f.name}'] = true;
+					final methods: Null<Map<String, Array<InlineMethod>>> = switch f.kind {
+						case FMethod(MethInline | MethNormal): _inlines;
+						case FMethod(MethMacro): _macros;
+						case _: null;
+					};
+					if (methods == null) continue;
+					final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
+					final list: Array<InlineMethod> = methods[info.file] ?? [];
+					methods[info.file] = list;
+					list.push({
+						file: info.file,
+						min: info.min,
+						max: info.max,
+						id: '$owner.${f.name}',
+						receiver: !takes(f, INLINED_RECEIVER),
+						arity: arity(f)
+					});
+				}
+			case _:
+		}
+	}
+
+	/**
+	 * The type path of the construction the text at `p` writes, when it names a `@:genericBuild` class's name; null for
+	 * any other text.
+	 */
+	private function constructed(p: Position): Null<TypePath> {
+		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(p);
+		if (!_bytes.exists(info.file)) _bytes[info.file] = try File.getBytes(info.file) catch (exception: haxe.Exception) null;
+		final bytes: Null<haxe.io.Bytes> = _bytes[info.file];
+		if (bytes == null || info.min < 0 || info.max > bytes.length || info.min >= info.max) return null;
+		final text: Null<String> = try bytes.getString(info.min, info.max - info.min) catch (exception: haxe.Exception) null;
+		if (text == null) return null;
+		if (!Lambda.exists(_generics, named -> text.indexOf(named[0].name) >= 0)) return null;
+		return switch (try Context.parse(text, p) catch (exception: haxe.Exception) null)?.expr {
+			case ENew(t, _): t;
+			case _: null;
+		};
+	}
+
+	/**
 	 * Install the hook that writes the facts of the compile to `path` once typing ended; the last line is an `end` record.
 	 * An inlined call is a fact of the node it was spliced into (`TypedFactsWalk`).
 	 */
@@ -280,177 +469,21 @@ final class TypedFactsMacro {
 		});
 	}
 
-	/**
-	 * A record for each typedef a type string printed that no module listed — an import alias — until none is left: its
-	 * target may print another.
-	 */
-	private function printedAliases(): Void {
-		var pending: Array<String> = [for (key => r in printedTypedefs) if (!printed(key, r)) key];
-		while (pending.length > 0) {
-			for (key in pending) {
-				final r: Null<Ref<DefType>> = printedTypedefs[key];
-				_written[key] = true;
-				if (r == null) continue;
-				final d: DefType = r.get();
-				typeLine(d.pack, d.name, 'typedef', d.pos, d.params, d.meta.get(), d.isExtern, [',"target":' + q(typeString(d.type, 0))]);
-			}
-			pending = [for (key => r in printedTypedefs) if (!printed(key, r)) key];
-		}
-	}
-
-	/** Whether the typedef `r`, printed under `key`, has a record: one of its own, or the one its module wrote. */
-	private function printed(key: String, r: Ref<DefType>): Bool {
-		return _written.exists(key) || _written.exists(r.toString());
-	}
-
-	/** Whether the field `target` (`<type>.<field>`) has overloads: a call of it then names the signature it chose. */
-	public function overloaded(target: String): Bool {
-		return _overloaded.exists(target);
-	}
-
-	/** Whether the field `cf` of `owner` holds a replaceable value: a variable, or a `dynamic` method. Decided once per field. */
-	public function replaceable(key: String, cf: Ref<ClassField>): Bool {
-		final known: Null<Bool> = _replaceable[key];
-		if (known != null) return known;
-		final answer: Bool = switch cf.get().kind {
-			case FVar(_, _) | FMethod(MethDynamic): true;
-			case FMethod(_): false;
-		};
-		_replaceable[key] = answer;
-		return answer;
-	}
-
-	/**
-	 * Announce `file` as the home of a record: once per file, a `src` record with its UTF-8 length and MD5, read from disk
-	 * now that typing ended — and `changed` when the file was written after the compile started, so the text hashed is
-	 * not provably the one the compile parsed.
-	 */
-	public function noteHome(file: String): Void {
-		if (_homes.exists(file)) return;
-		_homes[file] = true;
-		final bytes: Null<haxe.io.Bytes> = try File.getBytes(file) catch (exception: haxe.Exception) null;
-		if (bytes == null) return;
-		final changed: Bool = writtenSince(file, started);
-		line(
-			'{"k":"src","path":${Json.stringify(file)},"len":${bytes.length},"md5":"${haxe.crypto.Md5.make(bytes).toHex()}"'
-			+ (changed ? ',"changed":true}' : '}')
-		);
-	}
-
 	/** Whether `file` was modified at or after `time` (`Sys.time` seconds); true when it cannot be told. */
 	public static function writtenSince(file: String, time: Float): Bool {
 		final mtime: Null<Float> = try sys.FileSystem.stat(file).mtime.getTime() / MS_PER_SECOND catch (exception: haxe.Exception) null;
 		return mtime == null || mtime >= time;
 	}
 
-	/**
-	 * Note, for every class, which fields have overloads and where each method the compiler may splice in is declared:
-	 * an `inline` one, and any other one a call site inlines (`inline f()`, `inline new`) — every method but a macro,
-	 * whose expansion is code of its own, and whose declaration is noted apart (`macroCallee`).
-	 */
-	private function collectFields(t: ModuleType): Void {
-		switch t {
-			case TClassDecl(r):
-				final c: ClassType = r.get();
-				final owner: String = typeId(c.pack, c.name);
-				if (c.kind.match(KGenericBuild)) {
-					final named: Array<ClassType> = _generics[c.name] ?? [];
-					_generics[c.name] = named;
-					named.push(c);
-				}
-				final ctor: Null<ClassField> = c.constructor?.get();
-				final all: Array<ClassField> = c.fields.get().concat(c.statics.get());
-				if (ctor != null) all.push(ctor);
-				for (f in all) {
-					if (f.overloads.get().length > 0) _overloaded['$owner.${f.name}'] = true;
-					final methods: Null<Map<String, Array<InlineMethod>>> = switch f.kind {
-						case FMethod(MethInline | MethNormal): _inlines;
-						case FMethod(MethMacro): _macros;
-						case _: null;
-					};
-					if (methods != null) {
-						final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
-						final list: Array<InlineMethod> = methods[info.file] ?? [];
-						methods[info.file] = list;
-						list.push({
-							file: info.file,
-							min: info.min,
-							max: info.max,
-							id: '$owner.${f.name}',
-							receiver: !takes(f, INLINED_RECEIVER),
-							arity: arity(f)
-						});
-					}
-				}
-			case _:
-		}
-	}
-
-	/**
-	 * Whether the text of `file` spells, at `at`, an access of the member `name`: the whole word after the `.` of a field
-	 * access, spaces between allowed.
-	 */
-	public function spellsAccess(file: String, at: Int, name: String): Bool {
-		if (!_texts.exists(file)) _texts[file] = try File.getContent(file) catch (exception: haxe.Exception) null;
-		final text: Null<String> = _texts[file];
-		if (text == null || at <= 0 || at + name.length > text.length || text.substr(at, name.length) != name) return false;
-		final after: Int = at + name.length;
-		if (after < text.length && isWordCode(StringTools.fastCodeAt(text, after))) return false;
-		var dot: Int = at - 1;
-		while (dot > 0 && StringTools.isSpace(text, dot)) dot--;
-		return StringTools.fastCodeAt(text, dot) == '.'.code;
+	/** The file `p` lies in. */
+	public static function fileOf(p: Position): String {
+		return Context.getPosInfos(p).file;
 	}
 
 	/** Whether `code` may continue an identifier. */
 	private static function isWordCode(code: Int): Bool {
 		return code == '_'.code || (code >= '0'.code && code <= '9'.code) || (code >= 'a'.code && code <= 'z'.code)
 			|| (code >= 'A'.code && code <= 'Z'.code);
-	}
-
-	/**
-	 * The `@:genericBuild` class the text at `p`, a construction of the class `built`, constructs, when the compiler
-	 * resolves it, at the type arguments that text writes, to `built`: the text is parsed as a construction, each such class
-	 * of the name it writes — of its package, where it writes one — is resolved at those arguments, and the class the
-	 * compiler's genericBuild of it answers must be `built`. Null for any other construction, a text that does not parse as
-	 * one, or arguments that do not resolve here: the compile resolves them in no module's imports. A construction the
-	 * compiler typed where its text writes one ran the build at those arguments, which a build macro of the kind answers
-	 * again alike — the compiler calls it at each type reference — so asking again types nothing new; where a build macro
-	 * changed the construction, the build at the text's arguments may define a class, whose records a later round of the
-	 * hook writes (`run`), and answers another class than `built`.
-	 */
-	public function genericBuilt(built: Ref<ClassType>, p: Position): Null<String> {
-		final path: Null<TypePath> = _generics.keys().hasNext() ? constructed(p) : null;
-		if (path == null) return null;
-		final written: TypePath = path;
-		final name: String = written.sub ?? written.name;
-		// a construction of the class itself
-		if (name == built.get().name) return null;
-		final printer: haxe.macro.Printer = new haxe.macro.Printer();
-		for (g in _generics[name] ?? []) if (writes(written, g)) {
-			final id: String = typeId(g.pack, g.name);
-			final key: String = id + '<' + [for (t in written.params ?? []) printer.printTypeParam(t)].join(',') + '>';
-			if (!_genericBuilds.exists(key)) _genericBuilds[key] = resolvedClass(g, written.params ?? [], p);
-			if (_genericBuilds[key] == built.toString()) return id;
-		}
-		return null;
-	}
-
-	/**
-	 * The type path of the construction the text at `p` writes, when it names a `@:genericBuild` class's name; null for
-	 * any other text.
-	 */
-	private function constructed(p: Position): Null<TypePath> {
-		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(p);
-		if (!_bytes.exists(info.file)) _bytes[info.file] = try File.getBytes(info.file) catch (exception: haxe.Exception) null;
-		final bytes: Null<haxe.io.Bytes> = _bytes[info.file];
-		if (bytes == null || info.min < 0 || info.max > bytes.length || info.min >= info.max) return null;
-		final text: Null<String> = try bytes.getString(info.min, info.max - info.min) catch (exception: haxe.Exception) null;
-		if (text == null) return null;
-		if (!Lambda.exists(_generics, named -> text.indexOf(named[0].name) >= 0)) return null;
-		return switch (try Context.parse(text, p) catch (exception: haxe.Exception) null)?.expr {
-			case ENew(t, _): t;
-			case _: null;
-		};
 	}
 
 	/** Whether the type path `written` names the class `g`: its name, and its package and module where it writes them. */
@@ -475,19 +508,6 @@ final class TypedFactsMacro {
 		};
 	}
 
-	/** The method declared around `min`–`max` of `file` (the innermost), whose body was spliced from there; null for none. */
-	public function inlineCallee(file: String, min: Int, max: Int): Null<InlineMethod> {
-		return innermost(_inlines[file] ?? [], min, max);
-	}
-
-	/**
-	 * The macro method declared around `min`–`max` of `file` (the innermost), null for none: code an expression macro
-	 * built there and returned, which the compiler keeps at the positions it was built at.
-	 */
-	public function macroCallee(file: String, min: Int, max: Int): Null<InlineMethod> {
-		return innermost(_macros[file] ?? [], min, max);
-	}
-
 	/** The innermost of `methods` declared around `min`–`max`, or null. */
 	private static function innermost(methods: Array<InlineMethod>, min: Int, max: Int): Null<InlineMethod> {
 		var best: Null<InlineMethod> = null;
@@ -495,30 +515,9 @@ final class TypedFactsMacro {
 		return best;
 	}
 
-	/**
-	 * Whether `file` is the standard `Reflect.hx` or `Type.hx` the compile resolved — a body of reflection inlined from
-	 * there. Compared by resolved path: a project's own `Type.hx` is not one.
-	 */
-	public function reflectionModule(file: String): Bool {
-		final known: Null<Bool> = _reflectionFiles[file];
-		if (known != null) return known;
-		final full: String = canonicalFile(file);
-		final answer: Bool = Lambda.exists(['Reflect.hx', 'Type.hx'], m -> {
-			final resolved: Null<String> = try Context.resolvePath(m) catch (exception: haxe.Exception) null;
-			resolved != null && canonicalFile(resolved) == full;
-		});
-		_reflectionFiles[file] = answer;
-		return answer;
-	}
-
 	private static function canonicalFile(path: String): String {
 		final full: Null<String> = try sys.FileSystem.fullPath(path) catch (exception: haxe.Exception) null;
 		return haxe.io.Path.normalize(full ?? path);
-	}
-
-	/** The file `p` lies in. */
-	public static function fileOf(p: Position): String {
-		return Context.getPosInfos(p).file;
 	}
 
 	/**

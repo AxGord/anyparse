@@ -184,9 +184,7 @@ final class ExtractVar {
 		if (rewritten == source) return Err('extract of "$name" is a no-op');
 
 		final unparsed: Null<String> = ParseGate.refusal(plugin, rewritten, 'rewritten source');
-		if (unparsed != null) return Err(unparsed);
-
-		return Ok(rewritten);
+		return unparsed != null ? Err(unparsed) : Ok(rewritten);
 	}
 
 	/** Is `kind` a statement node (its kind ends with `Stmt`)? */

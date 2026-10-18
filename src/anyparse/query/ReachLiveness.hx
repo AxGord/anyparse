@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -121,7 +122,7 @@ final class ReachLiveness {
 				i = skipped[si].to;
 				continue;
 			}
-			final code: Int = StringTools.fastCodeAt(source, i);
+			final code: Int = source.fastCodeAt(i);
 			if (!(code == ' '.code || code == '\t'.code || code == '\n'.code || code == '\r'.code)) return true;
 			i++;
 		}

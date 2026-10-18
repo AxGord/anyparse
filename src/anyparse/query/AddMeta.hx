@@ -80,8 +80,9 @@ final class AddMeta {
 			return Err('already annotated: $nameNN');
 
 		final edit: Null<{ span: Span, text: String }> = runEdit(source, run, hostNN, text);
-		if (edit == null) return Err('the resolved ${resolved.kind} node has no source span to annotate');
-		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
+		return edit == null
+			? Err('the resolved ${resolved.kind} node has no source span to annotate')
+			: CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 	/**

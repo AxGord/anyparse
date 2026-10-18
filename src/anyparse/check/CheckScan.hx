@@ -447,7 +447,7 @@ final class CheckScan {
 	 */
 	public static function isLeadingAnnotation(node: QueryNode, modifierKinds: Array<String>): Bool {
 		final nm: Null<String> = node.name;
-		if (nm != null && nm.length > 0 && StringTools.fastCodeAt(nm, 0) == '@'.code) return true;
+		if (nm != null && nm.length > 0 && nm.fastCodeAt(0) == '@'.code) return true;
 		return modifierKinds.contains(node.kind);
 	}
 

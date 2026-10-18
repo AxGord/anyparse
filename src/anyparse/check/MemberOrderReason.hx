@@ -127,7 +127,7 @@ final class MemberOrderReason {
 	/** One of the pair is a plain member and the other sits in a content-ranked `#if` block of the SAME rank. */
 	private static function plainVersusBlockReason(a: OrderedMember, b: OrderedMember, leads: Bool): String {
 		return leads
-			? 'a conditional block of inline fields leads its rank, so ${nameOf(a)} must precede the plain ' + describe(b)
+			? 'a conditional block of inline fields leads its rank, so ${nameOf(a)} must precede the plain ${describe(b)}'
 			: 'a plain member leads its rank, and ${nameOf(b)} sits in a conditional block that trails the plain members of that rank';
 	}
 

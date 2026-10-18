@@ -1,9 +1,9 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.MacroNames.*;
 
 /**
  * Pass 4 of the macro pipeline — codegen.

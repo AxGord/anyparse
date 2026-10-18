@@ -359,8 +359,7 @@ final class MemberLookup {
 	 * hit as "do not rewrite".
 	 */
 	public function typeDeclaresMember(typeName: String, member: String): Bool {
-		for (decl in _refs.named(typeName)) if (decl.type.members.exists(m -> m.name == member)) return true;
-		return false;
+		return _refs.named(typeName).exists(decl -> decl.type.members.exists(m -> m.name == member));
 	}
 
 	/**

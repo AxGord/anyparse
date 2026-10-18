@@ -1,12 +1,12 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.macro.WriterBlankLowering.*;
+import anyparse.macro.WriterLoweringSupport.*;
+import anyparse.macro.WriterPolicyLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
-import anyparse.macro.WriterPolicyLowering.*;
-import anyparse.macro.WriterLoweringSupport.*;
-import anyparse.macro.WriterBlankLowering.*;
 
 /**
  * Pass 3W helpers — the separated-list (`@:trivia` + `@:sep`) Star emit
@@ -1150,7 +1150,7 @@ final class TriviaSepLowering {
 				// never runs on a non-array Star (whose element node is a non-enum struct →
 				// the cast would throw). Non-comprehension arrays keep their `_smlKeep` reflow
 				// behaviour untouched.
-				_matrixDoc != null ? _dbg(_matrixDoc) : (_smlKeep && !_isComprehension ? _dbg(_wlResult) : _wlResult);
+				_matrixDoc != null ? _dbg(_matrixDoc) : _smlKeep && !_isComprehension ? _dbg(_wlResult) : _wlResult;
 			};
 		} else {
 			triviaSepFlatBranch(openText, closeText, sepText, triviaElemCall);

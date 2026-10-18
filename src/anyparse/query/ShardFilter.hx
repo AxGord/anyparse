@@ -76,7 +76,12 @@ final class ShardFilter {
 	 */
 	public static function selected(className: String, names: Array<String>, tokens: Array<ShardToken>): Null<Array<String>> {
 		final sorted: Array<String> = names.copy();
-		sorted.sort((a, b) -> a < b ? -1 : a > b ? 1 : 0);
+		sorted.sort((a, b) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 		final out: Array<String> = [];
 		for (token in tokens) {
 			final test: Null<String> = token.test;

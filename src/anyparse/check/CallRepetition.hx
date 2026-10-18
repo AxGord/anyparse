@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -43,6 +44,9 @@ final class CallRepetition {
 	/** A `boundedRepeats` loop label carrying its rank among the loops of its header (`#2`). */
 	private static final RANKED: EReg = ~/ #[0-9]+$/;
 
+	/** The loops of the graph's trees: which stand around a position, and what each is called. */
+	public final loops: Loops;
+
 	/** The repeating parts of the loops around each placed position, keyed by `<file>:<offset>`; null for one the tree cannot place. */
 	private final _loops: Map<String, Null<Array<Span>>> = [];
 
@@ -61,15 +65,12 @@ final class CallRepetition {
 	/** Why `boundedRepeats` entries bind nothing (`notices`). */
 	private final _notices: Array<String> = [];
 
-	/** The loops of the graph's trees: which stand around a position, and what each is called. */
-	public final loops: Loops;
-
-	/** The names of the functions of the run's files that have a body (`runtimeCall`), filled on first use. */
-	private var _bodiedNames: Null<Map<String, Bool>> = null;
-
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
 	private final _listsOf: (String) -> ChainLists;
+
+	/** The names of the functions of the run's files that have a body (`runtimeCall`), filled on first use. */
+	private var _bodiedNames: Null<Map<String, Bool>> = null;
 
 	public function new(graph: CallGraph, trees: FunctionTrees, shape: RefShape, listsOf: (String) -> ChainLists) {
 		_graph = graph;
@@ -78,7 +79,10 @@ final class CallRepetition {
 		loops = new Loops(graph, shape, listsOf);
 	}
 
-	/** Whether `edge` may run more than once per run of its function: in a loop, handing its value to a call that may repeat it, or recursive. */
+	/**
+	 * Whether `edge` may run more than once per run of its function: in a
+	 * loop, handing its value to a call that may repeat it, or recursive.
+	 */
 	public function repeated(edge: CallEdge): Bool {
 		if (initializerRun(edge)) return false;
 		final loops: Null<Array<Span>> = loopsAround(edge);
@@ -103,8 +107,9 @@ final class CallRepetition {
 		if (initializerRun(edge)) return false;
 		final loops: Null<Array<Span>> = loopsAround(edge);
 		final outer: Null<Array<Span>> = loopsAround(take);
-		if (loops == null || outer == null || recursive(edge)) return true;
-		return !boundedOnce(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))));
+		return loops == null || (
+			outer == null || recursive(edge) || !boundedOnce(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))))
+		);
 	}
 
 	/**
@@ -125,8 +130,80 @@ final class CallRepetition {
 	public function alongUnder(edge: CallEdge, take: CallEdge, way: BoundedWay): Null<BoundedWay> {
 		final loops: Null<Array<Span>> = loopsAround(edge);
 		final outer: Null<Array<Span>> = loopsAround(take);
-		if (initializerRun(edge) || loops == null || outer == null) return way;
-		return extend(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))), way);
+		return initializerRun(edge) || loops == null || outer == null
+			? way
+			: extend(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))), way);
+	}
+
+	/**
+	 * Whether the `Ref` edge `edge` hands its value to a call that keeps it to run later, once per event however often it
+	 * was registered: one its chain's `registers` names, the runtime's own — a call into a function with a body in the
+	 * run's files keeps the value in project code, which runs it from a call the graph cannot follow, as often as it
+	 * likes. The value then runs as a run of its own, and nothing up its registration repeats it.
+	 */
+	public function registered(edge: CallEdge): Bool {
+		final lists: ChainLists = _listsOf(edge.file);
+		return listed(edge, lists.registerIds, lists.registerNames) && runtimeCall(edge);
+	}
+
+	/** Whether the `Ref` edge `edge` hands its value to a call its chain's `marshals` names: it runs on the main thread once per post. */
+	public function marshalled(edge: CallEdge): Bool {
+		return edge.kind == Ref && _listsOf(edge.file).marshalIds.contains(edge.via ?? '');
+	}
+
+	/**
+	 * What names the call `edge` with no loop around it, by name, never by position: the call a value is handed to —
+	 * with a rank (`#2`) for a second value its function hands that call which may block (`Loops.mayBlock`), as a loop's
+	 * label ranks a second loop of its header — else its target; a lambda's positional number (`#3`) is spelled `#fn`.
+	 */
+	public function handLabel(edge: CallEdge): String {
+		final target: String = edge.kind == Ref ? (edge.via ?? edge.viaMember ?? edge.to) : edge.to;
+		final named: String = ~/#[0-9]+/g.replace(target, '#fn');
+		if (edge.kind != Ref) return named;
+		final same: Array<CallEdge> = [
+			for (o in _graph.outEdges(edge.from))
+				if (o.kind == Ref && (o.via ?? o.viaMember ?? o.to) == target && (o == edge || loops.mayBlock(o.to))) o
+		];
+		same.sort((a, b) -> (a.span?.from ?? 0) - (b.span?.from ?? 0));
+		final rank: Int = same.indexOf(edge);
+		return rank > 0 ? '$named #${rank + 1}' : named;
+	}
+
+	/** Why each `boundedRepeats` entry of a chain the run's files sit under bounds nothing, one line each, deduplicated. */
+	public function notices(): Array<String> {
+		final seen: Map<String, Bool> = [];
+		for (edge in _graph.edges) if (!seen.exists(edge.file)) {
+			seen[edge.file] = true;
+			final lists: ChainLists = _listsOf(edge.file);
+			if (lists.reports) boundSources(lists);
+		}
+		return _notices;
+	}
+
+	/**
+	 * The repeating parts of the loops around the offset `at` of `file`, counted from the innermost function around it,
+	 * outermost first — a `for`'s body, any other loop whole; null when the tree of the file cannot place it, or the grammar
+	 * names no loop kind.
+	 */
+	public function loopsAt(file: String, at: Int): Null<Array<Span>> {
+		final key: String = '$file:$at';
+		if (_loops.exists(key)) return _loops[key];
+		final tree: Null<QueryNode> = _trees.ofFile(file);
+		final found: Null<Array<Span>> = tree == null || loops.kinds.length == 0 ? null : [for (l in loops.around(tree, at)) l.repeating];
+		_loops[key] = found;
+		return found;
+	}
+
+	/**
+	 * The header of the innermost loop around the offset `at` of `file`, counted from the innermost function around it —
+	 * `for (s in sessions)`, `while (pending())`, `do … while (more)` — its whitespace collapsed, and a rank (`#2`) for a
+	 * second loop of the same header in that function that repeats a call which may block (`repeatsSink`): what names the
+	 * loop whatever else its body holds, whatever moves around it, and whatever loop that blocks nothing is added
+	 * beside it. Null when no loop is placed there.
+	 */
+	public function loopLabel(file: String, at: Int): Null<String> {
+		final tree: Null<QueryNode> = _trees.ofFile(file);
+		return tree == null ? null : loops.label(file, tree, at);
 	}
 
 	/**
@@ -206,51 +283,6 @@ final class CallRepetition {
 	}
 
 	/**
-	 * Whether the `Ref` edge `edge` hands its value to a call that keeps it to run later, once per event however often it
-	 * was registered: one its chain's `registers` names, the runtime's own — a call into a function with a body in the
-	 * run's files keeps the value in project code, which runs it from a call the graph cannot follow, as often as it
-	 * likes. The value then runs as a run of its own, and nothing up its registration repeats it.
-	 */
-	public function registered(edge: CallEdge): Bool {
-		final lists: ChainLists = _listsOf(edge.file);
-		return listed(edge, lists.registerIds, lists.registerNames) && runtimeCall(edge);
-	}
-
-	/** Whether the `Ref` edge `edge` hands its value to a call its chain's `marshals` names: it runs on the main thread once per post. */
-	public function marshalled(edge: CallEdge): Bool {
-		return edge.kind == Ref && _listsOf(edge.file).marshalIds.contains(edge.via ?? '');
-	}
-
-	/**
-	 * What names the call `edge` with no loop around it, by name, never by position: the call a value is handed to —
-	 * with a rank (`#2`) for a second value its function hands that call which may block (`Loops.mayBlock`), as a loop's
-	 * label ranks a second loop of its header — else its target; a lambda's positional number (`#3`) is spelled `#fn`.
-	 */
-	public function handLabel(edge: CallEdge): String {
-		final target: String = edge.kind == Ref ? (edge.via ?? edge.viaMember ?? edge.to) : edge.to;
-		final named: String = ~/#[0-9]+/g.replace(target, "#fn");
-		if (edge.kind != Ref) return named;
-		final same: Array<CallEdge> = [
-			for (o in _graph.outEdges(edge.from))
-				if (o.kind == Ref && (o.via ?? o.viaMember ?? o.to) == target && (o == edge || loops.mayBlock(o.to))) o
-		];
-		same.sort((a, b) -> (a.span?.from ?? 0) - (b.span?.from ?? 0));
-		final rank: Int = same.indexOf(edge);
-		return rank > 0 ? '$named #${rank + 1}' : named;
-	}
-
-	/** Why each `boundedRepeats` entry of a chain the run's files sit under bounds nothing, one line each, deduplicated. */
-	public function notices(): Array<String> {
-		final seen: Map<String, Bool> = [];
-		for (edge in _graph.edges) if (!seen.exists(edge.file)) {
-			seen[edge.file] = true;
-			final lists: ChainLists = _listsOf(edge.file);
-			if (lists.reports) boundSources(lists);
-		}
-		return _notices;
-	}
-
-	/**
 	 * Whether `edge` calls into its own recursion: its target runs its caller again through calls. A registration is no
 	 * run: a value handed on runs where the call it is handed to runs it — once per element only for an `iterates` call.
 	 */
@@ -270,32 +302,6 @@ final class CallRepetition {
 	private function loopsAround(edge: CallEdge): Null<Array<Span>> {
 		final span: Null<Span> = edge.span;
 		return span == null ? null : loopsAt(edge.file, span.from);
-	}
-
-	/**
-	 * The repeating parts of the loops around the offset `at` of `file`, counted from the innermost function around it,
-	 * outermost first — a `for`'s body, any other loop whole; null when the tree of the file cannot place it, or the grammar
-	 * names no loop kind.
-	 */
-	public function loopsAt(file: String, at: Int): Null<Array<Span>> {
-		final key: String = '$file:$at';
-		if (_loops.exists(key)) return _loops[key];
-		final tree: Null<QueryNode> = _trees.ofFile(file);
-		final found: Null<Array<Span>> = tree == null || loops.kinds.length == 0 ? null : [for (l in loops.around(tree, at)) l.repeating];
-		_loops[key] = found;
-		return found;
-	}
-
-	/**
-	 * The header of the innermost loop around the offset `at` of `file`, counted from the innermost function around it —
-	 * `for (s in sessions)`, `while (pending())`, `do … while (more)` — its whitespace collapsed, and a rank (`#2`) for a
-	 * second loop of the same header in that function that repeats a call which may block (`repeatsSink`): what names the
-	 * loop whatever else its body holds, whatever moves around it, and whatever loop that blocks nothing is added
-	 * beside it. Null when no loop is placed there.
-	 */
-	public function loopLabel(file: String, at: Int): Null<String> {
-		final tree: Null<QueryNode> = _trees.ofFile(file);
-		return tree == null ? null : loops.label(file, tree, at);
 	}
 
 	/** Numbers the strongly connected components of the graph over its runs: calls, constructions, overrides, accessors (Tarjan). */
@@ -357,11 +363,6 @@ final class CallRepetition {
 			&& (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
 	}
 
-	/** Whether the `Ref` edge `edge` hands its value to a call `ids` names by the graph's target, or `names` by the name the call is written with. */
-	private static function listed(edge: CallEdge, ids: Array<String>, names: Array<String>): Bool {
-		return edge.kind == Ref && (ids.contains(edge.via ?? '') || names.contains(edge.viaMember ?? ''));
-	}
-
 	/**
 	 * The repetitions of `edge` in its own function: each loop of `loops` around its site, and the call it hands its
 	 * value to when that may repeat it (`handedOn`) — keyed by where each sits.
@@ -370,14 +371,6 @@ final class CallRepetition {
 		final out: Array<String> = [for (l in loops) loopKey(edge.file, l)];
 		if (handedOn(edge)) out.push(handKey(edge));
 		return out;
-	}
-
-	private static inline function handKey(edge: CallEdge): String {
-		return '${edge.file}:hand:${edge.span?.from ?? -1}';
-	}
-
-	private static inline function loopKey(file: String, loop: Span): String {
-		return '$file:loop:${loop.from}';
 	}
 
 	/**
@@ -454,7 +447,7 @@ final class CallRepetition {
 		final tree: Null<QueryNode> = _trees.ofFile(edge.file);
 		final span: Null<Span> = edge.span;
 		if (tree == null || span == null) return [];
-		final wanted: String = StringTools.endsWith(label, ' #1') ? label.substring(0, label.length - 3) : label;
+		final wanted: String = label.endsWith(' #1') ? label.substring(0, label.length - 3) : label;
 		return [
 			for (l in loops.around(
 				tree, span.from
@@ -485,6 +478,22 @@ final class CallRepetition {
 
 	private function note(text: String): Void {
 		if (!_notices.contains(text)) _notices.push(text);
+	}
+
+	private static inline function handKey(edge: CallEdge): String {
+		return '${edge.file}:hand:${edge.span?.from ?? -1}';
+	}
+
+	private static inline function loopKey(file: String, loop: Span): String {
+		return '$file:loop:${loop.from}';
+	}
+
+	/**
+	 * Whether the `Ref` edge `edge` hands its value to a call `ids` names by
+	 * the graph's target, or `names` by the name the call is written with.
+	 */
+	private static function listed(edge: CallEdge, ids: Array<String>, names: Array<String>): Bool {
+		return edge.kind == Ref && (ids.contains(edge.via ?? '') || names.contains(edge.viaMember ?? ''));
 	}
 
 }

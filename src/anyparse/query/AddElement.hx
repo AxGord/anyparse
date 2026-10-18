@@ -358,7 +358,7 @@ final class AddElement {
 	 * skips, not once per byte, so the linear walk is not a hot path.
 	 */
 	private static function commentIndexAt(comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int): Int {
-		for (i in 0...comments.length) if (at >= comments[i].from && at < comments[i].to) return i;
+		for (i => comment in comments) if (at >= comment.from && at < comment.to) return i;
 		return -1;
 	}
 

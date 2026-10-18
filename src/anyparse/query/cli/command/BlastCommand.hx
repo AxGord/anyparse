@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -10,7 +11,6 @@ import anyparse.query.cli.CliContext;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;

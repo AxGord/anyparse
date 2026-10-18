@@ -326,7 +326,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 			final name: Null<String> = p.name;
 			final pspan: Null<Span> = p.span;
 			if (name == null || pspan == null) continue;
-			if (StringTools.startsWith(name, '_')) continue;
+			if (name.startsWith('_')) continue;
 			if (OccurrenceScan.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan], matchMask)) continue;
 			final autofixable: Bool = eligible && fnName != null
 				&& RemoveParam.paramSlotEdits(source, tree, fn, pi, fnName, fnSpan.from, shape).error == null;
@@ -511,7 +511,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 		final pspan: Null<Span> = param.span;
 		return if (pspan == null)
 			-1
-		else if (StringTools.startsWith(name, '_'))
+		else if (name.startsWith('_'))
 			-1
 		else if (OccurrenceScan.referencedInRange(source, '_$name', fnSpan.from, fnSpan.to, [], matchMask))
 			-1

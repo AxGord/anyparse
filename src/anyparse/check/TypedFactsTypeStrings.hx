@@ -4,6 +4,8 @@ package anyparse.check;
 import haxe.Json;
 import haxe.macro.Type;
 
+using StringTools;
+
 /**
  * The PRINTING half of the facts type grammar (`TypedFactsProbe` specifies it, `FactsTypeTree` reads it back): a
  * compiler `Type` as the type string a facts record carries, plus the two JSON spellings every record line is built
@@ -18,18 +20,18 @@ import haxe.macro.Type;
 @:nullSafety(Strict)
 final class TypedFactsTypeStrings {
 
-	/** Deeper type nesting prints as unknown, so a recursive structure cannot grow a line without bound. */
-	private static inline final TYPE_DEPTH: Int = 8;
-
-	/** Whether each class path names a type parameter, decided once per path: reading a `Ref` decodes the whole class. */
-	private static final typeParams: Map<String, Bool> = [];
-
 	/**
 	 * Every typedef a type string printed, by id and declaration: an import alias (`import pack.T as U`) is one no module
 	 * lists, so the compile's records are closed over them once the module types are written (`run`). Two aliases of one
 	 * name of one module share an id, and each gets a record: the table holds every target an id names.
 	 */
 	public static final printedTypedefs: Map<String, Ref<DefType>> = [];
+
+	/** Deeper type nesting prints as unknown, so a recursive structure cannot grow a line without bound. */
+	private static inline final TYPE_DEPTH: Int = 8;
+
+	/** Whether each class path names a type parameter, decided once per path: reading a `Ref` decodes the whole class. */
+	private static final typeParams: Map<String, Bool> = [];
 
 	/** `s` as a JSON string. Names, paths and type strings carry no control character, so only a quote or a backslash needs the printer. */
 	public static function q(s: String): String {
@@ -43,7 +45,7 @@ final class TypedFactsTypeStrings {
 
 	/** The id of a type: its package, then its name, which is how the compiler names it — a private type's package ends in its module. */
 	public static function typeId(pack: Array<String>, name: String): String {
-		return pack.length == 0 ? name : pack.join('.') + '.' + name;
+		return pack.length == 0 ? name : pack.join('.') + '.$name';
 	}
 
 	/** `t` in the facts type grammar (`TypedFactsProbe`). */
@@ -59,11 +61,11 @@ final class TypedFactsTypeStrings {
 			case TType(d, params):
 				// the compiler names the typedef of a type's statics after it (`Enum<pack.E>`), which carries no arguments of its own
 				final name: String = d.toString();
-				if (!StringTools.endsWith(name, '>')) printedTypedefs[name + '@' + Std.string(d.get().pos)] = d;
-				StringTools.endsWith(name, '>') ? name : name + paramString(params, depth);
+				if (!name.endsWith('>')) printedTypedefs['$name@${d.get().pos}'] = d;
+				name.endsWith('>') ? name : name + paramString(params, depth);
 			case TAbstract(a, params): a.toString() + paramString(params, depth);
 			case TDynamic(null): 'Dynamic';
-			case TDynamic(inner): 'Dynamic<' + typeString(inner, depth + 1) + '>';
+			case TDynamic(inner): 'Dynamic<${typeString(inner, depth + 1)}>';
 			case TFun(args, ret):
 				'(' + [for (a in args) (a.opt ? '?' : '') + typeString(a.t, depth + 1)].join(',') + ')->' + typeString(ret, depth + 1);
 			case TAnonymous(a):
@@ -74,7 +76,12 @@ final class TypedFactsTypeStrings {
 					case AAbstractStatics(ab): 'Abstract<' + ab.toString() + '>';
 					case _:
 						final fields: Array<ClassField> = anon.fields.copy();
-						fields.sort((x, y) -> x.name < y.name ? -1 : x.name > y.name ? 1 : 0);
+						fields.sort((x, y) -> if (x.name < y.name)
+							-1
+						else if (x.name > y.name)
+							1
+						else
+							0);
 						'{'
 							+ [
 								for (f in fields) (f.meta.has(':optional') ? '?' : '') + f.name + ':' + typeString(f.type, depth + 1)
@@ -90,15 +97,15 @@ final class TypedFactsTypeStrings {
 			isParam = c.get().kind.match(KTypeParameter(_));
 			typeParams[path] = isParam;
 		}
-		return isParam ? '$' + path : path + paramString(params, depth);
-	}
-
-	private static function paramString(params: Array<Type>, depth: Int): String {
-		return params.length == 0 ? '' : '<' + [for (p in params) typeString(p, depth + 1)].join(',') + '>';
+		return isParam ? '$$$path' : path + paramString(params, depth);
 	}
 
 	public static function typeList(list: Array<Type>): String {
 		return arr([for (t in list) q(typeString(t, 0))]);
+	}
+
+	private static function paramString(params: Array<Type>, depth: Int): String {
+		return params.length == 0 ? '' : '<' + [for (p in params) typeString(p, depth + 1)].join(',') + '>';
 	}
 
 }

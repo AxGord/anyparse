@@ -30,14 +30,8 @@ using StringTools;
 @:nullSafety(Strict)
 final class FactsNativeReach {
 
-	/** The names target code spells the object its method runs on by (`reach`), besides a member of it. */
-	private static final THIS_SPELLINGS: Array<String> = ['this', '_hx_this', '__this', '__this__', 'self', '_gthis'];
-
 	/** The prefix a target gives a Haxe name it cannot spell as it is (hxcpp's `_hx_new`): the name stands behind it. */
 	private static inline final MANGLED: String = '_hx_';
-
-	/** The kinds of a typed type whose statics and constructor code naming it may run (`classesNamed`). */
-	private static final CLASS_KINDS: Array<String> = ['class', 'impl'];
 
 	/** What separates a nested function's id from its parent's (`TypedFactsWalk`): `<parent id>@<offset>`. */
 	private static inline final NESTED_ID: String = '@';
@@ -45,13 +39,19 @@ final class FactsNativeReach {
 	/** What separates a further overload's index from its field's node id (`TypedFactsWalk`): `<field id>~<n>`. */
 	private static inline final OVERLOAD_ID: String = '~';
 
+	/** The names target code spells the object its method runs on by (`reach`), besides a member of it. */
+	private static final THIS_SPELLINGS: Array<String> = ['this', '_hx_this', '__this', '__this__', 'self', '_gthis'];
+
+	/** The kinds of a typed type whose statics and constructor code naming it may run (`classesNamed`). */
+	private static final CLASS_KINDS: Array<String> = ['class', 'impl'];
+
+	/** Class id -> the names target code in its methods reaches a member of `this` by (`memberNames`), read once per class. */
+	private final _members: Map<String, Array<String>> = [];
+
 	private final _table: CompilerFacts;
 
 	/** Static variable name -> each declaration of one: its class and the types it is given (`reach`); built on first need. */
 	private var _statics: Null<Map<String, Array<{ owner: String, types: Array<String> }>>> = null;
-
-	/** Class id -> the names target code in its methods reaches a member of `this` by (`memberNames`), read once per class. */
-	private final _members: Map<String, Array<String>> = [];
 
 	/** The typed classes whose code target code may run by naming them (`classesNamed`); listed on first need. */
 	private var _classes: Null<Array<String>> = null;
@@ -65,8 +65,7 @@ final class FactsNativeReach {
 		if (n.natives.length == 0) return true;
 		final self: Null<String> = selfOf(id);
 		final locals: Array<{ name: String, type: String }> = localsOf(id);
-		for (x in n.natives) if (!handed(x, hand) || !reach(id, n.owner, self, locals, x.code, x.computed, hand)) return false;
-		return true;
+		return n.natives.foreach(x -> handed(x, hand) && reach(id, n.owner, self, locals, x.code, x.computed, hand));
 	}
 
 	/**
@@ -75,8 +74,9 @@ final class FactsNativeReach {
 	 */
 	public function siteEscapes(x: NativeFact, hand: NativeHand): Bool {
 		final home: Null<String> = _table.node(x.holder)?.owner;
-		if (home == null) return hand.refuse('the facts of `${x.holder}`, which holds target-language code, are lost');
-		return handed(x, hand) && reach(x.holder, home, selfOf(x.holder), localsOf(x.holder), x.code, x.computed, hand);
+		return home == null
+			? hand.refuse('the facts of `${x.holder}`, which holds target-language code, are lost')
+			: handed(x, hand) && reach(x.holder, home, selfOf(x.holder), localsOf(x.holder), x.code, x.computed, hand);
 	}
 
 	/**
@@ -104,6 +104,18 @@ final class FactsNativeReach {
 	}
 
 	/**
+	 * The classes of the program's code (`programClass`) target code spelling `words` (`targetNames`) names (`classNamed`):
+	 * code that names a class reaches what the class holds globally — its statics, its constructor — as Haxe code naming it
+	 * does.
+	 */
+	public function classesNamed(words: Array<String>): Array<String> {
+		if (words.length == 0) return [];
+		final listed: Array<String> = _classes ?? [for (id in _table.typeIds()) if (programClass(_table.type(id))) id];
+		_classes = listed;
+		return [for (id in listed) if (classNamed(id, words)) id];
+	}
+
+	/**
 	 * Hand what target code at `where`, written in the code of the class `home`, reaches to the escapes (see the type doc):
 	 * the values `locals` holds that its text names, the object its method runs on (`self`, the class declaring that method;
 	 * null when it runs on none) where it names that, and the static variables it names. False when the code's text is
@@ -127,37 +139,6 @@ final class FactsNativeReach {
 			if ((hierarchyOf(home).contains(s.owner) || classNamed(s.owner, names)) && !s.types.foreach(hand.escape)) return false;
 		}
 		return true;
-	}
-
-	/**
-	 * The classes of the program's code (`programClass`) target code spelling `words` (`targetNames`) names (`classNamed`):
-	 * code that names a class reaches what the class holds globally — its statics, its constructor — as Haxe code naming it
-	 * does.
-	 */
-	public function classesNamed(words: Array<String>): Array<String> {
-		if (words.length == 0) return [];
-		final listed: Array<String> = _classes ?? [for (id in _table.typeIds()) if (programClass(_table.type(id))) id];
-		_classes = listed;
-		return [for (id in listed) if (classNamed(id, words)) id];
-	}
-
-	/**
-	 * Whether the typed type `fact` is a class of the program's code: a class or an abstract's implementation that is no
-	 * extern — an extern's members are target code themselves, its `inline` ones spliced where Haxe code calls them.
-	 */
-	private static function programClass(fact: Null<TypeFact>): Bool {
-		return fact != null && CLASS_KINDS.contains(fact.kind) && !fact.isExtern;
-	}
-
-	/**
-	 * Hand `hand` each value the site `x` hands its target code (`NativeFact.handed`), but the string literal its first argument
-	 * is when the facts record that as the site's code (`NativeFact.code`): a constant, no object whatever the type of a place
-	 * holding a string may say. A chain of target names records the chain as its code, which no argument is.
-	 */
-	private static function handed(x: NativeFact, hand: NativeHand): Bool {
-		final code: Null<String> = x.code;
-		final literal: Bool = code != null && !StringTools.startsWith(code, x.name + '.');
-		return [for (i in (literal ? 1 : 0) ... x.handed.length) x.handed[i]].foreach(hand.escape);
 	}
 
 	/** Hand the type of every parameter of every type a build gave the method `f` to `hand`. */
@@ -244,21 +225,12 @@ final class FactsNativeReach {
 		return out;
 	}
 
-	/**
-	 * Whether target code naming `names` names the typed class `id`: a name holding its own (`Main`, hxcpp's `Main_obj`,
-	 * js's `pack_Main`).
-	 */
-	private static function classNamed(id: String, names: Array<String>): Bool {
-		final simple: String = SourceText.lastSegment(id);
-		return names.exists(x -> x.indexOf(simple) >= 0);
-	}
-
 	/** The identifiers the target code `code` spells, and the Haxe name behind each one a target mangled (`MANGLED`). */
 	public static function targetNames(code: String): Array<String> {
 		final out: Array<String> = [];
 		var start: Int = -1;
 		for (i in 0...code.length + 1) {
-			final c: Int = i < code.length ? StringTools.fastCodeAt(code, i) : 0;
+			final c: Int = i < code.length ? code.fastCodeAt(i) : 0;
 			final word: Bool = c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
 				|| (start >= 0 && c >= '0'.code && c <= '9'.code);
 			if (word && start < 0) start = i;
@@ -270,6 +242,34 @@ final class FactsNativeReach {
 				out.push(name.substr(MANGLED.length));
 		}
 		return out;
+	}
+
+	/**
+	 * Whether the typed type `fact` is a class of the program's code: a class or an abstract's implementation that is no
+	 * extern — an extern's members are target code themselves, its `inline` ones spliced where Haxe code calls them.
+	 */
+	private static function programClass(fact: Null<TypeFact>): Bool {
+		return fact != null && CLASS_KINDS.contains(fact.kind) && !fact.isExtern;
+	}
+
+	/**
+	 * Hand `hand` each value the site `x` hands its target code (`NativeFact.handed`), but the string literal its first argument
+	 * is when the facts record that as the site's code (`NativeFact.code`): a constant, no object whatever the type of a place
+	 * holding a string may say. A chain of target names records the chain as its code, which no argument is.
+	 */
+	private static function handed(x: NativeFact, hand: NativeHand): Bool {
+		final code: Null<String> = x.code;
+		final literal: Bool = code != null && !code.startsWith('${x.name}.');
+		return [for (i in (literal ? 1 : 0) ... x.handed.length) x.handed[i]].foreach(hand.escape);
+	}
+
+	/**
+	 * Whether target code naming `names` names the typed class `id`: a name holding its own (`Main`, hxcpp's `Main_obj`,
+	 * js's `pack_Main`).
+	 */
+	private static function classNamed(id: String, names: Array<String>): Bool {
+		final simple: String = SourceText.lastSegment(id);
+		return names.exists(x -> x.indexOf(simple) >= 0);
 	}
 
 }

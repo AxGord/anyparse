@@ -532,9 +532,9 @@ class MethodChainEmit {
 	private static function shapeKeepTail(segments: Array<Doc>, cols: Int, ?sourceBreakBefore: Array<Bool>): Doc {
 		final breaks: Array<Bool> = sourceBreakBefore ?? [];
 		final tail: Array<Doc> = [];
-		for (i in 0...segments.length) {
+		for (i => segment in segments) {
 			if (i < breaks.length && breaks[i]) tail.push(Line('\n'));
-			tail.push(segments[i]);
+			tail.push(segment);
 		}
 		return Concat([Nest(cols, Concat(tail))]);
 	}
@@ -737,7 +737,7 @@ class MethodChainEmit {
 	private static function startsWithHardline(d: Doc): Bool {
 		return switch d {
 			case Line(s):
-				s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code;
+				s.length > 0 && s.fastCodeAt(0) == '\n'.code;
 			case Nest(_, inner): startsWithHardline(inner);
 			case Concat(items):
 				var i: Int = 0;

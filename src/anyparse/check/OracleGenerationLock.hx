@@ -26,6 +26,12 @@ final class OracleGenerationLock {
 	/** How often a waiting hold looks again, in ms. */
 	private static inline final LOCK_POLL: Int = 250;
 
+	/** How many `LOCK_POLL` waits `endJob` gives a killed job to be gone. */
+	private static inline final JOB_END_POLLS: Int = 20;
+
+	/** The bound of the random suffix that keeps two runs' moved-aside claims apart. */
+	private static inline final ASIDE_SUFFIX_BOUND: Int = 0x7fffffff;
+
 	/** This process as a lock holder: its pid and its start time (`startTime`), which together outlive pid reuse. */
 	public static function holder(): Holder {
 		#if nodejs
@@ -118,6 +124,11 @@ final class OracleGenerationLock {
 		#end
 	}
 
+	/** Where a generation's job records its process group leader while this run holds the generation exclusively. */
+	public static function jobFile(dir: String): String {
+		return Path.join([dir, 'writer', 'job']);
+	}
+
 	#if nodejs
 	/**
 	 * When process `pid` started, as `ps` reports it — the second half of a holder's identity, so a pid the system reused
@@ -127,32 +138,6 @@ final class OracleGenerationLock {
 		if (js.Node.process.platform == 'win32') return '';
 		final res: Dynamic = js.node.ChildProcess.spawnSync('ps', ['-o', 'lstart=', '-p', '$pid'], { encoding: 'utf8' });
 		return res.status == 0 ? '${res.stdout}'.trim() : '';
-	}
-
-	/** Whether the holder `pid` / `start` still runs: the pid answers a signal-0 probe, and started when it says it did. */
-	private static function living(pid: Int, start: String): Bool {
-		final signalable: Bool = try {
-			js.Syntax.code('process.kill({0}, 0)', pid);
-			true;
-		} catch (exception: haxe.Exception) '${Reflect.field(exception.native, 'code')}' == 'EPERM';
-		return signalable && (start == '' || startTime(pid) == start);
-	}
-
-	/** The pids of every live run other than `me` holding `dir` shared; a dead one's file is removed on the way. */
-	private static function liveReaders(dir: String, me: Holder): Array<Int> {
-		final readers: String = Path.join([dir, 'readers']);
-		final entries: Array<String> = try sys.FileSystem.readDirectory(readers) catch (exception: haxe.Exception) [];
-		final out: Array<Int> = [];
-		for (entry in entries) {
-			final pid: Null<Int> = Std.parseInt(entry);
-			if (pid == null || '$pid' != entry || pid == me.pid) continue;
-			final start: Null<String> = try sys.io.File.getContent(Path.join([readers, entry])) catch (exception: haxe.Exception) null;
-			if (start != null && living(pid, start.trim()))
-				out.push(pid)
-			else if (start != null)
-				deleteQuietly(Path.join([readers, entry]));
-		}
-		return out;
 	}
 
 	/**
@@ -223,6 +208,32 @@ final class OracleGenerationLock {
 		return same;
 	}
 
+	/** Whether the holder `pid` / `start` still runs: the pid answers a signal-0 probe, and started when it says it did. */
+	private static function living(pid: Int, start: String): Bool {
+		final signalable: Bool = try {
+			js.Syntax.code('process.kill({0}, 0)', pid);
+			true;
+		} catch (exception: haxe.Exception) '${Reflect.field(exception.native, 'code')}' == 'EPERM';
+		return signalable && (start == '' || startTime(pid) == start);
+	}
+
+	/** The pids of every live run other than `me` holding `dir` shared; a dead one's file is removed on the way. */
+	private static function liveReaders(dir: String, me: Holder): Array<Int> {
+		final readers: String = Path.join([dir, 'readers']);
+		final entries: Array<String> = try sys.FileSystem.readDirectory(readers) catch (exception: haxe.Exception) [];
+		final out: Array<Int> = [];
+		for (entry in entries) {
+			final pid: Null<Int> = Std.parseInt(entry);
+			if (pid == null || '$pid' != entry || pid == me.pid) continue;
+			final start: Null<String> = try sys.io.File.getContent(Path.join([readers, entry])) catch (exception: haxe.Exception) null;
+			if (start != null && living(pid, start.trim()))
+				out.push(pid)
+			else if (start != null)
+				deleteQuietly(Path.join([readers, entry]));
+		}
+		return out;
+	}
+
 	/** Whether the takeover claim `claim` was left by a run that is gone, or has outlived `OWNERLESS_GRACE`. */
 	private static function claimAbandoned(claim: String): Bool {
 		final text: Null<String> = try sys.io.File.getContent(Path.join([claim, 'owner'])) catch (exception: haxe.Exception) null;
@@ -279,36 +290,21 @@ final class OracleGenerationLock {
 	private static inline function pause(): Void {
 		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', LOCK_POLL);
 	}
-	#end
 
-	#if nodejs
 	/** `path`'s modification time in ms, or now when it cannot be read. */
 	private static function modified(path: String): Float {
 		return try sys.FileSystem.stat(path).mtime.getTime() catch (exception: haxe.Exception) Date.now().getTime();
 	}
-	#end
 
-	/** How many `LOCK_POLL` waits `endJob` gives a killed job to be gone. */
-	private static inline final JOB_END_POLLS: Int = 20;
-
-	/** Where a generation's job records its process group leader while this run holds the generation exclusively. */
-	public static function jobFile(dir: String): String {
-		return Path.join([dir, 'writer', 'job']);
-	}
-
-	#if nodejs
 	/**
 	 * Create `path` and its parents, an existing directory counting as created — through node's recursive `mkdir`,
 	 * which is idempotent under a race. `sys.FileSystem.createDirectory` is not: two runs creating one lock's parents at
 	 * once see its retry fail with `EEXIST`, and a run dies inside a lock it was only trying to take.
 	 */
-	private static function ensureDirectory(path: String): Void {
+	private static inline function ensureDirectory(path: String): Void {
 		js.Syntax.code("require('fs').mkdirSync({0}, { recursive: true })", path);
 	}
 	#end
-
-	/** The bound of the random suffix that keeps two runs' moved-aside claims apart. */
-	private static inline final ASIDE_SUFFIX_BOUND: Int = 0x7fffffff;
 
 }
 

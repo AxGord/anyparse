@@ -704,6 +704,32 @@ final class MemberKinds {
 	}
 
 	/**
+	 * Whether code outside the project may name `member` of `container`: the member carries the public
+	 * modifier, or its container (the type declaration, a `final` wrapper
+	 * included) is declared under a public-by-default annotation or modifier
+	 * (`publicDefaultMetaNames`, `extern`). Fails closed — a grammar with no public modifier kind, or a
+	 * member or container whose parent cannot be found in `tree`, reads as exposed.
+	 */
+	public static function fieldExposed(
+		tree: QueryNode, member: QueryNode, container: QueryNode, plugin: GrammarPlugin, shape: RefShape
+	): Bool {
+		final publicKind: Null<String> = shape.publicModifierKind;
+		final host: Null<QueryNode> = TreePath.parentOf(tree, member);
+		// A type declared through a wrapper (`final class`) carries its modifiers on the wrapper.
+		final wrapper: Null<QueryNode> = TreePath.parentOf(tree, container);
+		final declared: QueryNode = wrapper != null && RefactorSupport.typeDeclOf(wrapper)?.nameNode == container ? wrapper : container;
+		final outer: Null<QueryNode> = declared == container ? wrapper : TreePath.parentOf(tree, declared);
+		if (publicKind == null || host == null || outer == null) return true;
+		final runKinds: Array<String> = CheckScan.modifierKinds(shape).concat(plugin.metaShape().metaKinds);
+		if (precedingModifiers(member, host, runKinds).exists(m -> m.kind == publicKind)) return true;
+		final publicMetaNames: Array<String> = shape.publicDefaultMetaNames ?? [];
+		final externKind: Null<String> = shape.externModifierKind;
+		return precedingModifiers(
+			declared, outer, runKinds
+		).exists(m -> m.kind == externKind || m.name != null && publicMetaNames.contains(m.name));
+	}
+
+	/**
 	 * Collect the `from` of every static member under `host` into `out`, returning the modifier-run
 	 * state the host's children leave behind. Descends into every nested member host — a
 	 * member-position `#if` region above all — carrying `incoming` in, because a `static` written
@@ -746,32 +772,6 @@ final class MemberKinds {
 		final paren: Null<String> = shape.parenKind;
 		if (paren != null && !out.contains(paren)) out.push(paren);
 		return out;
-	}
-
-	/**
-	 * Whether code outside the project may name `member` of `container`: the member carries the public
-	 * modifier, or its container (the type declaration, a `final` wrapper
-	 * included) is declared under a public-by-default annotation or modifier
-	 * (`publicDefaultMetaNames`, `extern`). Fails closed — a grammar with no public modifier kind, or a
-	 * member or container whose parent cannot be found in `tree`, reads as exposed.
-	 */
-	public static function fieldExposed(
-		tree: QueryNode, member: QueryNode, container: QueryNode, plugin: GrammarPlugin, shape: RefShape
-	): Bool {
-		final publicKind: Null<String> = shape.publicModifierKind;
-		final host: Null<QueryNode> = TreePath.parentOf(tree, member);
-		// A type declared through a wrapper (`final class`) carries its modifiers on the wrapper.
-		final wrapper: Null<QueryNode> = TreePath.parentOf(tree, container);
-		final declared: QueryNode = wrapper != null && RefactorSupport.typeDeclOf(wrapper)?.nameNode == container ? wrapper : container;
-		final outer: Null<QueryNode> = declared == container ? wrapper : TreePath.parentOf(tree, declared);
-		if (publicKind == null || host == null || outer == null) return true;
-		final runKinds: Array<String> = CheckScan.modifierKinds(shape).concat(plugin.metaShape().metaKinds);
-		if (precedingModifiers(member, host, runKinds).exists(m -> m.kind == publicKind)) return true;
-		final publicMetaNames: Array<String> = shape.publicDefaultMetaNames ?? [];
-		final externKind: Null<String> = shape.externModifierKind;
-		return precedingModifiers(
-			declared, outer, runKinds
-		).exists(m -> m.kind == externKind || m.name != null && publicMetaNames.contains(m.name));
 	}
 
 }

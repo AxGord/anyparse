@@ -2,9 +2,9 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.MacroNames.*;
 
 using Lambda;
 using anyparse.macro.MetaInspect;
@@ -118,14 +118,14 @@ class PairedShapeLowering {
 
 	/** The paired `*S` type of a rule, or its raw type when the rule is a Terminal (Terminals are not paired). */
 	private function pairedComplexType(rule: String): ComplexType {
-		return !isTerminalRule(rule)
-			? TPath({
+		return isTerminalRule(rule)
+			? TPath({ pack: packOf(rule), name: simpleName(rule), params: [] })
+			: TPath({
 				pack: packOf(_shape.root).concat([SYNTH_SUBPACK]),
 				name: SYNTH_MODULE,
 				sub: simpleName(rule) + PAIRED_SUFFIX,
 				params: []
-			})
-			: TPath({ pack: packOf(rule), name: simpleName(rule), params: [] });
+			});
 	}
 
 	/** Whether a rule name resolves to a Terminal - a primitive leaf with no paired type and no generated functions. */

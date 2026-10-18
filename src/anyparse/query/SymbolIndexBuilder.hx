@@ -200,6 +200,11 @@ final class SymbolIndexBuilder {
 		return RefactorSupport.typeDeclOf(node) ?? condSharedBodyDeclOf(node);
 	}
 
+	/** Whether `pendingMeta` holds the grammar's (optional) tag `name` — false when the grammar names none. */
+	private static inline function carriesMeta(pendingMeta: Array<String>, name: Null<String>): Bool {
+		return name != null && pendingMeta.contains(name);
+	}
+
 	/**
 	 * The module-level value declarations of `tree` (`RefShape.moduleValueDeclKinds`: a function, a `var`, the form a `final`
 	 * wraps), every one in source order — inside a conditional region or any other nameless wrapper too, never inside a named
@@ -216,18 +221,12 @@ final class SymbolIndexBuilder {
 				return;
 			}
 			final declared: String = name;
-			if (kinds.contains(node.kind) && span != null) {
-				final at: Span = span;
-				out.push({ name: declared, span: at });
-			}
+			if (!kinds.contains(node.kind) || span == null) return;
+			final at: Span = span;
+			out.push({ name: declared, span: at });
 		}
 		for (c in tree.children) walk(c);
 		return out;
-	}
-
-	/** Whether `pendingMeta` holds the grammar's (optional) tag `name` — false when the grammar names none. */
-	private static inline function carriesMeta(pendingMeta: Array<String>, name: Null<String>): Bool {
-		return name != null && pendingMeta.contains(name);
 	}
 
 	/**
@@ -545,12 +544,9 @@ final class SymbolIndexBuilder {
 	 * other member is scanned with the write walker, so a write hidden in a `#if` branch counts too.
 	 */
 	private static function memberRebindsThis(node: QueryNode, shape: RefShape): Bool {
-		if (node.kind == 'FnMember') {
-			if (node.name == 'new') return false;
-			for (h in Refs.find('this', node, shape)) if (h.kind == RefKind.Write) return true;
-			return false;
-		}
-		return node.children.exists(c -> memberRebindsThis(c, shape));
+		return node.kind != 'FnMember'
+			? node.children.exists(c -> memberRebindsThis(c, shape))
+			: node.name != 'new' && Refs.find('this', node, shape).exists(h -> h.kind == RefKind.Write);
 	}
 
 	/**
@@ -558,8 +554,9 @@ final class SymbolIndexBuilder {
 	 * annotations before it already said — when `meta` is not one or names none.
 	 */
 	private static function forwardedArgsOf(meta: QueryNode, shape: RefShape, pending: Null<Array<String>>): Null<Array<String>> {
-		if (meta.name != shape.forwardingDeclMetaName || meta.children.length == 0) return pending;
-		return [for (c in meta.children) if (c.name != null) c.name ?? ''];
+		return meta.name != shape.forwardingDeclMetaName || meta.children.length == 0
+			? pending
+			: [for (c in meta.children) if (c.name != null) c.name ?? ''];
 	}
 
 	/**

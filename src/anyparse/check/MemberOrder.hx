@@ -140,12 +140,11 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	public function description(): String {
-		return 'type members not in canonical order ('
-			+ 'constants, properties, fields, constructor, accessors, instance methods, static methods; public before private; within one '
-			+ 'rank inline members lead, then initialized declarations lead init-less ones; conditional members grouped into one #if block '
-			+ 'per condition and branch shape, sorted at the rank their members share and leading it when the block holds only inline '
-			+ 'fields - or pinned to the end of their '
-			+ 'section when they span several ranks) or rank groups and conditional blocks not separated by blank lines';
+		return 'type members not in canonical order (constants, properties, fields, constructor, accessors, instance methods, static '
+			+ 'methods; public before private; within one rank inline members lead, then initialized declarations lead init-less ones; '
+			+ 'conditional members grouped into one #if block per condition and branch shape, sorted at the rank their members share and '
+			+ 'leading it when the block holds only inline fields - or pinned to the end of their section when they span several ranks) '
+			+ 'or rank groups and conditional blocks not separated by blank lines';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -173,9 +172,8 @@ final class MemberOrder implements Check implements ConfigAware {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final shape: RefShape = plugin.refShape();
-		return !applicable(shape)
-			? []
-			: RunScan.edits(plugin, source, tree -> {
+		return applicable(shape)
+			? RunScan.edits(plugin, source, tree -> {
 				final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 				final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(source) : [];
 				final movableArglessNew: Bool = violations.length > 0 && optionOn(violations[0].file, 'movableArglessNew');
@@ -201,7 +199,8 @@ final class MemberOrder implements Check implements ConfigAware {
 					index, file, plugin.lexicalRegions(source)
 				);
 				return edits;
-			});
+			})
+			: [];
 	}
 
 	/**
@@ -280,7 +279,12 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * member of a content-ranked block -1 when the block leads its rank, 1 when it trails the plain members.
 	 */
 	private static inline function blockStep(m: OrderedMember, ordinal: Null<Int>, plan: SortPlan): Int {
-		return ordinal == null ? 0 : (leadsRank(m, plan) ? -1 : 1);
+		return if (ordinal == null)
+			0
+		else if (leadsRank(m, plan))
+			-1
+		else
+			1;
 	}
 
 	/**
@@ -921,7 +925,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	 */
 	private static function isDirectiveOrBlank(text: String): Bool {
 		for (line in text.split('\n')) {
-			final trimmed: String = StringTools.ltrim(line);
+			final trimmed: String = line.ltrim();
 			if (trimmed == '') continue;
 			if (!trimmed.startsWith('#')) return false;
 			if (SourceComments.textHasCommentMarker(trimmed)) return false;

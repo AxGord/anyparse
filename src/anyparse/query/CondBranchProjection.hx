@@ -202,7 +202,7 @@ final class CondBranchProjection {
 	): Bool {
 		if (from >= to) return false;
 		for (line in maskComments(source, from, to, comments).split('\n')) {
-			final trimmed: String = StringTools.ltrim(line);
+			final trimmed: String = line.ltrim();
 			for (kw in elseKeywords) if (trimmed.startsWith(kw)) return true;
 		}
 		return false;

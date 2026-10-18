@@ -59,8 +59,7 @@ final class NativeSiteReach {
 			escapeType: t -> take(t, ownerEscaped, anyEscaped, into),
 			refuse: reason -> false
 		};
-		if (!_native.siteEscapes(x, hand)) return Blind;
-		return Hands(into.types, into.values, _native.classesNamed(words));
+		return _native.siteEscapes(x, hand) ? Hands(into.types, into.values, _native.classesNamed(words)) : Blind;
 	}
 
 	/**

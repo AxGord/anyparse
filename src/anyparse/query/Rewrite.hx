@@ -175,7 +175,7 @@ final class Rewrite {
 		final shift: Int = plus >= 0 ? num : -num;
 		final raw: Null<String> = metavarSource(spec.substring(0, opAt), source, bindings);
 		if (raw == null) return null;
-		final value: Null<Int> = Std.parseInt(StringTools.trim(raw));
+		final value: Null<Int> = Std.parseInt(raw.trim());
 		return value == null ? null : '${value + shift}';
 	}
 

@@ -238,9 +238,9 @@ final class EdgeConditions {
 		final decl: Null<QueryNode> = fn == null ? null : BareNames.localOf(fn, local, _shape, _sequenceKinds);
 		if (decl == null) return null;
 		final declKinds: Array<String> = _shape.localDeclKinds ?? [];
-		if (!declKinds.contains(decl.kind) || (_shape.mutableLocalDeclKinds ?? []).contains(decl.kind) || decl.children.length == 0)
-			return null;
-		return decl.children[decl.children.length - 1];
+		return !declKinds.contains(decl.kind) || (_shape.mutableLocalDeclKinds ?? []).contains(decl.kind) || decl.children.length == 0
+			? null
+			: decl.children[decl.children.length - 1];
 	}
 
 	/** Whether `expr` is a read or call of a `mainThreadChecks` entry: the graph records an invocation of one at exactly its range. */

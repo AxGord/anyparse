@@ -58,6 +58,12 @@ final class SubtypeGraph {
 	/** Every indexed file's `FileInfo`, handed over by the owning index. */
 	private final _files: Array<FileInfo>;
 
+	/** Per-file source text, handed over by the owning index. */
+	private final _sources: Map<String, String>;
+
+	/** The name -> declaration layer this one resolves every written supertype reference through. */
+	private final _refs: TypeRefIndex;
+
 	/**
 	 * Every declared type in `_files` / `types` order (`types`) and, per member NAME, the ordinals of the
 	 * types that declare a member of that name (`byName`), built on first use. `subtypeOverridesProperty`
@@ -65,12 +71,6 @@ final class SubtypeGraph {
 	 * each ask (~0.3 s of a TM `lint --all`).
 	 */
 	private var _memberOwners: Null<{ types: Array<ResolvedType>, byName: Map<String, Array<Int>> }> = null;
-
-	/** Per-file source text, handed over by the owning index. */
-	private final _sources: Map<String, String>;
-
-	/** The name -> declaration layer this one resolves every written supertype reference through. */
-	private final _refs: TypeRefIndex;
 
 	/**
 	 * Lazily-built subtype adjacency in the three keyings one pass produces — see

@@ -1,11 +1,11 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.Cli.ReconCluster;
+import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.command.ReconCommand.ReconWalkResult;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;
@@ -54,6 +54,64 @@ final class StripCommand implements CliCommand {
 
 	public function usage(): Void {
 		printStripUsage();
+	}
+
+	/**
+	 * Count non-overlapping occurrences of `needle` in `haystack`.
+	 * Matches `StringTools.replace`'s scan semantics — used by `apq
+	 * strip --dry-run` so the per-pattern hit count exactly tracks
+	 * how many substitutions the non-dry-run path would perform.
+	 */
+	public static function countOccurrences(haystack: String, needle: String): Int {
+		if (needle.length == 0) return 0;
+		var count: Int = 0;
+		var from: Int = 0;
+		while (true) {
+			final idx: Int = haystack.indexOf(needle, from);
+			if (idx < 0) break;
+			count++;
+			from = idx + needle.length;
+		}
+		return count;
+	}
+
+	/**
+	 * Compile every `--replace` / `--delete` pattern as an `EReg` with
+	 * the global flag `g` (needed so `replace` and `map` walk every
+	 * occurrence, matching the literal-mode `StringTools.replace`
+	 * semantics). On compile failure prints the offending pattern + EReg
+	 * error to stderr and returns `null` — caller exits `EXIT_USAGE`
+	 * before any FS I/O. Tool tag (`'strip'` / `'recon'`) is threaded for
+	 * the error message prefix so the user sees which subcommand owned
+	 * the typo.
+	 */
+	public static function compileStripRegexes(tool: String, patterns: Array<String>): Null<Array<EReg>> {
+		final out: Array<EReg> = [];
+		for (idx => pat in patterns) {
+			try {
+				out.push(new EReg(pat, 'g'));
+			} catch (e: Exception) {
+				CliIo.stderr('apq $tool: --regex: pattern[$idx] "$pat" is not a valid EReg: ${e.message}\n');
+				return null;
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Count every match of `re` in `s`. Uses `EReg.map` for the side
+	 * effect — the callback fires once per match (including zero-length
+	 * matches, which `EReg` advances past internally) and returns the
+	 * matched text unchanged so the produced string equals the input.
+	 * Cheap enough for predict-strip / strip --dry-run sweeps.
+	 */
+	public static function countRegexHits(re: EReg, s: String): Int {
+		var n: Int = 0;
+		re.map(s, m -> {
+			n++;
+			m.matched(0);
+		});
+		return n;
 	}
 
 	/** Terminal-case StripOpts: a flag/usage path that the caller returns immediately, ignoring every other field. */
@@ -154,14 +212,12 @@ final class StripCommand implements CliCommand {
 			CliIo.stderr('apq strip: --per-pattern takes exactly one file (got ${o.files.length})\n');
 			return EXIT_USAGE;
 		}
-		if (o.patterns.length < 2) {
-			CliIo.stderr(
-				'apq strip: --per-pattern requires ≥2 patterns (got ${o.patterns.length}'
-				+ ') — isolation diagnostic only useful when patterns can be tested independently\n'
-			);
-			return EXIT_USAGE;
-		}
-		return runStripPerPattern(plugin, o.files[0], o.patterns, o.replacements, compiledRegex);
+		if (o.patterns.length >= 2) return runStripPerPattern(plugin, o.files[0], o.patterns, o.replacements, compiledRegex);
+		CliIo.stderr(
+			'apq strip: --per-pattern requires ≥2 patterns (got ${o.patterns.length}'
+			+ ') — isolation diagnostic only useful when patterns can be tested independently\n'
+		);
+		return EXIT_USAGE;
 	}
 
 	/**
@@ -276,64 +332,6 @@ final class StripCommand implements CliCommand {
 		CliIo.stderr('apq strip: --from-cluster requires a sys target (filesystem walk)\n');
 		return null;
 		#end
-	}
-
-	/**
-	 * Count non-overlapping occurrences of `needle` in `haystack`.
-	 * Matches `StringTools.replace`'s scan semantics — used by `apq
-	 * strip --dry-run` so the per-pattern hit count exactly tracks
-	 * how many substitutions the non-dry-run path would perform.
-	 */
-	public static function countOccurrences(haystack: String, needle: String): Int {
-		if (needle.length == 0) return 0;
-		var count: Int = 0;
-		var from: Int = 0;
-		while (true) {
-			final idx: Int = haystack.indexOf(needle, from);
-			if (idx < 0) break;
-			count++;
-			from = idx + needle.length;
-		}
-		return count;
-	}
-
-	/**
-	 * Compile every `--replace` / `--delete` pattern as an `EReg` with
-	 * the global flag `g` (needed so `replace` and `map` walk every
-	 * occurrence, matching the literal-mode `StringTools.replace`
-	 * semantics). On compile failure prints the offending pattern + EReg
-	 * error to stderr and returns `null` — caller exits `EXIT_USAGE`
-	 * before any FS I/O. Tool tag (`'strip'` / `'recon'`) is threaded for
-	 * the error message prefix so the user sees which subcommand owned
-	 * the typo.
-	 */
-	public static function compileStripRegexes(tool: String, patterns: Array<String>): Null<Array<EReg>> {
-		final out: Array<EReg> = [];
-		for (idx => pat in patterns) {
-			try {
-				out.push(new EReg(pat, 'g'));
-			} catch (e: Exception) {
-				CliIo.stderr('apq $tool: --regex: pattern[$idx] "$pat" is not a valid EReg: ${e.message}\n');
-				return null;
-			}
-		}
-		return out;
-	}
-
-	/**
-	 * Count every match of `re` in `s`. Uses `EReg.map` for the side
-	 * effect — the callback fires once per match (including zero-length
-	 * matches, which `EReg` advances past internally) and returns the
-	 * matched text unchanged so the produced string equals the input.
-	 * Cheap enough for predict-strip / strip --dry-run sweeps.
-	 */
-	public static function countRegexHits(re: EReg, s: String): Int {
-		var n: Int = 0;
-		re.map(s, m -> {
-			n++;
-			m.matched(0);
-		});
-		return n;
 	}
 
 	private static function printStripUsage(): Void {

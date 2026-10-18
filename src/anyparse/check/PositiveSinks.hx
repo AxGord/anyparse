@@ -63,6 +63,11 @@ final class PositiveSinks {
 		];
 	}
 
+	/** The library calls whose bodies block, for a chain whose `options` walk the libraries (`libraryBodies`); none otherwise. */
+	public inline function libraryFor(options: ThreadSafetyOptions): Array<String> {
+		return walkedFor(options)?.ids ?? [];
+	}
+
 	/**
 	 * The builtin sinks and natives the `nonBlocking` entries of `options` waive; each entry that waives none, names a
 	 * call of `configured` — the chain's own `sinks`, which keep it — or names a native that bears a library call's name
@@ -95,11 +100,6 @@ final class PositiveSinks {
 		return out;
 	}
 
-	/** The library calls whose bodies block, for a chain whose `options` walk the libraries (`libraryBodies`); none otherwise. */
-	public inline function libraryFor(options: ThreadSafetyOptions): Array<String> {
-		return walkedFor(options)?.ids ?? [];
-	}
-
 	/**
 	 * The notice a reporting run gives once: how many blocking library calls there are, how many it makes, its natives, and
 	 * how many of them the run's `nonBlocking` entries removed (`waived`, which a run calls first).
@@ -113,6 +113,11 @@ final class PositiveSinks {
 				+ ' project native(s)${library?.notice() ?? ''} — "sinks" adds to them, "nonBlocking" removes from them$waivers';
 	}
 
+	/** The libraries walked, for a chain whose `options` ask for them (`libraryBodies`); null otherwise. */
+	private inline function walkedFor(options: ThreadSafetyOptions): Null<LibraryBodies> {
+		return options.list(LibraryBodies.OPTION).length > 0 ? library : null;
+	}
+
 	/**
 	 * Says in `found` each `sinks` entry written with its package (`pkg.Type.member`) that names no call of `graph`: such an
 	 * entry names the type declared at that path alone, so a wrong package adds no sink while the others still match.
@@ -120,11 +125,6 @@ final class PositiveSinks {
 	public static function unmatched(sinks: Array<String>, graph: CallGraph, found: Array<String>): Void {
 		for (p in sinks) if (p.indexOf('.') >= 0 && !CallGraphNames.isTypeLike(p) && graph.matchIds(p).length == 0)
 			found.push('option "sinks" entry "$p" names no call of the run — it adds no sink');
-	}
-
-	/** The libraries walked, for a chain whose `options` ask for them (`libraryBodies`); null otherwise. */
-	private inline function walkedFor(options: ThreadSafetyOptions): Null<LibraryBodies> {
-		return options.list(LibraryBodies.OPTION).length > 0 ? library : null;
 	}
 
 }

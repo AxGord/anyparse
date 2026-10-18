@@ -1,13 +1,13 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.Address;
+import anyparse.query.ExitCode.*;
 import anyparse.query.SourceText;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliEdit;
 import anyparse.runtime.CommonPrefix;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;
@@ -114,17 +114,6 @@ final class SourceCommand implements CliCommand {
 		return common == null ? 0 : common.length;
 	}
 
-	/** The leading run of spaces / tabs at the start of `s`. */
-	private static function leadingWhitespace(s: String): String {
-		var i: Int = 0;
-		while (i < s.length) {
-			final c: Int = s.fastCodeAt(i);
-			if (c != ' '.code && c != '\t'.code) break;
-			i++;
-		}
-		return s.substr(0, i);
-	}
-
 	/**
 	 * Drop the first `strip` chars (the verified common indent) of `line`; a
 	 * blank / whitespace-only line collapses to empty instead of keeping stray
@@ -216,6 +205,17 @@ final class SourceCommand implements CliCommand {
 		// are the two that do reach it.
 		final span: Span = CliEdit.sourceWindows(tree, [resolved], content, plugin.lexicalRegions.bind(content))[0] ?? rawSpan;
 		return lineRange(span, content);
+	}
+
+	/** The leading run of spaces / tabs at the start of `s`. */
+	private static function leadingWhitespace(s: String): String {
+		var i: Int = 0;
+		while (i < s.length) {
+			final c: Int = s.fastCodeAt(i);
+			if (c != ' '.code && c != '\t'.code) break;
+			i++;
+		}
+		return s.substr(0, i);
 	}
 
 	/**
@@ -365,6 +365,45 @@ final class SourceCommand implements CliCommand {
 
 		emitSourceLines(lines, bounds.from, bounds.to, opts.number, opts.raw);
 		return EXIT_OK;
+	}
+
+	public static function printSourceUsage(): Void {
+		CliIo.sysPrint('Usage: apq source [options] <file>   (alias: apq show)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --range <spec>     1-based inclusive lines: L | L:L2 | L: | :L2 (default: whole file)\n');
+		CliIo.sysPrint('  --select <sel>     Source of the node matching <sel> (apq ast selector,\n');
+		CliIo.sysPrint("                     e.g. 'FnMember:foo' / 'ClassDecl:Bar') — must match exactly one.\n");
+		CliIo.sysPrint('                     REPEATABLE: several nodes print in document order, each\n');
+		CliIo.sysPrint('                     under a `=== <selector> ===` banner (one selector: no banner)\n');
+		CliIo.sysPrint('  --at <line>:<col>  Source of the innermost node at the 1-based position\n');
+		CliIo.sysPrint('  --number, -n       Prefix each line with `<lineno>\\t` (cat -n style)\n');
+		CliIo.sysPrint('  --raw              Keep bytes verbatim — no dedent (for Edit-anchoring / real columns)\n');
+		CliIo.sysPrint('  --all              Print the whole file past the narrow-the-read budget\n');
+		CliIo.sysPrint('  --lang <name>      Grammar plugin for --select / --at (default: haxe)\n');
+		CliIo.sysPrint('  -h, --help         Show this help\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Emits RAW lines of <file>. The default / `--range` path does NO parse and\n');
+		CliIo.sysPrint('works on any file (parseable or skip-parse). `--select` / `--at` parse the\n');
+		CliIo.sysPrint('file and print the full lines spanning the matched node together with its\n');
+		CliIo.sysPrint('leading modifier / annotation / conditional-prefix run — the span `patch`\n');
+		CliIo.sysPrint('searches and `replace-node` overwrites — the clean way to\n');
+		CliIo.sysPrint("read ONE function by name (no line numbers, no S-expr): apq source f.hx --select 'FnMember:foo'.\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('By default the common leading indentation shared by the shown lines is\n');
+		CliIo.sysPrint('stripped (dedent) so nested slices read cleanly; pass `--raw` to keep exact\n');
+		CliIo.sysPrint('bytes — needed when the output anchors an Edit or you need true column\n');
+		CliIo.sysPrint('positions. The gate-blessed replacement for `git show` / `readFileSync`.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A file longer than 120 lines read with NO --range / --select / --at is\n');
+		CliIo.sysPrint('REFUSED: stderr answers the line count plus a menu of top-level selectors\n');
+		CliIo.sysPrint('and the run exits non-zero, because `--select` needs a name you cannot have\n');
+		CliIo.sysPrint('on first contact. `--all` prints it whole; HXQ_SOURCE_MAX_LINES moves the\n');
+		CliIo.sysPrint('budget and 0 switches the refusal off.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('`apq show` is the SAME command. A shell sandbox refuses any command carrying\n');
+		CliIo.sysPrint('the token `source` (it reads as the builtin that executes a file), which made\n');
+		CliIo.sysPrint('this one unusable inside one — use the alias there.\n');
 	}
 
 	/**
@@ -532,7 +571,6 @@ final class SourceCommand implements CliCommand {
 		for (child in node.children) collectTopLevelSelectors(child, below, out);
 	}
 
-
 	/**
 	 * `Std.parseInt` parses a PREFIX and silently ignores trailing garbage
 	 * (`Std.parseInt('205,225') == 205`), which made `--range 205,225` (a
@@ -590,45 +628,6 @@ final class SourceCommand implements CliCommand {
 			lineCount
 		else
 			n;
-	}
-
-	public static function printSourceUsage(): Void {
-		CliIo.sysPrint('Usage: apq source [options] <file>   (alias: apq show)\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Options:\n');
-		CliIo.sysPrint('  --range <spec>     1-based inclusive lines: L | L:L2 | L: | :L2 (default: whole file)\n');
-		CliIo.sysPrint('  --select <sel>     Source of the node matching <sel> (apq ast selector,\n');
-		CliIo.sysPrint("                     e.g. 'FnMember:foo' / 'ClassDecl:Bar') — must match exactly one.\n");
-		CliIo.sysPrint('                     REPEATABLE: several nodes print in document order, each\n');
-		CliIo.sysPrint('                     under a `=== <selector> ===` banner (one selector: no banner)\n');
-		CliIo.sysPrint('  --at <line>:<col>  Source of the innermost node at the 1-based position\n');
-		CliIo.sysPrint('  --number, -n       Prefix each line with `<lineno>\\t` (cat -n style)\n');
-		CliIo.sysPrint('  --raw              Keep bytes verbatim — no dedent (for Edit-anchoring / real columns)\n');
-		CliIo.sysPrint('  --all              Print the whole file past the narrow-the-read budget\n');
-		CliIo.sysPrint('  --lang <name>      Grammar plugin for --select / --at (default: haxe)\n');
-		CliIo.sysPrint('  -h, --help         Show this help\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Emits RAW lines of <file>. The default / `--range` path does NO parse and\n');
-		CliIo.sysPrint('works on any file (parseable or skip-parse). `--select` / `--at` parse the\n');
-		CliIo.sysPrint('file and print the full lines spanning the matched node together with its\n');
-		CliIo.sysPrint('leading modifier / annotation / conditional-prefix run — the span `patch`\n');
-		CliIo.sysPrint('searches and `replace-node` overwrites — the clean way to\n');
-		CliIo.sysPrint("read ONE function by name (no line numbers, no S-expr): apq source f.hx --select 'FnMember:foo'.\n");
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('By default the common leading indentation shared by the shown lines is\n');
-		CliIo.sysPrint('stripped (dedent) so nested slices read cleanly; pass `--raw` to keep exact\n');
-		CliIo.sysPrint('bytes — needed when the output anchors an Edit or you need true column\n');
-		CliIo.sysPrint('positions. The gate-blessed replacement for `git show` / `readFileSync`.\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('A file longer than 120 lines read with NO --range / --select / --at is\n');
-		CliIo.sysPrint('REFUSED: stderr answers the line count plus a menu of top-level selectors\n');
-		CliIo.sysPrint('and the run exits non-zero, because `--select` needs a name you cannot have\n');
-		CliIo.sysPrint('on first contact. `--all` prints it whole; HXQ_SOURCE_MAX_LINES moves the\n');
-		CliIo.sysPrint('budget and 0 switches the refusal off.\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('`apq show` is the SAME command. A shell sandbox refuses any command carrying\n');
-		CliIo.sysPrint('the token `source` (it reads as the builtin that executes a file), which made\n');
-		CliIo.sysPrint('this one unusable inside one — use the alias there.\n');
 	}
 	#end
 

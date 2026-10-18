@@ -28,9 +28,14 @@ final class CatchTypes {
 	 */
 	public static function thrownType(node: QueryNode, shape: RefShape): Null<String> {
 		final value: Null<QueryNode> = node.children.length == 1 ? node.children[0] : null;
-		if (value == null) return null;
-		if ((shape.stringLiteralKinds ?? []).contains(value.kind)) return STRING_TYPE;
-		return value.kind == shape.newExprKind ? value.name : null;
+		return if (value == null)
+			null
+		else if ((shape.stringLiteralKinds ?? []).contains(value.kind))
+			STRING_TYPE
+		else if (value.kind == shape.newExprKind)
+			value.name
+		else
+			null;
 	}
 
 	/** Whether one of the `catch` clauses `clauses` provably catches a thrown value of the written type `thrown` (null: unknown). */
@@ -46,12 +51,10 @@ final class CatchTypes {
 		final declared: Null<QueryNode> = clause.type;
 		if (declared == null) return true;
 		final written: Null<String> = writtenType(declared, shape);
-		if (written == null) return false;
-		if (catchesAll(written, shape, index)) return true;
-		if (thrown == null) return false;
-		if (written == thrown) return true;
-		return index != null && index.refs.declsNamed(thrown).length == 1 && index.refs.declsNamed(written).length == 1
-			&& index.subtypes.isSubtype(thrown, written);
+		return written != null
+			&& (catchesAll(written, shape, index) || thrown != null
+				&& (written == thrown || index != null && index.refs.declsNamed(thrown).length == 1
+					&& index.refs.declsNamed(written).length == 1 && index.subtypes.isSubtype(thrown, written)));
 	}
 
 	/**
@@ -62,8 +65,12 @@ final class CatchTypes {
 		final name: Null<String> = declared.name;
 		if (!(shape.typeAnnotationKinds ?? []).contains(declared.kind) || name == null) return null;
 		final args: Array<Null<String>> = [for (c in declared.children) writtenType(c, shape)];
-		if (args.contains(null)) return null;
-		return args.length == 0 ? name : '$name<${args.join(',')}>';
+		return if (args.contains(null))
+			null
+		else if (args.length == 0)
+			name
+		else
+			'$name<${args.join(',')}>';
 	}
 
 	/** Whether a clause written as `written` catches every thrown value. */

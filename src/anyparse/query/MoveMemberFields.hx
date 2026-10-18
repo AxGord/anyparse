@@ -58,6 +58,25 @@ final class MoveMemberFields {
 	}
 
 	/**
+	 * Which members staying on the source also reach the `fields` a moved body reads — the reason they were not moved
+	 * along (`ownedFieldClosure`) — as a clause for the refusal, or '' when no bare reference names a staying member (the
+	 * field is then kept by a field access elsewhere, a destination member of its name, or its shape).
+	 */
+	public static function stayingReadersNote(prep: MovePrep, fields: Array<String>, plugin: GrammarPlugin): String {
+		final members: Array<MemberGroup> = MoveMember.membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions);
+		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(fields, prep.srcTree, prep.shape);
+		final readers: Array<String> = [];
+		for (field in fields) for (h in hitsByName[field] ?? []) if (
+			h.kind != RefKind.Decl && !MoveMember.insideAnyCut(prep, h.span.from)
+		) {
+			final holder: Null<MemberGroup> = members.find(g -> h.span.from >= g.groupSpan.from && h.span.from < (g.member.span?.to ?? -1));
+			final name: Null<String> = holder?.member.name;
+			if (name != null && name != field) MoveMember.pushUnique(readers, name);
+		}
+		return readers.length == 0 ? '' : ' — staying member(s) ${MoveMember.quoted(readers)} use them too; move those along';
+	}
+
+	/**
 	 * Whether `g` has the SHAPE of a field a moved group may take along (`ownedFieldClosure`): a non-static `var` with no
 	 * accessor clause or a non-static `final` with an initializer, outside every `#if` region, that the destination does
 	 * not declare a member of the same name for.
@@ -110,30 +129,9 @@ final class MoveMemberFields {
 			final span: Null<Span> = node.span;
 			if (node.kind == MemberKinds.FIELD_ACCESS_KIND && node.name == name && span != null && !(inSource && inside(span.from)))
 				return true;
-			for (c in node.children) if (walk(c, inSource)) return true;
-			return false;
+			return node.children.exists(c -> walk(c, inSource));
 		}
-		for (tree in trees) if (walk(tree, tree == srcTree)) return true;
-		return false;
-	}
-
-	/**
-	 * Which members staying on the source also reach the `fields` a moved body reads — the reason they were not moved
-	 * along (`ownedFieldClosure`) — as a clause for the refusal, or '' when no bare reference names a staying member (the
-	 * field is then kept by a field access elsewhere, a destination member of its name, or its shape).
-	 */
-	public static function stayingReadersNote(prep: MovePrep, fields: Array<String>, plugin: GrammarPlugin): String {
-		final members: Array<MemberGroup> = MoveMember.membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions);
-		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(fields, prep.srcTree, prep.shape);
-		final readers: Array<String> = [];
-		for (field in fields) for (h in hitsByName[field] ?? []) if (
-			h.kind != RefKind.Decl && !MoveMember.insideAnyCut(prep, h.span.from)
-		) {
-			final holder: Null<MemberGroup> = members.find(g -> h.span.from >= g.groupSpan.from && h.span.from < (g.member.span?.to ?? -1));
-			final name: Null<String> = holder?.member.name;
-			if (name != null && name != field) MoveMember.pushUnique(readers, name);
-		}
-		return readers.length == 0 ? '' : ' — staying member(s) ${MoveMember.quoted(readers)} use them too; move those along';
+		return Lambda.exists(trees, tree -> walk(tree, tree == srcTree));
 	}
 
 }

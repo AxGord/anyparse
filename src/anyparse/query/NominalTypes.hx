@@ -628,8 +628,6 @@ final class NominalTypes {
 	 * `seen` rides along rather than being re-created per receiver only for tidiness: the call-tail
 	 * recursion is structurally decreasing, and the cycle the guard actually exists for lives entirely
 	 * inside `typeWalk` (a `for` binder whose iterable reads it), which never comes back through here.
-	 */
-	/**
 	 * The type of an IDENT that names no value binding: a member of the ENCLOSING type, read
 	 * through an implicit `this` (`MS`, `l_usedLibs`). Null for anything else, including a name
 	 * that IS a binding — that one the path walk already answered.
@@ -682,9 +680,14 @@ final class NominalTypes {
 		final identKind: Null<String> = shape.identKind;
 		final name: Null<String> = receiver.name;
 		final span: Null<Span> = receiver.span;
-		if (identKind == null || receiver.kind != identKind || name == null || span == null) return null;
-		if (!SourceText.isUpperInitial(name) || TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
-		return index.refs.declaringFiles(name).length == 0 ? null : index.members.returnNominalOf(name, method);
+		return if (identKind == null || receiver.kind != identKind || name == null || span == null)
+			null
+		else if (!SourceText.isUpperInitial(name) || TypeResolver.resolveBindingFrom(name, span, root, shape) != null)
+			null
+		else if (index.refs.declaringFiles(name).length == 0)
+			null
+		else
+			index.members.returnNominalOf(name, method);
 	}
 
 	private static function expressionNominalWalk(

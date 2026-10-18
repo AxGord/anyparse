@@ -55,22 +55,12 @@ final class RemoveElement {
 		final cursor: Int = Span.offsetOf(source, line, col);
 
 		final hit: Null<ElementHit> = elementAt(tree, source, cursor);
-		if (hit == null)
-			return Err(
+		return hit == null
+			? Err(
 				'position $line:$col'
 				+ ' is not on the first token of an element — point at the first token of a statement / case / list element / member'
-			);
-		return ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
-	}
-
-	/**
-	 * The element at `cursor` with its parent — lifted to the wrapper when it is a `final class`'s
-	 * inner form, whose own span leaves the wrapper's `final` behind to glue onto the NEXT declaration
-	 * (`final abstract class Y`). Both the removal and its description read it, so they name one cut.
-	 */
-	private static function elementAt(tree: QueryNode, source: String, cursor: Int): Null<ElementHit> {
-		final hit: Null<ElementHit> = RefactorSupport.elementAtFrom(tree, source, cursor);
-		return hit == null ? null : liftedHit(tree, hit.node);
+			)
+			: ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
 	}
 
 	/**
@@ -122,6 +112,16 @@ final class RemoveElement {
 				case Failed(_): null;
 			}
 		);
+	}
+
+	/**
+	 * The element at `cursor` with its parent — lifted to the wrapper when it is a `final class`'s
+	 * inner form, whose own span leaves the wrapper's `final` behind to glue onto the NEXT declaration
+	 * (`final abstract class Y`). Both the removal and its description read it, so they name one cut.
+	 */
+	private static function elementAt(tree: QueryNode, source: String, cursor: Int): Null<ElementHit> {
+		final hit: Null<ElementHit> = RefactorSupport.elementAtFrom(tree, source, cursor);
+		return hit == null ? null : liftedHit(tree, hit.node);
 	}
 
 	/** The element `node` names with its parent, lifted to a folding `final` wrapper as `elementAt` does. */

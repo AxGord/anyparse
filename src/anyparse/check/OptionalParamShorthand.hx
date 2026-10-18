@@ -516,10 +516,10 @@ final class OptionalParamShorthand implements Check {
 		final unwrapped: Null<TypeSyntax> = typed.text == raw ? typed.wrapped([NULL_WRAPPER]) : null;
 		return if (unwrapped != null)
 			{ inner: typed.argumentsSource() ?? unwrapped.text, raw: raw, opt: false }
-		else if (!nullApplied(typed))
-			{ inner: raw, raw: raw, opt: false }
+		else if (nullApplied(typed))
+			null
 		else
-			null;
+			{ inner: raw, raw: raw, opt: false };
 	}
 
 	/** Whether `t` applies the `Null` wrapper to type arguments — `Null<T>`, or a malformed `Null<A, B>`. */

@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.cli.CliArgs;
@@ -7,7 +8,6 @@ import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliWalk;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;
@@ -90,6 +90,36 @@ final class GatesCommand implements CliCommand {
 
 	public function usage(): Void {
 		printGatesUsage();
+	}
+
+	/**
+	 * Bucket raw MetaHits by their `declSpan.from` — one bucket per
+	 * field / branch / ctor that carries annotations. Returns the
+	 * grouping map plus a parallel `order` array that preserves
+	 * first-seen source order so downstream emitters render in file
+	 * layout, not Map iteration order.
+	 *
+	 * Shared by `collectMechanismHits` (gates --mechanism) and
+	 * `collectPermissiveCandidates` (recon --permissive-construct).
+	 * Both consumers need the same grouping shape; factoring it out
+	 * keeps the bucket-build logic single-sourced.
+	 */
+	public static function groupMetaHitsByDeclSpan(raw: Array<MetaHit>): { order: Array<Int>, groups: Map<Int, Array<MetaHit>> } {
+		final order: Array<Int> = [];
+		final groups: Map<Int, Array<MetaHit>> = [];
+		for (h in raw) {
+			final span: Null<Span> = h.declSpan;
+			if (span == null) continue;
+			final key: Int = span.from;
+			var bucket: Null<Array<MetaHit>> = groups[key];
+			if (bucket == null) {
+				bucket = [];
+				groups[key] = bucket;
+				order.push(key);
+			}
+			bucket.push(h);
+		}
+		return { order: order, groups: groups };
 	}
 
 	private static inline function gatesParseExit(code: Int): GatesOpts {
@@ -212,36 +242,6 @@ final class GatesCommand implements CliCommand {
 			});
 		}
 		return out;
-	}
-
-	/**
-	 * Bucket raw MetaHits by their `declSpan.from` — one bucket per
-	 * field / branch / ctor that carries annotations. Returns the
-	 * grouping map plus a parallel `order` array that preserves
-	 * first-seen source order so downstream emitters render in file
-	 * layout, not Map iteration order.
-	 *
-	 * Shared by `collectMechanismHits` (gates --mechanism) and
-	 * `collectPermissiveCandidates` (recon --permissive-construct).
-	 * Both consumers need the same grouping shape; factoring it out
-	 * keeps the bucket-build logic single-sourced.
-	 */
-	public static function groupMetaHitsByDeclSpan(raw: Array<MetaHit>): { order: Array<Int>, groups: Map<Int, Array<MetaHit>> } {
-		final order: Array<Int> = [];
-		final groups: Map<Int, Array<MetaHit>> = [];
-		for (h in raw) {
-			final span: Null<Span> = h.declSpan;
-			if (span == null) continue;
-			final key: Int = span.from;
-			var bucket: Null<Array<MetaHit>> = groups[key];
-			if (bucket == null) {
-				bucket = [];
-				groups[key] = bucket;
-				order.push(key);
-			}
-			bucket.push(h);
-		}
-		return { order: order, groups: groups };
 	}
 
 	/**

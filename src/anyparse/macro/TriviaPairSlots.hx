@@ -48,6 +48,10 @@ final class TriviaPairSlots {
 		return buildNullStringSlot(child, pos, TriviaTypeSynth.AFTER_TRAIL_SUFFIX);
 	}
 
+	/** The `<field>BeforeLead:Null<String>` slot — see `TriviaTypeSynth.BEFORE_LEAD_SUFFIX`. */
+	public static inline function buildBeforeLeadSlot(child: ShapeNode, pos: Position): Field {
+		return buildNullStringSlot(child, pos, TriviaTypeSynth.BEFORE_LEAD_SUFFIX);
+	}
 
 	public static function buildStructField(child: ShapeNode, pos: Position, synthPack: Array<String>): Field {
 		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
@@ -216,11 +220,6 @@ final class TriviaPairSlots {
 	public static function isBeforeLeadRef(child: ShapeNode, isFirstField: Bool): Bool {
 		return !isFirstField && child.kind == Ref && child.readMetaString(':kw') == null && child.readMetaString(':lead') != null
 			&& child.readMetaStringArgs(':absentOn') == null && !child.hasMeta(':absentOnEof');
-	}
-
-	/** The `<field>BeforeLead:Null<String>` slot — see `TriviaTypeSynth.BEFORE_LEAD_SUFFIX`. */
-	public static inline function buildBeforeLeadSlot(child: ShapeNode, pos: Position): Field {
-		return buildNullStringSlot(child, pos, TriviaTypeSynth.BEFORE_LEAD_SUFFIX);
 	}
 
 	/**

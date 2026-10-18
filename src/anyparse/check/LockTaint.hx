@@ -56,7 +56,10 @@ typedef ChainLists = {
 	 */
 	final runsOnceIds: Array<String>;
 
-	/** The member names whose every call runs a function value handed to it at most once so (`runsOnceIds`), by the name the call is written with. */
+	/**
+	 * The member names whose every call runs a function value handed to it
+	 * at most once so (`runsOnceIds`), by the name the call is written with.
+	 */
 	final runsOnceNames: Array<String>;
 
 	/** The `lockPairs` take members that take their lock shared (`sharedLocks`): such takes never wait for each other. */
@@ -326,8 +329,7 @@ final class LockTaint {
 		if (!_threads.runsFrom(edge) || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;
 		if (!takesLock(edge)) return true;
 		final lock: Null<String> = _sites.lockOf(edge);
-		if (quiet.never(edge)) return false;
-		return lock == null || !(lock == held && _sites.selfTake(edge)) && blockingLocks().contains(lock);
+		return !quiet.never(edge) && (lock == null || !(lock == held && _sites.selfTake(edge)) && blockingLocks().contains(lock));
 	}
 
 	/**
@@ -340,7 +342,7 @@ final class LockTaint {
 		if (retakesElsewhere(edge, held)) return held != null && _long.contains(held);
 		if (!takesLock(edge)) return !listsOf(edge.file).shortSinkIds.contains(edge.to);
 		final lock: Null<String> = _sites.lockOf(edge);
-		return lock == null || _long.contains(lock) && !(_cost?.dominance.dominated(edge, valuation) == true);
+		return lock == null || _long.contains(lock) && _cost?.dominance.dominated(edge, valuation) != true;
 	}
 
 	/**
@@ -417,7 +419,6 @@ final class LockTaint {
 		return lists.sinkIds.contains(edge.to) && lists.pairs.exists(p -> p.lockId == edge.to);
 	}
 
-
 	/** The locks whose take blocks at all: the plain taint's `long`, or the plain solve's for a taint asking about cost. */
 	private inline function blockingLocks(): Array<String> {
 		return _cost?.blocking ?? _long;
@@ -462,6 +463,12 @@ final class LockTaint {
 	private inline function briefUnder(under: Null<String>, edge: CallEdge): Bool {
 		return under != null && takesLock(edge)
 			&& _cost?.dominance.briefUnder(under, edge, listsOf(edge.file).reentrantIds.contains(edge.to)) == true;
+	}
+
+	/** `way` extended by the call `edge` asking about cost (`CallRepetition.along`); `way` itself for the plain taint. */
+	private inline function wayAt(edge: CallEdge, way: BoundedWay): Null<BoundedWay> {
+		final cost: Null<TaintCost> = _cost;
+		return cost == null ? way : cost.repetition.along(edge, way);
 	}
 
 	/**
@@ -701,14 +708,6 @@ final class LockTaint {
 		return answer;
 	}
 
-	private static inline function stateKey(
-		held: Null<String>, id: String, valuation: String, ctx: Int, flags: WalkFlags, under: Null<String>
-	): String {
-		final way: BoundedWay = flags.way;
-		final bounded: String = way.entries.length > 0 ? '|${way.turns}x${way.cost}' : '';
-		return '${held ?? ''}|$id|$valuation|$ctx${flags.repeated ? '|repeated' : bounded}|${under ?? ''}';
-	}
-
 	/**
 	 * What the call `edge` of `state` carries down under a hold of `held`: whether a call on the way to its target
 	 * repeats — bounded repetitions on one way multiply, and the call that takes them past the budget repeats — and the
@@ -719,10 +718,12 @@ final class LockTaint {
 		return { held: held, repeated: state.repeated || repeatsAt(edge) || way == null, way: way ?? state.way };
 	}
 
-	/** `way` extended by the call `edge` asking about cost (`CallRepetition.along`); `way` itself for the plain taint. */
-	private inline function wayAt(edge: CallEdge, way: BoundedWay): Null<BoundedWay> {
-		final cost: Null<TaintCost> = _cost;
-		return cost == null ? way : cost.repetition.along(edge, way);
+	private static inline function stateKey(
+		held: Null<String>, id: String, valuation: String, ctx: Int, flags: WalkFlags, under: Null<String>
+	): String {
+		final way: BoundedWay = flags.way;
+		final bounded: String = way.entries.length > 0 ? '|${way.turns}x${way.cost}' : '';
+		return '${held ?? ''}|$id|$valuation|$ctx${flags.repeated ? '|repeated' : bounded}|${under ?? ''}';
 	}
 
 }

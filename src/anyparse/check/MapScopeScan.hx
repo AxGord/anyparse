@@ -4,6 +4,8 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * What one file's header binds, for the two name-resolution questions `prefer-map-type` asks: does a
  * short `IntMap` here MEAN `haxe.ds.IntMap`, and is `Map` free to be written? `imports` maps a
@@ -117,7 +119,7 @@ final class MapScopeScan {
 			case IMPORT_DECL_KIND, UsingScan.USING_DECL_KIND:
 				scope.imports[CheckScan.simpleModuleName(name)] = name;
 			case WILDCARD_IMPORT_KIND, WILDCARD_USING_KIND:
-				if (StringTools.endsWith(name, WILDCARD_SUFFIX)) scope.wildcards.push(name.substr(0, name.length - WILDCARD_SUFFIX.length));
+				if (name.endsWith(WILDCARD_SUFFIX)) scope.wildcards.push(name.substr(0, name.length - WILDCARD_SUFFIX.length));
 			case _:
 				if (ALIAS_IMPORT_KINDS.contains(node.kind)) scope.aliases.push(name);
 		}

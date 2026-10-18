@@ -30,6 +30,9 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class CliArgs {
 
+	/** The maximum 32-bit signed integer — a null-span sort sentinel and the unbounded `--top` / `--all` count. */
+	public static inline final MAX_INT: Int = 0x7FFFFFFF;
+
 	/**
 	 * The nearest ancestor `hxformat.json` content for `filePath`, or null. Thin alias
 	 * for `FormatConfigDiscovery.discover` — the CLI keeps the short local name its
@@ -64,6 +67,14 @@ final class CliArgs {
 	/** A fresh `PositionalScan` for `args`: an empty scope-spec accumulator and its separator index. */
 	public static inline function beginPositionalScan(args: Array<String>): PositionalScan {
 		return { inputSpecs: [], separator: nameSeparatorIndex(args) };
+	}
+
+	public static inline function stripQuotes(s: String): String {
+		final t: String = s.trim();
+		if (t.length < 2) return t;
+		final first: String = t.charAt(0);
+		final last: String = t.charAt(t.length - 1);
+		return (first == "'" && last == "'") || (first == '"' && last == '"') ? t.substring(1, t.length - 1) : t;
 	}
 
 	/**
@@ -320,17 +331,6 @@ final class CliArgs {
 		else
 			s;
 	}
-
-	public static inline function stripQuotes(s: String): String {
-		final t: String = s.trim();
-		if (t.length < 2) return t;
-		final first: String = t.charAt(0);
-		final last: String = t.charAt(t.length - 1);
-		return (first == "'" && last == "'") || (first == '"' && last == '"') ? t.substring(1, t.length - 1) : t;
-	}
-
-	/** The maximum 32-bit signed integer — a null-span sort sentinel and the unbounded `--top` / `--all` count. */
-	public static inline final MAX_INT: Int = 0x7FFFFFFF;
 
 }
 

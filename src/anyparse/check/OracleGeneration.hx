@@ -358,11 +358,7 @@ final class OracleGeneration {
 
 	/** Every path of `paths` with its content hash, through `memo`. */
 	private static function hashAll(paths: Array<String>, memo: Map<String, String>): Array<FileHash> {
-		#if (sys || nodejs)
-		return [for (path in paths) { path: path, hash: hashOf(path, memo) }];
-		#else
-		return [];
-		#end
+		return #if (sys || nodejs) [for (path in paths) { path: path, hash: hashOf(path, memo) }] #else [] #end;
 	}
 
 	/**
@@ -402,10 +398,9 @@ final class OracleGeneration {
 		final refs: HxmlRefs = OracleCache.hxmlRefs(text);
 		for (include in refs.includes) {
 			final path: String = absolute(cwd, include);
-			if (!paths.contains(path)) {
-				paths.push(path);
-				collectHxml(path, cwd, root, paths, names, libraries, depth + 1);
-			}
+			if (paths.contains(path)) continue;
+			paths.push(path);
+			collectHxml(path, cwd, root, paths, names, libraries, depth + 1);
 		}
 		for (lib in refs.libs) if (!names.contains(lib)) names.push(lib);
 		for (classPath in refs.classPaths) {
@@ -715,12 +710,12 @@ final class OracleGeneration {
 	 */
 	private static function hold(run: GenerationRun, group: GenerationGroup, exclusive: Bool): Null<String> {
 		final lock: String = lockDir(group);
-		try {
-			if (exclusive) return OracleGenerationLock.holdExclusive(lock, run.me, run.deadline);
-			return OracleGenerationLock.holdShared(lock, run.me, run.deadline);
-		} catch (exception: Exception) {
-			return 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: ${exception.message}';
-		}
+		return try exclusive
+			? OracleGenerationLock.holdExclusive(lock, run.me, run.deadline)
+			: OracleGenerationLock.holdShared(
+				lock, run.me, run.deadline
+			) catch (exception: Exception) 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: '
+			+ exception.message;
 	}
 
 	/**
@@ -754,7 +749,10 @@ typedef PreparedOracles = {
 	var notes: Array<String>;
 }
 
-/** A stale generation about to run: its group, why, and its explicit and previously-recorded implicit inputs as hashed before the command. */
+/**
+ * A stale generation about to run: its group, why, and its explicit
+ * and previously-recorded implicit inputs as hashed before the command.
+ */
 typedef StaleGroup = {
 	var group: GenerationGroup;
 	var why: String;

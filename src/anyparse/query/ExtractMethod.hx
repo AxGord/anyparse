@@ -308,8 +308,8 @@ final class ExtractMethod {
 
 	/** Index of the statement whose `span.from == offset`, or -1. */
 	private static function indexStartingAt(stmts: Array<QueryNode>, offset: Int): Int {
-		for (i in 0...stmts.length) {
-			final sp: Null<Span> = stmts[i].span;
+		for (i => stmt in stmts) {
+			final sp: Null<Span> = stmt.span;
 			if (sp != null && sp.from == offset) return i;
 		}
 		return -1;

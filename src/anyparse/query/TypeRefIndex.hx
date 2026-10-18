@@ -30,14 +30,17 @@ using Lambda;
 @:allow(anyparse.query.MemberLookup)
 final class TypeRefIndex {
 
+	/** What a simple type name written in a file binds to, tier by tier in the compiler's order — the one reading of a bare name. */
+	public final names: TypeNameBinding;
+
+	/** Simple name -> each file entry declaring it once, in index order (`declaringFiles`): built with `_byName`. */
+	private final _filesByName: Map<String, Array<FileInfo>> = [];
+
 	/** Every indexed file's `FileInfo`, handed over by the owning index. */
 	private final _files: Array<FileInfo>;
 
 	/** Every declaration by simple name, with its file, in index order (`named`): built on first need. */
 	private var _byName: Null<Map<String, Array<ResolvedType>>> = null;
-
-	/** Simple name -> each file entry declaring it once, in index order (`declaringFiles`): built with `_byName`. */
-	private final _filesByName: Map<String, Array<FileInfo>> = [];
 
 	/**
 	 * Built once by the owning `SymbolIndex`, before any layer that resolves through it; `skipped` are the files it could
@@ -219,6 +222,41 @@ final class TypeRefIndex {
 	}
 
 	/**
+	 * The declarations named `name`, each with its file, in index order — what every lookup by simple name opened with
+	 * as a scan of every type of every file. On TM that scan, through `declaringFiles` alone, was 140 of a 360 s
+	 * `--fix`. The files are the owning index's, which never changes them (`SymbolIndex.without` builds a new index), so
+	 * the table is built once. Iterated, never handed out: a caller gets its own array.
+	 */
+	private function named(name: String): Array<ResolvedType> {
+		var table: Null<Map<String, Array<ResolvedType>>> = _byName;
+		if (table == null) {
+			final built: Map<String, Array<ResolvedType>> = [];
+			for (fi in _files) {
+				final own: Array<String> = [];
+				for (t in fi.types) {
+					final list: Array<ResolvedType> = built[t.name] ?? [];
+					list.push({ file: fi, type: t });
+					built[t.name] = list;
+					if (!own.contains(t.name)) own.push(t.name);
+				}
+				for (n in own) {
+					final declaring: Array<FileInfo> = _filesByName[n] ?? [];
+					declaring.push(fi);
+					_filesByName[n] = declaring;
+				}
+			}
+			_byName = built;
+			table = built;
+		}
+		return table[name] ?? [];
+	}
+
+	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
+	public static inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
+		return t.isMain ? fi.module : '${fi.module}.${t.name}';
+	}
+
+	/**
 	 * ONE file's import-alias edges: the alias a `import pkg.Util as U;` statement binds -> the
 	 * SIMPLE name of every path it points at. An ARRAY because a `#if` region may bind one
 	 * alias name to a different target per branch. The import twin of `aliasEdges`, and per-FILE rather
@@ -265,68 +303,6 @@ final class TypeRefIndex {
 		return edges;
 	}
 
-	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
-	public static inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
-		return t.isMain ? fi.module : '${fi.module}.${t.name}';
-	}
-
-	/**
-	 * Whether the MODULE of `fi` can be named by its own simple name from `fromFile` — the
-	 * visibility a module-relative `Mod.Sub` reference needs, which is NOT the one a bare TYPE
-	 * name needs, so the simple-name binding (`names`) cannot stand in for it. Compiled on 4.3.7: same package
-	 * resolves and `import pkg.*;` resolves, while BOTH `import pkg.Mod;` and `using pkg.Mod;`
-	 * fail with `Type not found : Mod` — a module import puts the module's TYPES in simple-name
-	 * scope, but the qualifier of `Mod.Sub` is read as a module PATH, which only the package
-	 * itself or a wildcard over it supplies.
-	 *
-	 * A ROOT-package module needs no arm: its own import path already IS `Mod.Sub`, so the
-	 * root-relative match in `resolveQualifiedRefAll` answers it and the fallback never runs.
-	 */
-	private static function moduleRefInScope(fromFile: FileInfo, fi: FileInfo): Bool {
-		if (fi.pkg == fromFile.pkg) return true;
-		final wild: String = '${fi.pkg}.*';
-		inline function supplies(imports: Array<ImportInfo>): Bool {
-			return imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == wild);
-		}
-		// An ambient source's wildcard supplies the qualifier exactly as the file's own would, and
-		// this is a membership question with no precedence in it — a module either can be named by
-		// its simple name here or cannot — so the two lists answer as a union.
-		return supplies(fromFile.imports) || fromFile.ambientImports.exists(g -> supplies(g.imports));
-	}
-
-	/**
-	 * The declarations named `name`, each with its file, in index order — what every lookup by simple name opened with
-	 * as a scan of every type of every file. On TM that scan, through `declaringFiles` alone, was 140 of a 360 s
-	 * `--fix`. The files are the owning index's, which never changes them (`SymbolIndex.without` builds a new index), so
-	 * the table is built once. Iterated, never handed out: a caller gets its own array.
-	 */
-	private function named(name: String): Array<ResolvedType> {
-		var table: Null<Map<String, Array<ResolvedType>>> = _byName;
-		if (table == null) {
-			final built: Map<String, Array<ResolvedType>> = [];
-			for (fi in _files) {
-				final own: Array<String> = [];
-				for (t in fi.types) {
-					final list: Array<ResolvedType> = built[t.name] ?? [];
-					list.push({ file: fi, type: t });
-					built[t.name] = list;
-					if (!own.contains(t.name)) own.push(t.name);
-				}
-				for (n in own) {
-					final declaring: Array<FileInfo> = _filesByName[n] ?? [];
-					declaring.push(fi);
-					_filesByName[n] = declaring;
-				}
-			}
-			_byName = built;
-			table = built;
-		}
-		return table[name] ?? [];
-	}
-
-	/** What a simple type name written in a file binds to, tier by tier in the compiler's order — the one reading of a bare name. */
-	public final names: TypeNameBinding;
-
 	/**
 	 * The paths of the `using` statements `fi` receives from its AMBIENT chain (`import.hx`), nearest source first —
 	 * the extensions in scope that the file itself does not spell. A guarded one included: the build that compiles it
@@ -357,8 +333,7 @@ final class TypeRefIndex {
 	 */
 	public static function plainImportPathOf(fi: FileInfo, simple: String): Null<String> {
 		var found: Null<String> = null;
-		for (imp in fi.imports) if (!imp.guarded && imp.kind == ImportKind.Import) {
-			if (SourceText.lastSegment(imp.raw) != simple) continue;
+		for (imp in fi.imports) if (!imp.guarded && imp.kind == ImportKind.Import && SourceText.lastSegment(imp.raw) == simple) {
 			if (found != null && found != imp.raw) return null;
 			found = imp.raw;
 		}
@@ -380,6 +355,30 @@ final class TypeRefIndex {
 				return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Whether the MODULE of `fi` can be named by its own simple name from `fromFile` — the
+	 * visibility a module-relative `Mod.Sub` reference needs, which is NOT the one a bare TYPE
+	 * name needs, so the simple-name binding (`names`) cannot stand in for it. Compiled on 4.3.7: same package
+	 * resolves and `import pkg.*;` resolves, while BOTH `import pkg.Mod;` and `using pkg.Mod;`
+	 * fail with `Type not found : Mod` — a module import puts the module's TYPES in simple-name
+	 * scope, but the qualifier of `Mod.Sub` is read as a module PATH, which only the package
+	 * itself or a wildcard over it supplies.
+	 *
+	 * A ROOT-package module needs no arm: its own import path already IS `Mod.Sub`, so the
+	 * root-relative match in `resolveQualifiedRefAll` answers it and the fallback never runs.
+	 */
+	private static function moduleRefInScope(fromFile: FileInfo, fi: FileInfo): Bool {
+		if (fi.pkg == fromFile.pkg) return true;
+		final wild: String = '${fi.pkg}.*';
+		inline function supplies(imports: Array<ImportInfo>): Bool {
+			return imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == wild);
+		}
+		// An ambient source's wildcard supplies the qualifier exactly as the file's own would, and
+		// this is a membership question with no precedence in it — a module either can be named by
+		// its simple name here or cannot — so the two lists answer as a union.
+		return supplies(fromFile.imports) || fromFile.ambientImports.exists(g -> supplies(g.imports));
 	}
 
 }

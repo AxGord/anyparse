@@ -7,6 +7,8 @@ import anyparse.macro.EmbeddedSource;
 import anyparse.query.CompilerFacts;
 import haxe.io.Path;
 
+using Lambda;
+
 /**
  * What the compiler typed, for every configured compiler oracle: one compile of the configuration's own hxml with the
  * `TypedFactsMacro` hook, which writes the typed tree's facts to a file once typing ended, read into one
@@ -258,6 +260,21 @@ final class TypedFactsProbe {
 		#end
 	}
 
+	/** The arguments of the facts compile of `hxml` under `defines`, writing to `out` with the hook found under `dir`. */
+	public static function compileArgs(hxml: String, defines: Array<String>, dir: String, out: String): Array<String> {
+		// the hook's class path goes AFTER the hxml: a later class path wins, so a project holding its own copy — anyparse —
+		// still runs the one written here. `keep-inline-positions` leaves an inlined body at the callee's positions: without
+		// it every fact of the body lands on the call site's range and reads as the type of the call itself
+		return CompilerOracle.defineFlags(defines.concat(['keep-inline-positions'])).concat([
+			hxml,
+			'--no-output',
+			'-cp',
+			dir,
+			'--macro',
+			'anyparse.check.TypedFactsMacro.run(${haxe.Json.stringify(out)})'
+		]);
+	}
+
 	/**
 	 * Whether the facts compile of `oracle` should bring its baseline typecheck along: the run will ask for one of the tree
 	 * as it is now, the memo holds none, and it is not a run that answers baselines from the persisted cache, which
@@ -274,28 +291,9 @@ final class TypedFactsProbe {
 	/** Why the compile `run` left no facts, in one line. */
 	private static function failureOf(run: HaxeRun): String {
 		if (run.failure != '') return run.failure;
-		if (run.status != 0) {
-			final first: String = StringTools.trim(
-				Lambda.find(run.err.split('\n'), l -> StringTools.trim(l) != '' && l.indexOf('Warning') < 0) ?? ''
-			);
-			return 'the compile failed (status ${run.status})' + (first == '' ? '' : ': $first');
-		}
-		return 'it wrote no facts file';
-	}
-
-	/** The arguments of the facts compile of `hxml` under `defines`, writing to `out` with the hook found under `dir`. */
-	public static function compileArgs(hxml: String, defines: Array<String>, dir: String, out: String): Array<String> {
-		// the hook's class path goes AFTER the hxml: a later class path wins, so a project holding its own copy — anyparse —
-		// still runs the one written here. `keep-inline-positions` leaves an inlined body at the callee's positions: without
-		// it every fact of the body lands on the call site's range and reads as the type of the call itself
-		return CompilerOracle.defineFlags(defines.concat(['keep-inline-positions'])).concat([
-			hxml,
-			'--no-output',
-			'-cp',
-			dir,
-			'--macro',
-			'anyparse.check.TypedFactsMacro.run(${haxe.Json.stringify(out)})'
-		]);
+		if (run.status == 0) return 'it wrote no facts file';
+		final first: String = StringTools.trim(run.err.split('\n').find(l -> StringTools.trim(l) != '' && l.indexOf('Warning') < 0) ?? '');
+		return 'the compile failed (status ${run.status})' + (first == '' ? '' : ': $first');
 	}
 
 	#if (sys || nodejs)
@@ -326,8 +324,9 @@ final class TypedFactsProbe {
 	private static function answer(oracle: OracleConfig, run: HaxeRun, out: String): Null<FactsDump> {
 		if (run.failure != '' || run.status != 0) return null;
 		final text: Null<String> = try sys.io.File.getContent(out) catch (exception: haxe.Exception) null;
-		if (text == null) return null;
-		return { name: OracleDeclaration.describeOracle(oracle), text: text, file: memoised(oracle.dir ?? Sys.getCwd()) };
+		return text == null
+			? null
+			: { name: OracleDeclaration.describeOracle(oracle), text: text, file: memoised(oracle.dir ?? Sys.getCwd()) };
 	}
 
 	/** `OracleCoverage.canonical` against `root`, each path resolved once: a facts file names one path on many lines. */

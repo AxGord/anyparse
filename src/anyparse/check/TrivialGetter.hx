@@ -745,9 +745,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 							isOverride: mods.contains('Override'),
 							isInline: mods.contains('Inline')
 						};
-						if (StringTools.startsWith(name, 'get_'))
+						if (name.startsWith('get_'))
 							getters[name] = entry;
-						else if (StringTools.startsWith(name, 'set_'))
+						else if (name.startsWith('set_'))
 							setters[name] = entry;
 					}
 			}

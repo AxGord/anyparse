@@ -1,8 +1,8 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ExitCode.*;
 import anyparse.query.MoveSymbol;
 import anyparse.query.cli.CliContext;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 

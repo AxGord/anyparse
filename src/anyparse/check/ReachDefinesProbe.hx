@@ -35,7 +35,8 @@ typedef AheadBuilds = {
  * value as well: a define of the first set whose value the second still gives it held that value for every file
  * (`ReachConfiguration.values`), which decides a comparison such as `haxe_ver >= 4.2` (`CondValues`) — save a value a
  * macro changed and changed back in between, which no probe can see. It also names every type the
- * build typed and its file: the index the analysis reads must declare each, or a type it cannot see may exist. `-v` counts the compile's arms:
+ * build typed and its file: the index the analysis reads must declare
+ * each, or a type it cannot see may exist. `-v` counts the compile's arms:
  * the macros join the last arm only, so an hxml of several arms answers nothing, and so does any probe that fails. An
  * answer must hold in every configuration, so one unanswered configuration leaves the analysis with none (`probeAll`).
  */
@@ -62,7 +63,6 @@ final class ReachDefinesProbe {
 
 	/** The bound of the random suffix that keeps two runs' probe directories apart. */
 	private static inline final DIRECTORY_SUFFIX_BOUND: Int = 0x7fffffff;
-
 
 	/** Spawn buffer, in bytes: `-v` names every parsed module. */
 	private static inline final BUFFER: Int = 256 * 1024 * 1024;
@@ -105,47 +105,6 @@ final class ReachDefinesProbe {
 	public static function abandon(probe: DefinesProbe): Void {
 		probe.runs?.cancel();
 		for (p in probe.ready ?? []) discard(p.dir);
-	}
-
-	/** Every configuration's probe directory and arguments, or null when any of them cannot be prepared (and none is kept). */
-	private static function prepareAll(oracles: Array<OracleConfig>): Null<Array<{ dir: String, args: Array<String> }>> {
-		final prepared: Array<Null<{ dir: String, args: Array<String> }>> = [for (i in 0...oracles.length) prepare(oracles[i], i)];
-		final ready: Array<{ dir: String, args: Array<String> }> = [for (p in prepared) if (p != null) p];
-		if (ready.length == oracles.length) return ready;
-		for (p in ready) discard(p.dir);
-		return null;
-	}
-
-	private static function jobsOf(oracles: Array<OracleConfig>, ready: Array<{ dir: String, args: Array<String> }>): Array<SpawnJob> {
-		return [for (i in 0...ready.length) { args: ready[i].args, cwd: oracles[i].dir }];
-	}
-
-	/**
-	 * The builds the probe compiles `runs` of `oracles` (prepared as `ready`, null when they could not be) report, the
-	 * probe directories deleted; null when any configuration answers nothing.
-	 */
-	private static function answerAll(
-		oracles: Array<OracleConfig>, ready: Null<Array<{ dir: String, args: Array<String> }>>, runs: Array<HaxeRun>
-	): Null<ReachBuilds> {
-		for (p in ready ?? []) discard(p.dir);
-		if (runs.length != oracles.length || oracles.length == 0) return null;
-		final out: Array<ReachConfiguration> = [];
-		for (i in 0...oracles.length) {
-			final configuration: Null<ReachConfiguration> = answer(oracles[i], runs[i]);
-			if (configuration == null) return null;
-			out.push(configuration);
-		}
-		final seen: Map<String, Bool> = [];
-		final library: Array<{ file: String, source: String }> = [];
-		#if (sys || nodejs)
-		for (c in out) for (path in c.compiled) if (!seen.exists(path)) {
-			seen[path] = true;
-			// a file that cannot be read declares nothing the walk resolves against: a call into it stays a blind spot
-			final source: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
-			if (source != null) library.push({ file: path, source: source });
-		}
-		#end
-		return { configurations: out, library: library };
 	}
 
 	/**
@@ -203,6 +162,47 @@ final class ReachDefinesProbe {
 			compiled: compiled,
 			types: types
 		};
+	}
+
+	/** Every configuration's probe directory and arguments, or null when any of them cannot be prepared (and none is kept). */
+	private static function prepareAll(oracles: Array<OracleConfig>): Null<Array<{ dir: String, args: Array<String> }>> {
+		final prepared: Array<Null<{ dir: String, args: Array<String> }>> = [for (i in 0...oracles.length) prepare(oracles[i], i)];
+		final ready: Array<{ dir: String, args: Array<String> }> = [for (p in prepared) if (p != null) p];
+		if (ready.length == oracles.length) return ready;
+		for (p in ready) discard(p.dir);
+		return null;
+	}
+
+	private static function jobsOf(oracles: Array<OracleConfig>, ready: Array<{ dir: String, args: Array<String> }>): Array<SpawnJob> {
+		return [for (i in 0...ready.length) { args: ready[i].args, cwd: oracles[i].dir }];
+	}
+
+	/**
+	 * The builds the probe compiles `runs` of `oracles` (prepared as `ready`, null when they could not be) report, the
+	 * probe directories deleted; null when any configuration answers nothing.
+	 */
+	private static function answerAll(
+		oracles: Array<OracleConfig>, ready: Null<Array<{ dir: String, args: Array<String> }>>, runs: Array<HaxeRun>
+	): Null<ReachBuilds> {
+		for (p in ready ?? []) discard(p.dir);
+		if (runs.length != oracles.length || oracles.length == 0) return null;
+		final out: Array<ReachConfiguration> = [];
+		for (i in 0...oracles.length) {
+			final configuration: Null<ReachConfiguration> = answer(oracles[i], runs[i]);
+			if (configuration == null) return null;
+			out.push(configuration);
+		}
+		final seen: Map<String, Bool> = [];
+		final library: Array<{ file: String, source: String }> = [];
+		#if (sys || nodejs)
+		for (c in out) for (path in c.compiled) if (!seen.exists(path)) {
+			seen[path] = true;
+			// a file that cannot be read declares nothing the walk resolves against: a call into it stays a blind spot
+			final source: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
+			if (source != null) library.push({ file: path, source: source });
+		}
+		#end
+		return { configurations: out, library: library };
 	}
 
 	/**
@@ -312,14 +312,12 @@ final class ReachDefinesProbe {
 		#end
 	}
 
-
 	/** The define and value one value line carries — a JSON array of two strings — or null for anything else. */
 	private static function valuePair(json: String): Null<{ name: String, value: String }> {
 		final read: Null<Dynamic> = try haxe.Json.parse(json) catch (exception: haxe.Exception) null;
 		if (read == null || !(read is Array)) return null;
 		final pair: Array<Dynamic> = read;
-		if (pair.length != 2 || !(pair[0] is String) || !(pair[1] is String)) return null;
-		return { name: Std.string(pair[0]), value: Std.string(pair[1]) };
+		return pair.length != 2 || !(pair[0] is String) || !(pair[1] is String) ? null : { name: '${pair[0]}', value: '${pair[1]}' };
 	}
 
 	private static function defines(list: String): Array<String> {

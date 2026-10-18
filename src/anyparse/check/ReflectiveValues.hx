@@ -212,10 +212,16 @@ final class ReflectiveValues {
 		final literal: Null<String> = (_shape.literalTypeNames ?? [])[value.kind];
 		if (literal != null) return [literal];
 		final written: Null<String> = value.kind == _shape.newExprKind ? value.name : typer(file, fn, value);
-		if (written != null && typeParameter(file, value, written)) return null;
-		if (written != null && value.kind != _shape.newExprKind && claimed(file, value, typer)) return null;
-		if (written != null && !catchAll(written)) return typedAs(file, written);
-		return value.kind == _shape.identKind ? parameterTypes(file, value, typer, visiting) : null;
+		return if (written != null && typeParameter(file, value, written))
+			null
+		else if (written != null && value.kind != _shape.newExprKind && claimed(file, value, typer))
+			null
+		else if (written != null && !catchAll(written))
+			typedAs(file, written)
+		else if (value.kind == _shape.identKind)
+			parameterTypes(file, value, typer, visiting)
+		else
+			null;
 	}
 
 	/**
@@ -307,11 +313,6 @@ final class ReflectiveValues {
 			noteClaim(out.fields, written);
 	}
 
-	/** Adds `key` to `claims` once. */
-	private static inline function noteClaim(claims: Array<String>, key: String): Void {
-		if (!claims.contains(key)) claims.push(key);
-	}
-
 	/**
 	 * Whether the expression `node` of `file` may hand on a value its declared type was never checked against: it holds an
 	 * unchecked `cast` (`uncheckedCastKind`) or an `untyped` (`untypedKinds`) anywhere, or is itself declared of a catch-all
@@ -338,7 +339,12 @@ final class ReflectiveValues {
 	): Null<Array<String>> {
 		final typed: Null<String> = (_shape.operatorWriteKinds ?? []).contains(kind) ? typer(file, id, target) : null;
 		final written: Null<String> = typed == null || typeParameter(file, target, typed) ? null : typed;
-		return written == null ? null : catchAll(written) ? [] : typedAs(file, written);
+		return if (written == null)
+			null
+		else if (catchAll(written))
+			[]
+		else
+			typedAs(file, written);
 	}
 
 	/** Whether `written` names a catch-all type (`Dynamic`, `Any`), which any value is of. */
@@ -483,8 +489,12 @@ final class ReflectiveValues {
 		final isStatic: Bool = declarations.length > 0 && declarations.foreach(d -> d.member.isStatic);
 		if (!isStatic || !FieldWrites.accessKind(callee.kind, _shape) || callee.children.length == 0) return args;
 		final receiver: Null<String> = callee.children[0].name;
-		if (receiver == CallGraphNames.lastSegments(type, 1)) return args;
-		return receiver != null && CallGraphNames.isTypeLike(receiver) ? null : [callee.children[0]].concat(args);
+		return if (receiver == CallGraphNames.lastSegments(type, 1))
+			args
+		else if (receiver != null && CallGraphNames.isTypeLike(receiver))
+			null
+		else
+			[callee.children[0]].concat(args);
 	}
 
 	/**
@@ -559,6 +569,11 @@ final class ReflectiveValues {
 			walk(held.tree);
 		}
 		return out;
+	}
+
+	/** Adds `key` to `claims` once. */
+	private static inline function noteClaim(claims: Array<String>, key: String): Void {
+		if (!claims.contains(key)) claims.push(key);
 	}
 
 }

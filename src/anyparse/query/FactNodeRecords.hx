@@ -223,6 +223,28 @@ final class FactNodeRecords {
 		}
 	}
 
+	/** The bodies the `inlined` calls of `node` spliced in, one per declared range with every site a call of it ran at. */
+	public static function collectSplices(node: Null<FactNode>): Void {
+		if (node == null) return;
+		for (c in node.calls) {
+			final body: Null<FactPos> = c.body;
+			final site: Null<FactPos> = c.site;
+			if (c.access != INLINED || body == null || site == null) continue;
+			final declared: FactPos = body;
+			final ran: Span = site.span;
+			final known: Null<SpliceFact> = node.splices.find(s -> s.body.file == declared.file && sameSpan(s.body.span, declared.span));
+			if (known == null)
+				node.splices.push({ callee: c.target ?? '', body: declared, sites: [ran] })
+			else if (!known.sites.exists(s -> sameSpan(s, ran)))
+				known.sites.push(ran);
+		}
+	}
+
+	/** Whether `a` and `b` are the same range. */
+	private static inline function sameSpan(a: Span, b: Span): Bool {
+		return a.from == b.from && a.to == b.to;
+	}
+
 	/** The parameter `use` hands its value to (`FieldFact.argument`), or null for any other use. */
 	private static function argumentOf(use: UseRecord): Null<ArgumentFact> {
 		final target: Null<String> = use.ag;
@@ -234,8 +256,7 @@ final class FactNodeRecords {
 	/** The uses `record` gives each parameter of its node (`FactNode.paramUses`), or null when it records none. */
 	private static function paramUsesOf(record: NodeRecord): Null<Array<Array<ParamUse>>> {
 		final recorded: Null<Array<Array<UseRecord>>> = record.pu;
-		if (recorded == null || recorded.length != (record.params ?? []).length) return null;
-		return [
+		return recorded == null || recorded.length != (record.params ?? []).length ? null : [
 			for (uses in recorded) [for (u in uses) { use: u.u ?? '', method: u.m, argument: argumentOf(u) }]
 		];
 	}
@@ -252,31 +273,6 @@ final class FactNodeRecords {
 			for (u in added[i]) if (!into.exists(k -> Json.stringify(k) == Json.stringify(u))) into.push(u);
 		}
 		return known;
-	}
-
-	/** The bodies the `inlined` calls of `node` spliced in, one per declared range with every site a call of it ran at. */
-	public static function collectSplices(node: Null<FactNode>): Void {
-		if (node == null) return;
-		for (c in node.calls) {
-			final body: Null<FactPos> = c.body;
-			final site: Null<FactPos> = c.site;
-			if (c.access == INLINED && body != null && site != null) {
-				final declared: FactPos = body;
-				final ran: Span = site.span;
-				final known: Null<SpliceFact> = node.splices.find(s ->
-					s.body.file == declared.file && sameSpan(s.body.span, declared.span)
-				);
-				if (known == null)
-					node.splices.push({ callee: c.target ?? '', body: declared, sites: [ran] })
-				else if (!known.sites.exists(s -> sameSpan(s, ran)))
-					known.sites.push(ran);
-			}
-		}
-	}
-
-	/** Whether `a` and `b` are the same range. */
-	private static inline function sameSpan(a: Span, b: Span): Bool {
-		return a.from == b.from && a.to == b.to;
 	}
 
 }

@@ -1,9 +1,9 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.macro.ParseDispatchLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.ParseDispatchLowering.*;
 
 /**
  * Pass 3 — the repetition-loop body and close-detection leaves.

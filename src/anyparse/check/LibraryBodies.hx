@@ -61,7 +61,7 @@ final class LibraryBodies {
 		options: ThreadSafetyOptions
 	) {
 		PhaseTimings.time('library parse', () -> for (s in sources) try plugin.parseFile(s.source) catch (exception: haxe.Exception) {});
-		final graph: CallGraph = PhaseTimings.measure('library graph', () -> CallGraph.build(sources, plugin));
+		final graph: CallGraph = PhaseTimings.measure('library graph', CallGraph.build.bind(sources, plugin));
 		files = sources.length - graph.skippedFiles.length;
 		skipped = graph.skippedFiles.length;
 		final found: { ids: Array<String>, chains: Map<String, Array<String>>, waivers: Array<String> } = {
@@ -309,22 +309,6 @@ final class LibraryBodies {
 		return e.kind == Ref && via != null && !awayIds.exists(via) && !awayNames.contains(e.viaMember ?? '');
 	}
 
-	#if (sys || nodejs)
-	/** Every `.hx` under `classPaths` that a build for `target` may compile (`LibraryBuild.compiles`) and can be read, each once. */
-	private static function readSources(classPaths: Array<String>, target: Null<String>): Array<{ file: String, source: String }> {
-		final out: Array<{ file: String, source: String }> = [];
-		final seen: Map<String, Bool> = [];
-		for (dir in classPaths) for (path in Glob.expand(dir, '.hx')) if (!seen.exists(path)) {
-			seen[path] = true;
-			final relative: String = path.substr(dir.length + 1);
-			if (!LibraryBuild.compiles(relative, target, p -> sys.FileSystem.exists('$dir/$p'))) continue;
-			final source: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
-			if (source != null) out.push({ file: path, source: source });
-		}
-		return out;
-	}
-	#end
-
 	/** `source` with every range of `dead` blanked — each character but a line break turned a space — its offsets kept. */
 	private static function blanked(source: String, dead: Array<Span>): String {
 		if (dead.length == 0) return source;
@@ -340,5 +324,21 @@ final class LibraryBodies {
 		out.add(source.substring(at));
 		return out.toString();
 	}
+
+	#if (sys || nodejs)
+	/** Every `.hx` under `classPaths` that a build for `target` may compile (`LibraryBuild.compiles`) and can be read, each once. */
+	private static function readSources(classPaths: Array<String>, target: Null<String>): Array<{ file: String, source: String }> {
+		final out: Array<{ file: String, source: String }> = [];
+		final seen: Map<String, Bool> = [];
+		for (dir in classPaths) for (path in Glob.expand(dir, '.hx')) if (!seen.exists(path)) {
+			seen[path] = true;
+			final relative: String = path.substr(dir.length + 1);
+			if (!LibraryBuild.compiles(relative, target, p -> sys.FileSystem.exists('$dir/$p'))) continue;
+			final source: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
+			if (source != null) out.push({ file: path, source: source });
+		}
+		return out;
+	}
+	#end
 
 }

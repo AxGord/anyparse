@@ -1,11 +1,11 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.Cli.ReconCluster;
+import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliContext;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;
@@ -88,17 +88,22 @@ typedef ReconOpts = {
 @:nullSafety(Strict)
 final class ReconCommand implements CliCommand {
 
-	private static inline final RECON_TOP_N_DEFAULT: Int = 30;
-
-	private static inline final RECON_EXAMPLES_PER_CLUSTER: Int = 2;
-
-	private static inline final RECON_HEAD_LEN: Int = 70;
-
-	private static inline final RECON_LOCUS_LEN: Int = 20;
-
-	private static inline final RECON_SOURCE_WINDOW_RADIUS: Int = 3;
+	#if (sys || nodejs)
+	/**
+	 * NO-TARGET diagnostic list cap — both `--no-target-cluster` 0-match
+	 * stderr and the sweep footer breakdown surface at most this many
+	 * keys before truncating.
+	 */
+	public static inline final NO_TARGET_TOP_N: Int = 10;
+	#end
 
 	public static inline final CLUSTER_PREVIEW_LIMIT: Int = 10;
+
+	private static inline final RECON_TOP_N_DEFAULT: Int = 30;
+	private static inline final RECON_EXAMPLES_PER_CLUSTER: Int = 2;
+	private static inline final RECON_HEAD_LEN: Int = 70;
+	private static inline final RECON_LOCUS_LEN: Int = 20;
+	private static inline final RECON_SOURCE_WINDOW_RADIUS: Int = 3;
 
 	public function new() {}
 
@@ -124,15 +129,6 @@ final class ReconCommand implements CliCommand {
 		printReconUsage();
 		#end
 	}
-
-	#if (sys || nodejs)
-	/**
-	 * NO-TARGET diagnostic list cap — both `--no-target-cluster` 0-match
-	 * stderr and the sweep footer breakdown surface at most this many
-	 * keys before truncating.
-	 */
-	public static inline final NO_TARGET_TOP_N: Int = 10;
-	#end
 
 	/** Terminal-case ReconOpts: a flag/usage path the caller returns immediately, ignoring every other field. */
 	private static inline function reconParseExit(code: Int): ReconOpts {
@@ -360,18 +356,15 @@ final class ReconCommand implements CliCommand {
 			}
 		}
 		if (
-			o.permissiveConstruct && (
-				o.probePath != null || o.predictStrip || o.predictRelax || o.regressionProbe || o.clusterFilter != null
-				|| o.candidatesRegex != null || o.patterns.length > 0
-			)
-		) {
-			CliIo.stderr(
-				'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax '
-				+ '/ --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
-			);
-			return EXIT_USAGE;
-		}
-		return null;
+			!o.permissiveConstruct || o.probePath == null && !o.predictStrip && !o.predictRelax && !o.regressionProbe
+			&& o.clusterFilter == null && o.candidatesRegex == null && o.patterns.length <= 0
+		)
+			return null;
+		CliIo.stderr(
+			'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax '
+			+ '/ --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
+		);
+		return EXIT_USAGE;
 	}
 
 	/**
@@ -648,6 +641,192 @@ final class ReconCommand implements CliCommand {
 
 	#if (sys || nodejs)
 	/**
+	 * Every `.hxtest` fixture under `root`, in the order the corpus walk visits
+	 * them: each directory's own entries sorted, subdirectories descended after
+	 * the files beside them and in reverse order (a LIFO stack — the shape the
+	 * skip listing has always had, and what `apq recon`'s SKIP lines and
+	 * `--regression-probe` read).
+	 *
+	 * One walker because there were two: `apq sweep --run` re-derives the corpus
+	 * census over the same tree, and `duplicate-code` reported the prologue
+	 * cross-file the day the second one landed.
+	 */
+	public static function hxtestPathsUnder(root: String): Array<String> {
+		final out: Array<String> = [];
+		final stack: Array<String> = [root];
+		while (stack.length > 0) {
+			final dir: Null<String> = stack.pop();
+			if (dir == null) break;
+			final names: Array<String> = FileSystem.readDirectory(dir);
+			names.sort(CliIo.compareStrings);
+			for (name in names) {
+				final path: String = '$dir/$name';
+				if (FileSystem.isDirectory(path))
+					stack.push(path);
+				else if (CliIo.isHxtestPath(name))
+					out.push(path);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Corpus-walk extracted from `runReconSweep` so the same skip-parse
+	 * record list drives both the recon sweep (histogram / cluster drill
+	 * / predict-strip) and `strip --from-cluster` (apply substitutions
+	 * to every file in a named cluster). Walks `hxtestPathsUnder`, parses
+	 * each `.hxtest` via the plugin's trivia parser, and clusters
+	 * failures by normalised forward-locus. `wired == false` when the
+	 * plugin returns `false` from `reconParse` — surfaces the same
+	 * "no recon parser for lang X" error in both callers.
+	 */
+	public static function collectReconSkipRecords(plugin: GrammarPlugin, root: String): ReconWalkResult {
+		final clusters: Map<String, ReconCluster> = [];
+		final records: Array<ReconRecord> = [];
+		var wired: Bool = true;
+		for (path in hxtestPathsUnder(root)) {
+			final source: String = CliIo.readSourceForParse(path);
+			try {
+				if (!plugin.reconParse(source)) {
+					wired = false;
+					break;
+				}
+			} catch (exception: ParseError) {
+				final pos: Position = exception.span.lineCol(source);
+				final relPath: String = stripRootPrefix(path, root);
+				final exp: String = reconNormalize(exception.expected);
+				final snip: String = reconNormalize(reconSnippet(source, exception.span.from));
+				final rawLocus: String = reconRawLocus(source, exception.span.from);
+				final key: String = reconNormalizeLocus(rawLocus);
+				addReconCluster(clusters, key, relPath, rawLocus);
+				records.push({
+					path: relPath,
+					clusterKey: key,
+					source: source,
+					skipLine: 'SKIP $relPath :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"',
+					line: pos.line,
+					col: pos.col
+				});
+			} catch (exception: Exception) {
+				final relPath: String = stripRootPrefix(path, root);
+				final key: String = '<non-ParseError> ${reconNormalize(exception.message)}';
+				addReconCluster(clusters, key, relPath, '<exception>');
+				records.push({
+					path: relPath,
+					clusterKey: key,
+					source: source,
+					skipLine: 'SKIP $relPath :: $key',
+					line: 0,
+					col: 0
+				});
+			}
+		}
+		return { wired: wired, records: records, clusters: clusters };
+	}
+
+	/**
+	 * Emit a windowed source slice centred on `failLine` (1-indexed) to
+	 * stdout, with a `>>` marker on the fail row and right-aligned line
+	 * numbers. Window radius is `RECON_SOURCE_WINDOW_RADIUS` either
+	 * side; lines past EOF are silently clipped so a fail near the top
+	 * or bottom prints as much context as is available.
+	 */
+	public static function printReconSourceWindow(source: String, failLine: Int): Void {
+		final lines: Array<String> = source.split('\n');
+		final radius: Int = RECON_SOURCE_WINDOW_RADIUS;
+		final start: Int = failLine - radius < 1 ? 1 : failLine - radius;
+		final end: Int = failLine + radius > lines.length ? lines.length : failLine + radius;
+		CliIo.sysPrint('      --- src window (L±$radius) ---\n');
+		// Compute the gutter width from `end` so all rows line up; e.g.
+		// a 3-digit end-line gives a 3-char gutter.
+		final gutter: Int = ('$end').length;
+		for (ln in start ... end + 1) {
+			final marker: String = ln == failLine ? '>>' : '  ';
+			final num: String = padLeft('$ln', gutter);
+			final body: String = lines[ln - 1];
+			CliIo.sysPrint('      $marker$num | $body\n');
+		}
+		CliIo.sysPrint('      --- end ---\n');
+	}
+
+	/**
+	 * Render the predict-strip "moved locus" suffix. Three regimes:
+	 *  - Same locus → empty (no hint needed).
+	 *  - NEW > ORIG (line strictly greater, or same line + col strictly
+	 *    greater) → ` (was L:C, advanced)` — strip uncovered a downstream
+	 *    blocker; the substitution's effect was forward, so the residual
+	 *    fail is a real second blocker.
+	 *  - NEW < ORIG (line less, or same line + col less) → ` (was L:C,
+	 *    moved BACKWARD — strip may have damaged earlier syntax, or your
+	 *    substitution model doesn't match the actual blocker mechanism;
+	 *    verify with `apq probe` on the unstripped fragment)` — the
+	 *    common failure mode where token substitution
+	 *    can't model gate-relaxation.
+	 *  - Same line, col differs → ` (was L:C)` — neutral; the strip
+	 *    shifted things within one line, usually inconsequential.
+	 *
+	 * `origLine == 0` means the original error had no locus (rare —
+	 * `<no locus>` already printed instead); guard returns empty.
+	 */
+	public static inline function movedLocusHint(origLine: Int, origCol: Int, newLine: Int, newCol: Int): String {
+		if (origLine <= 0) return '';
+		if (newLine == origLine && newCol == origCol) return '';
+		final forward: Bool = newLine > origLine || (newLine == origLine && newCol > origCol);
+		final backward: Bool = newLine < origLine || (newLine == origLine && newCol < origCol);
+		return if (forward && newLine != origLine)
+			' (was $origLine:$origCol, advanced)'
+		else if (backward)
+			' (was $origLine:$origCol'
+				+ ', moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)'
+		else
+			' (was $origLine:$origCol)';
+	}
+
+	public static function defaultReconRoot(): String {
+		final fork: Null<String> = resolveForkPath();
+		if (fork == null || fork.length == 0) return '';
+		final candidate: String = '$fork/test/testcases';
+		final resolved: String = FileSystem.exists(candidate) && FileSystem.isDirectory(candidate) ? candidate : fork;
+		// Write-cache: persist the env-supplied path to
+		// `~/.config/anyparse/fork_path` so the next `apq recon` works
+		// WITHOUT re-exporting the env var. Env always wins; the cache
+		// is consulted only by `resolveForkPath` when env is unset.
+		// `tryWriteForkPathCache` short-circuits when the on-disk value
+		// already matches, so steady-state writes are no-ops.
+		#if (sys || nodejs)
+		final envFork: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
+		if (envFork != null && envFork.length > 0) tryWriteForkPathCache(envFork);
+		#end
+		return resolved;
+	}
+
+	public static function stripRootPrefix(path: String, root: String): String {
+		return if (path.startsWith('$root/'))
+			path.substr(root.length + 1)
+		else if (path == root)
+			'.'
+		else
+			path;
+	}
+
+	/**
+	 * Source window of `RECON_HEAD_LEN` characters centred on `offset`
+	 * — the text around the farthest-failure locus, for the human-
+	 * readable SKIP line. Whitespace is escaped by `reconNormalize`.
+	 */
+	public static function reconSnippet(input: String, offset: Int): String {
+		final half: Int = Std.int(RECON_HEAD_LEN / 2);
+		final centre: Int = offset > input.length ? input.length : offset;
+		final start: Int = centre - half < 0 ? 0 : centre - half;
+		final end: Int = centre + half > input.length ? input.length : centre + half;
+		return input.substring(start, end);
+	}
+
+	public static function reconNormalize(message: Null<String>): String {
+		return message == null || message == '' ? '<no message>' : message.replace('\n', '\\n').replace('\t', '\\t');
+	}
+
+	/**
 	 * `apq recon` — corpus skip-parse drill harness. Walks a directory
 	 * looking for source files (`.hxtest` fixtures auto-extract section
 	 * 2), tries each via the plugin's trivia parser, and clusters the
@@ -866,90 +1045,6 @@ final class ReconCommand implements CliCommand {
 			: printReconHistogram(clusters, records.length, topN);
 	}
 
-	/**
-	 * Every `.hxtest` fixture under `root`, in the order the corpus walk visits
-	 * them: each directory's own entries sorted, subdirectories descended after
-	 * the files beside them and in reverse order (a LIFO stack — the shape the
-	 * skip listing has always had, and what `apq recon`'s SKIP lines and
-	 * `--regression-probe` read).
-	 *
-	 * One walker because there were two: `apq sweep --run` re-derives the corpus
-	 * census over the same tree, and `duplicate-code` reported the prologue
-	 * cross-file the day the second one landed.
-	 */
-	public static function hxtestPathsUnder(root: String): Array<String> {
-		final out: Array<String> = [];
-		final stack: Array<String> = [root];
-		while (stack.length > 0) {
-			final dir: Null<String> = stack.pop();
-			if (dir == null) break;
-			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort(CliIo.compareStrings);
-			for (name in names) {
-				final path: String = '$dir/$name';
-				if (FileSystem.isDirectory(path))
-					stack.push(path);
-				else if (CliIo.isHxtestPath(name))
-					out.push(path);
-			}
-		}
-		return out;
-	}
-
-	/**
-	 * Corpus-walk extracted from `runReconSweep` so the same skip-parse
-	 * record list drives both the recon sweep (histogram / cluster drill
-	 * / predict-strip) and `strip --from-cluster` (apply substitutions
-	 * to every file in a named cluster). Walks `hxtestPathsUnder`, parses
-	 * each `.hxtest` via the plugin's trivia parser, and clusters
-	 * failures by normalised forward-locus. `wired == false` when the
-	 * plugin returns `false` from `reconParse` — surfaces the same
-	 * "no recon parser for lang X" error in both callers.
-	 */
-	public static function collectReconSkipRecords(plugin: GrammarPlugin, root: String): ReconWalkResult {
-		final clusters: Map<String, ReconCluster> = [];
-		final records: Array<ReconRecord> = [];
-		var wired: Bool = true;
-		for (path in hxtestPathsUnder(root)) {
-			final source: String = CliIo.readSourceForParse(path);
-			try {
-				if (!plugin.reconParse(source)) {
-					wired = false;
-					break;
-				}
-			} catch (exception: ParseError) {
-				final pos: Position = exception.span.lineCol(source);
-				final relPath: String = stripRootPrefix(path, root);
-				final exp: String = reconNormalize(exception.expected);
-				final snip: String = reconNormalize(reconSnippet(source, exception.span.from));
-				final rawLocus: String = reconRawLocus(source, exception.span.from);
-				final key: String = reconNormalizeLocus(rawLocus);
-				addReconCluster(clusters, key, relPath, rawLocus);
-				records.push({
-					path: relPath,
-					clusterKey: key,
-					source: source,
-					skipLine: 'SKIP $relPath :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"',
-					line: pos.line,
-					col: pos.col
-				});
-			} catch (exception: Exception) {
-				final relPath: String = stripRootPrefix(path, root);
-				final key: String = '<non-ParseError> ${reconNormalize(exception.message)}';
-				addReconCluster(clusters, key, relPath, '<exception>');
-				records.push({
-					path: relPath,
-					clusterKey: key,
-					source: source,
-					skipLine: 'SKIP $relPath :: $key',
-					line: 0,
-					col: 0
-				});
-			}
-		}
-		return { wired: wired, records: records, clusters: clusters };
-	}
-
 	private static function printReconHistogram(clusters: Map<String, ReconCluster>, total: Int, topN: Int): Int {
 		final entries: Array<{ key: String, cluster: ReconCluster }> = [
 			for (k => v in clusters) { key: k, cluster: v }
@@ -1033,86 +1128,10 @@ final class ReconCommand implements CliCommand {
 		return EXIT_OK;
 	}
 
-	/**
-	 * Emit a windowed source slice centred on `failLine` (1-indexed) to
-	 * stdout, with a `>>` marker on the fail row and right-aligned line
-	 * numbers. Window radius is `RECON_SOURCE_WINDOW_RADIUS` either
-	 * side; lines past EOF are silently clipped so a fail near the top
-	 * or bottom prints as much context as is available.
-	 */
-	public static function printReconSourceWindow(source: String, failLine: Int): Void {
-		final lines: Array<String> = source.split('\n');
-		final radius: Int = RECON_SOURCE_WINDOW_RADIUS;
-		final start: Int = failLine - radius < 1 ? 1 : failLine - radius;
-		final end: Int = failLine + radius > lines.length ? lines.length : failLine + radius;
-		CliIo.sysPrint('      --- src window (L±$radius) ---\n');
-		// Compute the gutter width from `end` so all rows line up; e.g.
-		// a 3-digit end-line gives a 3-char gutter.
-		final gutter: Int = ('$end').length;
-		for (ln in start ... end + 1) {
-			final marker: String = ln == failLine ? '>>' : '  ';
-			final num: String = padLeft('$ln', gutter);
-			final body: String = lines[ln - 1];
-			CliIo.sysPrint('      $marker$num | $body\n');
-		}
-		CliIo.sysPrint('      --- end ---\n');
-	}
-
 	private static inline function padLeft(s: String, width: Int): String {
 		var out: String = s;
 		while (out.length < width) out = ' $out';
 		return out;
-	}
-
-	/**
-	 * Render the predict-strip "moved locus" suffix. Three regimes:
-	 *  - Same locus → empty (no hint needed).
-	 *  - NEW > ORIG (line strictly greater, or same line + col strictly
-	 *    greater) → ` (was L:C, advanced)` — strip uncovered a downstream
-	 *    blocker; the substitution's effect was forward, so the residual
-	 *    fail is a real second blocker.
-	 *  - NEW < ORIG (line less, or same line + col less) → ` (was L:C,
-	 *    moved BACKWARD — strip may have damaged earlier syntax, or your
-	 *    substitution model doesn't match the actual blocker mechanism;
-	 *    verify with `apq probe` on the unstripped fragment)` — the
-	 *    common failure mode where token substitution
-	 *    can't model gate-relaxation.
-	 *  - Same line, col differs → ` (was L:C)` — neutral; the strip
-	 *    shifted things within one line, usually inconsequential.
-	 *
-	 * `origLine == 0` means the original error had no locus (rare —
-	 * `<no locus>` already printed instead); guard returns empty.
-	 */
-	public static inline function movedLocusHint(origLine: Int, origCol: Int, newLine: Int, newCol: Int): String {
-		if (origLine <= 0) return '';
-		if (newLine == origLine && newCol == origCol) return '';
-		final forward: Bool = newLine > origLine || (newLine == origLine && newCol > origCol);
-		final backward: Bool = newLine < origLine || (newLine == origLine && newCol < origCol);
-		return if (forward && newLine != origLine)
-			' (was $origLine:$origCol, advanced)'
-		else if (backward)
-			' (was $origLine:$origCol'
-				+ ', moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)'
-		else
-			' (was $origLine:$origCol)';
-	}
-
-	public static function defaultReconRoot(): String {
-		final fork: Null<String> = resolveForkPath();
-		if (fork == null || fork.length == 0) return '';
-		final candidate: String = '$fork/test/testcases';
-		final resolved: String = FileSystem.exists(candidate) && FileSystem.isDirectory(candidate) ? candidate : fork;
-		// Write-cache: persist the env-supplied path to
-		// `~/.config/anyparse/fork_path` so the next `apq recon` works
-		// WITHOUT re-exporting the env var. Env always wins; the cache
-		// is consulted only by `resolveForkPath` when env is unset.
-		// `tryWriteForkPathCache` short-circuits when the on-disk value
-		// already matches, so steady-state writes are no-ops.
-		#if (sys || nodejs)
-		final envFork: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
-		if (envFork != null && envFork.length > 0) tryWriteForkPathCache(envFork);
-		#end
-		return resolved;
 	}
 
 	/**
@@ -1172,15 +1191,6 @@ final class ReconCommand implements CliCommand {
 			// failure (read-only HOME, disk full, permission). The env
 			// path stays valid for the current run.
 		}
-	}
-
-	public static function stripRootPrefix(path: String, root: String): String {
-		return if (path.startsWith('$root/'))
-			path.substr(root.length + 1)
-		else if (path == root)
-			'.'
-		else
-			path;
 	}
 
 	private static function addReconCluster(map: Map<String, ReconCluster>, key: String, file: String, rawLocus: String): Void {
@@ -1245,25 +1255,6 @@ final class ReconCommand implements CliCommand {
 			}
 		}
 		return reconNormalize(buf.toString());
-	}
-
-	/**
-	 * Source window of `RECON_HEAD_LEN` characters centred on `offset`
-	 * — the text around the farthest-failure locus, for the human-
-	 * readable SKIP line. Whitespace is escaped by `reconNormalize`.
-	 */
-	public static function reconSnippet(input: String, offset: Int): String {
-		final half: Int = Std.int(RECON_HEAD_LEN / 2);
-		final centre: Int = offset > input.length ? input.length : offset;
-		final start: Int = centre - half < 0 ? 0 : centre - half;
-		final end: Int = centre + half > input.length ? input.length : centre + half;
-		return input.substring(start, end);
-	}
-
-	public static function reconNormalize(message: Null<String>): String {
-		return message == null || message == ''
-			? '<no message>'
-			: StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
 	}
 	#end
 

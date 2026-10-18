@@ -4,6 +4,8 @@ import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
 import anyparse.format.ArrayMatrixWrap;
 
+using StringTools;
+
 /**
  * Bottom-up grid layout for matrix-shaped array literals.
  *
@@ -54,7 +56,7 @@ final class MatrixWrap {
 
 		// Per-column max bare width (no separator).
 		final widths: Array<Int> = [for (i in 0...n) DocMeasure.flatTokenWidth(items[i])];
-		final maxCols: Array<Int> = [for (c in 0...lineRun) 0];
+		final maxCols: Array<Int> = [for (_ in 0...lineRun) 0];
 		for (i in 0...n) {
 			final c: Int = i % lineRun;
 			if (widths[i] > maxCols[c]) maxCols[c] = widths[i];
@@ -97,7 +99,7 @@ final class MatrixWrap {
 			switch node {
 				case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline:
 				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return true;
+					if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) return true;
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 					return true;
 				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner),

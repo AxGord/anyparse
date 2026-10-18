@@ -39,6 +39,20 @@ final class MutationSchemaCommand implements CliCommand {
 		printMutationSchemaUsage();
 	}
 
+	private static function printMutationSchemaUsage(): Void {
+		CliIo.sysPrint('Usage: apq mutation-schema <plan>\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Compose declared mutation arms into ONE build behind a run-time switch\n');
+		CliIo.sysPrint('(tools/mutation-arm.sh). Each plan row is\n');
+		CliIo.sysPrint('  <id> TAB <file> TAB <selector> TAB <mutated-file>\n');
+		CliIo.sysPrint('where <mutated-file> is <file> with the arm cut applied. Every file named is\n');
+		CliIo.sysPrint('rewritten IN PLACE, relative to the working directory: the arm method is\n');
+		CliIo.sysPrint('copied in as __mut<id>_<name>, and the original opens with a switch that\n');
+		CliIo.sysPrint('calls the copy when APQ_MUTANT=<id>. One stdout line per row:\n');
+		CliIo.sysPrint('  <id> TAB ok TAB <file> TAB <dispatch line> TAB <copy from> TAB <copy to> TAB <owner type>\n');
+		CliIo.sysPrint('  <id> TAB skip TAB <file> TAB <reason>     left to a per-arm build\n');
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * `apq mutation-schema <plan>` — read the plan's rows, `<id>\t<file>\t<selector>\t<mutated-file>`, compose every
@@ -92,6 +106,7 @@ final class MutationSchemaCommand implements CliCommand {
 		for (row in rows) CliIo.sysPrint('${row.id}\t${placed[row.id] ?? 'skip\t${row.file}\tnot composed'}\n');
 		return EXIT_OK;
 	}
+
 	/** The plan's rows, each arm's mutated file read; throws on a malformed row or an unreadable file. */
 	private static function parsePlan(plan: String): Array<{ id: Int, file: String, arm: SchemaArm }> {
 		return [
@@ -114,26 +129,12 @@ final class MutationSchemaCommand implements CliCommand {
 			return;
 		}
 		final composed: SchemaFile = MutationSchema.compose(source, tree, plugin, arms);
-		for (at in composed.placements) placed[at.id] = if (at.skip != null)
-			'skip\t$file\t${at.skip}'
-		else
-			'ok\t$file\t${at.dispatch}\t${at.copyFrom}\t${at.copyTo}\t${at.owner}';
+		for (at in composed.placements)
+			placed[at.id] = at.skip != null
+				? 'skip\t$file\t${at.skip}'
+				: 'ok\t$file\t${at.dispatch}\t${at.copyFrom}\t${at.copyTo}\t${at.owner}';
 		if (composed.text != source) CliIo.writeFile(file, composed.text);
 	}
 	#end
-
-	private static function printMutationSchemaUsage(): Void {
-		CliIo.sysPrint('Usage: apq mutation-schema <plan>\n');
-		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Compose declared mutation arms into ONE build behind a run-time switch\n');
-		CliIo.sysPrint('(tools/mutation-arm.sh). Each plan row is\n');
-		CliIo.sysPrint('  <id> TAB <file> TAB <selector> TAB <mutated-file>\n');
-		CliIo.sysPrint('where <mutated-file> is <file> with the arm cut applied. Every file named is\n');
-		CliIo.sysPrint('rewritten IN PLACE, relative to the working directory: the arm method is\n');
-		CliIo.sysPrint('copied in as __mut<id>_<name>, and the original opens with a switch that\n');
-		CliIo.sysPrint('calls the copy when APQ_MUTANT=<id>. One stdout line per row:\n');
-		CliIo.sysPrint('  <id> TAB ok TAB <file> TAB <dispatch line> TAB <copy from> TAB <copy to> TAB <owner type>\n');
-		CliIo.sysPrint('  <id> TAB skip TAB <file> TAB <reason>     left to a per-arm build\n');
-	}
 
 }

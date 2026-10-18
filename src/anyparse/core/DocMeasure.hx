@@ -102,7 +102,7 @@ final class DocMeasure {
 				case OptSpaceSkipAfterHardline:
 					total++;
 				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return total;
+					if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) return total;
 					total += flat.length;
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 					return total;
@@ -221,7 +221,7 @@ final class DocMeasure {
 		while (stack.length > 0) {
 			final node: Doc = (cast stack.pop(): Doc);
 			switch (node) {
-				case Line(flat) if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code):
+				case Line(flat) if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code):
 					return true;
 				case Empty, Text(_), Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
 					OptHardlineSkipBeforeHardline:
@@ -310,7 +310,7 @@ final class DocMeasure {
 				case Text(s):
 					buf.add(s);
 				case Line(flat):
-					if (!(flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code)) buf.add(flat);
+					if (!(flat.length > 0 && flat.fastCodeAt(0) == '\n'.code)) buf.add(flat);
 				case OptSpace(s):
 					buf.add(s);
 				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
@@ -382,7 +382,7 @@ final class DocMeasure {
 			switch node {
 				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
 				case Text(s), OptSpace(s), Line(s):
-					final t: String = StringTools.rtrim(s);
+					final t: String = s.rtrim();
 					if (t.length > 0) return t.fastCodeAt(t.length - 1) == '}'.code;
 				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
 					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
@@ -439,7 +439,7 @@ final class DocMeasure {
 	 */
 	public static function firstVisibleTextStartsWith(d: Doc, c: Int): Bool {
 		final s: Null<String> = firstVisibleText(d);
-		return s != null && s.length > 0 && StringTools.fastCodeAt(s, 0) == c;
+		return s != null && s.length > 0 && s.fastCodeAt(0) == c;
 	}
 
 	/**
@@ -511,7 +511,7 @@ final class DocMeasure {
 			switch node {
 				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
 				case Text(s), OptSpace(s), Line(s):
-					final t: String = StringTools.rtrim(s);
+					final t: String = s.rtrim();
 					if (t.length > 0) {
 						final c: Int = t.fastCodeAt(t.length - 1);
 						return c == '}'.code || c == ';'.code;
@@ -556,7 +556,7 @@ final class DocMeasure {
 			switch node {
 				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
 				case Text(s), OptSpace(s), Line(s):
-					final t: String = StringTools.rtrim(s);
+					final t: String = s.rtrim();
 					if (t.length > 0) {
 						final c: Int = t.fastCodeAt(t.length - 1);
 						return c == ';'.code;
@@ -773,7 +773,7 @@ final class DocMeasure {
 			// line that the atom has already terminated.
 			case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
 				TailCloses;
-			case Line(flat) if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code):
+			case Line(flat) if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code):
 				if (out != null) out.nest = nest;
 				TailBreak;
 			case Text(s), OptSpace(s), Line(s):
@@ -860,7 +860,7 @@ final class DocMeasure {
 			case Line(flat):
 				// A forced hardline (`'\n'`) contributes 0; an `OptSpace`-style
 				// flat string contributes its own length.
-				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? 0 : flat.length;
+				return flat.length > 0 && flat.fastCodeAt(0) == '\n'.code ? 0 : flat.length;
 			case Concat(items):
 				var i: Int = items.length;
 				while (--i >= 0) stack.push(items[i]);

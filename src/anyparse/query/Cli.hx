@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.check.Check;
 import anyparse.check.Severity;
 import anyparse.query.CanonicalEdit.CarriedEdit;
+import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliIo;
@@ -11,7 +12,6 @@ import anyparse.query.cli.PostWriteFix;
 import anyparse.query.cli.UsageFailure;
 import anyparse.query.cli.WriteFailure;
 import anyparse.runtime.Span;
-import anyparse.query.ExitCode.*;
 
 using Lambda;
 

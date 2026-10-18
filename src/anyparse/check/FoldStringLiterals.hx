@@ -404,10 +404,10 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			final verdict: OperatorVerdict = proposed == null || operators == null ? Builtin : operators.verdictFor(node, literal);
 			final planned: Null<PlannedFold> = verdict.match(Overloaded(_)) ? null : proposed;
 			if (planned != null) {
-				final gated: String = (gate.blocks(calls, planned.groups) ? MACRO_REFUSAL : "")
-					+ (verdict.match(Unproven) ? OperatorGate.REFUSAL : "");
+				final gated: String = (gate.blocks(calls, planned.groups) ? MACRO_REFUSAL : '')
+					+ (verdict.match(Unproven) ? OperatorGate.REFUSAL : '');
 				final refused: String = gate.intrinsic(calls, planned.constant) ? MacroGate.INTRINSIC_REFUSAL + gated : gated;
-				out.push(refused == "" ? planned : {
+				out.push(refused == '' ? planned : {
 					span: planned.span,
 					editSpan: planned.editSpan,
 					text: planned.text,
@@ -1092,11 +1092,11 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			from = end;
 		}
 		final text: StringBuf = new StringBuf();
-		for (k in 0...parts.length) {
+		for (k => part in parts) {
 			// A locked boundary is re-emitted from the SOURCE, so the comment, the line break and
 			// the `+` an author wrote come back byte for byte; every other boundary is plain glue.
 			if (k > 0) text.add(decomposition.glue[ends[k - 1]] ?? GROUP_JOIN);
-			text.add(parts[k]);
+			text.add(part);
 		}
 		return { text: text.toString(), widest: widest };
 	}
@@ -1548,13 +1548,13 @@ private class PlanContext {
 	 */
 	private final _scopes: Map<String, Null<MemberScope>> = [];
 
+	/** Statement region ("<from>:<to>") -> whether its member renders it exactly as it renders alone (`rendersAlone`). */
+	private final _alone: Map<String, Bool> = [];
+
 	private var _originalLines: Null<Array<String>> = null;
 	private var _originalFailed: Bool = false;
 	private var _memberSpans: Null<Array<Span>> = null;
 	private var _statementSpans: Null<Array<Span>> = null;
-
-	/** Statement region ("<from>:<to>") -> whether its member renders it exactly as it renders alone (`rendersAlone`). */
-	private final _alone: Map<String, Bool> = [];
 
 	public function new(
 		plugin: GrammarPlugin, seams: Seams, source: String, optsJson: Null<String>, metrics: LayoutMetrics, operators: Null<OperatorGate>
@@ -1614,6 +1614,11 @@ private class PlanContext {
 		if (statement == null) return memberScope;
 		final statementScope: Null<MemberScope> = scopeOf(statement, STATEMENT_SCOPE_HEAD, STATEMENT_SCOPE_TAIL);
 		return statementScope != null && rendersAlone(statementScope, memberScope) ? statementScope : memberScope;
+	}
+
+	/** The first non-blank offset on `pos`'s line when that line opens exactly one indent deep, else -1. */
+	private inline function memberLineStart(pos: Int): Int {
+		return lineStartAtDepth(pos, 1);
 	}
 
 	/**
@@ -1689,11 +1694,6 @@ private class PlanContext {
 			}
 		}
 		for (child in node.children) collectMembers(child, out);
-	}
-
-	/** The first non-blank offset on `pos`'s line when that line opens exactly one indent deep, else -1. */
-	private function memberLineStart(pos: Int): Int {
-		return lineStartAtDepth(pos, 1);
 	}
 
 	/**

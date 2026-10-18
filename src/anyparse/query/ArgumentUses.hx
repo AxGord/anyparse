@@ -36,19 +36,19 @@ final class ArgumentUses {
 	/** The access of a call of an instance method (`CallFact.access`): an override may run instead. */
 	private static inline final INSTANCE_ACCESS: String = 'FInstance';
 
+	/** The kind of an interface, which declares a method and runs none (`TypeFact.kind`). */
+	private static inline final INTERFACE_KIND: String = 'interface';
+
 	/** The field kinds a method that runs its declared body has (`TypedFactsProbe`). */
 	private static final BODIED_KINDS: Array<String> = ['method', 'inline'];
 
 	/** The type kinds whose methods have bodies (`TypeFact.kind`): a class, an abstract's implementation class. */
 	private static final BODIED_TYPES: Array<String> = ['class', 'impl'];
 
-	/** The kind of an interface, which declares a method and runs none (`TypeFact.kind`). */
-	private static inline final INTERFACE_KIND: String = 'interface';
-
-	private final _table: CompilerFacts;
-
 	/** Argument key -> the uses the value meets, or null when the facts do not answer; settled once. */
 	private final _settled: Map<String, Null<Array<ParamUse>>> = [];
+
+	private final _table: CompilerFacts;
 
 	public function new(table: CompilerFacts) {
 		_table = table;

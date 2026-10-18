@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.Diff;
+import anyparse.query.ExitCode.*;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.cli.CliContext;
 import anyparse.query.format.Json;
@@ -9,7 +10,6 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
-import anyparse.query.ExitCode.*;
 
 using StringTools;
 using Lambda;
@@ -79,32 +79,6 @@ final class AstCommand implements CliCommand {
 
 	public function usage(): Void {
 		printAstUsage();
-	}
-
-	/** Terminal-case AstOpts: a flag/usage path that the caller returns immediately, ignoring every other field. */
-	private static inline function astParseExit(code: Int): AstOpts {
-		return {
-			lang: '',
-			json: false,
-			depth: -1,
-			selectExpr: null,
-			atExpr: null,
-			wantDoc: false,
-			wantSource: false,
-			writerOutput: false,
-			writerOutputPlain: false,
-			writerDiff: false,
-			minChildren: -1,
-			maxChildren: -1,
-			childrenLimit: -1,
-			spans: false,
-			countOnly: false,
-			typeRefs: false,
-			file: null,
-			codeArg: null,
-			stdinFlag: false,
-			errExit: code
-		};
 	}
 
 	public static function runAst(args: Array<String>): Int {
@@ -194,6 +168,32 @@ final class AstCommand implements CliCommand {
 		final shaped: QueryNode = shapeAstOutput(tree, o.depth, o.childrenLimit);
 		CliIo.sysPrint(o.json ? Json.renderTree(fileLabel, source, shaped) : Text.render(shaped, o.spans));
 		return EXIT_OK;
+	}
+
+	/** Terminal-case AstOpts: a flag/usage path that the caller returns immediately, ignoring every other field. */
+	private static inline function astParseExit(code: Int): AstOpts {
+		return {
+			lang: '',
+			json: false,
+			depth: -1,
+			selectExpr: null,
+			atExpr: null,
+			wantDoc: false,
+			wantSource: false,
+			writerOutput: false,
+			writerOutputPlain: false,
+			writerDiff: false,
+			minChildren: -1,
+			maxChildren: -1,
+			childrenLimit: -1,
+			spans: false,
+			countOnly: false,
+			typeRefs: false,
+			file: null,
+			codeArg: null,
+			stdinFlag: false,
+			errExit: code
+		};
 	}
 
 	/**

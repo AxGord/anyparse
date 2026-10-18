@@ -3,14 +3,14 @@ package anyparse.macro;
 #if macro
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
-import haxe.macro.Context;
-import haxe.macro.Expr;
-import anyparse.macro.StarFieldLowering.*;
+import anyparse.macro.BinaryParseLowering.*;
 import anyparse.macro.Lowering.*;
+import anyparse.macro.MacroNames.*;
+import anyparse.macro.StarFieldLowering.*;
 import anyparse.macro.StructFieldTrailLowering.*;
 import anyparse.macro.TriviaSlotNames.*;
-import anyparse.macro.BinaryParseLowering.*;
-import anyparse.macro.MacroNames.*;
+import haxe.macro.Context;
+import haxe.macro.Expr;
 
 using Lambda;
 using anyparse.macro.MetaInspect;

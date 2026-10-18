@@ -147,12 +147,12 @@ final class LockDominance {
 	public function briefUnder(under: String, take: CallEdge, reentrant: Bool): Bool {
 		final lock: Null<String> = _sites.lockOf(take);
 		final object: Null<String> = _must.takeObject(take);
-		if (lock == null || object == null) return false;
-		return under.split(HELD_SEPARATOR).exists(
-			held ->
-				MustHeld.objectOf(held) == object
-				&& (lock == MustHeld.lockOf(held) ? reentrant : (dominators[lock] ?? []).contains(MustHeld.lockOf(held)))
-		);
+		return lock != null && object != null && under.split(HELD_SEPARATOR)
+			.exists(
+				held ->
+					MustHeld.objectOf(held) == object
+					&& (lock == MustHeld.lockOf(held) ? reentrant : (dominators[lock] ?? []).contains(MustHeld.lockOf(held)))
+			);
 	}
 
 	/**

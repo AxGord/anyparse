@@ -24,9 +24,6 @@ final class Loops {
 	/** The loop kinds of the grammar (`ShapeVocab.loopKinds`); empty for a grammar naming none. */
 	public final kinds: Array<String>;
 
-	/** The functions a call of which may block: one calling a sink its call's chain names, and every one calling or handing on such a one. */
-	private var _sinkward: Null<Map<String, Bool>> = null;
-
 	private final _graph: CallGraph;
 	private final _listsOf: (String) -> ChainLists;
 	private final _bindingKinds: Array<String>;
@@ -34,6 +31,12 @@ final class Loops {
 
 	/** The kinds whose body is a function of its own: a position inside one sits in no loop around it. */
 	private final _functionKinds: Array<String>;
+
+	/**
+	 * The functions a call of which may block: one calling a sink its
+	 * call's chain names, and every one calling or handing on such a one.
+	 */
+	private var _sinkward: Null<Map<String, Bool>> = null;
 
 	public function new(graph: CallGraph, shape: RefShape, listsOf: (String) -> ChainLists) {
 		_graph = graph;
@@ -44,9 +47,9 @@ final class Loops {
 		_functionKinds = ShapeVocab.functionLikeKinds(shape);
 	}
 
-	/** A loop header as a label spells it (`label`, a `boundedRepeats` entry's `loop`): each run of whitespace one space, none at the ends. */
-	public static function spelled(text: String): String {
-		return StringTools.trim(~/\s+/g.replace(text, ' '));
+	/** Whether a call made from the function `id` may block: it calls a sink, or a function from which a call may (`sinkward`). */
+	public inline function mayBlock(id: String): Bool {
+		return sinkward().exists(id);
 	}
 
 	/**
@@ -123,9 +126,11 @@ final class Loops {
 		final first: Null<Span> = loop.children[0].span;
 		final last: Null<Span> = loop.children[loop.children.length - 1].span;
 		final text: Null<String> = if (_doWhileKinds.contains(loop.kind))
-			first == null ? null : 'do … ' + source.substring(first.to, span.to)
+			first == null ? null : 'do … ${source.substring(first.to, span.to)}'
+		else if (last == null)
+			null
 		else
-			last == null ? null : source.substring(span.from, last.from);
+			source.substring(span.from, last.from);
 		return text == null ? null : spelled(text);
 	}
 
@@ -146,11 +151,6 @@ final class Loops {
 		);
 	}
 
-	/** Whether a call made from the function `id` may block: it calls a sink, or a function from which a call may (`sinkward`). */
-	public inline function mayBlock(id: String): Bool {
-		return sinkward().exists(id);
-	}
-
 	/** The functions from which a call may block (`_sinkward`), filled on first use. */
 	private function sinkward(): Map<String, Bool> {
 		final known: Null<Map<String, Bool>> = _sinkward;
@@ -168,6 +168,14 @@ final class Loops {
 		}
 		_sinkward = found;
 		return found;
+	}
+
+	/**
+	 * A loop header as a label spells it (`label`, a `boundedRepeats`
+	 * entry's `loop`): each run of whitespace one space, none at the ends.
+	 */
+	public static function spelled(text: String): String {
+		return StringTools.trim(~/\s+/g.replace(text, ' '));
 	}
 
 }
