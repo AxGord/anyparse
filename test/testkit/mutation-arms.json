@@ -25335,8 +25335,8 @@
 			"name": "M-SORTED-OFFSETS-LOWER-BLIND",
 			"type": "anyparse.runtime.SortedOffsets",
 			"method": "firstIn",
-			"find": "if (sorted[mid] < from) lo = mid + 1 else hi = mid;",
-			"replace": "hi = mid;",
+			"find": "lo = mid + 1",
+			"replace": "hi = mid",
 			"note": "the search never moves past an offset below the range, so the first offset of the array answers"
 		},
 		{
