@@ -5,6 +5,7 @@ import anyparse.query.CallGraph.ParsedEntry;
 import anyparse.query.CallGraph.UnresolvedReason;
 import anyparse.query.CallGraphImports.WrittenIn;
 import anyparse.query.CallGraphTypes.HeldFile;
+import anyparse.query.ExpectedTypes.ExpectationHost;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NominalTypes.TypingHost;
 import anyparse.query.SymbolIndex.MemberInfo;
@@ -65,21 +66,14 @@ final class CallGraphEdges {
 		final accessorPrefixes: Array<String> = shape.accessorMethodPrefixes ?? [];
 		final ctorName: String = shape.constructorName ?? 'new';
 		final objectLiteralKind: Null<String> = shape.objectLiteralKind;
-		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
-		final returnKinds: Array<String> = shape.valueReturnKinds ?? [];
-		final arrayLiteralKind: Null<String> = shape.arrayLiteralKind;
-		final ifExprKinds: Array<String> = shape.ifExpressionKinds ?? [];
-		final switchKinds: Array<String> = shape.switchKinds ?? [];
-		final caseBranchKind: Null<String> = shape.caseBranchKind;
-		final blockKinds: Array<String> = [for (k in [shape.blockStmtKind, shape.exprStatementKind]) if (k != null) k];
-		final mapEntryKind: Null<String> = shape.mapLiteralEntryKind;
-		final objectFieldKind: Null<String> = shape.objectFieldKind;
 		// call / `new` site `span.from` -> the target it resolved to and the receiver it was made on, for typing its arguments
 		final sites: Map<Int, CallSite> = [];
 		// the ancestors of the node being walked, outermost first, and the child index leading down from each
 		final lineage: Array<QueryNode> = [];
 		final lineageIndex: Array<Int> = [];
+		// the expectation ladder every typer shares, asked from `lineage` (`ExpectedTypes`)
+		final expectation: ExpectedTypes = new ExpectedTypes(shape);
 		final tree: QueryNode = entry.tree;
 		final file: String = entry.file;
 		final source: String = entry.source;
@@ -653,6 +647,9 @@ final class CallGraphEdges {
 			// a local written with no type holds its initializer's type (`NominalTypes.localInitializer`)
 			initializer: (_, use, _) -> NominalTypes.localInitializer(use, tree, shape, typeSources),
 			loopElement: (_, _) -> null,
+			// a lambda's untyped parameter is typed into `typeSources` as the walk reaches the lambda (`typeLambdaParams`), so `bound`
+			// answers it
+			parameter: null,
 			unbound: unboundTypeSource,
 			access: accessTypeSource,
 			element: (container, _) -> elementTypeSource(container),
@@ -1268,23 +1265,6 @@ final class CallGraphEdges {
 		}
 
 		/**
-		 * The type a `return` at `lineage[level]` is expected to have: the declared return type of the function
-		 * or lambda enclosing it, or for an unannotated lambda the return type of the function type the lambda is
-		 * itself expected to be (`expected`, which is `expectedAt`, asked strictly further out).
-		 */
-		function returnExpectation(level: Int, currentType: Null<String>, expected: (Int, Null<String>) -> Null<String>): Null<String> {
-			var at: Int = level - 1;
-			while (at >= 0 && !(fnKinds.contains(lineage[at].kind) || lambdaKinds.contains(lineage[at].kind))) at--;
-			if (at < 0) return null;
-			final span: Null<Span> = lineage[at].span;
-			final id: Null<String> = span == null ? null : entry.fnBySpanFrom[span.from];
-			final declared: Null<String> = id == null ? null : g._facts.returns[id];
-			return declared != null || !lambdaKinds.contains(lineage[at].kind)
-				? declared
-				: CallGraphNames.functionReturnSource(g._plugin.typeSyntax(expected(at - 1, currentType) ?? ''));
-		}
-
-		/**
 		 * The written type of field `field` of a value written `outer`: an
 		 * inline anonymous structure's, or a typedef's or class's member.
 		 */
@@ -1296,58 +1276,33 @@ final class CallGraphEdges {
 			return nominal == null ? null : memberTypeThrough(peeled, nominal, field, currentType);
 		}
 
-		/**
-		 * The written type the value at child `lineage[level].index` of `lineage[level].node` is expected to have:
-		 * a declaration's annotation, an assignment's target, the enclosing function's return type (a lambda's
-		 * from the function type it is typed as), the parameter of the call or constructor it is an argument of
-		 * (every element of a rest parameter), the element of the array or the value of the map literal it sits
-		 * in, the field of the object literal it initialises — through parentheses, ternary / `if` / `switch`
-		 * arms and the value a block ends with. Null where nothing written says.
-		 */
-		function expectedAt(level: Int, currentType: Null<String>): Null<String> {
-			if (level < 0) return null;
-			final holder: QueryNode = lineage[level];
-			final index: Int = lineageIndex[level];
-			final span: Null<Span> = holder.span;
-			final kind: String = holder.kind;
-			final last: Bool = index == holder.children.length - 1;
-			return if (localDeclKinds.contains(kind) || fieldKinds.contains(kind))
-				span == null ? null : typeSources[span.from]
-			else if (kind == assignKind && index == 1)
-				typeSourceOf(holder.children[0], currentType)
-			else if (returnKinds.contains(kind))
-				returnExpectation(level, currentType, expectedAt)
-			else if (lambdaKinds.contains(kind) && last)
-				CallGraphNames.functionReturnSource(g._plugin.typeSyntax(expectedAt(level - 1, currentType) ?? ''))
-			else if (
-				kind == parenKind || (kind == ternaryKind && index >= 1) || (ifExprKinds.contains(kind) && index >= 1)
-				|| (switchKinds.contains(kind) && index >= 1) || ((kind == caseBranchKind || blockKinds.contains(kind)) && last)
-			)
-				expectedAt(level - 1, currentType)
-			else if (kind == arrayLiteralKind) {
-				final outer: Null<String> = expectedAt(level - 1, currentType);
-				outer == null ? null : elementTypeSource(outer);
-			} else if (kind == mapEntryKind && index == 1 && level > 0 && lineage[level - 1].kind == arrayLiteralKind) {
-				final outer: Null<String> = expectedAt(level - 2, currentType);
-				outer == null ? null : elementTypeSource(outer);
-			} else if (kind == objectFieldKind && level > 0 && lineage[level - 1].kind == objectLiteralKind) {
-				final outer: Null<String> = expectedAt(level - 2, currentType);
-				final field: Null<String> = holder.name;
-				outer == null || field == null ? null : fieldTypeSource(outer, field, currentType);
-			} else if ((kind == callKind && index >= 1) || kind == newExprKind) {
+		// the graph's answers to the ONE expected-type engine (`ExpectedTypes`), in the graph's currency
+		final graphExpectation: ExpectationHost<String, Null<String>> = {
+			declared: (holder, _) -> {
+				final at: Null<Span> = holder.span;
+				at == null ? null : typeSources[at.from];
+			},
+			assigned: typeSourceOf,
+			returned: (fn, _) -> {
+				final at: Null<Span> = fn.span;
+				final id: Null<String> = at == null ? null : entry.fnBySpanFrom[at.from];
+				id == null ? null : g._facts.returns[id];
+			},
+			argument: (call, at, count, currentType) -> {
+				final span: Null<Span> = call.span;
 				final site: Null<CallSite> = span == null ? null : sites[span.from];
-				// a `new` names its type's arguments among its children (`new Box<Int>(x)`): they are no arguments
-				final args: Array<QueryNode> = kind == callKind ? holder.children.slice(1) : holder.children.slice(holder.typeArgCount);
-				final at: Int = args.indexOf(holder.children[index]);
-				site == null || at < 0 ? null : argumentTypeSource(site, at, args.length, currentType);
-			} else
-				null;
-		}
+				site == null ? null : argumentTypeSource(site, at, count, currentType);
+			},
+			element: (literal, _) -> elementTypeSource(literal),
+			field: fieldTypeSource,
+			read: (written, _) -> g._plugin.typeSyntax(written),
+			part: (_, text, _) -> text
+		};
 
 		/**
 		 * Type the parameters the lambda `lambda`, walked at the top of `lineage`, writes with no type by the function type it is
-		 * expected to be (`expectedAt`): a call's parameter as the callee's own file writes it, a declaration's or an assignment's
-		 * type — one of the same arity.
+		 * expected to be (`ExpectedTypes.lambdaParamTypes`): a call's parameter as the callee's own file writes it, a declaration's
+		 * or an assignment's type — one of the same arity.
 		 */
 		function typeLambdaParams(lambda: QueryNode, currentType: Null<String>): Void {
 			final params: Array<QueryNode> = [for (c in lambda.children) if (paramKinds.contains(c.kind)) c];
@@ -1355,24 +1310,20 @@ final class CallGraphEdges {
 				for (p in params) if (p.span != null && !typeSources.exists(p.span?.from ?? -1)) p
 			];
 			if (bare.length == 0) return;
-			final read: Null<TypeSyntax> = g._plugin.typeSyntax(expectedAt(lineage.length - 1, currentType) ?? '');
-			final written: Array<TypeSyntax> = switch (read?.wrapped(['Null']) ?? read)?.shape {
-				case Function(ps, _, _): [for (p in ps) p.type];
-				case _: return;
-			};
-			if (written.length != params.length) return;
+			final written: Null<Array<String>> = expectation.lambdaParamTypes(lambda, lineage, lineageIndex, graphExpectation, currentType);
+			if (written == null) return;
 			for (i in 0...params.length) {
 				final at: Null<Span> = params[i].span;
-				if (at != null && bare.contains(params[i])) typeSources[at.from] = written[i].text;
+				if (at != null && bare.contains(params[i])) typeSources[at.from] = written[i];
 			}
 		}
 
 		/**
-		 * An object literal whose expected type (`expectedAt`) is a class the language CONSTRUCTS from a literal
+		 * An object literal whose expected type (`ExpectedTypes.expectedAt`) is a class the language CONSTRUCTS from a literal
 		 * (`ExecutionShape.implicitConstructionTypeMetaNames`): the `New` edge and constructor run a `new` would carry.
 		 */
 		function handleConstructionLiteral(node: QueryNode, currentType: Null<String>): Void {
-			final written: Null<String> = expectedAt(lineage.length - 1, currentType);
+			final written: Null<String> = expectation.expectedAt(lineage, lineageIndex, lineage.length - 1, graphExpectation, currentType);
 			final found: Null<String> = written == null ? null : nominalOf(written, currentType);
 			if (found != null && g.types.meta.constructsFromLiteral(found)) constructionRun(found, node.span, currentType);
 		}
