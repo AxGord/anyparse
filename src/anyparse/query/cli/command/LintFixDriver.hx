@@ -294,6 +294,10 @@ final class LintFixDriver {
 		// answers a tree that no longer exists — while the plugin behind the decorator reads the
 		// chain from disk fresh, so the stale memo is a SECOND answer for the same file.
 		cached.invalidateAmbientChain();
+		// Only this pass's texts may be asked about again; every superseded version, and every
+		// speculative text an earlier pass parsed to judge one check's edits, would otherwise stay
+		// memoised for the rest of the run.
+		cached.retainSources([for (entry in files) entry.source]);
 		// a file an earlier pass rewrote no longer holds the text the compile's facts describe
 		cached.compilerFactsEdited(changedFiles, originals);
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources

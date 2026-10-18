@@ -24841,6 +24841,22 @@
 			"find": "if (!(c is RiskyArm)) c.id()",
 			"replace": "c.id()",
 			"note": "a RiskyArm rule is footnoted as absent from the ledger (and counted never asked) beside its own row"
+		},
+		{
+			"name": "M-RETAIN-SOURCES-KEEPS-ALL",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "staleKeys",
+			"find": "if (!keep.exists(source)) source]",
+			"replace": "if (false) source]",
+			"note": "nothing is ever dropped, so a --fix run keeps every superseded and speculative parse for the rest of the run (the N25 self-fix OOM at the default heap)"
+		},
+		{
+			"name": "M-RETAIN-SOURCES-DROPS-LIVE",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "retainSources",
+			"find": "final keep: Map<String, Bool> = [for (source in live) source => true];",
+			"replace": "final keep: Map<String, Bool> = [];",
+			"note": "the live sources are dropped too, so every pass re-parses every file and an unchanged file loses its tree identity across passes"
 		}
 	]
 }

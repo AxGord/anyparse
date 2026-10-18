@@ -3385,6 +3385,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
+			'unit.query.CachingGrammarPluginTest#testRetainSourcesDropsOnlyTheSupersededTexts :: control :: '
+				+ 'M-RETAIN-SOURCES-KEEPS-ALL,M-RETAIN-SOURCES-DROPS-LIVE',
 			'unit.query.CallGraphBindingTest#testAClassExtendingAnAliasIsASubtypeOfItsTarget :: control :: M-TS-REACH-ALIAS-SUBTYPES',
 			'unit.query.CallGraphBindingTest#testAContainerIsTheStdOneOnlyWhereItsWritingFileBindsIt :: control :: '
 				+ 'M-TS-STD-CONTAINER-DECLARED,M-TS-STD-CONTAINER-WHERE,M-TS-NULLABLE-PATH-KEY',
@@ -7719,7 +7721,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-ARM-LEDGER-HANDOFF-KEPT',
 			'M-ARM-LEDGER-HANDOFF-UNRECORDED',
 			'M-ARM-LEDGER-ARM-BLIND',
-			'M-LEDGER-ARM-LISTED-ABSENT'
+			'M-LEDGER-ARM-LISTED-ABSENT',
+			'M-RETAIN-SOURCES-KEEPS-ALL',
+			'M-RETAIN-SOURCES-DROPS-LIVE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

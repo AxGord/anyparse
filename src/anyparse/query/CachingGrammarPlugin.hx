@@ -695,6 +695,30 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	}
 
 	/**
+	 * Drop every CONTENT-keyed memo whose source is not one of `live`, and the refs index of every tree it drops.
+	 *
+	 * A content key never answers stale — it simply never meets its source again — so in a `--fix` run these memos grew
+	 * with every text the run ever parsed: each rewritten version of a file, and every speculative text a guard parsed
+	 * to judge one check's edits (`BodySlotGuard` splices and parses each check's edit set). `LintFixDriver.applyLintPass`
+	 * calls it at the head of every pass with that pass's sources, so an unchanged file keeps its parse, its tree
+	 * identity included; a source outside `live` that is asked for again is re-parsed, which is correct, only slower.
+	 * The resolution library lives in the process-scoped `SharedParseTier` and is not touched.
+	 */
+	public function retainSources(live: Array<String>): Void {
+		final keep: Map<String, Bool> = [for (source in live) source => true];
+		final dropped: Array<QueryNode> = [];
+		for (cache in [_parseCache, _typeRefCache, _branchAwareCache]) for (source in staleKeys(cache, keep)) {
+			final tree: Null<QueryNode> = cache[source];
+			if (tree != null) dropped.push(tree);
+			cache.remove(source);
+		}
+		for (source in staleKeys(_rootCache, keep)) _rootCache.remove(source);
+		for (source in staleKeys(_spanInfoCache, keep)) _spanInfoCache.remove(source);
+		for (source in staleKeys(_lexicalRegionsCache, keep)) _lexicalRegionsCache.remove(source);
+		_refsCache.forget(dropped);
+	}
+
+	/**
 	 * `SpanTypeInfoProvider`: the five span-indexed maps, memoized by source. When the
 	 * wrapped plugin batches (`SpanTypeInfoProvider`) the bundle is one span-parse;
 	 * otherwise it falls back to the wrapped plugin's five individual accessors, so a
@@ -899,6 +923,11 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		if (sources.length != files.length) return false;
 		for (i => source in sources) if (source != files[i].source) return false;
 		return true;
+	}
+
+	/** The keys of `cache` that `keep` does not hold — collected first, so the caller may remove while it walks them. */
+	private static function staleKeys<T>(cache: Map<String, T>, keep: Map<String, Bool>): Array<String> {
+		return [for (source in cache.keys()) if (!keep.exists(source)) source];
 	}
 
 }

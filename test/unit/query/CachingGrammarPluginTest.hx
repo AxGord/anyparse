@@ -108,6 +108,27 @@ class CachingGrammarPluginTest extends Test {
 	}
 
 	/**
+	 * `retainSources` keeps the memos of the sources it is handed and drops every other one: the kept source answers
+	 * with the very tree it had (identity, no parse), the dropped one is parsed again on demand. Before it, a `--fix`
+	 * run memoised every text it ever parsed — every superseded version of a file and every speculative text a guard
+	 * spliced to judge one check's edits — for the rest of the run.
+	 */
+	@:pin('control') @:killer('M-RETAIN-SOURCES-KEEPS-ALL', 'M-RETAIN-SOURCES-DROPS-LIVE')
+	public function testRetainSourcesDropsOnlyTheSupersededTexts(): Void {
+		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final current: String = 'class RetainProbeA {\n\tvar x: Int;\n}';
+		final superseded: String = 'class RetainProbeB {\n\tvar y: String;\n}';
+		final kept: QueryNode = cached.parseFile(current);
+		Assert.notNull(cached.parseFile(superseded));
+		final before: Int = cached.rootParses;
+		cached.retainSources([current]);
+		Assert.isTrue(cached.parseFile(current) == kept, 'a live source keeps its tree, identity included');
+		Assert.equals(0, cached.rootParses - before, 'and costs no parse');
+		Assert.notNull(cached.parseFile(superseded));
+		Assert.equals(1, cached.rootParses - before, 'a dropped source is parsed again when it is asked for');
+	}
+
+	/**
 	 * The seam is output-NEUTRAL: every projection taken through the shared root returns
 	 * what the UNWRAPPED plugin returns for the same source. The fixture carries an import,
 	 * a type parameter, a typed field and a typed cast so that none of the comparisons is
