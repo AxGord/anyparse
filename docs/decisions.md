@@ -3929,3 +3929,8 @@ decided the question; it may not become a record of runs.
   `$` (raw text = value); the existing list strictly ascending in code-unit order (`TestDiscovery.compareStrings`);
   a present entry refused. `--append` stays the explicit unsorted form. JSON: no `GrammarPlugin` exists for the JSON
   grammar, so `mutation-arms.json` is out of reach of every op — branch `feat/infra-N35`
+- N35 (2b) — `add-element --append` onto an array written WITH a trailing comma (`[…, 'b',]`) spliced `, x` after
+  that comma (`,, x`, "result does not parse"; met appending to `TestDiscoveryParityTest`'s deferred-arm census). The
+  element now follows the existing separator and takes it over (`'b', 'x',`), also past trailing comments.
+  `NamingCrossRenameTest.testTheOracleRunRenamesAndRevertsTheMiss` needed a NEW miss for the oracle to revert, since
+  the aliased import it used is renamed now: a typedef alias of a class read as a bare VALUE — branch `feat/infra-N35`

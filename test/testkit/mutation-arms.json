@@ -24817,7 +24817,7 @@
 			"type": "anyparse.query.AddElement",
 			"method": "sortedElements",
 			"find": "last != null && last.key >= entry.key",
-			"replace": "false",
+			"replace": "last != null && false",
 			"note": "an unsorted list is accepted and entries land between elements in no order"
 		},
 		{
