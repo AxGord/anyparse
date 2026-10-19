@@ -40,6 +40,12 @@ final class HxCondExprFitRegionFixedPointTest extends Test {
 	/** Past this width main's own fixed point of the lambda body drifts as well (a separate residue). */
 	private static inline final MAX_K_LAMBDA: Int = 77;
 
+	/**
+	 * Past this width the literal in the region breaks as well, and a host reads that break, which no write names inside
+	 * a fit region, as undecided (the lambda's residue above).
+	 */
+	private static inline final MAX_K_CHAIN: Int = 77;
+
 	/** Call arguments fill their line; a fit region breaks its seams together. */
 	private static final CFG_FILL: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
 		+ '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": []}}, "sameLine": {"conditionalExprFit": true}}';
@@ -48,6 +54,11 @@ final class HxCondExprFitRegionFixedPointTest extends Test {
 	private static final CFG_COMPREHENSION: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": '
 		+ '{"maxLineLength": 140, "comprehensionCuddledOpen": true}, "sameLine": {"conditionalExprFit": true, "comprehensionFor": '
 		+ '"fitLine"}}';
+
+	/** The comprehension config, with a chain link after a multi-line `)` cuddled onto it. */
+	private static final CFG_CHAIN: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": '
+		+ '{"maxLineLength": 140, "comprehensionCuddledOpen": true, "methodChainCuddledLinks": true}, "sameLine": '
+		+ '{"conditionalExprFit": true, "comprehensionFor": "fitLine"}}';
 
 	public function new(): Void {
 		super();
@@ -84,6 +95,26 @@ final class HxCondExprFitRegionFixedPointTest extends Test {
 		for (k in 1...MAX_K_ELSEIF + 1) assertOneWriteWithinLimit(elseifComprehension(k), CFG_COMPREHENSION, k);
 	}
 
+	/**
+	 * A chain link after a call whose comprehension body is a region settles in one write: once the region breaks, the
+	 * call closes on its own line, and the link after it is cuddled onto that line as the next write lays it out. Both
+	 * break shapes of the chain: a head that is not a call keeps its first link (`builder.withName(…)`), a call head
+	 * breaks before every link (`makeBuilder(…)`).
+	 */
+	@:pin('control')
+	@:killer('M-CHAIN-REGION-OFFER-OFF')
+	@:killer('M-CHAIN-CLOSE-UNRESOLVED')
+	@:killer('M-CHAIN-AFTERFIRST-COMMIT-UNREAD')
+	@:killer('M-CHAIN-ONEPERLINE-COMMIT-UNREAD')
+	@:killer('M-TAIL-RESOLVE-IGNORED')
+	@:killer('M-OFFER-WANTED-DROPS')
+	public function testAChainLinkAfterARegionSettlesInOneWrite(): Void {
+		for (head in ['builder.withName(nameValue)', 'makeBuilder(nameValue)']) for (k in 1...MAX_K_CHAIN + 1) {
+			final once: String = assertOneWriteWithinLimit(chainComprehension(head, k), CFG_CHAIN, k);
+			if (once.contains('#else\n')) Assert.isTrue(once.contains('\t]).build();'), 'k=$k: the link was not cuddled\n$once');
+		}
+	}
+
 	private static function assertOneWriteWithinLimit(src: String, config: String, k: Int): String {
 		final once: String = HxWriteFixture.triviaWrite(src, config);
 		Assert.equals(once, HxWriteFixture.triviaWrite(once, config), 'k=$k\n$src');
@@ -107,6 +138,13 @@ final class HxCondExprFitRegionFixedPointTest extends Test {
 		return statement(
 			'var f = () -> [for (x in xs) #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \'' + ''.lpad('k', k)
 			+ '\'} #else {alpha: x.aaaaaaaaaaaaaaaaaaaaaa} #end];'
+		);
+	}
+
+	private static function chainComprehension(head: String, k: Int): String {
+		return statement(
+			'var y = $head.withItems([for (x in xs) #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \'' + ''.lpad('k', k)
+			+ '\'} #else {alpha: x.aaaaaaaaaaaaaaaaaaaaaa} #end]).build();'
 		);
 	}
 

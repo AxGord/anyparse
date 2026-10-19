@@ -117,14 +117,19 @@ final class HxParenValueIfOpenWrapSliceTest extends Test {
 	 * reaches the value-`if` arm and stays on the generic `CollapseProbe` tail,
 	 * where the fit gate keeps the paren glued. The established `-> ({ … })` shape
 	 * is protected by CONSTRUCTION (a different arm), not by a width accident.
+	 * The literal its cascade commits to one-per-line measures as the deferred body the
+	 * next write reads back, so the first write glues the paren to the arrow as well
+	 * (it opened the call and moved the paren to its own line, which the next write
+	 * glued); the glued shape is the fixed point.
 	 */
 	public function testParenObjectLiteralKeepsItsShape(): Void {
 		final src: String = 'class Sample {\n\tfunction run() {\n\t\tbucketList.map(m -> ({ headMarkOne: m.alphaValueOne, headMarkTwo: '
 			+ 'm.alphaValueTwo, headMarkThree: m.alphaValueThree, headMarkFour: m.alphaValueFour }));\n\t}\n}';
-		final out: String = 'class Sample {\n\tfunction run() {\n\t\tbucketList.map(m ->\n\t\t\t({\n'
-			+ '\t\t\t\theadMarkOne: m.alphaValueOne,\n\t\t\t\theadMarkTwo: m.alphaValueTwo,\n'
-			+ '\t\t\t\theadMarkThree: m.alphaValueThree,\n\t\t\t\theadMarkFour: m.alphaValueFour\n\t\t\t})\n\t\t);\n\t}\n}';
+		final out: String = 'class Sample {\n\tfunction run() {\n\t\tbucketList.map(m -> ({\n'
+			+ '\t\t\theadMarkOne: m.alphaValueOne,\n\t\t\theadMarkTwo: m.alphaValueTwo,\n'
+			+ '\t\t\theadMarkThree: m.alphaValueThree,\n\t\t\theadMarkFour: m.alphaValueFour\n\t\t}));\n\t}\n}';
 		Assert.equals(out, triviaWrite(src, CFG));
+		Assert.equals(out, triviaWrite(out, CFG));
 	}
 
 	/**

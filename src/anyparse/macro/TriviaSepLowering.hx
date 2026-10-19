@@ -1163,7 +1163,17 @@ final class TriviaSepLowering {
 				// never runs on a non-array Star (whose element node is a non-enum struct →
 				// the cast would throw). Non-comprehension arrays keep their `_smlKeep` reflow
 				// behaviour untouched.
-				_matrixDoc != null ? _dbg(_matrixDoc) : _smlKeep && !_isComprehension ? _dbg(_wlResult) : _wlResult;
+				// A list the one-per-line collapse (`_breakAsOnePerLine`) committed at build time is
+				// the same question from the other side: the next pass reads its newlines and takes
+				// the force-multi path, whose Doc is a `BodyGroup`, so it is that `BodyGroup` on this
+				// pass already; a chain or an arrow around it measured it full-width once and deferred
+				// the next time. Only a result carrying a hardline (`flatLength < 0`): an answer the
+				// RENDERER still decides stays counted, as the next pass may read it back flat.
+				_matrixDoc != null
+					? _dbg(_matrixDoc)
+					: (_smlKeep || _breakAsOnePerLine && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0) && !_isComprehension
+						? _dbg(_wlResult)
+						: _wlResult;
 			};
 		} else {
 			triviaSepFlatBranch(openText, closeText, sepText, triviaElemCall);

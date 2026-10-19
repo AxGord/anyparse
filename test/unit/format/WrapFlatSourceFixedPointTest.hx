@@ -307,6 +307,10 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ 'e) ? fName = v : fName } : { args: [{ name: \'v\', type: null }], ret: null, expr: macro { if (evName == null) { var prev = fNam'
 		+ 'e; } return fName; } })\n\t\t});\n\t}\n}';
 
+	/** An object literal that always breaks one-per-line, under every other default. */
+	private static final COMMITTED_LITERAL: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": '
+		+ '{"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": []}}}';
+
 	public function new(): Void {
 		super();
 	}
@@ -603,46 +607,59 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 *    ω-committed-objectlit-glue closed inside `shapeSingleArgGlue`'s `{`-branch,
 	 *    met here through the cascade's own INPUT, and it SURVIVES a rules-free
 	 *    cascade, which is what proves it is not mechanism A. Hosts: a ternary under a
-	 *    sole-argument call (pinned here) and a method chain (no fixture yet).
+	 *    sole-argument call and a method chain. CLOSED for a list its own cascade commits:
+	 *    the one-per-line collapse is the `BodyGroup` the next pass reads back, so its case
+	 *    below converges (`testCommittedLiteralUnderAChainOrArrowSettlesInOneWrite`).
 	 *
-	 * The two mechanisms STACK, and that is what a THREE-rewrite file is
-	 * (`testStackedMechanismsNeedThreeRewrites`; its `rules: []` is load-bearing, since the
+	 * The two mechanisms STACKED were a THREE-rewrite file; with B closed it needs two
+	 * (`testStackedMechanismsNeedTwoRewrites`; its `rules: []` is load-bearing, since the
 	 * shipped `arrayWrap` rules shadow `defaultWrap` and the file then converges).
-	 * `testMultiArgFillPacksACommittedBodyOnPassTwo` is mechanism B in a third host.
+	 * `testMultiArgFillPacksACommittedBodyOnPassOne` is mechanism B in a third host.
 	 *
-	 * Of the candidate fixes only `Renderer.flatFirstLineStep` adopting `restNodeWidth`'s
-	 * committed-`BodyGroup` answer for the `IfFirstLineExceeds` consumer shipped (the
-	 * `bgPrefix` flag); every other candidate reformats this project's own tree, which is
-	 * otherwise a fixed point — each is one line in `docs/decisions.md`. So the writer
-	 * defect is left standing and reported (`apq fmt` warns), and the CONSUMER silently
-	 * harmed by it — `RefactorSupport.canonicalize` — was fixed instead. When a fix does
-	 * land, these become `Assert.equals` on `once` and `twice`; do not delete them.
+	 * Of the candidate fixes for A only `Renderer.flatFirstLineStep` adopting `restNodeWidth`'s
+	 * committed-`BodyGroup` answer (the `bgPrefix` flag) shipped; every other one reformats this
+	 * tree (`docs/decisions.md`), and `RefactorSupport.canonicalize` was fixed instead. A closed
+	 * case becomes `Assert.equals` on `once` and `twice`; do not delete it.
 	 */
 	public function testConvergenceTailStillNeedsTwoRewrites(): Void {
-		final cases: Array<{ name: String, src: String, config: String }> = [
+		final cases: Array<{
+			name: String,
+			src: String,
+			config: String,
+			closed: Bool
+		}> = [
 			{
 				name: 'case body (Unpack.hx, Builder.hx)',
 				config: CASE_BODY_OBJECT,
-				src: CASE_BODY_SRC
+				src: CASE_BODY_SRC,
+				closed: false
 			},
 			{
 				name: 'value-if branch (DIBuilder.hx)',
 				config: VALUE_IF_NESTED,
-				src: VALUE_IF_SRC
+				src: VALUE_IF_SRC,
+				closed: false
 			},
 			{
 				name: 'ternary under a sole-arg call (HasSignalBuilder.hx)',
 				config: CALL_TERNARY_NESTED,
-				src: CALL_TERNARY_SRC
+				src: CALL_TERNARY_SRC,
+				closed: true
 			}
 		];
 		for (c in cases) {
 			final once: String = write(c.src, c.config);
 			final twice: String = write(once, c.config);
-			Assert.notEquals(
-				once, twice, '${c.name}: this writer divergence is CLOSED — flip this case to Assert.equals and re-run the Pony census'
-			);
-			Assert.equals(twice, write(twice, c.config), '${c.name}: the second rewrite must itself be the fixed point');
+			if (c.closed) {
+				Assert.equals(
+					once, twice, '${c.name}: this divergence was closed (mechanism B) — one round trip must land on the fixed point'
+				);
+			} else {
+				Assert.notEquals(
+					once, twice, '${c.name}: this writer divergence is CLOSED — flip this case to Assert.equals and re-run the Pony census'
+				);
+				Assert.equals(twice, write(twice, c.config), '${c.name}: the second rewrite must itself be the fixed point');
+			}
 		}
 	}
 
@@ -775,6 +792,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * paren and leave the literal flat on its own line. Byte-identical to the
 	 * pre-slice output, verified against a base-engine build.
 	 */
+	@:pin('control')
+	@:killer('M-COLLAPSE-ANY-RESULT')
 	public function testSoleUncommittedObjectLiteralArgKeepsTheOpenParen(): Void {
 		final src: String = 'class C {\n\tstatic function g(): Void {\n\t\tregisterDeferredResolutionForVerifiedProducerFields'
 			+ 'OnTheCurrentLevelAndItsParentsAndEveryEnclosingScopeChainInDeclarationOrder({ x: 1, y: 2 });\n\t}\n}';
@@ -794,7 +813,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * DIVERGENT under cascades that carry a fit-dependent `noWrap` shadow. Run
 	 * them again with only that shadow removed — a rules-free cascade answers
 	 * ONE mode in both fit states, so no `IfFirstLineExceeds` pivot can exist —
-	 * and two of the three CONVERGE while the third still needs two rewrites.
+	 * and the two mechanism-A cases CONVERGE. The third, mechanism B, needed two
+	 * rewrites under either cascade until B was closed; it now converges under both.
 	 *
 	 * That split is the whole content of the mechanism claim above, and the two
 	 * tests together are its mutation proof: the only variable between them is
@@ -827,10 +847,10 @@ class WrapFlatSourceFixedPointTest extends Test {
 				shape: 'if (staticDIVar != null)\n\t\t\t{\n\t\t\t\texpr: EVars([\n'
 			},
 			{
-				name: 'ternary under a sole-arg call — mechanism B, no pivot and still two passes',
+				name: 'ternary under a sole-arg call — mechanism B, closed',
 				src: CALL_TERNARY_SRC,
 				config: CALL_TERNARY_COMMITTED,
-				rewrites: 2,
+				rewrites: 1,
 				shape: 'kind: FFun(setcontroll\n'
 			}
 		];
@@ -846,28 +866,26 @@ class WrapFlatSourceFixedPointTest extends Test {
 	}
 
 	/**
-	 * The two mechanisms STACKED, which is what a THREE-rewrite file is
-	 * (ω-canonical-fixed-point).
+	 * The two mechanisms STACKED, which is what a THREE-rewrite file was
+	 * (ω-canonical-fixed-point); with mechanism B closed only the A link remains.
 	 *
 	 * `tools/src/create/ides/VSCode.hx` under Pony's committed `hxformat.json`
 	 * plus `arrayWrap: {"defaultWrap": "fillLine", "rules": []}` needs three
 	 * writer rewrites — one deeper than any shape recorded before this. The
-	 * links settle one per pass and they are one of each mechanism: pass 1 to 2
-	 * packs the committed array (`} : Dynamic), ({`, mechanism B), and only the
-	 * shape that leaves lets pass 2 to 3 read the enclosing literal's pivot and
-	 * explode it one-per-line (mechanism A).
+	 * links settled one per pass and they were one of each mechanism: pass 1 to 2
+	 * packed the committed array (`} : Dynamic), ({`, mechanism B), and only the
+	 * shape that leaves lets the next pass read the enclosing literal's pivot and
+	 * explode it one-per-line (mechanism A). Pass 1 now packs the array itself.
 	 *
-	 * Committing the literal cascade removes the second link and leaves exactly
-	 * two, which is the assertion that proves the two are independent rather
-	 * than one decision counted twice.
+	 * Committing the literal cascade removes the A link and leaves the file a one-rewrite fixed point, which is the
+	 * assertion that proves the two were independent rather than one decision counted twice.
 	 */
-	public function testStackedMechanismsNeedThreeRewrites(): Void {
+	public function testStackedMechanismsNeedTwoRewrites(): Void {
 		final chained: FormatFixedPointResult = FormatFixedPoint.run(s -> write(s, STACKED_ARRAY_PIVOT), STACKED_SRC);
-		// `converged` first: three is ONE pass under `FormatFixedPoint.MAX_REWRITES`,
-		// so a chain that grew a fourth link would fail the count assertion with
-		// "expected 3 got 4" and say nothing about the condition that actually broke.
+		// `converged` first: a chain that grew a link would fail the count assertion
+		// and say nothing about the condition that actually broke.
 		Assert.isTrue(chained.converged, 'the chain must still reach a fixed point at all: ${chained.failure}');
-		Assert.equals(3, chained.rewrites, 'the deepest known chain must still take three writer rewrites');
+		Assert.equals(2, chained.rewrites, 'with mechanism B closed the chain takes two writer rewrites, the A link');
 		final settled: Null<String> = chained.text;
 		Assert.isTrue(
 			settled != null && settled.indexOf('} : Dynamic), ({\n') != -1,
@@ -878,22 +896,23 @@ class WrapFlatSourceFixedPointTest extends Test {
 			'the mechanism-A link must settle on the exploded literal:\n<$settled>'
 		);
 		Assert.equals(
-			2, FormatFixedPoint.run(s -> write(s, STACKED_ARRAY_COMMITTED), STACKED_SRC).rewrites,
-			'with the literal cascade committed exactly ONE link must remain'
+			1, FormatFixedPoint.run(s -> write(s, STACKED_ARRAY_COMMITTED), STACKED_SRC).rewrites,
+			'with the literal cascade committed no link may remain'
 		);
 	}
 
 	/**
 	 * Mechanism B in a third host: the multi-argument fill
-	 * (ω-canonical-fixed-point).
+	 * (ω-canonical-fixed-point), closed with the rest of B.
 	 *
 	 * `src/anyparse/query/Cli.hx`'s `limitEntries(...)` is a fixed point under
 	 * this project's own `hxformat.json`, so nothing here observes it; a share
 	 * of the single-knob config arms do. Under a COMMITTED literal cascade the
-	 * trailing `(e, k) -> {…}` argument measures its real `DocMeasure.flatTokenWidth`
+	 * trailing `(e, k) -> {…}` argument measured its real `DocMeasure.flatTokenWidth`
 	 * on pass 1 and a deferred one on pass 2 — the `BodyGroup` deferral — so
-	 * `shapeFillLineWithLeadingBreak`'s `FillBreakAfterWrap` wraps before that
-	 * argument on pass 1 and packs it on pass 2.
+	 * `shapeFillLineWithLeadingBreak`'s `FillBreakAfterWrap` wrapped before that
+	 * argument on pass 1 and packed it on pass 2. The literal now reaches pass 1 as the
+	 * same `BodyGroup`, so pass 1 packs it.
 	 *
 	 * The control is the SAME cascade with its `totalItemLength <= 140` shadow
 	 * put back: the literal then stays flat, nothing is committed, and one
@@ -901,13 +920,13 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * not evidence on its own — its job is to show that the two-rewrite arm
 	 * above is about the COMMITMENT and not about the source.
 	 */
-	public function testMultiArgFillPacksACommittedBodyOnPassTwo(): Void {
+	public function testMultiArgFillPacksACommittedBodyOnPassOne(): Void {
 		final committed: FormatFixedPointResult = FormatFixedPoint.run(s -> write(s, CALL_TERNARY_COMMITTED), MULTI_ARG_FILL_SRC);
-		Assert.equals(2, committed.rewrites, 'the multi-argument fill must still need two writer rewrites');
+		Assert.equals(1, committed.rewrites, 'the multi-argument fill must settle in one writer rewrite');
 		final settled: Null<String> = committed.text;
 		Assert.isTrue(
-			settled != null && settled.indexOf('e -> e.hits.length, (e, k) -> {\n') != -1,
-			'pass 2 must pack the committed lambda body onto the leading arguments:\n<$settled>'
+			settled != null && settled.indexOf('\t\t\tallEntries, cappedLimit, e -> e.hits.length, (e, k) -> {\n') != -1,
+			'pass 1 must pack the committed lambda body onto the leading arguments:\n<$settled>'
 		);
 		final control: FormatFixedPointResult = FormatFixedPoint.run(s -> write(s, CALL_TERNARY_NESTED), MULTI_ARG_FILL_SRC);
 		Assert.equals(1, control.rewrites, 'an UNcommitted literal leaves the same call a one-rewrite fixed point');
@@ -920,6 +939,37 @@ class WrapFlatSourceFixedPointTest extends Test {
 			&& flat.indexOf('e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)}\n') != -1,
 			'the control must keep the literal flat on the packed argument line:\n<$flat>'
 		);
+	}
+
+	/**
+	 * Mechanism B under a method chain and an arrow body: an object literal its own cascade commits to one-per-line,
+	 * written from a FLAT source, too wide to stand flat on the chain's or the arrow's line.
+	 *
+	 * Pass 1 met the collapsed literal as a counted list, so the chain read its link as too wide and broke every link,
+	 * and the arrow moved its body to the next line; pass 2 met the same literal through the force-multi emit, a
+	 * `BodyGroup` the width probes defer, and glued both. The collapse is now that `BodyGroup` already, so pass 1 glues.
+	 * Both shapes are asserted on `once`: on base `once` is the broken shape, so anchor and equality both fail.
+	 */
+	@:pin('control')
+	@:killer('M-COLLAPSE-COUNTED')
+	public function testCommittedLiteralUnderAChainOrArrowSettlesInOneWrite(): Void {
+		final cases: Array<{ src: String, glued: String }> = [
+			{
+				src: 'var y = builder.withName(nameValue).withItems({alpha: x.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, '
+					+ 'beta: x.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}).build();',
+				glued: '\t\tvar y = builder.withName(nameValue).withItems({\n'
+			},
+			{
+				src: 'var f = () -> foo({alpha: x.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, '
+					+ 'beta: x.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb});',
+				glued: '\t\tvar f = () -> foo({\n'
+			}
+		];
+		for (c in cases) {
+			final once: String = write('class M {\n\tfunction f() {\n\t\t${c.src}\n\t}\n}', COMMITTED_LITERAL);
+			Assert.isTrue(once.indexOf(c.glued) != -1, 'expected the glued shape the next pass produces, got:\n<$once>');
+			Assert.equals(once, write(once, COMMITTED_LITERAL), 'one round trip must land on the fixed point');
+		}
 	}
 
 	private static function write(src: String, config: String): String {

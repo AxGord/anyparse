@@ -109,6 +109,33 @@ final class BreakCommits {
 	}
 
 	/**
+	 * `plain`, offered once more per break nested in one of `items` — for each token its outermost node, and by default none
+	 * inside a `BodyGroup` (`nested(item, false)`) — as `laidOut(with, i)`: the host laid out again from `with`, `items` with
+	 * item `i` holding that break committed. A host whose layout reads its items' Docs at build time so lays itself out the
+	 * way the next rewrite will, which reads the break from the source. `wanted(item, i, broken)` keeps an offer only when
+	 * the committed item changes what the host reads from it; without it every break is offered. `throughBodies` reaches
+	 * into bodies as `nested` does. Each alternative commits only its own break: when two are taken, the one offered last
+	 * wins and the other stays a live decision inside it.
+	 */
+	public static function offerItemBreaks(
+		items: Array<Doc>, plain: Doc, laidOut: (items:Array<Doc>, committed:Int) -> Doc, ?wanted: (item:Doc, i:Int, broken:Doc) -> Bool,
+		throughBodies: Bool = false
+	): Doc {
+		var out: Doc = plain;
+		for (i => item in items) for (inner in outermostPerToken(nested(item, throughBodies))) switch inner {
+			case BreakCommit(brk, _, token) if (token != null):
+				final broken: Doc = replaced(item, inner, brk);
+				if (wanted == null || wanted(item, i, broken)) {
+					final with: Array<Doc> = items.copy();
+					with[i] = broken;
+					out = BreakCommit(laidOut(with, i), out, token);
+				}
+			case _:
+		}
+		return out;
+	}
+
+	/**
 	 * `shape(inner)`, offered once more per break nested in `inner` — `shape` laid out with that break committed, and
 	 * every COMMITTED break (a token-less `BreakCommit`) read as its bare `brk` rather than as the source form a next
 	 * rewrite reads. For a host whose next rewrite does not measure that break at all: an expression paren keeps the
@@ -116,13 +143,7 @@ final class BreakCommits {
 	 * or it settles on the other of its two fixed points.
 	 */
 	public static function followBare(inner: Doc, shape: Doc -> Doc): Doc {
-		var out: Doc = shape(inner);
-		for (c in outermostPerToken(nested(inner))) switch c {
-			case BreakCommit(brk, _, token) if (token != null):
-				out = BreakCommit(shape(bare(replaced(inner, c, brk))), out, token);
-			case _:
-		}
-		return out;
+		return offerItemBreaks([inner], shape(inner), (with, _) -> shape(bare(with[0])), true);
 	}
 
 	/**

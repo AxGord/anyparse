@@ -26336,8 +26336,8 @@
 			"name": "M-PAREN-MEASURES-COMMITTED",
 			"type": "anyparse.core.BreakCommits",
 			"method": "followBare",
-			"find": "out = BreakCommit(shape(bare(replaced(inner, c, brk))), out, token);",
-			"replace": "out = BreakCommit(shape(replaced(inner, c, brk)), out, token);",
+			"find": "(with, _) -> shape(bare(with[0]))",
+			"replace": "(with, _) -> shape(with[0])",
 			"note": "an expression paren measures a committed literal break deferred, so the paren that opens for every narrower literal glues once the literal breaks: one write still, but onto the other fixed point than the one the paren reached before"
 		},
 		{
@@ -27018,8 +27018,8 @@
 			"name": "M-REGION-OFFER-THROUGH-BODIES",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "emit",
-			"find": "BreakCommits.outermostPerToken(BreakCommits.nested(item, false))",
-			"replace": "BreakCommits.outermostPerToken(BreakCommits.nested(item))",
+			"find": "BreakCommits.offerItemBreaks(items, out, laidOut)",
+			"replace": "BreakCommits.offerItemBreaks(items, out, laidOut, null, true)",
 			"note": "a list lays itself out for a region inside a comprehension body, whose own seam the next write re-decides"
 		},
 		{
@@ -27863,6 +27863,70 @@
 			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(fl)): fl;",
 			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (false): fl;",
 			"note": "a rest-aware `&&` / `+` chain whose trailing paren opens is no longer forward-glued, so it breaks before `|| (` instead of hugging the paren"
+		},
+		{
+			"name": "M-CHAIN-REGION-OFFER-OFF",
+			"type": "anyparse.format.wrap.MethodChainEmit",
+			"method": "emit",
+			"find": "return opt.methodChainCuddledLinks",
+			"replace": "return false",
+			"note": "a chain is never offered for a break nested in a part, so the link after a call whose region breaks stays on its own line and the next write cuddles it"
+		},
+		{
+			"name": "M-CHAIN-CLOSE-UNRESOLVED",
+			"type": "anyparse.format.wrap.MethodChainEmit",
+			"method": "emit",
+			"find": "endsWithMultilineClose(broken, true)",
+			"replace": "endsWithMultilineClose(broken, false)",
+			"note": "the offer gate reads the committed part on the flat side of the conditional around the region, sees no closing line and offers nothing"
+		},
+		{
+			"name": "M-CHAIN-AFTERFIRST-COMMIT-UNREAD",
+			"type": "anyparse.format.wrap.MethodChainEmit",
+			"method": "shapeOnePerLineAfterFirst",
+			"find": "committed == i || i == 1 && committed == 0",
+			"replace": "false",
+			"note": "the offered layout of a chain whose head is not a call reads the committed part flat, so the offer lays the link out uncuddled as before"
+		},
+		{
+			"name": "M-CHAIN-ONEPERLINE-COMMIT-UNREAD",
+			"type": "anyparse.format.wrap.MethodChainEmit",
+			"method": "shapeOnePerLine",
+			"find": "segs[i - 1], committed == i)",
+			"replace": "segs[i - 1], false)",
+			"note": "the offered layout of a chain with a call head reads the committed part flat, so the offer lays the link out uncuddled as before"
+		},
+		{
+			"name": "M-TAIL-RESOLVE-IGNORED",
+			"type": "anyparse.core.DocMeasure",
+			"method": "endsWithForcedCloseLine",
+			"find": "scanTailAt(d, 0, resolveForcedBreaks, null)",
+			"replace": "scanTailAt(d, 0, false, null)",
+			"note": "the closing-line read ignores the request to read a conditional that cannot stay flat on its break side"
+		},
+		{
+			"name": "M-OFFER-WANTED-DROPS",
+			"type": "anyparse.core.BreakCommits",
+			"method": "offerItemBreaks",
+			"find": "if (wanted == null || wanted(item, i, broken)) {",
+			"replace": "if (wanted == null) {",
+			"note": "a host that filters its offers gets none, so the chain never lays itself out for the region break"
+		},
+		{
+			"name": "M-COLLAPSE-COUNTED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepNoTriviaBranch",
+			"find": "(_smlKeep || _breakAsOnePerLine && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0)",
+			"replace": "(_smlKeep)",
+			"note": "a source-flat list its cascade commits to one-per-line reaches its host counted while the next write reads it back deferred, so a chain or an arrow around it breaks once and glues on the next write"
+		},
+		{
+			"name": "M-COLLAPSE-ANY-RESULT",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepNoTriviaBranch",
+			"find": "_breakAsOnePerLine && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0",
+			"replace": "_breakAsOnePerLine",
+			"note": "every source-flat list is deferred, a flat one included, so a host under-measures a literal that still stands flat and glues past the limit"
 		}
 	]
 }
