@@ -107,6 +107,9 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBeforeAMultilineMember :: control :: M-BLANK-MULTILINE-OFF',
 		'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBetweenMultilineAndSingleLine :: control :: '
 			+ 'M-BLANK-MULTILINE-OFF',
+		'unit.grammar.haxe.HxCallArgLambdaBodyChainIndentTest#testArrowSwitchCaseBodyChainIndents :: control :: M-STMT-LIST-CALLARG-CASE',
+		'unit.grammar.haxe.HxCallArgLambdaBodyChainIndentTest#testFinalInFirstLambdaArgChainIndents :: control :: M-STMT-LIST-CALLARG-BLOCK',
+		'unit.grammar.haxe.HxCallArgLambdaBodyChainIndentTest#testReturnInSoleLambdaArgChainIndents :: control :: M-STMT-LIST-CALLARG-BARRIER',
 		'unit.grammar.haxe.HxCallGroupRestProbeCasePatternTest#testCasePatternCtorInsideACollectionStaysGlued :: control :: '
 			+ 'M-PATTERN-RESTPROBE-UNSET',
 		'unit.grammar.haxe.HxCaseBodyControlFlowGlueTest#testABracelessControlFlowBodyGoesBelowAndSpreads :: control :: '

@@ -230,7 +230,10 @@ final class DeferredArms {
 		'M-XREN-EXTENDS-HEAD-UNEMITTED :: anyparse.macro.QueryWalkerLowering#typeRefsDescendCore',
 		'M-QUERY-NAME-IGNORED :: anyparse.macro.QueryWalkerLowering#lowerNameSeq',
 		'M-PAREN-BROKEN-CHAIN-PINNED :: anyparse.macro.WriterKwRefLowering#kwRefWrapHardFlatten',
-		'M-BREAKMARK-FIT-NAMED :: anyparse.macro.WriterPolicyLowering#nestBodyOnSourceNewlineWrap'
+		'M-BREAKMARK-FIT-NAMED :: anyparse.macro.WriterPolicyLowering#nestBodyOnSourceNewlineWrap',
+		'M-STMT-LIST-CALLARG-BARRIER :: anyparse.macro.WriterOptFanout#statementListElemOpt',
+		'M-STMT-LIST-CALLARG-BLOCK :: anyparse.macro.TriviaBlockLowering#triviaBlockElemCallExpr',
+		'M-STMT-LIST-CALLARG-CASE :: anyparse.macro.TriviaTryparseLowering#triviaTryparseElemCallExprs'
 	];
 
 }
