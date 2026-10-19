@@ -68,6 +68,12 @@ final class ArgumentTypes {
 		reading: s -> s.seen
 	};
 
+	/** File -> its declarations' written types, by binding offset (`TypeInfoProvider.declaredTypeSources`). */
+	private final _typeSources: Map<String, Map<Int, String>> = [];
+
+	/** File -> the offsets `typeSourcesOf` answers for, ascending (`annotationOf`). */
+	private final _typeSourceOffsets: Map<String, Array<Int>> = [];
+
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
 	private final _plugin: GrammarPlugin;
@@ -75,12 +81,6 @@ final class ArgumentTypes {
 
 	/** What reads the written types of declarations; null for a plugin that reads none, which then knows no type. */
 	private final _types: Null<TypeInfoProvider>;
-
-	/** File -> its declarations' written types, by binding offset (`TypeInfoProvider.declaredTypeSources`). */
-	private final _typeSources: Map<String, Map<Int, String>> = [];
-
-	/** File -> the offsets `typeSourcesOf` answers for, ascending (`annotationOf`). */
-	private final _typeSourceOffsets: Map<String, Array<Int>> = [];
 
 	public function new(graph: CallGraph, trees: FunctionTrees, plugin: GrammarPlugin) {
 		_graph = graph;
@@ -156,6 +156,11 @@ final class ArgumentTypes {
 		var at: QueryNode = node;
 		while (at.kind == _shape.parenKind && at.children.length == 1) at = at.children[0];
 		return at;
+	}
+
+	/** Whether `m` is a field: a member holding a value, no function. */
+	private inline function isField(m: MemberInfo): Bool {
+		return (_shape.fieldDeclKinds ?? []).contains(m.kind);
 	}
 
 	/** The written types of every annotated declaration of `file`, by binding offset (`TypeInfoProvider.declaredTypeSources`). */
@@ -247,11 +252,6 @@ final class ArgumentTypes {
 				_graph.typeParamBoundsOf(callerId, path) == null && _graph.typeParamBoundsOf(calleeId, path) == null;
 			case _: false;
 		};
-	}
-
-	/** Whether `m` is a field: a member holding a value, no function. */
-	private inline function isField(m: MemberInfo): Bool {
-		return (_shape.fieldDeclKinds ?? []).contains(m.kind);
 	}
 
 }

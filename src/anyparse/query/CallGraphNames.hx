@@ -149,14 +149,6 @@ final class CallGraphNames {
 		};
 	}
 
-	/** Whether `t` is a type named by one of `names`. */
-	private static function namedAmong(t: TypeSyntax, names: Array<String>): Bool {
-		return switch t.shape {
-			case Nominal(path, _): names.contains(path);
-			case _: false;
-		};
-	}
-
 	/**
 	 * The parameters `fn` declares (`paramsOf`), read by the grammar's parameter kinds, its annotation kinds, its optional
 	 * and its rest parameter kind — what the index records of every member it holds (`MemberInfo.paramSkippableFrom`).
@@ -182,6 +174,14 @@ final class CallGraphNames {
 				}
 			],
 			rest: params.length > 0 && params[params.length - 1].kind == restKind
+		};
+	}
+
+	/** Whether `t` is a type named by one of `names`. */
+	private static function namedAmong(t: TypeSyntax, names: Array<String>): Bool {
+		return switch t.shape {
+			case Nominal(path, _): names.contains(path);
+			case _: false;
 		};
 	}
 

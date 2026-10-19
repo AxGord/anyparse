@@ -30,16 +30,6 @@ using Lambda;
 final class OperandCallees {
 
 	/**
-	 * Whether a call to `m`, a member of this file, selects the signature its declaration writes: the one declaration of the
-	 * name in its type (a `#if` twin is another build's signature), carrying no `@:overload`. A macro's parameters are
-	 * expressions and a type parameter binds to nothing in scope, so neither types a lambda by construction.
-	 */
-	private static function selectsItsSignature(binder: OperandBinder, m: MemberInfo): Bool {
-		final owner: Null<TypeDeclInfo> = binder._index.fileInfo(binder._file)?.types.find(t -> t.members.contains(m));
-		return owner != null && owner.members.filter(o -> o.name == m.name).length == 1 && !m.hasOverloadMeta;
-	}
-
-	/**
 	 * The parameter list the call or construction `call` selects, where it is declared, with the type parameters the call
 	 * binds there — for a callee of ONE signature (no `@:overload`, no macro, no `#if` twin): a bare call to a member of this
 	 * file, to a local function, or to a member the enclosing type inherits; `recv.m(…)` on a receiver of one declaration —
@@ -55,6 +45,16 @@ final class OperandCallees {
 		return name == null || callee.kind != binder._shape.fieldAccessKind || callee.children.length != 1
 			? null
 			: memberCallParams(binder, callee.children[0], name, call);
+	}
+
+	/**
+	 * Whether a call to `m`, a member of this file, selects the signature its declaration writes: the one declaration of the
+	 * name in its type (a `#if` twin is another build's signature), carrying no `@:overload`. A macro's parameters are
+	 * expressions and a type parameter binds to nothing in scope, so neither types a lambda by construction.
+	 */
+	private static function selectsItsSignature(binder: OperandBinder, m: MemberInfo): Bool {
+		final owner: Null<TypeDeclInfo> = binder._index.fileInfo(binder._file)?.types.find(t -> t.members.contains(m));
+		return owner != null && owner.members.filter(o -> o.name == m.name).length == 1 && !m.hasOverloadMeta;
 	}
 
 	/**

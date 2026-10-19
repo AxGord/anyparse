@@ -187,16 +187,6 @@ final class ArgumentValues {
 			: { param: at, suffix: method == affix.suffix, text: text };
 	}
 
-	/** Whether the atom `atom` holds `null`. */
-	public static inline function isNullAtom(atom: String): Bool {
-		return atom == NULL;
-	}
-
-	/** The string the atom `atom` holds, or null for an atom of no known string. */
-	public static function stringOf(atom: String): Null<String> {
-		return atom.startsWith(STRING_ATOM) ? atom.substr(STRING_ATOM.length) : null;
-	}
-
 	/**
 	 * Every way the call of `edge` may bind its `args` to `params` of the callee declared in `calleeFile`
 	 * (`ArgumentSlots`), each argument typed where the caller writes it; null where there are too many to follow.
@@ -464,6 +454,16 @@ final class ArgumentValues {
 			|| method != affix.suffix && method != affix.prefix
 			? null
 			: callee.children[0];
+	}
+
+	/** Whether the atom `atom` holds `null`. */
+	public static inline function isNullAtom(atom: String): Bool {
+		return atom == NULL;
+	}
+
+	/** The string the atom `atom` holds, or null for an atom of no known string. */
+	public static function stringOf(atom: String): Null<String> {
+		return atom.startsWith(STRING_ATOM) ? atom.substr(STRING_ATOM.length) : null;
 	}
 
 	/**

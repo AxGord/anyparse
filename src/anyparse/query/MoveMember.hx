@@ -350,6 +350,21 @@ final class MoveMember {
 	}
 
 	/**
+	 * The edit qualifying one bare reference with `qualifier` (`Dest.` for a static, `via.`
+	 * for an instance member).
+	 *
+	 * An ordinary read takes a zero-width PREFIX insertion. A braceless `$name`
+	 * interpolation read cannot: `$` binds to a bare identifier, so a prefix there emits the
+	 * literal text `Dest.` followed by an interpolation of a name the source type no longer
+	 * declares. Its whole `$name` span is replaced with the BRACED form, which is an ordinary
+	 * expression position — sound here because the substituted text is always a dotted
+	 * identifier chain, never an arbitrary expression.
+	 */
+	private static inline function qualifyEdit(hit: BareHit, qualifier: String): { span: Span, text: String } {
+		return nameQualifyEdit(hit.offset, hit.interp, hit.m.name, qualifier);
+	}
+
+	/**
 	 * All direct members of a type decl with their modifier / meta runs.
 	 */
 	private static function membersOf(
@@ -698,21 +713,6 @@ final class MoveMember {
 				pushUnique(callerFilesNeedingImport, file);
 			}
 		}
-	}
-
-	/**
-	 * The edit qualifying one bare reference with `qualifier` (`Dest.` for a static, `via.`
-	 * for an instance member).
-	 *
-	 * An ordinary read takes a zero-width PREFIX insertion. A braceless `$name`
-	 * interpolation read cannot: `$` binds to a bare identifier, so a prefix there emits the
-	 * literal text `Dest.` followed by an interpolation of a name the source type no longer
-	 * declares. Its whole `$name` span is replaced with the BRACED form, which is an ordinary
-	 * expression position — sound here because the substituted text is always a dotted
-	 * identifier chain, never an arbitrary expression.
-	 */
-	private static function qualifyEdit(hit: BareHit, qualifier: String): { span: Span, text: String } {
-		return nameQualifyEdit(hit.offset, hit.interp, hit.m.name, qualifier);
 	}
 
 	/**
