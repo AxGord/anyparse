@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.format.comment.CommentDirective;
+
 using StringTools;
 using Lambda;
 
@@ -26,14 +28,6 @@ final class CommentProse {
 
 	/** The longest a DECORATED phrase can be and still read as a section label rather than a sentence (gate 9). */
 	private static inline final DECORATED_LABEL_WORDS: Int = 4;
-
-	/**
-	 * Tooling directives (gate 5), lower-cased and matched as a LINE PREFIX. `noqa` and
-	 * `CHECKSTYLE:` are this project's own suppression markers (`Suppression`); the
-	 * `@formatter:` and `#region` pairs are the two conventions foreign formatters and
-	 * IDEs read out of Haxe line comments.
-	 */
-	private static final DIRECTIVE_MARKERS: Array<String> = ['noqa', 'checkstyle:', '@formatter:', '#region', '#endregion'];
 
 	/** Task markers (gate 6), lower-cased and matched ANYWHERE in a line. */
 	private static final TASK_MARKERS: Array<String> = ['todo', 'fixme', 'hack', 'xxx'];
@@ -110,10 +104,52 @@ final class CommentProse {
 	 * that does not READ AS PROSE.
 	 */
 	public static function declines(text: String): Bool {
+		if (CommentDirective.isDirective(text)) return true;
 		final lower: String = text.toLowerCase();
-		for (marker in DIRECTIVE_MARKERS) if (lower.startsWith(marker)) return true;
 		for (marker in TASK_MARKERS) if (lower.indexOf(marker) >= 0) return true;
 		return !readsAsProse(text);
+	}
+
+	/**
+	 * Gate 7, stated POSITIVELY: whether `text` reads as prose. The rule converts what it can
+	 * recognise as English, rather than dodging a list of code shapes — a blacklist of
+	 * commented-out forms leaks, because every shape omitted from it converts silently and the
+	 * list can only grow after the fact.
+	 *
+	 * Prose is a line that opens with something other than a code head and carries no
+	 * punctuation English does not use:
+	 *
+	 *  - its first word is not a declaration / statement keyword (`CODE_HEAD_KEYWORDS`), and
+	 *    not a control keyword followed by the construct's `(` or `{`
+	 *    (`CONTROL_HEAD_KEYWORDS`) — the keyword sets are the LANGUAGE's, a closed fact, not a
+	 *    catalogue of observed mistakes;
+	 *  - it holds no `;`, `{`, `}`, `=` or `@`;
+	 *  - no identifier is glued to a `(` (a CALL — prose puts a space before a bracket, as in
+	 *    `… width and height (center align)`);
+	 *  - no identifier is glued to a `:` that a further identifier follows (a TYPE ANNOTATION
+	 *    — a prose colon is followed by a space or ends the line, and a URL's `://` is neither).
+	 *
+	 * QUOTED MATERIAL IS EXEMPT. Quoting is how English embeds a foreign shape — an example
+	 * value, a fragment of code — so a balanced `"…"` or backtick span is judged as the
+	 * QUOTATION it is, rather than as punctuation of the line: `// the model, -- "Core(TM)2
+	 * @ 2.80GHz"` describes a field whatever the sample inside the quotes looks like. Every
+	 * check above therefore takes its CHARACTERS from the text with those spans blanked
+	 * (`maskQuotedSpans`), so nothing inside a quotation can be the line's own punctuation.
+	 *
+	 * The judgement is SPLIT, though. Whether a `;` / `{` / `}` sits in a STRUCTURAL position
+	 * is a question about what surrounds it, and blanking a span changes exactly that: it
+	 * would leave `// stop; "really"` reading as `;`-terminated and `// "note" } tail` as a
+	 * line-opening `}`, both prose at HEAD. So those positions are asked of the RAW line —
+	 * which loses nothing, because a `;` inside a balanced span can never terminate the line
+	 * anyway: its own closing delimiter follows it.
+	 *
+	 * An empty line is prose: it is the paragraph break of a multi-line run.
+	 */
+	public static function readsAsProse(text: String): Bool {
+		final bare: String = maskQuotedSpans(text);
+		final head: String = firstWord(bare);
+		return !CODE_HEAD_KEYWORDS.contains(head) && !(CONTROL_HEAD_KEYWORDS.contains(head) && opensBracket(bare.substr(head.length)))
+			&& !hasCodePunctuation(bare, text);
 	}
 
 	/** Whether `c` is one of the characters a section rule is drawn from. */
@@ -155,48 +191,6 @@ final class CommentProse {
 		var words: Int = 0;
 		for (part in text.trim().split(' ')) if (part.trim() != '') words++;
 		return words;
-	}
-
-	/**
-	 * Gate 7, stated POSITIVELY: whether `text` reads as prose. The rule converts what it can
-	 * recognise as English, rather than dodging a list of code shapes — a blacklist of
-	 * commented-out forms leaks, because every shape omitted from it converts silently and the
-	 * list can only grow after the fact.
-	 *
-	 * Prose is a line that opens with something other than a code head and carries no
-	 * punctuation English does not use:
-	 *
-	 *  - its first word is not a declaration / statement keyword (`CODE_HEAD_KEYWORDS`), and
-	 *    not a control keyword followed by the construct's `(` or `{`
-	 *    (`CONTROL_HEAD_KEYWORDS`) — the keyword sets are the LANGUAGE's, a closed fact, not a
-	 *    catalogue of observed mistakes;
-	 *  - it holds no `;`, `{`, `}`, `=` or `@`;
-	 *  - no identifier is glued to a `(` (a CALL — prose puts a space before a bracket, as in
-	 *    `… width and height (center align)`);
-	 *  - no identifier is glued to a `:` that a further identifier follows (a TYPE ANNOTATION
-	 *    — a prose colon is followed by a space or ends the line, and a URL's `://` is neither).
-	 *
-	 * QUOTED MATERIAL IS EXEMPT. Quoting is how English embeds a foreign shape — an example
-	 * value, a fragment of code — so a balanced `"…"` or backtick span is judged as the
-	 * QUOTATION it is, rather than as punctuation of the line: `// the model, -- "Core(TM)2
-	 * @ 2.80GHz"` describes a field whatever the sample inside the quotes looks like. Every
-	 * check above therefore takes its CHARACTERS from the text with those spans blanked
-	 * (`maskQuotedSpans`), so nothing inside a quotation can be the line's own punctuation.
-	 *
-	 * The judgement is SPLIT, though. Whether a `;` / `{` / `}` sits in a STRUCTURAL position
-	 * is a question about what surrounds it, and blanking a span changes exactly that: it
-	 * would leave `// stop; "really"` reading as `;`-terminated and `// "note" } tail` as a
-	 * line-opening `}`, both prose at HEAD. So those positions are asked of the RAW line —
-	 * which loses nothing, because a `;` inside a balanced span can never terminate the line
-	 * anyway: its own closing delimiter follows it.
-	 *
-	 * An empty line is prose: it is the paragraph break of a multi-line run.
-	 */
-	private static function readsAsProse(text: String): Bool {
-		final bare: String = maskQuotedSpans(text);
-		final head: String = firstWord(bare);
-		return !CODE_HEAD_KEYWORDS.contains(head) && !(CONTROL_HEAD_KEYWORDS.contains(head) && opensBracket(bare.substr(head.length)))
-			&& !hasCodePunctuation(bare, text);
 	}
 
 	/**

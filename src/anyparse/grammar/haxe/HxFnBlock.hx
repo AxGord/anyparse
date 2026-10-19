@@ -37,7 +37,7 @@ package anyparse.grammar.haxe;
 @:fmt(multilineWhenFieldNonEmpty('stmts'))
 typedef HxFnBlock = {
 	@:fmt(emptyCurlyBreak, keepCurlyBlanks, rightCurlyAnonFnOverride('anonFunctionRightCurly'), clearExprPositionNonTail,
-		uniformStmtBlanks, trailSepKeepIf('elementIsConditional_HxStatement'))
+		uniformStmtBlanks, trailSepKeepIf('elementIsConditional_HxStatement'), relocateTrailingComments)
 	@:lead('{') @:trail('}') @:trivia @:skimmable
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var stmts: Array<HxStatement>;

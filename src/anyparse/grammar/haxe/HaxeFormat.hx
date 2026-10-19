@@ -254,6 +254,7 @@ final class HaxeFormat implements TextFormat {
 		afterLeftCurly: KeepEmptyLinesPolicy.Keep,
 		beforeRightCurly: KeepEmptyLinesPolicy.Keep,
 		uniformStatementBlanks: UniformStatementBlanksPolicy.Keep,
+		trailingCommentAbove: false,
 		typedefAssign: WhitespacePolicy.Both,
 		typedefIntersection: WhitespacePolicy.After,
 		typeParamDefaultEquals: WhitespacePolicy.Both,

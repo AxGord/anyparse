@@ -168,7 +168,7 @@ class D {
 				IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
 				IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
 				IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _),
-				IfGluedFirstLineExceeds(_, _, _, _):
+				IfGluedFirstLineExceeds(_, _, _, _), IfTrailingCommentOverflows(_, _, _, _, _):
 				// Handled above by `flattenConditional`; unreachable here, kept
 				// only for switch exhaustiveness.
 				Empty;
@@ -218,6 +218,7 @@ class D {
 			case IfArrowContinuationFitsWithRest(ei, fw, n, brk, fl): IfArrowContinuationFitsWithRest(ei, fw, n, f(brk), f(fl));
 			case IfIndentWidthExceeds(fw, n, brk, fl): IfIndentWidthExceeds(fw, n, f(brk), f(fl));
 			case IfGluedFirstLineExceeds(n, bi, brk, fl): IfGluedFirstLineExceeds(n, bi, f(brk), f(fl));
+			case IfTrailingCommentOverflows(n, tw, code, brk, fl): IfTrailingCommentOverflows(n, tw, f(code), f(brk), f(fl));
 			case Concat(items): Concat([for (it in items) f(it)]);
 			case Fill(items, sep, tr): Fill([for (it in items) f(it)], f(sep), tr);
 			case FillWithRestProbe(items, sep, tr): FillWithRestProbe([for (it in items) f(it)], f(sep), tr);
@@ -262,7 +263,8 @@ class D {
 			case IfNaturalFirstLineExceeds(_, _, fl), IfNaturalFirstLineExceedsWithRest(_, _, fl): flatten(fl);
 			case IfNaturalFirstLineFitsOpenDelim(_, _, fl): flatten(fl);
 			case IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl),
-				IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl): flatten(fl);
+				IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
+				flatten(fl);
 			case _: null;
 		};
 	}

@@ -119,7 +119,7 @@ objectLiteralBracesOpen, operandBreakAfterMultilineBrace, optionalSemicolon(…)
 preWrite(…), propagateAnonFnContext, propagateArrowLambdaBody, propagateElseIfBranch,
 propagateEnumAbstractContext, propagateExprPosition, propagateFieldLevelVar, propagateTypedefContext,
 propagateValueIfBranch, reflowInExprPosition, reflowSourceMultiline, refuseFlatOnComplexExpr,
-refuseGlueOnControlFlowRoot, rightCurly[(…)], rightCurlyAnonFnOverride(…), sameLine(…),
+refuseGlueOnControlFlowRoot, relocateTrailingComments, rightCurly[(…)], rightCurlyAnonFnOverride(…), sameLine(…),
 semicolonBeforeSibling(…), semicolonNextLineElse, sepBeforeOpt, setBoolFlagFromStarCtor(…), shapeAware,
 sharpCondParensGap, sharpCondParensInside(…), softFill, spaceAfterLead, spaceBeforeLead, spaceBeforeTrail,
 staticVarSubdivision, suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe,
@@ -150,8 +150,8 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | module | inventory flags it names |
 |---|---|
 | `WriterRefFieldLowering` | 45 |
-| `WriterTriviaStarDispatch` | 43 |
-| `WriterStarEmitLowering` | 40 |
+| `WriterTriviaStarDispatch` | 44 |
+| `WriterStarEmitLowering` | 41 |
 | `WriterKwRefLowering` | 31 |
 | `WriterTriviaStarEmitLowering` | 28 |
 | `WriterCtorBlankLowering` | 17 |

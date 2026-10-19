@@ -289,7 +289,7 @@ Every `Doc` ctor carries its own contract in `core/Doc.hx`. What follows is the 
 
 ### The Doc probe family
 
-The probe family is the set of ctors whose width test reads the frame's INDENT rather than the live pen column, and so answers the same for every sibling rendered at that indent. The column-reading probes — `IfWidthExceeds`, `IfFirstLineExceeds`, `IfLineExceeds`, `IfResidualLineExceeds`, `IfFullLineExceeds`, `IfNaturalFirstLineFitsOpenDelim` — are a separate population and are not rows here.
+The probe family is the set of ctors whose width test reads the frame's INDENT rather than the live pen column, and so answers the same for every sibling rendered at that indent. The column-reading probes — `IfWidthExceeds`, `IfFirstLineExceeds`, `IfLineExceeds`, `IfResidualLineExceeds`, `IfFullLineExceeds`, `IfNaturalFirstLineFitsOpenDelim` — are a separate population and are not rows here. So is `IfTrailingCommentOverflows` (FU12): it renders its `code` child speculatively at the live pen (`Renderer.naturalSingleLineEnd`) and every static walker reads its FLAT side (the pre-knob emit); only the route walkers (`twoSides`, `unresolvedAlternative`) and `CollapsePass.children` see both branches.
 
 They look interchangeable and are not. Each divergence below is justified only at its own call sites, and re-deriving one member's behaviour from another is how a wrong "every walker forwards to flatDoc" claim got written once already.
 

@@ -540,6 +540,22 @@ bracket branch answers the fit question like any other value (only a CURLY previ
 the soft pre-`else` seam, for the `} else` glue it owns), so `if (a) [] else [2]` stays on one line
 when it fits whichever way it was typed (`unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest`).
 
+## `comments.*` — anyparse-only keys
+
+The fork has no `comments` section; both keys are additive.
+
+| key | type | default | effect |
+|---|---|---|---|
+| `blockCommentStyle` | `"verbatim"` / `"javadoc"` / `"javadocNoStars"` | `"verbatim"` | reshapes MULTI-LINE `/**` docs (`CommentStyle`); a doc with one content line collapses to `/** text */` when it fits |
+| `trailingCommentOverflow` | `"keep"` / `"above"` | `"keep"` | `"above"` (FU12) moves a same-line `//` comment that ALONE carries its line past `wrapping.maxLineLength` onto its own line above the statement or member it trails, at that element's indent, and lays the code out as if the comment were not there. Only in a statement block or a type's member list (`@:fmt(relocateTrailingComments)`), only when the code alone renders as ONE line that fits, never for a directive (`noqa`, `CHECKSTYLE:`, `@formatter:`, `#region` — `CommentDirective`), a block comment, or an element that already has a leading comment. A comment inside an expression (an object field, a call argument, an operator chain) or a case body stays. |
+
+The fork's answer to an overflowing trailing comment is the other one: it counts the comment into the line
+(`TokenList.calcLineLength`) and wraps the CODE to make room, so `x = f(a, b); // note` becomes a broken call
+with the comment on its `)` line. `"above"` is deliberately not that: the code is what the reader reads, and a
+comment's width should not decide its layout. The default `"keep"` keeps hxq where it was: the comment rides the element's measured body where
+there is one (`foldTrailingIntoBodyGroup`), so some code wraps for it (a glued `if` body drops to its own line,
+some calls break) and the rest stays on one over-width line.
+
 ## Where to look when a key still does nothing
 
 1. Check the spelling here. An unknown value is silently ignored.

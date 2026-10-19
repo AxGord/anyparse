@@ -32,4 +32,12 @@ package anyparse.grammar.haxe.format;
 @:peg typedef HxFormatCommentsSection = {
 
 	@:optional var blockCommentStyle: String;
+
+	/**
+	 * FU12: `"above"` moves a same-line `//` comment that alone carries its line past `wrapping.maxLineLength`
+	 * onto its own line above the statement or member it trails (`opt.trailingCommentAbove`); `"keep"` (default)
+	 * and any unknown token leave every trailing comment where it was. The fork has no such key: it counts a
+	 * trailing comment into the line and wraps the CODE to make room.
+	 */
+	@:optional var trailingCommentOverflow: String;
 };

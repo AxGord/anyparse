@@ -64,7 +64,7 @@ using StringTools;
  *  5. NO TOOLING DIRECTIVE. A run containing `noqa`, `CHECKSTYLE:`, `@formatter:` or a
  *     `#region` / `#endregion` marker is skipped WHOLE — those lines are machine
  *     instructions, and burying one in a doc block both silences it and documents
- *     nothing. The list is `CommentProse.DIRECTIVE_MARKERS`.
+ *     nothing. The list is `CommentDirective`'s.
  *  6. NO TASK MARKER. `TODO` / `FIXME` / `HACK` / `XXX` anywhere in the run (case-
  *     insensitive) — a reminder to change the code is not a description of it.
  *  7. READS AS PROSE. Every line must satisfy `readsAsProse`, a POSITIVE criterion:

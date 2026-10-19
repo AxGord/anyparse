@@ -112,7 +112,8 @@ final class MatrixWrap {
 				case Fill(parts, sep, _), FillWithRestProbe(parts, sep, _), FillBreakAfterWrap(parts, sep, _):
 					for (p in parts) stack.push(p);
 					stack.push(sep);
-				case IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				case IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat),
+					IfTrailingCommentOverflows(_, _, _, _, flat):
 					// ω-case-sym-linear + ω-glue-width: both `BodyFit` width probes are
 					// EXCLUDED from the both-branch descent, for COST alone — descending
 					// both doubles the visited node count per nested probe, 2^depth for

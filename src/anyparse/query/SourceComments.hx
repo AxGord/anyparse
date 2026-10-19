@@ -4,6 +4,8 @@ using StringTools;
 using Lambda;
 
 import anyparse.check.CheckScan;
+import anyparse.check.CommentProse;
+import anyparse.format.comment.CommentDirective;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
@@ -542,6 +544,12 @@ final class SourceComments {
 	 *    indent to the bare continuation.
 	 *  - a MARKDOWN block marker. A table row split mid-row loses its cell count; a `- ` bullet's
 	 *    continuation, laid out at the bare gutter, reads as a sibling paragraph between two bullets.
+	 *  - a TAB-ALIGNED row (FU12). A tab past the line's first character lines a column up with
+	 *    its neighbours (`@param\tname\t\tdescription`); the continuation lands at the bare gutter,
+	 *    under none of the columns, and the table loses its shape.
+	 *  - CODE rather than prose (FU12): a line that ends a statement or opens / closes a block
+	 *    (`;`, `{`, a leading `}`), or carries a `name="value"` attribute. Commented-out code and
+	 *    markup break at spaces into lines no reader can paste back.
 	 *
 	 * A refused line stays over-width and the caller names it, which is the honest end state: the
 	 * reflow cannot re-lay-out this line, and says so instead of guessing.
@@ -550,11 +558,12 @@ final class SourceComments {
 		if (text.length == 0) return 'an empty line';
 		final head: Int = text.fastCodeAt(0);
 		if (SourceText.isSpace(head)) return 'indentation the author wrote';
-		final lower: String = text.toLowerCase();
-		if (lower.startsWith('noqa') || lower.startsWith('checkstyle:')) return 'a suppression directive';
+		if (CommentDirective.isDirective(text)) return 'a suppression directive';
 		if (head == '|'.code) return 'a table row';
 		if (head == '>'.code) return 'a block quote';
 		if (head == '#'.code) return 'a markdown heading';
+		final shape: Null<String> = codeShapeRefusal(text);
+		if (shape != null) return shape;
 		if (text.length > 1 && text.fastCodeAt(1) == ' '.code && (head == '-'.code || head == '+'.code || head == '*'.code))
 			return 'a bullet';
 		var digits: Int = 0;
@@ -951,8 +960,9 @@ final class SourceComments {
 	 *
 	 * A remainder with no space inside its budget is emitted WHOLE and over-width rather than cut
 	 * mid-word: a 180-character identifier or URL is not a wrapping problem, and splitting it would
-	 * change the text. That short-circuit is also why the narrowest width is found by scanning up
-	 * from an estimate rather than by bisecting — at a small enough limit `fillText` stops finding
+	 * change the text; a backtick span counts as one word (`fillText`). That short-circuit is also
+	 * why the narrowest width is found by scanning up from an estimate rather
+	 * than by bisecting — at a small enough limit `fillText` stops finding
 	 * break points and the line COUNT falls again, so the predicate is not monotone and a bisection
 	 * would converge on one unwrappable line.
 	 */
@@ -993,10 +1003,16 @@ final class SourceComments {
 			var cut: Int = -1;
 			var cols: Int = 0;
 			var i: Int = start;
+			// A space inside a backtick span is not a break point: `while (a) b()` split at its spaces is a code
+			// sample no reader can paste back. Every chunk starts outside a span (cuts are only made outside one),
+			// so counting from `start` is exact; an unbalanced backtick leaves the rest uncuttable, i.e. whole.
+			var inCode: Bool = false;
 			while (i < text.length) {
-				cols += text.fastCodeAt(i) == '\t'.code ? tab : 1;
+				final c: Int = text.fastCodeAt(i);
+				cols += c == '\t'.code ? tab : 1;
 				if (cols > avail) break;
-				if (i > start && text.fastCodeAt(i) == ' '.code) cut = i;
+				if (c == '`'.code) inCode = !inCode;
+				if (i > start && c == ' '.code && !inCode) cut = i;
 				i++;
 			}
 			if (cut < 0) {
@@ -1048,6 +1064,29 @@ final class SourceComments {
 			if (cols > best) best = cols;
 		}
 		return best;
+	}
+
+	/**
+	 * `reflowRefusal`'s two FU12 shapes: a TAB-ALIGNED row (a tab past the first character lines a column up)
+	 * and a line that does not read as prose by `CommentProse.readsAsProse` — the positive criterion
+	 * `prefer-doc-comment` already judges commented-out code by, asked of the line with a leading doc tag
+	 * (`@param`, `@return`) set aside, since the tag's `@` is what that criterion reads as code. Null for any
+	 * other line.
+	 */
+	private static function codeShapeRefusal(text: String): Null<String> {
+		final prose: String = text.fastCodeAt(0) == '@'.code ? text.substring(firstSpace(text)) : text;
+		return if (text.indexOf('\t') > 0)
+			'a tab-aligned row'
+		else if (CommentProse.readsAsProse(prose))
+			null
+		else
+			'code, not prose';
+	}
+
+	/** The index of `text`'s first space, or its length when it has none. */
+	private static function firstSpace(text: String): Int {
+		final at: Int = text.indexOf(' ');
+		return at < 0 ? text.length : at;
 	}
 
 }

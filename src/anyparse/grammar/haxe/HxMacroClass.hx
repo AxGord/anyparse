@@ -44,7 +44,6 @@ package anyparse.grammar.haxe;
 typedef HxMacroClass = {
 	var head: HxMacroClassHead;
 	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps, heritageWrap) var heritage: Array<HxHeritageClause>;
-	@:fmt(interMemberBlankLines(
-		'member', 'VarMember|FinalMember', 'FnMember'
-	), blankAroundMultilineMembers('aroundMultilineFields')) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+	@:fmt(interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember'), blankAroundMultilineMembers('aroundMultilineFields'),
+		relocateTrailingComments) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }

@@ -164,7 +164,9 @@ final class CollapsePass {
 			case IfBreak(brk, fl), IfWidthExceeds(_, brk, fl), IfFirstLineExceeds(_, brk, fl), IfLineExceeds(_, brk, fl),
 				IfResidualLineExceeds(_, brk, fl), IfFullLineExceeds(_, brk, fl), IfNaturalFirstLineExceeds(_, brk, fl),
 				IfNaturalFirstLineExceedsWithRest(_, brk, fl), IfNaturalFirstLineFitsOpenDelim(_, brk, fl),
-				IfArrowContinuationFits(_, _, _, brk, fl), IfArrowContinuationFitsWithRest(_, _, _, brk, fl):
+				IfArrowContinuationFits(_, _, _, brk, fl), IfArrowContinuationFitsWithRest(_, _, _, brk, fl),
+				IfTrailingCommentOverflows(_, _, _, brk, fl):
+				// The relocation choice's `code` is a subtree of `brk`, so the two branches cover it.
 				[brk, fl];
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				items.concat([sep]);

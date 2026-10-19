@@ -316,6 +316,50 @@ class CommentWidthCheckTest extends Test {
 	}
 
 	/** Run the check over `src` as if it were `file`, whose own `hxformat.json` supplies the width. */
+	/**
+	 * FU12: a tab past a line's first character lines a column up (`@param\tname\t\tdescription`). The
+	 * continuation would land at the bare gutter under none of the columns, so the row is reported and kept.
+	 * Killed by arm `M-COMMENT-REFLOW-TAB-ROW`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-TAB-ROW')
+	public function testATabAlignedRowIsReportOnlyAndSaysSo(): Void {
+		final src: String = doc('@param\tname\t\t$LONG');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('not reflowed: a tab-aligned row'), vs[0].message);
+		Assert.equals(src, fixed(src));
+	}
+
+	/**
+	 * FU12: commented-out code and markup are not prose — a line that ends a statement, or carries a
+	 * `name="value"` attribute, would break at spaces into lines no reader can paste back. Killed by arm
+	 * `M-COMMENT-REFLOW-CODE-SHAPED`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-CODE-SHAPED')
+	public function testCommentedOutCodeIsReportOnlyAndSaysSo(): Void {
+		for (line in ['panZoom="-909.1" $LONG', '$LONG;']) {
+			final src: String = 'class C {\n\t// $line\n\tvar x = 1;\n}';
+			final vs: Array<Violation> = violations(src);
+			Assert.equals(1, vs.length);
+			Assert.isTrue(vs[0].message.contains('not reflowed: code, not prose'), vs[0].message);
+			Assert.equals(src, fixed(src));
+		}
+	}
+
+	/**
+	 * FU12: a space inside a backtick span is not a break point — the span is a code sample and comes back whole
+	 * even when that leaves its line over the width. Killed by arm `M-COMMENT-REFLOW-SPLITS-CODE-SPAN`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-SPLITS-CODE-SPAN')
+	public function testABacktickSpanIsNeverSplit(): Void {
+		final span: String = '`' + rep('code ', 30).rtrim() + '`';
+		final text: String = fixed(doc('Note: $span'));
+		Assert.isTrue(text.contains(span), text);
+	}
+
 	private function violations(src: String, file: String = 'C.hx'): Array<Violation> {
 		return CheckFixture.violationsIn(new CommentWidth(), [{ file: file, source: src }]);
 	}
