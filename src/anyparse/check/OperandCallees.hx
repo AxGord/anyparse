@@ -30,16 +30,6 @@ using Lambda;
 final class OperandCallees {
 
 	/**
-	 * Whether a call to `m`, a member of this file, selects the signature its declaration writes: the one declaration of the
-	 * name in its type (a `#if` twin is another build's signature), carrying no `@:overload`. A macro's parameters are
-	 * expressions and a type parameter binds to nothing in scope, so neither types a lambda by construction.
-	 */
-	private static function selectsItsSignature(binder: OperandBinder, m: MemberInfo): Bool {
-		final owner: Null<TypeDeclInfo> = binder._index.fileInfo(binder._file)?.types.find(t -> t.members.contains(m));
-		return owner != null && owner.members.filter(o -> o.name == m.name).length == 1 && !m.hasOverloadMeta;
-	}
-
-	/**
 	 * The parameter list the call or construction `call` selects, where it is declared, with the type parameters the call
 	 * binds there — for a callee of ONE signature (no `@:overload`, no macro, no `#if` twin): a bare call to a member of this
 	 * file, to a local function, or to a member the enclosing type inherits; `recv.m(…)` on a receiver of one declaration —
@@ -55,6 +45,16 @@ final class OperandCallees {
 		return name == null || callee.kind != binder._shape.fieldAccessKind || callee.children.length != 1
 			? null
 			: memberCallParams(binder, callee.children[0], name, call);
+	}
+
+	/**
+	 * Whether a call to `m`, a member of this file, selects the signature its declaration writes: the one declaration of the
+	 * name in its type (a `#if` twin is another build's signature), carrying no `@:overload`. A macro's parameters are
+	 * expressions and a type parameter binds to nothing in scope, so neither types a lambda by construction.
+	 */
+	private static function selectsItsSignature(binder: OperandBinder, m: MemberInfo): Bool {
+		final owner: Null<TypeDeclInfo> = binder._index.fileInfo(binder._file)?.types.find(t -> t.members.contains(m));
+		return owner != null && owner.members.filter(o -> o.name == m.name).length == 1 && !m.hasOverloadMeta;
 	}
 
 	/**
@@ -112,10 +112,12 @@ final class OperandCallees {
 		if (binder._index.typing.members.declarationLacksMember(owner, name))
 			return onType ? null : extensionParams(binder, owner, receiver, name);
 		final declared: Null<HostedMembers> = binder.declarationOf(owner, name);
-		if (declared == null || declared.members.exists(m -> m.isStatic != onType)) return null;
-		return onType
-			? memberParams(binder, declared, [], 0, methodBindings(binder, declared, call.children.slice(1)))
-			: memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);
+		return if (declared == null || declared.members.exists(m -> m.isStatic != onType))
+			null
+		else if (onType)
+			memberParams(binder, declared, [], 0, methodBindings(binder, declared, call.children.slice(1)))
+		else
+			memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);
 	}
 
 	/**
@@ -184,9 +186,7 @@ final class OperandCallees {
 		final written: Null<Located> = writtenSourceOf(binder, receiver);
 		final args: Null<Array<String>> = written == null
 			? null
-			: binder._index.typeSyntax(
-				NominalTypes.unwrapNullable(StringTools.trim(written.text), binder._wrappers, binder._index.typeSyntax)
-			)?.argumentTexts();
+			: binder._index.typeSyntax(NominalTypes.unwrapNullable(written.text.trim(), binder._wrappers, binder._index.typeSyntax))?.argumentTexts();
 		return written == null || args == null || !OperandBinder.sameDeclaration(owner, host)
 			? []
 			: bindAll(owner.type.typeParamNames, args, written.at);
@@ -257,7 +257,7 @@ final class OperandCallees {
 	): Null<Map<String, Located>> {
 		final iterable: Null<String> = binder._shape.iterableTypeName;
 		final elements: Map<String, Int> = binder._shape.iterableElementTypeParams ?? [];
-		final param: Null<TypeSyntax> = binder._index.typeSyntax(StringTools.trim(written));
+		final param: Null<TypeSyntax> = binder._index.typeSyntax(written.trim());
 		if (iterable == null || given == null || param == null) return null;
 		final element: Null<String> = switch param.shape {
 			case Nominal(path, [arg]) if (
@@ -266,7 +266,7 @@ final class OperandCallees {
 				StringTools.trim(arg.text);
 			case _: null;
 		};
-		final peeled: String = NominalTypes.unwrapNullable(StringTools.trim(given.text), binder._wrappers, binder._index.typeSyntax);
+		final peeled: String = NominalTypes.unwrapNullable(given.text.trim(), binder._wrappers, binder._index.typeSyntax);
 		final arg: Null<TypeSyntax> = binder._index.typeSyntax(peeled);
 		final args: Null<Array<String>> = arg?.argumentTexts();
 		final path: Null<String> = arg == null ? null : NominalTypes.outerPathOf(peeled, [], binder._index.typeSyntax);

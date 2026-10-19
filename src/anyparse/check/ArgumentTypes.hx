@@ -13,6 +13,8 @@ import anyparse.query.TypingService;
 import anyparse.runtime.SortedOffsets;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /** A type as an argument or a parameter is written: its text, and the file writing it — null for a type no file spells. */
 typedef WrittenType = {
 	final text: String;
@@ -67,6 +69,12 @@ final class ArgumentTypes {
 		reading: s -> s.seen
 	};
 
+	/** File -> its declarations' written types, by binding offset (`TypeInfoProvider.declaredTypeSources`). */
+	private final _typeSources: Map<String, Map<Int, String>> = [];
+
+	/** File -> the offsets `typeSourcesOf` answers for, ascending (`annotationOf`). */
+	private final _typeSourceOffsets: Map<String, Array<Int>> = [];
+
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
 	private final _plugin: GrammarPlugin;
@@ -74,12 +82,6 @@ final class ArgumentTypes {
 
 	/** What reads the written types of declarations; null for a plugin that reads none, which then knows no type. */
 	private final _types: Null<TypeInfoProvider>;
-
-	/** File -> its declarations' written types, by binding offset (`TypeInfoProvider.declaredTypeSources`). */
-	private final _typeSources: Map<String, Map<Int, String>> = [];
-
-	/** File -> the offsets `typeSourcesOf` answers for, ascending (`annotationOf`). */
-	private final _typeSourceOffsets: Map<String, Array<Int>> = [];
 
 	public function new(graph: CallGraph, trees: FunctionTrees, plugin: GrammarPlugin) {
 		_graph = graph;
@@ -117,8 +119,12 @@ final class ArgumentTypes {
 		final a: Null<String> = coreName(given.text);
 		final p: Null<String> = coreName(wanted);
 		final widens: Map<String, Array<String>> = _shape.coreValueTypes?.widens ?? [];
-		if (a != null && p != null) return a == p || (widens[a] ?? []).contains(p) ? Fits : Misfits;
-		return a == null && p == null && given.file == wantedFile && sameNamedType(given.text, wanted, callerId, calleeId) ? Fits : MayFit;
+		return if (a != null && p != null)
+			a == p || (widens[a] ?? []).contains(p) ? Fits : Misfits
+		else if (a == null && p == null && given.file == wantedFile && sameNamedType(given.text, wanted, callerId, calleeId))
+			Fits
+		else
+			MayFit;
 	}
 
 	/**
@@ -140,7 +146,7 @@ final class ArgumentTypes {
 	 */
 	public function coreName(text: String): Null<String> {
 		final peeled: String = ~/\s+/g.replace(
-			NominalTypes.unwrapNullable(StringTools.trim(text), _shape.memberTransparentWrapperTypeNames ?? [], _plugin.typeSyntax), ''
+			NominalTypes.unwrapNullable(text.trim(), _shape.memberTransparentWrapperTypeNames ?? [], _plugin.typeSyntax), ''
 		);
 		final names: Array<String> = _shape.coreValueTypes?.names ?? [];
 		return names.contains(peeled) && _graph.types.declarationCount(peeled) == 0 ? peeled : null;
@@ -151,6 +157,11 @@ final class ArgumentTypes {
 		var at: QueryNode = node;
 		while (at.kind == _shape.parenKind && at.children.length == 1) at = at.children[0];
 		return at;
+	}
+
+	/** Whether `m` is a field: a member holding a value, no function. */
+	private inline function isField(m: MemberInfo): Bool {
+		return (_shape.fieldDeclKinds ?? []).contains(m.kind);
 	}
 
 	/** The written types of every annotated declaration of `file`, by binding offset (`TypeInfoProvider.declaredTypeSources`). */
@@ -242,11 +253,6 @@ final class ArgumentTypes {
 				_graph.typeParamBoundsOf(callerId, path) == null && _graph.typeParamBoundsOf(calleeId, path) == null;
 			case _: false;
 		};
-	}
-
-	/** Whether `m` is a field: a member holding a value, no function. */
-	private inline function isField(m: MemberInfo): Bool {
-		return (_shape.fieldDeclKinds ?? []).contains(m.kind);
 	}
 
 }

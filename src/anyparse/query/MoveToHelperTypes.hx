@@ -92,7 +92,8 @@ final class MoveToHelperTypes {
 			text: '\n\n${[for (t in types) t.text].join('\n\n')}\n'
 		});
 		advisory.push(
-			'moved the private type(s) ${[for (t in types) '"${t.name}"'].join(', ')} into ${prep.destFile}, which only the moved code names'
+			'moved the private type(s) ' + [for (t in types) '"${t.name}"'].join(', ')
+			+ ' into ${prep.destFile}, which only the moved code names'
 		);
 	}
 

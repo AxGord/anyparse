@@ -487,6 +487,16 @@ final class OperandBinder {
 			: boundMembers(resolvers, owner, true);
 	}
 
+	/** What the type `written` binds to where it is written (`Located`): a type parameter the call binds read as what binds it. */
+	private function locatedTier(written: Located): Tier {
+		final bound: Null<Located> = written.bindings?.get(written.text.trim());
+		if (bound != null) return locatedTier(bound);
+		final host: Null<WrittenHost> = written.host;
+		return host == null
+			? writtenTier(written.text, written.at)
+			: DeclaredNullity.headTierIn(written.text, host.file, written.at, _index, host.params, _wrappers, _builtins);
+	}
+
 	/**
 	 * THE way a rule obtains the binder of one file — the operator-overload gate (`OperatorSelection.typingFor`),
 	 * `redundant-tostring` and `prefer-bind` alike: over `index`, the grammar's type information and its built-in type
@@ -532,16 +542,6 @@ final class OperandBinder {
 	 */
 	private static inline function typedByItsReturn(m: MemberInfo): Bool {
 		return !m.hasOverloadMeta && !m.isMacro;
-	}
-
-	/** What the type `written` binds to where it is written (`Located`): a type parameter the call binds read as what binds it. */
-	private function locatedTier(written: Located): Tier {
-		final bound: Null<Located> = written.bindings?.get(StringTools.trim(written.text));
-		if (bound != null) return locatedTier(bound);
-		final host: Null<WrittenHost> = written.host;
-		return host == null
-			? writtenTier(written.text, written.at)
-			: DeclaredNullity.headTierIn(written.text, host.file, written.at, _index, host.params, _wrappers, _builtins);
 	}
 
 }

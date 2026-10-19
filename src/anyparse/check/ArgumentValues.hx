@@ -13,6 +13,7 @@ import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -186,16 +187,6 @@ final class ArgumentValues {
 			: { param: at, suffix: method == affix.suffix, text: text };
 	}
 
-	/** Whether the atom `atom` holds `null`. */
-	public static inline function isNullAtom(atom: String): Bool {
-		return atom == NULL;
-	}
-
-	/** The string the atom `atom` holds, or null for an atom of no known string. */
-	public static function stringOf(atom: String): Null<String> {
-		return StringTools.startsWith(atom, STRING_ATOM) ? atom.substr(STRING_ATOM.length) : null;
-	}
-
 	/**
 	 * Every way the call of `edge` may bind its `args` to `params` of the callee declared in `calleeFile`
 	 * (`ArgumentSlots`), each argument typed where the caller writes it; null where there are too many to follow.
@@ -302,8 +293,9 @@ final class ArgumentValues {
 	/** The value `!` of a value `value` makes: `TRUE` and `FALSE` swapped, `UNKNOWN` for one holding any other atom. */
 	private function negated(value: String): String {
 		final atoms: Null<Array<String>> = atomsOf(value);
-		if (atoms == null || atoms.exists(a -> a != TRUE && a != FALSE)) return UNKNOWN;
-		return spell([for (a in atoms) a == TRUE ? FALSE : TRUE], false);
+		return atoms == null || atoms.exists(a -> a != TRUE && a != FALSE)
+			? UNKNOWN
+			: spell([for (a in atoms) a == TRUE ? FALSE : TRUE], false);
 	}
 
 	/**
@@ -462,6 +454,16 @@ final class ArgumentValues {
 			|| method != affix.suffix && method != affix.prefix
 			? null
 			: callee.children[0];
+	}
+
+	/** Whether the atom `atom` holds `null`. */
+	public static inline function isNullAtom(atom: String): Bool {
+		return atom == NULL;
+	}
+
+	/** The string the atom `atom` holds, or null for an atom of no known string. */
+	public static function stringOf(atom: String): Null<String> {
+		return atom.startsWith(STRING_ATOM) ? atom.substr(STRING_ATOM.length) : null;
 	}
 
 	/**

@@ -328,8 +328,7 @@ final class MoveCommand implements CliCommand {
 		final original: Null<String> = try CliIo.readSourceForParse(change.file) catch (exception: Exception) null;
 		if (original == null) return change;
 		final opts: Null<String> = CliArgs.discoverFormatConfig(change.file);
-		if (!CanonicalEdit.isWriterCanonical(original, plugin, opts)) return change;
-		return fixedPointChange(cmd, change, plugin, opts);
+		return CanonicalEdit.isWriterCanonical(original, plugin, opts) ? fixedPointChange(cmd, change, plugin, opts) : change;
 	}
 
 }

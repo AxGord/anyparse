@@ -8,6 +8,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -207,15 +208,19 @@ final class EdgeConditions {
 			if (bound != null) return factsOf(bound, value, fnId, file);
 		}
 		final affix: Null<AffixTest> = _values.stringPredicate(fnId, cond);
-		if (affix != null) return [
-			{
-				param: affix.param,
-				value: value,
-				nullTest: false,
-				test: affix
-			}
-		];
-		return isMainCheck(cond, fnId, file) ? [{ param: MAIN_CHECK, value: value, nullTest: false }] : [];
+		return if (affix != null)
+			[
+				{
+					param: affix.param,
+					value: value,
+					nullTest: false,
+					test: affix
+				}
+			]
+		else if (isMainCheck(cond, fnId, file))
+			[{ param: MAIN_CHECK, value: value, nullTest: false }]
+		else
+			[];
 	}
 
 	/**
@@ -277,11 +282,9 @@ final class EdgeConditions {
 	private static function admits(atom: String, fact: SiteFact): Bool {
 		final test: Null<AffixTest> = fact.test;
 		if (fact.nullTest) return ArgumentValues.isNullAtom(atom) == fact.value;
-		if (test != null) {
-			final s: Null<String> = ArgumentValues.stringOf(atom);
-			return s == null || (test.suffix ? StringTools.endsWith(s, test.text) : StringTools.startsWith(s, test.text)) == fact.value;
-		}
-		return atom == ArgumentValues.TRUE ? fact.value : atom != ArgumentValues.FALSE || !fact.value;
+		if (test == null) return atom == ArgumentValues.TRUE ? fact.value : atom != ArgumentValues.FALSE || !fact.value;
+		final s: Null<String> = ArgumentValues.stringOf(atom);
+		return s == null || (test.suffix ? s.endsWith(test.text) : s.startsWith(test.text)) == fact.value;
 	}
 
 }
