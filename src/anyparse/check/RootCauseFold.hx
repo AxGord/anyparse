@@ -48,7 +48,8 @@ private typedef SiteDoer = {
  * `RemoteFileSystemBase.renameCloudFolderBlocked` over the loop `CloudDatabase.moveCloudFolderSubItemsAction2` runs under
  * its own lock). Any other hold across the same work — of another lock, or of the same lock in another function, on any
  * thread — is a stall of its own (TM's `moveCloudFileBlocked`, holding the batch lock across its own stat, beside
- * `addCloudActionValidated` reaching that stat through `addCloudAction2`). Positive: a lock long by a hand-off, an unresolved call, a release in another
+ * `addCloudActionValidated` reaching that stat through `addCloudAction2`).
+ * Positive: a lock long by a hand-off, an unresolved call, a release in another
  * function (a multi-lock helper's give excepted: it is its caller's release) or a hold with no finding
  * is not covered, nor is a hold long by what no call of it names. A hold waiting for a lock some hold with no finding reporting
  * its work makes long stays from the start (TM's `StandardFileSystem.getText`, waiting for the tree lock `listFolder` holds),
