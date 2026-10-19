@@ -129,7 +129,7 @@ final class UnguardedNullableDeref implements Check implements NoAutofix {
 			// redundant annotation, and seeding it warns about a dereference no path can fault.
 			final declaredNullable: (QueryNode) -> Bool = decl ->
 				NullableSource.declaredNullable(decl, declaredTypes, cfg)
-				&& !NullableSource.initTypeIsNonNull(NullFlow.declInit(decl, declTypeChildKinds), cfg, valueNominalOf);
+					&& !NullableSource.initTypeIsNonNull(NullFlow.declInit(decl, declTypeChildKinds), cfg, valueNominalOf);
 			// The written types are what lets a non-null predicate call guard its argument; the
 			// other `NullFlow` consumers pass none, so for them no call is a guard.
 			NullFlow.analyze(

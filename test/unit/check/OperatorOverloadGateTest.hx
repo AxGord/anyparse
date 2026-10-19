@@ -228,7 +228,7 @@ class OperatorOverloadGateTest extends Test {
 		return found.exists(v -> {
 			final span: Null<Span> = v.span;
 			return v.file == 'Use.hx' && span != null && span.from <= at && at < span.to
-			&& v.message.indexOf('overloads the concatenation operator') == -1;
+				&& v.message.indexOf('overloads the concatenation operator') == -1;
 		});
 	}
 
