@@ -26841,6 +26841,34 @@
 			"find": "if (!exact && _nestedFnKinds.contains(child.kind)) return [];",
 			"replace": "if (_nestedFnKinds.contains(child.kind)) return [];",
 			"note": "the site that IS a nested function reads as one inside it: the guards around the value written there are dropped, so a reference under a false guard is handed on all the same"
+		},
+		{
+			"name": "M-TS-BIND-MEMO-ONE-VALUATION",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "bind",
+			"find": [
+				"final hit: Null<String> = byValuation[valuation];",
+				"byValuation[valuation] = bound;"
+			],
+			"replace": [
+				"final hit: Null<String> = byValuation[''];",
+				"byValuation[''] = bound;"
+			],
+			"note": "the memo keys an edge's binding by the edge alone: the first valuation it was bound under answers for every later one, so a caller reached with another value hands the callee the first one's"
+		},
+		{
+			"name": "M-TS-SITE-MEMO-BY-CALLER",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "siteOf",
+			"find": [
+				"final known: Null<EdgeSite> = _sites.get(edge);",
+				"_sites.set(edge, site);"
+			],
+			"replace": [
+				"final known: Null<EdgeSite> = _sites.get(_graph.outEdges(edge.from)[0]);",
+				"_sites.set(_graph.outEdges(edge.from)[0], site);"
+			],
+			"note": "the site memo keys by the caller (its first out-edge) instead of the edge: every call of a function answers the conditions of whichever site was read first"
 		}
 	]
 }

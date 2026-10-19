@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.ArgumentValues.AffixTest;
+import anyparse.core.IdentityMap;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
@@ -22,6 +23,15 @@ private typedef SiteFact = {
 	final value: Bool;
 	final nullTest: Bool;
 	@:optional final test: AffixTest;
+}
+
+/**
+ * What a call site fixes under every state (`EdgeConditions.siteOf`): the contexts it keeps (`mask`, 0 where nothing runs),
+ * and the facts about each tracked parameter its conditions test (`params`, each parameter once).
+ */
+private typedef EdgeSite = {
+	final mask: Int;
+	final params: Array<{ param: Int, facts: Array<SiteFact> }>;
 }
 
 /**
@@ -56,6 +66,9 @@ final class EdgeConditions {
 
 	/** `<from>|<file>:<from>-<to>` of a call site -> what its conditions fix there. */
 	private final _facts: Map<String, Array<SiteFact>> = [];
+
+	/** Each edge `carried` was asked of -> what its site fixes (`siteOf`). */
+	private final _sites: IdentityMap<CallEdge, EdgeSite> = new IdentityMap();
 
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
@@ -117,8 +130,33 @@ final class EdgeConditions {
 	 * narrowed to the main thread (or to the others) inside a main-thread check, `ctx` itself otherwise.
 	 */
 	public function carried(edge: CallEdge, valuation: String, ctx: Int): Int {
+		final site: EdgeSite = siteOf(edge);
+		for (tested in site.params) {
+			final atoms: Null<Array<String>> = _values.atomsOf(valuation.charAt(tested.param));
+			if (atoms != null && !atoms.exists(a -> tested.facts.foreach(f -> admits(a, f)))) return 0;
+		}
+		return ctx & site.mask;
+	}
+
+	/**
+	 * What the site of `edge` fixes under every state, read once per edge: `carried` is asked of each edge for every state
+	 * a walk reaches its function in, and only the valuation and the context differ between those asks.
+	 */
+	private function siteOf(edge: CallEdge): EdgeSite {
+		final known: Null<EdgeSite> = _sites.get(edge);
+		if (known != null) return known;
+		final site: EdgeSite = readSite(edge);
+		_sites.set(edge, site);
+		return site;
+	}
+
+	/**
+	 * The mask of contexts the site of `edge` keeps — none for a site where nothing runs (`_dead`), the main thread's or the
+	 * others' inside a main-thread check — and its facts about the tracked parameters, grouped by parameter.
+	 */
+	private function readSite(edge: CallEdge): EdgeSite {
 		final dead: Null<(CallEdge) -> Bool> = _dead;
-		if (dead != null && dead(edge)) return 0;
+		if (dead != null && dead(edge)) return { mask: 0, params: [] };
 		var mask: Int = MAIN_BITS | ThreadSafety.CTX_BG;
 		final byParam: Map<Int, Array<SiteFact>> = [];
 		for (fact in siteFacts(edge)) {
@@ -130,11 +168,7 @@ final class EdgeConditions {
 			list.push(fact);
 			byParam[fact.param] = list;
 		}
-		for (param => facts in byParam) {
-			final atoms: Null<Array<String>> = _values.atomsOf(valuation.charAt(param));
-			if (atoms != null && !atoms.exists(a -> facts.foreach(f -> admits(a, f)))) return 0;
-		}
-		return ctx & mask;
+		return { mask: mask, params: [for (param => facts in byParam) { param: param, facts: facts }] };
 	}
 
 	/** What the conditions around the call site of `edge` fix there (cached per site). */
