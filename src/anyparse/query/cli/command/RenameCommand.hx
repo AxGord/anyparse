@@ -93,13 +93,13 @@ final class RenameCommand implements CliCommand {
 						CliIo.stderr('apq rename: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (posSpec == null && selectExpr == null && matchExpr == null && newName == null && CliArgs.isPosSpec(a))
+					} else if (posSpec == null && selectExpr == null && matchExpr == null && newName == null && CliArgs.isPosSpec(a)) {
 						posSpec = a;
-					else if (newName == null)
+					} else if (newName == null) {
 						newName = a;
-					else {
+					} else {
 						CliIo.stderr('apq rename: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -142,8 +142,9 @@ final class RenameCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq rename: wrote $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq rename: $message\n');

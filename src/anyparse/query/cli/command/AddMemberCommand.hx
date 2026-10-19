@@ -167,11 +167,11 @@ final class AddMemberCommand implements CliCommand implements PostWriteFix {
 						CliIo.stderr('apq add-member: unknown option "$a"\n');
 						return addMemberParseExit(EXIT_USAGE);
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (memberText == null)
+					} else if (memberText == null) {
 						memberText = a;
-					else {
+					} else {
 						CliIo.stderr('apq add-member: unexpected extra argument "$a"\n');
 						return addMemberParseExit(EXIT_USAGE);
 					}

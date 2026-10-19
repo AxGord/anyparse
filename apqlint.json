@@ -91,6 +91,9 @@
 		"anon-type-dup": {
 			"enabled": true
 		},
+		"asymmetric-branch-braces": {
+			"enabled": true
+		},
 		"case-pattern-separator": {
 			"enabled": true
 		},
@@ -104,6 +107,9 @@
 			"enabled": true
 		},
 		"dead-binder-counter-loop": {
+			"enabled": true
+		},
+		"default-repeated-argument": {
 			"enabled": true
 		},
 		"doc-length": {
@@ -154,6 +160,9 @@
 				"TypedFactsMacro <= 57 members: C2 moved its type-string printer out (`TypedFactsTypeStrings`); what is left is the fact-record writer, every member of it reading the same fields.",
 				"CallGraph <= 67 members: its members are the public question surface 86 files read (C2 and B9 measured it); N13 moved `collectEdges` out (`CallGraphEdges.collect`) and kept that surface unchanged on purpose."
 			]
+		},
+		"prefer-count": {
+			"enabled": true
 		},
 		"prefer-doc-comment": {
 			"enabled": true
@@ -210,6 +219,9 @@
 			"enabled": true
 		},
 		"return-reassign-ternary": {
+			"enabled": true
+		},
+		"shadowing-parameter": {
 			"enabled": true
 		},
 		"shorten-type-ref": {

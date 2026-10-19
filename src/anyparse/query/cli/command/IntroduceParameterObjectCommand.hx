@@ -76,11 +76,11 @@ final class IntroduceParameterObjectCommand implements CliCommand {
 						CliIo.stderr('apq introduce-parameter-object: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (posSpec == null && selectExpr == null && matchExpr == null && CliArgs.isPosSpec(a))
+					} else if (posSpec == null && selectExpr == null && matchExpr == null && CliArgs.isPosSpec(a)) {
 						posSpec = a;
-					else {
+					} else {
 						CliIo.stderr('apq introduce-parameter-object: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -118,8 +118,9 @@ final class IntroduceParameterObjectCommand implements CliCommand {
 					CliIo.stderr(
 						'apq introduce-parameter-object: folded ${paramNames.length} parameter(s) into "$typeNameNN" in $filePath\n'
 					);
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq introduce-parameter-object: $message\n');

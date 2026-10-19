@@ -62,8 +62,9 @@ final class LintFormat {
 			if (group == null) {
 				rules.push(v.rule);
 				byRule[v.rule] = [v];
-			} else
+			} else {
 				group.push(v);
+			}
 		}
 		final countOf: String -> Int = rule -> byRule[rule]?.length ?? 0;
 		rules.sort((a, b) -> countOf(a) != countOf(b) ? countOf(b) - countOf(a) : Reflect.compare(a, b));

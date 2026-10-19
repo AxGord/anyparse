@@ -20479,8 +20479,8 @@
 			"name": "M-TS-WILD-MAYBE",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "bindingsOf",
-			"find": "if (answer.match(Unreadable(_)))\n\t\t\t\tout.unlisted.push(binding)",
-			"replace": "if (answer.match(Unreadable(_)))\n\t\t\t\t{}",
+			"find": "if (answer.match(Unreadable(_))) {\n\t\t\t\tout.unlisted.push(binding);",
+			"replace": "if (answer.match(Unreadable(_))) {\n\t\t\t\t{}",
 			"note": "a wildcard of a package nothing lists supplies no candidate"
 		},
 		{
@@ -21334,7 +21334,7 @@
 			"name": "M-TS-LOOP-THROUGH",
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
-			"find": "written: throughParams(written, g.nodes[target]?.typeName, source, type, currentType),",
+			"find": "written: throughParams(written, g.nodes[target]?.typeName, valueSource, type, currentType),",
 			"replace": "written: written,",
 			"note": "a container's type parameter in what its iterator yields is not bound by the value's argument"
 		},
@@ -27556,6 +27556,74 @@
 			"find": "if (node.kind != 'Literal' || hit.node == node) return null;",
 			"replace": "if (true) return null;",
 			"note": "a lifted literal that is not a whole list item is removed anyway instead of refused"
+		},
+		{
+			"name": "M-ASYM-FIX-NO-EDIT",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "braceFix",
+			"force": "Declined('mutated')",
+			"note": "no bare branch is ever braced, so asymmetric-branch-braces stays report-only although the wrap is the writer's symmetric repair"
+		},
+		{
+			"name": "M-ASYM-FIX-UNTERMINATED",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "selfTerminated",
+			"force": "true",
+			"note": "a bare branch with no terminator of its own is braced: `if (a) p() else { … }` becomes `{ p() }`, which Haxe rejects with Missing ;"
+		},
+		{
+			"name": "M-ASYM-FIX-NESTED-OVERLAP",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "braceFix",
+			"find": "if (edits.exists(e -> taken.exists(t -> e.span.from < t.span.to && t.span.from < e.span.to)))",
+			"replace": "if (false)",
+			"note": "a pair inside a bare branch the same call braces gets its own edit, nested inside the outer one"
+		},
+		{
+			"name": "M-ASYM-FIX-DECL",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "braceFix",
+			"find": "if (site.seams.declKinds.contains(bare.kind))",
+			"replace": "if (false)",
+			"note": "a bare declaration branch is braced, scoping its binding"
+		},
+		{
+			"name": "M-ASYM-FIX-NO-TERMINATOR-ADDED",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "braceFix",
+			"find": "text + site.terminator",
+			"replace": "text",
+			"note": "an unterminated bare expression statement is braced without its terminator: `{ p() }`, which Haxe rejects with Missing ;"
+		},
+		{
+			"name": "M-ASYM-FIX-CHAIN-TAIL-ONLY",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "chainOf",
+			"find": "while (at >= 0 && elseOf(path[at], seams) == head) {",
+			"replace": "while (false) {",
+			"note": "only the flagged tail pair of an else-if chain is braced, leaving `if (a) x(); else if (b) { y(); } else { … }` braced in its tail and bare in its head"
+		},
+		{
+			"name": "M-ASYM-FIX-OPEN-TAIL-ANY",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "openTail",
+			"force": "true",
+			"note": "any unterminated bare branch takes an appended terminator, a conditional-compilation region included, whose terminator its parent owns"
+		},
+		{
+			"name": "M-SHADOWING-PARAM-NO-RENAME",
+			"type": "anyparse.check.ShadowingLocal",
+			"method": "shadowFix",
+			"find": "if (site.seams.reportParameters) return renameEdits(site, decl, name, span, path[path.length - 2]);",
+			"replace": "if (site.seams.reportParameters) return Declined('mutated');",
+			"note": "no shadowing parameter is renamed, so `(item:DiskSystemItemData) -> …` over a local `item` stays a finding although the rename is binder-proven"
+		},
+		{
+			"name": "M-SHADOWING-PARAM-ANY-TYPE",
+			"type": "anyparse.check.ShadowingLocal",
+			"method": "typeNamedLocal",
+			"force": "'renamed'",
+			"note": "any written type names a replacement, `Null<Array<Item>>` and `String` included, so a parameter is renamed to a name no type gave it"
 		}
 	]
 }

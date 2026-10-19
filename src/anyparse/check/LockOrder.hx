@@ -223,8 +223,9 @@ final class LockOrder {
 		if (known == null) {
 			_steps[key] = [step];
 			_order.push(key);
-		} else
+		} else {
 			known.push(step);
+		}
 	}
 
 	/** One finding per pair of locks whose two orders some main-thread step and some background step make. */

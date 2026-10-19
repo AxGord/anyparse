@@ -521,15 +521,16 @@ final class PreferLocalFunction implements Check {
 					optional: c.kind == s.optionalParamKind || c.children.length > 0,
 					type: source.substring(typeSpan.from, typeSpan.to)
 				});
-			} else if (s.bodyKinds.contains(c.kind))
+			} else if (s.bodyKinds.contains(c.kind)) {
 				body = c;
-			else if (s.typeAnnotationKinds.contains(c.kind))
+			} else if (s.typeAnnotationKinds.contains(c.kind)) {
 				hintSpan = c.span;
-			else if (i == last) {
+			} else if (i == last) {
 				body = c;
 				bare = true;
-			} else
+			} else {
 				return null;
+			}
 		}
 		final b: Null<QueryNode> = body;
 		if (b == null || b.kind == s.noBodyKind) return null;

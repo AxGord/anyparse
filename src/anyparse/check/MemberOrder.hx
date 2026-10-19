@@ -99,7 +99,7 @@ private typedef FixOptions = {
  * a same-phase side-effecting UNCONDITIONAL initializer is flagged and then bails to spacing-only. Demoting the block and re-sorting would
  * close it, but the sole trigger is the side-effecting constraint - the one the `movableArglessNew` option relaxes - so a retry would
  * reintroduce exactly the report/fix option disagreement the config-independent gates exist to prevent. The finding is the same advisory
- * shape the rule already produces for a plain unsafe container, and neither TM nor this repo holds an instance of it. A container in a
+ * shape the rule already produces for a plain unsafe container, and neither client nor this repo holds an instance of it. A container in a
  * type that transitively carries a BUILD MACRO is gated separately, and only on the FIX path (`macroBuiltMetaOrderKept`, which needs the
  * run`\s `SymbolIndex`): the relative order of its ANNOTATED members is preserved, because a build macro reads the field list in
  * declaration order and dispatches on metadata - Pony`\s `DeclaratorBuilder` turns `@:arg` fields into constructor PARAMETERS that way.
@@ -717,11 +717,11 @@ final class MemberOrder implements Check implements ConfigAware {
 			} else if (t.startsWith(ifPrefix)) {
 				current = t.substring(ifPrefix.length).trim();
 				branch = 0;
-			} else if (t.startsWith('#else'))
+			} else if (t.startsWith('#else')) {
 				branch++;
-			else if (isTriviaOnly(t))
+			} else if (isTriviaOnly(t)) {
 				continue;
-			else {
+			} else {
 				if (si >= sorted.length || current != sorted[si].condition || branch != MemberSlots.branchIndexOf(sorted[si])) return false;
 				si++;
 			}
@@ -824,8 +824,9 @@ final class MemberOrder implements Check implements ConfigAware {
 				groupFirst[key] = m.index;
 				buckets[key] = [m];
 				order.push(key);
-			} else
+			} else {
 				bucket.push(m);
+			}
 		}
 		final ranked: Map<String, Int> = [];
 		final rankedInline: Array<String> = [];

@@ -81,13 +81,13 @@ final class AddParamCommand implements CliCommand {
 						CliIo.stderr('apq add-param: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (posSpec == null && selectExpr == null && matchExpr == null && paramText == null && CliArgs.isPosSpec(a))
+					} else if (posSpec == null && selectExpr == null && matchExpr == null && paramText == null && CliArgs.isPosSpec(a)) {
 						posSpec = a;
-					else if (paramText == null)
+					} else if (paramText == null) {
 						paramText = a;
-					else {
+					} else {
 						CliIo.stderr('apq add-param: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -119,8 +119,9 @@ final class AddParamCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq add-param: wrote $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq add-param: $message\n');

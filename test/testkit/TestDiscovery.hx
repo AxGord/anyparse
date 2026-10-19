@@ -399,19 +399,20 @@ class TestDiscovery {
 					Context.currentPos()
 				);
 			final types: Null<Array<Type>> = moduleTypes(arm.type);
-			if (types == null)
+			if (types == null) {
 				Context.error(
 					'$ARMS_FILE: "${arm.name}" names the type ${arm.type}, and no module of that path is on the classpath'
 					+ ' — check the spelling, or the root the module lives under',
 					Context.currentPos()
 				);
+			}
 			// A non-default kind addresses something the TYPER has no question for — a grammar
 			// declaration's `@:re` terminal is a module-level `MetaCall`, and an abstract is not a
 			// `ClassType` to ask for a method at all. Same third answer as a `#if macro` module:
 			// deferred to the parser, which reads the file the runner patches.
-			else if (types.length == 0 || arm.kind != MutationArms.DEFAULT_KIND)
+			else if (types.length == 0 || arm.kind != MutationArms.DEFAULT_KIND) {
 				deferred.push('${arm.name} :: ${MutationArms.address(arm)}');
-			else {
+			} else {
 				final owner: Null<ClassType> = classIn(types, arm.type, arm.method);
 				if (owner == null)
 					Context.error('$ARMS_FILE: "${arm.name}" names the type ${arm.type}, which resolves to no class', Context.currentPos());

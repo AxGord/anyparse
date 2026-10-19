@@ -371,11 +371,11 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		for (i => text in clauses) {
 			final ceiling: Null<Int> = clause.match(text) ? Std.parseInt(clause.matched(1)) : null;
 			final unit: String = ceiling == null ? '' : clause.matched(2);
-			if (unit == 'members' && i == 0)
-				members = ceiling
-			else if (unit == 'lines' && lines == null)
-				lines = ceiling
-			else {
+			if (unit == 'members' && i == 0) {
+				members = ceiling;
+			} else if (unit == 'lines' && lines == null) {
+				lines = ceiling;
+			} else {
 				problems.push(malformedGrant(head));
 				return null;
 			}
@@ -643,12 +643,9 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		final interfaces: Array<String> = decl.interfaces;
 		if (interfaces.length == 0) return 0;
 		for (iface in interfaces) if (index.refs.resolveStartType(iface, file) == null) return null;
-		var dictated: Int = 0;
-		for (member in members) if (member.length > 0 && interfaces.exists(i ->
-			!index.typing.members.typeProvablyLacksMember(i, member, file)
-		))
-			dictated++;
-		return dictated;
+		return (members.count(
+			member -> member.length > 0 && interfaces.exists(i -> !index.typing.members.typeProvablyLacksMember(i, member, file))
+		): Int);
 	}
 
 	/**

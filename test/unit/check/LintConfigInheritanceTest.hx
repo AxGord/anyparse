@@ -37,7 +37,7 @@ class LintConfigInheritanceTest extends Test {
 	public function testAnUnnamedKeyFallsThroughToTheAncestor(): Void {
 		#if (sys || nodejs)
 		final root: String = tree(
-			'{"compilerOracleServer": true, "resolutionLibs": ["utest"], "languageVersion": "4.3", "reflectiveClasses": ["drill.**"], '
+			'{"compilerOracleServer": true, "resolutionLibs": ["utest"], "languageVersion": "4.3", "reflectiveClasses": ["model.**"], '
 			+ '"reflectiveMethodHolders": ["ui.Handler"], "ownedTypes": [{"types": ["a.T"], "owners": ["a.**"], "why": "w"}]}',
 			'{"rules": {"magic-number": {"enabled": false}}}'
 		);
@@ -45,7 +45,7 @@ class LintConfigInheritanceTest extends Test {
 		Assert.isTrue(config.compilerOracleServer(), 'compilerOracleServer falls through');
 		Assert.same(['utest'], config.resolutionLibs(), 'resolutionLibs falls through');
 		Assert.equals('4.3', config.languageVersion(), 'languageVersion falls through');
-		Assert.same(['drill.**'], config.reflectiveClasses(), 'reflectiveClasses falls through');
+		Assert.same(['model.**'], config.reflectiveClasses(), 'reflectiveClasses falls through');
 		Assert.same(['ui.Handler'], config.reflectiveMethodHolders(), 'reflectiveMethodHolders falls through');
 		Assert.same([['a.T']], [for (o in config.ownedTypes()) o.types], 'ownedTypes falls through');
 		Assert.isFalse(config.enabledFor('magic-number'), 'the nested document still disables its own rule');
@@ -179,9 +179,9 @@ class LintConfigInheritanceTest extends Test {
 		Sys.command('chmod', ['000', '$root/nested/apqlint.json']);
 		// Skipped rather than asserted when the chmod does not bite (a root-owned CI runner
 		// reads it anyway) — a probe that cannot create the condition must not claim it did.
-		if (readable('$root/nested/apqlint.json'))
-			Assert.pass('chmod 000 did not make the file unreadable for this user')
-		else {
+		if (readable('$root/nested/apqlint.json')) {
+			Assert.pass('chmod 000 did not make the file unreadable for this user');
+		} else {
 			final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
 			Assert.same(['utest'], config.resolutionLibs(), 'unreadable, the ancestor applies');
 		}

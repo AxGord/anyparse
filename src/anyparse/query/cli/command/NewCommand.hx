@@ -214,8 +214,9 @@ final class NewCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq new: wrote $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit('new', filePath, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq new: $message\n');
@@ -320,9 +321,9 @@ final class NewCommand implements CliCommand {
 						CliIo.stderr('apq new: unknown option "$a"\n');
 						return newParseExit(EXIT_USAGE);
 					}
-					if (path == null)
+					if (path == null) {
 						path = a;
-					else {
+					} else {
 						CliIo.stderr('apq new: unexpected extra argument "$a"\n');
 						return newParseExit(EXIT_USAGE);
 					}

@@ -327,17 +327,17 @@ final class ThreadSafetyOptions {
 				final bound: Null<Float> = max;
 				final turn: Null<Float> = cost;
 				final dropped: String = '$BOUNDED_KEY[$i] dropped: ';
-				if (wrong.length > 0)
+				if (wrong.length > 0) {
 					problems.push('$BOUNDED_KEY[$i] dropped: ${wrong.join(', ')}');
-				else if (siteName == null)
+				} else if (siteName == null) {
 					problems.push('${dropped}it names no "site"');
-				else if (siteName.indexOf('*') >= 0)
+				} else if (siteName.indexOf('*') >= 0) {
 					problems.push('$dropped"site" is a pattern, not one member');
-				else if (bound == null || !(bound > 0))
+				} else if (bound == null || !(bound > 0)) {
 					problems.push('$dropped"max" is not a positive number');
-				else if (turn == null || !(turn > 0))
+				} else if (turn == null || !(turn > 0)) {
 					problems.push('$dropped"costMs" is not a positive number');
-				else {
+				} else {
 					// re-bound: strict null-safety does not carry a narrowed local into a structure literal
 					final named: String = siteName;
 					final most: Float = bound;

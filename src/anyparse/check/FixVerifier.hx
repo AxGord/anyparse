@@ -818,8 +818,9 @@ final class FixVerifier {
 				final fresh: Array<Int> = [i];
 				byGroup[group] = fresh;
 				units.push(fresh);
-			} else
+			} else {
 				unit.push(i);
+			}
 		}
 		return units;
 	}

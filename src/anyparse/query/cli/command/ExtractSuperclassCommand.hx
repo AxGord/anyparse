@@ -65,11 +65,11 @@ final class ExtractSuperclassCommand implements CliCommand {
 						CliIo.stderr('apq extract-superclass: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (srcFile == null)
+					if (srcFile == null) {
 						srcFile = a;
-					else if (superName == null)
+					} else if (superName == null) {
 						superName = a;
-					else {
+					} else {
 						CliIo.stderr('apq extract-superclass: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}

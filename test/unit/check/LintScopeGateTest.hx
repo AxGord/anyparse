@@ -12,6 +12,8 @@ import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
+
 /**
  * The SCOPE half of the reflection gate — the one input that decides whether a "nothing
  * reflects this name" answer is evidence or an artefact of how the lint was invoked.
@@ -71,7 +73,7 @@ class LintScopeGateTest extends Test {
 	 * which of the two the answer came from.
 	 */
 	public function testTheSameLiteralOutsideAnyScopeIsInvisible(): Void {
-		Assert.isFalse(ReflectionScan.runtimeTypePath(unscoped(BARE_REPORT).whole, 'Align'));
+		Assert.isFalse(ReflectionScan.runtimeTypePath(unscoped().whole, 'Align'));
 	}
 
 	/** The interpolated half widens with the scope too — one scan, both questions. */
@@ -82,7 +84,7 @@ class LintScopeGateTest extends Test {
 
 	/** Control for the fragment half: same plugin, same report file, no scope — no fragment. */
 	public function testTheSameFragmentOutsideAnyScopeIsInvisible(): Void {
-		Assert.isFalse(ReflectionScan.runtimeNameFragment(unscoped(BARE_REPORT).fragments, 'computeValue'));
+		Assert.isFalse(ReflectionScan.runtimeNameFragment(unscoped().fragments, 'computeValue'));
 	}
 
 	/**
@@ -108,8 +110,7 @@ class LintScopeGateTest extends Test {
 	public function testAFileInBothHalvesIsScannedOnce(): Void {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Use.hx', source: RESOLVER }];
 		final surface: ReflectionSurface = withScope(report, report, []);
-		var seen: Int = 0;
-		for (s in surface.whole) if (s == 'pkg.Align') seen++;
+		final seen: Int = surface.whole.count(s -> s == 'pkg.Align');
 		Assert.equals(1, seen);
 	}
 
@@ -265,7 +266,7 @@ class LintScopeGateTest extends Test {
 	}
 
 	/** The same plugin WITHOUT a resolution scope — the one-variable counterpart of `scoped`. */
-	private function unscoped(reportSource: String): ReflectionSurface {
+	private function unscoped(reportSource: String = BARE_REPORT): ReflectionSurface {
 		return ReflectionScan.reflectionSurface(
 			[{ file: 'pkg/Align.hx', source: reportSource }], new CachingGrammarPlugin(new HaxeQueryPlugin())
 		);

@@ -400,8 +400,7 @@ final class MemberSlots {
 		for (i in firstIdx ... out.length) {
 			final decl: Null<Span> = out[i].node.span;
 			final at: Int = decl != null ? decl.from : out[i].span.from;
-			var index: Int = 0;
-			for (o in opens) if (o.at < at) index++;
+			final index: Int = opens.count(o -> o.at < at);
 			out[i].branch = { index: index, opens: texts };
 		}
 	}

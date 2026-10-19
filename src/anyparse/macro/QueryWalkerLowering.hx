@@ -751,8 +751,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 				});
 				for (e in typeRefsDescend(head, access, 0)) body.push(e);
 			}
-		} else
+		} else {
 			for (i in 0...branch.children.length) for (e in typeRefsDescend(branch.children[i], ident(argNames[i]), 0)) body.push(e);
+		}
 
 		return body.length == 0
 			? {

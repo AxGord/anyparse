@@ -88,8 +88,9 @@ final class CliEdit {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq $opName: wrote $filePath$tail\n');
 					if (fix) postWriteFix(filePath, before, text);
-				} else
+				} else {
 					previewEdit(opName, filePath, text, tail);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq $opName: $message\n');
@@ -145,10 +146,12 @@ final class CliEdit {
 					if (lifted == null) {
 						CliIo.stderr('apq $opName: the resolved ${node.kind} node has no enclosing "$kind" node\n');
 						null;
-					} else
+					} else {
 						ByNode(lifted);
-				} else
+					}
+				} else {
 					ByNode(node);
+				}
 			case Err(message):
 				CliIo.stderr('apq $opName: $message\n');
 				null;

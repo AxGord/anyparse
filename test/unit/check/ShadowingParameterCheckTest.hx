@@ -1,5 +1,7 @@
 package unit.check;
 
+import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
@@ -134,8 +136,71 @@ class ShadowingParameterCheckTest extends Test {
 		Assert.equals(1, found.filter(v -> v.rule == 'shadowing-parameter').length);
 	}
 
+	/**
+	 * client `RemoteDiskSystemCache`: a typed lambda parameter over a local of its name takes its written
+	 * type's lower-camel name - `shadowing-local`'s rename, through the same `Rename.rename`. The
+	 * hidden local is read after the lambda, and that does not keep the finding: a parameter is bound
+	 * by the call, so no write meant for the outer binding can land on it, and every read inside the
+	 * function reads the argument either way.
+	 */
+	@:pin('control')
+	@:killer('M-SHADOWING-PARAM-NO-RENAME')
+	public function testFixRenamesATypedParameterAfterItsWrittenType(): Void {
+		final src: String = 'class C {\n\tfunction f(xs:Array<DiskSystemItemData>):Void {\n\t\tvar item:DiskSystemItemData = xs[0];\n'
+			+ '\t\tfinal e = xs.find((item:DiskSystemItemData) -> item.fileName == "a");\n\t\ttrace(item);\n\t}\n}';
+		Assert.equals(
+			'class C {\n\tfunction f(xs:Array<DiskSystemItemData>):Void {\n\t\tvar item:DiskSystemItemData = xs[0];\n'
+			+ '\t\tfinal e = xs.find((diskSystemItemData:DiskSystemItemData) -> diskSystemItemData.fileName == "a");\n'
+			+ '\t\ttrace(item);\n\t}\n}',
+			CheckFixture.fixedSource(new ShadowingParameter(), src)
+		);
+	}
+
+	/**
+	 * No written nominal type names a replacement: an untyped arrow parameter (client `errorMessage ->`), a
+	 * type with arguments (client `cloudItems:Null<Array<DiskSystemItemData>>`), a std root type.
+	 */
+	@:pin('control')
+	@:killer('M-SHADOWING-PARAM-ANY-TYPE')
+	public function testFixLeavesAParameterNoWrittenTypeNames(): Void {
+		for (src in [
+			'class C {\n\tfunction f(errorMessage:String):Void {\n\t\tlogin(errorMessage -> trace(errorMessage));\n\t}\n}',
+			'class C {\n\tfunction f(items:Array<Item>):Void {\n\t\tlist((items:Null<Array<Item>>) -> trace(items));\n\t}\n}',
+			'class C {\n\tfunction f(source:String):Void {\n\t\tlist((source:String) -> trace(source));\n\t}\n}'
+		]) {
+			Assert.equals(src, CheckFixture.fixedSource(new ShadowingParameter(), src));
+			Assert.notNull(declineOf(src), src);
+		}
+	}
+
+	/**
+	 * `Rename.rename` refuses a capture: the new name is already read inside the function, so renaming
+	 * the parameter to it would re-bind that read.
+	 */
+	public function testFixRefusesARenameThatCaptures(): Void {
+		final src: String = 'class C {\n\tfunction f(xs:Array<DiskSystemItemData>, diskSystemItemData:Int):Void {\n'
+			+ '\t\tvar item:DiskSystemItemData = xs[0];\n'
+			+ '\t\tfinal e = xs.find((item:DiskSystemItemData) -> item.size > diskSystemItemData);\n\t\ttrace(item);\n\t}\n}';
+		Assert.equals(src, CheckFixture.fixedSource(new ShadowingParameter(), src));
+		Assert.notNull(declineOf(src));
+	}
+
+	/** It has an autofix now, so it no longer declares `NoAutofix`; it stays opt-in. */
+	public function testItFixesAndStaysOptIn(): Void {
+		final check: ShadowingParameter = new ShadowingParameter();
+		Assert.isTrue((check: Dynamic) is DefaultOff);
+		Assert.isFalse((check: Dynamic) is NoAutofix);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new ShadowingParameter(), src);
+	}
+
+	/** The decline the fix leaves on the one finding of `src`. */
+	private function declineOf(src: String): Null<String> {
+		final run: FixRun = CheckFixture.fixRun(new ShadowingParameter(), [{ file: 'C.hx', source: src }]);
+		Assert.equals(1, run.violations.length);
+		return run.violations[0].declineReason;
 	}
 
 }

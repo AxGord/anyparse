@@ -130,8 +130,9 @@ final class CondDirectives {
 					openAt = i;
 					flat = true;
 					single = true;
-				} else
+				} else {
 					flat = false;
+				}
 				depth++;
 				continue;
 			}

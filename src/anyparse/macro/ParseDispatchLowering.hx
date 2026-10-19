@@ -895,9 +895,9 @@ final class ParseDispatchLowering {
 			case EBinop(OpBoolOr, left, right):
 				final a: Null<Array<Int>> = byteSetOf(left, local);
 				final b: Null<Array<Int>> = byteSetOf(right, local);
-				if (a == null || b == null)
+				if (a == null || b == null) {
 					null;
-				else {
+				} else {
 					for (code in b) if (!a.contains(code)) a.push(code);
 					a;
 				}

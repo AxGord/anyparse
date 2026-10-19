@@ -254,11 +254,11 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 						CliIo.stderr('apq patch: unknown option "$a"\n');
 						return patchParseExit(EXIT_USAGE);
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (payload == null)
+					} else if (payload == null) {
 						payload = a;
-					else {
+					} else {
 						CliIo.stderr('apq patch: unexpected extra argument "$a"\n');
 						return patchParseExit(EXIT_USAGE);
 					}

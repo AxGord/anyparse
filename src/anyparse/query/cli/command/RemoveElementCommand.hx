@@ -91,11 +91,11 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 						CliIo.stderr('apq remove-element: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (posSpec == null)
+					} else if (posSpec == null) {
 						posSpec = a;
-					else {
+					} else {
 						CliIo.stderr('apq remove-element: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}

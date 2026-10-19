@@ -71,11 +71,11 @@ final class ExtractConstantToMode {
 						CliIo.stderr('apq $OP: "$a" is not an option of the addressed mode\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (at == null && CliArgs.isPosSpec(a))
+					} else if (at == null && CliArgs.isPosSpec(a)) {
 						at = a;
-					else {
+					} else {
 						CliIo.stderr('apq $OP: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -134,8 +134,9 @@ final class ExtractConstantToMode {
 				if (write) {
 					CliIo.writeFiles(writes);
 					CliIo.stderr('apq $OP: wrote ${writes.length} file(s)\n');
-				} else
+				} else {
 					for (w in writes) CliEdit.previewEdit(OP, w.path, w.content);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq $OP: $message\n');

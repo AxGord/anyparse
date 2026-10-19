@@ -122,8 +122,9 @@ final class ExtractConstantCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq extract-constant: wrote $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq extract-constant: $message\n');

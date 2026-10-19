@@ -735,8 +735,9 @@ final class WriterKwRefLowering {
 						kw.shape.root, kw.ctx.trivia, false, 'condSpliceRawWrapsCases', [rawAccess]
 					);
 					parts.push(macro $wrapsCases ? _dcmd($kwDoc) : $kwDoc);
-				} else
+				} else {
 					parts.push(kwDoc);
+				}
 			}
 		}
 		if (leadText != null) {

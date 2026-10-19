@@ -143,8 +143,9 @@ final class JsonLayoutWriter {
 			if (node.kind == JsonProjection.OBJECT) {
 				_out += keyText(child) + sep.before + keyValueSep() + sep.after;
 				writeNew(child.children[0], shaped == null ? null : memberValueModel(shaped, child), expanded);
-			} else
+			} else {
 				writeNew(child, shaped?.children.find(c -> c.kind == child.kind), expanded);
+			}
 			if (i < last) _out += entrySep();
 		}
 		_out += (expanded ? _lineEnd + indent : gaps.close) + closeOf(node);

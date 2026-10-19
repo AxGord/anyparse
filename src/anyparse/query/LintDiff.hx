@@ -135,8 +135,9 @@ final class LintDiff {
 					identity: data != null
 				};
 				counts[key] = 1;
-			} else
+			} else {
 				counts[key] = seen + 1;
+			}
 		}
 		return {
 			total: findings.length,

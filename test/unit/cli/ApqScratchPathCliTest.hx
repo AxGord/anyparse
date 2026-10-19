@@ -276,11 +276,11 @@ class ApqScratchPathCliTest extends Test {
 			err.indexOf('drove 0 candidate(s)') != -1,
 			'the fixture scope must stay candidate-free so no haxe is spawned inside the suite, got: $err'
 		);
-		return afterMarker(err, WORK_DIR_MARKER);
+		return afterMarker(err);
 	}
 
 	/** The rest of the first line carrying `marker`, or `''` (with the failure recorded) when there is none. */
-	private function afterMarker(transcript: String, marker: String): String {
+	private function afterMarker(transcript: String, marker: String = WORK_DIR_MARKER): String {
 		final at: Int = transcript.indexOf(marker);
 		if (at < 0) {
 			Assert.fail('the run must announce its work directory, got: $transcript');
@@ -329,7 +329,7 @@ class ApqScratchPathCliTest extends Test {
 	/** The work directory a child announced, and a removal of it so the fixture leaves nothing behind. */
 	private function announcedWorkDir(result: js.node.ChildProcess.ChildProcessSpawnSyncResult): String {
 		Assert.equals(0, result.status, 'the stdlib-dup child exits clean');
-		final dir: String = afterMarker(text(result.stderr), WORK_DIR_MARKER);
+		final dir: String = afterMarker(text(result.stderr));
 		if (dir != '') CliFixture.removeDir(dir);
 		return dir;
 	}

@@ -214,8 +214,9 @@ final class CommentOwnerGuard {
 			if (was == null) {
 				code = span;
 				hoisted = codeFirstInSource;
-			} else
+			} else {
 				code = new Span(was.from < span.from ? was.from : span.from, was.to > span.to ? was.to : span.to);
+			}
 		}
 		final crossed: Null<Span> = code;
 		return crossed == null ? null : { code: crossed, hoisted: hoisted };

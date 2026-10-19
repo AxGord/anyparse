@@ -76,11 +76,11 @@ final class MoveMemberCommand implements CliCommand {
 						CliIo.stderr('apq move-member: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (srcFile == null)
+					if (srcFile == null) {
 						srcFile = a;
-					else if (memberArg == null)
+					} else if (memberArg == null) {
 						memberArg = a;
-					else {
+					} else {
 						CliIo.stderr('apq move-member: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}

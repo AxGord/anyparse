@@ -208,9 +208,7 @@ final class Text {
 	}
 
 	private static inline function countBindings(m: Match): Int {
-		var n: Int = 0;
-		for (_ in m.bindings) n++;
-		return n;
+		return m.bindings.count();
 	}
 
 	/**

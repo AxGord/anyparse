@@ -801,8 +801,9 @@ final class DocMeasure {
 					if (out != null && c >= 0) out.braceCloser = c == '}'.code;
 					if (out != null) out.closeWidth += s.length;
 					TailCloses;
-				} else
+				} else {
 					TailOther;
+				}
 			case Concat(items), Fill(items, _, _), FillWithRestProbe(items, _, _), FillBreakAfterWrap(items, _, _):
 				scanTailItemsAt(items, nest, resolveForcedBreaks, out);
 			case Nest(n, inner):

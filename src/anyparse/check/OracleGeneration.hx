@@ -617,9 +617,9 @@ final class OracleGeneration {
 		final stale: Array<StaleGroup> = [];
 		for (group in candidates) {
 			final blocked: Null<String> = hold(run, group, true);
-			if (blocked != null)
-				refuse(run, group, blocked)
-			else {
+			if (blocked != null) {
+				refuse(run, group, blocked);
+			} else {
 				final claimed: Null<StaleGroup> = claim(run, group, fresh);
 				if (claimed != null) stale.push(claimed);
 			}
@@ -675,9 +675,9 @@ final class OracleGeneration {
 			if (observe(group, judged) == seen) continue;
 			final record: Null<GenerationRecord> = #if (sys || nodejs) readRecord(recordFile(group)) #else null #end;
 			final rival: Null<String> = record?.format == FORMAT_TAG && record?.command != group.generate.command ? record?.command : null;
-			if (rival == null)
-				moved.push(group)
-			else {
+			if (rival == null) {
+				moved.push(group);
+			} else {
 				OracleGenerationLock.dropShared(lockDir(group), run.me);
 				refuse(run, group, 'another config regenerates this tree with a different command (`$rival`)');
 			}

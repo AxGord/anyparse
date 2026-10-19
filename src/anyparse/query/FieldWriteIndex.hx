@@ -240,9 +240,7 @@ final class FieldWriteIndex {
 	 * must additionally rule out a second write elsewhere.
 	 */
 	public function writeCount(type: String, field: String): Int {
-		var n: Int = 0;
-		for (w in _writes) if (w.owner == type && w.field == field) n++;
-		return n;
+		return _writes.count(w -> w.owner == type && w.field == field);
 	}
 
 	/**
@@ -451,7 +449,7 @@ final class FieldWriteIndex {
 
 	/** Every indexed type declaration named `name`, across all files. */
 	private static inline function declsNamedIn(index: SymbolIndex, name: String): Array<TypeDeclInfo> {
-		// the index's by-name table, in index order: a scan of every type of every file per write was 4 s of a TM `--fix`
+		// the index's by-name table, in index order: a scan of every type of every file per write was 4 s of a client `--fix`
 		return index.refs.declsNamed(name);
 	}
 

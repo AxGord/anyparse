@@ -150,11 +150,11 @@ final class AddMetaCommand implements CliCommand implements PostWriteFix {
 						CliIo.stderr('apq add-meta: unknown option "$a"\n');
 						return addMetaParseExit(EXIT_USAGE);
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (meta == null)
+					} else if (meta == null) {
 						meta = a;
-					else {
+					} else {
 						CliIo.stderr('apq add-meta: unexpected extra argument "$a"\n');
 						return addMetaParseExit(EXIT_USAGE);
 					}

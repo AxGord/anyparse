@@ -1,7 +1,6 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
@@ -10,7 +9,7 @@ import anyparse.runtime.Span;
 /**
  * Flags a function PARAMETER whose name is already bound — by an enclosing local, a loop or
  * catch binder, a local function, or an enclosing parameter — at the point it takes effect.
- * `Warning`, REPORT-ONLY, and `DefaultOff`.
+ * `Warning` and `DefaultOff`; its fix is `shadowing-local`'s rename (`ShadowingLocal.fixWith`).
  *
  * ## The same trap one spelling over
  *
@@ -50,7 +49,7 @@ import anyparse.runtime.Span;
  * idiom, not a mistake — same rule, same reason, as for a local declaration.
  */
 @:nullSafety(Strict)
-final class ShadowingParameter implements Check implements NoAutofix implements DefaultOff {
+final class ShadowingParameter implements Check implements DefaultOff {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shadowing-parameter';
@@ -69,15 +68,15 @@ final class ShadowingParameter implements Check implements NoAutofix implements 
 		return ShadowingLocal.collect(files, plugin, true, RULE_ID);
 	}
 
-	/** Report-only: renaming the parameter or the binding it hides is the author's call. */
+	/**
+	 * The parameter takes its written type's lower-camel name — `(item:DiskSystemItemData) -> …` becomes
+	 * `(diskSystemItemData:DiskSystemItemData) -> …` — through `Rename.rename`, refusing whatever it refuses; a
+	 * parameter no written nominal type names (an untyped arrow parameter, `Null<Array<T>>`, `String`) stays reported.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
-	}
-
-	public function noAutofixReason(): String {
-		return 'renaming the parameter or the binding it hides is the author\'s call';
+		return ShadowingLocal.fixWith(source, violations, plugin, true, RULE_ID);
 	}
 
 }

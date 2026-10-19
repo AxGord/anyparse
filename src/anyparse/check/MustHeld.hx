@@ -349,9 +349,9 @@ final class MustHeld {
 		final keysOf: Map<String, Array<Int>> = [];
 		for (id => node in _graph.nodes) {
 			final unknown: Bool = enteredUnknown(id, node, inertRef, unresolvedNames, seedable);
-			for (s in _states.statesOf(id)) if (unknown)
-				_entry['$id|${s.valuation}'] = []
-			else {
+			for (s in _states.statesOf(id)) if (unknown) {
+				_entry['$id|${s.valuation}'] = [];
+			} else {
 				keysOf[id] = (keysOf[id] ?? []).concat([keys.length]);
 				keys.push({ id: id, valuation: s.valuation });
 			}

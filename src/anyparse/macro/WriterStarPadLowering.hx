@@ -183,7 +183,7 @@ final class WriterStarPadLowering {
 					_dc(_docs);
 				}
 			});
-		} else
+		} else {
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				if (_arr.length == 0)
@@ -201,6 +201,7 @@ final class WriterStarPadLowering {
 					_dc(_docs);
 				}
 			});
+		}
 	}
 
 	/**

@@ -96,11 +96,11 @@ final class ExtractInterfaceCommand implements CliCommand {
 						CliIo.stderr('apq extract-interface: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (srcFile == null)
+					if (srcFile == null) {
 						srcFile = a;
-					else if (ifaceName == null)
+					} else if (ifaceName == null) {
 						ifaceName = a;
-					else {
+					} else {
 						CliIo.stderr('apq extract-interface: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}

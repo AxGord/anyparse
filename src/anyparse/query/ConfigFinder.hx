@@ -127,9 +127,9 @@ final class ConfigFinder {
 			if (sys.FileSystem.exists(candidate) && !sys.FileSystem.isDirectory(candidate)) {
 				final content: Null<String> = try sys.io.File.getContent(candidate) catch (exception: haxe.Exception) null;
 				// Re-bound: strict null-safety does not carry a narrowed local into a structure literal.
-				if (content == null)
-					unreadable.push(candidate)
-				else {
+				if (content == null) {
+					unreadable.push(candidate);
+				} else {
 					final text: String = content;
 					out.push({ content: text, path: candidate });
 				}

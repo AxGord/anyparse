@@ -145,23 +145,23 @@ final class SymbolIndexMembers {
 					runExtern = false;
 					runOverload = false;
 					runMetaNames = [];
-				} else if (sp != null && seams.visibilityKinds.contains(child.kind))
+				} else if (sp != null && seams.visibilityKinds.contains(child.kind)) {
 					runVisibility = source.substring(sp.from, sp.to);
-				else if (child.kind == seams.overrideKind)
+				} else if (child.kind == seams.overrideKind) {
 					runOverride = true;
-				else if (child.kind == seams.staticKind)
+				} else if (child.kind == seams.staticKind) {
 					runStatic = true;
-				else if (child.kind == seams.inlineKind)
+				} else if (child.kind == seams.inlineKind) {
 					runInline = true;
-				else if (child.kind == seams.macroKind)
+				} else if (child.kind == seams.macroKind) {
 					runMacro = true;
-				else if (child.kind == seams.dynamicKind)
+				} else if (child.kind == seams.dynamicKind) {
 					runDynamic = true;
-				else if (child.kind == seams.externKind)
+				} else if (child.kind == seams.externKind) {
 					runExtern = true;
-				else if (child.kind == seams.overloadKind)
+				} else if (child.kind == seams.overloadKind) {
 					runOverload = true;
-				else {
+				} else {
 					if (MemberKinds.META_KINDS.contains(child.kind) && child.name != null) runMetaNames.push(child.name ?? '');
 					final operatorKind: Null<String> = operatorKindOf(child, seams);
 					if (operatorKind != null) runOperators.push(operatorKind);

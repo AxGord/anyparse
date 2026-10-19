@@ -362,8 +362,9 @@ final class NewFile {
 					else
 						imports.push(stmt);
 				}
-			} else
+			} else {
 				bodies[section] = SourceComments.trimBlankEdges(buf).join('\n');
+			}
 		}
 		for (line in lines) {
 			if (line.startsWith('@@ ')) {
@@ -463,8 +464,9 @@ final class NewFile {
 			if (body == null) {
 				stubbed.push(name);
 				members.push('public $sig {\n$STUB\n}');
-			} else
+			} else {
 				members.push('public $sig {\n$body\n}');
+			}
 		}
 		for (key in bodies.keys()) if (!methodNames.contains(key))
 			return '@@ $key names no method on $ifaceSimple (have: ${methodNames.join(', ')})';

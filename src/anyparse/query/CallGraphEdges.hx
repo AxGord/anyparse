@@ -444,19 +444,21 @@ final class CallGraphEdges {
 		}
 
 		/**
-		 * The written return type of the function `member` a value written `source` declares on its type's chain, as that value
+		 * The written return type of the function `member` a value written `valueSource` declares on its type's chain, as that value
 		 * sees it (`throughParams`), with the one file declaring it (null when several do); null for a member that is no
 		 * function the graph holds, or one declaring type parameters.
 		 */
-		function memberReturn(source: String, member: String, currentType: Null<String>): Null<{ written: String, file: Null<String> }> {
-			final type: Null<String> = nominalOf(source, currentType);
+		function memberReturn(
+			valueSource: String, member: String, currentType: Null<String>
+		): Null<{ written: String, file: Null<String> }> {
+			final type: Null<String> = nominalOf(valueSource, currentType);
 			final target: Null<String> = type == null ? null : g.memberOnChain(type, member);
 			final written: Null<String> = target == null || (g._facts.typeParams[target] ?? []).length > 0 ? null : returnSourceOf(target);
 			if (target == null || written == null) return null;
 			final files: Array<String> = [];
 			for (d in g.declarationsOf(target)) if (!files.contains(d.file)) files.push(d.file);
 			return {
-				written: throughParams(written, g.nodes[target]?.typeName, source, type, currentType),
+				written: throughParams(written, g.nodes[target]?.typeName, valueSource, type, currentType),
 				file: files.length == 1 ? files[0] : null
 			};
 		}

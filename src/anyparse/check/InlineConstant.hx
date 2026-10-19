@@ -29,11 +29,11 @@ using StringTools;
  *
  * A bare `inlineConstantLiteralKinds` literal (or `negationKind` over a numeric one) is the
  * primary shape. The second is a REFERENCE that provably resolves to an already-`static inline`
- * final / var whose OWN initializer is such a literal — the `PLAYER_MALE_GENDER` shape:
+ * final / var whose OWN initializer is such a literal — the `SPRITE_MALE_GENDER` shape:
  *
  * ```
- * public static inline final PLAYER_MALE_GENDER:Int = 1;
- * private static final GENDER:Int = PLAYER_MALE_GENDER;   // -> private static inline final
+ * public static inline final SPRITE_MALE_GENDER:Int = 1;
+ * private static final GENDER:Int = SPRITE_MALE_GENDER;   // -> private static inline final
  * ```
  *
  * `static inline final B:Int = A;` compiles and folds when `A` is `static inline` (final OR var —
@@ -544,9 +544,8 @@ final class InlineConstant implements Check {
 		// The unreadable half cannot take part in the count: a file the parser could not read has no
 		// literal the self-name test could subtract, so its bytes mentioning the name is the whole
 		// answer — the same word-boundary proof `runtimeName` makes for the non-counting gate.
-		if (reflected.unreadable.exists(source -> RawSourceScan.mentionsWord(source, name))) return true;
-		var count: Int = 0;
-		for (s in reflected.whole) if (s == name) count++;
+		if (reflected.unreadable.exists(unreadable -> RawSourceScan.mentionsWord(unreadable, name))) return true;
+		final count: Int = reflected.whole.count(s -> s == name);
 		if (count == 0) return false;
 		final self: Int = ownValueIsName(name, init, source, seams.stringFold) ? 1 : 0;
 		return count > self;
@@ -613,8 +612,9 @@ final class InlineConstant implements Check {
 				while (i < n && isIdentPart(source.fastCodeAt(i))) i++;
 				final token: String = source.substring(start, i);
 				if (isUpper(token.fastCodeAt(0)) && !out.contains(token)) out.push(token);
-			} else
+			} else {
 				i++;
+			}
 		}
 	}
 

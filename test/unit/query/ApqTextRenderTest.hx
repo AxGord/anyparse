@@ -13,6 +13,7 @@ import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -97,8 +98,7 @@ class ApqTextRenderTest extends Test {
 		for (m in matches) {
 			final pos: Position = m.span.lineCol(source);
 			buf.add('$file:${pos.line}:${pos.col}: match');
-			var n: Int = 0;
-			for (_ in m.bindings) n++;
+			final n: Int = m.bindings.count();
 			if (n > 0) {
 				buf.add(' (');
 				var first: Bool = true;

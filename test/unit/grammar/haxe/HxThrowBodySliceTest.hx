@@ -63,7 +63,7 @@ class HxThrowBodySliceTest extends Test {
 	 * exactly the corpus shape (issue_179) the default flip targets.
 	 */
 	public function testSameKeepsLongValueFlat(): Void {
-		final src: String = 'class M { function f():Void { throw ${makeLongStringLit(LONG_VALUE_LEN)}; } }';
+		final src: String = 'class M { function f():Void { throw ${makeLongStringLit()}; } }';
 		final out: String = writeWith(src, BodyPolicy.Same);
 		Assert.isTrue(out.indexOf('throw "') != -1, 'expected `throw "..."` flat (Same ignores width) in: <$out>');
 		Assert.isTrue(out.indexOf('throw\n') == -1, '`Same` must NOT break before long value in: <$out>');
@@ -81,7 +81,7 @@ class HxThrowBodySliceTest extends Test {
 	}
 
 	public function testFitLineBreaksLongValue(): Void {
-		final src: String = 'class M { function f():Void { throw ${makeLongStringLit(LONG_VALUE_LEN)}; } }';
+		final src: String = 'class M { function f():Void { throw ${makeLongStringLit()}; } }';
 		final out: String = writeWith(src, BodyPolicy.FitLine);
 		Assert.isTrue(out.indexOf('throw\n') != -1, 'expected break before long value (>lineWidth) in: <$out>');
 	}
@@ -129,7 +129,7 @@ class HxThrowBodySliceTest extends Test {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
-	private static inline function makeLongStringLit(len: Int): String {
+	private static inline function makeLongStringLit(len: Int = LONG_VALUE_LEN): String {
 		final buf: StringBuf = new StringBuf();
 		for (i in 0...len) buf.add('-');
 		return '"${buf.toString()}"';

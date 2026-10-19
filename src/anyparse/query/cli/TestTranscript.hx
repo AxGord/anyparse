@@ -257,16 +257,17 @@ final class TestTranscript {
 		final names: Array<String> = [];
 		var pending: String = '';
 		var current: String = '';
-		for (line in lines) if (classRe.match(line))
+		for (line in lines) if (classRe.match(line)) {
 			pending = line;
-		else if (rowRe.match(line)) {
+		} else if (rowRe.match(line)) {
 			if (pending.length > 0) {
 				current = pending;
 				pending = '';
 			}
 			if (!okRe.match(line)) names.push('$current.${rowRe.matched(1)}');
-		} else
+		} else {
 			pending = '';
+		}
 		return names;
 	}
 
@@ -288,7 +289,7 @@ final class TestTranscript {
 
 	/**
 	 * Pure parser over a tink_testrunner (tink_unittest) stdout
-	 * transcript — the reporter TM's `openfl test macos -DUNIT_TESTS`
+	 * transcript — the reporter the client's `openfl test macos -DUNIT_TESTS`
 	 * suite uses (haxelib tink_testrunner, `BasicReporter`). Dispatched
 	 * from `parseTestSummary` once `looksLikeTinkTranscript` flags the
 	 * shape; `lines` is already ANSI-stripped.

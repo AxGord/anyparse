@@ -64,11 +64,11 @@ final class SafeDeleteCommand implements CliCommand {
 						CliIo.stderr('apq safe-delete: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (srcFile == null)
+					if (srcFile == null) {
 						srcFile = a;
-					else if (memberName == null)
+					} else if (memberName == null) {
 						memberName = a;
-					else {
+					} else {
 						CliIo.stderr('apq safe-delete: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -104,8 +104,9 @@ final class SafeDeleteCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(srcFileNN, text);
 					CliIo.stderr('apq safe-delete: removed "$memberNameNN" from $srcFileNN\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, srcFileNN, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq safe-delete: $message\n');

@@ -113,8 +113,9 @@ final class SetModifierCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq set-modifier: wrote $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq set-modifier: $message\n');

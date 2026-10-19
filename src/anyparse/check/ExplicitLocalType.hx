@@ -402,8 +402,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			if (norm == null) {
 				printer.rollbackPendingImports(mark);
 				v.declineReason = LiteralInfer.unwritableReason(raw, maxAnon, { file: v.file, methodName: owner }, true);
-			} else
+			} else {
 				edits.push({ span: new Span(at, at), text: ':$norm' });
+			}
 		}
 		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
 		return edits;

@@ -527,9 +527,9 @@ final class OracleCoverage {
 		return [
 			for (i in 0...asked.length) {
 				final reused: Null<HaxeRun> = held[i];
-				if (reused != null)
-					reused
-				else {
+				if (reused != null) {
+					reused;
+				} else {
 					final k: Int = spawned.indexOf(i);
 					memo?.file(asked[i], true, before[i], after[k], runs[k]);
 					runs[k];

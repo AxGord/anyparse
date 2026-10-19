@@ -86,16 +86,16 @@ final class ChangeSigCommand implements CliCommand {
 						CliIo.stderr('apq change-sig: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (
+					} else if (
 						posSpec == null && selectExpr == null && matchExpr == null && permSpec == null && CliArgs.isPosSpec(a)
 						&& a.indexOf(',') < 0
-					)
+					) {
 						posSpec = a;
-					else if (permSpec == null)
+					} else if (permSpec == null) {
 						permSpec = a;
-					else {
+					} else {
 						CliIo.stderr('apq change-sig: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -128,8 +128,9 @@ final class ChangeSigCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq change-sig: wrote $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				if (advisory != null) CliIo.stderr('apq change-sig: $advisory\n');
 				return EXIT_OK;
 			case Err(message):

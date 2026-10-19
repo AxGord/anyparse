@@ -454,9 +454,9 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	): Void {
 		if (containerKinds.contains(node.kind)) {
 			final wt: Null<WholeType> = wholeType(node, siblings, selfIndex, source, cfg);
-			if (wt != null)
+			if (wt != null) {
 				whole.push(wt);
-			else {
+			} else {
 				final byPrefix: Map<String, Array<ConstDecl>> = [];
 				for (decl in collectConsts(node, cfg)) {
 					final existing: Null<Array<ConstDecl>> = byPrefix[decl.prefix];
@@ -735,8 +735,7 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	/** Whether two or more of `members` feed a single sink — the interchangeable-use signal. */
 	private static function interchangeable(members: Array<String>, sinks: Map<String, Array<String>>): Bool {
 		for (ms in sinks) {
-			var count: Int = 0;
-			for (m in members) if (ms.contains(m)) count++;
+			final count: Int = members.count(m -> ms.contains(m));
 			if (count >= 2) return true;
 		}
 		return false;

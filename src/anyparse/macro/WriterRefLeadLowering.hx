@@ -86,8 +86,9 @@ final class WriterRefLeadLowering {
 		if (child.fmtHasFlag('switchSubjectParensStrip')) {
 			final cond: Expr = switchParensStripCond(fieldAccess);
 			parts.push(macro $cond ? _de() : $leadDoc);
-		} else
+		} else {
 			parts.push(leadDoc);
+		}
 	}
 
 	/**

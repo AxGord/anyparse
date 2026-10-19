@@ -160,15 +160,15 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 						CliIo.stderr('apq extract-method: unknown option "$a"\n');
 						return extractMethodParseExit(EXIT_USAGE);
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (startSpec == null)
+					} else if (startSpec == null) {
 						startSpec = a;
-					else if (endSpec == null)
+					} else if (endSpec == null) {
 						endSpec = a;
-					else if (name == null)
+					} else if (name == null) {
 						name = a;
-					else {
+					} else {
 						CliIo.stderr('apq extract-method: unexpected extra argument "$a"\n');
 						return extractMethodParseExit(EXIT_USAGE);
 					}

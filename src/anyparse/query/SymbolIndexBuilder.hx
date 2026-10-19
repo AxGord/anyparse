@@ -369,11 +369,11 @@ final class SymbolIndexBuilder {
 				continue;
 			}
 			final statement: Null<ImportInfo> = importOf(node.kind, nullableName, nullableSpan, gn.guarded, source);
-			if (statement != null)
-				imports.push(statement)
-			else if (node.kind == 'PackageDecl')
-				pkg = nullableName
-			else {
+			if (statement != null) {
+				imports.push(statement);
+			} else if (node.kind == 'PackageDecl') {
+				pkg = nullableName;
+			} else {
 				// A module-level declaration that is not a TYPE — Haxe 4.2's module-level statics
 				// project as `(Private) (FnDecl helper)`, so the visibility modifier reaches this loop
 				// with no type to attach to. It must NOT be carried forward the way `pendingMeta` and
@@ -710,16 +710,17 @@ final class SymbolIndexBuilder {
 		final children: Array<QueryNode> = node.children;
 		for (i in 0...children.length) {
 			final child: QueryNode = children[i];
-			if (child.kind == 'Conditional')
-				collectGuardedDecls(child, source, out, guardedNames, seenImports, externModifierKind, privateKinds)
-			else if (privateKinds.contains(child.kind)) {
+			if (child.kind == 'Conditional') {
+				collectGuardedDecls(child, source, out, guardedNames, seenImports, externModifierKind, privateKinds);
+			} else if (privateKinds.contains(child.kind)) {
 				// lifted only onto a declaration the region holds, past the other modifiers marking it (`declNodes`)
 				var next: Int = i + 1;
 				while (next < children.length && (children[next].kind == externModifierKind || privateKinds.contains(children[next].kind)))
 					next++;
 				if (next < children.length && typeDeclAt(children[next]) != null) out.push({ node: child, guarded: true });
-			} else
+			} else {
 				pushGuardedDecl(child, source, out, guardedNames, seenImports, externModifierKind);
+			}
 		}
 	}
 
@@ -992,9 +993,9 @@ final class SymbolIndexBuilder {
 				// A source that does not PARSE is a chain member whose bindings are unknown, which is the
 				// same state as one that could not be read: the reader must not be pinned against it, and
 				// an empty group would claim it binds nothing.
-				if (imports == null)
-					bounded = false
-				else {
+				if (imports == null) {
+					bounded = false;
+				} else {
 					// Re-bound: strict null-safety does not carry a narrowed local into a structure literal.
 					final read: Array<ImportInfo> = imports;
 					groups.push({ file: ambient.file, imports: read });

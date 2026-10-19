@@ -232,11 +232,13 @@ final class EmptyDocTag implements Check {
 			if (j == last) {
 				if (j > i) spans.push(lineRunSpan(source, lines, i, j - 1));
 				spans.push(new Span(contentFrom(source, lines[j]), lines[j].to));
-			} else
+			} else {
 				spans.push(lineRunSpan(source, lines, i, j));
+			}
 			i = j + 1;
-		} else
+		} else {
 			i++;
+		}
 		return spans;
 	}
 

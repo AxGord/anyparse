@@ -93,7 +93,7 @@ class ApqSourceReadGuardCliTest extends Test {
 	/** A file inside the budget reads whole with no flag — the behaviour every short-file caller had. */
 	public function testAShortFileStillReadsWhole(): Void {
 		#if (sys || nodejs)
-		final path: String = writeClassOf(SHORT_MEMBERS);
+		final path: String = writeClassOf();
 		var code: Int = -1;
 		final out: String = CliFixture.captureStdout(() -> code = Cli.run(['source', path]));
 		FileSystem.deleteFile(path);
@@ -109,7 +109,7 @@ class ApqSourceReadGuardCliTest extends Test {
 	/** `HXQ_SOURCE_MAX_LINES` moves the budget, and `0` switches the refusal off entirely. */
 	public function testTheBudgetIsConfigurable(): Void {
 		#if (sys || nodejs)
-		final path: String = writeClassOf(SHORT_MEMBERS);
+		final path: String = writeClassOf();
 		final saved: Null<String> = Sys.getEnv('HXQ_SOURCE_MAX_LINES');
 		// Captured: a tightened budget REFUSES, and an uncaptured refusal is 20 menu
 		// entries in the suite transcript.
@@ -216,7 +216,7 @@ class ApqSourceReadGuardCliTest extends Test {
 	 * package line and an import — so the menu has one-line nodes to drop and
 	 * multi-line ones to keep.
 	 */
-	private function writeClassOf(count: Int): String {
+	private function writeClassOf(count: Int = SHORT_MEMBERS): String {
 		final buf: StringBuf = new StringBuf();
 		buf.add('package;\n\nimport haxe.Exception;\n\nclass Long {\n');
 		for (i in 0...count) buf.add('\tpublic function member$i(): Int {\n\t\treturn $i;\n\t}\n\n');

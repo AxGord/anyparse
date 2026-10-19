@@ -116,13 +116,13 @@ final class SetCommentCommand implements CliCommand implements PostWriteFix {
 						CliIo.stderr('apq set-comment: unknown option "$a"\n');
 						return SetCommentCommand.setCommentParseExit(EXIT_USAGE);
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (pos == null)
+					} else if (pos == null) {
 						pos = a;
-					else if (commentText == null)
+					} else if (commentText == null) {
 						commentText = a;
-					else {
+					} else {
 						CliIo.stderr('apq set-comment: unexpected extra argument "$a"\n');
 						return SetCommentCommand.setCommentParseExit(EXIT_USAGE);
 					}

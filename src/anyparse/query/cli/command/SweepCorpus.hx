@@ -8,6 +8,7 @@ import haxe.Exception;
 import sys.io.File;
 #end
 
+using Lambda;
 using StringTools;
 
 /**
@@ -116,9 +117,7 @@ final class SweepCorpus {
 	}
 
 	private static function countOf(entries: Array<SweepCorpusEntry>, status: String): Int {
-		var n: Int = 0;
-		for (entry in entries) if (entry.status == status) n++;
-		return n;
+		return entries.count(entry -> entry.status == status);
 	}
 
 

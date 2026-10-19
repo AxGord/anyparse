@@ -4733,3 +4733,27 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   then accepts the lift only when the parent is a `commaContainerKinds` container (the item IS the element) and refuses
   otherwise (positive whitelist: no confident cut of a shape that has no element). Arms: M-LITERAL-WRAPPER-SKIPPED,
   M-LITERAL-STRANDED-ACCEPTED; M-LIFT-FINAL-WRAPPER-SKIPPED re-aimed onto the new line.
+
+## FU7 (2026-10-19) — four default-off rules enabled for anyparse; two of them gain an autofix
+
+- Enabled in `apqlint.json` (N57 verdicts): `default-repeated-argument`, `prefer-count` (risky: applied WITH the
+  `test-js.hxml` oracle, 19 files verified, 0 reverted), `asymmetric-branch-braces`, `shadowing-parameter`. src+test are
+  at the fixed point of all four. `hoist-common-import` and `duplicate-code-renamed` stay off. `tools/` is outside the
+  lint scope (battery lints src+test) and keeps its one `prefer-count` site.
+- `asymmetric-branch-braces` fix = the writer's repair direction under `singleStatementBraces: "symmetric"`, never the
+  removal one, over the whole if/else-if CHAIN the flagged pair ends (the writer's `chainForcesBraces`): only a chain's
+  tail pair can be a finding, and bracing it alone left chains braced in the tail and bare in the head. Gates read
+  RefShape seams (positive whitelist): a branch ending in `statementTerminator`, or closing on a block / switch, or an
+  if / loop / try / catch whose last child closes so; else one that ENDS in an unterminated expression statement takes
+  the terminator inside the braces (Haxe accepts `if (a) p() else {..}` and rejects `{ p() }` with `Missing ;`,
+  verified with `haxe --interp`; `{ p(); }` is the same statement). Declined: a bare declaration (braces scope it), a
+  conditional-compilation region (its terminator belongs to the parent's span), an edit overlapping another of the
+  same call (next pass), a rewrite that does not parse back as the same chain fully braced. This goes one step past the
+  writer's gate 3 (which leaves an unterminated expression bare): the terminator is inserted, not invented, and the
+  reparse proves the shape.
+- `shadowing-parameter` fix = `shadowing-local`'s rename (`ShadowingLocal.fixWith`), scoped to the declaring function;
+  its readAfter gate does not apply to a parameter (bound by the call, so no write meant for the hidden binding can land
+  on it). A parameter with no written nominal type (untyped arrow parameter, `Null<Array<T>>`, a std root type) stays
+  reported.
+- Known detection gap, not changed: an else-if chain with no final `else` (`if (a) { x; } else if (b) y();`) is not a
+  finding, although the writer's symmetric mode braces it.

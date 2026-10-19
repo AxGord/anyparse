@@ -490,9 +490,9 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	private static function deepChain(n: Int, glued: Bool): String {
 		final lines: Array<String> = ['class C {', '\tfunction f() {'];
 		inline function link(i: Int): Void {
-			if (glued)
+			if (glued) {
 				lines.push('\t\tif (c$i) step$i();');
-			else {
+			} else {
 				lines.push('\t\tif (c$i)');
 				lines.push('\t\t\tstep$i();');
 			}

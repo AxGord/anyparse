@@ -133,7 +133,18 @@ final class ShadowingLocal implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<ScopeSeams> = seamsOf(plugin.refShape(), false, RULE_ID);
+		return fixWith(source, violations, plugin, false, RULE_ID);
+	}
+
+	/**
+	 * The fix both spellings of the question share, as `collect` is the walk they share: `parameters` picks the family
+	 * the findings are of. A local declaration goes through `shadowFix`'s gates; a PARAMETER goes straight to the rename,
+	 * scoped to the function declaring it.
+	 */
+	public static function fixWith(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, parameters: Bool, ruleId: String
+	): Array<FixEdit> {
+		final seams: Null<ScopeSeams> = seamsOf(plugin.refShape(), parameters, ruleId);
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (seams == null || tree == null) return [];
 		final root: QueryNode = tree;
@@ -146,10 +157,11 @@ final class ShadowingLocal implements Check {
 			typeSources: RunScan.typeInfoOf(plugin)?.declaredTypeSources(source) ?? [],
 			claimed: []
 		};
+		final declKinds: Array<String> = parameters ? scope.paramKinds : scope.localDeclKinds;
 		final edits: Array<FixEdit> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
-			final decl: Null<QueryNode> = span == null ? null : declAt(tree, span, seams.localDeclKinds);
+			final decl: Null<QueryNode> = span == null ? null : declAt(root, span, declKinds);
 			// A finding this call cannot place gets no sentence: one would be invented, not the deciding gate speaking.
 			if (decl != null) switch shadowFix(site, decl) {
 				case Applied(own):
@@ -473,15 +485,20 @@ final class ShadowingLocal implements Check {
 	}
 
 	/**
-	 * `fix`'s answer for the flagged declaration `decl`. Gates in order: the hidden binding is read after `decl` within
-	 * the frame declaring it (then the shadow may be the defect itself, and resolving it would bury the finding); `decl`
-	 * continues another declarator; then the assignment and, failing it, the rename are asked.
+	 * `fix`'s answer for the flagged declaration `decl`. A PARAMETER goes straight to the rename, scoped to the function
+	 * declaring it: it is bound by the call, so no write meant for the hidden binding can land on it (the defect
+	 * `readAfter` guards against), every read inside the function reads the argument whatever the parameter is called,
+	 * and a parameter neither continues a declarator chain nor takes an assignment. For a local, gates in order: the
+	 * hidden binding is read after `decl` within the frame declaring it (then the shadow may be the defect itself, and
+	 * resolving it would bury the finding); `decl` continues another declarator; then the assignment and, failing it, the
+	 * rename are asked.
 	 */
 	private static function shadowFix(site: FixFile, decl: QueryNode): ShadowFix {
 		final path: Null<Array<QueryNode>> = TreePath.pathTo(site.tree, decl);
 		final name: Null<String> = decl.name;
 		final span: Null<Span> = decl.span;
-		if (path == null || name == null || span == null) return Declined(DECLINE_UNPLACED);
+		if (path == null || path.length < 2 || name == null || span == null) return Declined(DECLINE_UNPLACED);
+		if (site.seams.reportParameters) return renameEdits(site, decl, name, span, path[path.length - 2]);
 		final ancestors: Array<QueryNode> = path.slice(0, path.length - 1);
 		final hidden: Null<Hidden> = shadowedBinding(decl, ancestors, site.seams);
 		if (hidden == null) return Declined(DECLINE_UNPLACED);
@@ -491,7 +508,7 @@ final class ShadowingLocal implements Check {
 		if ((site.seams.shape.localDeclContinuationKinds ?? []).contains(decl.kind))
 			return Declined('a continuation declarator: renaming one name of a `var a, b` chain is left to the author');
 		final assignment: Null<FixEdit> = assignmentEdit(site, decl, name, span, hidden, ancestors, hits);
-		return assignment != null ? Applied([assignment]) : renameEdits(site, decl, name, span, hidden);
+		return assignment != null ? Applied([assignment]) : renameEdits(site, decl, name, span, hidden.frame);
 	}
 
 	/**
@@ -586,19 +603,19 @@ final class ShadowingLocal implements Check {
 	}
 
 	/**
-	 * The rename of `decl` to its written type's lower-camel name (`final event:RightPanelEvent` → `rightPanelEvent`),
+	 * The rename of `decl` to its written type's lower-camel name (`final event:SidebarTabEvent` → `sidebarTabEvent`),
 	 * or the gate that refused it: no written nominal type, a name already handed out by this call, a nested function
-	 * in the scope rebinding the name, the name in a string of the scope (code text no resolver reads), and finally
+	 * in `frame` rebinding the name, the name in a string of `frame` (code text no resolver reads), and finally
 	 * `Rename.rename` — the scope-correct rename `hxq rename` runs, which refuses a capture and every resolution blind spot.
+	 * `frame` is the scope the gates read: the hidden binding's frame for a local, the declaring function for a parameter.
 	 */
-	private static function renameEdits(site: FixFile, decl: QueryNode, name: String, span: Span, hidden: Hidden): ShadowFix {
+	private static function renameEdits(site: FixFile, decl: QueryNode, name: String, span: Span, frame: QueryNode): ShadowFix {
 		final shape: RefShape = site.seams.shape;
 		final written: Null<String> = site.typeSources[span.from];
 		final candidate: Null<String> = written == null ? null : typeNamedLocal(written);
 		if (candidate == null || candidate == name || (shape.reservedWords ?? []).contains(candidate))
 			return Declined('no written nominal type names a replacement for "$name"');
 		final newName: String = candidate;
-		final frame: QueryNode = hidden.frame;
 		if (nestedFunctionRebinds(frame, name, site.seams))
 			return Declined('a nested function in its scope declares a parameter "$name", which the rename would have to tell apart');
 		final frameSpan: Null<Span> = frame.span;
@@ -637,7 +654,7 @@ final class ShadowingLocal implements Check {
 
 	/**
 	 * The local name a declaration written with type `written` takes: the lower-camel of its simple nominal
-	 * (`events.RightPanelEvent` → `rightPanelEvent`), or null for anything else — a type argument, a function or
+	 * (`events.SidebarTabEvent` → `sidebarTabEvent`), or null for anything else — a type argument, a function or
 	 * structure type, a name not starting upper-case, and a std root type (`TypeNameBinding.AMBIENT_TYPE_NAMES`:
 	 * `int` / `string` would name a type, not the value).
 	 */

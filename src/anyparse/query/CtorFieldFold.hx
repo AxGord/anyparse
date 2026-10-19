@@ -291,9 +291,9 @@ final class CtorFieldFold {
 		final condHole: Span = new Span(head.length, head.length + condText.length);
 		final folded: String = '$head$condText ? $valueText : $elseText${init.terminator}';
 		final edits: Array<{ span: Span, text: String }> = [{ span: decl.initDrop, text: '' }];
-		if (init.sole)
+		if (init.sole) {
 			edits.push({ span: init.ifStmt, text: guardedText(source, init.ifStmt, folded, condHole, plugin) });
-		else {
+		} else {
 			final at: Span = new Span(guardFrom, guardFrom);
 			edits.push({ span: at, text: guardedText(source, at, '$folded\n', condHole, plugin) });
 			edits.push({ span: ElementSpan.lineExtendedSpan(source, init.assignStmt), text: '' });

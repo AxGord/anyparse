@@ -632,8 +632,7 @@ final class StripCommand implements CliCommand {
 		if (combinedOk && !baselineOk) {
 			final anyIsolatedOk: Bool = isolatedResults.exists(r -> r.ok);
 			if (anyIsolatedOk) {
-				var soleCount: Int = 0;
-				for (r in isolatedResults) if (r.ok) soleCount++;
+				final soleCount: Int = isolatedResults.count(r -> r.ok);
 				CliIo.sysPrint(
 					'VERDICT $soleCount of $patternCount pattern${CliIo.plural(patternCount)}'
 					+ ' unblock alone — the rest are redundant (or compose into a tighter slice).\n'

@@ -180,7 +180,7 @@ final class UsingScan {
 	): Bool {
 		final scope: UsingScope = usingScopeAt(header, module, [for (e in edits) e.span.from]);
 		if (scope == UsingScope.Guarded) {
-			for (violation in violations) violation.declineReason = guardedUsingDecline(module, FILE_WIDE_SUBJECT);
+			for (violation in violations) violation.declineReason = guardedUsingDecline(module);
 			return false;
 		}
 		if (scope == UsingScope.Absent) {
@@ -196,7 +196,7 @@ final class UsingScan {
 	 * leaves one of its call sites out — one sentence, in one place, so every rule sharing the gate
 	 * reports the same fact and a reader who has met it once recognises it from any of them.
 	 */
-	public static function guardedUsingDecline(module: String, subject: String): String {
+	public static function guardedUsingDecline(module: String, subject: String = FILE_WIDE_SUBJECT): String {
 		return 'the file declares `using $module` only inside a `#if` region $subject sits outside of, so the extension call'
 			+ ' would not resolve in the builds that region is compiled out of, and a second unguarded `using` would change'
 			+ ' what the region\'s own calls resolve to';

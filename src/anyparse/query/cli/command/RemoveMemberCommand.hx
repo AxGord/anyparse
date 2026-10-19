@@ -102,11 +102,11 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 						CliIo.stderr('apq remove-member: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (memberName == null)
+					} else if (memberName == null) {
 						memberName = a;
-					else {
+					} else {
 						CliIo.stderr('apq remove-member: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}

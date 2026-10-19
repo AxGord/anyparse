@@ -592,10 +592,7 @@ class WrapList {
 	 * (the axis omitted) counts 0.
 	 */
 	public static function countComplexItems(kinds: Null<Array<Int>>): Int {
-		if (kinds == null) return 0;
-		var n: Int = 0;
-		for (kind in kinds) if (kind == KIND_CALL || kind == KIND_CONTAINER) n++;
-		return n;
+		return kinds == null ? 0 : kinds.count(kind -> kind == KIND_CALL || kind == KIND_CONTAINER);
 	}
 
 	/**

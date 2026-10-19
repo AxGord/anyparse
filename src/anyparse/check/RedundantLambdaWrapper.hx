@@ -519,9 +519,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 	}
 
 	private static function countParams(decl: QueryNode, seams: Seams): Int {
-		var count: Int = 0;
-		for (c in decl.children) if (seams.paramKinds.contains(c.kind)) count++;
-		return count;
+		return decl.children.count(c -> seams.paramKinds.contains(c.kind));
 	}
 
 	/** Whether every declared parameter is required, undefaulted and non-rest — the shape a method value keeps. */

@@ -11,6 +11,8 @@ import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
+
 /**
  * The `avoid-dynamic` DynamicAccess bag FIX (`fixWithOracle`, D4). A `Dynamic` LOCAL /
  * private plain FIELD used exclusively as a string-keyed reflect bag whose values unify to
@@ -120,8 +122,7 @@ class AvoidDynamicBagFixTest extends Test {
 		final src: String = 'using Reflect;\nimport haxe.DynamicAccess;\nclass C {\n\tfunction f():Dynamic {\n'
 			+ '\t\tfinal bag:Dynamic = {};\n\t\tbag.setField("a", "x");\n\t\treturn bag;\n\t}\n}';
 		final e: Array<{ span: Span, text: String }> = edits(src, new FakeTypeOracle(null));
-		var importEdits: Int = 0;
-		for (ed in e) if (ed.text.indexOf('import haxe.DynamicAccess;') != -1) importEdits++;
+		final importEdits: Int = e.count(ed -> ed.text.indexOf('import haxe.DynamicAccess;') != -1);
 		Assert.equals(0, importEdits);
 	}
 

@@ -174,13 +174,13 @@ final class SetDocCommand implements CliCommand implements PostWriteFix {
 						CliIo.stderr('apq set-doc: unknown option "$a"\n');
 						return setDocParseExit(EXIT_USAGE);
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (pos == null && selectExpr == null && matchExpr == null && CliArgs.isPosSpec(a))
+					} else if (pos == null && selectExpr == null && matchExpr == null && CliArgs.isPosSpec(a)) {
 						pos = a;
-					else if (docText == null)
+					} else if (docText == null) {
 						docText = a;
-					else {
+					} else {
 						CliIo.stderr('apq set-doc: unexpected extra argument "$a"\n');
 						return setDocParseExit(EXIT_USAGE);
 					}
