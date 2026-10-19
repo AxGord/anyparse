@@ -243,7 +243,8 @@ final class DeferredArms {
 		'M-TAIL-TERNARY-UNREAD :: anyparse.macro.TriviaTailRehome#altTail',
 		'M-TAIL-PREFIX-UNREAD :: anyparse.macro.TriviaTailRehome#altTail',
 		'M-TAIL-OPERAND-UNREAD :: anyparse.macro.TriviaTailRehome#altTail',
-		'M-REGION-UNNAMED :: anyparse.macro.WriterKwRefLowering#kwRefFinalDoc'
+		'M-REGION-UNNAMED :: anyparse.macro.WriterKwRefLowering#kwRefFinalDoc',
+		'M-REGION-SEAMS-BOUNDED :: anyparse.macro.TriviaTryparseLowering#triviaTryparseWrapDispatchExpr'
 	];
 
 }

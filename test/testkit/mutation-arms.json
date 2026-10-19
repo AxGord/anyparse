@@ -27037,6 +27037,14 @@
 			"find": "case BodyGroup(_) if (!throughBodies):",
 			"replace": "case BodyGroup(_) if (false):",
 			"note": "the walk descends fit bodies whatever the caller asked"
+		},
+		{
+			"name": "M-REGION-SEAMS-BOUNDED",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseWrapDispatchExpr",
+			"find": "? macro (opt.conditionalExprFit ? $finalWrapDocs : _dwb($finalWrapDocs))",
+			"replace": "? macro _dwb($finalWrapDocs)",
+			"note": "the elseifs Star of a fit region keeps its force-flat boundary, so inside a glued comprehension body the seams before the #elseif flatten and the ones after it break"
 		}
 	]
 }

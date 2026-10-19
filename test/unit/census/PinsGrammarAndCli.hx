@@ -194,6 +194,8 @@ final class PinsGrammarAndCli {
 			+ 'M-REGION-UNNAMED,M-REGION-SEAMS-SOFT,M-REGION-MARK-ALWAYS',
 		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAComprehensionBodyRegionUnderAnArrowSettlesInOneWrite :: control :: '
 			+ 'M-REGION-OFFER-THROUGH-BODIES,M-NESTED-THROUGH-BODIES',
+		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAnElseifRegionInAComprehensionSettlesInOneWrite :: control :: '
+			+ 'M-REGION-SEAMS-BOUNDED',
 		'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured :: control :: '
 			+ 'M-WORDOP-NO-RESTORE',
 		'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionCollapsesEmptyCatchBody :: control :: '

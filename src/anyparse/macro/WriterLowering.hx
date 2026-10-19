@@ -2530,6 +2530,12 @@ typedef TryparseStarCtx = {
 	final tryparseBlockEndedTrailEmit: Expr;
 	final lastTrailTerminatorEmit: Expr;
 	final finalWrapDocs: Expr;
+
+	/**
+	 * The Star's seams are a `conditionalExprFit` region's (`@:fmt(condExprFitBreak)`): its default terminal skips the
+	 * force-flat boundary while the knob is on, so the seams follow the one region group's mode.
+	 */
+	final regionSeams: Bool;
 	final forceInlineSep: Bool;
 	final elemSelfTrailsNewline: Bool;
 
