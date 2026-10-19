@@ -11960,9 +11960,9 @@
 		{
 			"name": "M-TS-ARG-UNBOUND",
 			"type": "anyparse.check.ArgumentValues",
-			"method": "bind",
-			"find": "valueOf(args[at], edge.file, callerNames, valuation)",
-			"replace": "UNKNOWN",
+			"method": "valueOver",
+			"find": ": valueOf(arg, call, keepStrings);",
+			"replace": ": UNKNOWN;",
 			"note": "a literal argument hands its callee nothing known, so a branch the call rules out still runs"
 		},
 		{
@@ -11977,7 +11977,7 @@
 			"name": "M-TS-ARG-PARAM-UNREAD",
 			"type": "anyparse.check.ArgumentValues",
 			"method": "valueOf",
-			"find": "if (at >= 0) return valuation.charAt(at);",
+			"find": "if (at >= 0) return call.valuation.charAt(at);",
 			"replace": "",
 			"note": "a parameter handed on bare carries nothing its caller knew, so `load = false` is lost one call down"
 		},
@@ -11991,10 +11991,10 @@
 		},
 		{
 			"name": "M-TS-SKIP-UNCHECKED",
-			"type": "anyparse.check.ArgumentValues",
-			"method": "maySkip",
-			"find": "args.length != params.length",
-			"replace": "false",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "fit",
+			"find": "a == p || (widens[a] ?? []).contains(p) ? Fits : Misfits",
+			"replace": "Fits",
 			"note": "arguments bind by position even where Haxe skips an optional parameter by type, so `work(true)` reads as leaving `sleep` at its default"
 		},
 		{
@@ -19136,25 +19136,9 @@
 			"name": "M-TS-FOLD-SITE-LOCK",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "covers",
-			"find": "&& (sameLock(by, own) && oneThread(by, own) || nests(by, own) || way.contains(by.hold.edge.from));",
-			"replace": ";",
-			"note": "a hold of any lock across the same sink call covers another, though narrowing one frees nothing of the other"
-		},
-		{
-			"name": "M-TS-FOLD-SITE-THREAD",
-			"type": "anyparse.check.RootCauseFold",
-			"method": "covers",
-			"find": "sameLock(by, own) && oneThread(by, own)",
-			"replace": "sameLock(by, own)",
-			"note": "a hold of a lock covers another of it in another function across threads, though each thread stalls the main one by itself"
-		},
-		{
-			"name": "M-TS-FOLD-SITE-ONE-ORIGIN",
-			"type": "anyparse.check.RootCauseFold",
-			"method": "oneThread",
-			"find": "return covered.length > 0 && covered.foreach(t -> covering.contains(t));",
-			"replace": "return covered.length == 1 && covering.length == 1 && covered[0] == covering[0];",
-			"note": "a hold covers another of its lock only when both run on one origin alone, though a hold running wherever the covered one does reports its stall"
+			"find": "&& (nests(by, own) || way.contains(by.hold.edge.from));",
+			"replace": "&& true;",
+			"note": "any hold across the same sink call covers, so a hold of another lock, or of the same lock in another function, folds onto it"
 		},
 		{
 			"name": "M-TS-REPEATED-BY-OFF",
@@ -19203,14 +19187,6 @@
 			"find": "'${span.from}:${span.to}'",
 			"replace": "'${span.from}'",
 			"note": "a lock-call site is keyed by its start, so a call a give is made on passes as lock traffic"
-		},
-		{
-			"name": "M-TS-ORIGIN-STATES",
-			"type": "anyparse.check.ThreadStates",
-			"method": "workerStep",
-			"find": "_conditions.carried(e, valuation, ThreadSafety.CTX_BG)",
-			"replace": "ThreadSafety.CTX_BG",
-			"note": "a worker origin flows along every call whatever valuation the worker hands down"
 		},
 		{
 			"name": "M-TS-FOLD-UNNAMED-SAME",
@@ -21453,7 +21429,7 @@
 		{
 			"name": "M-TS-SKIP-DEFAULT",
 			"type": "anyparse.query.CallGraphNames",
-			"method": "paramsOf",
+			"method": "paramsBy",
 			"find": "&& !params[skippable].children.exists(c -> !annotationKinds.contains(c.kind))",
 			"replace": "",
 			"note": "a parameter with a default value is not skippable"
@@ -25184,21 +25160,21 @@
 			"name": "M-BINDER-ARGUMENT-REST",
 			"type": "anyparse.check.OperandBinder",
 			"method": "argumentType",
-			"find": "params.rest ? Std.int(Math.min(at, params.params.length - 1)) : at",
-			"replace": "at",
+			"find": "params.rest ? Std.int(Math.min(index, params.params.length - 1)) : index",
+			"replace": "index",
 			"note": "an argument past a rest parameter's position binds no parameter"
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-SKIPPABLE",
 			"type": "anyparse.check.OperandBinder",
 			"method": "argumentType",
-			"find": "written == null || bound >= params.skippableFrom ? null",
-			"replace": "written == null ? null",
+			"find": "written == null || bound >= params.skippableFrom",
+			"replace": "written == null",
 			"note": "a lambda after an optional or defaulted parameter is typed by the parameter at its position, which the call may have skipped"
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-OVERLOAD",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "selectsItsSignature",
 			"find": " && !m.hasOverloadMeta",
 			"replace": "",
@@ -25206,7 +25182,7 @@
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-TWIN",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.OperandCallees",
 			"method": "selectsItsSignature",
 			"find": "owner.members.filter(o -> o.name == m.name).length == 1 && ",
 			"replace": "",
@@ -25216,8 +25192,8 @@
 			"name": "M-BINDER-ARGUMENT-SCOPE",
 			"type": "anyparse.check.OperandBinder",
 			"method": "argumentType",
-			"find": "{ text: written, at: fnFrom }",
-			"replace": "{ text: written, at: call.span?.from ?? fnFrom }",
+			"find": "at: callee.at,",
+			"replace": "at: call.span?.from ?? callee.at,",
 			"note": "a callee parameter is bound where the CALL is, so the callee's own type parameter binds a namesake class"
 		},
 		{
@@ -26427,6 +26403,222 @@
 			"find": "ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source)",
 			"replace": "CliArgs.pickPlugin(lang)",
 			"note": "the op reads the file with no project resolution scope, so the insert seat takes every wildcard for a run boundary and places the import where the import-order rule does not"
+		},
+		{
+			"name": "M-SLOTS-FIT-SKIPS",
+			"type": "anyparse.query.ArgumentSlots",
+			"method": "step",
+			"find": "if (p.optional && !p.rest && fit != Fits) step(walk, arg, param + 1);",
+			"replace": "if (p.optional && !p.rest) step(walk, arg, param + 1);",
+			"note": "an argument that fits an optional parameter may also skip it, so `f(?a:Int, ?b:String, c:Int)` called `f(1)` reads as binding `c`"
+		},
+		{
+			"name": "M-SLOTS-MISFIT-BINDS",
+			"type": "anyparse.query.ArgumentSlots",
+			"method": "step",
+			"find": "if (fit != Misfits) {",
+			"replace": "if (true) {",
+			"note": "an argument binds a parameter it misfits, so `g(true)` keeps `true` in `?a:Int` as well"
+		},
+		{
+			"name": "M-SLOTS-MAYFIT-BINDS-ONLY",
+			"type": "anyparse.query.ArgumentSlots",
+			"method": "step",
+			"find": "fit != Fits) step(walk, arg, param + 1);",
+			"replace": "fit == Misfits) step(walk, arg, param + 1);",
+			"note": "an undecided fit only binds, so the way the compiler skips the parameter is lost"
+		},
+		{
+			"name": "M-SLOTS-MANDATORY-MISFIT",
+			"type": "anyparse.query.ArgumentSlots",
+			"method": "step",
+			"find": "if (p.optional && !p.rest && fit != Fits)",
+			"replace": "if (!p.rest && fit != Fits)",
+			"note": "a mandatory parameter an argument misfits is skipped, so a call that cannot compile reads as binding the next one"
+		},
+		{
+			"name": "M-SLOTS-UNBOUND-MANDATORY",
+			"type": "anyparse.query.ArgumentSlots",
+			"method": "step",
+			"find": "for (p in param ... params.length) if (!params[p].optional && !params[p].rest) return;",
+			"replace": "",
+			"note": "a run leaving a mandatory parameter unbound is kept"
+		},
+		{
+			"name": "M-SLOTS-REST-ONCE",
+			"type": "anyparse.query.ArgumentSlots",
+			"method": "step",
+			"find": "step(walk, arg + 1, p.rest ? param : param + 1);",
+			"replace": "step(walk, arg + 1, param + 1);",
+			"note": "a rest parameter takes one argument only"
+		},
+		{
+			"name": "M-SLOTS-OVERFLOW-PARTIAL",
+			"type": "anyparse.query.ArgumentSlots",
+			"method": "runs",
+			"find": "return walk.overflow ? null : walk.out;",
+			"replace": "return walk.out;",
+			"note": "past MAX_RUNS the runs found so far are answered as all of them"
+		},
+		{
+			"name": "M-TS-NEW-UNBOUND",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "bind",
+			"find": "edge.kind != Call && edge.kind != Virtual && edge.kind != New",
+			"replace": "edge.kind != Call && edge.kind != Virtual",
+			"note": "a construction hands its constructor nothing known, so `new W(false)` runs the branch `false` rules out"
+		},
+		{
+			"name": "M-TS-NULL-DEFAULT-UNREAD",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "valueOver",
+			"find": "arg == null || hasDefault(param) && _types.unwrap(arg).kind == _shape.nullLiteralKind",
+			"replace": "arg == null",
+			"note": "a `null` handed to a parameter with a default reads as null, though the default applies"
+		},
+		{
+			"name": "M-TS-STRING-ATOM-OFF",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "stringValue",
+			"find": "final text: Null<String> = keepStrings ? plainText(node) : null;",
+			"replace": "final text: Null<String> = null;",
+			"note": "a string literal hands only \"never null\", so the affix guard it decides stays open"
+		},
+		{
+			"name": "M-TS-AFFIX-USINGS-UNCHECKED",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "bindingUsing",
+			"find": "if (hosts.exists(h -> h.type.members.exists(m -> extendsAs(m, method)))) return { path: path, hosts: hosts };",
+			"replace": "",
+			"note": "a later `using` declaring the affix method itself is passed over, so its guard is decided by StringTools"
+		},
+		{
+			"name": "M-TS-ARG-SETS-UNKNOWN",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "bind",
+			"find": "if (runs == null || runs.length == 0) return unknownValuation;",
+			"replace": "if (runs == null || runs.length != 1) return unknownValuation;",
+			"note": "a call that may bind two ways hands nothing known, though every way decides the guard alike"
+		},
+		{
+			"name": "M-TS-AFFIX-UNREAD",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "factsOf",
+			"find": "final affix: Null<AffixTest> = _values.stringPredicate(fnId, cond);",
+			"replace": "final affix: Null<AffixTest> = null;",
+			"note": "a string affix guard fixes nothing, so the branch an `.svg` id rules out still runs"
+		},
+		{
+			"name": "M-ARGFIT-UNKNOWN-MISFITS",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "fit",
+			"find": "sameNamedType(given.text, wanted, callerId, calleeId) ? Fits : MayFit;",
+			"replace": "sameNamedType(given.text, wanted, callerId, calleeId) ? Fits : Misfits;",
+			"note": "a type the fit cannot decide misfits, so a string an abstract takes through `@:from` reads as skipping it"
+		},
+		{
+			"name": "M-ARGTYPE-STATIC-OFF",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "accessType",
+			"find": "final m: Null<MemberInfo> = type == null || !_graph.types.isStatic(type, name) ? null : _graph.types.memberOnChain(type, name);",
+			"replace": "final m: Null<MemberInfo> = null;",
+			"note": "a static field read off a type name is untyped"
+		},
+		{
+			"name": "M-WALK-ARITHMETIC-OFF",
+			"type": "anyparse.query.NominalTypes",
+			"method": "arithmeticType",
+			"find": "final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>> = host.arithmetic;",
+			"replace": "final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>> = null;",
+			"note": "arithmetic is untyped by the shared walk"
+		},
+		{
+			"name": "M-BINDER-CALLEE-MEMBER-OFF",
+			"type": "anyparse.check.OperandCallees",
+			"method": "calleeParams",
+			"find": ": memberCallParams(binder, callee.children[0], name, call);",
+			"replace": ": null;",
+			"note": "`recv.m(…)` selects no parameter list, so a lambda handed to a member of another file stays untyped"
+		},
+		{
+			"name": "M-BINDER-CALLEE-NEW-OFF",
+			"type": "anyparse.check.OperandCallees",
+			"method": "calleeParams",
+			"find": "if (call.kind == binder._shape.newExprKind) return constructionParams(binder, call);",
+			"replace": "if (call.kind == binder._shape.newExprKind) return null;",
+			"note": "a construction selects no parameter list, so a lambda handed to a constructor stays untyped"
+		},
+		{
+			"name": "M-BINDER-CALLEE-INHERITED-OFF",
+			"type": "anyparse.check.OperandCallees",
+			"method": "bareCallParams",
+			"find": "? null : memberParams(binder, declared, [], 0, []);",
+			"replace": "? null : null;",
+			"note": "a bare call to an inherited member selects no parameter list"
+		},
+		{
+			"name": "M-BINDER-CALLEE-LOCAL-OFF",
+			"type": "anyparse.check.OperandCallees",
+			"method": "bareCallParams",
+			"find": "final local: Bool = ShapeVocab.localFunctionScopeKinds(binder._shape).contains(fn.kind);",
+			"replace": "final local: Bool = false;",
+			"note": "a call to a local function selects no parameter list"
+		},
+		{
+			"name": "M-BINDER-OWNER-BINDINGS-OFF",
+			"type": "anyparse.check.OperandCallees",
+			"method": "memberCallParams",
+			"find": ": memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);",
+			"replace": ": memberParams(binder, declared, [], 0, []);",
+			"note": "the receiver's type arguments bind nothing, so `Box<Use>.each`'s `T` stays unbound"
+		},
+		{
+			"name": "M-BINDER-LOCATED-HOST-OFF",
+			"type": "anyparse.check.OperandBinder",
+			"method": "locatedTier",
+			"find": "final host: Null<WrittenHost> = written.host;",
+			"replace": "final host: Null<WrittenHost> = null;",
+			"note": "a callee's parameter type is bound in the calling file, where the callee's private type means nothing"
+		},
+		{
+			"name": "M-BINDER-METHOD-SHADOWS-OFF",
+			"type": "anyparse.check.OperandCallees",
+			"method": "memberParams",
+			"find": "if (!m.typeParamNames.contains(k)) k => v",
+			"replace": "k => v",
+			"note": "a method's own type parameter does not shadow its type's, so `Box<Use>.shadow<T>` reads `T` as `Use`"
+		},
+		{
+			"name": "M-BINDER-CALLEE-OVERLOAD",
+			"type": "anyparse.check.OperandCallees",
+			"method": "memberParams",
+			"find": "if (!OperandBinder.typedByItsReturn(m) || m.isOverload",
+			"replace": "if (m.isOverload",
+			"note": "an `@:overload` member of another file is read by its written signature, which the call may not select"
+		},
+		{
+			"name": "M-BINDER-ITERABLE-OFF",
+			"type": "anyparse.check.OperandCallees",
+			"method": "iterableBinding",
+			"find": "final iterable: Null<String> = binder._shape.iterableTypeName;",
+			"replace": "final iterable: Null<String> = null;",
+			"note": "a std Iterable parameter binds nothing, so `xs.iter(c -> …)`'s `c` stays untyped"
+		},
+		{
+			"name": "M-BINDER-ITERABLE-ANY-TYPE",
+			"type": "anyparse.check.OperandCallees",
+			"method": "iterableBinding",
+			"find": "if (i < args.length && stdNamed(binder, path, binder._file, name))",
+			"replace": "if (i < args.length)",
+			"note": "any generic type binds an Iterable's element, a haxe.ds.Vector included"
+		},
+		{
+			"name": "M-TS-INIT-SITE-UNREAD",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "argumentsAt",
+			"find": "_trees.ofEdge(edge) ?? _trees.ofFile(edge.file)",
+			"replace": "_trees.ofEdge(edge)",
+			"note": "a call or construction in a field initializer hands nothing known, since no function the tree holds runs it"
 		},
 		{
 			"name": "M-REACH-HOMES-RECORDED",

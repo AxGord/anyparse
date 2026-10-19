@@ -105,27 +105,7 @@ final class CallGraphNames {
 	 * (`TypeInfoProvider.declaredTypeSources`).
 	 */
 	public static function paramsOf(fn: QueryNode, sources: Map<Int, String>, shape: RefShape): DeclaredParams {
-		final paramKinds: Array<String> = shape.paramKinds ?? [];
-		final params: Array<QueryNode> = [for (c in fn.children) if (paramKinds.contains(c.kind)) c];
-		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
-		final optionalKind: Null<String> = shape.optionalParamKind;
-		// `?p` and `p = v` alike are skippable; a grammar naming no optional kind may skip any
-		var skippable: Int = 0;
-		while (
-			optionalKind != null && skippable < params.length && params[skippable].kind != optionalKind
-			&& !params[skippable].children.exists(c -> !annotationKinds.contains(c.kind))
-		)
-			skippable++;
-		return {
-			skippableFrom: skippable,
-			params: [
-				for (c in params) {
-					final at: Null<Span> = c.span;
-					at == null ? null : sources[at.from];
-				}
-			],
-			rest: params.length > 0 && params[params.length - 1].kind == shape.restParamKind
-		};
+		return paramsBy(fn, sources, shape.paramKinds ?? [], shape.typeAnnotationKinds ?? [], shape.optionalParamKind, shape.restParamKind);
 	}
 
 	/** `a.b.C.m` → last `count` dot-segments joined (`C.m` for count 2). */
@@ -174,6 +154,34 @@ final class CallGraphNames {
 		return switch t.shape {
 			case Nominal(path, _): names.contains(path);
 			case _: false;
+		};
+	}
+
+	/**
+	 * The parameters `fn` declares (`paramsOf`), read by the grammar's parameter kinds, its annotation kinds, its optional
+	 * and its rest parameter kind — what the index records of every member it holds (`MemberInfo.paramSkippableFrom`).
+	 */
+	public static function paramsBy(
+		fn: QueryNode, sources: Map<Int, String>, paramKinds: Array<String>, annotationKinds: Array<String>, optionalKind: Null<String>,
+		restKind: Null<String>
+	): DeclaredParams {
+		final params: Array<QueryNode> = [for (c in fn.children) if (paramKinds.contains(c.kind)) c];
+		// `?p` and `p = v` alike are skippable; a grammar naming no optional kind may skip any
+		var skippable: Int = 0;
+		while (
+			optionalKind != null && skippable < params.length && params[skippable].kind != optionalKind
+			&& !params[skippable].children.exists(c -> !annotationKinds.contains(c.kind))
+		)
+			skippable++;
+		return {
+			skippableFrom: skippable,
+			params: [
+				for (c in params) {
+					final at: Null<Span> = c.span;
+					at == null ? null : sources[at.from];
+				}
+			],
+			rest: params.length > 0 && params[params.length - 1].kind == restKind
 		};
 	}
 

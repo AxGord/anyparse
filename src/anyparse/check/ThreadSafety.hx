@@ -248,7 +248,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			reported: reported,
 			enclosed: dominance.enclosed,
 			writes: writes,
-			threads: states.origins(inertRef),
 			suppressed: suppressed
 		}, states, violations);
 		reportThrowHeld(graph, writes, acquires.concat(helperHolds), throws, violations);
@@ -740,7 +739,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			reported: Map<String, Violation>,
 			enclosed: (LockAcquire) -> Bool,
 			writes: FieldWrites,
-			threads: (String) -> Array<String>,
 			suppressed: (Violation) -> Bool
 		},
 		states: ThreadStates, violations: Array<Violation>
@@ -807,7 +805,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		foldEnclosed(reported, judged.enclosed, covers, judged.suppressed);
 		// a multi-lock helper's give is its caller's release, as `solveLongLocks` reads it: it makes no lock long
 		final crossing: Array<String> = [for (c in sites.crossing) if (!sites.helpers.contains(c.edge.from)) c.lock];
-		new RootCauseFold(crossing, covers, judged.threads, judged.suppressed).fold(folds);
+		new RootCauseFold(crossing, covers, judged.suppressed).fold(folds);
 	}
 
 	/**

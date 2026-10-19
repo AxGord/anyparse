@@ -14,6 +14,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -37,7 +38,8 @@ using Lambda;
  *  - a lambda's parameter written with no type: the parameter of the function type the lambda is
  *    expected to be, read by the expected-type engine every typer shares (`ExpectedTypes`, over
  *    `EXPECTATION`) — through a declaration's or an assigned binding's annotation, a function's written
- *    result, an anonymous structure's field and the parameter of a bare call to a member of this file.
+ *    result, an anonymous structure's field and the parameter of a callee the call selects, where the
+ *    callee is written and with the type parameters the call binds there (`OperandCallees`).
  *
  * Everything else is `Unknown`: an inherited member, a receiver no rule above types, a member whose
  * type is not written. A built-in candidate among several drops out of a `Bound` answer, since it can
@@ -62,15 +64,16 @@ final class OperandBinder {
 		element: null,
 		call: (node, b) -> b.callTier(node),
 		construction: (node, b) -> b.constructionTier(node),
+		arithmetic: null,
 		reading: b -> b._reading
 	};
 
 	/**
-	 * The binder's answers to the expected-type engine (`ExpectedTypes`): each a type written in THIS file, with the offset it
-	 * is written at, so it binds with the type parameters in scope there (`writtenTier`). A declaration's annotation, an
-	 * assigned binding's, a function's written result, the parameter of a bare call to a member of this file
-	 * (`argumentType`), an anonymous structure's field. No container element: the binder holds no proof that a written
-	 * `Array` is the standard one whose element it would read.
+	 * The binder's answers to the expected-type engine (`ExpectedTypes`): each a type with where it is written — this file
+	 * or the one declaring a callee, at an offset, so it binds with the type parameters in scope there, a type parameter the
+	 * call binds read as what binds it (`locatedTier`). A declaration's annotation, an assigned binding's, a function's
+	 * written result, the parameter of a callee the call selects (`argumentType`), an anonymous structure's field. No
+	 * container element: the binder holds no proof that a written `Array` is the standard one whose element it would read.
 	 */
 	private static final EXPECTATION: ExpectationHost<Located, OperandBinder> = {
 		declared: (holder, b) -> b.annotationOf(holder.span?.from),
@@ -80,7 +83,12 @@ final class OperandBinder {
 		element: (_, _) -> null,
 		field: (outer, name, b) -> b.anonField(outer, name),
 		read: (written, b) -> b._index.typeSyntax(written.text),
-		part: (of, text, _) -> {text: text, at: of.at }
+		part: (of, text, _) -> {
+			text: text,
+			at: of.at,
+			host: of.host,
+			bindings: of.bindings
+		}
 	};
 
 	/** The binding offsets whose unannotated type the walk is reading right now (`TypingHost.reading`). */
@@ -297,40 +305,29 @@ final class OperandBinder {
 		);
 		final at: Int = lambda.children.filter(c -> (_shape.paramKinds ?? []).contains(c.kind)).indexOf(param);
 		final written: Null<Located> = types == null || at < 0 ? null : types[at];
-		return written == null ? null : writtenTier(written.text, written.at);
+		return written == null ? null : locatedTier(written);
 	}
 
 	/**
-	 * The parameter the argument `at` of `call` binds — for a bare call to a member this file declares once, whose written
-	 * signature is the one every call selects (no `@:overload`: 4.3.7 retypes the lambda against the next signature when the
-	 * first fails): its written type, at the member's declaration, so the callee's type parameters are in scope there. Every
-	 * argument from a rest parameter's position on binds that parameter. Null where a parameter before the one bound may be
-	 * skipped (optional, or carrying a default value: 4.3.7 tries the lambda against it first), and for every other callee —
-	 * a local function, a member of another file, an inherited one, a construction (follow-ups: those need the declaration's
-	 * parameter list read where it is written).
+	 * The parameter the argument `at` of the call or construction `call` binds: its written type where the callee declares it,
+	 * the type parameters the call binds there (`calleeParams`) — every argument from a rest parameter's position on binding
+	 * that parameter. Null where that parameter, or one before it, may be skipped (optional, or carrying a default value:
+	 * 4.3.7 tries the lambda against it first), and for a callee `calleeParams` does not read.
 	 */
 	private function argumentType(call: QueryNode, at: Int): Null<Located> {
-		if (call.kind != _shape.callKind || call.children.length == 0) return null;
-		final fn: Null<QueryNode> = hitOf(call.children[0])?.bindingNode;
-		final member: Null<MemberInfo> = fn == null || !_fnKinds.contains(fn.kind) ? null : memberAt(fn);
-		final fnFrom: Null<Int> = fn?.span?.from;
-		if (fn == null || member == null || fnFrom == null) return null;
-		if (!selectsItsSignature(member)) return null;
-		final params: DeclaredParams = CallGraphNames.paramsOf(fn, _annotations, _shape);
+		final callee: Null<CalleeParams> = OperandCallees.calleeParams(this, call);
+		if (callee == null) return null;
+		final params: DeclaredParams = callee.params;
+		final index: Int = at + callee.shift;
 		// a rest parameter takes every argument from its position on
-		final bound: Int = params.rest ? Std.int(Math.min(at, params.params.length - 1)) : at;
+		final bound: Int = params.rest ? Std.int(Math.min(index, params.params.length - 1)) : index;
 		final written: Null<String> = bound < params.params.length ? params.params[bound] : null;
-		return written == null || bound >= params.skippableFrom ? null : { text: written, at: fnFrom };
-	}
-
-	/**
-	 * Whether a call to `m`, a member of this file, selects the signature its declaration writes: the one declaration of the
-	 * name in its type (a `#if` twin is another build's signature), carrying no `@:overload`. A macro's parameters are
-	 * expressions and a type parameter binds to nothing in scope, so neither types a lambda by construction.
-	 */
-	private function selectsItsSignature(m: MemberInfo): Bool {
-		final owner: Null<TypeDeclInfo> = _index.fileInfo(_file)?.types.find(t -> t.members.contains(m));
-		return owner != null && owner.members.filter(o -> o.name == m.name).length == 1 && !m.hasOverloadMeta;
+		return written == null || bound >= params.skippableFrom ? null : {
+			text: written,
+			at: callee.at,
+			host: callee.host,
+			bindings: callee.bindings
+		};
 	}
 
 	/** The annotation this file writes for the binding at `from`, at that offset; null for none. */
@@ -350,7 +347,12 @@ final class OperandBinder {
 	private function anonField(outer: Located, name: String): Null<Located> {
 		final peeled: String = NominalTypes.unwrapNullable(outer.text.trim(), _wrappers, _index.typeSyntax);
 		final written: Null<String> = CallGraphNames.anonFieldTypeSource(_index.typeSyntax(peeled), name);
-		return written == null ? null : { text: written, at: outer.at };
+		return written == null ? null : {
+			text: written,
+			at: outer.at,
+			host: outer.host,
+			bindings: outer.bindings
+		};
 	}
 
 	/**
@@ -531,10 +533,44 @@ final class OperandBinder {
 		return !m.hasOverloadMeta && !m.isMacro;
 	}
 
+	/** What the type `written` binds to where it is written (`Located`): a type parameter the call binds read as what binds it. */
+	private function locatedTier(written: Located): Tier {
+		final bound: Null<Located> = written.bindings?.get(StringTools.trim(written.text));
+		if (bound != null) return locatedTier(bound);
+		final host: Null<WrittenHost> = written.host;
+		return host == null
+			? writtenTier(written.text, written.at)
+			: DeclaredNullity.headTierIn(written.text, host.file, written.at, _index, host.params, _wrappers, _builtins);
+	}
+
 }
 
-/** A type written in the binder's file and the offset it is written at, which says what type parameters are in scope. */
-private typedef Located = {
+/**
+ * A type and where it is written: at `at` of the binder's file, or — `host` set — of the file declaring a callee, whose
+ * type parameters in scope there `host` names; a type parameter `bindings` holds is the type the call binds it to.
+ */
+typedef Located = {
 	final text: String;
 	final at: Int;
+	@:optional final host: WrittenHost;
+	@:optional final bindings: Map<String, Located>;
+}
+
+/** The file of the index a type is written in, and the type parameters in scope where it is. */
+typedef WrittenHost = {
+	final file: FileInfo;
+	final params: Array<String>;
+}
+
+/**
+ * The parameter list a call selects (`OperandBinder.calleeParams`): where it is written (`at` of the binder's file, or of
+ * `host`'s), the type parameters the call binds there, and how many parameters come before the first argument's (a static
+ * extension's receiver).
+ */
+typedef CalleeParams = {
+	final params: DeclaredParams;
+	final at: Int;
+	final host: Null<WrittenHost>;
+	final shift: Int;
+	final bindings: Map<String, Located>;
 }

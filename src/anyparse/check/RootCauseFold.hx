@@ -43,12 +43,12 @@ private typedef SiteDoer = {
  * finding names (TM's tree lock, held long by `FolderWatcher.updateInternal`, which `StandardFileSystem.saveXML` waits
  * for under the mutation lock) — or when it ends in a sink call another warned hold is long by too,
  * at least as often — one that repeats under its hold is not covered by a hold reaching it once (TM's
- * `FolderWatcher.updateInternal` walk against `rename`'s one stat) — by a hold of the same lock on every
- * thread the covered one runs on (`ThreadStates.origins` — TM's `StandardFileSystem.loadDrillContent`
- * on the I/O worker is not covered by `getText` on the sync worker), in the same function, or one
- * whose function every way to the call passes (TM's `RemoteFileSystemBase.renameCloudFolderBlocked` over the loop
- * `CloudDatabase.moveCloudFolderSubItemsAction2` runs under its own lock); another lock's hold across the same work elsewhere
- * is a stall of its own. Positive: a lock long by a hand-off, an unresolved call, a release in another
+ * `FolderWatcher.updateInternal` walk against `rename`'s one stat) — that is the covered hold's own: around it
+ * in its function, or one whose function every way to the call passes (TM's
+ * `RemoteFileSystemBase.renameCloudFolderBlocked` over the loop `CloudDatabase.moveCloudFolderSubItemsAction2` runs under
+ * its own lock). Any other hold across the same work — of another lock, or of the same lock in another function, on any
+ * thread — is a stall of its own (TM's `moveCloudFileBlocked`, holding the batch lock across its own stat, beside
+ * `addCloudActionValidated` reaching that stat through `addCloudAction2`). Positive: a lock long by a hand-off, an unresolved call, a release in another
  * function (a multi-lock helper's give excepted: it is its caller's release) or a hold with no finding
  * is not covered, nor is a hold long by what no call of it names. A hold waiting for a lock some hold with no finding reporting
  * its work makes long stays from the start (TM's `StandardFileSystem.getText`, waiting for the tree lock `listFolder` holds),
@@ -94,9 +94,6 @@ final class RootCauseFold {
 	 */
 	private final _covers: Array<{ finding: Violation, by: Array<Violation> }>;
 
-	/** The threads each function runs on, by origin (`ThreadStates.origins`). */
-	private final _threads: (String) -> Array<String>;
-
 	/** Whether a directive in its file silences a finding (`Suppression.silencer`): a silenced warning reports nothing. */
 	private final _suppressed: (Violation) -> Bool;
 
@@ -107,12 +104,10 @@ final class RootCauseFold {
 	private var _warned: Array<FoldHold> = [];
 
 	public function new(
-		crossing: Array<String>, covers: Array<{ finding: Violation, by: Array<Violation> }>, threads: (String) -> Array<String>,
-		suppressed: (Violation) -> Bool
+		crossing: Array<String>, covers: Array<{ finding: Violation, by: Array<Violation> }>, suppressed: (Violation) -> Bool
 	) {
 		_crossing = crossing;
 		_covers = covers;
-		_threads = threads;
 		_suppressed = suppressed;
 	}
 
@@ -309,28 +304,18 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 	/**
 	 * Whether the warned hold `d` makes a sink call another one (at `i`) is long by, as often — repeating along its trail
 	 * where the other's may (`repeated`) —: a hold reaching it once reports no stall of one repeating it under its own lock
-	 * (TM's `FolderWatcher.rename`'s one stat against `updateInternal`'s walk over the whole tree). And it is a hold of the
-	 * same lock — one a member names (`sameLock`) — on every thread the covered one runs on (`oneThread`: on two threads each
-	 * hold stalls the main thread by itself, TM's `StandardFileSystem.loadDrillContent` on the I/O worker against `getText` on
-	 * the sync worker), a hold around the covered one in its function (`nests`), or one whose function every way of the
-	 * covered hold to the call passes. Two holds of different locks one after the other in one function are two stalls.
+	 * (TM's `FolderWatcher.rename`'s one stat against `updateInternal`'s walk over the whole tree). And it is the covered
+	 * hold's own: a hold around it in its function (`nests`), or one whose function every way of the covered hold to the call
+	 * passes — the work is that hold's, done for the covered one. A hold of the same lock in another function, whose own call
+	 * reaches the same sink, is a stall of its own whatever thread runs either: narrowing one hold frees nothing of the
+	 * other (TM's `moveCloudFileBlocked` holding the batch lock across its own `getTimestamp` stat beside
+	 * `addCloudActionValidated`, which reaches that stat through `addCloudAction2`). Two holds of different locks one after
+	 * the other in one function are two stalls.
 	 */
 	private function covers(d: SiteDoer, i: Int, repeated: Bool, way: Array<String>): Bool {
 		final by: FoldHold = _warned[d.at];
 		final own: FoldHold = _warned[i];
-		return d.at != i && (d.repeated || !repeated)
-			&& (sameLock(by, own) && oneThread(by, own) || nests(by, own) || way.contains(by.hold.edge.from));
-	}
-
-	/**
-	 * Whether every thread the covered hold `own` runs on runs the covering hold `by` too: the origins of the function
-	 * taking `own` (`ThreadStates.origins`) are some and all among `by`'s — positive: a hold no known thread runs
-	 * shares none.
-	 */
-	private function oneThread(by: FoldHold, own: FoldHold): Bool {
-		final covering: Array<String> = _threads(by.hold.edge.from);
-		final covered: Array<String> = _threads(own.hold.edge.from);
-		return covered.length > 0 && covered.foreach(t -> covering.contains(t));
+		return d.at != i && (d.repeated || !repeated) && (nests(by, own) || way.contains(by.hold.edge.from));
 	}
 
 	/**

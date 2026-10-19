@@ -557,6 +557,8 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyConditionsTest#testABareNeverInvokesNameMatchesAnUnresolvedCall :: control :: M-TS-NEVER-INVOKES-BY-NAME',
 		'unit.check.ThreadSafetyConditionsTest#testABoolLiteralArgumentDecidesTheCalleesBranch :: control :: '
 			+ 'M-TS-ARG-UNBOUND,M-TS-STATES-UNCONDITIONED',
+		'unit.check.ThreadSafetyConditionsTest#testAConstructionArgumentDecidesTheConstructorsBranch :: control :: M-TS-NEW-UNBOUND',
+		'unit.check.ThreadSafetyConditionsTest#testAFieldInitializersConstructionBindsItsArguments :: control :: M-TS-INIT-SITE-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testAFinalLocalDecidesOnlyTheReadsItBinds :: control :: M-TS-COND-LOCAL-ANY-BLOCK',
 		'unit.check.ThreadSafetyConditionsTest#testAHandlerHandedToANeverInvokesTargetRunsNowhereFromThere :: control :: '
 			+ 'M-TS-NEVER-INVOKES-BY-TARGET',
@@ -565,6 +567,7 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyConditionsTest#testAHoldAcrossACallBlockingOnlyOnAnotherThreadIsQuiet :: control :: '
 			+ 'M-TS-TAINT-UNCONDITIONED',
 		'unit.check.ThreadSafetyConditionsTest#testAMainThreadCheckPropertyIsReadThroughItsGetter :: control :: M-TS-MAIN-CHECK-NO-GETTER',
+		'unit.check.ThreadSafetyConditionsTest#testANullArgumentToAParameterWithADefaultLeavesTheDefault :: control :: M-TS-NULL-DEFAULT-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testANullTestOfALocalTheCheckChoseIsTheChecksAnswer :: control :: M-TS-NULL-LOCAL-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testAParameterHandedOnCarriesItsValue :: control :: '
 			+ 'M-TS-ARG-PARAM-UNREAD,M-TS-STATES-UNBOUND',
@@ -572,15 +575,21 @@ final class PinsCheckPToZ {
 			+ 'M-TS-STORE-SEALED-BLIND',
 		'unit.check.ThreadSafetyConditionsTest#testAStoredValueInvokedOnTheMainThreadIsReachedThroughTheInvoker :: control :: '
 			+ 'M-TS-STORE-UNMIRRORED',
+		'unit.check.ThreadSafetyConditionsTest#testAStringAffixGuardAnotherUsingMayBindDecidesNothing :: control :: M-TS-AFFIX-USINGS-UNCHECKED',
+		'unit.check.ThreadSafetyConditionsTest#testAStringTheCalleesAffixGuardTestsDecidesIt :: control :: M-TS-AFFIX-UNREAD,M-TS-STRING-ATOM-OFF',
 		'unit.check.ThreadSafetyConditionsTest#testATakeABoolArgumentRulesOutOrdersNothing :: control :: M-TS-ORDER-UNCONDITIONED',
 		'unit.check.ThreadSafetyConditionsTest#testAValueStoredInADynamicMemberRunsWhereTheMemberRuns :: control :: M-TS-STORE-INERT',
 		'unit.check.ThreadSafetyConditionsTest#testAWrittenParameterIsNotTracked :: control :: M-TS-PARAM-WRITE-IGNORED',
+		'unit.check.ThreadSafetyConditionsTest#testAnArgumentAnAbstractMayTakeLeavesBothBindings :: control :: M-ARGFIT-UNKNOWN-MISFITS',
 		'unit.check.ThreadSafetyConditionsTest#testAnArgumentHaxeMaySkipAnOptionalParameterForBindsNothing :: control :: '
 			+ 'M-TS-SKIP-UNCHECKED',
+		'unit.check.ThreadSafetyConditionsTest#testAnArgumentTypedByArithmeticBindsItsOwnParameter :: control :: M-WALK-ARITHMETIC-OFF,M-ARGTYPE-STATIC-OFF',
+		'unit.check.ThreadSafetyConditionsTest#testAnInheritedConstructorTakesTheArgumentsOfItsSupertypes :: control :: M-TS-NEW-UNBOUND',
 		'unit.check.ThreadSafetyConditionsTest#testAnOmittedArgumentTakesItsBoolDefault :: control :: M-TS-DEFAULT-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testAnOmittedOptionalParameterIsNull :: control :: M-TS-NULL-PARAM-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testCodeAfterAnEarlyExitOnTheCheckRunsOnTheOtherThreads :: control :: '
 			+ 'M-TS-EARLY-EXIT-UNREAD',
+		'unit.check.ThreadSafetyConditionsTest#testEveryWayACallMayBindDecidesTogether :: control :: M-TS-ARG-SETS-UNKNOWN',
 		'unit.check.ThreadSafetyConditionsTest#testTheOffMainBranchOfAMainThreadCheckIsNoMainStall :: control :: M-TS-MAIN-CHECK-IGNORED',
 		'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAConstructorStaysARoot :: control :: M-TS-SEAL-CTOR',
 		'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAHoldNoThreadRunsIsQuiet :: control :: M-TS-DEAD-HOLDS-KEPT',
@@ -855,12 +864,10 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyRootCauseTest#testARecursionThroughACallbackRepeatsUnderTheLock :: control :: M-TS-CYCLE-REGISTERED',
 		'unit.check.ThreadSafetyRootCauseTest#testASuppressedWarningCoversNothing :: control :: '
 			+ 'M-TS-FOLD-SUPPRESSED,M-TS-FOLD-SUPPRESSED-WAIT,M-TS-NEST-SUPPRESSED,M-TS-WAY-SUPPRESSED,M-TS-ONE-TAKE-SUPPRESSED',
-		'unit.check.ThreadSafetyRootCauseTest#testAWorkerRunsOnlyTheWaysItsValuesOpen :: control :: M-TS-ORIGIN-STATES',
 		'unit.check.ThreadSafetyRootCauseTest#testHoldsLongByOneCallMakeOneWarning :: control :: '
 			+ 'M-TS-FOLD-SITE,M-TS-FOLD-DEPTH,M-TS-FOLD-SITE-LOCK',
+		'unit.check.ThreadSafetyRootCauseTest#testHoldsOfOneLockInTwoFunctionsAreTwoStalls :: control :: M-TS-FOLD-SITE-LOCK',
 		'unit.check.ThreadSafetyRootCauseTest#testHoldsOfTwoLocksOneAfterTheOtherAreTwoStalls :: control :: M-TS-FOLD-NEST-LOCK',
-		'unit.check.ThreadSafetyRootCauseTest#testHoldsOnTwoThreadsDoNotCoverEachOther :: control :: '
-			+ 'M-TS-FOLD-SITE-THREAD,M-TS-FOLD-SITE-ONE-ORIGIN',
 		'unit.check.ThreadSafetyRootCauseTest#testSinkCallsOfOneWayMakeOneWarning :: control :: M-TS-WAY-OFF',
 		'unit.check.ThreadSafetyRootCauseTest#testTheCallsOfOneLoopMakeOneWarning :: control :: M-TS-LOOP-KEY',
 		'unit.check.ThreadSafetyRootCauseTest#testTwoCallsReachingOneSinkAreTwoWays :: control :: M-TS-FOLD-SAME-WAY,M-TS-FOLD-PARTS-ONCE',

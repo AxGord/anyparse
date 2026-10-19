@@ -338,6 +338,9 @@ final class CallGraphTypes {
 			typeSource: agreed(a.typeSource, b.typeSource),
 			firstParamTypeSource: agreed(a.firstParamTypeSource, b.firstParamTypeSource),
 			paramTypeSources: [for (i in 0...arity) agreed(paramAt(a, i), paramAt(b, i))],
+			// two parameter lists that skip or rest differently bind a call differently: none is skipped by position
+			paramSkippableFrom: a.paramRest == b.paramRest ? Std.int(Math.min(a.paramSkippableFrom, b.paramSkippableFrom)) : 0,
+			paramRest: a.paramRest && b.paramRest,
 			visibility: a.visibility,
 			isOverride: a.isOverride || b.isOverride,
 			kind: mixed && !_functionKinds.contains(a.kind) ? b.kind : a.kind,

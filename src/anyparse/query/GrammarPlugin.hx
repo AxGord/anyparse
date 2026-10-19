@@ -2534,6 +2534,46 @@ typedef RefShape = {
 	@:optional var literalTypeNames: Map<String, String>;
 
 	/**
+	 * The language's core value types, as a typer decides which parameter a call binds an argument to by them
+	 * (`ArgumentSlots`): `names` are types each of which means the one built-in type in every file that declares no type
+	 * of that name (Haxe `Bool`, `String`, `Int`, `Float`), two of which unify only when they are the same or `widens`
+	 * says so (`Int` to `Float`, proved on Haxe 4.3.7: `f(?x:Float, ?s:String)` called `f(1)` binds `x`, called `f(true)`
+	 * skips both); arithmetic over core numbers (`arithmeticKinds`) yields the `integer` type or the `real` one. Every
+	 * other type — an abstract converting through `@:from` / `@:to`, a type parameter, `Dynamic` — is undecided.
+	 * Optional; unset decides nothing.
+	 */
+	@:optional var coreValueTypes: CoreValueTypes;
+
+	/**
+	 * The binary operators whose result over core numbers (`coreValueTypes`) is a core number: the `integer` type when
+	 * every operand is one and the operator is not one of `realArithmeticKinds`, the `real` type otherwise (Haxe 4.3.7
+	 * `$type`: `Int + Int`, `Int % Int` are `Int`, `Int / Int` and any `Float` operand `Float`); `negationKind` keeps its
+	 * operand's type. Optional; unset types no arithmetic.
+	 */
+	@:optional var arithmeticKinds: Array<String>;
+
+	@:optional var realArithmeticKinds: Array<String>;
+
+	/**
+	 * The static extensions that test the ends of a string, as a guard over a string the analysis knows is decided:
+	 * `module` declares them (Haxe `StringTools`), `suffix` tests the end (`endsWith`), `prefix` the start
+	 * (`startsWith`). Optional; unset decides no such guard.
+	 */
+	@:optional var stringAffixTests: { module: String, suffix: String, prefix: String };
+
+	/**
+	 * The std structure a value is iterable as (Haxe `Iterable`), and the std types that unify with it, each by the type
+	 * parameter that is its element there — what binds `A` when such a value is handed to a parameter written as that
+	 * structure of a type parameter (`Lambda.iter<A>(it:Iterable<A>, …)`). Proved on Haxe 4.3.7: `Lambda.iter(xs, c -> …)`
+	 * types `c` as the element of an `Array<T>` (0), a `List<T>` (0), an `Iterable<T>` (0) and the VALUE of a `Map<K, V>`
+	 * (1); a `haxe.ds.Vector` has no `iter` (it is no `Iterable`), and an `Iterator` is none either. Optional; unset binds
+	 * nothing.
+	 */
+	@:optional var iterableTypeName: String;
+
+	@:optional var iterableElementTypeParams: Map<String, Int>;
+
+	/**
 	 * The array-literal node kind (Haxe `ArrayExpr`, whose children are the element
 	 * expressions) — the `explicit-local-type` autofix annotates a local whose
 	 * initializer is a NON-EMPTY array literal of one KNOWN literal element type as
@@ -3469,6 +3509,14 @@ typedef RefShape = {
 	 * precedence. Optional; unset suppresses nothing.
 	 */
 	@:optional var parenOpaqueSubtreeKinds: Array<String>;
+}
+
+/** The language's core value types (`RefShape.coreValueTypes`, which says what each field means). */
+typedef CoreValueTypes = {
+	final names: Array<String>;
+	final widens: Map<String, Array<String>>;
+	final integer: String;
+	final real: String;
 }
 
 /** The execution facts of `RefShape` (`RefShape.execution`): what runs code no call site names, and what reach may assume. */

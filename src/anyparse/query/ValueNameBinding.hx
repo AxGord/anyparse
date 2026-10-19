@@ -232,6 +232,28 @@ final class ValueNameBinding {
 		return null;
 	}
 
+	/**
+	 * Which `using` of the file `fi` a call `recv.method(…)` may bind to — Haxe binds the LAST one declaring an applicable static
+	 * `method` — walking back from the last of the file's own: the first whose module the index cannot read (`hosts` null:
+	 * what it brings is unknown) or one of whose types declares a static `method` it extends with, every module after it read
+	 * and built by no macro. Null when none may, at a module a macro builds, and when the file has a guarded `using` or an
+	 * ambient one (an `import.hx`'s), whose order against its own this does not decide.
+	 */
+	public function bindingUsing(fi: FileInfo, method: String): Null<{ path: String, hosts: Null<Array<ResolvedType>> }> {
+		if (fi.ambientImports.exists(g -> g.imports.exists(i -> i.kind == ImportKind.Using))) return null;
+		final usings: Array<ImportInfo> = fi.imports.filter(i -> i.kind == ImportKind.Using);
+		if (usings.exists(u -> u.guarded)) return null;
+		var k: Int = usings.length;
+		while (k-- > 0) {
+			final path: String = usings[k].raw;
+			final hosts: Null<Array<ResolvedType>> = usingHosts(path);
+			if (hosts == null) return { path: path, hosts: null };
+			if (hosts.exists(h -> builtAtOrAbove(h, []))) return null;
+			if (hosts.exists(h -> h.type.members.exists(m -> extendsAs(m, method)))) return { path: path, hosts: hosts };
+		}
+		return null;
+	}
+
 	/** The `#if` regions and branches the module-level declaration `field` of `fi` sits in. */
 	private inline function branchOf(fi: FileInfo, field: ModuleField): Array<CondFrame> {
 		return _refs.names.branchPathAt(fi, field.span.from);

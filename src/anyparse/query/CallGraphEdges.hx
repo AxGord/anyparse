@@ -661,6 +661,7 @@ final class CallGraphEdges {
 				final name: Null<String> = made.name;
 				at == null || name == null ? null : keys.keyed(name, at.from);
 			},
+			arithmetic: null,
 			reading: _ -> unannotatedReads
 		};
 
