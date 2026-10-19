@@ -117,9 +117,7 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 	 * a gate keeps carries that gate as its decline reason. Inert when the grammar names no
 	 * `RefShape.statementTerminator`.
 	 */
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		final resolved: Null<Seams> = resolveSeams(plugin);
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		final terminator: Null<String> = resolved?.terminator;
