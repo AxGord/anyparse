@@ -212,7 +212,7 @@ class UnnecessaryNullCheckCheckTest extends Test {
 	}
 
 	public function testReshadowedNullableParamGuardNotFlagged(): Void {
-		// Exact TM `renameItem` shape: a nullable param whose guard has a SIDE EFFECT
+		// Exact client `renameItem` shape: a nullable param whose guard has a SIDE EFFECT
 		// before `return`, followed by a later same-name non-null capture
 		// (`final p:String = p;`). The first-wins scope resolver binds the guard's `p`
 		// to the LATER non-null shadow, so `isProvablyNonNull` wrongly affirms and the

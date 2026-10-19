@@ -87,7 +87,7 @@ class PreferArrayLiteralCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
-	/** TM repro: a plain assignment to a bare-identifier field whose declaration pins the element type — rewritten to `[]`. */
+	/** client repro: a plain assignment to a bare-identifier field whose declaration pins the element type — rewritten to `[]`. */
 	public function testFixBareIdentFieldAssignment(): Void {
 		Assert.equals('[]', fixText('class C { var _actionKeys:Array<Int>; function f():Void { _actionKeys = new Array<Int>(); } }'));
 	}

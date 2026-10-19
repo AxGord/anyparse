@@ -132,10 +132,10 @@ class HxTryBraceSymmetrySliceTest extends Test {
 		assertFmt(
 			'class F {\n\tfunction f():Void {\n\t\tif (saveAfterValidation && origin != result) {\n'
 			+ '\t\t\ttry {\n\t\t\t\tsaveContentWithoutChangeTime(path, result);\n\t\t\t} catch (e:Exception) {\n'
-			+ '\t\t\t\ttrace(\'DrillValidator::getContent - unable to save this path\');\n\t\t\t}\n\t\t}\n\t}\n}',
+			+ '\t\t\t\ttrace(\'ModelValidator::getContent - unable to save this path\');\n\t\t\t}\n\t\t}\n\t}\n}',
 			'class F {\n\tfunction f():Void {\n\t\tif (saveAfterValidation && origin != result) try\n'
 			+ '\t\t\tsaveContentWithoutChangeTime(path, result)\n\t\tcatch (e:Exception)\n'
-			+ '\t\t\ttrace(\'DrillValidator::getContent - unable to save this path\');\n\t}\n}'
+			+ '\t\t\ttrace(\'ModelValidator::getContent - unable to save this path\');\n\t}\n}'
 		);
 	}
 

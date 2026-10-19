@@ -83,7 +83,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 	}
 
 	public function testFixRenamesParamNamedAfterAnImportedTypeName(): Void {
-		// TM's real shape: a handler parameter named `Event`, in a file importing `openfl.events.Event`
+		// the client's real shape: a handler parameter named `Event`, in a file importing `openfl.events.Event`
 		// and using `Event.ACTIVATE` — the import path is not a reference to the parameter.
 		final src: String =
 			'package pkg;\n\nimport openfl.events.Event;\n\nclass C {\n\tpublic function f(Event:Int):Int {\n\t\treturn Event;\n\t}\n}';
@@ -502,9 +502,9 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 	 * binding's lexical container is the body it binds into, not the declaration's own span.
 	 */
 	public function testLocalFunctionCommentMentionRenamesAlong(): Void {
-		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\t// draw_grid paints the pitch.\n'
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\t// draw_grid paints the stage.\n'
 			+ '\t\tfunction draw_grid() {\n\t\t\ttrace(1);\n\t\t}\n\t\tdraw_grid();\n\t}\n}';
-		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, '// drawGrid paints the pitch.', 'draw_grid');
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, '// drawGrid paints the stage.', 'draw_grid');
 	}
 
 	/**
@@ -554,11 +554,11 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final param: String = refusalFor([
 			{
 				file: 'pkg/C.hx',
-				source: 'package pkg;\nclass C {\n\tpublic function other(__drillButtons:Array<Int>):Int {\n'
-				+ '\t\tfinal drillButtons:Int = __drillButtons.length;\n\t\treturn drillButtons;\n\t}\n}'
+				source: 'package pkg;\nclass C {\n\tpublic function other(__modelButtons:Array<Int>):Int {\n'
+				+ '\t\tfinal modelButtons:Int = __modelButtons.length;\n\t\treturn modelButtons;\n\t}\n}'
 			}
 		], 'pkg/C.hx', true);
-		Assert.stringContains("'drillButtons' is already bound", param);
+		Assert.stringContains("'modelButtons' is already bound", param);
 		Assert.isFalse(param.indexOf('confinement proof') >= 0, 'a parameter needs no confinement proof, got: $param');
 	}
 

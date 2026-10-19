@@ -23,7 +23,7 @@ class ThreadSafetyDominanceTest extends Test {
 	private static inline final CLOSED: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}';
 
-	/** TM's `_mutex` under `_batchMutex`: the long hold of `_inner` holds `_outer`, so `quick` waits for no long hold. */
+	/** the client's `_mutex` under `_batchMutex`: the long hold of `_inner` holds `_outer`, so `quick` waits for no long hold. */
 	public function testATakeUnderTheOuterLockIsBrief(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -271,7 +271,7 @@ class ThreadSafetyDominanceTest extends Test {
 	}
 
 	/**
-	 * TM's `if (!batch) _batchMutex.acquire()`: taken where the caller hands `batch = false`, held by the caller where it
+	 * the client's `if (!batch) _batchMutex.acquire()`: taken where the caller hands `batch = false`, held by the caller where it
 	 * hands `true` — under every valuation the long hold of `_inner` holds `_outer` — the caller's part known only under `closedWorld`.
 	 */
 	@:pin('control') @:killer('M-TS-DOM-UNDECIDED') @:killer('M-TS-DOM-ENTRY-NONE')
@@ -430,7 +430,7 @@ class ThreadSafetyDominanceTest extends Test {
 	}
 
 	/**
-	 * TM's `getFileCount`: a hold of `_inner` outside `_outer` whose only unresolved call is a `trace` the config names a
+	 * the client's `getFileCount`: a hold of `_inner` outside `_outer` whose only unresolved call is a `trace` the config names a
 	 * short sink, run once: brief, so it leaves the dominance standing; in a loop it is long and breaks it.
 	 */
 	@:pin('control') @:killer('M-TS-DOM-BRIEF-NAMES-IGNORED') @:killer('M-TS-DOM-BRIEF-REPEATED')

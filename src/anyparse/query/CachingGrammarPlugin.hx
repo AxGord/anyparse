@@ -546,7 +546,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * `GrammarPlugin`: the inner shape with this wrapper's run-scoped `RefsCache` attached, so
 	 * `Refs.find` resolves through the memoized index instead of walking the tree per query. Built
 	 * ONCE per wrapper (`_refShape`): `_inner.refShape()` returns a fresh struct literal per call and
-	 * the checks ask per file, which cost ~0.8 s of construction and garbage on the TM tree. The
+	 * the checks ask per file, which cost ~0.8 s of construction and garbage on the client tree. The
 	 * attach is a write to the inner plugin's fresh copy, so it leaks nowhere.
 	 */
 	public function refShape(): RefShape {
@@ -632,7 +632,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function controlFlowSupport(): Null<ControlFlowSupport> return _inner.controlFlowSupport();
 
 	/**
-	 * Memoised per source, now that a profile names it (N1, 2026-10-17): on the TM tree a `lint --all`
+	 * Memoised per source, now that a profile names it (N1, 2026-10-17): on the client tree a `lint --all`
 	 * asked about every file from dozens of checks and paid ~0.9 s of whole-file rescans for it. The
 	 * cache holds one array per distinct file for the run, which is the price the old note here weighed
 	 * against a scan it judged small; the measurement settled it. Instance state like the rest, never

@@ -51,8 +51,8 @@ class TypeRefPrinterTest extends Test {
 	/**
 	 * A plain `import pkg.deep.Mod;` binds every TOP-LEVEL type the module declares, not only its
 	 * main one — so a secondary type of that module is already visible and must print short with
-	 * NO fresh import. Route 2 firing here is what put `import fs.FileSystemInterface.FileSystemCloudAction;`
-	 * into a file already carrying `import fs.FileSystemInterface;`.
+	 * NO fresh import. Route 2 firing here is what put `import fs.DiskSystemInterface.DiskSystemCloudAction;`
+	 * into a file already carrying `import fs.DiskSystemInterface;`.
 	 */
 	public function testModuleImportMakesItsSecondaryTypeVisible(): Void {
 		final index: SymbolIndex = indexOf([

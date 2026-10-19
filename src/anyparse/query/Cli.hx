@@ -209,7 +209,7 @@ final class Cli {
 		// object (source location of the throw site, decoded from the optimized frame) even when a
 		// JavaScript `catch` two frames up takes it. The generated parsers backtrack by throwing
 		// `ParseError.backtrack` hundreds of thousands of times per run, so that bookkeeping was
-		// about a fifth of all parsing (TM tree: 5.5 s -> 4.4 s; `lint --all` -5.5%). A microtask
+		// about a fifth of all parsing (client tree: 5.5 s -> 4.4 s; `lint --all` -5.5%). A microtask
 		// runs under a non-verbose catcher, so the throw is a plain unwind. Same exit code, same
 		// raw stack for a crash that escapes `run`.
 		js.Node.queueMicrotask(() -> proc.exitCode = run(Sys.args()));

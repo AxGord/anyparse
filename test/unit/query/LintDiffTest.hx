@@ -357,12 +357,12 @@ class LintDiffTest extends Test {
 			record('src/B.hx', 'warning', 'magic-number', 'magic number'),
 			record('src/C.hx', 'warning', 'magic-number', 'magic number')
 		]);
-		final lines: Array<String> = LintDiff.render(diff(before, after, ''), 'tm', 2);
-		Assert.stringContains('lint-diff tm:', lines[0]);
+		final lines: Array<String> = LintDiff.render(diff(before, after, ''), 'client', 2);
+		Assert.stringContains('lint-diff client:', lines[0]);
 		Assert.stringContains('3 added / 0 removed', lines[0]);
 		Assert.equals(6, lines.length, 'headline, one moved rule, the severity breakdown, two examples and the elision note');
 		Assert.stringContains('1 more added key(s)', lines[lines.length - 1]);
-		final uncapped: Array<String> = LintDiff.render(diff(before, after, ''), 'tm', -1);
+		final uncapped: Array<String> = LintDiff.render(diff(before, after, ''), 'client', -1);
 		Assert.equals(6, uncapped.length, 'a negative limit prints every example and no elision note');
 		Assert.stringContains('src/C.hx', uncapped[uncapped.length - 1]);
 	}

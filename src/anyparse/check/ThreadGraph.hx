@@ -17,7 +17,7 @@ final class ThreadGraph {
 	/**
 	 * The graph of `files`: when the project asks (`useFacts`, the `compilerFacts` option) and the run has them, read
 	 * through the compiler facts of its configured oracles (`SymbolIndexHost.compilerFacts`) as the reach analyses read
-	 * them — never the truth, so no file is dropped; by their syntax alone otherwise. Opt-in: measured on TM, a call the
+	 * them — never the truth, so no file is dropped; by their syntax alone otherwise. Opt-in: measured on the client corpus, a call the
 	 * facts describe carries no receiver field (`CallEdge.receiverField`), so the locks its takes work go unnamed.
 	 */
 	public static function build(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, useFacts: Bool): CallGraph {

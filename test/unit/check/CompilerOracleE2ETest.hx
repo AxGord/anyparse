@@ -217,7 +217,7 @@ final class CompilerOracleE2ETest extends Test {
 	 * (`dist/haxe/build.hxml`) but writes its `-cp` entries relative to the PROJECT
 	 * root the build is invoked from — the config's directory. Compiling from the
 	 * hxml's own directory resolves `src` as `dist/haxe/src` and every type goes
-	 * missing, so the oracle spuriously rejected every such project (TM's layout).
+	 * missing, so the oracle spuriously rejected every such project (the client's layout).
 	 * The compile dir is probed from the hxml's own relative classpaths: the
 	 * candidate that resolves strictly more of them wins.
 	 */

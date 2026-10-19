@@ -130,7 +130,7 @@ class PreferExistsCheckTest extends Test {
 		// ★ The receiver is `Null<M>`, and Haxe's `Null` is member-TRANSPARENT: `m.exists(…)` looks
 		// `exists` up on `M` all the same. Asking the VALUE nominal answers `Null`, which declares
 		// nothing — which is why the gate asks `CheckScan.receiverNominalResolver`. This is the
-		// second of the two measured TM sites (`baseData:Null<Map<Int, ObjectFrameData>>`), and the
+		// second of the two measured client sites (`baseData:Null<Map<Int, ObjectFrameInfo>>`), and the
 		// guarded merge rides on the qualified call unchanged.
 		final vs: Array<Violation> = violations(nullableMemberFn('if (m != null) for (x in m) if (x > 2) return true;\n\t\treturn false;'));
 		Assert.equals(1, vs.length);
@@ -374,7 +374,7 @@ class PreferExistsCheckTest extends Test {
 	}
 
 	public function testFlagFormFieldReadConditionFlagged(): Void {
-		// The motivating TM site's shape (`child.nodeType == CData`): the condition READS a field,
+		// The motivating client site's shape (`child.nodeType == CData`): the condition READS a field,
 		// which `RefactorSupport.isSideEffectFree` refuses outright and `PurityScan` admits. The twin
 		// of the refusal below — together they say WHICH purity question the gate asks.
 		final vs: Array<Violation> =
@@ -585,7 +585,7 @@ class PreferExistsCheckTest extends Test {
 			+ '\t\treturn [].iterator();\n\t}\n}';
 	}
 
-	/** The same shape behind a member-TRANSPARENT `Null<…>` wrapper — the shape the TM guarded site has. */
+	/** The same shape behind a member-TRANSPARENT `Null<…>` wrapper — the shape the client guarded site has. */
 	private function nullableMemberFn(body: String): String {
 		return 'class C {\n\tfunction f(m:Null<M>):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n'
 			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';

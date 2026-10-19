@@ -73,23 +73,23 @@ final class ConfiguredIdiomE2ETest extends Test {
 	private static final EVENT_TYPE: String = 'package ev;\n\nabstract EventType<T>(String) from String to String {}\n';
 	private static final DISPATCHER: String = 'package ev;\n\nclass Dispatcher {\n\tpublic function new() {}\n\n'
 		+ '\tpublic function addEventListener<T>(type:EventType<T>, listener:T->Void):Void {}\n}\n';
-	private static final POPUP_EVENT: String = 'package app;\n\nimport ev.Event;\n\nclass PopupEvent extends Event {\n'
+	private static final POPUP_EVENT: String = 'package app;\n\nimport ev.Event;\n\nclass ModalEvent extends Event {\n'
 		+ '\tpublic static inline final CLOSE:String = \'close\';\n\tpublic static inline final OPEN:String = \'open\';\n'
 		+ '\tpublic static inline final HELD:String = \'held\';\n}\n';
 	private static final MOUSE_EVENT: String = 'package app;\n\nimport ev.Event;\n\nclass MouseEv extends Event {}\n';
 	private static final EVENT_MAIN: String = [
 		'import app.MouseEv;',
-		'import app.PopupEvent;',
+		'import app.ModalEvent;',
 		'import ev.Dispatcher;',
 		'import ev.Event;',
 		'',
 		'class Main {',
 		'\tstatic function main():Void {',
 		'\t\tfinal d:Dispatcher = new Dispatcher();',
-		'\t\td.addEventListener(PopupEvent.CLOSE, onEvent);',
-		'\t\td.addEventListener(PopupEvent.OPEN, (e:MouseEv) -> {});',
-		'\t\td.addEventListener(PopupEvent.HELD, made());',
-		'\t\ttrace(PopupEvent.CLOSE == \'close\');',
+		'\t\td.addEventListener(ModalEvent.CLOSE, onEvent);',
+		'\t\td.addEventListener(ModalEvent.OPEN, (e:MouseEv) -> {});',
+		'\t\td.addEventListener(ModalEvent.HELD, made());',
+		'\t\ttrace(ModalEvent.CLOSE == \'close\');',
 		'\t}',
 		'',
 		'\tstatic function onEvent(e:Event):Void {}',
@@ -138,7 +138,7 @@ final class ConfiguredIdiomE2ETest extends Test {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('typedevent', [
 			{ name: 'Main.hx', source: EVENT_MAIN },
-			{ name: 'app/PopupEvent.hx', source: POPUP_EVENT },
+			{ name: 'app/ModalEvent.hx', source: POPUP_EVENT },
 			{ name: 'app/MouseEv.hx', source: MOUSE_EVENT },
 			{ name: 'ev/Event.hx', source: EVENT },
 			{ name: 'ev/EventType.hx', source: EVENT_TYPE },
@@ -151,28 +151,28 @@ final class ConfiguredIdiomE2ETest extends Test {
 			'--fix',
 			'--rule',
 			'typed-event-constant',
-			'$dir/app/PopupEvent.hx',
+			'$dir/app/ModalEvent.hx',
 			'$dir/Main.hx'
 		]));
-		final after: String = File.getContent('$dir/app/PopupEvent.hx');
-		Assert.isTrue(after.indexOf('CLOSE:ev.EventType<PopupEvent> = \'close\';') >= 0, after);
+		final after: String = File.getContent('$dir/app/ModalEvent.hx');
+		Assert.isTrue(after.indexOf('CLOSE:ev.EventType<ModalEvent> = \'close\';') >= 0, after);
 		Assert.isTrue(after.indexOf('OPEN:String = \'open\';') >= 0, 'the proven mismatch is never written: $after');
 		Assert.isTrue(after.indexOf('HELD:String = \'held\';') >= 0, 'the compiler rejected HELD and it was reverted: $after');
 		Assert.isTrue(fixLog.indexOf('1 edit(s) kept, 1 reverted') >= 0, fixLog);
-		Assert.isTrue(fixLog.indexOf('typing PopupEvent.OPEN EventType<PopupEvent> would not compile here') >= 0, fixLog);
+		Assert.isTrue(fixLog.indexOf('typing ModalEvent.OPEN EventType<ModalEvent> would not compile here') >= 0, fixLog);
 		final report: String = CliFixture.captureStdout(() -> Cli.run([
 			'lint',
 			'--all',
 			'--no-oracle',
 			'--rule',
 			'typed-event-constant',
-			'$dir/app/PopupEvent.hx',
+			'$dir/app/ModalEvent.hx',
 			'$dir/Main.hx'
 		]));
 		Assert.isTrue(
-			report.indexOf('listener (e:MouseEv) -> {} of PopupEvent.OPEN expects MouseEv, the event is PopupEvent') >= 0, report
+			report.indexOf('listener (e:MouseEv) -> {} of ModalEvent.OPEN expects MouseEv, the event is ModalEvent') >= 0, report
 		);
-		Assert.isTrue(report.indexOf('event-type constant PopupEvent.HELD is typed String') >= 0, report);
+		Assert.isTrue(report.indexOf('event-type constant ModalEvent.HELD is typed String') >= 0, report);
 		Assert.equals('Main.hx:12: true\n', run(dir), 'the build still compiles and runs');
 		CliFixture.removeDir(dir);
 		#else

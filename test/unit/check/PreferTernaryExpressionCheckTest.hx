@@ -44,7 +44,7 @@ class PreferTernaryExpressionCheckTest extends Test {
 		Assert.equals('c ? 1 : 2', es[0].text);
 	}
 
-	/** The multi-line TM shape this check was written for (`ReadyMadeFileSystem.getFileName`, anonymized). */
+	/** The multi-line client shape this check was written for (`ReadyMadeDiskSystem.getFileName`, anonymized). */
 	public function testFixMultiLineFixture(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
 			'class C {\n\tfunction f(pathText:String):Int {\n\t\tfinal start:Int = if (lastSepIndex > 1 || !pathText.startsWith(\':\'))\n'
@@ -84,7 +84,7 @@ class PreferTernaryExpressionCheckTest extends Test {
 		);
 	}
 
-	/** A real TM site before the exit gate existed: `a ? x : return` disguises control flow as a value. */
+	/** A real client site before the exit gate existed: `a ? x : return` disguises control flow as a value. */
 	public function testReturnBranchNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tfinal t:Float = if (c) 1 else return;\n\t}\n}').length);
 	}

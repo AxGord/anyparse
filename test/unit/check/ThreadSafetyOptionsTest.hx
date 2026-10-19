@@ -7,7 +7,7 @@ import utest.Test;
 /**
  * The `thread-safety` options are read and checked in ONE place (`ThreadSafetyOptions`): a key no option has, a value
  * of the wrong shape, a list item or a `boundedRepeats` entry dropped, a `site` matching no function — each is said, as
- * an `info` finding naming no file, instead of reading as a quiet config (the reviewer's `tm-bad` config was
+ * an `info` finding naming no file, instead of reading as a quiet config (the reviewer's `client-bad` config was
  * byte-identical to no config at all).
  */
 class ThreadSafetyOptionsTest extends Test {

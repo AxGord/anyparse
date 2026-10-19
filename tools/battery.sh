@@ -19,6 +19,13 @@
 #   tools/battery.sh --base 29011103  # compare blast against a specific snapshot
 #   tools/battery.sh --allow-blast    # accept the blast movement printed above
 #   tools/battery.sh --keep           # keep the scratch directory even on green
+#   tools/battery.sh --client <tree>  # also lint (and blast) a second, private
+#                                     #   tree; default $ANYPARSE_CLIENT_TREE
+#   tools/battery.sh --no-client      # skip that tree even when it is set
+#
+# The second tree is a downstream project that is NOT part of this repository,
+# so its location never is either: name it with --client or the
+# ANYPARSE_CLIENT_TREE environment variable. Neither given, the arm is skipped.
 #
 # The scratch directory under TMPDIR is removed on a green run and kept, with
 # its path printed, on a red one or under `--keep`. A run that dies to SIGKILL
@@ -114,13 +121,13 @@ set -euo pipefail
 shards=4
 quick=0
 snapshot=0
-with_tm=1
+with_client=1
 allow_blast=0
 keep_work=0
 jvm_mode=auto
 base_key=""
 cache_dir="${ANYPARSE_BLAST_CACHE:-$HOME/anyparse-blast-cache}"
-tm_tree="${ANYPARSE_TM_TREE:-/Users/axg/dev/soccertutor/TM-Haxe4}"
+client_tree="${ANYPARSE_CLIENT_TREE:-}"
 
 need_value() {
     if [ "$2" -lt 2 ]; then
@@ -134,10 +141,10 @@ while [ "$#" -gt 0 ]; do
         -n|--shards)   need_value "$1" "$#"; shards=$2; shift 2 ;;
         --base)        need_value "$1" "$#"; base_key=$2; shift 2 ;;
         --cache)       need_value "$1" "$#"; cache_dir=$2; shift 2 ;;
-        --tm)          need_value "$1" "$#"; tm_tree=$2; shift 2 ;;
+        --client)      need_value "$1" "$#"; client_tree=$2; shift 2 ;;
         --quick)       quick=1; shift ;;
         --snapshot)    snapshot=1; shift ;;
-        --no-tm)       with_tm=0; shift ;;
+        --no-client)   with_client=0; shift ;;
         --allow-blast) allow_blast=1; shift ;;
         --keep)        keep_work=1; shift ;;
         --jvm)         jvm_mode=always; shift ;;
@@ -822,30 +829,30 @@ branch_lint() {
 
     step_begin "lint"
     local lint_new_anyparse="$work/lint-anyparse.json"
-    local lint_new_tm="$work/lint-tm.json"
+    local lint_new_client="$work/lint-client.json"
     local anyparse_rc=0
-    local tm_rc=0
+    local client_rc=0
     bin/hxq lint --format json --all src test > "$lint_new_anyparse" 2> "$work/lint-anyparse.err" &
     local lint_anyparse_pid=$!
-    local lint_tm_pid=""
-    if [ "$with_tm" -eq 1 ] && [ -d "$tm_tree/src" ]; then
-        bin/hxq lint --format json --all "$tm_tree/src" > "$lint_new_tm" 2> "$work/lint-tm.err" &
-        lint_tm_pid=$!
-        # The driver decides whether to snapshot the TM arm, and it cannot see
+    local lint_client_pid=""
+    if [ "$with_client" -eq 1 ] && [ -n "$client_tree" ] && [ -d "$client_tree/src" ]; then
+        bin/hxq lint --format json --all "$client_tree/src" > "$lint_new_client" 2> "$work/lint-client.err" &
+        lint_client_pid=$!
+        # The driver decides whether to snapshot the client arm, and it cannot see
         # this subshell's variables.
-        : > "$work/lint-tm.used"
+        : > "$work/lint-client.used"
     fi
     wait "$lint_anyparse_pid" || anyparse_rc=$?
-    if [ -n "$lint_tm_pid" ]; then
-        wait "$lint_tm_pid" || tm_rc=$?
+    if [ -n "$lint_client_pid" ]; then
+        wait "$lint_client_pid" || client_rc=$?
     fi
     if [ "$anyparse_rc" -ne 0 ]; then
         cat "$work/lint-anyparse.err" >&2
         fail "lint of src+test exited $anyparse_rc"
     fi
-    if [ -n "$lint_tm_pid" ] && [ "$tm_rc" -ne 0 ]; then
-        cat "$work/lint-tm.err" >&2
-        fail "lint of $tm_tree/src exited $tm_rc"
+    if [ -n "$lint_client_pid" ] && [ "$client_rc" -ne 0 ]; then
+        cat "$work/lint-client.err" >&2
+        fail "lint of $client_tree/src exited $client_rc"
     fi
     step_end "lint"
 
@@ -876,10 +883,10 @@ branch_lint() {
     else
         echo "blast anyparse: no cached baseline at $base_key — nothing to compare"
     fi
-    if [ -n "$lint_tm_pid" ] && [ -f "$cache_dir/$base_key-tm.json" ]; then
-        blast_run "$cache_dir/$base_key-tm.json" "$lint_new_tm" "$tm_tree" tm
-    elif [ -n "$lint_tm_pid" ]; then
-        echo "blast tm: no cached baseline at $base_key — nothing to compare"
+    if [ -n "$lint_client_pid" ] && [ -f "$cache_dir/$base_key-client.json" ]; then
+        blast_run "$cache_dir/$base_key-client.json" "$lint_new_client" "$client_tree" client
+    elif [ -n "$lint_client_pid" ]; then
+        echo "blast client: no cached baseline at $base_key — nothing to compare"
     fi
     # A comparison that never happened is not a pass. Without this the step
     # would record a normal row on a first run and read, in the table, exactly
@@ -1002,8 +1009,8 @@ fi
 # baseline under the next comparison.
 if [ "$snapshot" -eq 1 ]; then
     cp "$work/lint-anyparse.json" "$cache_dir/$head_key-anyparse.json"
-    if [ -f "$work/lint-tm.used" ]; then
-        cp "$work/lint-tm.json" "$cache_dir/$head_key-tm.json"
+    if [ -f "$work/lint-client.used" ]; then
+        cp "$work/lint-client.json" "$cache_dir/$head_key-client.json"
     fi
     bin/hxq sweep --save "$cache_dir/$head_key-sweep.json" > /dev/null
     printf '%d %d\n' "$now_tests" "$now_asserts" > "$cache_dir/$head_key-suite.txt"

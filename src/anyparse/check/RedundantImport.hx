@@ -19,8 +19,8 @@ using Lambda;
  *
  * This is the report side of a fact the shared `TypeRefPrinter` prints by. When the two disagreed,
  * a fixer that materialised a secondary type (`explicit-local-type`'s annotation) spliced
- * `import fs.FileSystemInterface.FileSystemCloudAction;` into a file already carrying
- * `import fs.FileSystemInterface;` — observed on a real project. The printer now takes the
+ * `import fs.DiskSystemInterface.DiskSystemCloudAction;` into a file already carrying
+ * `import fs.DiskSystemInterface;` — observed on a real project. The printer now takes the
  * module-import route; this rule cleans up what earlier runs left behind.
  *
  * ## The evidence a finding needs

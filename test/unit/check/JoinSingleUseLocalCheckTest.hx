@@ -27,7 +27,7 @@ class JoinSingleUseLocalCheckTest extends Test {
 	// --- positive: the motivating shape and its fix ---
 
 	/**
-	 * The `VideoWatermark` site the rule was written for: an annotated capture of a
+	 * The `VideoStampMark` site the rule was written for: an annotated capture of a
 	 * `Null<T>` field, read once by a safe-nav call on the next line.
 	 */
 	public function testMotivatingSiteFlagged(): Void {
@@ -384,7 +384,7 @@ class JoinSingleUseLocalCheckTest extends Test {
 	 * A braceless `$name` string interpolation is a read `Refs` does not index, so the
 	 * sole-reference count misses it and calls the local single-use when it is not. Deleting the
 	 * declaration would leave the interpolation bound to nothing -- output that does not compile.
-	 * Found on TM-Haxe4 `src/video/VideoExportController.hx:239`, where a captured `batchH` is
+	 * Found on the client tree `src/video/VideoOutputController.hx:239`, where a captured `batchH` is
 	 * passed to a call and re-read from a `trace` on the next line.
 	 */
 	public function testInterpolationReadNotFlagged(): Void {

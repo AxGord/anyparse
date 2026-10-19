@@ -63,7 +63,7 @@ final class HxCompareOperandBreakSliceTest extends Test {
 	}
 
 	public function testCompareOperandInBoolChainBreaksBeforeOp(): Void {
-		// The TM FileSystemBase shape: a `||` operand `call(...) == CONST`
+		// The client DiskSystemBase shape: a `||` operand `call(...) == CONST`
 		// inside a nested-paren bool chain overflows at 151 columns — it
 		// must break before `==` instead of staying glued.
 		final glued: String = 'class C {\n\tfunction f() {\n\t\tif (\n'

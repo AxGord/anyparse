@@ -2,11 +2,14 @@
 # the two reference trees, chosen so that A/B deltas measured on it reproduce
 # the deltas on the full trees. Feed it to tools/ParseProf.hx:
 #
-#   TM_SRC=<other-tree>/src node bin/parse-prof.js tparse tools/bench-corpus.txt 6 hxformat.json
+#   ANYPARSE_BENCH_EXTRA=<private-manifest> CLIENT_SRC=<other-tree>/src \
+#     node bin/parse-prof.js tparse tools/bench-corpus.txt 6 hxformat.json
 #
-# Half the corpus lives in a tree that is not in this repository, written
-# ${TM_SRC}/... - those lines are skipped when TM_SRC is unset, leaving the
-# anyparse-only half, which is still stratified but no longer calibrated.
+# Half the corpus lives in a tree that is not in this repository, and so does
+# the list of its files: the `@${ANYPARSE_BENCH_EXTRA}` line below includes a
+# manifest kept OUTSIDE the repository (one path per line, written
+# ${CLIENT_SRC}/...). Both variables unset, the line is skipped and the corpus is
+# the anyparse-only half, which is still stratified but no longer calibrated.
 #
 # HOW IT WAS CHOSEN (reproduce with `perfile` + the recipe in
 # /Users/axg/anyparse-o1-parse-profile.md):
@@ -27,57 +30,7 @@
 # Use reps>=6 for timing (amortises JIT tier-up) and reps=1 for --cpu-prof
 # (the primitive mix then matches the full trees within ~2 points; at reps=10
 # V8 over-optimises and expectLit's share drops by 10).
-${TM_SRC}/Editor.hx
-${TM_SRC}/api/APIDevice.hx
-${TM_SRC}/api/model/LoginErrorResponse.hx
-${TM_SRC}/api/model/ProductKeyConversion.hx
-${TM_SRC}/api/model/ProductKeyValidation.hx
-${TM_SRC}/api/model/folders/Folders.hx
-${TM_SRC}/api/namespace/General.hx
-${TM_SRC}/api/namespace/Sessions.hx
-${TM_SRC}/common/ui/DatePicker.hx
-${TM_SRC}/common/ui/ToggleSwitch.hx
-${TM_SRC}/common/ui/components/IconToggleButton.hx
-${TM_SRC}/common/ui/components/RoundedButton.hx
-${TM_SRC}/common/ui/components/fileList/FileList.hx
-${TM_SRC}/common/ui/components/fileList/FileListEvent.hx
-${TM_SRC}/common/ui/components/form/DatePickerFormControlCompact.hx
-${TM_SRC}/common/ui/events/ImageButtonEvent.hx
-${TM_SRC}/components/editor/equipments/Goal.hx
-${TM_SRC}/drill/nodes/ToolNode.hx
-${TM_SRC}/editor/commands/SetAnimationSpeedCommand.hx
-${TM_SRC}/editor/header/topmenu/TopMenu.hx
-${TM_SRC}/editor/utils/MathCalc.hx
-${TM_SRC}/fs/FileSystemBase.hx
-${TM_SRC}/fs/SessionsFileSystem.hx
-${TM_SRC}/fs/SharedFileMoveDetector.hx
-${TM_SRC}/logs/SFS.hx
-${TM_SRC}/notifications/Notifications.hx
-${TM_SRC}/openfl/net/BlockingNativeURLLoader.hx
-${TM_SRC}/popups/PopupShadow.hx
-${TM_SRC}/popups/account/CroppingPopupInterface.hx
-${TM_SRC}/popups/account/formsv2/RegisterLoginTypeForm.hx
-${TM_SRC}/popups/export/LogoOverlay.hx
-${TM_SRC}/popups/export/exportjpeg/ExportJPEGPopup.hx
-${TM_SRC}/popups/fileDialog/DrillsDialog.hx
-${TM_SRC}/popups/fileDialog/FileDialogViewOptions.hx
-${TM_SRC}/popups/help/HelpMessageInfoPopup.hx
-${TM_SRC}/popups/help/HelpMessageInformation.hx
-${TM_SRC}/popups/masmigration/MigrationMASSuccessAlert.hx
-${TM_SRC}/popups/pitchAngles/PitchAnglesGrid.hx
-${TM_SRC}/popups/sessionPlanner/alerts/MissingDrillsList.hx
-${TM_SRC}/popups/settings/DeviceManagement.hx
-${TM_SRC}/popups/settings/account/plans/PlanColumn.hx
-${TM_SRC}/popups/settings/account/plans/PlanExpireHint.hx
-${TM_SRC}/popups/settings/license/AddUser.hx
-${TM_SRC}/popups/trainingMatchNotes/MatchNotes.hx
-${TM_SRC}/rightmenu/common/SelectableBaseButton.hx
-${TM_SRC}/rightmenu/components/AssetSprite.hx
-${TM_SRC}/tests/unit/RemoteFileSystemBaseTest.hx
-${TM_SRC}/tests/unit/SerFileDeleteRaceTest.hx
-${TM_SRC}/tests/unit/SharedSyncLoopTest.hx
-${TM_SRC}/utils/StringUtil.hx
-${TM_SRC}/utils/UUID.hx
+@${ANYPARSE_BENCH_EXTRA}
 src/anyparse/check/AvoidDynamic.hx
 src/anyparse/check/DeadBinderCounterLoop.hx
 src/anyparse/check/DeadNullGuard.hx

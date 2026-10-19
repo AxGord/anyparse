@@ -11,7 +11,7 @@ import utest.Test;
  * deciding whether the `case P if (cond):` label fits, and a genuinely
  * overlong guard must keep ladder lines indented.
  *
- * Repro from TM `DropDownList.hx`: a guard label well inside `maxLineLength` was torn open because the
+ * Repro from the client corpus `DropDownList.hx`: a guard label well inside `maxLineLength` was torn open because the
  * writer counted label PLUS the glued one-line body even though the `caseBody: fitLine` policy then
  * dropped the body to its own line anyway. The flip threshold sits at exactly label+space+body = limit + 1.
  *
@@ -22,7 +22,7 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCaseGuardFitSliceTest extends Test {
 
-	/** The TM-mirror config every fixture formats under. */
+	/** The client-mirror config every fixture formats under. */
 	private static final CONFIG: String =
 		'{"wrapping": {"maxLineLength": 140}, "sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine"}}';
 

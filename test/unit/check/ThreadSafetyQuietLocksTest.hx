@@ -19,7 +19,7 @@ class ThreadSafetyQuietLocksTest extends Test {
 		+ ' public function unlock():Void {} public function lockShared():Void {} public function unlockShared():Void {} }';
 
 	/**
-	 * TM's `APIToken._refreshReadWriteLock`: taken only with `lockShared`, so no take of it waits — neither the main
+	 * the client's `NetToken._refreshReadWriteLock`: taken only with `lockShared`, so no take of it waits — neither the main
 	 * thread's take nor anyone behind the worker's hold.
 	 */
 	@:pin('control') @:killer('M-TS-SHARED-OFF') @:killer('M-TS-SHARED-HOLD')
@@ -46,7 +46,7 @@ class ThreadSafetyQuietLocksTest extends Test {
 		#end
 	}
 
-	/** TM's `CloudDatabase.new`: a take of the instance's own lock in its constructor, before the object escapes, waits for no one. */
+	/** the client's `ShardDatabase.new`: a take of the instance's own lock in its constructor, before the object escapes, waits for no one. */
 	@:pin('control') @:killer('M-TS-CTOR-TAKE')
 	public function testAConstructorsOwnTakeNeverWaits(): Void {
 		#if (sys || nodejs)

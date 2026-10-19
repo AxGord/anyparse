@@ -38,7 +38,7 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxComprehensionCloserSliceTest extends Test {
 
-	/** TM-shaped config with `wrapping.comprehensionCuddledOpen` ON — the regime TM formats under. */
+	/** client-shaped config with `wrapping.comprehensionCuddledOpen` ON — the regime client formats under. */
 	private static final ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
 		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
 		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'

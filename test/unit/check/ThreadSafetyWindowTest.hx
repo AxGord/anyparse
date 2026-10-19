@@ -8,7 +8,7 @@ import utest.Test;
 /**
  * The window of a hold walks a local declaration's initializer and an array literal's elements in place, and takes a
  * `break` / `continue` for a jump inside its loop: none of them is a path out of the function, so none leaves the lock
- * held — which would make it long, and every main-thread take of it a warning (TM's `StandardFileSystem.getXML`, whose
+ * held — which would make it long, and every main-thread take of it a warning (the client's `StandardDiskSystem.getXML`, whose
  * `final xml = try … catch` releases before it rethrows; `listFolder`'s comprehension).
  */
 class ThreadSafetyWindowTest extends Test {

@@ -276,8 +276,8 @@ class MapKeysLookupCheckTest extends Test {
 	}
 
 	public function testMapMemberThroughPathStillFlaggedAcrossFiles(): Void {
-		final data: String = 'class SessionData {\n\tpublic var files(default, null):Map<String, String>;\n}';
-		final user: String = 'class C {\n\tfunction f(session:SessionData):Void {'
+		final data: String = 'class ProjectData {\n\tpublic var files(default, null):Map<String, String>;\n}';
+		final user: String = 'class C {\n\tfunction f(session:ProjectData):Void {'
 			+ '\n\t\tfor (n in session.files.keys()) trace(session.files.get(n));\n\t}\n}';
 		Assert.equals(1, violationsAcross([data, user]).length);
 	}

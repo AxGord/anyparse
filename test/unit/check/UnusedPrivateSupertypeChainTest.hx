@@ -10,9 +10,9 @@ using StringTools;
 
 /**
  * `unused-private`'s autofix on a private method of an `extends` class, with no compiler facts: the resolution scope
- * answers whether the chain can still reach the member (`MemberLookup.supertypeMemberProof`) — TM's
+ * answers whether the chain can still reach the member (`MemberLookup.supertypeMemberProof`) — the client's
  * `Form.onFormRemovedFromStage` over `Box -> openfl Sprite -> …` is the shape — and the deletion purity of a dead
- * final whose initializer is a `String` method (TM `StringUtil.CHARSET_UPPER`).
+ * final whose initializer is a `String` method (client `StringUtil.CHARSET_UPPER`).
  */
 class UnusedPrivateSupertypeChainTest extends Test {
 

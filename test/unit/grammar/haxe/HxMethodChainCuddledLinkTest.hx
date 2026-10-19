@@ -28,12 +28,12 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	private static final ONE_PER_LINE: String = '"methodChain": {"defaultWrap": "onePerLine",'
 		+ ' "rules": [{"conditions": [{"cond": "itemCount >= n", "value": 1}], "type": "onePerLine"}]}, ';
 
-	/** TM's `callParameter` cascade, as a `wrapping` fragment (see `BOUNDARY_ON`). */
+	/** the client's `callParameter` cascade, as a `wrapping` fragment (see `BOUNDARY_ON`). */
 	private static final CALL_PARAM: String = '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},'
 		+ ' {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}, ';
 
-	/** TM-shaped config (tab indent, maxLineLength 140, ifBody/functionBody fitLine, cuddled object braces) with the knob OFF. */
+	/** client-shaped config (tab indent, maxLineLength 140, ifBody/functionBody fitLine, cuddled object braces) with the knob OFF. */
 	private static final OFF: String = config('');
 
 	/** Same config with `wrapping.methodChainCuddledLinks` turned on. */
@@ -50,7 +50,7 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	private static final ONE_PER_LINE_OFF: String = config(ONE_PER_LINE);
 
 	/**
-	 * Knob on plus TM's `callParameter` cascade, whose `fillLineWithLeadingBreak` default makes a >100-char sole argument wrap once the
+	 * Knob on plus the client's `callParameter` cascade, whose `fillLineWithLeadingBreak` default makes a >100-char sole argument wrap once the
 	 * rendered line exceeds `maxLineLength`. The boundary fixtures need that cascade to show the args wrapping under a cuddled head.
 	 */
 	private static final BOUNDARY_ON: String = config(KNOB + CALL_PARAM);
@@ -272,7 +272,7 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	}
 
 	/**
-	 * The shared TM-shaped config with `extraWrapping` (a JSON fragment, comma-terminated) spliced into its `wrapping` section. Static
+	 * The shared client-shaped config with `extraWrapping` (a JSON fragment, comma-terminated) spliced into its `wrapping` section. Static
 	 * because the fixture constants are initialised before any instance exists.
 	 */
 	private static function config(extraWrapping: String): String {

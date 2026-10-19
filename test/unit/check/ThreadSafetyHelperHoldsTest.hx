@@ -8,7 +8,7 @@ import utest.Test;
 using Lambda;
 
 /**
- * A multi-lock helper (TM's `StandardFileSystem.acquireMutationLocks`: `_batchMutex`, then `_mutationMutex`) takes its
+ * A multi-lock helper (the client's `StandardDiskSystem.acquireMutationLocks`: `_batchMutex`, then `_mutationMutex`) takes its
  * locks for its caller: each call of it opens a hold of every lock it takes, judged where it is called, exactly as a
  * single-lock wrapper's take is. The helper's own takes, and the gives of its releasing twin, are its callers'.
  */
@@ -229,7 +229,7 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	}
 
 	/**
-	 * TM's `StandardFileSystem.createFolderItem`: one call of `acquireMutationLocks` opens a hold of `_batchMutex` and one
+	 * the client's `StandardDiskSystem.createFolderItem`: one call of `acquireMutationLocks` opens a hold of `_batchMutex` and one
 	 * of `_mutationMutex`, across the same calls — here a wait for a lock given back elsewhere, which nothing folds. One
 	 * warning, on the lock the helper takes first; the other names it, taken after it by the same call.
 	 */
@@ -252,7 +252,7 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	}
 
 	/**
-	 * TM's `StandardFileSystem.acquireMutationLocks`: the helper holds its first lock across its take of the second, long
+	 * the client's `StandardDiskSystem.acquireMutationLocks`: the helper holds its first lock across its take of the second, long
 	 * exactly when a hold of the second is — the twin's gives are its callers' releases, no crossing that leaves the lock
 	 * long by nothing a hold names. A hold of the second lock waiting for a lock no finding reports (`slowA`, for `k`)
 	 * stays a warning from the start, so the helper's wait folds onto it rather than staying in its place when the two

@@ -1841,7 +1841,7 @@ class RenameRefusal {
 	 * libraries — when the plugin carries one, else the report index): an `openfl` / `lime`
 	 * subclass's inherited members are then resolvable rather than unprovable. Refuse when the
 	 * inherited-`_x` possibility cannot be ruled out (a still-unresolvable supertype closure), and
-	 * refuse a member of a `@:rtti` / drill-Node hierarchy whose subtype-ward `@:rtti` only the index
+	 * refuse a member of a `@:rtti` / model-Node hierarchy whose subtype-ward `@:rtti` only the index
 	 * reveals (the direct-`@:rtti` case is already refused by `of`): such a class serializes by
 	 * reflecting on member NAMES, so a rename would break saved files.
 	 */

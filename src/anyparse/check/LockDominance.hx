@@ -125,7 +125,7 @@ final class LockDominance {
 	/**
 	 * Whether the hold `a` is a re-take inside a hold its callers keep: every state of its function that runs its take
 	 * already must-holds its lock, on the object it takes it on, right where it takes it (`MustHeld.at`, the meet over
-	 * its callers) — TM's `StandardFileSystem.cloudLocalRenameAndMoveItem`, whose `_batchMutex` take runs inside the
+	 * its callers) — the client's `StandardDiskSystem.cloudLocalRenameAndMoveItem`, whose `_batchMutex` take runs inside the
 	 * sync's own batch hold.
 	 */
 	public function enclosed(a: LockAcquire): Bool {
@@ -191,7 +191,7 @@ final class LockDominance {
 	/**
 	 * Whether a hold of `lock` keeps every other thread out for as long as its window runs: every take of it is known to
 	 * be exclusive (`QuietLocks.exclusive`) — a shared hold excludes no other shared one — and no function may give it
-	 * back without having taken it (`MustHeld.releasedUntaken`): an ownerless lock (TM's `LockMutex`) given back by
+	 * back without having taken it (`MustHeld.releasedUntaken`): an ownerless lock (the client's `GateMutex`) given back by
 	 * another thread is free while its holder's window still runs.
 	 */
 	private function excludes(lock: String): Bool {

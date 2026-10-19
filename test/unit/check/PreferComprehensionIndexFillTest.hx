@@ -15,7 +15,7 @@ using StringTools;
  */
 @:nullSafety(Strict) class PreferComprehensionIndexFillTest extends Test {
 
-	/** The motivating nested build, as in TM's `Grid.get_gridData`. */
+	/** The motivating nested build, as in the client's `Grid.get_gridData`. */
 	private static inline final NESTED: String = 'final out:Array<Array<P>> = [];\n\n\t\t// create empty array\n'
 		+ '\t\tfor (_ in 0...v + 1) {\n\t\t\tfinal arr:Array<P> = [];\n\t\t\tfor (j in 0...h + 1) arr[j] = { name: \'\', x: 0 };\n'
 		+ '\t\t\tout.push(arr);\n\t\t}';

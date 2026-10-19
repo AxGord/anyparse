@@ -427,7 +427,7 @@ class UnguardedNullableDerefTest extends Test {
 
 	/**
 	 * A `?.` guard narrows its ROOT: `u?.b != null` cannot be true with a null `u`, because `?.`
-	 * short-circuits the whole remaining chain to null. Live site — `TM-Haxe4`'s
+	 * short-circuits the whole remaining chain to null. Live site — `the client tree`'s
 	 * `src/utils/Error.hx:51` writes exactly this and was reported until the arm below existed.
 	 */
 	@:pin('control')
@@ -604,7 +604,7 @@ class UnguardedNullableDerefTest extends Test {
 	 * `while (c.length > 0) c.pop()` idiom, not what the author wrote down. Over three real trees
 	 * the length-guarded idiom is never written WITH the annotation, while
 	 * `final entry: Null<Entry> = entries.first()` dereferenced inside an array literal is
-	 * (TM-Haxe4 `src/tests/unit/ZipTest.hx:143`) and is a real NPE. The residual: an annotated
+	 * (the client tree `src/tests/unit/ZipTest.hx:143`) and is a real NPE. The residual: an annotated
 	 * length-guarded `pop` would be a false positive, unmeasured because no tree writes one.
 	 */
 	public function testDeclaredNullableExcludedCallStillFlagged(): Void {
@@ -688,7 +688,7 @@ class UnguardedNullableDerefTest extends Test {
 	/**
 	 * A call to a NON-NULL PREDICATE guards its argument like `x != null` does: a same-type member
 	 * that nothing can replace (`inline`, `static`, `final`) and whose whole body returns a
-	 * conjunction with `param != null` (TM `src/popups/fileDialog/share/ShareUsersStore.hx:334`).
+	 * conjunction with `param != null` (client `src/popups/fileDialog/share/ShareGuestStore.hx:334`).
 	 */
 	@:pin('control')
 	@:killer('M-NULLFLOW-PREDICATE-BLIND')

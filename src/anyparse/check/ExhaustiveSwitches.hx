@@ -29,7 +29,7 @@ using Lambda;
  *   function.
  * The holes the source cannot show are a `cast` into the abstract and a constructor the runtime calls (reflection), taken
  * as absent: the project's word that it builds the abstract's values only through its constants. The default `0` is a
- * TARGET's: a static target (hxcpp, where TM ships) starts an `Int` field at `0`, a dynamic one (JS) at `null`, so on JS
+ * TARGET's: a static target (hxcpp, where client ships) starts an `Int` field at `0`, a dynamic one (JS) at `null`, so on JS
  * an uninitialized member may hold no value at all — `zeroIsValue` is read as the static targets have it.
  */
 @:nullSafety(Strict)

@@ -611,7 +611,7 @@ class MemberOrderCheckTest extends Test {
 
 	/**
 	 * Option OFF (the default) keeps today's tight rank group: the blank between an `inline` constant and the
-	 * initialized constant of the same rank is reported and the fix removes it - the TM `FileListItemGrid` shape.
+	 * initialized constant of the same rank is reported and the fix removes it - the client `ItemListItemTile` shape.
 	 */
 	@:killer('M-MO-INLINE-OPTION-IGNORED')
 	@:pin('control')
@@ -735,7 +735,7 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
-	 * The `APIRequest2` shape: one `#else` mid-class must not degrade the whole container to
+	 * The `NetRequest2` shape: one `#else` mid-class must not degrade the whole container to
 	 * spraying rank-group blank lines over the ORIGINAL order. With alternating ranks
 	 * (var, readonly-prop, var) that fallback separates every neighbour and shreds the class.
 	 */
@@ -1151,7 +1151,7 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
-	/** The Cropping11Popup shape: a side-effecting final flips only with init-less members; the fix converges canonical. */
+	/** The CropSquarePopup shape: a side-effecting final flips only with init-less members; the fix converges canonical. */
 	public function testUninitFlipFixConvergesCanonical(): Void {
 		final src: String = 'class C {\n\tprivate final a:Int;\n\n\tprivate var b:Float;\n\n\tprivate final s:Foo = new Foo(1);\n'
 			+ '\tprivate final c:Point;\n}';
@@ -1161,7 +1161,7 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('final c') < fixed.indexOf('var b'), 'vars after finals: $fixed');
 	}
 
-	/** A sibling read of an INLINE constant is compile-time folded — the reader reorders across it freely (the ShareControl shape). */
+	/** A sibling read of an INLINE constant is compile-time folded — the reader reorders across it freely (the LinkControls shape). */
 	public function testSiblingReadOfInlineConstantReorders(): Void {
 		final src: String = 'class C { private static inline final P:Int = 16; public static inline final W:Int = (116 + P) * 2; }';
 		Assert.equals(1, violations(src).length);

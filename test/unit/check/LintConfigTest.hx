@@ -403,11 +403,11 @@ class LintConfigTest extends Test {
 			final read: LintConfig -> Null<Array<String>> = c ->
 				key == 'reflectiveClasses' ? c.reflectiveClasses() : c.reflectiveMethodHolders();
 			Assert.isNull(read(LintConfig.parse('{}')), key);
-			final drill: LintConfig = LintConfig.parse('{"$key": ["drill.**", "__ASSET__*"]}');
-			Assert.same(['drill.**', '__ASSET__*'], read(drill), key);
-			final other: LintConfig = LintConfig.parse('{"$key": ["drill.**"]}');
+			final model: LintConfig = LintConfig.parse('{"$key": ["model.**", "__ASSET__*"]}');
+			Assert.same(['model.**', '__ASSET__*'], read(model), key);
+			final other: LintConfig = LintConfig.parse('{"$key": ["model.**"]}');
 			final none: LintConfig = LintConfig.parse('{}');
-			final configs: Map<String, LintConfig> = ['a' => drill, 'b' => other, 'c' => none];
+			final configs: Map<String, LintConfig> = ['a' => model, 'b' => other, 'c' => none];
 			final resolve: String -> LintConfig = path -> configs[path] ?? none;
 			final bound: Array<String> -> Null<Array<String>> = paths -> {
 				var out: Null<Array<String>> = null;
@@ -416,7 +416,7 @@ class LintConfigTest extends Test {
 				);
 				out;
 			};
-			Assert.same(['drill.**', '__ASSET__*'], bound(['a', 'a']), key);
+			Assert.same(['model.**', '__ASSET__*'], bound(['a', 'a']), key);
 			Assert.isNull(bound(['a', 'b']), key);
 			Assert.isNull(bound(['a', 'c']), key);
 			Assert.isNull(bound(['c', 'c']), key);

@@ -245,7 +245,7 @@ final class LintConfig {
 
 	/**
 	 * The classes the project declares a class value may be made of from a name the compiler facts cannot read
-	 * (`reflectiveClasses`): globs over qualified type names (`drill.**`, `__ASSET__*`), a star within one dotted segment
+	 * (`reflectiveClasses`): globs over qualified type names (`model.**`, `__ASSET__*`), a star within one dotted segment
 	 * and a double star across segments (`Glob.qualifiedNames`). A name computed at run time and handed to
 	 * `Type.resolveClass`, a producer read as a value, a producer's body the compiler spliced in — each makes a class
 	 * value of a class one of the globs matches, by the qualified name of the class itself (a subtype is matched by its

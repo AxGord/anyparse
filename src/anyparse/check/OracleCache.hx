@@ -505,7 +505,7 @@ final class OracleCache {
 		}
 		if (!memoise && walks != null) {
 			// One walk per directory for every configuration a caller fingerprints at once
-			// (`OracleRunMemo.fingerprints`): thirteen TM builds share the project root, and
+			// (`OracleRunMemo.fingerprints`): thirteen client builds share the project root, and
 			// walking it per build was 43 of a 533 s `--fix` run. The union is the same —
 			// a file a nested root shares with its enclosing one hashes the same either way.
 			final walked: Map<String, String> = walks[dir] ?? [];

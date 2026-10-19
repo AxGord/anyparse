@@ -18,8 +18,8 @@ import utest.Test;
  *    other fragment is an independent guarded statement and must keep
  *    demanding the `;`, otherwise the postfix reading wins and glues
  *    two unrelated statements together -- the third test is that guard,
- *    taken verbatim from Tactics Manager
- *    `video/GpuDirectPipeline.hx:48`.
+ *    taken verbatim from a client project
+ *    `video/GpuInlinePipeline.hx:48`.
  */
 @:nullSafety(Strict)
 final class HxExprStmtTerminatorSliceTest extends Test {

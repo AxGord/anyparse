@@ -43,12 +43,12 @@ class ImportBlockOrderCheckTest extends Test {
 		+ 'import pkg.mid.SetBeta;\nimport util.Valid;\nimport app.deep.Mod.Widget;\n\nclass C {}\n';
 
 	/**
-	 * The WEDGE incident, verbatim from `TM/src/tests/unit/FileSystemSyncTest.hx`: a `#if`-guarded
+	 * The WEDGE incident, verbatim from `tests/unit/DiskSystemSyncTest.hx`: a `#if`-guarded
 	 * `#error` header, a wildcard import, a sorted run, a `using`, then a SECOND sorted run.
 	 */
 	private static inline final WEDGE: String = 'package tests.unit;\n\n#if !UNIT_TESTS\n#error "unit only"\n#end\n'
-		+ 'import tink.unit.Assert.*;\nimport fs.DrillsFolderWatcher;\nimport fs.FSUtil;\nimport haxe.io.Path;\n\n'
-		+ 'using tink.CoreApi;\n\nimport fs.FolderWatcher;\nimport haxe.Exception;\n\nclass C {}\n';
+		+ 'import tink.unit.Assert.*;\nimport fs.ModelsVolumeWatcher;\nimport fs.PathIO;\nimport haxe.io.Path;\n\n'
+		+ 'using tink.CoreApi;\n\nimport fs.VolumeWatcher;\nimport haxe.Exception;\n\nclass C {}\n';
 
 	/** The `usingAfterImports` opt-out — the pre-wedge reading, where a `using` is an immovable run boundary. */
 	private static inline final KEEP_USING: String = '{"rules":{"import-order":{"usingAfterImports":false}}}';
@@ -65,7 +65,7 @@ class ImportBlockOrderCheckTest extends Test {
 		{ file: 'a/Alpha.hx', source: 'package a;\n\nclass Alpha {}\n' },
 		{ file: 'b/Bee.hx', source: 'package b;\n\nclass Bee {}\n' },
 		{ file: 'z/Zeta.hx', source: 'package z;\n\nclass Zeta {}\n' },
-		{ file: 'fs/FSUtil.hx', source: 'package fs;\n\nclass FSUtil {}\n' },
+		{ file: 'fs/PathIO.hx', source: 'package fs;\n\nclass PathIO {}\n' },
 		{ file: 'haxe/io/Path.hx', source: 'package haxe.io;\n\nclass Path {}\n' },
 		{
 			file: 'tink/unit/Assert.hx',
@@ -222,18 +222,18 @@ class ImportBlockOrderCheckTest extends Test {
 	// --- wildcard MEMBERS: a wildcard joins the block when its position decides nothing ---
 
 	/**
-	 * The incident, `TM/src/tests/unit/FolderWatcherTest.hx`'s header: a field wildcard written ABOVE
+	 * The incident, `tests/unit/VolumeWatcherTest.hx`'s header: a field wildcard written ABOVE
 	 * the block it sorts into. `tink.unit.Assert` declares one static, which no other line binds, so
 	 * the wildcard is a line like any other and the block is reported and sorted with it.
 	 */
 	@:pin('control') @:killer('M-WILDGATE-NEVER-JOINS', 'M-RUN-GATE-NO-INDEX', 'M-FIX-GATE-NO-INDEX')
 	public function testAFieldWildcardWithFreeNamesJoinsTheBlock(): Void {
 		final src: String = 'package tests.unit;\n\n#if !UNIT_TESTS\n#error "unit only"\n#end\nimport tink.unit.Assert.*;\n'
-			+ 'import fs.FSUtil;\nimport haxe.io.Path;\nimport tink.testrunner.Assertion;\n\nusing tink.CoreApi;\n\nclass C {}\n';
+			+ 'import fs.PathIO;\nimport haxe.io.Path;\nimport tink.testrunner.Assertion;\n\nusing tink.CoreApi;\n\nclass C {}\n';
 		final vs: Array<Violation> = violations(src, null, WILD_LIBS);
 		Assert.equals(1, vs.length);
-		if (vs.length == 1) Assert.isTrue(vs[0].message.contains("'fs.FSUtil'"), vs[0].message);
-		final expected: String = 'package tests.unit;\n\n#if !UNIT_TESTS\n#error "unit only"\n#end\nimport fs.FSUtil;\n'
+		if (vs.length == 1) Assert.isTrue(vs[0].message.contains("'fs.PathIO'"), vs[0].message);
+		final expected: String = 'package tests.unit;\n\n#if !UNIT_TESTS\n#error "unit only"\n#end\nimport fs.PathIO;\n'
 			+ 'import haxe.io.Path;\nimport tink.testrunner.Assertion;\nimport tink.unit.Assert.*;\n\n'
 			+ 'using tink.CoreApi;\n\nclass C {}\n';
 		Assert.equals(expected, fixed(src, null, WILD_LIBS));
@@ -321,7 +321,7 @@ class ImportBlockOrderCheckTest extends Test {
 	@:pin('control') @:killer('M-WILDGATE-EXPLICIT-UNKNOWN-FREE')
 	public function testAnUnindexedExplicitMemberKeepsAFieldWildcardABoundary(): Void {
 		Assert.equals(
-			0, violations(module('import tink.unit.Assert.*;\nimport fs.FSUtil;\nimport mystery.Box;\n'), null, WILD_LIBS).length
+			0, violations(module('import tink.unit.Assert.*;\nimport fs.PathIO;\nimport mystery.Box;\n'), null, WILD_LIBS).length
 		);
 	}
 
@@ -606,7 +606,7 @@ class ImportBlockOrderCheckTest extends Test {
 		// Both runs are ordered on their own, so nothing was reported before the wedge reading — the
 		// file was a fixed point no rule repaired. The fix must also be its own fixed point.
 		final expected: String = 'package tests.unit;\n\n#if !UNIT_TESTS\n#error "unit only"\n#end\nimport tink.unit.Assert.*;\n'
-			+ 'import fs.DrillsFolderWatcher;\nimport fs.FSUtil;\nimport fs.FolderWatcher;\nimport haxe.Exception;\n'
+			+ 'import fs.ModelsVolumeWatcher;\nimport fs.PathIO;\nimport fs.VolumeWatcher;\nimport haxe.Exception;\n'
 			+ 'import haxe.io.Path;\n\nusing tink.CoreApi;\n\nclass C {}\n';
 		Assert.equals(expected, fixed(WEDGE));
 		Assert.equals(0, violations(expected).length, 'the fix converges in one pass');
@@ -616,7 +616,7 @@ class ImportBlockOrderCheckTest extends Test {
 		switch CanonicalEdit.canonicalize(WEDGE, edits(WEDGE), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.contains('import haxe.io.Path;\n\nusing tink.CoreApi;'), text);
-				Assert.isTrue(text.contains('import fs.FSUtil;\nimport fs.FolderWatcher;'), text);
+				Assert.isTrue(text.contains('import fs.PathIO;\nimport fs.VolumeWatcher;'), text);
 			case Err(message):
 				Assert.fail('wedge canonicalize Err: $message');
 		}

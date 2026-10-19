@@ -57,7 +57,7 @@ final class HxCondSpliceTailSliceTest extends Test {
 
 	/**
 	 * The same shape in a member initializer, and with a postfix operand after the operator —
-	 * TM `popups/help/HelpStyle.hx:15` and `popups/help/HelpMessageForm.hx:155`, the two live
+	 * client `popups/help/HintStyle.hx:15` and `popups/help/HintMessageForm.hx:155`, the two live
 	 * sites of this sub-shape.
 	 */
 	public function testTheOperatorFragmentInAMemberInitializer(): Void {
@@ -75,7 +75,7 @@ final class HxCondSpliceTailSliceTest extends Test {
 	 * whole reason this sub-shape has a production of its own rather than sharing the operator
 	 * one's `@:fmt(fillParts)` assembly: a fill seam would spend a space on that gap.
 	 *
-	 * TM `popups/sessionPlanner/SavedSessions.hx:45` and
+	 * client `popups/projectPlanner/SavedProjects.hx:45` and
 	 * `popups/settings/account/Account.hx:73`; Pony `pony/net/rpc/IRPC.hx:160` is the array form.
 	 */
 	public function testALeadingCommaFragmentKeepsTheCommaTight(): Void {
@@ -99,8 +99,8 @@ final class HxCondSpliceTailSliceTest extends Test {
 
 	/**
 	 * A fragment neither structured branch can represent stays raw and keeps its note. Three
-	 * shapes, one per reason: a switch arm split across branches (TM
-	 * `crashdumper/CrashDumper.hx:376`), a fragment carrying its own `#else`, and a
+	 * shapes, one per reason: a switch arm split across branches (client
+	 * `crashreport/CrashReport.hx:376`), a fragment carrying its own `#else`, and a
 	 * MULTI-element comma run — the last is `HxCondSpliceListTail`'s declared limit, since
 	 * every inter-element separator this writer offers would put a space before the comma.
 	 */

@@ -356,7 +356,7 @@ final class NamingCrossRenameTest extends Test {
 
 	public function testPascalCase(): Void {
 		Assert.equals('Printer', HaxeIdentifierCase.pascalCase('__Printer'));
-		Assert.equals('PitchActions', HaxeIdentifierCase.pascalCase('PITCH_ACTIONS'));
+		Assert.equals('StageActions', HaxeIdentifierCase.pascalCase('STAGE_ACTIONS'));
 		Assert.equals('JsonField', HaxeIdentifierCase.pascalCase('JSON_FIELD'));
 		Assert.equals('Goals', HaxeIdentifierCase.pascalCase('goals'));
 		Assert.equals('MutliLineTextField', HaxeIdentifierCase.pascalCase('__MutliLineTextField'));
@@ -518,7 +518,7 @@ final class NamingCrossRenameTest extends Test {
 
 	/**
 	 * A private member of a type whose SIMPLE name another package reuses: the namesake's subtypes are not
-	 * this type's, so the member stays confined and the single-file rename takes it (TM `Zoom.IconButton.icon`
+	 * this type's, so the member stays confined and the single-file rename takes it (client `Zoom.IconButton.icon`
 	 * beside `common.ui.components.IconButton`).
 	 */
 	@:pin('control')

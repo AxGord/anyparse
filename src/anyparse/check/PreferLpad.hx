@@ -18,9 +18,9 @@ using Lambda;
  *
  * ```haxe
  * for (i in 1...145)
- *     items.push(if (i < 10) 'goals3d000$i' else if (i < 100) 'goals3d00$i' else 'goals3d0$i');
+ *     items.push(if (i < 10) 'cones3d000$i' else if (i < 100) 'cones3d00$i' else 'cones3d0$i');
  * // ->
- * for (i in 1...145) items.push('goals3d' + '$i'.lpad('0', 4));
+ * for (i in 1...145) items.push('cones3d' + '$i'.lpad('0', 4));
  * ```
  *
  * `Severity.Info` -- the input is correct, this is a readability simplification -- and `DefaultOff`,

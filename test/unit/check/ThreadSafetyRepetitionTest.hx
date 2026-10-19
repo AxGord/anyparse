@@ -16,7 +16,7 @@ using Lambda;
  */
 class ThreadSafetyRepetitionTest extends Test {
 
-	/** TM's shape of a user helper looping over a callback (`each(xs, f)`): no `iterates` entry, so it repeats. */
+	/** the client's shape of a user helper looping over a callback (`each(xs, f)`): no `iterates` entry, so it repeats. */
 	@:pin('control') @:killer('M-TS-REPEAT-NO-ITERATES')
 	public function testAValueHandedToAnUnlistedCallRepeats(): Void {
 		#if (sys || nodejs)
@@ -154,7 +154,7 @@ class ThreadSafetyRepetitionTest extends Test {
 		#end
 	}
 
-	/** TM's `ThreadsUtil`: a background loop posts a task per item, and the main thread runs every pending task in one frame. */
+	/** the client's `ThreadUtils`: a background loop posts a task per item, and the main thread runs every pending task in one frame. */
 	@:pin('control') @:killer('M-TS-MARSHAL-OWNER-OFF')
 	public function testAMarshalledValueRepeats(): Void {
 		#if (sys || nodejs)
@@ -262,7 +262,7 @@ class ThreadSafetyRepetitionTest extends Test {
 	}
 
 	/**
-	 * TM's `StandardFileSystem.deleteItemInternal#6`: a warning owned by a value handed to an iterating call is keyed by
+	 * the client's `StandardDiskSystem.deleteItemInternal#6`: a warning owned by a value handed to an iterating call is keyed by
 	 * that call, never by the lambda's number in its file, which an unrelated lambda shifts.
 	 */
 	@:pin('control') @:killer('M-TS-HAND-SUBJECT')

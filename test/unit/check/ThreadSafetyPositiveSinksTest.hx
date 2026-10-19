@@ -15,7 +15,7 @@ using Lambda;
 /**
  * The sinks are POSITIVE: the runtime library's blocking calls (`ExecutionShape.blockingLibraryCalls`) and the project's
  * own natives (`ProjectNatives`) block wherever the rule runs, `sinks` adds to them and `nonBlocking` waives one only on
- * evidence. Before, a blocking call a project forgot to list was silently invisible — TM lacked `FileSystem.exists`,
+ * evidence. Before, a blocking call a project forgot to list was silently invisible — client lacked `FileSystem.exists`,
  * `isDirectory`, `nativeSetTimestamp` and `Sys.command` until they were added by hand.
  */
 class ThreadSafetyPositiveSinksTest extends Test {

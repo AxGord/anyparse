@@ -150,7 +150,7 @@ class RedundantMapIterKeyCheckTest extends Test {
 
 	/**
 	 * Only a class a `Map` value may BE vetoes it: a library's subclass of `BalancedTree` (tink_macro's `TypeMap`, met
-	 * on TM) is no map a `Map` holds, so the key still goes.
+	 * on the client corpus) is no map a `Map` holds, so the key still goes.
 	 */
 	public function testASubclassOfAClassNoMapHoldsVetoesNothing(): Void {
 		final src: String = localMap('new Map()', 'g(v);');

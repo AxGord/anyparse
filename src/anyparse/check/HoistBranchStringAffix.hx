@@ -21,14 +21,14 @@ import anyparse.runtime.Span;
  *
  * ```haxe
  * #if flash
- * return 'SystemData${endl()}{${endl()}  OS: $osName${endl()}}';
+ * return 'HostReport${endl()}{${endl()}  OS: $osName${endl()}}';
  * #elseif mobile
- * return 'SystemData${endl()}{${endl()}  RAM: $totalMemory${endl()}}';
+ * return 'HostReport${endl()}{${endl()}  RAM: $totalMemory${endl()}}';
  * #else
- * return 'SystemData${endl()}{${endl()}  GPU: $gpuName${endl()}}';
+ * return 'HostReport${endl()}{${endl()}  GPU: $gpuName${endl()}}';
  * #end
  * // ->
- * return 'SystemData${endl()}{${endl()}'
+ * return 'HostReport${endl()}{${endl()}'
  *     + #if flash '  OS: $osName' #elseif mobile '  RAM: $totalMemory' #else '  GPU: $gpuName' #end
  *     + '${endl()}}';
  * ```
@@ -65,7 +65,7 @@ import anyparse.runtime.Span;
  * ## The emitted region is a first-class node, not a raw splice
  *
  * A `#if` in EXPRESSION position is only swallowed as an opaque `CondSpliceExpr` when its branches
- * do not each form ONE balanced expression -- the shape the sibling `SystemData.toString` has,
+ * do not each form ONE balanced expression -- the shape the sibling `HostReport.toString` has,
  * where the region straddles the `+` operators. What this rule emits gives every branch exactly one
  * expression, which parses as a `ConditionalExpr` whose branch values are fully modelled. So the
  * rewrite does not trade a parsed region for an opaque one; it produces the BETTER of the two

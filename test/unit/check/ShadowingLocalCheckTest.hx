@@ -275,15 +275,15 @@ class ShadowingLocalCheckTest extends Test {
 		Assert.isTrue(found[0].message.indexOf('shadowing declaration') == 0, 'expected the block, got: ${found[0].message}');
 	}
 
-	/** TM `PlayerOptionsGroup`: an event parameter nothing reads after the shadow — the inner takes its type's name. */
+	/** client `SpriteOptionsGroup`: an event parameter nothing reads after the shadow — the inner takes its type's name. */
 	@:pin('control')
 	@:killer('M-SHADOWING-LOCAL-NO-RENAME')
 	public function testFixRenamesTheInnerAfterItsWrittenType(): Void {
-		final src: String = 'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n'
+		final src: String = 'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal event:SidebarTabEvent = new SidebarTabEvent(1);\n'
 			+ '\t\tevent.data = 2;\n\t\tdispatch(event);\n\t}\n}';
 		Assert.equals(
-			'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal rightPanelEvent:RightPanelEvent = new RightPanelEvent(1);\n'
-			+ '\t\trightPanelEvent.data = 2;\n\t\tdispatch(rightPanelEvent);\n\t}\n}',
+			'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal sidebarTabEvent:SidebarTabEvent = new SidebarTabEvent(1);\n'
+			+ '\t\tsidebarTabEvent.data = 2;\n\t\tdispatch(sidebarTabEvent);\n\t}\n}',
 			CheckFixture.fixedSource(new ShadowingLocal(), src)
 		);
 	}
@@ -292,13 +292,13 @@ class ShadowingLocalCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-SHADOWING-LOCAL-OUTER-READ-IGNORED')
 	public function testFixKeepsAShadowWhoseHiddenBindingIsReadAfter(): Void {
-		final src: String = 'class C {\n\tfunction h(event:Event):Void {\n\t\tif (c) {\n\t\t\tfinal event:RightPanelEvent = new '
-			+ 'RightPanelEvent(1);\n\t\t\tdispatch(event);\n\t\t}\n\t\ttrace(event);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction h(event:Event):Void {\n\t\tif (c) {\n\t\t\tfinal event:SidebarTabEvent = new '
+			+ 'SidebarTabEvent(1);\n\t\t\tdispatch(event);\n\t\t}\n\t\ttrace(event);\n\t}\n}';
 		Assert.equals(src, CheckFixture.fixedSource(new ShadowingLocal(), src));
 		Assert.isTrue((declineOf(src) ?? '').indexOf('read after this declaration') != -1, 'got: ${declineOf(src)}');
 	}
 
-	/** TM `DatePicker`: a same-block `var` redeclared with the same written type becomes an assignment. */
+	/** client `DatePicker`: a same-block `var` redeclared with the same written type becomes an assignment. */
 	@:pin('control')
 	@:killer('M-SHADOWING-LOCAL-NO-ASSIGNMENT')
 	public function testFixTurnsASameBlockRedeclarationIntoAnAssignment(): Void {
@@ -328,12 +328,12 @@ class ShadowingLocalCheckTest extends Test {
 	/** A nested function rebinding the name, and the name in a string of the scope, keep the rename off. */
 	public function testFixRefusesARenameItCannotAccountFor(): Void {
 		for (src in [
-			'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n'
+			'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal event:SidebarTabEvent = new SidebarTabEvent(1);\n'
 			+ '\t\txs.map(event -> event);\n\t\tdispatch(event);\n\t}\n}',
-			'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n'
+			'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal event:SidebarTabEvent = new SidebarTabEvent(1);\n'
 			+ '\t\tjs.Syntax.code("event.x");\n\t\tdispatch(event);\n\t}\n}',
-			'class C {\n\tfunction h(event:Event):Void {\n\t\tvar rightPanelEvent = 0;\n'
-			+ '\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n\t\tdispatch(event, rightPanelEvent);\n\t}\n}'
+			'class C {\n\tfunction h(event:Event):Void {\n\t\tvar sidebarTabEvent = 0;\n'
+			+ '\t\tfinal event:SidebarTabEvent = new SidebarTabEvent(1);\n\t\tdispatch(event, sidebarTabEvent);\n\t}\n}'
 		]) {
 			Assert.equals(src, CheckFixture.fixedSource(new ShadowingLocal(), src));
 			Assert.notNull(declineOf(src));

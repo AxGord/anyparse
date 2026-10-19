@@ -53,7 +53,7 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 		Assert.equals('trace(v)', es[0].text);
 	}
 
-	/** The multi-line TM shape this check was written for (`FileSystemBase` move comparator, anonymized). */
+	/** The multi-line client shape this check was written for (`DiskSystemBase` move comparator, anonymized). */
 	public function testFixTmComparatorFixture(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
 			'class C {\n\tfunction f():Void {\n\t\titems.sort((a:SortedPairEntryDetail, b:SortedPairEntryDetail) -> {\n'

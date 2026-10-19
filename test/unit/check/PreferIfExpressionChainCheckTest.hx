@@ -22,22 +22,22 @@ import utest.Test;
  */
 class PreferIfExpressionChainCheckTest extends Test {
 
-	/** The TM `FileSystemBase` move comparator after `prefer-lambda-expression-body` collapsed its block (anonymized). */
-	private static inline final TM_TERNARY_COMPARATOR: String =
+	/** The client `DiskSystemBase` move comparator after `prefer-lambda-expression-body` collapsed its block (anonymized). */
+	private static inline final RW_TERNARY_COMPARATOR: String =
 		'class C {\n\tfunction f():Void {\n\t\titems.sort((a:SortedPairEntryDetail, b:SortedPairEntryDetail) -> a.nodeName < b.nodeName ? -1 : a.nodeName > b.nodeName ? 1 : 0);\n\t}\n}';
 
-	/** TM `SharedRelink.decide` after `prefer-ternary-return` folded its guard ladder (anonymized) — the carry flagship. */
-	private static inline final TM_RELINK_DECISION: String =
+	/** client `MirrorRelink.decide` after `prefer-ternary-return` folded its guard ladder (anonymized) — the carry flagship. */
+	private static inline final RW_RELINK_DECISION: String =
 		'class C {\n\tfunction f():RebindDecision {\n\t\treturn !visible || remoteHostTag < 0\n\t\t\t? KeepLink\n\t\t\t: dbLocalTag == remoteHostTag\n\t\t\t\t? KeepLink // already correctly paired\n\t\t\t\t: groupAllowEdit && pendingAction == QUEUED_STATE_LOCAL_PENDING ? RebindAsEdit : RebindAsSteady;\n\t}\n}';
 
 	/** A ternary nested in the THEN arm — the shape inversion reaches, silent before it. */
 	private static inline final THEN_NESTED: String = 'class C {\n\tfunction f():Int {\n\t\treturn a ? b ? 1 : 2 : 3;\n\t}\n}';
 
-	/** TM `TimeInput.get_hrs` (anonymized) — a null guard duplicated into the conjunction, held by short-circuiting. */
-	private static inline final TM_NULL_GUARDED_ACCESSOR: String =
+	/** client `TimeInput.get_hrs` (anonymized) — a null guard duplicated into the conjunction, held by short-circuiting. */
+	private static inline final RW_NULL_GUARDED_ACCESSOR: String =
 		"class C {\n\tfunction f():String {\n\t\treturn sel != null ? sel.data.data == -1 ? 'N/A' : sel.data.text : '';\n\t}\n}";
 
-	/** A ternary chain as the value of a `case` arm — the shape TM's `getColorPickerType` writes five times over. */
+	/** A ternary chain as the value of a `case` arm — the shape the client's `getColorPickerType` writes five times over. */
 	private static inline final CASE_ARM_CHAIN: String =
 		'class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1:\n\t\t\t\ta ? 1 : b ? 2 : 3;\n\t\t\tcase _:\n\t\t}\n\t}\n}';
 
@@ -65,8 +65,8 @@ class PreferIfExpressionChainCheckTest extends Test {
 	private static inline final CANONICAL_CHAIN_WITH_TERNARY_RUNG_VALUE: String =
 		'class C {\n\tfunction f(a:Entry, b:Entry):Int {\n\t\treturn if (a.sticky != b.sticky)\n\t\t\ta.sticky ? -1 : 1\n\t\telse if (a.weight != b.weight)\n\t\t\ta.weight > b.weight ? -1 : 1\n\t\telse\n\t\t\tcompareNames(a.cls, b.cls);\n\t}\n}';
 
-	/** The TM `FileSystemBase` cloud-queue comparator — already canonical, so a 0-finding fixed point (anonymized). */
-	private static inline final TM_IF_CHAIN_COMPARATOR: String =
+	/** The client `DiskSystemBase` cloud-queue comparator — already canonical, so a 0-finding fixed point (anonymized). */
+	private static inline final RW_IF_CHAIN_COMPARATOR: String =
 		'class C {\n\tfunction f():Void {\n\t\tstack.sort((a:StoredEntryRecord, b:StoredEntryRecord) ->\n\t\t\tif (a.nested && !b.nested)\n\t\t\t\t-1\n\t\t\telse if (!a.nested && b.nested)\n\t\t\t\t1\n\t\t\telse\n\t\t\t\tSortHelper.orderTextValuesForKey(a.nodeName, b.nodeName)\n\t\t);\n\t}\n}';
 
 	public function testTernaryChainFlagged(): Void {
@@ -92,7 +92,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	}
 
 	public function testFixTmComparatorFixture(): Void {
-		final es: Array<{ span: Span, text: String }> = edits(TM_TERNARY_COMPARATOR);
+		final es: Array<{ span: Span, text: String }> = edits(RW_TERNARY_COMPARATOR);
 		Assert.equals(1, es.length);
 		Assert.equals('if (a.nodeName < b.nodeName) -1 else if (a.nodeName > b.nodeName) 1 else 0', es[0].text);
 	}
@@ -105,9 +105,9 @@ class PreferIfExpressionChainCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\treturn a ? 1 : 2;\n\t}\n}').length);
 	}
 
-	/** The already-canonical TM comparator: a chain with no ternary rung is the 0-finding fixed point. */
+	/** The already-canonical client comparator: a chain with no ternary rung is the 0-finding fixed point. */
 	public function testIfExpressionChainNotFlagged(): Void {
-		Assert.equals(0, violations(TM_IF_CHAIN_COMPARATOR).length);
+		Assert.equals(0, violations(RW_IF_CHAIN_COMPARATOR).length);
 	}
 
 	/**
@@ -284,21 +284,21 @@ class PreferIfExpressionChainCheckTest extends Test {
 	}
 
 	/**
-	 * The flagship: TM `SharedRelink.decide` as `prefer-ternary-return` leaves it (anonymized) —
+	 * The flagship: client `MirrorRelink.decide` as `prefer-ternary-return` leaves it (anonymized) —
 	 * a guard ladder already folded into a nested ternary, one arm still carrying the trailing
 	 * comment that used to sit after its `return`. Before the carry that comment refused the whole
 	 * chain, so the fixed point of the pipeline was the ternary form; now it converges to the
 	 * if-expression chain with the comment still on the arm it describes.
 	 */
 	public function testTmRelinkChainCarriesArmComment(): Void {
-		final es: Array<{ span: Span, text: String }> = edits(TM_RELINK_DECISION);
+		final es: Array<{ span: Span, text: String }> = edits(RW_RELINK_DECISION);
 		Assert.equals(1, es.length);
 		Assert.equals(
 			'if (!visible || remoteHostTag < 0) KeepLink else if (dbLocalTag == remoteHostTag) KeepLink // already correctly paired\n'
 			+ 'else if (groupAllowEdit && pendingAction == QUEUED_STATE_LOCAL_PENDING) RebindAsEdit else RebindAsSteady',
 			es[0].text
 		);
-		Assert.equals(0, violations(CanonicalEdit.applyEdits(TM_RELINK_DECISION, es)).length);
+		Assert.equals(0, violations(CanonicalEdit.applyEdits(RW_RELINK_DECISION, es)).length);
 	}
 
 	/** Every copied piece is cut back to its last token — a non-leaf span runs on through the trivia after it. */
@@ -321,7 +321,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	/**
 	 * The VALUE POSITION OF A `case` ARM is a host: the arm's `:` and the statement's `;`
 	 * delimit it exactly as a `return` does, and the formatter renders the ladder there under
-	 * `expressionIf: "next"`. The five `getColorPickerType` arms in TM are the shape.
+	 * `expressionIf: "next"`. The five `getColorPickerType` arms in the client corpus are the shape.
 	 */
 	public function testCaseArmValueFlagged(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(CASE_ARM_CHAIN);
@@ -444,14 +444,14 @@ class PreferIfExpressionChainCheckTest extends Test {
 	}
 
 	/**
-	 * The TM `TimeInput` accessor (anonymized): the null guard inverts to `if (sel == null) …`,
+	 * The client `TimeInput` accessor (anonymized): the null guard inverts to `if (sel == null) …`,
 	 * and `sel` still narrows to non-null in every branch behind it.
 	 */
 	public function testInvertedNullGuardStillNarrows(): Void {
-		final es: Array<{ span: Span, text: String }> = edits(TM_NULL_GUARDED_ACCESSOR);
+		final es: Array<{ span: Span, text: String }> = edits(RW_NULL_GUARDED_ACCESSOR);
 		Assert.equals(1, es.length);
 		Assert.equals("if (sel == null) '' else if (sel.data.data == -1) 'N/A' else sel.data.text", es[0].text);
-		Assert.equals(0, violations(CanonicalEdit.applyEdits(TM_NULL_GUARDED_ACCESSOR, es)).length);
+		Assert.equals(0, violations(CanonicalEdit.applyEdits(RW_NULL_GUARDED_ACCESSOR, es)).length);
 	}
 
 	/** The output is the fixed point: the emitted chain has no ternary rung left, so nothing draws it back. */

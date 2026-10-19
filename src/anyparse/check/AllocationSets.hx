@@ -13,8 +13,8 @@ using Lambda;
 /**
  * The classes a dispatched call's receiver may be an instance of, where the code says: the running object's (handed
  * down a call path), or a field every value of which is a `new` the project writes — a SEALED allocation set. A
- * dispatch no class of the set resolves to the call's target never runs on that path (`BaseNativeURLLoader.load`'s
- * `go()` on a loader `APIRequest2.doRequest` only ever builds as a thread or simple loader is never the blocking one).
+ * dispatch no class of the set resolves to the call's target never runs on that path (`BaseNativeURLReader.load`'s
+ * `go()` on a loader `NetRequest2.doRequest` only ever builds as a thread or simple loader is never the blocking one).
  * A class the run declares nowhere is a library's, which runs no project override, only when the run sees the whole
  * project (`FieldWrites.complete`) and the file names it by a path or an import of it.
  * Positive: any other receiver, any other write or declared value, a name an import aliases, a type parameter, a run

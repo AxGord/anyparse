@@ -19,7 +19,7 @@ import utest.Test;
  */
 class HoistBranchStringAffixCheckTest extends Test {
 
-	/** The motivating shape (anonymized from `crashdumper.SystemData.summary`): three branches, shared head AND tail. */
+	/** The motivating shape (anonymized from `crashreport.HostReport.summary`): three branches, shared head AND tail. */
 	private static inline final REGION: String = 'class C {\n\tpublic function f():String {\n'
 		+ '\t\t#if flash\n\t\treturn \'Data$${sep()}{$${sep()}  A: $$a$${sep()}}\';\n'
 		+ '\t\t#elseif mobile\n\t\treturn \'Data$${sep()}{$${sep()}  B: $$b$${sep()}}\';\n'

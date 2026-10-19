@@ -71,7 +71,7 @@ class ThreadSafetyFindingDataTest extends Test {
 	}
 
 	/**
-	 * TM's `FileListMoveFiles.moveItems` loop over a long sink (`File.getContent` per moved drill): the call warns at itself,
+	 * the client's `ItemListMoveItems.moveItems` loop over a long sink (`File.getContent` per moved model): the call warns at itself,
 	 * no key of its own added, and its message and data say what repeats it — a loop up the main thread's way, or one
 	 * around the call itself — which ranks a per-item stall above a one-off one.
 	 */
@@ -131,7 +131,7 @@ class ThreadSafetyFindingDataTest extends Test {
 		#end
 	}
 
-	/** The warning one main-thread way's sink calls fold into carries what repeats each of them (TM's `closeFileSystems` waits). */
+	/** The warning one main-thread way's sink calls fold into carries what repeats each of them (the client's `closeFileSystems` waits). */
 	@:pin('control') @:killer('M-TS-REPEATED-BY-MERGE')
 	public function testTheWayWarningCarriesWhatRepeatsItsFoldedCalls(): Void {
 		#if (sys || nodejs)
@@ -150,7 +150,7 @@ class ThreadSafetyFindingDataTest extends Test {
 	}
 
 	/**
-	 * The warning every main-thread take of one lock folds into carries what repeats each folded take (review round 4: TM's
+	 * The warning every main-thread take of one lock folds into carries what repeats each folded take (review round 4: the client's
 	 * `Store.get` stopped naming `Main.reboot`, which repeats `Store.remove`'s take of the same lock).
 	 */
 	@:pin('control') @:killer('M-TS-ONE-TAKE-MERGE')

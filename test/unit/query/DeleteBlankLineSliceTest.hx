@@ -27,7 +27,7 @@ using StringTools;
  * It is CONFIG-CONDITIONAL, which is why it survived so long: the run only
  * survives under a writer config that permits two consecutive blank lines
  * (`emptyLines.maxAnywhereInFile: 2`, which is this project's own setting). Under
- * the compiled defaults, and under the TM tree's `maxAnywhereInFile: 1`, the writer
+ * the compiled defaults, and under the client tree's `maxAnywhereInFile: 1`, the writer
  * collapses the run and the broken span is invisible. Every test here therefore
  * threads `KEEPS_TWO_BLANKS` explicitly rather than relying on whatever config the
  * runner happens to discover.
@@ -43,7 +43,7 @@ class DeleteBlankLineSliceTest extends Test {
 	 * This project's own `emptyLines` block, verbatim. Every test threads it, because the
 	 * compiled defaults differ from it in two ways that each make a fixture lie.
 	 * `maxAnywhereInFile` defaults below 2, so the writer collapses the doubled run and
-	 * hides the defect entirely — the TM tree sets 1 and is immune for that reason. And
+	 * hides the defect entirely — the client tree sets 1 and is immune for that reason. And
 	 * `classEmptyLines.beginType` / `endType` default to 0, so a type body opens flush
 	 * against its first member, and the first / last member cases would then measure a
 	 * blank line the writer never emits. A PARTIAL config is no safer than none: the keys

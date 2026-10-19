@@ -37,7 +37,7 @@ using StringTools;
  * except the `{` leaving it. That holds for a body with ONE arm. A body with several arms
  * puts its branch keywords into whatever syntactic position the lambda occupies, and in the
  * dominant position — a call argument — the result reads as one run of punctuation:
- * `success -> if (success) API.login(…); else LoadView.hideAsyncMask(),` ends a line on `;`,
+ * `success -> if (success) API.login(…); else WaitView.hideAsyncMask(),` ends a line on `;`,
  * `else`, and the argument comma, and nothing but indentation tells the reader where the
  * lambda body stops and the argument list resumes. The braces are the delimiter that
  * information needs.

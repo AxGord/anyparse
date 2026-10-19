@@ -15,7 +15,7 @@ final class FunctionTrees {
 
 	/**
 	 * `nodeAt`'s answers per `<file>\t<from>:<to>`, null included (no node spans it). The thread-safety passes ask
-	 * for the same function again and again, and each ask was a descent through the file's tree (~0.27 s of a TM
+	 * for the same function again and again, and each ask was a descent through the file's tree (~0.27 s of a client
 	 * run); a tree is never re-projected, so an answer never goes stale.
 	 */
 	private final _nodes: Map<String, Null<QueryNode>> = [];

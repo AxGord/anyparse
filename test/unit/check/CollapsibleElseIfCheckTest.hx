@@ -166,7 +166,7 @@ class CollapsibleElseIfCheckTest extends Test {
 	}
 
 	/**
-	 * The motivating `CrashDumper` shape under `singleStatementBraces: "remove"`: the
+	 * The motivating `CrashReport` shape under `singleStatementBraces: "remove"`: the
 	 * then-branch is a brace-KEEPING block, so the collapsed chain's body must be braced
 	 * too. The check no longer emits those braces — the WRITER does, on the canonicalizing
 	 * round-trip (`SingleStmtBraces`, gate 7's repair direction). Without it the asymmetry

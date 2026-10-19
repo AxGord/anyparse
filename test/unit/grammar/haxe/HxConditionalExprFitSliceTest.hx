@@ -30,7 +30,7 @@ final class HxConditionalExprFitSliceTest extends Test {
 
 	/** Over-wide conditional value with every seam glued (the `cond-assign-merge --fix` output shape). */
 	private static final GLUED: String = 'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n'
-		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET '
+		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ThinClientUtils.isThinClient() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET '
 		+ '#elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';
 
 	/**
@@ -38,14 +38,14 @@ final class HxConditionalExprFitSliceTest extends Test {
 	 * `HxCondExprValueFixpointSliceTest.BROKEN_RETURN` verbatim.
 	 */
 	private static final GLUED_TERNARY_BROKEN: String = 'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n'
-		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook()\n'
+		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ThinClientUtils.isThinClient()\n'
 		+ '\t\t\t? DEVICETYPE_WINDOWSPC\n\t\t\t: DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC '
 		+ '#elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';
 
 	/** The knob-on answer: directives at the statement indent, each branch value one indent step deeper. */
 	private static final LADDER: String = 'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n'
 		+ '\t\treturn #if ios\n\t\t\tDEVICETYPE_IPAD\n'
-		+ '\t\t#elseif android\n\t\t\tChromebookUtils.isChromebook() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET\n'
+		+ '\t\t#elseif android\n\t\t\tThinClientUtils.isThinClient() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET\n'
 		+ '\t\t#elseif macos\n\t\t\tDEVICETYPE_MACOSXPC\n' + '\t\t#elseif (windows || linux)\n\t\t\tDEVICETYPE_WINDOWSPC\n'
 		+ '\t\t#else\n\t\t\tDEVICETYPE_WEB\n' + '\t\t#end;\n\t}\n}';
 

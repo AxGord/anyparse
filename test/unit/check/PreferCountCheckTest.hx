@@ -330,7 +330,7 @@ class PreferCountCheckTest extends Test {
 	}
 
 	public function testJoinReturnFinishesTheFold(): Void {
-		// The TM `DrillVODrop.countSelected` shape: `prefer-count` folds the pair into a `final`, and
+		// The client `ModelVODrop.countSelected` shape: `prefer-count` folds the pair into a `final`, and
 		// `join-return` — not this rule — folds that into the `return`.
 		final out: String = fixCascade(
 			'package p;\n\nclass C {\n\tprivate final _checkBoxes:Array<Box> = [];\n\n\tfunction countSelected():Int {\n'

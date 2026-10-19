@@ -21,7 +21,7 @@ class ThreadSafetyFoldingTest extends Test {
 		+ ' class Net { final _done:Lock = new Lock(); public function new() {} public function fetch():Void { _done.wait(); }'
 		+ ' public function fetchDeep():Void deep(); function deep():Void _done.wait(); }';
 
-	/** TM's `LockMutex.lock` / `BlockingNativeURLLoader.go`: the wait a sink's own body makes is the sink's finding. */
+	/** the client's `GateMutex.lock` / `BlockingNativeURLReader.go`: the wait a sink's own body makes is the sink's finding. */
 	@:pin('control') @:killer('M-TS-INSIDE-SINK-OFF')
 	public function testAWaitInsideASinksBodyIsTheSinks(): Void {
 		#if (sys || nodejs)
@@ -58,7 +58,7 @@ class ThreadSafetyFoldingTest extends Test {
 	}
 
 	/**
-	 * TM's `_batchMutex`: every main-thread take of one long lock waits for the same holders — one warning, at the take
+	 * the client's `_batchMutex`: every main-thread take of one long lock waits for the same holders — one warning, at the take
 	 * inside the lock's wrapper when there is one, else the first by member.
 	 */
 	@:pin('control') @:killer('M-TS-ONE-TAKE-OFF') @:killer('M-TS-ONE-TAKE-NO-WRAPPER')
@@ -96,7 +96,7 @@ class ThreadSafetyFoldingTest extends Test {
 		#end
 	}
 
-	/** TM's `getText`: the tree lock taken inside the hold of `_mutationMutex` is that hold's finding. */
+	/** the client's `getText`: the tree lock taken inside the hold of `_mutationMutex` is that hold's finding. */
 	@:pin('control') @:killer('M-TS-NEST-OFF')
 	public function testAHoldInsideAnotherIsItsFinding(): Void {
 		#if (sys || nodejs)

@@ -24,7 +24,7 @@ using StringTools;
 @:nullSafety(Strict)
 class MemberOrderWriterGapTest extends Test {
 
-	/** TM's width and its `aroundMultilineFields: 1` - the config under which the 44 TM findings could never be fixed. */
+	/** the client's width and its `aroundMultilineFields: 1` - the config under which the 44 client findings could never be fixed. */
 	private static inline final AROUND_MULTILINE: String =
 		'{"wrapping": {"maxLineLength": 140}, "emptyLines": {"aroundMultilineFields": 1}}';
 
@@ -46,13 +46,13 @@ class MemberOrderWriterGapTest extends Test {
 		'{"emptyLines": {"beforeDocCommentEmptyLines": "none", "aroundMultilineFields": 1}}';
 
 	/**
-	 * TM `src/api/namespace/Help.hx` (without its package, imports and `@:nullSafety`): two same-rank
+	 * client `src/api/namespace/Help.hx` (without its package, imports and `@:nullSafety`): two same-rank
 	 * fields, the second written over two lines, set off by the blank `aroundMultilineFields: 1` writes there - one
-	 * of the 44 TM findings whose fix the canonical round-trip dropped every time.
+	 * of the 44 client findings whose fix the canonical round-trip dropped every time.
 	 */
-	private static final HELP: String = 'class Help {\n\tpublic final faqs:GetFaqs = new GetFaqs();\n\n'
-		+ '\tpublic final sendSupportEmail:APIEntity2<ResponseBase2, ErrorResponse> =\n'
-		+ '\t\tnew APIEntity2<ResponseBase2, ErrorResponse>(\'help/SendSupportEmail\');\n\n\tpublic function new() {}\n}\n';
+	private static final HELP: String = 'class Help {\n\tpublic final faqs:GetDocs = new GetDocs();\n\n'
+		+ '\tpublic final sendSupportEmail:NetEntity2<ResponseRoot2, ErrorResponse> =\n'
+		+ '\t\tnew NetEntity2<ResponseRoot2, ErrorResponse>(\'help/SendSupportEmail\');\n\n\tpublic function new() {}\n}\n';
 
 	/** A hand-written doc-commented field between two plain ones, no blank anywhere. */
 	private static final DOC_TIGHT: String =
@@ -92,7 +92,7 @@ class MemberOrderWriterGapTest extends Test {
 	@:pin('control')
 	@:killer('M-MO-WRITER-MULTILINE-IGNORED', 'M-MO-INLINE-SEPARATOR-DROPPED')
 	public function testAGluedMultiLineFieldIsReportedAndTheFixLandsTheWritersBlank(): Void {
-		final glued: String = HELP.replace('new GetFaqs();\n\n', 'new GetFaqs();\n');
+		final glued: String = HELP.replace('new GetDocs();\n\n', 'new GetDocs();\n');
 		final file: String = fileUnder(AROUND_MULTILINE);
 		final vs: Array<Violation> = violations(file, glued);
 		Assert.equals(1, vs.length);
@@ -102,7 +102,7 @@ class MemberOrderWriterGapTest extends Test {
 				vs[0].message
 			);
 		final raw: String = rawFix(file, glued);
-		Assert.equals(1, blanksBetween(raw, 'new GetFaqs();', 'public final sendSupportEmail'), raw);
+		Assert.equals(1, blanksBetween(raw, 'new GetDocs();', 'public final sendSupportEmail'), raw);
 		Assert.equals(HELP, canonicalFix(file, glued, AROUND_MULTILINE));
 	}
 

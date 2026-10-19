@@ -435,7 +435,7 @@ class ComparisonToBooleanCheckTest extends Test {
 	/**
 	 * `haxe.ds.Map.exists` writes NO return annotation (`public inline function exists(key:K) return
 	 * this.exists(key);`), so no resolution scope can read one — `RefShape.instanceMethodReturns`
-	 * supplies the `Bool` its forwarded-to `IMap.exists(k:K):Bool` declares. The TM shape that
+	 * supplies the `Bool` its forwarded-to `IMap.exists(k:K):Bool` declares. The client shape that
 	 * motivated the arm.
 	 */
 	public function testStdMapExistsFlagged(): Void {
@@ -508,7 +508,7 @@ class ComparisonToBooleanCheckTest extends Test {
 		Assert.equals(1, violationsAcross(files).length);
 	}
 
-	/** The motivating TM shape: `while (true == true) {}` folds to `while (true) {}`. */
+	/** The motivating client shape: `while (true == true) {}` folds to `while (true) {}`. */
 	public function testFixFoldsConstantEqTrueTrue(): Void {
 		Assert.equals(wrap('while (true) {}'), applyFix(wrap('while (true == true) {}')));
 	}

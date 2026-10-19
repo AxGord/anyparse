@@ -906,7 +906,7 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/**
-	 * A hold only a `quietRoots` function runs is quiet too (TM's Help-menu cache wipe under the file-system locks): the
+	 * A hold only a `quietRoots` function runs is quiet too (the client's Help-menu cache wipe under the file-system locks): the
 	 * main thread waits there on purpose, and never for its own hold — while a hold some loud path also runs still reports.
 	 */
 	@:pin('control') @:killer('M-TS-QUIET-HOLD')
@@ -1192,7 +1192,7 @@ class ThreadSafetyCheckTest extends Test {
 	#end
 
 	/**
-	 * TM's deadlock: the main thread's `save` holds `_mutation` and takes `_batch` inside `Db.add`, while the spawned
+	 * the client's deadlock: the main thread's `save` holds `_mutation` and takes `_batch` inside `Db.add`, while the spawned
 	 * `download` holds `_batch` and calls `save`, which takes `_mutation`. One finding, at the call where the main
 	 * thread's hold reaches the other lock, naming both chains.
 	 */
@@ -1373,7 +1373,7 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** TM's `addCloudAction2`: a `throw` in a `switch` between the take and the release leaves the lock held. */
+	/** the client's `addCloudAction2`: a `throw` in a `switch` between the take and the release leaves the lock held. */
 	@:pin('control') @:killer('M-TS-THROW-UNRAISED')
 	public function testAThrowBetweenTakeAndReleaseLeavesTheLockHeld(): Void {
 		#if (sys || nodejs)
@@ -1428,7 +1428,7 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** The same `throw` ahead of the take — TM's fix — raises with nothing held. */
+	/** The same `throw` ahead of the take — the client's fix — raises with nothing held. */
 	public function testAThrowBeforeTheTakeIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same([], throwFindings('', [
@@ -1471,7 +1471,7 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** TM's `FolderWatcher.createDirectory`: a hold across a call that reaches a `throwers` entry with no `catch` on the way. */
+	/** the client's `VolumeWatcher.createDirectory`: a hold across a call that reaches a `throwers` entry with no `catch` on the way. */
 	@:pin('control') @:killer('M-TS-THROW-NO-PROPAGATION')
 	public function testAHoldAcrossACallReachingAThrowerEscapes(): Void {
 		#if (sys || nodejs)
@@ -1611,7 +1611,7 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/**
-	 * TM's shape: `Fs.save` holds `_mutation` (through a wrapper) and calls `Db.add`, which takes `_batch` itself;
+	 * the client's shape: `Fs.save` holds `_mutation` (through a wrapper) and calls `Db.add`, which takes `_batch` itself;
 	 * `Fs.download` holds `_batch` (through a wrapper) and calls `save`. `body` is `save`'s body, `start` the body of
 	 * `main`, which has made an `Fs` as `fs`.
 	 */

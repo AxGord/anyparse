@@ -141,8 +141,8 @@ final class MainSinkReport {
 	}
 
 	/**
-	 * Of the warnings at sink calls in one function the main thread reaches by one way (`ThreadStates.mainPath`) — TM's
-	 * `FSUtil.deleteRecursive`, whose `readDirectory`, `deleteDirectory` and `deleteFile` run on every run of it — one
+	 * Of the warnings at sink calls in one function the main thread reaches by one way (`ThreadStates.mainPath`) — the client's
+	 * `PathIO.deleteRecursive`, whose `readDirectory`, `deleteDirectory` and `deleteFile` run on every run of it — one
 	 * stays, naming the others, and they turn info naming it: one trigger, one warning. The one that stays is the first
 	 * by offset of the calls the function makes itself, before a sink it only hands on as a value — which may be stored,
 	 * not run (`new Later(File.getContent)`) — and never one a directive silences (`suppressed`) while another can stay.
@@ -209,7 +209,7 @@ final class MainSinkReport {
 	 * no lock, and says who unsealed it: `FieldWrites.unsealedNote` of `writes`): of its warnings, one stays — of those no
 	 * directive silences (`suppressed`) when there is one, the take inside a lock wrapper of it (`LockAcquire.delegated`)
 	 * when there is one, else the first by member, file and offset — and the others turn info, naming that one, which
-	 * carries what repeats each of them (TM's `Store.get`, named for `Main.reboot`'s loop over `Store.remove`).
+	 * carries what repeats each of them (the client's `Store.get`, named for `Main.reboot`'s loop over `Store.remove`).
 	 */
 	private static function oneTakePerLock(
 		graph: CallGraph, sites: LockSites, takes: Array<{ edge: CallEdge, finding: Violation }>, suppressed: (Violation) -> Bool,
@@ -459,7 +459,7 @@ final class MainSinkReport {
 	/**
 	 * Finding (a) owned by the repeating call `owner` (`MainRepeats.climb`) of short `sinks`: the warning a short
 	 * call below it is spared, at the loop, recursion or `iterates` call that repeats it — ONE per call site, or per
-	 * loop for the calls one loop repeats (TM's `repairShareAttr`, whose session loop runs
+	 * loop for the calls one loop repeats (the client's `repairShareAttr`, whose session loop runs
 	 * `getXML` and `setXML`), about what `repeatSubject` names — the loop, never its first
 	 * call, so a call added to the loop moves no key — every short sink below it named in it;
 	 * `owned` keeps them by site or loop. Returns that finding.

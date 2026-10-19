@@ -1212,7 +1212,7 @@ final class TypedFactsWalk {
 	private static function wrapped(t: Type): Null<Type> {
 		return switch TypeTools.follow(t) {
 			case TAbstract(a, params):
-				// read once per abstract: each `a.get()` decodes the whole abstract, and a TM build asks ~47k times (11% of the macro)
+				// read once per abstract: each `a.get()` decodes the whole abstract, and a client build asks ~47k times (11% of the macro)
 				final key: String = a.toString();
 				if (!abstractBodies.exists(key)) {
 					final read: AbstractType = a.get();

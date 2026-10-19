@@ -133,7 +133,7 @@ class PreferInlineCheckTest extends Test {
 
 	public function testPlainSingleQuotedStringBodyFlagged(): Void {
 		Assert.equals(
-			1, violations(cls("function ext():String return '.drl';")).length,
+			1, violations(cls("function ext():String return '.mdl';")).length,
 			'a single-quoted string WITHOUT interpolation carries only Literal parts — a constant, still a candidate'
 		);
 	}
