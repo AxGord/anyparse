@@ -1263,10 +1263,37 @@ typedef RefShape = {
 
 	/**
 	 * The clause of an abstract declaration converting a value of another type into it implicitly (Haxe `from T`,
-	 * `FromClause`) — `thread-safety` reads an enum abstract with one as open: such a conversion builds values its
-	 * constants do not name. Optional; unset reads every enum abstract as open.
+	 * `FromClause`): with `abstractToClauseKind`, the edges of the cast graph `AbstractCasts` reads. Optional; unset reads
+	 * every abstract's casts as unknown.
 	 */
 	@:optional var abstractFromClauseKind: String;
+
+	/**
+	 * The clause of an abstract declaration converting a value of it into another type implicitly (Haxe `to T`,
+	 * `ToClause`): with `abstractFromClauseKind`, the edges of the cast graph `AbstractCasts` reads. Optional; unset reads
+	 * every abstract's casts as unknown.
+	 */
+	@:optional var abstractToClauseKind: String;
+
+	/**
+	 * The type annotations under which an abstract's `from` / `to` clauses allow a further abstract cast (Haxe `@:coreType`,
+	 * `@:transitive`; `tUnification.ml`, `get_abstract_context`): through any other abstract's clause, the type at the far
+	 * end must unify with no abstract cast of its own. Optional; unset makes no abstract transitive.
+	 */
+	@:optional var transitiveCastTypeMetaNames: Array<String>;
+
+	/**
+	 * The type annotation of an abstract whose casts the compiler picks by its type arguments (Haxe `@:multiType`, `Map`;
+	 * a static extension on one is bound by a cast, not by unification): the cast graph does not model one. Optional.
+	 */
+	@:optional var typeSelectedAbstractMetaName: String;
+
+	/**
+	 * The paths of the abstracts the compiler unifies by hand rather than by their clauses (`tUnification.ml`, Haxe 4.3.7:
+	 * `Void`, `EnumValue`, `Class`, `Enum`, `haxe.NotVoid`, `haxe.FlatEnum`, `haxe.Function`, `haxe.Constructible`): a
+	 * unification one of them takes part in is not decided by the cast graph. Optional; unset lists none.
+	 */
+	@:optional var handUnifiedAbstractPaths: Array<String>;
 
 	/**
 	 * The ANNOTATION name that turns an ordinary abstract declaration into an enum
@@ -3528,6 +3555,13 @@ typedef CoreValueTypes = {
 	final widens: Map<String, Array<String>>;
 	final integer: String;
 	final real: String;
+
+	/**
+	 * The `names` the language declares as classes (Haxe `String`); every other one is an abstract the compiler represents
+	 * itself (`@:coreType`), declaring no `@:from` / `@:to` member — the arm of an implicit cast (`abstractCast.ml`) a pair
+	 * takes depends on which side is an abstract.
+	 */
+	final classNames: Array<String>;
 }
 
 /** The execution facts of `RefShape` (`RefShape.execution`): what runs code no call site names, and what reach may assume. */
@@ -3770,6 +3804,13 @@ typedef ExecutionShape = {
 	 * Unset makes every abstract read as carrying no conversion.
 	 */
 	@:optional var implicitConversionMetaName: String;
+
+	/**
+	 * The ANNOTATION name a MEMBER carries to declare an implicit conversion OUT of its enclosing abstract into the type
+	 * it returns (Haxe `@:to`) — the outward half of the cast graph's members (`AbstractCasts`), which an argument's
+	 * implicit cast takes (`abstractCast.ml`) and a unification does not. Unset makes no member such a conversion.
+	 */
+	@:optional var implicitOutwardConversionMetaName: String;
 
 	/**
 	 * Qualified `pkg.Type.method` calls into the language's RUNTIME LIBRARY that block the calling thread on the world

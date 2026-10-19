@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.AbstractCasts.CastGraph;
 import anyparse.query.AncestorTable.AncestorLink;
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.MemberLookup.DeclaredMember;
@@ -37,6 +38,12 @@ final class QueryCache {
 
 	/** Whether a value of one plain type unifies with another, by the pair (`Unification.unifies`). */
 	public final unifies: DeclarationQuery<ArgumentFit> = new DeclarationQuery();
+
+	/** The cast graph of an abstract declaration, by the declaration (`AbstractCasts.graph`). */
+	public final castGraphs: DeclarationQuery<Null<CastGraph>> = new DeclarationQuery();
+
+	/** Whether an argument of one declaration's type is accepted where another's is expected, by the pair (`Unification.casts`). */
+	public final casts: DeclarationQuery<ArgumentFit> = new DeclarationQuery();
 
 	/** The static extension `recv.name` binds in a file on a receiver of a declaration (`StaticExtensions.binding`). */
 	public final extensionBindings: DeclarationQuery<Null<HostedMembers>> = new DeclarationQuery();

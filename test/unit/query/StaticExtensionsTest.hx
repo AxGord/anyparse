@@ -185,6 +185,25 @@ class StaticExtensionsTest extends Test {
 		#end
 	}
 
+	/**
+	 * A static extension's first parameter is unified with the receiver, never cast to (`unify_static_extension`, probed
+	 * on Haxe 4.3.7): an abstract taking a `Str` only through an `@:from` member rejects it and is passed over, while the
+	 * standard library's `Any` (`from Dynamic`) takes every receiver.
+	 */
+	@:pin('control') @:killer('M-UNIFY-ABSTRACT-OFF') @:killer('M-CASTS-DYNAMIC-END')
+	public function testAnAbstractParameterTakesWhatItsClausesTake(): Void {
+		final index: SymbolIndex = indexOf([
+			'Any.hx' => 'abstract Any(Dynamic) from Dynamic {}\n',
+			'p/F.hx' => 'package p;\n\nabstract F(Int) {\n\t@:from static function fromStr(s:Str):F return null;\n}\n',
+			'p/X1.hx' => 'package p;\n\nclass X1 {\n\tpublic static function a(s:Str):Int return 0;\n}\n',
+			'p/X2.hx' => 'package p;\n\nclass X2 {\n\tpublic static function a(f:F):Int return 0;\n\n'
+			+ '\tpublic static function b(x:Any):Int return 0;\n}\n',
+			'p/Main.hx' => 'package p;\n\nusing p.X1;\nusing p.X2;\n\nclass Main {}\n'
+		]);
+		Assert.equals('X1.a', binding(index, 'p/Main.hx', 'Str', 'a'), 'an `@:from` member does not bind a static extension');
+		Assert.equals('X2.b', binding(index, 'p/Main.hx', 'Str', 'b'), '`Any` takes every receiver');
+	}
+
 	/** What `recv.name` binds in `file` on a receiver of the one type named `receiver` the fixture declares: `Host.member`, or `-`. */
 	private static function binding(index: SymbolIndex, file: String, receiver: String, name: String): String {
 		final fi: Null<FileInfo> = index.fileInfo(file);

@@ -19,7 +19,8 @@ its hosts are functions of their arguments, and every remembered answer is insta
 | part | side | what it answers |
 |---|---|---|
 | `ancestors` (`AncestorTable`) | signature | a declaration's supertype links (each resolved once), its alias target, what its chain passes to an ancestor's type parameters |
-| `unification` (`Unification`) | signature | whether a value of one plain type unifies with another (`tUnification.ml`) |
+| `casts` (`AbstractCasts`) | signature | the cast graph of each abstract: its `from` / `to` clauses per `#if` branch and its `@:from` / `@:to` members, each resolved once into a `TypeEnd` |
+| `unification` (`Unification`) | signature | whether a value of one type unifies with another (`tUnification.ml`), and whether an argument of one type is accepted where another is expected (`casts`, `abstractCast.ml`) |
 | `members` (`MemberLookup`) | signature | what a named type declares or inherits, with what declared type, return, visibility, accessor shape; the type a READ of a member carries (`memberReadType`) |
 | `structural` (`StructuralTypes`) | signature | unification with an anonymous structure, membership of a builtin structural type (`Iterable`, `Iterator`) |
 | `extensions` (`StaticExtensions`) | body | which static extension `recv.name` binds in a file on a receiver of a declaration (`fields.ml`), and what a file's `using` statements bring |
@@ -50,7 +51,9 @@ A question may be cached only when its answer is a pure function of its key and 
 four fresh-walk roots of `MemberLookup`: `lacksMember` (`lacksMemberClosure`), `declaredMember`
 (`declaredMemberClosure`), `memberTypeSource` (`memberTypeSourceWalk`) and `freeOfExtensionTypes`; and the T2 tables:
 `ancestorLinks` and `aliasTargets` (by `ofType`), `ancestorArguments` and `unifies` (by `ofPair`); and the T3 table `extensionBindings`
-(by `ofUse`), whose answer reads a file's `using` statements and declarations, never a body. `memberReadType` is not a
+(by `ofUse`), whose answer reads a file's `using` statements and declarations, never a body; and the T4 tables
+`castGraphs` (by `ofType`) and `casts` (by `ofPair`, for two declarations — a pair with a core value type on one side is
+computed each time, it is a few clauses long). `memberReadType` is not a
 table of its own: its key would carry the receiver's written arguments, and it is composed of two cached answers
 (`declaredMember`, `ancestorArguments`) and a substitution. A walk entered with a
 caller's own `seen` set is never cached — its answer depends on what that caller already visited — and neither is a
@@ -144,9 +147,27 @@ inference of a local's type from more than its initializer, and the two reificat
   upstream DIFFERENT 0 before and after; facts DIFFERENT unchanged (anyparse 56 / 29, client 200 / 121, Pony 95 / 111), client
   nominal `Call` 7 UNKNOWN → MATCH; the all-rules lint of four trees byte-identical. Left for later: `PreferStaticExtension`'s
   `UsingScan.usingConflict` asks a hypothetical `using` the rewrite would insert, which this question does not model.
-- **T4 — the cast graph of abstracts.** A table per abstract declaration of its `from` / `to` edges, keyed by
-  `DeclarationKey.ofType` (`abstractCast.ml`: the first unequal `from` wins); `ArgumentTypes`' `MayFit` for an abstract
-  parameter becomes `Fits` or `Misfits` where the graph decides.
+- **T4 — the cast graph of abstracts (done, FU18).** The index records each abstract header's clauses per `#if` branch
+  (`TypeDeclInfo.castClauses`: the `from` / `to` types as written, `@:coreType` / `@:transitive`, `@:multiType`; null for
+  a branch that declares no abstract and for a clause under `#if`). `AbstractCasts` (`index.typing.casts`, table
+  `castGraphs` by `ofType`) resolves them once into `TypeEnd`s — a declaration, a core value type (a top-level
+  declaration of a `coreValueTypes` name, or such a name nothing resolves), the dynamic type, `Open` — with the
+  `@:from` / `@:to` members (`certain` only for a member of a one-branch declaration not under `#if`); no graph for an
+  abstract with type parameters, a `@:multiType` one, one the compiler unifies by hand (`handUnifiedAbstractPaths`:
+  `Void`, `EnumValue`, `Class`, `Enum`, `haxe.NotVoid` / `FlatEnum` / `Function` / `Constructible`). `Unification` reads
+  every pair as two `TypeEnd`s: the T2 arms for classes, interfaces and enums, core types by `widens` (a core type no
+  class, interface or enum takes), and for an abstract on either side `unify_to` / `unify_from` through the clauses, a
+  non-transitive abstract's clause allowing no second abstract cast (`get_abstract_context`), every branch agreeing.
+  `Unification.casts` (table `casts` by `ofPair`) adds the argument's implicit cast (`do_check_cast`): the members, and
+  past them the FIRST clause unequal to the abstract cast to again (`loop2`); a core abstract (`Int`, `Float`, `Bool` —
+  `CoreValueTypes.classNames` names `String` as the class) takes the abstract/abstract arm, which tries members only.
+  Consumers: `ArgumentTypes.fit` (`castFit`: a core type against a plain name is now decided too),
+  `StructuralTypes.receiverFitsParameter` (plain unification: an `@:from`-only parameter passes the receiver over, `Any`
+  takes every one) and `memberCouldUnify` (a read-only member through `to` clauses), all through `Unification`;
+  `TypedEventConstant` reads `castClauses` instead of re-parsing the declaring file. Each arm compiled first on Haxe
+  4.3.7 (`docs/decisions.md`, FU18). Not reached: the call graph's index holds the project and the library bodies but not
+  the std, so `ArgumentTypes` never resolves a std abstract (`UInt`) — that, and arithmetic over an abstract's `@:op`
+  overloads (`UInt - UInt`), is what the client's `RoundedTextField.new` finding still waits for.
 - **T5 — overloads.** Argument types computed once per call site (a body table keyed by the enclosing declaration and the
   site's offset) and an overload chosen over them; a choice that depends on the expected type answers Unknown.
   Consumers: `OperandCallees.selectsItsSignature`, `ArgumentSlots`.

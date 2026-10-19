@@ -916,6 +916,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.lowering.StarBlockEndedWsRewindTest',
 		'unit.lowering.StarSepStartsElementTest',
 		'unit.lowering.WriterFamilyCtxBundleTest',
+		'unit.query.AbstractCastsTest',
 		'unit.query.AddElementSliceTest',
 		'unit.query.AddElementSortedTest',
 		'unit.query.AddImportSliceTest',

@@ -26,7 +26,13 @@ final class TypingService {
 	/** SIGNATURE: each declaration's supertype links, alias target and the arguments its chain passes to an ancestor. */
 	public final ancestors: AncestorTable;
 
-	/** SIGNATURE: whether a value of one plain type unifies with another (`tUnification.ml`). */
+	/** SIGNATURE: the cast graph of each abstract — its `from` / `to` clauses and conversion members (`abstractCast.ml`). */
+	public final casts: AbstractCasts;
+
+	/**
+	 * SIGNATURE: whether a value of one type unifies with another (`tUnification.ml`), and whether an argument of one type
+	 * is accepted where another is expected (`abstractCast.ml`).
+	 */
 	public final unification: Unification;
 
 	/** SIGNATURE: what a named type declares or inherits, and with what declared type, return type and visibility. */
@@ -49,7 +55,8 @@ final class TypingService {
 		files: Array<FileInfo>, refs: TypeRefIndex, subtypes: SubtypeGraph, typeSyntax: TypeSyntaxReader, shape: RefShape
 	) {
 		ancestors = new AncestorTable(refs, cache, typeSyntax);
-		unification = new Unification(ancestors, cache, refs);
+		casts = new AbstractCasts(refs, ancestors, cache, typeSyntax, shape);
+		unification = new Unification(ancestors, cache, refs, casts, shape);
 		members = new MemberLookup(refs, cache, ancestors, typeSyntax, shape.optionalValueTypeName);
 		structural = new StructuralTypes(files, refs, subtypes, members, typeSyntax, unification);
 		extensions = new StaticExtensions(refs, cache, ancestors, members, structural);

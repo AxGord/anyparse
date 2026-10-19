@@ -4782,3 +4782,40 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   passes. With the gate a run merges at most once, so no composition across passes builds a nested condition. The
   repeat is compared on BOTH tail values: the one the merge repeats and the other one (`if (a) return 5; if (b)
   return null; if (c) return 5; return null;` would merge its tail to `!b && c ? 5 : null` and then the run again).
+
+## FU18 (2026-10-19): typer step T4 — the cast graph of abstracts, an argument's implicit cast
+
+- every pair an abstract took part in was `MayFit` (`Unification`, `ArgumentTypes.fit`, a static extension's first
+  parameter, a read-only structure member) → ONE cast graph on the typing service (`AbstractCasts`, table `castGraphs`
+  by `ofType`) over the header clauses the index now records per `#if` branch (`TypeDeclInfo.castClauses`), walked by
+  `Unification` for a unification (`tUnification.ml`: `unify_to` / `unify_from` / `unify_abstracts`) and by
+  `Unification.casts` for an argument (`abstractCast.ml`, `do_check_cast`) — branch `feat/fu-FU18`
+- probed on Haxe 4.3.7 (`--interp`, two also `-js`): a static extension's first parameter is UNIFIED, never cast
+  (`unify_static_extension`): an abstract taking the receiver only through an `@:from` member passes it over, an
+  `@:to String` member does not bind `s:String`, and `Any` (`from Dynamic`) takes an abstract and a `String`; an
+  argument IS cast, and optional-argument skipping uses the cast (`f(?a:Float, ?b:String)` binds `b` for an abstract
+  with `@:to String`); `UInt` binds `?a:Float` — branch `feat/fu-FU18`
+- a header `from` clause is no cast path of its own: `String` → `A from B` with `B(String) from String` is an error
+  (`find_from` answers a unification by `Not_found`, and `B`'s clause would be a second abstract cast), `@:transitive A`
+  compiles. Past the members the compiler casts to the FIRST `from` clause unequal to the abstract and to no other
+  (`loop2` returns that recursion's answer): `Ab from Bs from Dz` takes a `String` through `Bs.fromS`, not a `Bool`
+  through `Dz.fromB`, and `Ad from Dz from Bs` takes neither — a `Bool` is a `TAbstract`, so the abstract/abstract arm
+  applies, which tries the two abstracts' members only. Hence `CoreValueTypes.classNames` (`String` is the one core class)
+  — branch `feat/fu-FU18`
+- "matches or Unknown": no graph (both halves of a pair `MayFit`) for an abstract with type parameters (its clauses read
+  without the arguments binding them), `@:multiType` (cast by type arguments), one the compiler unifies by hand
+  (`RefShape.handUnifiedAbstractPaths`: `EnumValue` takes every enum by an arm, not a clause — answering `Misfits` there
+  would be another answer), a header with a clause under `#if` or a branch that declares no abstract
+  (`openfl.text.TextFormatAlign`: two abstracts and a typedef). A type several branches declare answers what every
+  branch agrees on; a conversion member is `certain` only on a one-branch declaration and not under `#if` (the members
+  are the branches' union, so a fit there may be another build's while a misfit is every build's); a build macro leaves a
+  member misfit open. A cycle of transitive clauses is `MayFit` (the compiler's `rec_stack` answers false; the walk does
+  not claim it) — branch `feat/fu-FU18`
+- the index's clauses replace a re-parse: `TypedEventConstant.isStringAbstract` re-parsed the declaring file to find the
+  `FromClause` / `ToClause` nodes "because no seam names them" → `castClauses` (every branch converting both ways);
+  `findDecl`, `convertsWith` and the two literal kind constants deleted, `abstractToClauseKind` joins
+  `abstractFromClauseKind` (whose doc claimed a `thread-safety` reader it never had) — branch `feat/fu-FU18`
+- NOT reached, measured: the call graph's index (`ArgumentTypes`' `heldFile`) holds the project and the library bodies
+  the graph reads, never the std, so a std abstract (`UInt`) never resolves there and the client's `UInt` arguments stay
+  `MayFit`; the client's `RoundedTextField.new` / `Assets.getBitmapData` false positive needs that AND typing `UInt - UInt`
+  through `UInt`'s `@:op` overloads (`SaveDialog`'s first argument) — branch `feat/fu-FU18`

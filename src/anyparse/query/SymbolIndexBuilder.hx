@@ -7,6 +7,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
 import anyparse.query.SymbolIndex.AmbientImportGroup;
+import anyparse.query.SymbolIndex.CastClauses;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
@@ -339,6 +340,7 @@ final class SymbolIndexBuilder {
 					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
 					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta, shape) : null,
 					underlyingRaw: underlyingPathOf(typeDecl.nameNode, isAbstract, gn.guarded),
+					castClauses: isAbstract ? castClausesOf(typeDecl, node, source, pendingMeta, shape) : null,
 					guarded: gn.guarded,
 					forwardedMembers: pendingForwarded
 				};
@@ -605,6 +607,58 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
+	 * The cast clauses of the abstract `decl` declares, read off the `node` that holds them (`TypeDeclInfo.castClauses`): one
+	 * record of the `from` and `to` types its header writes, verbatim, and the annotations `pendingMeta` puts on it. Null when
+	 * the header is shared by `#if` branches (a split-header region names one branch's head only), or puts a clause under
+	 * `#if` — what the header casts to is then not written in one place.
+	 */
+	private static function castClausesOf(
+		decl: TypeDeclMatch, node: QueryNode, source: String, pendingMeta: Array<String>, shape: RefShape
+	): Null<Array<CastClauses>> {
+		final fromKind: Null<String> = shape.abstractFromClauseKind;
+		final toKind: Null<String> = shape.abstractToClauseKind;
+		if (fromKind == null || toKind == null || decl.nameNode != node) return null;
+		final from: Array<String> = [];
+		final to: Array<String> = [];
+		for (c in node.children) {
+			if (c.kind == shape.conditionalMemberKind && holdsKind(c, [fromKind, toKind])) return null;
+			final written: Null<Array<String>> = if (c.kind == fromKind)
+				from
+			else if (c.kind == toKind)
+				to
+			else
+				null;
+			final span: Null<Span> = c.children.length == 1 ? c.children[0].span : null;
+			if (written == null) continue;
+			if (span == null) return null;
+			written.push(source.substring(span.from, span.to));
+		}
+		return [
+			{
+				from: from,
+				to: to,
+				transitive: carriesAnyMeta(pendingMeta, shape.transitiveCastTypeMetaNames),
+				typeSelected: carriesMeta(pendingMeta, shape.typeSelectedAbstractMetaName)
+			}
+		];
+	}
+
+	/**
+	 * The cast clauses of a type two `#if` branches declare (`withAlternate`): every branch's record, or null when either
+	 * branch's are unknown — a branch that declares no abstract has none.
+	 */
+	private static function bothCastClauses(
+		first: Null<Array<CastClauses>>, alternate: Null<Array<CastClauses>>
+	): Null<Array<CastClauses>> {
+		return first == null || alternate == null ? null : first.concat(alternate);
+	}
+
+	/** Whether `node` or a node under it is of one of `kinds`. */
+	private static function holdsKind(node: QueryNode, kinds: Array<String>): Bool {
+		return kinds.contains(node.kind) || node.children.exists(c -> holdsKind(c, kinds));
+	}
+
+	/**
 	 * The head path of the underlying type an abstract declares (`TypeDeclInfo.underlyingRaw`) — the
 	 * `QueryNode.type` slot of the node naming it — or null for a non-abstract (`isAbstract`), a `guarded`
 	 * one, one that writes none, or one that writes something other than a named type.
@@ -828,6 +882,7 @@ final class SymbolIndexBuilder {
 				? first.abstractForwardUnderlying
 				: null,
 			underlyingRaw: first.underlyingRaw == alternate.underlyingRaw ? first.underlyingRaw : null,
+			castClauses: bothCastClauses(first.castClauses, alternate.castClauses),
 			guarded: true,
 			forwardedMembers: forwarded == null || alsoForwarded == null ? null : union(forwarded, alsoForwarded)
 		};
