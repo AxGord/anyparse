@@ -500,12 +500,13 @@ final class ElementSpan {
 	 * `node` with its parent, lifted to the wrapper when it is a `final class`'s inner form
 	 * (`foldingWrapperOf`). An address resolves the inner form, whose span starts AFTER `final`: cutting it
 	 * left the `final` to glue onto the next declaration, and inserting before it landed between `final` and
-	 * `class`, which does not parse.
+	 * `class`, which does not parse. A string `Literal` is lifted the same way (`literalWrapperOf`).
 	 */
 	public static function liftedElement(tree: QueryNode, node: QueryNode): ElementHit {
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
 		final wrapper: Null<QueryNode> = parent == null ? null : foldingWrapperOf(node, parent);
-		return wrapper == null ? { node: node, parent: parent } : { node: wrapper, parent: TreePath.parentOf(tree, wrapper) };
+		final lifted: Null<QueryNode> = wrapper ?? (parent == null ? null : literalWrapperOf(node, parent));
+		return lifted == null ? { node: node, parent: parent } : { node: lifted, parent: TreePath.parentOf(tree, lifted) };
 	}
 
 	/**
@@ -730,6 +731,21 @@ final class ElementSpan {
 		var j: Int = span.from - 1;
 		while (j >= 0 && SourceText.isSpace(source.fastCodeAt(j))) j--;
 		return j >= 0 && source.fastCodeAt(j) == ','.code ? new Span(j, span.to) : span;
+	}
+
+	/**
+	 * `parent` when `node` is a string `Literal` and `parent` the expression that carries its quotes
+	 * (`SingleStringExpr`) — else null. The literal's span is the CONTENT between the quotes, so an address
+	 * resolving it (`--select 'Literal:B'`) names the inside of the element, not the element: cutting that span
+	 * emptied the string (`''`) at rc 0 instead of removing the array item.
+	 */
+	public static function literalWrapperOf(node: QueryNode, parent: QueryNode): Null<QueryNode> {
+		final nodeSpan: Null<Span> = node.span;
+		final parentSpan: Null<Span> = parent.span;
+		return node.kind == 'Literal' && parent.children.length == 1 && nodeSpan != null && parentSpan != null
+			&& parentSpan.from < nodeSpan.from && nodeSpan.to < parentSpan.to
+			? parent
+			: null;
 	}
 
 }

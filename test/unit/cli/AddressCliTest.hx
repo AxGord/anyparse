@@ -561,4 +561,37 @@ class AddressCliTest extends Test {
 		#end
 	}
 
+	/** `remove-element --select 'Literal:…'` on a string array item removes the item; off a list it refuses. */
+	public function testRemoveElementSelectLiteralIsTheItem(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write(
+			'addr_lit',
+			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\', \'c\'];\n\n\tfunction f():String {\n\t\treturn g(1) + \'r\';\n\t}\n}\n'
+		);
+		Assert.equals(0, Cli.run([
+			'remove-element',
+			path,
+			'--select',
+			'FinalMember:A >> Literal:b',
+			'--reformat',
+			'--write'
+		]));
+		final out: String = File.getContent(path);
+		Assert.isTrue(out.indexOf('[\'a\', \'c\']') >= 0, out);
+		Assert.isTrue(out.indexOf('\'\'') < 0, out);
+		Assert.notEquals(0, Cli.run([
+			'remove-element',
+			path,
+			'--select',
+			'FnMember:f >> Literal:r',
+			'--reformat',
+			'--write'
+		]));
+		Assert.equals(out, File.getContent(path));
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }
