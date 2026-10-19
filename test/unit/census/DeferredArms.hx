@@ -249,7 +249,9 @@ final class DeferredArms {
 		'M-STMT-LIST-CALLARG-BLOCK :: anyparse.macro.TriviaBlockLowering#triviaBlockElemCallExpr',
 		'M-STMT-LIST-CALLARG-CASE :: anyparse.macro.TriviaTryparseLowering#triviaTryparseElemCallExprs',
 		'M-TCO-KNOB-IGNORED :: anyparse.macro.TriviaBlockLowering#triviaBlockElemPushExpr',
-		'M-TCO-LEADING-IGNORED :: anyparse.macro.TriviaBlockLowering#triviaBlockElemPushExpr'
+		'M-TCO-LEADING-IGNORED :: anyparse.macro.TriviaBlockLowering#triviaBlockElemPushExpr',
+		'M-COLLAPSE-COUNTED :: anyparse.macro.TriviaSepLowering#triviaSepNoTriviaBranch',
+		'M-COLLAPSE-ANY-RESULT :: anyparse.macro.TriviaSepLowering#triviaSepNoTriviaBranch'
 	];
 
 }

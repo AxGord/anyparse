@@ -97,10 +97,22 @@ final class HxCondExprFitRegionFixedPointTest extends Test {
 
 	/**
 	 * A chain link after a call whose comprehension body is a region settles in one write: once the region breaks, the
-	 * call closes on its own line, and the link after it is cuddled onto that line as the next write lays it out.
+	 * call closes on its own line, and the link after it is cuddled onto that line as the next write lays it out. Both
+	 * break shapes of the chain: a head that is not a call keeps its first link (`builder.withName(…)`), a call head
+	 * breaks before every link (`makeBuilder(…)`).
 	 */
+	@:pin('control')
+	@:killer('M-CHAIN-REGION-OFFER-OFF')
+	@:killer('M-CHAIN-CLOSE-UNRESOLVED')
+	@:killer('M-CHAIN-AFTERFIRST-COMMIT-UNREAD')
+	@:killer('M-CHAIN-ONEPERLINE-COMMIT-UNREAD')
+	@:killer('M-TAIL-RESOLVE-IGNORED')
+	@:killer('M-OFFER-WANTED-DROPS')
 	public function testAChainLinkAfterARegionSettlesInOneWrite(): Void {
-		for (k in 1...MAX_K_CHAIN + 1) assertOneWriteWithinLimit(chainComprehension(k), CFG_CHAIN, k);
+		for (head in ['builder.withName(nameValue)', 'makeBuilder(nameValue)']) for (k in 1...MAX_K_CHAIN + 1) {
+			final once: String = assertOneWriteWithinLimit(chainComprehension(head, k), CFG_CHAIN, k);
+			if (once.contains('#else\n')) Assert.isTrue(once.contains('\t]).build();'), 'k=$k: the link was not cuddled\n$once');
+		}
 	}
 
 	private static function assertOneWriteWithinLimit(src: String, config: String, k: Int): String {
@@ -129,10 +141,10 @@ final class HxCondExprFitRegionFixedPointTest extends Test {
 		);
 	}
 
-	private static function chainComprehension(k: Int): String {
+	private static function chainComprehension(head: String, k: Int): String {
 		return statement(
-			'var y = builder.withName(nameValue).withItems([for (x in xs) #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \''
-			+ ''.lpad('k', k) + '\'} #else {alpha: x.aaaaaaaaaaaaaaaaaaaaaa} #end]).build();'
+			'var y = $head.withItems([for (x in xs) #if debug {alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: \'' + ''.lpad('k', k)
+			+ '\'} #else {alpha: x.aaaaaaaaaaaaaaaaaaaaaa} #end]).build();'
 		);
 	}
 

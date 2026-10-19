@@ -82,6 +82,8 @@ final class PinsGrammarAndCli {
 		'unit.format.BraceSymmetrySliceTest#testThenBracedElseBareGainsBraces :: control :: M-SSB-SYMMETRY-ONLY-BLIND',
 		'unit.format.CommentDirectiveTest#testDirectivesAreRecognised :: control :: M-COMMENT-DIRECTIVE-NONE',
 		'unit.format.CommentDirectiveTest#testOnlyAPlainLineCommentIsRelocatable :: control :: M-TCO-DIRECTIVE-MOVED',
+		'unit.format.WrapFlatSourceFixedPointTest#testCommittedLiteralUnderAChainOrArrowSettlesInOneWrite :: control :: M-COLLAPSE-COUNTED',
+		'unit.format.WrapFlatSourceFixedPointTest#testSoleUncommittedObjectLiteralArgKeepsTheOpenParen :: control :: M-COLLAPSE-ANY-RESULT',
 		'unit.grammar.JsonKeyMetaCompileTest#testAKeyMustBeOneString :: control :: M-JSON-KEY-UNCHECKED',
 		'unit.grammar.JsonKeyMetaCompileTest#testAKeyMustBeWritableAsIs :: control :: M-JSON-KEY-UNWRITABLE',
 		'unit.grammar.JsonKeyMetaCompileTest#testTwoFieldsCannotShareAKey :: control :: M-JSON-KEY-DUPLICATES,M-JSON-KEY-DUP-AT-FIELD',
@@ -199,6 +201,7 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testOneWriteIsAFixedPointAtEveryWidth :: control :: M-BREAKMARK-UNREAD',
 		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testACallArgumentRegionSettlesInOneWrite :: control :: '
 			+ 'M-REGION-UNNAMED,M-REGION-SEAMS-SOFT,M-REGION-MARK-ALWAYS',
+		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAChainLinkAfterARegionSettlesInOneWrite :: control :: M-CHAIN-REGION-OFFER-OFF,M-CHAIN-CLOSE-UNRESOLVED,M-CHAIN-AFTERFIRST-COMMIT-UNREAD,M-CHAIN-ONEPERLINE-COMMIT-UNREAD,M-TAIL-RESOLVE-IGNORED,M-OFFER-WANTED-DROPS',
 		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAComprehensionBodyRegionUnderAnArrowSettlesInOneWrite :: control :: '
 			+ 'M-REGION-OFFER-THROUGH-BODIES,M-NESTED-THROUGH-BODIES',
 		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAnElseifRegionInAComprehensionSettlesInOneWrite :: control :: '

@@ -4757,3 +4757,33 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   reported.
 - Known detection gap, not changed: an else-if chain with no final `else` (`if (a) { x; } else if (b) y();`) is not a
   finding, although the writer's symmetric mode braces it.
+
+## FU19 (2026-10-20) — writer one-pass drift residue: a chain cuddles after a region break; a committed collapse is a `BodyGroup`
+
+- **A method chain is a host of the breaks nested in its parts.** `methodChainCuddledLinks` decides each link's cuddle
+  once, at build time, from the predecessor's Doc (`DocMeasure.endsWithForcedCloseLine`), where a
+  `conditionalExprFit` region is an undecided group: pass 1 kept `.build()` on its own line, pass 2 read the region's
+  newlines from the source and cuddled `]).build()`. `MethodChainEmit.emit` now offers the chain once more per break
+  nested in the receiver or a segment whose committed form ends on a closing line where the plain one does not; the
+  committed part's closing line is read with `resolveForcedBreaks` (a conditional whose flat side carries a forced
+  hardline is read on its break side, as `breakTailCloseNest` already did — the next rewrite reads that newline from
+  the source). The per-item offer loop `WrapList.emit` and `BreakCommits.followBare` each carried is ONE shared
+  `BreakCommits.offerItemBreaks(items, plain, laidOut, ?wanted, throughBodies)`; the chain is its third host.
+- **A source-flat list the one-per-line collapse commits at build time is a `BodyGroup`** (`TriviaSepLowering`, the
+  non-reflow sep-Star cascade branch). ω-flat-source-fixed-point collapsed a breaking cascade answer to the lines the
+  next pass writes, but not to its Doc: the next pass reads those newlines and takes the force-multi path, whose Doc is
+  `WrapBoundary(BodyGroup(…))`, which every width probe defers. So a chain, an arrow or a fill around the literal
+  measured it full-width once and deferred the next time ("mechanism B" of the convergence tail,
+  `WrapFlatSourceFixedPointTest`). Only a result that carries a hardline (`flatLength < 0`) is wrapped; an answer the
+  renderer still decides stays counted. This is the opposite direction to the rejected `flatTokenWidth` descending a
+  `BodyGroup` (`f57325e5`): the first pass defers as the second does, so nothing that already settled moves — this
+  tree, client (903 files) and Pony (872) format byte-identically. Mechanism B's three pinned cases now converge in one
+  write and the stacked three-rewrite file needs two (the mechanism-A link alone).
+- Tried and dropped: naming a `conditionalExprFit` region's body literal (`BreakCommits.named` with a bare read-back)
+  closed the minimal-config tail but gave client `z_condparen` 29 new drifts (a binop fill read the committed literal
+  differently from the source-broken one); offers that commit two nested breaks together, `BinaryChainEmit` as a host,
+  and a cascade-width gate on the chain offer changed nothing in the harness.
+- Open, root causes measured: `z_condparen` pony/tc k 34-38 — the `#else` literal inside the comprehension's fit body
+  breaks by width and the `+` chain around it reads the operand flat, while the next write reads it source-broken
+  (`anyHardline`); the break sits behind the comprehension body's `BodyGroup`, which offers do not cross (FU3). `t_filter`
+  tc k=27 — the comprehension `if` body seam is re-decided on read-back (`strictFitLineShape`), the same fit-body limit.
