@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
+import anyparse.query.ImportSpelling.ImportSpelled;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.PostWriteFix;
 import haxe.Exception;
@@ -35,9 +36,11 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 	}
 
 	/**
-	 * `apq remove-import <file> <module.path> [--reformat] [--write]` — remove
+	 * `apq remove-import <file> <module.path> [--using] [--reformat] [--write]` — remove
 	 * the `import` / `using` whose exposed path equals `<module.path>` (the
-	 * alias for an aliased import). The path must name exactly one statement, and
+	 * alias for an aliased import). `<module.path>` may be the whole statement
+	 * (`using x.Y;`), whose keyword narrows the match to that kind; `--using` is
+	 * the flag spelling of the same narrowing. The path must name exactly one statement, and
 	 * a block comment directly above it goes too unless `--keep-doc` says otherwise.
 	 * The by-name counterpart of `remove-element`; backend of `lint --fix`.
 	 */
@@ -46,6 +49,7 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 		var write: Bool = false;
 		var reformat: Bool = false;
 		var withDoc: Bool = true;
+		var usingFlag: Bool = false;
 		var file: Null<String> = null;
 		var modulePath: Null<String> = null;
 
@@ -61,6 +65,8 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 					reformat = true;
 				case '--keep-doc':
 					withDoc = false;
+				case '--using':
+					usingFlag = true;
 				case '-h', '--help':
 					printRemoveImportUsage();
 					return EXIT_OK;
@@ -87,7 +93,14 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 		}
 
 		final filePath: String = file;
-		final path: String = modulePath;
+		final spelled: Null<ImportSpelled> = ImportSpelling.split(modulePath, usingFlag);
+		if (spelled == null) {
+			CliIo.stderr('apq remove-import: ${ImportSpelling.flagConflict(modulePath)}\n');
+			return EXIT_USAGE;
+		}
+		// `--using` is the keyword spelled as a flag: the op reads the statement form, so the flag
+		// becomes one rather than a second parameter the library entry point would have to carry.
+		final path: String = usingFlag ? '${ImportSpelling.USING_WORD} ${spelled.path}' : modulePath;
 		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
 			CliIo.stderr('apq remove-import: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
@@ -104,9 +117,13 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Remove the import / using statement whose exposed path equals <module.path>\n');
 		CliIo.sysPrint('(the alias for an aliased import). The path must name exactly one statement.\n');
-		CliIo.sysPrint('The by-name counterpart of remove-element; backend of lint --fix.\n');
+		CliIo.sysPrint('<module.path> may be the whole statement (`using x.Y;` / `import x.Y;`): its\n');
+		CliIo.sysPrint('keyword narrows the match to that kind, so `using a.B;` names the using alone\n');
+		CliIo.sysPrint('beside an `import a.B;`. The by-name counterpart of remove-element; backend of\n');
+		CliIo.sysPrint('lint --fix.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --using         Remove the `using` of <module.path> (the statement form\'s flag spelling)\n');
 		CliIo.sysPrint('  --keep-doc      Leave the import\'s leading block comment behind\n');
 		CliUsage.printOptionsEditTail();
 		CliUsage.printPostWriteFixTail();

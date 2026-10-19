@@ -47,7 +47,7 @@ class AddImportSliceTest extends Test {
 	 * A block no order explains is still appended to WITHIN its run. The op's own fallback anchor
 	 * is the file's last import statement — which for a file whose imports are followed by a
 	 * `using` sits PAST that `using`, opening a stray third run that every later insert extends.
-	 * This is the TM incident shape: an unordered run, a `using`, and a fixer adding one import.
+	 * This is the client incident shape: an unordered run, a `using`, and a fixer adding one import.
 	 */
 	public function testUnorderedRunKeepsTheImportBeforeTheUsing(): Void {
 		final source: String = 'package foo;\n\nimport m.Mid;\nimport z.Zed;\nimport a.Al;\n\nusing e.Ext;\n\nclass C {}\n';
@@ -217,6 +217,65 @@ class AddImportSliceTest extends Test {
 		assertAdd(source, 'q.*', false, expected);
 	}
 
+	/**
+	 * A whole `using x.Y;` statement is accepted as the path argument and means a `using` — the spelling
+	 * a caller reaches for, because it is what the file will contain. Before, it was wrapped into
+	 * `import using c.D;;` and refused two layers later as a parse error at a column the caller never wrote.
+	 */
+	@:pin('control')
+	@:killer('M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED')
+	public function testWholeUsingStatementAddsAUsing(): Void {
+		final source: String = 'package foo;\n\nimport a.B;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport a.B;\n\nusing c.D;\n\nclass C {}\n';
+		assertAdd(source, 'using c.D;', false, expected);
+	}
+
+	/** A whole `import x.Y;` statement (its `;` optional) is the same import its bare path is. */
+	public function testWholeImportStatementAddsAnImport(): Void {
+		final source: String = 'package foo;\n\nimport a.B;\nimport m.N;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport a.B;\nimport c.D;\nimport m.N;\n\nclass C {}\n';
+		assertAdd(source, 'import c.D;', false, expected);
+		assertAdd(source, 'import c.D', false, expected);
+	}
+
+	/** `import x.Y;` asked for under the `using` flag contradicts itself — refused by name, nothing added. */
+	@:pin('control')
+	@:killer('M-IMPORTSPELLING-FLAG-CONFLICT-UNCHECKED')
+	public function testImportStatementUnderTheUsingFlagIsRefused(): Void {
+		final source: String = 'package foo;\n\nimport a.B;\n\nclass C {}\n';
+		Assert.isTrue(errOf(source, 'import c.D;', true).indexOf('--using') >= 0, errOf(source, 'import c.D;', true));
+	}
+
+	/** Text that is neither a module path nor an import / using statement is refused BY NAME, not as a parse error. */
+	@:pin('control')
+	@:killer('M-ADDIMPORT-PATH-UNCHECKED')
+	public function testNotAModulePathIsRefusedByName(): Void {
+		final source: String = 'package foo;\n\nimport a.B;\n\nclass C {}\n';
+		final message: String = errOf(source, 'this is not a path', false);
+		Assert.isTrue(message.indexOf('neither a module path nor an import / using statement') >= 0, message);
+	}
+
+	/** A `using` spelled as a statement is deduplicated like one passed under the flag, guarded copies included. */
+	public function testUsingStatementDuplicateIsRefused(): Void {
+		assertRefused('package foo;\n\nusing a.B;\n\nclass C {}\n', 'using a.B;', false);
+		assertRefused('package foo;\n\n#if sys\nusing a.B;\n#end\n\nclass C {}\n', 'using a.B;', false);
+	}
+
+	/**
+	 * A file with no plain import still puts a fresh `using` ABOVE its `using` group. The seat used to be
+	 * "after the last plain import, else after the last import or using", which for a using-only header
+	 * appended BELOW the group — top priority, since Haxe ranks static extensions in reverse declaration
+	 * order, re-targeting every same-named extension call the file already makes.
+	 */
+	@:pin('control')
+	@:killer('M-ADDIMPORT-USING-TAKES-IMPORT-SEAT')
+	public function testUsingOnlyHeaderTakesTheLowestPriority(): Void {
+		final source: String = 'package foo;\n\nusing e.Ext;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nusing z.Zed;\nusing e.Ext;\n\nclass C {}\n';
+		assertAdd(source, 'z.Zed', true, expected);
+		assertAdd(source, 'using z.Zed;', false, expected);
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * The CLI op places a fresh import where the `import-order` rule reads the block: a field wildcard the project index proves
@@ -242,6 +301,19 @@ class AddImportSliceTest extends Test {
 		final target: String = '$dir/src/q/Target.hx';
 		Assert.equals(0, Cli.run(['add-import', target, 'z.Z', '--write']));
 		Assert.equals('${head}import z.Z;\n$tail', File.getContent(target));
+		CliFixture.removeDir(dir);
+	}
+
+	/** The CLI takes the statement spelling too: `add-import <file> 'using Lambda;'` writes a `using`. */
+	@:pin('control')
+	@:killer('M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED')
+	public function testCliTakesAWholeUsingStatement(): Void {
+		final dir: String = CliFixture.writeTree('addimportusing', [
+			{ name: 'src/q/Target.hx', source: 'package q;\n\nimport a.B;\n\nclass Target {}\n' }
+		]);
+		final target: String = '$dir/src/q/Target.hx';
+		Assert.equals(0, Cli.run(['add-import', target, 'using Lambda;', '--write']));
+		Assert.equals('package q;\n\nimport a.B;\n\nusing Lambda;\n\nclass Target {}\n', File.getContent(target));
 		CliFixture.removeDir(dir);
 	}
 	#end
@@ -275,6 +347,14 @@ class AddImportSliceTest extends Test {
 		} catch (exception: Exception) {
 			Assert.fail('add-import output failed to re-parse: ${exception.message}\n$text');
 		}
+	}
+
+	/** The refusal text of an add the caller expects to be refused. */
+	private function errOf(source: String, path: String, isUsing: Bool): String {
+		return switch addOf(source, path, isUsing, false) {
+			case Ok(text): 'expected Err, got Ok:\n$text';
+			case Err(message): message;
+		};
 	}
 
 	private static function addOf(source: String, path: String, isUsing: Bool, reformat: Bool): EditResult {

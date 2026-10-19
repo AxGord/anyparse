@@ -1410,26 +1410,26 @@
 		},
 		{
 			"name": "M-NEWFILE-IMPORT-DOUBLED",
-			"type": "anyparse.query.NewFile",
-			"method": "importStatement",
-			"find": "return path == '' ? null : '$keyword $path;';",
-			"replace": "return path == '' ? null : '$keyword $line;';",
-			"note": "a whole import line is wrapped a second time, so `@@ imports` writes `import import x.Y;;` and the failure surfaces as a column in generated text"
+			"type": "anyparse.query.ImportSpelling",
+			"method": "split",
+			"find": ": { keyword: keyword, path: withoutSemicolon(line.substr(keyword.length).trim()) };",
+			"replace": ": { keyword: keyword, path: withoutSemicolon(line) };",
+			"note": "a whole import line keeps its keyword in the path, so `@@ imports` (and add-import) refuse the statement spelling or wrap it into `import import x.Y;`"
 		},
 		{
 			"name": "M-NEWFILE-IMPORT-ANY-LINE",
 			"type": "anyparse.query.NewFile",
 			"method": "importStatement",
-			"find": "return isModulePath(line) ? 'import $line;' : null;",
-			"replace": "return 'import $line;';",
+			"find": "return spelled == null || spelled.path == '' || !ImportSpelling.isModulePath(spelled.path)",
+			"replace": "return spelled == null || spelled.path == ''",
 			"note": "a line that is neither a module path nor an import statement reaches assembly instead of being refused by name"
 		},
 		{
 			"name": "M-NEWFILE-BARE-KEYWORD-WRAPPED",
-			"type": "anyparse.query.NewFile",
-			"method": "importStatement",
-			"find": "for (keyword in ['import', 'using']) if (line == keyword || line.startsWith('$keyword ')) {",
-			"replace": "for (keyword in ['import', 'using']) if (line.startsWith('$keyword ')) {",
+			"type": "anyparse.query.ImportSpelling",
+			"method": "split",
+			"find": "for (keyword in [IMPORT_WORD, USING_WORD]) if (line == keyword || line.startsWith('$keyword ')) {",
+			"replace": "for (keyword in [IMPORT_WORD, USING_WORD]) if (line.startsWith('$keyword ')) {",
 			"note": "a bare `import` with no path falls through to the bare-path branch and becomes `import import;`, which parses and means nothing"
 		},
 		{
@@ -2306,17 +2306,17 @@
 			"name": "M-USES-EXACT-ONLY",
 			"type": "anyparse.query.Uses",
 			"method": "matches",
-			"find": "return nodeName == target || (includeQualified && target.indexOf('.') < 0 && SourceText.lastSegment(nodeName) == target);",
+			"find": "return nodeName == target || (includeQualified && SourceText.answersSimpleName(nodeName, target));",
 			"replace": "return nodeName == target;",
 			"note": "a type named through its module path is invisible again, so a deadness census over `uses` calls a live sub-module type dead"
 		},
 		{
 			"name": "M-USES-TAIL-SUBSTRING",
-			"type": "anyparse.query.Uses",
-			"method": "matches",
-			"find": "SourceText.lastSegment(nodeName) == target",
-			"replace": "StringTools.endsWith(nodeName, target)",
-			"note": "the qualified tail is matched as text rather than on the segment boundary, so `Mod.WrapBodyOpts` answers a query for `BodyOpts`"
+			"type": "anyparse.query.SourceText",
+			"method": "answersSimpleName",
+			"find": "return lastSegment(spelled) == target;",
+			"replace": "return StringTools.endsWith(spelled, target);",
+			"note": "the qualified tail is matched as text rather than on the segment boundary, so `Mod.WrapBodyOpts` answers a query for `BodyOpts` (and `my.OtherAssets` a mentions query for `Assets`)"
 		},
 		{
 			"name": "M-USES-QUALIFIED-DEFAULT",
@@ -26909,6 +26909,78 @@
 			"find": "WriterOptFanout.statementListElemOpt(macro _writerOpt)",
 			"replace": "macro _writerOpt",
 			"note": "a case-body statement of an arrow-body switch argument bypasses the statement-list barrier and inherits the call-argument chain flag"
+		},
+		{
+			"name": "M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED",
+			"type": "anyparse.query.AddImport",
+			"method": "addImport",
+			"find": "final asUsing: Bool = spelled.keyword == ImportSpelling.USING_WORD;",
+			"replace": "final asUsing: Bool = isUsing;",
+			"note": "a whole `using x.Y;` statement is added as an IMPORT of x.Y — the keyword the caller wrote is read and then ignored"
+		},
+		{
+			"name": "M-ADDIMPORT-USING-TAKES-IMPORT-SEAT",
+			"type": "anyparse.query.AddImport",
+			"method": "addImport",
+			"find": "? UsingScan.usingInsertEdit(UsingScan.headerOf(tree, source, plugin), trimmed)",
+			"replace": "? importEdit(source, tree, plugin, trimmed)",
+			"note": "a fresh `using` takes the import ladder again, which for a using-only header appends it BELOW the group: top static-extension priority, re-targeting the calls the file already makes"
+		},
+		{
+			"name": "M-ADDIMPORT-PATH-UNCHECKED",
+			"type": "anyparse.query.AddImport",
+			"method": "addImport",
+			"find": "if (!ImportSpelling.isModulePath(trimmed)) return Err(ImportSpelling.notAPath(path));",
+			"replace": "",
+			"note": "text that is no module path reaches the splice and is refused as a parse error at a column of a source the caller never wrote"
+		},
+		{
+			"name": "M-IMPORTSPELLING-FLAG-CONFLICT-UNCHECKED",
+			"type": "anyparse.query.ImportSpelling",
+			"method": "split",
+			"find": "return usingFlag && keyword == IMPORT_WORD",
+			"replace": "return false",
+			"note": "an `import x.Y;` statement under --using is silently taken as one of the two requests instead of refused"
+		},
+		{
+			"name": "M-REMOVEIMPORT-KEYWORD-IGNORED",
+			"type": "anyparse.query.RemoveImport",
+			"method": "removeImport",
+			"find": "final kinds: Array<String> = kindsFor(spelled.keyword);",
+			"replace": "final kinds: Array<String> = kindsFor(null);",
+			"note": "a `using a.B;` request matches the `import a.B;` beside it too, so the keyword that names one statement reads as ambiguous"
+		},
+		{
+			"name": "M-REMOVEIMPORT-CLI-USING-FLAG-DROPPED",
+			"type": "anyparse.query.cli.command.RemoveImportCommand",
+			"method": "runRemoveImport",
+			"find": "final path: String = usingFlag ? '${ImportSpelling.USING_WORD} ${spelled.path}' : modulePath;",
+			"replace": "final path: String = modulePath;",
+			"note": "remove-import --using parses and then drops the flag, so the bare path beside an import of the same module is ambiguous again"
+		},
+		{
+			"name": "M-MENTIONS-IMPORT-KINDS-UNPASSED",
+			"type": "anyparse.query.cli.command.MentionsCommand",
+			"method": "emitMentionsLit",
+			"find": "Lit.find(target, entry.tree, true, null, delimiters, ModuleScan.IMPORT_DECL_KINDS)",
+			"replace": "Lit.find(target, entry.tree, true, null, delimiters)",
+			"note": "mentions <Name> answers the uses and not the dotted `import pkg.Name;` that makes them resolve, and the reader concludes there is no import"
+		},
+		{
+			"name": "M-LIT-QUALIFIED-KINDS-IGNORED",
+			"type": "anyparse.query.Lit",
+			"method": "walk",
+			"find": "|| qualifiedKinds.contains(node.kind) && SourceText.answersSimpleName(n, target)",
+			"replace": "",
+			"note": "the import kinds a caller asks to widen are carried and never read, so a dotted import or using is blind to a simple-name query"
+		},
+		{
+			"name": "M-HOIST-USINGS-SOURCE-ORDER",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "builtAmbientSource",
+			"find": "usings.reverse();",
+			"replace": "",
+			"note": "hoisted usings are inserted first-first at a seat that puts each above the first, so they land reversed — and a using order IS its static-extension priority"
 		}
 	]
 }

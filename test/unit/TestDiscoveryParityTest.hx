@@ -470,6 +470,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.ApqLitCapHitCliTest',
 		'unit.cli.ApqLitCommentsCliTest',
 		'unit.cli.ApqLitDirectivesCliTest',
+		'unit.cli.ApqMentionsImportCliTest',
 		'unit.cli.ApqMetaCliTest',
 		'unit.cli.ApqOracleServerLifetimeCliTest',
 		'unit.cli.ApqPrefilterCliTest',
