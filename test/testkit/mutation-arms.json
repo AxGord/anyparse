@@ -26566,8 +26566,8 @@
 			"name": "M-ARGFIT-UNKNOWN-MISFITS",
 			"type": "anyparse.check.ArgumentTypes",
 			"method": "fit",
-			"find": "sameNamedType(given.text, wanted, callerId, calleeId))\n\t\tFits\n\telse\n\t\tMayFit;",
-			"replace": "sameNamedType(given.text, wanted, callerId, calleeId))\n\t\tFits\n\telse\n\t\tMisfits;",
+			"find": "\t\tMayFit;",
+			"replace": "\t\tMisfits;",
 			"note": "a type the fit cannot decide misfits, so a string an abstract takes through `@:from` reads as skipping it"
 		},
 		{
