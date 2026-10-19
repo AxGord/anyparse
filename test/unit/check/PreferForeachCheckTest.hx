@@ -335,12 +335,12 @@ class PreferForeachCheckTest extends Test {
 	}
 
 	/**
-	 * A later `using` the index cannot read may declare `items` itself, so the earlier `ExtArray` proves nothing: a module the
-	 * index does not hold, and one whose type is an ALIAS — 4.3.7 binds `using AliasHost;` (`typedef AliasHost = B`) to `B`'s
-	 * statics, which live on a type the `using` does not name.
+	 * A later `using` binds ahead of the earlier `ExtArray`: a module the index does not hold may declare `items` itself,
+	 * so the earlier one proves nothing; and one whose type is an ALIAS brings the statics of the type it names — 4.3.7
+	 * binds `using AliasHost;` (`typedef AliasHost = ExtIter`) to `ExtIter.items`, whose `Iterator` the rule refuses.
 	 */
 	@:pin('control')
-	@:killer('M-BINDER-EXTENSION-UNINDEXED')
+	@:killer('M-USING-HOSTS-ALIAS')
 	public function testUnindexedLaterUsingStopsTheWalk(): Void {
 		Assert.equals(0, extViolations('using ExtArray;\nusing Missing;', '').length);
 		Assert.equals(
@@ -362,7 +362,7 @@ class PreferForeachCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-EXT-DECL-GUARDED-MEMBER', 'M-BINDER-EXTENSION-GUARDED-USING')
 	public function testGuardedUsingOrDeclarationRefuses(): Void {
-		Assert.equals(0, extViolations('using ExtArray;\n#if x\nusing ExtIter;\n#end', '').length);
+		Assert.equals(0, extViolations('using ExtIter;\n#if x\nusing ExtArray;\n#end', '').length);
 		Assert.equals(0, extViolations('using ExtIter;\nusing ExtGuard;', '', extensionModules()).length);
 	}
 

@@ -257,7 +257,8 @@ class OperandTypingTest extends Test {
 		Assert.isFalse(inverts([
 			TOOLS,
 			FLAG_TOOLS,
-			use('using Tools;\n#if foo\nusing FlagTools;\n#end\n\n', '', '!s.ext()')
+			// the guarded `using` is the later one, and in a build defining `foo` it binds `Tools.ext` ahead of `FlagTools.ext`
+			use('using FlagTools;\n#if foo\nusing Tools;\n#end\n\n', '', '!s.ext()')
 		]));
 	}
 
