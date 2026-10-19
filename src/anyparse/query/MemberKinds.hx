@@ -741,13 +741,12 @@ final class MemberKinds {
 					if (sp != null) out.push(sp.from);
 				}
 				pending = false;
-			} else if (descendsToMemberHost(host.kind, child.kind))
-			// OR, not assignment: a `#if A static #end` region leaves `static` pending for the
-			// member after `#end` in the A build, and a region that consumed it leaves nothing —
-			// but `incoming` still reaches that member in the build where A is false. Over-marking
-			// is the safe direction for this function (a member the flat reading calls static is
-			// one no caller will move); dropping `incoming` was the unsafe one.
-			{
+			} else if (descendsToMemberHost(host.kind, child.kind)) {
+				// OR, not assignment: a `#if A static #end` region leaves `static` pending for the
+				// member after `#end` in the A build, and a region that consumed it leaves nothing —
+				// but `incoming` still reaches that member in the build where A is false. Over-marking
+				// is the safe direction for this function (a member the flat reading calls static is
+				// one no caller will move); dropping `incoming` was the unsafe one.
 				pending = collectStaticFroms(child, staticKind, members, pending, out) || pending;
 			}
 		}

@@ -4858,6 +4858,13 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   THEN position that is a `switch` or a bare `if` counts as bare and is braced by the fix, while the writer's
   symmetric wrap skips both ctors (`SYMMETRY_WRAP_SKIP_CTORS`); and an unterminated bare expression takes its `;`
   inside the braces where the writer leaves it bare (FU7's decision). anyparse and client have no such site.
-- anyparse src+test at the fixed point: 68 chain findings, 104 edits in 53 files, 0 declined; only braces / `;` /
+- A bare branch's OWN comments - each opening a line of its own between its header and its statement - now go inside
+  its braces (`bracesOpenAt`): the braces open right after the header. Left outside (FU7's edit started at the
+  statement) they land between the header and the `{`, which is also what `fmt` does with such a branch under the
+  symmetric policy - three anyparse sites (`ValueEscapes` x2, `MemberKinds`) read `)` / `// note` / `{`. A comment
+  that shares its line with the header is the header's and stays. The "comment token directly above, opening its own
+  line" step is one shared primitive, `SourceComments.ownLineCommentAbove`, which `ElementSpan.docExtendedSpan` now
+  calls instead of its inline copy (block comments only there, as before).
+- anyparse src+test at the fixed point: 68 chain findings in 53 files, 0 declined; only braces / `;` /
   whitespace differ; no follow-on rule fires. client (rule enabled, `fmt` runs `singleStatementBraces: "remove"`, which
   makes chains symmetric already): 0 sites.

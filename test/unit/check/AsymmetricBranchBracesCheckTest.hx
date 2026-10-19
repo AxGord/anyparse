@@ -222,6 +222,29 @@ class AsymmetricBranchBracesCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A bare branch's own comments - each on a line of its own between its header and its statement - go inside its
+	 * braces: left outside they would sit between the header and the `{`. A comment trailing the header on its line is
+	 * the header's and stays where it is.
+	 */
+	@:pin('control')
+	@:killer('M-ASYM-FIX-COMMENT-OUTSIDE')
+	@:killer('M-OWNLINE-COMMENT-TRAILING')
+	public function testFixTakesTheBranchsOwnCommentsInside(): Void {
+		Assert.equals(
+			wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) {\n\t\t\t// note\n\t\t\t/* more */\n\t\t\tq(); }'),
+			CheckFixture.fixedSource(
+				new AsymmetricBranchBraces(), wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b)\n\t\t\t// note\n\t\t\t/* more */\n\t\t\tq();')
+			)
+		);
+		Assert.equals(
+			wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) // the header\'s\n\t\t\t{ q(); }'),
+			CheckFixture.fixedSource(
+				new AsymmetricBranchBraces(), wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) // the header\'s\n\t\t\tq();')
+			)
+		);
+	}
+
 	/** A conditional-compilation region in a no-else chain stays bare, and the finding says why - the writer leaves it too. */
 	public function testFixLeavesANoElseConditionalRegionBare(): Void {
 		final src: String = wrap('if (a) {\n\t\t\tq();\n\t\t} else if (b) #if d p() #else r() #end;');

@@ -76,6 +76,8 @@ final class PinsCheckAToO {
 		'unit.check.AsymmetricBranchBracesCheckTest#testFixLeavesAConditionalRegionBare :: control :: M-ASYM-FIX-OPEN-TAIL-ANY',
 		'unit.check.AsymmetricBranchBracesCheckTest#testFixLeavesADeclarationBare :: control :: M-ASYM-FIX-DECL',
 		'unit.check.AsymmetricBranchBracesCheckTest#testFixLeavesANestedPairToTheNextPass :: control :: M-ASYM-FIX-NESTED-OVERLAP',
+		'unit.check.AsymmetricBranchBracesCheckTest#testFixTakesTheBranchsOwnCommentsInside :: control :: '
+			+ 'M-ASYM-FIX-COMMENT-OUTSIDE,M-OWNLINE-COMMENT-TRAILING',
 		'unit.check.AsymmetricBranchBracesCheckTest#testFixTerminatesAnUnterminatedExpression :: control :: '
 			+ 'M-ASYM-FIX-NO-TERMINATOR-ADDED,M-ASYM-FIX-UNTERMINATED',
 		'unit.check.AsymmetricBranchBracesCheckTest#testOneFindingPerChain :: control :: M-ASYM-CHAIN-PER-LINK,M-ASYM-CHAIN-PAIR-SKIPPED',

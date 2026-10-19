@@ -546,9 +546,8 @@ final class ValueEscapes {
 			final first: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
 			if (first != null && (kind == shape.uncheckedCastKind || kind == shape.checkTypeKind)) {
 				value(first);
-			} else if (first != null && (shape.throwKinds ?? []).contains(kind))
-			// a catch may bind what is thrown as a catch-all
-			{
+			} else if (first != null && (shape.throwKinds ?? []).contains(kind)) {
+				// a catch may bind what is thrown as a catch-all
 				value(first);
 			} else if (declKinds.contains(kind)) {
 				final init: Null<QueryNode> = CtorFieldFold.declInitializer(node, shape);
@@ -560,9 +559,8 @@ final class ValueEscapes {
 				call(node);
 			} else if ((shape.valueReturnKinds ?? []).contains(kind) && first != null) {
 				if (!returnsTypedly(fn)) value(first);
-			} else if (arrowKinds.contains(kind) && node.children.length > 0)
-			// the body's result is returned into a position nothing here types
-			{
+			} else if (arrowKinds.contains(kind) && node.children.length > 0) {
+				// the body's result is returned into a position nothing here types
 				bodyValue(node.children[node.children.length - 1]);
 			}
 			final inner: Null<QueryNode> = functions.contains(kind) ? node : fn;

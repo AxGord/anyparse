@@ -7,6 +7,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
 import anyparse.runtime.Span;
@@ -125,7 +126,8 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 			tree: root,
 			seams: seams,
 			terminator: closer,
-			plugin: plugin
+			plugin: plugin,
+			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source))
 		};
 		final edits: Array<FixEdit> = [];
 		for (pair in collect(tree, seams)) {
@@ -221,13 +223,31 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 			else
 				null;
 			if (statement == null) return Declined('a bare branch carries no terminator of its own, so it would not compile inside braces');
-			edits.push({ span: new Span(placed.from, placed.from + text.length), text: '{ $statement }' });
+			final open: Int = bracesOpenAt(site, placed.from);
+			final braced: String = open == placed.from ? '{ $statement }' : ' {${site.source.substring(open, placed.from)}$statement }';
+			edits.push({ span: new Span(open, placed.from + text.length), text: braced });
 		}
 		if (edits.exists(e -> taken.exists(t -> e.span.from < t.span.to && t.span.from < e.span.to)))
 			return Declined('it overlaps a branch this pass braces - the next pass takes it');
 		return chainBracedAfter(site, edits, links)
 			? Braced(edits)
 			: Declined('the braced chain does not parse back as the same if/else with every branch braced');
+	}
+
+	/**
+	 * Where a bare branch whose statement starts at `from` opens its braces: `from` itself, or - when comments of its
+	 * own sit between its header and the statement, each opening a line of its own (`SourceComments.ownLineCommentAbove`)
+	 * - right after the header's last token, so the braces take those notes in instead of leaving them between the
+	 * header and the `{`.
+	 */
+	private static function bracesOpenAt(site: FixSite, from: Int): Int {
+		var start: Int = from;
+		var open: Int = SourceComments.ownLineCommentAbove(site.source, site.comments, start, false);
+		while (open >= 0) {
+			start = open;
+			open = SourceComments.ownLineCommentAbove(site.source, site.comments, start, false);
+		}
+		return start == from ? from : site.source.substring(0, start).rtrim().length;
 	}
 
 	/**
@@ -395,6 +415,9 @@ private typedef FixSite = {
 	final seams: Seams;
 	final terminator: String;
 	final plugin: GrammarPlugin;
+
+	/** The file's comment tokens (`SourceComments.collectCommentTokens`): a bare branch's own comments go inside its braces. */
+	final comments: Array<CommentTok>;
 };
 
 /** What `fix` does with one asymmetric pair: the brace edits of its chain, or the gate that kept them bare. */

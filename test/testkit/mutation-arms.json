@@ -16295,7 +16295,7 @@
 			"name": "M-EXTERN-BLIND-DECLARED",
 			"type": "anyparse.query.MemberReach",
 			"method": "externHanded",
-			"find": "\t\t\t} else if (!escaped && !facts.unchecked().byType(read) && declaredCarrier(g, read, declaring))\n\t\t\t\tinto.blind = true;",
+			"find": "\t\t\t} else if (!escaped && !facts.unchecked().byType(read) && declaredCarrier(g, read, declaring)) {\n\t\t\t\tinto.blind = true;\n\t\t\t}",
 			"replace": "\t\t\t}",
 			"note": "an extern handed an object carrying the member that never left the type system is taken to write none by its name"
 		},
@@ -27868,8 +27868,8 @@
 			"name": "M-ASYM-CHAIN-UNFLAGGED",
 			"type": "anyparse.check.AsymmetricBranchBraces",
 			"method": "chainFinding",
-			"find": "return headSpan != null && braced && bareBranches(links, seams).length > 0",
-			"replace": "return headSpan != null && false && bareBranches(links, seams).length > 0",
+			"find": "headSpan != null && braced && bareBranches(links, seams).length > 0",
+			"replace": "headSpan != null && false && bareBranches(links, seams).length > 0",
 			"note": "a chain whose braced and bare branches disagree outside its tail pair - one with no final else - is not a finding, although the writer symmetric mode braces it"
 		},
 		{
@@ -27895,6 +27895,21 @@
 			"find": " && !seams.exemptElseKinds.contains(last.kind)) out.push(last);",
 			"replace": ") out.push(last);",
 			"note": "a terminal else switch counts as a bare branch, so a braced chain ending in one is flagged and its switch braced, though the writer glues it to its else"
+		},
+		{
+			"name": "M-ASYM-FIX-COMMENT-OUTSIDE",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "bracesOpenAt",
+			"force": "from",
+			"note": "a bare branch is braced around its statement alone, leaving its own comments between the header and the `{`"
+		},
+		{
+			"name": "M-OWNLINE-COMMENT-TRAILING",
+			"type": "anyparse.query.SourceComments",
+			"method": "ownLineCommentAbove",
+			"find": "return open >= 0 && SourceText.startsItsLine(source, open) ? open : -1;",
+			"replace": "return open;",
+			"note": "a comment sharing its line with the code before it is read as the next statement own, so a header note moves inside the braces and a trailing note becomes the next declaration doc"
 		}
 	]
 }

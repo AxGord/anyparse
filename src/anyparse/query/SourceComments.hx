@@ -795,6 +795,18 @@ final class SourceComments {
 	}
 
 	/**
+	 * The start of the comment token (a `collectCommentTokens` result) that ends directly above `from` - nothing but
+	 * whitespace between them - and opens its own line, or -1. A comment sharing its line with code before it trails
+	 * that code however adjacent it is to `from`, so it answers -1 too. `blockOnly` admits block comments alone.
+	 */
+	public static function ownLineCommentAbove(source: String, tokens: Array<CommentTok>, from: Int, blockOnly: Bool): Int {
+		var i: Int = from - 1;
+		while (i >= 0 && SourceText.isSpace(source.fastCodeAt(i))) i--;
+		final open: Int = i < 0 ? -1 : commentEndingAt(tokens, i + 1, blockOnly);
+		return open >= 0 && SourceText.startsItsLine(source, open) ? open : -1;
+	}
+
+	/**
 	 * A single-line excerpt of at most `limit` code units of `source` from `at`, never reading past
 	 * `to`, tabs and line breaks flattened to spaces and the ends trimmed.
 	 *
