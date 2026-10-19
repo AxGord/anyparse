@@ -106,7 +106,7 @@ final class OperandBinder {
 	private final _identKinds: Array<String>;
 	private final _fnKinds: Array<String>;
 
-	/** The expectation ladder (`ExpectedTypes`) an untyped lambda parameter is typed by. */
+	/** The typing service's expectation ladder (`TypingService.expectations`) an untyped lambda parameter is typed by. */
 	private final _expectation: ExpectedTypes;
 
 	/** This file's written type annotations by binding offset (`TypeInfoProvider.declaredTypeSources`). */
@@ -131,7 +131,7 @@ final class OperandBinder {
 			for (kind in [shape.identKind, shape.stringInterpIdentKind]) if (kind != null) kind
 		];
 		_fnKinds = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
-		_expectation = new ExpectedTypes(shape);
+		_expectation = index.typing.expectations;
 		_annotations = provider.declaredTypeSources(source);
 		_usings = usings;
 	}

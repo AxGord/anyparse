@@ -8,8 +8,8 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
  * The typing service of one run scope: the ONE place a typing question is asked, over the declarations the
  * `SymbolIndex` read. Its questions split the way a compiler's typer splits them. SIGNATURE questions are answered from
  * the declarations alone, no body read (`members`: what a named type declares or inherits; `structural`: what it unifies
- * with). BODY questions walk an expression: `typeWalk` owns the shapes and a `TypingHost` answers
- * each in its own currency. Every answer the service remembers lives in `cache`, keyed by the
+ * with). BODY questions walk an expression: `typeWalk` owns the shapes and a `TypingHost` answers each in its own currency,
+ * and `expectations` gives the type a position expects. Every answer the service remembers lives in `cache`, keyed by the
  * declaration the question is about (`DeclarationKey`), never by a name a second declaration may share.
  *
  * A declaration's key is its position in its file, so one declaration is one key whichever `#if` configuration reads it:
@@ -29,10 +29,16 @@ final class TypingService {
 	/** SIGNATURE: unification with an anonymous structure, and membership of a builtin structural type. */
 	public final structural: StructuralTypes;
 
-	/** Built by the owning `SymbolIndex` over its immutable declaration tables. */
-	public function new(files: Array<FileInfo>, refs: TypeRefIndex, subtypes: SubtypeGraph, typeSyntax: TypeSyntaxReader) {
+	/** BODY: the type a value is expected to have where the grammar `shape` writes it (`ExpectedTypes`). */
+	public final expectations: ExpectedTypes;
+
+	/** Built by the owning `SymbolIndex` over its immutable declaration tables and its grammar's `shape`. */
+	public function new(
+		files: Array<FileInfo>, refs: TypeRefIndex, subtypes: SubtypeGraph, typeSyntax: TypeSyntaxReader, shape: RefShape
+	) {
 		members = new MemberLookup(refs, cache);
 		structural = new StructuralTypes(files, refs, subtypes, members, typeSyntax);
+		expectations = new ExpectedTypes(shape);
 	}
 
 	/**

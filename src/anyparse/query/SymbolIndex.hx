@@ -697,7 +697,7 @@ final class SymbolIndex {
 		_typeSyntax = plugin.typeSyntax;
 		refs = new TypeRefIndex(files, skipped, sources, plugin);
 		subtypes = new SubtypeGraph(files, sources, refs);
-		typing = new TypingService(files, refs, subtypes, plugin.typeSyntax);
+		typing = new TypingService(files, refs, subtypes, plugin.typeSyntax, plugin.refShape());
 		paths = new MemberPathWalk(files, refs, typing.members, plugin.typeSyntax);
 		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty);
 		traits = new TypeTraits(files, sources, refs);
