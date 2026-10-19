@@ -473,9 +473,10 @@ final class CallSites {
 						if (boundReadFroms.contains(identSpan.from)) {
 							sites.push(node);
 							consumedFroms.push(identSpan.from);
-						} else if (!bareBindsElsewhere(identSpan, hits))
+						} else if (!bareBindsElsewhere(identSpan, hits)) {
 							error = 'cannot prove all call sites target "$name": unresolved call at ${posOf(source, node.span)}'
 								+ ' — every call site must be resolvable';
+						}
 					case CalleeThis:
 						sites.push(node);
 						thisSiteCount++;

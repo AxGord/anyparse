@@ -307,8 +307,9 @@ final class CondRegionScan {
 						if (inEffect) return decls[0].span;
 						inEffect = true;
 					}
-				} else if (declares(c, scan))
+				} else if (declares(c, scan)) {
 					inEffect = true;
+				}
 				final found: Null<Span> = walk(c, inEffect);
 				if (found != null) return found;
 			}

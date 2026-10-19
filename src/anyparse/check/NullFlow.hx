@@ -891,23 +891,23 @@ final class NullFlow {
 	/** Apply `node`'s flow transfer to `state` — the per-construct dispatch of `walk`. */
 	private static function transfer(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		final kind: String = node.kind;
-		if (ctx.writeKinds.contains(kind))
+		if (ctx.writeKinds.contains(kind)) {
 			handleWrite(node, state, ctx);
-		else if (ctx.localDeclKinds.contains(kind))
+		} else if (ctx.localDeclKinds.contains(kind)) {
 			handleDecl(node, state, ctx);
-		else if (ctx.ifKinds.contains(kind))
+		} else if (ctx.ifKinds.contains(kind)) {
 			handleIf(node, state, ctx);
-		else if (ctx.loopKinds.contains(kind))
+		} else if (ctx.loopKinds.contains(kind)) {
 			handleLoop(node, state, ctx);
-		else if (ctx.switchKinds.contains(kind))
+		} else if (ctx.switchKinds.contains(kind)) {
 			handleSwitch(node, state, ctx);
-		else if (ctx.tryKinds.contains(kind))
+		} else if (ctx.tryKinds.contains(kind)) {
 			handleTry(node, state, ctx);
-		else if (kind == BOOL_AND_KIND || kind == BOOL_OR_KIND)
+		} else if (kind == BOOL_AND_KIND || kind == BOOL_OR_KIND) {
 			handleShortCircuit(node, state, ctx);
-		else if (ctx.nullCoalKind != null && kind == ctx.nullCoalKind)
+		} else if (ctx.nullCoalKind != null && kind == ctx.nullCoalKind) {
 			handleNullCoalescing(node, state, ctx);
-		else if (ctx.callKind != null && kind == ctx.callKind) {
+		} else if (ctx.callKind != null && kind == ctx.callKind) {
 			for (c in node.children) walk(c, state, ctx);
 			killValueFacts(state);
 			handleNullAssertionCall(node, state, ctx);
@@ -915,10 +915,11 @@ final class NullFlow {
 		} else if (ctx.newExprKind != null && kind == ctx.newExprKind) {
 			for (c in node.children) walk(c, state, ctx);
 			killValueFacts(state);
-		} else if (ctx.blockKinds.contains(kind))
+		} else if (ctx.blockKinds.contains(kind)) {
 			handleBlock(node, state, ctx);
-		else
+		} else {
 			for (c in node.children) walk(c, state, ctx);
+		}
 	}
 
 	/**
@@ -1675,10 +1676,11 @@ final class NullFlow {
 			if (outer.nonNull.contains(n)) {
 				markNonNull(state, n);
 				if (outer.unseen.contains(n)) state.unseen.push(n);
-			} else if (outer.known.contains(n))
+			} else if (outer.known.contains(n)) {
 				markKnown(state, n);
-			else if (outer.maybe.contains(n))
+			} else if (outer.maybe.contains(n)) {
 				markMaybe(state, n);
+			}
 		}
 	}
 

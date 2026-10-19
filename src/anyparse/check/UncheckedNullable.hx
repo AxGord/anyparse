@@ -115,8 +115,9 @@ final class UncheckedNullable implements Check implements NoAutofix {
 		if (ctx.numericOps.contains(node.kind)) {
 			final stringContext: Bool = node.children.exists(c -> ctx.stringLiteralKinds.contains(c.kind));
 			if (!stringContext) for (c in node.children) flagIfNullable(out, file, c, ctx);
-		} else if (ctx.indexAccessKind != null && node.kind == ctx.indexAccessKind && node.children.length >= 2)
+		} else if (ctx.indexAccessKind != null && node.kind == ctx.indexAccessKind && node.children.length >= 2) {
 			flagIfNullable(out, file, node.children[1], ctx);
+		}
 		for (c in node.children) walk(out, file, c, ctx);
 	}
 

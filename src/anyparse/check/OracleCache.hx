@@ -505,7 +505,7 @@ final class OracleCache {
 		}
 		if (!memoise && walks != null) {
 			// One walk per directory for every configuration a caller fingerprints at once
-			// (`OracleRunMemo.fingerprints`): thirteen TM builds share the project root, and
+			// (`OracleRunMemo.fingerprints`): thirteen client builds share the project root, and
 			// walking it per build was 43 of a 533 s `--fix` run. The union is the same —
 			// a file a nested root shares with its enclosing one hashes the same either way.
 			final walked: Map<String, String> = walks[dir] ?? [];
@@ -548,9 +548,9 @@ final class OracleCache {
 		if (entries == null) return;
 		for (entry in entries) if (!entry.startsWith('.')) {
 			final full: String = Path.normalize(Path.join([dir, entry]));
-			if (isDirectory(full))
+			if (isDirectory(full)) {
 				walkDir(full, into, depth + 1, memo);
-			else if (full.endsWith('.hx') && !into.exists(full)) {
+			} else if (full.endsWith('.hx') && !into.exists(full)) {
 				final held: Null<String> = memo?.get(full);
 				final text: Null<String> = held == null ? readText(full) : null;
 				final hash: Null<String> = held ?? (text == null ? null : md5(text));

@@ -246,12 +246,13 @@ final class PreferArrowCallback implements Check {
 			if (paramKinds.contains(c.kind)) {
 				if (restKind != null && c.kind == restKind) return null;
 				params.push(c);
-			} else if (bodyKinds.contains(c.kind))
+			} else if (bodyKinds.contains(c.kind)) {
 				body = c;
-			else if (isTypeAnnotationKind(ctx, c.kind))
+			} else if (isTypeAnnotationKind(ctx, c.kind)) {
 				hint = c;
-			else
+			} else {
 				return null;
+			}
 		}
 		final b: Null<QueryNode> = body;
 		return b == null || b.kind == shape.noBodyKind ? null : { params: params, hint: hint, body: b };

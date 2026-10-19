@@ -1808,8 +1808,9 @@ final class MemberReach {
 					waitingExterns.remove(id);
 					for (w in waiting) externRevisits.push(w);
 				}
-			} else if (!spliceOnly.exists(id))
+			} else if (!spliceOnly.exists(id)) {
 				spliceOnly[id] = true;
+			}
 			final owner: Null<String> = typed != null && mayShare(g, id) ? typed : null;
 			final key: String = owner == null ? id : '$id@$owner';
 			final known: Array<ReachStep> = callers[id] ?? [];
@@ -2672,8 +2673,9 @@ final class MemberReach {
 				into.types = null;
 				into.values = true;
 				into.blind = true;
-			} else if (!escaped && !facts.unchecked().byType(read) && declaredCarrier(g, read, declaring))
+			} else if (!escaped && !facts.unchecked().byType(read) && declaredCarrier(g, read, declaring)) {
 				into.blind = true;
+			}
 		}
 		for (h in handed) take(h);
 		return into;

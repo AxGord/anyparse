@@ -129,15 +129,16 @@ final class ListenerSymmetry implements Check {
 			if (twinName == null) continue;
 			final isAdd: Bool = m.name.startsWith('add');
 			final twin: Null<ListenerMember> = byName[twinName];
-			if (twin == null)
+			if (twin == null) {
 				out.push(finding(file, source, m.span, '\'${m.name}\' has no matching \'$twinName\' declared in this type'));
-			else if (twin.isStatic != m.isStatic) {
+			} else if (twin.isStatic != m.isStatic) {
 				if (isAdd)
 					out.push(
 						finding(file, source, m.span, '\'${m.name}\' and \'$twinName\' must match in static-ness to form a listener pair')
 					);
-			} else if (isAdd && intAbs(m.index - twin.index) != 1)
+			} else if (isAdd && intAbs(m.index - twin.index) != 1) {
 				out.push(finding(file, source, m.span, '\'${m.name}\' and \'$twinName\' should be declared next to each other'));
+			}
 		}
 	}
 
@@ -184,8 +185,9 @@ final class ListenerSymmetry implements Check {
 					});
 				}
 				isStatic = false;
-			} else if (cfg.staticKind != null && child.kind == cfg.staticKind)
+			} else if (cfg.staticKind != null && child.kind == cfg.staticKind) {
 				isStatic = true;
+			}
 		}
 	}
 

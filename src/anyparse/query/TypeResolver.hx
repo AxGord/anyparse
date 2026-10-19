@@ -927,9 +927,9 @@ final class TypeResolver {
 			var pending: Array<{ from: Int, disabled: Bool }> = [];
 			for (c in node.children) {
 				final cs: Null<Span> = c.span;
-				if (cs != null && c.name == metaName)
+				if (cs != null && c.name == metaName) {
 					pending.push({ from: cs.from, disabled: metaDisabled(c, disableArg) });
-				else if (cs != null && isDeclScope(c.kind)) {
+				} else if (cs != null && isDeclScope(c.kind)) {
 					final typeLevel: Bool = isTypeDeclScope(c.kind);
 					for (p in pending) scopes.push({
 						from: p.from,

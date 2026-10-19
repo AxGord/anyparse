@@ -136,8 +136,9 @@ final class AddMember {
 					final name: Null<String> = child.name;
 					if (MemberKinds.isOpaqueMemberKind(child.kind)) {
 						if (isAdded) addedOpaqueRegion = true;
-					} else if (name != null)
+					} else if (name != null) {
 						(isAdded ? added : existing).push(name);
+					}
 				}
 			}
 		});
@@ -189,8 +190,9 @@ final class AddMember {
 			if (code == '\n'.code) {
 				newlines++;
 				if (newlines >= 2) return true;
-			} else if (!SourceText.isSpace(code))
+			} else if (!SourceText.isSpace(code)) {
 				return false;
+			}
 			i--;
 		}
 		return false;

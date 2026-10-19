@@ -364,9 +364,9 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		final span: Null<Span> = node.span;
 		if (name != null && span != null && names.contains(name)) {
 			final nodeSpan: Span = span;
-			if (node.kind == binders.identKind && node.children.length == 0)
+			if (node.kind == binders.identKind && node.children.length == 0) {
 				out.push({ span: nodeSpan, text: '$HOLE$name$HOLE' });
-			else if (binders.binderKinds.contains(node.kind)) {
+			} else if (binders.binderKinds.contains(node.kind)) {
 				final at: Int = binderNameOffset(source, node, nodeSpan, name);
 				if (at >= 0) out.push({ span: new Span(at, at + name.length), text: '$HOLE$name$HOLE' });
 			}

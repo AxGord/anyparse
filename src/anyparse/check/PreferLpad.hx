@@ -18,9 +18,9 @@ using Lambda;
  *
  * ```haxe
  * for (i in 1...145)
- *     items.push(if (i < 10) 'goals3d000$i' else if (i < 100) 'goals3d00$i' else 'goals3d0$i');
+ *     items.push(if (i < 10) 'cones3d000$i' else if (i < 100) 'cones3d00$i' else 'cones3d0$i');
  * // ->
- * for (i in 1...145) items.push('goals3d' + '$i'.lpad('0', 4));
+ * for (i in 1...145) items.push('cones3d' + '$i'.lpad('0', 4));
  * ```
  *
  * `Severity.Info` -- the input is correct, this is a readability simplification -- and `DefaultOff`,
@@ -353,8 +353,9 @@ final class PreferLpad implements Check implements DefaultOff {
 				base = seg.base;
 				suffix = seg.suffix;
 				lead = seg.zeros;
-			} else if (seg.base != base || seg.suffix != suffix || seg.zeros != lead - k)
+			} else if (seg.base != base || seg.suffix != suffix || seg.zeros != lead - k) {
 				return null;
+			}
 		}
 		return {
 			subject: subject,
@@ -374,8 +375,9 @@ final class PreferLpad implements Check implements DefaultOff {
 			if (kid.kind == s.interpIdentKind) {
 				if (holeAt >= 0 || kid.name != subject) return null;
 				holeAt = k;
-			} else if (kid.kind != CheckScan.STRING_FRAGMENT_KIND)
+			} else if (kid.kind != CheckScan.STRING_FRAGMENT_KIND) {
 				return null;
+			}
 		}
 		if (holeAt < 0 || holeAt > 1 || kids.length > holeAt + 2) return null;
 		final prefix: Null<String> = holeAt == 1 ? kids[0].name : '';

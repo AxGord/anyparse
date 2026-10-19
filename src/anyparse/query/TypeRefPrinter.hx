@@ -739,8 +739,9 @@ final class TypeRefPrinter {
 					return true;
 			} else if (index == null) {
 				if (SourceText.lastSegment(path) == simple) return true;
-			} else if (declarers.exists(f -> f.module == path && ModuleScan.pathOfTypeIn(f, simple) != canonical))
+			} else if (declarers.exists(f -> f.module == path && ModuleScan.pathOfTypeIn(f, simple) != canonical)) {
 				return true;
+			}
 		}
 		return false;
 	}

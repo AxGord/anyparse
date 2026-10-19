@@ -413,8 +413,9 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 				if (holdsMember(child, seams)) {
 					run.resize(0);
 					blocked = false;
-				} else if (collectRegionPrefix(child, seams, run))
+				} else if (collectRegionPrefix(child, seams, run)) {
 					blocked = true;
+				}
 				continue;
 			}
 			final name: Null<String> = child.name;

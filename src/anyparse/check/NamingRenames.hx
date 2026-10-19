@@ -918,8 +918,9 @@ final class NamingRenames {
 			final s: Null<Span> = node.span;
 			final off: Int = s == null ? -1 : SourceText.identTokenOffset(source, s, name);
 			if (off >= 0) bare.push({ off: off, cls: cls });
-		} else if (node.kind == 'FieldAccess' && node.name == name)
+		} else if (node.kind == 'FieldAccess' && node.name == name) {
 			collectFieldAccessRef(node, name, source, cls, bare, typed, recvNames);
+		}
 		for (child in node.children) collectAttributedRefs(child, name, source, cls, bare, typed, recvNames, shape);
 	}
 
@@ -1841,7 +1842,7 @@ class RenameRefusal {
 	 * libraries — when the plugin carries one, else the report index): an `openfl` / `lime`
 	 * subclass's inherited members are then resolvable rather than unprovable. Refuse when the
 	 * inherited-`_x` possibility cannot be ruled out (a still-unresolvable supertype closure), and
-	 * refuse a member of a `@:rtti` / drill-Node hierarchy whose subtype-ward `@:rtti` only the index
+	 * refuse a member of a `@:rtti` / model-Node hierarchy whose subtype-ward `@:rtti` only the index
 	 * reveals (the direct-`@:rtti` case is already refused by `of`): such a class serializes by
 	 * reflecting on member NAMES, so a rename would break saved files.
 	 */

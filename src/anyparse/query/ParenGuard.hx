@@ -234,8 +234,9 @@ final class ParenGuard {
 						wrap[i] = true;
 						changed = true;
 					}
-				} else if (wrapInside(probe, wrap, i))
+				} else if (wrapInside(probe, wrap, i)) {
 					changed = true;
+				}
 			}
 			if (!changed) break;
 			rounds++;
@@ -481,8 +482,9 @@ final class ParenGuard {
 		final rightType: Null<QueryNode> = right.type;
 		if (leftType == null || rightType == null) {
 			if (leftType != rightType) return false;
-		} else if (!sameIgnoringInserted(leftType, aText, aPairs, rightType, bText, bPairs))
+		} else if (!sameIgnoringInserted(leftType, aText, aPairs, rightType, bText, bPairs)) {
 			return false;
+		}
 		if (left.children.length != right.children.length) return false;
 		for (k in 0...left.children.length) if (!sameIgnoringInserted(left.children[k], aText, aPairs, right.children[k], bText, bPairs))
 			return false;

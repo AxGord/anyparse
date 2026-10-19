@@ -763,15 +763,15 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// linear pass — so target-conditional statics are captured either way.
 		for (child in flattenConditionals(container.children)) {
 			final kind: String = child.kind;
-			if (kind == 'Static')
+			if (kind == 'Static') {
 				sawStatic = true;
-			else if (kind == 'FnMember') {
+			} else if (kind == 'FnMember') {
 				final name: Null<String> = child.name;
 				if (sawStatic && name != null && hasParam(child)) into.push(name);
 				sawStatic = false;
-			} else if (FIELD_BOUNDARY_KINDS.contains(kind))
+			} else if (FIELD_BOUNDARY_KINDS.contains(kind)) {
 				sawStatic = false;
-			else if (!MODIFIER_KINDS.contains(kind)) {
+			} else if (!MODIFIER_KINDS.contains(kind)) {
 				collectStaticMethodsWithParam(child, into);
 				sawStatic = false;
 			}

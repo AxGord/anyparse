@@ -258,9 +258,9 @@ final class ThreadSafetyOptions {
 			return null;
 		}
 		if (wrong.length == 0 && (at == null || at.length == 0)) wrong.push('it names no "main" position');
-		if (wrong.length > 0)
+		if (wrong.length > 0) {
 			problems.push('$SPAWNS_KEY[$i] "$named": ${wrong.join(', ')} — kept as a plain entry');
-		else if (at != null) {
+		} else if (at != null) {
 			// re-bound: strict null-safety does not carry a narrowed local into a structure literal
 			final kept: String = named;
 			final onMain: Array<Int> = at;

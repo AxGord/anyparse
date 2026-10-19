@@ -1072,8 +1072,9 @@ class WrapList {
 		function record(isAdd: Bool, depth: Int): Void {
 			if (isAdd) {
 				if (addSubDepth < 0 || depth < addSubDepth) addSubDepth = depth;
-			} else if (otherDepth < 0 || depth < otherDepth)
+			} else if (otherDepth < 0 || depth < otherDepth) {
 				otherDepth = depth;
+			}
 		}
 		function w(n: Doc, depth: Int): Void {
 			switch n {

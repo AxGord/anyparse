@@ -223,11 +223,11 @@ final class MissingVisibility implements Check {
 	private static function scanRun(ctx: ScanCtx, kids: Array<QueryNode>, incoming: Bool): Bool {
 		var sawVisibility: Bool = incoming;
 		for (child in kids) {
-			if (ctx.seams.condKind != null && child.kind == ctx.seams.condKind)
+			if (ctx.seams.condKind != null && child.kind == ctx.seams.condKind) {
 				sawVisibility = scanConditional(ctx, child, sawVisibility);
-			else if (ctx.seams.visibility.contains(child.kind))
+			} else if (ctx.seams.visibility.contains(child.kind)) {
 				sawVisibility = true;
-			else if (ctx.seams.members.contains(child.kind)) {
+			} else if (ctx.seams.members.contains(child.kind)) {
 				final span: Null<Span> = child.span;
 				if (
 					!sawVisibility && !statesOwnVisibility(child, ctx.seams) && span != null

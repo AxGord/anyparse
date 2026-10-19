@@ -479,11 +479,11 @@ final class InlineConstant implements Check {
 		var sawInline: Bool = false;
 		for (child in container.children) {
 			final kind: String = child.kind;
-			if (kind == seams.staticKind)
+			if (kind == seams.staticKind) {
 				sawStatic = true;
-			else if (seams.inlineKind != null && kind == seams.inlineKind)
+			} else if (seams.inlineKind != null && kind == seams.inlineKind) {
 				sawInline = true;
-			else if (seams.members.contains(kind)) {
+			} else if (seams.members.contains(kind)) {
 				if (child.name == name) {
 					final isField: Bool = seams.finalFieldKinds.contains(kind) || seams.mutableFieldKinds.contains(kind);
 					final init: Null<QueryNode> = ConstantFieldScan.initializerOf(child);
