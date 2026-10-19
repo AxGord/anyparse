@@ -312,7 +312,7 @@ class OperandTypingTest extends Test {
 
 	/**
 	 * An untyped lambda parameter takes the parameter of the function type the lambda is expected to be (`ExpectedTypes`):
-	 * TM's `forEachChild(child -> … !child.folder …)` shape — an abstract's member taking `(child:Use)->Void`, called bare,
+	 * the client's `forEachChild(child -> … !child.folder …)` shape — an abstract's member taking `(child:Use)->Void`, called bare,
 	 * and a property read through an inline getter. `Bool` inverts, `Flag` does not; 4.3.7 types `child` as `Use`.
 	 */
 	@:pin('control') @:killer('M-BINDER-LAMBDA-PARAM-CUT', 'M-WALK-LAMBDA-PARAM-CUT', 'M-BINDER-ARGUMENT-CUT')
@@ -651,7 +651,11 @@ class OperandTypingTest extends Test {
 				source: 'class Lambda {\n\tpublic static function iter<A>(it:Iterable<A>, f:(a:A)->Void):Void {}\n}\n'
 			},
 			{ file: QueryTestHelpers.stdPath('StdTypes.hx'), source: 'typedef Iterable<T> = {\n\tfunction iterator():Iterator<T>;\n}\n' },
-			{ file: QueryTestHelpers.stdPath('Array.hx'), source: 'extern class Array<T> {\n\tfunction new():Void;\n}\n' },
+			// the std `Array` declares `iterator()`, which is what makes it an `Iterable` for the extension's first parameter
+			{
+				file: QueryTestHelpers.stdPath('Array.hx'),
+				source: 'extern class Array<T> {\n\tfunction new():Void;\n\n\tfunction iterator():Iterator<T>;\n}\n'
+			},
 			{
 				file: QueryTestHelpers.stdPath('haxe/ds/Vector.hx'),
 				source: 'package haxe.ds;\n\nextern class Vector<T> {\n\tfunction new(n:Int):Void;\n}\n'

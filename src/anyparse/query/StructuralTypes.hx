@@ -1,11 +1,12 @@
 package anyparse.query;
 
-import anyparse.query.MemberLookup.HostedMembers;
+import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -166,45 +167,6 @@ final class StructuralTypes {
 	}
 
 	/**
-	 * The RETURN nominal the STATIC EXTENSION `declared` gives at `<recv>.<method>(…)`, where `recv`
-	 * carries the simple type `receiver` — or null when nothing here proves one. `declared` is what
-	 * the file's `using`s bind (`ValueNameBinding.extensionDeclaration`): every static `method` of
-	 * the one type that supplies it, which is also where the walk over the `using`s ENDS — a
-	 * declaration whose first parameter is not proven to accept the receiver answers null, and the
-	 * caller must not try an earlier `using` (4.3.7 binds `<T>(s:T)` and `(s:Dynamic)` there).
-	 *
-	 * Every gate fails closed, and one of them is the whole reason this is not `returnNominalOf`
-	 * on the host: the first parameter must ACCEPT the receiver, not merely exist. Accepted are
-	 * an exact nominal match, a proven NOMINAL subtype (`isSubtype`), and — only for the two
-	 * structural types the layer models by MEMBERSHIP — a receiver that satisfies `Iterable` /
-	 * `Iterator` while implementing neither (`receiverFitsParameter`), which is what lets
-	 * `Lambda.exists(it:Iterable<A>, …)` bind on an `Array`.
-	 *
-	 * The rest: the member must carry a WRITTEN return — an inference-typed one names no type at
-	 * all, while `:Void` resolves to the nominal `Void`, exactly as `returnNominalOf` already
-	 * answers it for an ordinary member — and every declaration must agree.
-	 *
-	 * What this deliberately does NOT decide is whether the receiver's own type declares `method`
-	 * — a real member BEATS an extension and the extension must not be consulted at all. That
-	 * gate belongs to the caller, which holds the receiver and must prove absence with
-	 * `typeProvablyLacksMember` BEFORE asking here (`NominalTypes.staticExtensionNominal`).
-	 */
-	public function extensionReturnNominal(declared: HostedMembers, receiver: String, ?fromFile: String): Null<String> {
-		final host: ResolvedType = declared.host;
-		var found: Null<String> = null;
-		for (m in declared.members) {
-			final paramSource: Null<String> = m.firstParamTypeSource;
-			final ret: Null<String> = m.returnNominal;
-			if (paramSource == null || ret == null) return null;
-			final accepts: Null<String> = NominalTypes.outerNominalOf(paramSource, _typeSyntax);
-			if (accepts == null || !receiverFitsParameter(receiver, accepts, paramSource, host, fromFile)) return null;
-			if (found != null && found != ret) return null;
-			found = ret;
-		}
-		return found;
-	}
-
-	/**
 	 * Whether `typeName` satisfies the structural `Iterable` — it DECLARES, itself or anywhere in
 	 * its supertype closure, an `iterator()` method whose return satisfies `Iterator`. That is the
 	 * whole definition of `Iterable<A>` in the language, and it is the only reason `Lambda`'s
@@ -257,47 +219,26 @@ final class StructuralTypes {
 	}
 
 	/**
-	 * Whether a `using` extension whose FIRST parameter is written `paramSource` (outer nominal
-	 * `accepts`) binds at a call on a receiver of type `receiver` — the accept half of
-	 * `extensionReturnNominal`, kept apart because it answers in three ways and only the first is
-	 * nominal.
+	 * Whether a receiver of the declaration `receiver` binds to the FIRST parameter of the static extension `m`, a static
+	 * `host` declares — the question `fields.ml` answers by unifying the receiver with that parameter
+	 * (`type_field_by_extension`: `unify_static_extension`, Haxe 4.3.7), which `StaticExtensions.binding` asks of each
+	 * candidate in the compiler's order. `Fits` binds it, `Misfits` makes the compiler pass the candidate over to the next
+	 * one, `MayFit` is not decided here and ends the walk.
 	 *
-	 * An exact nominal match and a proven nominal subtype are the whole of what a nominal index
-	 * can say. The third way is STRUCTURAL, and it exists because `Lambda`'s entire surface takes
-	 * `Iterable<A>` while no container in the language declares that it implements one:
-	 * `satisfiesIterable` / `satisfiesIterator` decide membership from the receiver's own declared
-	 * members, which is exactly what the compiler unifies against.
-	 *
-	 * The structural way carries a gate the nominal ways do not need — the ELEMENT type. Proving
-	 * the receiver is iterable is not proving that its element type binds the signature's
-	 * parameter: `Iterable<Widget>` accepts a `Bag` of widgets and no other, while `Iterable<T>`
-	 * over the method's own `T` accepts every one. A receiver NOMINAL carries no element type, so
-	 * only the second form is provable, and it is recognised by the one fact that separates a
-	 * method's type PARAMETER from a real type — the name resolves to no declaration in the scope
-	 * where the signature is written. Everything else is refused: a concrete element
-	 * (`Iterable<Widget>`), a nested application (`Iterable<Iterable<A>>`, so `Lambda.flatten`),
-	 * and an unapplied `Iterable` naming no element at all.
-	 *
-	 * That refusal set is the per-member verdict on `Lambda` itself. CLAIMED, all generic in their
-	 * element: `array` / `list` / `map` / `mapi` / `flatMap` / `has` / `exists` / `foreach` /
-	 * `empty` / `count` / `indexOf` / `findIndex` / `iterator`. REFUSED here: `flatten`, whose
-	 * parameter's element is itself an application. Refused one gate EARLIER, by
-	 * `extensionReturnNominal`'s written-return requirement: `filter`, which the std declares with
-	 * an inferred return. Refused DOWNSTREAM, where the answer names a type nothing declares:
-	 * `fold` / `foldi`, returning a bare method type parameter, and `find`, returning `Null<T>` —
-	 * both resolve to no unique declaration, so every consumer that must act keeps its
-	 * conservative branch.
+	 * The parameter is read where `host` writes it. `Null<T>` is transparent (`f(s:Null<String>)` binds a `String`), and
+	 * a bare `Dynamic` takes every receiver. A type parameter of the method takes whatever it is constrained to, which
+	 * the index does not record (`<T>(t:T)` binds a `String`, `<T:Int>(t:T)` passes it over): `MayFit`. A named type is
+	 * unified with the receiver by declaration (`Unification.unifies`: a class or an interface by its chain, an enum by
+	 * itself; an abstract on either side, a type argument on the parameter, a declaration the index does not resolve are
+	 * `MayFit`). The two structural types the layer models by membership come last: `Iterable<T>` / `Iterator<T>` over
+	 * one of the method's own type parameters `Fits` a receiver that DECLARES the membership (`satisfiesIterable` /
+	 * `satisfiesIterator`) — what lets `Lambda.exists(it:Iterable<A>, …)` bind on an `Array` that implements no interface
+	 * for it — and is `MayFit` otherwise: membership is a proof of acceptance, never of rejection, and a concrete or nested
+	 * element (`Iterable<Widget>`, `Lambda.flatten`'s `Iterable<Iterable<A>>`) is not proven to bind.
 	 */
-	private function receiverFitsParameter(
-		receiver: String, accepts: String, paramSource: String, host: ResolvedType, fromFile: Null<String>
-	): Bool {
-		if (accepts == receiver || _subtypes.isSubtype(receiver, accepts)) return true;
-		if (accepts != ITERABLE_TYPE_NAME && accepts != ITERATOR_TYPE_NAME) return false;
-		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(paramSource, _typeSyntax);
-		if (args == null || args.length != 1) return false;
-		final element: String = args[0];
-		return SourceText.isIdentifier(element) && _refs.resolveTypeRef(element, host.file, host.type.span.from) == null
-			&& (accepts == ITERABLE_TYPE_NAME ? satisfiesIterable(receiver, fromFile) : satisfiesIterator(receiver, fromFile));
+	public function receiverFitsParameter(receiver: ResolvedType, m: MemberInfo, host: ResolvedType): ArgumentFit {
+		final written: Null<String> = m.firstParamTypeSource;
+		return written == null ? MayFit : writtenFits(receiver, written, m, host);
 	}
 
 	/**
@@ -481,6 +422,27 @@ final class StructuralTypes {
 		if (decl.type.isAnonStruct) return null;
 		final target: Null<String> = decl.type.aliasTargetRaw;
 		return target == null || !_refs.markSeen(decl, seen) ? null : comparableTypeOf(target, decl, seen);
+	}
+
+	/** `receiverFitsParameter` on the parameter type `written` (the whole first parameter, or the argument of a `Null<…>`). */
+	private function writtenFits(receiver: ResolvedType, written: String, m: MemberInfo, host: ResolvedType): ArgumentFit {
+		final nominal: Null<String> = NominalTypes.outerNominalOf(written, _typeSyntax);
+		if (nominal == null) return MayFit;
+		final args: Array<String> = NominalTypes.typeArgumentSourcesOf(written, _typeSyntax) ?? [];
+		if (nominal == NULLABLE_WRAPPER_TYPE_NAME) return args.length == 1 ? writtenFits(receiver, args[0], m, host) : MayFit;
+		if (MemberLookup.dynamicSupertypeRef(nominal)) return args.length == 0 ? Fits : MayFit;
+		if (m.typeParamNames.contains(nominal) || host.type.typeParamNames.contains(nominal)) return MayFit;
+		if (nominal == ITERABLE_TYPE_NAME || nominal == ITERATOR_TYPE_NAME) {
+			final element: Null<String> = args.length == 1 ? args[0].trim() : null;
+			if (element == null || !m.typeParamNames.contains(element)) return MayFit;
+			final member: Bool = nominal == ITERABLE_TYPE_NAME
+				? satisfiesIterable(receiver.type.name, receiver.file.file)
+				: satisfiesIterator(receiver.type.name, receiver.file.file);
+			return member ? Fits : MayFit;
+		}
+		final path: String = NominalTypes.outerPathOf(written, [], _typeSyntax) ?? nominal;
+		final decl: Null<ResolvedType> = _refs.resolveTypeRef(path, host.file, m.declFrom);
+		return decl == null ? MayFit : _unification.unifies(receiver, decl);
 	}
 
 	/** A member of a builtin structural type: a method by its name, no written type (`BUILTIN_STRUCTURAL_MEMBER_SETS`). */

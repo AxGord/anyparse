@@ -59,18 +59,37 @@ class UnificationTest extends Test {
 		Assert.equals(Misfits, unifies(index, 'A', 'E'), 'a class is no enum');
 	}
 
-	@:pin('control') @:killer('M-UNIFY-ALIAS-STOP')
+	@:pin('control') @:killer('M-UNIFY-ALIAS-STOP', 'M-UNIFY-SELF-OPEN')
 	public function testOnlyPlainTypesAreDecided(): Void {
 		final index: SymbolIndex = indexOf(PLAIN);
 		Assert.equals(Fits, unifies(index, 'B', 'TA'), 'an alias of a plain class is followed');
 		Assert.equals(MayFit, unifies(index, 'A', 'Ab'), 'an abstract: its casts are not modelled');
-		Assert.equals(MayFit, unifies(index, 'G', 'A'), 'a type with parameters');
+		Assert.equals(Fits, unifies(index, 'Ab', 'Ab'), 'an abstract is itself');
+		Assert.equals(MayFit, unifies(index, 'G', 'G'), 'one type with parameters: its arguments decide');
+		Assert.equals(MayFit, unifies(index, 'A', 'G'), 'a wanted type with parameters');
 	}
 
 	@:pin('control') @:killer('M-UNIFY-GUARDED-PLAIN')
 	public function testADeclarationUnderIfIsNotPlain(): Void {
 		final index: SymbolIndex = indexOf('package p;\n\nclass A {}\n\n#if x\nclass P extends A {}\n#else\nclass P {}\n#end\n');
 		Assert.equals(MayFit, unifies(index, 'P', 'A'), 'its branches extend different types');
+		Assert.equals(Fits, unifies(index, 'P', 'P'), 'but it is itself in every branch');
+	}
+
+	/**
+	 * A given type with type parameters against a plain wanted one is decided by its chain alone: `unify (TInst (c1, tl1))
+	 * (TInst (c2, []))` looks for `c2` up `c1`'s supertypes and has no argument to compare there (Haxe 4.3.7, FU14 probes).
+	 */
+	@:pin('control') @:killer('M-UNIFY-GENERIC-GIVEN')
+	public function testAGivenTypeWithParametersIsDecidedByItsChain(): Void {
+		final index: SymbolIndex = indexOf(
+			'package p;\n\ninterface I {}\n\nclass A implements I {}\n\nclass GA<T> extends A {}\n\nclass G<T> {}\n\nenum Opt<T> {\n\tNone;\n}\n'
+		);
+		Assert.equals(Fits, unifies(index, 'GA', 'A'), 'a generic subclass');
+		Assert.equals(Fits, unifies(index, 'GA', 'I'), 'an interface its superclass implements');
+		Assert.equals(Misfits, unifies(index, 'G', 'A'), 'a generic class its chain does not reach');
+		Assert.equals(Misfits, unifies(index, 'Opt', 'A'), 'a generic enum');
+		Assert.equals(MayFit, unifies(index, 'A', 'GA'), 'the wanted side has parameters');
 	}
 
 	private static function unifies(index: SymbolIndex, given: String, wanted: String): ArgumentFit {

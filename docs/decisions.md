@@ -4523,3 +4523,49 @@ decided the question; it may not become a record of runs.
   `HxCallArgLambdaBodyChainIndentTest`'s two non-discriminating pins.
 - client: 3 files / 4 hunks, each this defect (`ItemListProjectsShare.hx:171`, `BucketMutationOffMainTest.hx:109/153`,
   `ItemListThumbnailTest.hx:106`). Arm `M-STMT-LIST-CALLARG-BARRIER`.
+
+## FU14 (2026-10-19): typer step T3 — which static extension `recv.name` binds, in the compiler's `using` order
+
+- three consumers each walked the file's `using`s on their own terms (`OperandBinder.extensionTier` and
+  `OperandCallees.extensionParams` through `ValueNameBinding.extensionDeclaration`, `NominalTypes.staticExtensionNominal`
+  through `ChainTypeContext.usings`), and every one refused a receiver whose type or a supertype carries `@:using`, stopped
+  at the first `using` declaring the name whatever its first parameter, and refused two types of one used module
+  declaring it → ONE body question on the typing service, `StaticExtensions.binding(file, receiver declaration, name)`,
+  keyed `DeclarationKey.ofUse`, answered in `fields.ml`'s order (Haxe 4.3.7, every step compiled on `--interp` and `-js`,
+  FU14 probes): the receiver's field; its type's `mt_using` — the own `@:using` arguments LAST FIRST (`@:using(E1, E2)`
+  binds `E2`, two annotations the later), then the superclass's whole list, then each interface's (even when
+  `implements` is written before `extends`), a typedef's own before the aliased type's; then the file's `using`s LAST
+  FIRST; then each `import.hx`, the nearest first, its last `using` first. Inside one used module: the types in
+  REVERSE declaration order (`filter_classes` prepends), a `typedef` alias of a class bringing that class, an anonymous
+  structure nothing, module-level functions after every type. `@:using` paths are absolute (`@:using(Ext)` in package
+  `pk` is `Type not found`) — branch `feat/fu-FU14`
+- a candidate whose first parameter REJECTS the receiver is passed over, across every boundary (the next type, the next
+  `using`, the type's `@:using` into the file's): probed with `A.r(s:String)` / `B.r(i:Int)`, `using A; using B;` →
+  `A.r`. So `StructuralTypes.receiverFitsParameter` answers `Fits` / `Misfits` / `MayFit` over `Unification.unifies`
+  (by declaration) instead of a simple-name `SubtypeGraph.isSubtype`, and only `MayFit` ends the walk. Probed answers:
+  `Null<String>` accepts a `String`; bare `Dynamic` and `<T>(t:T)` accept anything, `<T:Int>(t:T)` rejects a `String`
+  (constraints are not indexed, so a method type parameter is `MayFit`); `Any` accepts (an abstract: T4) — branch
+  `feat/fu-FU14`
+- `Unification` gains two arms the walk needs, both `tUnification.ml`: `a == b` first — one declaration with no type
+  parameter is itself whatever its kind or `#if` (an anonymous structure `ItemListShareUsers` received by
+  `LinkUtils.count(users:ItemListShareUsers)`, an `#if`-folded openfl `BitmapData`: 29 client answers would otherwise have
+  turned Unknown), and a GIVEN type with type parameters against a PLAIN wanted one is decided by its chain alone
+  (`TInst (c1, tl1)` vs `TInst (c2, [])` compares no argument) — branch `feat/fu-FU14`
+- NOT proven, by the positive whitelist: a private static (`can_access`: reached from its class and subclasses only,
+  probed — the same file's other class does not reach it; the key is the file, not the class), a default-visibility
+  static of a non-extern type (`@:publicFields` is not indexed), a module-level function of a used module (no signature
+  in the index), an `@:overload` / macro / non-function static, a candidate type built by a macro or under `#if`, a
+  guarded `using` that may supply the name, a module the index holds in several files one of which supplies it (the
+  class path decides; when NO file supplies it the walk passes on — the client's `using StringTools` with a std and a `_std`
+  copy), a supertype only one `#if` branch of the receiver writes that brings a candidate, an unbounded ambient chain,
+  and no binding at all (the global `haxe.EnumTools` / `EnumValueTools` come last and are not modelled). The old walk
+  BOUND a private static (wrong outside its class) and passed over a module-level function (wrong: it binds) — branch
+  `feat/fu-FU14`
+- the using walk moved, it was not copied: `ValueNameBinding.usingTypes` / `usingHosts` / `usingDeclarations` /
+  `extensionDeclaration` / `bindingUsing` / `extendsAs` → `StaticExtensions` (`usingTypes`, `usingHosts`, `maySupply`,
+  `bindingUsing`), `ValueNameBinding.builtAtOrAbove` → `AncestorTable.builtAtOrAbove` (over the resolved links),
+  `UsingScan.extensionUsings` and `ChainTypeContext.usings` deleted (their `#if`-guarded-`using` refusal is the walk's
+  own, per statement), `StructuralTypes.extensionReturnNominal` deleted. `StaticExtensions` joins the owners of
+  `ImportInfo` / `ImportKind` in `apqlint.json` (`owned-types`): it is the name-resolution layer for `recv.name`, and
+  took the reads over from `ValueNameBinding`. Not moved: `PreferStaticExtension`'s `UsingScan.usingConflict`, which
+  asks about a `using` the rewrite would INSERT — a hypothetical file this question does not model — branch `feat/fu-FU14`

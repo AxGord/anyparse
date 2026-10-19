@@ -8,13 +8,15 @@ import anyparse.query.SymbolIndex.ResolvedType;
  * 4.3.7) over the declarations the index holds, step T2 of the typer by specification (`docs/typing-service.md`). Plain is
  * a class, an interface or an enum declaring no type parameter, reached directly or through plain `typedef` aliases: no
  * monomorph, no variance and no type argument takes part, so the answer is a function of the two declarations alone and
- * is remembered by the pair (`QueryCache.unifies`).
+ * is remembered by the pair (`QueryCache.unifies`). The GIVEN side may declare type parameters when the wanted one is
+ * plain: `unify (TInst (c1, tl1)) (TInst (c2, []))` walks `c1`'s supertypes for `c2` and has no argument to compare there
+ * (`T3`, `docs/typing-service.md`), so `MyList<Int>` against a plain interface it implements is decided by the chain alone.
  *
  * The specification's arms, as a positive whitelist. One declaration unifies with itself. A class or an interface
  * unifies with every ancestor its supertype chain reaches (`TInst, TInst`: `loop` over `cl_super` then `cl_implements`) and,
  * when every link of that chain resolves, with nothing else. An enum unifies with no other declaration (`TEnum, TEnum`:
  * `ea != eb`), and a class or an interface with no enum nor the reverse (the closing `_, _` arm). Every other pair answers
- * `MayFit`: an abstract on either side (its `from` / `to` casts are step T4), a declaration with type parameters, one
+ * `MayFit`: an abstract on either side (its `from` / `to` casts are step T4), a WANTED declaration with type parameters, one
  * declared under `#if` (its branches may extend different types, and one answer serves every configuration), and a chain
  * one link of which the index does not resolve.
  */
@@ -37,9 +39,16 @@ final class Unification {
 		_refs = refs;
 	}
 
-	/** Whether a value of the type `given` declares unifies with the type `wanted` declares: `Fits`, `Misfits` or `MayFit`. */
+	/**
+	 * Whether a value of the type `given` declares unifies with the type `wanted` declares: `Fits`, `Misfits` or `MayFit`.
+	 * One declaration with no type parameter is itself whatever its kind and its `#if` (`unify` starts with `a == b`): an
+	 * abstract, an anonymous structure, a type declared under `#if`.
+	 */
 	public function unifies(given: ResolvedType, wanted: ResolvedType): ArgumentFit {
-		return _cache.unifies.answer(DeclarationKey.ofPair(given, wanted), () -> verdict(plain(given), plain(wanted)));
+		return _cache.unifies.answer(
+			DeclarationKey.ofPair(given, wanted),
+			() -> AncestorTable.same(given, wanted) && given.type.typeParamArity == 0 ? Fits : verdict(nominal(given), plain(wanted))
+		);
 	}
 
 	/** The verdict on two plain declarations; `MayFit` when either is not one. */
@@ -79,12 +88,19 @@ final class Unification {
 		return open ? MayFit : Misfits;
 	}
 
-	/** `r` as a plain declaration (`followed`, then no type parameter and not under `#if`), or null. */
+	/** `r` as a plain declaration (`nominal`, declaring no type parameter), or null. */
 	private function plain(r: ResolvedType): Null<ResolvedType> {
+		final at: Null<ResolvedType> = nominal(r);
+		return at == null || at.type.typeParamArity > 0 ? null : at;
+	}
+
+	/**
+	 * `r` as a class, an interface or an enum (`followed`, not under `#if`), its type parameters whatever they are — the
+	 * given side of a pair whose wanted side is plain, where the chain alone decides — or null.
+	 */
+	private function nominal(r: ResolvedType): Null<ResolvedType> {
 		final at: Null<ResolvedType> = followed(r);
-		return at == null || at.type.guarded || at.type.typeParamArity > 0 || !SymbolIndex.PLAIN_NOMINAL_KINDS.contains(at.type.kind)
-			? null
-			: at;
+		return at == null || at.type.guarded || !SymbolIndex.PLAIN_NOMINAL_KINDS.contains(at.type.kind) ? null : at;
 	}
 
 	/**

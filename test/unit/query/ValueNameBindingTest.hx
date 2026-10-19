@@ -157,9 +157,10 @@ class ValueNameBindingTest extends Test {
 			'One.hx' => 'using p.Mod.Sub;\n\nclass One {}\n'
 		]);
 		Assert.equals(
-			'Mod,Sub,Ext', index.values.usingTypes(fileOf(index, 'Main.hx')).join(','), 'a module\'s every type, a module outside'
+			'Sub,Mod,Ext', index.typing.extensions.usingTypes(fileOf(index, 'Main.hx')).join(','),
+			'a module\'s every type, the last declared first, and a module outside'
 		);
-		Assert.equals('Sub', index.values.usingTypes(fileOf(index, 'One.hx')).join(','), 'the one type a path names');
+		Assert.equals('Sub', index.typing.extensions.usingTypes(fileOf(index, 'One.hx')).join(','), 'the one type a path names');
 	}
 
 	/**

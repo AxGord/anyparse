@@ -271,6 +271,8 @@ final class SymbolIndexBuilder {
 		var pendingMeta: Array<String> = [];
 		// the members a pending `@:forward(...)` names, null when it names none (it forwards them all)
 		var pendingForwarded: Null<Array<String>> = null;
+		// the paths the pending extension annotations (`@:using(...)`) write, null once one writes something else
+		var pendingUsings: Null<Array<String>> = [];
 		// The EXTERN modifier projects as a NAMELESS sibling node preceding its declaration
 		// (`(Extern) (ClassDecl Date …)`), the same splice shape a visibility modifier takes, so it
 		// is carried forward like `pendingMeta` and consumed by the next type declaration.
@@ -285,6 +287,7 @@ final class SymbolIndexBuilder {
 		inline function clearPending(): Void {
 			pendingMeta = [];
 			pendingForwarded = null;
+			pendingUsings = [];
 			pendingExtern = false;
 			pendingPrivate = false;
 		}
@@ -329,6 +332,7 @@ final class SymbolIndexBuilder {
 					hasKeep: carriesMeta(pendingMeta, shape.retainedDeclMetaName),
 					constructsFromLiteral: carriesAnyMeta(pendingMeta, shape.execution?.implicitConstructionTypeMetaNames),
 					bringsExtensions: carriesAnyMeta(pendingMeta, shape.execution?.extensionTypeMetaNames),
+					extensionTypesRaw: pendingUsings,
 					members: SymbolIndexMembers.collectMembers(
 						node, source, accessors, writeAccessors, returnTypes, typeSources, typeParams, memberSeams
 					),
@@ -348,6 +352,7 @@ final class SymbolIndexBuilder {
 				if (metaName != null) pendingMeta.push(metaName);
 				// `@:forward(a, b)` forwards only the members it names
 				pendingForwarded = forwardedArgsOf(node, shape, pendingForwarded);
+				pendingUsings = extensionArgsOf(node, source, shape, pendingUsings);
 				continue;
 			}
 			// A modifier (`private` / `extern`), comment or other module node between a meta (or a
@@ -568,6 +573,25 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
+	 * `pending` — the paths the run of annotations before `meta` writes in its extension annotations — with the arguments of
+	 * `meta` appended when it is one (`ExecutionShape.extensionTypeMetaNames`, Haxe `@:using(a.B)`): each argument as the
+	 * dotted path it spells in `source`. Null once an argument spells anything but a dotted path.
+	 */
+	private static function extensionArgsOf(
+		meta: QueryNode, source: String, shape: RefShape, pending: Null<Array<String>>
+	): Null<Array<String>> {
+		if (pending == null || !(shape.execution?.extensionTypeMetaNames ?? []).contains(meta.name ?? '')) return pending;
+		final out: Array<String> = pending.copy();
+		for (c in meta.children) {
+			final span: Null<Span> = c.span;
+			final path: Null<String> = span == null ? null : source.substring(span.from, span.to).trim().replace(' ', '');
+			if (path == null || !path.split('.').foreach(SourceText.isIdentifier)) return null;
+			out.push(path);
+		}
+		return out;
+	}
+
+	/**
 	 * The SIMPLE underlying-type name of a FORWARDING abstract `node` — its first `Named` child, last
 	 * dot-segment, type parameters stripped — or null when `pendingMeta` carries no
 	 * `RefShape.forwardingDeclMetaName` (Haxe `@:forward`) or the decl has no underlying.
@@ -773,6 +797,7 @@ final class SymbolIndexBuilder {
 		final forwarded: Null<Array<String>> = first.forwardedMembers;
 		final alsoForwarded: Null<Array<String>> = alternate.forwardedMembers;
 		final sameAlias: Bool = first.aliasTargetRaw == alternate.aliasTargetRaw;
+
 		return {
 			name: first.name,
 			kind: first.kind,
@@ -795,6 +820,7 @@ final class SymbolIndexBuilder {
 			hasKeep: first.hasKeep || alternate.hasKeep,
 			constructsFromLiteral: first.constructsFromLiteral || alternate.constructsFromLiteral,
 			bringsExtensions: first.bringsExtensions || alternate.bringsExtensions,
+			extensionTypesRaw: agreedPaths(first.extensionTypesRaw, alternate.extensionTypesRaw),
 			members: first.members.concat(alternate.members),
 			abstractSelfRebind: first.abstractSelfRebind || alternate.abstractSelfRebind,
 			abstractForwardUnderlying: first.abstractForwardUnderlying == alternate.abstractForwardUnderlying
@@ -1010,6 +1036,11 @@ final class SymbolIndexBuilder {
 			).imports;
 		extracted[ambient.file] = imports;
 		return imports;
+	}
+
+	/** `a` when `b` writes the same paths in the same order, else null: what two `#if` branches of one declaration agree on. */
+	private static function agreedPaths(a: Null<Array<String>>, b: Null<Array<String>>): Null<Array<String>> {
+		return a != null && b != null && a.join(',') == b.join(',') ? a : null;
 	}
 
 }

@@ -374,7 +374,6 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final chain: ChainTypeContext = {
 			declaredTypeSources: s.typed.declaredTypeSources(source),
 			source: source,
-			usings: UsingScan.extensionUsings(UsingScan.headerOf(tree, source, plugin)) ?? [],
 			typeSyntax: plugin.typeSyntax
 		};
 		// The conflict verdict depends only on (module, method), while a file repeats the same

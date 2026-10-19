@@ -52,6 +52,7 @@ class StructuralMembershipTest extends Test {
 	 * cannot prove the receiver matches — proving the receiver is iterable is not the same as
 	 * proving its element type binds the signature's type parameter.
 	 */
+	@:pin('control') @:killer('M-EXT-ITERABLE-ELEMENT')
 	public function testStructuralParameterAcceptGate(): Void {
 		final index: SymbolIndex = CheckFixture.index(iterableFiles(), new HaxeQueryPlugin());
 
@@ -205,6 +206,7 @@ class StructuralMembershipTest extends Test {
 			{ file: 'HalfIter.hx', source: 'class HalfIter {\n\tpublic function hasNext():Bool return false;\n}' },
 			{ file: 'FieldIter.hx', source: 'class FieldIter {\n\tpublic var hasNext:Bool;\n\n\tpublic var next:Widget;\n}' },
 			{ file: 'Widget.hx', source: 'class Widget {}' },
+			{ file: 'UseIterExt.hx', source: 'using IterExt;\n\nclass UseIterExt {}' },
 			{
 				file: 'deep/DeepIter.hx',
 				source: 'package deep;\n\nclass DeepIter {\n\tpublic function hasNext():Bool return false;\n\n'
@@ -221,12 +223,18 @@ class StructuralMembershipTest extends Test {
 		];
 	}
 
-	/** The return nominal `using <module>;` alone gives at `<recv>.<method>(…)` on a `receiver` — the shared walk, then the accept gate. */
+	/**
+	 * The return nominal `using <module>;` alone gives at `<recv>.<method>(…)` on a `receiver` resolved from `file` — the
+	 * binding the typing service walks to in the fixture's `Use<module>.hx`, which writes that one `using`.
+	 */
 	private static function extensionReturn(
 		index: SymbolIndex, module: String, method: String, receiver: String, ?file: String
 	): Null<String> {
-		final declared: Null<HostedMembers> = index.values.extensionDeclaration([module], method);
-		return declared == null ? null : index.typing.structural.extensionReturnNominal(declared, receiver, file);
+		final use: String = 'Use$module.hx';
+		final fi: Null<FileInfo> = index.fileInfo(use);
+		final start: Null<ResolvedType> = index.refs.resolveStartType(receiver, file ?? use);
+		final declared: Null<HostedMembers> = fi == null || start == null ? null : index.typing.extensions.binding(fi, start, method);
+		return declared?.members[0].returnNominal;
 	}
 
 }

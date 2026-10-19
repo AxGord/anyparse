@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.OperandBinder.CalleeParams;
 import anyparse.check.OperandBinder.Located;
 import anyparse.query.CallGraphNames;
-import anyparse.query.DeclaredNullity;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
@@ -193,32 +192,23 @@ final class OperandCallees {
 	}
 
 	/**
-	 * `recv.m(…)` through the static extension the file's `using`s supply (`ValueNameBinding.extensionDeclaration`, as
-	 * `extensionTier` reads it): its parameters past the first, which takes the receiver — a first parameter written as
-	 * `owner` itself, or as the std `Iterable` of one of the method's own type parameters over a receiver written as a std
-	 * iterable (`iterableBinding`), which binds that parameter.
+	 * `recv.m(…)` through the static extension the typing service binds there (`StaticExtensions.binding`, as `extensionTier`
+	 * reads it): its parameters past the first, which takes the receiver — with the method's own type parameter bound
+	 * when the first parameter is the std `Iterable` of one over a receiver written as a std iterable (`iterableBinding`).
 	 */
 	private static function extensionParams(
 		binder: OperandBinder, owner: ResolvedType, receiver: QueryNode, name: String
 	): Null<CalleeParams> {
-		final usings: Null<Array<String>> = binder._usings();
-		if (usings == null || !binder._index.typing.members.declarationFreeOfExtensionTypes(owner)) return null;
-		final declared: Null<HostedMembers> = binder._index.values.extensionDeclaration(usings, name);
-		if (declared == null || declared.members.length != 1) return null;
+		final fi: Null<FileInfo> = binder._index.fileInfo(binder._file);
+		final declared: Null<HostedMembers> = fi == null ? null : binder._index.typing.extensions.binding(fi, owner, name);
+		if (declared == null) return null;
 		final host: ResolvedType = declared.host;
 		final m: MemberInfo = declared.members[0];
 		final first: Null<String> = m.firstParamTypeSource;
-		if (first == null || host.type.typeParamArity != host.type.typeParamNames.length) return null;
-		final element: Null<Map<String, Located>> = iterableBinding(binder, first, host, m, writtenSourceOf(binder, receiver));
-		final params: Array<String> = host.type.typeParamNames.concat(m.typeParamNames);
-		final exact: Bool = switch DeclaredNullity.headTierIn(
-			first, host.file, m.declFrom, binder._index, params, binder._wrappers, binder._builtins
-		) {
-			case Bound(decls):
-				decls.length == 1 && OperandBinder.sameDeclaration(decls[0], owner);
-			case _: false;
-		};
-		return element == null && !exact ? null : memberParams(binder, declared, [], 1, element ?? []);
+		final element: Null<Map<String, Located>> = first == null
+			? null
+			: iterableBinding(binder, first, host, m, writtenSourceOf(binder, receiver));
+		return memberParams(binder, declared, [], 1, element ?? []);
 	}
 
 	/**

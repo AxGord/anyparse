@@ -23,6 +23,7 @@ using Lambda;
 @:allow(anyparse.query.StructuralTypes)
 @:allow(anyparse.query.MemberPathWalk)
 @:allow(anyparse.query.Unification)
+@:allow(anyparse.query.StaticExtensions)
 final class MemberLookup {
 
 	/** The grammar kind an `interface` declaration projects as: its supertypes are interfaces all. */
@@ -1000,7 +1001,7 @@ typedef MemberDeclaration = {
 
 /**
  * Every declaration of one member name on the one type declaring it (`MemberLookup.declaringMember`,
- * `ValueNameBinding.extensionDeclaration`): several only for a member declared in several branches of a `#if`.
+ * `StaticExtensions.binding`): several only for a member declared in several branches of a `#if`.
  */
 typedef HostedMembers = {
 

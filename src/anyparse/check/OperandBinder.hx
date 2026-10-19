@@ -112,12 +112,8 @@ final class OperandBinder {
 	/** This file's written type annotations by binding offset (`TypeInfoProvider.declaredTypeSources`). */
 	private final _annotations: Map<Int, String>;
 
-	/** This file's `using` modules in declaration order, read on first demand; null when a `#if` guards one. */
-	private final _usings: () -> Null<Array<String>>;
-
 	private function new(
-		file: String, source: String, tree: QueryNode, shape: RefShape, index: SymbolIndex, provider: TypeInfoProvider,
-		usings: () -> Null<Array<String>>
+		file: String, source: String, tree: QueryNode, shape: RefShape, index: SymbolIndex, provider: TypeInfoProvider
 	) {
 		_file = file;
 		_source = source;
@@ -133,7 +129,6 @@ final class OperandBinder {
 		_fnKinds = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		_expectation = index.typing.expectations;
 		_annotations = provider.declaredTypeSources(source);
-		_usings = usings;
 	}
 
 	/** What the type `written` at offset `at` of this file binds to, with the type parameters in scope there. */
@@ -441,26 +436,16 @@ final class OperandBinder {
 
 	/**
 	 * `recv.method(…)` on a receiver of the one declaration `owner`, whose closure provably declares no `method`: the static
-	 * extension the language binds there — the one declaration the file's `using`s supply (`ValueNameBinding.extensionDeclaration`,
-	 * which owns the walk), which must take `owner` itself as its first parameter — its written return bound where it is
-	 * declared. 4.3.7 binds a type's own `@:using` ahead of every `using` of the file, so a closure bringing extensions, a
-	 * guarded `using`, a walk the shared door does not prove, a name declared twice, and a first parameter that is not
-	 * exactly `owner` (a supertype, a type parameter, a structure) are each `Unknown`.
+	 * extension the typing service binds there (`StaticExtensions.binding`, which owns the compiler's order of the type's
+	 * `@:using` and the file's `using`s and the unification of the receiver with each candidate's first parameter) — its
+	 * written return bound where it is declared. `Unknown` wherever the service proves no binding.
 	 */
 	private function extensionTier(owner: ResolvedType, method: String): Tier {
-		final usings: Null<Array<String>> = _usings();
-		if (usings == null || !_index.typing.members.declarationFreeOfExtensionTypes(owner)) return Unknown;
-		final declared: Null<HostedMembers> = _index.values.extensionDeclaration(usings, method);
-		if (declared == null || declared.members.length != 1) return Unknown;
-		final host: ResolvedType = declared.host;
-		final m: MemberInfo = declared.members[0];
-		final first: Null<String> = m.firstParamTypeSource;
-		final params: Array<String> = host.type.typeParamNames.concat(m.typeParamNames);
-		if (first == null || host.type.typeParamArity != host.type.typeParamNames.length) return Unknown;
-		return switch DeclaredNullity.headTierIn(first, host.file, m.declFrom, _index, params, _wrappers, _builtins) {
-			case Bound(decls) if (decls.length == 1 && sameDeclaration(decls[0], owner)): boundMembers([m], host, true);
-			case _: Unknown;
-		};
+		final fi: Null<FileInfo> = _index.fileInfo(_file);
+		final declared: Null<HostedMembers> = fi == null ? null : _index.typing.extensions.binding(fi, owner, method);
+		return declared == null || declared.host.type.typeParamArity != declared.host.type.typeParamNames.length
+			? Unknown
+			: boundMembers(declared.members, declared.host, true);
 	}
 
 	/**
@@ -478,13 +463,10 @@ final class OperandBinder {
 		final resolvers: Array<MemberInfo> = fieldKind == null ? [] : t.members.filter(m -> m.operatorOverloads.contains(fieldKind));
 		if (
 			fi == null || resolvers.length != 1 || !(_shape.underlyingThisTypeKinds ?? []).contains(t.kind) || t.hasBuild || t.hasAutoBuild
-			|| t.guarded || !_index.typing.members.declarationFreeOfExtensionTypes(owner)
+			|| t.guarded || !_index.typing.members.declarationFreeOfExtensionTypes(owner) || _index.typing.extensions.maySupply(fi, name)
 		)
 			return Unknown;
-		final scope: Null<Array<ResolvedType>> = _index.values.usingDeclarations(fi);
-		return scope == null || scope.exists(h -> h.type.members.exists(m -> m.name == name))
-			? Unknown
-			: boundMembers(resolvers, owner, true);
+		return boundMembers(resolvers, owner, true);
 	}
 
 	/** What the type `written` binds to where it is written (`Located`): a type parameter the call binds read as what binds it. */
@@ -506,16 +488,7 @@ final class OperandBinder {
 		plugin: GrammarPlugin, file: String, source: String, tree: QueryNode, index: SymbolIndex
 	): Null<OperandBinder> {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		var read: Bool = false;
-		var usings: Null<Array<String>> = null;
-		function usingModules(): Null<Array<String>> {
-			if (!read) {
-				read = true;
-				usings = UsingScan.extensionUsings(UsingScan.headerOf(tree, source, plugin));
-			}
-			return usings;
-		}
-		return provider == null ? null : new OperandBinder(file, source, tree, plugin.refShape(), index, provider, usingModules);
+		return provider == null ? null : new OperandBinder(file, source, tree, plugin.refShape(), index, provider);
 	}
 
 	/** The type names the grammar declares built in — a literal's type or a basic value type — each once. */

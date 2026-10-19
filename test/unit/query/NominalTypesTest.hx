@@ -215,7 +215,6 @@ class NominalTypesTest extends Test {
 		final chain: ChainTypeContext = {
 			declaredTypeSources: plugin.declaredTypeSources(text),
 			source: text,
-			usings: [],
 			typeSyntax: plugin.typeSyntax
 		};
 		return {

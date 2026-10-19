@@ -609,7 +609,7 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/**
-	 * A GUARDED `private` type — `#if cpp private extern class P {} #end` (TM's `SharedMutex.hx`, openfl's `IVector`) — is
+	 * A GUARDED `private` type — `#if cpp private extern class P {} #end` (the client's `RwSyncMutex.hx`, openfl's `IVector`) — is
 	 * module-private in every build compiling it: the modifier is lifted onto the declaration the region holds, past the
 	 * `extern` between them, as `extern` is. One SPLIT from its declaration marks it in some builds only and is dropped; a
 	 * guarded `private` with no declaration after it in its region marks nothing that follows.
@@ -894,8 +894,8 @@ class SymbolIndexSliceTest extends Test {
 	/**
 	 * A supertype reference resolves through the REFERRING file's package / imports, not by a
 	 * globally-unique simple name: two interfaces sharing one simple name in different
-	 * packages no longer make the closure unprovable. This is TM's real shape —
-	 * `common.IResizable` beside `rightmenu.IResizable`, with `common.Resizable` implementing
+	 * packages no longer make the closure unprovable. This is the client's real shape —
+	 * `common.ISizeAware` beside `sidepanel.ISizeAware`, with `common.Resizable` implementing
 	 * the same-package one — and it used to block the `_`-prefix rename of every private
 	 * field under `Resizable`.
 	 */
@@ -922,18 +922,18 @@ class SymbolIndexSliceTest extends Test {
 	/** An inline-qualified supertype reference resolves to the type its path names, not to the same-package one. */
 	public function testProvablyLacksMemberResolvesQualifiedSupertypeReference(): Void {
 		final index: SymbolIndex = SymbolIndex.build([
-			{ file: 'src/common/IResizable.hx', source: 'package common;\ninterface IResizable { function inCommon():Void; }' },
+			{ file: 'src/common/ISizeAware.hx', source: 'package common;\ninterface ISizeAware { function inCommon():Void; }' },
 			{
-				file: 'src/rightmenu/IResizable.hx',
-				source: 'package rightmenu;\ninterface IResizable { function inRightmenu():Void; }'
+				file: 'src/sidepanel/ISizeAware.hx',
+				source: 'package sidepanel;\ninterface ISizeAware { function inRightmenu():Void; }'
 			},
 			{
 				file: 'src/common/Q.hx',
-				source: 'package common;\nclass Q implements rightmenu.IResizable { private var _own:Int; }'
+				source: 'package common;\nclass Q implements sidepanel.ISizeAware { private var _own:Int; }'
 			}
 		], plugin());
-		// The qualified clause names the `rightmenu` one, so ITS member is inherited and the
-		// same-package `common.IResizable`'s is not.
+		// The qualified clause names the `sidepanel` one, so ITS member is inherited and the
+		// same-package `common.ISizeAware`'s is not.
 		Assert.isFalse(index.typing.members.typeProvablyLacksMember('Q', 'inRightmenu'));
 		Assert.isTrue(index.typing.members.typeProvablyLacksMember('Q', 'inCommon'));
 	}
@@ -1001,24 +1001,24 @@ class SymbolIndexSliceTest extends Test {
 	 * no named member either, so it must not read as an unindexed, unprovable type.
 	 * An ambiguous SIMPLE starting name resolves against the file the caller names — the shape
 	 * every `implements`-clause consumer passes (`prefer-inline`, `trivial-getter`). `Holder`
-	 * imports the `rightmenu` one, so ITS member is the inherited one.
+	 * imports the `sidepanel` one, so ITS member is the inherited one.
 	 */
 	public function testProvablyLacksMemberResolvesAmbiguousStartFromFile(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
-		Assert.isFalse(index.typing.members.typeProvablyLacksMember('IResizable', 'inRightmenu', 'src/Holder.hx'));
-		Assert.isTrue(index.typing.members.typeProvablyLacksMember('IResizable', 'inCommon', 'src/Holder.hx'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('ISizeAware', 'inRightmenu', 'src/Holder.hx'));
+		Assert.isTrue(index.typing.members.typeProvablyLacksMember('ISizeAware', 'inCommon', 'src/Holder.hx'));
 	}
 
 	/** A file whose scope brings NEITHER same-named type in cannot pin the start — still refused. */
 	public function testProvablyLacksMemberRefusesAmbiguousStartFromUnrelatedFile(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
-		Assert.isFalse(index.typing.members.typeProvablyLacksMember('IResizable', '_absent', 'src/other/Away.hx'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('ISizeAware', '_absent', 'src/other/Away.hx'));
 	}
 
 	/** With no context at all the original rule stands: an ambiguous simple name is unprovable. */
 	public function testProvablyLacksMemberRefusesAmbiguousStartWithoutContext(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
-		Assert.isFalse(index.typing.members.typeProvablyLacksMember('IResizable', '_absent'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('ISizeAware', '_absent'));
 	}
 
 	/**
@@ -1027,14 +1027,14 @@ class SymbolIndexSliceTest extends Test {
 	 */
 	public function testProvablyLacksMemberResolvesQualifiedStartWithoutContext(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
-		Assert.isFalse(index.typing.members.typeProvablyLacksMember('rightmenu.IResizable', 'inRightmenu'));
-		Assert.isTrue(index.typing.members.typeProvablyLacksMember('rightmenu.IResizable', 'inCommon'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('sidepanel.ISizeAware', 'inRightmenu'));
+		Assert.isTrue(index.typing.members.typeProvablyLacksMember('sidepanel.ISizeAware', 'inCommon'));
 	}
 
 	/** A qualified name no indexed file declares is unprovable, not silently reduced to its tail. */
 	public function testProvablyLacksMemberRefusesUnknownQualifiedStart(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
-		Assert.isFalse(index.typing.members.typeProvablyLacksMember('nowhere.IResizable', '_absent'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('nowhere.ISizeAware', '_absent'));
 	}
 
 	/** A `fromFile` the index does not hold degrades to the unique-simple-name rule, not to a refusal. */
@@ -1538,27 +1538,27 @@ class SymbolIndexSliceTest extends Test {
 	/**
 	 * The two facts a `using` STATIC EXTENSION needs beyond an ordinary member lookup: the type
 	 * its FIRST PARAMETER accepts (`firstParamTypeSource`) and, joined with the receiver, the
-	 * return it hands back (`extensionReturnNominal`).
+	 * return it hands back (`StaticExtensions.binding`).
 	 */
 	public function testStaticExtensionSignature(): Void {
 		final index: SymbolIndex = SymbolIndex.build(extensionFiles(), plugin());
 
-		Assert.equals('String', memberOf(fileInfoOf(index, 'Ext.hx').types[0], 'tag').firstParamTypeSource);
+		Assert.equals('Text', memberOf(fileInfoOf(index, 'Ext.hx').types[0], 'tag').firstParamTypeSource);
 		Assert.isNull(memberOf(fileInfoOf(index, 'Ext.hx').types[0], 'bare').firstParamTypeSource);
 
-		Assert.equals('Int', extensionReturn(index, 'Ext', 'tag', 'String'));
+		Assert.equals('Int', extensionReturn(index, 'Ext', 'tag', 'Text'));
 		// The first parameter must ACCEPT the receiver, not merely exist.
-		Assert.isNull(extensionReturn(index, 'Ext', 'ints', 'String'));
+		Assert.isNull(extensionReturn(index, 'Ext', 'ints', 'Text'));
 		// A parameterless static is not an extension at all, and neither is an instance method.
-		Assert.isNull(extensionReturn(index, 'Ext', 'bare', 'String'));
-		Assert.isNull(extensionReturn(index, 'Inst', 'tag', 'String'));
+		Assert.isNull(extensionReturn(index, 'Ext', 'bare', 'Text'));
+		Assert.isNull(extensionReturn(index, 'Inst', 'tag', 'Text'));
 		// An unannotated return names no type, so it proves nothing.
-		Assert.isNull(extensionReturn(index, 'Ext', 'inferred', 'String'));
+		Assert.isNull(extensionReturn(index, 'Ext', 'inferred', 'Text'));
 		// A SUBTYPE of the first parameter's type is accepted; an unrelated receiver is not.
 		Assert.equals('Base', extensionReturn(index, 'BaseExt', 'id', 'Sub'));
-		Assert.isNull(extensionReturn(index, 'BaseExt', 'id', 'String'));
+		Assert.isNull(extensionReturn(index, 'BaseExt', 'id', 'Text'));
 		// A module the index does not hold answers nothing.
-		Assert.isNull(extensionReturn(index, 'Missing', 'tag', 'String'));
+		Assert.isNull(extensionReturn(index, 'Missing', 'tag', 'Text'));
 	}
 
 	/** The static-extension fixture set: one module of statics, one instance host, and a two-level `extends` pair. */
@@ -1566,11 +1566,16 @@ class SymbolIndexSliceTest extends Test {
 		return [
 			{
 				file: 'Ext.hx',
-				source: 'class Ext {\n\tpublic static function tag(s:String):Int return 0;\n\n'
+				source: 'class Ext {\n\tpublic static function tag(s:Text):Int return 0;\n\n'
 					+ '\tpublic static function ints(i:Int):String return null;\n\n'
-					+ '\tpublic static function bare():Int return 0;\n\n\tpublic static function inferred(s:String) return 0;\n}'
+					+ '\tpublic static function bare():Int return 0;\n\n\tpublic static function inferred(s:Text) return 0;\n}'
 			},
-			{ file: 'Inst.hx', source: 'class Inst {\n\tpublic function tag(s:String):Int return 0;\n}' },
+			{ file: 'Inst.hx', source: 'class Inst {\n\tpublic function tag(s:Text):Int return 0;\n}' },
+			{ file: 'Text.hx', source: 'class Text {}' },
+			{ file: 'UseExt.hx', source: 'using Ext;\n\nclass UseExt {}' },
+			{ file: 'UseInst.hx', source: 'using Inst;\n\nclass UseInst {}' },
+			{ file: 'UseBaseExt.hx', source: 'using BaseExt;\n\nclass UseBaseExt {}' },
+			{ file: 'UseMissing.hx', source: 'using Missing;\n\nclass UseMissing {}' },
 			{ file: 'Base.hx', source: 'class Base {}' },
 			{ file: 'Sub.hx', source: 'class Sub extends Base {}' },
 			{ file: 'BaseExt.hx', source: 'class BaseExt {\n\tpublic static function id(b:Base):Base return b;\n}' }
@@ -1619,35 +1624,35 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/**
-	 * TM's real collision: two `IResizable` interfaces in different packages, and a class whose
+	 * the client's real collision: two `ISizeAware` interfaces in different packages, and a class whose
 	 * base implements the SAME-PACKAGE one with no import. Each carries a distinctly named member
 	 * so a fixture can tell which one the closure actually reached.
 	 * The same collision seen from the STARTING side: nothing extends anything, the caller names
-	 * `IResizable` directly, and `Holder` imports the `rightmenu` one while `other/Away.hx`
+	 * `ISizeAware` directly, and `Holder` imports the `sidepanel` one while `other/Away.hx`
 	 * imports neither.
 	 */
 	private static function ambiguousStartFiles(): Array<{ file: String, source: String }> {
 		return [
-			{ file: 'src/common/IResizable.hx', source: 'package common;\ninterface IResizable { function inCommon():Void; }' },
+			{ file: 'src/common/ISizeAware.hx', source: 'package common;\ninterface ISizeAware { function inCommon():Void; }' },
 			{
-				file: 'src/rightmenu/IResizable.hx',
-				source: 'package rightmenu;\ninterface IResizable { function inRightmenu():Void; }'
+				file: 'src/sidepanel/ISizeAware.hx',
+				source: 'package sidepanel;\ninterface ISizeAware { function inRightmenu():Void; }'
 			},
-			{ file: 'src/Holder.hx', source: 'import rightmenu.IResizable;\n\nclass Holder {}' },
+			{ file: 'src/Holder.hx', source: 'import sidepanel.ISizeAware;\n\nclass Holder {}' },
 			{ file: 'src/other/Away.hx', source: 'package other;\n\nclass Away {}' }
 		];
 	}
 
 	private static function ambiguousInterfaceFiles(): Array<{ file: String, source: String }> {
 		return [
-			{ file: 'src/common/IResizable.hx', source: 'package common;\ninterface IResizable { function inCommon():Void; }' },
+			{ file: 'src/common/ISizeAware.hx', source: 'package common;\ninterface ISizeAware { function inCommon():Void; }' },
 			{
-				file: 'src/rightmenu/IResizable.hx',
-				source: 'package rightmenu;\ninterface IResizable { function inRightmenu():Void; }'
+				file: 'src/sidepanel/ISizeAware.hx',
+				source: 'package sidepanel;\ninterface ISizeAware { function inRightmenu():Void; }'
 			},
 			{
 				file: 'src/common/Resizable.hx',
-				source: 'package common;\nclass Resizable implements IResizable { public function inCommon():Void {} }'
+				source: 'package common;\nclass Resizable implements ISizeAware { public function inCommon():Void {} }'
 			},
 			{ file: 'src/Sub.hx', source: 'import common.Resizable;\nclass Sub extends Resizable { private var _own:Int; }' }
 		];
@@ -1670,12 +1675,16 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isTrue(index.subtypes.provablyNotSubtype('Other', 'Owner'));
 	}
 
-	/** The return nominal `using <module>;` alone gives at `<recv>.<method>(…)` on a `receiver` — the shared walk, then the accept gate. */
-	private static function extensionReturn(
-		index: SymbolIndex, module: String, method: String, receiver: String, ?file: String
-	): Null<String> {
-		final declared: Null<HostedMembers> = index.values.extensionDeclaration([module], method);
-		return declared == null ? null : index.typing.structural.extensionReturnNominal(declared, receiver, file);
+	/**
+	 * The return nominal `using <module>;` alone gives at `<recv>.<method>(…)` on a `receiver` — the binding the typing service
+	 * walks to in the fixture's `Use<module>.hx`, which writes that one `using`.
+	 */
+	private static function extensionReturn(index: SymbolIndex, module: String, method: String, receiver: String): Null<String> {
+		final use: String = 'Use$module.hx';
+		final fi: Null<FileInfo> = index.fileInfo(use);
+		final start: Null<ResolvedType> = index.refs.resolveStartType(receiver, use);
+		final declared: Null<HostedMembers> = fi == null || start == null ? null : index.typing.extensions.binding(fi, start, method);
+		return declared?.members[0].returnNominal;
 	}
 
 }

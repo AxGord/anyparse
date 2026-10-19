@@ -379,13 +379,14 @@ final class ArgumentValues {
 
 	/**
 	 * Whether a call `recv.method(…)` on a string in `file` runs the static extension `module` declares: the `using` the
-	 * file binds it to (`ValueNameBinding.bindingUsing`) is `module`'s, and that is the std one — a module the index cannot
+	 * file binds it to (`StaticExtensions.bindingUsing`) is `module`'s, and that is the std one — a module the index cannot
 	 * read where no indexed type bears its name, or one read from the std.
 	 */
 	private function affixResolves(file: String, method: String, module: String): Bool {
 		final held: Null<HeldFile> = _graph.types.heldFile(file);
 		if (held == null) return false;
-		final bound: Null<{ path: String, hosts: Null<Array<ResolvedType>> }> = held.index.values.bindingUsing(held.info, method);
+		final bound: Null<{ path: String, hosts: Null<Array<ResolvedType>> }> =
+			held.index.typing.extensions.bindingUsing(held.info, method);
 		if (bound == null || bound.path != module) return false;
 		final hosts: Null<Array<ResolvedType>> = bound.hosts;
 		return hosts == null ? _graph.types.declarationCount(module) == 0 : hosts.foreach(h -> StdResolver.isStdFile(h.file.file));

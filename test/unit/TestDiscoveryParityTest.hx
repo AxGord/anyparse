@@ -1057,6 +1057,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.ShardPlanTest',
 		'unit.query.SourceTextTest',
 		'unit.query.SpanTypeInfoPinTest',
+		'unit.query.StaticExtensionsTest',
 		'unit.query.StdResolverReturnTypeTest',
 		'unit.query.StdResolverTest',
 		'unit.query.StdlibDifferentialTest',

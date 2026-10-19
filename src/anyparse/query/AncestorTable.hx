@@ -67,6 +67,25 @@ final class AncestorTable {
 			: _cache.ancestorArguments.answer(DeclarationKey.ofPair(start, host), () -> chainTo(start, host, []));
 	}
 
+	/**
+	 * Whether `r` or an ancestor its links reach carries a build macro (`@:build`, `@:autoBuild`) — one that may give the
+	 * declaration members, statics among them, no declaration shows. A link that does not resolve adds none.
+	 */
+	public function builtAtOrAbove(r: ResolvedType): Bool {
+		return builtFrom(r, []);
+	}
+
+	/** `builtAtOrAbove` from `cur` up, `seen` the declarations already walked. */
+	private function builtFrom(cur: ResolvedType, seen: Array<String>): Bool {
+		if (!_refs.markSeen(cur, seen)) return false;
+		if (cur.type.hasBuild || cur.type.hasAutoBuild) return true;
+		for (link in links(cur)) {
+			final up: Null<ResolvedType> = link.decl;
+			if (up != null && builtFrom(up, seen)) return true;
+		}
+		return false;
+	}
+
 	/** `argumentsTo` from `cur` up, `seen` the declarations already walked. */
 	private function chainTo(cur: ResolvedType, host: ResolvedType, seen: Array<String>): Null<Array<String>> {
 		if (!_refs.markSeen(cur, seen)) return null;
