@@ -27370,8 +27370,8 @@
 			"name": "M-PIER-CASCADE-UNMERGED-REPORTED",
 			"type": "anyparse.check.PreferIfExpressionReturn",
 			"method": "eachMergedRun",
-			"find": "if (m == null || merge == null) continue;",
-			"replace": "if (m == null) continue;",
+			"find": "final merge: Null<Merge> = m?.merge;",
+			"replace": "final merge: Null<Merge> = m == null ? null : m.merge ?? { shape: Leading, from: 0, span: m.prefix, prefix: m.prefix };",
 			"note": "an owned cascade that does not merge is reported, with no fix behind the finding"
 		},
 		{
