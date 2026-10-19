@@ -424,6 +424,7 @@ final class PinsCheckPToZ {
 		'unit.check.StringLiteralDupCheckTest#testSmallCollectionOfOnlyLiteralsIsATable :: control :: M-STRING-LITERAL-DUP-TABLE-ARITY',
 		'unit.check.StructuralConformanceProofTest#testANamesakeOfAnotherPackageRefutes :: control :: M-STRUCT-MUTABLE-SAME-DECL',
 		'unit.check.StructuralConformanceProofTest#testAReadOnlyStructureFieldTakesASubtype :: control :: M-STRUCT-READONLY-INVARIANT',
+		'unit.check.StructuralConformanceProofTest#testAReadOnlyStructureFieldTakesAnAbstractThroughItsClause :: control :: M-UNIFY-ABSTRACT-OFF',
 		'unit.check.StructuralConformanceProofTest#testAliasedStructureMemberTypeStillPins :: control :: M-STRUCT-ALIAS-OPAQUE',
 		'unit.check.StructuralConformanceProofTest#testAnonStructureNominalStillPins :: control :: M-STRUCT-ANON-CLOSED',
 		'unit.check.StructuralConformanceProofTest#testDifferentDeclaredTypeDoesNotPin :: control :: M-STRUCT-NOMINAL-OPEN',
@@ -595,6 +596,7 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyConditionsTest#testATakeABoolArgumentRulesOutOrdersNothing :: control :: M-TS-ORDER-UNCONDITIONED',
 		'unit.check.ThreadSafetyConditionsTest#testAValueStoredInADynamicMemberRunsWhereTheMemberRuns :: control :: M-TS-STORE-INERT',
 		'unit.check.ThreadSafetyConditionsTest#testAWrittenParameterIsNotTracked :: control :: M-TS-PARAM-WRITE-IGNORED',
+		'unit.check.ThreadSafetyConditionsTest#testAnAbstractArgumentBindsTheParameterItCastsTo :: control :: M-ARGFIT-CAST-OFF,M-UNIFY-ABSTRACT-OFF',
 		'unit.check.ThreadSafetyConditionsTest#testAnArgumentAnAbstractMayTakeLeavesBothBindings :: control :: M-ARGFIT-UNKNOWN-MISFITS',
 		'unit.check.ThreadSafetyConditionsTest#testAnArgumentHaxeMaySkipAnOptionalParameterForBindsNothing :: control :: '
 			+ 'M-TS-SKIP-UNCHECKED',

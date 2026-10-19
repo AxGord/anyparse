@@ -515,6 +515,14 @@ typedef TypeDeclInfo = {
 	var underlyingRaw: Null<String>;
 
 	/**
+	 * What an abstract declaration's header says about its implicit casts, one record per `#if` branch declaring it (one
+	 * for a declaration written once): the `from` / `to` clauses as written and whether they cast on transitively
+	 * (`CastClauses`). Null for every other kind, and for an abstract one branch of which declares something else (an
+	 * alias, a class) or whose header puts a clause under `#if` — its casts are then not written anywhere this reads.
+	 */
+	var castClauses: Null<Array<CastClauses>>;
+
+	/**
 	 * True when the declaration sits inside a `#if` region. The index keeps ONE declaration per name
 	 * and the other branches may declare that name differently, so a proof about what the name
 	 * denotes must refuse a guarded one.
@@ -527,6 +535,19 @@ typedef TypeDeclInfo = {
 	 */
 	var forwardedMembers: Null<Array<String>>;
 };
+
+/**
+ * One `#if` branch of an abstract declaration's header, as its implicit casts read it (`TypeDeclInfo.castClauses`): the
+ * types its `from` and `to` clauses write, in source order and verbatim, and whether a cast through one of them allows a
+ * further abstract cast (`RefShape.transitiveCastTypeMetaNames`) or picks its cast by type arguments
+ * (`RefShape.typeSelectedAbstractMetaName`).
+ */
+typedef CastClauses = {
+	final from: Array<String>;
+	final to: Array<String>;
+	final transitive: Bool;
+	final typeSelected: Bool;
+}
 
 /**
  * A cross-file index entry for one source file: its `file` path, `pkg` / `module`, `imports`, declared `types`, and
@@ -637,6 +658,7 @@ typedef ResolvedType = {
 @:allow(anyparse.query.ValueNameBinding)
 @:allow(anyparse.query.Unification)
 @:allow(anyparse.query.StaticExtensions)
+@:allow(anyparse.query.AbstractCasts)
 final class SymbolIndex {
 
 	/** The grammar kind a `class` declaration projects as. */

@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.query.AbstractCasts.TypeEnd;
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphTypes.HeldFile;
@@ -41,10 +42,11 @@ private typedef ArgumentScope = {
  *
  * A positive whitelist for the fit: two core types (each one no indexed type of its name shadows) fit when they are the same
  * or one widens to the other and misfit otherwise; `null` fits a parameter a call may leave out; the same plain type
- * name written in one file, no type parameter on either side, fits; two PLAIN types (a class, an interface or an enum
- * with no type parameter, each resolved where it is written) fit or misfit as the typing service unifies them
- * (`Unification.unifies`: a subclass fits, an unrelated class misfits). Every other pair — an abstract converting
- * through `@:from` / `@:to` (`openfl.text.TextFormatAlign` takes a `String`), a type parameter, a generic type — may fit.
+ * name written in one file, no type parameter on either side, fits; a core type and a plain name, or two plain names
+ * (no type argument, each resolved where it is written) fit or misfit as the typing service casts the argument
+ * (`Unification.casts`: a subclass fits, an unrelated class misfits, an abstract through its `from` / `to` clauses and
+ * its `@:from` / `@:to` members). Every other pair — a type parameter, a generic type, an abstract the cast graph does not
+ * model (`openfl.text.TextFormatAlign`, an abstract in one `#if` branch and a typedef in another) — may fit.
  */
 @:nullSafety(Strict)
 final class ArgumentTypes {
@@ -123,10 +125,8 @@ final class ArgumentTypes {
 		final p: Null<String> = coreName(wanted);
 		final widens: Map<String, Array<String>> = _shape.coreValueTypes?.widens ?? [];
 		if (a != null && p != null) return a == p || (widens[a] ?? []).contains(p) ? Fits : Misfits;
-		if (a != null || p != null) return MayFit;
-		return given.file == wantedFile && sameNamedType(given.text, wanted, callerId, calleeId)
-			? Fits
-			: plainFit(given, wanted, wantedFile, callerId, calleeId);
+		if (a == null && p == null && given.file == wantedFile && sameNamedType(given.text, wanted, callerId, calleeId)) return Fits;
+		return castFit(given, a, wanted, p, wantedFile, callerId, calleeId);
 	}
 
 	/**
@@ -244,22 +244,44 @@ final class ArgumentTypes {
 	}
 
 	/**
-	 * How the argument type `given` meets the parameter type `wanted`, written in `wantedFile`, when both name a PLAIN type —
-	 * a class, an interface or an enum with no type parameter, a `Null<…>` peeled on either side (`tUnification.ml`: `Null<T>`
-	 * unifies as `T` both ways) — each resolved in the file writing it, one index holding both, neither a type parameter of
-	 * its function (`callerId`, `calleeId`): the typing service's unification of the two declarations (`Unification.unifies`).
+	 * How the argument type `given` meets the parameter type `wanted`, written in `wantedFile`, each side a core value type
+	 * by its name (`givenCore`, `wantedCore`) or a type written as a plain name — no type argument, a `Null<…>` peeled
+	 * (`tUnification.ml`: `Null<T>` unifies as `T` both ways), not a type parameter of its function (`callerId`,
+	 * `calleeId`) — resolved in the file writing it, one index holding both: the typing service's answer on the argument's
+	 * implicit cast (`Unification.casts`: a subclass fits, an unrelated class misfits, an abstract through its cast graph).
 	 * `MayFit` for every other pair.
 	 */
-	private function plainFit(given: WrittenType, wanted: String, wantedFile: String, callerId: String, calleeId: String): ArgumentFit {
-		final givenFile: Null<String> = given.file;
-		final from: Null<HeldFile> = givenFile == null ? null : _graph.types.heldFile(givenFile);
+	private function castFit(
+		given: WrittenType, givenCore: Null<String>, wanted: String, wantedCore: Null<String>, wantedFile: String, callerId: String,
+		calleeId: String
+	): ArgumentFit {
 		final to: Null<HeldFile> = _graph.types.heldFile(wantedFile);
-		if (from == null || to == null) return MayFit;
-		final index: SymbolIndex = from.index;
-		if (index != to.index) return MayFit;
-		final a: Null<ResolvedType> = plainDecl(given.text, from, callerId);
-		final p: Null<ResolvedType> = plainDecl(wanted, to, calleeId);
-		return a == null || p == null ? MayFit : index.typing.unification.unifies(a, p);
+		if (to == null) return MayFit;
+		final index: SymbolIndex = to.index;
+		final w: Null<TypeEnd> = wantedCore != null ? Core(wantedCore) : endOf(wanted, to, calleeId);
+		final g: Null<TypeEnd> = givenCore != null ? Core(givenCore) : givenEnd(given, index, callerId);
+		return w == null || g == null ? MayFit : index.typing.unification.casts(g, w);
+	}
+
+	/** The end the argument type `given` stands for, when the file writing it is held by `index`; null otherwise. */
+	private function givenEnd(given: WrittenType, index: SymbolIndex, callerId: String): Null<TypeEnd> {
+		final file: Null<String> = given.file;
+		final from: Null<HeldFile> = file == null ? null : _graph.types.heldFile(file);
+		return from == null || from.index != index ? null : endOf(given.text, from, callerId);
+	}
+
+	/**
+	 * The end the type `text`, written in `held`'s file by the function `functionId`, stands for: the dynamic type written
+	 * bare, the declaration a plain name resolves to (`plainDecl`) as the typing service reads it (`AbstractCasts.declEnd`);
+	 * null for any other type.
+	 */
+	private function endOf(text: String, held: HeldFile, functionId: String): Null<TypeEnd> {
+		final peeled: String = ~/\s+/g.replace(
+			NominalTypes.unwrapNullable(text.trim(), _shape.memberTransparentWrapperTypeNames ?? [], _plugin.typeSyntax), ''
+		);
+		if (peeled == _shape.rawDynamicTypeName) return Dyn;
+		final decl: Null<ResolvedType> = plainDecl(text, held, functionId);
+		return decl == null ? null : held.index.typing.casts.declEnd(decl);
 	}
 
 	/**

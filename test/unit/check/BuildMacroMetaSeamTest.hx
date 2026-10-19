@@ -352,6 +352,7 @@ class BuildMacroMetaSeamTest extends Test {
 			abstractSelfRebind: false,
 			abstractForwardUnderlying: null,
 			underlyingRaw: null,
+			castClauses: null,
 			guarded: false,
 			forwardedMembers: null
 		};

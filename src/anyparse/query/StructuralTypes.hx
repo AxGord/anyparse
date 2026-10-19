@@ -229,8 +229,10 @@ final class StructuralTypes {
 	 * a bare `Dynamic` takes every receiver. A type parameter of the method takes whatever it is constrained to, which
 	 * the index does not record (`<T>(t:T)` binds a `String`, `<T:Int>(t:T)` passes it over): `MayFit`. A named type is
 	 * unified with the receiver by declaration (`Unification.unifies`: a class or an interface by its chain, an enum by
-	 * itself; an abstract on either side, a type argument on the parameter, a declaration the index does not resolve are
-	 * `MayFit`). The two structural types the layer models by membership come last: `Iterable<T>` / `Iterator<T>` over
+	 * itself, an abstract through its `from` / `to` clauses — `Any` takes every receiver — but never through an `@:from` /
+	 * `@:to` member, which a static extension does not take (Haxe 4.3.7, `unify_static_extension`); a type argument on the
+	 * parameter, an abstract the cast graph does not model, a declaration the index does not resolve are `MayFit`). The
+	 * two structural types the layer models by membership come last: `Iterable<T>` / `Iterator<T>` over
 	 * one of the method's own type parameters `Fits` a receiver that DECLARES the membership (`satisfiesIterable` /
 	 * `satisfiesIterator`) — what lets `Lambda.exists(it:Iterable<A>, …)` bind on an `Array` that implements no interface
 	 * for it — and is `MayFit` otherwise: membership is a proof of acceptance, never of rejection, and a concrete or nested

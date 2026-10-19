@@ -26557,10 +26557,10 @@
 		{
 			"name": "M-ARGFIT-UNKNOWN-MISFITS",
 			"type": "anyparse.check.ArgumentTypes",
-			"method": "fit",
-			"find": "if (a != null || p != null) return MayFit;",
-			"replace": "if (a != null || p != null) return Misfits;",
-			"note": "a type the fit cannot decide misfits, so a string an abstract takes through `@:from` reads as skipping it"
+			"method": "castFit",
+			"find": "return w == null || g == null ? MayFit : ",
+			"replace": "return w == null || g == null ? Misfits : ",
+			"note": "a type the fit cannot decide misfits, so a string an abstract the cast graph does not model may take reads as skipping it"
 		},
 		{
 			"name": "M-ARGTYPE-STATIC-OFF",
@@ -27097,10 +27097,10 @@
 		{
 			"name": "M-ARGFIT-PLAIN-OFF",
 			"type": "anyparse.check.ArgumentTypes",
-			"method": "fit",
-			"find": "plainFit(given, wanted, wantedFile, callerId, calleeId)",
-			"replace": "MayFit",
-			"note": "two plain class types are never unified, so an argument of an unrelated class still binds an optional parameter"
+			"method": "castFit",
+			"find": "givenCore != null ? Core(givenCore) : givenEnd(given, index, callerId)",
+			"replace": "givenCore != null ? Core(givenCore) : null",
+			"note": "an argument of a class or an abstract written in the caller's file is never read as an end, so an argument of an unrelated class still binds an optional parameter"
 		},
 		{
 			"name": "M-NOMINAL-OPTIONAL-PARAM",
@@ -27201,9 +27201,9 @@
 		{
 			"name": "M-UNIFY-GENERIC-GIVEN",
 			"type": "anyparse.query.Unification",
-			"method": "unifies",
-			"find": "verdict(nominal(given), plain(wanted))",
-			"replace": "verdict(plain(given), plain(wanted))",
+			"method": "plainUnify",
+			"find": "verdict(nominal(a), plain(b))",
+			"replace": "verdict(plain(a), plain(b))",
 			"note": "a given type with type parameters is undecided against a plain wanted type, though its chain alone decides it"
 		},
 		{
@@ -27290,9 +27290,9 @@
 			"name": "M-UNIFY-SELF-OPEN",
 			"type": "anyparse.query.Unification",
 			"method": "unifies",
-			"find": "AncestorTable.same(given, wanted) && given.type.typeParamArity == 0 ? Fits : ",
+			"find": "AncestorTable.same(given, wanted) && given.type.typeParamArity == 0\n\t\t\t\t\t? Fits\n\t\t\t\t\t: ",
 			"replace": "",
-			"note": "a declaration that is not plain (an abstract, a structure, one under `#if`) is undecided against itself, though `unify` starts with `a == b`"
+			"note": "a declaration the cast graph reads as no end (an anonymous structure) is undecided against itself, though `unify` starts with `a == b`"
 		},
 		{
 			"name": "M-EXT-AMBIGUOUS-MODULE",
@@ -27624,6 +27624,134 @@
 			"method": "typeNamedLocal",
 			"force": "'renamed'",
 			"note": "any written type names a replacement, `Null<Array<Item>>` and `String` included, so a parameter is renamed to a name no type gave it"
+		},
+		{
+			"name": "M-UNIFY-ABSTRACT-OFF",
+			"type": "anyparse.query.Unification",
+			"method": "unifyEnds",
+			"find": "abstractUnify(given, wanted, allowCast, stack)",
+			"replace": "MayFit",
+			"note": "an abstract on either side is undecided again, so its clauses never decide a unification, a static extension's first parameter or a read-only structure member"
+		},
+		{
+			"name": "M-UNIFY-CAST-TRANSITIVE",
+			"type": "anyparse.query.Unification",
+			"method": "nextCast",
+			"find": "return b.transitive && allowCast;",
+			"replace": "return allowCast;",
+			"note": "a clause of an abstract that is not transitive allows a second abstract cast, so `B` reaches `Top from Mid` through `Mid`'s own clause"
+		},
+		{
+			"name": "M-UNIFY-CAST-STACK",
+			"type": "anyparse.query.Unification",
+			"method": "abstractUnify",
+			"find": "if (stack.contains(key)) return MayFit;",
+			"replace": "",
+			"note": "a cycle of transitive clauses is walked forever instead of answering MayFit"
+		},
+		{
+			"name": "M-UNIFY-CORE-WIDENS",
+			"type": "anyparse.query.Unification",
+			"method": "unifyEnds",
+			"find": "return (_widens[a] ?? []).contains(b) ? Fits : Misfits;",
+			"replace": "return Misfits;",
+			"note": "two different core value types never unify, so `UInt`'s `to Int` no longer reaches `Float`"
+		},
+		{
+			"name": "M-CASTS-BRANCHES-AGREE",
+			"type": "anyparse.query.Unification",
+			"method": "agreed",
+			"find": "return all.length > 0 && all.foreach(a -> a == Fits) ? Fits",
+			"replace": "return all.contains(Fits) ? Fits",
+			"note": "one `#if` branch's clause decides for every build, so an abstract casting from `B` in one branch only takes `B` everywhere"
+		},
+		{
+			"name": "M-CASTS-MEMBERS-OFF",
+			"type": "anyparse.query.Unification",
+			"method": "castVerdict",
+			"find": "castPath(wanted, given, [])",
+			"replace": "Misfits",
+			"note": "an argument's cast reads no `@:from` / `@:to` member, so a conversion member never binds a parameter"
+		},
+		{
+			"name": "M-CASTS-FIRST-FROM",
+			"type": "anyparse.query.Unification",
+			"method": "castPath",
+			"find": "either(inwardMembers(given, wanted), firstClause(wanted, b -> b.from, t -> castPath(t, given, stack)))",
+			"replace": "inwardMembers(given, wanted)",
+			"note": "the cast stops at the wanted abstract's own members and never casts to its first `from` clause"
+		},
+		{
+			"name": "M-CASTS-FIRST-ONLY",
+			"type": "anyparse.query.Unification",
+			"method": "firstClause",
+			"find": "final first: Null<TypeEnd> = side(b).find(t -> !AbstractCasts.same(t, e));",
+			"replace": "final first: Null<TypeEnd> = side(b).filter(t -> !AbstractCasts.same(t, e)).pop();",
+			"note": "the LAST clause unequal to the abstract is cast to instead of the first, so `Ad from Dz from Bs` takes a `String`"
+		},
+		{
+			"name": "M-CASTS-CORE-ABSTRACT",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "coreGraph",
+			"find": "|| core.classNames.contains(name)) return null;",
+			"replace": "|| true) return null;",
+			"note": "no core value type is an abstract, so a `Bool` argument takes the arm of a class and casts on through the wanted abstract's first `from` clause"
+		},
+		{
+			"name": "M-CASTS-GRAPH-PARAMS",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "graphOf",
+			"find": " || r.type.typeParamArity > 0) return null;",
+			"replace": ") return null;",
+			"note": "an abstract with type parameters gets a graph, its clauses read without the arguments that bind them"
+		},
+		{
+			"name": "M-CASTS-TYPE-SELECTED",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "graphOf",
+			"find": "clauses.exists(c -> c.typeSelected) || ",
+			"replace": "",
+			"note": "a `@:multiType` abstract, whose cast the compiler picks by its type arguments, is decided by its clauses"
+		},
+		{
+			"name": "M-CASTS-HAND-UNIFIED",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "graphOf",
+			"find": " || _handUnified.contains(pathOf(r))) return null;",
+			"replace": ") return null;",
+			"note": "an abstract the compiler unifies by a hand-written arm (`EnumValue` takes every enum) is decided by its empty clauses"
+		},
+		{
+			"name": "M-CASTS-MEMBER-CERTAIN",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "graphOf",
+			"find": "final certain: MemberInfo -> Bool = m -> single && !m.guarded;",
+			"replace": "final certain: MemberInfo -> Bool = m -> true;",
+			"note": "a conversion member under `#if`, or of a type two branches declare, casts in every build"
+		},
+		{
+			"name": "M-CASTS-BUILD-OPEN",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "graphOf",
+			"find": "fieldsComplete: !r.type.hasBuild && !r.type.hasAutoBuild",
+			"replace": "fieldsComplete: true",
+			"note": "an abstract a build macro may give a conversion member is read as having none"
+		},
+		{
+			"name": "M-CASTS-DYNAMIC-END",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "unresolvedEnd",
+			"find": "if (path == _dynamic) return Dyn;",
+			"replace": "",
+			"note": "a clause writing the dynamic type is no end the graph models, so `Any` (`from Dynamic`) takes nothing"
+		},
+		{
+			"name": "M-ARGFIT-CAST-OFF",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "castFit",
+			"find": "index.typing.unification.casts(g, w)",
+			"replace": "MayFit",
+			"note": "an argument the typing service could cast is undecided, so an abstract argument may land on any optional parameter"
 		}
 	]
 }
