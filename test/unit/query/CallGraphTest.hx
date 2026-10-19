@@ -1974,28 +1974,6 @@ class CallGraphTest extends Test {
 		#end
 	}
 
-	/**
-	 * A dispatch's targets are read per member, and follow the graph as it changes: `b.m()` and `b.n()` dispatch to their own
-	 * overrides, and an override whose file is taken out is no target any more — what was read while a batch's edges were
-	 * recorded is not kept past it.
-	 */
-	@:pin('control') @:killer('M-CG-DISPATCH-MEMO-LEAKS', 'M-CG-DISPATCH-MEMO-BY-TYPE')
-	public function testDispatchTargetsArePerMemberAndFollowTheGraph(): Void {
-		final files: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules([
-			'class Base { public function new() {} public function m():Void {} public function n():Void {} }',
-			'class Sub extends Base { override public function m():Void {} override public function n():Void {} }',
-			'class User { static function call(b:Base):Void { b.m(); b.n(); } }'
-		]);
-		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final g: CallGraph = CallGraph.build(files, plugin, SymbolIndex.build(files, plugin));
-		final virtual: Array<String> = [for (e in g.outEdges('User.call')) if (e.kind == Virtual) e.to];
-		virtual.sort(Reflect.compare);
-		Assert.same(['Sub.m', 'Sub.n'], virtual, 'each call its own override');
-		Assert.same(['Sub.m'], g.virtualTargets('Base', 'm'));
-		g.removeFile(files[1].file);
-		Assert.same([], g.virtualTargets('Base', 'm'), 'its file taken out');
-	}
-
 	private inline function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}
