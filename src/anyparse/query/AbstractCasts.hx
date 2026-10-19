@@ -81,7 +81,7 @@ final class AbstractCasts {
 	 * abstract).
 	 */
 	public function graph(r: ResolvedType): Null<CastGraph> {
-		return _cache.castGraphs.answer(DeclarationKey.ofType(r), () -> graphOf(r));
+		return _cache.castGraphs.answer(DeclarationKey.ofType(r), graphOf.bind(r));
 	}
 
 	/**
@@ -91,8 +91,7 @@ final class AbstractCasts {
 	 */
 	public function coreGraph(name: String): Null<CastGraph> {
 		final core: Null<CoreValueTypes> = _core;
-		if (core == null || !core.names.contains(name) || core.classNames.contains(name)) return null;
-		return {
+		return core == null || !core.names.contains(name) || core.classNames.contains(name) ? null : {
 			branches: [{ from: [], to: [for (w in core.widens[name] ?? []) Core(w)], transitive: true }],
 			fromFields: [],
 			toFields: [],
@@ -105,7 +104,7 @@ final class AbstractCasts {
 		return switch e {
 			case Declared(r): _abstractKinds.contains(r.type.kind);
 			case Core(name): coreGraph(name) != null;
-			case Dyn | Open: false;
+			case Dyn, Open: false;
 		};
 	}
 
@@ -141,20 +140,26 @@ final class AbstractCasts {
 		};
 	}
 
+	/**
+	 * `r`, or the declaration its plain `typedef` alias hops land on, each hop a declaration with no type parameter; null
+	 * for a hop that does not resolve, a structure, and an alias that re-enters itself.
+	 */
+	public function followed(r: ResolvedType): Null<ResolvedType> {
+		var at: ResolvedType = r;
+		final seen: Array<String> = [];
+		while (at.type.kind == SymbolIndex.TYPEDEF_DECL_KIND) {
+			if (at.type.isAnonStruct || at.type.typeParamArity > 0 || !_refs.markSeen(at, seen)) return null;
+			final next: Null<ResolvedType> = _ancestors.aliasTarget(at);
+			if (next == null) return null;
+			at = next;
+		}
+		return at;
+	}
+
 	/** The end a written name no declaration resolves stands for: the dynamic type, a core value type, else `Open`. */
 	private function unresolvedEnd(path: String): TypeEnd {
 		if (path == _dynamic) return Dyn;
 		return _core != null && _core.names.contains(path) ? Core(path) : Open;
-	}
-
-	/** Whether `a` and `b` are one end: one declaration, one core type, both dynamic. */
-	public static function same(a: TypeEnd, b: TypeEnd): Bool {
-		return switch [a, b] {
-			case [Declared(x), Declared(y)]: AncestorTable.same(x, y);
-			case [Core(x), Core(y)]: x == y;
-			case [Dyn, Dyn]: true;
-			case _: false;
-		};
 	}
 
 	/** `graph`'s computation. */
@@ -197,8 +202,7 @@ final class AbstractCasts {
 	private function inwardEnd(m: MemberInfo, r: ResolvedType): TypeEnd {
 		final param: Null<String> = m.paramTypeSources.length == 1 ? m.paramTypeSources[0] : null;
 		final returned: Null<String> = m.returnSource;
-		if (param == null || returned == null) return Open;
-		return same(writtenEnd(returned, r, m.declFrom, m.typeParamNames), Declared(r))
+		return param != null && returned != null && same(writtenEnd(returned, r, m.declFrom, m.typeParamNames), Declared(r))
 			? writtenEnd(param, r, m.declFrom, m.typeParamNames)
 			: Open;
 	}
@@ -209,20 +213,14 @@ final class AbstractCasts {
 		return returned == null || m.paramTypeSources.length > 0 ? Open : writtenEnd(returned, r, m.declFrom, m.typeParamNames);
 	}
 
-	/**
-	 * `r`, or the declaration its plain `typedef` alias hops land on, each hop a declaration with no type parameter; null
-	 * for a hop that does not resolve, a structure, and an alias that re-enters itself.
-	 */
-	private function followed(r: ResolvedType): Null<ResolvedType> {
-		var at: ResolvedType = r;
-		final seen: Array<String> = [];
-		while (at.type.kind == SymbolIndex.TYPEDEF_DECL_KIND) {
-			if (at.type.isAnonStruct || at.type.typeParamArity > 0 || !_refs.markSeen(at, seen)) return null;
-			final next: Null<ResolvedType> = _ancestors.aliasTarget(at);
-			if (next == null) return null;
-			at = next;
-		}
-		return at;
+	/** Whether `a` and `b` are one end: one declaration, one core type, both dynamic. */
+	public static function same(a: TypeEnd, b: TypeEnd): Bool {
+		return switch [a, b] {
+			case [Declared(x), Declared(y)]: AncestorTable.same(x, y);
+			case [Core(x), Core(y)]: x == y;
+			case [Dyn, Dyn]: true;
+			case _: false;
+		};
 	}
 
 	/** The dotted path of the declaration `r`: its package, then its name. */

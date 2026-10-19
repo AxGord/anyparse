@@ -622,7 +622,12 @@ final class SymbolIndexBuilder {
 		final to: Array<String> = [];
 		for (c in node.children) {
 			if (c.kind == shape.conditionalMemberKind && holdsKind(c, [fromKind, toKind])) return null;
-			final written: Null<Array<String>> = c.kind == fromKind ? from : c.kind == toKind ? to : null;
+			final written: Null<Array<String>> = if (c.kind == fromKind)
+				from
+			else if (c.kind == toKind)
+				to
+			else
+				null;
 			final span: Null<Span> = c.children.length == 1 ? c.children[0].span : null;
 			if (written == null) continue;
 			if (span == null) return null;

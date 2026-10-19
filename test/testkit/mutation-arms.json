@@ -27080,7 +27080,7 @@
 		},
 		{
 			"name": "M-UNIFY-ALIAS-STOP",
-			"type": "anyparse.query.Unification",
+			"type": "anyparse.query.AbstractCasts",
 			"method": "followed",
 			"find": "while (at.type.kind == SymbolIndex.TYPEDEF_DECL_KIND) {",
 			"replace": "while (false) {",
@@ -27661,8 +27661,8 @@
 			"name": "M-CASTS-BRANCHES-AGREE",
 			"type": "anyparse.query.Unification",
 			"method": "agreed",
-			"find": "return all.length > 0 && all.foreach(a -> a == Fits) ? Fits",
-			"replace": "return all.contains(Fits) ? Fits",
+			"find": "return if (all.length > 0 && all.foreach(a -> a == Fits))",
+			"replace": "return if (all.contains(Fits))",
 			"note": "one `#if` branch's clause decides for every build, so an abstract casting from `B` in one branch only takes `B` everywhere"
 		},
 		{
@@ -27693,8 +27693,8 @@
 			"name": "M-CASTS-CORE-ABSTRACT",
 			"type": "anyparse.query.AbstractCasts",
 			"method": "coreGraph",
-			"find": "|| core.classNames.contains(name)) return null;",
-			"replace": "|| true) return null;",
+			"find": "|| core.classNames.contains(name) ? null",
+			"replace": "|| true ? null",
 			"note": "no core value type is an abstract, so a `Bool` argument takes the arm of a class and casts on through the wanted abstract's first `from` clause"
 		},
 		{

@@ -86,7 +86,7 @@ final class Unification {
 	 */
 	public function casts(given: TypeEnd, wanted: TypeEnd): ArgumentFit {
 		return switch [given, wanted] {
-			case [Declared(a), Declared(b)]: _cache.casts.answer(DeclarationKey.ofPair(a, b), () -> castVerdict(given, wanted));
+			case [Declared(a), Declared(b)]: _cache.casts.answer(DeclarationKey.ofPair(a, b), castVerdict.bind(given, wanted));
 			case _: castVerdict(given, wanted);
 		};
 	}
@@ -110,7 +110,7 @@ final class Unification {
 			case _:
 		}
 		switch given {
-			case Dyn | Open:
+			case Dyn, Open:
 				return MayFit;
 			case _:
 		}
@@ -119,10 +119,9 @@ final class Unification {
 				return (_widens[a] ?? []).contains(b) ? Fits : Misfits;
 			case _:
 		}
-		return if (_casts.isAbstract(given) || _casts.isAbstract(wanted))
-			abstractUnify(given, wanted, allowCast, stack)
-		else
-			plainUnify(given, wanted);
+		return _casts.isAbstract(given) || _casts.isAbstract(wanted)
+			? abstractUnify(given, wanted, allowCast, stack)
+			: plainUnify(given, wanted);
 	}
 
 	/** Two ends neither of which is an abstract nor the dynamic type, not two core value types. */
@@ -165,11 +164,12 @@ final class Unification {
 		e: TypeEnd, allowCast: Bool, side: CastBranch -> Array<TypeEnd>, through: (b:CastBranch, t:TypeEnd) -> ArgumentFit
 	): ArgumentFit {
 		final graph: Null<CastGraph> = graphOf(e);
-		if (graph == null) return MayFit;
-		return agreed([
-			for (b in graph.branches)
-				!b.transitive && !allowCast ? Misfits : anyOf([for (t in side(b)) through(b, t)])
-		]);
+		return graph == null
+			? MayFit
+			: agreed([
+				for (b in graph.branches)
+					!b.transitive && !allowCast ? Misfits : anyOf([for (t in side(b)) through(b, t)])
+			]);
 	}
 
 	/**
@@ -179,7 +179,7 @@ final class Unification {
 	 */
 	private function castPath(wanted: TypeEnd, given: TypeEnd, stack: Array<String>): ArgumentFit {
 		switch [given, wanted] {
-			case [Open | Dyn, _] | [_, Open | Dyn]:
+			case [Open | Dyn, _], [_, Open | Dyn]:
 				return MayFit;
 			case _:
 		}
@@ -206,13 +206,14 @@ final class Unification {
 	 */
 	private function firstClause(e: TypeEnd, side: CastBranch -> Array<TypeEnd>, through: TypeEnd -> ArgumentFit): ArgumentFit {
 		final graph: Null<CastGraph> = graphOf(e);
-		if (graph == null) return MayFit;
-		return agreed([
-			for (b in graph.branches) {
-				final first: Null<TypeEnd> = side(b).find(t -> !AbstractCasts.same(t, e));
-				first == null ? Misfits : through(first);
-			}
-		]);
+		return graph == null
+			? MayFit
+			: agreed([
+				for (b in graph.branches) {
+					final first: Null<TypeEnd> = side(b).find(t -> !AbstractCasts.same(t, e));
+					first == null ? Misfits : through(first);
+				}
+			]);
 	}
 
 	/** Whether a `@:from` member of the abstract `wanted` takes a type `given` unifies with (`find_field_from`). */
@@ -249,7 +250,7 @@ final class Unification {
 		return switch e {
 			case Declared(r): _casts.graph(r);
 			case Core(name): _casts.coreGraph(name);
-			case Dyn | Open: null;
+			case Dyn, Open: null;
 		};
 	}
 
@@ -273,7 +274,7 @@ final class Unification {
 		if (!_refs.markSeen(cur, seen)) return Misfits;
 		var open: Bool = false;
 		for (link in _ancestors.links(cur)) if (!MemberLookup.dynamicSupertypeRef(link.raw)) {
-			final up: Null<ResolvedType> = link.decl == null ? null : followed(link.decl);
+			final up: Null<ResolvedType> = link.decl == null ? null : _casts.followed(link.decl);
 			if (up == null || up.type.guarded) {
 				open = true;
 				continue;
@@ -301,24 +302,18 @@ final class Unification {
 	 * given side of a pair whose wanted side is plain, where the chain alone decides — or null.
 	 */
 	private function nominal(r: ResolvedType): Null<ResolvedType> {
-		final at: Null<ResolvedType> = followed(r);
+		final at: Null<ResolvedType> = _casts.followed(r);
 		return at == null || at.type.guarded || !SymbolIndex.PLAIN_NOMINAL_KINDS.contains(at.type.kind) ? null : at;
 	}
 
-	/**
-	 * `r`, or the declaration its plain `typedef` alias hops land on, each hop a declaration with no type parameter; null
-	 * for a hop that does not resolve, a structure, and an alias that re-enters itself.
-	 */
-	private function followed(r: ResolvedType): Null<ResolvedType> {
-		var at: ResolvedType = r;
-		final seen: Array<String> = [];
-		while (at.type.kind == SymbolIndex.TYPEDEF_DECL_KIND) {
-			if (at.type.isAnonStruct || at.type.typeParamArity > 0 || !_refs.markSeen(at, seen)) return null;
-			final next: Null<ResolvedType> = _ancestors.aliasTarget(at);
-			if (next == null) return null;
-			at = next;
-		}
-		return at;
+	/** The context a cast through a clause of the branch `b` leaves (`get_abstract_context`): unchanged when it is transitive. */
+	private static inline function nextCast(b: CastBranch, allowCast: Bool): Bool {
+		return b.transitive && allowCast;
+	}
+
+	/** `Fits` when either answer is, `Misfits` when both are, else `MayFit`. */
+	private static inline function either(a: ArgumentFit, b: ArgumentFit): ArgumentFit {
+		return anyOf([a, b]);
 	}
 
 	/** Whether `e` is a declaration with type parameters: its arguments, not the declaration, decide what it unifies with. */
@@ -327,11 +322,6 @@ final class Unification {
 			case Declared(r): r.type.typeParamArity > 0;
 			case _: false;
 		};
-	}
-
-	/** The context a cast through a clause of the branch `b` leaves (`get_abstract_context`): unchanged when it is transitive. */
-	private static inline function nextCast(b: CastBranch, allowCast: Bool): Bool {
-		return b.transitive && allowCast;
 	}
 
 	/** The stack identity of an end. */
@@ -346,17 +336,22 @@ final class Unification {
 
 	/** `Fits` when some answer of `all` is, `Misfits` when every one is (none at all included), else `MayFit`. */
 	private static function anyOf(all: Array<ArgumentFit>): ArgumentFit {
-		return all.contains(Fits) ? Fits : all.contains(MayFit) ? MayFit : Misfits;
+		return if (all.contains(Fits))
+			Fits
+		else if (all.contains(MayFit))
+			MayFit
+		else
+			Misfits;
 	}
 
 	/** One answer every branch gives — `Fits` or `Misfits` — else `MayFit`. */
 	private static function agreed(all: Array<ArgumentFit>): ArgumentFit {
-		return all.length > 0 && all.foreach(a -> a == Fits) ? Fits : all.length > 0 && all.foreach(a -> a == Misfits) ? Misfits : MayFit;
-	}
-
-	/** `Fits` when either answer is, `Misfits` when both are, else `MayFit`. */
-	private static inline function either(a: ArgumentFit, b: ArgumentFit): ArgumentFit {
-		return anyOf([a, b]);
+		return if (all.length > 0 && all.foreach(a -> a == Fits))
+			Fits
+		else if (all.length > 0 && all.foreach(a -> a == Misfits))
+			Misfits
+		else
+			MayFit;
 	}
 
 }

@@ -17,14 +17,13 @@ import utest.Test;
 class AbstractCastsTest extends Test {
 
 	/** Classes, a conversion abstract, a chain of `from` clauses over members, header clauses, a core-number abstract. */
-	private static final FIXTURE: String = 'package p;\n\nclass A {}\n\nclass B extends A {}\n\nclass Other {}\n\n'
-		+ 'abstract Conv(Other) {\n\t@:from static function fromA(a:A):Conv return null;\n\n\t@:to function toA():A return null;\n}\n\n'
-		+ 'abstract Bs(Int) to Int {\n\t@:from static function fromS(s:String):Bs return null;\n}\n\n'
-		+ 'abstract Dz(Int) to Int {\n\t@:from static function fromB(b:Bool):Dz return null;\n}\n\n'
-		+ 'abstract Ab(Int) from Bs from Dz {}\n\nabstract Ad(Int) from Dz from Bs {}\n\n'
-		+ 'abstract Sb(String) from String to String {}\n\nabstract Sa(String) from Sb {}\n\n@:transitive abstract St(String) from Sb {}\n\n'
-		+ 'abstract U(Int) from Int to Int {}\n\nabstract H(Int) {\n#if js\n\t@:from static function fromA(a:A):H return null;\n#end\n}\n\n'
-		+ '@:build(p.M.b()) abstract K(Int) {}\n';
+	private static final FIXTURE: String = 'package p;\n\nclass A {}\n\nclass B extends A {}\n\nclass Other {}\n\nabstract Conv(Other) {\n'
+		+ '\t@:from static function fromA(a:A):Conv return null;\n\n\t@:to function toA():A return null;\n}\n\nabstract Bs(Int) to Int {\n'
+		+ '\t@:from static function fromS(s:String):Bs return null;\n}\n\nabstract Dz(Int) to Int {\n'
+		+ '\t@:from static function fromB(b:Bool):Dz return null;\n}\n\nabstract Ab(Int) from Bs from Dz {}\n\n'
+		+ 'abstract Ad(Int) from Dz from Bs {}\n\nabstract Sb(String) from String to String {}\n\nabstract Sa(String) from Sb {}\n\n'
+		+ '@:transitive abstract St(String) from Sb {}\n\nabstract U(Int) from Int to Int {}\n\nabstract H(Int) {\n#if js\n'
+		+ '\t@:from static function fromA(a:A):H return null;\n#end\n}\n\n@:build(p.M.b()) abstract K(Int) {}\n';
 
 	@:pin('control') @:killer('M-CASTS-MEMBERS-OFF')
 	public function testAnArgumentCastsThroughAConversionMember(): Void {
