@@ -201,7 +201,9 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testOneWriteIsAFixedPointAtEveryWidth :: control :: M-BREAKMARK-UNREAD',
 		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testACallArgumentRegionSettlesInOneWrite :: control :: '
 			+ 'M-REGION-UNNAMED,M-REGION-SEAMS-SOFT,M-REGION-MARK-ALWAYS',
-		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAChainLinkAfterARegionSettlesInOneWrite :: control :: M-CHAIN-REGION-OFFER-OFF,M-CHAIN-CLOSE-UNRESOLVED,M-CHAIN-AFTERFIRST-COMMIT-UNREAD,M-CHAIN-ONEPERLINE-COMMIT-UNREAD,M-TAIL-RESOLVE-IGNORED,M-OFFER-WANTED-DROPS',
+		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAChainLinkAfterARegionSettlesInOneWrite :: control :: '
+			+ 'M-CHAIN-REGION-OFFER-OFF,M-CHAIN-CLOSE-UNRESOLVED,M-CHAIN-AFTERFIRST-COMMIT-UNREAD,M-CHAIN-ONEPERLINE-COMMIT-UNREAD,'
+			+ 'M-TAIL-RESOLVE-IGNORED,M-OFFER-WANTED-DROPS',
 		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAComprehensionBodyRegionUnderAnArrowSettlesInOneWrite :: control :: '
 			+ 'M-REGION-OFFER-THROUGH-BODIES,M-NESTED-THROUGH-BODIES',
 		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAnElseifRegionInAComprehensionSettlesInOneWrite :: control :: '

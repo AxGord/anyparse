@@ -607,24 +607,19 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 *    ω-committed-objectlit-glue closed inside `shapeSingleArgGlue`'s `{`-branch,
 	 *    met here through the cascade's own INPUT, and it SURVIVES a rules-free
 	 *    cascade, which is what proves it is not mechanism A. Hosts: a ternary under a
-	 *    sole-argument call and a method chain. CLOSED for a list its own cascade commits
-	 *    (FU19): the source-flat list's one-per-line collapse is the `BodyGroup` the
-	 *    force-multi emit makes of the same list on the next pass, so both passes defer it
-	 *    alike; its case below asserts the convergence
-	 *    (`testCommittedLiteralUnderAChainOrArrowSettlesInOneWrite` pins the chain).
+	 *    sole-argument call and a method chain. CLOSED for a list its own cascade commits:
+	 *    the one-per-line collapse is the `BodyGroup` the next pass reads back, so its case
+	 *    below converges (`testCommittedLiteralUnderAChainOrArrowSettlesInOneWrite`).
 	 *
 	 * The two mechanisms STACKED were a THREE-rewrite file; with B closed it needs two
 	 * (`testStackedMechanismsNeedTwoRewrites`; its `rules: []` is load-bearing, since the
 	 * shipped `arrayWrap` rules shadow `defaultWrap` and the file then converges).
 	 * `testMultiArgFillPacksACommittedBodyOnPassOne` is mechanism B in a third host.
 	 *
-	 * Of the candidate fixes only `Renderer.flatFirstLineStep` adopting `restNodeWidth`'s
-	 * committed-`BodyGroup` answer for the `IfFirstLineExceeds` consumer shipped (the
-	 * `bgPrefix` flag); every other candidate reformats this project's own tree, which is
-	 * otherwise a fixed point — each is one line in `docs/decisions.md`. So the writer
-	 * defect is left standing and reported (`apq fmt` warns), and the CONSUMER silently
-	 * harmed by it — `RefactorSupport.canonicalize` — was fixed instead. When a fix does
-	 * land, these become `Assert.equals` on `once` and `twice`; do not delete them.
+	 * Of the candidate fixes for A only `Renderer.flatFirstLineStep` adopting `restNodeWidth`'s
+	 * committed-`BodyGroup` answer (the `bgPrefix` flag) shipped; every other one reformats this
+	 * tree (`docs/decisions.md`), and `RefactorSupport.canonicalize` was fixed instead. A closed
+	 * case becomes `Assert.equals` on `once` and `twice`; do not delete it.
 	 */
 	public function testConvergenceTailStillNeedsTwoRewrites(): Void {
 		final cases: Array<{
@@ -950,8 +945,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * Mechanism B under a method chain and an arrow body: an object literal its own cascade commits to one-per-line,
 	 * written from a FLAT source, too wide to stand flat on the chain's or the arrow's line.
 	 *
-	 * Pass 1 met the collapsed literal as a counted list, so the chain measured its link past the limit and broke every
-	 * link, and the arrow moved its body to the next line; pass 2 met the same literal through the force-multi emit, a
+	 * Pass 1 met the collapsed literal as a counted list, so the chain read its link as too wide and broke every link,
+	 * and the arrow moved its body to the next line; pass 2 met the same literal through the force-multi emit, a
 	 * `BodyGroup` the width probes defer, and glued both. The collapse is now that `BodyGroup` already, so pass 1 glues.
 	 * Both shapes are asserted on `once`: on base `once` is the broken shape, so anchor and equality both fail.
 	 */
