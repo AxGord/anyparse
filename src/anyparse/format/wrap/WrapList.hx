@@ -293,27 +293,32 @@ class WrapList {
 	 * (`WrapListOptions`), where each field carries its own contract; omitting the
 	 * argument entirely is the default cascade with no decoration.
 	 *
-	 * A list of ONE item that may still break inside at render time — its own body into Allman position
-	 * (`BodyAllman.tailBreak`), or a list nested in it that is offered the same way — is laid out once more per such
-	 * break, as if it had happened, and offered as a chain of `Doc.BreakCommit`s. The next rewrite reads the break as
-	 * source and lays the list out by the rules for a multi-line item, so the first rewrite has to pick that layout
-	 * exactly when the break happens. A nested break is asked first: it is the one that can change the head.
+	 * A list that may still break inside an item at render time is laid out once more per such break, as if it had
+	 * happened, and offered as a chain of `Doc.BreakCommit`s: a list of ONE item for its own body breaking into Allman
+	 * position (`BodyAllman.tailBreak`), and every list but an object literal's field list for a list nested in an item that
+	 * is offered the same way. The next rewrite reads the break as source and lays the list out by the rules for a
+	 * multi-line item (a call around `bar(b, [for …])` opens one argument per line), so the first rewrite has to pick that
+	 * layout exactly when the break happens. A nested break is asked first: it is the one that can change the head.
 	 */
 	public static function emit(
 		open: String, close: String, sep: String, items: Array<Doc>, opt: WriteOptions, openInside: Doc, closeInside: Doc,
 		keepInnerWhenEmpty: Bool, rules: WrapRules, ?options: WrapListOptions
 	): Doc {
 		final plain: Doc = emitList(open, close, sep, items, opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
-		if (items.length != 1 || flatLength(items[0]) < 0) return plain;
-		final item: Doc = items[0];
-		inline function laidOut(broken: Doc): Doc {
-			return emitList(open, close, sep, [broken], opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
+		inline function laidOut(i: Int, broken: Doc): Doc {
+			final with: Array<Doc> = items.copy();
+			with[i] = broken;
+			return emitList(open, close, sep, with, opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
 		}
-		final tail: Null<{ brk: Doc, token: BreakToken }> = BodyAllman.tailBreak(item);
-		var out: Doc = tail == null ? plain : BreakCommit(laidOut(tail.brk), plain, tail.token);
-		for (inner in BreakCommits.nested(item)) switch inner {
+		final flatSingle: Bool = items.length == 1 && flatLength(items[0]) >= 0;
+		final tail: Null<{ brk: Doc, token: BreakToken }> = flatSingle ? BodyAllman.tailBreak(items[0]) : null;
+		var out: Doc = tail == null ? plain : BreakCommit(laidOut(0, tail.brk), plain, tail.token);
+		// An object literal's field list is never wrapped: the literal is itself a body `BodyAllman` may still move,
+		// and its Doc has to stay the bare width decision `gluedLayout` and `tailBreak` read.
+		final offered: Bool = items.length == 1 ? flatSingle : open != '{';
+		if (offered) for (i in 0...items.length) for (inner in BreakCommits.outermostPerToken(BreakCommits.nested(items[i]))) switch inner {
 			case BreakCommit(brk, _, token) if (token != null):
-				out = BreakCommit(laidOut(BreakCommits.replaced(item, inner, brk)), out, token);
+				out = BreakCommit(laidOut(i, BreakCommits.replaced(items[i], inner, brk)), out, token);
 			case _:
 		}
 		return out;

@@ -1,5 +1,8 @@
 package unit.grammar.haxe;
 
+import anyparse.core.BreakCommits;
+import anyparse.core.BreakToken;
+import anyparse.core.Doc;
 import utest.Assert;
 import utest.Test;
 
@@ -46,6 +49,10 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 
 	/** Every config the sweeps run under. */
 	private static final CONFIGS: Array<String> = [CFG_SAME, CFG_SAME_LADDER, CFG_KEEP, CFG_GROUP, CFG_TRAILING_COMMA];
+
+	/** No wrap rules at all: the cascade's defaults under `comprehensionFor: keep`. */
+	private static final CFG_PLAIN_KEEP: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, '
+		+ '"sameLine": {"comprehensionFor": "keep"}}';
 
 	/**
 	 * An iterable call the ladder wraps before the literal is asked, so the literal stays glued and flat behind
@@ -120,6 +127,41 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 			assertOneWriteWithinLimit(shortDeclShape(k), config, k, k == 80 || k == 81 ? EQ_PROBE_SKEW : 0);
 	}
 
+	/**
+	 * A comprehension that is one argument of several, in a call that is itself one argument of several: the outer
+	 * call's layout follows the literal's break as well. Laid out from the flat item, `foo(` stayed glued while
+	 * the literal broke under it, and the next write, reading a multi-line argument, opened it one argument per line.
+	 */
+	@:pin('control')
+	@:killer('M-BREAK-MULTI-ITEM-HOST-OFF')
+	public function testAMultiArgumentHostFollowsTheBreak(): Void {
+		for (config in CONFIGS) for (k in 20...101) assertOneWriteWithinLimit(nestedCallShape(k), config, k);
+	}
+
+	/**
+	 * A comprehension in a field of an object literal that is itself a comprehension body: the literal's field list
+	 * offers no alternative of its own, so the literal stays the width decision its Allman placement reads.
+	 */
+	@:pin('control')
+	@:killer('M-BREAK-OBJECT-LITERAL-HOST')
+	public function testALiteralHostKeepsItsAllmanDecision(): Void {
+		for (config in CONFIGS.concat([CFG_PLAIN_KEEP])) for (k in 1...60) assertOneWriteWithinLimit(literalHostShape(k), config, k);
+	}
+
+	/** One alternative per break, from its outermost node: the alternatives do not multiply with the nesting depth. */
+	@:pin('control')
+	@:killer('M-BREAK-EVERY-NODE')
+	public function testOneAlternativePerBreak(): Void {
+		final token: BreakToken = new BreakToken();
+		final inner: Doc = Doc.BreakCommit(Doc.Text('b'), Doc.Text('f'), token);
+		final outer: Doc = Doc.BreakCommit(Doc.Text('B'), Doc.Concat([inner]), token);
+		final other: Doc = Doc.BreakCommit(Doc.Text('o'), Doc.Text('f'), new BreakToken());
+		final kept: Array<Doc> = BreakCommits.outermostPerToken(BreakCommits.nested(Doc.Concat([outer, other])));
+		Assert.equals(2, kept.length);
+		Assert.isTrue(kept.contains(outer));
+		Assert.isTrue(kept.contains(other));
+	}
+
 	private static function assertOneWriteWithinLimit(src: String, config: String, k: Int, slack: Int = 0): Void {
 		final once: String = HxWriteFixture.triviaWrite(src, config);
 		Assert.equals(once, HxWriteFixture.triviaWrite(once, config), 'k=$k config=$config\n$src');
@@ -172,6 +214,18 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	private static function comprehensionIterableShape(k: Int): String {
 		return 'class M {\n\tfunction f() {\n\t\tvar y = [for (x in [for (y in ys) {a: y, b: 2}]) {'
 			+ 'alpha: x.aaaaaaaaaaaaaaaaaaaaaaa, beta: x.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, k: \'${kinds(k)}\'}];\n\t}\n}';
+	}
+
+	/** A comprehension as the last of two arguments, of a call that is the last of two arguments. */
+	private static function nestedCallShape(k: Int): String {
+		return 'class M {\n\tfunction f() {\n\t\tvar y = foo(aaaaaaaa, bar(bbbbbbbb, [for (x in xs) {'
+			+ 'alpha: x.aaaaaaaaaaaaaaaaaaaaa, k: \'${kinds(k)}\'}]));\n\t}\n}';
+	}
+
+	/** A comprehension in a field of the object literal another comprehension carries as its body. */
+	private static function literalHostShape(k: Int): String {
+		return 'class M {\n\tfunction f() {\n\t\tvar y = [for (a in xs) {items: [for (b in a.children) {c: b.cccccccccccccccccccc, '
+			+ 'd: \'${kinds(k)}\'}], name: a.nnnnnnnnnnnnnnnnnnnnnnnnnnn}];\n\t}\n}';
 	}
 
 	private static function shortDeclShape(k: Int): String {

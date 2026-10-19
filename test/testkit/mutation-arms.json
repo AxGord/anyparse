@@ -26332,6 +26332,29 @@
 			"find": "|| anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0",
 			"replace": "|| false",
 			"note": "an expression paren around a `+`/`-` chain an operand already broke pins that chain flat again when no `expressionWrapping` rule is set, so every continuation line renders at column 0 and the next write re-indents it"
+		},
+		{
+			"name": "M-BREAK-MULTI-ITEM-HOST-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emit",
+			"find": "final offered: Bool = items.length == 1 ? flatSingle : open != '{';",
+			"replace": "final offered: Bool = items.length == 1 ? flatSingle : false;",
+			"note": "a list of several items stops following a break nested in one of them, so a call around `bar(b, [for …])` stays glued while the literal breaks under it and the next write opens it one argument per line"
+		},
+		{
+			"name": "M-BREAK-OBJECT-LITERAL-HOST",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emit",
+			"find": "final offered: Bool = items.length == 1 ? flatSingle : open != '{';",
+			"replace": "final offered: Bool = items.length == 1 ? flatSingle : true;",
+			"note": "an object literal's field list is wrapped in alternatives too, which hides the literal's width decision from its Allman placement: a comprehension body carrying a comprehension in a field breaks glued and goes Allman one write late"
+		},
+		{
+			"name": "M-BREAK-EVERY-NODE",
+			"type": "anyparse.core.BreakCommits",
+			"method": "outermostPerToken",
+			"force": "commits",
+			"note": "every node of a break is offered again by every list it is nested in, so the alternatives, and the Doc, grow exponentially with the nesting depth"
 		}
 	]
 }

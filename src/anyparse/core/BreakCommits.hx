@@ -81,4 +81,22 @@ final class BreakCommits {
 		return out;
 	}
 
+	/**
+	 * `commits` (in `nested` order) keeping, for each `BreakToken`, only its FIRST node: the outermost one, whose `brk`
+	 * side already holds every list nested under it laid out for the same break. The nodes of one token resolve
+	 * together, so one alternative per token is the whole answer; offering one per node makes every list re-offer the
+	 * alternatives of each list nested in it, which grows the Doc exponentially with the nesting depth.
+	 */
+	public static function outermostPerToken(commits: Array<Doc>): Array<Doc> {
+		final kept: Array<Doc> = [];
+		final seen: Array<BreakToken> = [];
+		for (c in commits) switch c {
+			case BreakCommit(_, _, token) if (token != null && !seen.contains(token)):
+				seen.push(token);
+				kept.push(c);
+			case _:
+		}
+		return kept;
+	}
+
 }
