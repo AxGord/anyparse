@@ -370,6 +370,13 @@ typedef TypeDeclInfo = {
 	var typeParamNames: Array<String>;
 
 	/**
+	 * The default type each type parameter of the header writes (`class Box<T = Int>` -> `['Int']`), positional to
+	 * `typeParamNames` and null for a parameter without one: verbatim, in the declaring file's terms. A reference that
+	 * leaves trailing arguments out names the type applied to these (4.3.7: `Box` is `Box<Int>`, inside `Box` too).
+	 */
+	var typeParamDefaults: Array<Null<String>>;
+
+	/**
 	 * Simple names (last `.` segment) of this type's `extends` / `implements`
 	 * targets — its direct supertypes. Drives `hasSubtype`, the first gate of a
 	 * cross-file-safe private-member rename (a subtype could access the member).

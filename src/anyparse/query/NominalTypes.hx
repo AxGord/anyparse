@@ -70,7 +70,11 @@ final class NominalTypes {
 		literal: (typeName, _) -> typeName,
 		self: indexSelf,
 		binding: (ident, c) -> TypeResolver.identBindingFrom(ident, c.root, c.shape),
-		bound: (from, c) -> boundType(from, c.chain.declaredTypeSources[from] ?? c.declaredTypes[from], c),
+		bound: (from, c) -> {
+			final written: Null<String> = c.chain.declaredTypeSources[from];
+			// the nominal alone has lost the arguments written with it: it is no text to complete
+			written == null ? boundType(from, c.declaredTypes[from], c, false) : boundType(from, written, c, true);
+		},
 		initializer: (_, use, c) -> localInitializer(use, c.root, c.shape, c.chain.declaredTypeSources),
 		loopElement: forBindingElementTypeSource,
 		// the index resolves no call to a declaration (its call arc is the tabled statics), so it reads no callee's parameter
@@ -814,8 +818,12 @@ final class NominalTypes {
 		var found: Null<String> = null;
 		final declared: Array<MemberDeclaration> = index.typing.members.memberDeclarationsOf(typeName, method);
 		for (d in declared) {
-			final written: Null<String> = d.member.returnSource;
 			final params: Array<String> = d.type.typeParamNames.concat(d.member.typeParamNames);
+			// as the compiler reads it where it is written: a reference leaving arguments out names their defaults
+			final returned: Null<String> = d.member.returnSource;
+			final written: Null<String> = returned == null
+				? null
+				: index.typing.ancestors.completed(returned, d.file, d.member.declFrom, params);
 			if (written == null || found != null && written != found || CallGraphNames.mentionsTypeName(written, params, index.typeSyntax))
 				return null;
 			found = written;
@@ -991,19 +999,35 @@ final class NominalTypes {
 	 * The type a read of the binding at `from` carries for the index host, its written type `written`: an optional
 	 * parameter's (`?x: T`, a node of `RefShape.optionalParamKind` starting at `from`) wrapped as an optional value
 	 * (`optionalValueType`), since 4.3.7 types a read of it as `Null<T>` with or without a default. Any other binding's as
-	 * written.
+	 * written — with the type arguments a reference in it leaves out written in (`AncestorTable.completed`: `b: Box` reads as
+	 * `Box<Int>` for `class Box<T = Int>`), null when they cannot be. With no index, or for a written type that is not the
+	 * whole text (`complete` false), nothing is completed.
 	 */
-	private static function boundType(from: Int, written: Null<String>, c: IndexTyping): Null<String> {
+	private static function boundType(from: Int, written: Null<String>, c: IndexTyping, complete: Bool): Null<String> {
 		final kind: Null<String> = c.shape.optionalParamKind;
 		// a written type the grammar does not read as one type (`#if lime Image #else Dynamic #end`) is no answer
-		return if (written == null || !answerableType(written, c.chain.typeSyntax))
+		if (written == null || !answerableType(written, c.chain.typeSyntax)) return null;
+		final index: Null<SymbolIndex> = c.index;
+		final fi: Null<FileInfo> = index?.fileInfo(c.file);
+		final full: Null<String> = !complete || index == null || fi == null
+			? written
+			: index.typing.ancestors.completed(written, fi, from, writtenTypeParams(fi));
+		return if (full == null)
 			null
-		else if (kind == null)
-			written
-		else if (startsKindAt(c.root, from, kind))
-			optionalValueType(written, c.shape.optionalValueTypeName, c.chain.typeSyntax)
+		else if (kind != null && startsKindAt(c.root, from, kind))
+			optionalValueType(full, c.shape.optionalValueTypeName, c.chain.typeSyntax)
 		else
-			written;
+			full;
+	}
+
+	/**
+	 * Every type parameter `fi` declares on a type or a member: a name the file may write for one rather than for a type
+	 * (`AncestorTable.completed`'s scope).
+	 */
+	private static function writtenTypeParams(fi: FileInfo): Array<String> {
+		return [
+			for (t in fi.types) for (p in t.typeParamNames.concat([for (m in t.members) for (q in m.typeParamNames) q])) p
+		];
 	}
 
 	/** Whether a node of `kind` starts at `from` under `node`, descending only into the nodes whose range holds `from`. */

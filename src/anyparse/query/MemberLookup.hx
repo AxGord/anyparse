@@ -544,13 +544,18 @@ final class MemberLookup {
 			return null;
 		final host: ResolvedType = found.host;
 		final params: Array<String> = host.type.typeParamNames;
+		// the type as the compiler reads it where it is written: a reference leaving arguments out names their defaults
+		final complete: Null<String> = _ancestors.completed(
+			written, host.file, found.member.declFrom, params.concat(found.member.typeParamNames)
+		);
+		if (complete == null) return null;
 		final passed: Null<Array<String>> = params.length == 0 ? [] : boundArguments(start, host, args);
 		final bound: Null<String> = if (passed != null && passed.length >= params.length)
-			CallGraphNames.substituteTypeParams(written, params, passed, _typeSyntax)
-		else if (CallGraphNames.mentionsTypeName(written, params, _typeSyntax))
+			CallGraphNames.substituteTypeParams(complete, params, passed, _typeSyntax)
+		else if (CallGraphNames.mentionsTypeName(complete, params, _typeSyntax))
 			null
 		else
-			written;
+			complete;
 		return bound == null || !found.member.optional ? bound : NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax);
 	}
 

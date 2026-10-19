@@ -28,6 +28,12 @@ class NominalTypesTest extends Test {
 		+ '\tfunction probeItems() return b.items();\n\tfunction probeGet() return b.get();\n'
 		+ '\tfunction probePick() return b.pick();\n\tfunction probePlain() return b.plain();\n}\n';
 
+	/** Declarations of standard-library names a fixture reads, each in the root-package module of its own name. */
+	private static final STD: Array<{ file: String, source: String }> = [
+		{ file: 'Dynamic.hx', source: '@:coreType abstract Dynamic<T> from T to T {}\n' },
+		{ file: 'String.hx', source: 'extern class String {}\n' }
+	];
+
 	@:pin('control')
 	@:killer('M-NOMINAL-LITERAL')
 	public function testALiteralIsItsType(): Void {
@@ -186,6 +192,68 @@ class NominalTypesTest extends Test {
 		Assert.isNull(sourceIn(text, 'probeLocal'), 'a local written under `#if`');
 	}
 
+	/**
+	 * A reference that leaves trailing type arguments out names its declaration applied to the defaults that declaration
+	 * writes (4.3.7: with `class Box<T = Int>`, `Box` is `Box<Int>` — inside `Box` too, as an argument, through an extends
+	 * link, and in a default that leaves its own arguments out): the binding, a member read through it, a member and a
+	 * return written so.
+	 */
+	@:pin('control') @:killer('M-ANCESTOR-DEFAULT-FILL') @:killer('M-ANCESTOR-COMPLETE-OFF') @:killer('M-ANCESTOR-LINK-DEFAULTS')
+	@:killer('M-MEMBER-READ-COMPLETE') @:killer('M-NOMINAL-BOUND-COMPLETE') @:killer('M-NOMINAL-RETURN-COMPLETE')
+	@:killer('M-INDEX-PARAM-DEFAULTS')
+	public function testAReferenceLeavingArgumentsOutNamesTheirDefaults(): Void {
+		final text: String = 'package p;\n\nclass Item {}\n\nclass Box<T = Item> {\n\tpublic var v: Null<T>;\n\tpublic var self: Box;\n'
+			+ '\tpublic function get(): Box return null;\n}\n\nclass Pair<A, B = String> {}\n\nclass Outer<T = Box> {}\n\n'
+			+ 'class Sub extends Box {}\n\nclass C {\n\tvar b: Box;\n\tvar bs: Array<Box>;\n\tvar p: Pair<Int>;\n\tvar o: Outer;\n'
+			+ '\tvar s: Sub;\n\tfunction probeB() return b;\n\tfunction probeV() return b.v;\n\tfunction probeSelf() return b.self;\n'
+			+ '\tfunction probeSelfV() return b.self.v;\n\tfunction probeGet() return b.get();\n\tfunction probeList() return bs;\n'
+			+ '\tfunction probePair() return p;\n\tfunction probeOuter() return o;\n\tfunction probeSub() return s.v;\n}\n';
+		Assert.equals('Box<Item>', sourceAmong(text, STD, 'probeB'), 'the binding');
+		Assert.equals('Null<Item>', sourceAmong(text, STD, 'probeV'), 'a member read through it');
+		Assert.equals('Box<Item>', sourceAmong(text, STD, 'probeSelf'), 'a member written so, inside the type itself');
+		Assert.equals('Null<Item>', sourceAmong(text, STD, 'probeSelfV'), 'read through such a member');
+		Assert.equals('Box<Item>', sourceAmong(text, STD, 'probeGet'), 'a return written so');
+		Assert.equals('Array<Box<Item>>', sourceAmong(text, STD, 'probeList'), 'as a type argument');
+		Assert.equals('Pair<Int, String>', sourceAmong(text, STD, 'probePair'), 'a trailing argument left out');
+		Assert.equals('Outer<Box<Item>>', sourceAmong(text, STD, 'probeOuter'), 'a default leaving its own arguments out');
+		Assert.equals('Null<Item>', sourceAmong(text, STD, 'probeSub'), 'through an extends link');
+	}
+
+	/**
+	 * A reference whose left-out arguments cannot be written in has no source answer rather than the reference as written:
+	 * a parameter without a default (not a type the compiler accepts), a default reaching its own type again (the compiler
+	 * overflows), a name a type parameter of the file may hold, and a default naming a type the reading file does not see.
+	 * The dynamic type alone may be written bare, and a default the reading file sees the same is written in. A type two
+	 * `#if` branches declare has a default only where both write the same one.
+	 */
+	@:pin('control') @:killer('M-ANCESTOR-DEFAULT-MISSING') @:killer('M-ANCESTOR-BARE-TYPE') @:killer('M-ANCESTOR-SCOPE-OFF')
+	@:killer('M-ANCESTOR-DEFAULT-SEEN') @:killer('M-ANCESTOR-DEFAULT-VISIBLE') @:killer('M-NOMINAL-BOUND-SCOPE')
+	@:killer('M-INDEX-ALTERNATE-DEFAULTS')
+	public function testAReferenceItCannotCompleteHasNoAnswer(): Void {
+		final text: String = 'package p;\n\nclass Need<T> {}\n\nclass Rec<T = Rec> {}\n\nclass Item {}\n\nclass Box<T = Item> {}\n\n'
+			+ 'class G<Box> {\n\tvar g: Box;\n}\n\nclass C {\n\tvar n: Need;\n\tvar r: Rec;\n\tvar b: Box;\n\tvar d: Dynamic;\n'
+			+ '\tfunction probeNeed() return n;\n\tfunction probeRec() return r;\n\tfunction probeBox() return b;\n'
+			+ '\tfunction probeDynamic() return d;\n}\n';
+		Assert.isNull(sourceAmong(text, STD, 'probeNeed'), 'a parameter without a default');
+		Assert.isNull(sourceAmong(text, STD, 'probeRec'), 'a default reaching its own type');
+		Assert.isNull(sourceAmong(text, STD, 'probeBox'), 'a name a type parameter of the file holds');
+		Assert.equals('Dynamic', sourceAmong(text, STD, 'probeDynamic'), 'the dynamic type written bare');
+		final holder: Array<{ file: String, source: String }> = [
+			{ file: 'a/Holder.hx', source: 'package a;\n\nimport b.Hidden;\n\nclass Holder<T = Hidden> {}\n' },
+			{ file: 'b/Hidden.hx', source: 'package b;\n\nclass Hidden {}\n' }
+		];
+		final reader: String = 'package p;\n\nimport a.Holder;\n\nclass C {\n\tvar h: Holder;\n\tfunction probeHolder() return h;\n}\n';
+		Assert.isNull(sourceAmong(reader, holder, 'probeHolder'), 'a default the reading file does not see');
+		final seeing: String = 'package p;\n\nimport a.Holder;\nimport b.Hidden;\n\nclass C {\n\tvar h: Holder;\n'
+			+ '\tfunction probeHolder() return h;\n}\n';
+		Assert.equals('Holder<Hidden>', sourceAmong(seeing, holder, 'probeHolder'), 'one it sees the same');
+		final branches: String = 'package p;\n\nclass Item {}\n\n#if a\nclass K<T = Item> {}\n#else\nclass K<T = String> {}\n#end\n\n'
+			+ '#if a\nclass L<T = Item> {}\n#else\nclass L<T = Item> {}\n#end\n\nclass C {\n\tvar k: K;\n\tvar l: L;\n'
+			+ '\tfunction probeK() return k;\n\tfunction probeL() return l;\n}\n';
+		Assert.isNull(sourceAmong(branches, STD, 'probeK'), 'two branches writing two defaults');
+		Assert.equals('L<Item>', sourceAmong(branches, STD, 'probeL'), 'two writing one');
+	}
+
 	private static function nominal(fn: String): Null<String> {
 		final at: Probe = probeIn(SOURCE, fn);
 		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);
@@ -205,8 +273,14 @@ class NominalTypesTest extends Test {
 		return NominalTypes.expressionTypeSource(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);
 	}
 
-	/** The expression the function `fn` of `text` returns, with what the typer is handed for it. */
-	private static function probeIn(text: String, fn: String): Probe {
+	/** `sourceIn` with the files `others` indexed beside `text`. */
+	private static function sourceAmong(text: String, others: Array<{ file: String, source: String }>, fn: String): Null<String> {
+		final at: Probe = probeIn(text, fn, others);
+		return NominalTypes.expressionTypeSource(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);
+	}
+
+	/** The expression the function `fn` of `text` returns, with what the typer is handed for it, `others` indexed beside it. */
+	private static function probeIn(text: String, fn: String, ?others: Array<{ file: String, source: String }>): Probe {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final root: QueryNode = plugin.parseFile(text);
 		final found: Null<QueryNode> = returnedBy(root, fn);
@@ -222,7 +296,7 @@ class NominalTypesTest extends Test {
 			root: root,
 			node: node,
 			declared: plugin.declaredTypes(text),
-			index: SymbolIndex.build([{ file: 'p/C.hx', source: text }], plugin),
+			index: SymbolIndex.build([{ file: 'p/C.hx', source: text }].concat(others ?? []), plugin),
 			chain: chain
 		};
 	}

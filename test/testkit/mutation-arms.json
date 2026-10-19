@@ -27927,6 +27927,118 @@
 			"find": "_breakAsOnePerLine && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0",
 			"replace": "_breakAsOnePerLine",
 			"note": "every source-flat list is deferred, a flat one included, so a host under-measures a literal that still stands flat and glues past the limit"
+		},
+		{
+			"name": "M-ANCESTOR-DEFAULT-FILL",
+			"type": "anyparse.query.AncestorTable",
+			"method": "withDefaults",
+			"find": "out.push(value);",
+			"replace": "out.push(decl.type.typeParamNames[i]);",
+			"note": "a left-out argument is filled with the parameter's own name instead of its default, so `Box` reads as `Box<T>`"
+		},
+		{
+			"name": "M-ANCESTOR-DEFAULT-MISSING",
+			"type": "anyparse.query.AncestorTable",
+			"method": "withDefaults",
+			"find": "if (value == null) return null;",
+			"replace": "if (value == null) continue;",
+			"note": "a left-out parameter with no default is skipped instead of refused, so a reference the compiler rejects gets a spelling"
+		},
+		{
+			"name": "M-ANCESTOR-COMPLETE-OFF",
+			"type": "anyparse.query.AncestorTable",
+			"method": "completedIn",
+			"find": "if (decl == null || args.length >= decl.type.typeParamNames.length || decl.type.name == _bareType) continue;",
+			"replace": "continue;",
+			"note": "no reference is completed, so a written `Box` stays `Box` where the compiler reads `Box<Int>`"
+		},
+		{
+			"name": "M-ANCESTOR-BARE-TYPE",
+			"type": "anyparse.query.AncestorTable",
+			"method": "completedIn",
+			"find": "|| args.length >= decl.type.typeParamNames.length || decl.type.name == _bareType) continue;",
+			"replace": "|| args.length >= decl.type.typeParamNames.length) continue;",
+			"note": "the dynamic type written bare is treated as a reference leaving its parameter out, so it has no answer"
+		},
+		{
+			"name": "M-ANCESTOR-SCOPE-OFF",
+			"type": "anyparse.query.AncestorTable",
+			"method": "completedIn",
+			"find": "if (filled == null || seen.contains(key) || scope.contains(path) || unspellable) return null;",
+			"replace": "if (filled == null || seen.contains(key) || unspellable) return null;",
+			"note": "a name a type parameter may hold is completed as the type of that name"
+		},
+		{
+			"name": "M-ANCESTOR-DEFAULT-SEEN",
+			"type": "anyparse.query.AncestorTable",
+			"method": "completedIn",
+			"find": "if (filled == null || seen.contains(key) || scope.contains(path) || unspellable) return null;",
+			"replace": "if (filled == null || scope.contains(path) || unspellable) return null;",
+			"note": "a default reaching its own declaration recurses without end"
+		},
+		{
+			"name": "M-ANCESTOR-DEFAULT-VISIBLE",
+			"type": "anyparse.query.AncestorTable",
+			"method": "defaultFor",
+			"find": "final here: Null<ResolvedType> = _refs.resolveTypeRef(path, from, at);",
+			"replace": "final here: Null<ResolvedType> = there;",
+			"note": "a default is written into a file that does not see the type it names"
+		},
+		{
+			"name": "M-ANCESTOR-LINK-DEFAULTS",
+			"type": "anyparse.query.AncestorTable",
+			"method": "linkOf",
+			"find": "decl == null ? written[0] : withDefaults(decl, written[0]) ?? written[0]",
+			"replace": "written[0]",
+			"note": "an extends link leaving arguments out passes none, so an inherited member written with the parameter has no answer"
+		},
+		{
+			"name": "M-MEMBER-READ-COMPLETE",
+			"type": "anyparse.query.MemberLookup",
+			"method": "memberReadType",
+			"find": "final complete: Null<String> = _ancestors.completed(",
+			"replace": "final complete: Null<String> = written ?? _ancestors.completed(",
+			"note": "a member's written type is read as written, so a member `self: Box` reads as `Box`"
+		},
+		{
+			"name": "M-NOMINAL-BOUND-COMPLETE",
+			"type": "anyparse.query.NominalTypes",
+			"method": "boundType",
+			"find": ": index.typing.ancestors.completed(written, fi, from, writtenTypeParams(fi));",
+			"replace": ": written;",
+			"note": "a binding's annotation is read as written, so `b: Box` reads as `Box`"
+		},
+		{
+			"name": "M-NOMINAL-BOUND-SCOPE",
+			"type": "anyparse.query.NominalTypes",
+			"method": "writtenTypeParams",
+			"find": "return [for (t in fi.types) for (p in t.typeParamNames.concat([for (m in t.members) for (q in m.typeParamNames) q])) p];",
+			"replace": "return [];",
+			"note": "a binding is completed with no type parameter in scope, so a name a parameter may hold reads as the type"
+		},
+		{
+			"name": "M-NOMINAL-RETURN-COMPLETE",
+			"type": "anyparse.query.NominalTypes",
+			"method": "returnSourceOf",
+			"find": ": index.typing.ancestors.completed(returned, d.file, d.member.declFrom, params);",
+			"replace": ": returned;",
+			"note": "a method's written return is read as written, so `get(): Box` returns `Box`"
+		},
+		{
+			"name": "M-INDEX-PARAM-DEFAULTS",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "declTypeParamDefaults",
+			"find": "return [for (n in names) own[n]];",
+			"replace": "return [for (n in names) null];",
+			"note": "no type parameter records its default, so a reference leaving arguments out has no answer"
+		},
+		{
+			"name": "M-INDEX-ALTERNATE-DEFAULTS",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "agreedDefaults",
+			"find": "i < other.length && other[i] == first.typeParamDefaults[i]",
+			"replace": "true",
+			"note": "a type two branches declare keeps the first branch's defaults when the other writes different ones"
 		}
 	]
 }

@@ -43,4 +43,11 @@ typedef SpanTypeInfo = {
 	 * batched bundle carries it — no `TypeInfoProvider` accessor mirrors it, so a non-batching plugin answers none.
 	 */
 	final typeParamConstraints: Map<Int, Map<String, Array<String>>>;
+
+	/**
+	 * The default types of the type parameters `typeParamNames` lists, keyed the same way and then by parameter name: the
+	 * verbatim source of each default (`<T = Int>` -> `T` -> `Int`). A parameter without one is absent. Like
+	 * `typeParamConstraints`, only the batched bundle carries it.
+	 */
+	final typeParamDefaults: Map<Int, Map<String, String>>;
 };
