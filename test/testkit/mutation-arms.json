@@ -27415,6 +27415,14 @@
 			"note": "a tail may start at a value folded out of the terminal ternary, past the last written rung"
 		},
 		{
+			"name": "M-PIER-TAIL-LADDER",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeOf",
+			"find": "return shape == null || from > 0 && repeatsTail(values[from - 1], tail, source, comments) ? null : {",
+			"replace": "return shape == null ? null : {",
+			"note": "a tail merges although the value before it repeats one of its own, so a guard ladder merges again on every pass into one nested condition"
+		},
+		{
 			"name": "M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED",
 			"type": "anyparse.query.AddImport",
 			"method": "addImport",

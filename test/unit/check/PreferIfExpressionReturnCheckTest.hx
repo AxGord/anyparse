@@ -472,6 +472,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 		Assert.equals(src.indexOf('if (f(h))'), es[0].span.from, 'the guard in front is not replaced');
 		final fixed: String = applyFixOnce(src);
 		Assert.isTrue(fixed.indexOf('if (o != null) return o.p;\n\t\treturn !f(h) && g(h) ? h : null;') != -1, fixed);
+		Assert.equals(0, violations(fixed).length, 'a run merges once: the next pass has nothing left to merge');
 	}
 
 	/** The tail merges by `||` as well, when its first two values repeat. */
@@ -522,6 +523,44 @@ class PreferIfExpressionReturnCheckTest extends Test {
 			edits(wrap('if (a) return 0;\n\t\telse if (b) return 1;\n\t\telse if (c) return 1;\n\t\telse return 3;'));
 		Assert.equals(1, chain.length);
 		Assert.equals('return if (a) 0 else if (b) 1 else if (c) 1 else 3;', chain[0].text);
+	}
+
+	/**
+	 * A guard LADDER stays the ladder it is (FU6's decision): when the value returned just ahead of
+	 * the tail repeats one of the tail's values, the merged return would leave a run of three that the
+	 * next pass merges AGAIN, and three guards of `null` would end as one nested
+	 * `a || (b || c) ? null : x`. So the tail is refused, and a run merges at most once - the run
+	 * repeating the tail's OTHER value (`5` here) is refused for the same reason.
+	 */
+	@:pin('control')
+	@:killer('M-PIER-TAIL-LADDER')
+	public function testGuardLadderIsNotMerged(): Void {
+		Assert.equals(
+			0, violations(wrap('if (a) return null;\n\t\tif (b) return null;\n\t\tif (c) return null;\n\t\treturn x;')).length,
+			'three guards'
+		);
+		Assert.equals(
+			0,
+			violations(
+				wrap('if (a) return null;\n\t\tif (b) return null;\n\t\tif (c) return null;\n\t\tif (d) return null;\n\t\treturn x;')
+			).length,
+			'four guards'
+		);
+		Assert.equals(
+			0,
+			violations(wrap(
+				'if (a) return null;\n\t\tif (b) return null;\n\t\tif (c) return null;\n\t\tif (d) return null;\n'
+				+ '\t\tif (e) return null;\n\t\treturn x;'
+			)).length,
+			'five guards'
+		);
+		Assert.equals(
+			0, violations(wrap('if (a) return 5;\n\t\tif (b) return null;\n\t\tif (c) return 5;\n\t\treturn null;')).length,
+			'the value before the tail repeats the tail\'s other value'
+		);
+		Assert.isTrue(
+			claimsCascade('if (a) return null;\n\t\tif (b) return null;\n\t\tif (c) return null;\n\t\treturn x;'), 'the ladder stays owned'
+		);
 	}
 
 	/**

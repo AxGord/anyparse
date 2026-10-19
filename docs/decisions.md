@@ -4776,7 +4776,9 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - Fall-through spelling only, from a WRITTEN rung. An else-linked chain is one statement with no tail to cut out, and
   keeps its chain fix. A tail whose first value is folded out of the terminal ternary (`if (a) return 0; return b ? 1 :
   c ? 1 : 3;`) sits inside that ternary, and re-shaping a ternary is not a cascade merge; the run stays owned.
-- Consequence for FU6's ladder note: `if (a) return null; if (b) return null; if (c) return null; return x;` now
-  merges its tail and then, as a run of three, merges again, ending as one `return a || (b || c) ? null : x;` over the
-  `--fix` passes. FU6 had left such a ladder alone; neither anyparse nor client holds one (measured), so the stance was not
-  re-gated here.
+- FU6's ladder decision is KEPT: a tail whose preceding value repeats one of the tail's values is refused
+  (`repeatsTail`). Merging it would leave a run of three the next pass merges again, so `if (a) return null; if (b)
+  return null; if (c) return null; return x;` would end as one nested `return a || (b || c) ? null : x;` over the `--fix`
+  passes. With the gate a run merges at most once, so no composition across passes builds a nested condition. The
+  repeat is compared on BOTH tail values: the one the merge repeats and the other one (`if (a) return 5; if (b)
+  return null; if (c) return 5; return null;` would merge its tail to `!b && c ? 5 : null` and then the run again).

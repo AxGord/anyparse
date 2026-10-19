@@ -621,7 +621,8 @@ final class PreferIfExpressionReturn implements Check {
 	 * A tail must start at a WRITTEN rung of the fall-through spelling, `rungs` being that spelling's
 	 * rung statements. An else-linked chain passes none: it is one statement, there is no tail to cut out
 	 * of it, and its own chain fix stands. A tail whose first value is FOLDED sits inside the terminal
-	 * ternary, and re-shaping a ternary is not a cascade merge.
+	 * ternary, and re-shaping a ternary is not a cascade merge. A tail whose preceding value repeats
+	 * one of its own is refused too (`repeatsTail`), so a run merges at most once.
 	 */
 	private static function mergeOf(
 		values: Array<QueryNode>, chain: IfChain, rungs: Array<QueryNode>, pairs: Array<{ cond: Span, value: Span }>, region: Span,
@@ -633,13 +634,28 @@ final class PreferIfExpressionReturn implements Check {
 		final returned: Null<Span> = chain.branches[from].stmt.span;
 		if (start == null || returned == null) return null;
 		final span: Span = new Span(start.from, region.to);
-		final shape: Null<MergeShape> = mergeShape(values.slice(from), span, source, comments, s);
-		return shape == null ? null : {
+		final tail: Array<QueryNode> = values.slice(from);
+		final shape: Null<MergeShape> = mergeShape(tail, span, source, comments, s);
+		return shape == null || from > 0 && repeatsTail(values[from - 1], tail, source, comments) ? null : {
 			shape: shape,
 			from: from,
 			span: span,
 			prefix: new Span(returned.from, pairs[from].value.from)
 		};
+	}
+
+	/**
+	 * Whether `before` - the value returned just ahead of a tail - repeats one of the tail's values. The
+	 * merged return would then leave a run whose last three are `before` and the two merged leaves, which
+	 * the next pass merges AGAIN: a guard ladder (`if (a) return null; if (b) return null; if (c) return
+	 * null; return x;`) would end as one nested `a || (b || c) ? null : x`. A ladder reads as the ladder
+	 * it is, so its tail is not merged, and no run is merged twice.
+	 */
+	private static function repeatsTail(
+		before: QueryNode, tail: Array<QueryNode>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+	): Bool {
+		final repeated: Null<String> = valueText(before, source, comments);
+		return repeated != null && tail.exists(v -> valueText(v, source, comments) == repeated);
 	}
 
 	/**

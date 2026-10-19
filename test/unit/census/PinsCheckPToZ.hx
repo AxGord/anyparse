@@ -128,6 +128,7 @@ final class PinsCheckPToZ {
 		'unit.check.PreferIfExpressionChainCheckTest#testChainWithNoBooleanLeafStillFlagged :: control :: M-PIEC-SPINE-CLAIM-ANY',
 		'unit.check.PreferIfExpressionReturnCheckTest#testFallThroughCascadeClaimedNotRewritten :: control :: M-PIER-CASCADE-UNMERGED-REPORTED',
 		'unit.check.PreferIfExpressionReturnCheckTest#testGuardBeforeTernaryClaimedNotRewritten :: control :: M-PIER-CASCADE-UNMERGED-REPORTED',
+		'unit.check.PreferIfExpressionReturnCheckTest#testGuardLadderIsNotMerged :: control :: M-PIER-TAIL-LADDER',
 		'unit.check.PreferIfExpressionReturnCheckTest#testGuardRepeatingTheTernaryElseMerges :: control :: M-PIER-OUTER-UNNEGATED,M-PIER-MERGE-NO-PARENS',
 		'unit.check.PreferIfExpressionReturnCheckTest#testMergeRefusals :: control :: M-PIER-MERGE-ANY-VALUE,M-PIER-MERGE-COMMENT',
 		'unit.check.PreferIfExpressionReturnCheckTest#testRepeatedLeadingValueMergesByOr :: control :: M-PIER-LEADING-AS-OUTER',
