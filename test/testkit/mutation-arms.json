@@ -16215,8 +16215,8 @@
 			"name": "M-UNCHECKED-ALIAS-PLACE",
 			"type": "anyparse.query.UncheckedConversions",
 			"method": "noneBy",
-			"find": "seen.concat([id]), false);",
-			"replace": "seen.concat([id]), true);",
+			"find": "foreign, seen.concat([id]), false",
+			"replace": "foreign, seen.concat([id]), true",
 			"note": "(precision) the type an alias stands for is read as a place of its own, a nullable one boxed"
 		},
 		{
@@ -27005,6 +27005,30 @@
 			"find": "return params.length == 0 ? decl.name : '${decl.name}<${params.join(', ')}>';",
 			"replace": "return decl.name;",
 			"note": "a generic type's `this` is its bare name, so a member written with its own parameter reads as nothing off `this`"
+		},
+		{
+			"name": "M-STMT-LIST-CALLARG-BARRIER",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "statementListElemOpt",
+			"find": "return macro _clearCallArgChainNest($optExpr);",
+			"replace": "return optExpr;",
+			"note": "a statement-list element keeps the call-argument chain flag: the first chain in a lambda argument's body wraps its operator at the statement's indent"
+		},
+		{
+			"name": "M-STMT-LIST-CALLARG-BLOCK",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElemCallExpr",
+			"find": "WriterOptFanout.statementListElemOpt(elemOptExpr)",
+			"replace": "elemOptExpr",
+			"note": "a block statement (lambda / anonymous function body) bypasses the statement-list barrier and inherits the call-argument chain flag"
+		},
+		{
+			"name": "M-STMT-LIST-CALLARG-CASE",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseElemCallExprs",
+			"find": "WriterOptFanout.statementListElemOpt(macro _writerOpt)",
+			"replace": "macro _writerOpt",
+			"note": "a case-body statement of an arrow-body switch argument bypasses the statement-list barrier and inherits the call-argument chain flag"
 		}
 	]
 }

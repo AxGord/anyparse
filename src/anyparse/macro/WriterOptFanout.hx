@@ -819,6 +819,28 @@ final class WriterOptFanout {
 	}
 
 	/**
+	 * omega-stmt-list-callarg-barrier: the opt a STATEMENT-LIST element is
+	 * written with — every block statement (`BlockExpr` / `BlockStmt` /
+	 * `HxFnBlock.stmts`, via `triviaBlockElemCallExpr`) and every case / default
+	 * body statement (`triviaTryparseElemCallExprs`), tail included. A statement
+	 * is never itself a call argument, so the `_callArgChainNest` flag a
+	 * leading-break call set on an argument that is a lambda / anonymous
+	 * function / arrow-body `switch` is stale inside its body: before this
+	 * barrier it reached the first binary chain of the body (`return a && b`,
+	 * `final v = a + b`, `x = a + b`), which then dropped its own continuation
+	 * Nest and wrapped `&&` at the statement's indent instead of one level
+	 * deeper (fork: +1, as in a plain function body). Both statement-list
+	 * Stars call this one helper, so a further statement-irrelevant
+	 * expression flag joins the barrier here. Emitted only inside the
+	 * `clearExprPositionNonTail` branch, which only the Haxe statement
+	 * Stars carry, and their shared `HxModuleWriteOptions` always declares
+	 * `_callArgChainNest`.
+	 */
+	private static function statementListElemOpt(optExpr: Expr): Expr {
+		return macro _clearCallArgChainNest($optExpr);
+	}
+
+	/**
 	 * ω-expr-paren-in-condition (cond F2) — opt-fanout shim for the
 	 * `@:fmt(condWrap)` site. Sets `_parenInCondition` to the supplied
 	 * value (idempotent: returns `o` unchanged when already equal — no

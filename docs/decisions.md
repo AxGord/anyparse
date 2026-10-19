@@ -4505,3 +4505,21 @@ decided the question; it may not become a record of runs.
   `StructuralTypes.memberCouldUnify`, which compared nominals by SIMPLE name and invariantly for every member: a
   read-only structure member (`final`, a method) unifies covariantly in the compiler (`{final x:Base}` accepts `var
   x:Sub`), and two namesakes of two packages are two types — branch `feat/fu-FU4`
+
+## FU11 (2026-10-19): a statement list is a barrier for the call-argument chain flag
+
+- A leading-break call stamps `_callArgChainNest` on each argument's opt so a chain that IS the argument drops its own
+  continuation Nest (the argument Nest already supplies `+1`). The flag was consumed only at a chain or a ternary, so an
+  argument that is a lambda / anonymous `function` / arrow-body `switch` carried it into its BODY, and the first chain of
+  the body (`return a && b`, `final v = a && b`, `x = a + b`) honoured it: the operator wrapped at the statement's own
+  indent instead of one level deeper. Every engine since 2026-10-15 did it, and `fmt --list` called it canonical. The
+  haxe-formatter fork gives `+1` there, as hxq does in a plain function body.
+- Fix in the one place statements are written: both statement-list Stars (`TriviaBlockLowering.triviaBlockElemCallExpr` —
+  `BlockExpr` / `BlockStmt` / `HxFnBlock.stmts` — and `TriviaTryparseLowering.triviaTryparseElemCallExprs` — case /
+  default bodies) write every element, tail included, through `WriterOptFanout.statementListElemOpt`, which clears the
+  flag. A statement is never itself a call argument, so the flag is stale there by construction.
+- NOT changed, by fork parity: an object-literal field value and an arrow EXPRESSION body inside a call argument are not
+  statements and keep the call-argument base (the fork wraps both at that column). Pinned by
+  `HxCallArgLambdaBodyChainIndentTest`'s two non-discriminating pins.
+- client: 3 files / 4 hunks, each this defect (`ItemListProjectsShare.hx:171`, `BucketMutationOffMainTest.hx:109/153`,
+  `ItemListThumbnailTest.hx:106`). Arm `M-STMT-LIST-CALLARG-BARRIER`.

@@ -174,7 +174,7 @@ The native twin is `tools/bench-hxcpp.hxml`. Point `HXCPP_COMPILE_CACHE` at a pe
 
 ```sh
 HXCPP_COMPILE_CACHE=~/.hxcpp_cache haxe tools/bench-hxcpp.hxml   # -> bin/parse-prof-cpp/ParseProf
-TM_SRC=<other-tree>/src tools/bench-ab.sh [--config <other-tree>/hxformat.json] tparse tools/bench-corpus.txt 9 6 \
+CLIENT_SRC=<other-tree>/src tools/bench-ab.sh [--config <other-tree>/hxformat.json] tparse tools/bench-corpus.txt 9 6 \
   js:bin/parse-prof.js cpp:bin/parse-prof-cpp/ParseProf
 ```
 
@@ -648,7 +648,7 @@ APQ_TEST=RemoveParam node /tmp/w1/test.js
 HXQ_BIN=/tmp/w1/apq.js hxq ast Foo.hx      # every hxq subcommand, queries and mutation ops alike
 ```
 
-`HXQ_BIN` points the `hxq` shim at an explicit engine and, as a consequence, skips the shared stale-check and auto-rebuild entirely — the worker owns its own build, so the shim must not decide to rebuild `bin/apq.js` underneath it. The two builds inside `worker-build.sh` run concurrently, and it resolves the repo from its own location rather than from the CWD, so a copy of the script living inside a git worktree builds *that* worktree's `src/`.
+`HXQ_BIN` points the `hxq` shim at an explicit engine and, as a consequence, skips the shared stale-check and auto-rebuild entirely (the shared engine auto-rebuilds only for a caller whose cwd is the main tree; elsewhere it warns and runs stale, and `HXQ_SHARED_REBUILD=0` turns the rebuild off everywhere) — the worker owns its own build, so the shim must not decide to rebuild `bin/apq.js` underneath it. The two builds inside `worker-build.sh` run concurrently, and it resolves the repo from its own location rather than from the CWD, so a copy of the script living inside a git worktree builds *that* worktree's `src/`.
 
 Some tests read paths relative to the CWD (`bin/.last-sweep.json`, `test/` fixtures, `hxformat.json`, `apqlint.json`), so run a private `test.js` with the CWD set to the tree it was built from.
 

@@ -281,10 +281,10 @@ final class MustHeld {
 		return (_givesIn[id] ?? []).exists(g -> {
 			final given: Int = g.edge.span?.to ?? pos + 1;
 			g.lock == cover && given <= pos && runs(id, valuation, g.edge) && runsBefore(g.edge, valuation, pos)
-			&& !(_holdsIn[id] ?? []).exists(a -> {
-				final take: Int = a.edge.span?.from ?? -1;
-				a.lock == cover && (take > given && take < at || around.exists(l -> l.from <= take && take < l.to));
-			});
+				&& !(_holdsIn[id] ?? []).exists(a -> {
+					final take: Int = a.edge.span?.from ?? -1;
+					a.lock == cover && (take > given && take < at || around.exists(l -> l.from <= take && take < l.to));
+				});
 		});
 	}
 

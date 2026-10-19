@@ -169,8 +169,8 @@ final class LockReleasers {
 			_facts.runs(id, s.valuation).exists(v -> _conditions.carried(give, v, s.ctx) != 0 && !takes.exists(a -> {
 				final taken: Int = a.edge.span?.to ?? at;
 				_conditions.carried(a.edge, v, s.ctx) != 0 && _facts.sameObject(a, given) && _facts.takenBefore(a.edge, v, at)
-				&& !_facts.repeatsAfter(give, a.edge)
-				&& !others.exists(o -> (o.span?.from ?? -1) >= taken && (o.span?.to ?? at + 1) <= at && _facts.takenBefore(o, v, at));
+					&& !_facts.repeatsAfter(give, a.edge)
+					&& !others.exists(o -> (o.span?.from ?? -1) >= taken && (o.span?.to ?? at + 1) <= at && _facts.takenBefore(o, v, at));
 			}))
 		);
 	}

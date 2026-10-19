@@ -588,6 +588,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxBodySliceTest',
 		'unit.grammar.haxe.HxBracketExprListTypeSliceTest',
 		'unit.grammar.haxe.HxCallArgCommentWriteTest',
+		'unit.grammar.haxe.HxCallArgLambdaBodyChainIndentTest',
 		'unit.grammar.haxe.HxCallArgMultilineStringCuddleTest',
 		'unit.grammar.haxe.HxCallGroupRestProbeCasePatternTest',
 		'unit.grammar.haxe.HxCallGroupRestProbeChainOperandTest',
