@@ -97,7 +97,7 @@ final class MoveToHelperArms {
 		else if (Std.isOfType(find, String))
 			[(find: String)]
 		else if (Std.isOfType(find, Array))
-			[for (f in (find: Array<Any>)) Std.string(f)]
+			[for (f in (find: Array<Any>)) '$f']
 		else
 			[];
 	}
