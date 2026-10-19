@@ -264,12 +264,12 @@ final class BackingFieldRefs {
 			excludeSpans.push(new Span(off, off + field.length));
 			return true;
 		}
-		if (index.subtypes.isSubtype(c, owner) && !index.members.typeDeclaresMember(c, field)) {
+		if (index.subtypes.isSubtype(c, owner) && !index.typing.members.typeDeclaresMember(c, field)) {
 			if (writePos) return false;
 			renameEdits.push({ span: new Span(off, off + field.length), text: bareIdent && shadowsProp ? 'this.$propName' : propName });
 			return true;
 		}
-		if (index.members.typeDeclaresMember(c, field) || index.members.supertypeDeclaresMember(c, field))
+		if (index.typing.members.typeDeclaresMember(c, field) || index.typing.members.supertypeDeclaresMember(c, field))
 			excludeSpans.push(new Span(off, off + field.length));
 		return true;
 	}

@@ -459,7 +459,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 */
 	private static function scopeChainDecline(scopeIndex: SymbolIndex, file: String, owner: String, name: String): Null<String> {
 		final built: Array<String> = [];
-		return switch scopeIndex.members.supertypeMemberProof(owner, name, file, built) {
+		return switch scopeIndex.typing.members.supertypeMemberProof(owner, name, file, built) {
 			case Absent: null;
 			case Declares: DECLINE_ABSTRACT_IMPL;
 			case Unreachable if (built.length > 0):
@@ -543,7 +543,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		// while the base invokes it polymorphically through its own declaration. Asked of the
 		// WIDEST index, because the declaring base may live in a resolution library rather than
 		// the report scope. An unresolvable supertype leaves the member flaggable, as before.
-		if (scopeIndex.members.supertypeDeclaresMember(owner, decl.name)) return null;
+		if (scopeIndex.typing.members.supertypeDeclaresMember(owner, decl.name)) return null;
 		// The confinement question goes to the WIDEST index too: a `@:access` grant or a subtype
 		// declared OUTSIDE the report scope (but inside the project's `resolutionRoots`) is
 		// invisible to the narrow `index`, which would wrongly call the member confined to this

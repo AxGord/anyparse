@@ -109,7 +109,7 @@ final class OperandCallees {
 		if (owners == null || owners.length != 1) return null;
 		final owner: ResolvedType = owners[0];
 		final onType: Bool = value == null;
-		if (binder._index.members.declarationLacksMember(owner, name))
+		if (binder._index.typing.members.declarationLacksMember(owner, name))
 			return onType ? null : extensionParams(binder, owner, receiver, name);
 		final declared: Null<HostedMembers> = binder.declarationOf(owner, name);
 		if (declared == null || declared.members.exists(m -> m.isStatic != onType)) return null;
@@ -202,7 +202,7 @@ final class OperandCallees {
 		binder: OperandBinder, owner: ResolvedType, receiver: QueryNode, name: String
 	): Null<CalleeParams> {
 		final usings: Null<Array<String>> = binder._usings();
-		if (usings == null || !binder._index.members.declarationFreeOfExtensionTypes(owner)) return null;
+		if (usings == null || !binder._index.typing.members.declarationFreeOfExtensionTypes(owner)) return null;
 		final declared: Null<HostedMembers> = binder._index.values.extensionDeclaration(usings, name);
 		if (declared == null || declared.members.length != 1) return null;
 		final host: ResolvedType = declared.host;

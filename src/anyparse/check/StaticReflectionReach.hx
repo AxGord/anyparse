@@ -161,7 +161,7 @@ final class StaticReflectionReach {
 			if (_values.exists(k)) return true;
 			if (ReflectionScan.runtimeTypePath(_surface.whole, k) || ReflectionScan.runtimeTypePathFragment(_surface.fragments, k))
 				return true;
-			if ((_receivers[k] ?? []).exists(member -> !index.members.typeDeclaresMember(k, member))) return true;
+			if ((_receivers[k] ?? []).exists(member -> !index.typing.members.typeDeclaresMember(k, member))) return true;
 		}
 		// A class-reifying macro yields the class it is built on (an `@:autoBuild` one: every subtype too)
 		// or called from, so a type on the chain, or an ancestor the owner inherits the build from, escapes.

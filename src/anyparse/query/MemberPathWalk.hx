@@ -116,7 +116,7 @@ final class MemberPathWalk {
 		for (i in 0...memberPath.length - 1) {
 			if (current == null) return null;
 			final cur: ResolvedType = current;
-			final memberSource: Null<String> = _members.memberTypeSourceWalk(cur, memberPath[i], []);
+			final memberSource: Null<String> = _members.memberTypeSource(cur, memberPath[i]);
 			if (memberSource == null) return null;
 			final effective: Null<String> = substitute ? substitutedMemberSource(cur, memberPath[i], memberSource, args) : memberSource;
 			if (effective == null) return null;
@@ -134,7 +134,7 @@ final class MemberPathWalk {
 		if (current == null) return null;
 		final last: ResolvedType = current;
 		final member: String = memberPath[memberPath.length - 1];
-		final finalSource: Null<String> = _members.memberTypeSourceWalk(last, member, []);
+		final finalSource: Null<String> = _members.memberTypeSource(last, member);
 		return finalSource == null || !substitute ? finalSource : substitutedMemberSource(last, member, finalSource, args);
 	}
 

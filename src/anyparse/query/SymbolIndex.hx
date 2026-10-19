@@ -601,8 +601,9 @@ typedef ResolvedType = {
  *  - `refs` (`TypeRefIndex`) — which files declare a name, and which declaration a written type
  *    reference denotes in a given file's scope. Every layer below resolves through it.
  *  - `subtypes` (`SubtypeGraph`) — the inheritance closure in both directions.
- *  - `members` (`MemberLookup`) — what a named type declares or inherits.
- *  - `structural` (`StructuralTypes`) — unification with an anonymous or builtin structure.
+ *  - `typing` (`TypingService`) — the typing questions asked of these declarations: `typing.members`
+ *    (`MemberLookup`, what a named type declares or inherits) and `typing.structural` (`StructuralTypes`,
+ *    unification with an anonymous or builtin structure), with the answers it remembers by declaration.
  *  - `paths` (`MemberPathWalk`) — the type a multi-hop `a.b.c` member walk lands on.
  *  - `text` (`RawSourceScan`) — the word-boundary scans over raw source bytes, the files the
  *    parser SKIPPED included.
@@ -641,11 +642,11 @@ final class SymbolIndex {
 	/** The INHERITANCE layer: subtype enumeration and supertype-closure proofs over the indexed `supertypes` edges. */
 	public final subtypes: SubtypeGraph;
 
-	/** The MEMBER layer: what a named type declares or inherits, and with what declared type, return type and visibility. */
-	public final members: MemberLookup;
-
-	/** The STRUCTURAL layer: unification with an anonymous structure, and membership of a builtin structural type. */
-	public final structural: StructuralTypes;
+	/**
+	 * The TYPING service over these declarations: the member and structural layers, and the answers it remembers keyed by
+	 * declaration (`TypingService`).
+	 */
+	public final typing: TypingService;
 
 	/** The receiver-PATH layer: the declared type source a multi-hop `a.b.c` member walk lands on. */
 	public final paths: MemberPathWalk;
@@ -696,9 +697,8 @@ final class SymbolIndex {
 		_typeSyntax = plugin.typeSyntax;
 		refs = new TypeRefIndex(files, skipped, sources, plugin);
 		subtypes = new SubtypeGraph(files, sources, refs);
-		members = new MemberLookup(refs);
-		structural = new StructuralTypes(files, refs, subtypes, members, plugin.typeSyntax);
-		paths = new MemberPathWalk(files, refs, members, plugin.typeSyntax);
+		typing = new TypingService(files, refs, subtypes, plugin.typeSyntax);
+		paths = new MemberPathWalk(files, refs, typing.members, plugin.typeSyntax);
 		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty);
 		traits = new TypeTraits(files, sources, refs);
 		final shape: RefShape = plugin.refShape();

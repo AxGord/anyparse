@@ -365,7 +365,7 @@ final class OperandBinder {
 	private function memberTier(receiver: QueryNode, name: String, call: Bool): Tier {
 		final owners: Null<Array<ResolvedType>> = receiverDecls(receiver);
 		if (owners == null) return Unknown;
-		if (owners.length == 1 && _index.members.declarationLacksMember(owners[0], name))
+		if (owners.length == 1 && _index.typing.members.declarationLacksMember(owners[0], name))
 			return call ? extensionTier(owners[0], name) : resolveTier(owners[0], name);
 		final found: Array<ResolvedType> = [];
 		for (owner in owners) {
@@ -416,8 +416,8 @@ final class OperandBinder {
 		final own: Array<MemberInfo> = owner.type.members.filter(m -> m.name == name);
 		return if (own.length > 0)
 			{ members: own, host: owner }
-		else if (_index.members.declarationFreeOfExtensionTypes(owner))
-			_index.members.declaringMember(owner, name)
+		else if (_index.typing.members.declarationFreeOfExtensionTypes(owner))
+			_index.typing.members.declaringMember(owner, name)
 		else
 			null;
 	}
@@ -448,7 +448,7 @@ final class OperandBinder {
 	 */
 	private function extensionTier(owner: ResolvedType, method: String): Tier {
 		final usings: Null<Array<String>> = _usings();
-		if (usings == null || !_index.members.declarationFreeOfExtensionTypes(owner)) return Unknown;
+		if (usings == null || !_index.typing.members.declarationFreeOfExtensionTypes(owner)) return Unknown;
 		final declared: Null<HostedMembers> = _index.values.extensionDeclaration(usings, method);
 		if (declared == null || declared.members.length != 1) return Unknown;
 		final host: ResolvedType = declared.host;
@@ -477,7 +477,7 @@ final class OperandBinder {
 		final resolvers: Array<MemberInfo> = fieldKind == null ? [] : t.members.filter(m -> m.operatorOverloads.contains(fieldKind));
 		if (
 			fi == null || resolvers.length != 1 || !(_shape.underlyingThisTypeKinds ?? []).contains(t.kind) || t.hasBuild || t.hasAutoBuild
-			|| t.guarded || !_index.members.declarationFreeOfExtensionTypes(owner)
+			|| t.guarded || !_index.typing.members.declarationFreeOfExtensionTypes(owner)
 		)
 			return Unknown;
 		final scope: Null<Array<ResolvedType>> = _index.values.usingDeclarations(fi);

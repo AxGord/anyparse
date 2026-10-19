@@ -226,14 +226,14 @@ final class NominalTypes {
 		final wrappers: Array<String> = transparentWrappers ?? [];
 		var current: String = rootType;
 		for (i in 1...path.length - 1) {
-			final memberType: Null<String> = index.members.memberTypeSourceOf(current, path[i]);
+			final memberType: Null<String> = index.typing.members.memberTypeSourceOf(current, path[i]);
 			final nominal: Null<String> = memberType == null
 				? null
 				: outerNominalOf(memberLookupReceiverSource(memberType, wrappers, index.typeSyntax), index.typeSyntax);
 			if (nominal == null) return null;
 			current = nominal;
 		}
-		return index.members.memberTypeSourceOf(current, path[path.length - 1]);
+		return index.typing.members.memberTypeSourceOf(current, path[path.length - 1]);
 	}
 
 	/**
@@ -668,7 +668,7 @@ final class NominalTypes {
 		final locals: Array<String> = (shape.localDeclKinds ?? []).concat(shape.paramKinds ?? []);
 		if (binding != null && locals.contains(binding.kind)) return null;
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
-		return enclosing == null ? null : index.members.returnNominalOf(enclosing, method);
+		return enclosing == null ? null : index.typing.members.returnNominalOf(enclosing, method);
 	}
 
 	/**
@@ -694,7 +694,7 @@ final class NominalTypes {
 		else if (index.refs.declaringFiles(name).length == 0)
 			null
 		else
-			index.members.returnNominalOf(name, method);
+			index.typing.members.returnNominalOf(name, method);
 	}
 
 	private static function expressionNominalWalk(
@@ -729,7 +729,7 @@ final class NominalTypes {
 		final receiver: Null<String> =
 			expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, seen, true);
 		if (receiver == null) return staticCallNominal(callee.children[0], root, shape, resolved, method);
-		final member: Null<String> = resolved.members.returnNominalOf(receiver, method);
+		final member: Null<String> = resolved.typing.members.returnNominalOf(receiver, method);
 		return member ?? staticExtensionNominal(receiver, method, chain, resolved, file);
 	}
 
@@ -770,12 +770,12 @@ final class NominalTypes {
 		if (chain == null) return null;
 		final usings: Array<String> = chain.usings;
 		if (
-			usings.length == 0 || !index.members.typeProvablyLacksMember(receiver, method, file)
-			|| !index.members.closureFreeOfExtensionTypes(receiver, file)
+			usings.length == 0 || !index.typing.members.typeProvablyLacksMember(receiver, method, file)
+			|| !index.typing.members.closureFreeOfExtensionTypes(receiver, file)
 		)
 			return null;
 		final declared: Null<HostedMembers> = index.values.extensionDeclaration(usings, method);
-		return declared == null ? null : index.structural.extensionReturnNominal(declared, receiver, file);
+		return declared == null ? null : index.typing.structural.extensionReturnNominal(declared, receiver, file);
 	}
 
 	/**
@@ -838,7 +838,7 @@ final class NominalTypes {
 	 */
 	private static function returnSourceOf(index: SymbolIndex, typeName: String, method: String): Null<String> {
 		var found: Null<String> = null;
-		final declared: Array<MemberDeclaration> = index.members.memberDeclarationsOf(typeName, method);
+		final declared: Array<MemberDeclaration> = index.typing.members.memberDeclarationsOf(typeName, method);
 		for (d in declared) {
 			final written: Null<String> = d.member.returnSource;
 			final params: Array<String> = d.type.typeParamNames.concat(d.member.typeParamNames);

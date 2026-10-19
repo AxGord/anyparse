@@ -217,7 +217,8 @@ final class ParamAscription {
 		// supertype or implemented interface declaring the name pins it from above, and there a family
 		// scan looks in the wrong direction entirely. An ancestor the closure cannot reach proves neither.
 		final family: Null<Array<OverrideFamilyMember>> = symbols.subtypes.overrideFamilyOf(owning.name, method);
-		return family != null && family.length == 0 && symbols.members.supertypeMemberProof(owning.name, method) == SupertypeProof.Absent
+		return family != null && family.length == 0
+			&& symbols.typing.members.supertypeMemberProof(owning.name, method) == SupertypeProof.Absent
 			? owning
 			: null;
 	}

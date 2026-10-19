@@ -423,7 +423,7 @@ final class NamingRenames {
 		final newName: Null<String> = Naming.correctedName(decl.name, rule, say);
 		return if (newName == null)
 			null
-		else if (!resolutionIndex.members.typeProvablyLacksMember(ownerName, newName, declFile))
+		else if (!resolutionIndex.typing.members.typeProvablyLacksMember(ownerName, newName, declFile))
 			no(RenameRefusal.INHERITED_COLLISION)
 		else if (resolutionIndex.traits.transitivelyCarriesRtti(ownerName))
 			no(RenameRefusal.RTTI_HIERARCHY)
@@ -890,7 +890,9 @@ final class NamingRenames {
 			final c: String = cls;
 			if (c == ownerName || resolutionIndex.subtypes.isSubtype(c, ownerName))
 				OccurrenceScan.pushUniqueSpan(bareBound, seenOwner, occ.off, name.length);
-			else if (resolutionIndex.subtypes.provablyNotSubtype(c, ownerName) && resolutionIndex.members.supertypeDeclaresMember(c, name))
+			else if (
+				resolutionIndex.subtypes.provablyNotSubtype(c, ownerName) && resolutionIndex.typing.members.supertypeDeclaresMember(c, name)
+			)
 				OccurrenceScan.pushUniqueSpan(ignore, seenIgnore, occ.off, name.length);
 		}
 		if (typed.length > 0)
@@ -1849,7 +1851,7 @@ class RenameRefusal {
 		if (owner == null) return NO_OWNER;
 		if (resolutionIndex == null) return NO_INDEX;
 		final idx: SymbolIndex = resolutionIndex;
-		return if (!idx.members.typeProvablyLacksMember(owner, newName, file))
+		return if (!idx.typing.members.typeProvablyLacksMember(owner, newName, file))
 			INHERITED_COLLISION
 		else if (idx.traits.transitivelyCarriesRtti(owner))
 			RTTI_HIERARCHY
