@@ -8,6 +8,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.query.TypingService.TypingHost;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -226,14 +227,14 @@ final class NominalTypes {
 		final wrappers: Array<String> = transparentWrappers ?? [];
 		var current: String = rootType;
 		for (i in 1...path.length - 1) {
-			final memberType: Null<String> = index.members.memberTypeSourceOf(current, path[i]);
+			final memberType: Null<String> = index.typing.members.memberTypeSourceOf(current, path[i]);
 			final nominal: Null<String> = memberType == null
 				? null
 				: outerNominalOf(memberLookupReceiverSource(memberType, wrappers, index.typeSyntax), index.typeSyntax);
 			if (nominal == null) return null;
 			current = nominal;
 		}
-		return index.members.memberTypeSourceOf(current, path[path.length - 1]);
+		return index.typing.members.memberTypeSourceOf(current, path[path.length - 1]);
 	}
 
 	/**
@@ -513,34 +514,6 @@ final class NominalTypes {
 	}
 
 	/**
-	 * The type source `raw` carries, as `host` spells it — THE structural walk both resolution models share (`TypingHost`;
-	 * `docs/decisions.md`, "ONE structural walk, TWO resolution models"). The walk owns the shapes: what a type passes
-	 * through (`peel`), a literal, the self reference, an identifier (`identifierType`), a field access, an element read, a
-	 * call and a construction; the host answers each in its own terms. Null for every other shape.
-	 */
-	public static function typeWalk<T, C>(raw: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
-		final node: QueryNode = host.peel(raw, ctx);
-		final name: Null<String> = node.name;
-		final kind: String = node.kind;
-		final literalType: Null<String> = shape.literalTypeNames?.get(kind);
-		final literal: Null<(typeName:String, ctx:C) -> Null<T>> = host.literal;
-		if (literalType != null) return literal == null ? null : literal(literalType, ctx);
-		if ((kind == shape.identKind || kind == shape.stringInterpIdentKind) && name != null)
-			return name == shape.selfReferenceText ? host.self(node, ctx) : identifierType(node, shape, host, ctx);
-		if (host.isAccess(kind, ctx) && name != null && node.children.length > 0) return host.access(node, ctx);
-		final element: Null<(container:T, ctx:C) -> Null<T>> = host.element;
-		if (kind == shape.indexAccessKind && element != null && node.children.length > 0) {
-			final container: Null<T> = typeWalk(node.children[0], shape, host, ctx);
-			return container == null ? null : element(container, ctx);
-		}
-		if (kind == shape.callKind && node.children.length > 0) return host.call(node, ctx);
-		final construction: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.construction;
-		return kind == shape.newExprKind && name != null && construction != null
-			? construction(node, ctx)
-			: arithmeticType(node, shape, host, ctx);
-	}
-
-	/**
 	 * The type a construction `new T<…>(…)` writes, read off the grammar's nodes: `path` the type as written, `args` the
 	 * verbatim type arguments it writes (none for `new Box(item)`, whose arguments the language infers), `text` the two
 	 * spelled as one type. The type arguments are the node's leading `typeArgCount` children — the grammar's own split,
@@ -668,7 +641,7 @@ final class NominalTypes {
 		final locals: Array<String> = (shape.localDeclKinds ?? []).concat(shape.paramKinds ?? []);
 		if (binding != null && locals.contains(binding.kind)) return null;
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
-		return enclosing == null ? null : index.members.returnNominalOf(enclosing, method);
+		return enclosing == null ? null : index.typing.members.returnNominalOf(enclosing, method);
 	}
 
 	/**
@@ -694,7 +667,7 @@ final class NominalTypes {
 		else if (index.refs.declaringFiles(name).length == 0)
 			null
 		else
-			index.members.returnNominalOf(name, method);
+			index.typing.members.returnNominalOf(name, method);
 	}
 
 	private static function expressionNominalWalk(
@@ -729,7 +702,7 @@ final class NominalTypes {
 		final receiver: Null<String> =
 			expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, seen, true);
 		if (receiver == null) return staticCallNominal(callee.children[0], root, shape, resolved, method);
-		final member: Null<String> = resolved.members.returnNominalOf(receiver, method);
+		final member: Null<String> = resolved.typing.members.returnNominalOf(receiver, method);
 		return member ?? staticExtensionNominal(receiver, method, chain, resolved, file);
 	}
 
@@ -770,12 +743,12 @@ final class NominalTypes {
 		if (chain == null) return null;
 		final usings: Array<String> = chain.usings;
 		if (
-			usings.length == 0 || !index.members.typeProvablyLacksMember(receiver, method, file)
-			|| !index.members.closureFreeOfExtensionTypes(receiver, file)
+			usings.length == 0 || !index.typing.members.typeProvablyLacksMember(receiver, method, file)
+			|| !index.typing.members.closureFreeOfExtensionTypes(receiver, file)
 		)
 			return null;
 		final declared: Null<HostedMembers> = index.values.extensionDeclaration(usings, method);
-		return declared == null ? null : index.structural.extensionReturnNominal(declared, receiver, file);
+		return declared == null ? null : index.typing.structural.extensionReturnNominal(declared, receiver, file);
 	}
 
 	/**
@@ -838,7 +811,7 @@ final class NominalTypes {
 	 */
 	private static function returnSourceOf(index: SymbolIndex, typeName: String, method: String): Null<String> {
 		var found: Null<String> = null;
-		final declared: Array<MemberDeclaration> = index.members.memberDeclarationsOf(typeName, method);
+		final declared: Array<MemberDeclaration> = index.typing.members.memberDeclarationsOf(typeName, method);
 		for (d in declared) {
 			final written: Null<String> = d.member.returnSource;
 			final params: Array<String> = d.type.typeParamNames.concat(d.member.typeParamNames);
@@ -886,7 +859,7 @@ final class NominalTypes {
 			file: file,
 			seen: seen
 		};
-		return typeWalk(node, shape, INDEX_HOST, c);
+		return TypingService.typeWalk(node, shape, INDEX_HOST, c);
 	}
 
 	/**
@@ -942,7 +915,7 @@ final class NominalTypes {
 		if (!hit.isValueBinder && hasIterationValueBinder(loop, valueBinderKinds)) return null;
 		final iterable: Null<QueryNode> = iterationIterable(loop, valueBinderKinds);
 		if (iterable == null) return null;
-		final iterableSource: Null<String> = typeWalk(iterable, shape, INDEX_HOST, c);
+		final iterableSource: Null<String> = TypingService.typeWalk(iterable, shape, INDEX_HOST, c);
 		return iterableSource == null ? null : elementTypeSourceOf(iterableSource, elementParams, [], c.chain.typeSyntax);
 	}
 
@@ -995,28 +968,6 @@ final class NominalTypes {
 	}
 
 	/**
-	 * `typeWalk`'s identifier: the type its binding is written with; else — for a binding written with no type, under the
-	 * host's ONE cycle guard (`reading`: `for (x in x)`, a local whose initializer reads itself) — the type of the
-	 * expression initialising it, the element of the loop binding it or, for a lambda's parameter, the parameter of the
-	 * function type the lambda is expected to be (`TypingHost.parameter`); for a name binding no value, what it names.
-	 */
-	private static function identifierType<T, C>(ident: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
-		final from: Null<Int> = host.binding(ident, ctx);
-		if (from == null) return host.unbound(ident, ctx);
-		final written: Null<T> = host.bound(from, ctx);
-		final reading: Array<Int> = host.reading(ctx);
-		if (written != null || reading.contains(from)) return written;
-		reading.push(from);
-		final init: Null<QueryNode> = host.initializer(from, ident, ctx);
-		final parameter: Null<(from:Int, use:QueryNode, ctx:C) -> Null<T>> = host.parameter;
-		final held: Null<T> = init != null
-			? typeWalk(init, shape, host, ctx)
-			: host.loopElement(from, ctx) ?? (parameter == null ? null : parameter(from, ident, ctx));
-		reading.pop();
-		return held;
-	}
-
-	/**
 	 * The self reference `node` for the index host: the enclosing type by its name, or — inside a type whose `this` is its
 	 * underlying value (`RefShape.underlyingThisTypeKinds`: `abstract A(T)`, where 4.3.7 types `this` as `T`) — the
 	 * underlying type as its declaration writes it. Null outside a type, and for such a type whose underlying type is not
@@ -1045,30 +996,8 @@ final class NominalTypes {
 		if (path == null || index == null) return null;
 		var root: QueryNode = node;
 		while (root.kind != identKind && root.children.length == 1) root = root.children[0];
-		final rootSource: Null<String> = typeWalk(root, shape, INDEX_HOST, c);
+		final rootSource: Null<String> = TypingService.typeWalk(root, shape, INDEX_HOST, c);
 		return pathReceiverMemberTypeSource(path, rootSource, index, c.file, true, shape.memberTransparentWrapperTypeNames ?? []);
-	}
-
-	/** Whether `node` is arithmetic the walk types by its operands: a binary `RefShape.arithmeticKinds` operator, or the negation. */
-	private static function isArithmetic(node: QueryNode, shape: RefShape): Bool {
-		final kinds: Array<String> = shape.arithmeticKinds ?? [];
-		return kinds.contains(node.kind) && node.children.length == 2 || node.kind == shape.negationKind && node.children.length == 1;
-	}
-
-	/**
-	 * The type the arithmetic `node` yields (`TypingHost.arithmetic`) over its operands typed by the walk: null for anything
-	 * but a binary `RefShape.arithmeticKinds` operator or the negation, for a host typing none, and when an operand is untyped.
-	 */
-	private static function arithmeticType<T, C>(node: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
-		final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>> = host.arithmetic;
-		if (arithmetic == null || !isArithmetic(node, shape)) return null;
-		final operands: Array<T> = [];
-		for (c in node.children) {
-			final t: Null<T> = typeWalk(c, shape, host, ctx);
-			if (t == null) return null;
-			operands.push(t);
-		}
-		return arithmetic(node, operands, ctx);
 	}
 
 }
@@ -1129,71 +1058,6 @@ typedef ChainTypeContext = {
 	final typeSyntax: TypeSyntaxReader;
 }
 
-/**
- * The resolution `NominalTypes.typeWalk` asks for, answering in its own currency `T`. Two hosts answer a type SOURCE and
- * differ in how it is spelled: the call graph spells it as it keys types (`CallGraphKeys.keyedIn`), the index as it was
- * written, resolved in the file that wrote it. The third, `OperandBinder`, answers what that written type BINDS to where it
- * is written (a `TypeNameBinding.Tier`), the currency an operator-overload gate judges a declaration in. `C` is what a walk
- * threads through every question (the call graph's enclosing type). The walk owns the shapes; the host owns what a
- * binding, a member, a call ARE — `docs/decisions.md`, "ONE structural walk, TWO resolution models". An arc a host does
- * not know is a null function (the walk skips the shape) or a null answer, never a guess.
- */
-typedef TypingHost<T, C> = {
-	/** `node` with what a type passes through unchanged (parentheses) peeled off, or `node` itself. */
-	final peel: (node:QueryNode, ctx:C) -> QueryNode;
-
-	/** Whether `kind` is a field access the host types (`a.b`; a member-lookup host adds `a?.b`, `a!.b`). */
-	final isAccess: (kind:String, ctx:C) -> Bool;
-
-	/** The value of a literal whose type `RefShape.literalTypeNames` names `typeName`; null for a host typing none. */
-	final literal: Null<(typeName:String, ctx:C) -> Null<T>>;
-
-	/** What the self reference `node` denotes. */
-	final self: (node:QueryNode, ctx:C) -> Null<T>;
-
-	/** The binding offset of the value the identifier `ident` reads, or null when it binds none. */
-	final binding: (ident:QueryNode, ctx:C) -> Null<Int>;
-
-	/** The type the binding at `from` is written with, or the host otherwise holds for it; null when none. */
-	final bound: (from:Int, ctx:C) -> Null<T>;
-
-	/** The expression initialising the binding at `from`, written with no type, as read at `use`: the binding holds its type. */
-	final initializer: (from:Int, use:QueryNode, ctx:C) -> Null<QueryNode>;
-
-	/** The element the loop binder at `from` binds, read off what the loop iterates. */
-	final loopElement: (from:Int, ctx:C) -> Null<T>;
-
-	/**
-	 * The type the lambda parameter at `from`, written with no type and read at `use`, takes from the function type the
-	 * lambda is expected to be (`ExpectedTypes.lambdaParamTypes`); null for a host typing none.
-	 */
-	final parameter: Null<(from:Int, use:QueryNode, ctx:C) -> Null<T>>;
-
-	/** What the identifier `ident`, which binds no value, names. */
-	final unbound: (ident:QueryNode, ctx:C) -> Null<T>;
-
-	/** What the field access `node` (an `isAccess` kind with a receiver) reads. */
-	final access: (node:QueryNode, ctx:C) -> Null<T>;
-
-	/** The element an index access into a value of type `container` reads; null for a host typing none. */
-	final element: Null<(container:T, ctx:C) -> Null<T>>;
-
-	/** What the call `node` returns. */
-	final call: (node:QueryNode, ctx:C) -> Null<T>;
-
-	/** What the construction `node` makes; null for a host typing none. */
-	final construction: Null<(node:QueryNode, ctx:C) -> Null<T>>;
-
-	/**
-	 * What the arithmetic `node` — an operator of `RefShape.arithmeticKinds`, or the negation — yields over
-	 * operands of the types `operands`, each typed by the walk; null for a host typing none.
-	 */
-	final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>>;
-
-	/** The binding offsets whose unannotated type the walk is reading right now, against a cycle (`for (x in x)`). */
-	final reading: (ctx:C) -> Array<Int>;
-}
-
 /** The type a construction writes (`NominalTypes.writtenConstruction`). */
 typedef WrittenConstruction = {
 	/** The type's path as written (`pkg.Box`). */
@@ -1206,7 +1070,7 @@ typedef WrittenConstruction = {
 	final text: String;
 }
 
-/** What the index host of `NominalTypes.typeWalk` reads with: the deep walk's arguments, `seen` its cycle guard. */
+/** What the index host of `TypingService.typeWalk` reads with: the deep walk's arguments, `seen` its cycle guard. */
 private typedef IndexTyping = {
 	final root: QueryNode;
 	final shape: RefShape;

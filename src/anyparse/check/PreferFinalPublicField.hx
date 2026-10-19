@@ -237,17 +237,17 @@ final class PreferFinalPublicField implements Check implements RiskyFix implemen
 		// non-property checks, so a field qualifying for NO arm bails here; the parse
 		// behind the predicate is memoized by the caching plugin.
 		if (!folded && !initialized && !CtorFieldWrite.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
-		if (index.members.supertypeDeclaresMember(owner, name)) return;
+		if (index.typing.members.supertypeDeclaresMember(owner, name)) return;
 		// Interface-mutability gate — complements supertypeDeclaresMember (which resolves
 		// a supertype member by name but treats an UNRESOLVABLE interface as absent): an
 		// implemented interface that cannot be resolved may still declare a mutable
 		// `name`, so `var → final` is unsafe and skipped conservatively.
-		if (index.members.implementsInterfaceDeclaringMember(owner, name)) return;
+		if (index.typing.members.implementsInterfaceDeclaringMember(owner, name)) return;
 		// Structural-conformance gate: the type may be passed where an anonymous structure
 		// declaring `name` mutably is expected — a READ position, so every write gate below is
 		// blind to it — and a `final` field satisfies neither a structural `var` nor a
 		// structural method.
-		if (index.structural.structuralConformanceForbidsFinal(owner, name)) return;
+		if (index.typing.structural.structuralConformanceForbidsFinal(owner, name)) return;
 		// Core-API gate: a `@:coreApi` type's members are pinned to the property access of a core
 		// type in the compiler's std path that no scope here holds, and `var` -> `final` is
 		// "Field <name> has different property access than core type".

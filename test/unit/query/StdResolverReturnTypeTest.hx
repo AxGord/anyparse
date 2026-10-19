@@ -34,10 +34,11 @@ class StdResolverReturnTypeTest extends Test {
 		];
 		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		Assert.equals(
-			'Date', index.members.returnNominalOf('Date', 'now'), 'the index resolves Date.now -> Date, so the tabled entry is derivable'
+			'Date', index.typing.members.returnNominalOf('Date', 'now'),
+			'the index resolves Date.now -> Date, so the tabled entry is derivable'
 		);
 		Assert.equals(
-			'String', index.members.returnNominalOf('Context', 'resolvePath'), 'the index resolves Context.resolvePath -> String'
+			'String', index.typing.members.returnNominalOf('Context', 'resolvePath'), 'the index resolves Context.resolvePath -> String'
 		);
 		#else
 		Assert.pass('non-sys target');

@@ -1,0 +1,946 @@
+package;
+
+import anyparse.check.CheckScan;
+import anyparse.check.FactsTypeOracle;
+import anyparse.check.LintConfig;
+import anyparse.check.OracleGeneration;
+import anyparse.check.RunScan;
+import anyparse.check.TypedFactsProbe;
+import anyparse.check.UsingScan;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.HaxelibResolver;
+import anyparse.query.IndexScope;
+import anyparse.query.NominalTypes;
+import anyparse.query.ParseGate;
+import anyparse.query.QueryNode;
+import anyparse.query.Refs;
+import anyparse.query.SourceText;
+import anyparse.query.StdResolver;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
+import anyparse.runtime.Span;
+import haxe.Exception;
+import haxe.io.Path;
+import sys.FileSystem;
+import sys.io.File;
+
+using Lambda;
+using StringTools;
+
+/**
+ * The typer's conformance harness, step T1 of the typer by specification (`docs/typing-service.md`): it asks the typing
+ * layers questions the compiler has answered and scores every answer MATCH (the compiler's), UNKNOWN (the typer
+ * declined) or DIFFERENT (anything else, the one outcome a typer that fails closed must never give). The UNKNOWN share
+ * of an area is the typer's coverage there.
+ *
+ * Two sources, neither copied into this repository. `upstream` reads a pinned Haxe 4.3.7 clone: `tests/display` (the
+ * `type`, `position` and `usage` assertions on `{-N-}` markers; every other display assertion is counted, unanswered)
+ * and `tests/misc` (the `$type` warnings and `A should be B` errors of every `compile-fail` stderr). `facts`, run in a
+ * project root, compiles the project's oracles (`apqlint.json`) with the facts hook and asks the type of every range the
+ * compiler typed.
+ *
+ *   haxe tools/typer-conformance.hxml
+ *   node bin/typer-conformance.js upstream <haxe-4.3.7-clone> [--list]
+ *   (cd <project> && node <anyparse>/bin/typer-conformance.js facts [<configuration-substring>] [--list])
+ */
+@:nullSafety(Strict)
+final class TyperConformance {
+
+	/** The group of the test function's name in `displayTests`' header pattern. */
+	private static inline final TEST_NAME_GROUP: Int = 3;
+
+	/** The group of `POSITION_ASSERT` / `FIRST_USAGE_ASSERT` holding the marker the query is made at. */
+	private static inline final QUERY_MARKER_GROUP: Int = 3;
+
+	/** The groups of `MESSAGE`: the line, the first and the end character, the text. */
+	private static inline final MESSAGE_LINE_GROUP: Int = 2;
+
+	private static inline final MESSAGE_FROM_GROUP: Int = 3;
+	private static inline final MESSAGE_TO_GROUP: Int = 4;
+	private static inline final MESSAGE_TEXT_GROUP: Int = 5;
+
+	/** The access of a call fact whose callee the compiler inlined at the call site (`CompilerFacts.CallFact`). */
+	private static inline final INLINED_ACCESS: String = 'inlined';
+
+	/** A display assertion the harness scores: `eq("<type>", type(pos(N)))`. */
+	private static final TYPE_ASSERT: EReg = ~/^eq\("((?:[^"\\]|\\.)*)",\s*type\(pos\((\d+)\)\)\)$/;
+
+	/** `eq(range(A, B), position(pos(N)))`. */
+	private static final POSITION_ASSERT: EReg = ~/^eq\(range\((\d+),\s*(\d+)\),\s*position\(pos\((\d+)\)\)\)$/;
+
+	/** `arrayEq([range(A, B), …], usage(pos(N)))`. */
+	private static final USAGE_ASSERT: EReg = ~/^arrayEq\(\[((?:\s*range\(\d+,\s*\d+\)\s*,?)*)\],\s*usage\(pos\((\d+)\)\)\)$/;
+
+	/** `eq(range(A, B), usage(pos(N))[0])`: the first usage alone. */
+	private static final FIRST_USAGE_ASSERT: EReg = ~/^eq\(range\((\d+),\s*(\d+)\),\s*usage\(pos\((\d+)\)\)\[0\]\)$/;
+
+	/** One `range(A, B)` of a usage list. */
+	private static final RANGE: EReg = ~/range\((\d+),\s*(\d+)\)/;
+
+	/** The display API calls an assertion may make, by area; the first one a statement calls decides its area. */
+	private static final DISPLAY_AREAS: Array<String> = [
+		'type',
+		'position',
+		'usage',
+		'fields',
+		'toplevel',
+		'signature',
+		'doc',
+		'metadataDoc',
+		'diagnostics',
+		'documentSymbols',
+		'noCompletionPoint',
+		'typeNotFound'
+	];
+
+	/** A classic compiler message: `<file>:<line>: characters <a>-<b> : <text>`. */
+	private static final MESSAGE: EReg = ~/^(.+?):(\d+): characters (\d+)-(\d+) : (.*)$/;
+
+	/** A `$type` warning's text. */
+	private static final TYPE_WARNING: EReg = ~/^Warning : (.+)$/;
+
+	/** A unification error's text, at the top of its chain: `<A> should be <B>`. */
+	private static final SHOULD_BE: EReg = ~/^(?:error: )?(.+) should be (.+)$/;
+
+	public static function main(): Void {
+		final args: Array<String> = Sys.args();
+		final list: Bool = args.remove('--list');
+		final report: Report = new Report(list);
+		switch args {
+			case ['upstream', clone]:
+				upstream(clone, report);
+			case ['facts']:
+				facts(null, report);
+			case ['facts', configuration]:
+				facts(configuration, report);
+			case _:
+				Sys.println('usage: typer-conformance upstream <haxe-4.3.7-clone> [--list] | facts [<configuration>] [--list]');
+				Sys.exit(2);
+		}
+		report.print();
+	}
+
+	/** The display and misc suites of the clone at `clone`. */
+	private static function upstream(clone: String, report: Report): Void {
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final std: Array<{ file: String, source: String }> = evalStd();
+		final cases: Array<String> = [];
+		collectPaths(Path.join([clone, 'tests/display/src/cases']), '.hx', cases);
+		cases.sort(Reflect.compare);
+		for (path in cases) for (test in displayTests(path)) displayCase(test, plugin, std, report);
+		final stderrs: Array<String> = [];
+		collectPaths(Path.join([clone, 'tests/misc/projects']), '-fail.hxml.stderr', stderrs);
+		stderrs.sort(Reflect.compare);
+		for (path in stderrs) miscCase(path, plugin, std, report);
+	}
+
+	/** The standard library as the `--interp` target sees it: the top level, `haxe`, `sys` and `eval`. */
+	private static function evalStd(): Array<{ file: String, source: String }> {
+		final dir: Null<String> = StdResolver.stdDir();
+		final out: Array<{ file: String, source: String }> = [];
+		if (dir == null) return out;
+		for (entry in FileSystem.readDirectory(dir)) {
+			final path: String = Path.join([dir, entry]);
+			if (FileSystem.isDirectory(path)) {
+				if (['haxe', 'sys', 'eval'].contains(entry)) collect(path, out);
+			} else if (entry.endsWith('.hx')) {
+				out.push({ file: path, source: File.getContent(path) });
+			}
+		}
+		return out;
+	}
+
+	/** Every test of the display case file `path` that carries its code in its doc comment. */
+	private static function displayTests(path: String): Array<DisplayTest> {
+		final text: String = File.getContent(path);
+		final packageLine: EReg = ~/^package\s+([\w.]+)\s*;/m;
+		final pack: Null<String> = packageLine.match(text) ? packageLine.matched(1) : null;
+		final head: EReg = ~/\/\*\*([\s\S]*?)\*\*\/\s*((?:@:[A-Za-z]+(?:\([^)]*\))?\s*)*)function\s+(\w+)\s*\(\)[^{]*\{/;
+		final out: Array<DisplayTest> = [];
+		var at: Int = 0;
+		while (head.matchSub(text, at)) {
+			final pos: { pos: Int, len: Int } = head.matchedPos();
+			final bodyFrom: Int = pos.pos + pos.len;
+			final bodyTo: Int = closingBrace(text, bodyFrom);
+			final metas: String = head.matched(2);
+			final doc: String = head.matched(1).replace('**\\/', '**/');
+			final wrapped: String = metas.contains('@:funcCode') ? 'class Main { static function main() { $doc}}' : doc;
+			final code: String = (pack == null ? '' : 'package $pack;\n') + wrapped;
+			final file: EReg = ~/@:filename\("([^"]+)"\)/;
+			out.push({
+				label: '${Path.withoutDirectory(path)}#${head.matched(TEST_NAME_GROUP)}',
+				file: file.match(metas) ? file.matched(1) : Path.withoutDirectory(path),
+				code: code,
+				statements: statementsOf(text.substring(bodyFrom, bodyTo))
+			});
+			at = bodyTo;
+		}
+		return out;
+	}
+
+	/** One display test: its code with the markers taken out, scored assertion by assertion. */
+	private static function displayCase(
+		test: DisplayTest, plugin: CachingGrammarPlugin, std: Array<{ file: String, source: String }>, report: Report
+	): Void {
+		final markers: Map<Int, Int> = [];
+		final marker: EReg = ~/\{-(\d+)-\}/;
+		var source: String = '';
+		var rest: String = test.code;
+		while (marker.match(rest)) {
+			source += marker.matchedLeft();
+			final n: Null<Int> = Std.parseInt(marker.matched(1));
+			if (n != null) markers[n] = source.length;
+			rest = marker.matchedRight();
+		}
+		source += rest;
+		final typer: Null<FileTyper> = FileTyper.over(plugin, [{ file: test.file, source: source }], std, test.file);
+		for (statement in test.statements) {
+			final area: Null<String> = DISPLAY_AREAS.find(a -> statement.contains('$a('));
+			if (area == null) continue;
+			final label: String = '${test.label}: $statement';
+			if (typer == null)
+				report.unscored('display/$area', '$label (the code does not parse)')
+			else
+				displayAssertion(statement, 'display/$area', label, markers, typer, report);
+		}
+	}
+
+	/** One display assertion of `area`: a `type`, `position` or `usage` one is asked of `typer`, any other is unanswered. */
+	private static function displayAssertion(
+		statement: String, area: String, label: String, markers: Map<Int, Int>, typer: FileTyper, report: Report
+	): Void {
+		if (TYPE_ASSERT.match(statement)) {
+			final at: Null<Int> = markers[group(TYPE_ASSERT, 2)];
+			final node: Null<QueryNode> = at == null ? null : typer.displayed(at);
+			if (node == null)
+				report.unscored(area, '$label (the position sits on a seam between two expressions)')
+			else
+				typeAt(report, area, label, unescape(TYPE_ASSERT.matched(1)), typer, node);
+		} else if (POSITION_ASSERT.match(statement)) {
+			final expected: Null<Span> = rangeOf(markers, POSITION_ASSERT.matched(1), POSITION_ASSERT.matched(2));
+			final at: Null<Int> = markers[group(POSITION_ASSERT, QUERY_MARKER_GROUP)];
+			if (expected != null && at != null) report.score(area, label, positionVerdict(expected, typer.definitionAt(at)));
+		} else if (USAGE_ASSERT.match(statement)) {
+			final at: Null<Int> = markers[group(USAGE_ASSERT, 2)];
+			final expected: Array<Span> = rangesOf(markers, USAGE_ASSERT.matched(1));
+			if (at != null) report.score(area, label, usageVerdict(expected, typer.usagesAt(at), false));
+		} else if (FIRST_USAGE_ASSERT.match(statement)) {
+			final expected: Null<Span> = rangeOf(markers, FIRST_USAGE_ASSERT.matched(1), FIRST_USAGE_ASSERT.matched(2));
+			final at: Null<Int> = markers[group(FIRST_USAGE_ASSERT, QUERY_MARKER_GROUP)];
+			if (expected != null && at != null) report.score(area, label, usageVerdict([expected], typer.usagesAt(at), true));
+		} else {
+			report.score(area, label, Unknown);
+		}
+	}
+
+	/** The `$type` warnings and the top `should be` error of one `compile-fail` stderr, typed in its project's files. */
+	private static function miscCase(
+		stderr: String, plugin: CachingGrammarPlugin, std: Array<{ file: String, source: String }>, report: Report
+	): Void {
+		final dir: String = Path.directory(stderr);
+		final files: Array<{ file: String, source: String }> = [];
+		collect(dir, files);
+		final project: Array<{ file: String, source: String }> = [
+			for (f in files)
+				{
+					file: f.file.substr(dir.length + 1),
+					source: f.source
+				}
+		];
+		final typers: Map<String, Null<FileTyper>> = [];
+		final projectName: String = Path.withoutDirectory(dir);
+		for (line in File.getContent(stderr).split('\n')) {
+			if (!MESSAGE.match(line.trim())) continue;
+			final file: String = Path.normalize(MESSAGE.matched(1));
+			final text: String = MESSAGE.matched(MESSAGE_TEXT_GROUP);
+			// a `... ` line continues the chain of the error above it, about a part of that type, not the expression's
+			if (text.startsWith('... ')) continue;
+			final warning: Bool = TYPE_WARNING.match(text);
+			final expected: Null<String> = warning ? TYPE_WARNING.matched(1) : SHOULD_BE.match(text) ? SHOULD_BE.matched(1) : null;
+			final area: String = warning ? 'misc/$$type' : 'misc/should-be';
+			final label: String = '$projectName/${Path.withoutDirectory(stderr)}: ${line.trim()}';
+			if (expected == null) {
+				report.unscored('misc/other', label);
+				continue;
+			}
+			if (!typers.exists(file)) typers[file] = FileTyper.over(plugin, project, std, file);
+			final typer: Null<FileTyper> = typers[file];
+			final span: Null<Span> = typer?.spanOfColumns(
+				group(MESSAGE, MESSAGE_LINE_GROUP), group(MESSAGE, MESSAGE_FROM_GROUP), group(MESSAGE, MESSAGE_TO_GROUP)
+			);
+			final node: Null<QueryNode> = span == null ? null : typer?.exactly(span);
+			if (typer == null || node == null || span == null) {
+				report.unscored(area, '$label (no node at that range)');
+				continue;
+			}
+			// a warning is a `$$type` answer only when `$$type(` encloses that range; any other is a macro's own message
+			if (warning && !typer.typeProbed(span)) {
+				report.unscored('misc/other', label);
+				continue;
+			}
+			typeAt(report, area, label, expected, typer, node);
+		}
+	}
+
+	/** Every range the compiler typed in the project in the working directory, asked of the typer. */
+	private static function facts(configuration: Null<String>, report: Report): Void {
+		final config: LintConfig = LintConfig.discover(Path.join([Sys.getCwd(), 'TyperConformance.hx']));
+		final project: Array<{ file: String, source: String }> = [];
+		for (root in config.resolutionRoots()) collect(root, project);
+		final library: Array<{ file: String, source: String }> = libraryOf(config, project);
+		final asked: Array<OracleConfig> = [
+			for (o in config.compilerOracles()) if (configuration == null || o.hxml.contains(configuration)) o
+		];
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final sources: Map<String, String> = [for (f in project) FileSystem.fullPath(f.file) => f.source];
+		final oracle: Null<FactsTypeOracle> = switch TypedFactsProbe.probeAll(OracleGeneration.prepare(asked).oracles) {
+			case null: null;
+			case table: new FactsTypeOracle(table, key -> sources[key], null, plugin);
+		};
+		if (oracle == null) {
+			Sys.println('facts: no configuration compiled');
+			return;
+		}
+		Sys.println('facts: configurations ${oracle.facts.configurations}, dropped ${oracle.facts.dropped}');
+		final index: SymbolIndex = IndexScope.over(project.concat(library), plugin, [for (f in library) f.file]);
+		var compiledFiles: Int = 0;
+		for (f in project) {
+			final key: String = FileSystem.fullPath(f.file);
+			final typer: Null<FileTyper> = FileTyper.within(plugin, index, f.file, f.source);
+			if (typer == null || !oracle.facts.compiled(key)) continue;
+			compiledFiles++;
+			typer.visit(factsCase.bind(report, oracle, key, f.file, typer));
+		}
+		Sys.println('facts: ${project.length} project files under ${config.resolutionRoots()}, $compiledFiles of them compiled');
+	}
+
+	/** The libraries and the standard library the project in `config` resolves against, its own files left out. */
+	private static function libraryOf(
+		config: LintConfig, project: Array<{ file: String, source: String }>
+	): Array<{ file: String, source: String }> {
+		final libs: Array<{ file: String, source: String }> = [];
+		for (name in config.resolutionLibs()) {
+			final dir: Null<String> = HaxelibResolver.libSourceDir(name);
+			if (dir != null) collect(dir, libs);
+		}
+		final std: Null<String> = StdResolver.stdDir();
+		if (std != null) collect(std, libs);
+		final held: Map<String, Bool> = [for (f in project) FileSystem.fullPath(f.file) => true];
+		return [for (f in libs) if (!held.exists(FileSystem.fullPath(f.file))) f];
+	}
+
+	/**
+	 * The facts case of `node` of `file` (table key `key`): the compiler's value type there asked of `typer`, unless the
+	 * facts at that range are not the text's own — the body an inlined call spliced there, a copy of an inline body typed in
+	 * a caller's terms, the compiler's own code lowered into the range, the implicit `this` a bare member read shares it with,
+	 * the `haxe.PosInfos` object the compiler hands a `?pos` parameter at the call's own range.
+	 */
+	private static function factsCase(
+		report: Report, oracle: FactsTypeOracle, key: String, file: String, typer: FileTyper, node: QueryNode
+	): Void {
+		final at: Null<Span> = node.span;
+		final compiled: Null<String> = at == null
+			? null
+			: switch oracle.valueType(key, at) {
+				case Typed(type): type;
+				case Declined(_): null;
+			};
+		if (at == null || compiled == null) return;
+		final label: String = '$file:${at.from}: $compiled';
+		final spliced: Bool = oracle.facts.nodesAround(key, at).exists(
+			n ->
+				n.inlinedFrom != null
+				|| n.calls.exists(c -> c.access == INLINED_ACCESS && c.site?.span.from == at.from && c.site?.span.to == at.to)
+		);
+		if (spliced)
+			report.unscored('facts/${node.kind}', '$label (inlined code)')
+		else if (typer.namesNoClassOf(node, compiled))
+			report.unscored('facts/${node.kind}', '$label (the compiler\'s own code at that range)')
+		else if (typer.implicitReceiver(node, outerOf(normalized(compiled))))
+			report.unscored('facts/${node.kind}', '$label (the implicit receiver of a member read)')
+		else if (typer.isCall(node) && isPosInfos(normalized(compiled)))
+			report.unscored('facts/${node.kind}', '$label (the haxe.PosInfos argument the compiler adds at a call)')
+		else
+			typeAt(report, 'facts/${node.kind}', label, compiled, typer, node);
+	}
+
+	/**
+	 * The typer's two answers for `node` — written source and nominal — scored against the compiler's `expected` type. A
+	 * typer name that is a typedef the compiler printed through (`Signal0` for `Priority<Listener0>`), or the class a
+	 * `@:generic` one expands to (`TypedPool_pony_ui_touch_Touch`), is the same type spelled another way: the nominal
+	 * follows the alias, and a source the harness cannot expand to the same text is unscored, not a match.
+	 */
+	private static function typeAt(
+		report: Report, area: String, label: String, expected: String, typer: FileTyper, node: Null<QueryNode>
+	): Void {
+		final want: String = normalized(expected);
+		final outer: String = outerOf(want);
+		final source: Null<String> = node == null ? null : typer.source(node);
+		final nominal: Null<String> = node == null ? null : typer.nominal(node);
+		final named: Null<String> = nominal == null ? null : SourceText.lastSegment(nominal);
+		final sourceOuter: Null<String> = source == null ? null : outerOf(normalized(source));
+		if (source == null)
+			report.score('$area (source)', label, Unknown)
+		else if (normalized(source) == want)
+			report.score('$area (source)', label, Match)
+		else if (sourceOuter != null && typer.spellsAlike(sourceOuter, outer))
+			report.unscored('$area (source)', '$label (an alias or a generic expansion of $source)')
+		else
+			report.score('$area (source)', label, Different(source));
+		if (named == null)
+			report.score('$area (nominal)', label, Unknown)
+		else if (named == outer || typer.aliased(named) == outer)
+			report.score('$area (nominal)', label, Match)
+		else if (typer.spellsAlike(named, outer))
+			report.unscored('$area (nominal)', '$label (a generic expansion of $named)')
+		else
+			report.score('$area (nominal)', label, Different(named));
+	}
+
+	private static function positionVerdict(expected: Span, found: Null<Span>): Verdict {
+		return found == null
+			? Unknown
+			: found.from == expected.from && found.to == expected.to ? Match : Different('${found.from}-${found.to}');
+	}
+
+	/** `found` against `expected`, the whole list or (`firstOnly`) its first range. */
+	private static function usageVerdict(expected: Array<Span>, found: Null<Array<Span>>, firstOnly: Bool): Verdict {
+		if (found == null) return Unknown;
+		final got: Array<String> = [for (s in found) '${s.from}-${s.to}'];
+		got.sort(Reflect.compare);
+		final want: Array<String> = [for (s in expected) '${s.from}-${s.to}'];
+		want.sort(Reflect.compare);
+		final same: Bool = firstOnly ? got.length > 0 && got[0] == want[0] : got.join(',') == want.join(',');
+		return same ? Match : Different(got.join(','));
+	}
+
+	/** `type` in the one spelling both sides are compared in (`TypeText`), or the text itself when it does not read as one. */
+	private static function normalized(type: String): String {
+		return TypeText.canonical(type) ?? type;
+	}
+
+	/** The outermost type name of a normalized type text. */
+	private static function outerOf(type: String): String {
+		final open: Int = type.indexOf('<');
+		return open < 0 ? type : type.substring(0, open);
+	}
+
+	/** Whether the normalized `type` is `haxe.PosInfos` as the compiler prints it: the structure of its four fields and more. */
+	private static function isPosInfos(type: String): Bool {
+		return ['className:String', 'fileName:String', 'lineNumber:Int', 'methodName:String'].foreach(f -> type.contains(f))
+			&& type.startsWith('{');
+	}
+
+	/** `r`'s group `n` read as a number, -1 when it is none. */
+	private static function group(r: EReg, n: Int): Int {
+		return Std.parseInt(r.matched(n)) ?? -1;
+	}
+
+	private static function unescape(text: String): String {
+		return text.replace('\\"', '"').replace('\\\\', '\\');
+	}
+
+	private static function rangeOf(markers: Map<Int, Int>, from: String, to: String): Null<Span> {
+		final a: Null<Int> = markers[Std.parseInt(from) ?? -1];
+		final b: Null<Int> = markers[Std.parseInt(to) ?? -1];
+		return a == null || b == null ? null : new Span(a, b);
+	}
+
+	private static function rangesOf(markers: Map<Int, Int>, list: String): Array<Span> {
+		final out: Array<Span> = [];
+		var rest: String = list;
+		while (RANGE.match(rest)) {
+			final r: Null<Span> = rangeOf(markers, RANGE.matched(1), RANGE.matched(2));
+			if (r != null) out.push(r);
+			rest = RANGE.matchedRight();
+		}
+		return out;
+	}
+
+	/** The offset of the `}` closing the block whose body starts at `from`. */
+	private static function closingBrace(text: String, from: Int): Int {
+		var depth: Int = 1;
+		var i: Int = from;
+		while (i < text.length && depth > 0) {
+			final c: String = text.charAt(i);
+			if (c == '"' || c == "'") {
+				i = text.indexOf(c, i + 1) + 1;
+				if (i == 0) return text.length;
+				continue;
+			}
+			if (c == '{') depth++;
+			if (c == '}') depth--;
+			i++;
+		}
+		return i - 1;
+	}
+
+	/** The top-level statements of a function body, each trimmed and without its `;`. */
+	private static function statementsOf(body: String): Array<String> {
+		final out: Array<String> = [];
+		var depth: Int = 0;
+		var start: Int = 0;
+		var i: Int = 0;
+		while (i < body.length) {
+			final c: String = body.charAt(i);
+			if (c == '"' || c == "'") {
+				final end: Int = body.indexOf(c, i + 1);
+				i = end < 0 ? body.length : end + 1;
+				continue;
+			}
+			if (c == '(' || c == '[' || c == '{') depth++;
+			if (c == ')' || c == ']' || c == '}') depth--;
+			if (c == ';' && depth == 0) {
+				out.push(~/\s+/g.replace(body.substring(start, i), ' ').trim());
+				start = i + 1;
+			}
+			i++;
+		}
+		return out;
+	}
+
+	/** The paths under `dir` ending in `suffix`. */
+	private static function collectPaths(dir: String, suffix: String, into: Array<String>): Void {
+		if (!FileSystem.exists(dir)) return;
+		for (entry in FileSystem.readDirectory(dir)) {
+			final path: String = Path.join([dir, entry]);
+			if (FileSystem.isDirectory(path))
+				collectPaths(path, suffix, into)
+			else if (entry.endsWith(suffix))
+				into.push(path);
+		}
+	}
+
+	/** Every `.hx` file under `dir`, read. */
+	private static function collect(dir: String, into: Array<{ file: String, source: String }>): Void {
+		final paths: Array<String> = [];
+		collectPaths(dir, '.hx', paths);
+		for (path in paths) into.push({ file: path, source: File.getContent(path) });
+	}
+
+}
+
+/** One display test: where it is, the module its doc comment compiles to, and its body's statements. */
+private typedef DisplayTest = {
+	final label: String;
+	final file: String;
+	final code: String;
+	final statements: Array<String>;
+}
+
+/** How one answer of the typer compares to the compiler's. */
+private enum Verdict {
+	Match;
+	Unknown;
+	Different(got: String);
+}
+
+/** The typer's answers over ONE file of an index: the written-source and nominal currencies, a definition, its uses. */
+@:nullSafety(Strict)
+private final class FileTyper {
+
+	private final _file: String;
+	private final _source: String;
+	private final _tree: QueryNode;
+	private final _shape: RefShape;
+	private final _index: SymbolIndex;
+	private final _declared: Map<Int, String>;
+	private final _chain: ChainTypeContext;
+	private final _nominal: Null<(QueryNode) -> Null<String>>;
+
+	private function new(
+		plugin: CachingGrammarPlugin, index: SymbolIndex, file: String, source: String, tree: QueryNode, provider: TypeInfoProvider
+	) {
+		_file = file;
+		_source = source;
+		_tree = tree;
+		_shape = plugin.refShape();
+		_index = index;
+		_declared = provider.declaredTypes(source);
+		_chain = {
+			declaredTypeSources: provider.declaredTypeSources(source),
+			source: source,
+			usings: UsingScan.extensionUsings(UsingScan.headerOf(tree, source, plugin)) ?? [],
+			typeSyntax: plugin.typeSyntax
+		};
+		_nominal = CheckScan.typeNominalResolver(source, plugin, tree, file, index, false, false);
+	}
+
+	/** The simple name `name` stands for through its typedef alias hops (`TypeRefIndex.aliasedName`). */
+	public inline function aliased(name: String): String {
+		return _index.refs.aliasedName(name);
+	}
+
+	/** Every node of the file, outer before inner. */
+	public inline function visit(f: (QueryNode) -> Void): Void {
+		visitUnder(_tree, f);
+	}
+
+	/** The written type source the deep walk gives `node` (`NominalTypes.expressionTypeSource`), or null. */
+	public function source(node: QueryNode): Null<String> {
+		return try NominalTypes.expressionTypeSource(
+			node, _tree, _shape, _declared, _index, _file, _chain
+		) catch (exception: Exception) null;
+	}
+
+	/** The nominal the checks' door gives `node` (`CheckScan.typeNominalResolver`), or null. */
+	public function nominal(node: QueryNode): Null<String> {
+		final resolve: Null<(QueryNode) -> Null<String>> = _nominal;
+		return resolve == null ? null : try resolve(node) catch (exception: Exception) null;
+	}
+
+	/** The innermost node whose range holds `at`, its end included: the expression a display query at `at` types. */
+	public function innermost(at: Int): Null<QueryNode> {
+		var found: Null<QueryNode> = null;
+		var cur: Null<QueryNode> = _tree;
+		while (cur != null) {
+			found = cur;
+			cur = cur.children.find(c -> c.span != null && c.span.from <= at && at <= c.span.to);
+		}
+		return found == _tree ? null : found;
+	}
+
+	/**
+	 * The expression a display query at `at` types, or null where the harness cannot tell which one the compiler means:
+	 * the innermost node holding `at` before its end, or — when that is a statement or a block — the innermost node
+	 * ending at `at` (the cursor after `a` of `a;`). A node ending at `at` inside an expression that goes on (`f(1|)`,
+	 * `a|+0.1`) is a seam whose display answer is the outer one's, and a cursor on the type name of a construction is
+	 * answered with the constructor's signature: both null.
+	 */
+	public function displayed(at: Int): Null<QueryNode> {
+		var inside: Null<QueryNode> = null;
+		var cur: Null<QueryNode> = _tree;
+		while (cur != null) {
+			inside = cur;
+			cur = cur.children.find(c -> c.span != null && c.span.from <= at && at < c.span.to);
+		}
+		if (inside == null || inside == _tree) return null;
+		final container: QueryNode = inside;
+		var ending: Null<QueryNode> = null;
+		visitUnder(container, n -> if (n != container && n.span != null && n.span.to == at) ending = n);
+		final statements: Array<String> = [for (k in [_shape.blockStmtKind, _shape.exprStatementKind]) if (k != null) k];
+		if (ending != null) return statements.contains(container.kind) ? ending : null;
+		return container.kind == _shape.newExprKind ? null : container;
+	}
+
+	/** Whether `$type(` encloses `span`: the compiler's warning there is the type it gave that expression. */
+	public function typeProbed(span: Span): Bool {
+		final open: String = '$$type(';
+		return span.from >= open.length && _source.substring(span.from - open.length, span.from) == open && _source.charAt(span.to) == ')';
+	}
+
+	/**
+	 * Whether the typer's simple name `typer` and the compiler's `compiled` name one type two ways: `typer` a typedef whose
+	 * alias hops land on `compiled`, or `compiled` the class a `@:generic` `typer` expands to (`TypedPool_pony_ui_Touch`).
+	 */
+	public function spellsAlike(typer: String, compiled: String): Bool {
+		return typer != compiled && (aliased(typer) == compiled || compiled.startsWith('${typer}_'));
+	}
+
+	/**
+	 * Whether `compiled` is the value of a class (`Class<HxOverrides>`) that the text of `node` does not name: the compiler
+	 * lowered the expression into code of its own there (a std call into a call of its target's runtime class).
+	 */
+	public function namesNoClassOf(node: QueryNode, compiled: String): Bool {
+		final at: Null<Span> = node.span;
+		final named: EReg = ~/^Class<([\w.]+)>$/;
+		return at != null && named.match(compiled) && !_source.substring(at.from, at.to).contains(SourceText.lastSegment(named.matched(1)));
+	}
+
+	/**
+	 * Whether `node` is a bare identifier and `compiled` the simple name of the type declaration holding it: a bare read of
+	 * a member shares its range with the implicit `this` the compiler records as that read's receiver.
+	 */
+	public function implicitReceiver(node: QueryNode, compiled: String): Bool {
+		final at: Null<Span> = node.span;
+		return at != null && node.kind == _shape.identKind && node.name != _shape.selfReferenceText
+			&& TypeResolver.enclosingTypeName(_tree, at) == compiled;
+	}
+
+	/** Whether `node` is a call of the grammar. */
+	public inline function isCall(node: QueryNode): Bool {
+		return node.kind == _shape.callKind;
+	}
+
+	/** The innermost node spanning exactly `span`, or null. */
+	public function exactly(span: Span): Null<QueryNode> {
+		var found: Null<QueryNode> = null;
+		visit(n -> if (n.span != null && n.span.from == span.from && n.span.to == span.to) found = n);
+		return found;
+	}
+
+	/** The range of 1-based `line`, characters `from`-`to` (the compiler's end exclusive), or null past the file. */
+	public function spanOfColumns(line: Int, from: Int, to: Int): Null<Span> {
+		var start: Int = 0;
+		for (_ in 1...line) {
+			final nl: Int = _source.indexOf('\n', start);
+			if (nl < 0) return null;
+			start = nl + 1;
+		}
+		return new Span(start + from - 1, start + to - 1);
+	}
+
+	/** The name range of the declaration the identifier at `at` binds to, or null when the binder resolves none. */
+	public function definitionAt(at: Int): Null<Span> {
+		final hit: Null<RefHit> = hitAt(at);
+		final bound: Null<Span> = hit?.bindingSpan;
+		return hit == null || bound == null ? null : nameIn(bound, hit.name);
+	}
+
+	/** The name ranges of every read and write of the value the identifier or declaration at `at` binds, or null. */
+	public function usagesAt(at: Int): Null<Array<Span>> {
+		final hit: Null<RefHit> = hitAt(at);
+		final bound: Null<Span> = hit?.bindingSpan;
+		if (hit == null || bound == null) return null;
+		final out: Array<Span> = [];
+		for (h in Refs.find(hit.name, _tree, _shape)) {
+			final b: Null<Span> = h.bindingSpan;
+			if (h.kind != Decl && b != null && b.from == bound.from && b.to == bound.to) {
+				final name: Null<Span> = nameIn(h.span, h.name);
+				if (name == null) return null;
+				out.push(name);
+			}
+		}
+		return out;
+	}
+
+	/** `root` and every node under it, outer before inner. */
+	private function visitUnder(root: QueryNode, f: (QueryNode) -> Void): Void {
+		final stack: Array<QueryNode> = [root];
+		while (stack.length > 0) {
+			final n: QueryNode = stack.pop() ?? root;
+			f(n);
+			for (i in 0...n.children.length) stack.push(n.children[n.children.length - 1 - i]);
+		}
+	}
+
+	/**
+	 * The reference hit whose name token holds `at` — a read, a write or a declaration — when it binds a LOCAL: a local
+	 * declaration or a parameter, the bindings the reference walk resolves by scope. Any other binding (a member reached
+	 * bare, a type, a capture) is not asked of it, so null.
+	 */
+	private function hitAt(at: Int): Null<RefHit> {
+		final node: Null<QueryNode> = innermost(at);
+		final name: Null<String> = node?.name;
+		if (node == null || name == null) return null;
+		for (h in Refs.find(name, _tree, _shape)) {
+			final token: Null<Span> = nameIn(h.span, name);
+			final kind: Null<String> = h.bindingNode?.kind;
+			final locals: Array<String> = (_shape.localDeclKinds ?? []).concat(_shape.paramKinds ?? []);
+			if (token != null && token.from <= at && at <= token.to) return kind != null && locals.contains(kind) ? h : null;
+		}
+		return null;
+	}
+
+	/** The range of the first whole-word `name` inside `span`. */
+	private function nameIn(span: Span, name: String): Null<Span> {
+		final at: Int = SourceText.identTokenOffset(_source, span, name);
+		return at < 0 ? null : new Span(at, at + name.length);
+	}
+
+	/** The typer of `file` over an index of `files` and the library `std`; null when it does not parse. */
+	public static function over(
+		plugin: CachingGrammarPlugin, files: Array<{ file: String, source: String }>, std: Array<{ file: String, source: String }>,
+		file: String
+	): Null<FileTyper> {
+		final own: Null<{ file: String, source: String }> = files.find(f -> f.file == file);
+		if (own == null) return null;
+		return within(plugin, IndexScope.over(files.concat(std), plugin, [for (f in std) f.file]), file, own.source);
+	}
+
+	/** The typer of `file` over `index`; null when it does not parse. */
+	public static function within(plugin: CachingGrammarPlugin, index: SymbolIndex, file: String, source: String): Null<FileTyper> {
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return tree == null || provider == null ? null : new FileTyper(plugin, index, file, source, tree, provider);
+	}
+
+}
+
+/**
+ * A type text read and spelled ONE way, so that two spellings of one type compare equal: every qualifier dropped (a
+ * package, a module, the type a type parameter belongs to — the compiler prints `AbGeneric.T`; the typer answers names as
+ * written), a function type as `(A,B)->R` whichever syntax wrote it (`A -> B -> R`, `(a : A, b : B) -> R`, `Void -> R`
+ * for no argument), a structure's fields in name order without `var` / `final`. Null for a text it does not read.
+ */
+@:nullSafety(Strict)
+private final class TypeText {
+
+	private final _tokens: Array<String>;
+
+	private var _at: Int = 0;
+
+	private function new(tokens: Array<String>) {
+		_tokens = tokens;
+	}
+
+	private inline function peek(): String {
+		return _tokens[_at] ?? '';
+	}
+
+	/** A type, an old-style function `A -> B` included. */
+	private function type(): String {
+		final first: Array<String> = primary();
+		if (peek() != '->') return first.length == 1 ? first[0] : '(${first.join(',')})';
+		final args: Array<String> = [first.length == 1 ? first[0] : '(${first.join(',')})'];
+		var result: String = '';
+		while (peek() == '->') {
+			_at++;
+			final next: Array<String> = primary();
+			if (peek() == '->')
+				args.push(next.join(','))
+			else
+				result = next.length == 1 ? next[0] : '(${next.join(',')})';
+		}
+		final parameters: Array<String> = args.length == 1 && args[0] == 'Void' ? [] : args;
+		return '(${parameters.join(',')})->$result';
+	}
+
+	/** A primary type, or — for a parenthesised list — its elements (a new-style function's arguments). */
+	private function primary(): Array<String> {
+		final t: String = next();
+		if (t == '(') {
+			final items: Array<String> = [];
+			while (peek() != ')') {
+				items.push(argument());
+				if (peek() == ',') _at++;
+			}
+			_at++;
+			if (peek() == '->') {
+				_at++;
+				return ['(${items.join(',')})->${type()}'];
+			}
+			return items;
+		}
+		if (t == '{') return [structure()];
+		if (t == '?') return ['?' + primary().join(',')];
+		var named: String = SourceText.lastSegment(t);
+		if (peek() == '<') {
+			_at++;
+			final params: Array<String> = [type()];
+			while (peek() == ',') {
+				_at++;
+				params.push(type());
+			}
+			expect('>');
+			named += '<${params.join(',')}>';
+		}
+		return [named];
+	}
+
+	/** A function argument: `name : T`, `?name : T` or `T`, spelled by its type. */
+	private function argument(): String {
+		final optional: Bool = peek() == '?';
+		if (optional) _at++;
+		if (_at + 1 < _tokens.length && _tokens[_at + 1] == ':') _at += 2;
+		return (optional ? '?' : '') + type();
+	}
+
+	/** A structure's fields, the opening brace read. */
+	private function structure(): String {
+		final fields: Array<String> = [];
+		while (peek() != '}') {
+			if (peek() == 'var' || peek() == 'final') _at++;
+			final optional: Bool = peek() == '?';
+			if (optional) _at++;
+			final name: String = next();
+			expect(':');
+			fields.push((optional ? '?' : '') + '$name:${type()}');
+			if (peek() == ',' || peek() == ';') _at++;
+		}
+		_at++;
+		fields.sort(Reflect.compare);
+		return '{${fields.join(',')}}';
+	}
+
+	private function next(): String {
+		if (_at >= _tokens.length) throw new Exception('the type ends early');
+		return _tokens[_at++];
+	}
+
+	private function expect(token: String): Void {
+		if (next() != token) throw new Exception('$token expected');
+	}
+
+	public static function canonical(text: String): Null<String> {
+		final tokens: Array<String> = [];
+		final token: EReg = ~/^\s*(->|[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*|[<>(){},:;?])/;
+		var rest: String = text;
+		while (token.match(rest)) {
+			tokens.push(token.matched(1));
+			rest = token.matchedRight();
+		}
+		if (rest.trim() != '') return null;
+		final reader: TypeText = new TypeText(tokens);
+		final read: Null<String> = try reader.type() catch (exception: Exception) null;
+		return reader._at == tokens.length ? read : null;
+	}
+
+}
+
+/** The tallies of one run, by area. */
+@:nullSafety(Strict)
+private final class Report {
+
+	/** Tenths of a percent: the precision of an UNKNOWN share. */
+	private static inline final PER_MILLE: Int = 1000;
+
+	/** A share as a percentage. */
+	private static inline final PERCENT: Int = 100;
+
+	private final _areas: Array<String> = [];
+	private final _counts: Map<String, Array<Int>> = [];
+	private final _different: Array<String> = [];
+	private final _unscored: Map<String, Int> = [];
+	private final _list: Bool;
+
+	public function new(list: Bool) {
+		_list = list;
+	}
+
+	/** One answer of `area` for the assertion `label`. */
+	public function score(area: String, label: String, verdict: Verdict): Void {
+		final c: Array<Int> = counts(area);
+		c[0]++;
+		switch verdict {
+			case Match:
+				c[1]++;
+			case Unknown:
+				c[2]++;
+			case Different(got):
+				c[3]++;
+				_different.push('$area  $label  got: $got');
+		}
+		if (_list) Sys.println('$area\t${verdict.getName()}\t$label');
+	}
+
+	/** An assertion of `area` the harness cannot pose to the typer: a parse failure, a range no node spans. */
+	public function unscored(area: String, label: String): Void {
+		counts(area);
+		_unscored[area] = (_unscored[area] ?? 0) + 1;
+		if (_list) Sys.println('$area\tUNSCORED\t$label');
+	}
+
+	public function print(): Void {
+		Sys.println('area\tcases\tmatch\tunknown\tdifferent\tunknown%\tunscored');
+		for (area in _areas) {
+			final c: Array<Int> = counts(area);
+			final share: String = c[0] == 0 ? '-' : '${Math.round(PER_MILLE * c[2] / c[0]) * PERCENT / PER_MILLE}';
+			Sys.println('$area\t${c[0]}\t${c[1]}\t${c[2]}\t${c[3]}\t$share\t${_unscored[area] ?? 0}');
+		}
+		for (d in _different) Sys.println('DIFFERENT  $d');
+	}
+
+	private function counts(area: String): Array<Int> {
+		final found: Null<Array<Int>> = _counts[area];
+		if (found != null) return found;
+		final fresh: Array<Int> = [0, 0, 0, 0];
+		_counts[area] = fresh;
+		_areas.push(area);
+		return fresh;
+	}
+
+}

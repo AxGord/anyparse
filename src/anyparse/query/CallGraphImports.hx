@@ -61,7 +61,7 @@ final class CallGraphImports {
 	 * import, since the language resolves a constructor against the expected type (`MemberLookup.declaresMemberAs`).
 	 */
 	public function isEnumConstructor(name: String): Bool {
-		return _indexes.exists(index -> index.members.declaresMemberAs(name, _enumConstructorKinds));
+		return _indexes.exists(index -> index.typing.members.declaresMemberAs(name, _enumConstructorKinds));
 	}
 
 	/**
@@ -71,7 +71,7 @@ final class CallGraphImports {
 	 */
 	public function memberFilesOf(typeName: String, member: String): Array<String> {
 		final out: Array<String> = [];
-		for (index in _indexes) for (d in index.members.memberDeclarationsOf(typeName, member)) {
+		for (index in _indexes) for (d in index.typing.members.memberDeclarationsOf(typeName, member)) {
 			final key: String = CallGraphNames.normalizePath(d.file.file);
 			if (!out.contains(key)) out.push(key);
 		}
@@ -85,7 +85,7 @@ final class CallGraphImports {
 	 */
 	public function memberTypesOf(typeName: String, member: String): Array<WrittenIn> {
 		final out: Array<WrittenIn> = [];
-		for (index in _indexes) for (d in index.members.memberDeclarationsOf(typeName, member)) {
+		for (index in _indexes) for (d in index.typing.members.memberDeclarationsOf(typeName, member)) {
 			final key: String = CallGraphNames.normalizePath(d.file.file);
 			if (!out.exists(w -> w.file == key && w.written == d.member.typeSource)) out.push({ file: key, written: d.member.typeSource });
 		}

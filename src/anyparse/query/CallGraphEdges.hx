@@ -8,9 +8,9 @@ import anyparse.query.CallGraphImports.WrittenIn;
 import anyparse.query.CallGraphTypes.HeldFile;
 import anyparse.query.ExpectedTypes.ExpectationHost;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.NominalTypes.TypingHost;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax;
+import anyparse.query.TypingService.TypingHost;
 import anyparse.query.ValueNameBinding.ImportedStatics;
 import anyparse.query.ValueNameBinding.ModuleValues;
 import anyparse.runtime.Span;
@@ -553,14 +553,14 @@ final class CallGraphEdges {
 				MEMBER_SCOPE;
 		}
 
-		// the graph's resolution for the ONE structural walk (`NominalTypes.typeWalk`), set right below `typeSourceOf`'s arms
+		// the graph's resolution for the ONE structural walk (`TypingService.typeWalk`), set right below `typeSourceOf`'s arms
 		var graphTyping: Null<TypingHost<String, Null<String>>> = null;
 		// the bindings whose unannotated type the walk is reading, against a cycle (`TypingHost.reading`)
 		final unannotatedReads: Array<Int> = [];
 
 		/**
 		 * The DECLARED type source of a value expression the receiver arms below do not name, as the graph keys it — the
-		 * shared walk (`NominalTypes.typeWalk`) over the graph's resolution (`graphTyping`): an identifier's own annotation
+		 * shared walk (`TypingService.typeWalk`) over the graph's resolution (`graphTyping`): an identifier's own annotation
 		 * (or, for a local written with none, the call initialising it), an inherited field read without `this` (through the
 		 * index), each link of a field path, an element `a[i]` of a container whose written type names its element, a call's
 		 * declared return and a construction. Never an inferred type: an unannotated link answers null.
@@ -568,7 +568,7 @@ final class CallGraphEdges {
 		function typeSourceOf(exprRaw: QueryNode, currentType: Null<String>): Null<String> {
 			final host: Null<TypingHost<String, Null<String>>> = graphTyping;
 			if (host == null) throw new Exception('the graph typing host is set before the walk types anything');
-			return NominalTypes.typeWalk(exprRaw, shape, host, currentType);
+			return TypingService.typeWalk(exprRaw, shape, host, currentType);
 		}
 
 		/**

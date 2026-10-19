@@ -15,6 +15,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
+import anyparse.query.TypingService;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -23,7 +24,7 @@ using Lambda;
 /**
  * What the declared type of an operand binds to, for ONE file — every type bound in the scope of the
  * file that WRITES it, never by its simple name. This is not a typer of its own: the shapes are walked
- * by THE structural walk every typer shares (`NominalTypes.typeWalk`), and this class is that walk's
+ * by THE structural walk every typer shares (`TypingService.typeWalk`), and this class is that walk's
  * BINDING host (`HOST`) — the resolution model whose currency is what a written type binds to
  * (`TypeNameBinding.Tier`), beside the index's written sources and the call graph's keyed ones:
  *
@@ -105,7 +106,7 @@ final class OperandBinder {
 	private final _identKinds: Array<String>;
 	private final _fnKinds: Array<String>;
 
-	/** The expectation ladder (`ExpectedTypes`) an untyped lambda parameter is typed by. */
+	/** The typing service's expectation ladder (`TypingService.expectations`) an untyped lambda parameter is typed by. */
 	private final _expectation: ExpectedTypes;
 
 	/** This file's written type annotations by binding offset (`TypeInfoProvider.declaredTypeSources`). */
@@ -130,7 +131,7 @@ final class OperandBinder {
 			for (kind in [shape.identKind, shape.stringInterpIdentKind]) if (kind != null) kind
 		];
 		_fnKinds = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
-		_expectation = new ExpectedTypes(shape);
+		_expectation = index.typing.expectations;
 		_annotations = provider.declaredTypeSources(source);
 		_usings = usings;
 	}
@@ -151,7 +152,7 @@ final class OperandBinder {
 
 	/** What `operand`'s declared type binds to: the shared walk over this file's binding resolution (`HOST`). */
 	public function tierOf(operand: QueryNode): Tier {
-		return NominalTypes.typeWalk(operand, _shape, HOST, this) ?? Unknown;
+		return TypingService.typeWalk(operand, _shape, HOST, this) ?? Unknown;
 	}
 
 	/**
@@ -365,7 +366,7 @@ final class OperandBinder {
 	private function memberTier(receiver: QueryNode, name: String, call: Bool): Tier {
 		final owners: Null<Array<ResolvedType>> = receiverDecls(receiver);
 		if (owners == null) return Unknown;
-		if (owners.length == 1 && _index.members.declarationLacksMember(owners[0], name))
+		if (owners.length == 1 && _index.typing.members.declarationLacksMember(owners[0], name))
 			return call ? extensionTier(owners[0], name) : resolveTier(owners[0], name);
 		final found: Array<ResolvedType> = [];
 		for (owner in owners) {
@@ -416,8 +417,8 @@ final class OperandBinder {
 		final own: Array<MemberInfo> = owner.type.members.filter(m -> m.name == name);
 		return if (own.length > 0)
 			{ members: own, host: owner }
-		else if (_index.members.declarationFreeOfExtensionTypes(owner))
-			_index.members.declaringMember(owner, name)
+		else if (_index.typing.members.declarationFreeOfExtensionTypes(owner))
+			_index.typing.members.declaringMember(owner, name)
 		else
 			null;
 	}
@@ -448,7 +449,7 @@ final class OperandBinder {
 	 */
 	private function extensionTier(owner: ResolvedType, method: String): Tier {
 		final usings: Null<Array<String>> = _usings();
-		if (usings == null || !_index.members.declarationFreeOfExtensionTypes(owner)) return Unknown;
+		if (usings == null || !_index.typing.members.declarationFreeOfExtensionTypes(owner)) return Unknown;
 		final declared: Null<HostedMembers> = _index.values.extensionDeclaration(usings, method);
 		if (declared == null || declared.members.length != 1) return Unknown;
 		final host: ResolvedType = declared.host;
@@ -477,7 +478,7 @@ final class OperandBinder {
 		final resolvers: Array<MemberInfo> = fieldKind == null ? [] : t.members.filter(m -> m.operatorOverloads.contains(fieldKind));
 		if (
 			fi == null || resolvers.length != 1 || !(_shape.underlyingThisTypeKinds ?? []).contains(t.kind) || t.hasBuild || t.hasAutoBuild
-			|| t.guarded || !_index.members.declarationFreeOfExtensionTypes(owner)
+			|| t.guarded || !_index.typing.members.declarationFreeOfExtensionTypes(owner)
 		)
 			return Unknown;
 		final scope: Null<Array<ResolvedType>> = _index.values.usingDeclarations(fi);

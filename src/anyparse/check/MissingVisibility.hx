@@ -387,7 +387,7 @@ final class MissingVisibility implements Check {
 		final insert: Null<String> = if (!state.sawOverride)
 			ctx.keyword;
 		else if (index != null && typeName != null && memberName != null)
-			index.members.memberVisibilityOf(typeName, memberName);
+			index.typing.members.memberVisibilityOf(typeName, memberName);
 		else
 			null;
 		if (insert == null) return;

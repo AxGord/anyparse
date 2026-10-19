@@ -578,7 +578,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			// supertype declaring the member means this method fills a base slot and
 			// must stay physical. An unresolvable supertype stays optimistic, like
 			// the extends chain always was for this rule.
-			if (index.members.supertypeDeclaresMember(owner, name)) continue;
+			if (index.typing.members.supertypeDeclaresMember(owner, name)) continue;
 			if (interfaceRequires(index, ifaces, name, file)) continue;
 			// A method a FRAMEWORK reaches by name has ONE call site, the one that framework's own
 			// macro writes or its runtime dispatches, and it runs once — so the fold buys nothing
@@ -846,7 +846,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * unreachable interface conservatively blocks the candidate.
 	 */
 	private static function interfaceRequires(index: SymbolIndex, ifaces: Array<String>, name: String, file: String): Bool {
-		return ifaces.exists(iface -> !index.members.typeProvablyLacksMember(iface, name, file));
+		return ifaces.exists(iface -> !index.typing.members.typeProvablyLacksMember(iface, name, file));
 	}
 
 

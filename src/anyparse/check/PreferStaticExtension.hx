@@ -538,11 +538,11 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		if (nominal == null || resolved == null) return Verdict.UnresolvedReceiver;
 		final receiverType: String = nominal;
 		final index: SymbolIndex = resolved;
-		return if (index.members.memberShadowsExtension(receiverType, method))
+		return if (index.typing.members.memberShadowsExtension(receiverType, method))
 			null
 		else if (
-			index.members.typeProvablyLacksMember(receiverType, method, file, at)
-			&& index.members.closureFreeOfExtensionTypes(receiverType, file, at)
+			index.typing.members.typeProvablyLacksMember(receiverType, method, file, at)
+			&& index.typing.members.closureFreeOfExtensionTypes(receiverType, file, at)
 		)
 			Verdict.Fixable
 		else

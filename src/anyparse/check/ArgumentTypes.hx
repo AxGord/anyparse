@@ -9,6 +9,7 @@ import anyparse.query.Refs;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypingService;
 import anyparse.runtime.SortedOffsets;
 import anyparse.runtime.Span;
 
@@ -30,7 +31,7 @@ private typedef ArgumentScope = {
 /**
  * The written type of a call's argument, and how it meets the type of a parameter (`ArgumentFit`) — what `ArgumentSlots`
  * decides the binding of a call by, for `ArgumentValues`. The shapes are THE structural walk every typer shares
- * (`NominalTypes.typeWalk`); this is its resolution over the call graph (`HOST`), answering a written type: a literal's
+ * (`TypingService.typeWalk`); this is its resolution over the call graph (`HOST`), answering a written type: a literal's
  * core type, a local's or a parameter's annotation (a local written with none by its initializer), a field of the
  * enclosing type's chain read bare or off the self reference, a static field read off a type name, and arithmetic over core
  * numbers (`RefShape.coreValueTypes`, `arithmeticKinds`). Everything else is untyped.
@@ -100,7 +101,7 @@ final class ArgumentTypes {
 			owner: _graph.node(callerId)?.typeName,
 			seen: []
 		};
-		return NominalTypes.typeWalk(arg, _shape, HOST, scope);
+		return TypingService.typeWalk(arg, _shape, HOST, scope);
 	}
 
 	/**

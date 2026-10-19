@@ -480,7 +480,7 @@ final class ValueEscapes {
 				if (held != null) value(held);
 			}
 			// a call the graph did not resolve hands everything to code nothing here can read: the graph types a receiver through
-			// the same walk this file's own typing reads (`NominalTypes.typeWalk`), so no receiver it leaves untyped is typed here
+			// the same walk this file's own typing reads (`TypingService.typeWalk`), so no receiver it leaves untyped is typed here
 			if (targets.length == 0) {
 				handAll();
 				return;

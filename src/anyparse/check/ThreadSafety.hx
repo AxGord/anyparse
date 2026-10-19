@@ -427,7 +427,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * anything; a graph with no index proves nothing.
 	 */
 	private static inline function inheritsNothingNamed(graph: CallGraph, type: String, name: String): Bool {
-		return graph.index?.members.supertypesDeclareNone(type, name) == true;
+		return graph.index?.typing.members.supertypesDeclareNone(type, name) == true;
 	}
 
 	/**

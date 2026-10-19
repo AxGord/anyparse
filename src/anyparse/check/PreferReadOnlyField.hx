@@ -161,14 +161,14 @@ final class PreferReadOnlyField implements Check {
 		// A macro-built type's fields are not what the declaration says — see
 		// `TypeTraits.transitivelyCarriesBuildMacro`.
 		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
-		if (index.members.supertypeDeclaresMember(owner, name)) return;
+		if (index.typing.members.supertypeDeclaresMember(owner, name)) return;
 		// An implemented interface that cannot be resolved may still declare `name` as a
 		// mutable member, whose property access `(default, null)` would violate.
-		if (index.members.implementsInterfaceDeclaringMember(owner, name)) return;
+		if (index.typing.members.implementsInterfaceDeclaringMember(owner, name)) return;
 		// Structural-conformance gate: a `(default, null)` field does not satisfy a structural
 		// `var name:T` the type may be unified with. A structural METHOD member is fine here —
 		// that is the one kind this gate is narrower than `prefer-final-public-field`'s.
-		if (index.structural.structuralConformanceForbidsWriteRestriction(owner, name)) return;
+		if (index.typing.structural.structuralConformanceForbidsWriteRestriction(owner, name)) return;
 		// Core-API gate: `(default, null)` is a property-access change, and a `@:coreApi` type's
 		// members are pinned to the access of a core type in the compiler's std path that no scope
 		// here holds — "Field <name> has different property access than core type" for every
@@ -194,7 +194,7 @@ final class PreferReadOnlyField implements Check {
 		// unconditional cession there drops the finding on the floor — neither rule reports it.
 		// That is exactly the `Iterator`-shaped field this gate was added for, whose correct
 		// answer is this rule's `(default, null)`, not silence.
-		final finalizable: Bool = !index.structural.structuralConformanceForbidsFinal(owner, name);
+		final finalizable: Bool = !index.typing.structural.structuralConformanceForbidsFinal(owner, name);
 		if (finalizable && CtorFieldWrite.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
 		if (finalizable && CtorFieldFold.ctorConditionalDefaultFinalEdits(source, span, plugin) != null) return;
 		out.push({

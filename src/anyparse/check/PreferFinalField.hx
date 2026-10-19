@@ -219,14 +219,14 @@ final class PreferFinalField implements Check implements RiskyFix implements Ora
 		// unresolvable implemented interface) is pinned to that interface's property
 		// access — `var → final` would break parity ("different property access than in
 		// <Interface>"). Applies to both the init and no-init cases below.
-		if (index.members.implementsInterfaceDeclaringMember(owner, name)) return;
+		if (index.typing.members.implementsInterfaceDeclaringMember(owner, name)) return;
 		// Structural-conformance gate, the same shared predicate `prefer-final-public-field` and
 		// `make-final` use.
 		// Unconditional, though a PRIVATE member normally takes no part in structural unification
 		// at all: `@:publicFields` publishes an unmarked field, and `eachFieldMember` does not
 		// model that meta, so such a field arrives HERE as non-exported and `final` on it is a
 		// hard error the write gates cannot see. See the class doc for the measured matrix.
-		if (index.structural.structuralConformanceForbidsFinal(owner, name)) return;
+		if (index.typing.structural.structuralConformanceForbidsFinal(owner, name)) return;
 		// The conditional-default arm, checked FIRST: an initialized field whose only other
 		// write is one `if (p != null) x = p;` constructor statement folds to `final` plus
 		// `x = p ?? <default>`. It is disjoint from the initializer arm either way (that

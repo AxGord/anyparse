@@ -450,7 +450,7 @@ final class PreferFind implements Check {
 				final nominal: Null<String> = resolve(iterable);
 				if (nominal == null) return false;
 				final symbols: Null<SymbolIndex> = index();
-				return symbols != null && symbols.members.memberShadowsExtension(nominal, FIND_METHOD);
+				return symbols != null && symbols.typing.members.memberShadowsExtension(nominal, FIND_METHOD);
 			},
 			qualified: () -> {
 				if (!reachesBuilt) {
