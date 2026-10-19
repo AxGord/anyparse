@@ -60,7 +60,6 @@ final class HxDroppedSepCommentTest extends Test {
 	/** Dropping the separator writes the tree the comma-less source parses to, and one write is a fixed point. */
 	@:pin('control')
 	@:killer('M-DROPPED-SEP-UNREHOMED')
-	@:killer('M-DROPPED-SEP-SOURCE-COMMA-READ')
 	@:killer('M-TAIL-ABSENT-FIELD-STOPS')
 	@:killer('M-TAIL-ARRAY-SLOT-UNREAD')
 	@:killer('M-TAIL-CALL-SLOT-UNREAD')
@@ -72,11 +71,14 @@ final class HxDroppedSepCommentTest extends Test {
 		for (tail in CAPTURING_TAILS) for (host in 0...HOSTS) assertDroppedLikeAbsent(tail, host);
 	}
 
-	/** A tail that captures nothing keeps the comment on the element, as the next parse does. */
+	/** A tail that captures nothing keeps the comment on the element, after its last token, as the next parse does. */
 	@:pin('control')
 	@:killer('M-TAIL-ONLY-KNOWN-METAS')
 	public function testATailThatCapturesNothingKeepsTheCommentOnTheElement(): Void {
-		for (tail in PLAIN_TAILS) for (host in 0...HOSTS) assertDroppedLikeAbsent(tail, host);
+		for (tail in PLAIN_TAILS) for (host in 0...HOSTS) {
+			final once: String = assertDroppedLikeAbsent(tail, host);
+			Assert.isTrue(once.indexOf('$tail $NOTE') >= 0, 'host=$host tail=$tail\n$once');
+		}
 	}
 
 	/** A slot that already holds a comment, or a written `;` after the body, leaves the dropped separator's comment outside. */
@@ -114,9 +116,10 @@ final class HxDroppedSepCommentTest extends Test {
 		);
 	}
 
-	private static function assertDroppedLikeAbsent(tail: String, host: Int): Void {
+	private static function assertDroppedLikeAbsent(tail: String, host: Int): String {
 		final dropped: String = assertOneWriteIsAFixedPoint(source(tail, host, true, NOTE), CFG_REMOVE, 'host=$host tail=$tail');
 		Assert.equals(HxWriteFixture.triviaWrite(source(tail, host, false, NOTE), CFG_REMOVE), dropped, 'host=$host tail=$tail');
+		return dropped;
 	}
 
 	private static function assertOneWriteIsAFixedPoint(src: String, config: String, what: String): String {

@@ -26890,17 +26890,9 @@
 			"name": "M-DROPPED-SEP-UNREHOMED",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepArrDecls",
-			"find": ": macro final _arr = anyparse.runtime.DroppedSepComment.last(_arrSrc, $sourceAppendTrailingCommaExpr, $tailRehomeFn);",
+			"find": ": macro final _arr = anyparse.runtime.DroppedSepComment.last(_arrSrc, $appendTrailingCommaExpr, $tailRehomeFn);",
 			"replace": ": macro final _arr = _arrSrc;",
 			"note": "a list whose trailing separator the writer drops is laid out from the source tree, the comment outside the element the next parse reads it inside of"
-		},
-		{
-			"name": "M-DROPPED-SEP-SOURCE-COMMA-READ",
-			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepStarExpr",
-			"find": "? macro (_arr == _arrSrc && $trailPresentAccess)",
-			"replace": "? macro $trailPresentAccess",
-			"note": "a rehomed list still reads the source trailing separator the next parse will not see"
 		},
 		{
 			"name": "M-DROPPED-SEP-KEPT-REHOMED",

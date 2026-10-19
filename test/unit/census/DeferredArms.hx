@@ -232,7 +232,6 @@ final class DeferredArms {
 		'M-PAREN-BROKEN-CHAIN-PINNED :: anyparse.macro.WriterKwRefLowering#kwRefWrapHardFlatten',
 		'M-BREAKMARK-FIT-NAMED :: anyparse.macro.WriterPolicyLowering#nestBodyOnSourceNewlineWrap',
 		'M-DROPPED-SEP-UNREHOMED :: anyparse.macro.TriviaSepLowering#triviaSepArrDecls',
-		'M-DROPPED-SEP-SOURCE-COMMA-READ :: anyparse.macro.TriviaSepLowering#triviaSepStarExpr',
 		'M-TAIL-SLOT-OVERWRITTEN :: anyparse.macro.TriviaTailRehome#starField',
 		'M-TAIL-ALT-SLOT-OVERWRITTEN :: anyparse.macro.TriviaTailRehome#altCase',
 		'M-TAIL-WRITTEN-SEMICOLON-IGNORED :: anyparse.macro.TriviaTailRehome#refField',

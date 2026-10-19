@@ -265,12 +265,8 @@ final class TriviaSepLowering {
 		// gets its `,`. When the knob is off the conjunction stays false
 		// and `appendTrailingComma` is false — behaviour is byte-
 		// identical to the pre-slice path.
-		// A rehomed list reads as the next parse reads it, and that parse sees no source separator after the last element.
-		final trailPresentRead: Null<Expr> = tailRehomeFn != null && trailPresentAccess != null
-			? macro (_arr == _arrSrc && $trailPresentAccess)
-			: trailPresentAccess;
 		final trail: WriterLowering.SepStarTrailExprs = triviaSepTrailExprs(
-			trailingCommaField, trailPresentRead, matrixWrap, forceMultiInTypedef, openText, closeText, sepText, triviaElemCall,
+			trailingCommaField, trailPresentAccess, matrixWrap, forceMultiInTypedef, openText, closeText, sepText, triviaElemCall,
 			trailingCommaRemovable
 		);
 		final forceExceedsExpr: Expr = trail.forceExceedsExpr;
@@ -367,17 +363,11 @@ final class TriviaSepLowering {
 				${triviaSepDispatchExpr(dispatchCtx)};
 			}
 		};
-		// The rehome decision reads the SOURCE list's trailing separator: it asks the trailing-comma policy with the source
-		// `trailPresent`, while the `trail` exprs above read the rehomed list's.
-		final sourceAppendTrailingCommaExpr: Expr = tailRehomeFn == null
-			? macro false
-			: triviaSepTrailExprs(
-				trailingCommaField, trailPresentAccess, matrixWrap, forceMultiInTypedef, openText, closeText, sepText, triviaElemCall,
-				trailingCommaRemovable
-			).appendTrailingCommaExpr;
+		// The rehomed list keeps reading the source `trailPresent`: a separator is only dropped under the `Remove` veto, and
+		// every layout that reads source presence is vetoed with it.
 		return switch body.expr {
 			case EBlock(stmts): {
-				expr: EBlock(triviaSepArrDecls(fieldAccess, tailRehomeFn, sourceAppendTrailingCommaExpr).concat(stmts)),
+				expr: EBlock(triviaSepArrDecls(fieldAccess, tailRehomeFn, appendTrailingCommaExpr).concat(stmts)),
 				pos: body.pos
 			};
 			case _: throw 'triviaSepStarExpr: the emitted body is not a block';
@@ -1695,12 +1685,10 @@ final class TriviaSepLowering {
 	 * parse reads it once the writer drops the separator after its last element (`DroppedSepComment.last`), with the
 	 * source list kept as `_arrSrc` for the `trailPresent` reads.
 	 */
-	private static function triviaSepArrDecls(
-		fieldAccess: Expr, tailRehomeFn: Null<Expr>, sourceAppendTrailingCommaExpr: Expr
-	): Array<Expr> {
+	private static function triviaSepArrDecls(fieldAccess: Expr, tailRehomeFn: Null<Expr>, appendTrailingCommaExpr: Expr): Array<Expr> {
 		final arrDecl: Expr = tailRehomeFn == null
 			? macro final _arr = $fieldAccess
-			: macro final _arr = anyparse.runtime.DroppedSepComment.last(_arrSrc, $sourceAppendTrailingCommaExpr, $tailRehomeFn);
+			: macro final _arr = anyparse.runtime.DroppedSepComment.last(_arrSrc, $appendTrailingCommaExpr, $tailRehomeFn);
 		if (tailRehomeFn == null) return [arrDecl];
 		final srcDecl: Expr = macro final _arrSrc = $fieldAccess;
 		return [srcDecl, arrDecl];
