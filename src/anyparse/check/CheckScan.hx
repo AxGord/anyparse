@@ -388,7 +388,7 @@ final class CheckScan {
 			final nominal: Null<String> = try typeOf(access.children[0]) catch (exception: Exception) null;
 			if (nominal == null) return false;
 			final resolved: Null<SymbolIndex> = door[0].index;
-			final indexed: Null<Bool> = resolved?.members.instanceMemberBinds(nominal, name, file, at);
+			final indexed: Null<Bool> = resolved?.typing.members.instanceMemberBinds(nominal, name, file, at);
 			return indexed ?? (
 				!NominalTypes.shadowedByNonStdType(resolved, nominal) && StdTypes.declaresInstanceMember(plugin, nominal, name)
 			);

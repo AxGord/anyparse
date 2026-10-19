@@ -792,7 +792,7 @@ final class OptionalParamShorthand implements Check {
 		if (typeName == null) return false;
 		final index: Null<SymbolIndex> = scope.resolveIndex();
 		if (index == null) return false;
-		final decls: Array<MemberDeclaration> = index.members.memberDeclarationsOf(typeName, memberName);
+		final decls: Array<MemberDeclaration> = index.typing.members.memberDeclarationsOf(typeName, memberName);
 		return decls.length != 0 && decls.foreach(decl -> isConstantField(decl.type, decl.member, seams));
 	}
 

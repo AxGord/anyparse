@@ -1071,6 +1071,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.TypeRefPrinterTest',
 		'unit.query.TypeResolverSliceTest',
 		'unit.query.TypeSyntaxTest',
+		'unit.query.TypingServiceTest',
 		'unit.query.UncheckedConversionsTest',
 		'unit.query.ValueNameBindingTest',
 		'unit.query.WriteSitesTest',

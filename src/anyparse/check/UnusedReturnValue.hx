@@ -240,7 +240,7 @@ final class UnusedReturnValue implements Check implements ConfigAware implements
 			// static / type receiver, looked up by its own name.
 			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, ctx.shape);
 			final lookupType: Null<String> = bindingFrom == null ? recvName : declaredTypes[bindingFrom];
-			lookupType == null ? null : ctx.index.members.returnNominalOf(lookupType, method);
+			lookupType == null ? null : ctx.index.typing.members.returnNominalOf(lookupType, method);
 		}
 		return discarded(nominal, '${recvName}.${method}()');
 	}
@@ -248,7 +248,7 @@ final class UnusedReturnValue implements Check implements ConfigAware implements
 	/** The enclosing type's `member` return nominal (for `this.` / implicit-`this` calls), or null. */
 	private static function memberReturn(root: QueryNode, span: Null<Span>, member: String, ctx: Ctx): Null<String> {
 		final enclosing: Null<String> = enclosingTypeName(root, span);
-		return enclosing == null ? null : ctx.index.members.returnNominalOf(enclosing, member);
+		return enclosing == null ? null : ctx.index.typing.members.returnNominalOf(enclosing, member);
 	}
 
 	/** The `{nominal, desc}` finding when `nominal` is a discardable value, or null for `Void` / untyped / unknown. */

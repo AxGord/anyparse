@@ -1312,6 +1312,10 @@ final class PinsQueryAndRuntime {
 		'unit.query.TypeNameBindingTest#testThePackageTierReadsTheStdCoresModulesPackageByPackage :: control :: M-TS-PACKAGE-PROJECT-FIRST',
 		'unit.query.TypeNameBindingTest#testTheStdTypesNamesAreTheStdsOwn :: guard :: ',
 		'unit.query.TypeNameBindingTest#testWildcardsAreAskedLastFirst :: control :: M-BINDING-FIRST-STATEMENT-WINS',
+		'unit.query.TypingServiceTest#testARememberedNullIsNotAskedAgain :: control :: M-TYPING-ANSWER-FORGOTTEN',
+		'unit.query.TypingServiceTest#testATypeQuestionIsKeptPerDeclaration :: control :: M-TYPING-TYPE-KEY-FILE',
+		'unit.query.TypingServiceTest#testNamesakesInTwoFilesKeepTheirOwnAnswers :: control :: M-TYPING-KEY-FILE',
+		'unit.query.TypingServiceTest#testTwoTypesOfOneFileKeepTheirOwnAnswers :: control :: M-TYPING-KEY-OFFSET',
 		'unit.query.UncheckedConversionsTest#testAFactsFileSaysTheTargetItsBuildGeneratesCodeFor :: control :: M-FACTS-TARGET-RECORD',
 		'unit.query.UncheckedConversionsTest#testAValueThatLeftTheTypeSystemSitsOnlyWhereSomeBuildKeepsIt :: control :: '
 			+ 'M-UNCHECKED-TARGET,M-UNCHECKED-ESCAPED,M-UNCHECKED-BOXED,M-UNCHECKED-STRING,M-UNCHECKED-ARRAY,'

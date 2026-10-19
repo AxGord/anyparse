@@ -241,7 +241,7 @@ final class NullableSource {
 		// the moment the index is wide enough to hold `Array`, and the exclusion reads as
 		// honoured while being silently void.
 		if (cfg.excludedCalls.contains('${lookupType}.${parts.method}')) return null;
-		final retNominal: Null<String> = idx.members.returnNominalOf(lookupType, parts.method);
+		final retNominal: Null<String> = idx.typing.members.returnNominalOf(lookupType, parts.method);
 		return retNominal != null && cfg.returnMarkers.contains(retNominal) ? '${recvName ?? lookupType}.${parts.method}()' : null;
 	}
 

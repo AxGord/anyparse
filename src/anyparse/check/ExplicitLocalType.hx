@@ -685,7 +685,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// INSTANCE field access, a distinct (cross-type instance) case not handled here.
 		// A genuine type reference resolves to no value binding.
 		if (TypeResolver.resolveBindingFrom(typeName, span, tree, shape) != null) return null;
-		final typeSrc: Null<String> = index.members.memberTypeSourceOf(typeName, member);
+		final typeSrc: Null<String> = index.typing.members.memberTypeSourceOf(typeName, member);
 		// The source is spelled in the DECLARING file; copy it into the consumer only when
 		// every component is a builtin guaranteed in scope there (see the doc).
 		return typeSrc != null && allComponentsAlwaysInScope(typeSrc) ? typeSrc : null;

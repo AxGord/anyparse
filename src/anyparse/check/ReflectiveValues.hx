@@ -160,7 +160,7 @@ final class ReflectiveValues {
 		final dot: Int = field.lastIndexOf('.');
 		if (dot <= 0) return null;
 		final index: Null<SymbolIndex> = _graph.index;
-		final found: Null<{ member: MemberInfo, host: ResolvedType }> = index?.members.declaringHost(
+		final found: Null<{ member: MemberInfo, host: ResolvedType }> = index?.typing.members.declaringHost(
 			field.substring(0, dot), field.substring(dot + 1)
 		);
 		final written: Null<String> = found?.member.typeSource;
@@ -485,7 +485,7 @@ final class ReflectiveValues {
 		final named: Null<{ type: String, name: String }> = memberOf(id);
 		if (named == null) return args;
 		final type: String = named.type;
-		final declarations: Array<MemberDeclaration> = _graph.index?.members.memberDeclarationsOf(type, named.name) ?? [];
+		final declarations: Array<MemberDeclaration> = _graph.index?.typing.members.memberDeclarationsOf(type, named.name) ?? [];
 		final isStatic: Bool = declarations.length > 0 && declarations.foreach(d -> d.member.isStatic);
 		if (!isStatic || !FieldWrites.accessKind(callee.kind, _shape) || callee.children.length == 0) return args;
 		final receiver: Null<String> = callee.children[0].name;

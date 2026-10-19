@@ -26,7 +26,7 @@ using StringTools;
 
 /**
  * ONE operand typing answers every rule that asks whether an operator is the language's own (`OperatorSelection`).
- * The same operand, reached by each arc the shared walk types (`NominalTypes.typeWalk` over `OperandBinder`) — a written
+ * The same operand, reached by each arc the shared walk types (`TypingService.typeWalk` over `OperandBinder`) — a written
  * annotation, an unannotated local's initializer, the self reference, an inherited member read bare, a static
  * extension's result, an abstract's `@:op(a.b)` field — must get the SAME answer from every negation form (an `if`
  * statement, a value `if`, a ternary, the four ternary builders and `!!`), from the `==` users (`!(a == b)`, the switch

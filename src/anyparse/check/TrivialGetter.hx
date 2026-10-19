@@ -634,9 +634,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (!isPublic) return false;
 		final ifaces: Array<String> = implementedInterfaces(cls);
 		// The clause's SIMPLE names resolve against this file's own imports / package.
-		return ifaces.length != 0 && (
-			index == null || ifaces.exists(iface -> !index.members.typeProvablyLacksMember(iface, propName, file))
-		);
+		return ifaces.length != 0
+			&& (index == null || ifaces.exists(iface -> !index.typing.members.typeProvablyLacksMember(iface, propName, file)));
 	}
 
 	/** The simple names of every interface in `cls`'s `implements` clauses. */

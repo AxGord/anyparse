@@ -129,7 +129,7 @@ final class PurityScan {
 		} else {
 			TypeResolver.identTypeName(recv, ctx.root, ctx.shape, ctx.declaredTypes);
 		}
-		return typeName != null && ctx.index.members.memberGetter(typeName, field) == true;
+		return typeName != null && ctx.index.typing.members.memberGetter(typeName, field) == true;
 	}
 
 	/**
@@ -156,7 +156,7 @@ final class PurityScan {
 		final span: Null<Span> = ident.span;
 		if (name == null || span == null) return false;
 		final owner: Null<String> = TypeResolver.enclosingTypeName(ctx.root, span);
-		if (owner == null || ctx.index.members.memberGetter(owner, name) != true) return false;
+		if (owner == null || ctx.index.typing.members.memberGetter(owner, name) != true) return false;
 		return !TypeResolver.bindsToValueDeclaration(name, span, ctx.root, ctx.shape);
 	}
 

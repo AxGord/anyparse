@@ -94,10 +94,10 @@ class SymbolIndexSliceTest extends Test {
 				source: 'class H { public function findUser():Null<Foo> return null; public function plain():Foo return null; }'
 			}
 		], plugin());
-		Assert.equals('Null', index.members.returnNominalOf('H', 'findUser'));
-		Assert.equals('Foo', index.members.returnNominalOf('H', 'plain'));
-		Assert.isNull(index.members.returnNominalOf('H', 'missing'));
-		Assert.isNull(index.members.returnNominalOf('Missing', 'findUser'));
+		Assert.equals('Null', index.typing.members.returnNominalOf('H', 'findUser'));
+		Assert.equals('Foo', index.typing.members.returnNominalOf('H', 'plain'));
+		Assert.isNull(index.typing.members.returnNominalOf('H', 'missing'));
+		Assert.isNull(index.typing.members.returnNominalOf('Missing', 'findUser'));
 	}
 
 	/**
@@ -109,7 +109,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/A.hx', source: 'class H { public function findUser():Null<Foo> return null; }' },
 			{ file: 'src/B.hx', source: 'class H { public function findUser():Foo return null; }' }
 		], plugin());
-		Assert.isNull(index.members.returnNominalOf('H', 'findUser'));
+		Assert.isNull(index.typing.members.returnNominalOf('H', 'findUser'));
 	}
 
 	/**
@@ -121,7 +121,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Base.hx', source: 'class Base { public function findUser():Null<Foo> return null; }' },
 			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
 		], plugin());
-		Assert.equals('Null', index.members.returnNominalOf('Sub', 'findUser'));
+		Assert.equals('Null', index.typing.members.returnNominalOf('Sub', 'findUser'));
 	}
 
 	/**
@@ -133,7 +133,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Base.hx', source: 'class Base { public function findUser():Null<Foo> return null; }' },
 			{ file: 'src/Sub.hx', source: 'class Sub extends Base { override public function findUser():Foo return null; }' }
 		], plugin());
-		Assert.equals('Foo', index.members.returnNominalOf('Sub', 'findUser'));
+		Assert.equals('Foo', index.typing.members.returnNominalOf('Sub', 'findUser'));
 	}
 
 	/**
@@ -807,13 +807,13 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/B.hx', source: "class Dup { public static var K:String = 'b'; }" }
 		], plugin());
 
-		final decls: Array<MemberDeclaration> = index.members.memberDeclarationsOf('Dup', 'K');
+		final decls: Array<MemberDeclaration> = index.typing.members.memberDeclarationsOf('Dup', 'K');
 		Assert.equals(2, decls.length);
 		Assert.isTrue(decls.exists(d -> d.member.isInline));
 		Assert.isTrue(decls.exists(d -> !d.member.isInline));
 		for (d in decls) Assert.equals('Dup', d.type.name);
-		Assert.equals(0, index.members.memberDeclarationsOf('Dup', 'missing').length);
-		Assert.equals(0, index.members.memberDeclarationsOf('Missing', 'K').length);
+		Assert.equals(0, index.typing.members.memberDeclarationsOf('Dup', 'missing').length);
+		Assert.equals(0, index.typing.members.memberDeclarationsOf('Missing', 'K').length);
 	}
 
 	public function testSubtypeOverridesProperty(): Void {
@@ -901,13 +901,13 @@ class SymbolIndexSliceTest extends Test {
 	 */
 	public function testProvablyLacksMemberResolvesAmbiguousSimpleSupertypeName(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousInterfaceFiles(), plugin());
-		Assert.isTrue(index.members.typeProvablyLacksMember('Sub', '_absent'));
+		Assert.isTrue(index.typing.members.typeProvablyLacksMember('Sub', '_absent'));
 	}
 
 	/** The member the IN-SCOPE same-named interface declares is still found — the proof stays sound. */
 	public function testProvablyLacksMemberFindsMemberOfInScopeSameNamedSupertype(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousInterfaceFiles(), plugin());
-		Assert.isFalse(index.members.typeProvablyLacksMember('Sub', 'inCommon'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('Sub', 'inCommon'));
 	}
 
 	/**
@@ -916,7 +916,7 @@ class SymbolIndexSliceTest extends Test {
 	 */
 	public function testProvablyLacksMemberIgnoresMemberOfOutOfScopeSameNamedSupertype(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousInterfaceFiles(), plugin());
-		Assert.isTrue(index.members.typeProvablyLacksMember('Sub', 'inRightmenu'));
+		Assert.isTrue(index.typing.members.typeProvablyLacksMember('Sub', 'inRightmenu'));
 	}
 
 	/** An inline-qualified supertype reference resolves to the type its path names, not to the same-package one. */
@@ -934,8 +934,8 @@ class SymbolIndexSliceTest extends Test {
 		], plugin());
 		// The qualified clause names the `rightmenu` one, so ITS member is inherited and the
 		// same-package `common.IResizable`'s is not.
-		Assert.isFalse(index.members.typeProvablyLacksMember('Q', 'inRightmenu'));
-		Assert.isTrue(index.members.typeProvablyLacksMember('Q', 'inCommon'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('Q', 'inRightmenu'));
+		Assert.isTrue(index.typing.members.typeProvablyLacksMember('Q', 'inCommon'));
 	}
 
 	/** A supertype outside the index stays unprovable — the conservative side is unchanged. */
@@ -943,7 +943,7 @@ class SymbolIndexSliceTest extends Test {
 		final index: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/Lone.hx', source: 'class Lone extends SomethingExternal { private var _own:Int; }' }
 		], plugin());
-		Assert.isFalse(index.members.typeProvablyLacksMember('Lone', '_absent'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('Lone', '_absent'));
 	}
 
 	/**
@@ -976,7 +976,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/b/I.hx', source: 'package b;\ninterface I { function m():Void; }' },
 			{ file: 'src/c/Q.hx', source: 'package c;\nclass Q implements I { private var _own:Int; }' }
 		], plugin());
-		Assert.isFalse(index.members.typeProvablyLacksMember('Q', '_absent'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('Q', '_absent'));
 	}
 
 	/** An inheritance cycle between two SAME-NAMED types terminates without a false proof. */
@@ -985,8 +985,8 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/a/C.hx', source: 'package a;\nimport b.C;\nclass C extends b.C { private var _fromA:Int; }' },
 			{ file: 'src/b/C.hx', source: 'package b;\nclass C extends a.C { private var _fromB:Int; }' }
 		], plugin());
-		Assert.isFalse(index.members.typeProvablyLacksMember('C', '_absent'));
-		Assert.isFalse(index.members.typeProvablyLacksMember('C', '_fromA'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('C', '_absent'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('C', '_fromA'));
 	}
 
 	/**
@@ -1005,20 +1005,20 @@ class SymbolIndexSliceTest extends Test {
 	 */
 	public function testProvablyLacksMemberResolvesAmbiguousStartFromFile(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
-		Assert.isFalse(index.members.typeProvablyLacksMember('IResizable', 'inRightmenu', 'src/Holder.hx'));
-		Assert.isTrue(index.members.typeProvablyLacksMember('IResizable', 'inCommon', 'src/Holder.hx'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('IResizable', 'inRightmenu', 'src/Holder.hx'));
+		Assert.isTrue(index.typing.members.typeProvablyLacksMember('IResizable', 'inCommon', 'src/Holder.hx'));
 	}
 
 	/** A file whose scope brings NEITHER same-named type in cannot pin the start — still refused. */
 	public function testProvablyLacksMemberRefusesAmbiguousStartFromUnrelatedFile(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
-		Assert.isFalse(index.members.typeProvablyLacksMember('IResizable', '_absent', 'src/other/Away.hx'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('IResizable', '_absent', 'src/other/Away.hx'));
 	}
 
 	/** With no context at all the original rule stands: an ambiguous simple name is unprovable. */
 	public function testProvablyLacksMemberRefusesAmbiguousStartWithoutContext(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
-		Assert.isFalse(index.members.typeProvablyLacksMember('IResizable', '_absent'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('IResizable', '_absent'));
 	}
 
 	/**
@@ -1027,27 +1027,27 @@ class SymbolIndexSliceTest extends Test {
 	 */
 	public function testProvablyLacksMemberResolvesQualifiedStartWithoutContext(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
-		Assert.isFalse(index.members.typeProvablyLacksMember('rightmenu.IResizable', 'inRightmenu'));
-		Assert.isTrue(index.members.typeProvablyLacksMember('rightmenu.IResizable', 'inCommon'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('rightmenu.IResizable', 'inRightmenu'));
+		Assert.isTrue(index.typing.members.typeProvablyLacksMember('rightmenu.IResizable', 'inCommon'));
 	}
 
 	/** A qualified name no indexed file declares is unprovable, not silently reduced to its tail. */
 	public function testProvablyLacksMemberRefusesUnknownQualifiedStart(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
-		Assert.isFalse(index.members.typeProvablyLacksMember('nowhere.IResizable', '_absent'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('nowhere.IResizable', '_absent'));
 	}
 
 	/** A `fromFile` the index does not hold degrades to the unique-simple-name rule, not to a refusal. */
 	public function testProvablyLacksMemberFallsBackForUnindexedFromFile(): Void {
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/Only.hx', source: 'class Only { private var _taken:Int; }' }], plugin());
-		Assert.isTrue(index.members.typeProvablyLacksMember('Only', '_absent', 'src/NotIndexed.hx'));
-		Assert.isFalse(index.members.typeProvablyLacksMember('Only', '_taken', 'src/NotIndexed.hx'));
+		Assert.isTrue(index.typing.members.typeProvablyLacksMember('Only', '_absent', 'src/NotIndexed.hx'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('Only', '_taken', 'src/NotIndexed.hx'));
 	}
 
 	/** `Dynamic` short-circuits before any resolution, with or without a context. */
 	public function testProvablyLacksMemberAcceptsDynamicWithFileContext(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
-		Assert.isTrue(index.members.typeProvablyLacksMember('Dynamic', '_absent', 'src/Holder.hx'));
+		Assert.isTrue(index.typing.members.typeProvablyLacksMember('Dynamic', '_absent', 'src/Holder.hx'));
 	}
 
 	/**
@@ -1113,7 +1113,7 @@ class SymbolIndexSliceTest extends Test {
 
 	public function testProvablyLacksMemberAcceptsDynamicAsStartingType(): Void {
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/Sub.hx', source: 'class Sub {}' }], plugin());
-		Assert.isTrue(index.members.typeProvablyLacksMember('Dynamic', '_absent'));
+		Assert.isTrue(index.typing.members.typeProvablyLacksMember('Dynamic', '_absent'));
 	}
 
 	public function testProvablyLacksMemberSkipsDynamicSupertype(): Void {
@@ -1123,9 +1123,9 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
 		], plugin());
 		// `Dynamic` is skipped, the rest of the closure resolves, and nothing declares `_absent`.
-		Assert.isTrue(index.members.typeProvablyLacksMember('Sub', '_absent'));
+		Assert.isTrue(index.typing.members.typeProvablyLacksMember('Sub', '_absent'));
 		// A real inherited member (Base's `_taken`) is still found through the closure.
-		Assert.isFalse(index.members.typeProvablyLacksMember('Sub', '_taken'));
+		Assert.isFalse(index.typing.members.typeProvablyLacksMember('Sub', '_taken'));
 	}
 
 	/**
@@ -1265,7 +1265,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Base.hx', source: 'class Base { public var f:Int; }' },
 			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
 		], plugin());
-		Assert.equals(false, index.members.memberGetter('Sub', 'f'), 'an inherited plain field is accessor-less');
+		Assert.equals(false, index.typing.members.memberGetter('Sub', 'f'), 'an inherited plain field is accessor-less');
 	}
 
 	/**
@@ -1277,7 +1277,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Base.hx', source: 'class Base { public var f(get, never):Int; }' },
 			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
 		], plugin());
-		Assert.equals(true, index.members.memberGetter('Sub', 'f'), 'an inherited getter property runs code on read');
+		Assert.equals(true, index.typing.members.memberGetter('Sub', 'f'), 'an inherited getter property runs code on read');
 	}
 
 	/**
@@ -1290,7 +1290,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Base.hx', source: 'class Base<T> { public final d:T; }' },
 			{ file: 'src/Sub.hx', source: 'class Sub extends Base<Int> {}' }
 		], plugin());
-		Assert.equals(false, index.members.memberGetter('Sub', 'd'), 'no type-argument substitution needed, accessor shape only');
+		Assert.equals(false, index.typing.members.memberGetter('Sub', 'd'), 'no type-argument substitution needed, accessor shape only');
 	}
 
 	/** The walk is transitive — a member three levels up still resolves. */
@@ -1300,7 +1300,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Mid.hx', source: 'class Mid extends Base {}' },
 			{ file: 'src/Leaf.hx', source: 'class Leaf extends Mid {}' }
 		], plugin());
-		Assert.equals(false, index.members.memberGetter('Leaf', 'f'), 'a two-hop inherited plain field resolves');
+		Assert.equals(false, index.typing.members.memberGetter('Leaf', 'f'), 'a two-hop inherited plain field resolves');
 	}
 
 	/** An `implements` link is walked like an `extends` one — an interface-declared getter is reached. */
@@ -1309,7 +1309,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/ITagged.hx', source: 'interface ITagged { public var f(get, never):Int; }' },
 			{ file: 'src/Sub.hx', source: 'class Sub implements ITagged {}' }
 		], plugin());
-		Assert.equals(true, index.members.memberGetter('Sub', 'f'), 'a getter declared on an implemented interface is reached');
+		Assert.equals(true, index.typing.members.memberGetter('Sub', 'f'), 'a getter declared on an implemented interface is reached');
 	}
 
 	/**
@@ -1323,8 +1323,8 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Base.hx', source: 'class Base { public static var f:Int; }' },
 			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
 		], plugin());
-		Assert.isNull(index.members.memberGetter('Sub', 'f'), 'a supertype static is not part of the subtype instance namespace');
-		Assert.equals(false, index.members.memberGetter('Base', 'f'), 'root arm unchanged: the static gate is inert at the root');
+		Assert.isNull(index.typing.members.memberGetter('Sub', 'f'), 'a supertype static is not part of the subtype instance namespace');
+		Assert.equals(false, index.typing.members.memberGetter('Base', 'f'), 'root arm unchanged: the static gate is inert at the root');
 	}
 
 	/**
@@ -1337,8 +1337,10 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/other/Base.hx', source: 'package other;\nclass Base { public var f:Int; }' },
 			{ file: 'src/pkg/Sub.hx', source: 'package pkg;\nclass Sub extends Base {}' }
 		], plugin());
-		Assert.isNull(index.members.memberGetter('Sub', 'f'), 'an out-of-scope supertype link ends the branch');
-		Assert.equals(false, index.members.memberGetter('Base', 'f'), 'the member itself is indexed — the null came from resolution');
+		Assert.isNull(index.typing.members.memberGetter('Sub', 'f'), 'an out-of-scope supertype link ends the branch');
+		Assert.equals(
+			false, index.typing.members.memberGetter('Base', 'f'), 'the member itself is indexed — the null came from resolution'
+		);
 	}
 
 	/**
@@ -1352,8 +1354,8 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'lib/pkg/Base.hx', source: 'package pkg;\nclass Base { public var f:Int; }' },
 			{ file: 'src/pkg/Sub.hx', source: 'package pkg;\nclass Sub extends Base {}' }
 		], plugin());
-		Assert.isNull(index.members.memberGetter('Sub', 'f'), 'an ambiguous supertype link resolves to nothing');
-		Assert.equals(false, index.members.memberGetter('Base', 'f'), 'the root entry stays simple-name unioned');
+		Assert.isNull(index.typing.members.memberGetter('Sub', 'f'), 'an ambiguous supertype link resolves to nothing');
+		Assert.equals(false, index.typing.members.memberGetter('Base', 'f'), 'the root entry stays simple-name unioned');
 	}
 
 	/**
@@ -1367,8 +1369,8 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Base.hx', source: '@:build(M.gen())\nclass Base { public var f:Int; }' },
 			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
 		], plugin());
-		Assert.isNull(index.members.memberGetter('Sub', 'f'), '@:build may turn the inherited field into a property');
-		Assert.equals(false, index.members.memberGetter('Base', 'f'), 'root arm unchanged: a @:build root still answers false');
+		Assert.isNull(index.typing.members.memberGetter('Sub', 'f'), '@:build may turn the inherited field into a property');
+		Assert.equals(false, index.typing.members.memberGetter('Base', 'f'), 'root arm unchanged: a @:build root still answers false');
 	}
 
 	/** An inheritance cycle terminates — `seen` ends the re-entered branch as unknown. */
@@ -1377,7 +1379,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/A.hx', source: 'class A extends B {}' },
 			{ file: 'src/B.hx', source: 'class B extends A {}' }
 		], plugin());
-		Assert.isNull(index.members.memberGetter('A', 'f'), 'a cycle ends its branch instead of recursing forever');
+		Assert.isNull(index.typing.members.memberGetter('A', 'f'), 'a cycle ends its branch instead of recursing forever');
 	}
 
 	/**
@@ -1392,8 +1394,8 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Base.hx', source: 'class Base implements Marker { public var f:Int = 1; }' },
 			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
 		], plugin());
-		Assert.isNull(index.members.memberGetter('Sub', 'f'), '@:autoBuild above the declarer may have rewritten the field');
-		Assert.equals(false, index.members.memberGetter('Base', 'f'), 'root arm unchanged: the autoBuild gate is inert at the root');
+		Assert.isNull(index.typing.members.memberGetter('Sub', 'f'), '@:autoBuild above the declarer may have rewritten the field');
+		Assert.equals(false, index.typing.members.memberGetter('Base', 'f'), 'root arm unchanged: the autoBuild gate is inert at the root');
 	}
 
 	/**
@@ -1407,7 +1409,9 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Base.hx', source: '@:build(M.gen())\nclass Base implements I { public var f:Int; }' },
 			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
 		], plugin());
-		Assert.isNull(index.members.memberGetter('Sub', 'f'), 'the @:build declaration ends the climb — the interface never answers');
+		Assert.isNull(
+			index.typing.members.memberGetter('Sub', 'f'), 'the @:build declaration ends the climb — the interface never answers'
+		);
 	}
 
 	/**
@@ -1422,13 +1426,13 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Mid.hx', source: 'class Mid extends Top { public static var f:Int; }' },
 			{ file: 'src/Leaf.hx', source: 'class Leaf extends Mid {}' }
 		], plugin());
-		Assert.equals(false, plain.members.memberGetter('Leaf', 'f'), 'a skipped static does not stop the climb');
+		Assert.equals(false, plain.typing.members.memberGetter('Leaf', 'f'), 'a skipped static does not stop the climb');
 		final getter: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/Top.hx', source: 'class Top { public var f(get, never):Int; }' },
 			{ file: 'src/Mid.hx', source: 'class Mid extends Top { public static var f:Int; }' },
 			{ file: 'src/Leaf.hx', source: 'class Leaf extends Mid {}' }
 		], plugin());
-		Assert.equals(true, getter.members.memberGetter('Leaf', 'f'), 'the instance getter above the static still answers');
+		Assert.equals(true, getter.typing.members.memberGetter('Leaf', 'f'), 'the instance getter above the static still answers');
 	}
 
 	/**
@@ -1444,7 +1448,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/p/Base.hx', source: 'package p;\nclass Base implements Marker { public var f:Int = 1; }' },
 			{ file: 'src/p/Sub.hx', source: 'package p;\nclass Sub extends Base {}' }
 		], plugin());
-		Assert.isNull(index.members.memberGetter('Sub', 'f'), 'a non-import-visible @:autoBuild carrier is still reached');
+		Assert.isNull(index.typing.members.memberGetter('Sub', 'f'), 'a non-import-visible @:autoBuild carrier is still reached');
 	}
 
 	/**
@@ -1458,14 +1462,14 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Base.hx', source: 'class Base extends Sprite { public var f:Int; }' },
 			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
 		], plugin());
-		Assert.equals(false, external.members.memberGetter('Sub', 'f'), 'an external supertype is not evidence of a macro');
+		Assert.equals(false, external.typing.members.memberGetter('Sub', 'f'), 'an external supertype is not evidence of a macro');
 		final ambiguous: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/x/Marker.hx', source: 'package x;\ninterface Marker {}' },
 			{ file: 'src/y/Marker.hx', source: 'package y;\n@:autoBuild(M.gen())\ninterface Marker {}' },
 			{ file: 'src/p/Base.hx', source: 'package p;\nclass Base implements Marker { public var f:Int = 1; }' },
 			{ file: 'src/p/Sub.hx', source: 'package p;\nclass Sub extends Base {}' }
 		], plugin());
-		Assert.equals(false, ambiguous.members.memberGetter('Sub', 'f'), 'an ambiguous simple name resolves to neither');
+		Assert.equals(false, ambiguous.typing.members.memberGetter('Sub', 'f'), 'an ambiguous simple name resolves to neither');
 	}
 
 	/**
@@ -1671,7 +1675,7 @@ class SymbolIndexSliceTest extends Test {
 		index: SymbolIndex, module: String, method: String, receiver: String, ?file: String
 	): Null<String> {
 		final declared: Null<HostedMembers> = index.values.extensionDeclaration([module], method);
-		return declared == null ? null : index.structural.extensionReturnNominal(declared, receiver, file);
+		return declared == null ? null : index.typing.structural.extensionReturnNominal(declared, receiver, file);
 	}
 
 }

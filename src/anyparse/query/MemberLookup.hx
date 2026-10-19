@@ -33,12 +33,16 @@ final class MemberLookup {
 	 */
 	private final _refs: TypeRefIndex;
 
+	/** The owning `TypingService`'s remembered answers, where every closure walk asked of one declaration is kept. */
+	private final _cache: QueryCache;
+
 	/** Member name -> the member kinds any indexed type declares a member of that name as (`declaresMemberAs`), built on first need. */
 	private var _memberKinds: Null<Map<String, Array<String>>> = null;
 
-	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
-	public function new(refs: TypeRefIndex) {
+	/** Built once by the owning `TypingService`, which hands over the shared, immutable index data and its cache. */
+	public function new(refs: TypeRefIndex, cache: QueryCache) {
 		_refs = refs;
+		_cache = cache;
 	}
 
 	/**
@@ -344,7 +348,7 @@ final class MemberLookup {
 		// `implements Dynamic<T>` clause — and it declares no named member (see `dynamicSupertypeRef`).
 		if (dynamicSupertypeRef(typeName)) return true;
 		final start: Null<ResolvedType> = _refs.resolveStartType(typeName, fromFile, at);
-		return start != null && lacksMemberClosure(start, member, []);
+		return start != null && declarationLacksMember(start, member);
 	}
 
 	/**
@@ -398,7 +402,7 @@ final class MemberLookup {
 	 */
 	public function closureFreeOfExtensionTypes(typeName: String, ?fromFile: String, ?at: Int): Bool {
 		final start: Null<ResolvedType> = _refs.resolveStartType(typeName, fromFile, at);
-		return start != null && freeOfExtensionTypes(start, []);
+		return start != null && declarationFreeOfExtensionTypes(start);
 	}
 
 	/**
@@ -407,12 +411,12 @@ final class MemberLookup {
 	 * abstract or `Dynamic` supertype exposes members no index lists.
 	 */
 	public function declarationFreeOfExtensionTypes(start: ResolvedType): Bool {
-		return freeOfExtensionTypes(start, []);
+		return _cache.freeOfExtensionTypes.answer(DeclarationKey.ofType(start), () -> freeOfExtensionTypes(start, []));
 	}
 
 	/** `typeProvablyLacksMember` asked of a declaration the caller already holds: no link of `start`'s closure declares `member`. */
 	public function declarationLacksMember(start: ResolvedType, member: String): Bool {
-		return lacksMemberClosure(start, member, []);
+		return _cache.lacksMember.answer(DeclarationKey.ofMember(start, member), () -> lacksMemberClosure(start, member, []));
 	}
 
 	/**
@@ -423,7 +427,7 @@ final class MemberLookup {
 	 * read) proves the closure resolvable first (`declarationFreeOfExtensionTypes`). Null when no link declares it.
 	 */
 	public function declaringMember(start: ResolvedType, member: String): Null<HostedMembers> {
-		final hit: Null<{ member: MemberInfo, host: ResolvedType }> = declaredMemberClosure(start, member, []);
+		final hit: Null<DeclaredMember> = declaredMember(start, member);
 		return hit == null ? null : { members: hit.host.type.members.filter(m -> m.name == member), host: hit.host };
 	}
 
@@ -466,9 +470,9 @@ final class MemberLookup {
 	 * the declaration hosting it (`declaredMemberClosure`, each link resolved by declaration): where the member's written
 	 * type is to be read. Null when the name is not declared once, or nothing the closure resolves declares the member.
 	 */
-	public function declaringHost(typeName: String, member: String): Null<{ member: MemberInfo, host: ResolvedType }> {
+	public function declaringHost(typeName: String, member: String): Null<DeclaredMember> {
 		final starts: Array<ResolvedType> = _refs.resolvedDeclsNamed(typeName);
-		return starts.length == 1 ? declaredMemberClosure(starts[0], member, []) : null;
+		return starts.length == 1 ? declaredMember(starts[0], member) : null;
 	}
 
 	/**
@@ -504,6 +508,16 @@ final class MemberLookup {
 			for (iface in r.type.interfaces)
 				if (!typeProvablyLacksMember(iface, field, r.file.file)) return true;
 		return false;
+	}
+
+	/** `declaredMemberClosure` from `start` on a fresh walk, asked once per declaration and member name (`QueryCache.declaredMember`). */
+	private function declaredMember(start: ResolvedType, member: String): Null<DeclaredMember> {
+		return _cache.declaredMember.answer(DeclarationKey.ofMember(start, member), () -> declaredMemberClosure(start, member, []));
+	}
+
+	/** `memberTypeSourceWalk` from `start` on a fresh walk, asked once per declaration and member name (`QueryCache.memberTypeSource`). */
+	private function memberTypeSource(start: ResolvedType, member: String): Null<String> {
+		return _cache.memberTypeSource.answer(DeclarationKey.ofMember(start, member), () -> memberTypeSourceWalk(start, member, []));
 	}
 
 	/**
@@ -592,9 +606,7 @@ final class MemberLookup {
 	 * type-parameter scope that spelled it — the HOST's, which a supertype hop moves away from the
 	 * receiver's.
 	 */
-	private function declaredMemberClosure(
-		cur: ResolvedType, member: String, seen: Array<String>
-	): Null<{ member: MemberInfo, host: ResolvedType }> {
+	private function declaredMemberClosure(cur: ResolvedType, member: String, seen: Array<String>): Null<DeclaredMember> {
 		if (!_refs.markSeen(cur, seen)) return null;
 		final t: TypeDeclInfo = cur.type;
 		final own: Null<MemberInfo> = t.members.find(m -> m.name == member);
@@ -609,7 +621,7 @@ final class MemberLookup {
 		for (raw in t.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
 			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			if (anc == null) continue;
-			final up: Null<{ member: MemberInfo, host: ResolvedType }> = declaredMemberClosure(anc, member, seen);
+			final up: Null<DeclaredMember> = declaredMemberClosure(anc, member, seen);
 			if (up != null) return up;
 		}
 		return null;
@@ -935,3 +947,9 @@ typedef HostedMembers = {
 	final host: ResolvedType;
 
 }
+
+/** One member declaration found in a type's closure, with the declaration of the type that declares it. */
+typedef DeclaredMember = {
+	member: MemberInfo,
+	host: ResolvedType
+};
