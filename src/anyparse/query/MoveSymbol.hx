@@ -982,9 +982,8 @@ final class MoveSymbol {
 			// Keep the module statement beside the new one when it still has something to bind here: a
 			// `using` unconditionally, because its other types are reached through EXTENSION CALLS that
 			// no name scan can see.
-			final keep: Bool = moduleWide && plan.mainMoved && plan.remaining.length > 0 && (
-				imp.kind == ImportKind.Using || needsRemaining
-			);
+			final keep: Bool = moduleWide && plan.mainMoved && plan.remaining.length > 0
+				&& (imp.kind == ImportKind.Using || needsRemaining);
 			return {
 				span: imp.span,
 				text: (keep ? '$statement\n${importIndent(src, imp)}' : '') + importStatementText(imp, plan.newPath, statement)
@@ -1292,9 +1291,8 @@ final class MoveSymbol {
 			// Keeping an import this file no longer needs costs a lint advisory; dropping one it
 			// does need costs the build — so both scans answer conservatively, and a name reached
 			// through a QUALIFIED path (which needs no import) is not counted by either.
-			final needsRemaining: Bool = plan.mainMoved && NameMentionScan.sourceNamesAny(
-				src, plan.remaining, excluded, lexicalRegions(src)
-			);
+			final needsRemaining: Bool = plan.mainMoved
+				&& NameMentionScan.sourceNamesAny(src, plan.remaining, excluded, lexicalRegions(src));
 			// A file that ALSO spells the old path in a statement binding the type's OWN NAME gets the
 			// moved type from the repoint of that statement, so the module statement owes it nothing —
 			// without this the two both emitted the new path and the file came out with a duplicate

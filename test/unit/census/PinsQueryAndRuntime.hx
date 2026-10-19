@@ -13,6 +13,11 @@ package unit.census;
 final class PinsQueryAndRuntime {
 
 	public static final PINS: Array<String> = [
+		'unit.query.AbstractCastsTest#testACoreClauseWidens :: control :: M-UNIFY-CORE-WIDENS',
+		'unit.query.AbstractCastsTest#testAHeaderClauseChainsOnlyThroughATransitiveAbstract :: control :: M-UNIFY-CAST-TRANSITIVE',
+		'unit.query.AbstractCastsTest#testAMemberNotInEveryBuildIsNotDecided :: control :: M-CASTS-MEMBER-CERTAIN,M-CASTS-BUILD-OPEN',
+		'unit.query.AbstractCastsTest#testAnArgumentCastsThroughAConversionMember :: control :: M-CASTS-MEMBERS-OFF',
+		'unit.query.AbstractCastsTest#testTheFirstUnequalFromAloneIsCastTo :: control :: M-CASTS-FIRST-FROM,M-CASTS-FIRST-ONLY,M-CASTS-CORE-ABSTRACT',
 		'unit.query.AddElementSliceTest#testInsertBeforeAFinalClassAddressedThroughItsForm :: control :: M-LIFT-FINAL-WRAPPER-SKIPPED',
 		'unit.query.AddElementSortedTest#testConcatenatedEntriesSortByTheirValue :: control :: M-SORTED-NO-CONCAT',
 		'unit.query.AddElementSortedTest#testDuplicateIsRefused :: control :: M-SORTED-DUP-UNCHECKED',
@@ -1282,6 +1287,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.StaticExtensionsTest#testAModuleBringsItsLastDeclaredTypeFirstAndItsFunctionsLast :: control :: M-EXT-DECL-TWO-HOSTS,M-EXT-MODULE-FIELDS-OPEN',
 		'unit.query.StaticExtensionsTest#testATypedefBringsItsOwnThenTheAliasedTypes :: control :: M-EXT-ALIAS-STOP',
 		'unit.query.StaticExtensionsTest#testAlternativesTheIndexCannotOrderMustAllPass :: control :: M-EXT-AMBIGUOUS-MODULE,M-EXT-GUARDED-LINKS',
+		'unit.query.StaticExtensionsTest#testAnAbstractParameterTakesWhatItsClausesTake :: control :: M-UNIFY-ABSTRACT-OFF,M-CASTS-DYNAMIC-END',
 		'unit.query.StaticExtensionsTest#testAnAliasInAUsedModuleBringsTheClassItNames :: control :: M-USING-HOSTS-ALIAS',
 		'unit.query.StaticExtensionsTest#testAnInheritedUsingComesSuperclassFirst :: control :: M-EXT-INTERFACES-FIRST',
 		'unit.query.StaticExtensionsTest#testTheFilesOwnUsingsComeBeforeTheAmbientOnes :: control :: M-EXT-AMBIENT-FIRST',
@@ -1351,8 +1357,13 @@ final class PinsQueryAndRuntime {
 		'unit.query.UnificationTest#testAClassUnifiesWithWhatItsChainReaches :: control :: M-UNIFY-CHAIN-OPEN',
 		'unit.query.UnificationTest#testADeclarationUnderIfIsNotPlain :: control :: M-UNIFY-GUARDED-PLAIN',
 		'unit.query.UnificationTest#testAGivenTypeWithParametersIsDecidedByItsChain :: control :: M-UNIFY-GENERIC-GIVEN',
+		'unit.query.UnificationTest#testAHandUnifiedOrCyclicAbstractIsNotDecided :: control :: M-CASTS-HAND-UNIFIED,M-UNIFY-CAST-STACK',
 		'unit.query.UnificationTest#testALinkWritingTooFewArgumentsBindsNothing :: control :: M-ANCESTOR-SHORT-ARGS',
+		'unit.query.UnificationTest#testAPlainAbstractsClauseAllowsNoSecondCast :: control :: M-UNIFY-CAST-TRANSITIVE',
+		'unit.query.UnificationTest#testAUnificationReadsTheClausesOfEveryBranchAndNoMember :: control :: M-CASTS-GRAPH-PARAMS,M-CASTS-BRANCHES-AGREE,M-CASTS-TYPE-SELECTED',
+		'unit.query.UnificationTest#testAnAbstractUnifiesThroughItsClauses :: control :: M-UNIFY-ABSTRACT-OFF',
 		'unit.query.UnificationTest#testAnEnumUnifiesWithItselfAlone :: control :: M-UNIFY-CHAIN-OPEN',
+		'unit.query.UnificationTest#testAnyTakesEveryValue :: control :: M-CASTS-DYNAMIC-END',
 		'unit.query.UnificationTest#testOnlyPlainTypesAreDecided :: control :: M-UNIFY-ALIAS-STOP,M-UNIFY-SELF-OPEN',
 		'unit.query.UnificationTest#testTheChainPassesItsArgumentsInTheStartsTerms :: control :: M-ANCESTOR-ARGS-OFF',
 		'unit.query.ValueNameBindingTest#testAModuleFieldComesBeforeAnyImport :: control :: '

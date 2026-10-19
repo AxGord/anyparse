@@ -11,6 +11,16 @@ using Lambda;
  * values, so one pair serves the whole walk.
  */
 private typedef RewriteRec = { flat: Doc -> Doc, broken: Doc -> Doc };
+/**
+ * A tagged opAddSub chain `WrapBoundary(Group(IfBreak(CollapseAddProbe(brk), flat)))`, destructured.
+ * `restAware` says the pivot was the rest-aware `GroupWithRestProbe`, which a rebuild keeps.
+ */
+private typedef TaggedAddChain = {
+	marker: Doc,
+	brk: Doc,
+	flat: Doc,
+	restAware: Bool
+};
 
 /**
  * Doc→Doc pre-render collapse pass (increment-2 chain-collapse).
@@ -248,7 +258,7 @@ final class CollapsePass {
 		// `insideBroken` + the chain's break decision + the captured continuation
 		// indent, and recurses through `rewrite` so the forward paren-collapse
 		// still applies to inner parens.
-		final tagged: Null<{ marker: Doc, brk: Doc, flat: Doc }> = taggedAddChain(d);
+		final tagged: Null<TaggedAddChain> = taggedAddChain(d);
 		if (tagged != null) return rewriteTaggedAddChain(tagged, decisions, insideBroken, width);
 
 		// PROBED tagged add-chain (ω-opadd-trailing-paren-glue): the same
@@ -258,13 +268,15 @@ final class CollapsePass {
 		// glued shape); otherwise the probe is preserved around the rewritten
 		// IfBreak so the render-time glue decision still applies.
 		switch d {
-			case WrapBoundary(IfNaturalFirstLineFitsOpenDelim(n, Group(IfBreak(marker = CollapseAddProbe(brk), flat)), noWrap)):
-				if (insideBroken) return WrapBoundary(rewrite(flat, decisions, true, width));
-				final broke: Bool = opens(marker, decisions);
-				return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(
-					n, Group(IfBreak(rewrite(brk, decisions, broke, width), rewrite(flat, decisions, false, width))),
-					rewrite(noWrap, decisions, false, width)
-				));
+			case WrapBoundary(IfNaturalFirstLineFitsOpenDelim(n, pivot, noWrap)):
+				final probed: Null<TaggedAddChain> = taggedAddPivot(pivot);
+				if (probed != null) {
+					if (insideBroken) return WrapBoundary(rewrite(probed.flat, decisions, true, width));
+					final broke: Bool = opens(probed.marker, decisions);
+					return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(
+						n, rebuildTaggedAddPivot(probed, decisions, broke, width), rewrite(noWrap, decisions, false, width)
+					));
+				}
 			case _:
 		}
 
@@ -306,11 +318,13 @@ final class CollapsePass {
 		// the packed operands into one flat line; the opening paren renders its own
 		// break. Mirrors `chainGluedIfOpens`/`collapseChainBreaksAfter` for the
 		// fillLine shape the If*-pivot matcher cannot reach.
-		switch d {
-			case WrapBoundary(Group(Nest(nc, Fill(fitems, _, _)))) if (
-				fitems.length > 1 && subtreeOpens(fitems[fitems.length - 1], decisions)
-			):
-				return WrapBoundary(Group(Nest(nc, gluedFillChain(fitems, decisions, width))));
+		final fillGroup: Null<{ inner: Doc, restAware: Bool }> = switch d {
+			case WrapBoundary(group): chainGroup(group);
+			case _: null;
+		};
+		if (fillGroup != null) switch fillGroup.inner {
+			case Nest(nc, Fill(fitems, _, _)) if (fitems.length > 1 && subtreeOpens(fitems[fitems.length - 1], decisions)):
+				return WrapBoundary(D.groupOrRestProbe(Nest(nc, gluedFillChain(fitems, decisions, width)), fillGroup.restAware));
 			case _:
 		}
 		final pair: RewriteRec = rec ?? recPair(decisions, width);
@@ -381,9 +395,7 @@ final class CollapsePass {
 	 * the enclosing class — exactly the opBool-outer re-measure case
 	 * `opbool_reeval_strips_opadd_breaks`.
 	 */
-	private static function rewriteTaggedAddChain(
-		tagged: { marker: Doc, brk: Doc, flat: Doc }, decisions: CollapseRun, insideBroken: Bool, width: Int
-	): Doc {
+	private static function rewriteTaggedAddChain(tagged: TaggedAddChain, decisions: CollapseRun, insideBroken: Bool, width: Int): Doc {
 		if (insideBroken) return WrapBoundary(rewrite(tagged.flat, decisions, true, width));
 		final broke: Bool = opens(tagged.marker, decisions);
 		// ω-opadd-plain-fillline: a top-level tagged opAddSub chain (NOT
@@ -396,7 +408,7 @@ final class CollapsePass {
 		// of a never-wrap compare nested in an `onePerLineAfterFirst` opBool — is
 		// committed by leg 2 (`compareOpGluedToHeadBreak`, which still calls
 		// `commitHeadBreak`), so no direct head-break is needed here.
-		return WrapBoundary(Group(IfBreak(rewrite(tagged.brk, decisions, broke, width), rewrite(tagged.flat, decisions, false, width))));
+		return WrapBoundary(rebuildTaggedAddPivot(tagged, decisions, broke, width));
 	}
 
 	/**
@@ -424,7 +436,7 @@ final class CollapsePass {
 	 * recursive natural-first-line probe across the binary spine (mirror the
 	 * forward `collapseParenCommitsOpen` fit gate).
 	 */
-	private static function commitHeadBreak(tagged: { marker: Doc, brk: Doc, flat: Doc }, decisions: CollapseRun, width: Int): Null<Doc> {
+	private static function commitHeadBreak(tagged: TaggedAddChain, decisions: CollapseRun, width: Int): Null<Doc> {
 		final fill: Null<{ cols: Int, items: Array<Doc> }> = fillLineParts(tagged.brk);
 		if (fill == null || fill.items.length < 2) return null;
 		// ω-opadd-afterlast-cont-indent: the head-break re-measure GLUES the tail
@@ -476,10 +488,13 @@ final class CollapsePass {
 	 * not head-broken (those modes are not the over-pack case this targets).
 	 */
 	private static function fillLineParts(d: Doc): Null<{ cols: Int, items: Array<Doc> }> {
-		return switch d {
-			case Group(Nest(cols, Fill(items, _, _))): { cols: cols, items: items };
-			case _: null;
-		};
+		final group: Null<{ inner: Doc, restAware: Bool }> = chainGroup(d);
+		return group == null
+			? null
+			: switch group.inner {
+				case Nest(cols, Fill(items, _, _)): { cols: cols, items: items };
+				case _: null;
+			};
 	}
 
 	/**
@@ -558,7 +573,7 @@ final class CollapsePass {
 			case _: false;
 		};
 		if (!isOpCont) return null;
-		final tagged: Null<{ marker: Doc, brk: Doc, flat: Doc }> = taggedAddChain(parts.left);
+		final tagged: Null<TaggedAddChain> = taggedAddChain(parts.left);
 		if (tagged == null) return null;
 		if (!opens(tagged.marker, decisions)) return null;
 		final headBreak: Null<Doc> = commitHeadBreak(tagged, decisions, width);
@@ -572,17 +587,52 @@ final class CollapsePass {
 
 	/**
 	 * If `d` is a tagged opAddSub chain
-	 * `WrapBoundary(Group(IfBreak(CollapseAddProbe(brk), flat)))`, return the
-	 * marker node (for the measure-decision lookup), the marked broken shape,
-	 * and the sibling flat shape. Otherwise null.
+	 * `WrapBoundary(Group(IfBreak(CollapseAddProbe(brk), flat)))` (or its
+	 * rest-aware `GroupWithRestProbe` pivot), return the marker node (for the
+	 * measure-decision lookup), the marked broken shape, the sibling flat shape
+	 * and which pivot it was. Otherwise null.
 	 */
-	private static function taggedAddChain(d: Doc): Null<{ marker: Doc, brk: Doc, flat: Doc }> {
+	private static function taggedAddChain(d: Doc): Null<TaggedAddChain> {
 		return switch d {
-			case WrapBoundary(Group(IfBreak(marker, flat))):
-				switch marker {
-					case CollapseAddProbe(brk): { marker: marker, brk: brk, flat: flat };
-					case _: null;
-				}
+			case WrapBoundary(pivot): taggedAddPivot(pivot);
+			case _: null;
+		};
+	}
+
+	/** `taggedAddChain` below its `WrapBoundary`: the chain's pivot `Group(IfBreak(CollapseAddProbe(brk), flat))`. */
+	private static function taggedAddPivot(pivot: Doc): Null<TaggedAddChain> {
+		final group: Null<{ inner: Doc, restAware: Bool }> = chainGroup(pivot);
+		return group == null
+			? null
+			: switch group.inner {
+				case IfBreak(marker = CollapseAddProbe(brk), flat): {
+					marker: marker,
+					brk: brk,
+					flat: flat,
+					restAware: group.restAware
+				};
+				case _: null;
+			};
+	}
+
+	/**
+	 * The tagged chain's pivot rebuilt with its marker consumed: the broken branch rewritten as `broke` says, the flat one
+	 * as unbroken, under the same `Group` / `GroupWithRestProbe` the chain was emitted with.
+	 */
+	private static function rebuildTaggedAddPivot(tagged: TaggedAddChain, decisions: CollapseRun, broke: Bool, width: Int): Doc {
+		return D.groupOrRestProbe(
+			IfBreak(rewrite(tagged.brk, decisions, broke, width), rewrite(tagged.flat, decisions, false, width)), tagged.restAware
+		);
+	}
+
+	/**
+	 * The content of a chain pivot - a plain `Group` or the rest-aware `GroupWithRestProbe` a `BinaryChainEmit` chain
+	 * builds through `D.groupOrRestProbe` - and which of the two it is. Null for any other node.
+	 */
+	private static function chainGroup(d: Doc): Null<{ inner: Doc, restAware: Bool }> {
+		return switch d {
+			case Group(inner): { inner: inner, restAware: false };
+			case GroupWithRestProbe(inner): { inner: inner, restAware: true };
 			case _: null;
 		};
 	}
@@ -616,7 +666,12 @@ final class CollapsePass {
 		// trailing shape unchanged (recursed so nested operand parens resolve).
 		final col: Null<Int> = capturedIndent(d, decisions);
 		if (col == null) return rewrite(inner, decisions, insideBroken, width);
-		final parts: Null<{ cols: Int, items: Array<Doc>, sep: Doc }> = afterLastFillParts(inner);
+		final parts: Null<{
+			cols: Int,
+			items: Array<Doc>,
+			sep: Doc,
+			restAware: Bool
+		}> = afterLastFillParts(inner);
 		if (parts == null) return rewrite(inner, decisions, insideBroken, width);
 		// Recover the bare operands + their operators from the AfterLast-enriched
 		// Fill items (item i<last = Concat([operand_i, Text(' op')]); last =
@@ -645,7 +700,7 @@ final class CollapsePass {
 			Text('${chain.ops[i]} '),
 			flattenIfFittingCall(rewrite(chain.operands[i + 1], decisions, insideBroken, width), col, width)
 		]));
-		return Group(Nest(parts.cols, Fill(beforeItems, parts.sep)));
+		return D.groupOrRestProbe(Nest(parts.cols, Fill(beforeItems, parts.sep)), parts.restAware);
 	}
 
 	/**
@@ -842,11 +897,24 @@ final class CollapsePass {
 	 * shape (the `CollapseBoolProbe` payload) into its Nest indent, Fill items,
 	 * and separator. Null when `d` is not that exact shape.
 	 */
-	private static function afterLastFillParts(d: Doc): Null<{ cols: Int, items: Array<Doc>, sep: Doc }> {
-		return switch d {
-			case Group(Nest(cols, Fill(items, sep, _))): { cols: cols, items: items, sep: sep };
-			case _: null;
-		};
+	private static function afterLastFillParts(d: Doc): Null<{
+		cols: Int,
+		items: Array<Doc>,
+		sep: Doc,
+		restAware: Bool
+	}> {
+		final group: Null<{ inner: Doc, restAware: Bool }> = chainGroup(d);
+		return group == null
+			? null
+			: switch group.inner {
+				case Nest(cols, Fill(items, sep, _)): {
+					cols: cols,
+					items: items,
+					sep: sep,
+					restAware: group.restAware
+				};
+				case _: null;
+			};
 	}
 
 	/**
@@ -993,6 +1061,7 @@ final class CollapsePass {
 	private static function chainGluedIfOpens(d: Doc, decisions: CollapseRun): Null<Doc> {
 		final flat: Null<Doc> = switch d {
 			case WrapBoundary(Group(IfBreak(_, fl))): fl;
+			case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(fl)): fl;
 			case WrapBoundary(Group(IfWidthExceeds(_, _, fl))): fl;
 			case WrapBoundary(Group(IfFullLineExceeds(_, _, fl))): fl;
 			case _: null;
@@ -1003,6 +1072,22 @@ final class CollapsePass {
 			flat
 		else
 			null;
+	}
+
+	/**
+	 * The flat side of a rest-aware chain pivot is an infix chain glued as `a op b op c` with `&&`, `||`, `+` or `-` (the
+	 * `BinaryChainEmit` NoWrap shape). A ternary's `c ? a : b` shares the rest-aware pivot but is NOT an op-chain: the
+	 * forward glue never commits it, so it stays outside this positive list.
+	 */
+	private static function gluesInfixChain(flat: Doc): Bool {
+		return switch flat {
+			case Concat(parts) if (parts.length >= 3):
+				switch parts[1] {
+					case Text(' && ' | ' || ' | ' + ' | ' - '): true;
+					case _: false;
+				}
+			case _: false;
+		};
 	}
 
 	/**
@@ -1316,7 +1401,7 @@ final class CollapsePass {
 	 */
 	private static function commitChainGlue(d: Doc, glued: Doc, decisions: CollapseRun, insideBroken: Bool, width: Int): Doc {
 		final committed: Doc = WrapBoundary(commitOpens(glued, decisions));
-		final tagged: Null<{ marker: Doc, brk: Doc, flat: Doc }> = insideBroken ? null : taggedAddChain(d);
+		final tagged: Null<TaggedAddChain> = insideBroken ? null : taggedAddChain(d);
 		return tagged == null
 			? committed
 			: IfNaturalFirstLineFitsOpenDelim(width, rewriteTaggedAddChain(tagged, decisions, insideBroken, width), committed);

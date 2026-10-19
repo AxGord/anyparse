@@ -110,6 +110,10 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testTheValueIfThenBranchGluesAsWell :: control :: M-ELSE-SWITCH-TESTS-NONE',
 		'unit.grammar.haxe.HxAnonFieldTypeProjectionTest#testATypeSlotThatIsAlsoAChildPrintsOnce :: control :: M-AST-SLOT-DUPLICATED',
 		'unit.grammar.haxe.HxArrowBlockIfOverflowSliceTest#testOverflowingBlockIfBreaksAfterArrow :: control :: M-ARROW-HEAD-WIDTH-NONE',
+		'unit.grammar.haxe.HxBinaryChainRestWidthTest#testAddChainOneColumnOverBreaksAtPlus :: control :: M-CHAIN-REST-ADD-PIVOT-PLAIN',
+		'unit.grammar.haxe.HxBinaryChainRestWidthTest#testAddChainTwoColumnsOverBreaksAtPlus :: control :: M-COLLAPSE-ADD-REBUILD-PLAIN',
+		'unit.grammar.haxe.HxBinaryChainRestWidthTest#testDeclarationOneColumnOverBreaksAtAnd :: control :: M-CHAIN-REST-FILL-GROUP-PLAIN,M-CHAIN-REST-SHAPE-UNTHREADED,M-CHAIN-REST-UNSET',
+		'unit.grammar.haxe.HxBinaryChainRestWidthTest#testDeclarationTwoColumnsOverBreaksAtAnd :: control :: M-CHAIN-REST-PIVOT-PLAIN',
 		'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBeforeAMultilineMember :: control :: M-BLANK-MULTILINE-OFF',
 		'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBetweenMultilineAndSingleLine :: control :: '
 			+ 'M-BLANK-MULTILINE-OFF',
@@ -269,6 +273,7 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testCollapseTailParenIsNotABreakPoint :: control :: M-PAREN-SIBLING-COLLAPSE',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testLambdaParenMeasuresItsOwnBreakableContent :: control :: '
 			+ 'M-PAREN-EXACT-CONTENT',
+		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testNestedCallBreaksItsOuterArgumentList :: control :: M-CHAIN-REST-IN-KEPT-PAREN',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testPinnedArgumentListIsMeasuredFlat :: control :: M-PAREN-FLATTEN-REGION',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testSecondParenOpensWhenOnlyItCrossesDiv :: control :: M-PAREN-SIBLING-FLAT',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testUnmeasuredRestNodeEndsColumnPredictions :: control :: M-PAREN-EXACT-REST',
@@ -283,6 +288,7 @@ final class PinsGrammarAndCli {
 			+ 'M-FILEHEADER-ANY-COMMENT-KIND,M-FILEHEADER-ANY-COMMENT',
 		'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testNoFileHeaderBlankWithoutImports :: control :: M-FILEHEADER-HEAD-ALWAYS-PIU',
 		'unit.grammar.haxe.HxFitLineBodyGlueSliceTest#testArrowLambdaBodyGluesAfterTheArrow :: control :: M-PAREN-PIN-NONE',
+		'unit.grammar.haxe.HxFitLineBodyGlueSliceTest#testChainOperandParenStillOpens :: control :: M-COLLAPSE-GLUE-REST-CHAIN-SKIPPED',
 		'unit.grammar.haxe.HxFitLineBodyGlueSliceTest#testComprehensionFilterBodyGluesToTheIfHead :: control :: M-PAREN-PIN-NONE',
 		'unit.grammar.haxe.HxFitLineBodyGlueSliceTest#testGluedBodyIsIdempotent :: control :: M-PAREN-PIN-NONE',
 		'unit.grammar.haxe.HxFunctionLambdaBodyWidthSliceTest#testABareCallStatementOpensItsArgumentListInsteadOfSplittingTheChain :: '
@@ -337,6 +343,8 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxObjectLitForcedNoWrapProbeTest#testOneWriteIsAFixedPointAtEveryWidth :: control :: M-FORCED-NOWRAP-UNPROBED',
 		'unit.grammar.haxe.HxObjectLitLineLengthRuleFixedPointTest#testAWidthRuleLiteralInAComprehensionSettlesInOneWrite :: control :: '
 			+ 'M-WIDTH-RULE-DECISION-UNREAD,M-WIDTH-RULE-TAIL-UNREAD',
+		'unit.grammar.haxe.HxOpAddChainOperatorFirstSliceTest#testGlueBoundaryOneColumnOverBreaks :: control :: M-COLLAPSE-CHAIN-GROUP-PLAIN-ONLY',
+		'unit.grammar.haxe.HxParenTernaryOpenWrapSliceTest#testFillLineExpressionWrapOpensParenOpAddSub :: control :: M-COLLAPSE-GLUE-TERNARY',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAKeywordANewerHaxeAddedStillNamesAVersionGatedDeclaration :: control :: '
 			+ 'M-RESERVED-VERSIONED-REFUSED',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoFunctionParameterOrBinderName :: control :: '

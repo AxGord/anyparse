@@ -128,10 +128,14 @@ final class PinsCheckPToZ {
 		'unit.check.PreferIfExpressionChainCheckTest#testChainWithNoBooleanLeafStillFlagged :: control :: M-PIEC-SPINE-CLAIM-ANY',
 		'unit.check.PreferIfExpressionReturnCheckTest#testFallThroughCascadeClaimedNotRewritten :: control :: M-PIER-CASCADE-UNMERGED-REPORTED',
 		'unit.check.PreferIfExpressionReturnCheckTest#testGuardBeforeTernaryClaimedNotRewritten :: control :: M-PIER-CASCADE-UNMERGED-REPORTED',
+		'unit.check.PreferIfExpressionReturnCheckTest#testGuardLadderIsNotMerged :: control :: M-PIER-TAIL-LADDER',
 		'unit.check.PreferIfExpressionReturnCheckTest#testGuardRepeatingTheTernaryElseMerges :: control :: M-PIER-OUTER-UNNEGATED,M-PIER-MERGE-NO-PARENS',
-		'unit.check.PreferIfExpressionReturnCheckTest#testMergeRefusals :: control :: M-PIER-MERGE-ANY-VALUE,M-PIER-MERGE-COMMENT,M-PIER-MERGE-ANY-COUNT',
+		'unit.check.PreferIfExpressionReturnCheckTest#testMergeRefusals :: control :: M-PIER-MERGE-ANY-VALUE,M-PIER-MERGE-COMMENT',
 		'unit.check.PreferIfExpressionReturnCheckTest#testRepeatedLeadingValueMergesByOr :: control :: M-PIER-LEADING-AS-OUTER',
 		'unit.check.PreferIfExpressionReturnCheckTest#testStatementLikeValueIsNotMerged :: control :: M-PIER-MERGE-UNMARCHABLE',
+		'unit.check.PreferIfExpressionReturnCheckTest#testTailMergeRefusals :: control :: M-PIER-TAIL-FROM-FOLDED',
+		'unit.check.PreferIfExpressionReturnCheckTest#testTailOfALongerCascadeMerges :: control :: M-PIER-MERGE-ANY-COUNT,M-PIER-TAIL-SPAN-WHOLE,M-PIER-TAIL-REPORTED-AT-HEAD',
+		'unit.check.PreferIfExpressionReturnCheckTest#testTailRepeatingLeadingValueMergesByOr :: control :: M-PIER-MERGE-ANY-COUNT',
 		'unit.check.PreferIfExpressionReturnCheckTest#testTwoWrittenBranchesAndAFoldedTailAreNotAChain :: control :: M-PIER-REWRITES-FOLDED,M-PIER-CLAIMSCHAIN-OWNS',
 		'unit.check.PreferIndexAccessCheckTest#testObjectLiteralSetValueNotFlagged :: control :: M-PIA-OBJLIT-SET-FLAGGED',
 		'unit.check.PreferInlineCheckTest#testOwnFileBuildMacroTokenCostsNoResolutionIndex :: control :: M-INLINE-LOCAL-BUILD-MACRO',
@@ -379,8 +383,7 @@ final class PinsCheckPToZ {
 		'unit.check.SimplifyBooleanReturnChainCheckTest#testNegatedConjunctionGuardRegroups :: control :: '
 			+ 'M-GUARD-CHAIN-NEGATED-RUN-DROPPED',
 		'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestRegroups :: control :: M-NARROWING-OR-FLAT',
-		'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestWithCommentNotReduced :: control :: '
-			+ 'M-NARROWING-OR-GLUE-COMMENT-ADMITTED',
+		'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestWithCommentNotReduced :: guard :: ',
 		'unit.check.SimplifyBooleanTernaryCheckTest#testCompoundNullTestBeforeReuseNotSimplified :: control :: '
 			+ 'M-NARROWING-OR-COMPOUND-ADMITTED',
 		'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestInBranchRegroups :: control :: M-TERNARY-OR-BRANCH-UNREAD',
@@ -389,6 +392,8 @@ final class PinsCheckPToZ {
 			+ 'M-NARROWING-OR-FLAT,M-OR-LEAVES-OR-OPAQUE',
 		'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestWithCommentNotSimplified :: control :: '
 			+ 'M-NARROWING-OR-INNER-COMMENT-ADMITTED',
+		'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestWithGlueCommentNotSimplified :: control :: '
+			+ 'M-NARROWING-OR-GLUE-COMMENT-ADMITTED',
 		'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
 		'unit.check.StaticReflectionReachTest#testAClassReifyingBuildMacroKeepsTheGate :: control :: M-STATICREACH-REIFY-BLIND',
 		'unit.check.StaticReflectionReachTest#testAClassSourceInAnOpaqueRegionKeepsTheGate :: control :: '
@@ -424,6 +429,7 @@ final class PinsCheckPToZ {
 		'unit.check.StringLiteralDupCheckTest#testSmallCollectionOfOnlyLiteralsIsATable :: control :: M-STRING-LITERAL-DUP-TABLE-ARITY',
 		'unit.check.StructuralConformanceProofTest#testANamesakeOfAnotherPackageRefutes :: control :: M-STRUCT-MUTABLE-SAME-DECL',
 		'unit.check.StructuralConformanceProofTest#testAReadOnlyStructureFieldTakesASubtype :: control :: M-STRUCT-READONLY-INVARIANT',
+		'unit.check.StructuralConformanceProofTest#testAReadOnlyStructureFieldTakesAnAbstractThroughItsClause :: control :: M-UNIFY-ABSTRACT-OFF',
 		'unit.check.StructuralConformanceProofTest#testAliasedStructureMemberTypeStillPins :: control :: M-STRUCT-ALIAS-OPAQUE',
 		'unit.check.StructuralConformanceProofTest#testAnonStructureNominalStillPins :: control :: M-STRUCT-ANON-CLOSED',
 		'unit.check.StructuralConformanceProofTest#testDifferentDeclaredTypeDoesNotPin :: control :: M-STRUCT-NOMINAL-OPEN',
@@ -595,6 +601,7 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyConditionsTest#testATakeABoolArgumentRulesOutOrdersNothing :: control :: M-TS-ORDER-UNCONDITIONED',
 		'unit.check.ThreadSafetyConditionsTest#testAValueStoredInADynamicMemberRunsWhereTheMemberRuns :: control :: M-TS-STORE-INERT',
 		'unit.check.ThreadSafetyConditionsTest#testAWrittenParameterIsNotTracked :: control :: M-TS-PARAM-WRITE-IGNORED',
+		'unit.check.ThreadSafetyConditionsTest#testAnAbstractArgumentBindsTheParameterItCastsTo :: control :: M-ARGFIT-CAST-OFF,M-UNIFY-ABSTRACT-OFF',
 		'unit.check.ThreadSafetyConditionsTest#testAnArgumentAnAbstractMayTakeLeavesBothBindings :: control :: M-ARGFIT-UNKNOWN-MISFITS',
 		'unit.check.ThreadSafetyConditionsTest#testAnArgumentHaxeMaySkipAnOptionalParameterForBindsNothing :: control :: '
 			+ 'M-TS-SKIP-UNCHECKED',

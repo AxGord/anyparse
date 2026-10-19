@@ -384,7 +384,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	/** `@:noUsing` keeps `Util.f` out of `using`: the rewrite would not compile. */
 	@:pin('control') @:killer('M-PSE-CHANNEL-NO-USING')
 	public function testANoUsingFunctionDropsTheSite(): Void {
-		final source: String = 'class Util {\n\t@:noUsing public static function f(x:Base):String\n\t\treturn "Util.f";\n}\n\n' + BASE_MAKER;
+		final source: String = 'class Util {\n\t@:noUsing public static function f(x:Base):String\n\t\treturn "Util.f";\n}\n\n'
+			+ BASE_MAKER;
 		final seen: Null<Map<String, String>> = verdicts([[]], source, source);
 		if (seen == null) return;
 		for (site in ['facts', 'structural']) Assert.equals('drop', seen[site], '$site: $seen');

@@ -24,8 +24,8 @@ using Lambda;
 
 /**
  * Retypes an event class's `String` event-type constant to the project's TYPED event-type abstract —
- * `public static inline final CLOSE:String = 'close';` on `class PopupEvent extends Event` becomes
- * `public static inline final CLOSE:EventType<PopupEvent> = 'close';` — so a listener written for another event class
+ * `public static inline final CLOSE:String = 'close';` on `class ModalEvent extends Event` becomes
+ * `public static inline final CLOSE:EventType<ModalEvent> = 'close';` — so a listener written for another event class
  * stops compiling. Inert until the project declares its framework's event types in `apqlint.json`:
  *
  *     "typed-event-constant": {
@@ -53,8 +53,8 @@ using Lambda;
  * ## Mismatches are reported, not retyped
  *
  * The retype turns an inconsistency the program carries today into a compile error, and the inconsistency is the
- * finding worth having: a listener typed for another event class (`addEventListener(PopupEvent.CLOSE, (e:MouseEvent)
- * -> …)`) or an event dispatched as another class (`new Event(PopupEvent.CLOSE)`) is a latent bug — the listener is
+ * finding worth having: a listener typed for another event class (`addEventListener(ModalEvent.CLOSE, (e:MouseEvent)
+ * -> …)`) or an event dispatched as another class (`new Event(ModalEvent.CLOSE)`) is a latent bug — the listener is
  * handed an object that is not what it declares. Each one the rule can PROVE is reported as a `Warning` at the use,
  * naming the listener's parameter type or the dispatched class, and the constant is NOT retyped (`declineReason`).
  * Proof means: a listener that is a lambda with a written parameter type, a method of the enclosing
@@ -82,19 +82,13 @@ using Lambda;
  * Driven by `callKind`, `fieldAccessKind`, `identKind`, `newExprKind`, `lambdaKinds`, `paramKinds`, `fieldDeclKinds` /
  * `mutableFieldDeclKinds`, `memberDeclKinds`, `stringLiteralKinds` + `literalTypeNames` (the string type's name),
  * `underlyingThisTypeKinds` / `enumAbstractDeclKind` and `TypeRefShape.typeRefKinds`. The abstract header's conversion
- * clauses are read by their projected kinds, spelled literally (`FromClause` / `ToClause`) because no seam names them.
+ * clauses are the index's (`TypeDeclInfo.castClauses`, read by `abstractFromClauseKind` / `abstractToClauseKind`).
  */
 @:nullSafety(Strict)
 final class TypedEventConstant implements Check implements ConfigAware implements FileGated implements RiskyFix {
 
 	/** The rule id, also the `apqlint.json` option key. */
 	private static inline final RULE_ID: String = 'typed-event-constant';
-
-	/** The projected kind of an abstract header's `from T` clause — no seam names it. */
-	private static inline final FROM_CLAUSE_KIND: String = 'FromClause';
-
-	/** The projected kind of an abstract header's `to T` clause — no seam names it. */
-	private static inline final TO_CLAUSE_KIND: String = 'ToClause';
 
 	/** The type parameters `typeAbstract` must declare: the event class goes in the one slot. */
 	private static inline final ABSTRACT_ARITY: Int = 1;
@@ -213,7 +207,7 @@ final class TypedEventConstant implements Check implements ConfigAware implement
 			return null;
 		}
 		final abstractType: Null<ResolvedType> = ConfiguredTypes.resolve(index, spec.typeAbstract);
-		if (abstractType != null && isStringAbstract(abstractType, index, seams, plugin)) return { base: base, abstractType: abstractType };
+		if (abstractType != null && isStringAbstract(abstractType, seams)) return { base: base, abstractType: abstractType };
 		problems.push(
 			'"typeAbstract" "${spec.typeAbstract}" is not an abstract of one type parameter over ${seams.stringType} '
 			+ 'converting from ${seams.stringType} and to ${seams.stringType} — rule inert'
@@ -233,34 +227,14 @@ final class TypedEventConstant implements Check implements ConfigAware implement
 
 	/**
 	 * Whether `t` is a plain abstract of `ABSTRACT_ARITY` type parameter over the string type whose header converts from
-	 * and to the string type — read off the declaring file's own projection, since the index records no conversion
-	 * clause.
+	 * and to the string type in every branch declaring it (`TypeDeclInfo.castClauses`).
 	 */
-	private static function isStringAbstract(t: ResolvedType, index: SymbolIndex, seams: Seams, plugin: GrammarPlugin): Bool {
+	private static function isStringAbstract(t: ResolvedType, seams: Seams): Bool {
 		final decl: TypeDeclInfo = t.type;
 		if (!seams.abstractKinds.contains(decl.kind) || decl.kind == seams.enumAbstractKind) return false;
 		if (decl.typeParamArity != ABSTRACT_ARITY || decl.underlyingRaw != seams.stringType) return false;
-		final source: Null<String> = index.sourceOf(t.file.file);
-		final tree: Null<QueryNode> = source == null ? null : ParseGate.parseOrNull(plugin, source);
-		final node: Null<QueryNode> = tree == null ? null : findDecl(tree, decl.kind, decl.name);
-		return node != null && convertsWith(node, FROM_CLAUSE_KIND, seams.stringType) && convertsWith(
-			node, TO_CLAUSE_KIND, seams.stringType
-		);
-	}
-
-	/** The first node of `kind` named `name` in `node`'s subtree, or null. */
-	private static function findDecl(node: QueryNode, kind: String, name: String): Null<QueryNode> {
-		if (node.kind == kind && node.name == name) return node;
-		for (c in node.children) {
-			final found: Null<QueryNode> = findDecl(c, kind, name);
-			if (found != null) return found;
-		}
-		return null;
-	}
-
-	/** Whether the abstract header `decl` carries a `clauseKind` clause naming `type`. */
-	private static function convertsWith(decl: QueryNode, clauseKind: String, type: String): Bool {
-		return decl.children.exists(c -> c.kind == clauseKind && c.children.exists(t -> t.name == type));
+		final clauses: Null<Array<CastClauses>> = decl.castClauses;
+		return clauses != null && clauses.foreach(c -> c.from.contains(seams.stringType) && c.to.contains(seams.stringType));
 	}
 
 	/** The seams the rule reads, or null when a required one is unset. */

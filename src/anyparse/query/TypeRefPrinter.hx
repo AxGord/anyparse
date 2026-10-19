@@ -447,8 +447,8 @@ final class TypeRefPrinter {
 	 * A module import brings in every top-level type the module declares, not only its main one, so
 	 * the short name is already visible and a fresh `import <module>.<simple>;` would be pure noise
 	 * (the shape `redundant-import` reports; without this route the printer was the thing WRITING
-	 * it — `import fs.FileSystemInterface.FileSystemCloudAction;` into a file already carrying
-	 * `import fs.FileSystemInterface;`).
+	 * it — `import fs.DiskSystemInterface.DiskSystemCloudAction;` into a file already carrying
+	 * `import fs.DiskSystemInterface;`).
 	 *
 	 * A `using <module>;` qualifies on the same terms — it IS an `import <module>;` plus static
 	 * extension — but only UNGUARDED and at the top level, since a `#if`-guarded one binds the name
@@ -621,8 +621,8 @@ final class TypeRefPrinter {
 	private function alwaysInScope(canonical: String, simple: String): Bool {
 		if (ALWAYS_IN_SCOPE[simple] == canonical) return true;
 		final index: Null<SymbolIndex> = _index;
-		return index != null && index.refs.declaringFiles(simple)
-			.exists(f -> f.pkg == '' && ModuleScan.pathOfTypeIn(f, simple) == canonical);
+		return index != null
+			&& index.refs.declaringFiles(simple).exists(f -> f.pkg == '' && ModuleScan.pathOfTypeIn(f, simple) == canonical);
 	}
 
 	/**

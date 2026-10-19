@@ -433,7 +433,8 @@ class MemberReachFactsTest extends Test {
 	private static function copiesAsk(
 		copies: Map<String, String>, listed: Bool, ownDirs: Bool = false, plain: Bool = false, ?unread: Array<String>
 	): ReachResult {
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Gen.calm(); /*>*/ }\n\t}\n}\n';
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Gen.calm(); /*>*/ }\n\t}\n}\n';
 		final hub: String = plain ? '' : '--macro addGlobalMetadata("", "@:build(Mac.hub())")\n';
 		// in build order: the first build's copy is where its facts place a node first
 		final names: Array<String> = [for (b in ['a', 'b']) ownDirs ? 'gen/$b/build_$b.hxml' : 'build_$b.hxml'];
@@ -1177,7 +1178,8 @@ class MemberReachFactsTest extends Test {
 			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Util.f(); /*>*/ }\n\t}\n}\n'
 			+ 'class Util {\n\tpublic static function f():Void Mac.gen();\n}\n';
 		assertMatch(compiledTruthAsk(['Main.hx' => called, 'Mac.hx' => EXPRESSION_MACROS]), r -> r.match(Reached(_)));
-		final direct: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Mac.gen(); /*>*/ }\n\t}\n}\n';
+		final direct: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Mac.gen(); /*>*/ }\n\t}\n}\n';
 		assertMatch(compiledTruthAsk(['Main.hx' => direct, 'Mac.hx' => EXPRESSION_MACROS]), r -> r.match(Reached(_)));
 		final shown: String = StringTools.replace(expandedBefore(''), 'var n:Int = i;', 'Mac.show();');
 		assertMatch(compiledTruthAsk(['Main.hx' => shown, 'Mac.hx' => EXPRESSION_MACROS, 'Words.hx' => WORDS]), r -> r.match(Reached(_)));

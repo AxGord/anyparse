@@ -317,9 +317,8 @@ final class NegatedCondition {
 
 	/** Whether a comment lies in `outer` before or after `inner` — the part of `outer` a rebuild as `inner` drops. */
 	private static function commentOutside(source: String, outer: Span, inner: Span): Bool {
-		return SourceComments.hasCommentMarker(source, outer.from, inner.from) || SourceComments.hasCommentMarker(
-			source, inner.to, outer.to
-		);
+		return SourceComments.hasCommentMarker(source, outer.from, inner.from)
+			|| SourceComments.hasCommentMarker(source, inner.to, outer.to);
 	}
 
 }

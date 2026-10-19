@@ -526,8 +526,9 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/**
-	 * An abstract may take a `String` through `@:from` (`openfl.text.TextFormatAlign`), so a string literal may bind it or
-	 * skip it: the `String` after it may stay `null` (4.3.7 binds `align`), and the branch a `null` takes runs.
+	 * An abstract takes a `String` through `@:from` (`openfl.text.TextFormatAlign`), so a string literal binds it (4.3.7
+	 * binds `align`), the `String` after it stays `null` and the branch a `null` takes runs. An abstract the cast graph does
+	 * not model (one with a type parameter) may bind it or skip it: both bindings are followed, and the branch runs too.
 	 */
 	@:pin('control') @:killer('M-ARGFIT-UNKNOWN-MISFITS')
 	public function testAnArgumentAnAbstractMayTakeLeavesBothBindings(): Void {
@@ -537,6 +538,11 @@ class ThreadSafetyConditionsTest extends Test {
 			'class W { public static function make(?align:Align, ?hint:String):Void if (hint == null) Sys.sleep(1); }',
 			'class A { public static function main():Void W.make(\'x\'); }'
 		]));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', [
+			'abstract Align<T>(Null<Int>) { @:from static function ofText<T>(s:String):Align<T> return null; }',
+			'class W { public static function make(?align:Align<Int>, ?hint:String):Void if (hint == null) Sys.sleep(1); }',
+			'class A { public static function main():Void W.make(\'x\'); }'
+		]), 'an abstract the graph does not model');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -562,6 +568,30 @@ class ThreadSafetyConditionsTest extends Test {
 		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', model.concat([
 			'class A { public static function main():Void { final v:Z = null; W.make(v); } }'
 		])), 'a subclass of Y binds y');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An argument of an abstract binds a parameter it casts to (`abstractCast.ml`, probed on Haxe 4.3.7): `W.make(u)` with
+	 * `u: U` and `abstract U(Int) to Float` binds `?w:Float`, so `hint` stays null and the branch never runs; an abstract
+	 * with an `@:to String` member skips `w` and binds `hint`.
+	 */
+	@:pin('control') @:killer('M-ARGFIT-CAST-OFF') @:killer('M-UNIFY-ABSTRACT-OFF')
+	public function testAnAbstractArgumentBindsTheParameterItCastsTo(): Void {
+		#if (sys || nodejs)
+		final model: Array<String> = [
+			'abstract U(Int) to Float { public inline function new(i:Int) this = i; }',
+			'abstract V(Int) { public inline function new(i:Int) this = i;\n@:to function toText():String return \'v\'; }',
+			'class W { public static function make(?w:Float, ?hint:String, quiet:Bool = true):Void if (hint != null) Sys.sleep(1); }'
+		];
+		Assert.same([], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final u:U = new U(1); W.make(u); } }'
+		])));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final v:V = new V(1); W.make(v); } }'
+		])), 'an `@:to String` member binds hint');
 		#else
 		Assert.pass('non-sys target');
 		#end

@@ -935,8 +935,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 		// one string. The source line differs from it by the space before its close
 		// brace, so no untransformed input can satisfy it.
 		Assert.isTrue(
-			flat != null && flat.indexOf('e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)}\n')
-				!= -1,
+			flat != null
+			&& flat.indexOf('e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)}\n') != -1,
 			'the control must keep the literal flat on the packed argument line:\n<$flat>'
 		);
 	}

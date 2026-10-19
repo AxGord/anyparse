@@ -152,6 +152,8 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 	 * its own line. Position-agnostic: fires for a ternary branch here, not only a
 	 * condition operand (the arm previously gated the open on `_parenInCondition`).
 	 */
+	@:pin('control')
+	@:killer('M-COLLAPSE-GLUE-TERNARY')
 	public function testFillLineExpressionWrapOpensParenOpAddSub(): Void {
 		Assert.equals(
 			'class Sample {\n\n\tfunction run() {\n\t\tsummaryLine = headMarkNode != null\n\t\t\t? (\n'

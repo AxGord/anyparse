@@ -405,7 +405,7 @@ final class WriterPrattLowering {
 		// unconditional glue below (open/close-delim operand carries the wrap)
 		// is stale for Eq/NotEq: a bracketed operand whose own Group fits flat
 		// leaves the trailing `== CONST` invisible to any probe and the line
-		// lands >max (TM FileSystemBase.hx 170-col `|| call(...) == CONST)`).
+		// lands >max (client DiskSystemBase.hx 170-col `|| call(...) == CONST)`).
 		// Gate with IfLineExceeds(lineWidth + 1) -- same probe + `+1` strict-`>`
 		// restoration as WrapList.emitCondition -- byte-inert unless the
 		// rendered line overflows. The probe sits AFTER `_left` in the Concat
@@ -639,9 +639,11 @@ final class WriterPrattLowering {
 		final emitCall: Expr = threadBreaks
 			? macro anyparse.format.wrap.BinaryChainEmit.emit(
 				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _headBreak, _hasLeadComment,
-				_afterComments
+				_afterComments, _restAware
 			)
-			: macro anyparse.format.wrap.BinaryChainEmit.emit(_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced);
+			: macro anyparse.format.wrap.BinaryChainEmit.emit(
+				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, null, false, false, null, _restAware
+			);
 		return macro {
 			final _items: Array<anyparse.core.Doc> = [];
 			final _ops: Array<String> = [];
@@ -687,6 +689,15 @@ final class WriterPrattLowering {
 			// being Keep so non-keep chains in a paren are byte-inert.
 			final _keepChainInParen: Bool = opt._keepChainInParen && $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep;
 			final _chainNestSuppress: Bool = _condWrapForced || opt._callArgChainNest || _keepChainInParen;
+			// omega-chain-rest-width: the chain pivot and its fill group count the
+			// whole physical line (the trailing `;` / `)` and the space after `=`),
+			// except inside a paren that owns the wrap. Neither a string
+			// interpolation nor a condition wrap needs a gate of its own: the first
+			// collapses the chain to a groupless NoWrap shape, the second breaks its
+			// `(` before the chain, which then has nothing after it on its line
+			// (measured: no output moves in the suite, client or anyparse). Read before
+			// the re-bind below clears `_keepChainInParen`.
+			final _restAware: Bool = !opt._keepChainInParen;
 			$headDecl;
 			final opt = $clearOptExpr;
 			final _leafOpen: Array<Bool> = [];

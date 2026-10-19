@@ -398,6 +398,7 @@ final class HaxeRefShape {
 			optionalFieldMetaName: '@:optional',
 			execution: {
 				implicitConversionMetaName: '@:from',
+				implicitOutwardConversionMetaName: '@:to',
 				// what `thread-safety` counts as blocking with no configuration: each one waits on a file, a process, a socket, a
 				// database, a timer or another thread (verified against the std of Haxe 4.3.7); `FileSystem.absolutePath` is no
 				// entry, its cpp body reads `Sys.getCwd` and joins strings
@@ -923,6 +924,20 @@ final class HaxeRefShape {
 			expressionBodyKinds: ['ExprBody'],
 			enumAbstractDeclKind: 'EnumAbstractDecl',
 			abstractFromClauseKind: 'FromClause',
+			abstractToClauseKind: 'ToClause',
+			// `@:coreType` abstracts (`Int`'s `to Float`) cast on through any clause; a plain one's clause allows no second cast
+			transitiveCastTypeMetaNames: ['@:coreType', '@:transitive'],
+			typeSelectedAbstractMetaName: '@:multiType',
+			handUnifiedAbstractPaths: [
+				'Void',
+				'EnumValue',
+				'Class',
+				'Enum',
+				'haxe.NotVoid',
+				'haxe.FlatEnum',
+				'haxe.Function',
+				'haxe.Constructible'
+			],
 			enumAbstractMetaName: '@:enum',
 			enumAbstractImplicitValues: { counting: ['Int', 'UInt'], naming: ['String'] },
 			operatorOverloadMetaName: '@:op',
@@ -997,7 +1012,8 @@ final class HaxeRefShape {
 				names: ['Bool', 'String', 'Int', 'Float'],
 				widens: ['Int' => ['Float']],
 				integer: 'Int',
-				real: 'Float'
+				real: 'Float',
+				classNames: ['String']
 			},
 			arithmeticKinds: ['Add', 'Sub', 'Mul', 'Div', 'Mod'],
 			realArithmeticKinds: ['Div'],

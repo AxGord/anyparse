@@ -244,6 +244,26 @@ class StructuralConformanceProofTest extends Test {
 		])), 'b.T');
 	}
 
+	/**
+	 * A read-only structure field takes an abstract whose `to` clause reaches its type (`tUnification.ml`, `unify_to`), and
+	 * an abstract with none refutes the structure: `{final x:Base}` against `var x:ToBase` pins `y`, against `var x:Bare` not.
+	 */
+	@:pin('control') @:killer('M-UNIFY-ABSTRACT-OFF')
+	public function testAReadOnlyStructureFieldTakesAnAbstractThroughItsClause(): Void {
+		final model: Array<SourceFile> = [
+			{ file: 'Base.hx', source: 'class Base {}' },
+			{ file: 'ToBase.hx', source: 'abstract ToBase(Base) to Base {}' },
+			{ file: 'Bare.hx', source: 'abstract Bare(Base) {}' },
+			{ file: 'S.hx', source: 'typedef S = { final x:Base; var y:Int; }' }
+		];
+		Assert.equals(1, owner(model.concat([
+			{ file: 'C.hx', source: 'class C { public var x:ToBase = null; public var y:Int = 0; }' }
+		])));
+		Assert.equals(2, owner(model.concat([
+			{ file: 'C.hx', source: 'class C { public var x:Bare = null; public var y:Int = 0; }' }
+		])), 'no clause reaches Base');
+	}
+
 	/** How many findings the rule reports against the owner file `C.hx`. */
 	private function owner(files: Array<SourceFile>): Int {
 		return CheckFixture.violationsIn(new PreferFinalPublicField(), files).count(v -> v.file == 'C.hx');

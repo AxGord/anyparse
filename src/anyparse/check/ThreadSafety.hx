@@ -672,9 +672,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final shape: RefShape = plugin.refShape();
 		final kinds: Array<String> = (shape.modifierKinds ?? []).concat(plugin.metaShape().metaKinds);
 		final leading: Null<Array<QueryNode>> = MemberKinds.precedingAt(tree, d.span, kinds);
-		return leading != null && !leading.exists(m ->
-			m.kind == shape.overrideModifierKind || plugin.metaShape().metaKinds.contains(m.kind)
-		);
+		return leading != null
+			&& !leading.exists(m -> m.kind == shape.overrideModifierKind || plugin.metaShape().metaKinds.contains(m.kind));
 	}
 
 	/**
@@ -948,7 +947,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/**
 	 * Whether one call of a multi-lock helper opens both holds (`LockAcquire.inner`), the helper's take of `outer`'s lock
 	 * written before its take of `inner`'s: the caller holds both from that call on, and of two holds across the same calls
-	 * the one the helper takes first — the outer lock of its order (TM's `StandardFileSystem.acquireMutationLocks`:
+	 * the one the helper takes first — the outer lock of its order (the client's `StandardDiskSystem.acquireMutationLocks`:
 	 * `_batchMutex`, then `_mutationMutex`) — keeps the warning. Whether the outer window spans the inner hold's long calls
 	 * is `nestHolds`' question.
 	 */

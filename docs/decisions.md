@@ -4758,6 +4758,89 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - Known detection gap, not changed: an else-if chain with no final `else` (`if (a) { x; } else if (b) y();`) is not a
   finding, although the writer's symmetric mode braces it.
 
+## FU21 (2026-10-19) — `prefer-if-expression-return` merges the LAST three values of a longer fall-through run
+
+- client `DiskSystemBase.localPathBeforeMove`: `if (ownMove != null) return ownMove.localFilePath; if (heldAt == null)
+  return null; return exists(…) ? heldAt : null;` is a run of four values, so FU6's "exactly three" left it as written
+  although its last three carry two. A run of four or more now merges its LAST three (`mergeOf`): the guards in front
+  keep their statements, the merged return replaces the tail from the `if` that returns the first of the three, and the
+  finding is reported on that `if` (where the edit starts; `fix` keys on the same statement). Here:
+  `return heldAt != null && exists(…) ? heldAt : null;` after the first guard.
+- Only the last three: the merged text ends at the terminal, so two rungs and the terminal are what the rebuild copies;
+  any other window would drop a condition.
+- Soundness is FU6's, unchanged and applied to the three: the `Leading` / `Outer` merges keep every condition's
+  evaluation and order (`c2` still runs only when `c1` was false), so a condition with a side effect is no obstacle;
+  the `v2 == v3` merge that would DROP a condition's evaluation stays refused; the repeated value is a non-boolean
+  literal or a bare name; any comment in the replaced tail refuses it. A comment in FRONT of the tail is outside the
+  edit and stays above the merged return.
+- Fall-through spelling only, from a WRITTEN rung. An else-linked chain is one statement with no tail to cut out, and
+  keeps its chain fix. A tail whose first value is folded out of the terminal ternary (`if (a) return 0; return b ? 1 :
+  c ? 1 : 3;`) sits inside that ternary, and re-shaping a ternary is not a cascade merge; the run stays owned.
+- FU6's ladder decision is KEPT: a tail whose preceding value repeats one of the tail's values is refused
+  (`repeatsTail`). Merging it would leave a run of three the next pass merges again, so `if (a) return null; if (b)
+  return null; if (c) return null; return x;` would end as one nested `return a || (b || c) ? null : x;` over the `--fix`
+  passes. With the gate a run merges at most once, so no composition across passes builds a nested condition. The
+  repeat is compared on BOTH tail values: the one the merge repeats and the other one (`if (a) return 5; if (b)
+  return null; if (c) return 5; return null;` would merge its tail to `!b && c ? 5 : null` and then the run again).
+
+## FU18 (2026-10-19): typer step T4 — the cast graph of abstracts, an argument's implicit cast
+
+- every pair an abstract took part in was `MayFit` (`Unification`, `ArgumentTypes.fit`, a static extension's first
+  parameter, a read-only structure member) → ONE cast graph on the typing service (`AbstractCasts`, table `castGraphs`
+  by `ofType`) over the header clauses the index now records per `#if` branch (`TypeDeclInfo.castClauses`), walked by
+  `Unification` for a unification (`tUnification.ml`: `unify_to` / `unify_from` / `unify_abstracts`) and by
+  `Unification.casts` for an argument (`abstractCast.ml`, `do_check_cast`) — branch `feat/fu-FU18`
+- probed on Haxe 4.3.7 (`--interp`, two also `-js`): a static extension's first parameter is UNIFIED, never cast
+  (`unify_static_extension`): an abstract taking the receiver only through an `@:from` member passes it over, an
+  `@:to String` member does not bind `s:String`, and `Any` (`from Dynamic`) takes an abstract and a `String`; an
+  argument IS cast, and optional-argument skipping uses the cast (`f(?a:Float, ?b:String)` binds `b` for an abstract
+  with `@:to String`); `UInt` binds `?a:Float` — branch `feat/fu-FU18`
+- a header `from` clause is no cast path of its own: `String` → `A from B` with `B(String) from String` is an error
+  (`find_from` answers a unification by `Not_found`, and `B`'s clause would be a second abstract cast), `@:transitive A`
+  compiles. Past the members the compiler casts to the FIRST `from` clause unequal to the abstract and to no other
+  (`loop2` returns that recursion's answer): `Ab from Bs from Dz` takes a `String` through `Bs.fromS`, not a `Bool`
+  through `Dz.fromB`, and `Ad from Dz from Bs` takes neither — a `Bool` is a `TAbstract`, so the abstract/abstract arm
+  applies, which tries the two abstracts' members only. Hence `CoreValueTypes.classNames` (`String` is the one core class)
+  — branch `feat/fu-FU18`
+- "matches or Unknown": no graph (both halves of a pair `MayFit`) for an abstract with type parameters (its clauses read
+  without the arguments binding them), `@:multiType` (cast by type arguments), one the compiler unifies by hand
+  (`RefShape.handUnifiedAbstractPaths`: `EnumValue` takes every enum by an arm, not a clause — answering `Misfits` there
+  would be another answer), a header with a clause under `#if` or a branch that declares no abstract
+  (`openfl.text.TextFormatAlign`: two abstracts and a typedef). A type several branches declare answers what every
+  branch agrees on; a conversion member is `certain` only on a one-branch declaration and not under `#if` (the members
+  are the branches' union, so a fit there may be another build's while a misfit is every build's); a build macro leaves a
+  member misfit open. A cycle of transitive clauses is `MayFit` (the compiler's `rec_stack` answers false; the walk does
+  not claim it) — branch `feat/fu-FU18`
+- the index's clauses replace a re-parse: `TypedEventConstant.isStringAbstract` re-parsed the declaring file to find the
+  `FromClause` / `ToClause` nodes "because no seam names them" → `castClauses` (every branch converting both ways);
+  `findDecl`, `convertsWith` and the two literal kind constants deleted, `abstractToClauseKind` joins
+  `abstractFromClauseKind` (whose doc claimed a `thread-safety` reader it never had) — branch `feat/fu-FU18`
+- NOT reached, measured: the call graph's index (`ArgumentTypes`' `heldFile`) holds the project and the library bodies
+  the graph reads, never the std, so a std abstract (`UInt`) never resolves there and the client's `UInt` arguments stay
+  `MayFit`; the client's `RoundedTextField.new` / `Assets.getBitmapData` false positive needs that AND typing `UInt - UInt`
+  through `UInt`'s `@:op` overloads (`SaveDialog`'s first argument) — branch `feat/fu-FU18`
+
+## FU20 (2026-10-19) — an `&&` / `||` / `+` / `-` chain counts its whole physical line
+
+- Defect (found by FU11): a chain whose flat body ended on the limit but whose physical line ran one or two columns over
+  (the statement `;`, an enclosing `)`, the un-flushed space after `=`) stayed glued, and the line broke at the first
+  inner group that did count the rest: before a nested `==` (`requestedAnchors.count()` / `== 0 && ...`), after
+  `return`, or not at all for a `+` chain. The fork breaks at the chain operator in every such case.
+- Mechanism: TWO plain `Group`s decided on `col + flatWidth` alone, the chain pivot (`emitNoThreshold`'s
+  `Group(IfBreak)`, and the addSub tagged pivot) and the FillLine shape's own `Group(Nest(Fill))`, which re-decided flat
+  inside an already-broken pivot. Both now build through `D.groupOrRestProbe` (moved from `WrapList`'s private copy, the
+  one spelling of "Group or its rest-aware twin") when the chain is `restAware`: everywhere except a paren that owns the
+  wrap (`_keepChainInParen`, as for the ternary). A string interpolation and a condition wrap need no gate of their own
+  (measured: dropping the condition-wrap conjunct moved nothing in the suite, client or anyparse) - the first collapses the
+  chain to a groupless NoWrap shape, the second breaks its `(` first.
+- CollapsePass reads both pivot kinds through `chainGroup` (tagged addSub chain, its probed form, FillLine parts, the
+  bool re-eval payload, the fill forward glue) and keeps the kind on every rebuild. The forward glue
+  (`chainGluedIfOpens`) takes a rest-aware pivot only when its flat side is an infix chain (`gluesInfixChain`, a
+  positive list of ` && ` / ` || ` / ` + ` / ` - `): a ternary shares the rest-aware pivot but was never a glue
+  candidate, and admitting it rewrote two client files and three suite fixtures away from the fork.
+- Unarmed, equivalent by construction: the rebuild kind of the bool re-eval flip and of the fill forward glue (the
+  flipped chain overflows by its call operand, the glued chain has no soft line left, so either group answers the same).
+
 ## FU19 (2026-10-20) — writer one-pass drift residue: a chain cuddles after a region break; a committed collapse is a `BodyGroup`
 
 - **A method chain is a host of the breaks nested in its parts.** `methodChainCuddledLinks` decides each link's cuddle

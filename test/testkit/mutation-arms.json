@@ -23574,8 +23574,8 @@
 			"name": "M-NEGCOND-COMMENT-BEFORE-KEPT",
 			"type": "anyparse.check.NegatedCondition",
 			"method": "commentOutside",
-			"find": "SourceComments.hasCommentMarker(source, outer.from, inner.from) || ",
-			"replace": "",
+			"find": "return SourceComments.hasCommentMarker(source, outer.from, inner.from)",
+			"replace": "return false",
 			"note": "a comment between the `!` and its operand is not seen, and the positive rebuild drops it"
 		},
 		{
@@ -26557,10 +26557,10 @@
 		{
 			"name": "M-ARGFIT-UNKNOWN-MISFITS",
 			"type": "anyparse.check.ArgumentTypes",
-			"method": "fit",
-			"find": "if (a != null || p != null) return MayFit;",
-			"replace": "if (a != null || p != null) return Misfits;",
-			"note": "a type the fit cannot decide misfits, so a string an abstract takes through `@:from` reads as skipping it"
+			"method": "castFit",
+			"find": "return w == null || g == null ? MayFit : ",
+			"replace": "return w == null || g == null ? Misfits : ",
+			"note": "a type the fit cannot decide misfits, so a string an abstract the cast graph does not model may take reads as skipping it"
 		},
 		{
 			"name": "M-ARGTYPE-STATIC-OFF",
@@ -27080,7 +27080,7 @@
 		},
 		{
 			"name": "M-UNIFY-ALIAS-STOP",
-			"type": "anyparse.query.Unification",
+			"type": "anyparse.query.AbstractCasts",
 			"method": "followed",
 			"find": "while (at.type.kind == SymbolIndex.TYPEDEF_DECL_KIND) {",
 			"replace": "while (false) {",
@@ -27097,10 +27097,10 @@
 		{
 			"name": "M-ARGFIT-PLAIN-OFF",
 			"type": "anyparse.check.ArgumentTypes",
-			"method": "fit",
-			"find": "plainFit(given, wanted, wantedFile, callerId, calleeId)",
-			"replace": "MayFit",
-			"note": "two plain class types are never unified, so an argument of an unrelated class still binds an optional parameter"
+			"method": "castFit",
+			"find": "givenCore != null ? Core(givenCore) : givenEnd(given, index, callerId)",
+			"replace": "givenCore != null ? Core(givenCore) : null",
+			"note": "an argument of a class or an abstract written in the caller's file is never read as an end, so an argument of an unrelated class still binds an optional parameter"
 		},
 		{
 			"name": "M-NOMINAL-OPTIONAL-PARAM",
@@ -27201,9 +27201,9 @@
 		{
 			"name": "M-UNIFY-GENERIC-GIVEN",
 			"type": "anyparse.query.Unification",
-			"method": "unifies",
-			"find": "verdict(nominal(given), plain(wanted))",
-			"replace": "verdict(plain(given), plain(wanted))",
+			"method": "plainUnify",
+			"find": "verdict(nominal(a), plain(b))",
+			"replace": "verdict(plain(a), plain(b))",
 			"note": "a given type with type parameters is undecided against a plain wanted type, though its chain alone decides it"
 		},
 		{
@@ -27290,9 +27290,9 @@
 			"name": "M-UNIFY-SELF-OPEN",
 			"type": "anyparse.query.Unification",
 			"method": "unifies",
-			"find": "AncestorTable.same(given, wanted) && given.type.typeParamArity == 0 ? Fits : ",
+			"find": "AncestorTable.same(given, wanted) && given.type.typeParamArity == 0\n\t\t\t\t\t? Fits\n\t\t\t\t\t: ",
 			"replace": "",
-			"note": "a declaration that is not plain (an abstract, a structure, one under `#if`) is undecided against itself, though `unify` starts with `a == b`"
+			"note": "a declaration the cast graph reads as no end (an anonymous structure) is undecided against itself, though `unify` starts with `a == b`"
 		},
 		{
 			"name": "M-EXT-AMBIGUOUS-MODULE",
@@ -27337,10 +27337,10 @@
 		{
 			"name": "M-PIER-MERGE-ANY-COUNT",
 			"type": "anyparse.check.PreferIfExpressionReturn",
-			"method": "mergeShape",
-			"find": "if (values.length != MERGED_VALUE_COUNT) return null;",
-			"replace": "if (values.length < MERGED_VALUE_COUNT) return null;",
-			"note": "a four-value run merges from its first two rungs and the terminal, dropping the third condition"
+			"method": "mergeOf",
+			"find": "if (from < 0 || from > 0 && from >= rungs.length) return null;",
+			"replace": "if (from != 0) return null;",
+			"note": "only a run of exactly three merges, so the mergeable tail of a longer run keeps its statements"
 		},
 		{
 			"name": "M-PIER-LEADING-AS-OUTER",
@@ -27369,17 +27369,17 @@
 		{
 			"name": "M-PIER-CASCADE-UNMERGED-REPORTED",
 			"type": "anyparse.check.PreferIfExpressionReturn",
-			"method": "walkCascades",
-			"find": "if (cascadeMatch(kids, i, source, comments, s)?.merge == null) continue;",
-			"replace": "if (cascadeMatch(kids, i, source, comments, s) == null) continue;",
+			"method": "eachMergedRun",
+			"find": "final merge: Null<Merge> = m?.merge;",
+			"replace": "final merge: Null<Merge> = m == null ? null : m.merge ?? { shape: Leading, from: 0, span: m.prefix, prefix: m.prefix };",
 			"note": "an owned cascade that does not merge is reported, with no fix behind the finding"
 		},
 		{
 			"name": "M-PIER-OUTER-UNNEGATED",
 			"type": "anyparse.check.PreferIfExpressionReturn",
 			"method": "mergedEdit",
-			"find": "case Outer: NegationScan.negateConditionText(m.conds[0], source, s.negation, emit.logic, emit.types());",
-			"replace": "case Outer: text(source, m.pairs[0].cond);",
+			"find": "case Outer: NegationScan.negateConditionText(m.conds[rung], source, s.negation, emit.logic, emit.types());",
+			"replace": "case Outer: text(source, m.pairs[rung].cond);",
 			"note": "the outer merge keeps the first condition positive, inverting which branch returns what"
 		},
 		{
@@ -27389,6 +27389,38 @@
 			"find": "if (i % 2 == 0) holes.push(new Span(at, at + piece.length));",
 			"replace": "if (false) holes.push(new Span(at, at + piece.length));",
 			"note": "no merged piece is a ParenGuard hole, so a ternary condition re-associates across the new `&&`"
+		},
+		{
+			"name": "M-PIER-TAIL-REPORTED-AT-HEAD",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "eachMergedRun",
+			"find": "final reported: Null<Span> = kids[i + merge.from].span;",
+			"replace": "final reported: Null<Span> = kids[i].span;",
+			"note": "a merged tail is reported and keyed at the run head, so the finding names a guard the edit does not touch"
+		},
+		{
+			"name": "M-PIER-TAIL-SPAN-WHOLE",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeOf",
+			"find": "final span: Span = new Span(start.from, region.to);",
+			"replace": "final span: Span = region;",
+			"note": "a merged tail replaces the whole run, dropping the guards in front of it"
+		},
+		{
+			"name": "M-PIER-TAIL-FROM-FOLDED",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeOf",
+			"find": "if (from < 0 || from > 0 && from >= rungs.length) return null;",
+			"replace": "if (from < 0 || from > 0 && from > rungs.length) return null;",
+			"note": "a tail may start at a value folded out of the terminal ternary, past the last written rung"
+		},
+		{
+			"name": "M-PIER-TAIL-LADDER",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeOf",
+			"find": "return shape == null || from > 0 && repeatsTail(values[from - 1], tail, source, comments) ? null : {",
+			"replace": "return shape == null ? null : {",
+			"note": "a tail merges although the value before it repeats one of its own, so a guard ladder merges again on every pass into one nested condition"
 		},
 		{
 			"name": "M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED",
@@ -27624,6 +27656,213 @@
 			"method": "typeNamedLocal",
 			"force": "'renamed'",
 			"note": "any written type names a replacement, `Null<Array<Item>>` and `String` included, so a parameter is renamed to a name no type gave it"
+		},
+		{
+			"name": "M-UNIFY-ABSTRACT-OFF",
+			"type": "anyparse.query.Unification",
+			"method": "unifyEnds",
+			"find": "abstractUnify(given, wanted, allowCast, stack)",
+			"replace": "MayFit",
+			"note": "an abstract on either side is undecided again, so its clauses never decide a unification, a static extension's first parameter or a read-only structure member"
+		},
+		{
+			"name": "M-UNIFY-CAST-TRANSITIVE",
+			"type": "anyparse.query.Unification",
+			"method": "nextCast",
+			"find": "return b.transitive && allowCast;",
+			"replace": "return allowCast;",
+			"note": "a clause of an abstract that is not transitive allows a second abstract cast, so `B` reaches `Top from Mid` through `Mid`'s own clause"
+		},
+		{
+			"name": "M-UNIFY-CAST-STACK",
+			"type": "anyparse.query.Unification",
+			"method": "abstractUnify",
+			"find": "if (stack.contains(key)) return MayFit;",
+			"replace": "",
+			"note": "a cycle of transitive clauses is walked forever instead of answering MayFit"
+		},
+		{
+			"name": "M-UNIFY-CORE-WIDENS",
+			"type": "anyparse.query.Unification",
+			"method": "unifyEnds",
+			"find": "return (_widens[a] ?? []).contains(b) ? Fits : Misfits;",
+			"replace": "return Misfits;",
+			"note": "two different core value types never unify, so `UInt`'s `to Int` no longer reaches `Float`"
+		},
+		{
+			"name": "M-CASTS-BRANCHES-AGREE",
+			"type": "anyparse.query.Unification",
+			"method": "agreed",
+			"find": "return if (all.length > 0 && all.foreach(a -> a == Fits))",
+			"replace": "return if (all.contains(Fits))",
+			"note": "one `#if` branch's clause decides for every build, so an abstract casting from `B` in one branch only takes `B` everywhere"
+		},
+		{
+			"name": "M-CASTS-MEMBERS-OFF",
+			"type": "anyparse.query.Unification",
+			"method": "castVerdict",
+			"find": "castPath(wanted, given, [])",
+			"replace": "Misfits",
+			"note": "an argument's cast reads no `@:from` / `@:to` member, so a conversion member never binds a parameter"
+		},
+		{
+			"name": "M-CASTS-FIRST-FROM",
+			"type": "anyparse.query.Unification",
+			"method": "castPath",
+			"find": "either(inwardMembers(given, wanted), firstClause(wanted, b -> b.from, t -> castPath(t, given, stack)))",
+			"replace": "inwardMembers(given, wanted)",
+			"note": "the cast stops at the wanted abstract's own members and never casts to its first `from` clause"
+		},
+		{
+			"name": "M-CASTS-FIRST-ONLY",
+			"type": "anyparse.query.Unification",
+			"method": "firstClause",
+			"find": "final first: Null<TypeEnd> = side(b).find(t -> !AbstractCasts.same(t, e));",
+			"replace": "final first: Null<TypeEnd> = side(b).filter(t -> !AbstractCasts.same(t, e)).pop();",
+			"note": "the LAST clause unequal to the abstract is cast to instead of the first, so `Ad from Dz from Bs` takes a `String`"
+		},
+		{
+			"name": "M-CASTS-CORE-ABSTRACT",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "coreGraph",
+			"find": "|| core.classNames.contains(name) ? null",
+			"replace": "|| true ? null",
+			"note": "no core value type is an abstract, so a `Bool` argument takes the arm of a class and casts on through the wanted abstract's first `from` clause"
+		},
+		{
+			"name": "M-CASTS-GRAPH-PARAMS",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "graphOf",
+			"find": " || r.type.typeParamArity > 0) return null;",
+			"replace": ") return null;",
+			"note": "an abstract with type parameters gets a graph, its clauses read without the arguments that bind them"
+		},
+		{
+			"name": "M-CASTS-TYPE-SELECTED",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "graphOf",
+			"find": "clauses.exists(c -> c.typeSelected) || ",
+			"replace": "",
+			"note": "a `@:multiType` abstract, whose cast the compiler picks by its type arguments, is decided by its clauses"
+		},
+		{
+			"name": "M-CASTS-HAND-UNIFIED",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "graphOf",
+			"find": " || _handUnified.contains(pathOf(r))) return null;",
+			"replace": ") return null;",
+			"note": "an abstract the compiler unifies by a hand-written arm (`EnumValue` takes every enum) is decided by its empty clauses"
+		},
+		{
+			"name": "M-CASTS-MEMBER-CERTAIN",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "graphOf",
+			"find": "final certain: MemberInfo -> Bool = m -> single && !m.guarded;",
+			"replace": "final certain: MemberInfo -> Bool = m -> true;",
+			"note": "a conversion member under `#if`, or of a type two branches declare, casts in every build"
+		},
+		{
+			"name": "M-CASTS-BUILD-OPEN",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "graphOf",
+			"find": "fieldsComplete: !r.type.hasBuild && !r.type.hasAutoBuild",
+			"replace": "fieldsComplete: true",
+			"note": "an abstract a build macro may give a conversion member is read as having none"
+		},
+		{
+			"name": "M-CASTS-DYNAMIC-END",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "unresolvedEnd",
+			"find": "if (path == _dynamic) return Dyn;",
+			"replace": "",
+			"note": "a clause writing the dynamic type is no end the graph models, so `Any` (`from Dynamic`) takes nothing"
+		},
+		{
+			"name": "M-ARGFIT-CAST-OFF",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "castFit",
+			"find": "index.typing.unification.casts(g, w)",
+			"replace": "MayFit",
+			"note": "an argument the typing service could cast is undecided, so an abstract argument may land on any optional parameter"
+		},
+		{
+			"name": "M-CHAIN-REST-PIVOT-PLAIN",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emitNoThreshold",
+			"find": "return WrapBoundary(D.groupOrRestProbe(ifBreak, restAware));",
+			"replace": "return WrapBoundary(Group(ifBreak));",
+			"note": "the chain pivot decides on `col + flatWidth` alone, so a chain whose physical line runs two columns over (the `;` and the space after `=`) stays glued and breaks before a nested `==`"
+		},
+		{
+			"name": "M-CHAIN-REST-ADD-PIVOT-PLAIN",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emitNoThreshold",
+			"find": "final brkDoc: Doc = D.groupOrRestProbe(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat)), restAware);",
+			"replace": "final brkDoc: Doc = Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat)));",
+			"note": "the tagged `+` chain pivot ignores the rest of its line, so a declaration one column over the limit spills past it unbroken"
+		},
+		{
+			"name": "M-CHAIN-REST-FILL-GROUP-PLAIN",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "shapeFillLine",
+			"find": "return D.groupOrRestProbe(packed, restAware);",
+			"replace": "return Group(packed);",
+			"note": "the fill shape's own group re-decides flat on `col + flatWidth` inside the broken pivot, so a chain one column over breaks before a nested `==` instead of at `&&`"
+		},
+		{
+			"name": "M-CHAIN-REST-SHAPE-UNTHREADED",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emit",
+			"find": "r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, restAware",
+			"replace": "r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, false",
+			"note": "`restAware` never reaches the shapes, so the fill group stays plain and undoes the rest-aware pivot's break"
+		},
+		{
+			"name": "M-CHAIN-REST-UNSET",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixChain",
+			"find": "final _restAware: Bool = !opt._keepChainInParen;",
+			"replace": "final _restAware: Bool = false;",
+			"note": "no `&&` / `+` chain is rest-aware, so every one-or-two-column overrun breaks inside an operand or not at all"
+		},
+		{
+			"name": "M-CHAIN-REST-IN-KEPT-PAREN",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixChain",
+			"find": "final _restAware: Bool = !opt._keepChainInParen;",
+			"replace": "final _restAware: Bool = true;",
+			"note": "a chain inside a paren that owns the wrap counts the paren's rest too, so it breaks where the paren should open first"
+		},
+		{
+			"name": "M-COLLAPSE-CHAIN-GROUP-PLAIN-ONLY",
+			"type": "anyparse.core.CollapsePass",
+			"method": "chainGroup",
+			"find": "case GroupWithRestProbe(inner): { inner: inner, restAware: true };",
+			"replace": "case GroupWithRestProbe(inner): null;",
+			"note": "CollapsePass no longer recognises a rest-aware chain pivot, so a tagged `+` chain keeps its marker and loses its glue / head-break rewrites"
+		},
+		{
+			"name": "M-COLLAPSE-ADD-REBUILD-PLAIN",
+			"type": "anyparse.core.CollapsePass",
+			"method": "rebuildTaggedAddPivot",
+			"find": "rewrite(tagged.flat, decisions, false, width)), tagged.restAware",
+			"replace": "rewrite(tagged.flat, decisions, false, width)), false",
+			"note": "a rewritten tagged `+` chain comes back under a plain `Group` with its rest-awareness dropped, so it spills one column past the limit again"
+		},
+		{
+			"name": "M-COLLAPSE-GLUE-TERNARY",
+			"type": "anyparse.core.CollapsePass",
+			"method": "gluesInfixChain",
+			"force": "true",
+			"note": "a rest-aware ternary pivot is forward-glued like an op-chain, so a ternary call argument hugs an opening paren branch the fork breaks before"
+		},
+		{
+			"name": "M-COLLAPSE-GLUE-REST-CHAIN-SKIPPED",
+			"type": "anyparse.core.CollapsePass",
+			"method": "chainGluedIfOpens",
+			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(fl)): fl;",
+			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (false): fl;",
+			"note": "a rest-aware `&&` / `+` chain whose trailing paren opens is no longer forward-glued, so it breaks before `|| (` instead of hugging the paren"
 		},
 		{
 			"name": "M-CHAIN-REGION-OFFER-OFF",

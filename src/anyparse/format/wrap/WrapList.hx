@@ -3,6 +3,7 @@ package anyparse.format.wrap;
 import anyparse.core.BreakCommits;
 import anyparse.core.BreakToken;
 import anyparse.core.CollapsePass;
+import anyparse.core.D.groupOrRestProbe;
 import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
@@ -1338,24 +1339,6 @@ class WrapList {
 	 */
 	private static inline function skipSepBefore(flags: Null<Array<Bool>>, i: Int): Bool {
 		return flags != null && i >= 0 && i < flags.length && flags[i];
-	}
-
-	/**
-	 * ω-group-rest-probe slice 2: pick `GroupWithRestProbe` over `Group`
-	 * when the caller's Star opted into rest-of-stack lookahead via
-	 * `@:fmt(groupRestProbe)`. Used at sites where significant same-line
-	 * content trails the wrap construct (e.g. typedef LHS `<T,U,V>`
-	 * followed by ` = Rhs<...>;` on the same source line). Fork's wrap
-	 * engine considers `lengthAfter` when deciding whether to wrap the
-	 * LHS — our plain `Group.fitsFlat` is blind to rest-of-stack.
-	 * `GroupWithRestProbe(inner)` subtracts
-	 * `flatTokenWidthOfRestStack(stack)` from the budget at render time,
-	 * matching fork's bias. Default `false` keeps every other consumer
-	 * (call args, object literals, anon types, HxTypeRef.params) on the
-	 * legacy `Group` decision.
-	 */
-	private static inline function groupOrRestProbe(inner: Doc, groupRestProbe: Bool): Doc {
-		return groupRestProbe ? GroupWithRestProbe(inner) : Group(inner);
 	}
 
 	private static inline function isLeadingTransparent(d: Doc): Bool {
