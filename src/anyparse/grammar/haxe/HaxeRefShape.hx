@@ -394,6 +394,8 @@ final class HaxeRefShape {
 			equalityKinds: ['Eq', 'NotEq'],
 			optionalParamKind: 'Optional',
 			restParamKind: 'Rest',
+			optionalValueTypeName: 'Null',
+			optionalFieldMetaName: '@:optional',
 			execution: {
 				implicitConversionMetaName: '@:from',
 				// what `thread-safety` counts as blocking with no configuration: each one waits on a file, a process, a socket, a
@@ -843,7 +845,7 @@ final class HaxeRefShape {
 			ternaryKind: 'Ternary',
 			switchExpressionHostKinds: SWITCH_EXPRESSION_HOST_KINDS,
 			// The switch hosts plus the three arrow-lambda bodies: a comparator written as
-			// `(a, b) -> if (…) -1 else if (…) 1 else 0` is the established TM shape, while a
+			// `(a, b) -> if (…) -1 else if (…) 1 else 0` is the established client shape, while a
 			// `switch` in that slot is not — so the if-chain seam is a proper superset.
 			// …plus the switch ARMS, taken from the one list that already names them. An arm's
 			// value is delimited by the `:` that opens it and the `;` that ends it, exactly as a

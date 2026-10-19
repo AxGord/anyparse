@@ -690,12 +690,12 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * The verbatim declared type SOURCE a BARE identifier carries when it names no value binding at
-	 * all but IS a member — declared directly or INHERITED — of the enclosing type declaration: the
-	 * implicit-`this` read Haxe resolves without the qualifier. `SymbolIndex`'s import-aware walk
-	 * supplies it (`resolvePathFinalMemberTypeSource` over a one-segment member path), so the
-	 * extends chain is followed to the SPECIFIC supertype each clause names rather than to any
-	 * same-simple-named type elsewhere in the scope.
+	 * The type a BARE identifier carries when it names no value binding at all but IS a member — declared directly or
+	 * INHERITED — of the enclosing type declaration: the implicit-`this` read Haxe resolves without the qualifier.
+	 * `SymbolIndex`'s import-aware walk supplies it (`resolveGenericPathFinalMemberTypeSource` over a one-segment member
+	 * path, the enclosing type's own parameters as its arguments), so the extends chain is followed to the SPECIFIC
+	 * supertype each clause names rather than to any same-simple-named type elsewhere in the scope, and an inherited
+	 * member written with a supertype's parameter reads as what the chain passes (`MemberLookup.memberReadType`).
 	 *
 	 * Null — the caller keeps its conservative branch — whenever: `ident` is not an identifier node;
 	 * it DOES resolve to a value binding; no enclosing type declaration covers it; or the member is
@@ -720,7 +720,12 @@ final class RefactorSupport {
 		if (invisibleBinders == null || invisibleBinders.contains(name)) return null;
 		if (TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
-		return enclosing == null ? null : index.paths.resolvePathFinalMemberTypeSource(file, enclosing, [name]);
+		if (enclosing == null) return null;
+		// read as `this` reads it: the enclosing type's own parameters are its arguments, so an inherited member declared with
+		// a supertype's parameter is read through what the extends chain passes (`MemberLookup.memberReadType`)
+		final params: Array<String> = index.refs.findDeclaredType(file, enclosing)?.type.typeParamNames ?? [];
+		final self: String = params.length == 0 ? enclosing : '$enclosing<${params.join(', ')}>';
+		return index.paths.resolveGenericPathFinalMemberTypeSource(file, self, [name]);
 	}
 
 	/**

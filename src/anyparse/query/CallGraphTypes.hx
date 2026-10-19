@@ -360,6 +360,7 @@ final class CallGraphTypes {
 			typeParamNames: union(a.typeParamNames, b.typeParamNames),
 			metaNames: union(a.metaNames, b.metaNames),
 			excludedFromExtensions: a.excludedFromExtensions && b.excludedFromExtensions,
+			optional: a.optional || b.optional,
 			guarded: a.guarded || b.guarded
 		};
 	}

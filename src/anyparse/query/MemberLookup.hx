@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.OverrideFamilyMember;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using Lambda;
 
@@ -21,6 +22,7 @@ using Lambda;
 @:nullSafety(Strict)
 @:allow(anyparse.query.StructuralTypes)
 @:allow(anyparse.query.MemberPathWalk)
+@:allow(anyparse.query.Unification)
 final class MemberLookup {
 
 	/** The grammar kind an `interface` declaration projects as: its supertypes are interfaces all. */
@@ -29,20 +31,34 @@ final class MemberLookup {
 	/**
 	 * The name -> declaration layer this one resolves every written member and supertype reference through, and the
 	 * table every lookup by simple name reads (`TypeRefIndex.named`) — each of them a scan of every type of every file
-	 * before, `supertypeDeclares` and `typeDeclaresMember` alone 12 s of a TM `--fix`.
+	 * before, `supertypeDeclares` and `typeDeclaresMember` alone 12 s of a client `--fix`.
 	 */
 	private final _refs: TypeRefIndex;
 
 	/** The owning `TypingService`'s remembered answers, where every closure walk asked of one declaration is kept. */
 	private final _cache: QueryCache;
 
+	/** Each declaration's supertype links and alias target, resolved once (`AncestorTable`): what every closure walk follows. */
+	private final _ancestors: AncestorTable;
+
+	/** `GrammarPlugin.typeSyntax` — how `memberReadType` reads and substitutes a member's written type. */
+	private final _typeSyntax: TypeSyntaxReader;
+
+	/** The type a read of an optional structure field is wrapped in (`RefShape.optionalValueTypeName`), null for none. */
+	private final _optionalWrapper: Null<String>;
+
 	/** Member name -> the member kinds any indexed type declares a member of that name as (`declaresMemberAs`), built on first need. */
 	private var _memberKinds: Null<Map<String, Array<String>>> = null;
 
-	/** Built once by the owning `TypingService`, which hands over the shared, immutable index data and its cache. */
-	public function new(refs: TypeRefIndex, cache: QueryCache) {
+	/** Built once by the owning `TypingService`, which hands over the shared, immutable index data and its tables. */
+	public function new(
+		refs: TypeRefIndex, cache: QueryCache, ancestors: AncestorTable, typeSyntax: TypeSyntaxReader, optionalWrapper: Null<String>
+	) {
 		_refs = refs;
 		_cache = cache;
+		_ancestors = ancestors;
+		_typeSyntax = typeSyntax;
+		_optionalWrapper = optionalWrapper;
 	}
 
 	/**
@@ -101,15 +117,10 @@ final class MemberLookup {
 	 * from an inheritance clause (`class A extends B<C>` → `(ExtendsClause (Named B))`), so
 	 * `supertypesRaw` already carries the bare nominal `B` and the link resolves; and the answer is the
 	 * member's ACCESSOR SHAPE (`hasGetter`), never its TYPE — `public final d:T` is accessor-less
-	 * whatever `T` binds to. Nothing is substituted because nothing needs to be. A consumer that wants
-	 * the member's RESOLVED TYPE must use `resolveGenericPathFinalMemberTypeSource`, the only walk that
-	 * binds type parameters to arguments — and even that one substitutes for a DIRECTLY-declared member
-	 * only, since it does not model the extends-clause argument mapping. On THIS very shape it does not
-	 * fail closed either: `class Base<T> {public final d:T;}` + `class Sub extends Base<Int> {}` yields
-	 * the UNBOUND parameter name `T`, because `substitutedMemberSource` runs `mentionsTypeParam` against
-	 * the RECEIVER's `typeParamNames` (`Sub` → empty, and an empty list early-returns false) instead of
-	 * the DECLARING type's. That is a separate PRE-EXISTING defect of `substitutedMemberSource`, left
-	 * untouched here. Answering accessor shape rather than type is what makes the inherited arm
+	 * whatever `T` binds to. Nothing is substituted because nothing needs to be. A consumer that wants the member's
+	 * TYPE as a read carries it asks `memberReadType`, which binds the DECLARING type's parameters through what the
+	 * extends chain passes (`AncestorTable.argumentsTo`): `class Base<T> {public final d:T;}` + `class Sub extends
+	 * Base<Int> {}` reads `d` as `Int`. Answering accessor shape rather than type is what makes the inherited arm
 	 * answerable at all.
 	 *
 	 * `seen` is per-ROOT-declaration and SHARED across sibling supertype branches (matching
@@ -510,6 +521,38 @@ final class MemberLookup {
 		return false;
 	}
 
+	/**
+	 * The type a READ of `member` carries on a value of `start` whose type arguments are `args` — written in the reader's
+	 * terms, positional to `start`'s type parameters (`start`'s own parameters for a read inside `start` itself). It is the
+	 * written type of the declaration nearest in `start`'s closure (`declaredMember`) with the declaring type's parameters
+	 * bound: to `args` when `start` declares the member, else to what `start`'s supertype chain passes up
+	 * (`AncestorTable.argumentsTo`) read through `args` — `Base<T>.item` read off a `Sub extends Base<Int>` is `Int`, never
+	 * `T`. An optional field of a structure (`?a: T`, `@:optional var b: T`) reads as the language's optional-value type
+	 * (`Null<T>`, 4.3.7; a class or interface field keeps `T`). Null when the member has no written type, or its type names a
+	 * parameter of the declaring type or of the member itself that nothing written here binds: the compiler's answer or none.
+	 */
+	public function memberReadType(start: ResolvedType, member: String, args: Array<String>): Null<String> {
+		final found: Null<DeclaredMember> = declaredMember(start, member);
+		final written: Null<String> = found?.member.typeSource;
+		if (found == null || written == null) return null;
+		// a written type the grammar does not read as one type (`#if lime Image #else Dynamic #end`) is no answer
+		if (
+			!NominalTypes.answerableType(written, _typeSyntax)
+			|| CallGraphNames.mentionsTypeName(written, found.member.typeParamNames, _typeSyntax)
+		)
+			return null;
+		final host: ResolvedType = found.host;
+		final params: Array<String> = host.type.typeParamNames;
+		final passed: Null<Array<String>> = params.length == 0 ? [] : boundArguments(start, host, args);
+		final bound: Null<String> = if (passed != null && passed.length >= params.length)
+			CallGraphNames.substituteTypeParams(written, params, passed, _typeSyntax)
+		else if (CallGraphNames.mentionsTypeName(written, params, _typeSyntax))
+			null
+		else
+			written;
+		return bound == null || !found.member.optional ? bound : NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax);
+	}
+
 	/** `declaredMemberClosure` from `start` on a fresh walk, asked once per declaration and member name (`QueryCache.declaredMember`). */
 	private function declaredMember(start: ResolvedType, member: String): Null<DeclaredMember> {
 		return _cache.declaredMember.answer(DeclarationKey.ofMember(start, member), () -> declaredMemberClosure(start, member, []));
@@ -518,6 +561,24 @@ final class MemberLookup {
 	/** `memberTypeSourceWalk` from `start` on a fresh walk, asked once per declaration and member name (`QueryCache.memberTypeSource`). */
 	private function memberTypeSource(start: ResolvedType, member: String): Null<String> {
 		return _cache.memberTypeSource.answer(DeclarationKey.ofMember(start, member), () -> memberTypeSourceWalk(start, member, []));
+	}
+
+	/**
+	 * The arguments `start`'s supertype chain passes to the parameters of its ancestor `host` (`AncestorTable.argumentsTo`),
+	 * read through `args`, the arguments of `start` itself; null when the chain writes none, or when what it passes names a
+	 * parameter of `start` that `args` does not bind.
+	 */
+	private function boundArguments(start: ResolvedType, host: ResolvedType, args: Array<String>): Null<Array<String>> {
+		final via: Null<Array<String>> = _ancestors.argumentsTo(start, host);
+		final own: Array<String> = start.type.typeParamNames;
+		return if (via == null || own.length == 0)
+			via
+		else if (args.length >= own.length)
+			[for (a in via) CallGraphNames.substituteTypeParams(a, own, args, _typeSyntax)]
+		else if (via.exists(a -> CallGraphNames.mentionsTypeName(a, own, _typeSyntax)))
+			null
+		else
+			via;
 	}
 
 	/**
@@ -544,7 +605,7 @@ final class MemberLookup {
 			// hop lands on the alias, hits the cycle test below and proves nothing.
 			final target: Null<String> = t.aliasTargetRaw;
 			if (target == null) return false;
-			final next: Null<ResolvedType> = _refs.resolveTypeRef(target, cur.file, cur.type.span.from);
+			final next: Null<ResolvedType> = _ancestors.aliasTarget(cur);
 			// An alias CYCLE proves nothing — unlike a supertype cycle, whose closure is still
 			// fully enumerated, a chain that re-enters itself never reaches a member host at all.
 			return next == null || seen.contains(_refs.seenKey(next)) ? false : lacksMemberClosure(next, member, seen);
@@ -554,8 +615,8 @@ final class MemberLookup {
 		// file (`resolveTypeRef` -> `simpleRefInScope`), so a simple name shared by several
 		// packages picks the one actually in scope instead of failing the whole proof. A
 		// reference resolving to zero OR to several decls is refused identically: unresolved.
-		for (raw in t.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
+		for (link in _ancestors.links(cur)) if (!dynamicSupertypeRef(link.raw)) {
+			final anc: Null<ResolvedType> = link.decl;
 			if (anc == null || !lacksMemberClosure(anc, member, seen)) return false;
 		}
 		return true;
@@ -568,11 +629,11 @@ final class MemberLookup {
 		if (t.bringsExtensions || t.abstractForwardUnderlying != null) return false;
 		if (t.kind == SymbolIndex.TYPEDEF_DECL_KIND && !t.isAnonStruct) {
 			final target: Null<String> = t.aliasTargetRaw;
-			final next: Null<ResolvedType> = target == null ? null : _refs.resolveTypeRef(target, cur.file, cur.type.span.from);
+			final next: Null<ResolvedType> = target == null ? null : _ancestors.aliasTarget(cur);
 			return next != null && !seen.contains(_refs.seenKey(next)) && freeOfExtensionTypes(next, seen);
 		}
-		for (raw in t.supertypesRaw) {
-			final anc: Null<ResolvedType> = dynamicSupertypeRef(raw) ? null : _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
+		for (link in _ancestors.links(cur)) {
+			final anc: Null<ResolvedType> = dynamicSupertypeRef(link.raw) ? null : link.decl;
 			if (anc == null || !freeOfExtensionTypes(anc, seen)) return false;
 		}
 		return true;
@@ -614,12 +675,12 @@ final class MemberLookup {
 		if (t.kind == SymbolIndex.TYPEDEF_DECL_KIND && !t.isAnonStruct) {
 			final target: Null<String> = t.aliasTargetRaw;
 			if (target == null) return null;
-			final next: Null<ResolvedType> = _refs.resolveTypeRef(target, cur.file, cur.type.span.from);
+			final next: Null<ResolvedType> = _ancestors.aliasTarget(cur);
 			return next == null || seen.contains(_refs.seenKey(next)) ? null : declaredMemberClosure(next, member, seen);
 		}
 		if (t.abstractForwardUnderlying != null) return null;
-		for (raw in t.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
+		for (link in _ancestors.links(cur)) if (!dynamicSupertypeRef(link.raw)) {
+			final anc: Null<ResolvedType> = link.decl;
 			if (anc == null) continue;
 			final up: Null<DeclaredMember> = declaredMemberClosure(anc, member, seen);
 			if (up != null) return up;
@@ -631,12 +692,12 @@ final class MemberLookup {
 	private function supertypesDeclareNoneWalk(cur: ResolvedType, member: String, seen: Array<String>): Bool {
 		if (!_refs.markSeen(cur, seen)) return true;
 		final isInterface: Bool = cur.type.kind == INTERFACE_DECL_KIND;
-		for (raw in cur.type.supertypesRaw) {
-			final ups: Array<ResolvedType> = _refs.resolveTypeRefAll(raw, cur.file, cur.type.span.from);
+		for (link in _ancestors.links(cur)) {
+			final ups: Array<ResolvedType> = link.matches;
 			// two declarations the link may name: which one is not known, so neither is cleared
 			if (ups.length > 1) return false;
 			if (ups.length == 0) {
-				if (isInterface || cur.type.interfaces.contains(SourceText.lastSegment(raw))) return false;
+				if (isInterface || cur.type.interfaces.contains(SourceText.lastSegment(link.raw))) return false;
 			} else if (ups[0].type.members.exists(m -> m.name == member) || !supertypesDeclareNoneWalk(ups[0], member, seen)) {
 				return false;
 			}
@@ -657,8 +718,8 @@ final class MemberLookup {
 	/** `supertypeMemberProof`'s walk: `Declares` short-circuits, an unresolvable link is remembered and reported at the end. */
 	private function ancestorsProof(cur: ResolvedType, field: String, seen: Array<String>, built: Array<String>): SupertypeProof {
 		var unreachable: Bool = false;
-		for (raw in cur.type.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
+		for (link in _ancestors.links(cur)) if (!dynamicSupertypeRef(link.raw)) {
+			final anc: Null<ResolvedType> = link.decl;
 			switch anc == null ? SupertypeProof.Unreachable : hostProof(anc, field, seen, built) {
 				case SupertypeProof.Declares:
 					return SupertypeProof.Declares;
@@ -689,7 +750,7 @@ final class MemberLookup {
 		if (t.abstractForwardUnderlying != null) return SupertypeProof.Unreachable;
 		if (t.kind != SymbolIndex.TYPEDEF_DECL_KIND) return ancestorsProof(cur, field, seen, built);
 		final target: Null<String> = t.isAnonStruct ? null : t.aliasTargetRaw;
-		final next: Null<ResolvedType> = target == null ? null : _refs.resolveTypeRef(target, cur.file, cur.type.span.from);
+		final next: Null<ResolvedType> = target == null ? null : _ancestors.aliasTarget(cur);
 		return next == null ? SupertypeProof.Unreachable : hostProof(next, field, seen, built);
 	}
 
@@ -711,8 +772,8 @@ final class MemberLookup {
 	 */
 	private function inheritsInstanceMemberWalk(cur: ResolvedType, member: String, seen: Array<String>): Null<Bool> {
 		if (!_refs.markSeen(cur, seen)) return null;
-		for (raw in cur.type.supertypesRaw) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
+		for (link in _ancestors.links(cur)) {
+			final anc: Null<ResolvedType> = link.decl;
 			if (anc == null) continue;
 			final ancestor: ResolvedType = anc;
 			final declared: Null<Bool> = declaredInstanceMember(ancestor.type, member);
@@ -733,8 +794,8 @@ final class MemberLookup {
 		if (!_refs.markSeen(cur, seen)) return null;
 		final direct: Null<MemberInfo> = cur.type.members.find(m -> m.name == member);
 		if (direct != null) return direct.typeSource;
-		for (raw in cur.type.supertypesRaw) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
+		for (link in _ancestors.links(cur)) {
+			final anc: Null<ResolvedType> = link.decl;
 			if (anc == null) continue;
 			final src: Null<String> = memberTypeSourceWalk(anc, member, seen);
 			if (src != null) return src;
@@ -763,8 +824,8 @@ final class MemberLookup {
 		}
 		if (declared) return inherited && (cur.type.hasBuild || autoBuildAtOrAbove(cur, [])) ? null : false;
 		var found: Null<Bool> = null;
-		for (raw in cur.type.supertypesRaw) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
+		for (link in _ancestors.links(cur)) {
+			final anc: Null<ResolvedType> = link.decl;
 			if (anc == null) continue;
 			final up: Null<Bool> = memberGetterWalk(anc, field, true, seen);
 			if (up == true) return true;
@@ -785,8 +846,8 @@ final class MemberLookup {
 	private function autoBuildAtOrAbove(cur: ResolvedType, seen: Array<String>): Bool {
 		if (!_refs.markSeen(cur, seen)) return false;
 		if (cur.type.hasAutoBuild) return true;
-		for (raw in cur.type.supertypesRaw) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from) ?? uniqueDeclarationOf(raw);
+		for (link in _ancestors.links(cur)) {
+			final anc: Null<ResolvedType> = link.decl ?? uniqueDeclarationOf(link.raw);
 			if (anc == null) continue;
 			if (autoBuildAtOrAbove(anc, seen)) return true;
 		}
@@ -817,9 +878,12 @@ final class MemberLookup {
 		var found: Null<String> = null;
 		var direct: Int = 0;
 		for (decl in _refs.named(typeName)) for (m in decl.type.members) if (m.name == memberName) {
+			// a return written as a type parameter of the method or of its type names what each call binds, not a type
+			final own: Null<String> = m.returnNominal;
+			if (own != null && (m.typeParamNames.contains(own) || decl.type.typeParamNames.contains(own))) return null;
 			if (direct == 0)
-				found = m.returnNominal;
-			else if (m.returnNominal != found)
+				found = own;
+			else if (own != found)
 				return null;
 			direct++;
 		}

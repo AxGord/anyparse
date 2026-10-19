@@ -204,6 +204,46 @@ class StructuralConformanceProofTest extends Test {
 		Assert.equals(1, owner([S_ALIAS, C_INT]), 'an unresolvable MyInt is compared as a name and refutes');
 	}
 
+	/**
+	 * A READ-ONLY structure field unifies covariantly (`tUnification.ml`: the class member's type is unified WITH the
+	 * structure's), so `{final x:Base; var y:Int}` accepts a class declaring `var x:Sub` and pins its `y`, while an unrelated
+	 * `var x:Other` refutes the structure and leaves `y` free. `x` is no arm either way: the structure declares it `final`.
+	 */
+	@:pin('control') @:killer('M-STRUCT-READONLY-INVARIANT')
+	public function testAReadOnlyStructureFieldTakesASubtype(): Void {
+		final model: Array<SourceFile> = [
+			{ file: 'Base.hx', source: 'class Base {}' },
+			{ file: 'Sub.hx', source: 'class Sub extends Base {}' },
+			{ file: 'Other.hx', source: 'class Other {}' },
+			{ file: 'S.hx', source: 'typedef S = { final x:Base; var y:Int; }' }
+		];
+		Assert.equals(1, owner(model.concat([
+			{ file: 'C.hx', source: 'class C { public var x:Sub = null; public var y:Int = 0; }' }
+		])));
+		Assert.equals(2, owner(model.concat([
+			{ file: 'C.hx', source: 'class C { public var x:Other = null; public var y:Int = 0; }' }
+		])), 'unrelated');
+	}
+
+	/**
+	 * A MUTABLE structure field asks for the same type, and two namesakes of two packages are two types: `{var x:a.T}`
+	 * rejects a class declaring `var x:b.T`, where comparing simple names read them as one.
+	 */
+	@:pin('control') @:killer('M-STRUCT-MUTABLE-SAME-DECL')
+	public function testANamesakeOfAnotherPackageRefutes(): Void {
+		final model: Array<SourceFile> = [
+			{ file: 'a/T.hx', source: 'package a;\nclass T {}' },
+			{ file: 'b/T.hx', source: 'package b;\nclass T {}' },
+			{ file: 'S.hx', source: 'import a.T;\ntypedef S = { var x:T; var y:Int; }' }
+		];
+		Assert.equals(0, owner(model.concat([
+			{ file: 'C.hx', source: 'import a.T;\nclass C { public var x:T = null; public var y:Int = 0; }' }
+		])));
+		Assert.equals(2, owner(model.concat([
+			{ file: 'C.hx', source: 'import b.T;\nclass C { public var x:T = null; public var y:Int = 0; }' }
+		])), 'b.T');
+	}
+
 	/** How many findings the rule reports against the owner file `C.hx`. */
 	private function owner(files: Array<SourceFile>): Int {
 		return CheckFixture.violationsIn(new PreferFinalPublicField(), files).count(v -> v.file == 'C.hx');

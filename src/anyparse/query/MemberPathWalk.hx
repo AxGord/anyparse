@@ -4,7 +4,6 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
-using StringTools;
 using Lambda;
 
 /**
@@ -15,7 +14,7 @@ using Lambda;
  * simple-name walk it replaces — and it fails CLOSED at every hop.
  *
  * Split out of `SymbolIndex`. Each hop's member comes from `MemberLookup` and each hop's type from
- * the index's own reference resolution; the type-argument substitution is this layer's own.
+ * the index's own reference resolution; the type-argument substitution is the member layer's (`MemberLookup.memberReadType`).
  */
 @:nullSafety(Strict)
 final class MemberPathWalk {
@@ -64,11 +63,10 @@ final class MemberPathWalk {
 	 * `Box<Item>.payload : T` to `Item`, which is what makes a generic container's element member
 	 * reachable at all — the verbatim `T` resolves to no type.
 	 *
-	 * Strictly more conservative than the plain walk wherever it is unsure: substitution applies
-	 * ONLY to a member declared DIRECTLY on the current type (an INHERITED member's `T` names the
-	 * SUPERTYPE's parameter, and the extends-clause argument mapping is not modelled), and any
-	 * effective source that STILL mentions a parameter name of the type it came from aborts THIS
-	 * walk. Null on every unresolved / ambiguous link, exactly like the plain walk.
+	 * Each hop is a READ of the member (`MemberLookup.memberReadType`): the declaring type's parameters are bound through the
+	 * receiver's arguments or, for an INHERITED member, through what the extends chain passes up
+	 * (`AncestorTable.argumentsTo`), and an optional structure field reads as its optional-value type; a hop whose type still
+	 * names a parameter nothing binds aborts THIS walk. Null on every unresolved / ambiguous link, exactly like the plain walk.
 	 *
 	 * "Aborts this walk" is the honest scope: the caller
 	 * (`NominalTypes.pathReceiverMemberTypeSource`) treats a null the same way it treats one from
@@ -89,9 +87,9 @@ final class MemberPathWalk {
 	 * the current type and rewrites a parameter-typed member through them.
 	 *
 	 * `args` is re-seeded at every step from the effective member source, so the substitution
-	 * follows a chain of generic containers (`Array<Box<Item>>` → `Box<Item>` → `Item`). The
-	 * fail-closed rule that ends the walk when a parameter name survives substitution is what keeps
-	 * that sound: without it an unsubstituted `T` would travel forward as if it were a concrete
+	 * follows a chain of generic containers (`Array<Box<Item>>` → `Box<Item>` → `Item`). The fail-closed
+	 * rule that ends the walk when a parameter name survives substitution (`memberReadType` answers null) is
+	 * what keeps that sound: without it an unsubstituted `T` would travel forward as if it were a concrete
 	 * argument and could collide with the NEXT type's parameter of the same name, or with a project
 	 * type literally called `T` / `K` / `V`.
 	 */
@@ -116,9 +114,9 @@ final class MemberPathWalk {
 		for (i in 0...memberPath.length - 1) {
 			if (current == null) return null;
 			final cur: ResolvedType = current;
-			final memberSource: Null<String> = _members.memberTypeSource(cur, memberPath[i]);
-			if (memberSource == null) return null;
-			final effective: Null<String> = substitute ? substitutedMemberSource(cur, memberPath[i], memberSource, args) : memberSource;
+			final effective: Null<String> = substitute
+				? _members.memberReadType(cur, memberPath[i], args)
+				: _members.memberTypeSource(cur, memberPath[i]);
 			if (effective == null) return null;
 			// An INTERMEDIATE link is a receiver for the next segment, so a member-transparent
 			// wrapper on it is peeled (`res: Null<Res>` in `box.res.count`). The FINAL member's
@@ -134,35 +132,7 @@ final class MemberPathWalk {
 		if (current == null) return null;
 		final last: ResolvedType = current;
 		final member: String = memberPath[memberPath.length - 1];
-		final finalSource: Null<String> = _members.memberTypeSource(last, member);
-		return finalSource == null || !substitute ? finalSource : substitutedMemberSource(last, member, finalSource, args);
-	}
-
-	/**
-	 * `memberSource` with `cur`'s type parameters resolved through `args`, or null when the result
-	 * would still name one of them.
-	 *
-	 * Substitution fires only when ALL three hold: the member is declared DIRECTLY on `cur.type`
-	 * (an inherited one's parameter name belongs to the supertype's header, a mapping this index
-	 * does not model); its trimmed source is EXACTLY one parameter name (a source that merely
-	 * CONTAINS one, `Array<T>`, would need a rewrite, not a lookup); and that name's position is
-	 * covered by the arguments actually written on the receiver. Otherwise the verbatim source
-	 * stands — and is then rejected by the parameter-mention gate if it names a parameter, so an
-	 * unsubstitutable parameter can never leave this function as if it were a concrete type.
-	 *
-	 * The DIRECT-member gate is the one that stops a wrong CONCRETE type, not merely an
-	 * unresolvable one: a subtype whose header parameter happens to share the supertype's name but
-	 * passes something else up (`class Der<T:Item> extends Base<Str>`, `Base<T> { var u:T; }`)
-	 * would otherwise substitute `Der`'s argument into `Base`'s parameter and resolve `u` to the
-	 * wrong type entirely. `SimplifyNegatedCompoundCheckTest.testSupertypeParamNameCollisionKeepsWrap`
-	 * is the fixture that fails if it is removed.
-	 */
-	private function substitutedMemberSource(cur: ResolvedType, member: String, memberSource: String, args: Array<String>): Null<String> {
-		final params: Array<String> = cur.type.typeParamNames;
-		final at: Int = params.indexOf(memberSource.trim());
-		final declaredHere: Bool = cur.type.members.exists(m -> m.name == member);
-		final effective: String = declaredHere && at >= 0 && at < args.length ? args[at] : memberSource;
-		return CallGraphNames.mentionsTypeName(effective, params, _typeSyntax) ? null : effective;
+		return substitute ? _members.memberReadType(last, member, args) : _members.memberTypeSource(last, member);
 	}
 
 }
