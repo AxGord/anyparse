@@ -188,8 +188,7 @@ final class CommentProse {
 
 	/** The number of whitespace-separated words in `text`. */
 	private static function wordCount(text: String): Int {
-		final words: Int = text.trim().split(' ').count(part -> part.trim() != '');
-		return words;
+		return text.trim().split(' ').count(part -> part.trim() != '');
 	}
 
 	/**

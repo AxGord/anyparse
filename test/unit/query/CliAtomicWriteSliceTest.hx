@@ -336,8 +336,7 @@ final class CliAtomicWriteSliceTest extends Test {
 
 	/** Staging temporaries still sitting in `dir` — every write path is supposed to remove its own. */
 	private static function stagedLeftovers(dir: String): Int {
-		final left: Int = FileSystem.readDirectory(dir).count(entry -> entry.endsWith('.apq-tmp'));
-		return left;
+		return FileSystem.readDirectory(dir).count(entry -> entry.endsWith('.apq-tmp'));
 	}
 	#end
 

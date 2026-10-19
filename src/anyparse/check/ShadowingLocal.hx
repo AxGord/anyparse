@@ -138,8 +138,8 @@ final class ShadowingLocal implements Check {
 
 	/**
 	 * The fix both spellings of the question share, as `collect` is the walk they share: `parameters` picks the family
-	 * the findings are of. A local declaration goes through `shadowFix`'s gates; a PARAMETER goes straight to the rename
-	 * (`paramFix`), scoped to the function declaring it.
+	 * the findings are of. A local declaration goes through `shadowFix`'s gates; a PARAMETER goes straight to the rename,
+	 * scoped to the function declaring it.
 	 */
 	public static function fixWith(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, parameters: Bool, ruleId: String
@@ -163,7 +163,7 @@ final class ShadowingLocal implements Check {
 			final span: Null<Span> = v.span;
 			final decl: Null<QueryNode> = span == null ? null : declAt(root, span, declKinds);
 			// A finding this call cannot place gets no sentence: one would be invented, not the deciding gate speaking.
-			if (decl != null) switch parameters ? paramFix(site, decl) : shadowFix(site, decl) {
+			if (decl != null) switch shadowFix(site, decl) {
 				case Applied(own):
 					for (e in own) edits.push(e);
 				case Declined(reason):
@@ -485,15 +485,20 @@ final class ShadowingLocal implements Check {
 	}
 
 	/**
-	 * `fix`'s answer for the flagged declaration `decl`. Gates in order: the hidden binding is read after `decl` within
-	 * the frame declaring it (then the shadow may be the defect itself, and resolving it would bury the finding); `decl`
-	 * continues another declarator; then the assignment and, failing it, the rename are asked.
+	 * `fix`'s answer for the flagged declaration `decl`. A PARAMETER goes straight to the rename, scoped to the function
+	 * declaring it: it is bound by the call, so no write meant for the hidden binding can land on it (the defect
+	 * `readAfter` guards against), every read inside the function reads the argument whatever the parameter is called,
+	 * and a parameter neither continues a declarator chain nor takes an assignment. For a local, gates in order: the
+	 * hidden binding is read after `decl` within the frame declaring it (then the shadow may be the defect itself, and
+	 * resolving it would bury the finding); `decl` continues another declarator; then the assignment and, failing it, the
+	 * rename are asked.
 	 */
 	private static function shadowFix(site: FixFile, decl: QueryNode): ShadowFix {
 		final path: Null<Array<QueryNode>> = TreePath.pathTo(site.tree, decl);
 		final name: Null<String> = decl.name;
 		final span: Null<Span> = decl.span;
-		if (path == null || name == null || span == null) return Declined(DECLINE_UNPLACED);
+		if (path == null || path.length < 2 || name == null || span == null) return Declined(DECLINE_UNPLACED);
+		if (site.seams.reportParameters) return renameEdits(site, decl, name, span, path[path.length - 2]);
 		final ancestors: Array<QueryNode> = path.slice(0, path.length - 1);
 		final hidden: Null<Hidden> = shadowedBinding(decl, ancestors, site.seams);
 		if (hidden == null) return Declined(DECLINE_UNPLACED);
@@ -504,20 +509,6 @@ final class ShadowingLocal implements Check {
 			return Declined('a continuation declarator: renaming one name of a `var a, b` chain is left to the author');
 		final assignment: Null<FixEdit> = assignmentEdit(site, decl, name, span, hidden, ancestors, hits);
 		return assignment != null ? Applied([assignment]) : renameEdits(site, decl, name, span, hidden.frame);
-	}
-
-	/**
-	 * `fix`'s answer for the flagged PARAMETER `decl`: the rename of `renameEdits`, scoped to the function declaring it.
-	 * None of `shadowFix`'s other gates applies: a parameter is bound by the call, so no write meant for the hidden
-	 * binding can land on it (the defect `readAfter` guards against), every read inside the function reads the argument
-	 * whatever the parameter is called, and a parameter neither continues a declarator chain nor takes an assignment.
-	 */
-	private static function paramFix(site: FixFile, decl: QueryNode): ShadowFix {
-		final path: Null<Array<QueryNode>> = TreePath.pathTo(site.tree, decl);
-		final name: Null<String> = decl.name;
-		final span: Null<Span> = decl.span;
-		if (path == null || path.length < 2 || name == null || span == null) return Declined(DECLINE_UNPLACED);
-		return renameEdits(site, decl, name, span, path[path.length - 2]);
 	}
 
 	/**

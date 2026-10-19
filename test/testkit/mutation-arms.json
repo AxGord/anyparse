@@ -27613,8 +27613,9 @@
 		{
 			"name": "M-SHADOWING-PARAM-NO-RENAME",
 			"type": "anyparse.check.ShadowingLocal",
-			"method": "paramFix",
-			"force": "Declined('mutated')",
+			"method": "shadowFix",
+			"find": "if (site.seams.reportParameters) return renameEdits(site, decl, name, span, path[path.length - 2]);",
+			"replace": "if (site.seams.reportParameters) return Declined('mutated');",
 			"note": "no shadowing parameter is renamed, so `(item:DiskSystemItemData) -> …` over a local `item` stays a finding although the rename is binder-proven"
 		},
 		{

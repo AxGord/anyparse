@@ -296,8 +296,8 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		final catchKind: Null<String> = shape.catchClauseKind;
+		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		return ifKinds.length == 0 || blockStmtKind == null ? null : {
 			ifKinds: ifKinds,
 			blockStmtKind: blockStmtKind,

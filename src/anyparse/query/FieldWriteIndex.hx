@@ -240,8 +240,7 @@ final class FieldWriteIndex {
 	 * must additionally rule out a second write elsewhere.
 	 */
 	public function writeCount(type: String, field: String): Int {
-		final n: Int = _writes.count(w -> w.owner == type && w.field == field);
-		return n;
+		return _writes.count(w -> w.owner == type && w.field == field);
 	}
 
 	/**

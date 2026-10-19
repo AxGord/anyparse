@@ -117,8 +117,7 @@ final class SweepCorpus {
 	}
 
 	private static function countOf(entries: Array<SweepCorpusEntry>, status: String): Int {
-		final n: Int = entries.count(entry -> entry.status == status);
-		return n;
+		return entries.count(entry -> entry.status == status);
 	}
 
 
