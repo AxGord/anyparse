@@ -62,13 +62,21 @@ final class Lit {
 	 * quotes still matches. Without it the two spellings of one literal answered differently:
 	 * `'needle'` matched and `"needle"` did not under `--exact`, and under a substring match only
 	 * because the quotes happen to sit at the ends.
+	 *
+	 * `qualifiedKinds` widens an EXACT match on the nodes of those kinds to their last dotted
+	 * segment (`SourceText.answersSimpleName`, the test `uses` reads for a qualified type reference):
+	 * `import openfl.Assets;` is ONE leaf named `openfl.Assets`, so a query for `Assets` used to miss
+	 * the very import that makes its uses resolve. The hit carries the node's own spelling, so the
+	 * reader sees the path found. Opt-in — `mentions` passes the import kinds, `lit` passes none.
 	 */
 	public static function find(
-		target: String, tree: QueryNode, exact: Bool, ?kindFilter: Array<String>, ?delimiters: Map<String, String>
+		target: String, tree: QueryNode, exact: Bool, ?kindFilter: Array<String>, ?delimiters: Map<String, String>,
+		?qualifiedKinds: Array<String>
 	): Array<LitHit> {
 		final out: Array<LitHit> = [];
 		final filter: Null<Array<String>> = kindFilter == null || kindFilter.length == 0 ? null : kindFilter;
-		walk(target, tree, exact, filter, delimiters, out);
+		final qualified: Array<String> = exact ? (qualifiedKinds ?? []) : [];
+		walk(target, tree, exact, filter, delimiters, qualified, out);
 		return out;
 	}
 
@@ -171,7 +179,7 @@ final class Lit {
 
 	private static function walk(
 		target: String, node: QueryNode, exact: Bool, filter: Null<Array<String>>, delimiters: Null<Map<String, String>>,
-		out: Array<LitHit>
+		qualifiedKinds: Array<String>, out: Array<LitHit>
 	): Void {
 		final n: Null<String> = node.name;
 		if (n != null) {
@@ -179,11 +187,12 @@ final class Lit {
 			if (kindOk) {
 				final delimiter: Null<String> = delimiters == null ? null : delimiters[node.kind];
 				final content: Null<String> = delimiter == null ? null : unquoted(n, delimiter);
-				final hit: Bool = matches(n, target, exact) || content != null && matches(content, target, exact);
+				final hit: Bool = matches(n, target, exact) || content != null && matches(content, target, exact)
+					|| qualifiedKinds.contains(node.kind) && SourceText.answersSimpleName(n, target);
 				if (hit && node.span != null) out.push(new LitHit(node.kind, n, (node.span: Span)));
 			}
 		}
-		for (c in node.children) walk(target, c, exact, filter, delimiters, out);
+		for (c in node.children) walk(target, c, exact, filter, delimiters, qualifiedKinds, out);
 	}
 
 	private static function displayText(name: String): String {

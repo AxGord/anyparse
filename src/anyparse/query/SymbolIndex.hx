@@ -295,6 +295,14 @@ typedef MemberInfo = {
 	var excludedFromExtensions: Bool;
 
 	/**
+	 * True when the member is an OPTIONAL field of a structure: written `?name: T`, `var ?name: T` / `final ?name: T` (a node
+	 * of `RefShape.optionalParamKind` carrying the name) or under the structure's optional annotation
+	 * (`RefShape.optionalFieldMetaName`, `@:optional`). A read of it carries the language's optional-value type
+	 * (`MemberLookup.memberReadType`, 4.3.7: `Null<T>`). False for a member of any host but a structure.
+	 */
+	var optional: Bool;
+
+	/**
 	 * True when the member's DECLARATION sits under a `conditionalMemberKind` host — the
 	 * member is written inside a `#if` region rather than at plain type-body level.
 	 * Mirrors `ImportInfo.guarded`: the declaration genuinely exists, but its presence is
@@ -426,7 +434,7 @@ typedef TypeDeclInfo = {
 
 	/**
 	 * True when the type declaration carries `@:rtti` metadata directly. Such a
-	 * class is serialized by reflecting on its runtime field NAMES (e.g. drill
+	 * class is serialized by reflecting on its runtime field NAMES (e.g. model
 	 * Node), so a naming autofix must not rename its fields. Feeds
 	 * `transitivelyCarriesRtti` for the subtype-ward serialization guard.
 	 */
@@ -619,6 +627,7 @@ typedef ResolvedType = {
 @:allow(anyparse.query.MemberLookup)
 @:allow(anyparse.query.StructuralTypes)
 @:allow(anyparse.query.ValueNameBinding)
+@:allow(anyparse.query.Unification)
 final class SymbolIndex {
 
 	/** The grammar kind a `class` declaration projects as. */
@@ -627,11 +636,14 @@ final class SymbolIndex {
 	/** The grammar kind a `typedef` declaration projects as — the only member host whose members sit under an `Anon`. */
 	private static final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
 
+	/** The grammar kind an `enum` declaration projects as: a value of it unifies with no other declaration (`Unification`). */
+	private static final ENUM_DECL_KIND: String = 'EnumDecl';
+
 	/**
 	 * The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression.
 	 * The decl kinds free of implicit-conversion / aliasing semantics — see `resolvesToPlainNominal`.
 	 */
-	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, 'InterfaceDecl', 'EnumDecl'];
+	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, 'InterfaceDecl', ENUM_DECL_KIND];
 
 	/**
 	 * The name -> DECLARATION layer: which files declare a name, and which

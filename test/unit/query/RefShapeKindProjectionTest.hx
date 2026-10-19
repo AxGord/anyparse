@@ -582,6 +582,14 @@ final class RefShapeKindProjectionTest extends Test {
 				after: ' class C {}'
 			},
 			{
+				field: 'optionalFieldMetaName',
+				slot: '',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: 'typedef S = { ',
+				after: ' var a: Int; }'
+			},
+			{
 				field: 'selfReferenceText',
 				slot: '',
 				kind: 'IdentExpr',

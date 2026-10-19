@@ -2,12 +2,13 @@ package anyparse.check;
 
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.CallGraph;
+import anyparse.query.CallGraphTypes.HeldFile;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceText;
-import anyparse.query.SymbolIndex.MemberInfo;
+import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypingService;
 import anyparse.runtime.SortedOffsets;
@@ -39,9 +40,11 @@ private typedef ArgumentScope = {
  * numbers (`RefShape.coreValueTypes`, `arithmeticKinds`). Everything else is untyped.
  *
  * A positive whitelist for the fit: two core types (each one no indexed type of its name shadows) fit when they are the same
- * or one widens to the other and misfit otherwise; `null` fits a parameter a call may leave out; the same plain type name
- * written in one file, no type parameter on either side, fits. Every other pair — an abstract converting through `@:from`
- * / `@:to` (`openfl.text.TextFormatAlign` takes a `String`), a type parameter, a type written in two files — may fit.
+ * or one widens to the other and misfit otherwise; `null` fits a parameter a call may leave out; the same plain type
+ * name written in one file, no type parameter on either side, fits; two PLAIN types (a class, an interface or an enum
+ * with no type parameter, each resolved where it is written) fit or misfit as the typing service unifies them
+ * (`Unification.unifies`: a subclass fits, an unrelated class misfits). Every other pair — an abstract converting
+ * through `@:from` / `@:to` (`openfl.text.TextFormatAlign` takes a `String`), a type parameter, a generic type — may fit.
  */
 @:nullSafety(Strict)
 final class ArgumentTypes {
@@ -123,6 +126,8 @@ final class ArgumentTypes {
 			a == p || (widens[a] ?? []).contains(p) ? Fits : Misfits
 		else if (a == null && p == null && given.file == wantedFile && sameNamedType(given.text, wanted, callerId, calleeId))
 			Fits
+		else if (a == null && p == null)
+			plainFit(given, wanted, wantedFile, callerId, calleeId)
 		else
 			MayFit;
 	}
@@ -239,6 +244,40 @@ final class ArgumentTypes {
 			if (name != core.integer) integral = false;
 		}
 		return { text: integral ? core.integer : core.real, file: null };
+	}
+
+	/**
+	 * How the argument type `given` meets the parameter type `wanted`, written in `wantedFile`, when both name a PLAIN type —
+	 * a class, an interface or an enum with no type parameter, a `Null<…>` peeled on either side (`tUnification.ml`: `Null<T>`
+	 * unifies as `T` both ways) — each resolved in the file writing it, one index holding both, neither a type parameter of
+	 * its function (`callerId`, `calleeId`): the typing service's unification of the two declarations (`Unification.unifies`).
+	 * `MayFit` for every other pair.
+	 */
+	private function plainFit(given: WrittenType, wanted: String, wantedFile: String, callerId: String, calleeId: String): ArgumentFit {
+		final givenFile: Null<String> = given.file;
+		final from: Null<HeldFile> = givenFile == null ? null : _graph.types.heldFile(givenFile);
+		final to: Null<HeldFile> = _graph.types.heldFile(wantedFile);
+		if (from == null || to == null) return MayFit;
+		final index: SymbolIndex = from.index;
+		if (index != to.index) return MayFit;
+		final a: Null<ResolvedType> = plainDecl(given.text, from, callerId);
+		final p: Null<ResolvedType> = plainDecl(wanted, to, calleeId);
+		return a == null || p == null ? MayFit : index.typing.unification.unifies(a, p);
+	}
+
+	/**
+	 * The declaration the written type `text` names in `held`'s file, its `Null<…>` peeled, when it is a plain name written
+	 * with no type argument and no type parameter of the function `functionId` or of its type; null otherwise.
+	 */
+	private function plainDecl(text: String, held: HeldFile, functionId: String): Null<ResolvedType> {
+		final peeled: String = NominalTypes.memberLookupReceiverSource(
+			text.trim(), _shape.memberTransparentWrapperTypeNames ?? [], _plugin.typeSyntax
+		);
+		return switch _plugin.typeSyntax(peeled)?.shape {
+			case Nominal(path, args) if (args.length == 0 && _graph.typeParamBoundsOf(functionId, path) == null):
+				held.index.refs.resolveTypeRef(path, held.info);
+			case _: null;
+		};
 	}
 
 	/**

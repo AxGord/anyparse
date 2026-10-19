@@ -543,6 +543,31 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/**
+	 * A value of a plain class unifies with no unrelated class (`tUnification.ml`, `TInst, TInst`: the supertype chain never
+	 * reaches it), so the compiler skips the optional parameter of that class and binds the next (4.3.7): `W.make(v)` with `v: X` leaves
+	 * `y` null and hands `v` to `?x: X`, and the branch on a non-null `y` never runs. A `Y`, or a subclass of it, binds `y` and may run it.
+	 */
+	@:pin('control') @:killer('M-ARGFIT-PLAIN-OFF') @:killer('M-UNIFY-CHAIN-OPEN')
+	public function testAPlainClassArgumentSkipsAnOptionalParameterOfAnUnrelatedClass(): Void {
+		#if (sys || nodejs)
+		final model: Array<String> = [
+			'class X { public function new() {} }',
+			'class Y { public function new() {} }',
+			'class Z extends Y {}',
+			'class W { public static function make(?y:Y, ?x:X):Void if (y != null) Sys.sleep(1); }'
+		];
+		Assert.same([], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final v:X = new X(); W.make(v); } }'
+		])));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final v:Z = null; W.make(v); } }'
+		])), 'a subclass of Y binds y');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * Every way a call may bind decides a guard together: the literal binds the abstract (the `String` stays `null`) or the
 	 * `String` (an `.svg`), and neither way runs the branch.
 	 */

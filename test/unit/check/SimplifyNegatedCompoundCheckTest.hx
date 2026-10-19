@@ -393,32 +393,29 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		Assert.equals(fixed, fixedWith(source, model));
 	}
 
-	public function testInheritedGenericMemberKeepsWrap(): Void {
-		// Substitution is DIRECT-MEMBERS-ONLY. `u` is declared on `Base<U>`, so its `U` names the
-		// SUPERTYPE's parameter; mapping it through `extends Base<T>` to `Der`'s `T` and on to the
-		// written `Item` is a link this index does not model. The verbatim `U` resolves to no type,
-		// so the chain dies and the wrap stays.
+	public function testInheritedGenericMemberFlipsThroughTheChain(): Void {
+		// `u` is declared on `Base<U>`, so its `U` names the SUPERTYPE's parameter, and the extends chain binds it:
+		// `Der<T:Item> extends Base<T>` passes `Der`'s `T` up, and `d: Der<Item>` binds that to `Item`
+		// (`AncestorTable.argumentsTo`, `MemberLookup.memberReadType`) — 4.3.7 types `d.u` as `Item`. So `d.u.text` is a
+		// `Str`, its `indexOf` an `Int`, and the comparison flips as `it.text.indexOf(k) < 0` does on an `it: Item`. Until
+		// the chain was modelled the verbatim `U` resolved to nothing and the wrap stayed.
 		//
-		// This one does NOT discriminate the direct-member gate: the parameter names differ, so the
-		// index-lookup gate (`U` is not among `Der`'s parameters) rejects it first. The fixture that
-		// does is `testSupertypeParamNameCollisionKeepsWrap` below.
+		// The fixture where the chain passes something ELSE up is `testSupertypeParamNameCollisionKeepsWrap` below.
 		final model: String = '$MODEL_STR_ITEM\nclass Base<U> {\n\tpublic var u:U;\n}\nclass Der<T:Item> extends Base<T> {}';
 		final params: String = 'q:Bool, d:Der<Item>, k:Str';
 		final source: String = wrapTyped('var b = !(!q || d.u.text.indexOf(k) < 0);', params);
-		final fixed: String = wrapTyped('var b = q && !(d.u.text.indexOf(k) < 0);', params);
+		final fixed: String = wrapTyped('var b = q && d.u.text.indexOf(k) >= 0;', params);
 		Assert.equals(fixed, fixedWith(source, model));
 	}
 
 	public function testSupertypeParamNameCollisionKeepsWrap(): Void {
-		// The DIRECT-MEMBER gate, isolated — and the one shape where losing it produces a WRONG
-		// concrete type rather than merely an unresolvable one. `Base<T>` and `Der<T>` both spell
-		// their parameter `T`, but `Der` passes `Str` up, not its own `T`. So `d.u` is a `Str`,
-		// which has no `text` member and no resolution: the wrap is the only sound answer.
+		// The one shape where binding a supertype's parameter by NAME produces a WRONG concrete type rather than merely an
+		// unresolvable one. `Base<T>` and `Der<T>` both spell their parameter `T`, but `Der` passes `Str` up, not its own
+		// `T`. So `d.u` is a `Str` (`AncestorTable.argumentsTo` binds `Base`'s `T` to what the clause writes), which has no
+		// `text` member and no resolution: the wrap is the only sound answer.
 		//
-		// Without the gate the walk would find `u`'s source `T` through the supertype, match it
-		// against `Der`'s OWN parameter list, and substitute `Der`'s argument `Item` — after which
-		// `Item.text` resolves, `Str.indexOf` returns `Int`, and the comparison flips. Every later
-		// gate passes; only the direct-member test rejects this.
+		// Matching `u`'s `T` against `Der`'s OWN parameter list instead would substitute `Der`'s argument `Item` — after
+		// which `Item.text` resolves, `Str.indexOf` returns `Int`, and the comparison flips.
 		final model: String = '$MODEL_STR_ITEM\nclass Base<T> {\n\tpublic var u:T;\n}\nclass Der<T:Item> extends Base<Str> {}';
 		final params: String = 'q:Bool, d:Der<Item>, k:Str';
 		final source: String = wrapTyped('var b = !(!q || d.u.text.indexOf(k) < 0);', params);

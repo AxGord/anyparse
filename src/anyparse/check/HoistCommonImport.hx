@@ -352,7 +352,7 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 		return violations.exists(v -> {
 			final span: Null<Span> = v.span;
 			return v.rule == RULE_ID && v.file == spelled.file && span != null && span.from == spelled.span.from
-			&& span.to == spelled.span.to;
+				&& span.to == spelled.span.to;
 		});
 	}
 
@@ -370,8 +370,12 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 		// An EMPTY source is not at the writer's fixed point, so the inserting seat refuses it: a new
 		// source is SEEDED with its first statement instead, and every later one is placed by that seat
 		// exactly as it would be in an existing file. Imports lead, so the seed is one whenever there is
-		// one — a `using` opens its own block below them.
-		final ordered: Array<Hoistable> = statements.filter(s -> !s.isUsing).concat(statements.filter(s -> s.isUsing));
+		// one — a `using` opens its own block below them. The usings go in REVERSE: the seat puts each
+		// fresh `using` ABOVE the header's first one (the lowest static-extension priority), so
+		// inserting them last-first is what leaves them in their source order — which is their priority.
+		final usings: Array<Hoistable> = statements.filter(s -> s.isUsing);
+		usings.reverse();
+		final ordered: Array<Hoistable> = statements.filter(s -> !s.isUsing).concat(usings);
 		if (ordered.length == 0) return null;
 		var text: String = existing ?? '${ordered[0].isUsing ? USING_WORD : IMPORT_WORD} ${ordered[0].path};\n';
 		for (i in (existing == null ? 1 : 0) ... ordered.length) {

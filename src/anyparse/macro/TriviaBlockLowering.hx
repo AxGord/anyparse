@@ -697,6 +697,7 @@ final class TriviaBlockLowering {
 	 * orchestrator stays under the complexity gate.
 	 */
 	@:access(anyparse.macro.WriterLowering)
+	@:access(anyparse.macro.WriterOptFanout)
 	private static function triviaBlockElemCallExpr(
 		elemFn: String, clearAnonFnBodyOnElems: Bool, clearExprPositionNonTail: Bool, caseSiblingSymmetry: Bool = false
 	): Expr {
@@ -750,14 +751,16 @@ final class TriviaBlockLowering {
 		// walk-up, `for` / `while` bodies the fork breaks) keep the inherited frame.
 		final elemCallOptArg: Expr = if (clearExprPositionNonTail) {
 			final blockTailBarrier: Expr = WriterLowering.astPredCallT('tailStmtReadsExprPosition', [macro _t.node]);
+			// omega-stmt-list-callarg-barrier: every element, tail included.
+			final stmtOptExpr: Expr = WriterOptFanout.statementListElemOpt(elemOptExpr);
 			macro (
 				_si == _arr.length - 1 ? (
 					$blockTailBarrier
 						&& (opt.expressionIfBody == anyparse.format.BodyPolicy.Next
 							|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine)
-						? _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($elemOptExpr)))
-						: _clearArrowLambdaBody(_clearValueIfBranch($elemOptExpr))
-				) : _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($elemOptExpr)))
+						? _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($stmtOptExpr)))
+						: _clearArrowLambdaBody(_clearValueIfBranch($stmtOptExpr))
+				) : _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($stmtOptExpr)))
 			);
 		} else
 			elemOptExpr;

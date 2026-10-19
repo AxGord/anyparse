@@ -75,7 +75,7 @@ final class CollapsibleIf implements Check {
 				final its: Null<Span> = innerThen.span;
 				if (cs == null || ts == null || ics == null || its == null) continue;
 				final merged: String = '${wrap(source.substring(cs.from, cs.to), outerCond, wrapKinds)} $andOp '
-				+ wrap(source.substring(ics.from, ics.to), innerCond, wrapKinds);
+					+ wrap(source.substring(ics.from, ics.to), innerCond, wrapKinds);
 				edits.push({ span: cs, text: merged });
 				// The inner then-body travels with the terminator a region body parks in its `if`'s slot.
 				edits.push({ span: ts, text: RegionTerminator.ownedText(innerThen, source, shape) ?? source.substring(its.from, its.to) });

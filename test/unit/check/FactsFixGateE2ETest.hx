@@ -37,16 +37,17 @@ class FactsFixGateE2ETest extends Test {
 		+ 'class Item {\n\tpublic final folder:Bool;\n\tpublic final name:String;\n\n'
 		+ '\tpublic function new(folder:Bool, name:String) {\n\t\tthis.folder = folder;\n\t\tthis.name = name;\n\t}\n}\n\n'
 		+ 'class Main {\n\tstatic function each(items:Array<Item>, f:(Item) -> Void):Void {\n\t\tfor (i in items) f(i);\n\t}\n\n'
-		+ '\tstatic function thumb(xml:String):String {\n\t\tfinal drill:Access = new Access(Xml.parse(xml).firstElement());\n'
-		+ '\t\treturn !drill.hasNode.thumbnail ? \'none\' : drill.node.thumbnail.innerData;\n\t}\n\n'
+		+ '\tstatic function thumb(xml:String):String {\n\t\tfinal model:Access = new Access(Xml.parse(xml).firstElement());\n'
+		+ '\t\treturn !model.hasNode.thumbnail ? \'none\' : model.node.thumbnail.innerData;\n\t}\n\n'
 		+ '\tstatic function named(fileName:String, ext:String):String {\n'
 		+ '\t\treturn fileName + (!fileName.toLowerCase().endsWith(ext) ? ext : \'\');\n\t}\n\n'
 		+ '\tstatic function flag(f:Flag):String {\n\t\treturn !f ? \'n\' : \'y\';\n\t}\n\n'
-		+ '\tstatic function main() {\n\t\tfinal out:Array<String> = [];\n'
+		+ '\tstatic function id<T>(x:T):T {\n\t\treturn x;\n\t}\n\n' + '\tstatic function main() {\n\t\tfinal out:Array<String> = [];\n'
 		+ '\t\teach([new Item(true, \'a\'), new Item(false, \'b\')], child -> {\n'
-		+ '\t\t\tout.push(!child.folder ? child.name + \'.drl\' : child.name);\n\t\t});\n'
+		+ '\t\t\tout.push(!child.folder ? child.name + \'.mdl\' : child.name);\n\t\t});\n'
 		+ '\t\tout.push(thumb(\'<d><thumbnail>T</thumbnail></d>\'));\n\t\tout.push(thumb(\'<d/>\'));\n'
-		+ '\t\tout.push(named(\'x.DRL\', \'.drl\'));\n\t\tout.push(named(\'y\', \'.drl\'));\n\t\tout.push(flag(true));\n'
+		+ '\t\tfinal raw = [{folder: true, name: \'r\'}];\n\t\tfinal g = id(raw[0]);\n\t\tout.push(!g.folder ? \'c\' : \'d\');\n'
+		+ '\t\tout.push(named(\'x.MDL\', \'.mdl\'));\n\t\tout.push(named(\'y\', \'.mdl\'));\n\t\tout.push(flag(true));\n'
 		+ '\t\tSys.println(out.join(\',\'));\n\t}\n}\n';
 	private static final CHAIN_MAIN: String = 'class Impl extends Base {\n' + '\tprivate function hook():Void {\n'
 		+ '\t\tSys.println(\'hook\');\n' + '\t}\n' + '\n' + '\tprivate function spare():Void {\n' + '\t\tSys.println(\'s\');\n' + '\t}\n'
@@ -237,9 +238,10 @@ class FactsFixGateE2ETest extends Test {
 	}
 
 	/**
-	 * With an `@:op(!A)` in scope (TM's resolution libraries carry two: `tink.core.Pair`, `tink.testrunner.Assertion`) a
-	 * negated ternary is inverted only once its operand is proven not to select it. The TM shapes no annotation types: an
-	 * untyped lambda parameter's field is proven by the compiler's facts, which the operator gate reads inside the `--fix`
+	 * With an `@:op(!A)` in scope (the client's resolution libraries carry two: `tink.core.Pair`, `tink.testrunner.Assertion`) a
+	 * negated ternary is inverted only once its operand is proven not to select it. The client shapes no annotation types: a
+	 * field of a local typed only by inference through a generic call (`id(raw[0])`; a lambda parameter of a declared callee
+	 * is bound since N56) is proven by the compiler's facts, which the operator gate reads inside the `--fix`
 	 * run; an abstract's `@:op(a.b)` field (`haxe.xml.Access.hasNode`, whose facts site names `resolve`, which the text never
 	 * spells) and a static extension's result by the shared walk's binding host. The operand that IS the overloading
 	 * abstract stays negated, and the program prints what it printed.
@@ -253,9 +255,10 @@ class FactsFixGateE2ETest extends Test {
 		CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'invert-negated-if-else', dir]));
 		final after: String = File.getContent('$dir/Main.hx');
 		for (inverted in [
-			'return drill.hasNode.thumbnail ? drill.node.thumbnail.innerData : \'none\';',
+			'return model.hasNode.thumbnail ? model.node.thumbnail.innerData : \'none\';',
 			'return fileName + (fileName.toLowerCase().endsWith(ext) ? \'\' : ext);',
-			'out.push(child.folder ? child.name : child.name + \'.drl\');',
+			'out.push(child.folder ? child.name : child.name + \'.mdl\');',
+			'out.push(g.folder ? \'d\' : \'c\');',
 			'return !f ? \'n\' : \'y\';'
 		]) Assert.isTrue(after.indexOf(inverted) >= 0, '$inverted\n$after');
 		Assert.equals(before, run(dir), 'the program prints what it printed');

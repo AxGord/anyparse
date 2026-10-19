@@ -22,6 +22,11 @@ final class PinsQueryAndRuntime {
 		'unit.query.AddElementSortedTest#testNonArrayContainerIsRefused :: control :: M-SORTED-ANY-CONTAINER',
 		'unit.query.AddElementSortedTest#testUnsortedListIsRefused :: control :: M-SORTED-ORDER-UNCHECKED',
 		'unit.query.AddImportSliceTest#testCliSeatReadsTheWildcardAsRunMember :: control :: M-ADDIMPORT-CLI-BLIND-SEAT',
+		'unit.query.AddImportSliceTest#testCliTakesAWholeUsingStatement :: control :: M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED',
+		'unit.query.AddImportSliceTest#testImportStatementUnderTheUsingFlagIsRefused :: control :: M-IMPORTSPELLING-FLAG-CONFLICT-UNCHECKED',
+		'unit.query.AddImportSliceTest#testNotAModulePathIsRefusedByName :: control :: M-ADDIMPORT-PATH-UNCHECKED',
+		'unit.query.AddImportSliceTest#testUsingOnlyHeaderTakesTheLowestPriority :: control :: M-ADDIMPORT-USING-TAKES-IMPORT-SEAT',
+		'unit.query.AddImportSliceTest#testWholeUsingStatementAddsAUsing :: control :: M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED',
 		'unit.query.AddMetaSliceTest#testCliWritesTheEntry :: control :: M-ADDMETA-CLI-UNROUTED',
 		'unit.query.AddMetaSliceTest#testFinalClassWrapperIsLifted :: control :: M-ADDMETA-NO-WRAPPER-CLIMB',
 		'unit.query.AddMetaSliceTest#testGuardedTypeKeepsTheEntryInsideTheGuard :: control :: M-ADDMETA-LOOSE-WRAPPER-CLIMB',
@@ -1179,6 +1184,10 @@ final class PinsQueryAndRuntime {
 		'unit.query.NominalTypesTest#testAConstructionReadsTheTypeArgumentsItWrites :: control :: M-CONSTRUCTION-CTOR-GAP',
 		'unit.query.NominalTypesTest#testALiteralIsItsType :: control :: M-NOMINAL-LITERAL',
 		'unit.query.NominalTypesTest#testALocalWrittenWithNoTypeHoldsItsInitializersType :: control :: M-NOMINAL-LOCAL-INIT',
+		'unit.query.NominalTypesTest#testATypeParameterReturnOrAnUnreadableTypeHasNoAnswer :: control :: M-NOMINAL-RETURN-PARAM-NAME,M-NOMINAL-UNREADABLE-WRITTEN',
+		'unit.query.NominalTypesTest#testAnInheritedMemberReadsThroughItsChainsArguments :: control :: M-ANCESTOR-ARGS-OFF,M-MEMBER-READ-HOST-ARGS,M-NOMINAL-SELF-PARAMS',
+		'unit.query.NominalTypesTest#testAnOptionalParameterReadsAsNullable :: control :: M-NOMINAL-OPTIONAL-PARAM',
+		'unit.query.NominalTypesTest#testAnOptionalStructureFieldReadsAsNullable :: control :: M-MEMBER-OPTIONAL-READ,M-INDEX-OPTIONAL-FIELD',
 		'unit.query.NominalTypesTest#testDeclarationsWritingAReturnDifferentlyHaveNoSource :: control :: M-NOMINAL-RETURN-AGREE',
 		'unit.query.NominalTypesTest#testTheSourceModeKeepsTypeArguments :: control :: M-NOMINAL-SOURCE-CALL,M-NOMINAL-RETURN-TYPEPARAM',
 		'unit.query.NominalTypesTest#testTheWrittenTypeReadersPeelTheirWrappers :: control :: M-ELEMENT-PEEL,M-OUTER-PATH-PEEL',
@@ -1227,6 +1236,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.RemoveElementSliceTest#testRemoveFinalClassTakesItsFinal :: control :: '
 			+ 'M-DECLSPAN-FINAL-WRAPPER-BLIND,M-LIFT-FINAL-WRAPPER-SKIPPED',
 		'unit.query.RemoveElementSliceTest#testRemoveOnePerLineElementTakesItsLine :: control :: M-REMOVE-COMMA-LINE-KEPT',
+		'unit.query.RemoveImportSliceTest#testCliUsingFlagRemovesTheUsing :: control :: M-REMOVEIMPORT-CLI-USING-FLAG-DROPPED',
+		'unit.query.RemoveImportSliceTest#testUsingStatementPicksTheUsing :: control :: M-REMOVEIMPORT-KEYWORD-IGNORED',
 		'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 			+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 		'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
@@ -1324,6 +1335,12 @@ final class PinsQueryAndRuntime {
 			+ 'M-NATIVE-SITE-INERT,M-NATIVE-SITE-CORE-TYPE,M-NATIVE-SITE-ALIAS,M-NATIVE-SITE-ARRAY-ELEMENTS',
 		'unit.query.UncheckedConversionsTest#testAnInstanceOfAnotherClassSitsOnlyWhereSomeBuildKeepsIt :: control :: '
 			+ 'M-UNCHECKED-CLASS-EXTERN,M-UNCHECKED-ALIKE',
+		'unit.query.UnificationTest#testAClassUnifiesWithWhatItsChainReaches :: control :: M-UNIFY-CHAIN-OPEN',
+		'unit.query.UnificationTest#testADeclarationUnderIfIsNotPlain :: control :: M-UNIFY-GUARDED-PLAIN',
+		'unit.query.UnificationTest#testALinkWritingTooFewArgumentsBindsNothing :: control :: M-ANCESTOR-SHORT-ARGS',
+		'unit.query.UnificationTest#testAnEnumUnifiesWithItselfAlone :: control :: M-UNIFY-CHAIN-OPEN',
+		'unit.query.UnificationTest#testOnlyPlainTypesAreDecided :: control :: M-UNIFY-ALIAS-STOP',
+		'unit.query.UnificationTest#testTheChainPassesItsArgumentsInTheStartsTerms :: control :: M-ANCESTOR-ARGS-OFF',
 		'unit.query.ValueNameBindingTest#testAModuleFieldComesBeforeAnyImport :: control :: '
 			+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
 		'unit.query.ValueNameBindingTest#testAModuleValueUnderIfBindsInTheBuildsCompilingIt :: control :: '

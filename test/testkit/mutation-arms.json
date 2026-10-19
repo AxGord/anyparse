@@ -812,38 +812,38 @@
 		{
 			"name": "M-STRUCT-NOMINAL-OPEN",
 			"type": "anyparse.query.StructuralTypes",
-			"method": "comparableNominalOf",
+			"method": "comparableTypeOf",
 			"force": "null",
 			"note": "no written type is comparable, so the unification refutation never fires and a member SET match pins again whatever the two types are"
 		},
 		{
 			"name": "M-STRUCT-ALIAS-OPAQUE",
 			"type": "anyparse.query.StructuralTypes",
-			"method": "comparableNominalOf",
-			"find": "final target: Null<String> = decl.type.aliasTargetRaw;\n\t\treturn target == null || !_refs.markSeen(decl, seen) ? null : comparableNominalOf(target, decl, seen);",
-			"replace": "return nominal;",
+			"method": "comparableTypeOf",
+			"find": "final target: Null<String> = decl.type.aliasTargetRaw;\n\t\treturn target == null || !_refs.markSeen(decl, seen) ? null : comparableTypeOf(target, decl, seen);",
+			"replace": "return { name: nominal, decl: null };",
 			"note": "a plain `typedef A = C` alias is compared as its own written name instead of being followed, so `{x:MyInt}` stops pinning a `var x:Int` the compiler does unify with it"
 		},
 		{
 			"name": "M-STRUCT-NULL-OPAQUE",
 			"type": "anyparse.query.StructuralTypes",
-			"method": "comparableNominalOf",
+			"method": "comparableTypeOf",
 			"find": "if (nominal == NULLABLE_WRAPPER_TYPE_NAME) {",
-			"replace": "if (nominal == NULLABLE_WRAPPER_TYPE_NAME) return nominal;\n\t\tif (nominal == NULLABLE_WRAPPER_TYPE_NAME) {",
+			"replace": "if (nominal == NULLABLE_WRAPPER_TYPE_NAME) return { name: nominal, decl: null };\n\t\tif (nominal == NULLABLE_WRAPPER_TYPE_NAME) {",
 			"note": "the nullability wrapper is compared as the nominal `Null`, so `{var x:Null<Int>}` stops pinning a `var x:Int` it accepts in both directions"
 		},
 		{
 			"name": "M-STRUCT-TYPEPARAM-CLOSED",
 			"type": "anyparse.query.StructuralTypes",
-			"method": "comparableNominalOf",
+			"method": "comparableTypeOf",
 			"find": "if (host.type.typeParamNames.contains(nominal)) return null;",
-			"replace": "if (host.type.typeParamNames.contains(nominal)) return nominal;",
+			"replace": "if (host.type.typeParamNames.contains(nominal)) return { name: nominal, decl: null };",
 			"note": "a structure member typed as its declaration's own type PARAMETER is compared as an ordinary nominal, so it refutes every argument it could have bound to"
 		},
 		{
 			"name": "M-STRUCT-DYNAMIC-CLOSED",
 			"type": "anyparse.query.StructuralTypes",
-			"method": "comparableNominalOf",
+			"method": "comparableTypeOf",
 			"find": "if (nominal == null || MemberLookup.dynamicSupertypeRef(nominal)) return null;",
 			"replace": "if (nominal == null) return null;",
 			"note": "`Dynamic` is compared as an ordinary nominal, so a structure member declared `Dynamic` refutes every type it unifies with"
@@ -858,17 +858,17 @@
 		{
 			"name": "M-STRUCT-UNRESOLVED-OPEN",
 			"type": "anyparse.query.StructuralTypes",
-			"method": "comparableNominalOf",
-			"find": "if (decl == null) return nominal;",
+			"method": "comparableTypeOf",
+			"find": "if (decl == null) return { name: nominal, decl: null };",
 			"replace": "if (decl == null) return null;",
 			"note": "a nominal that resolves nowhere is OPEN instead of compared by its written name, which is the sound reading for an out-of-scope alias and drops every refutation resting on an unresolved spelling"
 		},
 		{
 			"name": "M-STRUCT-ANON-CLOSED",
 			"type": "anyparse.query.StructuralTypes",
-			"method": "comparableNominalOf",
+			"method": "comparableTypeOf",
 			"find": "if (decl.type.isAnonStruct) return null;",
-			"replace": "if (decl.type.isAnonStruct) return nominal;",
+			"replace": "if (decl.type.isAnonStruct) return { name: nominal, decl: decl };",
 			"note": "a nominal naming an ANONYMOUS-STRUCTURE typedef is compared as a name, so a structure member typed by one refutes every class that could unify with it"
 		},
 		{
@@ -1410,26 +1410,26 @@
 		},
 		{
 			"name": "M-NEWFILE-IMPORT-DOUBLED",
-			"type": "anyparse.query.NewFile",
-			"method": "importStatement",
-			"find": "return path == '' ? null : '$keyword $path;';",
-			"replace": "return path == '' ? null : '$keyword $line;';",
-			"note": "a whole import line is wrapped a second time, so `@@ imports` writes `import import x.Y;;` and the failure surfaces as a column in generated text"
+			"type": "anyparse.query.ImportSpelling",
+			"method": "split",
+			"find": ": { keyword: keyword, path: withoutSemicolon(line.substr(keyword.length).trim()) };",
+			"replace": ": { keyword: keyword, path: withoutSemicolon(line) };",
+			"note": "a whole import line keeps its keyword in the path, so `@@ imports` (and add-import) refuse the statement spelling or wrap it into `import import x.Y;`"
 		},
 		{
 			"name": "M-NEWFILE-IMPORT-ANY-LINE",
 			"type": "anyparse.query.NewFile",
 			"method": "importStatement",
-			"find": "return isModulePath(line) ? 'import $line;' : null;",
-			"replace": "return 'import $line;';",
+			"find": "return spelled == null || spelled.path == '' || !ImportSpelling.isModulePath(spelled.path)",
+			"replace": "return spelled == null || spelled.path == ''",
 			"note": "a line that is neither a module path nor an import statement reaches assembly instead of being refused by name"
 		},
 		{
 			"name": "M-NEWFILE-BARE-KEYWORD-WRAPPED",
-			"type": "anyparse.query.NewFile",
-			"method": "importStatement",
-			"find": "for (keyword in ['import', 'using']) if (line == keyword || line.startsWith('$keyword ')) {",
-			"replace": "for (keyword in ['import', 'using']) if (line.startsWith('$keyword ')) {",
+			"type": "anyparse.query.ImportSpelling",
+			"method": "split",
+			"find": "for (keyword in [IMPORT_WORD, USING_WORD]) if (line == keyword || line.startsWith('$keyword ')) {",
+			"replace": "for (keyword in [IMPORT_WORD, USING_WORD]) if (line.startsWith('$keyword ')) {",
 			"note": "a bare `import` with no path falls through to the bare-path branch and becomes `import import;`, which parses and means nothing"
 		},
 		{
@@ -2258,8 +2258,8 @@
 			"name": "M-STRUCT-BUILTIN-BY-NAME",
 			"type": "anyparse.query.StructuralTypes",
 			"method": "structuralConformancePins",
-			"find": "\t\t\tif (\n\t\t\t\tmembers.contains(field)\n\t\t\t\t&& familyDeclaresEveryMember(typeName, [for (n in members) { name: n, typeSource: null, host: null }], [])\n\t\t\t)\n\t\t\t\treturn true;",
-			"replace": "\t\t\tif (\n\t\t\t\tmembers.contains(field)\n\t\t\t)\n\t\t\t\treturn true;",
+			"find": "if (members.contains(field) && familyDeclaresEveryMember(typeName, members.map(builtinMember), [])) return true;",
+			"replace": "if (members.contains(field)) return true;",
 			"note": "a builtin structural type is matched by member NAME instead of by its whole member set, so a class declaring `hasNext` alone reads as an Iterator and its field is refused finalization"
 		},
 		{
@@ -2306,17 +2306,17 @@
 			"name": "M-USES-EXACT-ONLY",
 			"type": "anyparse.query.Uses",
 			"method": "matches",
-			"find": "return nodeName == target || (includeQualified && target.indexOf('.') < 0 && SourceText.lastSegment(nodeName) == target);",
+			"find": "return nodeName == target || (includeQualified && SourceText.answersSimpleName(nodeName, target));",
 			"replace": "return nodeName == target;",
 			"note": "a type named through its module path is invisible again, so a deadness census over `uses` calls a live sub-module type dead"
 		},
 		{
 			"name": "M-USES-TAIL-SUBSTRING",
-			"type": "anyparse.query.Uses",
-			"method": "matches",
-			"find": "SourceText.lastSegment(nodeName) == target",
-			"replace": "StringTools.endsWith(nodeName, target)",
-			"note": "the qualified tail is matched as text rather than on the segment boundary, so `Mod.WrapBodyOpts` answers a query for `BodyOpts`"
+			"type": "anyparse.query.SourceText",
+			"method": "answersSimpleName",
+			"find": "return lastSegment(spelled) == target;",
+			"replace": "return StringTools.endsWith(spelled, target);",
+			"note": "the qualified tail is matched as text rather than on the segment boundary, so `Mod.WrapBodyOpts` answers a query for `BodyOpts` (and `my.OtherAssets` a mentions query for `Assets`)"
 		},
 		{
 			"name": "M-USES-QUALIFIED-DEFAULT",
@@ -3106,8 +3106,8 @@
 			"name": "M-LIT-DELIMITERS-IGNORED",
 			"type": "anyparse.query.Lit",
 			"method": "walk",
-			"find": "final hit: Bool = matches(n, target, exact) || content != null && matches(content, target, exact);",
-			"replace": "final hit: Bool = matches(n, target, exact);",
+			"find": "final hit: Bool = matches(n, target, exact) || content != null && matches(content, target, exact)",
+			"replace": "final hit: Bool = matches(n, target, exact)",
 			"note": "the declared quotes stay on the name slot for the compare, so `--exact` can never match content written in the grammar's whole-span string spelling and the two spellings answer differently again"
 		},
 		{
@@ -16215,8 +16215,8 @@
 			"name": "M-UNCHECKED-ALIAS-PLACE",
 			"type": "anyparse.query.UncheckedConversions",
 			"method": "noneBy",
-			"find": "seen.concat([id]), false);",
-			"replace": "seen.concat([id]), true);",
+			"find": "foreign, seen.concat([id]), false",
+			"replace": "foreign, seen.concat([id]), true",
 			"note": "(precision) the type an alias stands for is read as a place of its own, a nullable one boxed"
 		},
 		{
@@ -21590,7 +21590,7 @@
 			"name": "M-SEAL-UNRESOLVED-IFACE",
 			"type": "anyparse.query.MemberLookup",
 			"method": "supertypesDeclareNoneWalk",
-			"find": "if (isInterface || cur.type.interfaces.contains(SourceText.lastSegment(raw))) return false;",
+			"find": "if (isInterface || cur.type.interfaces.contains(SourceText.lastSegment(link.raw))) return false;",
 			"replace": "",
 			"note": "an interface the index cannot resolve is taken to declare nothing"
 		},
@@ -22082,8 +22082,8 @@
 			"name": "M-NOMINAL-ABSTRACT-THIS",
 			"type": "anyparse.query.NominalTypes",
 			"method": "indexSelf",
-			"find": "if (!(c.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return decl.name;",
-			"replace": "return decl.name;",
+			"find": "if (!(c.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) {",
+			"replace": "if (true) {",
 			"note": "`this` inside an abstract is the abstract, not its underlying value (4.3.7 types it as the underlying)"
 		},
 		{
@@ -27061,6 +27061,222 @@
 			"find": "Doc.Group(Doc.IfWidthExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
 			"replace": "Doc.Group(Doc.IfLineExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
 			"note": "the Allman break of a lineLength-rule literal is not offered to its one-item list, which stays laddered where the next write cuddles"
+		},
+		{
+			"name": "M-ANCESTOR-ARGS-OFF",
+			"type": "anyparse.query.AncestorTable",
+			"method": "chainTo",
+			"find": "for (a in above) CallGraphNames.substituteTypeParams(a, params, args, _typeSyntax)",
+			"replace": "for (a in above) a",
+			"note": "what a link passes is not substituted for the ancestor's parameters, so a chain answers the ancestor's own parameter names in the start's terms"
+		},
+		{
+			"name": "M-ANCESTOR-SHORT-ARGS",
+			"type": "anyparse.query.AncestorTable",
+			"method": "chainTo",
+			"find": "return args == null || args.length < params.length",
+			"replace": "return args == null",
+			"note": "a link writing fewer arguments than the parameters it fills still binds them, to nothing written"
+		},
+		{
+			"name": "M-UNIFY-CHAIN-OPEN",
+			"type": "anyparse.query.Unification",
+			"method": "reaches",
+			"find": "return open ? MayFit : Misfits;",
+			"replace": "return MayFit;",
+			"note": "a class whose whole chain resolves without reaching the other type is undecided instead of refuted, so no plain argument skips an optional parameter"
+		},
+		{
+			"name": "M-UNIFY-ALIAS-STOP",
+			"type": "anyparse.query.Unification",
+			"method": "followed",
+			"find": "while (at.type.kind == SymbolIndex.TYPEDEF_DECL_KIND) {",
+			"replace": "while (false) {",
+			"note": "a plain alias is not followed, so a type reached through one is never decided"
+		},
+		{
+			"name": "M-UNIFY-GUARDED-PLAIN",
+			"type": "anyparse.query.Unification",
+			"method": "plain",
+			"find": "return at == null || at.type.guarded || ",
+			"replace": "return at == null || ",
+			"note": "a declaration under `#if` is decided as if one branch were every configuration's"
+		},
+		{
+			"name": "M-ARGFIT-PLAIN-OFF",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "fit",
+			"find": "plainFit(given, wanted, wantedFile, callerId, calleeId)",
+			"replace": "MayFit",
+			"note": "two plain class types are never unified, so an argument of an unrelated class still binds an optional parameter"
+		},
+		{
+			"name": "M-NOMINAL-OPTIONAL-PARAM",
+			"type": "anyparse.query.NominalTypes",
+			"method": "boundType",
+			"find": "optionalValueType(written, c.shape.optionalValueTypeName, c.chain.typeSyntax)",
+			"replace": "written",
+			"note": "an optional parameter reads as its written type, not the optional value the compiler types it (`Null<T>`)"
+		},
+		{
+			"name": "M-NOMINAL-UNREADABLE-WRITTEN",
+			"type": "anyparse.query.NominalTypes",
+			"method": "boundType",
+			"find": "return if (written == null || !answerableType(written, c.chain.typeSyntax))",
+			"replace": "return if (written == null)",
+			"note": "a written type that is no one type (`#if` inside it) is answered verbatim"
+		},
+		{
+			"name": "M-MEMBER-OPTIONAL-READ",
+			"type": "anyparse.query.MemberLookup",
+			"method": "memberReadType",
+			"find": "return bound == null || !found.member.optional ? bound : NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax);",
+			"replace": "return bound;",
+			"note": "an optional structure field reads as its written type, not `Null<T>`"
+		},
+		{
+			"name": "M-MEMBER-READ-HOST-ARGS",
+			"type": "anyparse.query.MemberLookup",
+			"method": "memberReadType",
+			"find": "params.length == 0 ? [] : boundArguments(start, host, args);",
+			"replace": "params.length == 0 ? [] : null;",
+			"note": "no argument binds the declaring type's parameters, so a member written with one is unknown everywhere"
+		},
+		{
+			"name": "M-INDEX-OPTIONAL-FIELD",
+			"type": "anyparse.query.SymbolIndexMembers",
+			"method": "optionalField",
+			"find": "return decl != null && decl.kind == kind && decl.name == member.name || meta != null && metas.contains(meta);",
+			"replace": "return meta != null && metas.contains(meta);",
+			"note": "a structure field written `?a: T` or `var ?b: T` is not optional, only one under `@:optional`"
+		},
+		{
+			"name": "M-NOMINAL-RETURN-PARAM-NAME",
+			"type": "anyparse.query.MemberLookup",
+			"method": "returnNominalWalk",
+			"find": "if (own != null && (m.typeParamNames.contains(own) || decl.type.typeParamNames.contains(own))) return null;",
+			"replace": "",
+			"note": "a method returning a type parameter answers the parameter's name as a call's nominal"
+		},
+		{
+			"name": "M-STRUCT-READONLY-INVARIANT",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "memberCouldUnify",
+			"find": "_unification.unifies(haveDecl, wantDecl) != Misfits",
+			"replace": "AncestorTable.same(haveDecl, wantDecl)",
+			"note": "a read-only structure field asks for the same type, so a subtype refutes a structure the compiler unifies with"
+		},
+		{
+			"name": "M-STRUCT-MUTABLE-SAME-DECL",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "memberCouldUnify",
+			"find": "AncestorTable.same(haveDecl, wantDecl);",
+			"replace": "wantDecl.type.name == haveDecl.type.name;",
+			"note": "a mutable structure field compares types by simple name, so a namesake of another package conforms"
+		},
+		{
+			"name": "M-NOMINAL-SELF-PARAMS",
+			"type": "anyparse.query.NominalTypes",
+			"method": "indexSelf",
+			"find": "return params.length == 0 ? decl.name : '${decl.name}<${params.join(', ')}>';",
+			"replace": "return decl.name;",
+			"note": "a generic type's `this` is its bare name, so a member written with its own parameter reads as nothing off `this`"
+		},
+		{
+			"name": "M-STMT-LIST-CALLARG-BARRIER",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "statementListElemOpt",
+			"find": "return macro _clearCallArgChainNest($optExpr);",
+			"replace": "return optExpr;",
+			"note": "a statement-list element keeps the call-argument chain flag: the first chain in a lambda argument's body wraps its operator at the statement's indent"
+		},
+		{
+			"name": "M-STMT-LIST-CALLARG-BLOCK",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElemCallExpr",
+			"find": "WriterOptFanout.statementListElemOpt(elemOptExpr)",
+			"replace": "elemOptExpr",
+			"note": "a block statement (lambda / anonymous function body) bypasses the statement-list barrier and inherits the call-argument chain flag"
+		},
+		{
+			"name": "M-STMT-LIST-CALLARG-CASE",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseElemCallExprs",
+			"find": "WriterOptFanout.statementListElemOpt(macro _writerOpt)",
+			"replace": "macro _writerOpt",
+			"note": "a case-body statement of an arrow-body switch argument bypasses the statement-list barrier and inherits the call-argument chain flag"
+		},
+		{
+			"name": "M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED",
+			"type": "anyparse.query.AddImport",
+			"method": "addImport",
+			"find": "final asUsing: Bool = spelled.keyword == ImportSpelling.USING_WORD;",
+			"replace": "final asUsing: Bool = isUsing;",
+			"note": "a whole `using x.Y;` statement is added as an IMPORT of x.Y — the keyword the caller wrote is read and then ignored"
+		},
+		{
+			"name": "M-ADDIMPORT-USING-TAKES-IMPORT-SEAT",
+			"type": "anyparse.query.AddImport",
+			"method": "addImport",
+			"find": "? UsingScan.usingInsertEdit(UsingScan.headerOf(tree, source, plugin), trimmed)",
+			"replace": "? importEdit(source, tree, plugin, trimmed)",
+			"note": "a fresh `using` takes the import ladder again, which for a using-only header appends it BELOW the group: top static-extension priority, re-targeting the calls the file already makes"
+		},
+		{
+			"name": "M-ADDIMPORT-PATH-UNCHECKED",
+			"type": "anyparse.query.AddImport",
+			"method": "addImport",
+			"find": "if (!ImportSpelling.isModulePath(trimmed)) return Err(ImportSpelling.notAPath(path));",
+			"replace": "",
+			"note": "text that is no module path reaches the splice and is refused as a parse error at a column of a source the caller never wrote"
+		},
+		{
+			"name": "M-IMPORTSPELLING-FLAG-CONFLICT-UNCHECKED",
+			"type": "anyparse.query.ImportSpelling",
+			"method": "split",
+			"find": "return usingFlag && keyword == IMPORT_WORD",
+			"replace": "return false",
+			"note": "an `import x.Y;` statement under --using is silently taken as one of the two requests instead of refused"
+		},
+		{
+			"name": "M-REMOVEIMPORT-KEYWORD-IGNORED",
+			"type": "anyparse.query.RemoveImport",
+			"method": "removeImport",
+			"find": "final kinds: Array<String> = kindsFor(spelled.keyword);",
+			"replace": "final kinds: Array<String> = kindsFor(null);",
+			"note": "a `using a.B;` request matches the `import a.B;` beside it too, so the keyword that names one statement reads as ambiguous"
+		},
+		{
+			"name": "M-REMOVEIMPORT-CLI-USING-FLAG-DROPPED",
+			"type": "anyparse.query.cli.command.RemoveImportCommand",
+			"method": "runRemoveImport",
+			"find": "final path: String = usingFlag ? '${ImportSpelling.USING_WORD} ${spelled.path}' : modulePath;",
+			"replace": "final path: String = modulePath;",
+			"note": "remove-import --using parses and then drops the flag, so the bare path beside an import of the same module is ambiguous again"
+		},
+		{
+			"name": "M-MENTIONS-IMPORT-KINDS-UNPASSED",
+			"type": "anyparse.query.cli.command.MentionsCommand",
+			"method": "emitMentionsLit",
+			"find": "Lit.find(target, entry.tree, true, null, delimiters, ModuleScan.IMPORT_DECL_KINDS)",
+			"replace": "Lit.find(target, entry.tree, true, null, delimiters)",
+			"note": "mentions <Name> answers the uses and not the dotted `import pkg.Name;` that makes them resolve, and the reader concludes there is no import"
+		},
+		{
+			"name": "M-LIT-QUALIFIED-KINDS-IGNORED",
+			"type": "anyparse.query.Lit",
+			"method": "walk",
+			"find": "|| qualifiedKinds.contains(node.kind) && SourceText.answersSimpleName(n, target)",
+			"replace": "",
+			"note": "the import kinds a caller asks to widen are carried and never read, so a dotted import or using is blind to a simple-name query"
+		},
+		{
+			"name": "M-HOIST-USINGS-SOURCE-ORDER",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "builtAmbientSource",
+			"find": "usings.reverse();",
+			"replace": "",
+			"note": "hoisted usings are inserted first-first at a seat that puts each above the first, so they land reversed — and a using order IS its static-extension priority"
 		}
 	]
 }

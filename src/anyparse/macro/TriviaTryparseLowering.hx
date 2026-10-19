@@ -1244,6 +1244,7 @@ final class TriviaTryparseLowering {
 	 * call and the operand-break opt init.
 	 */
 	@:access(anyparse.macro.WriterLowering)
+	@:access(anyparse.macro.WriterOptFanout)
 	private static function triviaTryparseElemCallExprs(
 		elemFn: String, clearExprPositionNonTail: Bool, operandBreakAfterMultilineBrace: Bool
 	): { triviaElemCall: Expr, triviaElemCallMaybeBreak: Expr, elemOptInit: Expr } {
@@ -1265,14 +1266,16 @@ final class TriviaTryparseLowering {
 		// `while` bodies the fork breaks) keep the force-propagated `_writerOpt`.
 		final caseTailOptArg: Expr = if (clearExprPositionNonTail) {
 			final caseTailBarrier: Expr = WriterLowering.astPredCallT('tailStmtReadsExprPosition', [macro _t.node]);
+			// omega-stmt-list-callarg-barrier: every element, tail included.
+			final stmtOptExpr: Expr = WriterOptFanout.statementListElemOpt(macro _writerOpt);
 			macro (
 				_si == _arr.length - 1 ? (
 					$caseTailBarrier && !opt._inExprPosition
 						&& (opt.expressionIfBody == anyparse.format.BodyPolicy.Next
 							|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine)
-						? _clearExprPosition(_writerOpt)
-						: _writerOpt
-				) : _clearExprPosition(_writerOpt)
+						? _clearExprPosition($stmtOptExpr)
+						: $stmtOptExpr
+				) : _clearExprPosition($stmtOptExpr)
 			);
 		} else
 			macro _writerOpt;

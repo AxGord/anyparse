@@ -4512,3 +4512,92 @@ decided the question; it may not become a record of runs.
   recognises its Allman break side. This was the whole `thr` harness family (5022 drifting files). 191 files main
   drifted on settle on another fixed point than main's second write: an outer `noWrap` literal keeps its fields glued
   around the Allman comprehension, where main's second write had broken it because the first had printed it multi-line.
+
+## FU4 (2026-10-19): typer step T2 — the ancestor table, the unification of plain types, a member's READ type
+
+- every closure walk of `MemberLookup` resolved each `supertypesRaw` link again (`resolveTypeRef(raw, cur.file, …)`), and
+  three other places spelled "what a supertype chain passes to an ancestor's parameter" by SIMPLE name
+  (`SubtypeGraph.chainArguments`, `CallGraphGenerics`) or not at all (`MemberPathWalk.substitutedMemberSource`
+  substituted a DIRECTLY declared member only) → ONE `AncestorTable` on the typing service: each declaration's links
+  resolved once with the arguments they pass, its alias target, and `argumentsTo(start, host)` — `tUnification.ml`'s
+  `loop cs (List.map (apply_params c.cl_params tl) tls)` by DECLARATION, the first link reaching the ancestor in written
+  order. The walks read it (a pure move); `substitutedMemberSource` is deleted, its job is `MemberLookup.memberReadType`.
+  The call graph's simple-name chain stays: it keys types its own way and may run with no index — branch `feat/fu-FU4`
+- the type a READ of a member carries is not its written type: 4.3.7 types `Base<T>.item` read off a `Sub extends
+  Base<Int>` as `Int`, a structure's `?a: T` / `var ?b: T` / `@:optional var c: T` as `Null<T>` (an interface's
+  `@:optional var e: Int` stays `Int`), and a parameter `?x: T` as `Null<T>` with or without a default (`x: T = v` stays
+  `T`; `?x: Null<T>` is not wrapped twice) — verified with `$type` on `--interp` and `-js`. The facts harness read 4901
+  (anyparse) / 996 (client) nominal answers that left the wrapper out and 232 client answers naming an ancestor's parameter →
+  `memberReadType` binds the declaring type's parameters through the chain and wraps an optional structure field
+  (`MemberInfo.optional`, recorded by the index); the index host wraps an optional parameter
+  (`RefShape.optionalValueTypeName` / `optionalFieldMetaName`). Every consumer reads the wrapper exactly as it reads one
+  written by hand — branch `feat/fu-FU4`
+- "the compiler's answer or Unknown": a call whose declaration returns a type parameter of the method or of its type now
+  has no nominal (`returnNominalWalk`), where it answered the parameter's NAME (`Std.downcast` → `S`); a written type that
+  is no one type (`#if lime Image #else Dynamic #end`, a macro splice) is no answer (`NominalTypes.answerableType`).
+  Inferring what a call binds its method's parameters to is overload / argument typing, step T5 — branch `feat/fu-FU4`
+- `Unification` memoizes `unify` over PLAIN types only (a class, an interface or an enum with no type parameter, through
+  plain aliases, not under `#if`), keyed by the pair: itself `Fits`, an ancestor its chain reaches `Fits`, an enum against
+  anything else `Misfits`, a class or interface whose whole chain resolves without reaching the other `Misfits`, all else
+  `MayFit` (abstract casts are step T4). Consumers: `ArgumentTypes.fit` (two plain types were always `MayFit`, so an
+  argument of an unrelated class still bound an optional parameter the compiler skips) and
+  `StructuralTypes.memberCouldUnify`, which compared nominals by SIMPLE name and invariantly for every member: a
+  read-only structure member (`final`, a method) unifies covariantly in the compiler (`{final x:Base}` accepts `var
+  x:Sub`), and two namesakes of two packages are two types — branch `feat/fu-FU4`
+
+## FU11 (2026-10-19): a statement list is a barrier for the call-argument chain flag
+
+- A leading-break call stamps `_callArgChainNest` on each argument's opt so a chain that IS the argument drops its own
+  continuation Nest (the argument Nest already supplies `+1`). The flag was consumed only at a chain or a ternary, so an
+  argument that is a lambda / anonymous `function` / arrow-body `switch` carried it into its BODY, and the first chain of
+  the body (`return a && b`, `final v = a && b`, `x = a + b`) honoured it: the operator wrapped at the statement's own
+  indent instead of one level deeper. Every engine since 2026-10-15 did it, and `fmt --list` called it canonical. The
+  haxe-formatter fork gives `+1` there, as hxq does in a plain function body.
+- Fix in the one place statements are written: both statement-list Stars (`TriviaBlockLowering.triviaBlockElemCallExpr` —
+  `BlockExpr` / `BlockStmt` / `HxFnBlock.stmts` — and `TriviaTryparseLowering.triviaTryparseElemCallExprs` — case /
+  default bodies) write every element, tail included, through `WriterOptFanout.statementListElemOpt`, which clears the
+  flag. A statement is never itself a call argument, so the flag is stale there by construction.
+- NOT changed, by fork parity: an object-literal field value and an arrow EXPRESSION body inside a call argument are not
+  statements and keep the call-argument base (the fork wraps both at that column). Pinned by
+  `HxCallArgLambdaBodyChainIndentTest`'s two non-discriminating pins.
+- client: 3 files / 4 hunks, each this defect (`ItemListProjectsShare.hx:171`, `BucketMutationOffMainTest.hx:109/153`,
+  `ItemListThumbnailTest.hx:106`). Arm `M-STMT-LIST-CALLARG-BARRIER`.
+
+## FU5 (2026-10-19): an import argument may be the whole statement; `mentions` answers a dotted import
+
+- client gap (a): an agent concluded `add-import` "cannot add a `using`" and patched `using Lambda;` in by hand. The flag
+  `--using` existed; what did not was the spelling every caller reaches for — `add-import <file> 'using Lambda;'` was
+  wrapped into `import using Lambda;;` and refused as `result does not parse: error at 5:14`, a column of a source the
+  caller never wrote. `new`'s `@@ imports` had learnt both spellings in `e8ec6cc1` with its own reader; that reader MOVED
+  to `query.ImportSpelling` (`split` + `isModulePath`, the copy in `NewFile` deleted) and now serves `add-import`,
+  `remove-import` and `new` alike. A statement's keyword picks the kind; an `import …` statement under `--using` is
+  refused by name; a bare path keeps its old meaning. `isModulePath` (a POSITIVE whitelist) also accepts the legacy
+  alias spelling ` in <Alias>`, which `add-import` could always splice. `add-import` now refuses text that is neither a
+  module path nor a statement BY NAME instead of as a parse error.
+- `remove-import` takes the same statement spelling, and its keyword narrows the match: `using a.B;` names the `using`
+  alone where a bare `a.B` beside `import a.B;` stays ambiguous. `--using` is the CLI's flag spelling of the same request
+  (folded into the statement form, so the library entry point carries no second parameter). Its private copy of the
+  import kinds is gone; it reads `ModuleScan.IMPORT_DECL_KINDS`.
+- Placement of a `using`: Haxe ranks static extensions in REVERSE declaration order (verified, Haxe 4.3.7 `--interp`:
+  `using A; using B;` resolves `x.who()` to B). `UsingScan.usingInsertEdit` — the seat every `using`-inserting rule takes —
+  puts a fresh one ABOVE the header's first `using`, the lowest priority, so no call the file already makes moves.
+  `add-import` used `ImportOrder`'s import ladder ("after the last plain import, else after the last import / using"),
+  which agrees only when plain imports precede the usings: for a using-only header it appended BELOW the group (top
+  priority). `add-import --using` now calls `UsingScan.usingInsertEdit` (guarded-body header included) — one answer for
+  the op and the rules; `ImportOrder`'s doc, which claimed every caller APPENDS a `using`, is corrected.
+  `HoistCommonImport` inserts several usings through the op, so it now inserts them last-first to keep their source
+  order (= their priority) in the ambient source.
+- Dedupe is unchanged in kind and reach: same-kind, top level and inside `#if` regions, whichever spelling was passed.
+- client gap (b): `mentions Assets` answered the uses and NOT `import openfl.Assets;` — the import payload is ONE leaf, and the
+  lit section compared names exactly. The last-segment test `uses` reads for a qualified type reference since `84b5aceaa`
+  is now ONE shared predicate, `SourceText.answersSimpleName` (`Uses.matches` calls it), and `Lit.find` takes opt-in
+  `qualifiedKinds` it applies under an exact match; `mentions` passes `ModuleScan.IMPORT_DECL_KINDS`, so a simple name
+  also answers an import / using whose last segment it is, printing the node's own (full) path. A dotted query stays an
+  exact compare (a last segment carries no dot, so the old explicit `indexOf('.')` guard was redundant and went).
+  `lit` passes no kinds and is unchanged; `refs` has no import part; `rename` reads neither (its dotted-path arithmetic
+  stays `CrossRename`'s).
+- Arms: M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED, M-ADDIMPORT-USING-TAKES-IMPORT-SEAT, M-ADDIMPORT-PATH-UNCHECKED,
+  M-IMPORTSPELLING-FLAG-CONFLICT-UNCHECKED, M-REMOVEIMPORT-KEYWORD-IGNORED, M-REMOVEIMPORT-CLI-USING-FLAG-DROPPED,
+  M-MENTIONS-IMPORT-KINDS-UNPASSED, M-LIT-QUALIFIED-KINDS-IGNORED, M-HOIST-USINGS-SOURCE-ORDER; re-aimed onto the moved
+  code: M-NEWFILE-IMPORT-DOUBLED / -BARE-KEYWORD-WRAPPED (`ImportSpelling.split`), M-NEWFILE-IMPORT-ANY-LINE,
+  M-USES-EXACT-ONLY, M-USES-TAIL-SUBSTRING (`SourceText.answersSimpleName`).

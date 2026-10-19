@@ -14,6 +14,16 @@
 # resolves its own real path through symlinks, so it still finds
 # `apq.js` in the repo's bin/ regardless of the symlink location.
 #
+# Stale engine: a SHARED bin/apq.js (the one next to this script) is
+# auto-rebuilt only when the caller's cwd git toplevel is the anyparse main
+# tree itself (the directory holding this bin/). From any other cwd (the client
+# tree, /tmp, ...) a stale shared engine RUNS, with a one-line stderr warning,
+# and is never rebuilt: a bare `hxq` elsewhere used to truncate the artifact
+# other processes were executing. HXQ_SHARED_REBUILD=0 turns the shared
+# rebuild off everywhere (warning instead). A worktree's OWN engine (its
+# bin/apq.js) is private and still auto-rebuilds. See the stale-build block
+# below for HXQ_QUIET / HXQ_AUTO_REBUILD.
+#
 # Usage: hxq <subcommand> [options] <file>
 
 set -e
@@ -59,6 +69,10 @@ else
         esac
     done
     here=$(cd -P "$(dirname "$src")" && pwd)
+    # The shared engine's bin/ (the one this script lives in), kept before
+    # the worktree override below: the stale check rebuilds it only for a
+    # caller standing in its own tree.
+    shared_here="$here"
 
     # Worktree awareness: when invoked from inside a git worktree (or
     # clone) whose own bin/ holds a built engine, prefer THAT engine +
@@ -117,6 +131,8 @@ fi
 #                         legacy warn-once-per-mtime mode. Useful when
 #                         interactive feedback on the build itself is
 #                         desired (`haxe bin/apq-js.hxml` separately).
+#   HXQ_SHARED_REBUILD=0 — never rebuild the SHARED engine, from any cwd
+#                         (the main tree included); warn and run it.
 #   Otherwise: auto-rebuild runs the appropriate `haxe bin/<hxml>` and
 #   aborts on build failure. Stale results are silent regressions —
 #   defaulting to auto-rebuild keeps query output truthful without
@@ -130,7 +146,25 @@ if [ "${HXQ_QUIET:-}" != "1" ] && [ -d "$src_root" ]; then
         bin_name="bin/apq.js"
         hxml_path="$here/apq-js.hxml"
         hxml_name="bin/apq-js.hxml"
-        if [ "${HXQ_AUTO_REBUILD:-1}" != "0" ]; then
+        # Shared engine, caller outside the main tree (or HXQ_SHARED_REBUILD=0):
+        # never rebuild it, run it and say so. A private worktree engine
+        # ($here != $shared_here) keeps the normal behaviour.
+        shared_rebuild=1
+        if [ "$here" = "$shared_here" ]; then
+            if [ "${HXQ_SHARED_REBUILD:-1}" = "0" ]; then
+                shared_rebuild=0
+                why="HXQ_SHARED_REBUILD=0"
+            else
+                main_top=$(cd -P "$here/.." && pwd)
+                if [ -z "$wt_top" ] || [ "$(cd -P "$wt_top" && pwd)" != "$main_top" ]; then
+                    shared_rebuild=0
+                    why="cwd is outside $main_top"
+                fi
+            fi
+        fi
+        if [ "$shared_rebuild" = "0" ]; then
+            echo "hxq: warning: src/ newer than shared $bin_name ($why): NOT rebuilding, running the STALE engine. Rebuild in $(cd -P "$here/.." && pwd) (\`haxe $hxml_name\`) or pin a private engine with HXQ_BIN." >&2
+        elif [ "${HXQ_AUTO_REBUILD:-1}" != "0" ]; then
             # Rebuild in-process (DEFAULT). On failure print the build's
             # stderr and bail — running a stale binary after a failed
             # rebuild would be misleading.
@@ -179,7 +213,7 @@ if [ "${HXQ_QUIET:-}" != "1" ] && [ -d "$src_root" ]; then
 fi
 
 # Node flags. A 64 MB young generation (V8's default is 16 MB) collects less
-# often and promotes fewer short-lived objects: measured 2026-10-18 on TM
+# often and promotes fewer short-lived objects: measured 2026-10-18 on the client corpus
 # (N37) at -1.6% on `lint --all` and -2.6% on `lint --fix` for +5% RSS
 # (1.80 -> 1.89 GB). HXQ_NODE_FLAGS replaces the default; set it empty to
 # run node with none.

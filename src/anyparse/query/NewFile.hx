@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.format.comment.CommentLossException;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
+import anyparse.query.ImportSpelling.ImportSpelled;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -357,7 +358,7 @@ final class NewFile {
 				for (line in buf) if (line.trim() != '') {
 					final stmt: Null<String> = importStatement(line.trim());
 					if (stmt == null)
-						failure ??= '@@ imports: "${line.trim()}" is neither a module path nor an import / using statement';
+						failure ??= '@@ imports: ${ImportSpelling.notAPath(line)}';
 					else
 						imports.push(stmt);
 				}
@@ -377,27 +378,15 @@ final class NewFile {
 	}
 
 	/**
-	 * One `@@ imports` line as the statement it means, or null when it is neither
-	 * spelling.
-	 *
-	 * The section has always taken BARE module paths, and a whole `import x.Y;` line —
-	 * the spelling every caller reaches for, because it is what the file will contain —
-	 * was concatenated into `import import x.Y;;` and surfaced two layers later as
-	 * `assembled source does not parse: error at 2:15: unexpected input (expected //)`,
-	 * a column inside a source the caller never wrote. Both spellings are accepted now,
-	 * and `using` with them: it costs the same line as recognising `import` and is
-	 * otherwise unreachable from `apq new` at all.
+	 * One `@@ imports` line as the statement it means, or null when it is neither spelling — a bare
+	 * module path or a whole `import x.Y;` / `using x.Y;` line, read by `ImportSpelling`, the reader
+	 * `add-import` and `remove-import` share.
 	 */
 	private static function importStatement(line: String): Null<String> {
-		// `line == keyword` is not a redundant arm: matching only `'import '` let a bare
-		// `import` fall through to the bare-path branch, which wrapped it into the
-		// `import import;` that parses and means nothing.
-		for (keyword in ['import', 'using']) if (line == keyword || line.startsWith('$keyword ')) {
-			final body: String = line.substr(keyword.length).trim();
-			final path: String = body.endsWith(';') ? body.substr(0, body.length - 1).trim() : body;
-			return path == '' ? null : '$keyword $path;';
-		}
-		return isModulePath(line) ? 'import $line;' : null;
+		final spelled: Null<ImportSpelled> = ImportSpelling.split(line);
+		return spelled == null || spelled.path == '' || !ImportSpelling.isModulePath(spelled.path)
+			? null
+			: '${spelled.keyword ?? ImportSpelling.IMPORT_WORD} ${spelled.path};';
 	}
 
 
@@ -410,27 +399,6 @@ final class NewFile {
 		final value: Null<String> = bodies[key];
 		if (value != null) bodies.remove(key);
 		return value;
-	}
-
-	/**
-	 * Is `path` a module path the assembled source will parse — dot-separated identifier
-	 * segments, an optional `.*` last segment, an optional ` as <Alias>` tail?
-	 *
-	 * A POSITIVE criterion, because the harm side is open-ended. The first cut refused
-	 * only a line carrying a `;` — one leak of the class, not the class: `this is not a
-	 * path` still became `import this is not a path;` and died with exactly the
-	 * `unexpected input (expected //)` at a generated column that naming the bad line
-	 * exists to replace.
-	 */
-	private static function isModulePath(path: String): Bool {
-		final aliasAt: Int = path.indexOf(' as ');
-		if (aliasAt >= 0 && !SourceText.isIdentifier(path.substr(aliasAt + 4).trim())) return false;
-		final segments: Array<String> = (aliasAt < 0 ? path : path.substring(0, aliasAt)).split('.');
-		for (i in 0...segments.length) if (
-			!(segments[i] == '*' && i > 0 && i == segments.length - 1) && !SourceText.isIdentifier(segments[i])
-		)
-			return false;
-		return true;
 	}
 
 	/** Order-preserving de-duplication of import lines. */

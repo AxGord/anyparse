@@ -134,7 +134,9 @@ final class UncheckedConversions {
 					fact.targets.length > 0 && fact.targets.foreach(target -> {
 						final read: Null<FactsType> = FactsTypeTree.read(target);
 						read != null
-						&& noneBy(FactsEscapes.substitute(read, FactsEscapes.bindings(id, fact, args)), foreign, seen.concat([id]), false);
+							&& noneBy(
+								FactsEscapes.substitute(read, FactsEscapes.bindings(id, fact, args)), foreign, seen.concat([id]), false
+							);
 					})
 				else
 					coreValue(fact);
@@ -193,7 +195,7 @@ final class UncheckedConversions {
 					fact.targets.exists(target -> {
 						final read: Null<FactsType> = FactsTypeTree.read(target);
 						read == null
-						|| coreValueType(FactsEscapes.substitute(read, FactsEscapes.bindings(id, fact, args)), seen.concat([id]));
+							|| coreValueType(FactsEscapes.substitute(read, FactsEscapes.bindings(id, fact, args)), seen.concat([id]));
 					})
 				else
 					coreValue(fact);
