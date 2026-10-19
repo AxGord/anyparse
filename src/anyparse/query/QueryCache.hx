@@ -1,6 +1,9 @@
 package anyparse.query;
 
+import anyparse.query.AncestorTable.AncestorLink;
+import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.MemberLookup.DeclaredMember;
+import anyparse.query.SymbolIndex.ResolvedType;
 
 /**
  * The answers the typing service remembers, one table per question, each keyed by the declaration the question is about.
@@ -21,6 +24,18 @@ final class QueryCache {
 
 	/** No type of a type's closure brings static extensions (`MemberLookup.declarationFreeOfExtensionTypes`). */
 	public final freeOfExtensionTypes: DeclarationQuery<Bool> = new DeclarationQuery();
+
+	/** A type's direct supertype links, each resolved once where the type writes it (`AncestorTable.links`). */
+	public final ancestorLinks: DeclarationQuery<Array<AncestorLink>> = new DeclarationQuery();
+
+	/** The declaration a plain alias re-points at, resolved where the alias writes it (`AncestorTable.aliasTarget`). */
+	public final aliasTargets: DeclarationQuery<Null<ResolvedType>> = new DeclarationQuery();
+
+	/** What a type's supertype chain passes to an ancestor's type parameters, by the pair (`AncestorTable.argumentsTo`). */
+	public final ancestorArguments: DeclarationQuery<Null<Array<String>>> = new DeclarationQuery();
+
+	/** Whether a value of one plain type unifies with another, by the pair (`Unification.unifies`). */
+	public final unifies: DeclarationQuery<ArgumentFit> = new DeclarationQuery();
 
 	public function new() {}
 

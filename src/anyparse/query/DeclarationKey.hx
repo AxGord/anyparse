@@ -23,4 +23,9 @@ abstract DeclarationKey(String) to String {
 		return new DeclarationKey('${r.file.file}@${r.type.span.from}.$member');
 	}
 
+	/** The key of a question about the two declarations `a` and `b`, in that order (`a` unifies with `b`, `a` reaches `b`). */
+	public static inline function ofPair(a: ResolvedType, b: ResolvedType): DeclarationKey {
+		return new DeclarationKey('${a.file.file}@${a.type.span.from}>${b.file.file}@${b.type.span.from}');
+	}
+
 }

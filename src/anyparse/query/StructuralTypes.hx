@@ -98,15 +98,20 @@ final class StructuralTypes {
 	/** `GrammarPlugin.typeSyntax` of the grammar that built the owning index. */
 	private final _typeSyntax: TypeSyntaxReader;
 
-	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
+	/** The typing service's unification of plain types: how a read-only structure field's type meets the class member's. */
+	private final _unification: Unification;
+
+	/** Built once by the owning `TypingService`, which hands over the shared, immutable index data. */
 	public function new(
-		files: Array<FileInfo>, refs: TypeRefIndex, subtypes: SubtypeGraph, members: MemberLookup, typeSyntax: TypeSyntaxReader
+		files: Array<FileInfo>, refs: TypeRefIndex, subtypes: SubtypeGraph, members: MemberLookup, typeSyntax: TypeSyntaxReader,
+		unification: Unification
 	) {
 		_files = files;
 		_refs = refs;
 		_subtypes = subtypes;
 		_members = members;
 		_typeSyntax = typeSyntax;
+		_unification = unification;
 	}
 
 	/**
@@ -350,22 +355,14 @@ final class StructuralTypes {
 	private function structuralConformancePins(typeName: String, field: String, methodMemberPins: Bool): Bool {
 		if (methodMemberPins)
 			for (members in BUILTIN_STRUCTURAL_MEMBER_SETS)
-				if (
-					members.contains(field)
-					&& familyDeclaresEveryMember(typeName, [for (n in members) { name: n, typeSource: null, host: null }], [])
-				)
-					return true;
+				if (members.contains(field) && familyDeclaresEveryMember(typeName, members.map(builtinMember), [])) return true;
 		for (fi in _files) for (t in fi.types) if (t.isAnonStruct) {
 			final declared: Null<MemberInfo> = t.members.find(m -> m.name == field);
 			if (declared == null) continue;
 			final pins: Bool = MUTABLE_ANON_FIELD_KINDS.contains(declared.kind)
 				|| (methodMemberPins && declared.kind == METHOD_ANON_FIELD_KIND);
 			final host: ResolvedType = { file: fi, type: t };
-			if (
-				pins
-				&& familyDeclaresEveryMember(typeName, [for (m in t.members) { name: m.name, typeSource: m.typeSource, host: host }], [])
-			)
-				return true;
+			if (pins && familyDeclaresEveryMember(typeName, t.members.map(structureMember.bind(host)), [])) return true;
 		}
 		return false;
 	}
@@ -411,8 +408,11 @@ final class StructuralTypes {
 	 * Then a refutation on the two WRITTEN types, because a member set is not a unification. A structure's
 	 * MUTABLE field is INVARIANT: `{var x:Float}` rejects a class declaring `var x:Int`, `{var x:Base}`
 	 * rejects `var x:Sub` (a subtype is not enough), and `{var x:C}` for an abstract `C` with a `@:from
-	 * Int` rejects `var x:Int` (an implicit cast does not bridge a mutable field either). So two nominals
-	 * that differ REFUTE the unification, and no consumer of this predicate may pin on them.
+	 * Int` rejects `var x:Int` (an implicit cast does not bridge a mutable field either). So two declarations that differ REFUTE the
+	 * unification of a mutable field, and no consumer of this predicate may pin on them. A READ-ONLY structure member (a `final` field, a
+	 * method) unifies covariantly instead (`tUnification.ml` unifies the class member's type WITH the structure's): `{final x:Base}`
+	 * accepts `var x:Sub`, so there the plain types are unified (`Unification.unifies`) and only a `Misfits` refutes. Two types are told
+	 * apart by DECLARATION (namesakes of two packages are two types); a spelling the index does not resolve is compared by its simple name.
 	 *
 	 * Both halves only ever REMOVE a pin, and both fail toward keeping it: a member whose type
 	 * either side leaves unwritten, or whose spelling `comparableNominalOf` cannot close, still
@@ -425,14 +425,24 @@ final class StructuralTypes {
 		final wantSource: Null<String> = want.typeSource;
 		final haveSource: Null<String> = found.member.typeSource;
 		if (wantHost == null || wantSource == null || haveSource == null) return true;
-		final wantNominal: Null<String> = comparableNominalOf(wantSource, wantHost, []);
-		final haveNominal: Null<String> = comparableNominalOf(haveSource, found.host, []);
-		return wantNominal == null || haveNominal == null || wantNominal == haveNominal;
+		final wanted: Null<ComparableType> = comparableTypeOf(wantSource, wantHost, []);
+		final have: Null<ComparableType> = comparableTypeOf(haveSource, found.host, []);
+		if (wanted == null || have == null) return true;
+		final wantDecl: Null<ResolvedType> = wanted.decl;
+		final haveDecl: Null<ResolvedType> = have.decl;
+		// a type the index does not resolve is compared by its written name: the residual `comparableTypeOf` documents
+		return if (wantDecl == null || haveDecl == null)
+			wanted.name == have.name
+		else if (want.readOnly)
+			_unification.unifies(haveDecl, wantDecl) != Misfits
+		else
+			AncestorTable.same(haveDecl, wantDecl);
 	}
 
 	/**
-	 * The nominal two WRITTEN types may be compared on for a unification refutation, or null when
-	 * this spelling cannot carry one — every null is a REFUSAL to refute, so the pin survives.
+	 * The nominal two WRITTEN types may be compared on for a unification refutation — its simple name, and
+	 * the declaration it resolves to where it is written (its PATH as written, so `a.T` is `a.T`) — or
+	 * null when this spelling cannot carry one — every null is a REFUSAL to refute, so the pin survives.
 	 *
 	 * Four spellings are open by construction. A type PARAMETER of the declaring type binds to
 	 * whatever the unification site supplies. `Dynamic` unifies with everything. `Null<T>` is
@@ -456,20 +466,41 @@ final class StructuralTypes {
 	 * indexed. `unit.check.StructuralConformanceProofTest#testUnresolvableStructureMemberTypeRefutes`
 	 * pins the residual, so a future instance is a test change rather than a silent one.
 	 */
-	private function comparableNominalOf(typeSource: String, host: ResolvedType, seen: Array<String>): Null<String> {
+	private function comparableTypeOf(typeSource: String, host: ResolvedType, seen: Array<String>): Null<ComparableType> {
 		final nominal: Null<String> = NominalTypes.outerNominalOf(typeSource, _typeSyntax);
 		if (nominal == null || MemberLookup.dynamicSupertypeRef(nominal)) return null;
 		if (host.type.typeParamNames.contains(nominal)) return null;
 		if (nominal == NULLABLE_WRAPPER_TYPE_NAME) {
 			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(typeSource, _typeSyntax);
-			return args == null || args.length != 1 ? null : comparableNominalOf(args[0], host, seen);
+			return args == null || args.length != 1 ? null : comparableTypeOf(args[0], host, seen);
 		}
-		final decl: Null<ResolvedType> = _refs.resolveTypeRef(nominal, host.file, host.type.span.from);
-		if (decl == null) return nominal;
-		if (decl.type.kind != SymbolIndex.TYPEDEF_DECL_KIND) return nominal;
+		final path: String = NominalTypes.outerPathOf(typeSource, [], _typeSyntax) ?? nominal;
+		final decl: Null<ResolvedType> = _refs.resolveTypeRef(path, host.file, host.type.span.from);
+		if (decl == null) return { name: nominal, decl: null };
+		if (decl.type.kind != SymbolIndex.TYPEDEF_DECL_KIND) return { name: nominal, decl: decl };
 		if (decl.type.isAnonStruct) return null;
 		final target: Null<String> = decl.type.aliasTargetRaw;
-		return target == null || !_refs.markSeen(decl, seen) ? null : comparableNominalOf(target, decl, seen);
+		return target == null || !_refs.markSeen(decl, seen) ? null : comparableTypeOf(target, decl, seen);
+	}
+
+	/** A member of a builtin structural type: a method by its name, no written type (`BUILTIN_STRUCTURAL_MEMBER_SETS`). */
+	private static function builtinMember(name: String): StructureMember {
+		return {
+			name: name,
+			typeSource: null,
+			host: null,
+			readOnly: true
+		};
+	}
+
+	/** The member `m` of the structure declared by `host`; read-only unless its kind is a mutable field's. */
+	private static function structureMember(host: ResolvedType, m: MemberInfo): StructureMember {
+		return {
+			name: m.name,
+			typeSource: m.typeSource,
+			host: host,
+			readOnly: !MUTABLE_ANON_FIELD_KINDS.contains(m.kind)
+		};
 	}
 
 }
@@ -493,4 +524,22 @@ typedef StructureMember = {
 
 	/** The declaration `typeSource` was written in — its import scope and type parameters. */
 	var host: Null<ResolvedType>;
+
+	/**
+	 * Whether the structure member cannot be written through the structure — a `final` field or a method — so a type
+	 * unifies with it covariantly (`tUnification.ml`: a read-only field unifies the class member's type WITH the
+	 * structure's), where a mutable one asks for the same type.
+	 */
+	var readOnly: Bool;
 };
+
+/** A written type as a structure-member unification compares it (`StructuralTypes.comparableTypeOf`). */
+private typedef ComparableType = {
+
+	/** Its outer nominal, by simple name. */
+	final name: String;
+
+	/** The declaration it resolves to where it is written, or null when the index resolves none. */
+	final decl: Null<ResolvedType>;
+
+}

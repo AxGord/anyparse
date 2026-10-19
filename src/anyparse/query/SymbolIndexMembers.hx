@@ -126,7 +126,8 @@ final class SymbolIndexMembers {
 							metaNames: runMetaNames,
 							excludedFromExtensions: runNoExtension,
 							hasOverloadMeta: runOverloadMeta,
-							guarded: guarded
+							guarded: guarded,
+							optional: n.kind == SymbolIndexBuilder.ANON_KIND && optionalField(child, runMetaNames, seams)
 						});
 					}
 					runVisibility = null;
@@ -203,6 +204,7 @@ final class SymbolIndexMembers {
 			paramKinds: shape.paramKinds ?? [],
 			optionalParamKind: shape.optionalParamKind,
 			restParamKind: shape.restParamKind,
+			optionalFieldMetaName: shape.optionalFieldMetaName,
 			functionKinds: shape.functionKinds ?? [],
 			fieldKinds: shape.fieldDeclKinds ?? [],
 			annotationKinds: shape.typeAnnotationKinds ?? []
@@ -224,6 +226,18 @@ final class SymbolIndexMembers {
 		if (decl == null || decl.name != member.name) return own.from;
 		final declSpan: Null<Span> = decl.span;
 		return declSpan == null ? own.from : declSpan.from;
+	}
+
+	/**
+	 * Whether the structure field `member` is optional: an `optionalParamKind` node itself (`?a: T`), or wrapping one that
+	 * carries its name (`var ?a: T`, `ANON_WRAPPED_FIELD_KINDS`), or under the optional annotation among `metas`.
+	 */
+	private static function optionalField(member: QueryNode, metas: Array<String>, seams: MemberSeams): Bool {
+		final kind: Null<String> = seams.optionalParamKind;
+		final meta: Null<String> = seams.optionalFieldMetaName;
+		if (kind == null) return meta != null && metas.contains(meta);
+		final decl: Null<QueryNode> = ANON_WRAPPED_FIELD_KINDS.contains(member.kind) ? member.children[0] : member;
+		return decl != null && decl.kind == kind && decl.name == member.name || meta != null && metas.contains(meta);
 	}
 
 	/** Whether `node` is an annotation under which the language calls the member implicitly (`MemberSeams.implicitCallMetaNames`). */
