@@ -125,7 +125,9 @@ class AsymmetricBranchBracesCheckTest extends Test {
 	/**
 	 * A conditional-compilation region stays bare: its terminator belongs to the region although its
 	 * parent's span owns it (`RefShape.statementTerminator`), so neither the region's own text nor that
-	 * text plus a terminator is the branch's statement.
+	 * text plus a terminator is the branch's statement. The terminator gate is what declines it, and the
+	 * reason says so: the reparse gate behind it would refuse the wrapped region too, so only the reason
+	 * tells the two apart.
 	 */
 	@:pin('control')
 	@:killer('M-ASYM-FIX-OPEN-TAIL-ANY')
@@ -134,7 +136,8 @@ class AsymmetricBranchBracesCheckTest extends Test {
 		final run: FixRun = CheckFixture.fixRun(new AsymmetricBranchBraces(), [{ file: 'C.hx', source: src }]);
 		Assert.equals(1, run.violations.length);
 		Assert.equals(0, run.edits.length);
-		Assert.notNull(run.violations[0].declineReason);
+		final reason: String = run.violations[0].declineReason ?? '';
+		Assert.isTrue(reason.indexOf('no terminator of its own') != -1, 'the terminator gate must decide, got: $reason');
 	}
 
 	/**
