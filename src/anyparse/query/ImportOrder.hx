@@ -165,9 +165,7 @@ private typedef RunChoice = {
  * extensions declared after it, and the `import-order` rule never reorders the group. A fresh
  * `using` does not take this seat at all: `AddImport` and every `using`-inserting rule place it
  * through `UsingScan.usingInsertEdit`, ABOVE the header's first `using` — the lowest priority, so
- * no extension call the file already makes is re-targeted. (This paragraph used to say every
- * caller APPENDS one after the last; `AddImport` in fact took "after the last plain import", which
- * for a using-only header appended below the group and gave the fresh module TOP priority.)
+ * no extension call the file already makes is re-targeted.
  *
  * LIMIT — this seat is config-blind while the rule is config-aware. Under a non-default
  * `"import-order": { "order": … }` a run the seat reads as ordered (the first order that explains
