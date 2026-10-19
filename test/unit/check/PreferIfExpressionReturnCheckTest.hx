@@ -356,13 +356,13 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	 * - a repeated BOOL literal is `simplify-boolean-*`'s, and the march owns that cascade.
 	 * - the MIDDLE value repeating the last would drop `c2`'s evaluation, which no merge here does.
 	 * - a comment anywhere in the region fails the merge closed: the rebuild re-orders and drops pieces.
-	 * - a run of FOUR values does not merge: the edit is built from the first two rungs and the
-	 *   terminal, so a wider merge would drop the third condition.
+	 * - a run of FOUR values does not merge its FIRST three: the edit is built from two rungs and the
+	 *   terminal, so a merge that does not end at the terminal would drop a condition. Only the last
+	 *   three can merge (`testTailOfALongerCascadeMerges`), and here they do not repeat.
 	 */
 	@:pin('control')
 	@:killer('M-PIER-MERGE-ANY-VALUE')
 	@:killer('M-PIER-MERGE-COMMENT')
-	@:killer('M-PIER-MERGE-ANY-COUNT')
 	public function testMergeRefusals(): Void {
 		Assert.equals(
 			0, violations(wrap('if (a) return g();\n\t\tif (b) return g();\n\t\treturn h();')).length, 'a call is not a repeated value'
@@ -439,18 +439,89 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	/**
 	 * The head of a run is the index whose predecessor is not a rung THIS rule would collect, and
 	 * "rung" has to mean a valued `return`: a leading `if (x) g();` is a rung by shape alone, and the
-	 * shape-only test hid the whole cascade behind it. A merged TAIL of a longer cascade is not
-	 * reported either - the head owns the run, and four values do not merge.
+	 * shape-only test hid the whole cascade behind it.
 	 */
 	public function testNonReturnStatementDoesNotHideTheCascade(): Void {
 		Assert.equals(
 			1, violations(wrap('if (x) g();\n\t\tif (a) return 1;\n\t\tif (b) return 1;\n\t\treturn 3;')).length,
 			'a leading non-return guard does not swallow the cascade behind it'
 		);
+	}
+
+	/**
+	 * A run of FOUR values whose LAST three carry two merges those three alone: the guard in front
+	 * keeps its statement and the merged return replaces only the tail. the client's
+	 * `DiskSystemBase.localPathBeforeMove` is the shape - an early return, a guard returning `null` and
+	 * a ternary whose else repeats it. The finding sits on the first statement the edit replaces. The
+	 * conditions still run in their written order (`f(h)` first, `g(h)` only when it was false), so a
+	 * call in either is no obstacle.
+	 */
+	@:pin('control')
+	@:killer('M-PIER-MERGE-ANY-COUNT')
+	@:killer('M-PIER-TAIL-SPAN-WHOLE')
+	@:killer('M-PIER-TAIL-REPORTED-AT-HEAD')
+	public function testTailOfALongerCascadeMerges(): Void {
+		final src: String = wrap('if (o != null) return o.p;\n\t\tif (f(h)) return null;\n\t\treturn g(h) ? h : null;');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('the last three values of this if/return cascade repeat one and can be a single ternary return', vs[0].message);
+		Assert.equals(src.indexOf('if (f(h))'), vs[0].span?.from, 'reported where the edit starts');
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('return !f(h) && g(h) ? h : null;', es[0].text);
+		Assert.equals(src.indexOf('if (f(h))'), es[0].span.from, 'the guard in front is not replaced');
+		final fixed: String = applyFixOnce(src);
+		Assert.isTrue(fixed.indexOf('if (o != null) return o.p;\n\t\treturn !f(h) && g(h) ? h : null;') != -1, fixed);
+	}
+
+	/** The tail merges by `||` as well, when its first two values repeat. */
+	@:pin('control')
+	@:killer('M-PIER-MERGE-ANY-COUNT')
+	public function testTailRepeatingLeadingValueMergesByOr(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('if (a) return 0;\n\t\tif (b) return 1;\n\t\tif (c) return 1;\n\t\treturn 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return b || c ? 1 : 3;', es[0].text);
+	}
+
+	/**
+	 * The tail's refusals, each a run that would merge but for one thing:
+	 *
+	 * - a comment in the replaced tail fails it closed, exactly as in a three-value run;
+	 * - values that do not repeat stay statements;
+	 * - the MIDDLE value repeating the last is still refused: the merge would drop the evaluation of
+	 *   the condition between them, and that condition may have a side effect (`next()`);
+	 * - a repeated call is not one value;
+	 * - the first merged value must come from a WRITTEN rung: in `return b ? 1 : c ? 1 : 3` the last
+	 *   three values live inside one ternary, and re-shaping a ternary is not a cascade merge (the run
+	 *   stays owned, so `prefer-ternary-return` does not march it either);
+	 * - an else-linked chain of four values keeps its chain fix: the tail merge is the fall-through
+	 *   spelling's, whose guards in front of the tail are statements already.
+	 */
+	@:pin('control')
+	@:killer('M-PIER-TAIL-FROM-FOLDED')
+	public function testTailMergeRefusals(): Void {
 		Assert.equals(
-			0, violations(wrap('if (a) return 0;\n\t\tif (b) return 1;\n\t\tif (c) return 1;\n\t\treturn 3;')).length,
-			'a mergeable tail of a longer run is the head\'s, and the head keeps its statements'
+			0, violations(wrap('if (a) return 0;\n\t\tif (b) return null; // none\n\t\treturn c ? p : null;')).length,
+			'a comment in the tail'
 		);
+		Assert.equals(
+			0, violations(wrap('if (a) return 0;\n\t\tif (b) return 1;\n\t\tif (c) return 2;\n\t\treturn 3;')).length, 'distinct values'
+		);
+		Assert.equals(
+			0, violations(wrap('if (a) return 0;\n\t\tif (b) return 1;\n\t\tif (next()) return 2;\n\t\treturn 2;')).length,
+			'dropping a condition that may have a side effect'
+		);
+		Assert.equals(
+			0, violations(wrap('if (a) return 0;\n\t\tif (b) return g();\n\t\tif (c) return g();\n\t\treturn 3;')).length,
+			'a repeated call'
+		);
+		Assert.equals(0, violations(wrap('if (a) return 0;\n\t\treturn b ? 1 : c ? 1 : 3;')).length, 'a tail inside the ternary');
+		Assert.isTrue(claimsCascade('if (a) return 0;\n\t\treturn b ? 1 : c ? 1 : 3;'), 'which stays owned');
+		final chain: Array<{ span: Span, text: String }> =
+			edits(wrap('if (a) return 0;\n\t\telse if (b) return 1;\n\t\telse if (c) return 1;\n\t\telse return 3;'));
+		Assert.equals(1, chain.length);
+		Assert.equals('return if (a) 0 else if (b) 1 else if (c) 1 else 3;', chain[0].text);
 	}
 
 	/**

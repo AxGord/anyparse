@@ -51,9 +51,10 @@ using Lambda;
  * two conditions as an else-linked chain; the conditions a folded ternary contributes do not count,
  * and a cascade - guard returns plus a final return - is never turned into one. Either spelling is
  * rewritten when its three values MERGE into two (`mergeShape`): `if (m == null) return null;
- * return x ? p : null;` becomes `return m != null && x ? p : null;`. An owned run that is not
- * rewritten is not reported: its statements are the canon, and owning it is what keeps the
- * pairwise march from building the same chain the long way.
+ * return x ? p : null;` becomes `return m != null && x ? p : null;`, and a longer fall-through run
+ * merges its LAST three (`mergeOf`). An owned run that is not rewritten is not reported: its
+ * statements are the canon, and owning it is what keeps the pairwise march from building the same
+ * chain the long way.
  *
  * The other two rules defer by ASKING this one (`claimsChain` / `claimsCascade`), gates and all,
  * rather than mirroring the shape: a shape-only deferral silences them wherever this rule refuses
@@ -136,7 +137,10 @@ final class PreferIfExpressionReturn implements Check {
 	 */
 	private static inline final MIN_COLLECT_BRANCHES: Int = 1;
 
-	/** A merge turns exactly THREE values into two; a longer run keeps its statements. */
+	/**
+	 * A merge turns exactly THREE values into two: a whole run of three, or the LAST three of a longer
+	 * fall-through run, whose guards in front keep their statements.
+	 */
 	private static inline final MERGED_VALUE_COUNT: Int = 3;
 
 	public function new() {}
@@ -292,61 +296,64 @@ final class PreferIfExpressionReturn implements Check {
 	}
 
 	/**
-	 * Walk `node`; at each statement list flag the HEAD of every fall-through return cascade. The
-	 * head is the index whose predecessor is not itself a rung — the collector is greedy, so every
-	 * later index of one run would collect a shorter cascade and report the same code again.
-	 *
-	 * The finding's span is that head `if`'s own span, the coordinate the else-chain arm reports
-	 * too, so `fix` finds it and the two spellings of one control flow report at the same place.
+	 * Walk `node`; at each statement list flag every fall-through return cascade whose values merge
+	 * (`eachMergedRun`). The finding's span is the `if` the edit starts at: the run head's own span -
+	 * the coordinate the else-chain arm reports too, so the two spellings of one control flow report at
+	 * the same place - or, for a longer run whose last three values merge, the first rung of that tail.
 	 */
 	private static function walkCascades(
 		node: QueryNode, out: Array<Violation>, file: String, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
 		s: Seams, blockKinds: Array<String>
 	): Void {
-		if (blockKinds.contains(node.kind)) {
-			final kids: Array<QueryNode> = node.children;
-			for (i in 0...kids.length) {
-				if (i > 0 && isReturnRung(kids[i - 1], s)) continue; // not a run HEAD
-				// Claimed is not reported: a cascade is rewritten only when its values MERGE into two.
-				if (cascadeMatch(kids, i, source, comments, s)?.merge == null) continue;
-				final span: Null<Span> = kids[i].span;
-				if (span != null) out.push({
-					file: file,
-					span: span,
-					rule: RULE_ID,
-					severity: Severity.Info,
-					message: 'this if/return cascade repeats a value and can be a single ternary return'
-				});
-			}
-		}
+		if (blockKinds.contains(node.kind)) eachMergedRun(
+			node.children, source, comments, s, (_, merge, span) -> out.push({
+				file: file,
+				span: span,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: merge.from == 0
+					? 'this if/return cascade repeats a value and can be a single ternary return'
+					: 'the last three values of this if/return cascade repeat one and can be a single ternary return'
+			})
+		);
 		for (c in node.children) walkCascades(c, out, file, source, comments, s, blockKinds);
 	}
 
 	/**
-	 * Mirror `walkCascades`: collect one replacement edit per flagged cascade head. The edit's span
-	 * runs from that head to the END of the terminal statement, which is why this walk exists at
-	 * all — `applyBySpan` hands back a node, and the rest of the cascade is that node's siblings.
+	 * Mirror `walkCascades`: collect one replacement edit per flagged cascade, keyed on the statement
+	 * the finding names. The edit's span runs from that statement to the END of the terminal one, which
+	 * is why this walk exists at all — `applyBySpan` hands back a node, and the rest of the cascade is
+	 * that node's siblings.
 	 */
 	private static function collectCascadeFixes(
 		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, blockKinds: Array<String>,
 		flagged: Array<String>, edits: Array<{ span: Span, text: String }>, emit: Emit
 	): Void {
-		if (blockKinds.contains(node.kind)) {
-			final kids: Array<QueryNode> = node.children;
-			for (i in 0...kids.length) {
-				if (i > 0 && isReturnRung(kids[i - 1], s)) continue;
-				final headSpan: Null<Span> = kids[i].span;
-				if (headSpan == null || !flagged.contains(IfExpressionChain.spanKey(headSpan))) continue;
-				final chain: Null<IfChain> = IfExpressionChain.collectCascade(kids, i, s.ifKinds, s.blockStmtKind, MIN_COLLECT_BRANCHES);
-				if (chain == null) continue;
-				final endSpan: Null<Span> = chain.terminal.span;
-				if (endSpan == null) continue;
-				final region: Span = new Span(headSpan.from, endSpan.to);
-				final m: Null<Match> = matchChain(chain, region, source, comments, s, true);
-				if (m != null && m.merge != null) edits.push(buildEdit(m, source, region, s, emit));
-			}
-		}
+		if (blockKinds.contains(node.kind)) eachMergedRun(node.children, source, comments, s, (m, merge, reported) -> {
+			if (flagged.contains(IfExpressionChain.spanKey(reported))) edits.push(mergedEdit(m, merge, source, s, emit));
+		});
 		for (c in node.children) collectCascadeFixes(c, source, comments, s, blockKinds, flagged, edits, emit);
+	}
+
+	/**
+	 * Call `found` for every fall-through run of `kids` whose values merge, with its match, the merge and
+	 * the statement the finding names - the one the merged edit starts at. Only a run HEAD is asked, the
+	 * index whose predecessor is not itself a rung: the collector is greedy, so every later index of one
+	 * run would collect a shorter cascade of the same code. A run that is owned but does not merge is
+	 * not passed on: its statements are the canon.
+	 */
+	private static function eachMergedRun(
+		kids: Array<QueryNode>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams,
+		found: (Match, Merge, Span) -> Void
+	): Void {
+		for (i in 0...kids.length) {
+			if (i > 0 && isReturnRung(kids[i - 1], s)) continue; // not a run HEAD
+			final m: Null<Match> = cascadeMatch(kids, i, source, comments, s);
+			final merge: Null<Merge> = m?.merge;
+			if (m == null || merge == null) continue;
+			final reported: Null<Span> = kids[i + merge.from].span;
+			if (reported != null) found(m, merge, reported);
+		}
 	}
 
 	/**
@@ -421,7 +428,7 @@ final class PreferIfExpressionReturn implements Check {
 	): Null<Match> {
 		final chain: Null<IfChain> = IfExpressionChain.collect(head, s.ifKinds, s.blockStmtKind, MIN_COLLECT_BRANCHES);
 		final headSpan: Null<Span> = head.span;
-		return chain == null || headSpan == null ? null : matchChain(chain, headSpan, source, comments, s, marchOnly);
+		return chain == null || headSpan == null ? null : matchChain(chain, [], headSpan, source, comments, s, marchOnly);
 	}
 
 	/**
@@ -444,7 +451,9 @@ final class PreferIfExpressionReturn implements Check {
 		final to: Null<Span> = chain.terminal.span;
 		// ALWAYS march-gated: anything this arm claims beyond what `prefer-ternary-return` already
 		// marched is a CHANGED fixed point.
-		return from == null || to == null ? null : matchChain(chain, new Span(from.from, to.to), source, comments, s, true);
+		return from == null || to == null
+			? null
+			: matchChain(chain, kids.slice(at, at + chain.branches.length), new Span(from.from, to.to), source, comments, s, true);
 	}
 
 	/**
@@ -454,7 +463,8 @@ final class PreferIfExpressionReturn implements Check {
 	 * here, so `buildEdit` and the comment classification see the same spans.
 	 */
 	private static function matchChain(
-		chain: IfChain, region: Span, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, marchOnly: Bool
+		chain: IfChain, rungs: Array<QueryNode>, region: Span, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
+		s: Seams, marchOnly: Bool
 	): Null<Match> {
 		final headReturnSpan: Null<Span> = chain.branches[0].stmt.span;
 		if (headReturnSpan == null) return null;
@@ -511,7 +521,7 @@ final class PreferIfExpressionReturn implements Check {
 			carried: slots,
 			conds: conds,
 			writtenRungs: chain.branches.length,
-			merge: mergeShape(values, region, source, comments, s)
+			merge: mergeOf(values, chain, rungs, pairs, region, source, comments, s)
 		};
 	}
 
@@ -553,8 +563,8 @@ final class PreferIfExpressionReturn implements Check {
 
 	/** Build the `return if (c1) a else if (c2) b … else n;` edit replacing the whole head-`if` span. */
 	private static function buildEdit(m: Match, source: String, span: Span, s: Seams, emit: Emit): { span: Span, text: String } {
-		final merge: Null<MergeShape> = m.merge;
-		if (merge != null) return mergedEdit(m, merge, source, span, s, emit);
+		final merge: Null<Merge> = m.merge;
+		if (merge != null) return mergedEdit(m, merge, source, s, emit);
 		final built: Array<{ cond: String, value: String }> = [
 			for (p in m.pairs) { cond: text(source, p.cond), value: IfExpressionChain.spanText(source, p.value, m.carried) }
 		];
@@ -562,30 +572,31 @@ final class PreferIfExpressionReturn implements Check {
 	}
 
 	/**
-	 * Build the merged `return <cond> ? <then> : <else>;` edit replacing `span`. `Leading` joins the
+	 * Build the merged `return <cond> ? <then> : <else>;` edit replacing `merge.span`, from the two
+	 * rungs at `merge.from` and the terminal. `Leading` joins the
 	 * two conditions with `||` and returns the repeated value first; `Outer` negates the first
 	 * condition (`NegationScan`'s engine, the one the `guard-*` family inverts with, so `m == null`
 	 * flips to `m != null`) and joins it with `&&`. Every piece is a `ParenGuard` hole: a condition
 	 * that sat in an `if (…)` or `?:` slot may bind looser than the operator it now meets, and gains a
 	 * pair exactly there.
 	 */
-	private static function mergedEdit(
-		m: Match, merge: MergeShape, source: String, span: Span, s: Seams, emit: Emit
-	): { span: Span, text: String } {
-		final first: String = switch merge {
-			case Leading: text(source, m.pairs[0].cond);
-			case Outer: NegationScan.negateConditionText(m.conds[0], source, s.negation, emit.logic, emit.types());
+	private static function mergedEdit(m: Match, merge: Merge, source: String, s: Seams, emit: Emit): { span: Span, text: String } {
+		final rung: Int = merge.from;
+		final first: String = switch merge.shape {
+			case Leading: text(source, m.pairs[rung].cond);
+			case Outer: NegationScan.negateConditionText(m.conds[rung], source, s.negation, emit.logic, emit.types());
 		};
 		final pieces: Array<String> = [
 			first,
-			merge == Leading ? ' || ' : ' && ',
-			text(source, m.pairs[1].cond),
+			merge.shape == Leading ? ' || ' : ' && ',
+			text(source, m.pairs[rung + 1].cond),
 			' ? ',
-			text(source, merge == Leading ? m.pairs[0].value : m.pairs[1].value),
+			text(source, merge.shape == Leading ? m.pairs[rung].value : m.pairs[rung + 1].value),
 			' : ',
 			text(source, m.terminalValue)
 		];
-		final head: String = text(source, m.prefix);
+		final span: Span = merge.span;
+		final head: String = text(source, merge.prefix);
 		final holes: Array<Span> = [];
 		var at: Int = head.length;
 		for (i => piece in pieces) {
@@ -601,7 +612,39 @@ final class PreferIfExpressionReturn implements Check {
 	}
 
 	/**
-	 * How the three values of a matched return run merge into TWO, or null when they do not.
+	 * Which three values of a matched run merge into two, and how, or null when none do. A run of
+	 * exactly three merges whole. A LONGER run merges its LAST three only: the guards in front stay the
+	 * statements they are, and the merged return replaces the tail from the `if` that returns the first
+	 * of the three. The last three because the merged text ENDS at the terminal - two rungs and the
+	 * terminal are the pieces `mergedEdit` copies, so any other window would drop a condition.
+	 *
+	 * A tail must start at a WRITTEN rung of the fall-through spelling, `rungs` being that spelling's
+	 * rung statements. An else-linked chain passes none: it is one statement, there is no tail to cut out
+	 * of it, and its own chain fix stands. A tail whose first value is FOLDED sits inside the terminal
+	 * ternary, and re-shaping a ternary is not a cascade merge.
+	 */
+	private static function mergeOf(
+		values: Array<QueryNode>, chain: IfChain, rungs: Array<QueryNode>, pairs: Array<{ cond: Span, value: Span }>, region: Span,
+		source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
+	): Null<Merge> {
+		final from: Int = values.length - MERGED_VALUE_COUNT;
+		if (from < 0 || from > 0 && from >= rungs.length) return null;
+		final start: Null<Span> = from == 0 ? region : rungs[from].span;
+		final returned: Null<Span> = chain.branches[from].stmt.span;
+		if (start == null || returned == null) return null;
+		final span: Span = new Span(start.from, region.to);
+		final shape: Null<MergeShape> = mergeShape(values.slice(from), span, source, comments, s);
+		return shape == null ? null : {
+			shape: shape,
+			from: from,
+			span: span,
+			prefix: new Span(returned.from, pairs[from].value.from)
+		};
+	}
+
+	/**
+	 * How three values ending a matched return run merge into TWO, or null when they do not; `region`
+	 * is the span their statements cover, which the merged return replaces.
 	 *
 	 * Only the two merges that keep every evaluation exactly as the statements had it are taken, so
 	 * neither needs the conditions to be pure: `Leading` (`v1 == v2`) evaluates `c2` only when `c1`
@@ -618,12 +661,12 @@ final class PreferIfExpressionReturn implements Check {
 	 * `simplify-boolean-*` reduces it further than a merge does.
 	 *
 	 * Fail-closed on ANY comment in the replaced region: the rebuild drops one value and reorders the
-	 * rest, so no slot keeps a comment's position.
+	 * rest, so no slot keeps a comment's position. A comment in front of a merged tail is outside it and
+	 * stays where it is.
 	 */
 	private static function mergeShape(
 		values: Array<QueryNode>, region: Span, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<MergeShape> {
-		if (values.length != MERGED_VALUE_COUNT) return null;
 		if (comments.exists(tok -> tok.to > region.from && tok.from < region.to)) return null;
 		if (!marchable(values, s) || !s.mergeValueKinds.contains(values[0].kind)) return null;
 		final repeated: Null<String> = valueText(values[0], source, comments);
@@ -748,8 +791,8 @@ private typedef Match = {
 	/** How many conditions the author WROTE as an else-linked chain; the folded ternary's are not counted. */
 	var writtenRungs: Int;
 
-	/** How the values merge into two, or null when they do not. */
-	var merge: Null<MergeShape>;
+	/** Which three values merge into two and how, or null when none do. */
+	var merge: Null<Merge>;
 }
 
 /**
@@ -759,6 +802,19 @@ private typedef Match = {
 private enum MergeShape {
 	Leading;
 	Outer;
+}
+
+/**
+ * A merge of a matched run: its `shape`, the index `from` of the first of the three merged values
+ * (0 for a run of exactly three, else the start of the run's tail), the `span` the merged return
+ * replaces - from the statement holding that value to the end of the terminal - and the `return `
+ * prefix copied from that statement's own `return`.
+ */
+private typedef Merge = {
+	var shape: MergeShape;
+	var from: Int;
+	var span: Span;
+	var prefix: Span;
 }
 
 /**
