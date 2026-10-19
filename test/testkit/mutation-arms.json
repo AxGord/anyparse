@@ -3106,8 +3106,8 @@
 			"name": "M-LIT-DELIMITERS-IGNORED",
 			"type": "anyparse.query.Lit",
 			"method": "walk",
-			"find": "final hit: Bool = matches(n, target, exact) || content != null && matches(content, target, exact);",
-			"replace": "final hit: Bool = matches(n, target, exact);",
+			"find": "final hit: Bool = matches(n, target, exact) || content != null && matches(content, target, exact)",
+			"replace": "final hit: Bool = matches(n, target, exact)",
 			"note": "the declared quotes stay on the name slot for the compare, so `--exact` can never match content written in the grammar's whole-span string spelling and the two spellings answer differently again"
 		},
 		{
