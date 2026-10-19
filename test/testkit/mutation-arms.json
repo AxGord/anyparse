@@ -26885,6 +26885,126 @@
 			"find": "final key: String = '$typeName\\t$member';",
 			"replace": "final key: String = typeName;",
 			"note": "the dispatch memo keys by the receiver type alone: the first member dispatched on a type answers for every other"
+		},
+		{
+			"name": "M-DROPPED-SEP-UNREHOMED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepArrDecls",
+			"find": ": macro final _arr = anyparse.runtime.DroppedSepComment.last(_arrSrc, $sourceAppendTrailingCommaExpr, $tailRehomeFn);",
+			"replace": ": macro final _arr = _arrSrc;",
+			"note": "a list whose trailing separator the writer drops is laid out from the source tree, the comment outside the element the next parse reads it inside of"
+		},
+		{
+			"name": "M-DROPPED-SEP-SOURCE-COMMA-READ",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepStarExpr",
+			"find": "? macro (_arr == _arrSrc && $trailPresentAccess)",
+			"replace": "? macro $trailPresentAccess",
+			"note": "a rehomed list still reads the source trailing separator the next parse will not see"
+		},
+		{
+			"name": "M-DROPPED-SEP-KEPT-REHOMED",
+			"type": "anyparse.runtime.DroppedSepComment",
+			"method": "last",
+			"find": "if (sepEmitted || arr.length == 0) return arr;",
+			"replace": "if (arr.length == 0) return arr;",
+			"note": "a comment after a separator the writer keeps is moved into the element, in front of the separator"
+		},
+		{
+			"name": "M-DROPPED-SEP-BLOCK-REHOMED",
+			"type": "anyparse.runtime.DroppedSepComment",
+			"method": "last",
+			"find": "if (comment == null || !StringTools.startsWith(comment, '//')) return arr;",
+			"replace": "if (comment == null) return arr;",
+			"note": "a block comment after a dropped separator moves into the element, changing a layout the first write already settles"
+		},
+		{
+			"name": "M-TAIL-SLOT-OVERWRITTEN",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "starField",
+			"find": "return macro $slotAccess == null ? $copy : null;",
+			"replace": "return macro $copy;",
+			"note": "a struct close slot already holding a comment is overwritten, and that comment is lost"
+		},
+		{
+			"name": "M-TAIL-ALT-SLOT-OVERWRITTEN",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altCase",
+			"find": "macro $slot == null ? ${rebuild(index, macro $i{COMMENT_ARG})} : null;",
+			"replace": "macro ${rebuild(index, macro $i{COMMENT_ARG})};",
+			"note": "a ctor close slot already holding a comment is overwritten, and that comment is lost"
+		},
+		{
+			"name": "M-TAIL-WRITTEN-SEMICOLON-IGNORED",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "refField",
+			"find": "return macro $presentAccess == true ? null : $rebuilt;",
+			"replace": "return rebuilt;",
+			"note": "a body the source closed with `;` takes the comment in front of the `;`, which the comment then swallows"
+		},
+		{
+			"name": "M-TAIL-ONLY-KNOWN-METAS",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "onlyMetas",
+			"find": "return meta == null || meta.foreach(entry -> allowed.contains(entry.name));",
+			"replace": "return true;",
+			"note": "a shape with a token after its operand (a paren pair, a trail literal) passes the comment into the operand, ahead of that token"
+		},
+		{
+			"name": "M-TAIL-ABSENT-FIELD-STOPS",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "seqField",
+			"find": "return macro $access == null ? $before : $present;",
+			"replace": "return present;",
+			"note": "an absent optional last field (an if with no else) answers null instead of the field emitted before it"
+		},
+		{
+			"name": "M-TAIL-ARRAY-SLOT-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch) || TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"replace": "if (TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"note": "an array literal tail no longer takes the comment its close captures"
+		},
+		{
+			"name": "M-TAIL-CALL-SLOT-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch) || TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"replace": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch)) {",
+			"note": "a call tail no longer takes the comment its close paren captures"
+		},
+		{
+			"name": "M-TAIL-INFIX-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':infix')) return children.length == 2 && onlyMetas(branch, [':infix', ':fmt']) ? Operand(1) : None;",
+			"replace": "if (branch.hasMeta(':infix')) return None;",
+			"note": "an infix expression's right operand is not asked, so `t + {a: 1}` keeps the comment outside"
+		},
+		{
+			"name": "M-TAIL-TERNARY-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':ternary')) return children.length == 3 && onlyMetas(branch, [':ternary', ':fmt']) ? Operand(2) : None;",
+			"replace": "if (branch.hasMeta(':ternary')) return None;",
+			"note": "a ternary's else operand is not asked"
+		},
+		{
+			"name": "M-TAIL-PREFIX-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':prefix')) return children.length == 1 && onlyMetas(branch, [':prefix', ':fmt']) ? Operand(0) : None;",
+			"replace": "if (branch.hasMeta(':prefix')) return None;",
+			"note": "a prefix operator's operand is not asked"
+		},
+		{
+			"name": "M-TAIL-OPERAND-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "return single && onlyMetas(branch, TRANSPARENT_BRANCH_METAS) ? Operand(0) : None;",
+			"replace": "return None;",
+			"note": "a keyword or lead ctor (if, for, object literal, new, function) does not pass the comment to its one operand"
 		}
 	]
 }

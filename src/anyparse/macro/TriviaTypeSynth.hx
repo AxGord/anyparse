@@ -524,6 +524,10 @@ class TriviaTypeSynth {
 		if (!convertersAdded) {
 			convertersAdded = true;
 			paired.push(TriviaPairConverters.buildConvertersClass(convertedNames, synthPack));
+			// Where the parser would put a comment that directly follows a value (`TailComments.rehome_<T>`): read by
+			// the sep-Star writer when it drops a separator the source had a comment after. Built from the paired
+			// definitions above, so a rebuilt struct copy carries every synth slot.
+			paired.push(TriviaTailRehome.buildClass(convertedNames, synthPack, paired.copy()));
 		}
 		Context.defineModule(modulePath, paired);
 		#if anyparse_trivia_dump

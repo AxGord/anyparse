@@ -209,6 +209,14 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testReturnTypeToExpressionBodyKeepsTheComment :: control :: '
 			+ 'M-FNBODY-GAP-COMMENT-NONE',
 		'unit.grammar.haxe.HxDoWhileThrowTryCatchSliceTest#testPlainWriterDropsTheSemicolonBeforeWhile :: control :: M-DOWHILE-PLAIN-SEMI',
+		'unit.grammar.haxe.HxDroppedSepCommentTest#testABlockCommentStaysOnTheElement :: control :: M-DROPPED-SEP-BLOCK-REHOMED',
+		'unit.grammar.haxe.HxDroppedSepCommentTest#testADroppedSeparatorsCommentIsWrittenWhereTheNextParseReadsIt :: control :: '
+			+ 'M-DROPPED-SEP-UNREHOMED,M-DROPPED-SEP-SOURCE-COMMA-READ,M-TAIL-ABSENT-FIELD-STOPS,M-TAIL-ARRAY-SLOT-UNREAD,M-TAIL-CALL-SLOT-UNREAD,'
+			+ 'M-TAIL-INFIX-UNREAD,M-TAIL-OPERAND-UNREAD,M-TAIL-PREFIX-UNREAD,M-TAIL-TERNARY-UNREAD',
+		'unit.grammar.haxe.HxDroppedSepCommentTest#testAKeptSeparatorKeepsTheCommentAfterIt :: control :: M-DROPPED-SEP-KEPT-REHOMED',
+		'unit.grammar.haxe.HxDroppedSepCommentTest#testATailThatCapturesNothingKeepsTheCommentOnTheElement :: control :: M-TAIL-ONLY-KNOWN-METAS',
+		'unit.grammar.haxe.HxDroppedSepCommentTest#testAnOccupiedTailKeepsBothComments :: control :: '
+			+ 'M-TAIL-SLOT-OVERWRITTEN,M-TAIL-ALT-SLOT-OVERWRITTEN,M-TAIL-WRITTEN-SEMICOLON-IGNORED',
 		'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBareBodyElseIfTrailsCommentAfterCondition :: control :: '
 			+ 'M-EICR-AFTERCOND-RESET',
 		'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBracedElseIfGluesAndTrailsCommentAfterOpenCurly :: control :: '

@@ -230,7 +230,20 @@ final class DeferredArms {
 		'M-XREN-EXTENDS-HEAD-UNEMITTED :: anyparse.macro.QueryWalkerLowering#typeRefsDescendCore',
 		'M-QUERY-NAME-IGNORED :: anyparse.macro.QueryWalkerLowering#lowerNameSeq',
 		'M-PAREN-BROKEN-CHAIN-PINNED :: anyparse.macro.WriterKwRefLowering#kwRefWrapHardFlatten',
-		'M-BREAKMARK-FIT-NAMED :: anyparse.macro.WriterPolicyLowering#nestBodyOnSourceNewlineWrap'
+		'M-BREAKMARK-FIT-NAMED :: anyparse.macro.WriterPolicyLowering#nestBodyOnSourceNewlineWrap',
+		'M-DROPPED-SEP-UNREHOMED :: anyparse.macro.TriviaSepLowering#triviaSepArrDecls',
+		'M-DROPPED-SEP-SOURCE-COMMA-READ :: anyparse.macro.TriviaSepLowering#triviaSepStarExpr',
+		'M-TAIL-SLOT-OVERWRITTEN :: anyparse.macro.TriviaTailRehome#starField',
+		'M-TAIL-ALT-SLOT-OVERWRITTEN :: anyparse.macro.TriviaTailRehome#altCase',
+		'M-TAIL-WRITTEN-SEMICOLON-IGNORED :: anyparse.macro.TriviaTailRehome#refField',
+		'M-TAIL-ONLY-KNOWN-METAS :: anyparse.macro.TriviaTailRehome#onlyMetas',
+		'M-TAIL-ABSENT-FIELD-STOPS :: anyparse.macro.TriviaTailRehome#seqField',
+		'M-TAIL-ARRAY-SLOT-UNREAD :: anyparse.macro.TriviaTailRehome#altTail',
+		'M-TAIL-CALL-SLOT-UNREAD :: anyparse.macro.TriviaTailRehome#altTail',
+		'M-TAIL-INFIX-UNREAD :: anyparse.macro.TriviaTailRehome#altTail',
+		'M-TAIL-TERNARY-UNREAD :: anyparse.macro.TriviaTailRehome#altTail',
+		'M-TAIL-PREFIX-UNREAD :: anyparse.macro.TriviaTailRehome#altTail',
+		'M-TAIL-OPERAND-UNREAD :: anyparse.macro.TriviaTailRehome#altTail'
 	];
 
 }

@@ -676,6 +676,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxDollarBlockExprStmtNoSemiSliceTest',
 		'unit.grammar.haxe.HxDollarReifSliceTest',
 		'unit.grammar.haxe.HxDottedMetaNameSliceTest',
+		'unit.grammar.haxe.HxDroppedSepCommentTest',
 		'unit.grammar.haxe.HxECheckTypeSliceTest',
 		'unit.grammar.haxe.HxEllipsisMemberSliceTest',
 		'unit.grammar.haxe.HxEllipsisStmtSliceTest',
