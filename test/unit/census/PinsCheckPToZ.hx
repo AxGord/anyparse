@@ -578,6 +578,8 @@ final class PinsCheckPToZ {
 			+ 'M-TS-ARG-UNBOUND,M-TS-STATES-UNCONDITIONED',
 		'unit.check.ThreadSafetyConditionsTest#testAConstructionArgumentDecidesTheConstructorsBranch :: control :: M-TS-NEW-UNBOUND',
 		'unit.check.ThreadSafetyConditionsTest#testAFieldInitializersConstructionBindsItsArguments :: control :: M-TS-INIT-SITE-UNREAD',
+		'unit.check.ThreadSafetyConditionsTest#testAFieldsTypeResolvesWhereItsDeclarationWritesIt :: control :: '
+			+ 'M-ARGTYPE-FIELD-FILE,M-ARGTYPE-STATIC-FILE',
 		'unit.check.ThreadSafetyConditionsTest#testAFinalLocalDecidesOnlyTheReadsItBinds :: control :: M-TS-COND-LOCAL-ANY-BLOCK',
 		'unit.check.ThreadSafetyConditionsTest#testAFunctionValueWrittenUnderAGuardIsHandedOnOnlyWhereItHolds :: control :: M-TS-LAMBDA-SITE-UNGUARDED',
 		'unit.check.ThreadSafetyConditionsTest#testAHandlerHandedToANeverInvokesTargetRunsNowhereFromThere :: control :: '
@@ -601,14 +603,21 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyConditionsTest#testATakeABoolArgumentRulesOutOrdersNothing :: control :: M-TS-ORDER-UNCONDITIONED',
 		'unit.check.ThreadSafetyConditionsTest#testAValueStoredInADynamicMemberRunsWhereTheMemberRuns :: control :: M-TS-STORE-INERT',
 		'unit.check.ThreadSafetyConditionsTest#testAWrittenParameterIsNotTracked :: control :: M-TS-PARAM-WRITE-IGNORED',
-		'unit.check.ThreadSafetyConditionsTest#testAnAbstractArgumentBindsTheParameterItCastsTo :: control :: M-ARGFIT-CAST-OFF,M-UNIFY-ABSTRACT-OFF',
+		'unit.check.ThreadSafetyConditionsTest#testAnAbstractArgumentBindsTheParameterItCastsTo :: control :: '
+			+ 'M-ARGFIT-CAST-OFF,M-UNIFY-ABSTRACT-OFF,M-ARGTYPE-HELD-GRAPH',
 		'unit.check.ThreadSafetyConditionsTest#testAnArgumentAnAbstractMayTakeLeavesBothBindings :: control :: M-ARGFIT-UNKNOWN-MISFITS',
 		'unit.check.ThreadSafetyConditionsTest#testAnArgumentHaxeMaySkipAnOptionalParameterForBindsNothing :: control :: '
 			+ 'M-TS-SKIP-UNCHECKED',
+		'unit.check.ThreadSafetyConditionsTest#testAnArgumentOfALibraryTypeResolvesInTheResolutionScope :: control :: '
+			+ 'M-ARGTYPE-RESOLUTION-OFF',
 		'unit.check.ThreadSafetyConditionsTest#testAnArgumentTypedByArithmeticBindsItsOwnParameter :: control :: M-WALK-ARITHMETIC-OFF,M-ARGTYPE-STATIC-OFF',
+		'unit.check.ThreadSafetyConditionsTest#testAnEnumAbstractValueIsOfItsAbstract :: control :: '
+			+ 'M-ENUM-VALUE-OFF,M-ENUM-VALUE-UNREAD-BRANCHES',
 		'unit.check.ThreadSafetyConditionsTest#testAnInheritedConstructorTakesTheArgumentsOfItsSupertypes :: control :: M-TS-NEW-UNBOUND',
 		'unit.check.ThreadSafetyConditionsTest#testAnOmittedArgumentTakesItsBoolDefault :: control :: M-TS-DEFAULT-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testAnOmittedOptionalParameterIsNull :: control :: M-TS-NULL-PARAM-UNREAD',
+		'unit.check.ThreadSafetyConditionsTest#testArithmeticOverAnAbstractIsTypedByItsOperatorOverload :: control :: '
+			+ 'M-ARGTYPE-OVERLOAD-OFF,M-OPS-FIRST-TAKEN',
 		'unit.check.ThreadSafetyConditionsTest#testCodeAfterAnEarlyExitOnTheCheckRunsOnTheOtherThreads :: control :: '
 			+ 'M-TS-EARLY-EXIT-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testEveryWayACallMayBindDecidesTogether :: control :: M-TS-ARG-SETS-UNKNOWN',

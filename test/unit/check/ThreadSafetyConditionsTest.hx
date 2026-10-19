@@ -419,14 +419,14 @@ class ThreadSafetyConditionsTest extends Test {
 
 	/**
 	 * Every message of a `Sys.sleep` run over `sources` (plus `Runner`, whose `create` is a spawn), `extra` added to the
-	 * rule's options (`"key":value,…` or empty), sorted.
+	 * rule's options (`"key":value,…` or empty), with `library` held by the resolution scope only, sorted.
 	 */
-	private static function sleepFindings(extra: String, sources: Array<String>): Array<String> {
+	private static function sleepFindings(extra: String, sources: Array<String>, ?library: Array<String>): Array<String> {
 		final found: Array<String> = [
 			for (v in ThreadSafetyCheckTest.violations(
 				'{"rules":{"thread-safety":{"sinks":["Sys.sleep","Lock.wait","Mutex.acquire"],"spawns":["Runner.create"]'
 				+ (extra.length > 0 ? ',$extra' : '') + '}}}',
-				['class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources)
+				['class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources), null, false, library
 			)) v.message
 		];
 		found.sort(Reflect.compare);
@@ -578,7 +578,7 @@ class ThreadSafetyConditionsTest extends Test {
 	 * `u: U` and `abstract U(Int) to Float` binds `?w:Float`, so `hint` stays null and the branch never runs; an abstract
 	 * with an `@:to String` member skips `w` and binds `hint`.
 	 */
-	@:pin('control') @:killer('M-ARGFIT-CAST-OFF') @:killer('M-UNIFY-ABSTRACT-OFF')
+	@:pin('control') @:killer('M-ARGFIT-CAST-OFF') @:killer('M-UNIFY-ABSTRACT-OFF') @:killer('M-ARGTYPE-HELD-GRAPH')
 	public function testAnAbstractArgumentBindsTheParameterItCastsTo(): Void {
 		#if (sys || nodejs)
 		final model: Array<String> = [
@@ -669,6 +669,105 @@ class ThreadSafetyConditionsTest extends Test {
 				'class M { public static function pass(b:Bool):Void W.run(b); }',
 				'class A { public static function main():Void { M.pass(true); Runner.create(() -> M.pass(false)); } }'
 			])
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An argument of a type the resolution scope holds and the call graph does not — the std's `UInt`, a library type — is
+	 * resolved there: `u: U` with a library `abstract U(Int) from Int to Float` binds `?w:Float` (4.3.7), so `hint` stays null;
+	 * a `V ... to String` skips `w` and binds `hint`.
+	 */
+	@:pin('control') @:killer('M-ARGTYPE-RESOLUTION-OFF')
+	public function testAnArgumentOfALibraryTypeResolvesInTheResolutionScope(): Void {
+		#if (sys || nodejs)
+		final library: Array<String> = [
+			'package lib;\nabstract U(Int) from Int to Float {}',
+			'package lib;\nabstract V(Int) from Int to String {}'
+		];
+		final callee: String = 'class W { public static function make(?w:Float, ?hint:String):Void if (hint != null) Sys.sleep(1); }';
+		Assert.same([], sleepFindings('', [
+			callee,
+			'import lib.U;\nclass A { public static function main():Void { final u:U = 1; W.make(u); } }'
+		], library));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', [
+			callee,
+			'import lib.V;\nclass A { public static function main():Void { final v:V = 1; W.make(v); } }'
+		], library), 'a `to String` skips `w`');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Arithmetic over an abstract is typed by the `@:op` overload it selects (`operators.ml`, probed on 4.3.7): `a - b` over
+	 * `U` returns `U`, which binds `?w:Float`; over `S` the overload declared FIRST takes the operands and returns `String`,
+	 * which binds `hint`.
+	 */
+	@:pin('control') @:killer('M-ARGTYPE-OVERLOAD-OFF') @:killer('M-OPS-FIRST-TAKEN')
+	public function testArithmeticOverAnAbstractIsTypedByItsOperatorOverload(): Void {
+		#if (sys || nodejs)
+		final model: Array<String> = [
+			'abstract U(Int) from Int to Float {\n@:op(A - B) static function sub(a:U, b:U):U return 0;\n}',
+			'abstract S(Int) from Int to Float {\n@:op(A - B) static function sub(a:S, b:S):String return \'s\';\n\n'
+				+ '@:op(A - B) static function subF(a:S, b:Float):S return 0;\n}',
+			'class W { public static function make(?w:Float, ?hint:String):Void if (hint != null) Sys.sleep(1); }'
+		];
+		Assert.same([], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final a:U = 1; final b:U = 2; W.make(a - b); } }'
+		])));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', model.concat([
+			'class A { public static function main():Void { final a:S = 1; final b:S = 2; W.make(a - b); } }'
+		])), 'the first overload returns a String');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An enum-abstract value written with no type is of its enum abstract (4.3.7): `E.X` binds `?e:E`, so `hint` stays null.
+	 * A declaration one `#if` branch of which is a `typedef` types no value — another build's `F.X` is that alias's.
+	 */
+	@:pin('control') @:killer('M-ENUM-VALUE-OFF') @:killer('M-ENUM-VALUE-UNREAD-BRANCHES')
+	public function testAnEnumAbstractValueIsOfItsAbstract(): Void {
+		#if (sys || nodejs)
+		Assert.same([], sleepFindings('', [
+			'enum abstract E(Int) {\nvar X = 1;\n}',
+			'class W { public static function make(?w:Float, ?e:E, ?hint:String):Void if (hint != null) Sys.sleep(1); }',
+			'class A { public static function main():Void W.make(1, E.X); }'
+		]));
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', [
+			'#if flash\ntypedef F = flash.text.Other;\n#else\nenum abstract F(Int) {\nvar X = 1;\n}\n#end',
+			'class W { public static function make(?w:Float, ?f:F, ?hint:String):Void if (hint != null) Sys.sleep(1); }',
+			'class A { public static function main():Void W.make(1, F.X); }'
+		]), 'a typedef branch');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A field read bare — inherited — and a static read off a type name carry the type their declaration writes, resolved in
+	 * the declaration's file: `width: U` of `Base` and `K.WIDTH: U` both bind `?w:Float`.
+	 */
+	@:pin('control') @:killer('M-ARGTYPE-FIELD-FILE') @:killer('M-ARGTYPE-STATIC-FILE')
+	public function testAFieldsTypeResolvesWhereItsDeclarationWritesIt(): Void {
+		#if (sys || nodejs)
+		final model: Array<String> = [
+			'abstract U(Int) from Int to Float {}',
+			'class Base { public final width:U = 1; public function new() {} }',
+			'class K { public static inline final WIDTH:U = 3; }',
+			'class W { public static function make(?w:Float, ?hint:String):Void if (hint != null) Sys.sleep(1); }'
+		];
+		Assert.same(
+			[], sleepFindings('', model.concat(['class A extends Base { public function new() { super(); W.make(width); } }'])),
+			'an inherited field'
+		);
+		Assert.same(
+			[], sleepFindings('', model.concat(['class A { public static function main():Void W.make(K.WIDTH); }'])),
+			'a static off its type'
 		);
 		#else
 		Assert.pass('non-sys target');

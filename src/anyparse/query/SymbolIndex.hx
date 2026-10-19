@@ -298,7 +298,7 @@ typedef MemberInfo = {
 	 * True when the member is an OPTIONAL field of a structure: written `?name: T`, `var ?name: T` / `final ?name: T` (a node
 	 * of `RefShape.optionalParamKind` carrying the name) or under the structure's optional annotation
 	 * (`RefShape.optionalFieldMetaName`, `@:optional`). A read of it carries the language's optional-value type
-	 * (`MemberLookup.memberReadType`, 4.3.7: `Null<T>`). False for a member of any host but a structure.
+	 * (`MemberLookup.memberRead`, 4.3.7: `Null<T>`). False for a member of any host but a structure.
 	 */
 	var optional: Bool;
 
@@ -547,6 +547,12 @@ typedef CastClauses = {
 	final to: Array<String>;
 	final transitive: Bool;
 	final typeSelected: Bool;
+
+	/**
+	 * The range of the branch's whole declaration, its members included: a member of the type (`TypeDeclInfo.members`, the
+	 * union of every branch's) belongs to this branch when its `declFrom` lies inside it.
+	 */
+	final span: Span;
 }
 
 /**

@@ -4840,3 +4840,49 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   candidate, and admitting it rewrote two client files and three suite fixtures away from the fork.
 - Unarmed, equivalent by construction: the rebuild kind of the bool re-eval flip and of the fill forward glue (the
   flipped chain overflows by its call operand, the glued chain has no soft line left, so either group answers the same).
+
+## FU24 (2026-10-20): typer step T4b — std types for argument fits, `@:op` results, enum-abstract values
+
+- `ArgumentTypes` resolved every argument / parameter type in the CALL GRAPH's index (the project and the library bodies
+  the graph reads, no std), so a std abstract (`UInt`) or a library type the graph holds no body of never resolved and
+  stayed `MayFit` → `heldFor`: the run's resolution index (`IndexScope.resolutionIndexOf`, report + libraries + std)
+  where it holds the file writing the type, else the graph's entry (no resolution scope: as before). `coreName` keeps
+  asking the CALL GRAPH whether an indexed type bears a core name — the resolution index holds the std's `Int` /
+  `Float`, and asking it would make no name core — branch `feat/fu-FU24`
+- the type of a field read (bare, off `this`, a static off a type name) carried no file (`ownField` / `accessType` read
+  the graph's name-keyed `memberOnChain`), so a `UInt` field was never resolved → both read `MemberLookup.memberRead`
+  (the old `memberReadType` with the declaration writing the member: `MemberReading.host`, `.member`) through the
+  resolution index, the type carrying the declaring file — none for a supertype member whose type the chain substitutes
+  (the arguments are written in another file). A static is read off its OWN type only (statics are not inherited) —
+  branch `feat/fu-FU24`
+- arithmetic over an abstract was untyped (core numbers only) → `OperatorOverloads` (`index.typing.operators`,
+  `operators.ml` 4.3.7): the left operand's abstract first, the right one's when the left takes none
+  (`try_abstract_binop_overloads`); the overloads of the operator in DECLARATION order (probed: `subA(A,A):String` before
+  `subF(A,Float):Bool` gives `String`, the reverse order `Bool`); a candidate takes the operands when its first
+  parameter EQUALS the left operand's type (`type_eq EqStrict`: `X - X` passes `subI(a:Int, b:X)` over though `X to Int`)
+  and the right operand casts to the second (`Unification.casts`), mirrored for the right abstract, and a
+  `@:commutative` one also swapped (`RefShape.commutativeOperatorMetaName`); `Null<U>` operands take `U`'s overload
+  (probed, `type_eq` sees through `Null` there). Every `#if` branch of the abstract must pick an overload returning one
+  type: `CastClauses.span` (the branch's range) tells which members a branch declares (`AbstractCasts.branchMembers`) —
+  `UInt`'s flash branch picks `subI(UInt, Int):UInt`, the other `sub(UInt, UInt):UInt`, both `UInt` — branch `feat/fu-FU24`
+- "matches or Unknown" for the overload: no answer for an operand or a parameter type the cast graph does not model, a
+  candidate with type parameters, under `#if`, a signature overload, not taking two parameters (an instance overload
+  takes one), a cast `Unification.casts` cannot decide, an abstract a build macro may add an overload to, branches that
+  pick different types (`D - D` is `D` on `--interp`, `String` on `-js`, probed), and the language's own operator (no
+  overload taken: the walk's core arithmetic answers that). The expected type's promotion (`type_non_assign_op`'s
+  one-applicable-overload `with_type`) retypes an operand EXPRESSION only, never an identifier's or a field's type, which
+  are the operands the walk types — branch `feat/fu-FU24`
+- an enum-abstract value written with no type (`TextFormatAlign.LEFT`) had no type → `AbstractCasts.holdsUntypedValue`:
+  every `#if` branch of the declaration an abstract declaring a non-static, unguarded field of the name with no written
+  type — which an abstract declares only as an enum value ("Cannot declare member variable in abstract", probed), so the
+  deprecated `@:enum abstract` qualifies too — and the value is of the declaration (`var A = 1` / `final B = 2` / `var F;`
+  are `E`, `static var D = 4` is `Int`, probed). Asked by `ArgumentTypes.accessType` only; the index host's deep walk does
+  not ask yet (the facts harness keeps its tables) — branch `feat/fu-FU24`
+- NOT reached, measured: `openfl.text.TextFormatAlign` stays untyped, so the client's `RoundedTextField.new` /
+  `Assets.getBitmapData` false positive keeps its `HintMessageForm` chain (every remaining chain passes `TFA.LEFT`). Two
+  facts stand in the way, each beyond this step: its first branch writes the `enum` keyword under `#if`
+  (`#if (haxe_ver >= 4.0) enum #else @:enum #end abstract`), which the index reads as a split header (kind
+  `AbstractDecl`, `castClauses` null); and its flash branch is `typedef TextFormatAlign = flash.text.TextFormatAlign`,
+  a std target subtree the resolution scope does not hold (`StdResolver.resolutionSpecs`: `*.hx`, `haxe/`, `sys/`), so
+  what `LEFT` is there cannot be read. The `SaveDialog` chain (`Editor.saveAs`, `UInt - UInt`) is pruned — branch
+  `feat/fu-FU24`

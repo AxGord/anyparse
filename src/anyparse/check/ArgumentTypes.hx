@@ -1,11 +1,15 @@
 package anyparse.check;
 
 import anyparse.query.AbstractCasts.TypeEnd;
+import anyparse.query.AncestorTable;
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphTypes.HeldFile;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
+import anyparse.query.MemberLookup.MemberReading;
 import anyparse.query.NominalTypes;
+import anyparse.query.OperatorOverloads.OperatorResult;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceText;
@@ -29,6 +33,7 @@ private typedef ArgumentScope = {
 	final file: String;
 	final root: QueryNode;
 	final owner: Null<String>;
+	final caller: String;
 	final seen: Array<Int>;
 }
 
@@ -37,8 +42,11 @@ private typedef ArgumentScope = {
  * decides the binding of a call by, for `ArgumentValues`. The shapes are THE structural walk every typer shares
  * (`TypingService.typeWalk`); this is its resolution over the call graph (`HOST`), answering a written type: a literal's
  * core type, a local's or a parameter's annotation (a local written with none by its initializer), a field of the
- * enclosing type's chain read bare or off the self reference, a static field read off a type name, and arithmetic over core
- * numbers (`RefShape.coreValueTypes`, `arithmeticKinds`). Everything else is untyped.
+ * enclosing type's chain read bare or off the self reference, a static field or an enum-abstract value read off a
+ * type name (each the type `MemberLookup.memberRead` answers, written in the declaring file), arithmetic over
+ * core numbers (`RefShape.coreValueTypes`, `arithmeticKinds`) and the type an abstract's operator overload yields
+ * (`OperatorOverloads`). Every type is resolved in the run's resolution index where it holds the file writing it
+ * (`heldFor`: the std and the libraries resolve there), else in the call graph's. Everything else is untyped.
  *
  * A positive whitelist for the fit: two core types (each one no indexed type of its name shadows) fit when they are the same
  * or one widens to the other and misfit otherwise; `null` fits a parameter a call may leave out; the same plain type
@@ -65,12 +73,12 @@ final class ArgumentTypes {
 		initializer: (_, use, s) -> NominalTypes.localInitializer(use, s.root, s.types._shape, s.types.typeSourcesOf(s.file)),
 		loopElement: (_, _) -> null,
 		parameter: null,
-		unbound: (ident, s) -> s.types.ownField(ident.name, s.owner, false),
+		unbound: (ident, s) -> s.types.ownField(ident.name, s.owner, false, s),
 		access: (node, s) -> s.types.accessType(node, s),
 		element: null,
 		call: (_, _) -> null,
 		construction: null,
-		arithmetic: (node, operands, s) -> s.types.arithmeticType(node, operands),
+		arithmetic: (node, operands, s) -> s.types.arithmeticType(node, operands, s),
 		reading: s -> s.seen
 	};
 
@@ -79,6 +87,9 @@ final class ArgumentTypes {
 
 	/** File -> the offsets `typeSourcesOf` answers for, ascending (`annotationOf`). */
 	private final _typeSourceOffsets: Map<String, Array<Int>> = [];
+
+	/** File -> the index entry its written types are resolved in (`heldFor`), remembered per file, null for none. */
+	private final _held: Map<String, Null<HeldFile>> = [];
 
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
@@ -106,6 +117,7 @@ final class ArgumentTypes {
 			file: file,
 			root: tree,
 			owner: _graph.node(callerId)?.typeName,
+			caller: callerId,
 			seen: []
 		};
 		return TypingService.typeWalk(arg, _shape, HOST, scope);
@@ -196,51 +208,112 @@ final class ArgumentTypes {
 
 	/**
 	 * The type of the field `name` of `owner`'s chain, read bare (a supertype's static is not in scope bare) or, with
-	 * `onSelf`, off the self reference: its written type, when the chain declares it as a field.
+	 * `onSelf`, off the self reference, in `scope`'s file: the type a read of it carries
+	 * (`MemberLookup.memberRead`), written in the file of the declaration holding it — none for a field
+	 * of a supertype whose type parameters the chain substitutes, with arguments it writes elsewhere.
 	 */
-	private function ownField(name: Null<String>, owner: Null<String>, onSelf: Bool): Null<WrittenType> {
-		if (name == null || owner == null) return null;
-		final declaring: Null<String> = _graph.types.declaringTypeOf(owner, name);
-		final m: Null<MemberInfo> = _graph.types.memberOnChain(owner, name);
-		if (declaring == null || m == null) return null;
-		final member: MemberInfo = m;
-		if (!isField(member) || member.isStatic && !onSelf && declaring != owner) return null;
-		final written: Null<String> = member.typeSource;
-		return written == null ? null : { text: written, file: null };
+	private function ownField(name: Null<String>, owner: Null<String>, onSelf: Bool, scope: ArgumentScope): Null<WrittenType> {
+		final held: Null<HeldFile> = heldFor(scope.file);
+		if (name == null || owner == null || held == null) return null;
+		final decl: Null<ResolvedType> = held.index.refs.resolveTypeRef(owner, held.info);
+		final read: Null<MemberReading> = decl == null ? null : held.index.typing.members.memberRead(decl, name, decl.type.typeParamNames);
+		if (decl == null || read == null) return null;
+		final own: Bool = AncestorTable.same(read.host, decl);
+		if (!isField(read.member) || read.member.isStatic && !onSelf && !own) return null;
+		// what the chain substitutes for a supertype's parameters is written elsewhere
+		final written: Bool = own || read.text == read.member.typeSource || read.host.type.typeParamNames.length == 0;
+		return { text: read.text, file: written ? read.host.file.file : null };
 	}
 
 	/**
-	 * What the field access `node` reads: a field of the enclosing type's chain off the self reference, or a static field
-	 * off a type name no local binds — its written type.
+	 * What the field access `node` reads: a field of the enclosing type's chain off the self reference, or, off a type name no
+	 * local binds, a static field of the type it resolves to (statics are not inherited) — the type a read of it carries,
+	 * written in the file of its declaration — or a value of that type written with no type, an enum-abstract value, of the
+	 * type itself (`AbstractCasts.holdsUntypedValue`).
 	 */
 	private function accessType(node: QueryNode, scope: ArgumentScope): Null<WrittenType> {
 		final name: Null<String> = node.name;
 		final receiver: QueryNode = unwrap(node.children[0]);
 		final rname: Null<String> = receiver.name;
 		if (name == null || receiver.kind != _shape.identKind || rname == null) return null;
-		if (rname == _shape.selfReferenceText) return ownField(name, scope.owner, true);
-		if (!SourceText.isUpperInitial(rname) || bindingOf(receiver, scope) != null) return null;
-		final keys: Array<String> = _graph.typeKeysOf(scope.file, rname);
-		final type: Null<String> = keys.length == 1 ? keys[0] : null;
-		final m: Null<MemberInfo> = type == null || !_graph.types.isStatic(type, name) ? null : _graph.types.memberOnChain(type, name);
-		final written: Null<String> = m == null || !isField(m) ? null : m.typeSource;
-		return written == null ? null : { text: written, file: null };
+		if (rname == _shape.selfReferenceText) return ownField(name, scope.owner, true, scope);
+		final held: Null<HeldFile> = heldFor(scope.file);
+		if (!SourceText.isUpperInitial(rname) || bindingOf(receiver, scope) != null || held == null) return null;
+		final decl: Null<ResolvedType> = held.index.refs.resolveTypeRef(rname, held.info, receiver.span?.from);
+		if (decl == null) return null;
+		final typing: TypingService = held.index.typing;
+		if (typing.casts.holdsUntypedValue(decl, name)) return { text: decl.type.name, file: decl.file.file };
+		final read: Null<MemberReading> = typing.members.memberRead(decl, name, []);
+		if (read == null) return null;
+		final member: MemberInfo = read.member;
+		final own: Bool = AncestorTable.same(read.host, decl);
+		return own && isField(member) && member.isStatic ? { text: read.text, file: decl.file.file } : null;
 	}
 
 	/**
-	 * The core number arithmetic over `operands` yields (`RefShape.arithmeticKinds`): the integer type when every operand is
-	 * one and `node`'s operator keeps it, the real type when every operand is a core number; null otherwise.
+	 * The type the arithmetic `node` over `operands` yields (`RefShape.arithmeticKinds`): over core numbers the integer type
+	 * when every operand is one and `node`'s operator keeps it, else the real type; over two operands an abstract takes part
+	 * in, the type its operator overload yields (`overloadType`); null otherwise.
 	 */
-	private function arithmeticType(node: QueryNode, operands: Array<WrittenType>): Null<WrittenType> {
+	private function arithmeticType(node: QueryNode, operands: Array<WrittenType>, scope: ArgumentScope): Null<WrittenType> {
 		final core: Null<CoreValueTypes> = _shape.coreValueTypes;
 		if (core == null) return null;
 		var integral: Bool = !(_shape.realArithmeticKinds ?? []).contains(node.kind);
 		for (o in operands) {
 			final name: Null<String> = coreName(o.text);
-			if (name != core.integer && name != core.real) return null;
+			if (name != core.integer && name != core.real) return operands.length == 2 ? overloadType(node.kind, operands, scope) : null;
 			if (name != core.integer) integral = false;
 		}
 		return { text: integral ? core.integer : core.real, file: null };
+	}
+
+	/**
+	 * The type an abstract's overload of the binary operator of kind `kind` yields over the two `operands`
+	 * (`OperatorOverloads.binaryResult`), each operand's type resolved in one index, where it is written: written in the
+	 * file of the abstract declaring the overload. Null where an operand's type is not resolved there, and where no overload
+	 * is decided.
+	 */
+	private function overloadType(kind: String, operands: Array<WrittenType>, scope: ArgumentScope): Null<WrittenType> {
+		final index: Null<SymbolIndex> = operandIndex(operands[0]) ?? operandIndex(operands[1]);
+		if (index == null) return null;
+		final left: Null<TypeEnd> = operandEnd(operands[0], index, scope.caller);
+		final right: Null<TypeEnd> = operandEnd(operands[1], index, scope.caller);
+		final result: Null<OperatorResult> = left == null || right == null ? null : index.typing.operators.binaryResult(kind, left, right);
+		return result == null ? null : { text: result.text, file: result.host.file.file };
+	}
+
+	/** The index the type `w` is resolved in where it is written (`heldFor`); null for a type no file writes. */
+	private function operandIndex(w: WrittenType): Null<SymbolIndex> {
+		final file: Null<String> = w.file;
+		return file == null ? null : heldFor(file)?.index;
+	}
+
+	/**
+	 * The end the operand type `w` stands for in `index`, as an operator overload's parameter must EQUAL it (`type_eq
+	 * EqStrict`, which sees through `Null<…>` there: `a - a` with `a: Null<U>` takes `U`'s overload, 4.3.7): a core value
+	 * type by its name, else the plain name written in a file `index` holds (`endOf`); null for any other.
+	 */
+	private function operandEnd(w: WrittenType, index: SymbolIndex, functionId: String): Null<TypeEnd> {
+		final core: Null<String> = coreName(w.text);
+		if (core != null) return Core(core);
+		final file: Null<String> = w.file;
+		final held: Null<HeldFile> = file == null ? null : heldFor(file);
+		return held == null || held.index != index ? null : endOf(w.text, held, functionId);
+	}
+
+	/**
+	 * The index entry the types written in `file` are resolved in: the run's resolution index when it holds the file — the
+	 * std and the libraries resolve there, the call graph's own index holds neither the std nor a library it has no body
+	 * of — else the graph's entry (`CallGraphTypes.heldFile`); null for a file neither holds.
+	 */
+	private function heldFor(file: String): Null<HeldFile> {
+		if (_held.exists(file)) return _held[file];
+		// the host builds the resolution index once per run
+		final wide: Null<SymbolIndex> = IndexScope.resolutionIndexOf(_plugin);
+		final info: Null<FileInfo> = wide?.fileInfo(file);
+		final held: Null<HeldFile> = wide != null && info != null ? { index: wide, info: info } : _graph.types.heldFile(file);
+		_held[file] = held;
+		return held;
 	}
 
 	/**
@@ -255,7 +328,7 @@ final class ArgumentTypes {
 		given: WrittenType, givenCore: Null<String>, wanted: String, wantedCore: Null<String>, wantedFile: String, callerId: String,
 		calleeId: String
 	): ArgumentFit {
-		final to: Null<HeldFile> = _graph.types.heldFile(wantedFile);
+		final to: Null<HeldFile> = heldFor(wantedFile);
 		if (to == null) return MayFit;
 		final index: SymbolIndex = to.index;
 		final w: Null<TypeEnd> = wantedCore != null ? Core(wantedCore) : endOf(wanted, to, calleeId);
@@ -266,7 +339,7 @@ final class ArgumentTypes {
 	/** The end the argument type `given` stands for, when the file writing it is held by `index`; null otherwise. */
 	private function givenEnd(given: WrittenType, index: SymbolIndex, callerId: String): Null<TypeEnd> {
 		final file: Null<String> = given.file;
-		final from: Null<HeldFile> = file == null ? null : _graph.types.heldFile(file);
+		final from: Null<HeldFile> = file == null ? null : heldFor(file);
 		return from == null || from.index != index ? null : endOf(given.text, from, callerId);
 	}
 

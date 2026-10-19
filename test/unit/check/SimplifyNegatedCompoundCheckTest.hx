@@ -396,7 +396,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	public function testInheritedGenericMemberFlipsThroughTheChain(): Void {
 		// `u` is declared on `Base<U>`, so its `U` names the SUPERTYPE's parameter, and the extends chain binds it:
 		// `Der<T:Item> extends Base<T>` passes `Der`'s `T` up, and `d: Der<Item>` binds that to `Item`
-		// (`AncestorTable.argumentsTo`, `MemberLookup.memberReadType`) — 4.3.7 types `d.u` as `Item`. So `d.u.text` is a
+		// (`AncestorTable.argumentsTo`, `MemberLookup.memberRead`) — 4.3.7 types `d.u` as `Item`. So `d.u.text` is a
 		// `Str`, its `indexOf` an `Int`, and the comparison flips as `it.text.indexOf(k) < 0` does on an `it: Item`. Until
 		// the chain was modelled the verbatim `U` resolved to nothing and the wrap stayed.
 		//

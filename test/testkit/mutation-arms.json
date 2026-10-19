@@ -26566,8 +26566,8 @@
 			"name": "M-ARGTYPE-STATIC-OFF",
 			"type": "anyparse.check.ArgumentTypes",
 			"method": "accessType",
-			"find": "final m: Null<MemberInfo> = type == null || !_graph.types.isStatic(type, name) ? null : _graph.types.memberOnChain(type, name);",
-			"replace": "final m: Null<MemberInfo> = null;",
+			"find": "final read: Null<MemberReading> = typing.members.memberRead(decl, name, []);",
+			"replace": "final read: Null<MemberReading> = null;",
 			"note": "a static field read off a type name is untyped"
 		},
 		{
@@ -27121,15 +27121,15 @@
 		{
 			"name": "M-MEMBER-OPTIONAL-READ",
 			"type": "anyparse.query.MemberLookup",
-			"method": "memberReadType",
-			"find": "return bound == null || !found.member.optional ? bound : NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax);",
-			"replace": "return bound;",
+			"method": "memberRead",
+			"find": "text: found.member.optional ? NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax) : bound,",
+			"replace": "text: bound,",
 			"note": "an optional structure field reads as its written type, not `Null<T>`"
 		},
 		{
 			"name": "M-MEMBER-READ-HOST-ARGS",
 			"type": "anyparse.query.MemberLookup",
-			"method": "memberReadType",
+			"method": "memberRead",
 			"find": "params.length == 0 ? [] : boundArguments(start, host, args);",
 			"replace": "params.length == 0 ? [] : null;",
 			"note": "no argument binds the declaring type's parameters, so a member written with one is unknown everywhere"
@@ -27863,6 +27863,198 @@
 			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(fl)): fl;",
 			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (false): fl;",
 			"note": "a rest-aware `&&` / `+` chain whose trailing paren opens is no longer forward-glued, so it breaks before `|| (` instead of hugging the paren"
+		},
+		{
+			"name": "M-ARGTYPE-RESOLUTION-OFF",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "heldFor",
+			"find": "final wide: Null<SymbolIndex> = IndexScope.resolutionIndexOf(_plugin);",
+			"replace": "final wide: Null<SymbolIndex> = null;",
+			"note": "argument and parameter types resolve in the call graph's index alone, which holds no std and no library it has no body of, so a library abstract argument may land on any optional parameter"
+		},
+		{
+			"name": "M-ARGTYPE-HELD-GRAPH",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "heldFor",
+			"find": ": _graph.types.heldFile(file);",
+			"replace": ": null;",
+			"note": "a file the resolution index does not hold resolves nothing, so without a resolution scope no plain-name argument is decided"
+		},
+		{
+			"name": "M-ARGTYPE-OVERLOAD-OFF",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "arithmeticType",
+			"find": "return operands.length == 2 ? overloadType(node.kind, operands, scope) : null;",
+			"replace": "return null;",
+			"note": "arithmetic over an abstract is untyped, so `a - b` over an abstract with an `@:op` overload may land on any optional parameter"
+		},
+		{
+			"name": "M-ARGTYPE-FIELD-FILE",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "ownField",
+			"find": "return { text: read.text, file: written ? read.host.file.file : null };",
+			"replace": "return { text: read.text, file: null };",
+			"note": "a field's type carries no file, so a field of an abstract type is never resolved and binds no parameter"
+		},
+		{
+			"name": "M-ARGTYPE-STATIC-FILE",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "accessType",
+			"find": "{ text: read.text, file: decl.file.file }",
+			"replace": "{ text: read.text, file: null }",
+			"note": "a static's type carries no file, so `K.WIDTH: U` is never resolved and binds no parameter"
+		},
+		{
+			"name": "M-OPS-LEFT-OFF",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "binaryResult",
+			"find": "final picked: OverloadPick = switch selection(left, kind, left, right, true) {",
+			"replace": "final picked: OverloadPick = switch NoneTaken {",
+			"note": "the left operand's abstract is never asked, so `U - Int` takes no overload"
+		},
+		{
+			"name": "M-OPS-RIGHT-OFF",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "binaryResult",
+			"find": "case NoneTaken: selection(right, kind, left, right, false);",
+			"replace": "case NoneTaken: NoneTaken;",
+			"note": "the right operand's abstract is never asked, so `Int - R` takes no overload of `R`"
+		},
+		{
+			"name": "M-OPS-FIRST-TAKEN",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "branchSelection",
+			"find": "for (m in members) if (m.operatorOverloads.contains(kind)) {",
+			"replace": "for (m in [for (i in 0...members.length) members[members.length - 1 - i]]) if (m.operatorOverloads.contains(kind)) {",
+			"note": "the overloads are tried last declared first, so `S - S` takes `subF` (`S`) instead of the first-declared `sub` (`String`)"
+		},
+		{
+			"name": "M-OPS-COMMUTATIVE-OFF",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "branchSelection",
+			"find": "if (taken == Misfits && isCommutative(m)) taken = takes(right, params[0], left, params[1]);",
+			"replace": "",
+			"note": "a `@:commutative` overload is never tried swapped, so `Int * C` takes no overload"
+		},
+		{
+			"name": "M-OPS-MAYFIT",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "branchSelection",
+			"find": "if (taken == MayFit || taken == Misfits && _commutativeMeta == null) return Undecided;",
+			"replace": "if (taken == Misfits && _commutativeMeta == null) return Undecided;",
+			"note": "a candidate whose cast is not decided is passed over, so `Z - A0` takes `subA` though `sub` binds in a build where `Q`'s `@:from` is"
+		},
+		{
+			"name": "M-OPS-RETURN-OPEN",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "branchSelection",
+			"find": "return end.match(Open) ? Undecided : Chosen({ end: end, text: returned, host: decl });",
+			"replace": "return Chosen({ end: end, text: returned, host: decl });",
+			"note": "an overload returning a type the cast graph does not model is an answer"
+		},
+		{
+			"name": "M-OPS-BRANCHES-AGREE",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "selection",
+			"find": "if (one.match(Undecided) || agreed != null && !samePick(agreed, one)) return Undecided;",
+			"replace": "if (one.match(Undecided)) return Undecided;",
+			"note": "the last `#if` branch decides for every build, so `D - D` answers one build's type"
+		},
+		{
+			"name": "M-OPS-GUARDED",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "candidateParams",
+			"find": "if (m.guarded || m.typeParamNames.length > 0",
+			"replace": "if (m.typeParamNames.length > 0",
+			"note": "an overload under `#if` is taken in every build"
+		},
+		{
+			"name": "M-OPS-INSTANCE",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "candidateParams",
+			"find": "if (m.paramTypeSources.length != 2) return null;",
+			"replace": "",
+			"note": "an instance overload, taking one parameter, is read as taking two"
+		},
+		{
+			"name": "M-OPS-EXACT-EQUAL",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "takes",
+			"find": "return AbstractCasts.same(exact, exactParam) ? ",
+			"replace": "return _unification.casts(exact, exactParam) == Fits ? ",
+			"note": "the first parameter takes an operand that casts to it, so `X - X` takes `subI(a:Int, b:X)` instead of `sub(a:X, b:X)`"
+		},
+		{
+			"name": "M-OPS-OPEN-OPERAND",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "takes",
+			"find": "if (exact.match(Open)) return MayFit;",
+			"replace": "",
+			"note": "an operand of a type the cast graph does not model misfits a swapped `@:commutative` overload, so a later one is taken"
+		},
+		{
+			"name": "M-CASTS-BRANCH-MEMBERS",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "branchMembers",
+			"find": "for (m in r.type.members) if (c.span.from <= m.declFrom && m.declFrom < c.span.to) m",
+			"replace": "for (m in r.type.members) m",
+			"note": "every `#if` branch declares every branch's members, so two branches of `D` pick the same first overload"
+		},
+		{
+			"name": "M-ENUM-VALUE-OFF",
+			"type": "anyparse.check.ArgumentTypes",
+			"method": "accessType",
+			"find": "if (typing.casts.holdsUntypedValue(decl, name)) return { text: decl.type.name, file: decl.file.file };",
+			"replace": "",
+			"note": "an enum-abstract value written with no type reads as untyped"
+		},
+		{
+			"name": "M-ENUM-VALUE-UNREAD-BRANCHES",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "holdsUntypedValue",
+			"find": "return branches != null && branches.foreach(",
+			"replace": "return branches == null || branches.foreach(",
+			"note": "a declaration the index does not read as an abstract in every branch (a `typedef` branch) still types its value"
+		},
+		{
+			"name": "M-ENUM-VALUE-EVERY-BRANCH",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "holdsUntypedValue",
+			"find": "branches.foreach(members ->",
+			"replace": "branches.exists(members ->",
+			"note": "one `#if` branch declaring the value decides, so `J.A` declared in one branch is typed"
+		},
+		{
+			"name": "M-ENUM-VALUE-STATIC",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "isUntypedValue",
+			"find": " && !m.isStatic",
+			"replace": "",
+			"note": "a static field of an enum abstract written with no type reads as a value of it"
+		},
+		{
+			"name": "M-ENUM-VALUE-GUARDED",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "isUntypedValue",
+			"find": " && !m.guarded",
+			"replace": "",
+			"note": "a value under `#if` is typed in every build"
+		},
+		{
+			"name": "M-ENUM-VALUE-UNTYPED",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "isUntypedValue",
+			"find": " && m.typeSource == null",
+			"replace": "",
+			"note": "an annotated enum-abstract value reads as written with no type"
+		},
+		{
+			"name": "M-SHAPE-COMMUTATIVE-UNSET",
+			"type": "anyparse.grammar.haxe.HaxeRefShape",
+			"method": "shape",
+			"find": "commutativeOperatorMetaName: '@:commutative',",
+			"replace": "",
+			"note": "the grammar names no commutativity annotation, so no overload is tried swapped and a misfit leaves the walk undecided"
 		}
 	]
 }
