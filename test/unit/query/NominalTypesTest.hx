@@ -160,7 +160,7 @@ class NominalTypesTest extends Test {
 	public function testAnInheritedMemberReadsThroughItsChainsArguments(): Void {
 		final text: String = 'package p;\n\nclass Base<T> {\n\tpublic var item: T;\n}\n\nclass Mid<U> extends Base<Array<U>> {}\n\n'
 			+ 'class Leaf extends Mid<String> {\n\tfunction probeBare() return item;\n\tfunction probeThis() return this.item;\n}\n\nclass '
-			+ 'Own<V> {\n\tvar v: V;\n\tfunction probeOwn() return v;\n\tfunction probeOwnThis() return this.v;\n}\n\nclass C {\n\tvar '
+			+ 'Own<V> {\n\tvar v: V;\n\tfunction probeOwn() return v;\n\tfunction probeOwnThis() return this.v;\n\tfunction probeOwnSelf() return this;\n}\n\nclass C {\n\tvar '
 			+ 'leaf: Leaf;\n\tvar mid: Mid<Int>;\n\tfunction probePath() return leaf.item;\n\tfunction probeArgs() return mid.item;\n}\n';
 		Assert.equals('Array', nominalIn(text, 'probeBare'), 'a bare read in the subclass');
 		Assert.equals('Array<String>', sourceIn(text, 'probeThis'), 'off this');
@@ -168,6 +168,7 @@ class NominalTypesTest extends Test {
 		Assert.equals('Array<Int>', sourceIn(text, 'probeArgs'), 'off a Mid<Int>');
 		Assert.equals('V', nominalIn(text, 'probeOwn'), 'the type\'s own parameter, bare');
 		Assert.equals('V', sourceIn(text, 'probeOwnThis'), 'and off this');
+		Assert.equals('Own<V>', sourceIn(text, 'probeOwnSelf'), 'a generic type\'s `this`: the type applied to its own parameters');
 	}
 
 	/**
