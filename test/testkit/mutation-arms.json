@@ -11928,7 +11928,7 @@
 		{
 			"name": "M-TS-MAIN-CHECK-IGNORED",
 			"type": "anyparse.check.EdgeConditions",
-			"method": "carried",
+			"method": "readSite",
 			"find": "mask &= fact.value ? MAIN_BITS : ThreadSafety.CTX_BG;",
 			"replace": "mask &= MAIN_BITS | ThreadSafety.CTX_BG;",
 			"note": "a branch a main-thread check takes only on a worker runs on the main thread too"
@@ -12649,7 +12649,7 @@
 		{
 			"name": "M-GRAPH-VIRTUAL-OWN-ONLY",
 			"type": "anyparse.query.CallGraph",
-			"method": "virtualTargets",
+			"method": "dispatchTargets",
 			"find": "final hit: Null<String> = _members[sub]?.get(member) ?? inheritedOffChain(typeName, sub, member);",
 			"replace": "final hit: Null<String> = _members[sub]?.get(member);",
 			"note": "a subtype that inherits the dispatched member from a superclass off the dispatched type's chain adds no dispatch target, so an interface's implementation its implementer inherits is never followed"
@@ -18159,9 +18159,9 @@
 		{
 			"name": "M-TS-DEADCATCH-OFF",
 			"type": "anyparse.check.EdgeConditions",
-			"method": "carried",
-			"find": "if (dead != null && dead(edge)) return 0;",
-			"replace": "if (dead != null && false) return 0;",
+			"method": "readSite",
+			"find": "if (dead != null && dead(edge)) return { mask: 0, params: [] };",
+			"replace": "if (dead != null && false) return { mask: 0, params: [] };",
 			"note": "a catch around only nonThrowing calls is still a path"
 		},
 		{
@@ -26517,7 +26517,7 @@
 		{
 			"name": "M-TS-NEW-UNBOUND",
 			"type": "anyparse.check.ArgumentValues",
-			"method": "bind",
+			"method": "bindOnce",
 			"find": "edge.kind != Call && edge.kind != Virtual && edge.kind != New",
 			"replace": "edge.kind != Call && edge.kind != Virtual",
 			"note": "a construction hands its constructor nothing known, so `new W(false)` runs the branch `false` rules out"
@@ -26549,7 +26549,7 @@
 		{
 			"name": "M-TS-ARG-SETS-UNKNOWN",
 			"type": "anyparse.check.ArgumentValues",
-			"method": "bind",
+			"method": "bindOnce",
 			"find": "if (runs == null || runs.length == 0) return unknownValuation;",
 			"replace": "if (runs == null || runs.length != 1) return unknownValuation;",
 			"note": "a call that may bind two ways hands nothing known, though every way decides the guard alike"
