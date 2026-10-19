@@ -296,9 +296,10 @@ class WrapList {
 	 * A list that may still break inside an item at render time is laid out once more per such break, as if it had
 	 * happened, and offered as a chain of `Doc.BreakCommit`s: a list of ONE item for its own body breaking into Allman
 	 * position (`BodyAllman.tailBreak`), and every list but an object literal's field list for a list nested in an item that
-	 * is offered the same way. The next rewrite reads the break as source and lays the list out by the rules for a
-	 * multi-line item (a call around `bar(b, [for …])` opens one argument per line), so the first rewrite has to pick that
-	 * layout exactly when the break happens. A nested break is asked first: it is the one that can change the head.
+	 * is offered the same way, or a literal nested in it whose own break is named (`BreakCommits.named`). The next rewrite
+	 * reads the break as source and lays the list out by the rules for a multi-line item (a call around `bar(b, [for …])`
+	 * opens one argument per line), so the first rewrite has to pick that layout exactly when the break happens. A nested
+	 * break is asked first: it is the one that can change the head.
 	 */
 	public static function emit(
 		open: String, close: String, sep: String, items: Array<Doc>, opt: WriteOptions, openInside: Doc, closeInside: Doc,
@@ -503,7 +504,7 @@ class WrapList {
 			if (depth > 1) return;
 			switch n {
 				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
-					CollapseAddProbe(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakCommit(_, i):
+					CollapseAddProbe(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _), BreakCommit(_, i):
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
@@ -871,7 +872,7 @@ class WrapList {
 				if (first == null) return false;
 				node = first;
 			case Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
-				CollapseBoolProbe(inner), CollapseChainProbe(inner):
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), BreakMark(inner, _):
 				// ω-force-flat-engine slice A: pass-through. Render-time
 				// state — leading-hardline detection sees the marker's
 				// `inner` as if no wrapper were present.
@@ -939,7 +940,8 @@ class WrapList {
 				return s.length > 0 && (s.fastCodeAt(0) == '('.code || s.fastCodeAt(0) == '['.code || s.fastCodeAt(0) == '{'.code);
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
-				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
+				BreakMark(inner, _):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -988,7 +990,8 @@ class WrapList {
 				return c == ')'.code || c == ']'.code || c == '}'.code;
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
-				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
+				BreakMark(inner, _):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1029,7 +1032,8 @@ class WrapList {
 				return c >= '0'.code && c <= '9'.code;
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
-				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
+				BreakMark(inner, _):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1076,7 +1080,7 @@ class WrapList {
 		function w(n: Doc, depth: Int): Void {
 			switch n {
 				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
-					CollapseAddProbe(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakCommit(_, i):
+					CollapseAddProbe(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _), BreakCommit(_, i):
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
@@ -1133,7 +1137,8 @@ class WrapList {
 				return s.length > 0 && (s.fastCodeAt(0) == '['.code || s.fastCodeAt(0) == '{'.code);
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
-				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
+				BreakMark(inner, _):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1171,7 +1176,8 @@ class WrapList {
 				return s.endsWith('#end');
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
-				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
+				BreakMark(inner, _):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1236,7 +1242,7 @@ class WrapList {
 				r;
 			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
 				HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
-				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
+				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _):
 				lastVisibleText(i);
 			case IfBreak(brk, _), IfWidthExceeds(_, brk, _), IfFirstLineExceeds(_, brk, _), IfLineExceeds(_, brk, _),
 				IfResidualLineExceeds(_, brk, _), IfFullLineExceeds(_, brk, _), IfNaturalFirstLineExceeds(_, brk, _),
@@ -1400,6 +1406,17 @@ class WrapList {
 	 */
 	private static inline function firstBreakIsArrayDelim(d: Doc): Bool {
 		return firstBreakIsDelimChar(d, '['.code);
+	}
+
+	/**
+	 * Whether a list a source trailing separator forces into the break-mode cascade (`forceExceeds`), with no hardline
+	 * and no line-length threshold rule, answers that cascade `NoWrap`: the flat layout a shadowing `noWrap` rule gives,
+	 * which `emitList` puts behind the unforced path's first-line probe.
+	 */
+	private static inline function forcedNoWrap(
+		forceExceeds: Bool, anyHardline: Bool, extraThresholds: Array<Int>, evalAt: (Bool, Array<Int>) -> WrapMode
+	): Bool {
+		return forceExceeds && !anyHardline && extraThresholds.length == 0 && evalAt(true, []) == NoWrap;
 	}
 
 	/**
@@ -1706,7 +1723,7 @@ class WrapList {
 			switch n {
 				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
 					HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i),
-					ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
+					ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _):
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
@@ -1763,7 +1780,7 @@ class WrapList {
 			switch n {
 				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
 					HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i),
-					ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
+					ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _):
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
@@ -1906,7 +1923,7 @@ class WrapList {
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				DocMeasure.pushFillReversed(stack, items, sep);
 			case Flatten(inner), WrapBoundary(inner), LeadingBreak(_, inner), BreakCommit(_, inner), HardFlatten(inner),
-				CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner):
+				CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), BreakMark(inner, _):
 				stack.push(inner);
 			case ConditionalMarkerZero(inner):
 				stack.push(inner);
@@ -2939,7 +2956,7 @@ class WrapList {
 				case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner),
 					BreakCommit(_, inner), LeadingBreak(_, inner), Flatten(inner), HardFlatten(inner), CollapseProbe(inner),
 					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
-					ConditionalMarkerDecrease(inner):
+					ConditionalMarkerDecrease(inner), BreakMark(inner, _):
 					stack.push(inner);
 				case Concat(arr):
 					for (it in arr) stack.push(it);
@@ -3023,7 +3040,8 @@ class WrapList {
 		return switch item {
 			case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner), BreakCommit(_, inner),
 				LeadingBreak(_, inner), Flatten(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
-				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
+				BreakMark(inner, _):
 				isMethodChainItem(inner);
 			case IfBreak(brk, _), IfWidthExceeds(_, brk, _), IfFirstLineExceeds(_, brk, _), IfLineExceeds(_, brk, _),
 				IfResidualLineExceeds(_, brk, _), IfFullLineExceeds(_, brk, _), IfNaturalFirstLineExceeds(_, brk, _),
@@ -3079,8 +3097,8 @@ class WrapList {
 					// NARROWED here, not closed.
 					case WrapBoundary(_), Group(_), BodyGroup(_), GroupWithRestProbe(_), Flatten(_), HardFlatten(_), CollapseProbe(_),
 						CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_), ConditionalMarkerZero(_),
-						ConditionalMarkerDecrease(_), Concat(_), IfBreak(_, _), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _),
-						IfLineExceeds(_, _, _), IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _),
+						ConditionalMarkerDecrease(_), BreakMark(_, _), Concat(_), IfBreak(_, _), IfWidthExceeds(_, _, _),
+						IfFirstLineExceeds(_, _, _), IfLineExceeds(_, _, _), IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _),
 						IfNaturalFirstLineExceeds(_, _, _), IfNaturalFirstLineExceedsWithRest(_, _, _),
 						IfNaturalFirstLineFitsOpenDelim(_, _, _), IfArrowContinuationFits(_, _, _, _, _),
 						IfArrowContinuationFitsWithRest(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _),
@@ -3835,7 +3853,7 @@ class WrapList {
 			// are render-time state — their `inner` carries the same leading
 			// hardline answer it would without the wrap.
 			case Flatten(inner), WrapBoundary(inner), BreakCommit(_, inner), HardFlatten(inner), CollapseProbe(inner),
-				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner):
+				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), BreakMark(inner, _):
 				hasLeadingHardline(inner);
 			// ω-cond-indent-policy FixedZero / AlignedDecrease: render-time
 			// markers, transparent — leading-hardline answer matches `inner`.
@@ -3939,7 +3957,7 @@ class WrapList {
 				hit;
 			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
 				HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
-				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
+				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _):
 				firstVisibleTextIsFunctionKw(i);
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -4039,7 +4057,7 @@ class WrapList {
 				r;
 			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
 				HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
-				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
+				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _):
 				firstVisibleText(i);
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -4104,7 +4122,8 @@ class WrapList {
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner):
 				hasTopLevelElse(inner, depth + 1);
 			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Flatten(i), HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i),
-				CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
+				CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i),
+				BreakMark(i, _):
 				hasTopLevelElse(i, depth);
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -4445,6 +4464,8 @@ class WrapList {
 				LeadingBreak(n, groupifyShared(inner, memo), token);
 			case BreakCommit(brk, flat, token):
 				BreakCommit(groupifyShared(brk, memo), groupifyShared(flat, memo), token);
+			case BreakMark(inner, token):
+				BreakMark(groupifyShared(inner, memo), token);
 			case HardFlatten(inner):
 				HardFlatten(groupifyShared(inner, memo));
 			case CollapseProbe(inner):
@@ -4705,13 +4726,24 @@ class WrapList {
 		// `groupRestProbe` consumers for the zero-threshold call — its bracket
 		// shares its line with the statement's `;` (or a call's `);`), and the
 		// plain-`Group` fit is blind to that tail. See the param doc above.
-		return if (anyHardline || forceExceeds)
+		final defaultBreakMode: WrapMode = onePerLineWhenBreaking(
+			floorSourceMultiline(rules.defaultMode, sourceMultilineKeep), breakAsOnePerLine, true
+		);
+		// A source trailing separator forces the break-mode cascade (`forceExceeds`), and a `noWrap` rule that shadows
+		// a break default answers it flat: that flat layout still has to fit its line, behind the probe the unforced
+		// path puts there (`emitZeroThresholdAgree`). The first write lays the list out unforced; the next one reads
+		// the trailing comma it added and is forced, so without the probe it flattened the list past the limit.
+		return if (forcedNoWrap(forceExceeds, anyHardline, extraThresholds, evalAt))
+			emitZeroThresholdAgree(
+				NoWrap, rules, items, opt, cols, open, close, openInside, closeInside, forceMode, leadFlat, leadBreak, shapeAt, leadFor,
+				defaultBreakMode
+			)
+		else if (anyHardline || forceExceeds)
 			WrapBoundary(buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor))
 		else if (extraThresholds.length == 0)
 			emitZeroThreshold(
 				rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe || comprehensionFitMeasure,
-				leadFlat, leadBreak, evalAt, shapeAt, leadFor,
-				onePerLineWhenBreaking(floorSourceMultiline(rules.defaultMode, sourceMultilineKeep), breakAsOnePerLine, true)
+				leadFlat, leadBreak, evalAt, shapeAt, leadFor, defaultBreakMode
 			)
 		else if (extraThresholds.length == 1)
 			emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)

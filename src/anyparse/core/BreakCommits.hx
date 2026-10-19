@@ -5,32 +5,39 @@ import anyparse.format.IndentChar;
 /**
  * Resolves every `Doc.BreakCommit` before the collapse pass and the emit render see the Doc.
  *
- * A `BreakCommit` offers two layouts of one construct and answers by a `LeadingBreak` decided at render time, so the
- * pass renders once to MEASURE — the renderer records each `LeadingBreak` it takes, at its true column, with every
- * decision around it resolved as the emit render will — and then REWRITES each node to the layout its break asked
- * for. The render-twice model `CollapsePass` uses, for the same reason: the choice depends on a column only the
- * renderer knows. Every node is answered from the one measure render, with every other node on its `flat`
- * side. Two limits follow from that: the measure runs BEFORE the collapse pass, so a collapse that later moves
- * a column can in principle fire a still-live `LeadingBreak` the measure did not see; and each alternative
- * forces only its own break, so when a list and a node nested in it both break, only the outermost is forced
- * and the rest stay live decisions. Neither reproduced over the multi-break and collapse-context sweeps.
+ * A `BreakCommit` offers two layouts of one construct and answers by a break decided at render time — a `LeadingBreak`
+ * the renderer adds, or a `BreakMark` on the break side of a construct's own width decision (`named`) — so the pass
+ * renders once to MEASURE — the renderer records each such break it takes, at its true column, with every decision
+ * around it resolved as the emit render will — and then REWRITES each node to the layout its break asked for. The
+ * render-twice model `CollapsePass` uses, for the same reason: the choice depends on a column only the renderer knows.
+ * A committed layout can move a break the measure saw at another column (a call that opens around a comprehension
+ * pushes a literal in it past the limit), so the committed layout is measured again until a round takes no new break
+ * (`MEASURE_ROUNDS` at most); a break taken once stays taken. Two limits remain: the measure runs BEFORE the collapse
+ * pass, so a collapse that later moves a column can in principle fire a still-live break the measure did not see; and
+ * each alternative forces only its own break, so when a list and a node nested in it both break, only the outermost is
+ * forced and the rest stay live decisions. Neither reproduced over the multi-break and collapse-context sweeps.
  */
 @:nullSafety(Strict)
 final class BreakCommits {
 
-	/** `doc` with every `BreakCommit` resolved, or `doc` itself when it holds none. */
+	/** The most measure renders `resolve` runs: each one past the first only follows a layout the one before committed. */
+	private static inline final MEASURE_ROUNDS: Int = 4;
+
+	/**
+	 * `doc` with every `BreakCommit` resolved, or `doc` itself when it holds none. A layout one round committed can move a
+	 * break the round before saw at another column (a list that opens pushes a literal in it past the limit), so the
+	 * committed layout is measured again, and resolved again from `doc` with every break taken so far, until a round
+	 * takes no new break.
+	 */
 	public static function resolve(doc: Doc, width: Int, indentChar: IndentChar, tabWidth: Int, indentSize: Int): Doc {
 		if (nested(doc).length == 0) return doc;
-		final taken: Array<{ node: Doc, crosses: Bool, ?indent: Int }> = [];
-		// The measure render's text is not the answer; the breaks it records in `taken` are.
-		Renderer.render(doc, width, indentChar, tabWidth, indentSize, '\n', false, false, -1, taken); // noqa: unused-return-value
 		final tokens: Array<BreakToken> = [];
-		for (e in taken) switch e.node {
-			case LeadingBreak(_, _, token) if (token != null):
-				tokens.push(token);
-			case _:
+		var measured: Doc = doc;
+		for (_ in 0...MEASURE_ROUNDS) {
+			if (!tookNewBreaks(measured, width, indentChar, tabWidth, indentSize, tokens)) break;
+			measured = commit(doc, tokens, new DocIdentityMap());
 		}
-		return commit(doc, tokens, new DocIdentityMap());
+		return measured == doc ? commit(doc, tokens, new DocIdentityMap()) : measured;
 	}
 
 	/**
@@ -138,6 +145,68 @@ final class BreakCommits {
 	 */
 	public static inline function committed(bare: Doc, source: Doc): Doc {
 		return BreakCommit(bare, source, null);
+	}
+
+	/**
+	 * `body` with its own width decision offered as the next rewrite reads it back, or `body` itself when it is not wholly
+	 * one of the decisions `decisionMapped` reads. The decision stays where it was, with a `BreakMark` on its break side;
+	 * around it a `BreakCommit` on the same token holds the broken body as that rewrite reads the newlines it printed (a
+	 * source-multi-line literal, `committed(brk, BodyGroup(brk))`). Every walker keeps reading the decision until the
+	 * measure render shows it breaking, and then every host around it — a list measuring its items, the item's own
+	 * first line — reads the broken body the next rewrite will read.
+	 */
+	public static function named(body: Doc): Doc {
+		return decisionMapped(body, (brk, rebuild) -> {
+			final token: BreakToken = new BreakToken();
+			BreakCommit(committed(brk, BodyGroup(brk)), rebuild(BreakMark(brk, token)), token);
+		}) ?? body;
+	}
+
+	/**
+	 * `body` with the width decision it wholly is — `IfFirstLineExceeds(n, brk, flat)` or
+	 * `GroupWithRestProbe(IfBreak(brk, flat))` behind `WrapBoundary` / one-element `Concat` wrappers, the shapes an object
+	 * literal's own wrap rule emits — replaced by `f(brk, rebuild)`, where `rebuild(b)` is that decision with `b` for its
+	 * break side; `null` when `body` is anything else.
+	 */
+	public static function decisionMapped(body: Doc, f: (brk:Doc, rebuild:Doc -> Doc) -> Doc): Null<Doc> {
+		return switch body {
+			case IfFirstLineExceeds(n, brk, flat):
+				f(brk, b -> IfFirstLineExceeds(n, b, flat));
+			case GroupWithRestProbe(IfBreak(brk, flat)):
+				f(brk, b -> GroupWithRestProbe(IfBreak(b, flat)));
+			case WrapBoundary(inner):
+				final mapped: Null<Doc> = decisionMapped(inner, f);
+				mapped == null ? null : WrapBoundary(mapped);
+			case Concat([inner]):
+				final mapped: Null<Doc> = decisionMapped(inner, f);
+				mapped == null ? null : Concat([mapped]);
+			case _:
+				null;
+		};
+	}
+
+	/**
+	 * Renders `doc` to measure and appends to `tokens` every break it takes (a `LeadingBreak` or a `BreakMark`) that
+	 * `tokens` does not hold yet; `true` when it appended one.
+	 */
+	private static function tookNewBreaks(
+		doc: Doc, width: Int, indentChar: IndentChar, tabWidth: Int, indentSize: Int, tokens: Array<BreakToken>
+	): Bool {
+		final taken: Array<{ node: Doc, crosses: Bool, ?indent: Int }> = [];
+		// The measure render's text is not the answer; the breaks it records in `taken` are.
+		Renderer.render(doc, width, indentChar, tabWidth, indentSize, '\n', false, false, -1, taken); // noqa: unused-return-value
+		var added: Bool = false;
+		for (e in taken) {
+			final token: Null<BreakToken> = switch e.node {
+				case LeadingBreak(_, _, token): token;
+				case BreakMark(_, token): token;
+				case _: null;
+			};
+			if (token == null || tokens.contains(token)) continue;
+			tokens.push(token);
+			added = true;
+		}
+		return added;
 	}
 
 }

@@ -4423,3 +4423,53 @@ decided the question; it may not become a record of runs.
   `Context.warning` read as a `$type`, the compiler's `AbGeneric.T` for a type parameter, and a definition or use whose
   binding the reference walk does not resolve by scope (a member reached bare, a type name) — each is now a refusal the
   harness counts UNSCORED, never a match — branch `feat/infra-N56`
+
+## N52b (2026-10-19): an `#if` branch literal's break is named; the measure follows the layout it committed
+
+- An object literal that a branch of an expression-scope `#if` holds on the keyword's line breaks GLUED, by its own width
+  decision (`WrapBoundary(IfFirstLineExceeds(..))` / `GroupWithRestProbe(IfBreak(..))`). A list around the `#if` (a
+  comprehension's brackets, a call's arguments) used to lay itself out from the flat item, and the next write, reading the
+  broken literal back as a source-multi-line one (`BodyGroup`), laid the list out by the multi-line-item rules: one write
+  late, on main too (`x_condcomp` 626 drifting files of the 91,000-file harness, plus calls, nested calls, chains,
+  lambdas, parens and `#elseif` bodies: ~5,800 more in its `in6` templates).
+- DESIGN: a new Doc ctor, `BreakMark(inner, token)`, not a token field on the width decision. It sits on the decision's
+  BREAK side, renders `inner` and nothing else, every walker reads it transparent (each switch got the arm its
+  `ConditionalMarkerDecrease` / `CollapseProbe` siblings have — 40 switches, the exhaustive ones found by the compiler);
+  the measure render records it when it renders it, i.e. when the decision takes its break side. A token field on
+  `IfFirstLineExceeds` / `IfBreak` would have been silent at every rebuild site that does not copy it (`D.mapChildren`,
+  `WrapList.groupifyShared`, the collapse rewrite), and would need a second field for the `IfBreak` shape; the ctor is
+  rebuilt keeping its token in both rebuild walkers, which `testARebuiltMarkKeepsItsToken` / arm
+  `M-BREAKMARK-REBUILD-FRESH-TOKEN` pin. `LeadingBreak` was not reused: it renders a hardline.
+- `BreakCommits.named(body)` wraps the decision ITSELF in `BreakCommit(committed(brk, BodyGroup(brk)), decision-with-mark,
+  token)`: the read-back form the next write builds, behind the same token. Every list around it already offers one
+  alternative per nested token (`WrapList.emit` + `outermostPerToken`), so no list code changed, and a host that is not a
+  list (an assignment) just gets the read-back literal when it breaks. The recogniser is positive twice over: the site is
+  `WriterPolicyLowering.nestBodyOnSourceNewlineWrap`, whose only consumers are the three expression-scope `#if` body
+  fields (`HxConditionalExpr.expr` / `elseExpr`, `HxElseifExpr.expr`), and only its SAME-line arm; the Doc shapes are the
+  two `BodyAllman` already rewrote (`decisionMapped`, now shared by both — the walker moved out of `BodyAllman`).
+- NOT under `sameLine.conditionalExprFit`: there the region is its own fit group whose directive seams also break, and the
+  next write reads those seams back as source newlines, so the literal alone is not what it reads. Naming it there changed
+  21 files main settles in one write (tm config, k 80-100); arm `M-BREAKMARK-FIT-NAMED` pins the exclusion. The fit-mode
+  residue (tm: `z_condchain` 78, `z_condcall2` 74, `z_condelseif` 4) stays open.
+- `BreakCommits.resolve` measures again: the layout one round committed can move a break the round before saw at another
+  column (a call around a comprehension opens, pushing the second literal past the limit), so the committed layout is
+  rendered again and, while a round takes a new break, resolved again from the original Doc with every break taken so
+  far (at most `MEASURE_ROUNDS` = 4; a break taken once stays taken, which is what makes it terminate). A Doc where no
+  break is taken costs the same one measure render as before; one where a break is taken costs one more. Arm
+  `M-BREAKMARK-ONE-ROUND`.
+- The layout a list is offered for an Allman body break (`BodyAllman.tailBreak`) kept the glued placement's
+  `OptSpace(' ')` in front of the body; the hardline the Allman side opens with drops it at render, so the output never has
+  it, but a first line measured on that layout (the cuddled `[for (…)` head) counted it: at exactly the limit the first
+  write opened the bracket and the next, reading the Allman body back with no space before it, cuddled it (`u_fieldhead`
+  k=87, `w_innercomp` k=96/101, `u_longiter` k=37/62: 17 files, the pending-space skew of the N52 brief). The read-back
+  layout drops the space when the body is WHOLLY the decision (`decisionMapped` reads it); a body that only ENDS in one
+  (a nested `for`, whose own space precedes a keyword, not a break) keeps it — dropping it there glued `)for` in 680
+  files main settles in one write. Arms `M-ALLMAN-GLUED-SPACE-KEPT` / `-UNGUARDED`.
+- A list a source trailing separator forces into the break-mode cascade (`forceExceeds`: `<field>TrailPresent` and the
+  per-construct trailing-comma knob) went flat with no probe when a `noWrap` rule shadowing a break default answered the
+  forced cascade (`objectLiteral` `totalItemLength <= 140 -> noWrap` over `defaultWrap: onePerLine`). The unforced path
+  probes that flat layout's first line (`emitZeroThresholdAgree`), so the first write broke the literal and added its
+  comma, and the next write, forced by that comma, flattened it past the limit: main's fixed point overflowed (`t_filter`
+  under `trailingCommas.objectLiteralDefault: yes`, 142-162 columns at 140, 21 files; one more drifted). The forced path
+  now takes the same probe when it answers `NoWrap` with no threshold rule and no hardline; the 21 fixed points main
+  rewrote past the limit land within it (78-98). Arm `M-FORCED-NOWRAP-UNPROBED`.

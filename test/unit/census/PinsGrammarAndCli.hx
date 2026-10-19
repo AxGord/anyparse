@@ -150,6 +150,8 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAParenMeasuresTheBreakBare :: control :: M-PAREN-MEASURES-COMMITTED',
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAStaticallyBrokenLambdaBodyStaysGlued :: control :: M-BREAK-READBACK-BARE',
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testOneAlternativePerBreak :: control :: M-BREAK-EVERY-NODE',
+		'unit.grammar.haxe.HxComprehensionAllmanGluedSpaceTest#testANestedForKeepsItsSpace :: control :: M-ALLMAN-GLUED-SPACE-UNGUARDED',
+		'unit.grammar.haxe.HxComprehensionAllmanGluedSpaceTest#testOneWriteIsAFixedPointAtTheLimit :: control :: M-ALLMAN-GLUED-SPACE-KEPT',
 		'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAFlatItemThatStillOverflowsCuddlesItsHead :: control :: M-CUDDLE-FLATONLY',
 		'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAnItemOverflowingTheGlueColumnCuddlesAndDropsItsBody :: control :: '
 			+ 'M-CUDDLE-FALLBACK-INDENT',
@@ -181,6 +183,13 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testSemiAfterEndStaysBeforeTrailingComment :: control :: M-SEP-GLUE-OFF',
 		'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testTerminatedRegionGainsNoSemi :: control :: M-TRAILOPT-KEEP-PRESENCE-BLIND',
 		'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testThenBodyKeepsSemiAfterEnd :: control :: M-TRAILOPT-KEEP-OFF',
+		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testACallKeepsTheArgumentGluedInOneWrite :: control :: M-BREAKMARK-UNRECORDED',
+		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testAComprehensionCuddlesInOneWrite :: control :: M-BREAKMARK-SITE-OFF',
+		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testAFitRegionKeepsItsLadder :: control :: M-BREAKMARK-FIT-NAMED',
+		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testANestedListFollowsTheLayoutItCommitted :: control :: '
+			+ 'M-BREAKMARK-ONE-ROUND',
+		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testARebuiltMarkKeepsItsToken :: control :: M-BREAKMARK-REBUILD-FRESH-TOKEN',
+		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testOneWriteIsAFixedPointAtEveryWidth :: control :: M-BREAKMARK-UNREAD',
 		'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured :: control :: '
 			+ 'M-WORDOP-NO-RESTORE',
 		'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionCollapsesEmptyCatchBody :: control :: '
@@ -299,6 +308,7 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxNestingCostTest#testParserRunsEachNestedAtomOnce :: control :: '
 			+ 'M-PARSE-MEMO-REPLAY-OFF,M-PARSE-MEMO-STASHED-SKIP',
 		'unit.grammar.haxe.HxNestingCostTest#testWriterDocKeepsItsSharing :: control :: M-GROUPIFY-SHARED-OFF',
+		'unit.grammar.haxe.HxObjectLitForcedNoWrapProbeTest#testOneWriteIsAFixedPointAtEveryWidth :: control :: M-FORCED-NOWRAP-UNPROBED',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAKeywordANewerHaxeAddedStillNamesAVersionGatedDeclaration :: control :: '
 			+ 'M-RESERVED-VERSIONED-REFUSED',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoFunctionParameterOrBinderName :: control :: '

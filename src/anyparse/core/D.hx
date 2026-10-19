@@ -134,7 +134,7 @@ class D {
 			case Empty: Empty;
 			case Text(_): d;
 			case Line(flat): flat == '\n' ? Empty : Text(flat);
-			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner): flatten(inner);
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), BreakMark(inner, _): flatten(inner);
 			case Group(inner), GroupWithRestProbe(inner): flatten(inner);
 			case BodyGroup(inner): flatten(inner);
 			case Concat(items): Concat([for (i in items) flatten(i)]);
@@ -197,6 +197,7 @@ class D {
 			case WrapBoundary(inner): WrapBoundary(f(inner));
 			case LeadingBreak(n, inner, token): LeadingBreak(n, f(inner), token);
 			case BreakCommit(brk, flat, token): BreakCommit(f(brk), f(flat), token);
+			case BreakMark(inner, token): BreakMark(f(inner), token);
 			case HardFlatten(inner): HardFlatten(f(inner));
 			case CollapseProbe(inner): CollapseProbe(f(inner));
 			case CollapseAddProbe(inner): CollapseAddProbe(f(inner));
