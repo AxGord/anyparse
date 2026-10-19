@@ -81,4 +81,63 @@ final class BreakCommits {
 		return out;
 	}
 
+	/**
+	 * `commits` (in `nested` order) keeping, for each `BreakToken`, only its FIRST node: the outermost one, whose `brk`
+	 * side already holds every list nested under it laid out for the same break. The nodes of one token resolve
+	 * together, so one alternative per token is the whole answer; offering one per node makes every list re-offer the
+	 * alternatives of each list nested in it, which grows the Doc exponentially with the nesting depth.
+	 */
+	public static function outermostPerToken(commits: Array<Doc>): Array<Doc> {
+		final kept: Array<Doc> = [];
+		final seen: Array<BreakToken> = [];
+		for (c in commits) switch c {
+			case BreakCommit(_, _, token) if (token != null && !seen.contains(token)):
+				seen.push(token);
+				kept.push(c);
+			case _:
+		}
+		return kept;
+	}
+
+	/**
+	 * `shape(inner)`, offered once more per break nested in `inner` — `shape` laid out with that break committed, and
+	 * every COMMITTED break (a token-less `BreakCommit`) read as its bare `brk` rather than as the source form a next
+	 * rewrite reads. For a host whose next rewrite does not measure that break at all: an expression paren keeps the
+	 * open/glued layout its own source line shape states, so its first write must measure the break as it always has,
+	 * or it settles on the other of its two fixed points.
+	 */
+	public static function followBare(inner: Doc, shape: Doc -> Doc): Doc {
+		var out: Doc = shape(inner);
+		for (c in outermostPerToken(nested(inner))) switch c {
+			case BreakCommit(brk, _, token) if (token != null):
+				out = BreakCommit(shape(bare(replaced(inner, c, brk))), out, token);
+			case _:
+		}
+		return out;
+	}
+
+	/** `d` with every committed break (a `BreakCommit` with no token) replaced by its bare `brk`. */
+	private static function bare(d: Doc): Doc {
+		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
+		function walk(n: Doc): Doc {
+			final hit: Null<Doc> = memo.get(n);
+			if (hit != null) return hit;
+			final out: Doc = switch n {
+				case BreakCommit(brk, _, null): walk(brk);
+				case _: D.mapChildren(n, walk);
+			};
+			memo.set(n, out);
+			return out;
+		}
+		return walk(d);
+	}
+
+	/**
+	 * A COMMITTED break: `source`, the layout the next rewrite reads from its own source and every walker reads, with
+	 * `bare` kept for `followBare`. A `BreakCommit` with no token, which no measure render can resolve to `brk`.
+	 */
+	public static inline function committed(bare: Doc, source: Doc): Doc {
+		return BreakCommit(bare, source, null);
+	}
+
 }

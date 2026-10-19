@@ -886,7 +886,7 @@ final class WriterBodyPolicyLowering {
 				? $writeCall
 				: null;
 			if (_bodyForAllman != null && anyparse.format.wrap.WrapList.flatLength(_bodyForAllman) == -1)
-				_dn(_cols, _dc([_dhl(), _bodyForAllman]))
+				_dn(_cols, _dc([_dhl(), anyparse.format.BodyAllman.asReadBack(_bodyForAllman)]))
 			else {
 				final _layoutForAllman: anyparse.core.Doc = $wrapExpr;
 				_bodyForAllman == null ? _layoutForAllman : anyparse.format.BodyAllman.gluedLayout(_cols, _layoutForAllman);

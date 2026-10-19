@@ -1,5 +1,6 @@
 package anyparse.format;
 
+import anyparse.core.BreakCommits;
 import anyparse.core.BreakToken;
 import anyparse.core.Doc;
 
@@ -45,6 +46,9 @@ final class BodyAllman {
 	/**
 	 * `d` with the body `gluedLayout` rewrote in its tail resolved to the break side, laid out as the real
 	 * `BodyFit.breakLayout` the next rewrite reads from its own source, or `null` when the tail carries no such body.
+	 * That rewrite wraps the literal it reads multi-line in a `BodyGroup`, which every width probe defers (an arrow
+	 * body's residual line, a method chain's glued tail, a call's argument widths), so the broken literal is that
+	 * `BodyGroup`, committed (`BreakCommits.committed`) beside its bare self for the one host that measures it bare.
 	 * The walk follows only the last non-`Empty` element of each `Concat`: the body sits at the tail of its construct,
 	 * and anything earlier belongs to the head.
 	 */
@@ -52,7 +56,7 @@ final class BodyAllman {
 		return switch d {
 			case Doc.IfFirstLineExceeds(_, Doc.LeadingBreak(cols, brk, token), _),
 				Doc.GroupWithRestProbe(Doc.IfBreak(Doc.LeadingBreak(cols, brk, token), _)) if (token != null):
-				{ brk: BodyFit.breakLayout(cols, brk), token: token };
+				{ brk: BodyFit.breakLayout(cols, BreakCommits.committed(brk, Doc.BodyGroup(brk))), token: token };
 			case Doc.WrapBoundary(inner):
 				final t: Null<{ brk: Doc, token: BreakToken }> = tailBreak(inner);
 				t == null ? null : { brk: Doc.WrapBoundary(t.brk), token: t.token };
@@ -62,6 +66,19 @@ final class BodyAllman {
 				t == null ? null : { brk: replacedAt(items, i, t.brk), token: t.token };
 			case _:
 				null;
+		};
+	}
+
+	/**
+	 * A body that already breaks (a forced hardline), as the next rewrite reads it back: that rewrite wraps the
+	 * literal it reads multi-line in a `BodyGroup`, so a body that is not one yet is committed beside it
+	 * (`BreakCommits.committed`). A body the source already wrote multi-line is that `BodyGroup` and comes back as is.
+	 */
+	public static function asReadBack(body: Doc): Doc {
+		return switch body {
+			case Doc.BodyGroup(_), Doc.WrapBoundary(Doc.BodyGroup(_)): body;
+			case Doc.WrapBoundary(inner): BreakCommits.committed(body, Doc.WrapBoundary(Doc.BodyGroup(inner)));
+			case _: BreakCommits.committed(body, Doc.BodyGroup(body));
 		};
 	}
 
