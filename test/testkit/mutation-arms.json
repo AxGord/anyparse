@@ -25701,8 +25701,8 @@
 			"name": "M-HELPER-ACCESSOR-ALLOWED",
 			"type": "anyparse.query.MoveToHelper",
 			"method": "accessedProperty",
-			"find": "else if (isGet ? member.hasGetter : member.hasSetter)\n\t\tproperty",
-			"replace": "else if (isGet ? member.hasGetter : member.hasSetter)\n\t\tnull",
+			"find": "(isGet ? member.hasGetter : member.hasSetter) ? property : null;",
+			"replace": "(isGet ? member.hasGetter : member.hasSetter) ? null : null;",
 			"note": "a property accessor moves into the helper, where `<param>.p` calls the accessor it used to implement"
 		},
 		{
@@ -26566,8 +26566,8 @@
 			"name": "M-ARGFIT-UNKNOWN-MISFITS",
 			"type": "anyparse.check.ArgumentTypes",
 			"method": "fit",
-			"find": "\t\tMayFit;",
-			"replace": "\t\tMisfits;",
+			"find": "if (a != null || p != null) return MayFit;",
+			"replace": "if (a != null || p != null) return Misfits;",
 			"note": "a type the fit cannot decide misfits, so a string an abstract takes through `@:from` reads as skipping it"
 		},
 		{
@@ -26622,8 +26622,8 @@
 			"name": "M-BINDER-OWNER-BINDINGS-OFF",
 			"type": "anyparse.check.OperandCallees",
 			"method": "memberCallParams",
-			"find": "\tmemberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);",
-			"replace": "\tmemberParams(binder, declared, [], 0, []);",
+			"find": ": memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);",
+			"replace": ": memberParams(binder, declared, [], 0, []);",
 			"note": "the receiver's type arguments bind nothing, so `Box<Use>.each`'s `T` stays unbound"
 		},
 		{
@@ -27205,6 +27205,86 @@
 			"find": "WriterOptFanout.statementListElemOpt(macro _writerOpt)",
 			"replace": "macro _writerOpt",
 			"note": "a case-body statement of an arrow-body switch argument bypasses the statement-list barrier and inherits the call-argument chain flag"
+		},
+		{
+			"name": "M-PIER-MERGE-ANY-VALUE",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (!marchable(values, s) || !s.mergeValueKinds.contains(values[0].kind)) return null;",
+			"replace": "if (!marchable(values, s)) return null;",
+			"note": "any repeated value merges, so two equal calls (or field reads typed under different narrowings) become one ternary branch"
+		},
+		{
+			"name": "M-PIER-MERGE-UNMARCHABLE",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (!marchable(values, s) || !s.mergeValueKinds.contains(values[0].kind)) return null;",
+			"replace": "if (!s.mergeValueKinds.contains(values[0].kind)) return null;",
+			"note": "a statement-like value merges into a ternary branch the pairwise march would refuse"
+		},
+		{
+			"name": "M-PIER-MERGE-COMMENT",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (comments.exists(tok -> tok.to > region.from && tok.from < region.to)) return null;",
+			"replace": "if (false) return null;",
+			"note": "a merge ignores comments in its region, and the rebuild drops them"
+		},
+		{
+			"name": "M-PIER-MERGE-ANY-COUNT",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (values.length != MERGED_VALUE_COUNT) return null;",
+			"replace": "if (values.length < MERGED_VALUE_COUNT) return null;",
+			"note": "a four-value run merges from its first two rungs and the terminal, dropping the third condition"
+		},
+		{
+			"name": "M-PIER-LEADING-AS-OUTER",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (valueText(values[1], source, comments) == repeated) return Leading;",
+			"replace": "if (false) return Leading;",
+			"note": "two leading branches with one value no longer merge by `||`"
+		},
+		{
+			"name": "M-PIER-REWRITES-FOLDED",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "rewritesChain",
+			"find": "return m.merge != null || m.writtenRungs >= MIN_CHAIN_RUNGS;",
+			"replace": "return true;",
+			"note": "every owned chain is rewritten, so a two-branch chain with a ternary tail becomes a three-branch value chain the author never wrote"
+		},
+		{
+			"name": "M-PIER-CLAIMSCHAIN-OWNS",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "claimsChain",
+			"find": "return m != null && rewritesChain(m);",
+			"replace": "return m != null;",
+			"note": "the chain claim answers ownership, so `redundant-else-after-return` loses its de-nest on a chain this rule leaves alone"
+		},
+		{
+			"name": "M-PIER-CASCADE-UNMERGED-REPORTED",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "walkCascades",
+			"find": "if (cascadeMatch(kids, i, source, comments, s)?.merge == null) continue;",
+			"replace": "if (cascadeMatch(kids, i, source, comments, s) == null) continue;",
+			"note": "an owned cascade that does not merge is reported, with no fix behind the finding"
+		},
+		{
+			"name": "M-PIER-OUTER-UNNEGATED",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergedEdit",
+			"find": "case Outer: NegationScan.negateConditionText(m.conds[0], source, s.negation, emit.logic, emit.types());",
+			"replace": "case Outer: text(source, m.pairs[0].cond);",
+			"note": "the outer merge keeps the first condition positive, inverting which branch returns what"
+		},
+		{
+			"name": "M-PIER-MERGE-NO-PARENS",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergedEdit",
+			"find": "if (i % 2 == 0) holes.push(new Span(at, at + piece.length));",
+			"replace": "if (false) holes.push(new Span(at, at + piece.length));",
+			"note": "no merged piece is a ParenGuard hole, so a ternary condition re-associates across the new `&&`"
 		},
 		{
 			"name": "M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED",
