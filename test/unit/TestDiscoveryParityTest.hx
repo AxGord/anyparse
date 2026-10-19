@@ -686,6 +686,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxEnumScopeEmptyLinesSliceTest',
 		'unit.grammar.haxe.HxExprForGuardGlueSliceTest',
 		'unit.grammar.haxe.HxExprIdentGuardSliceTest',
+		'unit.grammar.haxe.HxExprParenBrokenChainTest',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest',
 		'unit.grammar.haxe.HxExprParenObjectLitGlueTest',
 		'unit.grammar.haxe.HxExprSliceTest',

@@ -424,65 +424,36 @@ final class WriterKwRefLowering {
 		final keepOpenGate: Expr = wrapOpenNewlineExpr != null
 			? macro ($wrapOpenNewlineExpr && anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0)
 			: macro false;
+		// A pure `+`/`-` chain is pinned flat (`HardFlatten`) on the open side only while it CAN be one line: an
+		// operand that already broke (an array its rule lays out one item per line) leaves hardlines a force-flat
+		// region renders as bare newlines at column 0. Such a chain opens as it does under an `expressionWrapping`
+		// rule — the paren's indent and the chain's own breaks, still behind the paren's width probe.
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			final _wrapInner: anyparse.core.Doc = $innerDoc;
 			final _wrapTrail: anyparse.core.Doc = $trailDoc;
-			// ω-keep-chain (increment: opadd_chain_keep): when this expr
-			// paren is an operand of a `WrapMode.Keep` chain
-			// (`opt._keepFlatInner`, set on the leaf-operand opt at the
-			// chain emit), the kept chain preserves source line structure
-			// verbatim — its operand lines may exceed `lineWidth`. The
-			// inner paren must therefore stay GLUED `(<inner>)`
-			// UNCONDITIONALLY, NOT re-open via the width-driven
-			// `IfFullLineExceeds` probe below (which would force
-			// `(\n\tHardFlatten(inner)\n)`). Mirrors fork `keep2`'s
-			// `noLineEndBefore` lock on operand-interior boundaries.
-			// Byte-identical to the existing GLUED flat side, so a
-			// standalone expr paren (flag false) is byte-inert.
-			opt._keepFlatInner
-				? _dc([$leadDoc, _wrapInner, _wrapTrail])
-				: anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
-					? _dg(_dib($hardlineOpenShape, _dc([$leadDoc, _wrapInner, _wrapTrail])))
-					: $keepOpenGate
-						? _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail])
-						: anyparse.format.wrap.WrapList.isPureOpAddSubChain(_wrapInner)
-							? (
-								anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
-									? _dfle(opt.lineWidth + 1, _dc([
-										$leadDoc,
-										_dn(_cols, _dc([_dhl(), _wrapInner])),
-										_dhl(),
-										_wrapTrail
-									]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-									: _dfle(opt.lineWidth + 1, _dc([
-										$leadDoc,
-										_dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])),
-										_dhl(),
-										_wrapTrail
-									]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-							)
-							: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
+			final _parenShape: anyparse.core.Doc -> anyparse.core.Doc = (_wrapInner: anyparse.core.Doc) -> {
+				// ω-keep-chain (increment: opadd_chain_keep): when this expr
+				// paren is an operand of a `WrapMode.Keep` chain
+				// (`opt._keepFlatInner`, set on the leaf-operand opt at the
+				// chain emit), the kept chain preserves source line structure
+				// verbatim — its operand lines may exceed `lineWidth`. The
+				// inner paren must therefore stay GLUED `(<inner>)`
+				// UNCONDITIONALLY, NOT re-open via the width-driven
+				// `IfFullLineExceeds` probe below (which would force
+				// `(\n\tHardFlatten(inner)\n)`). Mirrors fork `keep2`'s
+				// `noLineEndBefore` lock on operand-interior boundaries.
+				// Byte-identical to the existing GLUED flat side, so a
+				// standalone expr paren (flag false) is byte-inert.
+				opt._keepFlatInner
+					? _dc([$leadDoc, _wrapInner, _wrapTrail])
+					: anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
+						? _dg(_dib($hardlineOpenShape, _dc([$leadDoc, _wrapInner, _wrapTrail])))
+						: $keepOpenGate
+							? _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail])
+							: anyparse.format.wrap.WrapList.isPureOpAddSubChain(_wrapInner)
 								? (
 									anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
-										? _dfle(opt.lineWidth + 1, _dc([
-											$leadDoc,
-											_dn(_cols, _dc([_dhl(), _wrapInner])),
-											_dhl(),
-											_wrapTrail
-										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-										: _dc([$leadDoc, _wrapInner, _wrapTrail])
-								)
-								: anyparse.format.wrap.WrapList.isTopLevelValueIf(_wrapInner)
-									&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
-									? _dfle(opt.lineWidth + 1, _dc([
-										$leadDoc,
-										_dn(_cols, _dc([_dhl(), _wrapInner])),
-										_dhl(),
-										_wrapTrail
-									]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-									: opt._parenInCondition
-										&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+										|| anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0
 										? _dfle(opt.lineWidth + 1, _dc([
 											$leadDoc,
 											_dn(_cols, _dc([_dhl(), _wrapInner])),
@@ -491,10 +462,46 @@ final class WriterKwRefLowering {
 										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
 										: _dfle(opt.lineWidth + 1, _dc([
 											$leadDoc,
-											_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
+											_dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])),
 											_dhl(),
 											_wrapTrail
-										]), _dc([$leadDoc, _wrapInner, _wrapTrail]));
+										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+								)
+								: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
+									? (
+										anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+											? _dfle(opt.lineWidth + 1, _dc([
+												$leadDoc,
+												_dn(_cols, _dc([_dhl(), _wrapInner])),
+												_dhl(),
+												_wrapTrail
+											]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+											: _dc([$leadDoc, _wrapInner, _wrapTrail])
+									)
+									: anyparse.format.wrap.WrapList.isTopLevelValueIf(_wrapInner)
+										&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+										? _dfle(opt.lineWidth + 1, _dc([
+											$leadDoc,
+											_dn(_cols, _dc([_dhl(), _wrapInner])),
+											_dhl(),
+											_wrapTrail
+										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+										: opt._parenInCondition
+											&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+											? _dfle(opt.lineWidth + 1, _dc([
+												$leadDoc,
+												_dn(_cols, _dc([_dhl(), _wrapInner])),
+												_dhl(),
+												_wrapTrail
+											]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+											: _dfle(opt.lineWidth + 1, _dc([
+												$leadDoc,
+												_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
+												_dhl(),
+												_wrapTrail
+											]), _dc([$leadDoc, _wrapInner, _wrapTrail]));
+			};
+			anyparse.core.BreakCommits.followBare($innerDoc, _parenShape);
 		};
 	}
 
