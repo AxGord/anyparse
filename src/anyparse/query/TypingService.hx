@@ -23,6 +23,12 @@ final class TypingService {
 	/** Every remembered answer of the service's declaration-keyed questions. */
 	public final cache: QueryCache = new QueryCache();
 
+	/** SIGNATURE: each declaration's supertype links, alias target and the arguments its chain passes to an ancestor. */
+	public final ancestors: AncestorTable;
+
+	/** SIGNATURE: whether a value of one plain type unifies with another (`tUnification.ml`). */
+	public final unification: Unification;
+
 	/** SIGNATURE: what a named type declares or inherits, and with what declared type, return type and visibility. */
 	public final members: MemberLookup;
 
@@ -36,8 +42,10 @@ final class TypingService {
 	public function new(
 		files: Array<FileInfo>, refs: TypeRefIndex, subtypes: SubtypeGraph, typeSyntax: TypeSyntaxReader, shape: RefShape
 	) {
-		members = new MemberLookup(refs, cache);
-		structural = new StructuralTypes(files, refs, subtypes, members, typeSyntax);
+		ancestors = new AncestorTable(refs, cache, typeSyntax);
+		unification = new Unification(ancestors, cache, refs);
+		members = new MemberLookup(refs, cache, ancestors, typeSyntax, shape.optionalValueTypeName);
+		structural = new StructuralTypes(files, refs, subtypes, members, typeSyntax, unification);
 		expectations = new ExpectedTypes(shape);
 	}
 

@@ -411,6 +411,8 @@ final class PinsCheckPToZ {
 		'unit.check.StringLiteralDupCheckTest#testReportOnlyIsDeclaredAndPointsAtExtractConstant :: control :: '
 			+ 'M-STRING-LITERAL-DUP-REASON-MUTE',
 		'unit.check.StringLiteralDupCheckTest#testSmallCollectionOfOnlyLiteralsIsATable :: control :: M-STRING-LITERAL-DUP-TABLE-ARITY',
+		'unit.check.StructuralConformanceProofTest#testANamesakeOfAnotherPackageRefutes :: control :: M-STRUCT-MUTABLE-SAME-DECL',
+		'unit.check.StructuralConformanceProofTest#testAReadOnlyStructureFieldTakesASubtype :: control :: M-STRUCT-READONLY-INVARIANT',
 		'unit.check.StructuralConformanceProofTest#testAliasedStructureMemberTypeStillPins :: control :: M-STRUCT-ALIAS-OPAQUE',
 		'unit.check.StructuralConformanceProofTest#testAnonStructureNominalStillPins :: control :: M-STRUCT-ANON-CLOSED',
 		'unit.check.StructuralConformanceProofTest#testDifferentDeclaredTypeDoesNotPin :: control :: M-STRUCT-NOMINAL-OPEN',
@@ -572,6 +574,7 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyConditionsTest#testANullTestOfALocalTheCheckChoseIsTheChecksAnswer :: control :: M-TS-NULL-LOCAL-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testAParameterHandedOnCarriesItsValue :: control :: '
 			+ 'M-TS-ARG-PARAM-UNREAD,M-TS-STATES-UNBOUND',
+		'unit.check.ThreadSafetyConditionsTest#testAPlainClassArgumentSkipsAnOptionalParameterOfAnUnrelatedClass :: control :: M-ARGFIT-PLAIN-OFF,M-UNIFY-CHAIN-OPEN',
 		'unit.check.ThreadSafetyConditionsTest#testAStoredValueAnUnresolvedCallMayRunKeepsTheAssignersContext :: control :: '
 			+ 'M-TS-STORE-SEALED-BLIND',
 		'unit.check.ThreadSafetyConditionsTest#testAStoredValueInvokedOnTheMainThreadIsReachedThroughTheInvoker :: control :: '

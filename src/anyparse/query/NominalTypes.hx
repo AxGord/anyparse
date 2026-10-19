@@ -7,6 +7,7 @@ import anyparse.query.NodeShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.TypeSyntax;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypingService.TypingHost;
 import anyparse.runtime.Span;
@@ -67,7 +68,7 @@ final class NominalTypes {
 		literal: (typeName, _) -> typeName,
 		self: indexSelf,
 		binding: (ident, c) -> TypeResolver.identBindingFrom(ident, c.root, c.shape),
-		bound: (from, c) -> c.chain.declaredTypeSources[from] ?? c.declaredTypes[from],
+		bound: (from, c) -> boundType(from, c.chain.declaredTypeSources[from] ?? c.declaredTypes[from], c),
 		initializer: (_, use, c) -> localInitializer(use, c.root, c.shape, c.chain.declaredTypeSources),
 		loopElement: forBindingElementTypeSource,
 		// the index resolves no call to a declaration (its call arc is the tabled statics), so it reads no callee's parameter
@@ -188,6 +189,25 @@ final class NominalTypes {
 	}
 
 	/**
+	 * `typeSource` as a read of an OPTIONAL declaration carries it — a parameter `?x: T`, a structure field `?a: T` or
+	 * `@:optional var b: T` — wrapped in `wrapper` (`RefShape.optionalValueTypeName`, Haxe `Null`: 4.3.7 types such a read as
+	 * `Null<T>`), unless it is one already (`?x: Null<T>` reads as `Null<T>`); unchanged with no wrapper.
+	 */
+	public static function optionalValueType(typeSource: String, wrapper: Null<String>, typeSyntax: TypeSyntaxReader): String {
+		return wrapper == null || outerNominalOf(typeSource, typeSyntax) == wrapper ? typeSource : '$wrapper<$typeSource>';
+	}
+
+	/**
+	 * Whether `typeSource` reads as ONE type a typing currency may answer with: one the grammar reads, holding no
+	 * conditional-compilation region (`#if lime Image #else Dynamic #end` is a different type per configuration) and no form
+	 * the model does not break down (a macro splice).
+	 */
+	public static function answerableType(typeSource: String, typeSyntax: TypeSyntaxReader): Bool {
+		final t: Null<TypeSyntax> = typeSyntax(typeSource);
+		return t != null && !t.descendants().exists(d -> d.shape.match(Conditional(_) | Other));
+	}
+
+	/**
 	 * The verbatim type-ARGUMENT sources of a generic application (`Map<String, Array<Int>>` →
 	 * `['String', 'Array<Int>']`), or null when `typeSource` is not a named type written with
 	 * arguments — a function type whose RESULT is generic (`(Int) -> Array<Int>`) included, and any
@@ -273,10 +293,13 @@ final class NominalTypes {
 		if (resolved != null) return resolved;
 		// The package-blind fallback never substitutes; in substitute mode it is only fed the
 		// root's NOMINAL, since a `Box<Item>` start source is not a name any member lookup matches.
-		if (rootType != null)
-			return pathFinalMemberTypeSource(
+		if (rootType != null) {
+			final blind: Null<String> = pathFinalMemberTypeSource(
 				path, substituteTypeArgs ? outerNominalOf(startType, index.typeSyntax) ?? startType : startType, index, wrappers
 			);
+			// the substituting caller types a value: a written type that is no one type (`#if` inside it) is no answer there
+			return substituteTypeArgs && blind != null && !answerableType(blind, index.typeSyntax) ? null : blind;
+		}
 		final firstSource: Null<String> = index.paths.resolvePathFinalMemberTypeSource(fromFile, path[0], [path[1]]);
 		if (firstSource == null) return null;
 		if (path.length == 2) return firstSource;
@@ -977,9 +1000,40 @@ final class NominalTypes {
 		final span: Null<Span> = node.span;
 		final decl: Null<TypeDeclMatch> = span == null ? null : TypeResolver.enclosingTypeDecl(c.root, span);
 		if (decl == null) return null;
-		if (!(c.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return decl.name;
+		if (!(c.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) {
+			// a generic type's `this` is the type applied to its own parameters (4.3.7: `Box<T>` inside `Box<T>`)
+			final params: Array<String> = c.index?.refs.findDeclaredType(c.file, decl.name)?.type.typeParamNames ?? [];
+			return params.length == 0 ? decl.name : '${decl.name}<${params.join(', ')}>';
+		}
 		final underlying: Null<Span> = decl.declNode.type?.span;
 		return underlying == null ? null : c.chain.source.substring(underlying.from, underlying.to);
+	}
+
+	/**
+	 * The type a read of the binding at `from` carries for the index host, its written type `written`: an optional
+	 * parameter's (`?x: T`, a node of `RefShape.optionalParamKind` starting at `from`) wrapped as an optional value
+	 * (`optionalValueType`), since 4.3.7 types a read of it as `Null<T>` with or without a default. Any other binding's as
+	 * written.
+	 */
+	private static function boundType(from: Int, written: Null<String>, c: IndexTyping): Null<String> {
+		final kind: Null<String> = c.shape.optionalParamKind;
+		// a written type the grammar does not read as one type (`#if lime Image #else Dynamic #end`) is no answer
+		return if (written == null || !answerableType(written, c.chain.typeSyntax))
+			null
+		else if (kind == null)
+			written
+		else if (startsKindAt(c.root, from, kind))
+			optionalValueType(written, c.shape.optionalValueTypeName, c.chain.typeSyntax)
+		else
+			written;
+	}
+
+	/** Whether a node of `kind` starts at `from` under `node`, descending only into the nodes whose range holds `from`. */
+	private static function startsKindAt(node: QueryNode, from: Int, kind: String): Bool {
+		final span: Null<Span> = node.span;
+		if (span != null && (from < span.from || from >= span.to)) return false;
+		if (span != null && span.from == from && node.kind == kind) return true;
+		return node.children.exists(child -> startsKindAt(child, from, kind));
 	}
 
 	/**

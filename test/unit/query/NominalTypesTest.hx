@@ -21,13 +21,12 @@ class NominalTypesTest extends Test {
 	private static final SOURCE: String = 'package p;\n\nclass Item {}\n\nclass Box<T> {\n\tpublic function new() {}\n'
 		+ '\tpublic function items(): Array<Item> return null;\n\tpublic function get(): T return null;\n'
 		+ '\tpublic function pick<K>(): K return null;\n\tpublic function plain() return null;\n}\n\n'
-		+ 'abstract Wrap(Array<Item>) {\n\tpublic function probeThis() return this;\n}\n\n'
-		+ 'class C {\n\tvar m: Map<String, Array<Int>>;\n\tvar b: Box<Item>;\n'
-		+ '\tfunction probeString() return \'x\';\n\tfunction probeInt() return 5;\n'
-		+ '\tfunction probeNew() return new p.Box(1);\n\tfunction probeSelf() return this;\n'
-		+ '\tfunction probeMap() return m;\n\tfunction probeItems() return b.items();\n'
-		+ '\tfunction probeGet() return b.get();\n\tfunction probePick() return b.pick();\n'
-		+ '\tfunction probePlain() return b.plain();\n}\n';
+		+ 'abstract Wrap(Array<Item>) {\n\tpublic function probeThis() return this;\n}\n\nclass C {\n'
+		+ '\tvar m: Map<String, Array<Int>>;\n\tvar b: Box<Item>;\n\tfunction probeString() return \'x\';\n'
+		+ '\tfunction probeInt() return 5;\n\tfunction probeNew() return new p.Box(1);\n'
+		+ '\tfunction probeSelf() return this;\n\tfunction probeMap() return m;\n'
+		+ '\tfunction probeItems() return b.items();\n\tfunction probeGet() return b.get();\n'
+		+ '\tfunction probePick() return b.pick();\n\tfunction probePlain() return b.plain();\n}\n';
 
 	@:pin('control')
 	@:killer('M-NOMINAL-LITERAL')
@@ -64,9 +63,8 @@ class NominalTypesTest extends Test {
 	@:pin('control')
 	@:killer('M-NOMINAL-RETURN-AGREE')
 	public function testDeclarationsWritingAReturnDifferentlyHaveNoSource(): Void {
-		final split: String = 'package p;\n\nclass D {\n#if a\n\tpublic function make(): Array<Int> return null;\n#else\n'
-			+ '\tpublic function make(): Array<String> return null;\n#end\n}\n\nclass C {\n\tvar d: D;\n'
-			+ '\tfunction probe() return d.make();\n}\n';
+		final split: String = 'package p;\n\nclass D {\n#if a\n\tpublic function make(): Array<Int> return null;\n#else\n\tpublic function '
+			+ 'make(): Array<String> return null;\n#end\n}\n\nclass C {\n\tvar d: D;\n\tfunction probe() return d.make();\n}\n';
 		Assert.isNull(sourceIn(split, 'probe'), 'one branch writes `Array<Int>`, the other `Array<String>`');
 	}
 
@@ -104,11 +102,10 @@ class NominalTypesTest extends Test {
 	@:pin('control')
 	@:killer('M-NOMINAL-LOCAL-INIT')
 	public function testALocalWrittenWithNoTypeHoldsItsInitializersType(): Void {
-		final text: String = 'package p;\n\nclass Item {}\n\nclass C {\n\tvar items: Array<Item>;\n'
-			+ '\tfunction probeLiteral() {\n\t\tvar s = \'x\';\n\t\treturn s;\n\t}\n'
-			+ '\tfunction probeField() {\n\t\tvar all = items;\n\t\treturn all;\n\t}\n'
-			+ '\tfunction probeTyped() {\n\t\tvar n: Float = 1;\n\t\treturn n;\n\t}\n'
-			+ '\tfunction probeChain() {\n\t\tvar a = items;\n\t\tvar b = a;\n\t\treturn b;\n\t}\n}\n';
+		final text: String = 'package p;\n\nclass Item {}\n\nclass C {\n\tvar items: Array<Item>;\n\tfunction probeLiteral() {\n'
+			+ '\t\tvar s = \'x\';\n\t\treturn s;\n\t}\n\tfunction probeField() {\n\t\tvar all = items;\n\t\treturn all;\n\t}\n'
+			+ '\tfunction probeTyped() {\n\t\tvar n: Float = 1;\n\t\treturn n;\n\t}\n\tfunction probeChain() {\n'
+			+ '\t\tvar a = items;\n\t\tvar b = a;\n\t\treturn b;\n\t}\n}\n';
 		Assert.equals('String', sourceIn(text, 'probeLiteral'), 'a literal initializer');
 		Assert.equals('Array<Item>', sourceIn(text, 'probeField'), 'a field initializer, arguments kept');
 		Assert.equals('Float', sourceIn(text, 'probeTyped'), 'the annotation wins over the initializer');
@@ -118,8 +115,84 @@ class NominalTypesTest extends Test {
 		Assert.equals('IdentExpr', use?.kind, 'the initializer node itself');
 	}
 
+	/**
+	 * A read of an optional parameter carries the language's optional-value type (4.3.7): `?x: Int` reads as `Null<Int>`
+	 * with or without a default, `?w: Null<Int>` as itself, a lambda's `?a: String` as `Null<String>`, and a parameter with a
+	 * default but no `?` as written.
+	 */
+	@:pin('control') @:killer('M-NOMINAL-OPTIONAL-PARAM')
+	public function testAnOptionalParameterReadsAsNullable(): Void {
+		final text: String = 'package p;\n\nclass C {\n\tfunction probeOpt(?x: Int) return x;\n'
+			+ '\tfunction probeDefault(y: Int = 3) return y;\n\tfunction probeBoth(?z: Int = 4) return z;\n'
+			+ '\tfunction probeWrapped(?w: Null<Int>) return w;\n\tfunction probeCallback(?cb: Int -> Void) return cb;\n}\n';
+		Assert.equals('Null<Int>', sourceIn(text, 'probeOpt'), '?x: Int');
+		Assert.equals('Null', nominalIn(text, 'probeOpt'), 'its nominal');
+		Assert.equals('Int', sourceIn(text, 'probeDefault'), 'a default with no `?`');
+		Assert.equals('Null<Int>', sourceIn(text, 'probeBoth'), 'a default with `?`');
+		Assert.equals('Null<Int>', sourceIn(text, 'probeWrapped'), 'not wrapped twice');
+		Assert.equals('Null<Int -> Void>', sourceIn(text, 'probeCallback'), 'a function type');
+	}
+
+	/**
+	 * A read of an optional STRUCTURE field carries the optional-value type, in each of its three spellings (`?a: T`,
+	 * `var ?b: T`, `@:optional var c: T`), while a required field and an interface's `@:optional` field read as written
+	 * (4.3.7: `i.e` of an `@:optional var e: Int` is `Int`).
+	 */
+	@:pin('control') @:killer('M-MEMBER-OPTIONAL-READ') @:killer('M-INDEX-OPTIONAL-FIELD')
+	public function testAnOptionalStructureFieldReadsAsNullable(): Void {
+		final text: String = 'package p;\n\ntypedef S = {\n\t?a: Int,\n\tvar ?b: String;\n\t@:optional var c: Float;\n\tvar d: Int;\n}\n\n'
+			+ 'interface I {\n\t@:optional var e: Int;\n}\n\nclass C {\n\tvar s: S;\n\tvar i: I;\n'
+			+ '\tfunction probeA() return s.a;\n\tfunction probeB() return s.b;\n\tfunction probeC() return s.c;\n'
+			+ '\tfunction probeD() return s.d;\n\tfunction probeE() return i.e;\n}\n';
+		Assert.equals('Null<Int>', sourceIn(text, 'probeA'), '?a: Int');
+		Assert.equals('Null<String>', sourceIn(text, 'probeB'), 'var ?b: String');
+		Assert.equals('Null<Float>', sourceIn(text, 'probeC'), '@:optional var c: Float');
+		Assert.equals('Int', sourceIn(text, 'probeD'), 'a required field');
+		Assert.equals('Int', sourceIn(text, 'probeE'), 'an interface field');
+	}
+
+	/**
+	 * A member declared with a supertype's type parameter reads as what the extends chain passes up (4.3.7): `Base<T>.item`
+	 * through `Mid<U> extends Base<Array<U>>` and `Leaf extends Mid<String>` is `Array<String>` — read bare, off `this`, off
+	 * a `Leaf` and off a `Mid<Int>`; inside a generic type its own parameter is the answer.
+	 */
+	@:pin('control') @:killer('M-ANCESTOR-ARGS-OFF') @:killer('M-MEMBER-READ-HOST-ARGS') @:killer('M-NOMINAL-SELF-PARAMS')
+	public function testAnInheritedMemberReadsThroughItsChainsArguments(): Void {
+		final text: String = 'package p;\n\nclass Base<T> {\n\tpublic var item: T;\n}\n\nclass Mid<U> extends Base<Array<U>> {}\n\n'
+			+ 'class Leaf extends Mid<String> {\n\tfunction probeBare() return item;\n\tfunction probeThis() return this.item;\n}\n\nclass '
+			+ 'Own<V> {\n\tvar v: V;\n\tfunction probeOwn() return v;\n\tfunction probeOwnThis() return this.v;\n\tfunction probeOwnSelf() return this;\n}\n\nclass C {\n\tvar '
+			+ 'leaf: Leaf;\n\tvar mid: Mid<Int>;\n\tfunction probePath() return leaf.item;\n\tfunction probeArgs() return mid.item;\n}\n';
+		Assert.equals('Array', nominalIn(text, 'probeBare'), 'a bare read in the subclass');
+		Assert.equals('Array<String>', sourceIn(text, 'probeThis'), 'off this');
+		Assert.equals('Array<String>', sourceIn(text, 'probePath'), 'off a Leaf');
+		Assert.equals('Array<Int>', sourceIn(text, 'probeArgs'), 'off a Mid<Int>');
+		Assert.equals('V', nominalIn(text, 'probeOwn'), 'the type\'s own parameter, bare');
+		Assert.equals('V', sourceIn(text, 'probeOwnThis'), 'and off this');
+		Assert.equals('Own<V>', sourceIn(text, 'probeOwnSelf'), 'a generic type\'s `this`: the type applied to its own parameters');
+	}
+
+	/**
+	 * A call whose declaration returns a type parameter — of the method or of its type — has no nominal: the parameter names
+	 * what each call binds, and the compiler's answer is that binding, never the parameter (`b.get()` of a `Box<Item>` is an
+	 * `Item`, `b.pick()` whatever `K` is inferred to). A written type the grammar does not read as one type is no answer either.
+	 */
+	@:pin('control') @:killer('M-NOMINAL-RETURN-PARAM-NAME') @:killer('M-NOMINAL-UNREADABLE-WRITTEN')
+	public function testATypeParameterReturnOrAnUnreadableTypeHasNoAnswer(): Void {
+		Assert.isNull(nominal('probeGet'), 'the type\'s parameter');
+		Assert.isNull(nominal('probePick'), 'the method\'s own parameter');
+		Assert.equals('Array', nominal('probeItems'), 'a concrete return still answers');
+		final text: String = 'package p;\n\nclass C {\n\tfunction probeLocal() {\n\t\tvar n: #if lime Int #else String #end = null;\n'
+			+ '\t\treturn n;\n\t}\n}\n';
+		Assert.isNull(sourceIn(text, 'probeLocal'), 'a local written under `#if`');
+	}
+
 	private static function nominal(fn: String): Null<String> {
 		final at: Probe = probeIn(SOURCE, fn);
+		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);
+	}
+
+	private static function nominalIn(text: String, fn: String): Null<String> {
+		final at: Probe = probeIn(text, fn);
 		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);
 	}
 

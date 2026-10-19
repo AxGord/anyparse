@@ -4474,6 +4474,38 @@ decided the question; it may not become a record of runs.
   now takes the same probe when it answers `NoWrap` with no threshold rule and no hardline; the 21 fixed points main
   rewrote past the limit land within it (78-98). Arm `M-FORCED-NOWRAP-UNPROBED`.
 
+## FU4 (2026-10-19): typer step T2 — the ancestor table, the unification of plain types, a member's READ type
+
+- every closure walk of `MemberLookup` resolved each `supertypesRaw` link again (`resolveTypeRef(raw, cur.file, …)`), and
+  three other places spelled "what a supertype chain passes to an ancestor's parameter" by SIMPLE name
+  (`SubtypeGraph.chainArguments`, `CallGraphGenerics`) or not at all (`MemberPathWalk.substitutedMemberSource`
+  substituted a DIRECTLY declared member only) → ONE `AncestorTable` on the typing service: each declaration's links
+  resolved once with the arguments they pass, its alias target, and `argumentsTo(start, host)` — `tUnification.ml`'s
+  `loop cs (List.map (apply_params c.cl_params tl) tls)` by DECLARATION, the first link reaching the ancestor in written
+  order. The walks read it (a pure move); `substitutedMemberSource` is deleted, its job is `MemberLookup.memberReadType`.
+  The call graph's simple-name chain stays: it keys types its own way and may run with no index — branch `feat/fu-FU4`
+- the type a READ of a member carries is not its written type: 4.3.7 types `Base<T>.item` read off a `Sub extends
+  Base<Int>` as `Int`, a structure's `?a: T` / `var ?b: T` / `@:optional var c: T` as `Null<T>` (an interface's
+  `@:optional var e: Int` stays `Int`), and a parameter `?x: T` as `Null<T>` with or without a default (`x: T = v` stays
+  `T`; `?x: Null<T>` is not wrapped twice) — verified with `$type` on `--interp` and `-js`. The facts harness read 4901
+  (anyparse) / 996 (client) nominal answers that left the wrapper out and 232 client answers naming an ancestor's parameter →
+  `memberReadType` binds the declaring type's parameters through the chain and wraps an optional structure field
+  (`MemberInfo.optional`, recorded by the index); the index host wraps an optional parameter
+  (`RefShape.optionalValueTypeName` / `optionalFieldMetaName`). Every consumer reads the wrapper exactly as it reads one
+  written by hand — branch `feat/fu-FU4`
+- "the compiler's answer or Unknown": a call whose declaration returns a type parameter of the method or of its type now
+  has no nominal (`returnNominalWalk`), where it answered the parameter's NAME (`Std.downcast` → `S`); a written type that
+  is no one type (`#if lime Image #else Dynamic #end`, a macro splice) is no answer (`NominalTypes.answerableType`).
+  Inferring what a call binds its method's parameters to is overload / argument typing, step T5 — branch `feat/fu-FU4`
+- `Unification` memoizes `unify` over PLAIN types only (a class, an interface or an enum with no type parameter, through
+  plain aliases, not under `#if`), keyed by the pair: itself `Fits`, an ancestor its chain reaches `Fits`, an enum against
+  anything else `Misfits`, a class or interface whose whole chain resolves without reaching the other `Misfits`, all else
+  `MayFit` (abstract casts are step T4). Consumers: `ArgumentTypes.fit` (two plain types were always `MayFit`, so an
+  argument of an unrelated class still bound an optional parameter the compiler skips) and
+  `StructuralTypes.memberCouldUnify`, which compared nominals by SIMPLE name and invariantly for every member: a
+  read-only structure member (`final`, a method) unifies covariantly in the compiler (`{final x:Base}` accepts `var
+  x:Sub`), and two namesakes of two packages are two types — branch `feat/fu-FU4`
+
 ## FU11 (2026-10-19): a statement list is a barrier for the call-argument chain flag
 
 - A leading-break call stamps `_callArgChainNest` on each argument's opt so a chain that IS the argument drops its own

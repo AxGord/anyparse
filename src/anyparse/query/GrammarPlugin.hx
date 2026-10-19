@@ -1939,6 +1939,17 @@ typedef RefShape = {
 	@:optional var restParamKind: String;
 
 	/**
+	 * The type the language gives the VALUE of an optional declaration — a parameter of `optionalParamKind`, or a structure
+	 * field of that kind or carrying `optionalFieldMetaName` (Haxe `Null`: 4.3.7 types a read of `?x: T` as `Null<T>` with or
+	 * without a default, `?x: Null<T>` as itself, a structure's `?a: T` / `@:optional var b: T` as `Null<T>`, while a class or
+	 * interface field carrying the annotation keeps `T`). The typing service wraps such a read in it. Optional; unset wraps nothing.
+	 */
+	@:optional var optionalValueTypeName: String;
+
+	/** The annotation that makes a structure field optional (Haxe `@:optional`), beside the `optionalParamKind` form. Optional. */
+	@:optional var optionalFieldMetaName: String;
+
+	/**
 	 * How the language runs code no call site names, and what a reachability analysis may assume about code it reads:
 	 * implicit calls and conversions, reflection, pure library calls, fresh values, modelled kinds (`ExecutionShape`).
 	 * Nested so this structure stays within the constructor arity a static target allows. Optional; unset reads as

@@ -74,6 +74,9 @@ typedef MemberSeams = {
 	final optionalParamKind: Null<String>;
 
 	final restParamKind: Null<String>;
+
+	/** The annotation that makes a structure field optional (`RefShape.optionalFieldMetaName`), null for a grammar naming none. */
+	final optionalFieldMetaName: Null<String>;
 	final functionKinds: Array<String>;
 
 	/** The FIELD member kinds (`RefShape.fieldDeclKinds`) — the only members an initializer is recorded for. */
