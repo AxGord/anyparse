@@ -20479,8 +20479,8 @@
 			"name": "M-TS-WILD-MAYBE",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "bindingsOf",
-			"find": "if (answer.match(Unreadable(_)))\n\t\t\t\tout.unlisted.push(binding)",
-			"replace": "if (answer.match(Unreadable(_)))\n\t\t\t\t{}",
+			"find": "if (answer.match(Unreadable(_))) {\n\t\t\t\tout.unlisted.push(binding);",
+			"replace": "if (answer.match(Unreadable(_))) {\n\t\t\t\t{}",
 			"note": "a wildcard of a package nothing lists supplies no candidate"
 		},
 		{
@@ -21334,7 +21334,7 @@
 			"name": "M-TS-LOOP-THROUGH",
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
-			"find": "written: throughParams(written, g.nodes[target]?.typeName, source, type, currentType),",
+			"find": "written: throughParams(written, g.nodes[target]?.typeName, valueSource, type, currentType),",
 			"replace": "written: written,",
 			"note": "a container's type parameter in what its iterator yields is not bound by the value's argument"
 		},
