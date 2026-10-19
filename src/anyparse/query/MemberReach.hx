@@ -1705,7 +1705,7 @@ final class MemberReach {
 		final view: Null<FactsView> = _scope.facts;
 		if (view == null) return false;
 		final files: Array<String> = [node.file].concat([for (d in g.declarationsOf(node.id)) d.file]).concat(g.initializerFiles(node.id));
-		final file: Null<String> = files.find(f -> view.keyOf(f) == key);
+		final file: Null<String> = files.find(path -> view.keyOf(path) == key);
 		return file != null && _touches.onSelf(g, file, f.at.span, f.field);
 	}
 

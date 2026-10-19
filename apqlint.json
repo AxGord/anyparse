@@ -221,6 +221,9 @@
 		"return-reassign-ternary": {
 			"enabled": true
 		},
+		"shadowing-parameter": {
+			"enabled": true
+		},
 		"shorten-type-ref": {
 			"enabled": true
 		},

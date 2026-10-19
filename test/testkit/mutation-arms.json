@@ -27609,6 +27609,20 @@
 			"method": "openTail",
 			"force": "true",
 			"note": "any unterminated bare branch takes an appended terminator, a conditional-compilation region included, whose terminator its parent owns"
+		},
+		{
+			"name": "M-SHADOWING-PARAM-NO-RENAME",
+			"type": "anyparse.check.ShadowingLocal",
+			"method": "paramFix",
+			"force": "Declined('mutated')",
+			"note": "no shadowing parameter is renamed, so `(item:DiskSystemItemData) -> …` over a local `item` stays a finding although the rename is binder-proven"
+		},
+		{
+			"name": "M-SHADOWING-PARAM-ANY-TYPE",
+			"type": "anyparse.check.ShadowingLocal",
+			"method": "typeNamedLocal",
+			"force": "'renamed'",
+			"note": "any written type names a replacement, `Null<Array<Item>>` and `String` included, so a parameter is renamed to a name no type gave it"
 		}
 	]
 }

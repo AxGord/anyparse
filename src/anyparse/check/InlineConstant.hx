@@ -544,7 +544,7 @@ final class InlineConstant implements Check {
 		// The unreadable half cannot take part in the count: a file the parser could not read has no
 		// literal the self-name test could subtract, so its bytes mentioning the name is the whole
 		// answer — the same word-boundary proof `runtimeName` makes for the non-counting gate.
-		if (reflected.unreadable.exists(source -> RawSourceScan.mentionsWord(source, name))) return true;
+		if (reflected.unreadable.exists(unreadable -> RawSourceScan.mentionsWord(unreadable, name))) return true;
 		final count: Int = reflected.whole.count(s -> s == name);
 		if (count == 0) return false;
 		final self: Int = ownValueIsName(name, init, source, seams.stringFold) ? 1 : 0;

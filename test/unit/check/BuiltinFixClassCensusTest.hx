@@ -112,7 +112,6 @@ class BuiltinFixClassCensusTest extends Test {
 			'owned-types',
 			'possible-null-dereference',
 			'shadowing-case-binder',
-			'shadowing-parameter',
 			'string-literal-dup',
 			'swallowed-exception',
 			'thread-safety',
