@@ -31,6 +31,18 @@ class D {
 	/** Wraps `inner` as a unit that the renderer will try to flatten. */
 	public static inline function group(inner: Doc): Doc return Group(inner);
 
+	/**
+	 * omega-group-rest-probe: `group`, or its rest-aware twin `GroupWithRestProbe` when
+	 * `restAware`. A plain `Group` decides its fit on `col + flatWidth` alone, blind
+	 * to what follows on the same physical line (a statement `;`, an enclosing `)`,
+	 * the space after `=`); the twin subtracts that rest from the budget at render
+	 * time, matching the fork's `lengthAfter` bias. The one spelling of that choice:
+	 * `WrapList`'s `@:fmt(groupRestProbe)` Stars and `BinaryChainEmit`'s rest-aware
+	 * chains both build through it.
+	 */
+	public static inline function groupOrRestProbe(inner: Doc, restAware: Bool): Doc
+		return restAware ? GroupWithRestProbe(inner) : Group(inner);
+
 	/** Concatenates several docs in order. */
 	public static inline function concat(items: Array<Doc>): Doc return Concat(items);
 
