@@ -2234,8 +2234,8 @@
 			"name": "M-MOVE-CANONICALISE-ALWAYS",
 			"type": "anyparse.query.cli.command.MoveCommand",
 			"method": "canonicalMoveChange",
-			"find": "\tif (!CanonicalEdit.isWriterCanonical(original, plugin, opts)) return change;",
-			"replace": "",
+			"find": "return CanonicalEdit.isWriterCanonical(original, plugin, opts) ? fixedPointChange(cmd, change, plugin, opts) : change;",
+			"replace": "return fixedPointChange(cmd, change, plugin, opts);",
 			"note": "a move canonicalises every file it writes, so a source that was already non-canonical on disk is reformatted by an edit that asked only for a splice"
 		},
 		{
@@ -25701,8 +25701,8 @@
 			"name": "M-HELPER-ACCESSOR-ALLOWED",
 			"type": "anyparse.query.MoveToHelper",
 			"method": "accessedProperty",
-			"find": "return (isGet ? member.hasGetter : member.hasSetter) ? property : null;",
-			"replace": "return null;",
+			"find": "else if (isGet ? member.hasGetter : member.hasSetter)\n\t\tproperty",
+			"replace": "else if (isGet ? member.hasGetter : member.hasSetter)\n\t\tnull",
 			"note": "a property accessor moves into the helper, where `<param>.p` calls the accessor it used to implement"
 		},
 		{
@@ -26512,8 +26512,8 @@
 			"name": "M-ARGFIT-UNKNOWN-MISFITS",
 			"type": "anyparse.check.ArgumentTypes",
 			"method": "fit",
-			"find": "sameNamedType(given.text, wanted, callerId, calleeId) ? Fits : MayFit;",
-			"replace": "sameNamedType(given.text, wanted, callerId, calleeId) ? Fits : Misfits;",
+			"find": "sameNamedType(given.text, wanted, callerId, calleeId))\n\t\tFits\n\telse\n\t\tMayFit;",
+			"replace": "sameNamedType(given.text, wanted, callerId, calleeId))\n\t\tFits\n\telse\n\t\tMisfits;",
 			"note": "a type the fit cannot decide misfits, so a string an abstract takes through `@:from` reads as skipping it"
 		},
 		{
@@ -26568,8 +26568,8 @@
 			"name": "M-BINDER-OWNER-BINDINGS-OFF",
 			"type": "anyparse.check.OperandCallees",
 			"method": "memberCallParams",
-			"find": ": memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);",
-			"replace": ": memberParams(binder, declared, [], 0, []);",
+			"find": "\tmemberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);",
+			"replace": "\tmemberParams(binder, declared, [], 0, []);",
 			"note": "the receiver's type arguments bind nothing, so `Box<Use>.each`'s `T` stays unbound"
 		},
 		{
