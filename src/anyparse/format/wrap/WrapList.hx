@@ -306,23 +306,16 @@ class WrapList {
 		keepInnerWhenEmpty: Bool, rules: WrapRules, ?options: WrapListOptions
 	): Doc {
 		final plain: Doc = emitList(open, close, sep, items, opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
-		inline function laidOut(i: Int, broken: Doc): Doc {
-			final with: Array<Doc> = items.copy();
-			with[i] = broken;
+		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return emitList(open, close, sep, with, opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
 		}
 		final flatSingle: Bool = items.length == 1 && flatLength(items[0]) >= 0;
 		final tail: Null<{ brk: Doc, token: BreakToken }> = flatSingle ? BodyAllman.tailBreak(items[0]) : null;
-		var out: Doc = tail == null ? plain : BreakCommit(laidOut(0, tail.brk), plain, tail.token);
+		final out: Doc = tail == null ? plain : BreakCommit(laidOut([tail.brk], 0), plain, tail.token);
 		// An object literal's field list is never wrapped: the literal is itself a body `BodyAllman` may still move,
 		// and its Doc has to stay the bare width decision `gluedLayout` and `tailBreak` read.
 		final offered: Bool = items.length == 1 ? flatSingle : open != '{';
-		if (offered) for (i => item in items) for (inner in BreakCommits.outermostPerToken(BreakCommits.nested(item, false))) switch inner {
-			case BreakCommit(brk, _, token) if (token != null):
-				out = BreakCommit(laidOut(i, BreakCommits.replaced(item, inner, brk)), out, token);
-			case _:
-		}
-		return out;
+		return offered ? BreakCommits.offerItemBreaks(items, out, laidOut) : out;
 	}
 
 	/**

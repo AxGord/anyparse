@@ -620,9 +620,13 @@ final class DocMeasure {
 	 * Introduced for the cuddled-link gate
 	 * (`WriteOptions.methodChainCuddledLinks`), where the closes-only
 	 * requirement additionally pins the ride-along point to a low column.
+	 *
+	 * `resolveForcedBreaks` reads a conditional whose flat side carries a forced
+	 * hardline on its BREAK side (as `breakTailCloseNest` does): what a host
+	 * laid out for a break committed inside `d` asks, as the next rewrite reads it.
 	 */
-	public static function endsWithForcedCloseLine(d: Doc): Bool {
-		return scanTail(d) == TailBreak;
+	public static function endsWithForcedCloseLine(d: Doc, resolveForcedBreaks: Bool = false): Bool {
+		return scanTailAt(d, 0, resolveForcedBreaks, null) == TailBreak;
 	}
 
 	/**
@@ -720,11 +724,6 @@ final class DocMeasure {
 				true;
 			case _: false;
 		};
-	}
-
-	/** The verdict-only, flat-slot reading of `scanTailAt` — the shape `endsWithForcedCloseLine` asks for. */
-	private static inline function scanTail(d: Doc): DocTailScan {
-		return scanTailAt(d, 0, false, null);
 	}
 
 	/** The leftmost visible character of `s`, or `-1` when `s` holds only whitespace. */
