@@ -4840,3 +4840,25 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   candidate, and admitting it rewrote two client files and three suite fixtures away from the fork.
 - Unarmed, equivalent by construction: the rebuild kind of the bool re-eval flip and of the fill forward glue (the
   flipped chain overflows by its call operand, the glued chain has no soft line left, so either group answers the same).
+
+## FU27 (2026-10-20) — a lone arrow-lambda argument whose expression body breaks: no writer change
+
+- Question (client `DiskSystemBase.localPathBeforeMove`): `_moveLocalItems.exists(` + `move ->` on its own line + the
+  broken `&&` body, while `_moveLocalItems.find(move ->` two lines above keeps the head glued. Measured against the
+  haxe-formatter fork (`0e8b54f`, two passes) with the client's `hxformat.json` beside each file: NOT a parity defect.
+- The split is the config's own: `callParameter` pins a lone argument with `noWrap` only while
+  `itemCount <= 1 && totalItemLength <= 100`. The `find` lambda is 99 chars (glued head, body on the next line); the
+  `exists` lambda is 141 (`fillLineWithLeadingBreak` breaks after `(`, the body breaks after `->`). Both writers draw
+  the line at the same place (a 94-char and a 101-char twin: glued in both, split in both), and both put `move ->` on
+  its own line in `return x.exists(...)` and in `final e = x.find(...)`. the client's "`itemCount >= 2` keeps a lone callback
+  glued" is about the two `onePerLine` rules and a BLOCK body (`iter(move -> {`): glued in both writers.
+- The client statement as is (inside `heldAt != null && … ? heldAt : null`) differs in the fork, which glues
+  `exists(move -> move.folder` and sets the lambda's `&&` operands at the outer statement's continuation indent - the
+  level of the outer `&&` operand and the `?`/`:` branches, so the inner chain reads as the outer one. Its own isolated
+  `return x.exists(...)` lays the same lambda out like anyparse; that is a context artifact of its opBool re-evaluation
+  passes, not a target.
+- Open (not head glue, not changed): inside that broken lambda body the fork puts the first `&&` operand alone
+  (`move.folder` / `&& heldAt.startsWith(…)` / …) where anyparse fills (`move.folder && heldAt.startsWith(…)`); the
+  same chain outside a lambda fills identically in both. The fork's fill seam reads like a decision taken before the
+  arrow break moved the body (evaluate-before / apply-after). Evidence:
+  `/Users/axg/dev/lab/ts-truth/infra-audit/FU27-fork-vs-anyparse.log` — branch `feat/fu-FU27`
