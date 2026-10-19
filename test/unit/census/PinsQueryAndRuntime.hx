@@ -924,6 +924,8 @@ final class PinsQueryAndRuntime {
 			+ 'M-REACH-CLASSPATH-DISPATCH,M-CARRY-CLASSPATH',
 		'unit.query.MemberReachTest#testAConstructedReceiverIsItsOwnType :: control :: M-TS-NEW-RECEIVER',
 		'unit.query.MemberReachTest#testAConversionOfATypedOperandRunsOnlyItsTypesMethod :: control :: M-REACH-TYPED-SITE',
+		'unit.query.MemberReachTest#testAConversionReadsEveryCopyOfOneLibraryType :: control :: M-REACH-HOMES-RECORDED,M-REACH-LIBRARY-HOMES,M-REACH-SHARED-ONE-TYPE',
+		'unit.query.MemberReachTest#testACopyWhoseCodeTheNodeDoesNotHoldStaysShared :: control :: M-REACH-ONE-TYPE-FOLDED,M-REACH-ONE-TYPE-EXTERN',
 		'unit.query.MemberReachTest#testAFieldInitializerRunsWhatItHoldsThoughItCallsNothing :: control :: '
 			+ 'M-GRAPH-EAGER-INIT,M-REACH-INIT-BRANCHES',
 		'unit.query.MemberReachTest#testALibraryReadOfTheMemberByItsNameIsATouch :: control :: M-REACH-LIB-ACCESS',
@@ -1023,6 +1025,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.MemberReachTest#testLibraryBodyIsReadOnDemand :: control :: M-REACH-LIBRARY-GROWTH',
 		'unit.query.MemberReachTest#testLibraryBudgetIsPerQuestion :: control :: M-REACH-QUESTION-BUDGET',
 		'unit.query.MemberReachTest#testLibraryCallHandedAnObjectIsNotPure :: control :: M-REACH-PURE-PARAMS',
+		'unit.query.MemberReachTest#testLibraryCodeTheWalkCannotReadIsNamed :: control :: M-REACH-UNREAD-NAMED',
 		'unit.query.MemberReachTest#testLibraryFileNoConfiguredBuildParsesIsNotInPlay :: control :: '
 			+ 'M-REACH-COMPILED-ONLY,M-REACH-ESCALATE-NEVER,M-REACH-ESCALATE-ALWAYS,M-REACH-ESCALATE-INCOMPLETE',
 		'unit.query.MemberReachTest#testLibraryGrowthPastTheCapIsUnknown :: control :: M-REACH-LIBRARY-BUDGET',
@@ -1071,6 +1074,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.MemberReachTest#testTargetCodeCanNameAFreshLocal :: control :: M-REACH-LOCAL-HAZARDS',
 		'unit.query.MemberReachTest#testTwoHopMutatorIsReached :: control :: M-REACH-TOUCHER-FOUND',
 		'unit.query.MemberReachTest#testTypeSharingItsSimpleNameIsUnknown :: control :: M-REACH-AMBIGUOUS',
+		'unit.query.MemberReachTest#testTypesOfTwoPackagesSharingANameStayShared :: control :: M-REACH-ONE-TYPE-PATHS',
 		'unit.query.MemberReachTest#testUnannotatedFreshLocalArrayIsNotACulprit :: control :: M-REACH-UNTYPED-FRESH-LOCAL',
 		'unit.query.MemberReachTest#testUnparsedLibraryFileSpellingTheDispatchIsUnknown :: control :: M-REACH-LIB-SKIP-OVERRIDE',
 		'unit.query.MemberReachTest#testUnparsedProjectFileNamingTheMemberIsUnknown :: control :: M-REACH-SKIP-PARSE',
