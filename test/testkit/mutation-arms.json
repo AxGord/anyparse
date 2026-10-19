@@ -27162,8 +27162,8 @@
 			"name": "M-COMMENT-REFLOW-CODE-SHAPED",
 			"type": "anyparse.query.SourceComments",
 			"method": "codeShapeRefusal",
-			"find": "if (!CommentProse.readsAsProse(prose))",
-			"replace": "if (false)",
+			"find": "else if (CommentProse.readsAsProse(prose))",
+			"replace": "else if (true)",
 			"note": "a line that does not read as prose (commented-out code, `name=\"value\"` markup) breaks at spaces like prose"
 		},
 		{

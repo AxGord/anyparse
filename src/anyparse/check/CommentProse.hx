@@ -110,47 +110,6 @@ final class CommentProse {
 		return !readsAsProse(text);
 	}
 
-	/** Whether `c` is one of the characters a section rule is drawn from. */
-	private static inline function isRuleChar(c: Int): Bool {
-		return SEPARATOR_CHARS.indexOf(String.fromCharCode(c)) >= 0;
-	}
-
-	/** Whether `c` may appear inside a Haxe identifier. */
-	private static inline function isIdentChar(c: Int): Bool {
-		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
-	}
-
-	/** Whether `c` may START a Haxe identifier. */
-	private static inline function isIdentStart(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
-	}
-
-	/** Whether every line is drawn only from rule characters and whitespace. */
-	private static function ruleCharsOnly(lines: Array<String>): Bool {
-		for (line in lines) for (i in 0...line.length) {
-			final c: Int = line.fastCodeAt(i);
-			if (c != ' '.code && c != '\t'.code && !isRuleChar(c)) return false;
-		}
-		return true;
-	}
-
-	/** `text` with every rule character replaced by a space. */
-	private static function stripRuleChars(text: String): String {
-		final buf: StringBuf = new StringBuf();
-		for (i in 0...text.length) {
-			final c: Int = text.fastCodeAt(i);
-			buf.addChar(isRuleChar(c) ? ' '.code : c);
-		}
-		return buf.toString();
-	}
-
-	/** The number of whitespace-separated words in `text`. */
-	private static function wordCount(text: String): Int {
-		var words: Int = 0;
-		for (part in text.trim().split(' ')) if (part.trim() != '') words++;
-		return words;
-	}
-
 	/**
 	 * Gate 7, stated POSITIVELY: whether `text` reads as prose. The rule converts what it can
 	 * recognise as English, rather than dodging a list of code shapes — a blacklist of
@@ -191,6 +150,47 @@ final class CommentProse {
 		final head: String = firstWord(bare);
 		return !CODE_HEAD_KEYWORDS.contains(head) && !(CONTROL_HEAD_KEYWORDS.contains(head) && opensBracket(bare.substr(head.length)))
 			&& !hasCodePunctuation(bare, text);
+	}
+
+	/** Whether `c` is one of the characters a section rule is drawn from. */
+	private static inline function isRuleChar(c: Int): Bool {
+		return SEPARATOR_CHARS.indexOf(String.fromCharCode(c)) >= 0;
+	}
+
+	/** Whether `c` may appear inside a Haxe identifier. */
+	private static inline function isIdentChar(c: Int): Bool {
+		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
+	}
+
+	/** Whether `c` may START a Haxe identifier. */
+	private static inline function isIdentStart(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
+	}
+
+	/** Whether every line is drawn only from rule characters and whitespace. */
+	private static function ruleCharsOnly(lines: Array<String>): Bool {
+		for (line in lines) for (i in 0...line.length) {
+			final c: Int = line.fastCodeAt(i);
+			if (c != ' '.code && c != '\t'.code && !isRuleChar(c)) return false;
+		}
+		return true;
+	}
+
+	/** `text` with every rule character replaced by a space. */
+	private static function stripRuleChars(text: String): String {
+		final buf: StringBuf = new StringBuf();
+		for (i in 0...text.length) {
+			final c: Int = text.fastCodeAt(i);
+			buf.addChar(isRuleChar(c) ? ' '.code : c);
+		}
+		return buf.toString();
+	}
+
+	/** The number of whitespace-separated words in `text`. */
+	private static function wordCount(text: String): Int {
+		var words: Int = 0;
+		for (part in text.trim().split(' ')) if (part.trim() != '') words++;
+		return words;
 	}
 
 	/**

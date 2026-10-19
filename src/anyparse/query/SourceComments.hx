@@ -1077,10 +1077,10 @@ final class SourceComments {
 		final prose: String = text.fastCodeAt(0) == '@'.code ? text.substring(firstSpace(text)) : text;
 		return if (text.indexOf('\t') > 0)
 			'a tab-aligned row'
-		else if (!CommentProse.readsAsProse(prose))
-			'code, not prose'
+		else if (CommentProse.readsAsProse(prose))
+			null
 		else
-			null;
+			'code, not prose';
 	}
 
 	/** The index of `text`'s first space, or its length when it has none. */

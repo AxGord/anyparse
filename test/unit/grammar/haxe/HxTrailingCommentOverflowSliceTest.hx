@@ -27,7 +27,6 @@ final class HxTrailingCommentOverflowSliceTest extends Test {
 	private static final CONFIG_KEEP: String = '{$BASE, "comments": {"trailingCommentOverflow": "keep"}}';
 	private static final CONFIG_COLLAPSE_ON: String = '{$BASE, "emptyLines": {"uniformStatementBlanks": "collapse"}, '
 		+ '"comments": {"trailingCommentOverflow": "above"}}';
-
 	private static final STMT_SRC: String =
 		'class C {\n\tfunction f() {\n\t\tfinal value:Int = compute(alpha, beta); // explains the computation\n\t}\n}';
 	private static final STMT_ABOVE: String = 'class C {\n\tfunction f() {\n\t\t// explains the computation\n'
