@@ -349,8 +349,7 @@ final class Clusters {
 	 */
 	private static function countResolvedSites(graph: CallGraph, memberIds: Array<String>): Int {
 		final coverageKinds: Array<EdgeKind> = [Call, Ref, New, Accessor];
-		var count: Int = 0;
-		for (e in graph.edges) if (coverageKinds.contains(e.kind) && memberIds.contains(memberRoot(e.from))) count++;
+		final count: Int = graph.edges.count(e -> coverageKinds.contains(e.kind) && memberIds.contains(memberRoot(e.from)));
 		return count;
 	}
 

@@ -91,7 +91,7 @@ using Lambda;
  * `var` becomes `final` only when the run holds EVERY write of the local. A write that survives
  * AFTER the run is normal for this shape -- it is what makes the single-construct rules refuse it in
  * the first place -- and the declaration then stays `var`, which is what the motivating site
- * (`macros/Lang.hx` in Tactics Manager) needs: its `tKey` is overwritten once more, further down,
+ * (`macros/Lang.hx` in a client project) needs: its `tKey` is overwritten once more, further down,
  * behind a null test.
  */
 @:nullSafety(Strict)
@@ -285,8 +285,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Match> {
 		final writes: Array<Span> = [for (h in Refs.find(name, root, s.shape)) if (h.kind == RefKind.Write) h.span];
-		var inside: Int = 0;
-		for (w in writes) if (w.from >= region.from && w.from < region.to) inside++;
+		final inside: Int = writes.count(w -> w.from >= region.from && w.from < region.to);
 		if (inside != leafTotal) return null;
 		// A write that OUTLIVES the run keeps the local mutable -- the shape the single-construct
 		// rules refuse, and the one the motivating site has.

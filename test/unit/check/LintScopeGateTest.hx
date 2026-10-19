@@ -12,6 +12,8 @@ import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
+
 /**
  * The SCOPE half of the reflection gate — the one input that decides whether a "nothing
  * reflects this name" answer is evidence or an artefact of how the lint was invoked.
@@ -108,8 +110,7 @@ class LintScopeGateTest extends Test {
 	public function testAFileInBothHalvesIsScannedOnce(): Void {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Use.hx', source: RESOLVER }];
 		final surface: ReflectionSurface = withScope(report, report, []);
-		var seen: Int = 0;
-		for (s in surface.whole) if (s == 'pkg.Align') seen++;
+		final seen: Int = surface.whole.count(s -> s == 'pkg.Align');
 		Assert.equals(1, seen);
 	}
 

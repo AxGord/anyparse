@@ -10,6 +10,7 @@ import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -335,8 +336,7 @@ final class CliAtomicWriteSliceTest extends Test {
 
 	/** Staging temporaries still sitting in `dir` — every write path is supposed to remove its own. */
 	private static function stagedLeftovers(dir: String): Int {
-		var left: Int = 0;
-		for (entry in FileSystem.readDirectory(dir)) if (entry.endsWith('.apq-tmp')) left++;
+		final left: Int = FileSystem.readDirectory(dir).count(entry -> entry.endsWith('.apq-tmp'));
 		return left;
 	}
 	#end

@@ -519,8 +519,7 @@ final class NullFlow {
 	 * A node with no span reports multi (conservative).
 	 */
 	public static function isMultiBinding(node: QueryNode, continuationKinds: Array<String>, declTypeChildKinds: Array<String>): Bool {
-		var exprChildren: Int = 0;
-		for (c in node.children) if (!declTypeChildKinds.contains(c.kind)) exprChildren++;
+		final exprChildren: Int = node.children.count(c -> !declTypeChildKinds.contains(c.kind));
 		return exprChildren > 1 || node.span == null || SourceText.isMultiDeclarator(node, continuationKinds);
 	}
 

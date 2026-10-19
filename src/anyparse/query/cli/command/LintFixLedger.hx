@@ -57,8 +57,7 @@ final class LintFixLedger {
 	 */
 	public static function skippedTail(noted: Array<String>, changedFiles: Array<String>): String {
 		if (noted.length == 0) return '';
-		var partly: Int = 0;
-		for (file in noted) if (changedFiles.contains(file)) partly++;
+		final partly: Int = noted.count(file -> changedFiles.contains(file));
 		return partly == 0
 			? ', ${noted.length} file(s) skipped'
 			: ', ${noted.length} file(s) skipped ($partly partly fixed first, then refused)';

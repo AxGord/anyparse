@@ -158,6 +158,9 @@
 				"CallGraph <= 67 members: its members are the public question surface 86 files read (C2 and B9 measured it); N13 moved `collectEdges` out (`CallGraphEdges.collect`) and kept that surface unchanged on purpose."
 			]
 		},
+		"prefer-count": {
+			"enabled": true
+		},
 		"prefer-doc-comment": {
 			"enabled": true
 		},

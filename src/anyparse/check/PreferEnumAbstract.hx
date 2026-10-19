@@ -735,8 +735,7 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	/** Whether two or more of `members` feed a single sink — the interchangeable-use signal. */
 	private static function interchangeable(members: Array<String>, sinks: Map<String, Array<String>>): Bool {
 		for (ms in sinks) {
-			var count: Int = 0;
-			for (m in members) if (ms.contains(m)) count++;
+			final count: Int = members.count(m -> ms.contains(m));
 			if (count >= 2) return true;
 		}
 		return false;
