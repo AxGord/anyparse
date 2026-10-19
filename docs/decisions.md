@@ -4757,3 +4757,28 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   reported.
 - Known detection gap, not changed: an else-if chain with no final `else` (`if (a) { x; } else if (b) y();`) is not a
   finding, although the writer's symmetric mode braces it.
+
+## FU21 (2026-10-19) — `prefer-if-expression-return` merges the LAST three values of a longer fall-through run
+
+- client `DiskSystemBase.localPathBeforeMove`: `if (ownMove != null) return ownMove.localFilePath; if (heldAt == null)
+  return null; return exists(…) ? heldAt : null;` is a run of four values, so FU6's "exactly three" left it as written
+  although its last three carry two. A run of four or more now merges its LAST three (`mergeOf`): the guards in front
+  keep their statements, the merged return replaces the tail from the `if` that returns the first of the three, and the
+  finding is reported on that `if` (where the edit starts; `fix` keys on the same statement). Here:
+  `return heldAt != null && exists(…) ? heldAt : null;` after the first guard.
+- Only the last three: the merged text ends at the terminal, so two rungs and the terminal are what the rebuild copies;
+  any other window would drop a condition.
+- Soundness is FU6's, unchanged and applied to the three: the `Leading` / `Outer` merges keep every condition's
+  evaluation and order (`c2` still runs only when `c1` was false), so a condition with a side effect is no obstacle;
+  the `v2 == v3` merge that would DROP a condition's evaluation stays refused; the repeated value is a non-boolean
+  literal or a bare name; any comment in the replaced tail refuses it. A comment in FRONT of the tail is outside the
+  edit and stays above the merged return.
+- Fall-through spelling only, from a WRITTEN rung. An else-linked chain is one statement with no tail to cut out, and
+  keeps its chain fix. A tail whose first value is folded out of the terminal ternary (`if (a) return 0; return b ? 1 :
+  c ? 1 : 3;`) sits inside that ternary, and re-shaping a ternary is not a cascade merge; the run stays owned.
+- FU6's ladder decision is KEPT: a tail whose preceding value repeats one of the tail's values is refused
+  (`repeatsTail`). Merging it would leave a run of three the next pass merges again, so `if (a) return null; if (b)
+  return null; if (c) return null; return x;` would end as one nested `return a || (b || c) ? null : x;` over the `--fix`
+  passes. With the gate a run merges at most once, so no composition across passes builds a nested condition. The
+  repeat is compared on BOTH tail values: the one the merge repeats and the other one (`if (a) return 5; if (b)
+  return null; if (c) return 5; return null;` would merge its tail to `!b && c ? 5 : null` and then the run again).

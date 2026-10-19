@@ -27337,10 +27337,10 @@
 		{
 			"name": "M-PIER-MERGE-ANY-COUNT",
 			"type": "anyparse.check.PreferIfExpressionReturn",
-			"method": "mergeShape",
-			"find": "if (values.length != MERGED_VALUE_COUNT) return null;",
-			"replace": "if (values.length < MERGED_VALUE_COUNT) return null;",
-			"note": "a four-value run merges from its first two rungs and the terminal, dropping the third condition"
+			"method": "mergeOf",
+			"find": "if (from < 0 || from > 0 && from >= rungs.length) return null;",
+			"replace": "if (from != 0) return null;",
+			"note": "only a run of exactly three merges, so the mergeable tail of a longer run keeps its statements"
 		},
 		{
 			"name": "M-PIER-LEADING-AS-OUTER",
@@ -27369,17 +27369,17 @@
 		{
 			"name": "M-PIER-CASCADE-UNMERGED-REPORTED",
 			"type": "anyparse.check.PreferIfExpressionReturn",
-			"method": "walkCascades",
-			"find": "if (cascadeMatch(kids, i, source, comments, s)?.merge == null) continue;",
-			"replace": "if (cascadeMatch(kids, i, source, comments, s) == null) continue;",
+			"method": "eachMergedRun",
+			"find": "final merge: Null<Merge> = m?.merge;",
+			"replace": "final merge: Null<Merge> = m == null ? null : m.merge ?? { shape: Leading, from: 0, span: m.prefix, prefix: m.prefix };",
 			"note": "an owned cascade that does not merge is reported, with no fix behind the finding"
 		},
 		{
 			"name": "M-PIER-OUTER-UNNEGATED",
 			"type": "anyparse.check.PreferIfExpressionReturn",
 			"method": "mergedEdit",
-			"find": "case Outer: NegationScan.negateConditionText(m.conds[0], source, s.negation, emit.logic, emit.types());",
-			"replace": "case Outer: text(source, m.pairs[0].cond);",
+			"find": "case Outer: NegationScan.negateConditionText(m.conds[rung], source, s.negation, emit.logic, emit.types());",
+			"replace": "case Outer: text(source, m.pairs[rung].cond);",
 			"note": "the outer merge keeps the first condition positive, inverting which branch returns what"
 		},
 		{
@@ -27389,6 +27389,38 @@
 			"find": "if (i % 2 == 0) holes.push(new Span(at, at + piece.length));",
 			"replace": "if (false) holes.push(new Span(at, at + piece.length));",
 			"note": "no merged piece is a ParenGuard hole, so a ternary condition re-associates across the new `&&`"
+		},
+		{
+			"name": "M-PIER-TAIL-REPORTED-AT-HEAD",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "eachMergedRun",
+			"find": "final reported: Null<Span> = kids[i + merge.from].span;",
+			"replace": "final reported: Null<Span> = kids[i].span;",
+			"note": "a merged tail is reported and keyed at the run head, so the finding names a guard the edit does not touch"
+		},
+		{
+			"name": "M-PIER-TAIL-SPAN-WHOLE",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeOf",
+			"find": "final span: Span = new Span(start.from, region.to);",
+			"replace": "final span: Span = region;",
+			"note": "a merged tail replaces the whole run, dropping the guards in front of it"
+		},
+		{
+			"name": "M-PIER-TAIL-FROM-FOLDED",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeOf",
+			"find": "if (from < 0 || from > 0 && from >= rungs.length) return null;",
+			"replace": "if (from < 0 || from > 0 && from > rungs.length) return null;",
+			"note": "a tail may start at a value folded out of the terminal ternary, past the last written rung"
+		},
+		{
+			"name": "M-PIER-TAIL-LADDER",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeOf",
+			"find": "return shape == null || from > 0 && repeatsTail(values[from - 1], tail, source, comments) ? null : {",
+			"replace": "return shape == null ? null : {",
+			"note": "a tail merges although the value before it repeats one of its own, so a guard ladder merges again on every pass into one nested condition"
 		},
 		{
 			"name": "M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED",
