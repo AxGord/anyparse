@@ -354,6 +354,7 @@ final class PinsCheckAToO {
 		'unit.check.HoistCommonImportTest#testDoesNotProposeWhatTheChainAlreadyProvides :: guard :: ',
 		'unit.check.HoistCommonImportTest#testExtendingAnExistingSourceIsAnEdit :: guard :: ',
 		'unit.check.HoistCommonImportTest#testExtendsAnExistingAmbientSource :: control :: M-HOIST-NEVER-SOUND',
+		'unit.check.HoistCommonImportTest#testHoistedUsingsKeepTheirSourceOrder :: control :: M-HOIST-USINGS-SOURCE-ORDER',
 		'unit.check.HoistCommonImportTest#testHoistsAnAllowListedUsing :: control :: M-HOIST-NEVER-SOUND',
 		'unit.check.HoistCommonImportTest#testHoistsAnImportMostModulesSpell :: control :: M-HOIST-NEVER-SOUND',
 		'unit.check.HoistCommonImportTest#testKeepsAnAllowListedUsingWhereARivalRemains :: control :: M-HOIST-USING-DEMOTION',

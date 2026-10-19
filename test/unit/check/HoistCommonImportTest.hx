@@ -211,6 +211,24 @@ class HoistCommonImportTest extends Test {
 		Assert.equals('', planned(usingTree('qqz.Sqqwwee', 'using qqz.Rqqwwee;\n')));
 	}
 
+	/**
+	 * Two hoisted usings keep their SOURCE order, which is their priority (Haxe ranks static extensions
+	 * in reverse declaration order). The inserting seat puts each fresh `using` above the header's first
+	 * one, so the rule inserts them last-first; inserted first-first they would come out reversed.
+	 */
+	@:pin('control')
+	@:killer('M-HOIST-USINGS-SOURCE-ORDER')
+	public function testHoistedUsingsKeepTheirSourceOrder(): Void {
+		final tree: Array<TreeFile> = [
+			for (file in usingTree('qqz.Sqqwwee', 'using qqz.Rqqwwee;\n'))
+				file.name == 'apqlint.json' ? {
+					name: file.name,
+					source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee", "qqz.Rqqwwee"] } } }\n'
+				} : file
+		];
+		Assert.equals('using qqz.Sqqwwee;|using qqz.Rqqwwee;|', hoisted(tree));
+	}
+
 	/** An ambient explicit import OUTRANKS a same-package type, so a namesake there is a retarget. */
 	@:pin('control')
 	@:killer('M-HOIST-RETARGET-BAND')

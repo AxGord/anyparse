@@ -81,14 +81,16 @@ final class MentionsCommand implements CliCommand {
 	 *  - `uses` — type-position references (field/param/return/extends).
 	 *  - `refs` — value-binding references (var/fn/param of that name).
 	 *  - `lit --any-kind --exact` — every other leaf carrying that name:
-	 *    case-patterns (`case Foo(_):` → `IdentExpr 'Foo'`), import path
-	 *    segments, `new Foo()` ctor calls, field-name slots.
+	 *    case-patterns (`case Foo(_):` → `IdentExpr 'Foo'`), `new Foo()`
+	 *    ctor calls, field-name slots, and an import / using whose last
+	 *    dotted segment is the name (`import pkg.Foo;`, printed whole).
 	 *
 	 * The "everything called X" question. Complementary to `blast`:
 	 * `blast` answers "what could break when I change type T's shape"
 	 * via a name-based field-access SUPERSET; `mentions` answers "where
 	 * is the literal token X tokenised in the AST" precisely. No
-	 * heuristic — every section is structural and exact-name. Use this
+	 * heuristic — every section is structural; a simple name widens only
+	 * to the last segment of a dotted type reference or import. Use this
 	 * when refs/uses/blast all return 0 but you know the name appears
 	 * (case-patterns are the canonical example).
 	 */
@@ -155,7 +157,9 @@ final class MentionsCommand implements CliCommand {
 		CliIo.sysPrint('  refs  — value-binding references (precise)\n');
 		CliIo.sysPrint('  lit   — every other leaf with that exact name:\n');
 		CliIo.sysPrint('          case-patterns (`case Foo(_):` → IdentExpr),\n');
-		CliIo.sysPrint('          imports, `new Foo()`, field-name slots.\n');
+		CliIo.sysPrint('          imports, `new Foo()`, field-name slots; a simple <name>\n');
+		CliIo.sysPrint('          also answers an import / using whose LAST segment it\n');
+		CliIo.sysPrint('          is (`import pkg.Foo;`), and the hit prints the path\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Use this when refs/uses/blast return 0 but you know the\n');
 		CliIo.sysPrint('name appears (case-patterns are the canonical example —\n');
@@ -301,7 +305,10 @@ final class MentionsCommand implements CliCommand {
 		// conclusion there is a build error one command later.
 		final litEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = [];
 		for (entry in valueTrees) {
-			final hits: Array<LitHit> = Lit.find(target, entry.tree, true, null, delimiters);
+			// `IMPORT_DECL_KINDS`: an import / using payload is ONE dotted leaf, so the exact compare
+			// alone answered the uses of `Assets` and NOT the `import openfl.Assets;` that makes them
+			// resolve — and "no import" read off that answer is a build error one command later.
+			final hits: Array<LitHit> = Lit.find(target, entry.tree, true, null, delimiters, ModuleScan.IMPORT_DECL_KINDS);
 			if (hits.length == 0) continue;
 			litEntries.push({ file: entry.path, source: entry.source, hits: hits });
 		}

@@ -4523,3 +4523,42 @@ decided the question; it may not become a record of runs.
   `HxCallArgLambdaBodyChainIndentTest`'s two non-discriminating pins.
 - client: 3 files / 4 hunks, each this defect (`ItemListProjectsShare.hx:171`, `BucketMutationOffMainTest.hx:109/153`,
   `ItemListThumbnailTest.hx:106`). Arm `M-STMT-LIST-CALLARG-BARRIER`.
+
+## FU5 (2026-10-19): an import argument may be the whole statement; `mentions` answers a dotted import
+
+- client gap (a): an agent concluded `add-import` "cannot add a `using`" and patched `using Lambda;` in by hand. The flag
+  `--using` existed; what did not was the spelling every caller reaches for — `add-import <file> 'using Lambda;'` was
+  wrapped into `import using Lambda;;` and refused as `result does not parse: error at 5:14`, a column of a source the
+  caller never wrote. `new`'s `@@ imports` had learnt both spellings in `e8ec6cc1` with its own reader; that reader MOVED
+  to `query.ImportSpelling` (`split` + `isModulePath`, the copy in `NewFile` deleted) and now serves `add-import`,
+  `remove-import` and `new` alike. A statement's keyword picks the kind; an `import …` statement under `--using` is
+  refused by name; a bare path keeps its old meaning. `isModulePath` (a POSITIVE whitelist) also accepts the legacy
+  alias spelling ` in <Alias>`, which `add-import` could always splice. `add-import` now refuses text that is neither a
+  module path nor a statement BY NAME instead of as a parse error.
+- `remove-import` takes the same statement spelling, and its keyword narrows the match: `using a.B;` names the `using`
+  alone where a bare `a.B` beside `import a.B;` stays ambiguous. `--using` is the CLI's flag spelling of the same request
+  (folded into the statement form, so the library entry point carries no second parameter). Its private copy of the
+  import kinds is gone; it reads `ModuleScan.IMPORT_DECL_KINDS`.
+- Placement of a `using`: Haxe ranks static extensions in REVERSE declaration order (verified, Haxe 4.3.7 `--interp`:
+  `using A; using B;` resolves `x.who()` to B). `UsingScan.usingInsertEdit` — the seat every `using`-inserting rule takes —
+  puts a fresh one ABOVE the header's first `using`, the lowest priority, so no call the file already makes moves.
+  `add-import` used `ImportOrder`'s import ladder ("after the last plain import, else after the last import / using"),
+  which agrees only when plain imports precede the usings: for a using-only header it appended BELOW the group (top
+  priority). `add-import --using` now calls `UsingScan.usingInsertEdit` (guarded-body header included) — one answer for
+  the op and the rules; `ImportOrder`'s doc, which claimed every caller APPENDS a `using`, is corrected.
+  `HoistCommonImport` inserts several usings through the op, so it now inserts them last-first to keep their source
+  order (= their priority) in the ambient source.
+- Dedupe is unchanged in kind and reach: same-kind, top level and inside `#if` regions, whichever spelling was passed.
+- client gap (b): `mentions Assets` answered the uses and NOT `import openfl.Assets;` — the import payload is ONE leaf, and the
+  lit section compared names exactly. The last-segment test `uses` reads for a qualified type reference since `84b5aceaa`
+  is now ONE shared predicate, `SourceText.answersSimpleName` (`Uses.matches` calls it), and `Lit.find` takes opt-in
+  `qualifiedKinds` it applies under an exact match; `mentions` passes `ModuleScan.IMPORT_DECL_KINDS`, so a simple name
+  also answers an import / using whose last segment it is, printing the node's own (full) path. A dotted query stays an
+  exact compare (a last segment carries no dot, so the old explicit `indexOf('.')` guard was redundant and went).
+  `lit` passes no kinds and is unchanged; `refs` has no import part; `rename` reads neither (its dotted-path arithmetic
+  stays `CrossRename`'s).
+- Arms: M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED, M-ADDIMPORT-USING-TAKES-IMPORT-SEAT, M-ADDIMPORT-PATH-UNCHECKED,
+  M-IMPORTSPELLING-FLAG-CONFLICT-UNCHECKED, M-REMOVEIMPORT-KEYWORD-IGNORED, M-REMOVEIMPORT-CLI-USING-FLAG-DROPPED,
+  M-MENTIONS-IMPORT-KINDS-UNPASSED, M-LIT-QUALIFIED-KINDS-IGNORED, M-HOIST-USINGS-SOURCE-ORDER; re-aimed onto the moved
+  code: M-NEWFILE-IMPORT-DOUBLED / -BARE-KEYWORD-WRAPPED (`ImportSpelling.split`), M-NEWFILE-IMPORT-ANY-LINE,
+  M-USES-EXACT-ONLY, M-USES-TAIL-SUBSTRING (`SourceText.answersSimpleName`).

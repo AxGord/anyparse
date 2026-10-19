@@ -31,6 +31,8 @@ final class PinsGrammarAndCli {
 		'unit.cli.ApqKindVocabularyCliTest#testAstSelectUnprojectedKindIsAUsageError :: control :: M-AST-SELECT-UNKNOWN-KIND-EXIT-OK',
 		'unit.cli.ApqKindVocabularyCliTest#testLitAcceptsTheKindsItMintsItself :: control :: M-LIT-SYNTHETIC-KINDS-EMPTY',
 		'unit.cli.ApqKindVocabularyCliTest#testLitRejectsAnUnprojectedKind :: control :: M-KIND-GATE-FAIL-OPEN',
+		'unit.cli.ApqMentionsImportCliTest#testSimpleNameAnswersTheDottedImport :: control :: M-MENTIONS-IMPORT-KINDS-UNPASSED',
+		'unit.cli.ApqMentionsImportCliTest#testSimpleNameAnswersTheDottedUsing :: control :: M-LIT-QUALIFIED-KINDS-IGNORED',
 		'unit.cli.ApqProgressTtyCliTest#testNoEnvAndNoTerminalIsSilent :: control :: M-PROGRESS-TTY-BLIND',
 		'unit.cli.ApqScratchPathCliTest#testStdlibDupRefusesAWorkDirectoryThatIsASymlink :: control :: M-STDLIB-DUP-WORK-ANY-TARGET',
 		'unit.cli.ApqScratchPathCliTest#testStdlibDupStagesItsProbesInAPerProcessDirectory :: control :: M-STDLIB-DUP-WORKDIR-SHARED',
