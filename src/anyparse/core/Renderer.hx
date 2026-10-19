@@ -517,7 +517,7 @@ class Renderer {
 					// Delegated to the static `emitLeaf` on the `ctx` carrier.
 					emitLeaf(ctx, f);
 				case Nest(_, _), BreakCommit(_, _), LeadingBreak(_, _), Concat(_), Group(_), BodyGroup(_), GroupWithRestProbe(_),
-					Flatten(_), WrapBoundary(_), HardFlatten(_), CollapseProbe(_):
+					Flatten(_), WrapBoundary(_), HardFlatten(_), CollapseProbe(_), BreakMark(_, _):
 					// Structural / descend arms — no scalar layout mutation, only
 					// frame pushes. Delegated to the static `pushStructural` (reads
 					// `col`/`width`/`f`, writes `stack`). See that helper for each
@@ -863,7 +863,8 @@ class Renderer {
 					return { inner: inner, hard: hard };
 				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
 					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseAddProbe(inner),
-					CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+					CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
+					BreakMark(inner, _):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -1506,7 +1507,7 @@ class Renderer {
 				}
 				return null;
 			case Flatten(innerDoc), WrapBoundary(innerDoc), HardFlatten(innerDoc), CollapseProbe(innerDoc), CollapseAddProbe(innerDoc),
-				CollapseBoolProbe(innerDoc), CollapseChainProbe(innerDoc):
+				CollapseBoolProbe(innerDoc), CollapseChainProbe(innerDoc), BreakMark(innerDoc, _):
 				inner.push({ doc: innerDoc, mode: nd.mode });
 				return null;
 			case ConditionalMarkerZero(innerDoc):
@@ -1575,7 +1576,7 @@ class Renderer {
 				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
 				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
 				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _):
 				// Single-child transparent descend: structural wrappers (Nest /
 				// Group), the flat side of every render-time `If*` probe, the
 				// force-flat markers, and the cond-indent markers all contribute
@@ -1669,7 +1670,7 @@ class Renderer {
 				IfArrowContinuationFitsWithRest(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
 				IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner), LeadingBreak(_, inner),
 				BreakCommit(_, inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _):
 				// Single-child transparent descend at the same indent in MFlat.
 				// A `Group`'s nested flat content; the flat side of every
 				// render-time `If*` probe (the column/first-line/rest-of-stack/
@@ -1809,7 +1810,8 @@ class Renderer {
 				return { add: 0, aborted: false };
 			case Nest(_, innerDoc), BreakCommit(_, innerDoc), LeadingBreak(_, innerDoc), Flatten(innerDoc), WrapBoundary(innerDoc),
 				HardFlatten(innerDoc), CollapseProbe(innerDoc), CollapseAddProbe(innerDoc), CollapseBoolProbe(innerDoc),
-				CollapseChainProbe(innerDoc), ConditionalMarkerZero(innerDoc), ConditionalMarkerDecrease(innerDoc):
+				CollapseChainProbe(innerDoc), ConditionalMarkerZero(innerDoc), ConditionalMarkerDecrease(innerDoc),
+				BreakMark(innerDoc, _):
 				// Mode-preserving transparent descend: Nest, the ω-force-flat-
 				// engine markers (rest-of-stack probe measures structural
 				// width — force-flat markers add none), and the cond-indent
@@ -2061,7 +2063,7 @@ class Renderer {
 				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
 				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), CollapseProbe(inner),
 				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
-				ConditionalMarkerDecrease(inner), LeadingBreak(_, inner), BreakCommit(_, inner):
+				ConditionalMarkerDecrease(inner), BreakMark(inner, _), LeadingBreak(_, inner), BreakCommit(_, inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds`), the
 				// nested cond-paren-glue probes (render-time, seen flat here),
@@ -2373,7 +2375,7 @@ class Renderer {
 				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
 				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), CollapseProbe(inner),
 				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
-				ConditionalMarkerDecrease(inner), LeadingBreak(_, inner), BreakCommit(_, inner):
+				ConditionalMarkerDecrease(inner), BreakMark(inner, _), LeadingBreak(_, inner), BreakCommit(_, inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds` — the
 				// NoWrap-pinned call paren is measured kept-flat for the parent
@@ -2731,6 +2733,11 @@ class Renderer {
 						? new Frame(f.indent, f.mode, inner, true, f.hardFlat)
 						: new Frame(f.indent, MBreak, Nest(n, Concat([Line('\n'), inner])))
 				);
+			case BreakMark(inner, _):
+				// The break side of a width decision, rendered: the measure render records it, which resolves
+				// the `BreakCommit` named by the same token. Renders `inner`, in the frame's own mode.
+				if (!f.forceFlat) decisions?.push({ node: f.doc, crosses: true });
+				stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 			case BreakCommit(_, flat):
 				// Unresolved only inside the measure render, which lays the construct out as it stands.
 				stack.push(new Frame(f.indent, f.mode, flat, f.forceFlat, f.hardFlat));
@@ -3882,7 +3889,7 @@ class Renderer {
 					IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
 					IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
 					HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _):
 					stack.push(inner);
 			}
 		}
@@ -4050,7 +4057,8 @@ class Renderer {
 			case GroupWithRestProbe(_) if (restProbeEnds): true;
 			case Empty, OptSpace(_), OptSpaceSkipAfterHardline, Line(_), Concat(_), Nest(_, _), WrapBoundary(_), BreakCommit(_, _),
 				CollapseProbe(_), CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_), ConditionalMarkerZero(_),
-				ConditionalMarkerDecrease(_), IfBreak(_, _), Group(_), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _):
+				ConditionalMarkerDecrease(_), BreakMark(_, _), IfBreak(_, _), Group(_), IfWidthExceeds(_, _, _),
+				IfFirstLineExceeds(_, _, _):
 				true;
 			case Text(s): s.indexOf('\n') < 0;
 			case _: false;
@@ -4084,7 +4092,7 @@ class Renderer {
 		return switch d {
 			case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline, Line(_), Concat(_), Nest(_, _), WrapBoundary(_),
 				CollapseProbe(_), CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_), ConditionalMarkerZero(_),
-				ConditionalMarkerDecrease(_), Flatten(_), HardFlatten(_), Group(_), GroupWithRestProbe(_), Fill(_, _, _),
+				ConditionalMarkerDecrease(_), BreakMark(_, _), Flatten(_), HardFlatten(_), Group(_), GroupWithRestProbe(_), Fill(_, _, _),
 				FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _), LeadingBreak(_, _), BreakCommit(_, _), IfBreak(_, _),
 				IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _):
 				true;
@@ -4254,7 +4262,7 @@ class Renderer {
 				var k: Int = items.length;
 				while (--k >= 0) push(items[k], e.grouped, e.forceFlat, e.hardFlat);
 			case Nest(_, x), CollapseProbe(x), CollapseAddProbe(x), CollapseBoolProbe(x), CollapseChainProbe(x), ConditionalMarkerZero(x),
-				ConditionalMarkerDecrease(x), LeadingBreak(_, x), BreakCommit(_, x):
+				ConditionalMarkerDecrease(x), BreakMark(x, _), LeadingBreak(_, x), BreakCommit(_, x):
 				push(x, e.grouped, e.forceFlat, e.hardFlat);
 			case WrapBoundary(x):
 				if (e.hardFlat)

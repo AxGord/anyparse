@@ -102,7 +102,12 @@ final class WriterPolicyLowering {
 		// when it breaks. Every consumer of this helper is a field of the
 		// expression-scope cond-comp family, so no per-field opt-in is needed;
 		// with the knob off the emitted Doc is byte-identical to the old shape.
-		final sameLayoutExpr: Expr = macro opt.conditionalExprFit ? _dn(_cols, _dc([_dl(), $writeCall])) : _dc([_dt(' '), $writeCall]);
+		// A body on the keyword's line is an item of whatever list holds the `#if`: its literal breaking by its own wrap
+		// rule is named (`BreakCommits.named`), so the list can lay itself out as the next rewrite reads that break back.
+		// Not under `conditionalExprFit`: there the region's own group breaks its directive seams too, which the next
+		// rewrite reads back as source newlines, so the literal alone is not what that rewrite reads.
+		final namedCall: Expr = macro anyparse.core.BreakCommits.named($writeCall);
+		final sameLayoutExpr: Expr = macro opt.conditionalExprFit ? _dn(_cols, _dc([_dl(), $writeCall])) : _dc([_dt(' '), $namedCall]);
 		final nextLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;

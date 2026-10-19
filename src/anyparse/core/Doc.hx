@@ -993,6 +993,18 @@ enum Doc {
 	LeadingBreak(indent: Int, inner: Doc, ?token: BreakToken);
 
 	/**
+	 * The BREAK side of a construct's own width decision, named by `token`. It renders `inner` and nothing else, and
+	 * every other walker reads `inner`, transparent like `CollapseProbe`; the measure render of `BreakCommits` records
+	 * the node when it renders it, which is exactly when the decision around it takes its break side.
+	 *
+	 * The sister of `LeadingBreak` for a break the construct already prints itself: a branch literal of an
+	 * expression-scope `#if` that its own wrap rule breaks GLUED (`BreakCommits.named`). A list around that `#if` lays
+	 * itself out from the flat item, while the next rewrite reads the broken literal as source and lays the list out
+	 * by the rules for a multi-line item; the token lets `WrapList.emit` offer that layout as a `BreakCommit`.
+	 */
+	BreakMark(inner: Doc, token: BreakToken);
+
+	/**
 	 * A layout that follows whether the `LeadingBreak` named by `token` renders: `brk` is the construct laid out as
 	 * if that break were already in the source, `flat` as it stands. `BreakCommits` finds out with a measure render,
 	 * at the break's true column, and leaves `brk` or `flat` in the node's place before the collapse pass and the emit

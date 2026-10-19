@@ -57,6 +57,11 @@ final class BodyAllman {
 			case Doc.IfFirstLineExceeds(_, Doc.LeadingBreak(cols, brk, token), _),
 				Doc.GroupWithRestProbe(Doc.IfBreak(Doc.LeadingBreak(cols, brk, token), _)) if (token != null):
 				{ brk: BodyFit.breakLayout(cols, BreakCommits.committed(brk, Doc.BodyGroup(brk))), token: token };
+			case Doc.Concat([Doc.OptSpace(' '), body]) if (BreakCommits.decisionMapped(body, (brk, _) -> brk) != null):
+				// The glued placement `gluedLayout` writes, the body wholly its decision: the break its Allman side opens
+				// with drops the pending space, so the layout the next rewrite reads back has none, and a first line
+				// measured on it must not count it. A body that only ENDS in the decision keeps the space before it.
+				tailBreak(body);
 			case Doc.WrapBoundary(inner):
 				final t: Null<{ brk: Doc, token: BreakToken }> = tailBreak(inner);
 				t == null ? null : { brk: Doc.WrapBoundary(t.brk), token: t.token };
@@ -84,23 +89,10 @@ final class BodyAllman {
 
 	/**
 	 * `body` with its width decision's break side in Allman position, or `null` when `body` is not wholly one of the
-	 * decisions it can rewrite behind `WrapBoundary` / one-element `Concat` wrappers.
+	 * decisions `BreakCommits.decisionMapped` reads.
 	 */
 	private static function allmanBreakSide(cols: Int, body: Doc): Null<Doc> {
-		return switch body {
-			case Doc.IfFirstLineExceeds(n, brk, flat):
-				Doc.IfFirstLineExceeds(n, Doc.LeadingBreak(cols, brk, new BreakToken()), flat);
-			case Doc.GroupWithRestProbe(Doc.IfBreak(brk, flat)):
-				Doc.GroupWithRestProbe(Doc.IfBreak(Doc.LeadingBreak(cols, brk, new BreakToken()), flat));
-			case Doc.WrapBoundary(inner):
-				final moved: Null<Doc> = allmanBreakSide(cols, inner);
-				moved == null ? null : Doc.WrapBoundary(moved);
-			case Doc.Concat([inner]):
-				final moved: Null<Doc> = allmanBreakSide(cols, inner);
-				moved == null ? null : Doc.Concat([moved]);
-			case _:
-				null;
-		};
+		return BreakCommits.decisionMapped(body, (brk, rebuild) -> rebuild(Doc.LeadingBreak(cols, brk, new BreakToken())));
 	}
 
 	/** A copy of `items` with element `i` replaced by `d`. */
