@@ -106,6 +106,9 @@
 		"dead-binder-counter-loop": {
 			"enabled": true
 		},
+		"default-repeated-argument": {
+			"enabled": true
+		},
 		"doc-length": {
 			"enabled": true
 		},

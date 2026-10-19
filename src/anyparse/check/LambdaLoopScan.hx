@@ -262,8 +262,7 @@ final class LambdaLoopScan {
 			header, LAMBDA_MODULE, [for (i in 0...rewrites.length) if (extensionForm[i]) rewrites[i].span.from]
 		);
 		if (scope == UsingScope.Guarded) {
-			for (violation in violations)
-				violation.declineReason = UsingScan.guardedUsingDecline(LAMBDA_MODULE, UsingScan.FILE_WIDE_SUBJECT);
+			for (violation in violations) violation.declineReason = UsingScan.guardedUsingDecline(LAMBDA_MODULE);
 			return [];
 		}
 		if (scope == UsingScope.InScope) return flat;
@@ -683,7 +682,7 @@ final class LambdaLoopScan {
 	 * member-shadow gate read — or null when it does not resolve.
 	 *
 	 * The RECEIVER-position resolver, not the value one: the measured
-	 * `baseData:Null<Map<Int, ObjectFrameData>>` site names `Null` as a value and `Map` as a member
+	 * `baseData:Null<Map<Int, ObjectFrameInfo>>` site names `Null` as a value and `Map` as a member
 	 * host, and it is the member host the rewrite binds against — and a `Null<Iterator<T>>` is as
 	 * much an `Iterator` to `Lambda` as a bare one. The `Iterable` proof keeps the value question:
 	 * peeling a `Null<Array<T>>` there would claim a shape the loop's own iterable does not have. A construction is typed

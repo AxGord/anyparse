@@ -232,7 +232,7 @@ class CondRegionKindDerivationTest extends Test {
 	public function testEveryDirectiveAwareTerminalCarriesItsMarker(): Void {
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
 		final directives: Array<String> = [shape.conditionalIfKeyword ?? '#if', shape.conditionalEndKeyword ?? '#end'];
-		final marked: Array<String> = markedTypes(RAW_MARKER).concat(markedTypes(CONDITION_MARKER));
+		final marked: Array<String> = markedTypes().concat(markedTypes(CONDITION_MARKER));
 		Assert.isTrue(
 			marked.length >= MIN_RAW_TERMINALS,
 			'the marker scan found ${marked.length} tagged terminal(s) - below $MIN_RAW_TERMINALS the assertion below is vacuous'
@@ -319,7 +319,7 @@ class CondRegionKindDerivationTest extends Test {
 		final ctors: Map<String, Array<String>> = [];
 		final spanned: Map<String, String> = [];
 		collectGrammarReferences(refs, ctors, spanned);
-		final tainted: Array<String> = markedTypes(RAW_MARKER);
+		final tainted: Array<String> = markedTypes();
 		var grew: Bool = true;
 		while (grew) {
 			grew = false;
@@ -405,7 +405,7 @@ class CondRegionKindDerivationTest extends Test {
 	}
 
 	/** The type names carrying `marker` anywhere under the grammar package, read with the grammar's own parser. */
-	private static function markedTypes(marker: String): Array<String> {
+	private static function markedTypes(marker: String = RAW_MARKER): Array<String> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final out: Array<String> = [];
 		for (path in grammarSources('${CliFixture.repoRoot()}/$HAXE_GRAMMAR_DIR')) {

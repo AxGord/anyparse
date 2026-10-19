@@ -189,7 +189,7 @@ class MemberReachFactsTest extends Test {
 	 * gives its class an `added` doing so, `dyn` one calling what a dynamic value's `items` holds, `prop` makes its class's
 	 * `items` a property read through `get_items`, `recall` makes its class's `all` return `Main.make()`, positioned where
 	 * the old body was, `loop` makes its class's `f` push onto `Store.items`, and `leak` makes its class's `g` store
-	 * `Main.items` in `Other.keep`. The expression macro `t` builds a call of `Words.tr` (TM's `Lang.t`).
+	 * `Main.items` in `Other.keep`. The expression macro `t` builds a call of `Words.tr` (the client's `Lang.t`).
 	 */
 	private static final BUILD_MACROS: String = 'import haxe.macro.Context;\nimport haxe.macro.Expr;\n\nclass Mac {\n'
 		+ '\tpublic static macro function keep():Array<Field> return Context.getBuildFields();\n\n'
@@ -268,7 +268,7 @@ class MemberReachFactsTest extends Test {
 		+ '\tpublic static function say(s:String):Void {}\n}\n';
 
 	/**
-	 * The expression macros of `Mac`: `gen` expands to a push onto `Main.items`, `t` to a call of `Words.tr` (TM's `Lang.t`),
+	 * The expression macros of `Mac`: `gen` expands to a push onto `Main.items`, `t` to a call of `Words.tr` (the client's `Lang.t`),
 	 * `show` to a call of `Words.say` handed `Main.obj` converted to a string.
 	 */
 	private static final EXPRESSION_MACROS: String = 'class Mac {\n\tpublic static macro function gen() return macro Main.items.push(1);\n\n'
@@ -478,7 +478,7 @@ class MemberReachFactsTest extends Test {
 
 	/**
 	 * `truthAsk` of `files` with the std `Reflect` the build compiles declared where the build reads it: its accessors by name
-	 * reach members by the name they are handed in `untyped` code, which the walk enters as it does TM's. The fixture must
+	 * reach members by the name they are handed in `untyped` code, which the walk enters as it does the client's. The fixture must
 	 * compile: a build that fails leaves no facts, and the syntax would answer. With `interp` the build is `INTERP_BUILD`,
 	 * whose std calls no rebinding `Reflect.callMethod` of its own and reads no member by a computed name, as js's does
 	 * (`Type.createEnum`, `haxe.DynamicAccess`).
@@ -512,7 +512,7 @@ class MemberReachFactsTest extends Test {
 		+ '\t\tf();\n\t\tWords.say(s);\n\t}\n}\n';
 
 	/**
-	 * TM's `FileSystemItemData`: an abstract over an enum whose getters inline into each other — `children` and `folder`
+	 * the client's `DiskSystemItemData`: an abstract over an enum whose getters inline into each other — `children` and `folder`
 	 * read a field of what the inline `base` returns — with `count`, an inline counting what it is handed, `childCount`
 	 * calling it with the bare property, and `forEachChild` calling back on each child.
 	 */
@@ -1186,7 +1186,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-EXPANSION-PLACED') @:killer('M-FACTS-EXPANSION-BLIND')
 	@:killer('M-GRAPH-FACTS-EXPANSION-CALL')
 	public function testAMacroExpansionIsAnsweredFromItsFactsUnderTheTruth(): Void {
-		// TM's `t('…')`: the expansion calls `Words.tr`, which changes nothing — and, in the twin, `Loud.tr`, which does
+		// the client's `t('…')`: the expansion calls `Words.tr`, which changes nothing — and, in the twin, `Loud.tr`, which does
 		final quiet: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Util.f(); /*>*/ }\n\t}\n}\n'
 			+ 'class Util {\n\tpublic static function f():Void Words.say(Mac.t(\'x\'));\n}\n';
 		assertMatch(compiledTruthAsk(['Main.hx' => quiet, 'Mac.hx' => EXPRESSION_MACROS, 'Words.hx' => WORDS]), r -> r.match(Proven));
@@ -2350,7 +2350,7 @@ class MemberReachFactsTest extends Test {
 	public function testAStringBufHandsItsTargetCodeNoObjectUnderTheTruth(): Void {
 		// hxcpp's `StringBuf.flush` hands `cpp.Pointer.nativeArrayElem` its `Array<cpp.Char>` through two inline splices, and
 		// `__global__.String` a `cpp.Star<cpp.Char>` and an `Int`: target code handed only characters runs nothing, so not `g`,
-		// which `cb` holds (TM's `GridScale.hx:61`). Without the truth the extern may run any function value
+		// which `cb` holds (the client's `MeshScale.hx:61`). Without the truth the extern may run any function value
 		final main: String = targetFixture('var b:StringBuf = new StringBuf();\n\t\t\tb.addChar(65);\n\t\t\tvar s:String = b.toString();');
 		final std: String = StdResolver.stdDir() ?? '';
 		final declared: Map<String, String> = [];
@@ -2549,7 +2549,7 @@ class MemberReachFactsTest extends Test {
 		final spelled: String = main + reflectingOther('Reflect.getProperty(this, n)');
 		assertMatch(reflectAsk(['Main.hx' => spelled]), r -> r.match(Proven));
 		assertMatch(ask(['Main.hx' => spelled]), r -> r.match(Unknown(DynamicName(_, _))));
-		// `using Reflect` (TM's `drill.Node`): only the facts see the call
+		// `using Reflect` (the client's `model.Node`): only the facts see the call
 		assertMatch(reflectAsk(['Main.hx' => 'using Reflect;\n' + main + reflectingOther('this.getProperty(n)')]), r -> r.match(Proven));
 	}
 
@@ -3098,7 +3098,7 @@ class MemberReachFactsTest extends Test {
 				Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
 				return result;
 			}
-			return marked ? rewritten(marking('lib.Stack.str', FUTURE_MARKER), run) : run();
+			return marked ? rewritten(marking('lib.Stack.str'), run) : run();
 		}
 		assertMatch(question('"b"'), r -> r.match(Proven));
 		assertMatch(question('"b"', false), r -> r.match(Unknown(OutOfScope(_))));
@@ -3242,7 +3242,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-INDEX-GUARDED-PRIVATE') @:killer('M-INDEX-MODULE-PLATFORM') @:killer('M-FACTS-IMPLEMENTED-TYPED')
 	@:access(anyparse.query.MemberReach) @:access(anyparse.query.FactsView)
 	public function testTheIndexSpellsEachDeclarationAsTheBuildsTypeIt(): Void {
-		// a private type in a conditional region (TM's `SharedMutex.hx`), a private type of a platform variant of a module
+		// a private type in a conditional region (the client's `RwSyncMutex.hx`), a private type of a platform variant of a module
 		// (`Sqlite.cpp.hx` is the module `Sqlite`) and a private abstract, whose implementation class keeps its module: the
 		// index's id of each declaration is the one the builds typed
 		final files: Map<String, String> = [
@@ -3673,7 +3673,7 @@ class MemberReachFactsTest extends Test {
 	@:killer('M-GRAPH-REFACET-RETRACT')
 	public function testATypeEachBuildReadsFromItsOwnCopyIsItsTextUnderTheTruth(): Void {
 		// each build reads `Gen` from its own directory, the copies differing in a value and so in every position after it —
-		// `a`'s `calm` starts inside `b`'s `idle`, as TM's `mas-debug` copy of `ApplicationMain` is shifted: each build's
+		// `a`'s `calm` starts inside `b`'s `idle`, as the client's `mas-debug` copy of `ApplicationMain` is shifted: each build's
 		// facts are its own copy's text, the macro's expansion and the local function included, so the build macro every
 		// class carries changed nothing the text does not say. Without the whole list of builds, a build the list does not
 		// name may read a copy otherwise
@@ -4010,10 +4010,7 @@ class MemberReachFactsTest extends Test {
 			+ '\t\tother();\n\t}\n\n\tstatic function calm():Void {}\n\n\tstatic function other():Void {\n\t\tsum(items);\n\t}\n\n'
 			+ '\tstatic function sum(a:Array<Int>):Int return a.length;\n}\n';
 		assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Proven));
-		assertMatch(
-			rewritten(marking('Main.other', FUTURE_MARKER), () -> compiledTruthAsk(['Main.hx' => main])),
-			r -> r.match(Unknown(Escape(_, _)))
-		);
+		assertMatch(rewritten(marking('Main.other'), () -> compiledTruthAsk(['Main.hx' => main])), r -> r.match(Unknown(Escape(_, _))));
 	}
 
 	@:pin('control') @:killer('M-FACTS-BLIND-UNKNOWN')
@@ -4024,8 +4021,7 @@ class MemberReachFactsTest extends Test {
 			+ '\t}\n\n\tstatic function calm():Void {}\n}\n';
 		assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Proven));
 		assertMatch(
-			rewritten(marking('Main.main', FUTURE_MARKER), () -> compiledTruthAsk(['Main.hx' => main])),
-			r -> r.match(Unknown(Unmodelled(_, _, _)))
+			rewritten(marking('Main.main'), () -> compiledTruthAsk(['Main.hx' => main])), r -> r.match(Unknown(Unmodelled(_, _, _)))
 		);
 	}
 
@@ -4034,7 +4030,7 @@ class MemberReachFactsTest extends Test {
 		// `lib.Text.keep` lets nothing it is handed go anywhere — until it carries a marker no reader names, which may say a fact
 		// of what it does was lost
 		assertMatch(truthLibAsk('', 'throw last;'), r -> r.match(Proven));
-		assertMatch(rewritten(marking('lib.Text.keep', FUTURE_MARKER), () -> truthLibAsk('', 'throw last;')), r -> !r.match(Proven));
+		assertMatch(rewritten(marking('lib.Text.keep'), () -> truthLibAsk('', 'throw last;')), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-ESCAPES-FACTS-CTOR-SHAPE')
@@ -4063,7 +4059,7 @@ class MemberReachFactsTest extends Test {
 			+ 'class Rebind {\n\tpublic static function run():Void Reflect.callMethod(new Main(), new Third().calm, ["items"]);\n}\n'
 			+ 'class Nat {\n\tpublic static function go():Void untyped __js__("1");\n}\n';
 		assertMatch(reflectAsk(['Main.hx' => main], true), r -> r.match(Proven));
-		assertMatch(rewritten(marking('Third.calm', FUTURE_MARKER), () -> reflectAsk(['Main.hx' => main], true)), r -> !r.match(Proven));
+		assertMatch(rewritten(marking('Third.calm'), () -> reflectAsk(['Main.hx' => main], true)), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-VALUE-STORED-MARKER-UNKNOWN') @:killer('M-VALUE-CTOR-MARKER-UNKNOWN')
@@ -4084,7 +4080,7 @@ class MemberReachFactsTest extends Test {
 					));
 				});
 			}
-			return marked ? rewritten(marking('Main.grow', FUTURE_MARKER), run) : run();
+			return marked ? rewritten(marking('Main.grow'), run) : run();
 		}
 		function stored(v: FunctionValueTypes): Bool {
 			return v.readStored('Hook.run') != null;
@@ -4107,7 +4103,7 @@ class MemberReachFactsTest extends Test {
 		// `Util.other`'s facts are its text — until it carries a marker no reader names, which may say a fact of it was lost
 		final files: Map<String, String> = utilWith('public static function other():Map<String, Int> return new Map<String, Int>();');
 		assertMatch(hubAsk(files), r -> r.match(Proven));
-		assertMatch(rewritten(marking('Util.other', FUTURE_MARKER), () -> hubAsk(files)), r -> !r.match(Proven));
+		assertMatch(rewritten(marking('Util.other'), () -> hubAsk(files)), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-GRAPH-FIELD-ACCESS-UNKNOWN')
@@ -4309,7 +4305,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION') @:killer('M-FACTS-TEXT-EXPANSION-SPLICED')
 	@:killer('M-FACTS-EXPANSION-NESTED')
 	public function testAnExpressionMacroAnInlinedMethodCallsLeavesItsCallerItsTextUnderTheTruth(): Void {
-		// TM's `GridUtils.saveGridJSON`: the inlined `Shown.mask` calls the expression macro `Mac.t`, whose expansion lies in
+		// the client's `GridUtils.saveGridJSON`: the inlined `Shown.mask` calls the expression macro `Mac.t`, whose expansion lies in
 		// `Mac.hx`, in no range of `Util` nor of `Shown`. The call `Shown.mask` writes built it, so `Util` is its text still
 		final shown: String = 'class Shown {\n\tpublic static inline function mask():Void Words.say(\'$${Mac.t(\'Open\')}...\');\n}\n';
 		final files: Map<String, String> = utilWith(
@@ -4322,7 +4318,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION') @:killer('M-FACTS-TEXT-EXPANSION-BODY')
 	@:killer('M-FACTS-EXPANSION-RECORDED') @:killer('M-FACTS-MACRO-CALLEE')
 	public function testAnExpressionMacroTheTextCallsLeavesItsTypeItsTextUnderTheTruth(): Void {
-		// `Util.other` calls the expression macro `Mac.t` itself (TM's `t(...)` everywhere): the code its expansion holds is
+		// `Util.other` calls the expression macro `Mac.t` itself (the client's `t(...)` everywhere): the code its expansion holds is
 		// the text's, although no range of `Util` holds it
 		final files: Map<String, String> = utilWith('public static function other():Void Words.say(Mac.t(\'x\'));', ['Words.hx' => WORDS]);
 		assertMatch(hubAsk(files), r -> r.match(Proven));
@@ -4347,7 +4343,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TEXT-LITERAL')
 	public function testAConstructionALiteralWritesIsItsTextUnderTheTruth(): Void {
-		// the compiler constructs an `EReg` at a regex literal and a `Map` at an array literal a map is expected of (TM's
+		// the compiler constructs an `EReg` at a regex literal and a `Map` at an array literal a map is expected of (the client's
 		// `GridUtils.loadGridJSON`, openfl's `TextField.set_htmlText`)
 		final files: Map<String, String> = utilWith(
 			'public static function other():Map<Int, String> {\n\t\tfinal r:EReg = ~/a+/;\n\t\tfinal m:Map<Int, String> = [];\n'
@@ -4428,7 +4424,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-TEXT-JOINED-SPLICES')
 	public function testAFieldTheCompilerPlacesAcrossTwoInlinedGettersIsItsTextUnderTheTruth(): Void {
 		// `a.nn` inlines `get_nn`, whose `base` inlines `get_base`: the compiler places the read of `n` from the one's code to
-		// the other's (TM's `FileSystemItemData.filePath`)
+		// the other's (the client's `DiskSystemItemData.filePath`)
 		final ab: String = 'abstract Ab(Holder) from Holder {\n\tpublic var base(get, never):Holder;\n\n'
 			+ '\tinline function get_base():Holder return this;\n\n\tpublic var nn(get, never):Int;\n\n'
 			+ '\tinline function get_nn():Int return base.n;\n}\n';
@@ -4441,11 +4437,11 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-TEXT-JOINED-ACCESS')
 	public function testAMemberOfWhatAnInlinedGetterReturnsIsItsTextUnderTheTruth(): Void {
 		// `Mgr.instance` inlines `get_instance`: the compiler places the call of `get_q` from that code in `Mgr.hx` to the end of
-		// `.q` in `Util.hx` (TM's `PopupManager.instance.notification`, openfl's `textFormatRanges[i].end`)
+		// `.q` in `Util.hx` (the client's `PopupManager.instance.notification`, openfl's `textFormatRanges[i].end`)
 		final mgr: String = 'class Mgr {\n\tpublic static var instance(get, never):Holder;\n\n\tstatic var held:Null<Holder> = null;\n\n'
 			+ '\tstatic inline function get_instance():Holder return held ?? throw \'none\';\n}\n';
 		// the doc puts `.q` past every offset of `Mgr.hx`: the compiler keeps the larger end of the parts it joins, whatever
-		// their files, so the range ends in `Util.hx` only there, as in TM
+		// their files, so the range ends in `Util.hx` only there, as in the client corpus
 		final doc: String = '/**\n\t * The `q` of the manager\'s holder, read through `get_q` on what the inlined `get_instance` returns,\n'
 			+ '\t * past every offset of `Mgr.hx`.\n\t */\n\t';
 		final files: Map<String, String> = utilWith(
@@ -4457,10 +4453,10 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-TEXT-JOINED-CONVERSION') @:killer('M-FACTS-TEXT-JOINED-PLACED')
 	public function testAConversionOfAFieldOfWhatAnInlinedIndexReturnsIsItsTextUnderTheTruth(): Void {
 		// `${m[k].e}` inlines `Map.get`: the compiler places the conversion of `.e`, as the read of it, from that code in
-		// `Map.hx` to the end of `.e` in `Util.hx` (TM's `drill.Node.parse`)
+		// `Map.hx` to the end of `.e` in `Util.hx` (the client's `model.Node.parse`)
 		final box: String = 'enum En {\n\tA;\n}\n\nclass Box {\n\tpublic var e:En = A;\n\n\tpublic function new() {}\n}\n';
 		// the doc puts `.e` past every offset of `Map.get` in `Map.hx`: the compiler keeps the smaller start and the larger end of
-		// the parts it joins, whatever their files, so the range starts in `Map.hx` and ends in `Util.hx` only then, as in TM
+		// the parts it joins, whatever their files, so the range starts in `Map.hx` and ends in `Util.hx` only then, as in the client corpus
 		final doc: String = '/**\n\t * ' + [for (i in 0...70) 'The enum value of the box a key maps to, converted.'].join('\n\t * ')
 			+ '\n\t */\n\t';
 		final files: Map<String, String> = utilWith(
@@ -4484,7 +4480,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-DECLARATION-RUN')
 	public function testAnAbstractsInlineConstructorIsItsTextUnderTheTruth(): Void {
-		// haxe's `Rest` (TM's `GridScale.hx:61`, S10's blocker): `inline function new(a) this = a;` is lowered into the
+		// haxe's `Rest` (the client's `MeshScale.hx:61`, S10's blocker): `inline function new(a) this = a;` is lowered into the
 		// implementation class's `_new`, which the compiler places at the declaration's first modifier, before the function
 		final wrap: String = 'abstract Wrap(Array<Int>) {\n\tinline function new(a:Array<Int>) this = a;\n\n'
 			+ '\tpublic static function make(i:Int):Wrap return new Wrap([i]);\n}\n';
@@ -4508,7 +4504,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-MADE-FORWARDS')
 	public function testAConstructorTheCompilerMadeHandingItsParametersOnIsItsTextUnderTheTruth(): Void {
-		// a class the text gives no constructor gets its super's, which hands the parameters on (TM's `APIEntity`, `Col`)
+		// a class the text gives no constructor gets its super's, which hands the parameters on (the client's `NetEntity`, `Col`)
 		final files: Map<String, String> = hubFixture('new Made(1).poke();', [
 			'Made.hx' => 'class Made extends Base {\n\tpublic function poke():Void {}\n}\n',
 			'Base.hx' => 'class Base {\n\tpublic function new(k:Int) {}\n}\n'
@@ -4518,14 +4514,14 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TEXT-BINDING')
 	public function testALocalTheCompilerBindsAValueTheTextWritesToIsItsTextUnderTheTruth(): Void {
-		// `n ?? 3` reads `n` once into a `tmp` the compiler declares at `n` (TM's `Typography`, `PlayerBase`)
+		// `n ?? 3` reads `n` once into a `tmp` the compiler declares at `n` (the client's `Typography`, `SpriteBase`)
 		assertMatch(hubAsk(utilWith('public static function other(n:Null<Int>):Int return n ?? 3;')), r -> r.match(Proven));
-		// `a ?? b ?? 3` binds its `tmp` to `a ?? b`: `??` is left-associative, so that is a node of the text (TM's
-		// `AIPanel`, `SharedFileMoveDetector`, `Image`)
+		// `a ?? b ?? 3` binds its `tmp` to `a ?? b`: `??` is left-associative, so that is a node of the text (the client's
+		// `AIPanel`, `MirrorFileMoveDetector`, `Image`)
 		assertMatch(
 			hubAsk(utilWith('public static function other(a:Null<Int>, b:Null<Int>):Int return a ?? b ?? 3;')), r -> r.match(Proven)
 		);
-		// `o.inner.n += 1` holds `o.inner` in an `fh` (TM's `RoundedButton`)
+		// `o.inner.n += 1` holds `o.inner` in an `fh` (the client's `RoundedButton`)
 		final outer: String = 'class Outer {\n\tpublic var inner:Holder = new Holder();\n\n\tpublic function new() {}\n}\n';
 		final compound: Map<String, String> = utilWith(
 			'public static function other(o:Outer):Void o.inner.n += 1;', ['Outer.hx' => outer, 'Holder.hx' => HOLDER]
@@ -4536,7 +4532,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-TEXT-BINDING-TRIMMED')
 	public function testABindingOfAnOperandWrittenBeforeAnotherOperatorIsItsTextUnderTheTruth(): Void {
 		// `a + b + c` with `c` an abstract whose commutative `+` takes it first: to keep the order of evaluation the compiler
-		// binds `lhs` to `a + b`, whose node runs on to the space before the next `+` (TM's `FileListItemList`:
+		// binds `lhs` to `a + b`, whose node runs on to the space before the next `+` (the client's `ItemListItemList`:
 		// `x + width + SIZE` with a `UInt`)
 		final q: String =
 			'abstract Q(Int) from Int {\n\t@:commutative @:op(A + B) static function addF(lhs:Q, rhs:Float):Float return rhs;\n}\n';
@@ -4548,7 +4544,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TEXT-DECLARES')
 	public function testALocalPlacedAtItsDeclarationsKeywordIsItsTextUnderTheTruth(): Void {
-		// under `@:privateAccess` the compiler places `final q` at `final` alone (TM's `GlProgressOverlay`)
+		// under `@:privateAccess` the compiler places `final q` at `final` alone (the client's `GlProgressCurtain`)
 		final files: Map<String, String> =
 			utilWith('public static function other():Int {\n\t\t@:privateAccess final q:Int = 1;\n\t\treturn q;\n\t}');
 		assertMatch(hubAsk(files), r -> r.match(Proven));
@@ -4556,7 +4552,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TEXT-READ-AT-VALUE') @:killer('M-FACTS-TEXT-BINDING')
 	public function testTheFunctionAPartialApplicationMakesIsItsTextUnderTheTruth(): Void {
-		// `add.bind(1)` binds `x` at `1` and makes a function reading it and `y` at `add.bind` (TM's `Editor`, `FileSystemBase`)
+		// `add.bind(1)` binds `x` at `1` and makes a function reading it and `y` at `add.bind` (the client's `Editor`, `DiskSystemBase`)
 		final files: Map<String, String> = utilWith(
 			'public static function other():Int->Int return add.bind(1);\n\n\tstatic function add(x:Int, y:Int):Int return x + y;'
 		);
@@ -4566,8 +4562,8 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-TEXT-READ-AT-VALUE') @:killer('M-FACTS-TEXT-INTERPOLATED-VALUE') @:killer('M-FACTS-TEXT-LITERAL-END')
 	public function testAReadOfAnInlinedArgumentAtTheValueTheTextWritesIsItsTextUnderTheTruth(): Void {
 		// a local inline function's parameter, read in an interpolation, is read at the argument the text writes — an
-		// interpolated string's value, up to its last part, spaces and all, or an empty string (TM's
-		// `APIRequest2.buildMultipartBody`: `writeln('--$boundary')`, `writeln('')`; `ProfileLogoGroup`: `getDMY(' ')`)
+		// interpolated string's value, up to its last part, spaces and all, or an empty string (the client's
+		// `NetRequest2.buildMultipartBody`: `writeln('--$boundary')`, `writeln('')`; `AccountLogoGroup`: `getDMY(' ')`)
 		final files: Map<String, String> = utilWith(
 			'public static function other(b:String):Void {\n\t\tinline function line(s:String = \'\'):Void Words.say(\'$$s\\r\\n\');\n'
 			+ '\t\tline(\'--$$b\');\n\t\tline(\'\');\n\t\tline(\'type: $${b}\');\n\t\tline(\' \');\n\t}',
@@ -4578,19 +4574,19 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TEXT-COMPREHENSION')
 	public function testThePushesOfAComprehensionAreItsTextUnderTheTruth(): Void {
-		// the compiler builds `[for (…) e]` by pushing each `e`, positioned at `e` (TM's `Grid.get_gridData`, `Editor`)
+		// the compiler builds `[for (…) e]` by pushing each `e`, positioned at `e` (the client's `Grid.get_gridData`, `Editor`)
 		assertMatch(hubAsk(utilWith('public static function other():Array<Int> return [for (i in 0...3) i * 2];')), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-TEXT-INTERPOLATION')
 	public function testCodeInAnInterpolatedStringPastAnEscapeIsItsTextUnderTheTruth(): Void {
-		// the compiler counts `\t` as one character, so `h.n` past it sits one short (TM's `CrashManager`, `FileIO`)
+		// the compiler counts `\t` as one character, so `h.n` past it sits one short (the client's `FaultManager`, `FileIO`)
 		final files: Map<String, String> = utilWith(
 			'public static function other(h:Holder):String return \'a\\tb $${h.q} $${h.n}\';', ['Holder.hx' => HOLDER]
 		);
 		assertMatch(hubAsk(files), r -> r.match(Proven));
-		// it counts the bytes UTF-8 writes a character in, so past an arrow `h.n` sits two beyond (TM's
-		// `CloudDatabaseMigrations.runMigration`: `${a.from()}→${a.to()}`)
+		// it counts the bytes UTF-8 writes a character in, so past an arrow `h.n` sits two beyond (the client's
+		// `ShardDatabaseMigrations.runMigration`: `${a.from()}→${a.to()}`)
 		final arrow: Map<String, String> = utilWith(
 			'public static function other(h:Holder):String return \'$${h.q}→$${h.n}\';', ['Holder.hx' => HOLDER]
 		);
@@ -4599,7 +4595,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TEXT-CONVERTS')
 	public function testAnAbstractsConversionAnInterpolationCallsIsItsTextUnderTheTruth(): Void {
-		// `${c}` of an abstract calls its `toString` statically, at the value (TM's `VideoExportController`: `${exception.stack}`)
+		// `${c}` of an abstract calls its `toString` statically, at the value (the client's `VideoOutputController`: `${exception.stack}`)
 		final cs: String = 'abstract Cs(Int) from Int {\n\tpublic function toString():String return \'c\';\n}\n';
 		assertMatch(
 			hubAsk(utilWith('public static function other(c:Cs):String return \'c $${c}\';', ['Cs.hx' => cs])), r -> r.match(Proven)
@@ -4608,7 +4604,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TEXT-TYPEDEF-NEW')
 	public function testAConstructionThroughAnImportAliasIsItsTextUnderTheTruth(): Void {
-		// `import sys.ssl.Socket as SslSocket; new SslSocket()` (TM's `NativeURLLoaderQueue`): the compiler types the alias as a
+		// `import sys.ssl.Socket as SslSocket; new SslSocket()` (the client's `NativeURLReaderQueue`): the compiler types the alias as a
 		// typedef
 		final util: String = 'import Holder as H;\n\nclass Util {\n\tpublic static function calm():Void {}\n\n'
 			+ '\tpublic static function other():H return new H();\n}\n';
@@ -4623,7 +4619,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TEXT-TYPEDEF-NEW')
 	public function testAConstructionThroughATypedefIsItsTextUnderTheTruth(): Void {
-		// `new UniversalImageSelect()`, a typedef each platform points at its own class (TM's `ProfileImageGroup`)
+		// `new UniversalImagePicker()`, a typedef each platform points at its own class (the client's `AccountImageGroup`)
 		final files: Map<String, String> = utilWith(
 			'public static function other():HH return new HH();', ['Holder.hx' => HOLDER, 'HH.hx' => 'typedef HH = Holder;\n']
 		);
@@ -4632,14 +4628,14 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TEXT-ABSTRACT-CTOR-CALL')
 	public function testACallOfAnAbstractsConstructorIsItsTextUnderTheTruth(): Void {
-		// `new URLVariables()` of a constructor that is not inline is a call of its implementation's `_new` (TM's `CreatePDF`)
+		// `new URLVariables()` of a constructor that is not inline is a call of its implementation's `_new` (the client's `CreateDoc`)
 		final box: String = 'abstract Box(Array<Int>) {\n\tpublic function new() this = [];\n}\n';
 		assertMatch(hubAsk(utilWith('public static function other():Box return new Box();', ['Box.hx' => box])), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-TEXT-INLINED-WHOLE')
 	public function testAnInitializerThatIsWhollyAnInlinedCallIsItsTextUnderTheTruth(): Void {
-		// the compiler types `twice(3)` as `twice`'s body, at its positions, and records no call (TM's `PopupShadow`, `UInt`)
+		// the compiler types `twice(3)` as `twice`'s body, at its positions, and records no call (the client's `ModalShadow`, `UInt`)
 		final files: Map<String, String> =
 			utilWith('static var X:Int = twice(3);\n\n\tstatic inline function twice(q:Int):Int return q + q;');
 		assertMatch(hubAsk(files), r -> r.match(Proven));
@@ -4647,7 +4643,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TEXT-INLINED-CONSTRUCTION')
 	public function testAnInitializerThatIsWhollyAnInlinedConstructorIsItsTextUnderTheTruth(): Void {
-		// `new ByteArray()` of an abstract whose constructor is inline is its body (TM's `CreatePDF.pdfByteArray`)
+		// `new ByteArray()` of an abstract whose constructor is inline is its body (the client's `CreateDoc.pdfByteArray`)
 		final box: String = 'abstract Box(Array<Int>) {\n\tpublic inline function new() this = [];\n}\n';
 		assertMatch(hubAsk(utilWith('static var B:Box = new Box();', ['Box.hx' => box])), r -> r.match(Proven));
 	}
@@ -4655,7 +4651,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION-SITE')
 	public function testAnExpressionMacroInAnInlinedCallsArgumentIsItsTextUnderTheTruth(): Void {
 		// `Words.rep(Mac.t('x'), …)`: the expansion stands for `s` in `rep`'s code, the call of the macro at `rep`'s site
-		// (TM's `StringUtil.replace(t(…), …)`)
+		// (the client's `StringUtil.replace(t(…), …)`)
 		final files: Map<String, String> = utilWith(
 			'public static function other():String return Words.rep(Mac.t(\'x\'), \'a\', \'b\');', ['Words.hx' => WORDS_REP]
 		);
@@ -4665,7 +4661,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-SITE-HOLDS-OWN-CODE')
 	public function testAnExpressionMacroInAnInlinedCallBesideACapturedThisIsItsTextUnderTheTruth(): Void {
 		// a method's one statement `Shown.run(() -> self(), Mac.t('x'))`: the closure among the inlined call's arguments
-		// captures `this`, which the compiler binds ahead of the splice at the whole block (TM's `Editor.saveAs`)
+		// captures `this`, which the compiler binds ahead of the splice at the whole block (the client's `Editor.saveAs`)
 		final files: Map<String, String> = utilWith(
 			'public function new() {}\n\n\tfunction self():Void {}\n\n\tpublic function other():Void {\n'
 			+ '\t\tShown.run(() -> self(), Mac.t(\'x\'));\n\t}',
@@ -4677,7 +4673,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION-SIBLING')
 	public function testAnExpressionMacroAnInlinedSetterIsHandedIsItsTextUnderTheTruth(): Void {
 		// the inline `apply` assigns `Mac.t(…)` to a property whose inline setter the expansion stands in for: the call of the
-		// macro is in `apply`'s code, spliced at the setter's site (TM's `TextToolBase.applyTextLanguage`)
+		// macro is in `apply`'s code, spliced at the setter's site (the client's `TextItemBase.applyTextLanguage`)
 		final files: Map<String, String> = utilWith(
 			'public static var text(default, set):String = \'\';\n\n\tstatic inline function set_text(v:String):String return text = v;\n\n'
 			+ '\tstatic inline function apply():Void text = Mac.t(\'Type\');\n\n\tpublic static function other():Void apply();',
@@ -4689,7 +4685,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION-OUTER')
 	public function testAnExpressionMacroInAWhollyInlinedInitializerIsItsTextUnderTheTruth(): Void {
 		// `var label = Shown.label(Mac.t('Move'))` is wholly `label`'s body, where the expansion stands for its parameter
-		// (TM's `FileDialogOperations._moveButton`)
+		// (the client's `FilePickerOperations._moveButton`)
 		final shown: String = 'class Shown {\n\tpublic static inline function label(s:String):String return Words.tr(s);\n}\n';
 		final files: Map<String, String> = utilWith(
 			'static var L:String = Shown.label(Mac.t(\'Move\'));', ['Shown.hx' => shown, 'Words.hx' => WORDS_REP]
@@ -4712,7 +4708,7 @@ class MemberReachFactsTest extends Test {
 
 	public function testAReadJoinedAcrossTwoInlinedGettersIsItsTextUnderTheTruth(): Void {
 		// `childCount` calls `count(children)`: the compiler joins the read of `children` from `get_children`'s code to the end
-		// of what the inline `base` returned (TM's `FileSystemItemData.getChildCount` in `FolderWatcher.updateFileTimestamp`)
+		// of what the inline `base` returned (the client's `DiskSystemItemData.getChildCount` in `VolumeWatcher.updateFileTimestamp`)
 		final files: Map<String, String> = utilWith('public static function other(f:Fs):Int return f.childCount();', ['Fs.hx' => FS]);
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
@@ -4721,7 +4717,7 @@ class MemberReachFactsTest extends Test {
 	public function testAFieldReadJoinedAcrossTwoGettersInACallbackIsItsTextUnderTheTruth(): Void {
 		// in the callback, the inline `isFolderWithChild` reads `folder`, whose getter reads it off what the inline `base`
 		// returns: the compiler joins the read from one getter's code to the other's, and no method's range holds it whole
-		// (TM's `FileListGrid.createGridItems`: `childItemData.isFolderWithChild()` inside `itemData.forEachChild(…)`)
+		// (the client's `ItemListTile.createGridItems`: `childItemData.isFolderWithChild()` inside `itemData.forEachChild(…)`)
 		final files: Map<String, String> = utilWith(
 			'public static function other(f:Fs):Void f.forEachChild(c -> if (c.isFolderWithChild()) Words.say(c));',
 			['Fs.hx' => FS, 'Words.hx' => WORDS_REP]
@@ -4733,7 +4729,7 @@ class MemberReachFactsTest extends Test {
 	public function testAFieldReadJoinedFromAnIndexAccessToTheAccessAnotherInlinedMethodWritesIsItsTextUnderTheTruth(): Void {
 		// the inline `Pa.frameOf` reads `a[0].frame` through the inline `get` of an abstract in another file: the compiler
 		// joins the read from `get`'s code to `.frame` in `frameOf`'s, keeping `get`'s file for both offsets — whichever
-		// comes first (TM's `ReadOnlyArray` read of `.frame` in `PitchArea.getFrameByFieldId`, `Map.get` of `.box`)
+		// comes first (the client's `ReadOnlyArray` read of `.frame` in `StageArea.getFrameByFieldId`, `Map.get` of `.box`)
 		final ro: String = 'class Fr {\n\tpublic var frame:Int = 0;\n\n\tpublic function new() {}\n}\n\n'
 			+ 'abstract RoArr(Array<Fr>) from Array<Fr> {\n\t@:arrayAccess public inline function get(i:Int):Fr return this[i];\n}\n';
 		function pa(padding: Int): String {
@@ -4755,7 +4751,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-WALK-WRITTEN-CONSTANT')
 	public function testAnInlinedMethodWhoseBodyIsAnInlinedCallOfConstantsIsItsTextUnderTheTruth(): Void {
 		// `percentLimit(v)` is `limit(v, 0, 1)`: of `percentLimit` the compiler keeps the constants alone, in `limit`'s code
-		// (TM's `ScrollContainer.set_percent`)
+		// (the client's `ScrollContainer.set_percent`)
 		final files: Map<String, String> = utilWith(
 			'public static function other(v:Float):Float return percentLimit(v);\n\n'
 			+ '\tstatic inline function percentLimit(value:Float):Float {\n\t\treturn limit(value, 0, 1);\n\t}\n\n'
@@ -4794,7 +4790,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-REACH-REWRITTEN-TRUTH') @:killer('M-REACH-REWRITTEN-UNTRUE')
 	public function testAnArrayMemberOfASubclassUnderAnAncestorsAutoBuildIsAnsweredUnderTheTruth(): Void {
-		// TM's `GridScale extends Sprite`: an ancestor's `@:autoBuild` that changes nothing but a class carrying `@:bind`, and a
+		// the client's `MeshScale extends Sprite`: an ancestor's `@:autoBuild` that changes nothing but a class carrying `@:bind`, and a
 		// global build rebuilding every class from its own fields, over a subclass looping over its own private array
 		final main: String = 'class Main extends Mid {\n\tprivate final _points:Array<Int> = [];\n'
 			+ '\tstatic function main() {\n\t\tnew Main().f();\n\t}\n'
@@ -4814,7 +4810,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-INLINED-RECEIVER')
 	public function testAKeyValueLoopOverTheMemberLetsNothingEscapeUnderTheTruth(): Void {
-		// TM's `GridScale`: `for (i => p in _points)` is the inlined `_points.keyValueIterator()`, whose receiver the compiler
+		// the client's `MeshScale`: `for (i => p in _points)` is the inlined `_points.keyValueIterator()`, whose receiver the compiler
 		// binds to a local of its own and hands to `new ArrayKeyValueIterator(_this)` — a read the facts took for a value
 		// handed on. It is the receiver of a call of the array's own reader, as the syntax spells it; so is the one of
 		// `iterator()`, whose result is stored. The value loop and the indexed one are lowered with no call at all
@@ -4985,7 +4981,7 @@ class MemberReachFactsTest extends Test {
 	}
 
 	/** The edit adding the marker `marker` to the records of the node `id`. */
-	private static function marking(id: String, marker: String): CompilerFacts -> Void {
+	private static function marking(id: String, marker: String = FUTURE_MARKER): CompilerFacts -> Void {
 		return nodes((node, text) ->
 			if (node != id)
 				text

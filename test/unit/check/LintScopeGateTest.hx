@@ -71,7 +71,7 @@ class LintScopeGateTest extends Test {
 	 * which of the two the answer came from.
 	 */
 	public function testTheSameLiteralOutsideAnyScopeIsInvisible(): Void {
-		Assert.isFalse(ReflectionScan.runtimeTypePath(unscoped(BARE_REPORT).whole, 'Align'));
+		Assert.isFalse(ReflectionScan.runtimeTypePath(unscoped().whole, 'Align'));
 	}
 
 	/** The interpolated half widens with the scope too — one scan, both questions. */
@@ -82,7 +82,7 @@ class LintScopeGateTest extends Test {
 
 	/** Control for the fragment half: same plugin, same report file, no scope — no fragment. */
 	public function testTheSameFragmentOutsideAnyScopeIsInvisible(): Void {
-		Assert.isFalse(ReflectionScan.runtimeNameFragment(unscoped(BARE_REPORT).fragments, 'computeValue'));
+		Assert.isFalse(ReflectionScan.runtimeNameFragment(unscoped().fragments, 'computeValue'));
 	}
 
 	/**
@@ -265,7 +265,7 @@ class LintScopeGateTest extends Test {
 	}
 
 	/** The same plugin WITHOUT a resolution scope — the one-variable counterpart of `scoped`. */
-	private function unscoped(reportSource: String): ReflectionSurface {
+	private function unscoped(reportSource: String = BARE_REPORT): ReflectionSurface {
 		return ReflectionScan.reflectionSurface(
 			[{ file: 'pkg/Align.hx', source: reportSource }], new CachingGrammarPlugin(new HaxeQueryPlugin())
 		);
