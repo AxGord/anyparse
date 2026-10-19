@@ -488,8 +488,9 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		} else if ((shape.localDeclKinds ?? []).contains(pk)) {
 			final ps: Null<Span> = p.span;
 			ty = ps == null ? null : declaredTypes[ps.from];
-		} else
+		} else {
 			return false;
+		}
 		if (ty != null && DynamicShape.acceptableType(ty, dynName))
 			acc.sinkTypes.push(ty);
 		else

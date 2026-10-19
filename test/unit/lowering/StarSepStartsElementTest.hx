@@ -198,9 +198,9 @@ class StarSepStartsElementTest extends Test {
 			case [Atom(sa), Atom(sb)]: (sa: String) == (sb: String);
 			case [EmptyAtom, EmptyAtom]: true;
 			case [Block(la), Block(lb)]:
-				if (la.length != lb.length)
+				if (la.length != lb.length) {
 					false;
-				else {
+				} else {
 					var ok: Bool = true;
 					for (i in 0...la.length) if (!equals(la[i], lb[i])) {
 						ok = false;

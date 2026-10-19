@@ -68,6 +68,13 @@ final class PinsCheckAToO {
 			+ 'M-AMBIENT-IMPORT-BAND',
 		'unit.check.AnonTypeDupCheckTest#testAGroupIsAnchoredWhereTheRuleIsEnabled :: control :: M-ANON-ANCHOR-UNGATED',
 		'unit.check.AnonTypeDupCheckTest#testEachFileHeldToItsOwnChainThreshold :: control :: M-ANON-FIRST-FILE-CONFIG',
+		'unit.check.AsymmetricBranchBracesCheckTest#testFixBracesTheBareElse :: control :: M-ASYM-FIX-NO-EDIT',
+		'unit.check.AsymmetricBranchBracesCheckTest#testFixBracesTheWholeElseIfChain :: control :: M-ASYM-FIX-CHAIN-TAIL-ONLY',
+		'unit.check.AsymmetricBranchBracesCheckTest#testFixLeavesAConditionalRegionBare :: control :: M-ASYM-FIX-OPEN-TAIL-ANY',
+		'unit.check.AsymmetricBranchBracesCheckTest#testFixLeavesADeclarationBare :: control :: M-ASYM-FIX-DECL',
+		'unit.check.AsymmetricBranchBracesCheckTest#testFixLeavesANestedPairToTheNextPass :: control :: M-ASYM-FIX-NESTED-OVERLAP',
+		'unit.check.AsymmetricBranchBracesCheckTest#testFixTerminatesAnUnterminatedExpression :: control :: '
+			+ 'M-ASYM-FIX-NO-TERMINATOR-ADDED,M-ASYM-FIX-UNTERMINATED',
 		'unit.check.AvoidDynamicBagFixTest#testANullableValueIsNeverTypedByItsBareWrapper :: control :: M-BAG-NULL-OUTER',
 		'unit.check.AvoidDynamicBagFixTest#testAnInitializerOfAnotherTypeKeepsTheDeclaration :: control :: M-BAG-INITIALIZER',
 		'unit.check.AvoidDynamicCheckTest#testDynamicInsideIntersectionOrConditionalArgumentFlagged :: control :: '

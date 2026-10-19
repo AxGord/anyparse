@@ -160,7 +160,7 @@ final class BackingFieldRefs {
 			final edits: Array<{ span: Span, text: String }> = refs.renameEdits.copy();
 			if (classified == null) {
 				if (OccurrenceScan.referencedInRange(src, field, 0, src.length, excluded)) return null;
-			} else
+			} else {
 				for (occ in classified) switch occ.kind {
 					case OccurrenceClass.CommentTrivia if (distinctive):
 						edits.push({ span: occ.span, text: propName });
@@ -170,6 +170,7 @@ final class BackingFieldRefs {
 					case _:
 						return null;
 				}
+			}
 			if (edits.length > 0) slices.push({ file: file, edits: edits });
 		}
 		return slices;

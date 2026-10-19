@@ -646,8 +646,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			for (mod in run) if (MemberKinds.META_KINDS.contains(mod.kind)) {
 				final nm: Null<String> = mod.name;
 				if (nm != null) metas.push(nm);
-			} else
+			} else {
 				mods.push(mod.kind);
+			}
 			cb(name, member, mods, metas);
 		});
 	}

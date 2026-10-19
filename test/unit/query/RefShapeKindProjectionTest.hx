@@ -1400,8 +1400,9 @@ final class RefShapeKindProjectionTest extends Test {
 		final out: Array<String> = [];
 		for (field in Reflect.fields(shape)) if (GROUP_FIELDS.contains(field)) {
 			for (inner in Reflect.fields(Reflect.field(shape, field))) out.push(inner);
-		} else
+		} else {
 			out.push(field);
+		}
 		return out;
 	}
 

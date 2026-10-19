@@ -340,8 +340,9 @@ final class StructFieldTrailLowering {
 					]),
 					pos: Context.currentPos()
 				});
-			} else
+			} else {
 				parseSteps.push(macro skipWs(ctx));
+			}
 		}
 		// ω-condition-wrap-keep: the pre-field `skipWs` above advanced
 		// `ctx.pos` to the cond's first token, so `hasNewlineIn` over

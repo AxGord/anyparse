@@ -347,8 +347,9 @@ final class TypedFactsProbe {
 			if (sys.FileSystem.isDirectory(path)) {
 				for (entry in sys.FileSystem.readDirectory(path)) wipe(Path.join([path, entry]));
 				sys.FileSystem.deleteDirectory(path);
-			} else
+			} else {
 				sys.FileSystem.deleteFile(path);
+			}
 		}
 		try wipe(dir) catch (exception: haxe.Exception) { // noqa: swallowed-exception
 			// a leftover probe directory costs nothing but disk: the answer does not depend on it

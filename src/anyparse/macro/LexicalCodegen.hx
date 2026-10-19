@@ -186,8 +186,9 @@ class LexicalCodegen {
 		if (spec.sameLine) {
 			stmts.push(macro final nl: Int = source.indexOf('\n', from + $v{openLen}));
 			stmts.push(macro final limit: Int = nl < 0 ? n : nl);
-		} else
+		} else {
 			stmts.push(macro final limit: Int = n);
+		}
 		final steps: Array<Expr> = [];
 		if (spec.escape >= 0) steps.push(macro if (c == $v{spec.escape}) {
 			i += 2;

@@ -190,9 +190,9 @@ final class ImportOutsideGuard implements Check {
 		final usingText: String = textOf(source, movedUsings);
 		// Two zero-width edits at one offset would apply in an unspecified order, so a shared
 		// anchor carries both halves as ONE edit, imports first.
-		if (importAt == usingAt)
+		if (importAt == usingAt) {
 			edits.push({ span: new Span(importAt, importAt), text: importText + usingText });
-		else {
+		} else {
 			if (importText != '') edits.push({ span: new Span(importAt, importAt), text: importText });
 			if (usingText != '') edits.push({ span: new Span(usingAt, usingAt), text: usingText });
 		}

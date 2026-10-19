@@ -94,7 +94,6 @@ class BuiltinFixClassCensusTest extends Test {
 		Assert.same([
 			'anon-type-dup',
 			'assignment-in-condition',
-			'asymmetric-branch-braces',
 			'complexity',
 			'doc-coverage',
 			'doc-length',

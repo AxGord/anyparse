@@ -154,8 +154,9 @@ class ReachDefinesProbeTest extends Test {
 			if (FileSystem.isDirectory(path)) {
 				for (entry in FileSystem.readDirectory(path)) wipe(Path.join([path, entry]));
 				FileSystem.deleteDirectory(path);
-			} else
+			} else {
 				FileSystem.deleteFile(path);
+			}
 		}
 		try wipe(dir) catch (exception: Exception) {}
 	}

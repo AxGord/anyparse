@@ -2176,9 +2176,9 @@ final class MemberReach {
 					case ReflectiveName(null):
 						// an object of a type the facts name reaches only its own type's members by a name it computes
 						final reached: Null<ReflectedMembers> = _g.reflectedMembers(g, h.receivers ?? []);
-						if (reached == null || reached.types.contains(question.declaring))
+						if (reached == null || reached.types.contains(question.declaring)) {
 							blind = blind ?? DynamicName(entry.file, h.span);
-						else {
+						} else {
 							final reflected: AdmissionSite = site(from, entry.file, h.span, 'reflection', [], false);
 							reflected.owned = reached.ids;
 							bounded.push({ file: entry.file, span: h.span });
@@ -2314,9 +2314,9 @@ final class MemberReach {
 				final rebuilt: Null<ReachUnknown> = type == null ? null : rewrittenAt(g, node, type);
 				if (rebuilt != null) blind = blind ?? rebuilt;
 				final spans: Null<Array<Occurrence>> = bodySpans(g, node);
-				if (spans == null)
+				if (spans == null) {
 					blind = blind ?? UnresolvedDispatch(node.file, null, 'the body of `${node.id}`, which the graph cannot locate');
-				else {
+				} else {
 					if (enterBody(g, node)) widened = true;
 					// every declaration the node folds runs as it: each is read whole
 					for (d in spans) {

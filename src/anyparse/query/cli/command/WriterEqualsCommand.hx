@@ -107,11 +107,11 @@ final class WriterEqualsCommand implements CliCommand {
 						CliIo.stderr('apq writer-equals: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (inputPath == null)
+					if (inputPath == null) {
 						inputPath = a;
-					else if (expectedPath == null)
+					} else if (expectedPath == null) {
 						expectedPath = a;
-					else {
+					} else {
 						CliIo.stderr('apq writer-equals: expects exactly two paths (input, expected); got extra "$a"\n');
 						return EXIT_USAGE;
 					}

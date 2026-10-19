@@ -80,13 +80,13 @@ final class ExtractVarCommand implements CliCommand {
 						CliIo.stderr('apq extract-var: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (posSpec == null && matchExpr == null && name == null && CliArgs.isPosSpec(a))
+					} else if (posSpec == null && matchExpr == null && name == null && CliArgs.isPosSpec(a)) {
 						posSpec = a;
-					else if (name == null)
+					} else if (name == null) {
 						name = a;
-					else {
+					} else {
 						CliIo.stderr('apq extract-var: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -137,8 +137,9 @@ final class ExtractVarCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq extract-var: wrote $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq extract-var: $message\n');

@@ -254,11 +254,11 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 						CliIo.stderr('apq add-element: unknown option "$a"\n');
 						return addElementParseExit(EXIT_USAGE);
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (code == null)
+					} else if (code == null) {
 						code = a;
-					else {
+					} else {
 						CliIo.stderr('apq add-element: unexpected extra argument "$a"\n');
 						return addElementParseExit(EXIT_USAGE);
 					}

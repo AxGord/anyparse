@@ -849,8 +849,9 @@ final class CheckScan {
 			if (p.kind == seams.andKind || p.kind == seams.orKind) {
 				if (p.kind != wantKind) return false;
 				cur = p;
-			} else
+			} else {
 				return p.kind != seams.parenKind;
+			}
 		}
 	}
 

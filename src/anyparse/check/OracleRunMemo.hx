@@ -97,9 +97,9 @@ final class OracleRunMemo {
 				final scan: Null<{ fingerprint: String, roots: Array<String> }> = oracle.unavailable == null
 					? OracleCache.scanned(oracle.hxml, oracle.dir, oracle.defines, contents, walks)
 					: null;
-				if (scan == null)
-					null
-				else {
+				if (scan == null) {
+					null;
+				} else {
 					_roots[OracleDeclaration.oracleKey(oracle)] = scan.roots;
 					written = written ?? writtenDigest(_written());
 					OracleCache.md5('${scan.fingerprint}\n$written');
@@ -126,8 +126,9 @@ final class OracleRunMemo {
 		});
 		if (inside) {
 			if (!_seen.contains(config)) _seen.push(config);
-		} else
+		} else {
 			_blind.push(config);
+		}
 	}
 
 	/** The memo the configurations of `oracles` carry, or null when none does — every configuration outside a lint run. */

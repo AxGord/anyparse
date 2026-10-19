@@ -261,13 +261,13 @@ final class MoveCommand implements CliCommand {
 						CliIo.stderr('apq move: unknown option "$a"\n');
 						return moveParseExit(EXIT_USAGE);
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (posSpec == null && selectExpr == null && matchExpr == null && destFileArg == null && CliArgs.isPosSpec(a))
+					} else if (posSpec == null && selectExpr == null && matchExpr == null && destFileArg == null && CliArgs.isPosSpec(a)) {
 						posSpec = a;
-					else if (destFileArg == null)
+					} else if (destFileArg == null) {
 						destFileArg = a;
-					else {
+					} else {
 						CliIo.stderr('apq move: unexpected extra argument "$a"\n');
 						return moveParseExit(EXIT_USAGE);
 					}

@@ -224,8 +224,9 @@ final class KwBranchLowering {
 					};
 				}
 			});
-		} else
+		} else {
 			steps.push(macro skipWs(ctx));
+		}
 		// Capture _end_pos AFTER the post-Ref skipWs but BEFORE the
 		// trail-literal match, so trailing whitespace inside the
 		// braces (e.g. `${ i + 1 }`) is included in the verbatim

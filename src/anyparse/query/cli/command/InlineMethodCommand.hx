@@ -84,11 +84,11 @@ final class InlineMethodCommand implements CliCommand {
 						CliIo.stderr('apq inline-method: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (posSpec == null)
+					} else if (posSpec == null) {
 						posSpec = a;
-					else {
+					} else {
 						CliIo.stderr('apq inline-method: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -118,8 +118,9 @@ final class InlineMethodCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq inline-method: wrote $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq inline-method: $message\n');

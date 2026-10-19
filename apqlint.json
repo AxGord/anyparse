@@ -91,6 +91,9 @@
 		"anon-type-dup": {
 			"enabled": true
 		},
+		"asymmetric-branch-braces": {
+			"enabled": true
+		},
 		"case-pattern-separator": {
 			"enabled": true
 		},

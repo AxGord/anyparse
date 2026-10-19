@@ -612,8 +612,9 @@ final class InlineConstant implements Check {
 				while (i < n && isIdentPart(source.fastCodeAt(i))) i++;
 				final token: String = source.substring(start, i);
 				if (isUpper(token.fastCodeAt(0)) && !out.contains(token)) out.push(token);
-			} else
+			} else {
 				i++;
+			}
 		}
 	}
 

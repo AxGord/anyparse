@@ -454,9 +454,9 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	): Void {
 		if (containerKinds.contains(node.kind)) {
 			final wt: Null<WholeType> = wholeType(node, siblings, selfIndex, source, cfg);
-			if (wt != null)
+			if (wt != null) {
 				whole.push(wt);
-			else {
+			} else {
 				final byPrefix: Map<String, Array<ConstDecl>> = [];
 				for (decl in collectConsts(node, cfg)) {
 					final existing: Null<Array<ConstDecl>> = byPrefix[decl.prefix];

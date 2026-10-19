@@ -459,8 +459,9 @@ final class TypedFactsMacro {
 				writer.line('{"k":"facts","v":$VERSION,"inline":${!Context.defined('no-inline')}}');
 				// the target the compile generates code for: what a conversion into a typed place does to a value
 				writer.line('{"k":"target","n":${q(Context.definedValue('target.name') ?? '')}}');
-			} else
+			} else {
 				writer._out = File.append(path, false);
+			}
 			for (t in moduleTypes) writer.collectFields(t);
 			for (t in moduleTypes) writer.moduleType(t);
 			writer.printedAliases();

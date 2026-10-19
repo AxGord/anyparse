@@ -541,9 +541,9 @@ final class LintFixDriver {
 		final fileOwner: Map<String, Int> = [];
 		for (i in 0...n) for (slice in renames[i]) {
 			final owner: Null<Int> = fileOwner[slice.file];
-			if (owner == null)
+			if (owner == null) {
 				fileOwner[slice.file] = i;
-			else {
+			} else {
 				final ra: Int = find(i);
 				final rb: Int = find(owner);
 				if (ra != rb) parent[ra] = rb;

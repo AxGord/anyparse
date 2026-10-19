@@ -343,18 +343,18 @@ final class MoveToHelper {
 	): Void {
 		final visibility: Null<QueryNode> = m.group.modifiers.find(mod -> mod.kind == 'Public' || mod.kind == 'Private');
 		final visibilityEnd: Null<Int> = visibility?.span?.to;
-		if (visibilityEnd != null)
+		if (visibilityEnd != null) {
 			movedTextEdits.push({ span: new Span(visibilityEnd, visibilityEnd), text: ' static' });
-		else {
+		} else {
 			final at: Int = m.group.modifiers.find(mod -> !MemberKinds.META_KINDS.contains(mod.kind))?.span?.from ?? m.span.from;
 			movedTextEdits.push({ span: new Span(at, at), text: 'static ' });
 		}
 		final params: Array<QueryNode> = [for (c in m.group.member.children) if (AddParam.PARAM_KINDS.contains(c.kind)) c];
 		final first: Null<Int> = params.length > 0 ? params[0].span?.from : null;
 		final declared: String = '$paramName: ${prep.srcTypeName}';
-		if (first != null)
+		if (first != null) {
 			movedTextEdits.push({ span: new Span(first, first), text: '$declared, ' });
-		else {
+		} else {
 			final open: Int = AddParam.emptyParenInsertOffset(prep.srcSource, m.span);
 			if (open >= 0) movedTextEdits.push({ span: new Span(open, open), text: declared });
 		}

@@ -673,8 +673,9 @@ final class FmtCommand implements CliCommand {
 					fatalExit: null
 				};
 			}
-		} else
+		} else {
 			CliIo.sysPrint(formatted);
+		}
 		return {
 			changed: false,
 			failed: false,

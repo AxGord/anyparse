@@ -205,8 +205,9 @@ final class MissingVisibility implements Check {
 			if (ctx.seams.containers.contains(child.kind)) {
 				if (!isExtern) scanRun(ctx, child.children, false);
 				walk(ctx, child, false);
-			} else
+			} else {
 				walk(ctx, child, isExtern);
+			}
 			isExtern = false;
 		}
 	}
@@ -297,8 +298,9 @@ final class MissingVisibility implements Check {
 			if (ctx.seams.containers.contains(child.kind)) {
 				if (!publicDefault) insertRun(ctx, child.children, child.name, { insertAt: -1, sawOverride: false });
 				insertWalk(ctx, child, false);
-			} else
+			} else {
 				insertWalk(ctx, child, publicDefault);
+			}
 			publicDefault = false;
 		}
 	}

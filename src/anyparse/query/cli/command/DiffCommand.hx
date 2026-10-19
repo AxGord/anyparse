@@ -70,11 +70,11 @@ final class DiffCommand implements CliCommand {
 						CliIo.stderr('apq diff: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (fileA == null)
+					if (fileA == null) {
 						fileA = a;
-					else if (fileB == null)
+					} else if (fileB == null) {
 						fileB = a;
-					else {
+					} else {
 						CliIo.stderr('apq diff: only two file arguments supported (got "$fileA", "$fileB", "$a")\n');
 						return EXIT_USAGE;
 					}

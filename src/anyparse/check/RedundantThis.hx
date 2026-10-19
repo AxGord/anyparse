@@ -181,8 +181,9 @@ final class RedundantThis implements Check {
 			if (c.memberDeclKinds.contains(child.kind)) {
 				final name: Null<String> = child.name;
 				if (name != null) out.push(name);
-			} else
+			} else {
 				collectMemberNames(child, c, out);
+			}
 		}
 	}
 

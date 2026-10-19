@@ -268,8 +268,9 @@ final class UnusedLoopBinder implements Check implements DefaultOff {
 		final keyUnread: Bool = unread(ctx, keyName, body, bodySpan);
 		if (valueBinder == null || valueSpan == null) {
 			if (keyUnread) out.push(renamed(keyToken, 'loop binder \'$keyName\' is never read; rename it to _'));
-		} else
+		} else {
 			keyValueCandidates(ctx, iterable, body, bodySpan, keyUnread ? keyName : null, keyToken, valueBinder.name, valueSpan, out);
+		}
 	}
 
 	/** The unread binders of a key-value loop; `unreadKey` is the key's name when the body never reads it, else null. */

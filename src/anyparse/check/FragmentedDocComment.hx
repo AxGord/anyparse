@@ -100,8 +100,9 @@ final class FragmentedDocComment implements Check {
 					j++;
 				if (j > i) runs.push(comments.slice(i, j + 1));
 				i = j + 1;
-			} else
+			} else {
 				i++;
+			}
 		}
 		return runs;
 	}

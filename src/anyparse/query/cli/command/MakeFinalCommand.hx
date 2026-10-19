@@ -59,11 +59,11 @@ final class MakeFinalCommand implements CliCommand {
 						CliIo.stderr('apq make-final: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (fieldName == null)
+					} else if (fieldName == null) {
 						fieldName = a;
-					else {
+					} else {
 						CliIo.stderr('apq make-final: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -97,8 +97,9 @@ final class MakeFinalCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq make-final: made "$fieldNameNN" final in $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq make-final: $message\n');

@@ -119,7 +119,7 @@ final class TypeNameBinding {
 
 	/**
 	 * `splitPath` per import path, null included: `statementAnswer` reads every import of a file once per NAME the
-	 * file asks about, and split the same path anew each time (~0.25 s of a TM `lint --all`). Read only here.
+	 * file asks about, and split the same path anew each time (~0.25 s of a client `lint --all`). Read only here.
 	 */
 	private final _importPaths: Map<String, Null<ImportPath>> = [];
 
@@ -229,11 +229,11 @@ final class TypeNameBinding {
 			final answer: Answer = wildcardAnswer(name, SourceText.parentPath(w.raw));
 			final binding: Null<NameTarget> = bindingOf(answer);
 			if (binding == null) continue;
-			if (answer.match(Unreadable(_)))
-				out.unlisted.push(binding)
-			else if (w.guarded && !coGuarded(w, fi, order.use))
-				out.guarded.push(binding)
-			else {
+			if (answer.match(Unreadable(_))) {
+				out.unlisted.push(binding);
+			} else if (w.guarded && !coGuarded(w, fi, order.use)) {
+				out.guarded.push(binding);
+			} else {
 				out.bound = binding;
 				return out;
 			}

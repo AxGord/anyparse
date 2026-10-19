@@ -203,11 +203,11 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 						CliIo.stderr('apq replace-node: unknown option "$a"\n');
 						return replaceNodeParseExit(EXIT_USAGE);
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (newSource == null)
+					} else if (newSource == null) {
 						newSource = a;
-					else {
+					} else {
 						CliIo.stderr('apq replace-node: unexpected extra argument "$a"\n');
 						return replaceNodeParseExit(EXIT_USAGE);
 					}

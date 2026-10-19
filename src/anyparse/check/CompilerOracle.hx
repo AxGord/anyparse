@@ -289,8 +289,9 @@ final class CompilerOracle {
 			if (again >= 0) {
 				memo.file(oracles[i], false, before[i], after[k], plain[again]);
 				out[i] = retriedOutcome(plain[again]);
-			} else
+			} else {
 				out[i] = runs[k].cancelled == true ? null : outcomeOf(runs[k]);
+			}
 		}
 		return out;
 	}

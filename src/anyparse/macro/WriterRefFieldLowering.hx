@@ -393,8 +393,9 @@ final class WriterRefFieldLowering {
 				optParts.push(sepExpr);
 				optParts.push(writeCall);
 			}
-		} else
+		} else {
 			optParts.push(writeCall);
+		}
 	}
 
 	/**
@@ -675,8 +676,9 @@ final class WriterRefFieldLowering {
 			if (child.fmtHasFlag('switchSubjectParensStrip')) {
 				final cond: Expr = switchParensStripCond(fieldAccess);
 				parts.push(macro $cond ? _de() : $trailDoc);
-			} else
+			} else {
 				parts.push(trailDoc);
+			}
 		}
 		// ω-struct-trailopt-source-track: mandatory-
 		// Ref `@:trailOpt(LIT)` field gates the trail emission on the
@@ -742,7 +744,7 @@ final class WriterRefFieldLowering {
 	 * grammar has no other place to park, and dropping it would emit code that does not compile.
 	 *
 	 * Distinct from `optionalSemicolon` (the `}`-terminated statement's own `;`) because a config
-	 * legitimately wants opposite answers for the two: TM writes every statement terminator and
+	 * legitimately wants opposite answers for the two: client writes every statement terminator and
 	 * no `;` before `else`. Returns null -- caller keeps plain source presence -- for every field
 	 * without the meta, so the whole path is byte-inert unless a grammar opts in.
 	 */
@@ -1861,8 +1863,9 @@ final class WriterRefFieldLowering {
 			if (prevAnyStarNonEmpty != null) {
 				final prev: Expr = prevAnyStarNonEmpty;
 				parts.push(macro $prev ? $sep : _de());
-			} else
+			} else {
 				parts.push(sep);
+			}
 		}
 		if (child.fmtHasFlag('leftCurly')) {
 			// `leftCurlySeparator` (default `optSpaceUpstream=false`)

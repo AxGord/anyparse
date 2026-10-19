@@ -285,8 +285,9 @@ final class CasePatterns {
 		if (isNamedCallee(node, state.shape)) {
 			final callee: Null<String> = node.children[0].name;
 			for (i in 1...node.children.length) scanNode(state, node.children[i], false, callee == null ? Opaque : Slot(callee, i - 1));
-		} else
+		} else {
 			state.unmodelled(node);
+		}
 	}
 
 	/**
@@ -297,16 +298,16 @@ final class CasePatterns {
 		final shape: RefShape = state.shape;
 		final kind: String = node.kind;
 		final element: PatternSite = site == Whole || site == Structural ? Structural : Opaque;
-		if (kind == shape.arrayLiteralKind)
-			for (child in node.children) scanNode(state, child, false, element)
-		else if (kind == shape.objectLiteralKind)
+		if (kind == shape.arrayLiteralKind) {
+			for (child in node.children) scanNode(state, child, false, element);
+		} else if (kind == shape.objectLiteralKind) {
 			for (field in node.children) {
 				if (field.kind == shape.objectFieldKind && field.children.length == 1)
 					scanNode(state, field.children[0], false, element)
 				else
 					state.unmodelled(field);
 			}
-		else if (kind == shape.parenKind || kind == shape.negationKind) {
+		} else if (kind == shape.parenKind || kind == shape.negationKind) {
 			if (node.children.length == 1)
 				scanNode(state, node.children[0], whole && kind == shape.parenKind, kind == shape.parenKind ? site : Opaque)
 			else
@@ -321,8 +322,9 @@ final class CasePatterns {
 				scanNode(state, node.children[1], false, Opaque)
 			else
 				state.unmodelled(node);
-		} else
+		} else {
 			return false;
+		}
 		return true;
 	}
 

@@ -65,11 +65,11 @@ final class PullUpCommand implements CliCommand {
 						CliIo.stderr('apq $cmd: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (srcFile == null)
+					if (srcFile == null) {
 						srcFile = a;
-					else if (memberName == null)
+					} else if (memberName == null) {
 						memberName = a;
-					else {
+					} else {
 						CliIo.stderr('apq $cmd: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}

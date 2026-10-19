@@ -594,9 +594,9 @@ final class Rename {
 		var instance: Bool = false;
 		var isStatic: Bool = false;
 		function scan(parent: QueryNode): Void {
-			for (child in parent.children) if (CondRegionScan.isConditionalKind(child.kind, shape))
+			for (child in parent.children) if (CondRegionScan.isConditionalKind(child.kind, shape)) {
 				scan(child);
-			else {
+			} else {
 				final span: Null<Span> = child.span;
 				if (memberKinds.contains(child.kind) && child.name == name && (span == null || span.from != renamedFrom)) {
 					if (modifierPrecedes(tree, child, staticKind, modifierKinds))

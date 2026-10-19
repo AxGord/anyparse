@@ -89,16 +89,17 @@ final class RemoveParamCommand implements CliCommand {
 						CliIo.stderr('apq remove-param: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
+					}
 					// With a named address the position slot is skipped — every later
 					// positional is the index (which is also digits-only, so the slot
 					// routing must not steal it).
-					else if (posSpec == null && selectExpr == null && matchExpr == null && indexSpec == null && a.indexOf(':') >= 0)
+					else if (posSpec == null && selectExpr == null && matchExpr == null && indexSpec == null && a.indexOf(':') >= 0) {
 						posSpec = a;
-					else if (indexSpec == null)
+					} else if (indexSpec == null) {
 						indexSpec = a;
-					else {
+					} else {
 						CliIo.stderr('apq remove-param: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -136,8 +137,9 @@ final class RemoveParamCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq remove-param: wrote $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				if (advisory != null) CliIo.stderr('apq remove-param: $advisory\n');
 				return EXIT_OK;
 			case Err(message):

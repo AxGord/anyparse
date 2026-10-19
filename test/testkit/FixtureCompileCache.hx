@@ -399,8 +399,9 @@ final class FixtureCompileCache {
 				budget.bytes -= Std.int(stat.size);
 				if (budget.files < 0 || budget.bytes < 0) return false;
 				files[child] = hash(Fs.readFileSync(Path.join([root, child])));
-			} else
+			} else {
 				return false;
+			}
 		}
 		return true;
 	}

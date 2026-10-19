@@ -76,11 +76,11 @@ final class AddImportCommand implements CliCommand {
 						CliIo.stderr('apq add-import: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (path == null)
+					} else if (path == null) {
 						path = a;
-					else {
+					} else {
 						CliIo.stderr('apq add-import: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -110,8 +110,9 @@ final class AddImportCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq add-import: wrote $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq add-import: $message\n');

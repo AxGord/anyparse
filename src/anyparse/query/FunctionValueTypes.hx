@@ -157,7 +157,7 @@ final class FunctionValueTypes {
 	/**
 	 * A facts type text -> the function type it reads as (`functionText`), null for one that is none. It reads only the
 	 * text and the table's typedefs, which an edit of the run does not change (`CompilerFacts.invalidate` drops sources,
-	 * never types); `mayRun` parsed the same texts once per escaped function type per value type held, 72 of TM's 533
+	 * never types); `mayRun` parsed the same texts once per escaped function type per value type held, 72 of the client's 533
 	 * `--fix` seconds.
 	 */
 	private final _functionTexts: Map<String, Null<FactsType>> = [];
@@ -961,13 +961,13 @@ final class FunctionValueTypes {
 		final texts: Array<String> = [];
 		final ids: Array<String> = [];
 		final bodies: Null<Array<FactNode>> = g.facts?.faceted[id];
-		if (bodies != null)
+		if (bodies != null) {
 			for (b in bodies) {
 				ids.push(b.id);
 				texts.push(b.signature);
 				for (v in b.variants) texts.push(v.signature);
 			}
-		else {
+		} else {
 			final type: Null<String> = node.typeName;
 			final name: Null<String> = node.name;
 			if (type == null || name == null || id.indexOf(NESTED) >= 0) return null;

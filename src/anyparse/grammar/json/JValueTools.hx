@@ -23,9 +23,9 @@ class JValueTools {
 			case [JString(x), JString(y)]:
 				x == y;
 			case [JArray(xs), JArray(ys)]:
-				if (xs.length != ys.length)
+				if (xs.length != ys.length) {
 					false;
-				else {
+				} else {
 					var eq: Bool = true;
 					for (i in 0...xs.length) {
 						if (!equals(xs[i], ys[i])) {
@@ -36,9 +36,9 @@ class JValueTools {
 					eq;
 				}
 			case [JObject(xs), JObject(ys)]:
-				if (xs.length != ys.length)
+				if (xs.length != ys.length) {
 					false;
-				else {
+				} else {
 					var eq: Bool = true;
 					for (i in 0...xs.length) {
 						if (xs[i].key != ys[i].key || !equals(xs[i].value, ys[i].value)) {

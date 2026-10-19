@@ -75,11 +75,11 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 						CliIo.stderr('apq remove-import: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (modulePath == null)
+					} else if (modulePath == null) {
 						modulePath = a;
-					else {
+					} else {
 						CliIo.stderr('apq remove-import: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}

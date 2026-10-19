@@ -118,8 +118,9 @@ final class AstCommand implements CliCommand {
 		} else if (file != null) {
 			source = CliIo.readSourceForParse(file);
 			fileLabel = file;
-		} else
+		} else {
 			throw new Exception('apq ast: no source provider after mutex check (unreachable)');
+		}
 
 		// `--writer-output`: parse + format-write through the plugin's
 		// round-trip pipeline. Independent of --select / --at / --json /

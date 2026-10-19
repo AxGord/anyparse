@@ -371,11 +371,11 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		for (i => text in clauses) {
 			final ceiling: Null<Int> = clause.match(text) ? Std.parseInt(clause.matched(1)) : null;
 			final unit: String = ceiling == null ? '' : clause.matched(2);
-			if (unit == 'members' && i == 0)
-				members = ceiling
-			else if (unit == 'lines' && lines == null)
-				lines = ceiling
-			else {
+			if (unit == 'members' && i == 0) {
+				members = ceiling;
+			} else if (unit == 'lines' && lines == null) {
+				lines = ceiling;
+			} else {
 				problems.push(malformedGrant(head));
 				return null;
 			}

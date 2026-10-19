@@ -124,9 +124,9 @@ final class HaxeAmbientImports {
 			}
 			if (name == AMBIENT_FILE || Path.extension(name) != MODULE_EXTENSION) continue;
 			final text: Null<String> = try sys.io.File.getContent(child) catch (_: haxe.Exception) null;
-			if (text == null)
-				complete = false
-			else {
+			if (text == null) {
+				complete = false;
+			} else {
 				// Re-bound: strict null-safety does not carry a narrowed local into a structure literal.
 				final read: String = text;
 				out.push({ file: child, source: read });

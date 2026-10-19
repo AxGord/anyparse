@@ -1226,8 +1226,9 @@ class WriterLowering {
 					// ONE break axis for every arm, so the construct group is dropped and the outer
 					// `Group` decides alone.
 					parts.push(fitGroupExpr(node, elseAcc, grpInner));
-				} else
+				} else {
 					parts.push(macro _dbg($grpInner));
+				}
 				condFitGroupStartIdx = -1;
 			} else if (!isCondFitSetter)
 				condFitGroupStartIdx = -1;

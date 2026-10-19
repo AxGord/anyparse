@@ -215,9 +215,9 @@ final class StaticConstant implements Check implements DefaultOff {
 	private static function walk(node: QueryNode, ctx: Ctx, inheritedBlock: Bool): Void {
 		var blocked: Bool = inheritedBlock;
 		for (child in node.children) {
-			if (ctx.seams.metaKinds.contains(child.kind))
+			if (ctx.seams.metaKinds.contains(child.kind)) {
 				blocked = blocked || isBlockingMeta(child.name, ctx.seams);
-			else {
+			} else {
 				if (ctx.seams.classLikeContainers.contains(child.kind) && !blocked) scanContainer(child, ctx);
 				walk(child, ctx, blocked);
 				blocked = false;

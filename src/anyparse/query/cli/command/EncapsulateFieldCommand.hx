@@ -62,11 +62,11 @@ final class EncapsulateFieldCommand implements CliCommand {
 						CliIo.stderr('apq encapsulate-field: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
+					if (file == null) {
 						file = a;
-					else if (fieldName == null)
+					} else if (fieldName == null) {
 						fieldName = a;
-					else {
+					} else {
 						CliIo.stderr('apq encapsulate-field: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -97,8 +97,9 @@ final class EncapsulateFieldCommand implements CliCommand {
 				if (write) {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq encapsulate-field: encapsulated "$fieldNameNN" in $filePath\n');
-				} else
+				} else {
 					CliEdit.previewEdit(op, filePath, text);
+				}
 				return EXIT_OK;
 			case Err(message):
 				CliIo.stderr('apq encapsulate-field: $message\n');
