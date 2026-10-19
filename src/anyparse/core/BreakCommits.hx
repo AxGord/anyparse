@@ -18,6 +18,14 @@ import anyparse.format.IndentChar;
 @:nullSafety(Strict)
 final class BreakCommits {
 
+	/**
+	 * A COMMITTED break: `source`, the layout the next rewrite reads from its own source and every walker reads, with
+	 * `bare` kept for `followBare`. A `BreakCommit` with no token, which no measure render can resolve to `brk`.
+	 */
+	public static inline function committed(bare: Doc, source: Doc): Doc {
+		return BreakCommit(bare, source, null);
+	}
+
 	/** `doc` with every `BreakCommit` resolved, or `doc` itself when it holds none. */
 	public static function resolve(doc: Doc, width: Int, indentChar: IndentChar, tabWidth: Int, indentSize: Int): Doc {
 		if (nested(doc).length == 0) return doc;
@@ -70,17 +78,6 @@ final class BreakCommits {
 		return walk(d);
 	}
 
-	private static function commit(d: Doc, tokens: Array<BreakToken>, memo: DocIdentityMap<Doc>): Doc {
-		final hit: Null<Doc> = memo.get(d);
-		if (hit != null) return hit;
-		final out: Doc = switch d {
-			case BreakCommit(brk, flat, token): commit(token != null && tokens.contains(token) ? brk : flat, tokens, memo);
-			case _: D.mapChildren(d, c -> commit(c, tokens, memo));
-		};
-		memo.set(d, out);
-		return out;
-	}
-
 	/**
 	 * `commits` (in `nested` order) keeping, for each `BreakToken`, only its FIRST node: the outermost one, whose `brk`
 	 * side already holds every list nested under it laid out for the same break. The nodes of one token resolve
@@ -116,6 +113,17 @@ final class BreakCommits {
 		return out;
 	}
 
+	private static function commit(d: Doc, tokens: Array<BreakToken>, memo: DocIdentityMap<Doc>): Doc {
+		final hit: Null<Doc> = memo.get(d);
+		if (hit != null) return hit;
+		final out: Doc = switch d {
+			case BreakCommit(brk, flat, token): commit(token != null && tokens.contains(token) ? brk : flat, tokens, memo);
+			case _: D.mapChildren(d, c -> commit(c, tokens, memo));
+		};
+		memo.set(d, out);
+		return out;
+	}
+
 	/** `d` with every committed break (a `BreakCommit` with no token) replaced by its bare `brk`. */
 	private static function bare(d: Doc): Doc {
 		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
@@ -130,14 +138,6 @@ final class BreakCommits {
 			return out;
 		}
 		return walk(d);
-	}
-
-	/**
-	 * A COMMITTED break: `source`, the layout the next rewrite reads from its own source and every walker reads, with
-	 * `bare` kept for `followBare`. A `BreakCommit` with no token, which no measure render can resolve to `brk`.
-	 */
-	public static inline function committed(bare: Doc, source: Doc): Doc {
-		return BreakCommit(bare, source, null);
 	}
 
 }
