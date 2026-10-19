@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.ArgumentTypes.WrittenType;
+import anyparse.core.IdentityMap;
 import anyparse.query.ArgumentSlots;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphTypes.HeldFile;
@@ -74,6 +75,9 @@ final class ArgumentValues {
 	/** The atoms of a value, joined by a newline -> the character spelling it. */
 	private final _setChars: Map<String, String> = [];
 
+	/** Each edge `bind` was asked of -> the valuation it hands under each caller valuation asked. */
+	private final _bound: IdentityMap<CallEdge, Map<String, String>> = new IdentityMap();
+
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
 	private final _shape: RefShape;
@@ -99,10 +103,25 @@ final class ArgumentValues {
 		return [for (_ in tracked(id)) UNKNOWN].join('');
 	}
 
-	/** The valuation of `edge.to`'s tracked parameters a call made under the caller's `valuation` hands it. */
+	/**
+	 * The valuation of `edge.to`'s tracked parameters a call made under the caller's `valuation` hands it, read once per
+	 * edge and valuation: a walk asks it of each edge for every state its caller is reached in.
+	 */
 	public function bind(edge: CallEdge, valuation: String): String {
 		final names: Array<String> = tracked(edge.to);
 		if (names.length == 0) return '';
+		final known: Null<Map<String, String>> = _bound.get(edge);
+		final byValuation: Map<String, String> = known ?? [];
+		if (known == null) _bound.set(edge, byValuation);
+		final hit: Null<String> = byValuation[valuation];
+		if (hit != null) return hit;
+		final bound: String = bindOnce(edge, valuation, names);
+		byValuation[valuation] = bound;
+		return bound;
+	}
+
+	/** `bind` of `edge` under `valuation`, `names` the callee's tracked parameters (never empty): what it reads anew. */
+	private function bindOnce(edge: CallEdge, valuation: String, names: Array<String>): String {
 		final unknownValuation: String = unknown(edge.to);
 		if (edge.kind != Call && edge.kind != Virtual && edge.kind != New || edge.spliced != null) return unknownValuation;
 		final args: Null<Array<QueryNode>> = argumentsAt(edge);

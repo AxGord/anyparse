@@ -560,6 +560,7 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyConditionsTest#testAConstructionArgumentDecidesTheConstructorsBranch :: control :: M-TS-NEW-UNBOUND',
 		'unit.check.ThreadSafetyConditionsTest#testAFieldInitializersConstructionBindsItsArguments :: control :: M-TS-INIT-SITE-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testAFinalLocalDecidesOnlyTheReadsItBinds :: control :: M-TS-COND-LOCAL-ANY-BLOCK',
+		'unit.check.ThreadSafetyConditionsTest#testAFunctionValueWrittenUnderAGuardIsHandedOnOnlyWhereItHolds :: control :: M-TS-LAMBDA-SITE-UNGUARDED',
 		'unit.check.ThreadSafetyConditionsTest#testAHandlerHandedToANeverInvokesTargetRunsNowhereFromThere :: control :: '
 			+ 'M-TS-NEVER-INVOKES-BY-TARGET',
 		'unit.check.ThreadSafetyConditionsTest#testAHoldABoolArgumentRulesOutHoldsNothingInOrder :: control :: '
@@ -590,7 +591,8 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyConditionsTest#testCodeAfterAnEarlyExitOnTheCheckRunsOnTheOtherThreads :: control :: '
 			+ 'M-TS-EARLY-EXIT-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testEveryWayACallMayBindDecidesTogether :: control :: M-TS-ARG-SETS-UNKNOWN',
-		'unit.check.ThreadSafetyConditionsTest#testTheOffMainBranchOfAMainThreadCheckIsNoMainStall :: control :: M-TS-MAIN-CHECK-IGNORED',
+		'unit.check.ThreadSafetyConditionsTest#testOneCallBindsAnewUnderEachValuationOfItsCaller :: control :: M-TS-BIND-MEMO-ONE-VALUATION',
+		'unit.check.ThreadSafetyConditionsTest#testTheOffMainBranchOfAMainThreadCheckIsNoMainStall :: control :: M-TS-MAIN-CHECK-IGNORED,M-TS-SITE-MEMO-BY-CALLER',
 		'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAConstructorStaysARoot :: control :: M-TS-SEAL-CTOR',
 		'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAHoldNoThreadRunsIsQuiet :: control :: M-TS-DEAD-HOLDS-KEPT',
 		'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAMethodAnUnresolvedCallMayNameStaysARoot :: control :: '

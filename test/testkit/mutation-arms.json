@@ -7313,7 +7313,7 @@
 			"method": "answerReach",
 			"find": "final pinned: Null<String> = shared && site != null ? _scope.facts?.pinnedOwner(g, entryFile, site, declaring, member.name) : null;",
 			"replace": "final pinned: Null<String> = null;",
-			"note": "(precision) the owner of a member a loop reads is never told by the compiler's fact at the read, so a name two types share stays Ambiguous (TM's `editor.pitch.grid.Grid` beside `common.ui.Grid`)"
+			"note": "(precision) the owner of a member a loop reads is never told by the compiler's fact at the read, so a name two types share stays Ambiguous (the client's `editor.stage.grid.Grid` beside `common.ui.Grid`)"
 		},
 		{
 			"name": "M-REACH-PINNED-REWRITTEN-SIMPLE",
@@ -7665,7 +7665,7 @@
 			"method": "collectGuardedDecls",
 			"find": "if (next < children.length && typeDeclAt(children[next]) != null) out.push({ node: child, guarded: true });",
 			"replace": "if (false) out.push({ node: child, guarded: true });",
-			"note": "a module-private type in a conditional region is indexed public: its id drops its module (TM's `utils._SharedMutex.StdUniquePointer_SharedMutex`, openfl's `IVector`)"
+			"note": "a module-private type in a conditional region is indexed public: its id drops its module (the client's `utils._RwSyncMutex.StdUniquePointer_RwSyncMutex`, openfl's `IVector`)"
 		},
 		{
 			"name": "M-INDEX-GUARDED-PRIVATE-SPLIT",
@@ -8466,7 +8466,7 @@
 			"method": "factsOnText",
 			"find": "|| written.exists(x -> holds(x.declared, p))",
 			"replace": "",
-			"note": "code an expression macro built, in no range of the text, is never the text's, so every type whose code calls such a macro — TM's `t(...)` — keeps a build macro over it Unknown"
+			"note": "code an expression macro built, in no range of the text, is never the text's, so every type whose code calls such a macro — the client's `t(...)` — keeps a build macro over it Unknown"
 		},
 		{
 			"name": "M-FACTS-TEXT-EXPANSION-BODY",
@@ -9236,7 +9236,7 @@
 			"type": "anyparse.query.FactsProvenance",
 			"method": "convertsJoined",
 			"force": "false",
-			"note": "a conversion the compiler writes of a field read it placed across an inlined body and the text is no text's (TM's `drill.Node.parse`)"
+			"note": "a conversion the compiler writes of a field read it placed across an inlined body and the text is no text's (the client's `model.Node.parse`)"
 		},
 		{
 			"name": "M-FACTS-TEXT-JOINED-PLACED",
@@ -9244,7 +9244,7 @@
 			"method": "factsOnText",
 			"find": "own(p, body.holds(p) || readJoined(n, p, body))",
 			"replace": "own(p, body.holds(p))",
-			"note": "the value a field read the compiler placed across an inlined body and the text flows as is no text's (TM's `drill.Node.parse`)"
+			"note": "the value a field read the compiler placed across an inlined body and the text flows as is no text's (the client's `model.Node.parse`)"
 		},
 		{
 			"name": "M-FACTS-TREE-OPTIONAL",
@@ -11928,7 +11928,7 @@
 		{
 			"name": "M-TS-MAIN-CHECK-IGNORED",
 			"type": "anyparse.check.EdgeConditions",
-			"method": "carried",
+			"method": "readSite",
 			"find": "mask &= fact.value ? MAIN_BITS : ThreadSafety.CTX_BG;",
 			"replace": "mask &= MAIN_BITS | ThreadSafety.CTX_BG;",
 			"note": "a branch a main-thread check takes only on a worker runs on the main thread too"
@@ -12284,7 +12284,7 @@
 			"method": "calledPath",
 			"find": "node.kind == cfg.newExprKind",
 			"replace": "false",
-			"note": "a constructor never matches an ignoreCallArguments entry, so `SpriteDefinition.new` exempts nothing"
+			"note": "a constructor never matches an ignoreCallArguments entry, so `SpriteDescriptor.new` exempts nothing"
 		},
 		{
 			"name": "M-MAGIC-CALLARG-NESTED-NEW",
@@ -12292,7 +12292,7 @@
 			"method": "walk",
 			"find": " || keyCtx && node.kind == cfg.newExprKind",
 			"replace": "",
-			"note": "a value object built in place as a listed argument (`new SpriteDefinition(id, new Point(-18, -83))`) no longer carries the callee's context, so its literals are flagged"
+			"note": "a value object built in place as a listed argument (`new SpriteDescriptor(id, new Point(-18, -83))`) no longer carries the callee's context, so its literals are flagged"
 		},
 		{
 			"name": "M-MAGIC-TABLE-SWITCH-BLIND",
@@ -12649,7 +12649,7 @@
 		{
 			"name": "M-GRAPH-VIRTUAL-OWN-ONLY",
 			"type": "anyparse.query.CallGraph",
-			"method": "virtualTargets",
+			"method": "dispatchTargets",
 			"find": "final hit: Null<String> = _members[sub]?.get(member) ?? inheritedOffChain(typeName, sub, member);",
 			"replace": "final hit: Null<String> = _members[sub]?.get(member);",
 			"note": "a subtype that inherits the dispatched member from a superclass off the dispatched type's chain adds no dispatch target, so an interface's implementation its implementer inherits is never followed"
@@ -12748,7 +12748,7 @@
 			"method": "rewrittenAt",
 			"find": "final owner: Null<String> = read?.owner ?? sole;",
 			"replace": "final owner: Null<String> = read?.owner;",
-			"note": "a node the facts read as the one type of its shared name declaring the member asks for a build macro by the simple name, which `typeIsItsText` refuses for a shared name: any build macro of any type of the name is a Reification (TM's `Vector.splice`)"
+			"note": "a node the facts read as the one type of its shared name declaring the member asks for a build macro by the simple name, which `typeIsItsText` refuses for a shared name: any build macro of any type of the name is a Reification (the client's `Vector.splice`)"
 		},
 		{
 			"name": "M-COND-VALUES-READ",
@@ -13019,7 +13019,7 @@
 			"method": "dynamicOperand",
 			"find": "\t: ',\"o\":${q(sourceType(first))}' + (exactObject(first) ? ',\"x\":true' : '');",
 			"replace": "\t: '';",
-			"note": "a call handing a value to a `Dynamic` parameter records none of it, so a conversion an inlined body spliced in from another file converts a value of any type (TM's `StringBuf.add` in `EReg.replace`)"
+			"note": "a call handing a value to a `Dynamic` parameter records none of it, so a conversion an inlined body spliced in from another file converts a value of any type (the client's `StringBuf.add` in `EReg.replace`)"
 		},
 		{
 			"name": "M-FACTS-CALL-OPERAND-LEAF",
@@ -13075,7 +13075,7 @@
 			"method": "underTruth",
 			"find": "receivers: receiversAt(r.at.span)",
 			"replace": "receivers: []",
-			"note": "(precision) a reflective access only the facts see keeps no fact of the object it acts on (TM's `using Reflect` in `drill.Node`)"
+			"note": "(precision) a reflective access only the facts see keeps no fact of the object it acts on (the client's `using Reflect` in `model.Node`)"
 		},
 		{
 			"name": "M-REACH-REFLECT-BOUND-NONE",
@@ -18159,9 +18159,9 @@
 		{
 			"name": "M-TS-DEADCATCH-OFF",
 			"type": "anyparse.check.EdgeConditions",
-			"method": "carried",
-			"find": "if (dead != null && dead(edge)) return 0;",
-			"replace": "if (dead != null && false) return 0;",
+			"method": "readSite",
+			"find": "if (dead != null && dead(edge)) return { mask: 0, params: [] };",
+			"replace": "if (dead != null && false) return { mask: 0, params: [] };",
 			"note": "a catch around only nonThrowing calls is still a path"
 		},
 		{
@@ -21160,7 +21160,7 @@
 			"method": "runsNothing",
 			"find": "|| stored.stored(edge) ||",
 			"replace": "||",
-			"note": "a value a constructor only stores runs where it is handed, under the hold around the `new` (R7 L1b, TM FileList.reload)"
+			"note": "a value a constructor only stores runs where it is handed, under the hold around the `new` (R7 L1b, client ItemList.reload)"
 		},
 		{
 			"name": "M-TS-CTOR-STORE-DERIVE",
@@ -23465,7 +23465,7 @@
 			"method": "run",
 			"find": "MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup'))",
 			"replace": "{ separateInline: optionOn(entry.file, 'separateInlineSubgroup'), writer: null }",
-			"note": "the REPORT path ignores the writer's member-gap policy, so it flags a blank the writer forces (the 44 TM blanks around multi-line fields) while the fix path - reading the policy - finds nothing to do"
+			"note": "the REPORT path ignores the writer's member-gap policy, so it flags a blank the writer forces (the 44 client blanks around multi-line fields) while the fix path - reading the policy - finds nothing to do"
 		},
 		{
 			"name": "M-MO-WRITER-FIX-UNREAD",
@@ -24264,7 +24264,7 @@
 			"method": "scopeChainDecline",
 			"find": "case Absent: null;",
 			"replace": "case Absent: DECLINE_UNRESOLVED_CHAIN;",
-			"note": "a resolution-scope proof that no supertype declares the name is not taken, so every private method of a subclass stays undeletable without compiler facts (TM Form / PlayerBase / ProfileButton …)"
+			"note": "a resolution-scope proof that no supertype declares the name is not taken, so every private method of a subclass stays undeletable without compiler facts (client Form / SpriteBase / AccountButton …)"
 		},
 		{
 			"name": "M-UNUSED-PRIVATE-CHAIN-BUILD-IGNORED",
@@ -24287,7 +24287,7 @@
 			"type": "anyparse.check.ShadowingLocal",
 			"method": "renameEdits",
 			"force": "Declined('mutated')",
-			"note": "no shadow is renamed, so `final event:RightPanelEvent` over an unread `event` parameter stays a finding although the rename is binder-proven"
+			"note": "no shadow is renamed, so `final event:SidebarTabEvent` over an unread `event` parameter stays a finding although the rename is binder-proven"
 		},
 		{
 			"name": "M-SHADOWING-LOCAL-OUTER-READ-IGNORED",
@@ -24301,7 +24301,7 @@
 			"type": "anyparse.check.ShadowingLocal",
 			"method": "assignmentEdit",
 			"force": "null",
-			"note": "a same-block `var` redeclaration of the same type is never turned into an assignment (TM DatePicker dayIdx stays a finding)"
+			"note": "a same-block `var` redeclaration of the same type is never turned into an assignment (client DatePicker dayIdx stays a finding)"
 		},
 		{
 			"name": "M-SHADOWING-LOCAL-CAPTURE-IGNORED",
@@ -26517,7 +26517,7 @@
 		{
 			"name": "M-TS-NEW-UNBOUND",
 			"type": "anyparse.check.ArgumentValues",
-			"method": "bind",
+			"method": "bindOnce",
 			"find": "edge.kind != Call && edge.kind != Virtual && edge.kind != New",
 			"replace": "edge.kind != Call && edge.kind != Virtual",
 			"note": "a construction hands its constructor nothing known, so `new W(false)` runs the branch `false` rules out"
@@ -26549,7 +26549,7 @@
 		{
 			"name": "M-TS-ARG-SETS-UNKNOWN",
 			"type": "anyparse.check.ArgumentValues",
-			"method": "bind",
+			"method": "bindOnce",
 			"find": "if (runs == null || runs.length == 0) return unknownValuation;",
 			"replace": "if (runs == null || runs.length != 1) return unknownValuation;",
 			"note": "a call that may bind two ways hands nothing known, though every way decides the guard alike"
@@ -26833,6 +26833,58 @@
 			"find": "return forceExceeds && !anyHardline && extraThresholds.length == 0 && evalAt(true, []) == NoWrap;",
 			"replace": "return false;",
 			"note": "a list a source trailing separator forces into the break-mode cascade goes flat by a shadowing `noWrap` rule with no first-line probe, past the limit, where the unforced first write broke it"
+		},
+		{
+			"name": "M-TS-LAMBDA-SITE-UNGUARDED",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "guardsAround",
+			"find": "if (!exact && _nestedFnKinds.contains(child.kind)) return [];",
+			"replace": "if (_nestedFnKinds.contains(child.kind)) return [];",
+			"note": "the site that IS a nested function reads as one inside it: the guards around the value written there are dropped, so a reference under a false guard is handed on all the same"
+		},
+		{
+			"name": "M-TS-BIND-MEMO-ONE-VALUATION",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "bind",
+			"find": [
+				"final hit: Null<String> = byValuation[valuation];",
+				"byValuation[valuation] = bound;"
+			],
+			"replace": [
+				"final hit: Null<String> = byValuation[''];",
+				"byValuation[''] = bound;"
+			],
+			"note": "the memo keys an edge's binding by the edge alone: the first valuation it was bound under answers for every later one, so a caller reached with another value hands the callee the first one's"
+		},
+		{
+			"name": "M-TS-SITE-MEMO-BY-CALLER",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "siteOf",
+			"find": [
+				"final known: Null<EdgeSite> = _sites.get(edge);",
+				"_sites.set(edge, site);"
+			],
+			"replace": [
+				"final known: Null<EdgeSite> = _sites.get(_graph.outEdges(edge.from)[0]);",
+				"_sites.set(_graph.outEdges(edge.from)[0], site);"
+			],
+			"note": "the site memo keys by the caller (its first out-edge) instead of the edge: every call of a function answers the conditions of whichever site was read first"
+		},
+		{
+			"name": "M-CG-DISPATCH-MEMO-LEAKS",
+			"type": "anyparse.query.CallGraph",
+			"method": "addFiles",
+			"find": "\t_dispatchMemo = null;\n\treading?.recordAdopted(this, adopted);",
+			"replace": "\treading?.recordAdopted(this, adopted);",
+			"note": "the dispatch memo outlives the edges it was kept for: a query after a file is taken out answers the overrides read before"
+		},
+		{
+			"name": "M-CG-DISPATCH-MEMO-BY-TYPE",
+			"type": "anyparse.query.CallGraph",
+			"method": "virtualTargets",
+			"find": "final key: String = '$typeName\\t$member';",
+			"replace": "final key: String = typeName;",
+			"note": "the dispatch memo keys by the receiver type alone: the first member dispatched on a type answers for every other"
 		}
 	]
 }

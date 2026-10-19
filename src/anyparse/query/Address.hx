@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.core.IdentityMap;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.Selector.SelectorSegment;
@@ -468,13 +469,13 @@ final class AddressIndex {
 	private final _byKindName: Map<String, Array<QueryNode>> = [];
 
 	/** Pre-order rank per node; its presence is also the "does this tree hold the node" test. */
-	private final _ordinalOf: Map<QueryNode, Int> = [];
+	private final _ordinalOf: IdentityMap<QueryNode, Int> = new IdentityMap();
 
 	/** Highest pre-order rank inside a node's subtree — with `_ordinalOf` it turns descendancy into a range test. */
-	private final _lastOrdinalOf: Map<QueryNode, Int> = [];
+	private final _lastOrdinalOf: IdentityMap<QueryNode, Int> = new IdentityMap();
 
 	/** Each node's parent — the chain `describe` widens along, without a root-down search per step. */
-	private final _parentOf: Map<QueryNode, QueryNode> = [];
+	private final _parentOf: IdentityMap<QueryNode, QueryNode> = new IdentityMap();
 
 	private final _root: QueryNode;
 	private final _equiv: Null<KindEquivalence>;

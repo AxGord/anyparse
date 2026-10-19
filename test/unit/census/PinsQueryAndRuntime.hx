@@ -85,6 +85,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.CallGraphBindingTest#testAModuleLevelFunctionSeesItsModuleAndImportsNoClassChain :: control :: '
 			+ 'M-TS-MODULE-FN-CLASS-CHAIN,M-TS-MODULE-FN-IMPORTED-REF',
 		'unit.query.CallGraphBindingTest#testASupertypeIsTheTypeItsDeclaringFileBinds :: control :: M-SUPERS-BY-DECLARATION',
+		'unit.query.CallGraphBindingTest#testDispatchTargetsArePerMemberAndFollowTheGraph :: control :: M-CG-DISPATCH-MEMO-LEAKS,M-CG-DISPATCH-MEMO-BY-TYPE',
 		'unit.query.CallGraphBindingTest#testEachBodyOfAModuleLevelFunctionUnderIfIsANodeOfItsOwn :: control :: '
 			+ 'M-GRAPH-BODY-SPLIT,M-GRAPH-BODY-EXPAND,M-GRAPH-BODY-EXACT,M-GRAPH-BODY-TARGETS,M-GRAPH-BODY-COPY-IN,M-GRAPH-BODY-PURGE,'
 			+ 'M-GRAPH-MODULE-BINDING,M-GRAPH-MODULE-BINDING-MEMBER,M-GRAPH-MODULE-BINDING-VALUE,'

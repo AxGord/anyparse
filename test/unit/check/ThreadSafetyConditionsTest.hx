@@ -1,5 +1,12 @@
 package unit.check;
 
+import anyparse.check.ArgumentValues;
+import anyparse.check.EdgeConditions;
+import anyparse.check.FunctionTrees;
+import anyparse.check.ThreadSafety;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CallGraph;
+import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
 
@@ -102,8 +109,8 @@ class ThreadSafetyConditionsTest extends Test {
 		#end
 	}
 
-	/** The branch a `mainThreadChecks` call says runs off the main thread reaches nothing on it (`APIEntity2.get`'s shape). */
-	@:pin('control') @:killer('M-TS-MAIN-CHECK-IGNORED')
+	/** The branch a `mainThreadChecks` call says runs off the main thread reaches nothing on it (`NetEntity2.get`'s shape). */
+	@:pin('control') @:killer('M-TS-MAIN-CHECK-IGNORED', 'M-TS-SITE-MEMO-BY-CALLER')
 	public function testTheOffMainBranchOfAMainThreadCheckIsNoMainStall(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('"mainThreadChecks":["T.isMain"]', [
@@ -204,7 +211,7 @@ class ThreadSafetyConditionsTest extends Test {
 		#end
 	}
 
-	/** A `?fs` left out is null, so `if (fs != null) fs.save()` never runs (`SessionModel.checkSharedCloudId`). */
+	/** A `?fs` left out is null, so `if (fs != null) fs.save()` never runs (`ProjectModel.checkSharedCloudId`). */
 	@:pin('control') @:killer('M-TS-NULL-PARAM-UNREAD')
 	public function testAnOmittedOptionalParameterIsNull(): Void {
 		#if (sys || nodejs)
@@ -561,6 +568,53 @@ class ThreadSafetyConditionsTest extends Test {
 			'class W { public function new(sleep:Bool) if (sleep) Sys.sleep(1); }',
 			'class A { final w:W = new W(false); public function new() {} public static function main():Void new A(); }'
 		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A function value written under a guard is handed on only where the guard holds: the reference to the lambda under
+	 * `if (blocking)` runs nothing under `blocking = false`, at the FIRST ask as at every later one — the site's facts were
+	 * read once and cached, and the first ask answered none.
+	 */
+	@:pin('control') @:killer('M-TS-LAMBDA-SITE-UNGUARDED')
+	public function testAFunctionValueWrittenUnderAGuardIsHandedOnOnlyWhereItHolds(): Void {
+		#if (sys || nodejs)
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final graph: CallGraph = CallGraph.build(QueryTestHelpers.rootModules([
+			'class Lib { public static function later(f:()->Void):Void f(); }',
+			'class Api { public static function get(blocking:Bool):Void if (blocking) Lib.later(() -> Sys.sleep(1)); }'
+		]), plugin);
+		final conditions: EdgeConditions = new EdgeConditions(graph, new FunctionTrees(graph, plugin), plugin, _ -> []);
+		final refs: Array<CallEdge> = graph.outEdges('Api.get').filter(e -> e.kind == Ref);
+		Assert.equals(1, refs.length);
+		Assert.equals(0, conditions.carried(refs[0], ArgumentValues.FALSE, ThreadSafety.CTX_MAIN), 'first ask');
+		Assert.equals(0, conditions.carried(refs[0], ArgumentValues.FALSE, ThreadSafety.CTX_MAIN), 'later ask');
+		Assert.equals(ThreadSafety.CTX_MAIN, conditions.carried(refs[0], ArgumentValues.TRUE, ThreadSafety.CTX_MAIN), 'the guard holding');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * One call handed a parameter of its caller binds it anew under each value the caller is reached with: `M.pass` hands
+	 * `W.run` a `true` on the main thread and a `false` on the spawned one, so only the main thread sleeps — the answer of
+	 * one valuation never stands in for another's.
+	 */
+	@:pin('control') @:killer('M-TS-BIND-MEMO-ONE-VALUATION')
+	public function testOneCallBindsAnewUnderEachValuationOfItsCaller(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[
+				'main thread reaches blocking "Sys.sleep": A.main -> M.pass -> W.run -> Sys.sleep'
+			],
+			sleepFindings('', [
+				'class W { public static function run(sleep:Bool):Void if (sleep) Sys.sleep(1); }',
+				'class M { public static function pass(b:Bool):Void W.run(b); }',
+				'class A { public static function main():Void { M.pass(true); Runner.create(() -> M.pass(false)); } }'
+			])
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
