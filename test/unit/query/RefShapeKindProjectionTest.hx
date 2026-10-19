@@ -382,6 +382,38 @@ final class RefShapeKindProjectionTest extends Test {
 				after: ' class C {}'
 			},
 			{
+				field: 'transitiveCastTypeMetaNames',
+				slot: '0',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'transitiveCastTypeMetaNames',
+				slot: '1',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'typeSelectedAbstractMetaName',
+				slot: '',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'implicitOutwardConversionMetaName',
+				slot: '',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
 				field: 'metadataNamePrefixes',
 				slot: '0',
 				kind: 'Meta',
