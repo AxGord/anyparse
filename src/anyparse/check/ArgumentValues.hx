@@ -13,6 +13,7 @@ import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -193,7 +194,7 @@ final class ArgumentValues {
 
 	/** The string the atom `atom` holds, or null for an atom of no known string. */
 	public static function stringOf(atom: String): Null<String> {
-		return StringTools.startsWith(atom, STRING_ATOM) ? atom.substr(STRING_ATOM.length) : null;
+		return atom.startsWith(STRING_ATOM) ? atom.substr(STRING_ATOM.length) : null;
 	}
 
 	/**

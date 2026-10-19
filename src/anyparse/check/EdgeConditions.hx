@@ -8,6 +8,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -283,7 +284,7 @@ final class EdgeConditions {
 		if (fact.nullTest) return ArgumentValues.isNullAtom(atom) == fact.value;
 		if (test == null) return atom == ArgumentValues.TRUE ? fact.value : atom != ArgumentValues.FALSE || !fact.value;
 		final s: Null<String> = ArgumentValues.stringOf(atom);
-		return s == null || (test.suffix ? StringTools.endsWith(s, test.text) : StringTools.startsWith(s, test.text)) == fact.value;
+		return s == null || (test.suffix ? s.endsWith(test.text) : s.startsWith(test.text)) == fact.value;
 	}
 
 }

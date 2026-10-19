@@ -12,6 +12,8 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.SortedOffsets;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /** A type as an argument or a parameter is written: its text, and the file writing it — null for a type no file spells. */
 typedef WrittenType = {
 	final text: String;
@@ -143,7 +145,7 @@ final class ArgumentTypes {
 	 */
 	public function coreName(text: String): Null<String> {
 		final peeled: String = ~/\s+/g.replace(
-			NominalTypes.unwrapNullable(StringTools.trim(text), _shape.memberTransparentWrapperTypeNames ?? [], _plugin.typeSyntax), ''
+			NominalTypes.unwrapNullable(text.trim(), _shape.memberTransparentWrapperTypeNames ?? [], _plugin.typeSyntax), ''
 		);
 		final names: Array<String> = _shape.coreValueTypes?.names ?? [];
 		return names.contains(peeled) && _graph.types.declarationCount(peeled) == 0 ? peeled : null;
