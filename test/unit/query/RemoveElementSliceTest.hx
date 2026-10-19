@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.RemoveElement;
+import anyparse.query.ReplaceNode.ReplaceTarget;
 import haxe.Exception;
 import utest.Assert;
 import utest.Test;
@@ -185,6 +186,53 @@ class RemoveElementSliceTest extends Test {
 	private static function removeOf(source: String, line: Int, col: Int, reformat: Bool): EditResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return RemoveElement.removeElement(source, line, col, reformat, plugin);
+	}
+
+	/**
+	 * A `--select` on a string `Literal` resolves the text BETWEEN the quotes, so the cut took the content and
+	 * left `''` at rc 0 while the position form removed the item. The literal that is a whole list item lifts
+	 * to its quoted expression: first / middle / last, single-line, one per line (trailing comma kept).
+	 */
+	@:pin('control')
+	@:killer('M-LITERAL-WRAPPER-SKIPPED')
+	public function testSelectedLiteralRemovesTheArrayItem(): Void {
+		final one: String = 'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\', \'c\'];\n}\n';
+		assertSelectRemove(one, 'Literal:a', 'class C {\n\tstatic final A:Array<String> = [\'b\', \'c\'];\n}\n');
+		assertSelectRemove(one, 'Literal:b', 'class C {\n\tstatic final A:Array<String> = [\'a\', \'c\'];\n}\n');
+		assertSelectRemove(one, 'Literal:c', 'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\'];\n}\n');
+		final lines: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t\t\'c\',\n\t];\n}\n';
+		assertSelectRemove(lines, 'Literal:a', 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'b\',\n\t\t\'c\',\n\t];\n}\n');
+		assertSelectRemove(lines, 'Literal:b', 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'c\',\n\t];\n}\n');
+		assertSelectRemove(lines, 'Literal:c', 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t];\n}\n');
+	}
+
+	/** A literal that is not a whole list item — an operand, a `return` value — is refused, never emptied. */
+	@:pin('control')
+	@:killer('M-LITERAL-STRANDED-ACCEPTED')
+	public function testSelectedLiteralInsideAnExpressionIsRefused(): Void {
+		final concat: String = 'class C {\n\tfunction f():String {\n\t\treturn g(1) + \'r\';\n\t}\n}\n';
+		assertSelectRefused(concat, 'Literal:r', 'Add');
+		final ret: String = 'class C {\n\tfunction f():String {\n\t\treturn \'r\';\n\t}\n}\n';
+		assertSelectRefused(ret, 'Literal:r', 'ReturnStmt');
+	}
+
+	private function assertSelectRemove(source: String, selector: String, expected: String): Void {
+		switch RemoveElement.removeTarget(source, ReplaceTarget.BySelector(selector), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.equals(expected, text);
+				assertReparses(text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	private function assertSelectRefused(source: String, selector: String, container: String): Void {
+		switch RemoveElement.removeTarget(source, ReplaceTarget.BySelector(selector), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('not a whole element') >= 0 && message.indexOf('inside $container') >= 0, message);
+		}
 	}
 
 }

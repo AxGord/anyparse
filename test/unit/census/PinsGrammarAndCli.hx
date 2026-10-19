@@ -197,6 +197,12 @@ final class PinsGrammarAndCli {
 			+ 'M-BREAKMARK-ONE-ROUND',
 		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testARebuiltMarkKeepsItsToken :: control :: M-BREAKMARK-REBUILD-FRESH-TOKEN',
 		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testOneWriteIsAFixedPointAtEveryWidth :: control :: M-BREAKMARK-UNREAD',
+		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testACallArgumentRegionSettlesInOneWrite :: control :: '
+			+ 'M-REGION-UNNAMED,M-REGION-SEAMS-SOFT,M-REGION-MARK-ALWAYS',
+		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAComprehensionBodyRegionUnderAnArrowSettlesInOneWrite :: control :: '
+			+ 'M-REGION-OFFER-THROUGH-BODIES,M-NESTED-THROUGH-BODIES',
+		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAnElseifRegionInAComprehensionSettlesInOneWrite :: control :: '
+			+ 'M-REGION-SEAMS-BOUNDED',
 		'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured :: control :: '
 			+ 'M-WORDOP-NO-RESTORE',
 		'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionCollapsesEmptyCatchBody :: control :: '
@@ -216,6 +222,14 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testReturnTypeToExpressionBodyKeepsTheComment :: control :: '
 			+ 'M-FNBODY-GAP-COMMENT-NONE',
 		'unit.grammar.haxe.HxDoWhileThrowTryCatchSliceTest#testPlainWriterDropsTheSemicolonBeforeWhile :: control :: M-DOWHILE-PLAIN-SEMI',
+		'unit.grammar.haxe.HxDroppedSepCommentTest#testABlockCommentStaysOnTheElement :: control :: M-DROPPED-SEP-BLOCK-REHOMED',
+		'unit.grammar.haxe.HxDroppedSepCommentTest#testADroppedSeparatorsCommentIsWrittenWhereTheNextParseReadsIt :: control :: '
+			+ 'M-DROPPED-SEP-UNREHOMED,M-TAIL-ABSENT-FIELD-STOPS,M-TAIL-ARRAY-SLOT-UNREAD,M-TAIL-CALL-SLOT-UNREAD,'
+			+ 'M-TAIL-INFIX-UNREAD,M-TAIL-OPERAND-UNREAD,M-TAIL-PREFIX-UNREAD,M-TAIL-TERNARY-UNREAD',
+		'unit.grammar.haxe.HxDroppedSepCommentTest#testAKeptSeparatorKeepsTheCommentAfterIt :: control :: M-DROPPED-SEP-KEPT-REHOMED',
+		'unit.grammar.haxe.HxDroppedSepCommentTest#testATailThatCapturesNothingKeepsTheCommentOnTheElement :: control :: M-TAIL-ONLY-KNOWN-METAS',
+		'unit.grammar.haxe.HxDroppedSepCommentTest#testAnOccupiedTailKeepsBothComments :: control :: '
+			+ 'M-TAIL-SLOT-OVERWRITTEN,M-TAIL-ALT-SLOT-OVERWRITTEN,M-TAIL-WRITTEN-SEMICOLON-IGNORED',
 		'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBareBodyElseIfTrailsCommentAfterCondition :: control :: '
 			+ 'M-EICR-AFTERCOND-RESET',
 		'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBracedElseIfGluesAndTrailsCommentAfterOpenCurly :: control :: '
@@ -316,6 +330,8 @@ final class PinsGrammarAndCli {
 			+ 'M-PARSE-MEMO-REPLAY-OFF,M-PARSE-MEMO-STASHED-SKIP',
 		'unit.grammar.haxe.HxNestingCostTest#testWriterDocKeepsItsSharing :: control :: M-GROUPIFY-SHARED-OFF',
 		'unit.grammar.haxe.HxObjectLitForcedNoWrapProbeTest#testOneWriteIsAFixedPointAtEveryWidth :: control :: M-FORCED-NOWRAP-UNPROBED',
+		'unit.grammar.haxe.HxObjectLitLineLengthRuleFixedPointTest#testAWidthRuleLiteralInAComprehensionSettlesInOneWrite :: control :: '
+			+ 'M-WIDTH-RULE-DECISION-UNREAD,M-WIDTH-RULE-TAIL-UNREAD',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAKeywordANewerHaxeAddedStillNamesAVersionGatedDeclaration :: control :: '
 			+ 'M-RESERVED-VERSIONED-REFUSED',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoFunctionParameterOrBinderName :: control :: '

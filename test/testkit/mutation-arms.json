@@ -25045,8 +25045,8 @@
 			"name": "M-LIFT-FINAL-WRAPPER-SKIPPED",
 			"type": "anyparse.query.ElementSpan",
 			"method": "liftedElement",
-			"find": "return wrapper == null ? { node: node, parent: parent } : { node: wrapper, parent: TreePath.parentOf(tree, wrapper) };",
-			"replace": "return { node: node, parent: parent };",
+			"find": "final lifted: Null<QueryNode> = wrapper ?? (parent == null ? null : literalWrapperOf(node, parent));",
+			"replace": "final lifted: Null<QueryNode> = parent == null ? null : literalWrapperOf(node, parent);",
 			"note": "a `final class` addressed through its form is not lifted: `--before` splices between `final` and `class`, a removal leaves the `final` behind"
 		},
 		{
@@ -25701,8 +25701,8 @@
 			"name": "M-HELPER-ACCESSOR-ALLOWED",
 			"type": "anyparse.query.MoveToHelper",
 			"method": "accessedProperty",
-			"find": "else if (isGet ? member.hasGetter : member.hasSetter)\n\t\tproperty",
-			"replace": "else if (isGet ? member.hasGetter : member.hasSetter)\n\t\tnull",
+			"find": "(isGet ? member.hasGetter : member.hasSetter) ? property : null;",
+			"replace": "(isGet ? member.hasGetter : member.hasSetter) ? null : null;",
 			"note": "a property accessor moves into the helper, where `<param>.p` calls the accessor it used to implement"
 		},
 		{
@@ -26566,8 +26566,8 @@
 			"name": "M-ARGFIT-UNKNOWN-MISFITS",
 			"type": "anyparse.check.ArgumentTypes",
 			"method": "fit",
-			"find": "\t\tMayFit;",
-			"replace": "\t\tMisfits;",
+			"find": "if (a != null || p != null) return MayFit;",
+			"replace": "if (a != null || p != null) return Misfits;",
 			"note": "a type the fit cannot decide misfits, so a string an abstract takes through `@:from` reads as skipping it"
 		},
 		{
@@ -26622,8 +26622,8 @@
 			"name": "M-BINDER-OWNER-BINDINGS-OFF",
 			"type": "anyparse.check.OperandCallees",
 			"method": "memberCallParams",
-			"find": "\tmemberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);",
-			"replace": "\tmemberParams(binder, declared, [], 0, []);",
+			"find": ": memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);",
+			"replace": ": memberParams(binder, declared, [], 0, []);",
 			"note": "the receiver's type arguments bind nothing, so `Box<Use>.each`'s `T` stays unbound"
 		},
 		{
@@ -26887,6 +26887,182 @@
 			"note": "the dispatch memo keys by the receiver type alone: the first member dispatched on a type answers for every other"
 		},
 		{
+			"name": "M-DROPPED-SEP-UNREHOMED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepArrDecls",
+			"find": ": macro final _arr = anyparse.runtime.DroppedSepComment.last(_arrSrc, $appendTrailingCommaExpr, $tailRehomeFn);",
+			"replace": ": macro final _arr = _arrSrc;",
+			"note": "a list whose trailing separator the writer drops is laid out from the source tree, the comment outside the element the next parse reads it inside of"
+		},
+		{
+			"name": "M-DROPPED-SEP-KEPT-REHOMED",
+			"type": "anyparse.runtime.DroppedSepComment",
+			"method": "last",
+			"find": "if (sepEmitted || arr.length == 0) return arr;",
+			"replace": "if (arr.length == 0) return arr;",
+			"note": "a comment after a separator the writer keeps is moved into the element, in front of the separator"
+		},
+		{
+			"name": "M-DROPPED-SEP-BLOCK-REHOMED",
+			"type": "anyparse.runtime.DroppedSepComment",
+			"method": "last",
+			"find": "if (comment == null || !StringTools.startsWith(comment, '//')) return arr;",
+			"replace": "if (comment == null) return arr;",
+			"note": "a block comment after a dropped separator moves into the element, changing a layout the first write already settles"
+		},
+		{
+			"name": "M-TAIL-SLOT-OVERWRITTEN",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "starField",
+			"find": "return macro $slotAccess == null ? $copy : null;",
+			"replace": "return macro $copy;",
+			"note": "a struct close slot already holding a comment is overwritten, and that comment is lost"
+		},
+		{
+			"name": "M-TAIL-ALT-SLOT-OVERWRITTEN",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altCase",
+			"find": "macro $slot == null ? ${rebuild(index, macro $i{COMMENT_ARG})} : null;",
+			"replace": "macro ${rebuild(index, macro $i{COMMENT_ARG})};",
+			"note": "a ctor close slot already holding a comment is overwritten, and that comment is lost"
+		},
+		{
+			"name": "M-TAIL-WRITTEN-SEMICOLON-IGNORED",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "refField",
+			"find": "return macro $presentAccess == true ? null : $rebuilt;",
+			"replace": "return rebuilt;",
+			"note": "a body the source closed with `;` takes the comment in front of the `;`, which the comment then swallows"
+		},
+		{
+			"name": "M-TAIL-ONLY-KNOWN-METAS",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "onlyMetas",
+			"find": "return meta == null || meta.foreach(entry -> allowed.contains(entry.name));",
+			"replace": "return true;",
+			"note": "a shape with a token after its operand (a paren pair, a trail literal) passes the comment into the operand, ahead of that token"
+		},
+		{
+			"name": "M-TAIL-ABSENT-FIELD-STOPS",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "seqField",
+			"find": "return macro $access == null ? $before : $present;",
+			"replace": "return present;",
+			"note": "an absent optional last field (an if with no else) answers null instead of the field emitted before it"
+		},
+		{
+			"name": "M-TAIL-ARRAY-SLOT-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch) || TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"replace": "if (TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"note": "an array literal tail no longer takes the comment its close captures"
+		},
+		{
+			"name": "M-TAIL-CALL-SLOT-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch) || TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"replace": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch)) {",
+			"note": "a call tail no longer takes the comment its close paren captures"
+		},
+		{
+			"name": "M-TAIL-INFIX-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':infix')) return children.length == 2 && onlyMetas(branch, [':infix', ':fmt']) ? Operand(1) : None;",
+			"replace": "if (branch.hasMeta(':infix')) return None;",
+			"note": "an infix expression's right operand is not asked, so `t + {a: 1}` keeps the comment outside"
+		},
+		{
+			"name": "M-TAIL-TERNARY-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':ternary')) return children.length == 3 && onlyMetas(branch, [':ternary', ':fmt']) ? Operand(2) : None;",
+			"replace": "if (branch.hasMeta(':ternary')) return None;",
+			"note": "a ternary's else operand is not asked"
+		},
+		{
+			"name": "M-TAIL-PREFIX-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':prefix')) return children.length == 1 && onlyMetas(branch, [':prefix', ':fmt']) ? Operand(0) : None;",
+			"replace": "if (branch.hasMeta(':prefix')) return None;",
+			"note": "a prefix operator's operand is not asked"
+		},
+		{
+			"name": "M-TAIL-OPERAND-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "return single && onlyMetas(branch, TRANSPARENT_BRANCH_METAS) ? Operand(0) : None;",
+			"replace": "return None;",
+			"note": "a keyword or lead ctor (if, for, object literal, new, function) does not pass the comment to its one operand"
+		},
+		{
+			"name": "M-REGION-UNNAMED",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefFinalDoc",
+			"find": "? macro (opt.conditionalExprFit ? anyparse.core.BreakCommits.namedRegion($concatDoc) : $concatDoc)",
+			"replace": "? macro (opt.conditionalExprFit ? _dgrp($concatDoc) : $concatDoc)",
+			"note": "a fit region is an undecided group again, so a call filling its line measures it flat and opens before the `#if` the next write glues"
+		},
+		{
+			"name": "M-REGION-SEAMS-SOFT",
+			"type": "anyparse.core.BreakCommits",
+			"method": "hardSeams",
+			"find": "case Line(flat, verbatim) if (flat != '\\n'): Line('\\n', verbatim);",
+			"replace": "case Line(flat, verbatim) if (false): Line('\\n', verbatim);",
+			"note": "the read-back form keeps soft seams, so the list measures the broken region as flat as before"
+		},
+		{
+			"name": "M-REGION-MARK-ALWAYS",
+			"type": "anyparse.core.BreakCommits",
+			"method": "namedRegion",
+			"find": "Concat([IfBreak(BreakMark(Empty, token), Empty), inner])",
+			"replace": "Concat([BreakMark(Empty, token), inner])",
+			"note": "the mark renders whether or not the group breaks, so a region that fits is committed broken"
+		},
+		{
+			"name": "M-REGION-OFFER-THROUGH-BODIES",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emit",
+			"find": "BreakCommits.outermostPerToken(BreakCommits.nested(item, false))",
+			"replace": "BreakCommits.outermostPerToken(BreakCommits.nested(item))",
+			"note": "a list lays itself out for a region inside a comprehension body, whose own seam the next write re-decides"
+		},
+		{
+			"name": "M-NESTED-THROUGH-BODIES",
+			"type": "anyparse.core.BreakCommits",
+			"method": "nested",
+			"find": "case BodyGroup(_) if (!throughBodies):",
+			"replace": "case BodyGroup(_) if (false):",
+			"note": "the walk descends fit bodies whatever the caller asked"
+		},
+		{
+			"name": "M-REGION-SEAMS-BOUNDED",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseDefaultTerminal",
+			"find": "? macro (opt.conditionalExprFit ? $finalWrapDocs : _dwb($finalWrapDocs))",
+			"replace": "? macro _dwb($finalWrapDocs)",
+			"note": "the elseifs Star of a fit region keeps its force-flat boundary, so inside a glued comprehension body the seams before the #elseif flatten and the ones after it break"
+		},
+		{
+			"name": "M-WIDTH-RULE-DECISION-UNREAD",
+			"type": "anyparse.core.BreakCommits",
+			"method": "decisionMapped",
+			"find": "f(brk, b -> Group(IfWidthExceeds(n, b, flat)));",
+			"replace": "null;",
+			"note": "a literal broken by a lineLength rule is no width decision to the shared reader, so its comprehension body stays glued and the next write moves it Allman"
+		},
+		{
+			"name": "M-WIDTH-RULE-TAIL-UNREAD",
+			"type": "anyparse.format.BodyAllman",
+			"method": "tailBreak",
+			"find": "Doc.Group(Doc.IfWidthExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
+			"replace": "Doc.Group(Doc.IfLineExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
+			"note": "the Allman break of a lineLength-rule literal is not offered to its one-item list, which stays laddered where the next write cuddles"
+		},
+		{
 			"name": "M-ANCESTOR-ARGS-OFF",
 			"type": "anyparse.query.AncestorTable",
 			"method": "chainTo",
@@ -27029,6 +27205,86 @@
 			"find": "WriterOptFanout.statementListElemOpt(macro _writerOpt)",
 			"replace": "macro _writerOpt",
 			"note": "a case-body statement of an arrow-body switch argument bypasses the statement-list barrier and inherits the call-argument chain flag"
+		},
+		{
+			"name": "M-PIER-MERGE-ANY-VALUE",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (!marchable(values, s) || !s.mergeValueKinds.contains(values[0].kind)) return null;",
+			"replace": "if (!marchable(values, s)) return null;",
+			"note": "any repeated value merges, so two equal calls (or field reads typed under different narrowings) become one ternary branch"
+		},
+		{
+			"name": "M-PIER-MERGE-UNMARCHABLE",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (!marchable(values, s) || !s.mergeValueKinds.contains(values[0].kind)) return null;",
+			"replace": "if (!s.mergeValueKinds.contains(values[0].kind)) return null;",
+			"note": "a statement-like value merges into a ternary branch the pairwise march would refuse"
+		},
+		{
+			"name": "M-PIER-MERGE-COMMENT",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (comments.exists(tok -> tok.to > region.from && tok.from < region.to)) return null;",
+			"replace": "if (false) return null;",
+			"note": "a merge ignores comments in its region, and the rebuild drops them"
+		},
+		{
+			"name": "M-PIER-MERGE-ANY-COUNT",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (values.length != MERGED_VALUE_COUNT) return null;",
+			"replace": "if (values.length < MERGED_VALUE_COUNT) return null;",
+			"note": "a four-value run merges from its first two rungs and the terminal, dropping the third condition"
+		},
+		{
+			"name": "M-PIER-LEADING-AS-OUTER",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergeShape",
+			"find": "if (valueText(values[1], source, comments) == repeated) return Leading;",
+			"replace": "if (false) return Leading;",
+			"note": "two leading branches with one value no longer merge by `||`"
+		},
+		{
+			"name": "M-PIER-REWRITES-FOLDED",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "rewritesChain",
+			"find": "return m.merge != null || m.writtenRungs >= MIN_CHAIN_RUNGS;",
+			"replace": "return true;",
+			"note": "every owned chain is rewritten, so a two-branch chain with a ternary tail becomes a three-branch value chain the author never wrote"
+		},
+		{
+			"name": "M-PIER-CLAIMSCHAIN-OWNS",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "claimsChain",
+			"find": "return m != null && rewritesChain(m);",
+			"replace": "return m != null;",
+			"note": "the chain claim answers ownership, so `redundant-else-after-return` loses its de-nest on a chain this rule leaves alone"
+		},
+		{
+			"name": "M-PIER-CASCADE-UNMERGED-REPORTED",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "walkCascades",
+			"find": "if (cascadeMatch(kids, i, source, comments, s)?.merge == null) continue;",
+			"replace": "if (cascadeMatch(kids, i, source, comments, s) == null) continue;",
+			"note": "an owned cascade that does not merge is reported, with no fix behind the finding"
+		},
+		{
+			"name": "M-PIER-OUTER-UNNEGATED",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergedEdit",
+			"find": "case Outer: NegationScan.negateConditionText(m.conds[0], source, s.negation, emit.logic, emit.types());",
+			"replace": "case Outer: text(source, m.pairs[0].cond);",
+			"note": "the outer merge keeps the first condition positive, inverting which branch returns what"
+		},
+		{
+			"name": "M-PIER-MERGE-NO-PARENS",
+			"type": "anyparse.check.PreferIfExpressionReturn",
+			"method": "mergedEdit",
+			"find": "if (i % 2 == 0) holes.push(new Span(at, at + piece.length));",
+			"replace": "if (false) holes.push(new Span(at, at + piece.length));",
+			"note": "no merged piece is a ParenGuard hole, so a ternary condition re-associates across the new `&&`"
 		},
 		{
 			"name": "M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED",
@@ -27180,6 +27436,22 @@
 			"method": "isDirective",
 			"force": "false",
 			"note": "no comment reads as a directive, so the reflow and the trailing-comment move both treat `noqa` / `CHECKSTYLE` / `@formatter` markers as prose"
+		},
+		{
+			"name": "M-LITERAL-WRAPPER-SKIPPED",
+			"type": "anyparse.query.ElementSpan",
+			"method": "liftedElement",
+			"find": "final lifted: Null<QueryNode> = wrapper ?? (parent == null ? null : literalWrapperOf(node, parent));",
+			"replace": "final lifted: Null<QueryNode> = wrapper;",
+			"note": "a string Literal addressed by --select is not lifted to its quoted expression: remove-element cuts the content between the quotes and leaves ''"
+		},
+		{
+			"name": "M-LITERAL-STRANDED-ACCEPTED",
+			"type": "anyparse.query.RemoveElement",
+			"method": "strandedLiteral",
+			"find": "if (node.kind != 'Literal' || hit.node == node) return null;",
+			"replace": "if (true) return null;",
+			"note": "a lifted literal that is not a whole list item is removed anyway instead of refused"
 		}
 	]
 }

@@ -244,13 +244,10 @@ final class MoveToHelperRefs {
 		final binding: Null<Span> = hit.bindingSpan;
 		if (binding != null) {
 			final group: Null<MemberGroup> = byFrom[binding.from];
-			return if (group != null)
-				memberRef(edits, hit, group, indexes, calls)
-			else if (MoveMember.insideAnyCut(prep, binding.from) || prep.srcFile == prep.destFile)
-				null
-			else
-				'the moved code reads "${hit.name}" at ${where(prep.srcFile, prep.srcSource, hit.span.from)}, a module-level '
-					+ 'declaration of ${prep.srcFile} the helper module cannot see bare';
+			if (group != null) return memberRef(edits, hit, group, indexes, calls);
+			if (MoveMember.insideAnyCut(prep, binding.from) || prep.srcFile == prep.destFile) return null;
+			return 'the moved code reads "${hit.name}" at ${where(prep.srcFile, prep.srcSource, hit.span.from)}, a module-level '
+				+ 'declaration of ${prep.srcFile} the helper module cannot see bare';
 		}
 		final name: String = hit.name;
 		if (name == 'this') {

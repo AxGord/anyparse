@@ -4474,6 +4474,45 @@ decided the question; it may not become a record of runs.
   now takes the same probe when it answers `NoWrap` with no threshold rule and no hardline; the 21 fixed points main
   rewrote past the limit land within it (78-98). Arm `M-FORCED-NOWRAP-UNPROBED`.
 
+## FU3 (2026-10-19): a dropped separator's comment is rehomed; a fit region is named; lineLength rules are width decisions
+
+- **A comment after a separator the writer drops is written where the next parse reads it.** `[a, {b: 1}, // c]` keeps
+  `// c` on the element (the parser reads the `,` first); under `wrapping.trailingComma: remove` the next parse meets
+  `{b: 1} // c`, and the close capture of the element's last construct takes the comment, inside the element, where it
+  forces breaks (a comprehension cuddles, a ternary or binop explodes). `TriviaTailRehome` generates, beside the
+  `Converters` of each synth module, `TailComments.rehome_<T>(value, comment): Null<T>`: the tree the parser builds for
+  `<value> <comment>`, read off the SAME shape the parser is lowered from — the capture points are a close-peek trivia Star
+  branch and a postfix call (`closeTrailing`) and a struct trivia Star field with a `@:trail` (`<field>TrailingClose`); the
+  answer passes through an infix right operand, a ternary's else operand, a prefix operand, the one operand of a keyword
+  or lead ctor, and a struct's last PRESENT field. A positive whitelist: a meta the mirror does not know, a trail literal,
+  a `@:wrap` pair, a `;` the source wrote (`<field>TrailPresent`), an occupied slot, a block comment — all answer null and
+  the comment stays where it was. The paired ctor's argument positions are read off `TriviaPairAltCtor.buildEnumCtor`,
+  not recounted. The sep-Star writer (`TriviaSepLowering`, both call sites) lays the list out from
+  `DroppedSepComment.last(source, appendTrailingComma, rehome_<Elem>)`. The rehomed list keeps reading the source
+  `trailPresent`: a separator is only dropped under the `Remove` veto, and every layout that reads source presence is
+  vetoed with it (the arm cutting a separate read SURVIVED, so the read was dead and is gone).
+- **A `conditionalExprFit` region is a named break.** The region is one `GroupWithRestProbe` whose seams break together;
+  the next write reads the seams it printed as hardlines. `BreakCommits.namedRegion` keeps the group (an empty
+  `IfBreak(BreakMark, Empty)` probe carries the mark, so every walker measures the group as before) and wraps it in a
+  `BreakCommit` whose committed read-back has the seams as hardlines (`hardSeams` walks only `Concat`/`Nest`; every
+  other node decides its own lines or renders the same in the broken group). A list (call arguments filling a line) then
+  lays itself out as the next write does.
+- **A list does not lay itself out for a break inside a fit body** (`BreakCommits.nested(item, false)` stops at
+  `BodyGroup` for `WrapList.emit`'s offers). The next write re-decides the body's own seam from the body it reads back
+  (`strictFitLineShape`: a multi-line comprehension body goes to the next line, with no `BodyGroup`), which the committed
+  break alone does not say: offering through the body changed 156 main-stable fixed points (`z_condlambda`,
+  `z_condparen` under client — an arrow or a paren around the comprehension measured the deferred `BodyGroup`). Rejected:
+  `BreakCommits.follow` at the body (a `BreakCommit` around the slot) — every reader of the slot shape
+  (`dropComprehensionBody`, `tailBodyGroup`, …) stops recognising it, 161 changed fixed points; measuring
+  `BreakCommits` on the collapsed layout — no effect on any file, dropped.
+- **The `#elseif` seams of a fit region carry no force-flat boundary of their own** (`TryparseStarCtx.regionSeams`): a
+  `WrapBoundary` among one group's seams gave the region two modes inside an enclosing `Flatten`.
+- **A `lineLength >= n` rule's decision is a width decision.** It is emitted as `Group(IfWidthExceeds(n, brk, flat))`;
+  `decisionMapped` reads it beside `IfFirstLineExceeds` and `GroupWithRestProbe(IfBreak)`, and `BodyAllman.tailBreak`
+  recognises its Allman break side. This was the whole `thr` harness family (5022 drifting files). 191 files main
+  drifted on settle on another fixed point than main's second write: an outer `noWrap` literal keeps its fields glued
+  around the Allman comprehension, where main's second write had broken it because the first had printed it multi-line.
+
 ## FU4 (2026-10-19): typer step T2 — the ancestor table, the unification of plain types, a member's READ type
 
 - every closure walk of `MemberLookup` resolved each `supertypesRaw` link again (`resolveTypeRef(raw, cur.file, …)`), and
@@ -4523,6 +4562,34 @@ decided the question; it may not become a record of runs.
   `HxCallArgLambdaBodyChainIndentTest`'s two non-discriminating pins.
 - client: 3 files / 4 hunks, each this defect (`ItemListProjectsShare.hx:171`, `BucketMutationOffMainTest.hx:109/153`,
   `ItemListThumbnailTest.hx:106`). Arm `M-STMT-LIST-CALLARG-BARRIER`.
+
+## FU6 (2026-10-19): `prefer-if-expression-return` owns a return run of three values, rewrites it only when it merges
+
+- The N55 self-fix turned `if (member == null) return null; return (isGet ? …) ? property : null;` into a six-line
+  `return if … null else if … property else null;`: a guard return plus a final ternary was counted as three values and
+  rewritten as a value chain, `null` spelled twice. Four more sites took the same road (`ArgumentTypes.fit`,
+  `EdgeConditions.factsOf`, `OperandCallees.callParams`, `MoveToHelperRefs`). A value chain of three or more branches reads
+  worse than the statements (the formatter's own `expressionIfFitMaxBranches: 2` keeps one exploded), so:
+- OWNERSHIP is unchanged: three or more values are this rule's in either spelling (`claimsCascade` answers as before).
+  It has to stay: without it `prefer-ternary-return` marches the cascade pairwise into the three-leaf ternary that
+  `prefer-if-expression-chain` then turns into the very chain refused here.
+- The REWRITE is narrower. (b) A run whose three values carry TWO merges into one ternary, in either spelling:
+  `v1 == v2` → `c1 || c2 ? v1 : v3`, `v1 == v3` → `!c1 && c2 ? v2 : v1` (`NegationScan` negates, `ParenGuard` adds the
+  pairs). Both keep every evaluation exactly where the statements had it — `c2` runs only when `c1` is false — so no
+  purity proof is needed; `v2 == v3` would drop `c2`'s evaluation and is refused. The repeated value is on a POSITIVE
+  list (a non-boolean case literal or a bare name): equal text is one value between sibling statements, but not one type
+  — each branch is typed under its own condition's narrowing — and a literal or a name is what does not depend on it.
+  Any comment in the region refuses the merge. (a) Otherwise a chain is written only where the author WROTE at least
+  two conditions as an else-linked chain; a folded ternary's conditions do not count, a cascade never becomes one, and an
+  owned run left alone is not reported (its statements are the canon). `claimsChain` now means "rewrites", so a
+  two-branch chain with a ternary tail keeps `redundant-else-after-return`'s de-nest.
+- Why both: (a) alone would leave `accessedProperty` as its two statements when one line says it better; (b) alone
+  would still chain every non-merging guard cascade. A merge is limited to three values: a longer guard ladder that
+  repeats a value (`if (a) return null; if (b) return null; if (c) return null; return x;`) reads as the ladder it is,
+  and is left to it.
+- anyparse src: the five N55 chains restored to statements (`ArgumentTypes.fit` reworded so the two null tests are not
+  repeated); the rule's own `--fix` then writes `return member != null && (isGet ? member.hasGetter : member.hasSetter)
+  ? property : null;` and changes nothing else — branch `feat/fu-FU6`
 
 ## FU5 (2026-10-19): an import argument may be the whole statement; `mentions` answers a dotted import
 
@@ -4609,3 +4676,14 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - Arms: M-TCO-KNOB-IGNORED, M-TCO-LEADING-IGNORED, M-TCO-DIRECTIVE-MOVED, M-TCO-OVERWIDE-CODE-MOVED, M-TCO-BOUNDARY,
   M-TCO-MULTILINE-MOVED, M-COMMENT-REFLOW-TAB-ROW, M-COMMENT-REFLOW-CODE-SHAPED, M-COMMENT-REFLOW-SPLITS-CODE-SPAN,
   M-COMMENT-DIRECTIVE-NONE.
+
+## FU16 (2026-10-19) — `remove-element --select 'Literal:x'` removes the item, or refuses
+
+- Defect: a `Literal` node's span is the content between a string's quotes, so `--select 'FinalMember:ARMS >> Literal:B'`
+  resolved the cursor INSIDE the string, `elementAtFrom` picked the `Literal` itself and the cut left `''` at rc 0, while the
+  position form (on the quote) removed the `SingleStringExpr` item.
+- Decision: `ElementSpan.liftedElement` (shared by `remove-element` and `add-element`) lifts a `Literal` whose parent is the
+  single-child quoted expression carrying its quotes to that parent (`literalWrapperOf`). `RemoveElement.strandedLiteral`
+  then accepts the lift only when the parent is a `commaContainerKinds` container (the item IS the element) and refuses
+  otherwise (positive whitelist: no confident cut of a shape that has no element). Arms: M-LITERAL-WRAPPER-SKIPPED,
+  M-LITERAL-STRANDED-ACCEPTED; M-LIFT-FINAL-WRAPPER-SKIPPED re-aimed onto the new line.

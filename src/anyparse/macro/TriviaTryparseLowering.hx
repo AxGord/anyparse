@@ -293,6 +293,7 @@ final class TriviaTryparseLowering {
 			lastTrailTerminatorEmit: lastTrailTerminatorEmit,
 			trailPadSpaceDoc: trailPadSpaceDoc,
 			finalWrapDocs: finalWrapDocs,
+			regionSeams: condExprFitSeps,
 			forceInlineSep: forceInlineSep,
 			elemSelfTrailsNewline: elemSelfTrailsNewline,
 			elemCondFn: elemCondFnExpr
@@ -930,7 +931,7 @@ final class TriviaTryparseLowering {
 		final finalWrapDocs: Expr = c.finalWrapDocs;
 		final trailPadSpaceDoc: Expr = c.trailPadSpaceDoc;
 		final trailDocsExpr: Expr = triviaTryparseTrailDocsExpr();
-		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(finalWrapDocs, c.glueRefusalExpr, trailPadSpaceDoc);
+		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(finalWrapDocs, c.glueRefusalExpr, trailPadSpaceDoc, c.regionSeams);
 		return macro {
 			$tryparseBlockEndedTrailEmit;
 			// ω-cond-indent-policy: under AlignedIncrease hold the trailing
@@ -1085,8 +1086,11 @@ final class TriviaTryparseLowering {
 	 * orphan trail run ends with that run's own hardline-led docs — so neither
 	 * can glue a follower onto a `//` comment.
 	 */
-	private static function triviaTryparseWrapDispatchExpr(finalWrapDocs: Expr, glueRefusalExpr: Expr, trailPadSpaceDoc: Expr): Expr {
+	private static function triviaTryparseWrapDispatchExpr(
+		finalWrapDocs: Expr, glueRefusalExpr: Expr, trailPadSpaceDoc: Expr, regionSeams: Bool
+	): Expr {
 		final caseWrap: Expr = triviaTryparseCaseWrapExpr(glueRefusalExpr);
+		final defaultTerminal: Expr = triviaTryparseDefaultTerminal(finalWrapDocs, regionSeams);
 		return macro {
 			// ω-force-flat-engine sister-coverage: tryparse Star is used
 			// for inner-Star bodies (case bodies, `HxConditionalDecl.body`)
@@ -1137,9 +1141,20 @@ final class TriviaTryparseLowering {
 				// guard is forward-looking, so it DROPS when the parent's next
 				// emit is already a hardline - every sound seam stays byte-inert.
 				if (_trailEndsLine && !_lineTrailBroken) _docs.push(_dohsbh());
-				_dwb($finalWrapDocs);
+				$defaultTerminal;
 			}
 		};
+	}
+
+	/**
+	 * The default branch's terminal Doc: `finalWrapDocs` behind the force-flat boundary every tryparse terminal carries —
+	 * except, while `conditionalExprFit` is on, for a region's seams (`regionSeams`). They are lines of ONE group, and a
+	 * boundary among them gave the region two modes inside an enclosing `Flatten` (a cuddled comprehension's glued body):
+	 * the seams before it flattened and the ones after it broke, `… } #elseif c` on the head line and the `#elseif` body
+	 * below it.
+	 */
+	private static function triviaTryparseDefaultTerminal(finalWrapDocs: Expr, regionSeams: Bool): Expr {
+		return regionSeams ? macro (opt.conditionalExprFit ? $finalWrapDocs : _dwb($finalWrapDocs)) : macro _dwb($finalWrapDocs);
 	}
 
 	/**

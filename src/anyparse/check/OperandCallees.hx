@@ -112,12 +112,10 @@ final class OperandCallees {
 		if (binder._index.typing.members.declarationLacksMember(owner, name))
 			return onType ? null : extensionParams(binder, owner, receiver, name);
 		final declared: Null<HostedMembers> = binder.declarationOf(owner, name);
-		return if (declared == null || declared.members.exists(m -> m.isStatic != onType))
-			null
-		else if (onType)
-			memberParams(binder, declared, [], 0, methodBindings(binder, declared, call.children.slice(1)))
-		else
-			memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);
+		if (declared == null || declared.members.exists(m -> m.isStatic != onType)) return null;
+		return onType
+			? memberParams(binder, declared, [], 0, methodBindings(binder, declared, call.children.slice(1)))
+			: memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);
 	}
 
 	/**
