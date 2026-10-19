@@ -26302,6 +26302,60 @@
 			"note": "a `\"$x\"` string in a pattern stays a string, so a JSON pattern can hold no metavariable"
 		},
 		{
+			"name": "M-PAREN-BROKEN-CHAIN-PINNED",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefWrapHardFlatten",
+			"find": "|| anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0",
+			"replace": "|| false",
+			"note": "an expression paren around a `+`/`-` chain an operand already broke pins that chain flat again when no `expressionWrapping` rule is set, so every continuation line renders at column 0 and the next write re-indents it"
+		},
+		{
+			"name": "M-BREAK-MULTI-ITEM-HOST-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emit",
+			"find": "final offered: Bool = items.length == 1 ? flatSingle : open != '{';",
+			"replace": "final offered: Bool = items.length == 1 ? flatSingle : false;",
+			"note": "a list of several items stops following a break nested in one of them, so a call around `bar(b, [for …])` stays glued while the literal breaks under it and the next write opens it one argument per line"
+		},
+		{
+			"name": "M-BREAK-OBJECT-LITERAL-HOST",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emit",
+			"find": "final offered: Bool = items.length == 1 ? flatSingle : open != '{';",
+			"replace": "final offered: Bool = items.length == 1 ? flatSingle : true;",
+			"note": "an object literal's field list is wrapped in alternatives too, which hides the literal's width decision from its Allman placement: a comprehension body carrying a comprehension in a field breaks glued and goes Allman one write late"
+		},
+		{
+			"name": "M-BREAK-EVERY-NODE",
+			"type": "anyparse.core.BreakCommits",
+			"method": "outermostPerToken",
+			"force": "commits",
+			"note": "every node of a break is offered again by every list it is nested in, so the alternatives, and the Doc, grow exponentially with the nesting depth"
+		},
+		{
+			"name": "M-BREAK-COMMITTED-BARE",
+			"type": "anyparse.format.BodyAllman",
+			"method": "tailBreak",
+			"find": "BreakCommits.committed(brk, Doc.BodyGroup(brk))",
+			"replace": "brk",
+			"note": "a literal broken by its own width is laid out bare where the next write reads it in a `BodyGroup` every width probe defers, so a method chain dot-breaks and an arrow body leaves `->` on the first write and both glue back on the second"
+		},
+		{
+			"name": "M-PAREN-MEASURES-COMMITTED",
+			"type": "anyparse.core.BreakCommits",
+			"method": "followBare",
+			"find": "out = BreakCommit(shape(bare(replaced(inner, c, brk))), out, token);",
+			"replace": "out = BreakCommit(shape(replaced(inner, c, brk)), out, token);",
+			"note": "an expression paren measures a committed literal break deferred, so the paren that opens for every narrower literal glues once the literal breaks: one write still, but onto the other fixed point than the one the paren reached before"
+		},
+		{
+			"name": "M-BREAK-READBACK-BARE",
+			"type": "anyparse.format.BodyAllman",
+			"method": "asReadBack",
+			"force": "body",
+			"note": "a literal its own rule breaks statically keeps the bare layout where the next write reads it back in a `BodyGroup`, so an arrow body it leads leaves `->` on the first write and glues back on the second"
+		},
+		{
 			"name": "M-OWNED-TIER-NO-USE-SITE",
 			"type": "anyparse.check.OwnedTypes",
 			"method": "typesNamed",

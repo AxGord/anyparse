@@ -143,6 +143,13 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testValueCatchKeepsItsIndent :: control :: M-PENDING-HARDLINE-BLANK-FLUSHED',
 		'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testValueElseIfChainKeepsItsIndent :: control :: M-PENDING-HARDLINE-BLANK-FLUSHED',
 		'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testValueElseKeepsItsIndent :: control :: M-PENDING-HARDLINE-BLANK-FLUSHED',
+		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAChainFollowsTheBreak :: control :: M-BREAK-COMMITTED-BARE',
+		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testALambdaBodyFollowsTheBreak :: control :: M-BREAK-COMMITTED-BARE',
+		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testALiteralHostKeepsItsAllmanDecision :: control :: M-BREAK-OBJECT-LITERAL-HOST',
+		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAMultiArgumentHostFollowsTheBreak :: control :: M-BREAK-MULTI-ITEM-HOST-OFF',
+		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAParenMeasuresTheBreakBare :: control :: M-PAREN-MEASURES-COMMITTED',
+		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAStaticallyBrokenLambdaBodyStaysGlued :: control :: M-BREAK-READBACK-BARE',
+		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testOneAlternativePerBreak :: control :: M-BREAK-EVERY-NODE',
 		'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAFlatItemThatStillOverflowsCuddlesItsHead :: control :: M-CUDDLE-FLATONLY',
 		'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAnItemOverflowingTheGlueColumnCuddlesAndDropsItsBody :: control :: '
 			+ 'M-CUDDLE-FALLBACK-INDENT',
@@ -219,6 +226,8 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxElseIfOptionsTest#testElseIfNextOnlyLastLevelKeepsFirstLevelInline :: control :: M-KEEP-ELSEIF-NEXT-OFF',
 		'unit.grammar.haxe.HxExprForGuardGlueSliceTest#testArrowForForBlockGluesTheWholeSpine :: control :: M-STRICT-HEAD-DELIM-OFF',
 		'unit.grammar.haxe.HxExprForGuardGlueSliceTest#testArrowForIfBlockGluesTheWholeSpine :: control :: M-STRICT-HEAD-DELIM-OFF',
+		'unit.grammar.haxe.HxExprParenBrokenChainTest#testABrokenChainOpensAtItsIndent :: control :: M-PAREN-BROKEN-CHAIN-PINNED',
+		'unit.grammar.haxe.HxExprParenBrokenChainTest#testOneWriteIsAFixedPointAcrossTheBoundary :: control :: M-PAREN-BROKEN-CHAIN-PINNED',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testCallArgumentListBreaksInsteadOfTheFirstParen :: control :: '
 			+ 'M-PAREN-LIST-BREAK',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testChainProbeKeepsBreakingItsOwnLink :: control :: M-PAREN-CHAIN-PREDICTS',
