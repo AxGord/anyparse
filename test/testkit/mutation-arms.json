@@ -5763,8 +5763,8 @@
 			"name": "M-REACH-IMPLICIT-ARRAY-CHANGE",
 			"type": "anyparse.query.MemberReach",
 			"method": "answerLocal",
-			"find": "final change: Null<Occurrence> = reachedArrayChange(g, file, tree, region, callees);",
-			"replace": "final change: Null<Occurrence> = null;",
+			"find": "final change: Null<ReachUnknown> = reachedArrayChange(g, file, tree, region, callees, shared);",
+			"replace": "final change: Null<ReachUnknown> = null;",
 			"note": "a shared collection's region is proven although the functions it calls, or those the language calls implicitly, change arrays"
 		},
 		{
@@ -9258,8 +9258,8 @@
 			"name": "M-REACH-CALLEE-WALK",
 			"type": "anyparse.query.MemberReach",
 			"method": "answerLocal",
-			"find": "reachedArrayChange(g, file, tree, region, callees);",
-			"replace": "reachedArrayChange(g, file, tree, region, []);",
+			"find": "reachedArrayChange(g, file, tree, region, callees, shared);",
+			"replace": "reachedArrayChange(g, file, tree, region, [], shared);",
 			"note": "what a shared collection's region calls is admitted unwalked, so a callee growing any array proves"
 		},
 		{
@@ -26427,6 +26427,62 @@
 			"find": "ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source)",
 			"replace": "CliArgs.pickPlugin(lang)",
 			"note": "the op reads the file with no project resolution scope, so the insert seat takes every wildcard for a run boundary and places the import where the import-order rule does not"
+		},
+		{
+			"name": "M-REACH-HOMES-RECORDED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "idsOf",
+			"find": "if (declared == null) {",
+			"replace": "if (declared == null && false) {",
+			"note": "a placeholder records no type it stands for, so a name several declarations share loads none of them and the walk refuses as code it did not read"
+		},
+		{
+			"name": "M-REACH-LIBRARY-HOMES",
+			"type": "anyparse.query.MemberReach",
+			"method": "libraryBodyOf",
+			"find": "_g.loadHomes(g, node) != null",
+			"replace": "_g.loadType(g, type, []) != null",
+			"note": "an external node loads its type by simple name alone, which several declarations of it leave unread"
+		},
+		{
+			"name": "M-REACH-ONE-TYPE-PATHS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "oneTypeEverywhere",
+			"find": "if (paths.length != 1) return false;",
+			"replace": "",
+			"note": "(soundness) types of two packages sharing a simple name answer as copies of one type"
+		},
+		{
+			"name": "M-REACH-ONE-TYPE-FOLDED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "oneTypeEverywhere",
+			"find": "d -> folded.contains(CallGraphNames.normalizePath(d.file.file)) && ",
+			"replace": "d -> ",
+			"note": "(soundness) a copy inheriting the member, whose code no declaration of the node is, answers through the other copies' bodies"
+		},
+		{
+			"name": "M-REACH-ONE-TYPE-EXTERN",
+			"type": "anyparse.query.ReachGraph",
+			"method": "oneTypeEverywhere",
+			"find": " && (!d.type.isExtern || library.externQuiet(g, type, name))",
+			"replace": "",
+			"note": "(soundness) an extern copy's target code is taken to run nothing of the program, an override below it included"
+		},
+		{
+			"name": "M-REACH-SHARED-ONE-TYPE",
+			"type": "anyparse.query.MemberReach",
+			"method": "sharedName",
+			"find": "if (_g.oneTypeEverywhere(g, node)) return false;",
+			"replace": "",
+			"note": "(precision) copies of one type on two class paths stay a name two types share"
+		},
+		{
+			"name": "M-REACH-UNREAD-NAMED",
+			"type": "anyparse.query.MemberReach",
+			"method": "reachedArrayChange",
+			"find": "case Opaque:\n\t\t\t\t\t\treturn AliasedUnread(file, shared, id);",
+			"replace": "case Opaque:\n\t\t\t\t\t\treturn Aliased(file, shared, '', new Span(0, 0));",
+			"note": "library code the walk cannot read is refused as code at no file, naming no member"
 		}
 	]
 }
