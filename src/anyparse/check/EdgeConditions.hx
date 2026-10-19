@@ -281,11 +281,9 @@ final class EdgeConditions {
 	private static function admits(atom: String, fact: SiteFact): Bool {
 		final test: Null<AffixTest> = fact.test;
 		if (fact.nullTest) return ArgumentValues.isNullAtom(atom) == fact.value;
-		if (test != null) {
-			final s: Null<String> = ArgumentValues.stringOf(atom);
-			return s == null || (test.suffix ? StringTools.endsWith(s, test.text) : StringTools.startsWith(s, test.text)) == fact.value;
-		}
-		return atom == ArgumentValues.TRUE ? fact.value : atom != ArgumentValues.FALSE || !fact.value;
+		if (test == null) return atom == ArgumentValues.TRUE ? fact.value : atom != ArgumentValues.FALSE || !fact.value;
+		final s: Null<String> = ArgumentValues.stringOf(atom);
+		return s == null || (test.suffix ? StringTools.endsWith(s, test.text) : StringTools.startsWith(s, test.text)) == fact.value;
 	}
 
 }

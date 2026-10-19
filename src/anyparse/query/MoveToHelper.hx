@@ -176,10 +176,9 @@ final class MoveToHelper {
 		final runStart: Int = ElementSpan.declRunStart(decl.declNode, tree, declSpan);
 		for (c in tree.children) {
 			final span: Null<Span> = c.span;
-			if (span != null && span.from >= runStart && span.to <= declSpan.from && MemberKinds.META_KINDS.contains(c.kind)) {
-				final text: String = source.substring(span.from, span.to);
-				if (text.startsWith(metaName)) return text;
-			}
+			if (span == null || span.from < runStart || span.to > declSpan.from || !MemberKinds.META_KINDS.contains(c.kind)) continue;
+			final text: String = source.substring(span.from, span.to);
+			if (text.startsWith(metaName)) return text;
 		}
 		return null;
 	}
@@ -332,10 +331,9 @@ final class MoveToHelper {
 		}
 		for (m in prep.moved) {
 			final found: Null<QueryNode> = walk(m.group.member);
-			if (found != null) {
-				final at: Position = (found.span ?? new Span(0, 0)).lineCol(prep.srcSource);
-				return 'the moved code already spells "$paramName" at ${prep.srcFile}:${at.line}:${at.col}';
-			}
+			if (found == null) continue;
+			final at: Position = (found.span ?? new Span(0, 0)).lineCol(prep.srcSource);
+			return 'the moved code already spells "$paramName" at ${prep.srcFile}:${at.line}:${at.col}';
 		}
 		return null;
 	}
