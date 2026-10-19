@@ -4819,3 +4819,24 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   the graph reads, never the std, so a std abstract (`UInt`) never resolves there and the client's `UInt` arguments stay
   `MayFit`; the client's `RoundedTextField.new` / `Assets.getBitmapData` false positive needs that AND typing `UInt - UInt`
   through `UInt`'s `@:op` overloads (`SaveDialog`'s first argument) — branch `feat/fu-FU18`
+
+## FU20 (2026-10-19) — an `&&` / `||` / `+` / `-` chain counts its whole physical line
+
+- Defect (found by FU11): a chain whose flat body ended on the limit but whose physical line ran one or two columns over
+  (the statement `;`, an enclosing `)`, the un-flushed space after `=`) stayed glued, and the line broke at the first
+  inner group that did count the rest: before a nested `==` (`requestedAnchors.count()` / `== 0 && ...`), after
+  `return`, or not at all for a `+` chain. The fork breaks at the chain operator in every such case.
+- Mechanism: TWO plain `Group`s decided on `col + flatWidth` alone, the chain pivot (`emitNoThreshold`'s
+  `Group(IfBreak)`, and the addSub tagged pivot) and the FillLine shape's own `Group(Nest(Fill))`, which re-decided flat
+  inside an already-broken pivot. Both now build through `D.groupOrRestProbe` (moved from `WrapList`'s private copy, the
+  one spelling of "Group or its rest-aware twin") when the chain is `restAware`: everywhere except a paren that owns the
+  wrap (`_keepChainInParen`, as for the ternary). A string interpolation and a condition wrap need no gate of their own
+  (measured: dropping the condition-wrap conjunct moved nothing in the suite, client or anyparse) - the first collapses the
+  chain to a groupless NoWrap shape, the second breaks its `(` first.
+- CollapsePass reads both pivot kinds through `chainGroup` (tagged addSub chain, its probed form, FillLine parts, the
+  bool re-eval payload, the fill forward glue) and keeps the kind on every rebuild. The forward glue
+  (`chainGluedIfOpens`) takes a rest-aware pivot only when its flat side is an infix chain (`gluesInfixChain`, a
+  positive list of ` && ` / ` || ` / ` + ` / ` - `): a ternary shares the rest-aware pivot but was never a glue
+  candidate, and admitting it rewrote two client files and three suite fixtures away from the fork.
+- Unarmed, equivalent by construction: the rebuild kind of the bool re-eval flip and of the fill forward glue (the
+  flipped chain overflows by its call operand, the glued chain has no soft line left, so either group answers the same).

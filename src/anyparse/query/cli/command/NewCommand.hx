@@ -188,8 +188,8 @@ final class NewCommand implements CliCommand {
 			CliIo.stderr('apq new: --kind must be class|interface|enum|typedef|abstract (got "${o.kind}")\n');
 			return EXIT_USAGE;
 		}
-		final hasIntent: Bool = o.raw || o.asClass || o.iface != null || o.kind != 'class' || o.extendsList.length > 0 || o.fields.length
-			> 0;
+		final hasIntent: Bool = o.raw || o.asClass || o.iface != null || o.kind != 'class' || o.extendsList.length > 0
+			|| o.fields.length > 0;
 		if (!hasIntent) {
 			CliIo.stderr('apq new: specify --class / --implements <iface> / --kind <k> / --raw -\n');
 			return EXIT_USAGE;

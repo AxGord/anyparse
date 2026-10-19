@@ -23574,8 +23574,8 @@
 			"name": "M-NEGCOND-COMMENT-BEFORE-KEPT",
 			"type": "anyparse.check.NegatedCondition",
 			"method": "commentOutside",
-			"find": "SourceComments.hasCommentMarker(source, outer.from, inner.from) || ",
-			"replace": "",
+			"find": "return SourceComments.hasCommentMarker(source, outer.from, inner.from)",
+			"replace": "return false",
 			"note": "a comment between the `!` and its operand is not seen, and the positive rebuild drops it"
 		},
 		{
@@ -27784,6 +27784,85 @@
 			"find": "index.typing.unification.casts(g, w)",
 			"replace": "MayFit",
 			"note": "an argument the typing service could cast is undecided, so an abstract argument may land on any optional parameter"
+		},
+		{
+			"name": "M-CHAIN-REST-PIVOT-PLAIN",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emitNoThreshold",
+			"find": "return WrapBoundary(D.groupOrRestProbe(ifBreak, restAware));",
+			"replace": "return WrapBoundary(Group(ifBreak));",
+			"note": "the chain pivot decides on `col + flatWidth` alone, so a chain whose physical line runs two columns over (the `;` and the space after `=`) stays glued and breaks before a nested `==`"
+		},
+		{
+			"name": "M-CHAIN-REST-ADD-PIVOT-PLAIN",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emitNoThreshold",
+			"find": "final brkDoc: Doc = D.groupOrRestProbe(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat)), restAware);",
+			"replace": "final brkDoc: Doc = Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat)));",
+			"note": "the tagged `+` chain pivot ignores the rest of its line, so a declaration one column over the limit spills past it unbroken"
+		},
+		{
+			"name": "M-CHAIN-REST-FILL-GROUP-PLAIN",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "shapeFillLine",
+			"find": "return D.groupOrRestProbe(packed, restAware);",
+			"replace": "return Group(packed);",
+			"note": "the fill shape's own group re-decides flat on `col + flatWidth` inside the broken pivot, so a chain one column over breaks before a nested `==` instead of at `&&`"
+		},
+		{
+			"name": "M-CHAIN-REST-SHAPE-UNTHREADED",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emit",
+			"find": "r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, restAware",
+			"replace": "r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, false",
+			"note": "`restAware` never reaches the shapes, so the fill group stays plain and undoes the rest-aware pivot's break"
+		},
+		{
+			"name": "M-CHAIN-REST-UNSET",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixChain",
+			"find": "final _restAware: Bool = !opt._keepChainInParen;",
+			"replace": "final _restAware: Bool = false;",
+			"note": "no `&&` / `+` chain is rest-aware, so every one-or-two-column overrun breaks inside an operand or not at all"
+		},
+		{
+			"name": "M-CHAIN-REST-IN-KEPT-PAREN",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixChain",
+			"find": "final _restAware: Bool = !opt._keepChainInParen;",
+			"replace": "final _restAware: Bool = true;",
+			"note": "a chain inside a paren that owns the wrap counts the paren's rest too, so it breaks where the paren should open first"
+		},
+		{
+			"name": "M-COLLAPSE-CHAIN-GROUP-PLAIN-ONLY",
+			"type": "anyparse.core.CollapsePass",
+			"method": "chainGroup",
+			"find": "case GroupWithRestProbe(inner): { inner: inner, restAware: true };",
+			"replace": "case GroupWithRestProbe(inner): null;",
+			"note": "CollapsePass no longer recognises a rest-aware chain pivot, so a tagged `+` chain keeps its marker and loses its glue / head-break rewrites"
+		},
+		{
+			"name": "M-COLLAPSE-ADD-REBUILD-PLAIN",
+			"type": "anyparse.core.CollapsePass",
+			"method": "rebuildTaggedAddPivot",
+			"find": "rewrite(tagged.flat, decisions, false, width)), tagged.restAware",
+			"replace": "rewrite(tagged.flat, decisions, false, width)), false",
+			"note": "a rewritten tagged `+` chain comes back under a plain `Group` with its rest-awareness dropped, so it spills one column past the limit again"
+		},
+		{
+			"name": "M-COLLAPSE-GLUE-TERNARY",
+			"type": "anyparse.core.CollapsePass",
+			"method": "gluesInfixChain",
+			"force": "true",
+			"note": "a rest-aware ternary pivot is forward-glued like an op-chain, so a ternary call argument hugs an opening paren branch the fork breaks before"
+		},
+		{
+			"name": "M-COLLAPSE-GLUE-REST-CHAIN-SKIPPED",
+			"type": "anyparse.core.CollapsePass",
+			"method": "chainGluedIfOpens",
+			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(fl)): fl;",
+			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (false): fl;",
+			"note": "a rest-aware `&&` / `+` chain whose trailing paren opens is no longer forward-glued, so it breaks before `|| (` instead of hugging the paren"
 		}
 	]
 }

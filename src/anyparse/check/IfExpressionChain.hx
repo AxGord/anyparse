@@ -305,8 +305,8 @@ final class IfExpressionChain {
 	 * skipped when the walk reaches it on its own.
 	 */
 	public static function isElseIfLink(node: QueryNode, parent: Null<QueryNode>, ifKinds: Array<String>): Bool {
-		return parent != null && ifKinds.contains(parent.kind) && parent.children.length == IF_ELSE_CHILD_COUNT && parent.children[2]
-			== node;
+		return parent != null && ifKinds.contains(parent.kind) && parent.children.length == IF_ELSE_CHILD_COUNT
+			&& parent.children[2] == node;
 	}
 
 	/** Whether two subtrees are the SAME token-for-token — the l-value equality key. */

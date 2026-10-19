@@ -1855,10 +1855,9 @@ final class NullFlow {
 		if (cond.kind != ctx.callKind || cond.children.length != 2) return null;
 		final callee: QueryNode = cond.children[0];
 		final method: Null<String> = callee.name;
-		return
-			callee.kind != ctx.fieldAccessKind || method == null || !ctx.mapExistsMethods.contains(method) || callee.children.length != 1
-				? null
-				: pairFact(callee.children[0], cond.children[1], ctx, false);
+		return callee.kind != ctx.fieldAccessKind || method == null || !ctx.mapExistsMethods.contains(method) || callee.children.length != 1
+			? null
+			: pairFact(callee.children[0], cond.children[1], ctx, false);
 	}
 
 	/**

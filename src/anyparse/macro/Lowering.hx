@@ -1099,9 +1099,8 @@ class Lowering {
 		// `(\n<inner>\n)` (open broken; preserves authored shape on
 		// chain inners) and `(<inner>\n)` (glued; unchanged default).
 		// Trivia-only; plain mode keeps the original ctor arity.
-		final triviaWrapOpenNewline: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaPairAltCtor.isAltWrapOpenNewlineBranch(
-			branch
-		);
+		final triviaWrapOpenNewline: Bool = _ctx.trivia && isTriviaBearing(typePath)
+			&& TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch);
 		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
 		// ctors with `@:fmt(captureKwNewline)` carry a positional
 		// `kwNewline:Bool` arg. The parser captures whether the gap between

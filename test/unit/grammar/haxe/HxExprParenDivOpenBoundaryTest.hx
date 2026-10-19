@@ -281,6 +281,8 @@ final class HxExprParenDivOpenBoundaryTest extends Test {
 	/**
 	 * A nested call: the OUTER argument list is the first construct that breaks by itself.
 	 */
+	@:pin('control')
+	@:killer('M-CHAIN-REST-IN-KEPT-PAREN')
 	public function testNestedCallBreaksItsOuterArgumentList(): Void {
 		Assert.equals(
 			'class Sample {\n\n\tfunction run() {\n\t\tvalue = (aaaa.top - baseSpan.top) / outer(\n'

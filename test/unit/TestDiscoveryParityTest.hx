@@ -579,6 +579,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxAssignStmtNoSemiSliceTest',
 		'unit.grammar.haxe.HxBeforeTrailCommentWriteTest',
 		'unit.grammar.haxe.HxBeforeUsingSliceTest',
+		'unit.grammar.haxe.HxBinaryChainRestWidthTest',
 		'unit.grammar.haxe.HxBinaryChainWrapSliceTest',
 		'unit.grammar.haxe.HxBinopGroupWrapSliceTest',
 		'unit.grammar.haxe.HxBinopStmtNoSemiSliceTest',

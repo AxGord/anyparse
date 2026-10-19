@@ -1,5 +1,6 @@
 package anyparse.format.wrap;
 
+import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
@@ -40,7 +41,7 @@ final class BinaryChainEmit {
 	public static function emit(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
 		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
-		?afterComments: Array<Null<Doc>>, ternaryRestAware: Bool = false,
+		?afterComments: Array<Null<Doc>>, restAware: Bool = false,
 		// ω-keep-ternary-operand-comment: the wrapping location the `forceKeep`
 		// shape must use, overriding the cascade's own answer. A caller that
 		// forces `Keep` because an operand carries a LINE comment has exactly one
@@ -138,7 +139,9 @@ final class BinaryChainEmit {
 		final cuddleProbeWidth: Int = cuddleProbed ? ops[0].length + 1 + DocMeasure.flatTokenWidth(items[1]) : 0;
 
 		function shapeWith(r: { mode: WrapMode, location: WrappingLocation }, cuddleLast: Bool): Doc {
-			return shape(r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast);
+			return shape(
+				r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, restAware
+			);
 		}
 
 		function shapeAt(r: { mode: WrapMode, location: WrappingLocation }): Doc {
@@ -189,10 +192,10 @@ final class BinaryChainEmit {
 		else if (pivotHugIdx >= 0)
 			WrapBoundary(IfLineExceeds(
 				opt.lineWidth + 1, ternaryHugShape(pivotHugIdx, items, ops, opt, evalAt, shapeAt),
-				emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, ternaryRestAware, evalAt, shapeAt, shapeNoWrapAt)
+				emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt)
 			))
 		else if (extraThresholds.length == 0)
-			emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, ternaryRestAware, evalAt, shapeAt, shapeNoWrapAt)
+			emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt)
 		else if (extraThresholds.length == 1)
 			emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt)
 		else
@@ -539,14 +542,15 @@ final class BinaryChainEmit {
 
 	private static function shape(
 		mode: WrapMode, location: WrappingLocation, items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int,
-		?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, ?afterComments: Array<Null<Doc>>, cuddleLast: Bool = false
+		?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, ?afterComments: Array<Null<Doc>>, cuddleLast: Bool = false,
+		restAware: Bool = false
 	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(items, ops);
 			case OnePerLine: shapeOnePerLine(items, ops, cols, location, cuddleLast);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(items, ops, cols, location, cuddleLast);
 			case FillLine, FillLineWithLeadingBreak:
-				shapeFillLine(items, ops, cols, indentUnit, location);
+				shapeFillLine(items, ops, cols, indentUnit, location, restAware);
 			// ω-keep-chain (increment 2): JSON `"defaultWrap": "keep"` on chain
 			// configs (opAddSubChain, opBoolChain) preserves the source's
 			// per-operator line breaks verbatim — break before operand `i`
@@ -737,7 +741,7 @@ final class BinaryChainEmit {
 	}
 
 	private static function shapeFillLine(
-		items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int, location: WrappingLocation
+		items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int, location: WrappingLocation, restAware: Bool = false
 	): Doc {
 		// Soft-line packing through `Fill`. Per-item-fit decision packs
 		// operands inline until the next one would overflow, then the
@@ -795,7 +799,11 @@ final class BinaryChainEmit {
 		// Without it a middle operand ending flush at the limit stays on the packed
 		// line and an inner group (e.g. a call operand) then splits its own args
 		// instead of the chain breaking at the operator.
-		return Group(Nest(nestCols, Fill(enriched, Line(' '), 1)));
+		// omega-chain-rest-width: a `restAware` chain's own fill Group counts the
+		// whole physical line as the pivot that picked this shape did; left plain,
+		// it re-decided flat on `col + flatWidth` alone and undid that pivot's break.
+		final packed: Doc = Nest(nestCols, Fill(enriched, Line(' '), 1));
+		return D.groupOrRestProbe(packed, restAware);
 	}
 
 	/**
@@ -848,7 +856,7 @@ final class BinaryChainEmit {
 	 * unwrap shape that bypasses the cascade-decided mode.
 	 */
 	private static function emitNoThreshold(
-		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, nestSuppress: Bool, condWrapForced: Bool, ternaryRestAware: Bool,
+		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, nestSuppress: Bool, condWrapForced: Bool, restAware: Bool,
 		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
 		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, shapeNoWrapAt: (WrappingLocation) -> Doc
 	): Doc {
@@ -895,7 +903,7 @@ final class BinaryChainEmit {
 		// inner ternary/call breaks. opBool / ternary chains are NOT tagged
 		// (fork never `unwrapAddOps` them).
 		if (isAddSubOps(ops)) {
-			final brkDoc: Doc = Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat)));
+			final brkDoc: Doc = D.groupOrRestProbe(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat)), restAware);
 			// ω-opadd-trailing-paren-glue: when the chain's LAST operand leads
 			// with a bare `(` (a paren-expr operand) and operand-1 does not, pivot
 			// the committed break shape against the NoWrap glue via the natural-
@@ -1014,21 +1022,24 @@ final class BinaryChainEmit {
 		final boolReevalTag: Bool = isOpBoolOps(ops) && brk.location == AfterLast
 			&& (brk.mode == FillLine || brk.mode == FillLineWithLeadingBreak) && !nestSuppress && containsCallOperand(items);
 		final brkShape: Doc = boolReevalTag ? CollapseBoolProbe(shapeAt(brk)) : shapeAt(brk);
-		// ternary-rest-aware: a ternary the caller flagged `ternaryRestAware`
-		// (every host context except an interpolation body or an explicit
-		// expression paren, see `lowerTernaryBranch`) reaches this pivot. A plain
-		// `Group(IfBreak)`'s fitsFlat measures `col + flatWidth` and IGNORES the
-		// rest-of-stack (the statement `;`, an enclosing argument `,`), so a ternary
-		// whose flat body ends exactly at lineWidth stays glued while its physical
-		// line overflows; the fork wraps it. Swap to `GroupWithRestProbe`, which
-		// keeps the same fitsFlat decision (a break-mode `flat` cascade with inner
-		// hardlines makes fitsFlat refuse to flatten and commit to break, where a
-		// flatTokenWidth probe would collapse those hardlines to 0-width and stay
-		// under threshold) but subtracts `flatTokenWidthOfRestStack(stack)` from the
-		// budget, so the trailing content is counted. opBool `&&`/`||` chains
-		// (non-ternary ops) keep the plain `Group(IfBreak)` pivot.
+		// rest-aware pivot: a chain the caller flagged `restAware` (a ternary, or an
+		// `&&` / `||` chain, in every host context except an interpolation body or an
+		// explicit expression paren, see `lowerTernaryBranch` / `lowerInfixChain`)
+		// reaches this pivot. A plain `Group(IfBreak)`'s fitsFlat measures
+		// `col + flatWidth` and IGNORES the rest-of-stack (the statement `;`, an
+		// enclosing argument `,`) and the un-flushed space after an `=`, so a chain
+		// whose flat body ends at lineWidth stays glued while its physical line
+		// overflows by one or two columns; the fork wraps it at the chain operator,
+		// where the glued chain broke at the first INNER group that did count the
+		// rest (before a nested `==`, after `return`). Swap to `GroupWithRestProbe`,
+		// which keeps the same fitsFlat decision (a break-mode `flat` cascade with
+		// inner hardlines makes fitsFlat refuse to flatten and commit to break, where
+		// a flatTokenWidth probe would collapse those hardlines to 0-width and stay
+		// under threshold) but subtracts the pending space and
+		// `flatTokenWidthOfRestStack(stack)` from the budget, so the whole physical
+		// line is counted.
 		final ifBreak: Doc = IfBreak(brkShape, shapeAt(flat));
-		return WrapBoundary(isTernaryOps(ops) && ternaryRestAware ? GroupWithRestProbe(ifBreak) : Group(ifBreak));
+		return WrapBoundary(D.groupOrRestProbe(ifBreak, restAware));
 	}
 
 	/**
