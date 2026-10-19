@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.format.comment.CommentDirective;
+
 using StringTools;
 using Lambda;
 
@@ -26,14 +28,6 @@ final class CommentProse {
 
 	/** The longest a DECORATED phrase can be and still read as a section label rather than a sentence (gate 9). */
 	private static inline final DECORATED_LABEL_WORDS: Int = 4;
-
-	/**
-	 * Tooling directives (gate 5), lower-cased and matched as a LINE PREFIX. `noqa` and
-	 * `CHECKSTYLE:` are this project's own suppression markers (`Suppression`); the
-	 * `@formatter:` and `#region` pairs are the two conventions foreign formatters and
-	 * IDEs read out of Haxe line comments.
-	 */
-	private static final DIRECTIVE_MARKERS: Array<String> = ['noqa', 'checkstyle:', '@formatter:', '#region', '#endregion'];
 
 	/** Task markers (gate 6), lower-cased and matched ANYWHERE in a line. */
 	private static final TASK_MARKERS: Array<String> = ['todo', 'fixme', 'hack', 'xxx'];
@@ -110,8 +104,8 @@ final class CommentProse {
 	 * that does not READ AS PROSE.
 	 */
 	public static function declines(text: String): Bool {
+		if (CommentDirective.isDirective(text)) return true;
 		final lower: String = text.toLowerCase();
-		for (marker in DIRECTIVE_MARKERS) if (lower.startsWith(marker)) return true;
 		for (marker in TASK_MARKERS) if (lower.indexOf(marker) >= 0) return true;
 		return !readsAsProse(text);
 	}
@@ -192,7 +186,7 @@ final class CommentProse {
 	 *
 	 * An empty line is prose: it is the paragraph break of a multi-line run.
 	 */
-	private static function readsAsProse(text: String): Bool {
+	public static function readsAsProse(text: String): Bool {
 		final bare: String = maskQuotedSpans(text);
 		final head: String = firstWord(bare);
 		return !CODE_HEAD_KEYWORDS.contains(head) && !(CONTROL_HEAD_KEYWORDS.contains(head) && opensBracket(bare.substr(head.length)))

@@ -466,7 +466,7 @@ final class BinaryChainEmit {
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
-				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
 				// PROBE FAMILY (`docs/architecture.md` table), flat side for all four:
 				//  - `IfArrowContinuationFits` and its rest-aware sibling are two-SHAPE
 				//    probes like the natural siblings above, and their two shapes always

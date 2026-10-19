@@ -440,6 +440,16 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * resolved by `afterLeftCurly` / `beforeRightCurly` instead. See `UniformStatementBlanksPolicy`.
 	 */
 	uniformStatementBlanks: UniformStatementBlanksPolicy,
+
+	/**
+	 * FU12 `comments.trailingCommentOverflow: "above"`. True moves a same-line `//` comment that alone carries
+	 * its line past `lineWidth` onto its own line above the statement or member it trails, at that element's
+	 * indent; the code is then laid out as if the comment were not there. Only where a block Star opts in
+	 * (`@:fmt(relocateTrailingComments)`: statement blocks and type member lists), only when the element alone
+	 * renders as one line that fits, never for a directive (`CommentDirective`) and never for an element that
+	 * already carries a leading comment. False (default) keeps every trailing comment where it was.
+	 */
+	trailingCommentAbove: Bool,
 	typedefAssign: WhitespacePolicy,
 	typedefIntersection: WhitespacePolicy,
 	typeParamDefaultEquals: WhitespacePolicy,

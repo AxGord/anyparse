@@ -207,6 +207,7 @@ final class HaxeFormatConfigLoader {
 			afterLeftCurly: base.afterLeftCurly,
 			beforeRightCurly: base.beforeRightCurly,
 			uniformStatementBlanks: base.uniformStatementBlanks,
+			trailingCommentAbove: base.trailingCommentAbove,
 			typedefAssign: base.typedefAssign,
 			typedefIntersection: base.typedefIntersection,
 			typeParamDefaultEquals: base.typeParamDefaultEquals,
@@ -737,7 +738,7 @@ final class HaxeFormatConfigLoader {
 	}
 
 	/**
-	 * ω-comment-style: the `comments` section's sole key, mapped inline —
+	 * ω-comment-style: the `comments` section's keys, mapped inline —
 	 * one call site, so a `*ToRuntime` sibling would be indirection
 	 * without reuse. An absent or unrecognised `blockCommentStyle` leaves
 	 * `opt.commentStyle` on the byte-preserving `Verbatim` default, the
@@ -753,6 +754,8 @@ final class HaxeFormatConfigLoader {
 	 * callers.
 	 */
 	private static function applyComments(section: HxFormatCommentsSection, opt: HxModuleWriteOptions): Void {
+		final overflow: Null<String> = section.trailingCommentOverflow;
+		if (overflow != null) opt.trailingCommentAbove = overflow == 'above';
 		final style: Null<String> = section.blockCommentStyle;
 		if (style == null) return;
 		opt.commentStyle = switch style {

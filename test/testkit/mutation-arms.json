@@ -27101,6 +27101,85 @@
 			"find": "usings.reverse();",
 			"replace": "",
 			"note": "hoisted usings are inserted first-first at a seat that puts each above the first, so they land reversed — and a using order IS its static-extension priority"
+		},
+		{
+			"name": "M-TCO-KNOB-IGNORED",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElemPushExpr",
+			"find": "opt.trailingCommentAbove && _t.leadingComments.length == 0",
+			"replace": "_t.leadingComments.length == 0",
+			"note": "the runtime gate stops reading `opt.trailingCommentAbove`, so every opted-in block moves its overflowing trailing comments with the knob off"
+		},
+		{
+			"name": "M-TCO-LEADING-IGNORED",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElemPushExpr",
+			"find": "opt.trailingCommentAbove && _t.leadingComments.length == 0",
+			"replace": "opt.trailingCommentAbove",
+			"note": "an element that already carries a leading comment moves its trailing one too, where the second pass reads a longer leading list and the blank / doc / run rules may answer differently"
+		},
+		{
+			"name": "M-TCO-DIRECTIVE-MOVED",
+			"type": "anyparse.format.comment.CommentDirective",
+			"method": "relocatableTrailing",
+			"find": "comment.startsWith('//') && !isDirective(comment.substring(2))",
+			"replace": "comment.startsWith('//')",
+			"note": "a `// noqa` / `CHECKSTYLE` / `@formatter` comment moves off the line it governs, so it silences or marks a different line"
+		},
+		{
+			"name": "M-TCO-OVERWIDE-CODE-MOVED",
+			"type": "anyparse.core.Renderer",
+			"method": "pushTrailingCommentChoice",
+			"find": "end >= 0 && end <= n && end + trailWidth > n",
+			"replace": "end >= 0 && end + trailWidth > n",
+			"note": "the comment moves off code that is over the width on its own, where moving it fixes nothing the knob promises"
+		},
+		{
+			"name": "M-TCO-BOUNDARY",
+			"type": "anyparse.core.Renderer",
+			"method": "pushTrailingCommentChoice",
+			"find": "end >= 0 && end <= n && end + trailWidth > n",
+			"replace": "end >= 0 && end <= n && end + trailWidth >= n",
+			"note": "a line landing exactly on the width reads as overflowing, so a comment that fits moves"
+		},
+		{
+			"name": "M-TCO-MULTILINE-MOVED",
+			"type": "anyparse.core.Renderer",
+			"method": "pushTrailingCommentChoice",
+			"find": "final end: Int = naturalSingleLineEnd(code, col, f.indent, width);",
+			"replace": "final end: Int = naturalFirstLineWidth(code, col, f.indent, width);",
+			"note": "the probe measures the code's FIRST line, so code that spans lines on its own loses the comment from its last line whenever the first line plus the comment is wide"
+		},
+		{
+			"name": "M-COMMENT-REFLOW-TAB-ROW",
+			"type": "anyparse.query.SourceComments",
+			"method": "codeShapeRefusal",
+			"find": "if (text.indexOf('\\t') > 0)",
+			"replace": "if (false)",
+			"note": "a tab-aligned row (`@param\\tname\\t\\tdescription`) is reflowed and its continuation lands at the bare gutter under none of the columns"
+		},
+		{
+			"name": "M-COMMENT-REFLOW-CODE-SHAPED",
+			"type": "anyparse.query.SourceComments",
+			"method": "codeShapeRefusal",
+			"find": "if (!CommentProse.readsAsProse(prose))",
+			"replace": "if (false)",
+			"note": "a line that does not read as prose (commented-out code, `name=\"value\"` markup) breaks at spaces like prose"
+		},
+		{
+			"name": "M-COMMENT-REFLOW-SPLITS-CODE-SPAN",
+			"type": "anyparse.query.SourceComments",
+			"method": "fillText",
+			"find": "if (i > start && c == ' '.code && !inCode) cut = i;",
+			"replace": "if (i > start && c == ' '.code) cut = i;",
+			"note": "a space inside a backtick span becomes a break point, so an inline code sample is split across two lines"
+		},
+		{
+			"name": "M-COMMENT-DIRECTIVE-NONE",
+			"type": "anyparse.format.comment.CommentDirective",
+			"method": "isDirective",
+			"force": "false",
+			"note": "no comment reads as a directive, so the reflow and the trailing-comment move both treat `noqa` / `CHECKSTYLE` / `@formatter` markers as prose"
 		}
 	]
 }

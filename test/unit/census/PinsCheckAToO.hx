@@ -81,17 +81,20 @@ final class PinsCheckAToO {
 			+ 'M-NO-AUTOFIX-REASON-IS-THE-RULE-NAME',
 		'unit.check.BuiltinFixClassCensusTest#testNoDeclaredNoAutofixRuleCarriesAFixSeam :: guard :: ',
 		'unit.check.CollapseNestedSwitchCheckTest#testUnprovenBinderRefused :: control :: M-COLLAPSE-BINDER-UNPROVEN',
+		'unit.check.CommentWidthCheckTest#testABacktickSpanIsNeverSplit :: control :: M-COMMENT-REFLOW-SPLITS-CODE-SPAN',
 		'unit.check.CommentWidthCheckTest#testACommentInARawCondRegionIsReportOnly :: control :: M-COMMENT-WIDTH-OPAQUE-OPEN',
 		'unit.check.CommentWidthCheckTest#testAFencedCodeSampleIsReportOnly :: control :: M-COMMENT-WIDTH-FENCE-BLIND',
 		'unit.check.CommentWidthCheckTest#testAOneLineBlockOverByItsCloserIsReflowed :: control :: M-COMMENT-WIDTH-CLOSER-UNSEEN',
 		'unit.check.CommentWidthCheckTest#testAProseLineWithATwinInsideAFenceIsStillFixable :: control :: '
 			+ 'M-COMMENT-WIDTH-PROTECTION-BY-TEXT',
+		'unit.check.CommentWidthCheckTest#testATabAlignedRowIsReportOnlyAndSaysSo :: control :: M-COMMENT-REFLOW-TAB-ROW',
 		'unit.check.CommentWidthCheckTest#testATableRowIsReportOnlyAndSaysSo :: control :: M-COMMENT-REFLOW-UNSAFE-LINES',
 		'unit.check.CommentWidthCheckTest#testATrailingCommentBehindOverWideCodeIsNotThisRulesFinding :: control :: '
 			+ 'M-COMMENT-WIDTH-CODE-BLIND',
 		'unit.check.CommentWidthCheckTest#testATrailingCommentIsReportOnly :: control :: M-COMMENT-WIDTH-TRAILING-WRAPPED',
 		'unit.check.CommentWidthCheckTest#testCodeOnBothSidesOfAShortCommentIsNotThisRulesFinding :: control :: '
 			+ 'M-COMMENT-WIDTH-CODE-BLIND',
+		'unit.check.CommentWidthCheckTest#testCommentedOutCodeIsReportOnlyAndSaysSo :: control :: M-COMMENT-REFLOW-CODE-SHAPED',
 		'unit.check.CommentWidthCheckTest#testOnlyTheLinesTheViolationsNameAreReflowed :: control :: M-COMMENT-WIDTH-PROTECTION-OFF',
 		'unit.check.CommentWidthCheckTest#testTheConfiguredWidthIsRead :: control :: M-COMMENT-WIDTH-CONFIG-BLIND',
 		'unit.check.CommentWidthCheckTest#testTheFixReflowsIntoTheWidthWordForWord :: control :: M-COMMENT-REFLOW-ABSENT',

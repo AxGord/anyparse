@@ -4562,3 +4562,50 @@ decided the question; it may not become a record of runs.
   M-MENTIONS-IMPORT-KINDS-UNPASSED, M-LIT-QUALIFIED-KINDS-IGNORED, M-HOIST-USINGS-SOURCE-ORDER; re-aimed onto the moved
   code: M-NEWFILE-IMPORT-DOUBLED / -BARE-KEYWORD-WRAPPED (`ImportSpelling.split`), M-NEWFILE-IMPORT-ANY-LINE,
   M-USES-EXACT-ONLY, M-USES-TAIL-SUBSTRING (`SourceText.answersSimpleName`).
+
+## FU12 (2026-10-19): an overflowing trailing comment moves above its element; comment-width declines code shapes
+
+User report: client lines over `maxLineLength` the writer leaves alone. Census (client working tree, tab 4): 4 lines whose CODE
+fits and a trailing `//` overflows (`ItemListModelsShare.hx:88/129`, `ExportPDFBuilder.hx:106`, `API.hx:362`), 24
+over-wide COMMENT lines, 41 single long literals (unbreakable, left).
+
+- (a) Writer knob `comments.trailingCommentOverflow: "keep" | "above"` (`opt.trailingCommentAbove`, default `"keep"`,
+  so every other project is byte-unmoved). `"above"` moves a same-line `//` comment onto its own line above the
+  statement or member it trails, at that element's indent, ONLY when the element alone renders as one line that fits
+  and the comment is what carries it past the width. New Doc ctor `IfTrailingCommentOverflows(n, trailWidth, code,
+  breakDoc, flatDoc)`: the render arm measures `code` with the natural first-line walk (`Renderer.naturalFirstLine`,
+  now answering whether it stopped at a break — `naturalSingleLineEnd`), every static walker reads `flatDoc` (the
+  pre-knob emit), so the knob changes nothing but the choice.
+- Positive list, each a reason the second pass is provably the same layout: a block Star that opts in
+  (`@:fmt(relocateTrailingComments)`: `HxFnBlock.stmts`, `BlockStmt`, `BlockExpr`, class / interface / abstract /
+  macro-class members — every element starts on its own line, so the moved comment sits at the element's indent); a
+  `//` comment that is not a directive (`CommentDirective.relocatableTrailing`); an element with NO leading comment
+  (the moved one then reads back as the whole leading list, so the doc-led blank rules, the `//`-before-`/**` split
+  blank, the line-comment run adapter and the blank-after-leading-comments flag answer as they did). Left alone, by
+  the list: comments inside expressions (object fields, call arguments, operator chains — `ExportPDFBuilder.hx:106`,
+  `API.hx:362`), case bodies (the first statement can share the label's line), block comments.
+- The `uniformStatementBlanks: collapse` pre-pass needs NO gate although it refuses a list whose later element has a
+  leading comment: a collapsing list loses every blank, and a blank-free list does not collapse on the second pass
+  either. A first version gated the move on the collapse; the SECOND pass then moved the comment (fmt needed two
+  rewrites). Pinned by `testUniformCollapseAndTheMoveLandInOnePass`.
+- Fork comparison (haxe-formatter `feature/condition-wrapping`, measured): the fork counts a trailing comment into
+  `TokenList.calcLineLength` and WRAPS THE CODE to make room (`x =` + newline + value, a call broken one argument per
+  line), never moves a comment and never reflows one. Parity is unchanged under the default; `"above"` is an hxq-only
+  layout choice: the code is what the reader reads, a comment's width should not lay it out. Not a parity defect (see
+  the writer-vs-formatter note: a difference under an unset knob is a config question).
+- (b) `comment-width` already had a `--fix` (`SourceComments.wrapCommentBody`, balanced fill). client run found two
+  corruptions it made: a tab-aligned `@param` row lost its columns (`CrashReport.hx:85`) and commented-out XML attributes
+  were broken at spaces (`StageArea.hx:157`). `reflowRefusal` now also declines a TAB-ALIGNED row and a line that does
+  not read as prose — by `CommentProse.readsAsProse`, the positive criterion `prefer-doc-comment` already used (made
+  public; asked with a leading `@tag` set aside, the tag's `@` being what it reads as code) rather than a second,
+  negative code-shape list. `fillText` never breaks inside a backtick span.
+- Consolidation: the directive list existed three times (`CommentProse.DIRECTIVE_MARKERS`, the `noqa`/`checkstyle:`
+  test in `reflowRefusal`, and the new writer gate); it is ONE now, `anyparse.format.comment.CommentDirective`
+  (`noqa`, `checkstyle:`, `@formatter:`, `#region`, `#endregion`, case-insensitive prefix — the safe direction for
+  every consumer, each of which may only decline). `SourceComments.isNoqaComment` stays separate: it answers what the
+  LINTER reads (`noqa` exactly or `noqa:`), a different question.
+- client: `comments.trailingCommentOverflow: "above"` in `hxformat.json`, `"comment-width": {"enabled": true}` in
+  `apqlint.json` (proposed; client config not changed here).
+- Arms: M-TCO-KNOB-IGNORED, M-TCO-LEADING-IGNORED, M-TCO-DIRECTIVE-MOVED, M-TCO-OVERWIDE-CODE-MOVED, M-TCO-BOUNDARY,
+  M-TCO-MULTILINE-MOVED, M-COMMENT-REFLOW-TAB-ROW, M-COMMENT-REFLOW-CODE-SHAPED, M-COMMENT-REFLOW-SPLITS-CODE-SPAN,
+  M-COMMENT-DIRECTIVE-NONE.

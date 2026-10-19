@@ -527,7 +527,7 @@ class Renderer {
 					IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
 					IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
 					IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _),
-					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
+					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _), IfTrailingCommentOverflows(_, _, _, _, _):
 					pushExceedsBranch(f, stack, ctx.col, pendingSpaceWidth(ctx), width, decisions);
 				case Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _):
 					// Fill family — per-item / all-flat layout, no scalar layout
@@ -868,7 +868,7 @@ class Renderer {
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
+				case IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
 					// ω-case-sym-linear + ω-glue-width: both `BodyFit` width probes are
 					// EXCLUDED from the both-branch descent. Their two branches wrap the
 					// SAME body object and differ only in the separator before it, so a
@@ -1236,6 +1236,28 @@ class Renderer {
 	private static function naturalFirstLineWidth(
 		d: Doc, startCol: Int, indent: Int, width: Int, resolveOpenDelim: Bool = false, trailWidth: Int = 0
 	): Int {
+		return naturalFirstLine(d, startCol, indent, width, resolveOpenDelim, trailWidth).col;
+	}
+
+	/**
+	 * The column `d`'s natural render ends at when that render is ONE physical line,
+	 * or -1 when the walk met a break first. Same walk as `naturalFirstLineWidth`,
+	 * read for the other half of its answer: whether the first line was also the
+	 * last. Consumed by the `IfTrailingCommentOverflows` render arm, which moves a
+	 * trailing comment only off a line the code alone would have kept to itself.
+	 */
+	private static function naturalSingleLineEnd(d: Doc, startCol: Int, indent: Int, width: Int): Int {
+		final walk: { col: Int, aborted: Bool } = naturalFirstLine(d, startCol, indent, width, false, 0);
+		return walk.aborted ? -1 : walk.col;
+	}
+
+	/**
+	 * `naturalFirstLineWidth`'s walk, returning both its end column and whether it
+	 * stopped at a break (`aborted`) rather than at the end of `d`.
+	 */
+	private static function naturalFirstLine(
+		d: Doc, startCol: Int, indent: Int, width: Int, resolveOpenDelim: Bool, trailWidth: Int
+	): { col: Int, aborted: Bool } {
 		var col: Int = startCol;
 		var aborted: Bool = false;
 		// Work items carry their own indent + mode + forceFlat — a faithful
@@ -1269,7 +1291,7 @@ class Renderer {
 			col += step.add;
 			aborted = step.aborted;
 		}
-		return col;
+		return { col: col, aborted: aborted };
 	}
 
 	/**
@@ -1495,7 +1517,7 @@ class Renderer {
 				IfResidualLineExceeds(_, _, fl), IfFullLineExceeds(_, _, fl), IfNaturalFirstLineExceeds(_, _, fl),
 				IfNaturalFirstLineExceedsWithRest(_, _, fl), IfNaturalFirstLineFitsOpenDelim(_, _, fl),
 				IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl),
-				IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
+				IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
 				inner.push({ doc: fl, mode: MFlat });
 				return null;
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
@@ -1574,8 +1596,9 @@ class Renderer {
 				IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
 				IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
 				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
-				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
+				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner),
+				IfTrailingCommentOverflows(_, _, _, _, inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner),
+				CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
 				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _):
 				// Single-child transparent descend: structural wrappers (Nest /
 				// Group), the flat side of every render-time `If*` probe, the
@@ -1668,9 +1691,10 @@ class Renderer {
 				IfNaturalFirstLineExceeds(_, _, inner), IfNaturalFirstLineExceedsWithRest(_, _, inner),
 				IfNaturalFirstLineFitsOpenDelim(_, _, inner), IfArrowContinuationFits(_, _, _, _, inner),
 				IfArrowContinuationFitsWithRest(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
-				IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner), LeadingBreak(_, inner),
-				BreakCommit(_, inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _):
+				IfGluedFirstLineExceeds(_, _, _, inner), IfTrailingCommentOverflows(_, _, _, _, inner), Flatten(inner),
+				WrapBoundary(inner), LeadingBreak(_, inner), BreakCommit(_, inner), HardFlatten(inner), CollapseProbe(inner),
+				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+				ConditionalMarkerDecrease(inner), BreakMark(inner, _):
 				// Single-child transparent descend at the same indent in MFlat.
 				// A `Group`'s nested flat content; the flat side of every
 				// render-time `If*` probe (the column/first-line/rest-of-stack/
@@ -1800,7 +1824,7 @@ class Renderer {
 				IfLineExceeds(_, _, innerDoc), IfResidualLineExceeds(_, _, innerDoc), IfFullLineExceeds(_, _, innerDoc),
 				IfNaturalFirstLineFitsOpenDelim(_, _, innerDoc), IfArrowContinuationFits(_, _, _, _, innerDoc),
 				IfArrowContinuationFitsWithRest(_, _, _, _, innerDoc), IfIndentWidthExceeds(_, _, _, innerDoc),
-				IfGluedFirstLineExceeds(_, _, _, innerDoc):
+				IfGluedFirstLineExceeds(_, _, _, innerDoc), IfTrailingCommentOverflows(_, _, _, _, innerDoc):
 				// Static walk: descend in MFlat. Runtime Group decision is
 				// unknowable here; flat-side measurement matches the cascade
 				// rule semantic. The natural-first-line / rest-of-stack probes
@@ -2061,9 +2085,10 @@ class Renderer {
 				});
 			case IfFirstLineExceeds(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
 				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
-				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), CollapseProbe(inner),
-				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
-				ConditionalMarkerDecrease(inner), BreakMark(inner, _), LeadingBreak(_, inner), BreakCommit(_, inner):
+				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner),
+				IfTrailingCommentOverflows(_, _, _, _, inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _),
+				LeadingBreak(_, inner), BreakCommit(_, inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds`), the
 				// nested cond-paren-glue probes (render-time, seen flat here),
@@ -2373,9 +2398,10 @@ class Renderer {
 				});
 			case IfFirstLineExceeds(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
 				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
-				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), CollapseProbe(inner),
-				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
-				ConditionalMarkerDecrease(inner), BreakMark(inner, _), LeadingBreak(_, inner), BreakCommit(_, inner):
+				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner),
+				IfTrailingCommentOverflows(_, _, _, _, inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _),
+				LeadingBreak(_, inner), BreakCommit(_, inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds` — the
 				// NoWrap-pinned call paren is measured kept-flat for the parent
@@ -2522,7 +2548,7 @@ class Renderer {
 				}
 			case IfNaturalFirstLineExceeds(_, _, _), IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
 				IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _),
-				IfGluedFirstLineExceeds(_, _, _, _):
+				IfGluedFirstLineExceeds(_, _, _, _), IfTrailingCommentOverflows(_, _, _, _, _):
 				// Natural-shape family — inner Groups resolve by their own
 				// `fitsFlat` (or a precomputed arrow width). Delegated to the
 				// static `pushNaturalBranch`.
@@ -2613,7 +2639,7 @@ class Renderer {
 				// FULL physical line — it already subtracts the trailing `;` / `,`,
 				// so the leading pending space belongs to the same measurement.
 				// Verified no output flip beyond the target shape: `fmt --list`
-				// over anyparse `src`+`test` and over the whole TM tree moves only
+				// over anyparse `src`+`test` and over the whole client tree moves only
 				// the two `maxLineLength + 1` ternary declarations.
 				//
 				// The rest ends where a later construct on the line breaks BY
@@ -3760,6 +3786,8 @@ class Renderer {
 						&& brokenBodyIsWorthMoving(flatDoc, f.indent + bodyIndent, n, width);
 					stack.push(new Frame(f.indent, exceeds ? MBreak : f.mode, exceeds ? breakDoc : flatDoc));
 				}
+			case IfTrailingCommentOverflows(n, trailWidth, code, breakDoc, flatDoc):
+				pushTrailingCommentChoice(f, stack, col, width, n, trailWidth, code, breakDoc, flatDoc);
 			case IfIndentWidthExceeds(flatWidth, n, breakDoc, flatDoc):
 				// ω-case-sibling-symmetry: `flatWidth` is a build-time constant the
 				// emitter supplies (the widest sibling's flat width), NOT a
@@ -3786,6 +3814,24 @@ class Renderer {
 				// `pushFlatWidthBranch` sibling.
 				throw 'pushNaturalBranch: unrouted probe ctor ${f.doc.getName()}';
 		}
+	}
+
+	/**
+	 * The `IfTrailingCommentOverflows` render arm (FU12 `comments.trailingCommentOverflow: "above"`): the comment
+	 * moves onto its own line above the element only when the element's natural render, alone, is ONE line that
+	 * fits and the comment is what carries it past `n`. `<= n` fits, as for the glue probe: both are calibrated to a
+	 * whole rendered line against `maxLineLength`. A force-flat region renders the pre-knob emit.
+	 */
+	private static function pushTrailingCommentChoice(
+		f: Frame, stack: Array<Frame>, col: Int, width: Int, n: Int, trailWidth: Int, code: Doc, breakDoc: Doc, flatDoc: Doc
+	): Void {
+		if (f.forceFlat) {
+			stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+			return;
+		}
+		final end: Int = naturalSingleLineEnd(code, col, f.indent, width);
+		final above: Bool = end >= 0 && end <= n && end + trailWidth > n;
+		stack.push(new Frame(f.indent, above ? MBreak : f.mode, above ? breakDoc : flatDoc));
 	}
 
 	/**
@@ -3887,9 +3933,10 @@ class Renderer {
 					IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
 					IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
 					IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
-					IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
-					HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _):
+					IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner),
+					IfTrailingCommentOverflows(_, _, _, _, inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner),
+					CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
+					ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _):
 					stack.push(inner);
 			}
 		}
@@ -4117,7 +4164,7 @@ class Renderer {
 				IfNaturalFirstLineExceeds(_, brk, _), IfNaturalFirstLineExceedsWithRest(_, brk, _),
 				IfNaturalFirstLineFitsOpenDelim(_, brk, _), IfArrowContinuationFits(_, _, _, brk, _),
 				IfArrowContinuationFitsWithRest(_, _, _, brk, _), IfIndentWidthExceeds(_, _, brk, _),
-				IfGluedFirstLineExceeds(_, _, brk, _):
+				IfGluedFirstLineExceeds(_, _, brk, _), IfTrailingCommentOverflows(_, _, _, brk, _):
 				brk;
 			case _: null;
 		};
@@ -4201,7 +4248,7 @@ class Renderer {
 				IfFullLineExceeds(_, brk, fl), IfNaturalFirstLineExceeds(_, brk, fl), IfNaturalFirstLineExceedsWithRest(_, brk, fl),
 				IfNaturalFirstLineFitsOpenDelim(_, brk, fl), IfArrowContinuationFits(_, _, _, brk, fl),
 				IfArrowContinuationFitsWithRest(_, _, _, brk, fl), IfIndentWidthExceeds(_, _, brk, fl),
-				IfGluedFirstLineExceeds(_, _, brk, fl):
+				IfGluedFirstLineExceeds(_, _, brk, fl), IfTrailingCommentOverflows(_, _, _, brk, fl):
 				{ brk: brk, fl: fl };
 			case _: null;
 		};

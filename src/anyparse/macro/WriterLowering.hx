@@ -2287,6 +2287,12 @@ typedef BlockStarCtx = {
 	final uniformStmtBlanks: Bool;
 
 	/**
+	 * The per-element push of the element Doc, its trailing comment folded in (`triviaBlockElemPushExpr`):
+	 * the FU12 `IfTrailingCommentOverflows` choice when the Star carries `@:fmt(relocateTrailingComments)`.
+	 */
+	final elemPushExpr: Expr;
+
+	/**
 	 * ω-case-sibling-symmetry: `final _csW: Int = …;` widest-sibling
 	 * pre-pass, or `macro -1` when the Star has no `caseSiblingSymmetry` meta.
 	 */

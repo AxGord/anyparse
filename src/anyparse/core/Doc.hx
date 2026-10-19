@@ -529,6 +529,35 @@ enum Doc {
 	IfGluedFirstLineExceeds(n: Int, bodyIndent: Int, breakDoc: Doc, flatDoc: Doc);
 
 	/**
+	 * The `comments.trailingCommentOverflow: "above"` choice for ONE element of a
+	 * block-like list that carries a same-line `//` comment (FU12). `code` is the
+	 * element alone, `flatDoc` the element with its comment trailing it (the
+	 * pre-knob emit, byte for byte) and `breakDoc` the comment on its own line
+	 * followed by `code`, at the element's indent.
+	 *
+	 * At render time `code` is rendered SPECULATIVELY at the current pen
+	 * (`Renderer.naturalSingleLineEnd`, the same natural walk the first-line
+	 * probes use) and `breakDoc` is taken only when that render is ONE physical
+	 * line ending at or before `n` AND the comment, `trailWidth` columns with its
+	 * separating space, would carry that line past `n`. In words: the comment
+	 * moves above only when it is the comment alone that overflows. Code that
+	 * spans lines on its own, or that is over-wide without the comment, keeps
+	 * the comment where it was.
+	 *
+	 * Every static walk (`fitsFlat`, the flat-width measurers, the cascade
+	 * rules) forwards to `flatDoc`, so the knob changes nothing but the rendered
+	 * choice; a `Doc -> Doc` rewriter maps all three Docs.
+	 *
+	 * The output is a fixed point by construction: re-read, the moved comment is
+	 * the element's LEADING comment and there is no trailing one left to decide
+	 * about. That is why the writer emits this ctor only for an element whose
+	 * leading-comment list is empty (`TrailingCommentRelocation`): the moved
+	 * comment then reads back as the whole list, so no blank-line or doc rule
+	 * that reads that list answers differently on the second pass.
+	 */
+	IfTrailingCommentOverflows(n: Int, trailWidth: Int, code: Doc, breakDoc: Doc, flatDoc: Doc);
+
+	/**
 	 * Wadler `fillSep`. Flat mode emits the items joined by `sep` flat; break
 	 * mode packs them left to right — before each item after the first it
 	 * measures `sep + item` flat from the current column, emitting `sep` flat

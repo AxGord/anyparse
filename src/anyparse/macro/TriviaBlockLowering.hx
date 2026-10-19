@@ -528,7 +528,11 @@ final class TriviaBlockLowering {
 		// the blank count, or null when the Star does not carry the flag — the
 		// three splice points then lower to `macro {}` and the generated loop is
 		// byte-identical to the pre-slice one.
-		?blankAroundOptField: String
+		?blankAroundOptField: String,
+		// FU12: `@:fmt(relocateTrailingComments)` — the element push becomes the
+		// `IfTrailingCommentOverflows` choice under `opt.trailingCommentAbove`.
+		// False keeps the pre-slice push byte for byte.
+		relocateTrailingComments: Bool = false
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
@@ -681,6 +685,7 @@ final class TriviaBlockLowering {
 			uniformBetweenOptField: uniformBetweenOptField,
 			anyEmptyLinesFlag: anyEmptyLinesFlag,
 			uniformStmtBlanks: uniformStmtBlanks,
+			elemPushExpr: triviaBlockElemPushExpr(relocateTrailingComments),
 			caseSiblingWidthExpr: caseSiblingWidthExpr,
 			blankAroundMarkExpr: blankAround.markExpr,
 			blankAroundSeenExpr: blankAround.seenExpr,
@@ -1060,6 +1065,48 @@ final class TriviaBlockLowering {
 	}
 
 	/**
+	 * Block-Star per-element push: the element Doc with its same-line trailing comment folded into the body
+	 * measurement (`foldTrailingIntoBodyGroup`), or the bare element when it has none.
+	 *
+	 * FU12 `@:fmt(relocateTrailingComments)`: under `opt.trailingCommentAbove` the folded Doc becomes the
+	 * FLAT side of an `IfTrailingCommentOverflows` whose break side is the comment on its own line above the
+	 * element — the comment rendered by `leadingCommentDocRun` over a one-entry run, exactly what the second
+	 * pass renders once the comment reads back as the element's only leading comment. The choice is built only
+	 * where that second pass is provably the same layout (positive list):
+	 *
+	 *  - the comment is a `//` line comment and not a directive (`CommentDirective.relocatableTrailing`);
+	 *  - the element has NO leading comment, so the moved one reads back as the whole leading list and no rule
+	 *    reading that list (doc-led blanks, the `//` before `/**` split blank, the line-comment run adapter,
+	 *    the blank after leading comments) answers differently.
+	 *
+	 * The `uniformStmtBlanks` collapse needs no gate of its own, although its pre-pass refuses a list in which a
+	 * later element carries a leading comment: a collapsing list has a blank before EVERY later element, the
+	 * collapse deletes them all, and a list with no blanks left does not collapse on the second pass either — it
+	 * keeps its (absent) source blanks, the same layout. A list that does not collapse cannot start to once a
+	 * comment is added. Gating the move on the collapse made the SECOND pass move the comment instead.
+	 */
+	private static function triviaBlockElemPushExpr(relocateTrailingComments: Bool): Expr {
+		final besideExpr: Expr = macro foldTrailingIntoBodyGroup(_elemSep, trailingCommentDocVerbatim(_tc, opt));
+		return if (relocateTrailingComments)
+			macro {
+				if (_tc == null)
+					_inner.push(_elem);
+				else if (
+					opt.trailingCommentAbove && _t.leadingComments.length == 0
+					&& anyparse.format.comment.CommentDirective.relocatableTrailing(_tc)
+				) {
+					final _tcRun: Array<String> = [_tc];
+					final _tcWidth: Int = 1 + lineCommentStr(_tcRun, 0, opt).length;
+					final _above: anyparse.core.Doc = _dc([leadingCommentDocRun(_tcRun, 0, opt), _dhl(), _elemSep]);
+					_inner.push(anyparse.core.Doc.IfTrailingCommentOverflows(opt.lineWidth, _tcWidth, _elemSep, _above, $besideExpr));
+				} else
+					_inner.push($besideExpr);
+			}
+		else
+			macro _inner.push(_tc != null ? $besideExpr : _elem);
+	}
+
+	/**
 	 * Block-Star per-element while-loop emit. Builds the `while (_si < _arr.length)`
 	 * loop: blockEnded sep, per-iter hardline, begin-type (first elem), blank-
 	 * before, leading-comment emit (with split-gate + between-blank), element emit
@@ -1083,6 +1130,7 @@ final class TriviaBlockLowering {
 		final blankAroundMarkExpr: Expr = c.blankAroundMarkExpr;
 		final blankAroundSeenExpr: Expr = c.blankAroundSeenExpr;
 		final blankAroundApplyExpr: Expr = c.blankAroundApplyExpr;
+		final elemPushExpr: Expr = c.elemPushExpr;
 		return macro {
 			while (_si < _arr.length) {
 				final _t = _arr[_si];
@@ -1107,7 +1155,7 @@ final class TriviaBlockLowering {
 				$blankAroundApplyExpr;
 				final _tc: Null<String> = _t.trailingComment;
 				final _elemSep: anyparse.core.Doc = $elemSepGlueExpr;
-				_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elemSep, trailingCommentDocVerbatim(_tc, opt)) : _elem);
+				$elemPushExpr;
 				_priorElemDoc = _elem;
 				$trackPrevKindExpr;
 				_si++;

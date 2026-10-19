@@ -512,7 +512,7 @@ class WrapList {
 					IfResidualLineExceeds(_, b, _), IfFullLineExceeds(_, b, _), IfNaturalFirstLineExceeds(_, b, _),
 					IfNaturalFirstLineExceedsWithRest(_, b, _), IfNaturalFirstLineFitsOpenDelim(_, b, _),
 					IfArrowContinuationFits(_, _, _, b, _), IfArrowContinuationFitsWithRest(_, _, _, b, _),
-					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _):
+					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _), IfTrailingCommentOverflows(_, _, _, _, b):
 					w(b, depth);
 				case Concat(items):
 					for (it in items) w(it, depth);
@@ -852,7 +852,7 @@ class WrapList {
 				// Break-side leading-edge walk: descend the break branch
 				// (mirrors the If*Exceeds siblings).
 				node = brk;
-			case IfGluedFirstLineExceeds(_, _, _, flat):
+			case IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
 				// ω-glue-width: the ONE family member read on its FLAT side here.
 				// Its break branch opens with a hardline BY CONSTRUCTION (that is
 				// the whole decision), so a break-side read would answer "leads with
@@ -947,7 +947,7 @@ class WrapList {
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
-				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
@@ -997,7 +997,7 @@ class WrapList {
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
-				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final last: Null<Doc> = findLastNonTrailingTransparent(items);
@@ -1039,7 +1039,7 @@ class WrapList {
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
-				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final last: Null<Doc> = findLastNonTrailingTransparent(items);
@@ -1088,7 +1088,7 @@ class WrapList {
 					IfResidualLineExceeds(_, b, _), IfFullLineExceeds(_, b, _), IfNaturalFirstLineExceeds(_, b, _),
 					IfNaturalFirstLineExceedsWithRest(_, b, _), IfNaturalFirstLineFitsOpenDelim(_, b, _),
 					IfArrowContinuationFits(_, _, _, b, _), IfArrowContinuationFitsWithRest(_, _, _, b, _),
-					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _):
+					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _), IfTrailingCommentOverflows(_, _, _, _, b):
 					// Both branches of a chain cascade carry the same
 					// separators; walk only the break branch to avoid
 					// double-counting.
@@ -1144,7 +1144,7 @@ class WrapList {
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
-				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
@@ -1183,7 +1183,7 @@ class WrapList {
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
-				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final last: Null<Doc> = findLastNonTrailingTransparent(items);
@@ -1248,7 +1248,7 @@ class WrapList {
 				IfResidualLineExceeds(_, brk, _), IfFullLineExceeds(_, brk, _), IfNaturalFirstLineExceeds(_, brk, _),
 				IfNaturalFirstLineExceedsWithRest(_, brk, _), IfNaturalFirstLineFitsOpenDelim(_, brk, _),
 				IfArrowContinuationFits(_, _, _, brk, _), IfArrowContinuationFitsWithRest(_, _, _, brk, _),
-				IfIndentWidthExceeds(_, _, brk, _), IfGluedFirstLineExceeds(_, _, brk, _):
+				IfIndentWidthExceeds(_, _, brk, _), IfGluedFirstLineExceeds(_, _, brk, _), IfTrailingCommentOverflows(_, _, _, _, brk):
 				// PROBE FAMILY (`docs/architecture.md` table), break side for all four — the
 				// side this right-spine walk already takes, and side-independent for
 				// each: `IfArrowContinuationFits` closes BOTH of its layouts with the
@@ -1731,7 +1731,7 @@ class WrapList {
 					IfResidualLineExceeds(_, b, _), IfFullLineExceeds(_, b, _), IfNaturalFirstLineExceeds(_, b, _),
 					IfNaturalFirstLineExceedsWithRest(_, b, _), IfNaturalFirstLineFitsOpenDelim(_, b, _),
 					IfArrowContinuationFits(_, _, _, b, _), IfArrowContinuationFitsWithRest(_, _, _, b, _),
-					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _):
+					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _), IfTrailingCommentOverflows(_, _, _, _, b):
 					// PROBE FAMILY (`docs/architecture.md` table), break side for all four — the
 					// side this walk already takes, and side-independent for each. The
 					// operator `Text` this scan hunts only counts at `depth == 1`, i.e.
@@ -1793,7 +1793,7 @@ class WrapList {
 					IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _), IfLineExceeds(_, _, _), IfResidualLineExceeds(_, _, _),
 					IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _), IfNaturalFirstLineExceedsWithRest(_, _, _),
 					IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _),
-					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
+					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _), IfTrailingCommentOverflows(_, _, _, _, _):
 					// Every OTHER conditional stops the walk: this predicate asks whether
 					// the chain's own outermost wrap level IS the keep-flat probe, so a
 					// different probe there is a `false` answer, not a subtree to search.
@@ -1916,9 +1916,9 @@ class WrapList {
 			case IfFullLineExceeds(_, _, flatDoc):
 				stack.push(flatDoc);
 			case IfIndentWidthExceeds(_, _, _, flatDoc), IfGluedFirstLineExceeds(_, _, _, flatDoc),
-				IfNaturalFirstLineExceeds(_, _, flatDoc), IfNaturalFirstLineExceedsWithRest(_, _, flatDoc),
-				IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc), IfArrowContinuationFits(_, _, _, _, flatDoc),
-				IfArrowContinuationFitsWithRest(_, _, _, _, flatDoc):
+				IfTrailingCommentOverflows(_, _, _, _, flatDoc), IfNaturalFirstLineExceeds(_, _, flatDoc),
+				IfNaturalFirstLineExceedsWithRest(_, _, flatDoc), IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc),
+				IfArrowContinuationFits(_, _, _, _, flatDoc), IfArrowContinuationFitsWithRest(_, _, _, _, flatDoc):
 				stack.push(flatDoc);
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				DocMeasure.pushFillReversed(stack, items, sep);
@@ -2951,7 +2951,7 @@ class WrapList {
 					IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
 					IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
 					IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _),
-					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
+					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _), IfTrailingCommentOverflows(_, _, _, _, _):
 					return true;
 				case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner),
 					BreakCommit(_, inner), LeadingBreak(_, inner), Flatten(inner), HardFlatten(inner), CollapseProbe(inner),
@@ -3048,7 +3048,7 @@ class WrapList {
 				IfNaturalFirstLineExceedsWithRest(_, brk, _), IfNaturalFirstLineFitsOpenDelim(_, brk, _),
 				IfArrowContinuationFits(_, _, _, brk, _), IfArrowContinuationFitsWithRest(_, _, _, brk, _):
 				isMethodChainItem(brk);
-			case IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+			case IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
 				// PROBE FAMILY (`docs/architecture.md` table). The two body-placement probes are
 				// the one family pair this walker reads on its FLAT side, against the
 				// break side it takes everywhere else, and the reason is this walker's
@@ -3102,7 +3102,7 @@ class WrapList {
 						IfNaturalFirstLineExceeds(_, _, _), IfNaturalFirstLineExceedsWithRest(_, _, _),
 						IfNaturalFirstLineFitsOpenDelim(_, _, _), IfArrowContinuationFits(_, _, _, _, _),
 						IfArrowContinuationFitsWithRest(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _),
-						IfGluedFirstLineExceeds(_, _, _, _) if (arr.length == 2 && k == 1):
+						IfGluedFirstLineExceeds(_, _, _, _), IfTrailingCommentOverflows(_, _, _, _, _) if (arr.length == 2 && k == 1):
 						hit = isMethodChainItem(arr[k]);
 					case _:
 				}
@@ -3883,7 +3883,7 @@ class WrapList {
 				IfLineExceeds(_, _, _), IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
 				IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
 				IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _),
-				IfGluedFirstLineExceeds(_, _, _, _): false;
+				IfGluedFirstLineExceeds(_, _, _, _), IfTrailingCommentOverflows(_, _, _, _, _): false;
 			case _: null;
 		};
 	}
@@ -3963,7 +3963,7 @@ class WrapList {
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
-				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
 				// PROBE FAMILY (`docs/architecture.md` table), flat side for all four — this
 				// walker's own side, and side-independent for each.
 				// `IfArrowContinuationFits` opens BOTH of its layouts with the list's
@@ -4063,7 +4063,7 @@ class WrapList {
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
-				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
 				// PROBE FAMILY (`docs/architecture.md` table), flat side for all four — this
 				// walker's own side, and side-independent for each, by the same
 				// argument as `firstVisibleTextIsFunctionKw` above: both
@@ -4144,7 +4144,7 @@ class WrapList {
 				// may not answer differently for the two, not because the depth
 				// argument transfers.
 				hasTopLevelElse(flat, depth);
-			case IfIndentWidthExceeds(_, _, brk, _), IfGluedFirstLineExceeds(_, _, brk, _):
+			case IfIndentWidthExceeds(_, _, brk, _), IfGluedFirstLineExceeds(_, _, brk, _), IfTrailingCommentOverflows(_, _, _, _, brk):
 				// PROBE FAMILY: the two body-placement probes are read on their BREAK
 				// side, against this walker's flat side everywhere else, for the same
 				// depth reason. Both branches wrap the SAME body, but only the break
@@ -4368,7 +4368,7 @@ class WrapList {
 	 * deliberately so — the same argument holds there (a `[` followed only by a
 	 * trailing comment still ends its line). No shape was found where it
 	 * changes that consumer's answer: an A/B on a commented array arg is
-	 * byte-identical, and so are the suite, the anyparse own corpus, TM `src`
+	 * byte-identical, and so are the suite, the anyparse own corpus, client `src`
 	 * and the fork corpus apart from the comprehension fixtures above.
 	 */
 	private static function firstBreakIsDelimChar(d: Doc, ch: Int): Bool {
@@ -4514,6 +4514,8 @@ class WrapList {
 				IfIndentWidthExceeds(fw, n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfGluedFirstLineExceeds(n, bi, b, f):
 				IfGluedFirstLineExceeds(n, bi, groupifyShared(b, memo), groupifyShared(f, memo));
+			case IfTrailingCommentOverflows(n, tw, c, b, f):
+				IfTrailingCommentOverflows(n, tw, groupifyShared(c, memo), groupifyShared(b, memo), groupifyShared(f, memo));
 			case Fill(items, sep, tr):
 				Fill([for (it in items) groupifyShared(it, memo)], groupifyShared(sep, memo), tr);
 			case FillWithRestProbe(items, sep, tr):

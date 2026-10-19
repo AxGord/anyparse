@@ -49,5 +49,5 @@ typedef HxAbstractDecl = {
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines,
 		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember'), staticVarSubdivision, betweenMultilineCommentsBlanks,
-		blankAroundMultilineMembers('aroundMultilineFields')) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+		blankAroundMultilineMembers('aroundMultilineFields'), relocateTrailingComments) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }
