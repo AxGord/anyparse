@@ -27045,6 +27045,22 @@
 			"find": "? macro (opt.conditionalExprFit ? $finalWrapDocs : _dwb($finalWrapDocs))",
 			"replace": "? macro _dwb($finalWrapDocs)",
 			"note": "the elseifs Star of a fit region keeps its force-flat boundary, so inside a glued comprehension body the seams before the #elseif flatten and the ones after it break"
+		},
+		{
+			"name": "M-WIDTH-RULE-DECISION-UNREAD",
+			"type": "anyparse.core.BreakCommits",
+			"method": "decisionMapped",
+			"find": "f(brk, b -> Group(IfWidthExceeds(n, b, flat)));",
+			"replace": "null;",
+			"note": "a literal broken by a lineLength rule is no width decision to the shared reader, so its comprehension body stays glued and the next write moves it Allman"
+		},
+		{
+			"name": "M-WIDTH-RULE-TAIL-UNREAD",
+			"type": "anyparse.format.BodyAllman",
+			"method": "tailBreak",
+			"find": "Doc.Group(Doc.IfWidthExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
+			"replace": "Doc.Group(Doc.IfLineExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
+			"note": "the Allman break of a lineLength-rule literal is not offered to its one-item list, which stays laddered where the next write cuddles"
 		}
 	]
 }

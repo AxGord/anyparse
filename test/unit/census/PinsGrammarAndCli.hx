@@ -323,6 +323,8 @@ final class PinsGrammarAndCli {
 			+ 'M-PARSE-MEMO-REPLAY-OFF,M-PARSE-MEMO-STASHED-SKIP',
 		'unit.grammar.haxe.HxNestingCostTest#testWriterDocKeepsItsSharing :: control :: M-GROUPIFY-SHARED-OFF',
 		'unit.grammar.haxe.HxObjectLitForcedNoWrapProbeTest#testOneWriteIsAFixedPointAtEveryWidth :: control :: M-FORCED-NOWRAP-UNPROBED',
+		'unit.grammar.haxe.HxObjectLitLineLengthRuleFixedPointTest#testAWidthRuleLiteralInAComprehensionSettlesInOneWrite :: control :: '
+			+ 'M-WIDTH-RULE-DECISION-UNREAD,M-WIDTH-RULE-TAIL-UNREAD',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAKeywordANewerHaxeAddedStillNamesAVersionGatedDeclaration :: control :: '
 			+ 'M-RESERVED-VERSIONED-REFUSED',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoFunctionParameterOrBinderName :: control :: '

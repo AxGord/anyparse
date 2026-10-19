@@ -157,8 +157,9 @@ final class BreakCommits {
 	}
 
 	/**
-	 * `body` with the width decision it wholly is — `IfFirstLineExceeds(n, brk, flat)` or
-	 * `GroupWithRestProbe(IfBreak(brk, flat))` behind `WrapBoundary` / one-element `Concat` wrappers, the shapes an object
+	 * `body` with the width decision it wholly is — `IfFirstLineExceeds(n, brk, flat)`,
+	 * `GroupWithRestProbe(IfBreak(brk, flat))` or `Group(IfWidthExceeds(n, brk, flat))` (a
+	 * `lineLength` rule) behind `WrapBoundary` / one-element `Concat` wrappers, the shapes an object
 	 * literal's own wrap rule emits — replaced by `f(brk, rebuild)`, where `rebuild(b)` is that decision with `b` for its
 	 * break side; `null` when `body` is anything else.
 	 */
@@ -166,6 +167,8 @@ final class BreakCommits {
 		return switch body {
 			case IfFirstLineExceeds(n, brk, flat):
 				f(brk, b -> IfFirstLineExceeds(n, b, flat));
+			case Group(IfWidthExceeds(n, brk, flat)):
+				f(brk, b -> Group(IfWidthExceeds(n, b, flat)));
 			case GroupWithRestProbe(IfBreak(brk, flat)):
 				f(brk, b -> GroupWithRestProbe(IfBreak(b, flat)));
 			case WrapBoundary(inner):
