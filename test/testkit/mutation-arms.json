@@ -25045,8 +25045,8 @@
 			"name": "M-LIFT-FINAL-WRAPPER-SKIPPED",
 			"type": "anyparse.query.ElementSpan",
 			"method": "liftedElement",
-			"find": "return wrapper == null ? { node: node, parent: parent } : { node: wrapper, parent: TreePath.parentOf(tree, wrapper) };",
-			"replace": "return { node: node, parent: parent };",
+			"find": "final lifted: Null<QueryNode> = wrapper ?? (parent == null ? null : literalWrapperOf(node, parent));",
+			"replace": "final lifted: Null<QueryNode> = parent == null ? null : literalWrapperOf(node, parent);",
 			"note": "a `final class` addressed through its form is not lifted: `--before` splices between `final` and `class`, a removal leaves the `final` behind"
 		},
 		{
@@ -27357,6 +27357,22 @@
 			"find": "usings.reverse();",
 			"replace": "",
 			"note": "hoisted usings are inserted first-first at a seat that puts each above the first, so they land reversed — and a using order IS its static-extension priority"
+		},
+		{
+			"name": "M-LITERAL-WRAPPER-SKIPPED",
+			"type": "anyparse.query.ElementSpan",
+			"method": "liftedElement",
+			"find": "final lifted: Null<QueryNode> = wrapper ?? (parent == null ? null : literalWrapperOf(node, parent));",
+			"replace": "final lifted: Null<QueryNode> = wrapper;",
+			"note": "a string Literal addressed by --select is not lifted to its quoted expression: remove-element cuts the content between the quotes and leaves ''"
+		},
+		{
+			"name": "M-LITERAL-STRANDED-ACCEPTED",
+			"type": "anyparse.query.RemoveElement",
+			"method": "strandedLiteral",
+			"find": "if (node.kind != 'Literal' || hit.node == node) return null;",
+			"replace": "if (true) return null;",
+			"note": "a lifted literal that is not a whole list item is removed anyway instead of refused"
 		}
 	]
 }

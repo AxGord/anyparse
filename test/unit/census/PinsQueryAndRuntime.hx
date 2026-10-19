@@ -1236,6 +1236,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.RemoveElementSliceTest#testRemoveFinalClassTakesItsFinal :: control :: '
 			+ 'M-DECLSPAN-FINAL-WRAPPER-BLIND,M-LIFT-FINAL-WRAPPER-SKIPPED',
 		'unit.query.RemoveElementSliceTest#testRemoveOnePerLineElementTakesItsLine :: control :: M-REMOVE-COMMA-LINE-KEPT',
+		'unit.query.RemoveElementSliceTest#testSelectedLiteralInsideAnExpressionIsRefused :: control :: M-LITERAL-STRANDED-ACCEPTED',
+		'unit.query.RemoveElementSliceTest#testSelectedLiteralRemovesTheArrayItem :: control :: M-LITERAL-WRAPPER-SKIPPED',
 		'unit.query.RemoveImportSliceTest#testCliUsingFlagRemovesTheUsing :: control :: M-REMOVEIMPORT-CLI-USING-FLAG-DROPPED',
 		'unit.query.RemoveImportSliceTest#testUsingStatementPicksTheUsing :: control :: M-REMOVEIMPORT-KEYWORD-IGNORED',
 		'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '

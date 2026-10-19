@@ -4629,3 +4629,14 @@ decided the question; it may not become a record of runs.
   M-MENTIONS-IMPORT-KINDS-UNPASSED, M-LIT-QUALIFIED-KINDS-IGNORED, M-HOIST-USINGS-SOURCE-ORDER; re-aimed onto the moved
   code: M-NEWFILE-IMPORT-DOUBLED / -BARE-KEYWORD-WRAPPED (`ImportSpelling.split`), M-NEWFILE-IMPORT-ANY-LINE,
   M-USES-EXACT-ONLY, M-USES-TAIL-SUBSTRING (`SourceText.answersSimpleName`).
+
+## FU16 (2026-10-19) — `remove-element --select 'Literal:x'` removes the item, or refuses
+
+- Defect: a `Literal` node's span is the content between a string's quotes, so `--select 'FinalMember:ARMS >> Literal:B'`
+  resolved the cursor INSIDE the string, `elementAtFrom` picked the `Literal` itself and the cut left `''` at rc 0, while the
+  position form (on the quote) removed the `SingleStringExpr` item.
+- Decision: `ElementSpan.liftedElement` (shared by `remove-element` and `add-element`) lifts a `Literal` whose parent is the
+  single-child quoted expression carrying its quotes to that parent (`literalWrapperOf`). `RemoveElement.strandedLiteral`
+  then accepts the lift only when the parent is a `commaContainerKinds` container (the item IS the element) and refuses
+  otherwise (positive whitelist: no confident cut of a shape that has no element). Arms: M-LITERAL-WRAPPER-SKIPPED,
+  M-LITERAL-STRANDED-ACCEPTED; M-LIFT-FINAL-WRAPPER-SKIPPED re-aimed onto the new line.

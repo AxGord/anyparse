@@ -55,13 +55,15 @@ final class RemoveElement {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final hit: Null<ElementHit> = ElementSpan.liftedElementAt(tree, source, cursor);
-		return hit == null
-			? Err(
+		final raw: Null<ElementHit> = RefactorSupport.elementAtFrom(tree, source, cursor);
+		final hit: Null<ElementHit> = raw == null ? null : ElementSpan.liftedElement(tree, raw.node);
+		if (raw == null || hit == null)
+			return Err(
 				'position $line:$col'
 				+ ' is not on the first token of an element — point at the first token of a statement / case / list element / member'
-			)
-			: ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
+			);
+		final refusal: Null<String> = strandedLiteral(raw.node, hit, plugin);
+		return refusal == null ? ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson) : Err(refusal);
 	}
 
 	/**
@@ -100,7 +102,8 @@ final class RemoveElement {
 			case Failed(message): return Err(message);
 		};
 		final hit: ElementHit = ElementSpan.liftedElement(tree, node);
-		return ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
+		final refusal: Null<String> = strandedLiteral(node, hit, plugin);
+		return refusal == null ? ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson) : Err(refusal);
 	}
 
 	/** `describeRemoval` for the node `target` resolves to — what `removeTarget` cuts. */
@@ -125,6 +128,23 @@ final class RemoveElement {
 		if (hit == null) return null;
 		final nodeSpan: Null<Span> = hit.node.span;
 		return nodeSpan == null ? null : ElementSpan.describeCut(source, hit.node, hit.parent, nodeSpan, withDoc, plugin);
+	}
+
+	/**
+	 * The refusal for a string `Literal` that is NOT a whole element of a comma list, else null.
+	 *
+	 * An address on a literal resolves the text between its quotes. When the literal is itself the element
+	 * (`ElementSpan.literalWrapperOf` lifted `hit` to its quoted expression, whose parent is a comma container)
+	 * the removal is the one the position form makes. Anywhere else — an operand of `+`, a `return` value, an
+	 * object field's value — there is no element to cut, and cutting the content would silently leave `''`.
+	 */
+	private static function strandedLiteral(node: QueryNode, hit: ElementHit, plugin: GrammarPlugin): Null<String> {
+		if (node.kind != 'Literal' || hit.node == node) return null;
+		final container: Null<QueryNode> = hit.parent;
+		if (container != null && (plugin.refShape().commaContainerKinds ?? []).contains(container.kind)) return null;
+		final where: String = container == null ? 'the file' : container.kind;
+		return 'the literal is not a whole element of a list: it sits inside $where, so there is no element to remove — '
+			+ 'address the enclosing node (`--select`/`--match` it with `--kind`) or edit it with `replace-node` / `patch`';
 	}
 
 }
