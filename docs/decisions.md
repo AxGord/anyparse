@@ -4872,17 +4872,16 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   overload taken: the walk's core arithmetic answers that). The expected type's promotion (`type_non_assign_op`'s
   one-applicable-overload `with_type`) retypes an operand EXPRESSION only, never an identifier's or a field's type, which
   are the operands the walk types — branch `feat/fu-FU24`
-- an enum-abstract value written with no type (`TextFormatAlign.LEFT`) had no type → `AbstractCasts.holdsUntypedValue`:
+- an enum-abstract value written with no type (`E.X`) had no type → `AbstractCasts.holdsUntypedValue`:
   every `#if` branch of the declaration an abstract declaring a non-static, unguarded field of the name with no written
   type — which an abstract declares only as an enum value ("Cannot declare member variable in abstract", probed), so the
   deprecated `@:enum abstract` qualifies too — and the value is of the declaration (`var A = 1` / `final B = 2` / `var F;`
   are `E`, `static var D = 4` is `Int`, probed). Asked by `ArgumentTypes.accessType` only; the index host's deep walk does
   not ask yet (the facts harness keeps its tables) — branch `feat/fu-FU24`
-- NOT reached, measured: `openfl.text.TextFormatAlign` stays untyped, so the client's `RoundedTextField.new` /
-  `Assets.getBitmapData` false positive keeps its `HintMessageForm` chain (every remaining chain passes `TFA.LEFT`). Two
-  facts stand in the way, each beyond this step: its first branch writes the `enum` keyword under `#if`
+- NOT reached, measured on a client corpus: a library enum abstract of the shape of `openfl.text.TextFormatAlign` stays
+  untyped, so a false positive whose remaining call chains each pass one of its values keeps them. Two facts stand in the
+  way, each beyond this step: its first branch writes the `enum` keyword under `#if`
   (`#if (haxe_ver >= 4.0) enum #else @:enum #end abstract`), which the index reads as a split header (kind
-  `AbstractDecl`, `castClauses` null); and its flash branch is `typedef TextFormatAlign = flash.text.TextFormatAlign`,
-  a std target subtree the resolution scope does not hold (`StdResolver.resolutionSpecs`: `*.hx`, `haxe/`, `sys/`), so
-  what `LEFT` is there cannot be read. The `SaveDialog` chain (`Editor.saveAs`, `UInt - UInt`) is pruned — branch
-  `feat/fu-FU24`
+  `AbstractDecl`, `castClauses` null); and its flash branch is a `typedef` to `flash.text.TextFormatAlign`, a std target
+  subtree the resolution scope does not hold (`StdResolver.resolutionSpecs`: `*.hx`, `haxe/`, `sys/`), so what the value
+  is there cannot be read. A chain whose argument is `a - b` over two `UInt` fields is pruned — branch `feat/fu-FU24`

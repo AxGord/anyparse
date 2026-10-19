@@ -728,9 +728,9 @@ class ThreadSafetyConditionsTest extends Test {
 
 	/**
 	 * An enum-abstract value written with no type is of its enum abstract (4.3.7): `E.X` binds `?e:E`, so `hint` stays null.
-	 * A declaration one `#if` branch of which is a `typedef` types no value — another build's `F.X` is that alias's.
+	 * Which declarations qualify, branch by branch, is `EnumValueTypeTest`'s.
 	 */
-	@:pin('control') @:killer('M-ENUM-VALUE-OFF') @:killer('M-ENUM-VALUE-UNREAD-BRANCHES')
+	@:pin('control') @:killer('M-ENUM-VALUE-OFF')
 	public function testAnEnumAbstractValueIsOfItsAbstract(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -738,11 +738,6 @@ class ThreadSafetyConditionsTest extends Test {
 			'class W { public static function make(?w:Float, ?e:E, ?hint:String):Void if (hint != null) Sys.sleep(1); }',
 			'class A { public static function main():Void W.make(1, E.X); }'
 		]));
-		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', [
-			'#if flash\ntypedef F = flash.text.Other;\n#else\nenum abstract F(Int) {\nvar X = 1;\n}\n#end',
-			'class W { public static function make(?w:Float, ?f:F, ?hint:String):Void if (hint != null) Sys.sleep(1); }',
-			'class A { public static function main():Void W.make(1, F.X); }'
-		]), 'a typedef branch');
 		#else
 		Assert.pass('non-sys target');
 		#end

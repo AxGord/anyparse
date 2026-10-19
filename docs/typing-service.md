@@ -179,10 +179,10 @@ inference of a local's type from more than its initializer, and the two reificat
   abstract agreeing (`CastClauses.span`, `AbstractCasts.branchMembers`); `ArgumentTypes.arithmeticType` asks it past
   core numbers. `AbstractCasts.holdsUntypedValue`: a value written with no type in every branch of an abstract is an
   enum-abstract value, of the abstract (`ArgumentTypes.accessType` asks it; the index host's deep walk does not yet).
-  Measured: the client's `RoundedTextField.new` / `Assets.getBitmapData` loses its `SaveDialog` chain (`UInt - UInt`); its
-  `HintMessageForm` chain stays, `openfl.text.TextFormatAlign.LEFT` untyped — the declaration's first branch writes
-  `enum` under `#if` (a split header the index reads as no abstract) and its flash branch aliases a std target type the
-  resolution scope does not hold (`flash.text.TextFormatAlign`).
+  Measured on a client corpus: one false positive loses the call chain whose argument is `a - b` over `UInt` fields; its
+  other chains stay, each passing a value of an enum abstract shaped like `openfl.text.TextFormatAlign`, which stays
+  untyped — its first branch writes `enum` under `#if` (a split header the index reads as no abstract) and its flash
+  branch aliases a std target type the resolution scope does not hold (`flash.text.TextFormatAlign`).
 - **T5 — overloads.** Argument types computed once per call site (a body table keyed by the enclosing declaration and the
   site's offset) and an overload chosen over them; a choice that depends on the expected type answers Unknown.
   Consumers: `OperandCallees.selectsItsSignature`, `ArgumentSlots`.

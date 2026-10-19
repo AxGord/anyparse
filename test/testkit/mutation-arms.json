@@ -27931,9 +27931,9 @@
 		{
 			"name": "M-OPS-COMMUTATIVE-OFF",
 			"type": "anyparse.query.OperatorOverloads",
-			"method": "branchSelection",
-			"find": "if (taken == Misfits && isCommutative(m)) taken = takes(right, params[0], left, params[1]);",
-			"replace": "",
+			"method": "isCommutative",
+			"find": "return _commutativeMeta != null && m.metaNames.contains(_commutativeMeta);",
+			"replace": "return false;",
 			"note": "a `@:commutative` overload is never tried swapped, so `Int * C` takes no overload"
 		},
 		{
