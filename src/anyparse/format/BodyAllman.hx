@@ -97,4 +97,17 @@ final class BodyAllman {
 		return Doc.Concat(copy);
 	}
 
+	/**
+	 * A body that already breaks (a forced hardline), as the next rewrite reads it back: that rewrite wraps the
+	 * literal it reads multi-line in a `BodyGroup`, so a body that is not one yet is committed beside it
+	 * (`BreakCommits.committed`). A body the source already wrote multi-line is that `BodyGroup` and comes back as is.
+	 */
+	public static function asReadBack(body: Doc): Doc {
+		return switch body {
+			case Doc.BodyGroup(_), Doc.WrapBoundary(Doc.BodyGroup(_)): body;
+			case Doc.WrapBoundary(inner): BreakCommits.committed(body, Doc.WrapBoundary(Doc.BodyGroup(inner)));
+			case _: BreakCommits.committed(body, Doc.BodyGroup(body));
+		};
+	}
+
 }

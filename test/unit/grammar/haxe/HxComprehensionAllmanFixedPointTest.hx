@@ -192,6 +192,16 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	}
 
 	/**
+	 * The same lambda body under the `objectLiteral` rule, which breaks the literal STATICALLY past its width: the
+	 * forced Allman placement lays it out in the `BodyGroup` the next write reads it back in.
+	 */
+	@:pin('control')
+	@:killer('M-BREAK-READBACK-BARE')
+	public function testAStaticallyBrokenLambdaBodyStaysGlued(): Void {
+		for (config in [CFG_SAME, CFG_SAME_LADDER, CFG_KEEP]) for (k in 1...101) assertOneWriteWithinLimit(lambdaShape(k), config, k);
+	}
+
+	/**
 	 * An expression paren's next write keeps the open or glued layout its own source states, so its first write
 	 * measures the literal bare: a paren that opens for every literal narrower than the break keeps opening past it,
 	 * where measuring the deferred literal would glue it onto the other of its two fixed points.

@@ -26371,6 +26371,13 @@
 			"find": "out = BreakCommit(shape(bare(replaced(inner, c, brk))), out, token);",
 			"replace": "out = BreakCommit(shape(replaced(inner, c, brk)), out, token);",
 			"note": "an expression paren measures a committed literal break deferred, so the paren that opens for every narrower literal glues once the literal breaks: one write still, but onto the other fixed point than the one the paren reached before"
+		},
+		{
+			"name": "M-BREAK-READBACK-BARE",
+			"type": "anyparse.format.BodyAllman",
+			"method": "asReadBack",
+			"force": "body",
+			"note": "a literal its own rule breaks statically keeps the bare layout where the next write reads it back in a `BodyGroup`, so an arrow body it leads leaves `->` on the first write and glues back on the second"
 		}
 	]
 }
