@@ -781,6 +781,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxObjectFieldColonOptionsTest',
 		'unit.grammar.haxe.HxObjectLitArrowBodyPadSliceTest',
 		'unit.grammar.haxe.HxObjectLitBracesOptionsTest',
+		'unit.grammar.haxe.HxObjectLitForcedNoWrapProbeTest',
 		'unit.grammar.haxe.HxObjectLitLeftCurlyOptionsTest',
 		'unit.grammar.haxe.HxObjectLitRestProbeTest',
 		'unit.grammar.haxe.HxObjectLitSliceTest',

@@ -307,6 +307,7 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxNestingCostTest#testParserRunsEachNestedAtomOnce :: control :: '
 			+ 'M-PARSE-MEMO-REPLAY-OFF,M-PARSE-MEMO-STASHED-SKIP',
 		'unit.grammar.haxe.HxNestingCostTest#testWriterDocKeepsItsSharing :: control :: M-GROUPIFY-SHARED-OFF',
+		'unit.grammar.haxe.HxObjectLitForcedNoWrapProbeTest#testOneWriteIsAFixedPointAtEveryWidth :: control :: M-FORCED-NOWRAP-UNPROBED',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAKeywordANewerHaxeAddedStillNamesAVersionGatedDeclaration :: control :: '
 			+ 'M-RESERVED-VERSIONED-REFUSED',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoFunctionParameterOrBinderName :: control :: '

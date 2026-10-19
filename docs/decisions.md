@@ -4444,3 +4444,11 @@ decided the question; it may not become a record of runs.
   layout drops the space when the body is WHOLLY the decision (`decisionMapped` reads it); a body that only ENDS in one
   (a nested `for`, whose own space precedes a keyword, not a break) keeps it — dropping it there glued `)for` in 680
   files main settles in one write. Arms `M-ALLMAN-GLUED-SPACE-KEPT` / `-UNGUARDED`.
+- A list a source trailing separator forces into the break-mode cascade (`forceExceeds`: `<field>TrailPresent` and the
+  per-construct trailing-comma knob) went flat with no probe when a `noWrap` rule shadowing a break default answered the
+  forced cascade (`objectLiteral` `totalItemLength <= 140 -> noWrap` over `defaultWrap: onePerLine`). The unforced path
+  probes that flat layout's first line (`emitZeroThresholdAgree`), so the first write broke the literal and added its
+  comma, and the next write, forced by that comma, flattened it past the limit: main's fixed point overflowed (`t_filter`
+  under `trailingCommas.objectLiteralDefault: yes`, 142-162 columns at 140, 21 files; one more drifted). The forced path
+  now takes the same probe when it answers `NoWrap` with no threshold rule and no hardline; the 21 fixed points main
+  rewrote past the limit land within it (78-98). Arm `M-FORCED-NOWRAP-UNPROBED`.

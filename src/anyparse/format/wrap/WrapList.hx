@@ -4714,13 +4714,24 @@ class WrapList {
 		// `groupRestProbe` consumers for the zero-threshold call — its bracket
 		// shares its line with the statement's `;` (or a call's `);`), and the
 		// plain-`Group` fit is blind to that tail. See the param doc above.
-		return if (anyHardline || forceExceeds)
+		final defaultBreakMode: WrapMode = onePerLineWhenBreaking(
+			floorSourceMultiline(rules.defaultMode, sourceMultilineKeep), breakAsOnePerLine, true
+		);
+		// A source trailing separator forces the break-mode cascade (`forceExceeds`), and a `noWrap` rule that shadows
+		// a break default answers it flat: that flat layout still has to fit its line, behind the probe the unforced
+		// path puts there (`emitZeroThresholdAgree`). The first write lays the list out unforced; the next one reads
+		// the trailing comma it added and is forced, so without the probe it flattened the list past the limit.
+		return if (forceExceeds && !anyHardline && extraThresholds.length == 0 && evalAt(true, []) == NoWrap)
+			emitZeroThresholdAgree(
+				NoWrap, rules, items, opt, cols, open, close, openInside, closeInside, forceMode, leadFlat, leadBreak, shapeAt, leadFor,
+				defaultBreakMode
+			)
+		else if (anyHardline || forceExceeds)
 			WrapBoundary(buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor))
 		else if (extraThresholds.length == 0)
 			emitZeroThreshold(
 				rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe || comprehensionFitMeasure,
-				leadFlat, leadBreak, evalAt, shapeAt, leadFor,
-				onePerLineWhenBreaking(floorSourceMultiline(rules.defaultMode, sourceMultilineKeep), breakAsOnePerLine, true)
+				leadFlat, leadBreak, evalAt, shapeAt, leadFor, defaultBreakMode
 			)
 		else if (extraThresholds.length == 1)
 			emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
