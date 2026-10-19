@@ -57,7 +57,7 @@ final class Uses {
 	 * it AND the query is itself a simple name.
 	 */
 	private static inline function matches(nodeName: String, target: String, includeQualified: Bool): Bool {
-		return nodeName == target || (includeQualified && target.indexOf('.') < 0 && SourceText.lastSegment(nodeName) == target);
+		return nodeName == target || (includeQualified && SourceText.answersSimpleName(nodeName, target));
 	}
 
 	private static function walk(target: String, node: QueryNode, shape: TypeRefShape, includeQualified: Bool, out: Array<UsesHit>): Void {

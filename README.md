@@ -155,7 +155,7 @@ For the full flag set on any command: `hxq <cmd> --help`.
 | `refs` | value bindings — `--decls` / `--reads` / `--writes`, scope-resolved. A member access (`Type.f()`, `obj?.f()`) is NOT a value binding, so it never appears here; when the scope holds some, `refs` says so on stderr and points at `mentions` — an empty result is never on its own proof that a name is unreferenced |
 | `uses` | type-position references (fields, params, type params) |
 | `blast` | full change-impact for a type (uses + refs + member access) |
-| `mentions` / `lit` / `cases` | every named occurrence / string-or-ident leaves / switch case-patterns |
+| `mentions` / `lit` / `cases` | every named occurrence (a simple name also answers a qualified type reference and an `import` / `using` whose LAST dotted segment it is — `mentions Assets` lists `import openfl.Assets;` — printing the path found; a dotted name stays exact) / string-or-ident leaves / switch case-patterns |
 | `callees` / `callers` | transitive call tree out of / into a function (`--depth`), over the approximate project-wide call graph (name + declared-type resolution, `Null<T>` unwrapped; a receiver that is itself a CALL takes the callee's DECLARED return type, so `getWorker().work()` resolves — an annotation the source carries, never an inferred one, and a `Null<T>` / `Dynamic` / `Any` return names no dispatchable type and stays unresolved; virtual edges to subtype overrides — a BARE call to a non-static member of the enclosing type is an implicit-`this` call and gets them too; `Ref` edges for lambdas / method values / `.bind` with the receiving call recorded as `via`; out-of-scope targets become `[external]` nodes; unresolved sites counted honestly — and when NO edge resolved, the note says so in the stronger form, since a tree of just the root label reads exactly like a populated one; `--exit-on-empty` fires on that same signal) |
 | `reach` | shortest call path(s) `--from A --to B` (repeatable `--to`, `Type.*` patterns) over the same graph — "does main-context code reach this blocking call, and through which chain" |
 | `clusters` | partition analytics for one type over the same graph — "along which lines does this god-type split": members grouped by undirected intra-type call-edge connectivity after high-fan-in hubs are extracted into a utils bucket (`--hubs <n>`, `0` = off, default auto; lambdas condensed into their enclosing member); each component reports its directional hub traffic (the future module interface), plus resolved/unresolved coverage counts |
@@ -203,7 +203,10 @@ through the writer so the new code is formatted by the grammar's own rules and
 re-parse-validated in one step. Their inverses `remove-element` / `remove-import` /
 `remove-member` delete a node (with its doc-comment) the same way; `remove-element --kind <Kind>`
 removes the enclosing node of that kind an address names (`--match 'g($a)' --kind ExprStmt` takes the
-statement the call sits in), the lift `replace-node` / `patch` already had. `set-doc` adds or
+statement the call sits in), the lift `replace-node` / `patch` already had. `add-import` /
+`remove-import` take a module path or the whole statement (`add-import F.hx 'using Lambda;'`,
+`remove-import F.hx 'using a.B;'`; `--using` is the flag spelling), the keyword picking the kind; a
+fresh `using` lands ABOVE the file's first `using`, the lowest static-extension priority. `set-doc` adds or
 replaces a declaration's doc-comment, and `set-modifier` flips its visibility / adds or
 removes modifiers (`public`, `+static`, `-inline`, …) — both at a cursor, without
 retyping the declaration (the safe replacement for editing a modifier via `replace-node`).

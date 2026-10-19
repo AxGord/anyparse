@@ -1410,26 +1410,26 @@
 		},
 		{
 			"name": "M-NEWFILE-IMPORT-DOUBLED",
-			"type": "anyparse.query.NewFile",
-			"method": "importStatement",
-			"find": "return path == '' ? null : '$keyword $path;';",
-			"replace": "return path == '' ? null : '$keyword $line;';",
-			"note": "a whole import line is wrapped a second time, so `@@ imports` writes `import import x.Y;;` and the failure surfaces as a column in generated text"
+			"type": "anyparse.query.ImportSpelling",
+			"method": "split",
+			"find": ": { keyword: keyword, path: withoutSemicolon(line.substr(keyword.length).trim()) };",
+			"replace": ": { keyword: keyword, path: withoutSemicolon(line) };",
+			"note": "a whole import line keeps its keyword in the path, so `@@ imports` (and add-import) refuse the statement spelling or wrap it into `import import x.Y;`"
 		},
 		{
 			"name": "M-NEWFILE-IMPORT-ANY-LINE",
 			"type": "anyparse.query.NewFile",
 			"method": "importStatement",
-			"find": "return isModulePath(line) ? 'import $line;' : null;",
-			"replace": "return 'import $line;';",
+			"find": "return spelled == null || spelled.path == '' || !ImportSpelling.isModulePath(spelled.path)",
+			"replace": "return spelled == null || spelled.path == ''",
 			"note": "a line that is neither a module path nor an import statement reaches assembly instead of being refused by name"
 		},
 		{
 			"name": "M-NEWFILE-BARE-KEYWORD-WRAPPED",
-			"type": "anyparse.query.NewFile",
-			"method": "importStatement",
-			"find": "for (keyword in ['import', 'using']) if (line == keyword || line.startsWith('$keyword ')) {",
-			"replace": "for (keyword in ['import', 'using']) if (line.startsWith('$keyword ')) {",
+			"type": "anyparse.query.ImportSpelling",
+			"method": "split",
+			"find": "for (keyword in [IMPORT_WORD, USING_WORD]) if (line == keyword || line.startsWith('$keyword ')) {",
+			"replace": "for (keyword in [IMPORT_WORD, USING_WORD]) if (line.startsWith('$keyword ')) {",
 			"note": "a bare `import` with no path falls through to the bare-path branch and becomes `import import;`, which parses and means nothing"
 		},
 		{
@@ -2306,17 +2306,17 @@
 			"name": "M-USES-EXACT-ONLY",
 			"type": "anyparse.query.Uses",
 			"method": "matches",
-			"find": "return nodeName == target || (includeQualified && target.indexOf('.') < 0 && SourceText.lastSegment(nodeName) == target);",
+			"find": "return nodeName == target || (includeQualified && SourceText.answersSimpleName(nodeName, target));",
 			"replace": "return nodeName == target;",
 			"note": "a type named through its module path is invisible again, so a deadness census over `uses` calls a live sub-module type dead"
 		},
 		{
 			"name": "M-USES-TAIL-SUBSTRING",
-			"type": "anyparse.query.Uses",
-			"method": "matches",
-			"find": "SourceText.lastSegment(nodeName) == target",
-			"replace": "StringTools.endsWith(nodeName, target)",
-			"note": "the qualified tail is matched as text rather than on the segment boundary, so `Mod.WrapBodyOpts` answers a query for `BodyOpts`"
+			"type": "anyparse.query.SourceText",
+			"method": "answersSimpleName",
+			"find": "return lastSegment(spelled) == target;",
+			"replace": "return StringTools.endsWith(spelled, target);",
+			"note": "the qualified tail is matched as text rather than on the segment boundary, so `Mod.WrapBodyOpts` answers a query for `BodyOpts` (and `my.OtherAssets` a mentions query for `Assets`)"
 		},
 		{
 			"name": "M-USES-QUALIFIED-DEFAULT",
@@ -3106,8 +3106,8 @@
 			"name": "M-LIT-DELIMITERS-IGNORED",
 			"type": "anyparse.query.Lit",
 			"method": "walk",
-			"find": "final hit: Bool = matches(n, target, exact) || content != null && matches(content, target, exact);",
-			"replace": "final hit: Bool = matches(n, target, exact);",
+			"find": "final hit: Bool = matches(n, target, exact) || content != null && matches(content, target, exact)",
+			"replace": "final hit: Bool = matches(n, target, exact)",
 			"note": "the declared quotes stay on the name slot for the compare, so `--exact` can never match content written in the grammar's whole-span string spelling and the two spellings answer differently again"
 		},
 		{
@@ -26887,6 +26887,182 @@
 			"note": "the dispatch memo keys by the receiver type alone: the first member dispatched on a type answers for every other"
 		},
 		{
+			"name": "M-DROPPED-SEP-UNREHOMED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepArrDecls",
+			"find": ": macro final _arr = anyparse.runtime.DroppedSepComment.last(_arrSrc, $appendTrailingCommaExpr, $tailRehomeFn);",
+			"replace": ": macro final _arr = _arrSrc;",
+			"note": "a list whose trailing separator the writer drops is laid out from the source tree, the comment outside the element the next parse reads it inside of"
+		},
+		{
+			"name": "M-DROPPED-SEP-KEPT-REHOMED",
+			"type": "anyparse.runtime.DroppedSepComment",
+			"method": "last",
+			"find": "if (sepEmitted || arr.length == 0) return arr;",
+			"replace": "if (arr.length == 0) return arr;",
+			"note": "a comment after a separator the writer keeps is moved into the element, in front of the separator"
+		},
+		{
+			"name": "M-DROPPED-SEP-BLOCK-REHOMED",
+			"type": "anyparse.runtime.DroppedSepComment",
+			"method": "last",
+			"find": "if (comment == null || !StringTools.startsWith(comment, '//')) return arr;",
+			"replace": "if (comment == null) return arr;",
+			"note": "a block comment after a dropped separator moves into the element, changing a layout the first write already settles"
+		},
+		{
+			"name": "M-TAIL-SLOT-OVERWRITTEN",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "starField",
+			"find": "return macro $slotAccess == null ? $copy : null;",
+			"replace": "return macro $copy;",
+			"note": "a struct close slot already holding a comment is overwritten, and that comment is lost"
+		},
+		{
+			"name": "M-TAIL-ALT-SLOT-OVERWRITTEN",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altCase",
+			"find": "macro $slot == null ? ${rebuild(index, macro $i{COMMENT_ARG})} : null;",
+			"replace": "macro ${rebuild(index, macro $i{COMMENT_ARG})};",
+			"note": "a ctor close slot already holding a comment is overwritten, and that comment is lost"
+		},
+		{
+			"name": "M-TAIL-WRITTEN-SEMICOLON-IGNORED",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "refField",
+			"find": "return macro $presentAccess == true ? null : $rebuilt;",
+			"replace": "return rebuilt;",
+			"note": "a body the source closed with `;` takes the comment in front of the `;`, which the comment then swallows"
+		},
+		{
+			"name": "M-TAIL-ONLY-KNOWN-METAS",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "onlyMetas",
+			"find": "return meta == null || meta.foreach(entry -> allowed.contains(entry.name));",
+			"replace": "return true;",
+			"note": "a shape with a token after its operand (a paren pair, a trail literal) passes the comment into the operand, ahead of that token"
+		},
+		{
+			"name": "M-TAIL-ABSENT-FIELD-STOPS",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "seqField",
+			"find": "return macro $access == null ? $before : $present;",
+			"replace": "return present;",
+			"note": "an absent optional last field (an if with no else) answers null instead of the field emitted before it"
+		},
+		{
+			"name": "M-TAIL-ARRAY-SLOT-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch) || TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"replace": "if (TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"note": "an array literal tail no longer takes the comment its close captures"
+		},
+		{
+			"name": "M-TAIL-CALL-SLOT-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch) || TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {",
+			"replace": "if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch)) {",
+			"note": "a call tail no longer takes the comment its close paren captures"
+		},
+		{
+			"name": "M-TAIL-INFIX-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':infix')) return children.length == 2 && onlyMetas(branch, [':infix', ':fmt']) ? Operand(1) : None;",
+			"replace": "if (branch.hasMeta(':infix')) return None;",
+			"note": "an infix expression's right operand is not asked, so `t + {a: 1}` keeps the comment outside"
+		},
+		{
+			"name": "M-TAIL-TERNARY-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':ternary')) return children.length == 3 && onlyMetas(branch, [':ternary', ':fmt']) ? Operand(2) : None;",
+			"replace": "if (branch.hasMeta(':ternary')) return None;",
+			"note": "a ternary's else operand is not asked"
+		},
+		{
+			"name": "M-TAIL-PREFIX-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "if (branch.hasMeta(':prefix')) return children.length == 1 && onlyMetas(branch, [':prefix', ':fmt']) ? Operand(0) : None;",
+			"replace": "if (branch.hasMeta(':prefix')) return None;",
+			"note": "a prefix operator's operand is not asked"
+		},
+		{
+			"name": "M-TAIL-OPERAND-UNREAD",
+			"type": "anyparse.macro.TriviaTailRehome",
+			"method": "altTail",
+			"find": "return single && onlyMetas(branch, TRANSPARENT_BRANCH_METAS) ? Operand(0) : None;",
+			"replace": "return None;",
+			"note": "a keyword or lead ctor (if, for, object literal, new, function) does not pass the comment to its one operand"
+		},
+		{
+			"name": "M-REGION-UNNAMED",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefFinalDoc",
+			"find": "? macro (opt.conditionalExprFit ? anyparse.core.BreakCommits.namedRegion($concatDoc) : $concatDoc)",
+			"replace": "? macro (opt.conditionalExprFit ? _dgrp($concatDoc) : $concatDoc)",
+			"note": "a fit region is an undecided group again, so a call filling its line measures it flat and opens before the `#if` the next write glues"
+		},
+		{
+			"name": "M-REGION-SEAMS-SOFT",
+			"type": "anyparse.core.BreakCommits",
+			"method": "hardSeams",
+			"find": "case Line(flat, verbatim) if (flat != '\\n'): Line('\\n', verbatim);",
+			"replace": "case Line(flat, verbatim) if (false): Line('\\n', verbatim);",
+			"note": "the read-back form keeps soft seams, so the list measures the broken region as flat as before"
+		},
+		{
+			"name": "M-REGION-MARK-ALWAYS",
+			"type": "anyparse.core.BreakCommits",
+			"method": "namedRegion",
+			"find": "Concat([IfBreak(BreakMark(Empty, token), Empty), inner])",
+			"replace": "Concat([BreakMark(Empty, token), inner])",
+			"note": "the mark renders whether or not the group breaks, so a region that fits is committed broken"
+		},
+		{
+			"name": "M-REGION-OFFER-THROUGH-BODIES",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emit",
+			"find": "BreakCommits.outermostPerToken(BreakCommits.nested(item, false))",
+			"replace": "BreakCommits.outermostPerToken(BreakCommits.nested(item))",
+			"note": "a list lays itself out for a region inside a comprehension body, whose own seam the next write re-decides"
+		},
+		{
+			"name": "M-NESTED-THROUGH-BODIES",
+			"type": "anyparse.core.BreakCommits",
+			"method": "nested",
+			"find": "case BodyGroup(_) if (!throughBodies):",
+			"replace": "case BodyGroup(_) if (false):",
+			"note": "the walk descends fit bodies whatever the caller asked"
+		},
+		{
+			"name": "M-REGION-SEAMS-BOUNDED",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseDefaultTerminal",
+			"find": "? macro (opt.conditionalExprFit ? $finalWrapDocs : _dwb($finalWrapDocs))",
+			"replace": "? macro _dwb($finalWrapDocs)",
+			"note": "the elseifs Star of a fit region keeps its force-flat boundary, so inside a glued comprehension body the seams before the #elseif flatten and the ones after it break"
+		},
+		{
+			"name": "M-WIDTH-RULE-DECISION-UNREAD",
+			"type": "anyparse.core.BreakCommits",
+			"method": "decisionMapped",
+			"find": "f(brk, b -> Group(IfWidthExceeds(n, b, flat)));",
+			"replace": "null;",
+			"note": "a literal broken by a lineLength rule is no width decision to the shared reader, so its comprehension body stays glued and the next write moves it Allman"
+		},
+		{
+			"name": "M-WIDTH-RULE-TAIL-UNREAD",
+			"type": "anyparse.format.BodyAllman",
+			"method": "tailBreak",
+			"find": "Doc.Group(Doc.IfWidthExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
+			"replace": "Doc.Group(Doc.IfLineExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
+			"note": "the Allman break of a lineLength-rule literal is not offered to its one-item list, which stays laddered where the next write cuddles"
+		},
+		{
 			"name": "M-ANCESTOR-ARGS-OFF",
 			"type": "anyparse.query.AncestorTable",
 			"method": "chainTo",
@@ -27109,6 +27285,78 @@
 			"find": "if (i % 2 == 0) holes.push(new Span(at, at + piece.length));",
 			"replace": "if (false) holes.push(new Span(at, at + piece.length));",
 			"note": "no merged piece is a ParenGuard hole, so a ternary condition re-associates across the new `&&`"
+		},
+		{
+			"name": "M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED",
+			"type": "anyparse.query.AddImport",
+			"method": "addImport",
+			"find": "final asUsing: Bool = spelled.keyword == ImportSpelling.USING_WORD;",
+			"replace": "final asUsing: Bool = isUsing;",
+			"note": "a whole `using x.Y;` statement is added as an IMPORT of x.Y — the keyword the caller wrote is read and then ignored"
+		},
+		{
+			"name": "M-ADDIMPORT-USING-TAKES-IMPORT-SEAT",
+			"type": "anyparse.query.AddImport",
+			"method": "addImport",
+			"find": "? UsingScan.usingInsertEdit(UsingScan.headerOf(tree, source, plugin), trimmed)",
+			"replace": "? importEdit(source, tree, plugin, trimmed)",
+			"note": "a fresh `using` takes the import ladder again, which for a using-only header appends it BELOW the group: top static-extension priority, re-targeting the calls the file already makes"
+		},
+		{
+			"name": "M-ADDIMPORT-PATH-UNCHECKED",
+			"type": "anyparse.query.AddImport",
+			"method": "addImport",
+			"find": "if (!ImportSpelling.isModulePath(trimmed)) return Err(ImportSpelling.notAPath(path));",
+			"replace": "",
+			"note": "text that is no module path reaches the splice and is refused as a parse error at a column of a source the caller never wrote"
+		},
+		{
+			"name": "M-IMPORTSPELLING-FLAG-CONFLICT-UNCHECKED",
+			"type": "anyparse.query.ImportSpelling",
+			"method": "split",
+			"find": "return usingFlag && keyword == IMPORT_WORD",
+			"replace": "return false",
+			"note": "an `import x.Y;` statement under --using is silently taken as one of the two requests instead of refused"
+		},
+		{
+			"name": "M-REMOVEIMPORT-KEYWORD-IGNORED",
+			"type": "anyparse.query.RemoveImport",
+			"method": "removeImport",
+			"find": "final kinds: Array<String> = kindsFor(spelled.keyword);",
+			"replace": "final kinds: Array<String> = kindsFor(null);",
+			"note": "a `using a.B;` request matches the `import a.B;` beside it too, so the keyword that names one statement reads as ambiguous"
+		},
+		{
+			"name": "M-REMOVEIMPORT-CLI-USING-FLAG-DROPPED",
+			"type": "anyparse.query.cli.command.RemoveImportCommand",
+			"method": "runRemoveImport",
+			"find": "final path: String = usingFlag ? '${ImportSpelling.USING_WORD} ${spelled.path}' : modulePath;",
+			"replace": "final path: String = modulePath;",
+			"note": "remove-import --using parses and then drops the flag, so the bare path beside an import of the same module is ambiguous again"
+		},
+		{
+			"name": "M-MENTIONS-IMPORT-KINDS-UNPASSED",
+			"type": "anyparse.query.cli.command.MentionsCommand",
+			"method": "emitMentionsLit",
+			"find": "Lit.find(target, entry.tree, true, null, delimiters, ModuleScan.IMPORT_DECL_KINDS)",
+			"replace": "Lit.find(target, entry.tree, true, null, delimiters)",
+			"note": "mentions <Name> answers the uses and not the dotted `import pkg.Name;` that makes them resolve, and the reader concludes there is no import"
+		},
+		{
+			"name": "M-LIT-QUALIFIED-KINDS-IGNORED",
+			"type": "anyparse.query.Lit",
+			"method": "walk",
+			"find": "|| qualifiedKinds.contains(node.kind) && SourceText.answersSimpleName(n, target)",
+			"replace": "",
+			"note": "the import kinds a caller asks to widen are carried and never read, so a dotted import or using is blind to a simple-name query"
+		},
+		{
+			"name": "M-HOIST-USINGS-SOURCE-ORDER",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "builtAmbientSource",
+			"find": "usings.reverse();",
+			"replace": "",
+			"note": "hoisted usings are inserted first-first at a seat that puts each above the first, so they land reversed — and a using order IS its static-extension priority"
 		}
 	]
 }
