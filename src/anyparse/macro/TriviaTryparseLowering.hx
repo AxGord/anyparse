@@ -1090,12 +1090,7 @@ final class TriviaTryparseLowering {
 		finalWrapDocs: Expr, glueRefusalExpr: Expr, trailPadSpaceDoc: Expr, regionSeams: Bool
 	): Expr {
 		final caseWrap: Expr = triviaTryparseCaseWrapExpr(glueRefusalExpr);
-		// omega-cond-expr-fit: a region's seams are lines of ONE group. A force-flat boundary among them gave the region two
-		// modes inside an enclosing `Flatten` (a cuddled comprehension's glued body): the seams before it flattened and the
-		// ones after it broke, `… } #elseif c` on the head line and the `#elseif` body below it.
-		final defaultTerminal: Expr = regionSeams
-			? macro (opt.conditionalExprFit ? $finalWrapDocs : _dwb($finalWrapDocs))
-			: macro _dwb($finalWrapDocs);
+		final defaultTerminal: Expr = triviaTryparseDefaultTerminal(finalWrapDocs, regionSeams);
 		return macro {
 			// ω-force-flat-engine sister-coverage: tryparse Star is used
 			// for inner-Star bodies (case bodies, `HxConditionalDecl.body`)
@@ -1149,6 +1144,17 @@ final class TriviaTryparseLowering {
 				$defaultTerminal;
 			}
 		};
+	}
+
+	/**
+	 * The default branch's terminal Doc: `finalWrapDocs` behind the force-flat boundary every tryparse terminal carries —
+	 * except, while `conditionalExprFit` is on, for a region's seams (`regionSeams`). They are lines of ONE group, and a
+	 * boundary among them gave the region two modes inside an enclosing `Flatten` (a cuddled comprehension's glued body):
+	 * the seams before it flattened and the ones after it broke, `… } #elseif c` on the head line and the `#elseif` body
+	 * below it.
+	 */
+	private static function triviaTryparseDefaultTerminal(finalWrapDocs: Expr, regionSeams: Bool): Expr {
+		return regionSeams ? macro (opt.conditionalExprFit ? $finalWrapDocs : _dwb($finalWrapDocs)) : macro _dwb($finalWrapDocs);
 	}
 
 	/**

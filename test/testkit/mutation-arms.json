@@ -27041,7 +27041,7 @@
 		{
 			"name": "M-REGION-SEAMS-BOUNDED",
 			"type": "anyparse.macro.TriviaTryparseLowering",
-			"method": "triviaTryparseWrapDispatchExpr",
+			"method": "triviaTryparseDefaultTerminal",
 			"find": "? macro (opt.conditionalExprFit ? $finalWrapDocs : _dwb($finalWrapDocs))",
 			"replace": "? macro _dwb($finalWrapDocs)",
 			"note": "the elseifs Star of a fit region keeps its force-flat boundary, so inside a glued comprehension body the seams before the #elseif flatten and the ones after it break"
