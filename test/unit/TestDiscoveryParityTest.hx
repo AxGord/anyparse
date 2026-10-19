@@ -639,6 +639,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxCondElseifChainBlankTest',
 		'unit.grammar.haxe.HxCondEndTerminatorSliceTest',
 		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest',
+		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest',
 		'unit.grammar.haxe.HxCondExprValueFixpointSliceTest',
 		'unit.grammar.haxe.HxCondForContainerGlueSliceTest',
 		'unit.grammar.haxe.HxCondHeritageSliceTest',

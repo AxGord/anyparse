@@ -51,8 +51,12 @@ final class BreakCommits {
 	/**
 	 * Every `BreakCommit` in `d`, including the ones on the `flat` side of another, which is the layout they stand in
 	 * until resolved — and none on a `brk` side, which only exists once its own node resolves to it.
+	 *
+	 * With `throughBodies` false none inside a `BodyGroup` either: a fit body's own seam is a decision the next rewrite
+	 * takes again from the body it reads back (a comprehension body that breaks goes to the next line), so a list cannot
+	 * lay itself out for a break inside one from the committed break alone.
 	 */
-	public static function nested(d: Doc): Array<Doc> {
+	public static function nested(d: Doc, throughBodies: Bool = true): Array<Doc> {
 		final found: Array<Doc> = [];
 		final seen: DocIdentityMap<Bool> = new DocIdentityMap();
 		final stack: Array<Doc> = [d];
@@ -64,6 +68,7 @@ final class BreakCommits {
 				case BreakCommit(_, flat, _):
 					found.push(node);
 					stack.push(flat);
+				case BodyGroup(_) if (!throughBodies):
 				case _:
 					for (c in CollapsePass.children(node)) stack.push(c);
 			}
@@ -133,6 +138,22 @@ final class BreakCommits {
 			final token: BreakToken = new BreakToken();
 			BreakCommit(committed(brk, BodyGroup(brk)), rebuild(BreakMark(brk, token)), token);
 		}) ?? body;
+	}
+
+	/**
+	 * A `sameLine.conditionalExprFit` region — the group `inner` whose soft seams break together — offered as the next
+	 * rewrite reads it back once it breaks. That rewrite reads every seam newline the broken group printed from the source
+	 * and writes it as a hardline, so it measures the region as multi-line where the first write measured an undecided
+	 * group: a list holding the region (call arguments filling a line) laid its items out from the flat width and opened
+	 * before the `#if`, and the next rewrite, reading the first line `#if cond` only, glued it to the previous argument.
+	 * The group stays where it was, with a `BreakMark` on its break side; around it a `BreakCommit` on the same token holds
+	 * the region with its seams as hardlines, committed (`bare` keeps the undecided group for `followBare`).
+	 */
+	public static function namedRegion(inner: Doc): Doc {
+		final token: BreakToken = new BreakToken();
+		final readBack: Doc = committed(GroupWithRestProbe(inner), GroupWithRestProbe(hardSeams(inner)));
+		// The mark is an empty probe the group's own mode picks, so every walker measures the group exactly as before.
+		return BreakCommit(readBack, GroupWithRestProbe(Concat([IfBreak(BreakMark(Empty, token), Empty), inner])), token);
 	}
 
 	/**
@@ -207,6 +228,20 @@ final class BreakCommits {
 			added = true;
 		}
 		return added;
+	}
+
+	/**
+	 * `d` with every soft `Line` the enclosing group decides written as a hardline — the seams a broken group prints and
+	 * the next rewrite reads back as source newlines. Only a `Concat` or a `Nest` is walked: every other node either
+	 * decides its own lines (a nested group, a fill, a width decision) or is kept as it is, which renders the same inside
+	 * the now-broken group.
+	 */
+	private static function hardSeams(d: Doc): Doc {
+		return switch d {
+			case Line(flat, verbatim) if (flat != '\n'): Line('\n', verbatim);
+			case Concat(_) | Nest(_, _): D.mapChildren(d, hardSeams);
+			case _: d;
+		};
 	}
 
 }

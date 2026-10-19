@@ -190,6 +190,10 @@ final class PinsGrammarAndCli {
 			+ 'M-BREAKMARK-ONE-ROUND',
 		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testARebuiltMarkKeepsItsToken :: control :: M-BREAKMARK-REBUILD-FRESH-TOKEN',
 		'unit.grammar.haxe.HxCondExprBodyBreakFixedPointTest#testOneWriteIsAFixedPointAtEveryWidth :: control :: M-BREAKMARK-UNREAD',
+		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testACallArgumentRegionSettlesInOneWrite :: control :: '
+			+ 'M-REGION-UNNAMED,M-REGION-SEAMS-SOFT,M-REGION-MARK-ALWAYS',
+		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAComprehensionBodyRegionUnderAnArrowSettlesInOneWrite :: control :: '
+			+ 'M-REGION-OFFER-THROUGH-BODIES,M-NESTED-THROUGH-BODIES',
 		'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured :: control :: '
 			+ 'M-WORDOP-NO-RESTORE',
 		'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionCollapsesEmptyCatchBody :: control :: '

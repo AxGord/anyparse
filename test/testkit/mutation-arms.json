@@ -26997,6 +26997,46 @@
 			"find": "return single && onlyMetas(branch, TRANSPARENT_BRANCH_METAS) ? Operand(0) : None;",
 			"replace": "return None;",
 			"note": "a keyword or lead ctor (if, for, object literal, new, function) does not pass the comment to its one operand"
+		},
+		{
+			"name": "M-REGION-UNNAMED",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefFinalDoc",
+			"find": "? macro (opt.conditionalExprFit ? anyparse.core.BreakCommits.namedRegion($concatDoc) : $concatDoc)",
+			"replace": "? macro (opt.conditionalExprFit ? _dgrp($concatDoc) : $concatDoc)",
+			"note": "a fit region is an undecided group again, so a call filling its line measures it flat and opens before the `#if` the next write glues"
+		},
+		{
+			"name": "M-REGION-SEAMS-SOFT",
+			"type": "anyparse.core.BreakCommits",
+			"method": "hardSeams",
+			"find": "case Line(flat, verbatim) if (flat != '\\n'): Line('\\n', verbatim);",
+			"replace": "case Line(flat, verbatim) if (false): Line('\\n', verbatim);",
+			"note": "the read-back form keeps soft seams, so the list measures the broken region as flat as before"
+		},
+		{
+			"name": "M-REGION-MARK-ALWAYS",
+			"type": "anyparse.core.BreakCommits",
+			"method": "namedRegion",
+			"find": "Concat([IfBreak(BreakMark(Empty, token), Empty), inner])",
+			"replace": "Concat([BreakMark(Empty, token), inner])",
+			"note": "the mark renders whether or not the group breaks, so a region that fits is committed broken"
+		},
+		{
+			"name": "M-REGION-OFFER-THROUGH-BODIES",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emit",
+			"find": "BreakCommits.outermostPerToken(BreakCommits.nested(item, false))",
+			"replace": "BreakCommits.outermostPerToken(BreakCommits.nested(item))",
+			"note": "a list lays itself out for a region inside a comprehension body, whose own seam the next write re-decides"
+		},
+		{
+			"name": "M-NESTED-THROUGH-BODIES",
+			"type": "anyparse.core.BreakCommits",
+			"method": "nested",
+			"find": "case BodyGroup(_) if (!throughBodies):",
+			"replace": "case BodyGroup(_) if (false):",
+			"note": "the walk descends fit bodies whatever the caller asked"
 		}
 	]
 }

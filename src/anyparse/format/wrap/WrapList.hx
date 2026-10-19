@@ -317,7 +317,7 @@ class WrapList {
 		// An object literal's field list is never wrapped: the literal is itself a body `BodyAllman` may still move,
 		// and its Doc has to stay the bare width decision `gluedLayout` and `tailBreak` read.
 		final offered: Bool = items.length == 1 ? flatSingle : open != '{';
-		if (offered) for (i => item in items) for (inner in BreakCommits.outermostPerToken(BreakCommits.nested(item))) switch inner {
+		if (offered) for (i => item in items) for (inner in BreakCommits.outermostPerToken(BreakCommits.nested(item, false))) switch inner {
 			case BreakCommit(brk, _, token) if (token != null):
 				out = BreakCommit(laidOut(i, BreakCommits.replaced(item, inner, brk)), out, token);
 			case _:
@@ -4368,7 +4368,7 @@ class WrapList {
 	 * deliberately so — the same argument holds there (a `[` followed only by a
 	 * trailing comment still ends its line). No shape was found where it
 	 * changes that consumer's answer: an A/B on a commented array arg is
-	 * byte-identical, and so are the suite, the anyparse own corpus, TM `src`
+	 * byte-identical, and so are the suite, the anyparse own corpus, client `src`
 	 * and the fork corpus apart from the comprehension fixtures above.
 	 */
 	private static function firstBreakIsDelimChar(d: Doc, ch: Int): Bool {
