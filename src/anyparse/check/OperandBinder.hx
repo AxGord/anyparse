@@ -15,6 +15,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
+import anyparse.query.TypingService;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -23,7 +24,7 @@ using Lambda;
 /**
  * What the declared type of an operand binds to, for ONE file — every type bound in the scope of the
  * file that WRITES it, never by its simple name. This is not a typer of its own: the shapes are walked
- * by THE structural walk every typer shares (`NominalTypes.typeWalk`), and this class is that walk's
+ * by THE structural walk every typer shares (`TypingService.typeWalk`), and this class is that walk's
  * BINDING host (`HOST`) — the resolution model whose currency is what a written type binds to
  * (`TypeNameBinding.Tier`), beside the index's written sources and the call graph's keyed ones:
  *
@@ -151,7 +152,7 @@ final class OperandBinder {
 
 	/** What `operand`'s declared type binds to: the shared walk over this file's binding resolution (`HOST`). */
 	public function tierOf(operand: QueryNode): Tier {
-		return NominalTypes.typeWalk(operand, _shape, HOST, this) ?? Unknown;
+		return TypingService.typeWalk(operand, _shape, HOST, this) ?? Unknown;
 	}
 
 	/**

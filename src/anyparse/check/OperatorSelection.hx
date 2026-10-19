@@ -62,7 +62,7 @@ enum OperatorVerdict {
  *    before someone writes the first `@:op` — every occurrence is `Builtin` and no operand type
  *    is ever resolved. That is what keeps the gate free.
  * 2. **Could an operand of THIS occurrence be one of those types?** Each operand is typed by the
- *    ONE structural walk every typer shares (`NominalTypes.typeWalk`), over its BINDING host
+ *    ONE structural walk every typer shares (`TypingService.typeWalk`), over its BINDING host
  *    (`OperandBinder`): its declared type is BOUND in the file that writes it, tier by tier in the
  *    compiler's order (`typingFor`), and the answer is `Overloaded` for a declaration that declares
  *    the pattern, `Builtin` for one that provably cannot, and `Unproven` for everything else — an

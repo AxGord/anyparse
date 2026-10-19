@@ -22064,7 +22064,7 @@
 		},
 		{
 			"name": "M-NOMINAL-LITERAL",
-			"type": "anyparse.query.NominalTypes",
+			"type": "anyparse.query.TypingService",
 			"method": "typeWalk",
 			"find": "if (literalType != null) return literal == null ? null : literal(literalType, ctx);",
 			"replace": "if (literalType != null) return null;",
@@ -25122,7 +25122,7 @@
 		},
 		{
 			"name": "M-WALK-LAMBDA-PARAM-CUT",
-			"type": "anyparse.query.NominalTypes",
+			"type": "anyparse.query.TypingService",
 			"method": "identifierType",
 			"find": "host.loopElement(from, ctx) ?? (parameter == null ? null : parameter(from, ident, ctx))",
 			"replace": "host.loopElement(from, ctx)",
@@ -26526,7 +26526,7 @@
 		},
 		{
 			"name": "M-WALK-ARITHMETIC-OFF",
-			"type": "anyparse.query.NominalTypes",
+			"type": "anyparse.query.TypingService",
 			"method": "arithmeticType",
 			"find": "final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>> = host.arithmetic;",
 			"replace": "final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>> = null;",
