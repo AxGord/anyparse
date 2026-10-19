@@ -27863,6 +27863,38 @@
 			"find": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(fl)): fl;",
 			"replace": "case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (false): fl;",
 			"note": "a rest-aware `&&` / `+` chain whose trailing paren opens is no longer forward-glued, so it breaks before `|| (` instead of hugging the paren"
+		},
+		{
+			"name": "M-ASYM-CHAIN-UNFLAGGED",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "chainFinding",
+			"find": "return headSpan != null && braced && bareBranches(links, seams).length > 0",
+			"replace": "return headSpan != null && false && bareBranches(links, seams).length > 0",
+			"note": "a chain whose braced and bare branches disagree outside its tail pair - one with no final else - is not a finding, although the writer symmetric mode braces it"
+		},
+		{
+			"name": "M-ASYM-CHAIN-PER-LINK",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "walk",
+			"find": "link || !seams.ifKinds.contains(node.kind)",
+			"replace": "!seams.ifKinds.contains(node.kind)",
+			"note": "every else-if link is read as the head of a chain of its own, so one chain reports its tail pair once per link above it"
+		},
+		{
+			"name": "M-ASYM-CHAIN-PAIR-SKIPPED",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "chainFinding",
+			"find": "return pairFinding(tail, last, seams) ?? (",
+			"replace": "return (",
+			"note": "an asymmetric tail pair is reported as the whole chain, losing the message that names which branch is braced"
+		},
+		{
+			"name": "M-ASYM-CHAIN-SWITCH-BRACED",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "bareBranches",
+			"find": " && !seams.exemptElseKinds.contains(last.kind)) out.push(last);",
+			"replace": ") out.push(last);",
+			"note": "a terminal else switch counts as a bare branch, so a braced chain ending in one is flagged and its switch braced, though the writer glues it to its else"
 		}
 	]
 }

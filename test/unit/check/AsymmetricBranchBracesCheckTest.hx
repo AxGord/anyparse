@@ -55,8 +55,78 @@ class AsymmetricBranchBracesCheckTest extends Test {
 		Assert.equals(0, violations(wrap('if (d.length != 4)\n\t\t\tthrow \'bad\';')).length);
 	}
 
+	/** An `else if` LINK is exempt as a pair: a chain whose branches are all braced is symmetric. */
 	public function testAnElseIfLinkIsExempt(): Void {
-		Assert.equals(0, violations(wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b)\n\t\t\tq();')).length);
+		Assert.equals(0, violations(wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) {\n\t\t\tq();\n\t\t}')).length);
+	}
+
+	/**
+	 * A chain with NO final `else` is still a chain: a braced link opposite a bare one is the asymmetry the writer's
+	 * `chainForcesBraces` repairs (`fmt` under `singleStatementBraces: "symmetric"` braces `q();`). The finding spans
+	 * the whole chain, since no single pair of it is the defect.
+	 */
+	@:pin('control')
+	@:killer('M-ASYM-CHAIN-UNFLAGGED')
+	public function testANoElseChainWithABracedLinkIsFlagged(): Void {
+		final src: String = wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b)\n\t\t\tq();');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('the if/else-if chain braces some branches and not others - brace all or none', vs[0].message);
+		Assert.equals(src.indexOf('if (a)'), vs[0].span?.from);
+		Assert.equals(src.lastIndexOf('q();') + 'q();'.length, vs[0].span?.to);
+		Assert.equals(
+			1, violations(wrap('if (a)\n\t\t\tp();\n\t\telse if (b) {\n\t\t\tq();\n\t\t}')).length, 'the mirror, braced in the tail'
+		);
+	}
+
+	/** A final-else chain whose TAIL pair agrees but whose head does not is one too - `fmt` braces `p();`. */
+	public function testAChainBareInItsHeadOnlyIsFlagged(): Void {
+		final vs: Array<Violation> = violations(wrap('if (a) p(); else if (b) {\n\t\t\tq();\n\t\t} else {\n\t\t\tr();\n\t\t}'));
+		Assert.equals(1, vs.length);
+		Assert.equals('the if/else-if chain braces some branches and not others - brace all or none', vs[0].message);
+	}
+
+	/** Every branch bare, or every branch braced: symmetric, final `else` or not. */
+	public function testAnAgreeingChainIsNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (a) p(); else if (b) q();')).length);
+		Assert.equals(0, violations(wrap('if (a) p(); else if (b) q(); else if (d == s) r();')).length);
+		Assert.equals(
+			0,
+			violations(wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) {\n\t\t\tq();\n\t\t} else if (d == s) {\n\t\t\tr();\n\t\t}')).length
+		);
+	}
+
+	/**
+	 * ONE finding per chain, however many of its links disagree: the tail pair's own finding when that pair is the
+	 * asymmetric one, else the chain's.
+	 */
+	@:pin('control')
+	@:killer('M-ASYM-CHAIN-PER-LINK')
+	@:killer('M-ASYM-CHAIN-PAIR-SKIPPED')
+	public function testOneFindingPerChain(): Void {
+		final chain: Array<Violation> = violations(wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) q(); else if (d == s) r();'));
+		Assert.equals(1, chain.length, 'a three-link chain with no else');
+		Assert.equals('the if/else-if chain braces some branches and not others - brace all or none', chain[0].message);
+		final pair: Array<Violation> = violations(wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) q(); else {\n\t\t\tr();\n\t\t}'));
+		Assert.equals(1, pair.length, 'the tail pair is the finding');
+		Assert.equals('the else branch is braced and the then branch is not - brace both or neither', pair[0].message);
+	}
+
+	/**
+	 * A terminal `else switch` is neither braced nor bare in a chain, as in a pair: `fmt` braces the chain's other
+	 * branches and leaves the `switch` glued to its `else`. A chain that disagrees only through it is not a finding.
+	 */
+	@:pin('control')
+	@:killer('M-ASYM-CHAIN-SWITCH-BRACED')
+	public function testAnElseSwitchIsNeutralInAChain(): Void {
+		final sw: String = 'switch s {\n\t\t\tcase _:\n\t\t\t\tr();\n\t\t}';
+		Assert.equals(0, violations(wrap('if (a) p(); else if (b) q(); else $sw')).length);
+		Assert.equals(0, violations(wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) {\n\t\t\tq();\n\t\t} else $sw')).length);
+		final src: String = wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) q(); else $sw');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(
+			wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) { q(); } else $sw'), CheckFixture.fixedSource(new AsymmetricBranchBraces(), src)
+		);
 	}
 
 	public function testAnElseSwitchIsExempt(): Void {
@@ -123,6 +193,45 @@ class AsymmetricBranchBracesCheckTest extends Test {
 	}
 
 	/**
+	 * A chain with no final `else` is braced whole, both ways round, as `fmt` under `singleStatementBraces: "symmetric"`
+	 * braces it - and a head-only disagreement in a final-else chain the same.
+	 */
+	@:pin('control')
+	@:killer('M-ASYM-CHAIN-UNFLAGGED')
+	public function testFixBracesANoElseChain(): Void {
+		Assert.equals(
+			wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) { q(); } else if (d == s) { r(); }'),
+			CheckFixture.fixedSource(
+				new AsymmetricBranchBraces(), wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) q(); else if (d == s) r();')
+			)
+		);
+		Assert.equals(
+			wrap('if (a) { p(); } else if (b) {\n\t\t\tq();\n\t\t}'),
+			CheckFixture.fixedSource(new AsymmetricBranchBraces(), wrap('if (a) p(); else if (b) {\n\t\t\tq();\n\t\t}'))
+		);
+		Assert.equals(
+			wrap('if (a) { p(); } else if (b) {\n\t\t\tq();\n\t\t} else {\n\t\t\tr();\n\t\t}'),
+			CheckFixture.fixedSource(
+				new AsymmetricBranchBraces(), wrap('if (a) p(); else if (b) {\n\t\t\tq();\n\t\t} else {\n\t\t\tr();\n\t\t}')
+			)
+		);
+		Assert.equals(
+			wrap('if (a) { p(); } else if (b) {\n\t\t\tq();\n\t\t}'),
+			CheckFixture.fixedSource(new AsymmetricBranchBraces(), wrap('if (a) p() else if (b) {\n\t\t\tq();\n\t\t}')),
+			'an unterminated bare branch takes the terminator inside its braces'
+		);
+	}
+
+	/** A conditional-compilation region in a no-else chain stays bare, and the finding says why - the writer leaves it too. */
+	public function testFixLeavesANoElseConditionalRegionBare(): Void {
+		final src: String = wrap('if (a) {\n\t\t\tq();\n\t\t} else if (b) #if d p() #else r() #end;');
+		final run: FixRun = CheckFixture.fixRun(new AsymmetricBranchBraces(), [{ file: 'C.hx', source: src }]);
+		Assert.equals(1, run.violations.length);
+		Assert.equals(0, run.edits.length);
+		Assert.isTrue((run.violations[0].declineReason ?? '').indexOf('no terminator of its own') != -1);
+	}
+
+	/**
 	 * A conditional-compilation region stays bare: its terminator belongs to the region although its
 	 * parent's span owns it (`RefShape.statementTerminator`), so neither the region's own text nor that
 	 * text plus a terminator is the branch's statement. The terminator gate is what declines it, and the
@@ -181,6 +290,11 @@ class AsymmetricBranchBracesCheckTest extends Test {
 	public function testFixLeavesADeclarationBare(): Void {
 		final src: String = wrap('if (a) {\n\t\t\tp();\n\t\t} else\n\t\t\tvar x = 1;');
 		Assert.equals(src, CheckFixture.fixedSource(new AsymmetricBranchBraces(), src));
+		final noElse: String = wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b)\n\t\t\tvar x = 1;');
+		final run: FixRun = CheckFixture.fixRun(new AsymmetricBranchBraces(), [{ file: 'C.hx', source: noElse }]);
+		Assert.equals(1, run.violations.length, 'a no-else chain with a declaration is still reported');
+		Assert.equals(0, run.edits.length);
+		Assert.isTrue((run.violations[0].declineReason ?? '').indexOf('declaration') != -1);
 	}
 
 	/**
