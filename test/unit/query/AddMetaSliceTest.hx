@@ -91,13 +91,24 @@ class AddMetaSliceTest extends Test {
 	}
 
 	/**
-	 * A duplicate is judged by NAME, not by the whole entry: two `@:access` clauses with
-	 * different arguments are legal Haxe, but the shape this refusal exists for — a
-	 * re-run adding what is already there — spells the same name.
+	 * A duplicate is the whole ENTRY, not its name: Haxe allows several `@:access(...)` on one
+	 * declaration, so a second one with another argument is added after the first.
 	 */
-	public function testDuplicateNameWithDifferentArgsRefused(): Void {
-		assertRefused(
+	@:pin('control')
+	@:killer('M-ADDMETA-SAME-ARGS')
+	public function testSameNameWithDifferentArgsAdded(): Void {
+		assertMeta(
 			'@:access(foo.Bar)\nclass C {\n\n\tfunction f():Void {}\n\n}\n', BySelector('ClassDecl:C'), '@:access(baz.Qux)',
+			'@:access(foo.Bar)\n@:access(baz.Qux)\nclass C {\n\n\tfunction f():Void {}\n\n}\n'
+		);
+	}
+
+	/** The exact entry already there is refused, arguments included. */
+	@:pin('control')
+	@:killer('M-ADDMETA-ENTRY-NEVER-SAME')
+	public function testSameNameWithSameArgsRefused(): Void {
+		assertRefused(
+			'@:access(foo.Bar)\nclass C {\n\n\tfunction f():Void {}\n\n}\n', BySelector('ClassDecl:C'), '@:access(foo.Bar)',
 			'already annotated'
 		);
 	}

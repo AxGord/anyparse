@@ -1492,6 +1492,99 @@ class MemberReachTest extends Test {
 		);
 	}
 
+	/**
+	 * A type two class paths declare — the std `sys.net.Host` and a library's own copy of it — is ONE type, whose member a
+	 * string conversion of a value of no known type may run: the walk reads every copy of it and answers as their union
+	 * (`ReachGraph.loadHomes`, `ReachGraph.oneTypeEverywhere`). It read none, and refused as code the run did not read.
+	 */
+	@:pin('control')
+	@:killer('M-REACH-HOMES-RECORDED') @:killer('M-REACH-LIBRARY-HOMES') @:killer('M-REACH-SHARED-ONE-TYPE')
+	public function testAConversionReadsEveryCopyOfOneLibraryType(): Void {
+		final src: String = 'class C { function f(xs:Array<Int>, v:Dynamic):Void { /*<*/ var s:String = "" + v + xs[0]; /*>*/ } }';
+		final std: String = 'package sys.net; extern class Host { public function toString():String; }';
+		final quiet: String =
+			'package sys.net; class Host { var ip:String; public function new() {} public function toString():String return ip; }';
+		final loud: String = 'package sys.net; class Host { public static var all:Array<Int> = []; public function new() {} '
+			+ 'public function toString():String { all.push(0); return ""; } }';
+		final at: Int = src.lastIndexOf('xs', src.indexOf(REGION_CLOSE));
+		function askWith(copy: String): ReachResult {
+			return reachOf([src], [std, copy], true).mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), regionOf(src));
+		}
+		assertMatch(askWith(quiet), r -> r.match(Proven));
+		assertMatch(askWith(loud), r -> r.match(Unknown(Aliased(_, _, 'cp1/sys/net/Host.hx', _))));
+	}
+
+	/**
+	 * Two types of two packages sharing a simple name are two types, though the graph folds their members by that name: a
+	 * conversion running the member of either is not answered by their union (`ReachGraph.oneTypeEverywhere`), and the
+	 * refusal names the code it read rather than code it did not.
+	 */
+	@:pin('control')
+	@:killer('M-REACH-ONE-TYPE-PATHS')
+	public function testTypesOfTwoPackagesSharingANameStayShared(): Void {
+		final src: String = 'class C { function f(xs:Array<Int>, v:Dynamic):Void { /*<*/ var s:String = "" + v + xs[0]; /*>*/ } }';
+		final a: String = 'package a; class Host { var ip:String; public function new() {} public function toString():String return ip; }';
+		final b: String = 'package b; class Host { var ip:String; public function new() {} public function toString():String return ip; }';
+		final at: Int = src.lastIndexOf('xs', src.indexOf(REGION_CLOSE));
+		final result: ReachResult = reachOf([src], [a, b], true).mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), regionOf(src));
+		assertMatch(
+			result, r -> switch r {
+				case Unknown(Aliased(_, _, culprit, _)): StringTools.endsWith(culprit, '/Host.hx');
+				case _: false;
+			}
+		);
+	}
+
+	/**
+	 * Copies of one type answer as their union only while the node holds the code each copy runs
+	 * (`ReachGraph.oneTypeEverywhere`): a copy inheriting the member from a supertype runs that supertype's code, which no
+	 * declaration of the node is, and an extern copy's target code may dispatch to an override below it.
+	 */
+	@:pin('control')
+	@:killer('M-REACH-ONE-TYPE-FOLDED') @:killer('M-REACH-ONE-TYPE-EXTERN')
+	public function testACopyWhoseCodeTheNodeDoesNotHoldStaysShared(): Void {
+		final src: String = 'class C { function f(xs:Array<Int>, v:Dynamic):Void { /*<*/ var s:String = "" + v + xs[0]; /*>*/ } }';
+		final own: String =
+			'package sys.net; class Host { var ip:String; public function new() {} public function toString():String return ip; }';
+		final inherits: String = 'package sys.net; class Host extends Base { public function new() {} }';
+		final base: String =
+			'package sys.net; class Base { var ip:String; public function new() {} public function toString():String return ip; }';
+		final std: String = 'package sys.net; extern class Host { public function toString():String; }';
+		final below: String =
+			'class Below extends sys.net.Host { var ip:String; public function new() {} override public function toString():String return ip; }';
+		final at: Int = src.lastIndexOf('xs', src.indexOf(REGION_CLOSE));
+		function askWith(library: Array<String>): ReachResult {
+			return reachOf([src], library, true).mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), regionOf(src));
+		}
+		assertMatch(askWith([own, inherits, base]), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		assertMatch(askWith([std, own, below]), r -> r.match(Unknown(_)));
+	}
+
+	/**
+	 * Library code a string conversion may run whose type's files the walk cannot read — here past a budget of no library
+	 * file at all — is named by the refusal, member and all (`AliasedUnread`): it read as code at "library code the run did
+	 * not read", which named nothing a reader could look up.
+	 */
+	@:pin('control')
+	@:killer('M-REACH-UNREAD-NAMED')
+	public function testLibraryCodeTheWalkCannotReadIsNamed(): Void {
+		// the project names `Host`, so an instance of it may be what `v` holds
+		final src: String = 'class C { function f(xs:Array<Int>, v:Dynamic, h:Host):Void { /*<*/ var s:String = "" + v + xs[0]; /*>*/ } }';
+		final loud: String = 'class Host { public static var all:Array<Int> = []; public function new() {} '
+			+ 'public function toString():String { all.push(0); return ""; } }';
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final files: Array<{ file: String, source: String }> = [{ file: 'F0.hx', source: src }];
+		final libs: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules([loud]);
+		libs.push({ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY });
+		final reach: MemberReach = new MemberReach(
+			plugin, files, CheckFixture.index(files.concat(libs), plugin), true, 0, MemberReach.MAX_VISITED, null, () -> true
+		);
+		final at: Int = src.lastIndexOf('xs', src.indexOf(REGION_CLOSE));
+		final result: ReachResult = reach.mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), regionOf(src));
+		assertMatch(result, r -> r.match(Unknown(AliasedUnread(_, _, 'Host.toString'))));
+		Assert.stringContains('library code `Host.toString` the walk cannot read', reach.explain(result));
+	}
+
 	@:pin('control') @:killer('M-REACH-EXTERN-INERT')
 	public function testExternClosedOverInertValuesAdmitsNoFunctionValue(): Void {
 		// Target code behind an extern that takes and returns only numbers, strings and itself was handed no function

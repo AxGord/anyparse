@@ -673,8 +673,10 @@ final class PinsCheckAToO {
 		'unit.check.OperandTypingTest#testAGuardedUsingLeavesTheExtensionUnproven :: control :: M-BINDER-EXTENSION-GUARDED-USING',
 		'unit.check.OperandTypingTest#testALambdaAfterASkippableParameterIsUnproven :: control :: '
 			+ 'M-BINDER-ARGUMENT-SKIPPABLE,M-TS-SKIP-DEFAULT',
+		'unit.check.OperandTypingTest#testALambdaTakesTheParameterOfACalleeDeclaredElsewhere :: control :: M-BINDER-CALLEE-MEMBER-OFF,M-BINDER-CALLEE-NEW-OFF,M-BINDER-CALLEE-INHERITED-OFF,M-BINDER-CALLEE-LOCAL-OFF,M-BINDER-OWNER-BINDINGS-OFF,M-BINDER-LOCATED-HOST-OFF',
 		'unit.check.OperandTypingTest#testAStaticOfTheFieldsNameOutranksTheResolver :: control :: '
 			+ 'M-BINDER-RESOLVE-USING-SHADOW,M-USING-DECLS-AMBIENT',
+		'unit.check.OperandTypingTest#testAStdIterableBindsTheElementOfWhatIsHandedToIt :: control :: M-BINDER-ITERABLE-OFF,M-BINDER-ITERABLE-ANY-TYPE',
 		'unit.check.OperandTypingTest#testASupertypeStaticReadBareIsNotTheSupertypes :: control :: M-BINDER-INHERITED-STATIC',
 		'unit.check.OperandTypingTest#testAUsedAliasLeavesTheExtensionUnproven :: control :: M-USING-HOSTS-ALIAS',
 		'unit.check.OperandTypingTest#testAnExtensionOfAnotherFirstParameterIsUnproven :: control :: M-BINDER-EXTENSION-FIRST-PARAM',
@@ -694,6 +696,7 @@ final class PinsCheckAToO {
 		'unit.check.OperandTypingTest#testEveryTypeOfAUsedModuleBringsItsExtensions :: control :: M-USING-HOSTS-MODULE',
 		'unit.check.OperandTypingTest#testTheLastUsingDeclaringTheExtensionWins :: control :: M-BINDER-EXTENSION-LAST-USING',
 		'unit.check.OperandTypingTest#testTheReceiversOwnUsingOutranksTheFiles :: control :: M-BINDER-EXTENSION-ATUSING',
+		'unit.check.OperandTypingTest#testWhatTheCallDoesNotBindStaysUnproven :: control :: M-BINDER-METHOD-SHADOWS-OFF,M-BINDER-CALLEE-OVERLOAD',
 		'unit.check.OperatorOverloadGateTest#testDefaultLastAsksTheOperatorItWrites :: control :: '
 			+ 'M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND,M-NEGCOND-DEFAULT-LAST-EQ-UNASKED',
 		'unit.check.OperatorOverloadGateTest#testInvertTernarySkipsOverloadedNot :: control :: M-NEGCOND-OVERLOAD-BLIND',
@@ -853,6 +856,10 @@ final class PinsCheckAToO {
 			+ 'M-OVERSIZED-CONST-LINES-COUNTED,M-OVERSIZED-CONST-REGION-OWN-LINES',
 		'unit.check.OversizedTypeCheckTest#testTheLinesOfBehaviourStillCount :: control :: M-OVERSIZED-CONST-LINES-COUNTED',
 		'unit.check.OversizedTypeCheckTest#testTwoGrantsForOneTypeAreBothRefused :: control :: M-OVERSIZED-DUPLICATE-GRANT',
+		'unit.check.OwnedTypesCheckTest#testAGuardedImportBindsAUseInItsOwnBranch :: control :: '
+			+ 'M-OWNED-TIER-NO-USE-SITE,M-OWNED-MEMO-IGNORES-SITE',
+		'unit.check.OwnedTypesCheckTest#testALocalInitialisedByAConstructionIsTyped :: control :: '
+			+ 'M-NOMINAL-LOCAL-CONSTRUCTION,M-NOMINAL-INITIALIZER-ONE-STEP',
 		'unit.check.OwnedTypesCheckTest#testANameNoTierBindsIsNotReported :: control :: M-OWNED-FREE-REPORTED',
 		'unit.check.OwnedTypesCheckTest#testAQualifiedExpressionIsAMention :: control :: M-OWNED-QUALIFIED-EXPR-IGNORED',
 		'unit.check.OwnedTypesCheckTest#testASameNamedTypeOfAnotherPackageIsNotReported :: control :: M-OWNED-BOUND-BY-NAME',
@@ -860,9 +867,12 @@ final class PinsCheckAToO {
 		'unit.check.OwnedTypesCheckTest#testAValueNamedLikeTheTypeIsNotReported :: control :: M-OWNED-VALUE-IS-TYPE',
 		'unit.check.OwnedTypesCheckTest#testAnImportAndAnAliasAreMentions :: control :: M-OWNED-IMPORTS-IGNORED,M-OWNED-ALIAS-IGNORED',
 		'unit.check.OwnedTypesCheckTest#testAnInstanceMemberIsReachedThroughATypedReceiver :: control :: M-OWNED-NO-SUPERTYPE-WALK',
+		'unit.check.OwnedTypesCheckTest#testAnOutsideCandidateIsMatchedByItsPath :: control :: M-OWNED-OUTSIDE-CANDIDATE-IGNORED',
 		'unit.check.OwnedTypesCheckTest#testAnOwnerTypeOwnsItsOwnBody :: control :: M-OWNED-ENCLOSING-TYPE',
 		'unit.check.OwnedTypesCheckTest#testAnUnknownReceiverIsReportedForAStaticOnly :: control :: '
 			+ 'M-OWNED-STATIC-UNKNOWN-SILENT,M-OWNED-UNKNOWN-SILENT,M-OWNED-INSTANCE-BY-NAME',
+		'unit.check.OwnedTypesCheckTest#testAnUnknownReceiverIsReportedOnlyWhenACandidateIsOwned :: control :: '
+			+ 'M-OWNED-CANDIDATES-IGNORED,M-BINDING-EITHER-DROPS-GUARDED',
 		'unit.check.OwnedTypesCheckTest#testAnUnresolvableMentionIsReported :: control :: M-OWNED-UNKNOWN-SILENT',
 		'unit.check.OwnedTypesCheckTest#testConstructionIsTheNewMember :: control :: M-OWNED-CTOR-ANY-TYPE',
 		'unit.check.OwnedTypesCheckTest#testNoDeclarationIsInert :: control :: M-OWNED-SKIP-REASON-NULL',

@@ -991,6 +991,17 @@ final class HaxeRefShape {
 				'DoubleStringExpr' => 'String'
 			],
 			numericLiteralKinds: ['IntLit', 'FloatLit', 'HexLit'],
+			coreValueTypes: {
+				names: ['Bool', 'String', 'Int', 'Float'],
+				widens: ['Int' => ['Float']],
+				integer: 'Int',
+				real: 'Float'
+			},
+			arithmeticKinds: ['Add', 'Sub', 'Mul', 'Div', 'Mod'],
+			realArithmeticKinds: ['Div'],
+			stringAffixTests: { module: 'StringTools', suffix: 'endsWith', prefix: 'startsWith' },
+			iterableTypeName: 'Iterable',
+			iterableElementTypeParams: ['Array' => 0, 'List' => 0, 'Iterable' => 0, 'Map' => 1],
 			arrayLiteralKind: 'ArrayExpr',
 			arrayTypeNames: ['Array'],
 			objectLiteralKind: 'ObjectLit',

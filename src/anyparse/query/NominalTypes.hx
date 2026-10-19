@@ -78,6 +78,7 @@ final class NominalTypes {
 		element: null,
 		call: (node, c) -> tabledStaticCallTypeSource(node, c.root, c.shape, c.index),
 		construction: null,
+		arithmetic: null,
 		reading: c -> c.seen
 	};
 
@@ -534,7 +535,9 @@ final class NominalTypes {
 		}
 		if (kind == shape.callKind && node.children.length > 0) return host.call(node, ctx);
 		final construction: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.construction;
-		return kind == shape.newExprKind && name != null && construction != null ? construction(node, ctx) : null;
+		return kind == shape.newExprKind && name != null && construction != null
+			? construction(node, ctx)
+			: arithmeticType(node, shape, host, ctx);
 	}
 
 	/**
@@ -777,7 +780,8 @@ final class NominalTypes {
 
 	/**
 	 * `valueTypeNominal`'s deep-mode twin: `valueTypeSourceDeep`'s written type source, reduced to
-	 * its outer nominal.
+	 * its outer nominal; with no source, the type a construction makes — the node itself, or the one
+	 * initialising the local it reads (`initializingConstruction`).
 	 *
 	 * `asReceiver` peels a member-TRANSPARENT wrapper off first (`Null<String>` -> `String`), and is
 	 * set ONLY where the answer is about to seed a member lookup. It is deliberately NOT the default:
@@ -791,7 +795,7 @@ final class NominalTypes {
 	): Null<String> {
 		final source: Null<String> = valueTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, seen);
 		return if (source == null)
-			constructedNominal(node, shape)
+			constructedNominal(initializingConstruction(node, root, shape, chain.declaredTypeSources), shape)
 		else if (asReceiver)
 			outerNominalOf(
 				memberLookupReceiverSource(source, shape.memberTransparentWrapperTypeNames ?? [], chain.typeSyntax), chain.typeSyntax
@@ -807,6 +811,24 @@ final class NominalTypes {
 	private static function constructedNominal(node: QueryNode, shape: RefShape): Null<String> {
 		final written: Null<String> = node.kind == shape.newExprKind ? node.name : null;
 		return written == null ? null : SourceText.lastSegment(written);
+	}
+
+	/**
+	 * The construction a local written with no type holds, for an identifier reading one — followed through the locals
+	 * initialised by one another (`final b = a`): Haxe infers the local's type from its initializer
+	 * (`localInitializer`), and the source walk types no construction. Any other node is itself; one whose initializer
+	 * chain ends in no construction answers that last node, which `constructedNominal` then types as nothing.
+	 */
+	private static function initializingConstruction(
+		node: QueryNode, root: QueryNode, shape: RefShape, annotations: Map<Int, String>
+	): QueryNode {
+		var held: QueryNode = node;
+		while (held.kind == shape.identKind) {
+			final init: Null<QueryNode> = localInitializer(held, root, shape, annotations);
+			if (init == null) return held;
+			held = init;
+		}
+		return held;
 	}
 
 	/**
@@ -1027,6 +1049,28 @@ final class NominalTypes {
 		return pathReceiverMemberTypeSource(path, rootSource, index, c.file, true, shape.memberTransparentWrapperTypeNames ?? []);
 	}
 
+	/** Whether `node` is arithmetic the walk types by its operands: a binary `RefShape.arithmeticKinds` operator, or the negation. */
+	private static function isArithmetic(node: QueryNode, shape: RefShape): Bool {
+		final kinds: Array<String> = shape.arithmeticKinds ?? [];
+		return kinds.contains(node.kind) && node.children.length == 2 || node.kind == shape.negationKind && node.children.length == 1;
+	}
+
+	/**
+	 * The type the arithmetic `node` yields (`TypingHost.arithmetic`) over its operands typed by the walk: null for anything
+	 * but a binary `RefShape.arithmeticKinds` operator or the negation, for a host typing none, and when an operand is untyped.
+	 */
+	private static function arithmeticType<T, C>(node: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
+		final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>> = host.arithmetic;
+		if (arithmetic == null || !isArithmetic(node, shape)) return null;
+		final operands: Array<T> = [];
+		for (c in node.children) {
+			final t: Null<T> = typeWalk(c, shape, host, ctx);
+			if (t == null) return null;
+			operands.push(t);
+		}
+		return arithmetic(node, operands, ctx);
+	}
+
 }
 
 /**
@@ -1139,6 +1183,12 @@ typedef TypingHost<T, C> = {
 
 	/** What the construction `node` makes; null for a host typing none. */
 	final construction: Null<(node:QueryNode, ctx:C) -> Null<T>>;
+
+	/**
+	 * What the arithmetic `node` — an operator of `RefShape.arithmeticKinds`, or the negation — yields over
+	 * operands of the types `operands`, each typed by the walk; null for a host typing none.
+	 */
+	final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>>;
 
 	/** The binding offsets whose unannotated type the walk is reading right now, against a cycle (`for (x in x)`). */
 	final reading: (ctx:C) -> Array<Int>;

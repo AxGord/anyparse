@@ -90,8 +90,14 @@ class PossibleNullDereferenceTest extends Test {
 		Assert.equals(0, violations('class C { var items:Array<Int>; function f(o:C) { var a = o.items[i].foo; } }').length);
 	}
 
+	/** A local written with no type whose initializer the typer cannot follow (a call) is unresolvable: not flagged. */
 	public function testUnannotatedMapNotFlagged(): Void {
-		Assert.equals(0, violations('class C { function f() { var m = new Map<String,Int>(); var a = m[k].foo; } }').length);
+		Assert.equals(0, violations('class C { function f() { var m = make(); var a = m[k].foo; } }').length);
+	}
+
+	/** A local written with no type holds the type of the construction initialising it — Haxe infers exactly that. */
+	public function testConstructedMapLocalIsFlagged(): Void {
+		Assert.equals(1, violations('class C { function f() { var m = new Map<String,Int>(); var a = m[k].foo; } }').length);
 	}
 
 	public function testBareIndexNoDerefNotFlagged(): Void {
