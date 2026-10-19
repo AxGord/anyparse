@@ -201,7 +201,7 @@ final class NewLiteral {
 		final member: Null<String> = lval.name;
 		if (symbolIndex == null || member == null || recv.kind != identKind || recv.name != 'this') return null;
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(tree, newSpan);
-		return enclosing == null ? null : symbolIndex.members.memberTypeSourceOf(enclosing, member);
+		return enclosing == null ? null : symbolIndex.typing.members.memberTypeSourceOf(enclosing, member);
 	}
 
 }

@@ -4786,7 +4786,7 @@
 			"name": "M-STATICREACH-RECEIVER-BLIND",
 			"type": "anyparse.check.StaticReflectionReach",
 			"method": "staticReachable",
-			"find": "if ((_receivers[k] ?? []).exists(member -> !index.members.typeDeclaresMember(k, member))) return true;",
+			"find": "if ((_receivers[k] ?? []).exists(member -> !index.typing.members.typeDeclaresMember(k, member))) return true;",
 			"replace": "",
 			"note": "`C.ext()` naming no member of C is read as a static access, although a `using` extension then receives the class"
 		},
@@ -10622,7 +10622,7 @@
 			"name": "M-PSE-CLOSURE-USING",
 			"type": "anyparse.check.PreferStaticExtension",
 			"method": "verdictFor",
-			"find": "\n\t\t\t&& index.members.closureFreeOfExtensionTypes(receiverType, file, at)",
+			"find": "\n\t\t\t&& index.typing.members.closureFreeOfExtensionTypes(receiverType, file, at)",
 			"replace": "",
 			"note": "the structural path ignores @:using on the receiver's type closure"
 		},
@@ -21614,8 +21614,8 @@
 			"name": "M-HOST-UNIQUE",
 			"type": "anyparse.query.MemberLookup",
 			"method": "declaringHost",
-			"find": "return starts.length == 1 ? declaredMemberClosure(starts[0], member, []) : null;",
-			"replace": "return starts.length > 0 ? declaredMemberClosure(starts[0], member, []) : null;",
+			"find": "return starts.length == 1 ? declaredMember(starts[0], member) : null;",
+			"replace": "return starts.length > 0 ? declaredMember(starts[0], member) : null;",
 			"note": "a name declared twice hosts its member in its first declaration"
 		},
 		{
@@ -22064,7 +22064,7 @@
 		},
 		{
 			"name": "M-NOMINAL-LITERAL",
-			"type": "anyparse.query.NominalTypes",
+			"type": "anyparse.query.TypingService",
 			"method": "typeWalk",
 			"find": "if (literalType != null) return literal == null ? null : literal(literalType, ctx);",
 			"replace": "if (literalType != null) return null;",
@@ -24098,7 +24098,7 @@
 			"name": "M-BINDER-CLOSURE-UNRESOLVED",
 			"type": "anyparse.check.OperandBinder",
 			"method": "declarationOf",
-			"find": "else if (_index.members.declarationFreeOfExtensionTypes(owner))",
+			"find": "else if (_index.typing.members.declarationFreeOfExtensionTypes(owner))",
 			"replace": "else if (true)",
 			"note": "an inherited member is read past a supertype link the index cannot resolve, where a covariant override may sit"
 		},
@@ -24106,7 +24106,7 @@
 			"name": "M-BINDER-EXTENSION-ATUSING",
 			"type": "anyparse.check.OperandBinder",
 			"method": "extensionTier",
-			"find": "if (usings == null || !_index.members.declarationFreeOfExtensionTypes(owner)) return Unknown;",
+			"find": "if (usings == null || !_index.typing.members.declarationFreeOfExtensionTypes(owner)) return Unknown;",
 			"replace": "if (usings == null) return Unknown;",
 			"note": "a file's using is taken over the extension the receiver type's own @:using brings, which 4.3.7 binds first"
 		},
@@ -24377,7 +24377,7 @@
 			"name": "M-EXT-NOMINAL-ATUSING",
 			"type": "anyparse.query.NominalTypes",
 			"method": "staticExtensionNominal",
-			"find": "|| !index.members.closureFreeOfExtensionTypes(receiver, file)",
+			"find": "|| !index.typing.members.closureFreeOfExtensionTypes(receiver, file)",
 			"replace": "|| false",
 			"note": "a file's using answers a call on a receiver whose type (or a supertype) brings extensions of its own (@:using), which 4.3.7 binds first"
 		},
@@ -25122,7 +25122,7 @@
 		},
 		{
 			"name": "M-WALK-LAMBDA-PARAM-CUT",
-			"type": "anyparse.query.NominalTypes",
+			"type": "anyparse.query.TypingService",
 			"method": "identifierType",
 			"find": "host.loopElement(from, ctx) ?? (parameter == null ? null : parameter(from, ident, ctx))",
 			"replace": "host.loopElement(from, ctx)",
@@ -26580,7 +26580,7 @@
 		},
 		{
 			"name": "M-WALK-ARITHMETIC-OFF",
-			"type": "anyparse.query.NominalTypes",
+			"type": "anyparse.query.TypingService",
 			"method": "arithmeticType",
 			"find": "final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>> = host.arithmetic;",
 			"replace": "final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>> = null;",
@@ -26729,6 +26729,38 @@
 			"find": "case Opaque:\n\t\t\t\t\t\treturn AliasedUnread(file, shared, id);",
 			"replace": "case Opaque:\n\t\t\t\t\t\treturn Aliased(file, shared, '', new Span(0, 0));",
 			"note": "library code the walk cannot read is refused as code at no file, naming no member"
+		},
+		{
+			"name": "M-TYPING-ANSWER-FORGOTTEN",
+			"type": "anyparse.query.DeclarationQuery",
+			"method": "answer",
+			"find": "if (held != null) return held.value;",
+			"replace": "",
+			"note": "a remembered answer is computed again on every asking: the table keeps nothing"
+		},
+		{
+			"name": "M-TYPING-KEY-FILE",
+			"type": "anyparse.query.DeclarationKey",
+			"method": "ofMember",
+			"find": "'${r.file.file}@${r.type.span.from}.$member'",
+			"replace": "'@${r.type.span.from}.$member'",
+			"note": "a member question is keyed by the declaration's offset alone: a namesake at the same offset of another file takes its answer"
+		},
+		{
+			"name": "M-TYPING-KEY-OFFSET",
+			"type": "anyparse.query.DeclarationKey",
+			"method": "ofMember",
+			"find": "'${r.file.file}@${r.type.span.from}.$member'",
+			"replace": "'${r.file.file}.$member'",
+			"note": "a member question is keyed by the file alone: two types of one module share one answer"
+		},
+		{
+			"name": "M-TYPING-TYPE-KEY-FILE",
+			"type": "anyparse.query.DeclarationKey",
+			"method": "ofType",
+			"find": "'${r.file.file}@${r.type.span.from}'",
+			"replace": "'@${r.type.span.from}'",
+			"note": "a type question is keyed by the declaration's offset alone: a namesake at the same offset of another file takes its answer"
 		}
 	]
 }

@@ -251,10 +251,10 @@ final class CrossRenameMember {
 		// The member's own declarations come next: a `#if` region can declare it once per branch, and
 		// each branch is a separate declaration the edit set must carry. The cursor's own declaration
 		// is re-listed among them - harmless, since `apply` dedups the resulting offsets.
-		for (own in index.members.declarationsOf(t.typeName, t.memberName)) overrides.push(own);
+		for (own in index.typing.members.declarationsOf(t.typeName, t.memberName)) overrides.push(own);
 		// The destination name must be free on every type the edit set touches, not only the cursor's -
 		// an override renamed onto a name its own type already declares is a duplicate field.
-		for (fm in overrides) if (index.members.typeDeclaresMember(fm.typeName, newName))
+		for (fm in overrides) if (index.typing.members.typeDeclaresMember(fm.typeName, newName))
 			return Err('type "${fm.typeName}" already declares a member "$newName"');
 		// The declaring MODULE. A qualified static access names the owning type THROUGH its module
 		// path, so the receiver match needs that path — matching the receiver's last segment instead
@@ -1048,8 +1048,8 @@ final class CrossRenameMember {
 		// and run: with `Base` OUTSIDE `--scope` declaring `public var same: Colour`, the rewrite
 		// changed `pick(): Colour return same;` from the field's value to the constant SILENTLY —
 		// the one failure mode this operation forbids. So an unresolvable chain refuses.
-		return index.members.typeDeclaresMember(owner, memberName) || index.members.supertypeDeclaresMember(owner, memberName)
-			|| !index.subtypes.supertypeChainResolved(owner);
+		return index.typing.members.typeDeclaresMember(owner, memberName)
+			|| index.typing.members.supertypeDeclaresMember(owner, memberName) || !index.subtypes.supertypeChainResolved(owner);
 	}
 
 }

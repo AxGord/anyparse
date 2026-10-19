@@ -311,7 +311,7 @@ final class FieldWriteIndex {
 		}
 		if (!any) return false;
 		if (!allTyped) return true;
-		final candidateTypeSource: Null<String> = _index.members.memberTypeSourceOf(owner, field);
+		final candidateTypeSource: Null<String> = _index.typing.members.memberTypeSourceOf(owner, field);
 		if (candidateTypeSource == null) return true;
 		final parsed: Null<NominalParts> = nominalParse(candidateTypeSource, _unwrapNames, _index.typeSyntax);
 		if (parsed == null || _rejectNames.contains(parsed.name) || _builtinNames.contains(parsed.name)) return true;
@@ -674,7 +674,7 @@ final class FieldWriteIndex {
 	): Null<String> {
 		if (seen.contains(typeName)) return null;
 		seen.push(typeName);
-		final direct: Null<String> = index.members.memberTypeSourceOf(typeName, member);
+		final direct: Null<String> = index.typing.members.memberTypeSourceOf(typeName, member);
 		if (direct != null) return direct;
 		final decls: Array<TypeDeclInfo> = declsNamedIn(index, typeName);
 		if (decls.length != 1) return null;

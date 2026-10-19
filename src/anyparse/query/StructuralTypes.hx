@@ -419,7 +419,7 @@ final class StructuralTypes {
 	 * conforms.
 	 */
 	private function memberCouldUnify(owner: ResolvedType, want: StructureMember): Bool {
-		final found: Null<{ member: MemberInfo, host: ResolvedType }> = _members.declaredMemberClosure(owner, want.name, []);
+		final found: Null<{ member: MemberInfo, host: ResolvedType }> = _members.declaredMember(owner, want.name);
 		if (found == null) return false;
 		final wantHost: Null<ResolvedType> = want.host;
 		final wantSource: Null<String> = want.typeSource;

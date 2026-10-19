@@ -270,7 +270,7 @@ final class RedundantThis implements Check {
 		if (members.contains(name)) return true;
 		if (typeName == null) return false;
 		final index: Null<SymbolIndex> = symbols();
-		return index != null && index.members.inheritsMemberUnambiguously(file, typeName, name);
+		return index != null && index.typing.members.inheritsMemberUnambiguously(file, typeName, name);
 	}
 
 

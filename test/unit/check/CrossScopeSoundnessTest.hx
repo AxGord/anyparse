@@ -953,7 +953,7 @@ class CrossScopeSoundnessTest extends Test {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final surface: ReflectionSurface = ReflectionScan.reflectionSurface([{ file: REACH_FILE, source: cell.grantee }], plugin);
 		final index: SymbolIndex = CheckFixture.index([{ file: DECL_FILE, source: cell.decl }], plugin);
-		return surface.whole.exists(name -> index.members.typeDeclaresMember(DECL_TYPE, name));
+		return surface.whole.exists(name -> index.typing.members.typeDeclaresMember(DECL_TYPE, name));
 	}
 
 	/**

@@ -81,11 +81,11 @@ class DeclarationQueriesTest extends Test {
 			'r/Box.hx' => 'package r;\n\nclass Box {\n\tpublic var item:Int;\n}\n'
 		]);
 		final ctorKinds: Array<String> = new HaxeQueryPlugin().refShape().execution?.enumConstructorKinds ?? [];
-		Assert.isTrue(index.members.declaresMemberAs('Red', ctorKinds), 'an enum constructor');
-		Assert.isFalse(index.members.declaresMemberAs('tone', ctorKinds), 'a field is no constructor');
-		Assert.isFalse(index.members.declaresMemberAs('Blue', ctorKinds), 'nothing declares it');
+		Assert.isTrue(index.typing.members.declaresMemberAs('Red', ctorKinds), 'an enum constructor');
+		Assert.isFalse(index.typing.members.declaresMemberAs('tone', ctorKinds), 'a field is no constructor');
+		Assert.isFalse(index.typing.members.declaresMemberAs('Blue', ctorKinds), 'nothing declares it');
 		Assert.same(['q/Box.hx:String', 'r/Box.hx:Int'], [
-			for (d in index.members.memberDeclarationsOf('Box', 'item')) '${d.file.file}:${d.member.typeSource}'
+			for (d in index.typing.members.memberDeclarationsOf('Box', 'item')) '${d.file.file}:${d.member.typeSource}'
 		], 'each declaration, with its file');
 		final paths: Array<String> = [
 			for (r in index.refs.resolvedDeclsNamed('Colour')) for (p in TypeNameBinding.namingPaths(r)) p
@@ -105,8 +105,10 @@ class DeclarationQueriesTest extends Test {
 			'a/Twin.hx' => 'package a;\n\nclass Twin {\n\tpublic var lock:Int = 0;\n}\n',
 			'b/Twin.hx' => 'package b;\n\nclass Twin {\n\tpublic var lock:Int = 0;\n}\n'
 		]);
-		Assert.equals('p/Base.hx', index.members.declaringHost('Kid', 'lock')?.host.file.file, 'an inherited member, on its declaration');
-		Assert.isNull(index.members.declaringHost('Twin', 'lock'), 'a name declared twice hosts nothing provable');
+		Assert.equals(
+			'p/Base.hx', index.typing.members.declaringHost('Kid', 'lock')?.host.file.file, 'an inherited member, on its declaration'
+		);
+		Assert.isNull(index.typing.members.declaringHost('Twin', 'lock'), 'a name declared twice hosts nothing provable');
 	}
 
 	@:pin('control') @:killer('M-SEAL-AMBIGUOUS') @:killer('M-SEAL-UNRESOLVED-IFACE') @:killer('M-SEAL-DECLARING-SUPER')
@@ -120,10 +122,10 @@ class DeclarationQueriesTest extends Test {
 			'cp1/p/Shared.hx' => 'package p;\n\nclass Shared {}\n',
 			'p/Over.hx' => 'package p;\n\nclass Over extends Shared {\n\tfunction run():Void {}\n}\n'
 		]);
-		Assert.isTrue(index.members.supertypesDeclareNone('Plain', 'run'), 'an unread superclass: reached only by an override');
-		Assert.isFalse(index.members.supertypesDeclareNone('Iface', 'run'), 'an unread interface may declare it');
-		Assert.isFalse(index.members.supertypesDeclareNone('Kid', 'run'), 'a superclass declaring it');
-		Assert.isFalse(index.members.supertypesDeclareNone('Over', 'run'), 'a link naming two declarations of one module');
+		Assert.isTrue(index.typing.members.supertypesDeclareNone('Plain', 'run'), 'an unread superclass: reached only by an override');
+		Assert.isFalse(index.typing.members.supertypesDeclareNone('Iface', 'run'), 'an unread interface may declare it');
+		Assert.isFalse(index.typing.members.supertypesDeclareNone('Kid', 'run'), 'a superclass declaring it');
+		Assert.isFalse(index.typing.members.supertypesDeclareNone('Over', 'run'), 'a link naming two declarations of one module');
 	}
 
 	private static function indexOf(files: Map<String, String>): SymbolIndex {

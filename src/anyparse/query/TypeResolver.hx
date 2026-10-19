@@ -154,12 +154,13 @@ final class TypeResolver {
 		if (recvName == shape.selfReferenceText) {
 			final lookSpan: Span = faNode.span ?? recvSpan;
 			final enclosing: Null<String> = enclosingTypeName(tree, lookSpan);
-			return enclosing != null && index.members.memberGetter(enclosing, field) == false;
+			return enclosing != null && index.typing.members.memberGetter(enclosing, field) == false;
 		}
 		final bindingFrom: Null<Int> = resolveBindingFrom(recvName, recvSpan, tree, shape);
 		if (bindingFrom == null) return false;
 		final typeName: Null<String> = declaredTypes[bindingFrom];
-		return typeName != null && (index.structural.isAnonStructType(typeName) || index.members.memberGetter(typeName, field) == false);
+		return typeName != null
+			&& (index.typing.structural.isAnonStructType(typeName) || index.typing.members.memberGetter(typeName, field) == false);
 	}
 
 	/**

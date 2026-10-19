@@ -9,6 +9,7 @@ import anyparse.query.SubtypeGraph;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeTraits;
+import anyparse.query.TypingService;
 import utest.Assert;
 import utest.Test;
 
@@ -51,21 +52,10 @@ class SymbolIndexLayerSeamTest extends Test {
 			]
 		},
 		{
-			name: 'MemberLookup',
-			declared: Type.getInstanceFields(MemberLookup),
-			field: 'members',
-			members: [
-				'memberGetter',
-				'returnNominalOf',
-				'typeProvablyLacksMember',
-				'supertypeDeclaresMember'
-			]
-		},
-		{
-			name: 'StructuralTypes',
-			declared: Type.getInstanceFields(StructuralTypes),
-			field: 'structural',
-			members: ['satisfiesIterable', 'satisfiesIterator', 'structuralConformanceForbidsFinal']
+			name: 'TypingService',
+			declared: Type.getInstanceFields(TypingService),
+			field: 'typing',
+			members: ['members', 'structural']
 		},
 		{
 			name: 'MemberPathWalk',
@@ -96,6 +86,32 @@ class SymbolIndexLayerSeamTest extends Test {
 		}
 	];
 
+	/** The typing service's own layers, reached as `index.typing.<field>`, each with its own questions. */
+	private static final SERVICE_LAYERS: Array<{
+		name: String,
+		field: String,
+		declared: Array<String>,
+		members: Array<String>
+	}> = [
+		{
+			name: 'MemberLookup',
+			declared: Type.getInstanceFields(MemberLookup),
+			field: 'members',
+			members: [
+				'memberGetter',
+				'returnNominalOf',
+				'typeProvablyLacksMember',
+				'supertypeDeclaresMember'
+			]
+		},
+		{
+			name: 'StructuralTypes',
+			declared: Type.getInstanceFields(StructuralTypes),
+			field: 'structural',
+			members: ['satisfiesIterable', 'satisfiesIterator', 'structuralConformanceForbidsFinal']
+		}
+	];
+
 	/**
 	 * Every layer is reachable by its own field on the index, and every question it owns is
 	 * declared on the LAYER and not on `SymbolIndex`. Red at base on both halves: at base each of
@@ -113,6 +129,23 @@ class SymbolIndexLayerSeamTest extends Test {
 	}
 
 	/**
+	 * The member and structural layers moved under the typing service: each is a field of `TypingService`, owns its
+	 * questions, and neither the service nor the index declares any of them.
+	 */
+	public function testTheTypingServiceOwnsTheSignatureLayers(): Void {
+		final serviceFields: Array<String> = Type.getInstanceFields(TypingService);
+		final indexFields: Array<String> = Type.getInstanceFields(SymbolIndex);
+		for (layer in SERVICE_LAYERS) {
+			Assert.isTrue(serviceFields.contains(layer.field), 'TypingService should expose the "${layer.field}" layer');
+			for (member in layer.members) {
+				Assert.isTrue(layer.declared.contains(member), '${layer.name} should declare "$member"');
+				Assert.isFalse(serviceFields.contains(member), 'TypingService should not declare "$member"');
+				Assert.isFalse(indexFields.contains(member), 'SymbolIndex should not declare "$member"');
+			}
+		}
+	}
+
+	/**
 	 * The layers are WIRED, not merely present: a two-file index answers one question per layer
 	 * through its field, and each answer is the one the pre-split index gave.
 	 */
@@ -125,8 +158,8 @@ class SymbolIndexLayerSeamTest extends Test {
 		);
 		Assert.equals(1, index.refs.declaringFiles('Derived').length);
 		Assert.isTrue(index.subtypes.isSubtype('Derived', 'Base'));
-		Assert.isTrue(index.members.typeDeclaresMember('Base', 'n'));
-		Assert.isFalse(index.structural.satisfiesIterable('Base'));
+		Assert.isTrue(index.typing.members.typeDeclaresMember('Base', 'n'));
+		Assert.isFalse(index.typing.structural.satisfiesIterable('Base'));
 		Assert.isNull(index.paths.resolvePathFinalMemberTypeSource('p/Base.hx', 'Base', ['n', 'missing']));
 		Assert.isTrue(index.text.sourceCarriesAllowGrant(derived));
 		Assert.isFalse(index.traits.transitivelyCarriesRtti('Derived'));

@@ -295,7 +295,7 @@ final class CasePatternScan {
 			if (!seams.scope.classLikeKinds.contains(node.kind)) continue;
 			if (declaresNamed(seams.scope.memberDeclKinds, node.children, name)) return 'field';
 			final owner: Null<String> = node.name;
-			if (index != null && owner != null && index.members.supertypeDeclaresMember(owner, name)) return 'inherited field';
+			if (index != null && owner != null && index.typing.members.supertypeDeclaresMember(owner, name)) return 'inherited field';
 		}
 		return null;
 	}

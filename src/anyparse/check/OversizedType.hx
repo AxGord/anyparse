@@ -644,7 +644,9 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		if (interfaces.length == 0) return 0;
 		for (iface in interfaces) if (index.refs.resolveStartType(iface, file) == null) return null;
 		var dictated: Int = 0;
-		for (member in members) if (member.length > 0 && interfaces.exists(i -> !index.members.typeProvablyLacksMember(i, member, file)))
+		for (member in members) if (member.length > 0 && interfaces.exists(i ->
+			!index.typing.members.typeProvablyLacksMember(i, member, file)
+		))
 			dictated++;
 		return dictated;
 	}

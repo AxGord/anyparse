@@ -401,7 +401,7 @@ final class ComparisonToBoolean implements Check {
 		final lookup: Null<PinnedLookup> = pinnedLookup(call.receiver, method, seams.shape, proof);
 		if (lookup == null) return null;
 		final recvType: String = lookup.recvType;
-		final written: Null<String> = lookup.index.members.returnNominalOf(recvType, method);
+		final written: Null<String> = lookup.index.typing.members.returnNominalOf(recvType, method);
 		if (written != null) return written;
 		if (NominalTypes.shadowedByNonStdType(lookup.index, recvType)) return null;
 		final tabled: Null<String> = seams.instanceMethodReturns['$recvType.$method'];
@@ -435,8 +435,8 @@ final class ComparisonToBoolean implements Check {
 	 * one — makes that walk itself answer null.
 	 */
 	private static function memberLookupIsPinned(recvType: String, field: String, index: SymbolIndex): Bool {
-		return !index.structural.isAnonStructType(recvType) && typeNameIsPinned(recvType, index)
-			&& index.members.memberDeclarationsOf(recvType, field).foreach(declaration -> !(declaration.member.guarded));
+		return !index.typing.structural.isAnonStructType(recvType) && typeNameIsPinned(recvType, index)
+			&& index.typing.members.memberDeclarationsOf(recvType, field).foreach(declaration -> !(declaration.member.guarded));
 	}
 
 	/**

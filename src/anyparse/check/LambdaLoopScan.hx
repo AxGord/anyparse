@@ -647,7 +647,8 @@ final class LambdaLoopScan {
 		final index: Null<SymbolIndex> = probe.index();
 		return index == null
 			? nominal == ITERATOR_TYPE_NAME
-			: index.structural.satisfiesIterator(nominal, probe.file) && !index.structural.satisfiesIterable(nominal, probe.file);
+			: index.typing.structural.satisfiesIterator(nominal, probe.file)
+				&& !index.typing.structural.satisfiesIterable(nominal, probe.file);
 	}
 
 	/**
@@ -717,7 +718,7 @@ final class LambdaLoopScan {
 	 */
 	private static function receiverDeclaresMethod(nominal: String, probe: Probes): Bool {
 		final index: Null<SymbolIndex> = probe.index();
-		return index != null && index.members.memberShadowsExtension(nominal, probe.method);
+		return index != null && index.typing.members.memberShadowsExtension(nominal, probe.method);
 	}
 
 	/**
