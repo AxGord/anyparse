@@ -999,8 +999,12 @@ enum Doc {
 	 * render run; until then every walker, the renderer included, reads `flat`.
 	 *
 	 * It exists because the break is decided at render time while the construct around it is placed at build time:
-	 * a list whose one item breaks inside is laid out by the rules for a MULTI-LINE item on the next rewrite, and
-	 * only this node lets the first rewrite already pick that layout.
+	 * a list whose one item breaks inside is laid out by the rules for a MULTI-LINE item on
+	 * the next rewrite, and only this node lets the first rewrite already pick that layout.
+	 *
+	 * With no `token` the node is a COMMITTED break (`BreakCommits.committed`): no render resolves it, so every walker,
+	 * `BreakCommits.commit` included, reads `flat`, the layout the next rewrite reads from its own source; `brk` is the bare layout
+	 * a first rewrite measured before, kept for a host whose next rewrite does not measure the break (`BreakCommits.followBare`).
 	 */
 	BreakCommit(brk: Doc, flat: Doc, ?token: BreakToken);
 

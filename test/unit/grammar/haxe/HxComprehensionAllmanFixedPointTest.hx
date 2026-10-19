@@ -54,6 +54,16 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	private static final CFG_PLAIN_KEEP: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, '
 		+ '"sameLine": {"comprehensionFor": "keep"}}';
 
+	/** An `expressionWrapping` rule: an expression paren opens by its own width probe, with no collapse gate. */
+	private static final CFG_EXPRESSION: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
+		+ '"expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", '
+		+ '"value": 0}], "type": "noWrap"}]}}, "sameLine": {"comprehensionFor": "keep"}}';
+
+	/** The ternary paren at the width where its literal breaks: it opens, as it does for every narrower literal. */
+	private static final OPEN_TERNARY_PAREN: String = 'class M {\n\tfunction f() {\n\t\tvar y = (\n\t\t\tcond ? [\n\t\t\t\tfor (x in xs)\n'
+		+ '\t\t\t\t\t{\n\t\t\t\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaa,\n\t\t\t\t\t\tk: \'${kinds(90)}\'\n\t\t\t\t\t}\n'
+		+ '\t\t\t] : otherList\n\t\t).concat(tail);\n\t}\n}';
+
 	/**
 	 * An iterable call the ladder wraps before the literal is asked, so the literal stays glued and flat behind
 	 * `))`: a layout the writer already reached in one write, which a static verdict on the flat item's width
@@ -162,6 +172,37 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 		Assert.isTrue(kept.contains(other));
 	}
 
+	/**
+	 * A comprehension argument of a method-chain link: the chain's glued tail is measured on the literal the next write
+	 * reads, a multi-line literal whose `BodyGroup` the probe defers, so the first write already glues the chain where
+	 * the second did.
+	 */
+	@:pin('control')
+	@:killer('M-BREAK-COMMITTED-BARE')
+	public function testAChainFollowsTheBreak(): Void {
+		for (config in CONFIGS) for (k in 20...101) assertOneWriteWithinLimit(chainShape(k), config, k);
+	}
+
+	/** An arrow-lambda body: its residual line is measured on that literal too, so the body stays glued to `->`. */
+	@:pin('control')
+	@:killer('M-BREAK-COMMITTED-BARE')
+	public function testALambdaBodyFollowsTheBreak(): Void {
+		for (config in [CFG_GROUP, CFG_TRAILING_COMMA, CFG_PLAIN_KEEP]) for (k in 1...101)
+			assertOneWriteWithinLimit(lambdaShape(k), config, k);
+	}
+
+	/**
+	 * An expression paren's next write keeps the open or glued layout its own source states, so its first write
+	 * measures the literal bare: a paren that opens for every literal narrower than the break keeps opening past it,
+	 * where measuring the deferred literal would glue it onto the other of its two fixed points.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-MEASURES-COMMITTED')
+	public function testAParenMeasuresTheBreakBare(): Void {
+		Assert.equals(OPEN_TERNARY_PAREN, HxWriteFixture.triviaWrite(ternaryParenShape(90), CFG_EXPRESSION));
+		for (k in 1...101) assertOneWriteWithinLimit(ternaryParenShape(k), CFG_EXPRESSION, k);
+	}
+
 	private static function assertOneWriteWithinLimit(src: String, config: String, k: Int, slack: Int = 0): Void {
 		final once: String = HxWriteFixture.triviaWrite(src, config);
 		Assert.equals(once, HxWriteFixture.triviaWrite(once, config), 'k=$k config=$config\n$src');
@@ -226,6 +267,24 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	private static function literalHostShape(k: Int): String {
 		return 'class M {\n\tfunction f() {\n\t\tvar y = [for (a in xs) {items: [for (b in a.children) {c: b.cccccccccccccccccccc, '
 			+ 'd: \'${kinds(k)}\'}], name: a.nnnnnnnnnnnnnnnnnnnnnnnnnnn}];\n\t}\n}';
+	}
+
+	/** A comprehension argument of the middle link of a method chain. */
+	private static function chainShape(k: Int): String {
+		return 'class M {\n\tfunction f() {\n\t\treturn builder.withName(nameValue).withItems([for (x in xs) {'
+			+ 'alpha: x.aaaaaaaaaaaaaaaaaaaaa, k: \'${kinds(k)}\'}]).build();\n\t}\n}';
+	}
+
+	/** A comprehension as an arrow-lambda body. */
+	private static function lambdaShape(k: Int): String {
+		return 'class M {\n\tfunction f() {\n\t\tvar f = () -> [for (x in xs) {'
+			+ 'alpha: x.aaaaaaaaaaaaaaaaaaaaaa, beta: x.bbbbbbbbbbbbbbbbbbbbbb, k: \'${kinds(k)}\'}];\n\t}\n}';
+	}
+
+	/** A comprehension as a ternary branch inside an expression paren. */
+	private static function ternaryParenShape(k: Int): String {
+		return 'class M {\n\tfunction f() {\n\t\tvar y = (cond ? [for (x in xs) {'
+			+ 'alpha: x.aaaaaaaaaaaaaaaaaaaaa, k: \'${kinds(k)}\'}] : otherList).concat(tail);\n\t}\n}';
 	}
 
 	private static function shortDeclShape(k: Int): String {

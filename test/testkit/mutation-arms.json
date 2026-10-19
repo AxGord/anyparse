@@ -26355,6 +26355,22 @@
 			"method": "outermostPerToken",
 			"force": "commits",
 			"note": "every node of a break is offered again by every list it is nested in, so the alternatives, and the Doc, grow exponentially with the nesting depth"
+		},
+		{
+			"name": "M-BREAK-COMMITTED-BARE",
+			"type": "anyparse.format.BodyAllman",
+			"method": "tailBreak",
+			"find": "BreakCommits.committed(brk, Doc.BodyGroup(brk))",
+			"replace": "brk",
+			"note": "a literal broken by its own width is laid out bare where the next write reads it in a `BodyGroup` every width probe defers, so a method chain dot-breaks and an arrow body leaves `->` on the first write and both glue back on the second"
+		},
+		{
+			"name": "M-PAREN-MEASURES-COMMITTED",
+			"type": "anyparse.core.BreakCommits",
+			"method": "followBare",
+			"find": "out = BreakCommit(shape(bare(replaced(inner, c, brk))), out, token);",
+			"replace": "out = BreakCommit(shape(replaced(inner, c, brk)), out, token);",
+			"note": "an expression paren measures a committed literal break deferred, so the paren that opens for every narrower literal glues once the literal breaks: one write still, but onto the other fixed point than the one the paren reached before"
 		}
 	]
 }
