@@ -55,7 +55,8 @@ final class BodyAllman {
 	public static function tailBreak(d: Doc): Null<{ brk: Doc, token: BreakToken }> {
 		return switch d {
 			case Doc.IfFirstLineExceeds(_, Doc.LeadingBreak(cols, brk, token), _),
-				Doc.GroupWithRestProbe(Doc.IfBreak(Doc.LeadingBreak(cols, brk, token), _)) if (token != null):
+				Doc.GroupWithRestProbe(Doc.IfBreak(Doc.LeadingBreak(cols, brk, token), _)),
+				Doc.Group(Doc.IfWidthExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):
 				{ brk: BodyFit.breakLayout(cols, BreakCommits.committed(brk, Doc.BodyGroup(brk))), token: token };
 			case Doc.Concat([Doc.OptSpace(' '), body]) if (BreakCommits.decisionMapped(body, (brk, _) -> brk) != null):
 				// The glued placement `gluedLayout` writes, the body wholly its decision: the break its Allman side opens

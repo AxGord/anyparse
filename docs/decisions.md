@@ -4474,6 +4474,45 @@ decided the question; it may not become a record of runs.
   now takes the same probe when it answers `NoWrap` with no threshold rule and no hardline; the 21 fixed points main
   rewrote past the limit land within it (78-98). Arm `M-FORCED-NOWRAP-UNPROBED`.
 
+## FU3 (2026-10-19): a dropped separator's comment is rehomed; a fit region is named; lineLength rules are width decisions
+
+- **A comment after a separator the writer drops is written where the next parse reads it.** `[a, {b: 1}, // c]` keeps
+  `// c` on the element (the parser reads the `,` first); under `wrapping.trailingComma: remove` the next parse meets
+  `{b: 1} // c`, and the close capture of the element's last construct takes the comment, inside the element, where it
+  forces breaks (a comprehension cuddles, a ternary or binop explodes). `TriviaTailRehome` generates, beside the
+  `Converters` of each synth module, `TailComments.rehome_<T>(value, comment): Null<T>`: the tree the parser builds for
+  `<value> <comment>`, read off the SAME shape the parser is lowered from — the capture points are a close-peek trivia Star
+  branch and a postfix call (`closeTrailing`) and a struct trivia Star field with a `@:trail` (`<field>TrailingClose`); the
+  answer passes through an infix right operand, a ternary's else operand, a prefix operand, the one operand of a keyword
+  or lead ctor, and a struct's last PRESENT field. A positive whitelist: a meta the mirror does not know, a trail literal,
+  a `@:wrap` pair, a `;` the source wrote (`<field>TrailPresent`), an occupied slot, a block comment — all answer null and
+  the comment stays where it was. The paired ctor's argument positions are read off `TriviaPairAltCtor.buildEnumCtor`,
+  not recounted. The sep-Star writer (`TriviaSepLowering`, both call sites) lays the list out from
+  `DroppedSepComment.last(source, appendTrailingComma, rehome_<Elem>)`. The rehomed list keeps reading the source
+  `trailPresent`: a separator is only dropped under the `Remove` veto, and every layout that reads source presence is
+  vetoed with it (the arm cutting a separate read SURVIVED, so the read was dead and is gone).
+- **A `conditionalExprFit` region is a named break.** The region is one `GroupWithRestProbe` whose seams break together;
+  the next write reads the seams it printed as hardlines. `BreakCommits.namedRegion` keeps the group (an empty
+  `IfBreak(BreakMark, Empty)` probe carries the mark, so every walker measures the group as before) and wraps it in a
+  `BreakCommit` whose committed read-back has the seams as hardlines (`hardSeams` walks only `Concat`/`Nest`; every
+  other node decides its own lines or renders the same in the broken group). A list (call arguments filling a line) then
+  lays itself out as the next write does.
+- **A list does not lay itself out for a break inside a fit body** (`BreakCommits.nested(item, false)` stops at
+  `BodyGroup` for `WrapList.emit`'s offers). The next write re-decides the body's own seam from the body it reads back
+  (`strictFitLineShape`: a multi-line comprehension body goes to the next line, with no `BodyGroup`), which the committed
+  break alone does not say: offering through the body changed 156 main-stable fixed points (`z_condlambda`,
+  `z_condparen` under client — an arrow or a paren around the comprehension measured the deferred `BodyGroup`). Rejected:
+  `BreakCommits.follow` at the body (a `BreakCommit` around the slot) — every reader of the slot shape
+  (`dropComprehensionBody`, `tailBodyGroup`, …) stops recognising it, 161 changed fixed points; measuring
+  `BreakCommits` on the collapsed layout — no effect on any file, dropped.
+- **The `#elseif` seams of a fit region carry no force-flat boundary of their own** (`TryparseStarCtx.regionSeams`): a
+  `WrapBoundary` among one group's seams gave the region two modes inside an enclosing `Flatten`.
+- **A `lineLength >= n` rule's decision is a width decision.** It is emitted as `Group(IfWidthExceeds(n, brk, flat))`;
+  `decisionMapped` reads it beside `IfFirstLineExceeds` and `GroupWithRestProbe(IfBreak)`, and `BodyAllman.tailBreak`
+  recognises its Allman break side. This was the whole `thr` harness family (5022 drifting files). 191 files main
+  drifted on settle on another fixed point than main's second write: an outer `noWrap` literal keeps its fields glued
+  around the Allman comprehension, where main's second write had broken it because the first had printed it multi-line.
+
 ## FU4 (2026-10-19): typer step T2 — the ancestor table, the unification of plain types, a member's READ type
 
 - every closure walk of `MemberLookup` resolved each `supertypesRaw` link again (`resolveTypeRef(raw, cur.file, …)`), and
