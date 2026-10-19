@@ -625,8 +625,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * to refuse: unproven means keep the wrap.
 	 */
 	private static function totallyOrdered(node: QueryNode, types: Null<(QueryNode) -> Null<String>>): Bool {
-		return
-			node.children.length == 2 && totallyOrderedOperand(node.children[0], types) && totallyOrderedOperand(node.children[1], types);
+		return node.children.length == 2 && totallyOrderedOperand(node.children[0], types)
+			&& totallyOrderedOperand(node.children[1], types);
 	}
 
 	/**

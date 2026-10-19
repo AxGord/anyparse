@@ -100,7 +100,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ '{"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
 
 	/**
-	 * A Tactics Manager cascade, reduced: `arrayWrap` left to its two
+	 * A client-project cascade, reduced: `arrayWrap` left to its two
 	 * `exceedsMaxLineLength` runs — which resolve to `Group(IfBreak(…))`, the fit
 	 * pivot — under the same leading-break `callParameter` the object fixtures use.
 	 * Its fixture puts the array FIRST of four arguments, the position the fit
@@ -504,12 +504,12 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 */
 	public function testCallArgArrayBeforeOtherArgumentsHugs(): Void {
 		final src: String = 'class C {\n\tfunction build(): Void {\n\t\tfinal searchRow: Row = new Row([searchInput, new Row(['
-			+ 'drillsSelected, new Label(t(\'({x} allowed)\', 10087).replace(\'{x}\', \'12\'), new TextFormat('
+			+ 'modelsSelected, new Label(t(\'({x} allowed)\', 10087).replace(\'{x}\', \'12\'), new TextFormat('
 			+ 'Typography.fontNameItalic, 11, Colors.BLACK, false, true), boxWidth / 6, 30)], Std.int(boxWidth * 0.461), 30, '
 			+ 'MainAxisAlignment.SPACE_AROUND)], boxWidth, 31, MainAxisAlignment.SPACE_AROUND);\n\t}\n}';
 		final once: String = write(src, CALL_ARG_EXCEEDS_ARRAY);
 		Assert.isTrue(
-			once.indexOf('new Row([\n\t\t\tsearchInput,\n\t\t\tnew Row([\n\t\t\t\tdrillsSelected,') != -1,
+			once.indexOf('new Row([\n\t\t\tsearchInput,\n\t\t\tnew Row([\n\t\t\t\tmodelsSelected,') != -1,
 			'expected both arrays hugged to their own head, got:\n<$once>'
 		);
 		Assert.isTrue(
@@ -916,8 +916,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 		// one string. The source line differs from it by the space before its close
 		// brace, so no untransformed input can satisfy it.
 		Assert.isTrue(
-			flat != null && flat.indexOf('e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)}\n')
-				!= -1,
+			flat != null
+			&& flat.indexOf('e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)}\n') != -1,
 			'the control must keep the literal flat on the packed argument line:\n<$flat>'
 		);
 	}

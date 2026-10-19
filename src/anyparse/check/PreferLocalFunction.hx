@@ -458,9 +458,8 @@ final class PreferLocalFunction implements Check {
 	 * hoist would turn a call to another function into unbounded recursion.
 	 */
 	private static function readsName(fn: QueryNode, name: String, s: Seams): Bool {
-		return (
-			fn.kind == s.identKind || fn.kind == s.stringInterpKind
-		) && fn.name == name || fn.children.exists(c -> readsName(c, name, s));
+		return (fn.kind == s.identKind || fn.kind == s.stringInterpKind) && fn.name == name
+			|| fn.children.exists(c -> readsName(c, name, s));
 	}
 
 	/**

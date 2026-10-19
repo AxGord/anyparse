@@ -24,8 +24,8 @@ using Lambda;
 
 /**
  * Retypes an event class's `String` event-type constant to the project's TYPED event-type abstract —
- * `public static inline final CLOSE:String = 'close';` on `class PopupEvent extends Event` becomes
- * `public static inline final CLOSE:EventType<PopupEvent> = 'close';` — so a listener written for another event class
+ * `public static inline final CLOSE:String = 'close';` on `class ModalEvent extends Event` becomes
+ * `public static inline final CLOSE:EventType<ModalEvent> = 'close';` — so a listener written for another event class
  * stops compiling. Inert until the project declares its framework's event types in `apqlint.json`:
  *
  *     "typed-event-constant": {
@@ -53,8 +53,8 @@ using Lambda;
  * ## Mismatches are reported, not retyped
  *
  * The retype turns an inconsistency the program carries today into a compile error, and the inconsistency is the
- * finding worth having: a listener typed for another event class (`addEventListener(PopupEvent.CLOSE, (e:MouseEvent)
- * -> …)`) or an event dispatched as another class (`new Event(PopupEvent.CLOSE)`) is a latent bug — the listener is
+ * finding worth having: a listener typed for another event class (`addEventListener(ModalEvent.CLOSE, (e:MouseEvent)
+ * -> …)`) or an event dispatched as another class (`new Event(ModalEvent.CLOSE)`) is a latent bug — the listener is
  * handed an object that is not what it declares. Each one the rule can PROVE is reported as a `Warning` at the use,
  * naming the listener's parameter type or the dispatched class, and the constant is NOT retyped (`declineReason`).
  * Proof means: a listener that is a lambda with a written parameter type, a method of the enclosing
@@ -243,9 +243,8 @@ final class TypedEventConstant implements Check implements ConfigAware implement
 		final source: Null<String> = index.sourceOf(t.file.file);
 		final tree: Null<QueryNode> = source == null ? null : ParseGate.parseOrNull(plugin, source);
 		final node: Null<QueryNode> = tree == null ? null : findDecl(tree, decl.kind, decl.name);
-		return node != null && convertsWith(node, FROM_CLAUSE_KIND, seams.stringType) && convertsWith(
-			node, TO_CLAUSE_KIND, seams.stringType
-		);
+		return node != null && convertsWith(node, FROM_CLAUSE_KIND, seams.stringType)
+			&& convertsWith(node, TO_CLAUSE_KIND, seams.stringType);
 	}
 
 	/** The first node of `kind` named `name` in `node`'s subtree, or null. */

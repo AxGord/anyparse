@@ -156,8 +156,8 @@ final class SimplifyNegatedCompound implements Check {
 	 * resolver has to run before the site can be accepted or refused.
 	 */
 	private static function hasShape(node: QueryNode, s: Seams): Bool {
-		return
-			!s.opaqueKinds.contains(node.kind) && (s.support.negatedOperandOf(node) != null || node.children.exists(c -> hasShape(c, s)));
+		return !s.opaqueKinds.contains(node.kind)
+			&& (s.support.negatedOperandOf(node) != null || node.children.exists(c -> hasShape(c, s)));
 	}
 
 	/**

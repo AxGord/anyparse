@@ -23574,8 +23574,8 @@
 			"name": "M-NEGCOND-COMMENT-BEFORE-KEPT",
 			"type": "anyparse.check.NegatedCondition",
 			"method": "commentOutside",
-			"find": "SourceComments.hasCommentMarker(source, outer.from, inner.from) || ",
-			"replace": "",
+			"find": "return SourceComments.hasCommentMarker(source, outer.from, inner.from)",
+			"replace": "return false",
 			"note": "a comment between the `!` and its operand is not seen, and the positive rebuild drops it"
 		},
 		{

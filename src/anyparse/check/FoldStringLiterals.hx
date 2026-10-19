@@ -1028,8 +1028,8 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 * bare operands.
 	 */
 	private static function steerable(decomposition: Decomposition, from: Int, end: Int): Bool {
-		return
-			from > 0 || decomposition.startsBare || decomposition.locked.contains(end) || !isBareGroup(decomposition.segments, from, end);
+		return from > 0 || decomposition.startsBare || decomposition.locked.contains(end)
+			|| !isBareGroup(decomposition.segments, from, end);
 	}
 
 	/**

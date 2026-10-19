@@ -197,8 +197,8 @@ final class StructuralTypes {
 		final found: Null<{ member: MemberInfo, file: String }> = structuralMemberOf(typeName, fromFile, ITERATOR_MEMBER_NAME, []);
 		if (found == null) return false;
 		final ret: Null<String> = found.member.returnNominal;
-		return
-			ret != null && found.member.firstParamTypeSource == null && (ret == ITERATOR_TYPE_NAME || satisfiesIterator(ret, found.file));
+		return ret != null && found.member.firstParamTypeSource == null
+			&& (ret == ITERATOR_TYPE_NAME || satisfiesIterator(ret, found.file));
 	}
 
 	/**

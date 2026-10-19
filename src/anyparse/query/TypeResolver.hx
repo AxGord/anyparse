@@ -256,8 +256,8 @@ final class TypeResolver {
 		while (root.kind == fieldAccessKind && root.children.length == 1) root = root.children[0];
 		final rootName: Null<String> = root.name;
 		final rootSpan: Null<Span> = root.span;
-		return
-			root.kind == identKind && rootName != null && rootSpan != null && resolveBindingFrom(rootName, rootSpan, tree, shape) == null;
+		return root.kind == identKind && rootName != null && rootSpan != null
+			&& resolveBindingFrom(rootName, rootSpan, tree, shape) == null;
 	}
 
 	/**
@@ -582,7 +582,7 @@ final class TypeResolver {
 		tree: QueryNode, span: Span, metaName: String, disableArg: Null<String>, ?memo: RefsCache
 	): Bool {
 		// memoised per tree in the run's `memo` when the caller has one: a proof asks twice per operand, and each ask
-		// walked the whole file (~0.37 s of a TM `lint --all`)
+		// walked the whole file (~0.37 s of a client `lint --all`)
 		final scopes: Array<NullSafetyScope> = memo == null
 			? collectNullSafetyScopes(tree, metaName, disableArg)
 			: memo.nullSafetyScopes(tree, '$metaName\t$disableArg', () -> collectNullSafetyScopes(tree, metaName, disableArg));
