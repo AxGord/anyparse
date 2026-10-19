@@ -244,10 +244,13 @@ final class MoveToHelperRefs {
 		final binding: Null<Span> = hit.bindingSpan;
 		if (binding != null) {
 			final group: Null<MemberGroup> = byFrom[binding.from];
-			if (group != null) return memberRef(edits, hit, group, indexes, calls);
-			if (MoveMember.insideAnyCut(prep, binding.from) || prep.srcFile == prep.destFile) return null;
-			return 'the moved code reads "${hit.name}" at ${where(prep.srcFile, prep.srcSource, hit.span.from)}, a module-level '
-				+ 'declaration of ${prep.srcFile} the helper module cannot see bare';
+			return if (group != null)
+				memberRef(edits, hit, group, indexes, calls)
+			else if (MoveMember.insideAnyCut(prep, binding.from) || prep.srcFile == prep.destFile)
+				null
+			else
+				'the moved code reads "${hit.name}" at ${where(prep.srcFile, prep.srcSource, hit.span.from)}, a module-level '
+					+ 'declaration of ${prep.srcFile} the helper module cannot see bare';
 		}
 		final name: String = hit.name;
 		if (name == 'this') {
@@ -280,8 +283,9 @@ final class MoveToHelperRefs {
 		final prep: MovePrep = edits.prep;
 		final moved: Null<MovedMember> = prep.moved.find(m -> m.span.from == group.member.span?.from);
 		if (moved != null) {
-			if (moved.isStatic) return null;
-			return callRewrite(edits, indexes, prep.srcFile, hit.span.from, moved, hit.interpolated, '', edits.param, true, calls);
+			return moved.isStatic
+				? null
+				: callRewrite(edits, indexes, prep.srcFile, hit.span.from, moved, hit.interpolated, '', edits.param, true, calls);
 		}
 		final isStatic: Bool = group.modifiers.exists(mod -> mod.kind == 'Static');
 		if (!group.modifiers.exists(mod -> mod.kind == 'Public')) grantFor(edits, hit.span.from);

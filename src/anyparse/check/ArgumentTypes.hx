@@ -116,8 +116,12 @@ final class ArgumentTypes {
 		final a: Null<String> = coreName(given.text);
 		final p: Null<String> = coreName(wanted);
 		final widens: Map<String, Array<String>> = _shape.coreValueTypes?.widens ?? [];
-		if (a != null && p != null) return a == p || (widens[a] ?? []).contains(p) ? Fits : Misfits;
-		return a == null && p == null && given.file == wantedFile && sameNamedType(given.text, wanted, callerId, calleeId) ? Fits : MayFit;
+		return if (a != null && p != null)
+			a == p || (widens[a] ?? []).contains(p) ? Fits : Misfits
+		else if (a == null && p == null && given.file == wantedFile && sameNamedType(given.text, wanted, callerId, calleeId))
+			Fits
+		else
+			MayFit;
 	}
 
 	/**

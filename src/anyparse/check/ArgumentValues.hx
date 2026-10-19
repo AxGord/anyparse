@@ -302,8 +302,9 @@ final class ArgumentValues {
 	/** The value `!` of a value `value` makes: `TRUE` and `FALSE` swapped, `UNKNOWN` for one holding any other atom. */
 	private function negated(value: String): String {
 		final atoms: Null<Array<String>> = atomsOf(value);
-		if (atoms == null || atoms.exists(a -> a != TRUE && a != FALSE)) return UNKNOWN;
-		return spell([for (a in atoms) a == TRUE ? FALSE : TRUE], false);
+		return atoms == null || atoms.exists(a -> a != TRUE && a != FALSE)
+			? UNKNOWN
+			: spell([for (a in atoms) a == TRUE ? FALSE : TRUE], false);
 	}
 
 	/**
