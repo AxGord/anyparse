@@ -51,8 +51,8 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	private static final CONFIGS: Array<String> = [CFG_SAME, CFG_SAME_LADDER, CFG_KEEP, CFG_GROUP, CFG_TRAILING_COMMA];
 
 	/** No wrap rules at all: the cascade's defaults under `comprehensionFor: keep`. */
-	private static final CFG_PLAIN_KEEP: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, '
-		+ '"sameLine": {"comprehensionFor": "keep"}}';
+	private static final CFG_PLAIN_KEEP: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140}, "sameLine": {"comprehensionFor": "keep"}}';
 
 	/** An `expressionWrapping` rule: an expression paren opens by its own width probe, with no collapse gate. */
 	private static final CFG_EXPRESSION: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '

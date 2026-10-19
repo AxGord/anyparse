@@ -21,19 +21,19 @@ final class HxExprParenBrokenChainTest extends Test {
 	/** Columns a tab occupies under every config here. */
 	private static inline final TAB_WIDTH: Int = 4;
 
-	/** The compiled defaults: no `expressionWrapping` rule, 160 columns. */
-	private static final CFG_DEFAULT: String = '{}';
-
 	/** `maxLineLength` of the compiled defaults. */
 	private static inline final LIMIT_DEFAULT: Int = 160;
+
+	/** `maxLineLength` of `CFG_ARRAY_RULE`. */
+	private static inline final LIMIT_ARRAY_RULE: Int = 140;
+
+	/** The compiled defaults: no `expressionWrapping` rule, 160 columns. */
+	private static final CFG_DEFAULT: String = '{}';
 
 	/** An array rule that breaks a list one item per line from its item widths alone, at 140 columns. */
 	private static final CFG_ARRAY_RULE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 		+ '"maxLineLength": 140, "arrayWrap": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": '
 		+ '"anyItemLength >= n", "value": 30}], "type": "onePerLine"}]}}}';
-
-	/** `maxLineLength` of `CFG_ARRAY_RULE`. */
-	private static inline final LIMIT_ARRAY_RULE: Int = 140;
 
 	/** An array the compiled defaults break one item per line, inside a parenthesised chain that has to open. */
 	private static final ARRAY_OPERAND: String = 'class M {\n\tfunction f() {\n\t\tvar v = (\n\t\t\tbaseValue\n\t\t\t\t+ [\n'
