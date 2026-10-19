@@ -1,14 +1,17 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.CheckScan.NegationSeams;
 import anyparse.check.IfExpressionChain.Carried;
 import anyparse.check.IfExpressionChain.CarrySeat;
 import anyparse.check.IfExpressionChain.IfChain;
 import anyparse.check.IfExpressionChain.TernaryTail;
 import anyparse.query.BoolExprShape;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
@@ -36,11 +39,21 @@ using Lambda;
  *
  * ## Boundary with `prefer-ternary-return`
  *
- * Split by VALUE COUNT, not by spelling. Two leaf values are a ternary and
- * `prefer-ternary-return`'s; three or more are an if-expression chain and this rule's - in EITHER
- * spelling of the same control flow, the written `if / else if / … / else` chain and the
- * fall-through cascade `redundant-else-after-return` rewrites it into. A terminal value that is
- * itself a ternary spine counts its own leaves, so `if (c) return a; return p ? q : r;` is three.
+ * OWNERSHIP is split by VALUE COUNT. Two leaf values are a ternary and `prefer-ternary-return`'s;
+ * three or more are this rule's in EITHER spelling of the same control flow - the written
+ * `if / else if / … / else` chain and the fall-through cascade `redundant-else-after-return`
+ * rewrites it into. A terminal ternary spine counts its own leaves, so
+ * `if (c) return a; return p ? q : r;` is three.
+ *
+ * The REWRITE is narrower than the ownership. A value chain of three or more branches reads worse
+ * than the statements it replaces (the formatter keeps such a chain exploded,
+ * `expressionIfFitMaxBranches: 2`), so one is written only where the author already WROTE at least
+ * two conditions as an else-linked chain; the conditions a folded ternary contributes do not count,
+ * and a cascade - guard returns plus a final return - is never turned into one. Either spelling is
+ * rewritten when its three values MERGE into two (`mergeShape`): `if (m == null) return null;
+ * return x ? p : null;` becomes `return m != null && x ? p : null;`. An owned run that is not
+ * rewritten is not reported: its statements are the canon, and owning it is what keeps the
+ * pairwise march from building the same chain the long way.
  *
  * The other two rules defer by ASKING this one (`claimsChain` / `claimsCascade`), gates and all,
  * rather than mirroring the shape: a shape-only deferral silences them wherever this rule refuses
@@ -96,8 +109,8 @@ using Lambda;
  * spans, each cut back to its last token, with any carried comment welded into the branch
  * slot it came from. `Match` carries those TRIMMED SPANS rather than nodes, so the text
  * `buildEdit` copies and the region the comment classification reports as kept cannot drift
- * apart. Needs `ifStatementKinds`, `returnStatementKind`, `blockStmtKind` (any unset makes
- * it a no-op).
+ * apart. A merged run is written `return <cond> ? <then> : <else>;` instead (`mergedEdit`).
+ * Needs `ifStatementKinds`, `returnStatementKind`, `blockStmtKind` (any unset makes it a no-op).
  */
 @:nullSafety(Strict)
 final class PreferIfExpressionReturn implements Check {
@@ -109,9 +122,10 @@ final class PreferIfExpressionReturn implements Check {
 	private static inline final RETURN_VALUE_CHILD_COUNT: Int = 1;
 
 	/**
-	 * The fewest CONDITIONS a claim needs — three leaf values. Two values are a ternary and belong
+	 * The fewest CONDITIONS a claim needs - three leaf values. Two values are a ternary and belong
 	 * to `prefer-ternary-return`; the count is taken AFTER the terminal ternary spine is folded in,
-	 * so `if (c) return a; return p ? q : r;` reaches it with one written `if`.
+	 * so `if (c) return a; return p ? q : r;` reaches it with one written `if`. The same minimum, counted
+	 * over WRITTEN conditions only (`Match.writtenRungs`), is what a chain needs to be rewritten as one.
 	 */
 	private static inline final MIN_CHAIN_RUNGS: Int = 2;
 
@@ -122,6 +136,9 @@ final class PreferIfExpressionReturn implements Check {
 	 */
 	private static inline final MIN_COLLECT_BRANCHES: Int = 1;
 
+	/** A merge turns exactly THREE values into two; a longer run keeps its statements. */
+	private static inline final MERGED_VALUE_COUNT: Int = 3;
+
 	public function new() {}
 
 	public function id(): String {
@@ -129,7 +146,8 @@ final class PreferIfExpressionReturn implements Check {
 	}
 
 	public function description(): String {
-		return 'an if/else-if chain returning in every branch, collapsible to a single if-expression return';
+		return 'an if/else-if chain returning in every branch, collapsible to a single if-expression return, or a return run '
+			+ 'repeating one of its three values, collapsible to a single ternary return';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -156,33 +174,51 @@ final class PreferIfExpressionReturn implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
+		// ONE branch-aware parse for both arms, the projection `run` reports from: the cascade arm needs
+		// it for its statement lists, and the type probe a merge's negation asks answers only for nodes
+		// of the tree it was built over.
+		final parsed: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
+		if (parsed == null) return [];
+		// Re-bound to a non-null local: the narrowing above does not reach into the probe's closure.
+		final tree: QueryNode = parsed;
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
-		final edits: Array<{ span: Span, text: String }> =
-			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {
-				final m: Null<Match> = match(node, source, comments, seams, false);
-				return m == null ? null : buildEdit(m, source, span);
-			});
-		// The cascade arm cannot go through `applyBySpan`: its edit spans the head `if` THROUGH a
-		// later SIBLING, and a node handed back by kind carries no access to its siblings. It
-		// re-walks the tree the way `prefer-ternary-return` does, keyed on the same flagged spans.
-		final blockKinds: Array<String> = blockKindsOf(plugin);
-		final tree: Null<QueryNode> = blockKinds.length == 0 ? null : CheckScan.parseBranchAwareOrNull(plugin, source);
 		final flagged: Array<String> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span != null) flagged.push(IfExpressionChain.spanKey(span));
 		}
-		if (tree != null) collectCascadeFixes(tree, source, comments, seams, blockKinds, flagged, edits);
+		final file: String = violations.length == 0 ? '' : violations[0].file;
+		var types: Null<(QueryNode) -> Null<String>> = null;
+		var asked: Bool = false;
+		final emit: Emit = {
+			plugin: plugin,
+			logic: plugin.booleanLogicSupport(),
+			types: () -> {
+				if (!asked) {
+					asked = true;
+					types = CheckScan.typeNominalResolver(source, plugin, tree, file, index);
+				}
+				return types;
+			}
+		};
+		final edits: Array<{ span: Span, text: String }> = [];
+		collectChainFixes(tree, source, comments, seams, flagged, edits, emit, null);
+		// The cascade arm's edit spans the head `if` THROUGH a later SIBLING, so it is keyed on the
+		// statement list rather than on the head node alone.
+		final blockKinds: Array<String> = blockKindsOf(plugin);
+		if (blockKinds.length > 0) collectCascadeFixes(tree, source, comments, seams, blockKinds, flagged, edits, emit);
 		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**
-	 * Whether this check claims the else-linked chain headed by `head` — the EXACT question, every
-	 * gate included, not its shape. `redundant-else-after-return` asks it before flagging: its
-	 * de-nest takes a chain of valued returns away from a rule whose single fix IS the canon, and
-	 * the composed `--fix` then reaches the same text the long way, through the three-rung ternary
-	 * `prefer-if-expression-chain` condemns. Asking the shape instead would silence that rule on
-	 * every site THIS one refuses on a comment — a finding lost with no replacement.
+	 * Whether this check REWRITES the else-linked chain headed by `head` - the EXACT question, every
+	 * gate included, not its shape. `redundant-else-after-return` asks it before flagging: its de-nest
+	 * takes a chain of valued returns away from a rule whose single fix IS the canon, and the composed
+	 * `--fix` then reaches the same text the long way, through the three-rung ternary
+	 * `prefer-if-expression-chain` condemns. Asking the shape instead would silence that rule on every
+	 * site THIS one refuses on a comment - a finding lost with no replacement. A chain this rule owns
+	 * but leaves alone (two written branches and a folded ternary) is not claimed: the de-nest turns it
+	 * into the cascade whose statements are the canon.
 	 */
 	public static function claimsChain(
 		head: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, shape: RefShape
@@ -190,16 +226,21 @@ final class PreferIfExpressionReturn implements Check {
 		// March-gated where the REPORT is not: this rule flags every valued-return chain and its own
 		// edit is deferred by the de-nest's, so gating the report would lose a finding. The CLAIM is
 		// what silences the other rule, and it may only silence where this rule reaches the same text
-		// the march did.
+		// the march did - and only where it REWRITES: a chain it leaves alone keeps the de-nest.
 		final seams: Null<Seams> = readSeams(shape);
-		return seams != null && match(head, source, comments, seams, true) != null;
+		if (seams == null) return false;
+		final m: Null<Match> = match(head, source, comments, seams, true);
+		return m != null && rewritesChain(m);
 	}
 
 	/**
-	 * Whether this check claims the fall-through cascade starting at `kids[at]` — the same exact
-	 * question for the other spelling. `prefer-ternary-return` asks it before flagging a pair: a
-	 * pair that is the TAIL of a claimed cascade is one rung of a rewrite this rule performs whole,
-	 * and collapsing it alone writes the ternary chain that has to be unrolled again afterwards.
+	 * Whether this check OWNS the fall-through cascade starting at `kids[at]` - the same exact question
+	 * for the other spelling. `prefer-ternary-return` asks it before flagging a pair: a pair that is the
+	 * TAIL of an owned cascade is one rung of a run this rule decides whole, and collapsing it alone
+	 * starts the march into the ternary chain that has to be unrolled again afterwards.
+	 *
+	 * Owned is not rewritten: the answer is true for a run whose values do not merge, which this rule
+	 * leaves as its statements (see the type doc), so the deferral is what keeps those statements.
 	 */
 	public static function claimsCascade(
 		kids: Array<QueryNode>, at: Int, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, shape: RefShape
@@ -232,6 +273,15 @@ final class PreferIfExpressionReturn implements Check {
 	}
 
 	/**
+	 * Whether a matched chain is REWRITTEN rather than only owned: its values merge into two, or the
+	 * author WROTE at least two conditions as an else-linked chain. Branches the fold of a terminal
+	 * ternary contributes are not written ones, so they never make a chain on their own.
+	 */
+	private static inline function rewritesChain(m: Match): Bool {
+		return m.merge != null || m.writtenRungs >= MIN_CHAIN_RUNGS;
+	}
+
+	/**
 	 * The statement-list kinds the cascade arm walks, or an empty list when the grammar exposes no
 	 * `ControlFlowSupport`. A cascade is a SIBLING relation, so with no statement-list model there
 	 * is nothing to read and the else-chain arm carries the rule alone.
@@ -257,14 +307,15 @@ final class PreferIfExpressionReturn implements Check {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
 				if (i > 0 && isReturnRung(kids[i - 1], s)) continue; // not a run HEAD
-				if (cascadeMatch(kids, i, source, comments, s) == null) continue;
+				// Claimed is not reported: a cascade is rewritten only when its values MERGE into two.
+				if (cascadeMatch(kids, i, source, comments, s)?.merge == null) continue;
 				final span: Null<Span> = kids[i].span;
 				if (span != null) out.push({
 					file: file,
 					span: span,
 					rule: RULE_ID,
 					severity: Severity.Info,
-					message: 'this if/return cascade can be a single if-expression return'
+					message: 'this if/return cascade repeats a value and can be a single ternary return'
 				});
 			}
 		}
@@ -278,7 +329,7 @@ final class PreferIfExpressionReturn implements Check {
 	 */
 	private static function collectCascadeFixes(
 		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, blockKinds: Array<String>,
-		flagged: Array<String>, edits: Array<{ span: Span, text: String }>
+		flagged: Array<String>, edits: Array<{ span: Span, text: String }>, emit: Emit
 	): Void {
 		if (blockKinds.contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;
@@ -292,10 +343,29 @@ final class PreferIfExpressionReturn implements Check {
 				if (endSpan == null) continue;
 				final region: Span = new Span(headSpan.from, endSpan.to);
 				final m: Null<Match> = matchChain(chain, region, source, comments, s, true);
-				if (m != null) edits.push(buildEdit(m, source, region));
+				if (m != null && m.merge != null) edits.push(buildEdit(m, source, region, s, emit));
 			}
 		}
-		for (c in node.children) collectCascadeFixes(c, source, comments, s, blockKinds, flagged, edits);
+		for (c in node.children) collectCascadeFixes(c, source, comments, s, blockKinds, flagged, edits, emit);
+	}
+
+	/**
+	 * Mirror `walk`: collect one replacement edit per flagged chain head, over the same branch-aware
+	 * tree, so the node a merge negates is one the type probe was built for.
+	 */
+	private static function collectChainFixes(
+		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, flagged: Array<String>,
+		edits: Array<{ span: Span, text: String }>, emit: Emit, parent: Null<QueryNode>
+	): Void {
+		final span: Null<Span> = node.span;
+		if (
+			span != null && s.ifKinds.contains(node.kind) && !IfExpressionChain.isElseIfLink(node, parent, s.ifKinds)
+			&& flagged.contains(IfExpressionChain.spanKey(span))
+		) {
+			final m: Null<Match> = match(node, source, comments, s, false);
+			if (m != null && rewritesChain(m)) edits.push(buildEdit(m, source, span, s, emit));
+		}
+		for (c in node.children) collectChainFixes(c, source, comments, s, flagged, edits, emit, node);
 	}
 
 	/** Bundle the required `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -305,6 +375,7 @@ final class PreferIfExpressionReturn implements Check {
 		final returnKind: Null<String> = shape.returnStatementKind;
 		if (returnKind == null) return null;
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
+		final boolLitKind: Null<String> = shape.boolLitKind;
 		return blockStmtKind == null ? null : {
 			ifKinds: ifKinds,
 			returnKind: returnKind,
@@ -312,7 +383,9 @@ final class PreferIfExpressionReturn implements Check {
 			conditionalKinds: ShapeVocab.ifKinds(shape),
 			ternaryKind: shape.ternaryKind,
 			parenKind: shape.parenKind,
-			shape: shape
+			shape: shape,
+			negation: NegationScan.negationSeams(shape),
+			mergeValueKinds: (shape.caseLiteralKinds ?? []).filter(k -> k != boolLitKind).concat([shape.identKind])
 		};
 	}
 
@@ -323,16 +396,16 @@ final class PreferIfExpressionReturn implements Check {
 	): Void {
 		if (s.ifKinds.contains(node.kind) && !IfExpressionChain.isElseIfLink(node, parent, s.ifKinds)) {
 			final m: Null<Match> = match(node, source, comments, s, false);
-			if (m != null) {
-				final span: Null<Span> = node.span;
-				if (span != null) out.push({
-					file: file,
-					span: span,
-					rule: RULE_ID,
-					severity: Severity.Info,
-					message: 'this if/else-if return chain can be a single if-expression return'
-				});
-			}
+			final span: Null<Span> = node.span;
+			if (m != null && rewritesChain(m) && span != null) out.push({
+				file: file,
+				span: span,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: m.merge == null
+					? 'this if/else-if return chain can be a single if-expression return'
+					: 'this if/else-if return chain repeats a value and can be a single ternary return'
+			});
 		}
 		for (c in node.children) walk(c, out, file, source, comments, s, node);
 	}
@@ -386,8 +459,9 @@ final class PreferIfExpressionReturn implements Check {
 		final headReturnSpan: Null<Span> = chain.branches[0].stmt.span;
 		if (headReturnSpan == null) return null;
 		final values: Array<QueryNode> = [];
+		final conds: Array<QueryNode> = [];
 		final pairs: Array<{ cond: Span, value: Span }> = [];
-		if (!collectRungs(chain.branches, source, comments, s, pairs, values)) return null;
+		if (!collectRungs(chain.branches, source, comments, s, pairs, conds, values)) return null;
 		final returned: Null<QueryNode> = returnValue(chain.terminal, s);
 		if (returned == null) return null;
 		final returnedSpan: Null<Span> = returned.span;
@@ -399,7 +473,7 @@ final class PreferIfExpressionReturn implements Check {
 		// nothing to report it.
 		final tail: TernaryTail = IfExpressionChain.unrollTernaryTail(returned, s.ternaryKind, s.parenKind);
 		if (tail.pairs.length > 0 && comments.exists(tok -> tok.from >= returnedSpan.from && tok.to <= returnedSpan.to)) return null;
-		if (!collectFoldedRungs(tail.pairs, source, comments, s, pairs, values)) return null;
+		if (!collectFoldedRungs(tail.pairs, source, comments, s, pairs, conds, values)) return null;
 		if (pairs.length < MIN_CHAIN_RUNGS) return null;
 		final terminal: QueryNode = tail.terminal;
 		values.push(terminal);
@@ -434,7 +508,10 @@ final class PreferIfExpressionReturn implements Check {
 			prefix: prefix,
 			pairs: pairs,
 			terminalValue: terminalValue,
-			carried: slots
+			carried: slots,
+			conds: conds,
+			writtenRungs: chain.branches.length,
+			merge: mergeShape(values, region, source, comments, s)
 		};
 	}
 
@@ -475,11 +552,84 @@ final class PreferIfExpressionReturn implements Check {
 	}
 
 	/** Build the `return if (c1) a else if (c2) b … else n;` edit replacing the whole head-`if` span. */
-	private static function buildEdit(m: Match, source: String, span: Span): { span: Span, text: String } {
+	private static function buildEdit(m: Match, source: String, span: Span, s: Seams, emit: Emit): { span: Span, text: String } {
+		final merge: Null<MergeShape> = m.merge;
+		if (merge != null) return mergedEdit(m, merge, source, span, s, emit);
 		final built: Array<{ cond: String, value: String }> = [
 			for (p in m.pairs) { cond: text(source, p.cond), value: IfExpressionChain.spanText(source, p.value, m.carried) }
 		];
 		return { span: span, text: IfExpressionChain.buildText(text(source, m.prefix), built, text(source, m.terminalValue)) };
+	}
+
+	/**
+	 * Build the merged `return <cond> ? <then> : <else>;` edit replacing `span`. `Leading` joins the
+	 * two conditions with `||` and returns the repeated value first; `Outer` negates the first
+	 * condition (`NegationScan`'s engine, the one the `guard-*` family inverts with, so `m == null`
+	 * flips to `m != null`) and joins it with `&&`. Every piece is a `ParenGuard` hole: a condition
+	 * that sat in an `if (…)` or `?:` slot may bind looser than the operator it now meets, and gains a
+	 * pair exactly there.
+	 */
+	private static function mergedEdit(
+		m: Match, merge: MergeShape, source: String, span: Span, s: Seams, emit: Emit
+	): { span: Span, text: String } {
+		final first: String = switch merge {
+			case Leading: text(source, m.pairs[0].cond);
+			case Outer: NegationScan.negateConditionText(m.conds[0], source, s.negation, emit.logic, emit.types());
+		};
+		final pieces: Array<String> = [
+			first,
+			merge == Leading ? ' || ' : ' && ',
+			text(source, m.pairs[1].cond),
+			' ? ',
+			text(source, merge == Leading ? m.pairs[0].value : m.pairs[1].value),
+			' : ',
+			text(source, m.terminalValue)
+		];
+		final head: String = text(source, m.prefix);
+		final holes: Array<Span> = [];
+		var at: Int = head.length;
+		for (i => piece in pieces) {
+			if (i % 2 == 0) holes.push(new Span(at, at + piece.length));
+			at += piece.length;
+		}
+		final guarded: Array<{ span: Span, text: String }> = ParenGuard.guard(
+			source,
+			[{ span: span, text: '$head${pieces.join('')};', holes: holes }],
+			emit.plugin
+		);
+		return { span: span, text: guarded[0].text };
+	}
+
+	/**
+	 * How the three values of a matched return run merge into TWO, or null when they do not.
+	 *
+	 * Only the two merges that keep every evaluation exactly as the statements had it are taken, so
+	 * neither needs the conditions to be pure: `Leading` (`v1 == v2`) evaluates `c2` only when `c1`
+	 * is false, as the second guard did, and `Outer` (`v1 == v3`, `!c1 && c2`) the same. A repeated
+	 * MIDDLE value (`v2 == v3`) would drop `c2`'s evaluation and is refused — it needs a purity proof
+	 * nothing here owns, and the source shape (a guard that changes no outcome) is rare.
+	 *
+	 * The repeated value must be on the positive list `mergeValueKinds` — a non-boolean literal or a
+	 * name. Equal TEXT is one value because the statements are siblings, so nothing rebinds a name
+	 * between them; what equal text does NOT promise is one TYPE, since a branch's value is typed under
+	 * the narrowing its own condition gave it and the merged one is not. A literal or a bare name does
+	 * not depend on that narrowing; a field read or a call can (`m.x` under `m != null`), so it stays
+	 * off the list. A boolean literal stays off too: a cascade of them is the march's, and
+	 * `simplify-boolean-*` reduces it further than a merge does.
+	 *
+	 * Fail-closed on ANY comment in the replaced region: the rebuild drops one value and reorders the
+	 * rest, so no slot keeps a comment's position.
+	 */
+	private static function mergeShape(
+		values: Array<QueryNode>, region: Span, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
+	): Null<MergeShape> {
+		if (values.length != MERGED_VALUE_COUNT) return null;
+		if (comments.exists(tok -> tok.to > region.from && tok.from < region.to)) return null;
+		if (!marchable(values, s) || !s.mergeValueKinds.contains(values[0].kind)) return null;
+		final repeated: Null<String> = valueText(values[0], source, comments);
+		if (repeated == null) return null;
+		if (valueText(values[1], source, comments) == repeated) return Leading;
+		return valueText(values[2], source, comments) == repeated ? Outer : null;
 	}
 
 	/**
@@ -495,14 +645,16 @@ final class PreferIfExpressionReturn implements Check {
 	 */
 	private static function collectRungs(
 		branches: Array<{ cond: QueryNode, stmt: QueryNode }>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
-		s: Seams, pairs: Array<{ cond: Span, value: Span }>, values: Array<QueryNode>
+		s: Seams, pairs: Array<{ cond: Span, value: Span }>, conds: Array<QueryNode>, values: Array<QueryNode>
 	): Bool {
 		for (b in branches) {
 			final v: Null<QueryNode> = returnValue(b.stmt, s);
 			if (v == null) return false;
 			values.push(v);
 			if (IfExpressionChain.holdsElseLessConditional(v, s.conditionalKinds)) return false;
-			final rawCond: Null<Span> = BoolExprShape.unwrapParens(b.cond, s.parenKind).span;
+			final cond: QueryNode = BoolExprShape.unwrapParens(b.cond, s.parenKind);
+			conds.push(cond);
+			final rawCond: Null<Span> = cond.span;
 			final rawValue: Null<Span> = v.span;
 			if (rawCond == null || rawValue == null) return false;
 			pairs.push({
@@ -520,11 +672,12 @@ final class PreferIfExpressionReturn implements Check {
 	 */
 	private static function collectFoldedRungs(
 		folded: Array<{ cond: QueryNode, value: QueryNode }>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
-		s: Seams, pairs: Array<{ cond: Span, value: Span }>, values: Array<QueryNode>
+		s: Seams, pairs: Array<{ cond: Span, value: Span }>, conds: Array<QueryNode>, values: Array<QueryNode>
 	): Bool {
 		for (rung in folded) {
 			if (IfExpressionChain.holdsElseLessConditional(rung.value, s.conditionalKinds)) return false;
 			values.push(rung.value);
+			conds.push(rung.cond);
 			final rawCond: Null<Span> = rung.cond.span;
 			final rawValue: Null<Span> = rung.value.span;
 			if (rawCond == null || rawValue == null) return false;
@@ -547,6 +700,14 @@ final class PreferIfExpressionReturn implements Check {
 		return stmt != null && returnValue(stmt, s) != null;
 	}
 
+	/** The text of `value` cut back to its last token, or null when it carries no span. */
+	private static function valueText(
+		value: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+	): Null<String> {
+		final span: Null<Span> = value.span;
+		return span == null ? null : text(source, IfExpressionChain.tokenSpan(span, source, comments));
+	}
+
 }
 
 /** The `RefShape` kinds `PreferIfExpressionReturn` reads. */
@@ -560,6 +721,12 @@ private typedef Seams = {
 
 	/** Read only by `marchable`, which mirrors gates `PreferTernaryReturn` states over the raw shape. */
 	var shape: RefShape;
+
+	/** The kinds `NegationScan` negates a merged `Outer` run's first condition with. */
+	var negation: NegationSeams;
+
+	/** The positive list of value kinds a merge may repeat: every non-boolean case literal, plus a bare name. */
+	var mergeValueKinds: Array<String>;
 }
 
 /**
@@ -574,4 +741,32 @@ private typedef Match = {
 	var pairs: Array<{ cond: Span, value: Span }>;
 	var terminalValue: Span;
 	var carried: Carried;
+
+	/** Each rung's condition NODE, paren-unwrapped, parallel to `pairs` — what a merge negates. */
+	var conds: Array<QueryNode>;
+
+	/** How many conditions the author WROTE as an else-linked chain; the folded ternary's are not counted. */
+	var writtenRungs: Int;
+
+	/** How the values merge into two, or null when they do not. */
+	var merge: Null<MergeShape>;
+}
+
+/**
+ * How a three-value return run merges into a two-value ternary: `Leading` when the first two
+ * values repeat (`c1 || c2 ? v1 : v3`), `Outer` when the first and the last do (`!c1 && c2 ? v2 : v1`).
+ */
+private enum MergeShape {
+	Leading;
+	Outer;
+}
+
+/**
+ * What a merged edit needs beyond the match: the plugin `ParenGuard` re-parses with, the grammar's
+ * negation engine, and the lazily-built operand-type probe that licenses flipping an ordered comparison.
+ */
+private typedef Emit = {
+	var plugin: GrammarPlugin;
+	var logic: Null<BooleanLogicSupport>;
+	var types: () -> Null<(QueryNode) -> Null<String>>;
 }

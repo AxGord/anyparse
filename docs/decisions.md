@@ -4523,3 +4523,31 @@ decided the question; it may not become a record of runs.
   `HxCallArgLambdaBodyChainIndentTest`'s two non-discriminating pins.
 - client: 3 files / 4 hunks, each this defect (`ItemListProjectsShare.hx:171`, `BucketMutationOffMainTest.hx:109/153`,
   `ItemListThumbnailTest.hx:106`). Arm `M-STMT-LIST-CALLARG-BARRIER`.
+
+## FU6 (2026-10-19): `prefer-if-expression-return` owns a return run of three values, rewrites it only when it merges
+
+- The N55 self-fix turned `if (member == null) return null; return (isGet ? …) ? property : null;` into a six-line
+  `return if … null else if … property else null;`: a guard return plus a final ternary was counted as three values and
+  rewritten as a value chain, `null` spelled twice. Four more sites took the same road (`ArgumentTypes.fit`,
+  `EdgeConditions.factsOf`, `OperandCallees.callParams`, `MoveToHelperRefs`). A value chain of three or more branches reads
+  worse than the statements (the formatter's own `expressionIfFitMaxBranches: 2` keeps one exploded), so:
+- OWNERSHIP is unchanged: three or more values are this rule's in either spelling (`claimsCascade` answers as before).
+  It has to stay: without it `prefer-ternary-return` marches the cascade pairwise into the three-leaf ternary that
+  `prefer-if-expression-chain` then turns into the very chain refused here.
+- The REWRITE is narrower. (b) A run whose three values carry TWO merges into one ternary, in either spelling:
+  `v1 == v2` → `c1 || c2 ? v1 : v3`, `v1 == v3` → `!c1 && c2 ? v2 : v1` (`NegationScan` negates, `ParenGuard` adds the
+  pairs). Both keep every evaluation exactly where the statements had it — `c2` runs only when `c1` is false — so no
+  purity proof is needed; `v2 == v3` would drop `c2`'s evaluation and is refused. The repeated value is on a POSITIVE
+  list (a non-boolean case literal or a bare name): equal text is one value between sibling statements, but not one type
+  — each branch is typed under its own condition's narrowing — and a literal or a name is what does not depend on it.
+  Any comment in the region refuses the merge. (a) Otherwise a chain is written only where the author WROTE at least
+  two conditions as an else-linked chain; a folded ternary's conditions do not count, a cascade never becomes one, and an
+  owned run left alone is not reported (its statements are the canon). `claimsChain` now means "rewrites", so a
+  two-branch chain with a ternary tail keeps `redundant-else-after-return`'s de-nest.
+- Why both: (a) alone would leave `accessedProperty` as its two statements when one line says it better; (b) alone
+  would still chain every non-merging guard cascade. A merge is limited to three values: a longer guard ladder that
+  repeats a value (`if (a) return null; if (b) return null; if (c) return null; return x;`) reads as the ladder it is,
+  and is left to it.
+- anyparse src: the five N55 chains restored to statements (`ArgumentTypes.fit` reworded so the two null tests are not
+  repeated); the rule's own `--fix` then writes `return member != null && (isGet ? member.hasGetter : member.hasSetter)
+  ? property : null;` and changes nothing else — branch `feat/fu-FU6`
