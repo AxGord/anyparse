@@ -136,7 +136,7 @@ typedef MemberInfo = {
 	 * The one fact a `using` STATIC EXTENSION needs that no other field here carries. `using M`
 	 * makes `M.m(first, …)` reachable as `<recv>.m(…)` ONLY for a receiver the first parameter
 	 * accepts, so nothing may take `returnNominal` as such a call's type without matching the
-	 * receiver against THIS source first — `extensionReturnNominal` is that join.
+	 * receiver against THIS source first — `StructuralTypes.receiverFitsParameter` is that join.
 	 */
 	var firstParamTypeSource: Null<String>;
 
@@ -474,6 +474,14 @@ typedef TypeDeclInfo = {
 	 */
 	var bringsExtensions: Bool;
 
+	/**
+	 * The paths the declaration's extension metadata writes (`ExecutionShape.extensionTypeMetaNames`, Haxe `@:using(a.B,
+	 * c.D)`), every argument of every such annotation in source order — each a module or `Module.Sub` path the compiler
+	 * reads ABSOLUTELY, never against the declaring package. Null when an argument is not a dotted path, and for a
+	 * declaration two `#if` branches of which write different lists.
+	 */
+	var extensionTypesRaw: Null<Array<String>>;
+
 	/** This type's directly-declared members (name + getter-property flag), for type-aware purity. */
 	var members: Array<MemberInfo>;
 
@@ -628,6 +636,7 @@ typedef ResolvedType = {
 @:allow(anyparse.query.StructuralTypes)
 @:allow(anyparse.query.ValueNameBinding)
 @:allow(anyparse.query.Unification)
+@:allow(anyparse.query.StaticExtensions)
 final class SymbolIndex {
 
 	/** The grammar kind a `class` declaration projects as. */
@@ -639,11 +648,17 @@ final class SymbolIndex {
 	/** The grammar kind an `enum` declaration projects as: a value of it unifies with no other declaration (`Unification`). */
 	private static final ENUM_DECL_KIND: String = 'EnumDecl';
 
+	/** The grammar kind an `interface` declaration projects as: every supertype link it writes is an interface. */
+	private static final INTERFACE_DECL_KIND: String = 'InterfaceDecl';
+
+	/** `MemberInfo.visibility` of a member written `public` — the modifier as written. */
+	private static final PUBLIC_VISIBILITY: String = 'public';
+
 	/**
 	 * The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression.
 	 * The decl kinds free of implicit-conversion / aliasing semantics — see `resolvesToPlainNominal`.
 	 */
-	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, 'InterfaceDecl', ENUM_DECL_KIND];
+	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, INTERFACE_DECL_KIND, ENUM_DECL_KIND];
 
 	/**
 	 * The name -> DECLARATION layer: which files declare a name, and which
@@ -715,7 +730,8 @@ final class SymbolIndex {
 		traits = new TypeTraits(files, sources, refs);
 		final shape: RefShape = plugin.refShape();
 		values = new ValueNameBinding(
-			refs, shape.execution?.enumConstructorKinds ?? [], (shape.bareConstructorTypeKinds ?? []).concat(shape.aliasingDeclKinds ?? [])
+			refs, typing.ancestors, shape.execution?.enumConstructorKinds ?? [],
+			(shape.bareConstructorTypeKinds ?? []).concat(shape.aliasingDeclKinds ?? [])
 		);
 	}
 

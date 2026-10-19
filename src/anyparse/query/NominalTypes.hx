@@ -7,6 +7,8 @@ import anyparse.query.NodeShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypingService.TypingHost;
@@ -730,48 +732,24 @@ final class NominalTypes {
 	}
 
 	/**
-	 * The return nominal a `using`-brought STATIC EXTENSION gives at `<recv>.<method>(…)`, where
-	 * `recv` carries the type `receiver` — the arm that runs only after the receiver's own type has
-	 * been proven NOT to declare `method`. Null everywhere it is unsure, so a caller keeps its
-	 * conservative branch exactly as it did before this arm existed.
+	 * The return nominal a STATIC EXTENSION gives at `<recv>.<method>(…)`, where `recv` carries the type `receiver` — what
+	 * the typing service binds there (`StaticExtensions.binding`) on the declaration `receiver` names in `file`: a member of
+	 * the receiver's type binds first (verified against the compiler: under `using E`, a `d.tag()` on a `D` declaring
+	 * `tag():Void` binds the MEMBER and errors as `Void should be Dynamic`, never `E.tag(d:D):String`), then the type's own
+	 * and inherited `@:using`, then the file's `using`s in the compiler's order, each candidate's first parameter unified
+	 * with the receiver and one that rejects it passed over. The bound member's written return, or null where the service
+	 * proves no binding or the member writes none.
 	 *
-	 * The gate is `MemberLookup.typeProvablyLacksMember`, and nothing weaker will do. A real member
-	 * BEATS an extension — verified against the compiler: under `using E`, a `d.tag()` on a `D`
-	 * declaring `tag():Void` binds to the MEMBER and errors as `Void should be Dynamic`, never to
-	 * `E.tag(d:D):String`. The member-side lookup that ran first (`returnNominalOf`) cannot stand in
-	 * for that proof, because it answers null for a `Void` / inference-typed member exactly as it
-	 * does for an absent one — reading its null as "no such member" would hand the extension's type
-	 * to a call the extension never receives. Only the POSITIVE proof of absence separates the two,
-	 * and it fails closed for a receiver whose type, or any type in its supertype closure, the run
-	 * does not index.
-	 *
-	 * The second gate is `MemberLookup.closureFreeOfExtensionTypes`: a type's own `@:using`, on the
-	 * receiver's type or any supertype, binds ahead of every `using` of the file (4.3.7), so a
-	 * closure that brings extensions — or one the index cannot read link by link — answers null.
-	 *
-	 * Which `using` supplies the call is the shared walk's (`ValueNameBinding.extensionDeclaration`):
-	 * the LAST one whose module declares a static `method` on any of its types (`using A; using B;`
-	 * binds `B.tag`, the reverse binds `A.tag`). Its first parameter must then ACCEPT the receiver
-	 * (`StructuralTypes.extensionReturnNominal`), and a NO there ends the walk rather than trying
-	 * the earlier `using`s: the compiler passes over only a parameter that provably rejects the
-	 * receiver, while `<T>(s:T)` or `(s:Dynamic)` bind it, and no nominal proof tells those apart.
-	 *
-	 * Deliberately unreachable in SHALLOW mode: `chain` is the opt-in every deep arm sits behind,
-	 * and this one carries the same obligation as its siblings — it resolves not merely MORE but
-	 * type-CORRECTLY, each of the three compiler-verified rules above written as its own gate.
+	 * Deliberately unreachable in SHALLOW mode: `chain` is the opt-in every deep arm sits behind, and this one carries the
+	 * same obligation as its siblings — it resolves not merely MORE but type-CORRECTLY.
 	 */
 	private static function staticExtensionNominal(
 		receiver: String, method: String, chain: Null<ChainTypeContext>, index: SymbolIndex, file: String
 	): Null<String> {
-		if (chain == null) return null;
-		final usings: Array<String> = chain.usings;
-		if (
-			usings.length == 0 || !index.typing.members.typeProvablyLacksMember(receiver, method, file)
-			|| !index.typing.members.closureFreeOfExtensionTypes(receiver, file)
-		)
-			return null;
-		final declared: Null<HostedMembers> = index.values.extensionDeclaration(usings, method);
-		return declared == null ? null : index.typing.structural.extensionReturnNominal(declared, receiver, file);
+		final fi: Null<FileInfo> = chain == null ? null : index.fileInfo(file);
+		final start: Null<ResolvedType> = fi == null ? null : index.refs.resolveStartType(receiver, file);
+		final declared: Null<HostedMembers> = fi == null || start == null ? null : index.typing.extensions.binding(fi, start, method);
+		return declared?.members[0].returnNominal;
 	}
 
 	/**
@@ -1099,14 +1077,6 @@ typedef ChainTypeContext = {
 	/** Source text of the file being probed — the for-binding arm reads the loop HEADER text to refuse the key-value form. */
 	final source: String;
 
-	/**
-	 * The module paths of every `using` the file declares, in DECLARATION order
-	 * (`UsingScan.extensionUsings`). The static-extension arm reads them BACKWARDS, because Haxe
-	 * resolves a static extension in reverse declaration order — the later `using` wins.
-	 * An empty array switches the arm off, which is what a consumer that has not thought about
-	 * static extensions should pass, and what a file with a `#if`-guarded `using` gets.
-	 */
-	final usings: Array<String>;
 
 	/** `GrammarPlugin.typeSyntax` — how the deep mode reads a written type's wrapper and arguments. */
 	final typeSyntax: TypeSyntaxReader;

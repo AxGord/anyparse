@@ -22,6 +22,7 @@ its hosts are functions of their arguments, and every remembered answer is insta
 | `unification` (`Unification`) | signature | whether a value of one plain type unifies with another (`tUnification.ml`) |
 | `members` (`MemberLookup`) | signature | what a named type declares or inherits, with what declared type, return, visibility, accessor shape; the type a READ of a member carries (`memberReadType`) |
 | `structural` (`StructuralTypes`) | signature | unification with an anonymous structure, membership of a builtin structural type (`Iterable`, `Iterator`) |
+| `extensions` (`StaticExtensions`) | body | which static extension `recv.name` binds in a file on a receiver of a declaration (`fields.ml`), and what a file's `using` statements bring |
 | `expectations` (`ExpectedTypes`) | body | the type a value is expected to have where it is written, and through it an untyped lambda parameter's |
 | `typeWalk` + `TypingHost` | body | the type an expression carries: the walk owns the shapes, a host answers each in its own currency |
 | `cache` (`QueryCache`) | — | the remembered answers, one `DeclarationQuery` table per question |
@@ -39,7 +40,8 @@ operand binder's (`OperandBinder`, what a written type BINDS to, a `TypeNameBind
 
 `DeclarationKey` names the declaration a question is about: the declaring file and the declaration's offset there, plus
 the member name for a question about a member of that type (`ofType`, `ofMember`), or both declarations of a question
-about two (`ofPair`: does `a` unify with `b`, what does `a`'s chain pass to `b`). It is never a simple name — two
+about two (`ofPair`: does `a` unify with `b`, what does `a`'s chain pass to `b`), or the file a body question is asked in
+with the declaration and member it is about (`ofUse`: what `recv.name` binds there). It is never a simple name — two
 namesakes in two packages, or two types of one module, are two keys — and it never names a configuration: the index
 reads every `#if` branch and folds a type declared in several branches into one declaration (`withAlternate`), so one
 declaration is one key and every one of a project's compiler configurations asks the same table.
@@ -47,7 +49,8 @@ declaration is one key and every one of a project's compiler configurations asks
 A question may be cached only when its answer is a pure function of its key and the immutable index. Today that is the
 four fresh-walk roots of `MemberLookup`: `lacksMember` (`lacksMemberClosure`), `declaredMember`
 (`declaredMemberClosure`), `memberTypeSource` (`memberTypeSourceWalk`) and `freeOfExtensionTypes`; and the T2 tables:
-`ancestorLinks` and `aliasTargets` (by `ofType`), `ancestorArguments` and `unifies` (by `ofPair`). `memberReadType` is not a
+`ancestorLinks` and `aliasTargets` (by `ofType`), `ancestorArguments` and `unifies` (by `ofPair`); and the T3 table `extensionBindings`
+(by `ofUse`), whose answer reads a file's `using` statements and declarations, never a body. `memberReadType` is not a
 table of its own: its key would carry the receiver's written arguments, and it is composed of two cached answers
 (`declaredMember`, `ancestorArguments`) and a substitution. A walk entered with a
 caller's own `seen` set is never cached — its answer depends on what that caller already visited — and neither is a
@@ -113,10 +116,34 @@ inference of a local's type from more than its initializer, and the two reificat
   Measured: upstream DIFFERENT 0 before and after; facts DIFFERENT anyparse 5060 / 4998 → 56 / 29 (source / nominal),
   client 1529 / 1349 → 200 / 121, Pony 345 / 332 → 95 / 111; UNKNOWN shares unchanged or lower (client source 36.0 → 35.9 %,
   nominal 23.4 → 23.2 %); the all-rules lint of four trees byte-identical.
-- **T3 — the `using` order (next).** One body question, "which static extension does `recv.name` bind", keyed by the file and
-  the receiver's declaration, answered in the compiler's order (`fields.ml`: the receiver type's own `@:using` first, then
-  the file's `using` lines last to first); `OperandBinder.extensionTier`, `NominalTypes.staticExtensionNominal` and
-  `ValueNameBinding.usingTypes` become its consumers.
+- **T3 — the `using` order (done, FU14).** `StaticExtensions` (`index.typing.extensions`): `binding(fi, receiver, name)`,
+  which static extension `recv.name` binds in the file `fi` on a receiver of the declaration `receiver` — keyed by
+  `DeclarationKey.ofUse` (file, receiver declaration, name), table `extensionBindings`. The compiler's order of
+  `fields.ml` (`type_field`, Haxe 4.3.7), each step compiled first on `--interp` and `-js`: a field of the receiver's type
+  binds first (`declarationLacksMember`); then the type extensions (`mt_using`): the receiver type's own `@:using` paths
+  (recorded by the index, `TypeDeclInfo.extensionTypesRaw`, read ABSOLUTELY) the last written first, then its
+  superclass's whole list, then each interface's (`typeloadFields.ml`'s `inherit_using`, walked over `ancestors.links`), a
+  `typedef`'s own then the aliased type's (`aliasTarget`); then the file's `using`s the last first, then the ambient
+  `import.hx` chain's, the nearest first. One path brings its module's types the LAST declared first (`filter_classes`), a
+  typedef alias as the class it names, module-level functions after them (`usingHosts`). Each candidate's first
+  parameter is unified with the receiver (`StructuralTypes.receiverFitsParameter`, now over `unification.unifies` instead
+  of a simple-name `isSubtype`), and one that REJECTS it is passed over — into the next type, the next path, from the
+  type's `@:using` into the file's. `Unification` decides two more pairs for it: a declaration with no type parameter is
+  itself whatever its kind or `#if` (`unify` starts with `a == b`), and a GIVEN type with type parameters against a
+  plain wanted one is decided by its chain. Not decided (`null`, the walk ends): a module-level function (no signature in
+  the index), a private or default-visibility static (reached from its class only — the key does not see the class), a
+  method type parameter (its constraint is not recorded: `<T:Int>(t:T)` passes a `String` over), an abstract or a type
+  argument on the parameter (T4/T5), `@:overload` / macro statics, a candidate under `#if` or built by a macro, a guarded
+  `using` that may supply one, a module held in several files one of which supplies one, a supertype one `#if` branch of
+  the receiver writes that brings one, and no binding at all (the global `haxe.EnumTools` extensions come last).
+  Consumers moved onto it: `OperandBinder.extensionTier` / `resolveTier` (`maySupply`), `OperandCallees.extensionParams`,
+  `NominalTypes.staticExtensionNominal` (`ChainTypeContext.usings` deleted), `CallGraphImports.staticExtensionsOf`
+  (`usingTypes`), `ArgumentValues.affixResolves` (`bindingUsing`); deleted: `ValueNameBinding`'s using walk
+  (`usingTypes`, `usingHosts`, `usingDeclarations`, `extensionDeclaration`, `bindingUsing`, `builtAtOrAbove` →
+  `AncestorTable.builtAtOrAbove`), `UsingScan.extensionUsings`, `StructuralTypes.extensionReturnNominal`. Measured:
+  upstream DIFFERENT 0 before and after; facts DIFFERENT unchanged (anyparse 56 / 29, client 200 / 121, Pony 95 / 111), client
+  nominal `Call` 7 UNKNOWN → MATCH; the all-rules lint of four trees byte-identical. Left for later: `PreferStaticExtension`'s
+  `UsingScan.usingConflict` asks a hypothetical `using` the rewrite would insert, which this question does not model.
 - **T4 — the cast graph of abstracts.** A table per abstract declaration of its `from` / `to` edges, keyed by
   `DeclarationKey.ofType` (`abstractCast.ml`: the first unequal `from` wins); `ArgumentTypes`' `MayFit` for an abstract
   parameter becomes `Fits` or `Misfits` where the graph decides.

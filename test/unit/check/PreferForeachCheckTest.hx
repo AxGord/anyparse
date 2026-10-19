@@ -310,7 +310,7 @@ class PreferForeachCheckTest extends Test {
 	 * `@:using(SupExt) class Sup` beats `using Sup.Plain` on a `Sub extends Sup`), so the file's `ExtArray` must not answer.
 	 */
 	@:pin('control')
-	@:killer('M-EXT-NOMINAL-ATUSING')
+	@:killer('M-BINDER-EXTENSION-ATUSING')
 	public function testReceiverUsingMetaBeatsTheFileUsing(): Void {
 		Assert.equals(0, extViolations('using ExtArray;', '', [], '@:using(ExtIter) class S').length);
 		Assert.equals(
@@ -335,12 +335,12 @@ class PreferForeachCheckTest extends Test {
 	}
 
 	/**
-	 * A later `using` the index cannot read may declare `items` itself, so the earlier `ExtArray` proves nothing: a module the
-	 * index does not hold, and one whose type is an ALIAS — 4.3.7 binds `using AliasHost;` (`typedef AliasHost = B`) to `B`'s
-	 * statics, which live on a type the `using` does not name.
+	 * A later `using` binds ahead of the earlier `ExtArray`: a module the index does not hold may declare `items` itself,
+	 * so the earlier one proves nothing; and one whose type is an ALIAS brings the statics of the type it names — 4.3.7
+	 * binds `using AliasHost;` (`typedef AliasHost = ExtIter`) to `ExtIter.items`, whose `Iterator` the rule refuses.
 	 */
 	@:pin('control')
-	@:killer('M-BINDER-EXTENSION-UNINDEXED')
+	@:killer('M-USING-HOSTS-ALIAS')
 	public function testUnindexedLaterUsingStopsTheWalk(): Void {
 		Assert.equals(0, extViolations('using ExtArray;\nusing Missing;', '').length);
 		Assert.equals(
@@ -362,7 +362,7 @@ class PreferForeachCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-EXT-DECL-GUARDED-MEMBER', 'M-BINDER-EXTENSION-GUARDED-USING')
 	public function testGuardedUsingOrDeclarationRefuses(): Void {
-		Assert.equals(0, extViolations('using ExtArray;\n#if x\nusing ExtIter;\n#end', '').length);
+		Assert.equals(0, extViolations('using ExtIter;\n#if x\nusing ExtArray;\n#end', '').length);
 		Assert.equals(0, extViolations('using ExtIter;\nusing ExtGuard;', '', extensionModules()).length);
 	}
 
@@ -387,6 +387,37 @@ class PreferForeachCheckTest extends Test {
 	public function testALaterUsingThatMayOfferTheExtensionStopsTheWalk(): Void {
 		Assert.equals(0, extViolations('using ExtArray;\nusing Built;', '', extensionModules()).length);
 		Assert.equals(0, extViolations('using ExtIter;\nusing GuardHost;', '', extensionModules()).length);
+	}
+
+	/**
+	 * The compiler's `using` order (`fields.ml`, Haxe 4.3.7, FU14): a later `using` whose first parameter REJECTS the receiver
+	 * is passed over to the earlier `ExtArray`; one module's types are tried last declared first; the receiver type's own
+	 * `@:using` binds with no `using` in the file; and a private static (reached from its class only) or a module-level
+	 * function of a used module (whose signature the index does not record) proves nothing.
+	 */
+	@:pin('control')
+	@:killer('M-BINDER-EXTENSION-FIRST-PARAM', 'M-EXT-DECL-TWO-HOSTS', 'M-BINDER-EXTENSION-ATUSING', 'M-EXT-PRIVATE-OPEN',
+		'M-EXT-MODULE-FIELDS-OPEN')
+	public function testTheCompilersUsingOrder(): Void {
+		final order: Array<{ file: String, source: String }> = [
+			{ file: 'Other.hx', source: 'class Other {}' },
+			{
+				file: 'ExtOther.hx',
+				source: 'class ExtOther {\n\tpublic static function items(o:Other):Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+			},
+			{
+				file: 'ModRev.hx',
+				source: 'class ModRev {\n\tpublic static function items(s:S):Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}\n\n'
+					+ 'class Last {\n\tpublic static function items(s:S):Array<Int> {\n\t\treturn [];\n\t}\n}'
+			},
+			{ file: 'ExtPriv.hx', source: 'class ExtPriv {\n\tstatic function items(s:S):Array<Int> {\n\t\treturn [];\n\t}\n}' },
+			{ file: 'ModFn.hx', source: 'function items(s:S):Iterator<Int> {\n\treturn [].iterator();\n}\n\nclass ModFn {}' }
+		];
+		Assert.equals(1, extViolations('using ExtArray;\nusing ExtOther;', '', order).length, 'a rejecting first parameter is passed over');
+		Assert.equals(1, extViolations('using ModRev;', '', order).length, 'the module\'s last declared type first');
+		Assert.equals(1, extViolations('', '', [], '@:using(ExtArray) class S').length, 'the receiver type\'s own `@:using`');
+		Assert.equals(0, extViolations('using ExtIter;\nusing ExtPriv;', '', order).length, 'a private static proves nothing');
+		Assert.equals(0, extViolations('using ExtArray;\nusing ModFn;', '', order).length, 'a module-level function proves nothing');
 	}
 
 	/** A receiver whose OWN type declares `foreach` — the name this direction rewrites to. */

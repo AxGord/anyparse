@@ -747,7 +747,6 @@ final class MemberTouchScan {
 		final chain: ChainTypeContext = {
 			declaredTypeSources: provider.declaredTypeSources(ctx.source),
 			source: ctx.source,
-			usings: [],
 			typeSyntax: _scope.plugin.typeSyntax
 		};
 		// no index: only the walk's arcs that need no file — a literal, a binding's annotation or initializer, a loop binder

@@ -19,6 +19,7 @@
 			"owners": [
 				"anyparse.query.TypeNameBinding",
 				"anyparse.query.ValueNameBinding",
+				"anyparse.query.StaticExtensions",
 				"anyparse.query.ImportBindings",
 				"anyparse.query.TypeRefIndex",
 				"anyparse.query.SymbolIndex",

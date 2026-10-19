@@ -23,6 +23,14 @@ abstract DeclarationKey(String) to String {
 		return new DeclarationKey('${r.file.file}@${r.type.span.from}.$member');
 	}
 
+	/**
+	 * The key of a question asked in the file `file` about `r`'s member named `member` — what `recv.member` binds there on
+	 * a receiver of `r`, which the file's `using` statements take part in (`StaticExtensions.binding`).
+	 */
+	public static inline function ofUse(file: String, r: ResolvedType, member: String): DeclarationKey {
+		return new DeclarationKey('$file:${r.file.file}@${r.type.span.from}.$member');
+	}
+
 	/** The key of a question about the two declarations `a` and `b`, in that order (`a` unifies with `b`, `a` reaches `b`). */
 	public static inline function ofPair(a: ResolvedType, b: ResolvedType): DeclarationKey {
 		return new DeclarationKey('${a.file.file}@${a.type.span.from}>${b.file.file}@${b.type.span.from}');

@@ -21500,9 +21500,9 @@
 		},
 		{
 			"name": "M-VALUES-BUILT-ABOVE",
-			"type": "anyparse.query.ValueNameBinding",
-			"method": "builtAtOrAbove",
-			"find": "\t\t\tif (up != null && builtAtOrAbove(up, seen)) return true;\n",
+			"type": "anyparse.query.AncestorTable",
+			"method": "builtFrom",
+			"find": "\t\t\tif (up != null && builtFrom(up, seen)) return true;\n",
 			"replace": "",
 			"note": "an @:autoBuild on a supertype is not seen, so a type it builds lists all its statics"
 		},
@@ -21556,10 +21556,10 @@
 		},
 		{
 			"name": "M-USING-MODULE-TYPES",
-			"type": "anyparse.query.ValueNameBinding",
+			"type": "anyparse.query.StaticExtensions",
 			"method": "usingTypes",
-			"find": "types == null ? [SourceText.lastSegment(imp.raw)] : [for (t in types) t.type.name]",
-			"replace": "[SourceText.lastSegment(imp.raw)]",
+			"find": "hosts == null ? [SourceText.lastSegment(u.raw)] : [for (t in hosts.types) t.type.name]",
+			"replace": "[SourceText.lastSegment(u.raw)]",
 			"note": "a using of a module brings its main type's extensions only, not its sub-types' (4.3.7 brings both)"
 		},
 		{
@@ -24104,74 +24104,74 @@
 		},
 		{
 			"name": "M-BINDER-EXTENSION-ATUSING",
-			"type": "anyparse.check.OperandBinder",
-			"method": "extensionTier",
-			"find": "if (usings == null || !_index.typing.members.declarationFreeOfExtensionTypes(owner)) return Unknown;",
-			"replace": "if (usings == null) return Unknown;",
-			"note": "a file's using is taken over the extension the receiver type's own @:using brings, which 4.3.7 binds first"
+			"type": "anyparse.query.StaticExtensions",
+			"method": "bindingOf",
+			"find": "final own: ExtensionStep = typeStep(receiver, receiver, name, []);",
+			"replace": "final own: ExtensionStep = Passed;",
+			"note": "the receiver type's own and inherited @:using are skipped, so a file's using answers a call 4.3.7 binds to the type's extension first"
 		},
 		{
 			"name": "M-BINDER-EXTENSION-LAST-USING",
-			"type": "anyparse.query.ValueNameBinding",
-			"method": "extensionDeclaration",
-			"find": "usingHosts(usings[k])",
-			"replace": "usingHosts(usings[usings.length - 1 - k])",
-			"note": "the FIRST using declaring the extension wins instead of the last"
+			"type": "anyparse.query.StaticExtensions",
+			"method": "bindingOf",
+			"find": "for (u in reversedUsings(fi.imports).concat(ambient))",
+			"replace": "for (u in fi.imports.filter(i -> i.kind == ImportKind.Using).concat(ambient))",
+			"note": "the FIRST using of the file is tried first instead of the last"
 		},
 		{
 			"name": "M-BINDER-EXTENSION-FIRST-PARAM",
-			"type": "anyparse.check.OperandBinder",
-			"method": "extensionTier",
-			"find": "case Bound(decls) if (decls.length == 1 && sameDeclaration(decls[0], owner)):",
-			"replace": "case Bound(_):",
-			"note": "an extension whose first parameter is another type is taken although the compiler skips it"
+			"type": "anyparse.query.StaticExtensions",
+			"method": "candidateStep",
+			"find": "case Misfits: Passed;",
+			"replace": "case Misfits: Bound({ members: [m], host: host });",
+			"note": "an extension whose first parameter rejects the receiver is taken although the compiler passes it over"
 		},
 		{
 			"name": "M-BINDER-EXTENSION-UNINDEXED",
-			"type": "anyparse.query.ValueNameBinding",
-			"method": "extensionDeclaration",
-			"find": "if (hosts == null || hosts.exists(h -> builtAtOrAbove(h, []))) return null;",
-			"replace": "if (hosts == null) continue;\n\t\tif (hosts.exists(h -> builtAtOrAbove(h, []))) return null;",
-			"note": "a later using the index does not hold is passed over, though it may declare the extension"
+			"type": "anyparse.query.StaticExtensions",
+			"method": "pathStep",
+			"find": "if (hosts == null) return Open;",
+			"replace": "if (hosts == null) return Passed;",
+			"note": "a using the index cannot read is passed over, though it may declare the extension"
 		},
 		{
 			"name": "M-BINDER-EXTENSION-GUARDED-USING",
-			"type": "anyparse.check.UsingScan",
-			"method": "extensionUsings",
-			"find": "header.guardedUsings.length > 0 ? null : usingModules(header)",
-			"replace": "usingModules(header)",
-			"note": "a #if-guarded using no longer refuses the extension, though a build defining it binds another"
+			"type": "anyparse.query.StaticExtensions",
+			"method": "bindingOf",
+			"find": "return u.guarded ? null : bound(step);",
+			"replace": "return bound(step);",
+			"note": "a #if-guarded using that may supply the extension answers in every build, though without the flag an earlier one binds"
 		},
 		{
 			"name": "M-BINDER-RESOLVE-USING-SHADOW",
 			"type": "anyparse.check.OperandBinder",
 			"method": "resolveTier",
-			"find": "scope == null || scope.exists(h -> h.type.members.exists(m -> m.name == name))",
-			"replace": "scope == null",
+			"find": "_index.typing.extensions.maySupply(fi, name)",
+			"replace": "false",
 			"note": "the @:op(a.b) resolver is taken although a using in scope declares a static of the field's name, which 4.3.7 binds first"
 		},
 		{
 			"name": "M-USING-HOSTS-MODULE",
-			"type": "anyparse.query.ValueNameBinding",
+			"type": "anyparse.query.StaticExtensions",
 			"method": "usingHosts",
-			"find": "? null : types;",
-			"replace": "? null : types.filter(t -> t.type.isMain);",
+			"find": "fi.types.filter(t -> !t.isPrivate && (sub == null || t.name == sub))",
+			"replace": "fi.types.filter(t -> !t.isPrivate && (sub == null ? t.isMain : t.name == sub))",
 			"note": "a used module brings only its main type's statics, not every type's"
 		},
 		{
 			"name": "M-USING-HOSTS-ALIAS",
-			"type": "anyparse.query.ValueNameBinding",
+			"type": "anyparse.query.StaticExtensions",
 			"method": "usingHosts",
-			"find": " || types.exists(t -> t.type.kind == SymbolIndex.TYPEDEF_DECL_KIND)",
-			"replace": "",
+			"find": "final host: Null<ResolvedType> = hostOf({ file: fi, type: declared[k] }, []);",
+			"replace": "final host: Null<ResolvedType> = { file: fi, type: declared[k] };",
 			"note": "a used alias reads as bringing no statics, though the type it names brings them"
 		},
 		{
 			"name": "M-USING-DECLS-AMBIENT",
-			"type": "anyparse.query.ValueNameBinding",
-			"method": "usingDeclarations",
-			"find": "for (imp in importsOf(fi))",
-			"replace": "for (imp in fi.imports)",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "usingsOf",
+			"find": "\t\tfor (group in fi.ambientImports) for (i in group.imports) if (i.kind == ImportKind.Using) out.push(i);\n",
+			"replace": "",
 			"note": "the ambient import.hx usings are not in scope of the resolver's shadow check"
 		},
 		{
@@ -24319,67 +24319,59 @@
 		},
 		{
 			"name": "M-EXT-DECL-BUILT",
-			"type": "anyparse.query.ValueNameBinding",
-			"method": "extensionDeclaration",
-			"find": " || hosts.exists(h -> builtAtOrAbove(h, []))",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "candidateStep",
+			"find": "\t\tif (_ancestors.builtAtOrAbove(host)) return Open;\n",
 			"replace": "",
-			"note": "a later using whose type a build macro may give the static is passed over, though in that build it binds the call"
+			"note": "a candidate type a build macro may give the static is read as its declarations, though in that build it binds the call"
 		},
 		{
 			"name": "M-EXT-DECL-PASS-OVER",
-			"type": "anyparse.query.ValueNameBinding",
-			"method": "extensionDeclaration",
-			"find": "if (declaring.length == 0) continue;",
-			"replace": "if (declaring.length == 0) return null;",
-			"note": "a later using offering no extension of the name stops the walk instead of leaving the call to the earlier one"
+			"type": "anyparse.query.StaticExtensions",
+			"method": "candidateStep",
+			"find": "if (statics.length == 0) return Passed;",
+			"replace": "if (statics.length == 0) return Open;",
+			"note": "a candidate type offering no static of the name stops the walk instead of leaving the call to the next one"
 		},
 		{
 			"name": "M-EXT-DECL-TWO-HOSTS",
-			"type": "anyparse.query.ValueNameBinding",
-			"method": "extensionDeclaration",
-			"find": "declaring.length != 1 || ",
-			"replace": "",
-			"note": "of two types of one used module declaring the extension the first is taken, though 4.3.7 binds the last that accepts"
+			"type": "anyparse.query.StaticExtensions",
+			"method": "usingHosts",
+			"find": "type: declared[k] }",
+			"replace": "type: declared[declared.length - 1 - k] }",
+			"note": "the types of a used module are tried in declaration order, though 4.3.7 tries the last declared first"
 		},
 		{
 			"name": "M-EXT-DECL-GUARDED-HOST",
-			"type": "anyparse.query.ValueNameBinding",
-			"method": "extensionDeclaration",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "candidateStep",
 			"find": " || host.type.guarded",
 			"replace": "",
-			"note": "an extension on a #if-guarded type of a used module is taken in every build, though without the flag the earlier using binds"
+			"note": "an extension on a #if-guarded type is taken in every build, though without the flag the next candidate binds"
 		},
 		{
 			"name": "M-EXT-DECL-GUARDED-MEMBER",
-			"type": "anyparse.query.ValueNameBinding",
-			"method": "extensionDeclaration",
-			"find": " || members.exists(m -> m.guarded)",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "candidateStep",
+			"find": " || m.guarded",
 			"replace": "",
-			"note": "a #if-guarded extension static is taken in every build, though without the flag the earlier using binds"
+			"note": "a #if-guarded extension static is taken in every build, though without the flag the next candidate binds"
 		},
 		{
 			"name": "M-EXT-DECL-STATIC",
-			"type": "anyparse.query.ValueNameBinding",
-			"method": "extendsAs",
-			"find": "m.name == method && m.isStatic && ",
-			"replace": "m.name == method && ",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "candidateStep",
+			"find": "host.type.members.filter(m -> m.name == name && m.isStatic)",
+			"replace": "host.type.members.filter(m -> m.name == name)",
 			"note": "an instance method of a used type is taken as the extension, though a using offers statics only"
 		},
 		{
 			"name": "M-EXT-DECL-NOUSING",
-			"type": "anyparse.query.ValueNameBinding",
-			"method": "extendsAs",
-			"find": " && !m.excludedFromExtensions",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "candidateStep",
+			"find": "\t\tif (m.excludedFromExtensions) return Passed;\n",
 			"replace": "",
-			"note": "a @:noUsing static is taken as the extension, though 4.3.7 passes it over for the earlier using"
-		},
-		{
-			"name": "M-EXT-NOMINAL-ATUSING",
-			"type": "anyparse.query.NominalTypes",
-			"method": "staticExtensionNominal",
-			"find": "|| !index.typing.members.closureFreeOfExtensionTypes(receiver, file)",
-			"replace": "|| false",
-			"note": "a file's using answers a call on a receiver whose type (or a supertype) brings extensions of its own (@:using), which 4.3.7 binds first"
+			"note": "a @:noUsing static is taken as the extension, though 4.3.7 passes it over"
 		},
 		{
 			"name": "M-NAMING-ENUMVALUE-PROPERTY",
@@ -26540,9 +26532,9 @@
 		},
 		{
 			"name": "M-TS-AFFIX-USINGS-UNCHECKED",
-			"type": "anyparse.query.ValueNameBinding",
+			"type": "anyparse.query.StaticExtensions",
 			"method": "bindingUsing",
-			"find": "if (hosts.exists(h -> h.type.members.exists(m -> extendsAs(m, method)))) return { path: path, hosts: hosts };",
+			"find": "if (declares) return { path: path, hosts: hosts.types };",
 			"replace": "",
 			"note": "a later `using` declaring the affix method itself is passed over, so its guard is decided by StringTools"
 		},
@@ -27097,7 +27089,7 @@
 		{
 			"name": "M-UNIFY-GUARDED-PLAIN",
 			"type": "anyparse.query.Unification",
-			"method": "plain",
+			"method": "nominal",
 			"find": "return at == null || at.type.guarded || ",
 			"replace": "return at == null || ",
 			"note": "a declaration under `#if` is decided as if one branch were every configuration's"
@@ -27205,6 +27197,118 @@
 			"find": "WriterOptFanout.statementListElemOpt(macro _writerOpt)",
 			"replace": "macro _writerOpt",
 			"note": "a case-body statement of an arrow-body switch argument bypasses the statement-list barrier and inherits the call-argument chain flag"
+		},
+		{
+			"name": "M-UNIFY-GENERIC-GIVEN",
+			"type": "anyparse.query.Unification",
+			"method": "unifies",
+			"find": "verdict(nominal(given), plain(wanted))",
+			"replace": "verdict(plain(given), plain(wanted))",
+			"note": "a given type with type parameters is undecided against a plain wanted type, though its chain alone decides it"
+		},
+		{
+			"name": "M-EXT-TYPE-USING-FORWARD",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "typeStep",
+			"find": "pathStep(paths[k], receiver, name)",
+			"replace": "pathStep(paths[paths.length - 1 - k], receiver, name)",
+			"note": "a type's @:using paths are tried in written order, though 4.3.7 tries the last written first"
+		},
+		{
+			"name": "M-EXT-INTERFACES-FIRST",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "typeStep",
+			"find": "links.filter(l -> !implemented(t, l)).concat(links.filter(l -> implemented(t, l)))",
+			"replace": "links",
+			"note": "the inherited @:using lists are tried in written order, so an interface written before the superclass comes first"
+		},
+		{
+			"name": "M-EXT-ALIAS-STOP",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "typeStep",
+			"find": "return next == null ? Open : typeStep(next, receiver, name, seen);",
+			"replace": "return Open;",
+			"note": "a typedef receiver stops at its own @:using, though 4.3.7 goes on to the aliased type's"
+		},
+		{
+			"name": "M-EXT-MODULE-FIELDS-OPEN",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "pathStep",
+			"find": "return hosts.moduleFields.exists(f -> f.name == name) ? Open : Passed;",
+			"replace": "return Passed;",
+			"note": "a module-level function of a used module is passed over, though it may be the extension the call binds"
+		},
+		{
+			"name": "M-EXT-NULL-PARAM-OPEN",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "writtenFits",
+			"find": "return args.length == 1 ? writtenFits(receiver, args[0], m, host) : MayFit;",
+			"replace": "return MayFit;",
+			"note": "a `Null<T>` first parameter is undecided, though it accepts a `T` receiver"
+		},
+		{
+			"name": "M-EXT-DYNAMIC-PARAM-OPEN",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "writtenFits",
+			"find": "return args.length == 0 ? Fits : MayFit;",
+			"replace": "return MayFit;",
+			"note": "a `Dynamic` first parameter is undecided, though it accepts every receiver"
+		},
+		{
+			"name": "M-EXT-ITERABLE-ELEMENT",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "writtenFits",
+			"find": "if (element == null || !m.typeParamNames.contains(element)) return MayFit;",
+			"replace": "if (element == null) return MayFit;",
+			"note": "an Iterable over a concrete element accepts every iterable receiver, though only one of that element binds"
+		},
+		{
+			"name": "M-EXT-FIELD-FIRST",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "bindingOf",
+			"find": "\t\tif (!_members.declarationLacksMember(receiver, name)) return null;\n",
+			"replace": "",
+			"note": "an extension answers a name the receiver's own type declares, though the field binds first"
+		},
+		{
+			"name": "M-EXT-AMBIENT-FIRST",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "bindingOf",
+			"find": "for (u in reversedUsings(fi.imports).concat(ambient))",
+			"replace": "for (u in ambient.concat(reversedUsings(fi.imports)))",
+			"note": "the ambient import.hx usings are tried before the file's own"
+		},
+		{
+			"name": "M-EXT-PRIVATE-OPEN",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "accessible",
+			"find": "return m.visibility == SymbolIndex.PUBLIC_VISIBILITY || ",
+			"replace": "return true || ",
+			"note": "a private static is taken as the extension from any file, though it is reached from its class and its subclasses only"
+		},
+		{
+			"name": "M-UNIFY-SELF-OPEN",
+			"type": "anyparse.query.Unification",
+			"method": "unifies",
+			"find": "AncestorTable.same(given, wanted) && given.type.typeParamArity == 0 ? Fits : ",
+			"replace": "",
+			"note": "a declaration that is not plain (an abstract, a structure, one under `#if`) is undecided against itself, though `unify` starts with `a == b`"
+		},
+		{
+			"name": "M-EXT-AMBIGUOUS-MODULE",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "pathStep",
+			"find": "return hosts.ambiguous ? Open : step;",
+			"replace": "return step;",
+			"note": "of a module the index holds in two files, one file's candidate is taken though the compiler may load the other"
+		},
+		{
+			"name": "M-EXT-GUARDED-LINKS",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "typeStep",
+			"find": "if (step != Passed) return t.guarded ? Open : step;",
+			"replace": "if (step != Passed) return step;",
+			"note": "a supertype one #if branch of the receiver's type writes answers for every build"
 		},
 		{
 			"name": "M-PIER-MERGE-ANY-VALUE",

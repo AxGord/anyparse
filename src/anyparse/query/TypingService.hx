@@ -35,6 +35,12 @@ final class TypingService {
 	/** SIGNATURE: unification with an anonymous structure, and membership of a builtin structural type. */
 	public final structural: StructuralTypes;
 
+	/**
+	 * BODY: which static extension `recv.name` binds in a file on a receiver of a declaration, in the compiler's order of the
+	 * receiver type's `@:using` and the file's `using` statements (`fields.ml`, step T3).
+	 */
+	public final extensions: StaticExtensions;
+
 	/** BODY: the type a value is expected to have where the grammar `shape` writes it (`ExpectedTypes`). */
 	public final expectations: ExpectedTypes;
 
@@ -46,6 +52,7 @@ final class TypingService {
 		unification = new Unification(ancestors, cache, refs);
 		members = new MemberLookup(refs, cache, ancestors, typeSyntax, shape.optionalValueTypeName);
 		structural = new StructuralTypes(files, refs, subtypes, members, typeSyntax, unification);
+		extensions = new StaticExtensions(refs, cache, ancestors, members, structural);
 		expectations = new ExpectedTypes(shape);
 	}
 

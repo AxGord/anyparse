@@ -1,11 +1,9 @@
 package anyparse.query;
 
 import anyparse.query.CondBranchPath;
-import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
-import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ModuleField;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeNameBinding.ImportPath;
@@ -35,14 +33,20 @@ final class ValueNameBinding {
 	/** The layer the owners' modules and supertypes are read through. */
 	private final _refs: TypeRefIndex;
 
+	/** The typing service's supertype links: whether a build macro on an owner or above it may add statics. */
+	private final _ancestors: AncestorTable;
+
 	/** The member kinds an enum constructor projects as: one an import names builds a value, no static. */
 	private final _enumConstructorKinds: Array<String>;
 
 	/** The type kinds whose every member is a value by its bare name where the type is in scope: an enum's, an abstract's. */
 	private final _valueHostKinds: Array<String>;
 
-	public function new(refs: TypeRefIndex, enumConstructorKinds: Array<String>, valueHostKinds: Array<String>) {
+	public function new(
+		refs: TypeRefIndex, ancestors: AncestorTable, enumConstructorKinds: Array<String>, valueHostKinds: Array<String>
+	) {
 		_refs = refs;
+		_ancestors = ancestors;
 		_enumConstructorKinds = enumConstructorKinds;
 		_valueHostKinds = valueHostKinds;
 	}
@@ -165,95 +169,6 @@ final class ValueNameBinding {
 		return out;
 	}
 
-	/**
-	 * The types the `using` statements of `fi` (its own, then its ambient chain's) bring static extensions from, by simple
-	 * name, each once: every non-private type of the module `using p.Mod;` names — its sub-types' statics too (4.3.7) — the
-	 * one type `using p.Mod.Sub;` names, and the last segment of a module the index does not hold.
-	 */
-	public function usingTypes(fi: FileInfo): Array<String> {
-		final out: Array<String> = [];
-		for (imp in importsOf(fi)) if (imp.kind == ImportKind.Using) {
-			final types: Null<Array<ResolvedType>> = _refs.names.importedTypes(imp.raw);
-			final names: Array<String> = types == null ? [SourceText.lastSegment(imp.raw)] : [for (t in types) t.type.name];
-			for (n in names) if (!out.contains(n)) out.push(n);
-		}
-		return out;
-	}
-
-	/**
-	 * The types `using <path>` brings, as declarations: the whole module's public types, or the one type a sub-type path
-	 * names — 4.3.7 binds an extension declared on ANY type of a used module. Null when the index does not hold the module,
-	 * when the path names nothing, and when a type it brings is an alias, whose statics live on a type it does not name.
-	 */
-	public function usingHosts(path: String): Null<Array<ResolvedType>> {
-		final types: Null<Array<ResolvedType>> = _refs.names.importedTypes(path);
-		return types == null || types.length == 0 || types.exists(t -> t.type.kind == SymbolIndex.TYPEDEF_DECL_KIND) ? null : types;
-	}
-
-	/**
-	 * Every type a `using` in scope of `fi` brings — its own statements and the ambient `import.hx` chain's — as declarations
-	 * (`usingHosts`), in no particular order; null when one of them cannot be read, so a caller proving that NO static
-	 * extension of a name applies is never answered by a module the index does not hold.
-	 */
-	public function usingDeclarations(fi: FileInfo): Null<Array<ResolvedType>> {
-		final out: Array<ResolvedType> = [];
-		for (imp in importsOf(fi)) if (imp.kind == ImportKind.Using) {
-			final hosts: Null<Array<ResolvedType>> = usingHosts(imp.raw);
-			if (hosts == null) return null;
-			for (h in hosts) out.push(h);
-		}
-		return out;
-	}
-
-	/**
-	 * The static extension a call `recv.method(…)` binds under the file's `usings` (its `using` paths in declaration order),
-	 * for a receiver whose own type's closure provably declares no `method` and brings no extensions of its own (`@:using`,
-	 * which 4.3.7 binds ahead of every `using`) — both the caller's gates: every static `method` of the one type of the LAST
-	 * `using` declaring one, with that type. 4.3.7 walks the `using`s backwards, binds an extension declared on ANY type of a
-	 * used module, and passes over a `using` only for a module declaring no such static (`@:noUsing` ones excluded).
-	 *
-	 * Null — not proven — when a later `using` cannot be read (`usingHosts`), a type it brings is built by a macro, which may
-	 * add the static, two types of one module declare it, or it or the type declaring it sits under a `#if`. Whether the
-	 * first parameter ACCEPTS the receiver is the caller's question, and a NO there is a refusal, not a reason to try the
-	 * earlier `using`: the compiler passes over only a parameter that provably rejects the receiver (`<T>(s:T)` and
-	 * `(s:Dynamic)` both bind), which no caller proves.
-	 */
-	public function extensionDeclaration(usings: Array<String>, method: String): Null<HostedMembers> {
-		var k: Int = usings.length;
-		while (k-- > 0) {
-			final hosts: Null<Array<ResolvedType>> = usingHosts(usings[k]);
-			if (hosts == null || hosts.exists(h -> builtAtOrAbove(h, []))) return null;
-			final declaring: Array<ResolvedType> = hosts.filter(h -> h.type.members.exists(m -> extendsAs(m, method)));
-			if (declaring.length == 0) continue;
-			final host: ResolvedType = declaring[0];
-			final members: Array<MemberInfo> = host.type.members.filter(m -> extendsAs(m, method));
-			return declaring.length != 1 || host.type.guarded || members.exists(m -> m.guarded) ? null : { members: members, host: host };
-		}
-		return null;
-	}
-
-	/**
-	 * Which `using` of the file `fi` a call `recv.method(…)` may bind to — Haxe binds the LAST one declaring an applicable static
-	 * `method` — walking back from the last of the file's own: the first whose module the index cannot read (`hosts` null:
-	 * what it brings is unknown) or one of whose types declares a static `method` it extends with, every module after it read
-	 * and built by no macro. Null when none may, at a module a macro builds, and when the file has a guarded `using` or an
-	 * ambient one (an `import.hx`'s), whose order against its own this does not decide.
-	 */
-	public function bindingUsing(fi: FileInfo, method: String): Null<{ path: String, hosts: Null<Array<ResolvedType>> }> {
-		if (fi.ambientImports.exists(g -> g.imports.exists(i -> i.kind == ImportKind.Using))) return null;
-		final usings: Array<ImportInfo> = fi.imports.filter(i -> i.kind == ImportKind.Using);
-		if (usings.exists(u -> u.guarded)) return null;
-		var k: Int = usings.length;
-		while (k-- > 0) {
-			final path: String = usings[k].raw;
-			final hosts: Null<Array<ResolvedType>> = usingHosts(path);
-			if (hosts == null) return { path: path, hosts: null };
-			if (hosts.exists(h -> builtAtOrAbove(h, []))) return null;
-			if (hosts.exists(h -> h.type.members.exists(m -> extendsAs(m, method)))) return { path: path, hosts: hosts };
-		}
-		return null;
-	}
-
 	/** The `#if` regions and branches the module-level declaration `field` of `fi` sits in. */
 	private inline function branchOf(fi: FileInfo, field: ModuleField): Array<CondFrame> {
 		return _refs.names.branchPathAt(fi, field.span.from);
@@ -344,23 +259,7 @@ final class ValueNameBinding {
 	 * `extern`, or a build macro on one of them or on a supertype it resolves may add members no declaration shows.
 	 */
 	private function unlisted(decls: Array<ResolvedType>): Bool {
-		return decls.length == 0 || decls.exists(d -> d.type.isExtern || builtAtOrAbove(d, []));
-	}
-
-	/** Whether `cur` or a supertype it resolves carries a build macro (`@:build`, `@:autoBuild`); an unresolved link adds none. */
-	private function builtAtOrAbove(cur: ResolvedType, seen: Array<String>): Bool {
-		if (!_refs.markSeen(cur, seen)) return false;
-		if (cur.type.hasBuild || cur.type.hasAutoBuild) return true;
-		for (raw in cur.type.supertypesRaw) {
-			final up: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
-			if (up != null && builtAtOrAbove(up, seen)) return true;
-		}
-		return false;
-	}
-
-	/** Whether `m` is a static a `using` offers as the extension `method` — `@:noUsing` withholds it. */
-	private static inline function extendsAs(m: MemberInfo, method: String): Bool {
-		return m.name == method && m.isStatic && !m.excludedFromExtensions;
+		return decls.length == 0 || decls.exists(d -> d.type.isExtern || _ancestors.builtAtOrAbove(d));
 	}
 
 	/** The import statements of `fi`: its own, then each group of its ambient chain, nearest first. */

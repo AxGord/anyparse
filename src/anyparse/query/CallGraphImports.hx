@@ -12,7 +12,7 @@ using Lambda;
  * type name written in a file means (`typeOf` — the declaration the shared binding `TypeNameBinding.bindingsOf` binds it
  * to, a type outside the indexes by its path when a declaration bears its simple name), the other keys it may mean on
  * some build (`alternateTypes`), the spelling a written type is read by wherever its text goes (`writtenAs`), the static
- * extensions a file's `using`s bring (`ValueNameBinding.usingTypes`), and per type name the files declaring each
+ * extensions a file's `using`s bring (`StaticExtensions.usingTypes`), and per type name the files declaring each
  * member, the paths it is declared under and the enum constructors a bare call may build — each read off the indexes
  * the graph took its files from (`recordIndex`: `MemberLookup.memberDeclarationsOf`, `MemberLookup.declaresMemberAs`,
  * `TypeNameBinding.namingPaths`), never a table of its own. No import statement is read here. Files are keyed by
@@ -127,7 +127,7 @@ final class CallGraphImports {
 	 */
 	public function staticExtensionsOf(file: String, member: String): Array<String> {
 		final held: Null<HeldFile> = _held(file);
-		final usings: Array<String> = held == null ? [] : held.index.values.usingTypes(held.info);
+		final usings: Array<String> = held == null ? [] : held.index.typing.extensions.usingTypes(held.info);
 		return [for (u in usings) if (_isStatic(u, member)) u];
 	}
 

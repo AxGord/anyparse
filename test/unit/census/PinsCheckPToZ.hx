@@ -109,9 +109,10 @@ final class PinsCheckPToZ {
 		'unit.check.PreferForeachCheckTest#testGuardedUsingOrDeclarationRefuses :: control :: '
 			+ 'M-EXT-DECL-GUARDED-MEMBER,M-BINDER-EXTENSION-GUARDED-USING',
 		'unit.check.PreferForeachCheckTest#testLaterUsingWinsOverEarlierOne :: control :: M-BINDER-EXTENSION-LAST-USING',
-		'unit.check.PreferForeachCheckTest#testReceiverUsingMetaBeatsTheFileUsing :: control :: M-EXT-NOMINAL-ATUSING',
+		'unit.check.PreferForeachCheckTest#testReceiverUsingMetaBeatsTheFileUsing :: control :: M-BINDER-EXTENSION-ATUSING',
+		'unit.check.PreferForeachCheckTest#testTheCompilersUsingOrder :: control :: M-BINDER-EXTENSION-FIRST-PARAM,M-EXT-DECL-TWO-HOSTS,M-BINDER-EXTENSION-ATUSING,M-EXT-PRIVATE-OPEN,M-EXT-MODULE-FIELDS-OPEN',
 		'unit.check.PreferForeachCheckTest#testTwoTypesOfOneModuleDeclaringTheNameRefuse :: control :: M-EXT-DECL-TWO-HOSTS',
-		'unit.check.PreferForeachCheckTest#testUnindexedLaterUsingStopsTheWalk :: control :: M-BINDER-EXTENSION-UNINDEXED',
+		'unit.check.PreferForeachCheckTest#testUnindexedLaterUsingStopsTheWalk :: control :: M-USING-HOSTS-ALIAS',
 		'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainElseWhileNotFlagged :: control :: M-ELSELESS-FINAL-ELSE',
 		'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainImpureInitNotFlagged :: control :: M-DECLCHAIN-INIT-ANY',
 		'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainNestedWriteNotFlagged :: control :: M-DECLCHAIN-OCCURRENCE-COUNT',
