@@ -27074,7 +27074,8 @@
 			"name": "M-PIER-REWRITES-FOLDED",
 			"type": "anyparse.check.PreferIfExpressionReturn",
 			"method": "rewritesChain",
-			"force": "true",
+			"find": "return m.merge != null || m.writtenRungs >= MIN_CHAIN_RUNGS;",
+			"replace": "return true;",
 			"note": "every owned chain is rewritten, so a two-branch chain with a ternary tail becomes a three-branch value chain the author never wrote"
 		},
 		{
