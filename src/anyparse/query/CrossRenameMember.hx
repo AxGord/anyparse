@@ -339,7 +339,7 @@ final class CrossRenameMember {
 							// kind over: `public static final PX: Colour = RED;` is `Identifier 'PX' is not
 							// part of Colour`. A value is the member that says no modifier at all.
 							isEnumValue: decl.kind == refShape.enumAbstractDeclKind && !saysStatic
-							&& MemberKinds.implicitlyStaticMember(decl.kind, kind, refShape),
+								&& MemberKinds.implicitlyStaticMember(decl.kind, kind, refShape),
 							srcDecl: decl
 						};
 					}

@@ -615,10 +615,10 @@ final class ScratchField implements Check implements RiskyFix implements OracleR
 			final target: QueryNode = assign.children[0];
 			final bare: Bool = target.kind == shape.identKind;
 			final throughSelf: Bool = target.kind == shape.fieldAccessKind && target.children.length == 1
-			&& target.children[0].kind == shape.identKind && self != null && target.children[0].name == self;
+				&& target.children[0].kind == shape.identKind && self != null && target.children[0].name == self;
 			final name: String = target.name ?? '';
 			return (throughSelf && fields.contains(name) || bare && (fields.contains(name) || params.contains(name)))
-			&& MemberKinds.isSideEffectFree(assign.children[1], shape);
+				&& MemberKinds.isSideEffectFree(assign.children[1], shape);
 		});
 	}
 

@@ -221,7 +221,7 @@ final class TriviaEofLowering {
 				for (_d in _elemDocs) {
 					final _w: Int = anyparse.core.DocMeasure.flatTokenWidth(_d);
 					anyparse.core.DocMeasure.hasForcedBreak(_d)
-					|| (_w > opt.lineWidth && anyparse.core.DocMeasure.breakableHead(_d).width < _w);
+						|| (_w > opt.lineWidth && anyparse.core.DocMeasure.breakableHead(_d).width < _w);
 				}
 			]);
 		}

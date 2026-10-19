@@ -16215,8 +16215,8 @@
 			"name": "M-UNCHECKED-ALIAS-PLACE",
 			"type": "anyparse.query.UncheckedConversions",
 			"method": "noneBy",
-			"find": "seen.concat([id]), false);",
-			"replace": "seen.concat([id]), true);",
+			"find": "foreign, seen.concat([id]), false",
+			"replace": "foreign, seen.concat([id]), true",
 			"note": "(precision) the type an alias stands for is read as a place of its own, a nullable one boxed"
 		},
 		{

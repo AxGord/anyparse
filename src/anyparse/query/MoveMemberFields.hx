@@ -48,7 +48,7 @@ final class MoveMemberFields {
 			final candidates: Array<MemberGroup> = all.filter(g -> {
 				final nm: String = g.member.name ?? '';
 				return nm != '' && !names.contains(nm) && !added.contains(nm) && slices.indexOf(nm) != -1
-				&& ownableField(g, srcDecl, srcSource, destDecl, destSource, plugin);
+					&& ownableField(g, srcDecl, srcSource, destDecl, destSource, plugin);
 			});
 			final owned: Array<String> = ownedBy(candidates, cuts, srcTree, trees, shape);
 			if (owned.length == 0) break;

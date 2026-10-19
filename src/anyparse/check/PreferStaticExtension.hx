@@ -291,13 +291,13 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 					}
 					if (!options.addUsing && scope != UsingScope.InScope) {
 						violation.declineReason = 'the file has no `using ${candidate.module}` and this project sets addUsing:false, so the'
-						+ ' extension call would not resolve';
+							+ ' extension call would not resolve';
 						continue;
 					}
 					final pair: Null<Array<{ span: Span, text: String }>> = rewriteEdits(candidate, source);
 					if (pair == null) {
 						violation.declineReason = 'a comment sits inside the region the rewrite deletes, and dropping a comment silently is'
-						+ ' never acceptable';
+							+ ' never acceptable';
 						continue;
 					}
 					// No reason on THIS one, and that is not an oversight: the gate fires only once `edits`
