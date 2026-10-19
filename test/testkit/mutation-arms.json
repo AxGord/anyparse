@@ -19136,25 +19136,9 @@
 			"name": "M-TS-FOLD-SITE-LOCK",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "covers",
-			"find": "&& (sameLock(by, own) && oneThread(by, own) || nests(by, own) || way.contains(by.hold.edge.from));",
-			"replace": ";",
-			"note": "a hold of any lock across the same sink call covers another, though narrowing one frees nothing of the other"
-		},
-		{
-			"name": "M-TS-FOLD-SITE-THREAD",
-			"type": "anyparse.check.RootCauseFold",
-			"method": "covers",
-			"find": "sameLock(by, own) && oneThread(by, own)",
-			"replace": "sameLock(by, own)",
-			"note": "a hold of a lock covers another of it in another function across threads, though each thread stalls the main one by itself"
-		},
-		{
-			"name": "M-TS-FOLD-SITE-ONE-ORIGIN",
-			"type": "anyparse.check.RootCauseFold",
-			"method": "oneThread",
-			"find": "return covered.length > 0 && covered.foreach(t -> covering.contains(t));",
-			"replace": "return covered.length == 1 && covering.length == 1 && covered[0] == covering[0];",
-			"note": "a hold covers another of its lock only when both run on one origin alone, though a hold running wherever the covered one does reports its stall"
+			"find": "&& (nests(by, own) || way.contains(by.hold.edge.from));",
+			"replace": "&& true;",
+			"note": "any hold across the same sink call covers, so a hold of another lock, or of the same lock in another function, folds onto it"
 		},
 		{
 			"name": "M-TS-REPEATED-BY-OFF",
@@ -19203,14 +19187,6 @@
 			"find": "'${span.from}:${span.to}'",
 			"replace": "'${span.from}'",
 			"note": "a lock-call site is keyed by its start, so a call a give is made on passes as lock traffic"
-		},
-		{
-			"name": "M-TS-ORIGIN-STATES",
-			"type": "anyparse.check.ThreadStates",
-			"method": "workerStep",
-			"find": "_conditions.carried(e, valuation, ThreadSafety.CTX_BG)",
-			"replace": "ThreadSafety.CTX_BG",
-			"note": "a worker origin flows along every call whatever valuation the worker hands down"
 		},
 		{
 			"name": "M-TS-FOLD-UNNAMED-SAME",

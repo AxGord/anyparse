@@ -4363,3 +4363,19 @@ decided the question; it may not become a record of runs.
   of a `Map` — 4.3.7 has no `iter` for a `haxe.ds.Vector`). Still unproven: a skippable parameter at or before the
   lambda's (4.3.7 types it against that one first), an overload, a macro, a `#if` twin, a type parameter nothing binds,
   an unannotated receiver, a supertype's parameters — branch `feat/infra-N48`
+- N48 follow-up — `RootCauseFold` no longer lets a hold of the SAME lock in ANOTHER function cover a `Site` reason
+  (reverses the same-lock / same-thread clause of `feat/ts-precision-3`, and with it `RootCauseFold.oneThread` and
+  `ThreadStates.origins`, which existed only for it). A sink call is covered only by a hold that makes it its own work:
+  around the covered hold in its function (`nests`) or on every way of it to the call (a callee holding a lock across
+  it). Why: under the user's policy (any file / SQL / network I/O under a lock the main thread takes is long) each holder
+  holding the lock across its OWN call to an I/O site is its own stall — narrowing one hold frees nothing of the other,
+  the argument `ts-precision-3` already made for two threads holds on one thread too. Measured: on TM 1d1ba147 the
+  clause folded two truth real-long holds once N48 cut the infeasible `batchLock` re-acquire that had kept them warned
+  (`moveCloudFileBlocked` across its own `getTimestamp` stat, `updateCloudActionsByFileSystem` across its own
+  `doesItemExist`), and on f81c2049 / bd943dac it folded the real-long `RemoteFileSystemBase.setTimestamp` (R7 L1b's
+  "different hold of the same root"); on main it decided no truth `dup-of` key for its own reason. Score 1d1ba147
+  `all 161 152 102 9 15 4 22 0 0 0.67 102/102` (main `… 0.65 102/102`); the price is two `dup-of` keys warning
+  (`FileSystemBase.addCloudAction3Validated` — whose hold does span a stat, `addCloudAction2` takes its timestamp
+  before its own locks — and `FolderWatcher.setTimestamp`, enclosed by its caller's hold of another lock). The fold
+  tests that modelled one hold's work as two peer holds now model it as two holds of one function (`nests`) or a callee
+  hold on the way — branch `feat/infra-N48`

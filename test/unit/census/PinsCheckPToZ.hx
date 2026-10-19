@@ -864,12 +864,10 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyRootCauseTest#testARecursionThroughACallbackRepeatsUnderTheLock :: control :: M-TS-CYCLE-REGISTERED',
 		'unit.check.ThreadSafetyRootCauseTest#testASuppressedWarningCoversNothing :: control :: '
 			+ 'M-TS-FOLD-SUPPRESSED,M-TS-FOLD-SUPPRESSED-WAIT,M-TS-NEST-SUPPRESSED,M-TS-WAY-SUPPRESSED,M-TS-ONE-TAKE-SUPPRESSED',
-		'unit.check.ThreadSafetyRootCauseTest#testAWorkerRunsOnlyTheWaysItsValuesOpen :: control :: M-TS-ORIGIN-STATES',
 		'unit.check.ThreadSafetyRootCauseTest#testHoldsLongByOneCallMakeOneWarning :: control :: '
 			+ 'M-TS-FOLD-SITE,M-TS-FOLD-DEPTH,M-TS-FOLD-SITE-LOCK',
+		'unit.check.ThreadSafetyRootCauseTest#testHoldsOfOneLockInTwoFunctionsAreTwoStalls :: control :: M-TS-FOLD-SITE-LOCK',
 		'unit.check.ThreadSafetyRootCauseTest#testHoldsOfTwoLocksOneAfterTheOtherAreTwoStalls :: control :: M-TS-FOLD-NEST-LOCK',
-		'unit.check.ThreadSafetyRootCauseTest#testHoldsOnTwoThreadsDoNotCoverEachOther :: control :: '
-			+ 'M-TS-FOLD-SITE-THREAD,M-TS-FOLD-SITE-ONE-ORIGIN',
 		'unit.check.ThreadSafetyRootCauseTest#testSinkCallsOfOneWayMakeOneWarning :: control :: M-TS-WAY-OFF',
 		'unit.check.ThreadSafetyRootCauseTest#testTheCallsOfOneLoopMakeOneWarning :: control :: M-TS-LOOP-KEY',
 		'unit.check.ThreadSafetyRootCauseTest#testTwoCallsReachingOneSinkAreTwoWays :: control :: M-TS-FOLD-SAME-WAY,M-TS-FOLD-PARTS-ONCE',
