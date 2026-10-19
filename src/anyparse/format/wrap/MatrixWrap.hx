@@ -105,7 +105,7 @@ final class MatrixWrap {
 				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner),
 					GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
 					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
-					ConditionalMarkerDecrease(inner):
+					ConditionalMarkerDecrease(inner), BreakMark(inner, _):
 					stack.push(inner);
 				case Concat(parts):
 					for (p in parts) stack.push(p);

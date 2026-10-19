@@ -26729,6 +26729,54 @@
 			"find": "case Opaque:\n\t\t\t\t\t\treturn AliasedUnread(file, shared, id);",
 			"replace": "case Opaque:\n\t\t\t\t\t\treturn Aliased(file, shared, '', new Span(0, 0));",
 			"note": "library code the walk cannot read is refused as code at no file, naming no member"
+		},
+		{
+			"name": "M-BREAKMARK-SITE-OFF",
+			"type": "anyparse.core.BreakCommits",
+			"method": "named",
+			"find": "BreakCommit(committed(brk, BodyGroup(brk)), rebuild(BreakMark(brk, token)), token);",
+			"replace": "rebuild(brk);",
+			"note": "an `#if` branch literal that breaks by its own width decision is no longer named, so a list around it lays itself out from the flat item and the next write, reading the broken literal back, lays the list out by the multi-line-item rules"
+		},
+		{
+			"name": "M-BREAKMARK-UNRECORDED",
+			"type": "anyparse.core.Renderer",
+			"method": "pushStructural",
+			"find": "\t\t\t\tif (!f.forceFlat) decisions?.push({ node: f.doc, crosses: true });\n\t\t\t\tstack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));\n\t\t\tcase BreakCommit(_, flat):",
+			"replace": "\t\t\t\tstack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));\n\t\t\tcase BreakCommit(_, flat):",
+			"note": "the measure render no longer records a rendered `BreakMark`, so no named literal ever resolves its `BreakCommit` to the read-back layout"
+		},
+		{
+			"name": "M-BREAKMARK-UNREAD",
+			"type": "anyparse.core.BreakCommits",
+			"method": "tookNewBreaks",
+			"find": "case BreakMark(_, token): token;",
+			"replace": "case BreakMark(_, _): null;",
+			"note": "the measure's recorded `BreakMark`s are not read as taken breaks, so the read-back layout is never picked"
+		},
+		{
+			"name": "M-BREAKMARK-ONE-ROUND",
+			"type": "anyparse.core.BreakCommits",
+			"method": "resolve",
+			"find": "for (_ in 0...MEASURE_ROUNDS) {",
+			"replace": "for (_ in 0...1) {",
+			"note": "the committed layout is not measured again, so a literal that only the committed layout pushes past the limit (a call that opens around a comprehension) breaks un-read-back"
+		},
+		{
+			"name": "M-BREAKMARK-REBUILD-FRESH-TOKEN",
+			"type": "anyparse.core.D",
+			"method": "mapChildren",
+			"find": "case BreakMark(inner, token): BreakMark(f(inner), token);",
+			"replace": "case BreakMark(inner, _): BreakMark(f(inner), new BreakToken());",
+			"note": "a rebuilt `BreakMark` loses its token, so a copy a list lays out names a break no `BreakCommit` waits for"
+		},
+		{
+			"name": "M-BREAKMARK-FIT-NAMED",
+			"type": "anyparse.macro.WriterPolicyLowering",
+			"method": "nestBodyOnSourceNewlineWrap",
+			"find": "_dn(_cols, _dc([_dl(), $writeCall])) : _dc([_dt(' '), $namedCall]);",
+			"replace": "_dn(_cols, _dc([_dl(), $namedCall])) : _dc([_dt(' '), $namedCall]);",
+			"note": "an `#if` body under `conditionalExprFit` is named too, though the next write reads the region's directive seams back as well as the literal, so a ladder main settles in one write becomes the glued shape"
 		}
 	]
 }

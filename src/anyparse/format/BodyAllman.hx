@@ -84,23 +84,10 @@ final class BodyAllman {
 
 	/**
 	 * `body` with its width decision's break side in Allman position, or `null` when `body` is not wholly one of the
-	 * decisions it can rewrite behind `WrapBoundary` / one-element `Concat` wrappers.
+	 * decisions `BreakCommits.decisionMapped` reads.
 	 */
 	private static function allmanBreakSide(cols: Int, body: Doc): Null<Doc> {
-		return switch body {
-			case Doc.IfFirstLineExceeds(n, brk, flat):
-				Doc.IfFirstLineExceeds(n, Doc.LeadingBreak(cols, brk, new BreakToken()), flat);
-			case Doc.GroupWithRestProbe(Doc.IfBreak(brk, flat)):
-				Doc.GroupWithRestProbe(Doc.IfBreak(Doc.LeadingBreak(cols, brk, new BreakToken()), flat));
-			case Doc.WrapBoundary(inner):
-				final moved: Null<Doc> = allmanBreakSide(cols, inner);
-				moved == null ? null : Doc.WrapBoundary(moved);
-			case Doc.Concat([inner]):
-				final moved: Null<Doc> = allmanBreakSide(cols, inner);
-				moved == null ? null : Doc.Concat([moved]);
-			case _:
-				null;
-		};
+		return BreakCommits.decisionMapped(body, (brk, rebuild) -> rebuild(Doc.LeadingBreak(cols, brk, new BreakToken())));
 	}
 
 	/** A copy of `items` with element `i` replaced by `d`. */

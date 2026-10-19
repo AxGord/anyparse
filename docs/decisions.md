@@ -4402,3 +4402,37 @@ decided the question; it may not become a record of runs.
   visit budget as `Budget`, where all three read "code at library code the run did not read". anyparse src
   prefer-keyvalue-loop: 39 such refusals -> 0 with and without the oracle, all 39 still declined by the next culprit the
   walk now reaches (std `haxe/Exception.hx`, project `toString`s) — branch `feat/infra-N50`
+
+## N52b (2026-10-19): an `#if` branch literal's break is named; the measure follows the layout it committed
+
+- An object literal that a branch of an expression-scope `#if` holds on the keyword's line breaks GLUED, by its own width
+  decision (`WrapBoundary(IfFirstLineExceeds(..))` / `GroupWithRestProbe(IfBreak(..))`). A list around the `#if` (a
+  comprehension's brackets, a call's arguments) used to lay itself out from the flat item, and the next write, reading the
+  broken literal back as a source-multi-line one (`BodyGroup`), laid the list out by the multi-line-item rules: one write
+  late, on main too (`x_condcomp` 626 drifting files of the 91,000-file harness, plus calls, nested calls, chains,
+  lambdas, parens and `#elseif` bodies: ~5,800 more in its `in6` templates).
+- DESIGN: a new Doc ctor, `BreakMark(inner, token)`, not a token field on the width decision. It sits on the decision's
+  BREAK side, renders `inner` and nothing else, every walker reads it transparent (each switch got the arm its
+  `ConditionalMarkerDecrease` / `CollapseProbe` siblings have — 40 switches, the exhaustive ones found by the compiler);
+  the measure render records it when it renders it, i.e. when the decision takes its break side. A token field on
+  `IfFirstLineExceeds` / `IfBreak` would have been silent at every rebuild site that does not copy it (`D.mapChildren`,
+  `WrapList.groupifyShared`, the collapse rewrite), and would need a second field for the `IfBreak` shape; the ctor is
+  rebuilt keeping its token in both rebuild walkers, which `testARebuiltMarkKeepsItsToken` / arm
+  `M-BREAKMARK-REBUILD-FRESH-TOKEN` pin. `LeadingBreak` was not reused: it renders a hardline.
+- `BreakCommits.named(body)` wraps the decision ITSELF in `BreakCommit(committed(brk, BodyGroup(brk)), decision-with-mark,
+  token)`: the read-back form the next write builds, behind the same token. Every list around it already offers one
+  alternative per nested token (`WrapList.emit` + `outermostPerToken`), so no list code changed, and a host that is not a
+  list (an assignment) just gets the read-back literal when it breaks. The recogniser is positive twice over: the site is
+  `WriterPolicyLowering.nestBodyOnSourceNewlineWrap`, whose only consumers are the three expression-scope `#if` body
+  fields (`HxConditionalExpr.expr` / `elseExpr`, `HxElseifExpr.expr`), and only its SAME-line arm; the Doc shapes are the
+  two `BodyAllman` already rewrote (`decisionMapped`, now shared by both — the walker moved out of `BodyAllman`).
+- NOT under `sameLine.conditionalExprFit`: there the region is its own fit group whose directive seams also break, and the
+  next write reads those seams back as source newlines, so the literal alone is not what it reads. Naming it there changed
+  21 files main settles in one write (tm config, k 80-100); arm `M-BREAKMARK-FIT-NAMED` pins the exclusion. The fit-mode
+  residue (tm: `z_condchain` 78, `z_condcall2` 74, `z_condelseif` 4) stays open.
+- `BreakCommits.resolve` measures again: the layout one round committed can move a break the round before saw at another
+  column (a call around a comprehension opens, pushing the second literal past the limit), so the committed layout is
+  rendered again and, while a round takes a new break, resolved again from the original Doc with every break taken so
+  far (at most `MEASURE_ROUNDS` = 4; a break taken once stays taken, which is what makes it terminate). A Doc where no
+  break is taken costs the same one measure render as before; one where a break is taken costs one more. Arm
+  `M-BREAKMARK-ONE-ROUND`.
