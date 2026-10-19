@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ImportSpelling.ImportSpelled;
 
 /**
  * Remove an `import` / `using` statement by its module path — the by-name
@@ -23,19 +24,15 @@ import anyparse.query.CanonicalEdit.EditResult;
 @:nullSafety(Strict)
 final class RemoveImport {
 
-	private static final IMPORT_KINDS: Array<String> = [
-		'ImportDecl',
-		'ImportAliasDecl',
-		'ImportAliasInDecl',
-		'ImportWildDecl',
-		'UsingDecl'
-	];
+	private static inline final USING_KIND: String = 'UsingDecl';
 
 	/**
-	 * Remove the import / using whose exposed path equals `modulePath`, with its
-	 * leading `/**` doc block. `reformat` opts into a whole-file canonicalisation
-	 * when the source is not already writer-canonical; `withDoc = false` keeps the
-	 * comment. Returns `Ok(rewritten)` or an `Err`.
+	 * Remove the import / using whose exposed path equals `modulePath`, with its leading `/**` doc
+	 * block. `modulePath` may also be the whole statement (`import x.Y;` / `using x.Y;`, read by
+	 * `ImportSpelling`), and then its keyword narrows the match to that kind: `using a.B;` names the
+	 * `using` alone where a bare `a.B` beside an `import a.B;` is ambiguous. `reformat` opts into a
+	 * whole-file canonicalisation when the source is not already writer-canonical; `withDoc = false`
+	 * keeps the comment. Returns `Ok(rewritten)` or an `Err`.
 	 */
 	public static function removeImport(
 		source: String, modulePath: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true, ?optsJson: String
@@ -45,13 +42,30 @@ final class RemoveImport {
 			case Parsed(parsed): parsed;
 		};
 
-		final matches: Array<QueryNode> = tree.children.filter(n -> IMPORT_KINDS.contains(n.kind) && n.name == modulePath);
+		final spelled: Null<ImportSpelled> = ImportSpelling.split(modulePath);
+		if (spelled == null) return Err(ImportSpelling.notAPath(modulePath));
+		final path: String = spelled.path;
+		final kinds: Array<String> = kindsFor(spelled.keyword);
+		final matches: Array<QueryNode> = tree.children.filter(n -> kinds.contains(n.kind) && n.name == path);
 		return if (matches.length == 0)
-			Err(absentMessage(tree, modulePath))
+			Err(absentMessage(tree, path, kinds, spelled.keyword))
 		else if (matches.length > 1)
-			Err('ambiguous — "$modulePath" matches ${matches.length} import statements')
+			Err('ambiguous — "$path" matches ${matches.length} import statements')
 		else
 			ElementSpan.deleteNode(source, matches[0], tree, reformat, plugin, withDoc, optsJson);
+	}
+
+	/**
+	 * The statement kinds a request spelled with `keyword` may name: a `using` statement names a
+	 * `using` only, an `import` statement every import spelling but a `using`, and a bare path any of
+	 * them — the by-path lookup this op has always made.
+	 */
+	private static function kindsFor(keyword: Null<String>): Array<String> {
+		return switch (keyword) {
+			case null: ModuleScan.IMPORT_DECL_KINDS;
+			case ImportSpelling.USING_WORD: [USING_KIND];
+			case _: ModuleScan.IMPORT_DECL_KINDS.filter(kind -> kind != USING_KIND);
+		};
 	}
 
 	/**
@@ -67,24 +81,27 @@ final class RemoveImport {
 	 * only statement in a region leaves `#if sys` / `#end` standing around nothing, and whether
 	 * the empty region should go with it depends on what else the condition is for. `remove-element`
 	 * has no such opinion because the caller addressed one node deliberately, so the message hands
-	 * the work to it by name.
+	 * the work to it by name — spelled with the keyword the caller asked for, when it asked for one.
 	 */
-	private static function absentMessage(tree: QueryNode, modulePath: String): String {
-		final guarded: Int = guardedCount(tree, modulePath);
+	private static function absentMessage(tree: QueryNode, modulePath: String, kinds: Array<String>, keyword: Null<String>): String {
+		final guarded: Int = guardedCount(tree, modulePath, kinds);
+		final what: String = keyword ?? 'import';
+		final hint: String = keyword == null
+			? '`apq remove-element <file> --match \'import $modulePath;\' --write` (or `--match \'using $modulePath;\'`)'
+			: '`apq remove-element <file> --match \'$keyword $modulePath;\' --write`';
 		return guarded == 0
-			? 'no import of "$modulePath" found'
-			: 'no TOP-LEVEL import of "$modulePath" found, but $guarded inside a conditional-compilation region — this op removes an '
+			? 'no $what of "$modulePath" found'
+			: 'no TOP-LEVEL $what of "$modulePath" found, but $guarded inside a conditional-compilation region — this op removes an '
 				+ 'unguarded statement only, because deleting the last one out of an `#if` leaves the region empty with its condition '
-				+ 'standing and only the caller can say whether that region should go too. Remove it with `apq remove-element <file> '
-				+ '--match \'import $modulePath;\' --write` (or `--match \'using $modulePath;\'`), then read the region back';
+				+ 'standing and only the caller can say whether that region should go too. Remove it with $hint, then read the region back';
 	}
 
-	/** Imports of `modulePath` anywhere BELOW the module's own children — that is, inside a conditional region. */
-	private static function guardedCount(node: QueryNode, modulePath: String): Int {
+	/** Statements of `kinds` naming `modulePath` anywhere BELOW the module's own children — that is, inside a conditional region. */
+	private static function guardedCount(node: QueryNode, modulePath: String, kinds: Array<String>): Int {
 		var found: Int = 0;
 		for (child in node.children) {
-			if (IMPORT_KINDS.contains(child.kind) && child.name == modulePath) found++;
-			found += guardedCount(child, modulePath);
+			if (kinds.contains(child.kind) && child.name == modulePath) found++;
+			found += guardedCount(child, modulePath, kinds);
 		}
 		return found;
 	}

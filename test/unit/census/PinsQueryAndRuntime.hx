@@ -22,6 +22,11 @@ final class PinsQueryAndRuntime {
 		'unit.query.AddElementSortedTest#testNonArrayContainerIsRefused :: control :: M-SORTED-ANY-CONTAINER',
 		'unit.query.AddElementSortedTest#testUnsortedListIsRefused :: control :: M-SORTED-ORDER-UNCHECKED',
 		'unit.query.AddImportSliceTest#testCliSeatReadsTheWildcardAsRunMember :: control :: M-ADDIMPORT-CLI-BLIND-SEAT',
+		'unit.query.AddImportSliceTest#testCliTakesAWholeUsingStatement :: control :: M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED',
+		'unit.query.AddImportSliceTest#testImportStatementUnderTheUsingFlagIsRefused :: control :: M-IMPORTSPELLING-FLAG-CONFLICT-UNCHECKED',
+		'unit.query.AddImportSliceTest#testNotAModulePathIsRefusedByName :: control :: M-ADDIMPORT-PATH-UNCHECKED',
+		'unit.query.AddImportSliceTest#testUsingOnlyHeaderTakesTheLowestPriority :: control :: M-ADDIMPORT-USING-TAKES-IMPORT-SEAT',
+		'unit.query.AddImportSliceTest#testWholeUsingStatementAddsAUsing :: control :: M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED',
 		'unit.query.AddMetaSliceTest#testCliWritesTheEntry :: control :: M-ADDMETA-CLI-UNROUTED',
 		'unit.query.AddMetaSliceTest#testFinalClassWrapperIsLifted :: control :: M-ADDMETA-NO-WRAPPER-CLIMB',
 		'unit.query.AddMetaSliceTest#testGuardedTypeKeepsTheEntryInsideTheGuard :: control :: M-ADDMETA-LOOSE-WRAPPER-CLIMB',
@@ -1231,6 +1236,10 @@ final class PinsQueryAndRuntime {
 		'unit.query.RemoveElementSliceTest#testRemoveFinalClassTakesItsFinal :: control :: '
 			+ 'M-DECLSPAN-FINAL-WRAPPER-BLIND,M-LIFT-FINAL-WRAPPER-SKIPPED',
 		'unit.query.RemoveElementSliceTest#testRemoveOnePerLineElementTakesItsLine :: control :: M-REMOVE-COMMA-LINE-KEPT',
+		'unit.query.RemoveElementSliceTest#testSelectedLiteralInsideAnExpressionIsRefused :: control :: M-LITERAL-STRANDED-ACCEPTED',
+		'unit.query.RemoveElementSliceTest#testSelectedLiteralRemovesTheArrayItem :: control :: M-LITERAL-WRAPPER-SKIPPED',
+		'unit.query.RemoveImportSliceTest#testCliUsingFlagRemovesTheUsing :: control :: M-REMOVEIMPORT-CLI-USING-FLAG-DROPPED',
+		'unit.query.RemoveImportSliceTest#testUsingStatementPicksTheUsing :: control :: M-REMOVEIMPORT-KEYWORD-IGNORED',
 		'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 			+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 		'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',

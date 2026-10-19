@@ -126,6 +126,13 @@ final class PinsCheckPToZ {
 		'unit.check.PreferIfExpressionAssignmentCheckTest#testFlatTwoBranchStillNotFlagged :: control :: M-TERMINAL-RUNGS-ANY',
 		'unit.check.PreferIfExpressionChainCheckTest#testBooleanReducibleUnfoldedRungStillConverts :: control :: M-PIEC-SPINE-CLAIM-ANY',
 		'unit.check.PreferIfExpressionChainCheckTest#testChainWithNoBooleanLeafStillFlagged :: control :: M-PIEC-SPINE-CLAIM-ANY',
+		'unit.check.PreferIfExpressionReturnCheckTest#testFallThroughCascadeClaimedNotRewritten :: control :: M-PIER-CASCADE-UNMERGED-REPORTED',
+		'unit.check.PreferIfExpressionReturnCheckTest#testGuardBeforeTernaryClaimedNotRewritten :: control :: M-PIER-CASCADE-UNMERGED-REPORTED',
+		'unit.check.PreferIfExpressionReturnCheckTest#testGuardRepeatingTheTernaryElseMerges :: control :: M-PIER-OUTER-UNNEGATED,M-PIER-MERGE-NO-PARENS',
+		'unit.check.PreferIfExpressionReturnCheckTest#testMergeRefusals :: control :: M-PIER-MERGE-ANY-VALUE,M-PIER-MERGE-COMMENT,M-PIER-MERGE-ANY-COUNT',
+		'unit.check.PreferIfExpressionReturnCheckTest#testRepeatedLeadingValueMergesByOr :: control :: M-PIER-LEADING-AS-OUTER',
+		'unit.check.PreferIfExpressionReturnCheckTest#testStatementLikeValueIsNotMerged :: control :: M-PIER-MERGE-UNMARCHABLE',
+		'unit.check.PreferIfExpressionReturnCheckTest#testTwoWrittenBranchesAndAFoldedTailAreNotAChain :: control :: M-PIER-REWRITES-FOLDED,M-PIER-CLAIMSCHAIN-OWNS',
 		'unit.check.PreferIndexAccessCheckTest#testObjectLiteralSetValueNotFlagged :: control :: M-PIA-OBJLIT-SET-FLAGGED',
 		'unit.check.PreferInlineCheckTest#testOwnFileBuildMacroTokenCostsNoResolutionIndex :: control :: M-INLINE-LOCAL-BUILD-MACRO',
 		'unit.check.PreferInlineCheckTest#testQualifiedSupertypeKeySplitsTheTwinFromTheRealSubtypesOwner :: control :: '

@@ -162,8 +162,10 @@ private typedef RunChoice = {
  * `using` is deliberately NOT ordered here. Haxe resolves a static extension through the `using`
  * statements in REVERSE declaration order, so a `using`'s POSITION is semantics, not layout:
  * sliding a fresh one into the middle of a sorted `using` group would silently rank it below
- * extensions declared after it. Every caller therefore appends a `using` after the last one, and
- * the `import-order` rule never reorders the group.
+ * extensions declared after it, and the `import-order` rule never reorders the group. A fresh
+ * `using` does not take this seat at all: `AddImport` and every `using`-inserting rule place it
+ * through `UsingScan.usingInsertEdit`, ABOVE the header's first `using` — the lowest priority, so
+ * no extension call the file already makes is re-targeted.
  *
  * LIMIT — this seat is config-blind while the rule is config-aware. Under a non-default
  * `"import-order": { "order": … }` a run the seat reads as ordered (the first order that explains

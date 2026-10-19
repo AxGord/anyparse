@@ -252,19 +252,15 @@ final class EdgeConditions {
 			if (bound != null) return factsOf(bound, value, fnId, file);
 		}
 		final affix: Null<AffixTest> = _values.stringPredicate(fnId, cond);
-		return if (affix != null)
-			[
-				{
-					param: affix.param,
-					value: value,
-					nullTest: false,
-					test: affix
-				}
-			]
-		else if (isMainCheck(cond, fnId, file))
-			[{ param: MAIN_CHECK, value: value, nullTest: false }]
-		else
-			[];
+		if (affix != null) return [
+			{
+				param: affix.param,
+				value: value,
+				nullTest: false,
+				test: affix
+			}
+		];
+		return isMainCheck(cond, fnId, file) ? [{ param: MAIN_CHECK, value: value, nullTest: false }] : [];
 	}
 
 	/**

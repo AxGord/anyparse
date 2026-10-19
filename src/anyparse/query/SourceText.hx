@@ -53,6 +53,21 @@ final class SourceText {
 		return dot < 0 ? '' : dotted.substring(0, dot);
 	}
 
+	/**
+	 * Whether `spelled` — a dotted name the tree carries as ONE leaf, a qualified type reference or an
+	 * import / using payload — answers a query for the SIMPLE name `target` through its last segment
+	 * (`pkg.Mod.T` answers `T`; `Mod.WrapBodyOpts` does not answer `BodyOpts`, which `endsWith` would).
+	 *
+	 * A dotted `target` never answers here — a last segment carries no dot — so a query that spells a
+	 * path stays the caller's own exact compare and `Other.T` cannot answer `Mod.T`. This is the
+	 * ONE spelling of the widening — `Uses` reads it for a qualified type reference, `Lit` for an import
+	 * leaf — and every consumer is opt-in, because a REWRITER handed a whole dotted path would splice
+	 * it whole (`CrossRename` owns that arithmetic through `RefactorSupport.qualifiedPaths`).
+	 */
+	public static inline function answersSimpleName(spelled: String, target: String): Bool {
+		return lastSegment(spelled) == target;
+	}
+
 	/** A name is renameable when it is a valid identifier and not `this`. */
 	public static inline function isRenameableName(name: Null<String>): Bool {
 		return name != null && name != 'this' && isIdentifier(name);
@@ -270,7 +285,7 @@ final class SourceText {
 
 	/**
 	 * `name` with its leading capital run lower-cased the way a camelCase VALUE name spells a type's: `Point` → `point`,
-	 * `RightPanelEvent` → `rightPanelEvent`, an acronym run up to the capital that opens the next word `URLLoader` →
+	 * `SidebarTabEvent` → `sidebarTabEvent`, an acronym run up to the capital that opens the next word `URLLoader` →
 	 * `urlLoader`, and a run with no lower-case letter after it entirely `IO` → `io`, `MD5Hash` → `md5Hash`. A name not
 	 * starting upper-case comes back unchanged.
 	 *

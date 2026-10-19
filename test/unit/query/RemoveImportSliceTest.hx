@@ -1,7 +1,10 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.Cli;
 import anyparse.query.RemoveImport;
+import sys.io.File;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -73,6 +76,46 @@ class RemoveImportSliceTest extends Test {
 		final source: String = '#if sys\nimport a.Used;\n#end\nclass C {}\n';
 		Assert.equals('no import of "a.Missing" found', errText(source, 'a.Missing'));
 	}
+
+	/**
+	 * A whole `using x.Y;` statement names the `using` alone, so the path an `import` of the same module
+	 * shares no longer makes the request ambiguous — the keyword is the disambiguation `testAmbiguous`
+	 * had no way to spell.
+	 */
+	@:pin('control')
+	@:killer('M-REMOVEIMPORT-KEYWORD-IGNORED')
+	public function testUsingStatementPicksTheUsing(): Void {
+		final text: String = okText('import a.B;\nusing a.B;\nclass C {}\n', 'using a.B;');
+		Assert.isTrue(text.indexOf('import a.B;') >= 0, text);
+		Assert.isTrue(text.indexOf('using') == -1, text);
+	}
+
+	/** And `import x.Y;` names the import alone, leaving the `using` of the same module standing. */
+	public function testImportStatementPicksTheImport(): Void {
+		final text: String = okText('import a.B;\nusing a.B;\nclass C {}\n', 'import a.B;');
+		Assert.isTrue(text.indexOf('using a.B;') >= 0, text);
+		Assert.isTrue(text.indexOf('import') == -1, text);
+	}
+
+	/** A `using` statement does not match an `import` of the same path: the kind is part of the request. */
+	public function testUsingStatementDoesNotRemoveAnImport(): Void {
+		assertErr('import a.B;\nclass C {}\n', 'using a.B;');
+	}
+
+	#if (sys || nodejs)
+	/** The CLI's `--using` is the flag spelling of the same request, mirroring `add-import --using`. */
+	@:pin('control')
+	@:killer('M-REMOVEIMPORT-CLI-USING-FLAG-DROPPED')
+	public function testCliUsingFlagRemovesTheUsing(): Void {
+		final dir: String = CliFixture.writeTree('removeimportusing', [
+			{ name: 'src/q/Target.hx', source: 'package q;\n\nimport a.B;\n\nusing a.B;\n\nclass Target {}\n' }
+		]);
+		final target: String = '$dir/src/q/Target.hx';
+		Assert.equals(0, Cli.run(['remove-import', target, 'a.B', '--using', '--write']));
+		Assert.equals('package q;\n\nimport a.B;\n\nclass Target {}\n', File.getContent(target));
+		CliFixture.removeDir(dir);
+	}
+	#end
 
 	private function okText(source: String, path: String): String {
 		switch RemoveImport.removeImport(source, path, true, new HaxeQueryPlugin()) {

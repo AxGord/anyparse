@@ -305,12 +305,7 @@ final class MoveToHelper {
 		final property: String = name.substr(4);
 		final info: Null<TypeDeclInfo> = prep.srcInfo.types.find(t -> t.name == prep.srcTypeName);
 		final member: Null<MemberInfo> = info?.members.find(mi -> mi.name == property);
-		return if (member == null)
-			null
-		else if (isGet ? member.hasGetter : member.hasSetter)
-			property
-		else
-			null;
+		return member != null && (isGet ? member.hasGetter : member.hasSetter) ? property : null;
 	}
 
 	/**

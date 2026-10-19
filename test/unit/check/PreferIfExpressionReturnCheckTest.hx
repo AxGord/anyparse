@@ -15,6 +15,8 @@ import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
+
 /**
  * The `prefer-if-expression-return` check: an `if / else if / … / else` CHAIN whose every
  * branch is a valued `return` is flagged `Info`, and `fix` collapses it to
@@ -233,158 +235,6 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	}
 
 	/**
-	 * The FALL-THROUGH spelling of the same control flow is claimed too: a run of no-`else` `if`s
-	 * each returning a value, plus the sibling return past the run. `redundant-else-after-return`
-	 * rewrites the chain INTO this shape, so the rule that owns one has to own the other or the
-	 * de-nest hands the code to a pairwise march this rule exists to replace.
-	 *
-	 * The pair is one test: a two-`if` cascade is claimed, a one-`if` one is not - two leaf values
-	 * are a ternary and belong to `prefer-ternary-return`.
-	 */
-	public function testFallThroughCascadeClaimed(): Void {
-		final vs: Array<Violation> = violations(wrap('if (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;'));
-		Assert.equals(1, vs.length);
-		Assert.equals('this if/return cascade can be a single if-expression return', vs[0].message);
-		Assert.equals(0, violations(wrap('if (a) return 1;\n\t\treturn 3;')).length, 'two leaf values are a ternary, not a chain');
-		// The collector is GREEDY, so every later index of one run would collect a shorter cascade of
-		// its own: only the index whose predecessor is NOT a rung is a head. A two-`if` cascade cannot
-		// show that (its tail index collects one branch, below the rung minimum); a three-`if` one can.
-		Assert.equals(
-			1, violations(wrap('if (a) return 1;\n\t\tif (b) return 2;\n\t\tif (c) return 3;\n\t\treturn 4;')).length,
-			'a longer cascade is reported ONCE, at its head'
-		);
-	}
-
-	/** The cascade collapses to the same text the else-linked chain does, in ONE edit. */
-	public function testFallThroughCascadeFixed(): Void {
-		final es: Array<{ span: Span, text: String }> = edits(wrap('if (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;'));
-		Assert.equals(1, es.length);
-		Assert.equals('return if (a) 1 else if (b) 2 else 3;', es[0].text);
-	}
-
-	/**
-	 * A terminal value that is itself a ternary spine becomes rungs of the chain, which is what
-	 * makes ONE edit land where the composed `--fix` needed the ternary the chain rule condemns.
-	 * The head here writes a single `if`, so without the fold there would be one rung and no claim.
-	 */
-	public function testTerminalTernaryFoldedIntoRungs(): Void {
-		final es: Array<{ span: Span, text: String }> = edits(wrap('if (a) return 1;\n\t\treturn p ? q : r;'));
-		Assert.equals(1, es.length);
-		Assert.equals('return if (a) 1 else if (p) q else r;', es[0].text);
-	}
-
-	/**
-	 * The march gate: this rule may not claim a cascade `prefer-ternary-return` would refuse, or the
-	 * claim silences that rule and CHANGES the fixed point - a guard cascade nobody asked to fold
-	 * becomes one expression. A bool-literal rung is the gate's largest class (`cond ? true : <not
-	 * provably Bool>` is what that rule calls a stuck collapse); the value pair is the control.
-	 */
-	public function testBoolLiteralRungNotClaimed(): Void {
-		Assert.equals(
-			0, violations(wrap('if (a) return false;\n\t\tif (b) return g();\n\t\treturn h();')).length,
-			'a bool-literal rung is left to the pairwise march'
-		);
-		Assert.equals(
-			1, violations(wrap('if (a) return e();\n\t\tif (b) return g();\n\t\treturn h();')).length,
-			'the same cascade with value rungs is claimed'
-		);
-	}
-
-	/**
-	 * The other two halves of the march gate, each with its own control, because a rung value the
-	 * pairwise march refuses is a rung this rule may not claim either: a STATEMENT-LIKE value (a
-	 * `switch` / `if` / `try` / block used as a value) reads no better as a chain rung than as the
-	 * two statements it replaced, and a ternary with exactly ONE bool-literal branch is a collapse
-	 * `simplify-boolean-ternary` is mid-way through - burying it one level deeper loses its licence.
-	 */
-	public function testMarchRefusedRungValuesNotClaimed(): Void {
-		Assert.equals(
-			0, violations(wrap('if (a) return switch x {\n\t\t\tcase _: 1;\n\t\t};\n\t\tif (b) return g();\n\t\treturn h();')).length,
-			'a switch used as a rung value is left to the pairwise march'
-		);
-		Assert.equals(
-			0, violations(wrap('if (a) return c ? true : g();\n\t\tif (b) return g();\n\t\treturn h();')).length,
-			'so is a boolean ternary mid-reduction'
-		);
-		Assert.equals(
-			1, violations(wrap('if (a) return c ? e() : g();\n\t\tif (b) return g();\n\t\treturn h();')).length,
-			'the same shape with a VALUE ternary is claimed'
-		);
-	}
-
-	/**
-	 * A rung condition is copied paren-UNWRAPPED, the way `PreferIfExpressionChain.spine` unwraps its
-	 * own: the emitted `if (` … `)` supplies the delimiters, so a copied pair only draws a
-	 * `redundant-parens` finding on the result. Seen on openfl\'s `Tile.__findTileset`, where a
-	 * source `(parent is Tilemap)` reached the rebuilt chain with both pairs while the pairwise route
-	 * emitted it bare - the same input, two spellings of the output.
-	 */
-	public function testRungConditionParensDropped(): Void {
-		final es: Array<{ span: Span, text: String }> = edits(wrap('if ((a)) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;'));
-		Assert.equals(1, es.length);
-		Assert.equals('return if (a) 1 else if (b) 2 else 3;', es[0].text);
-	}
-
-	/**
-	 * A cascade inside a conditional-compilation region is seen, because this rule reads the
-	 * BRANCH-AWARE projection. It has to: `prefer-ternary-return` reads that projection and now defers
-	 * to this one, and in the plain projection a `#if` region is ONE node whose branches are flattened
-	 * children with no statement list at all - so the pair would be deferred to a walk that never saw
-	 * it. Seen on openfl\'s `Lib.isXMLName`, whose three-`return` cascade under `#end` lost its
-	 * only finding that way.
-	 */
-	public function testCascadeInsideConditionalRegionClaimed(): Void {
-		Assert.equals(
-			1,
-			violations(
-				'class C {\n\tfunction f():Int {\n\t\t#if js\n\t\tif (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;\n\t\t#end\n\t}\n}'
-			).length,
-			'the branch-aware projection gives the region its own statement list'
-		);
-		Assert.equals(
-			1,
-			edits(
-				'class C {\n\tfunction f():Int {\n\t\t#if js\n\t\tif (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;\n\t\t#end\n\t}\n}'
-			).length,
-			'and `fix` reads the same projection, or the finding would have no edit'
-		);
-	}
-
-	/**
-	 * The head of a run is the index whose predecessor is not a rung THIS rule would collect, and
-	 * "rung" has to mean a valued `return`, not just a no-`else` `if` with one statement. A leading
-	 * `if (x) g();` is a rung by shape alone, and the shape-only test skipped the index behind it -
-	 * hiding the whole cascade that followed, while the longer run starting at the leading statement
-	 * was refused for not returning. The control is the same cascade with nothing in front of it.
-	 */
-	public function testNonReturnStatementDoesNotHideTheCascade(): Void {
-		Assert.equals(
-			1, violations(wrap('if (x) g();\n\t\tif (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;')).length,
-			'a leading non-return guard does not swallow the cascade behind it'
-		);
-		Assert.equals(
-			1, violations(wrap('if (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;')).length,
-			'and the same cascade alone is reported once'
-		);
-	}
-
-	/**
-	 * The terminal-ternary fold is refused when a comment sits inside that spine, asked of the parsed
-	 * comment TOKENS rather than a text scan: a `//` inside a STRING literal is not a comment, and a
-	 * raw scan blocked the fold on a URL.
-	 */
-	public function testStringLiteralSlashesDoNotBlockTheFold(): Void {
-		Assert.equals(
-			1, violations(wrap('if (a) return "x";\n\t\treturn b ? "http://example.com" : "y";')).length,
-			'a `//` inside a string literal is not a comment'
-		);
-		Assert.equals(
-			0, violations(wrap('if (a) return "x";\n\t\treturn b ? /* why */ "p" : "y";')).length,
-			'a real comment inside the folded spine still refuses'
-		);
-	}
-
-	/**
 	 * The march gate governs the CHAIN arm too, and `redundant-else-after-return` keeps its finding
 	 * when it refuses - the claim is what silences that rule, so a chain this one will not rewrite
 	 * must not be claimed. Same fixture both ways: bool-literal rungs are refused, value rungs are
@@ -397,6 +247,224 @@ class PreferIfExpressionReturnCheckTest extends Test {
 		);
 		Assert.isTrue(
 			claims('if (a) return e();\n\t\telse if (b) return g();\n\t\telse return h();'), 'the same chain with value rungs is claimed'
+		);
+	}
+
+	/**
+	 * The FALL-THROUGH spelling - a run of no-`else` `if`s each returning a value, plus the sibling
+	 * return past the run - is OWNED by this rule but never rewritten into a value chain: three or
+	 * more values the author wrote as guard statements read better as those statements than as an
+	 * `if` / `else if` / `else` value (the formatter's `expressionIfFitMaxBranches: 2`). Owning it is
+	 * what keeps `prefer-ternary-return` from marching it pairwise into the same chain by the long
+	 * route, so the cascade is claimed and the finding count is zero.
+	 *
+	 * Two leaf values are a ternary and not this rule's at all; a longer cascade is claimed at its head.
+	 */
+	@:pin('control')
+	@:killer('M-PIER-CASCADE-UNMERGED-REPORTED')
+	public function testFallThroughCascadeClaimedNotRewritten(): Void {
+		Assert.equals(0, violations(wrap('if (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;')).length);
+		Assert.isTrue(claimsCascade('if (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;'), 'the cascade stays this rule\'s');
+		Assert.isFalse(claimsCascade('if (a) return 1;\n\t\treturn 3;'), 'two leaf values are a ternary, not a chain');
+		Assert.isTrue(
+			claimsCascade('if (a) return 1;\n\t\tif (b) return 2;\n\t\tif (c) return 3;\n\t\treturn 4;'),
+			'a longer cascade is claimed at its head'
+		);
+	}
+
+	/**
+	 * A guard plus a terminal TERNARY is the shape N55's self-fix turned into a six-line chain that
+	 * spelled `null` twice (`MoveToHelper.accessedProperty`). The fold still COUNTS the ternary's
+	 * leaves - that is what makes the cascade this rule's, so `prefer-ternary-return` does not write
+	 * a three-leaf ternary - but distinct values leave the statements alone.
+	 */
+	@:pin('control')
+	@:killer('M-PIER-CASCADE-UNMERGED-REPORTED')
+	public function testGuardBeforeTernaryClaimedNotRewritten(): Void {
+		Assert.equals(0, violations(wrap('if (a) return 1;\n\t\treturn p ? q : r;')).length);
+		Assert.isTrue(claimsCascade('if (a) return 1;\n\t\treturn p ? q : r;'));
+	}
+
+	/**
+	 * When the guard's value is the one the ternary's ELSE repeats, the three branches carry two
+	 * values and merge into one condition: `!c1 && c2 ? v2 : v1`. Sound with no purity proof - `c1`
+	 * is still evaluated first and `c2` only when `c1` is false, exactly as the statements did - and
+	 * the conjunction keeps the null narrowing the guard gave `c2` (`m != null && m.x`). The rung
+	 * condition sat in a `?:` slot and binds looser than `&&`, so it regains its parentheses.
+	 */
+	@:pin('control')
+	@:killer('M-PIER-OUTER-UNNEGATED')
+	@:killer('M-PIER-MERGE-NO-PARENS')
+	public function testGuardRepeatingTheTernaryElseMerges(): Void {
+		final src: String = wrap('if (m == null) return null;\n\t\treturn (g ? m.a : m.b) ? p : null;');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('this if/return cascade repeats a value and can be a single ternary return', vs[0].message);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('return m != null && (g ? m.a : m.b) ? p : null;', es[0].text);
+	}
+
+	/** Two LEADING branches with one value merge by `||`: order and short-circuit are the statements' own. */
+	@:pin('control')
+	@:killer('M-PIER-LEADING-AS-OUTER')
+	public function testRepeatedLeadingValueMergesByOr(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('if (a) return null;\n\t\tif (b) return null;\n\t\treturn x;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return a || b ? null : x;', es[0].text);
+	}
+
+	/**
+	 * The merge applies to a WRITTEN chain as well, and wins over the chain there: two values are a
+	 * ternary however many branches spelled them.
+	 */
+	public function testWrittenChainRepeatingAValueMerges(): Void {
+		final src: String = wrap('if (a) return 1;\n\t\telse if (b) return 2;\n\t\telse return 1;');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('this if/else-if return chain repeats a value and can be a single ternary return', vs[0].message);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('return !a && b ? 2 : 1;', es[0].text);
+		Assert.isTrue(applyFixOnce(src).indexOf('return !a && b ? 2 : 1;') != -1, 'the merged return survives the canonical writer');
+	}
+
+	/**
+	 * A written chain of TWO branches whose terminal is a ternary was a chain of three only by the
+	 * fold, and the fold is not something the author wrote: it is neither reported nor claimed, so
+	 * `redundant-else-after-return` keeps its de-nest and the guard plus ternary it leaves behind is
+	 * the cascade the test above owns.
+	 */
+	@:pin('control')
+	@:killer('M-PIER-REWRITES-FOLDED')
+	@:killer('M-PIER-CLAIMSCHAIN-OWNS')
+	public function testTwoWrittenBranchesAndAFoldedTailAreNotAChain(): Void {
+		Assert.equals(0, violations(wrap('if (a) return 1;\n\t\telse return p ? q : r;')).length);
+		Assert.isFalse(claims('if (a) return 1;\n\t\telse return p ? q : r;'), 'the de-nest keeps its finding');
+		Assert.isTrue(
+			claims('if (a) return 1;\n\t\telse if (b) return 2;\n\t\telse return p ? q : r;'), 'three written branches stay a chain'
+		);
+	}
+
+	/**
+	 * The merge's refusals, each beside the shape it would otherwise take:
+	 *
+	 * - the repeated value must be a LITERAL or a NAME. Equal text is the same value only when the
+	 *   binding environment is (it is - the statements are siblings) AND its type does not depend on
+	 *   the narrowing the merged condition no longer gives it; a literal or a name is the positive
+	 *   list for which the second holds, a call or a field read is not on it.
+	 * - a repeated BOOL literal is `simplify-boolean-*`'s, and the march owns that cascade.
+	 * - the MIDDLE value repeating the last would drop `c2`'s evaluation, which no merge here does.
+	 * - a comment anywhere in the region fails the merge closed: the rebuild re-orders and drops pieces.
+	 * - a run of FOUR values does not merge: the edit is built from the first two rungs and the
+	 *   terminal, so a wider merge would drop the third condition.
+	 */
+	@:pin('control')
+	@:killer('M-PIER-MERGE-ANY-VALUE')
+	@:killer('M-PIER-MERGE-COMMENT')
+	@:killer('M-PIER-MERGE-ANY-COUNT')
+	public function testMergeRefusals(): Void {
+		Assert.equals(
+			0, violations(wrap('if (a) return g();\n\t\tif (b) return g();\n\t\treturn h();')).length, 'a call is not a repeated value'
+		);
+		Assert.equals(0, violations(wrap('if (a) return m.x;\n\t\tif (b) return m.x;\n\t\treturn h();')).length, 'nor is a field read');
+		Assert.equals(1, violations(wrap('if (a) return k;\n\t\tif (b) return k;\n\t\treturn h();')).length, 'a name is');
+		Assert.equals(0, violations(wrap('if (a) return true;\n\t\tif (b) return true;\n\t\treturn h();')).length, 'a bool literal is not');
+		Assert.equals(0, violations(wrap('if (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 2;')).length, 'dropping c2 is not a merge');
+		Assert.equals(0, violations(wrap('if (a) return null; // none\n\t\treturn b ? p : null;')).length, 'a comment fails it closed');
+		Assert.equals(1, violations(wrap('if (a) return null;\n\t\treturn b ? p : null;')).length, 'the same cascade without it merges');
+		Assert.equals(
+			0, violations(wrap('if (a) return 1;\n\t\tif (b) return 1;\n\t\tif (c) return 2;\n\t\treturn 3;')).length,
+			'four values do not merge, even where the first two repeat'
+		);
+	}
+
+	/**
+	 * A STATEMENT-LIKE value - a `switch` used as a value - is refused by the merge exactly as the
+	 * pairwise march refuses it: a ternary branch holding a multi-line `switch` reads no better than
+	 * the statements. A written chain of three branches keeps the chain fix instead.
+	 */
+	@:pin('control')
+	@:killer('M-PIER-MERGE-UNMARCHABLE')
+	public function testStatementLikeValueIsNotMerged(): Void {
+		final vs: Array<Violation> = violations(
+			wrap('if (a) return null;\n\t\telse if (b) return switch x {\n\t\t\tcase _: 1;\n\t\t};\n\t\telse return null;')
+		);
+		Assert.equals(1, vs.length);
+		Assert.equals('this if/else-if return chain can be a single if-expression return', vs[0].message);
+	}
+
+	/**
+	 * The march gate decides the CLAIM: a cascade `prefer-ternary-return` would refuse to march is
+	 * not claimed, or the claim silences that rule and CHANGES the fixed point. A bool-literal rung is
+	 * the gate's largest class; a statement-like value and a boolean ternary mid-reduction are the
+	 * other two. Each sits beside the same cascade with plain value rungs, which IS claimed.
+	 */
+	public function testMarchGateDecidesTheClaim(): Void {
+		Assert.isFalse(claimsCascade('if (a) return false;\n\t\tif (b) return g();\n\t\treturn h();'), 'a bool-literal rung');
+		Assert.isTrue(claimsCascade('if (a) return e();\n\t\tif (b) return g();\n\t\treturn h();'), 'the same cascade with value rungs');
+		Assert.isFalse(
+			claimsCascade('if (a) return switch x {\n\t\t\tcase _: 1;\n\t\t};\n\t\tif (b) return g();\n\t\treturn h();'),
+			'a switch rung value'
+		);
+		Assert.isFalse(
+			claimsCascade('if (a) return c ? true : g();\n\t\tif (b) return g();\n\t\treturn h();'), 'a boolean ternary mid-reduction'
+		);
+		Assert.isTrue(claimsCascade('if (a) return c ? e() : g();\n\t\tif (b) return g();\n\t\treturn h();'), 'a VALUE ternary rung');
+	}
+
+	/**
+	 * A rung condition is copied paren-UNWRAPPED, the way `PreferIfExpressionChain.spine` unwraps its
+	 * own: the emitted `if (` … `)` supplies the delimiters, so a copied pair only draws a
+	 * `redundant-parens` finding on the result. Seen on openfl\'s `Tile.__findTileset`.
+	 */
+	public function testRungConditionParensDropped(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('if ((a)) return 1;\n\t\telse if (b) return 2;\n\t\telse return 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return if (a) 1 else if (b) 2 else 3;', es[0].text);
+	}
+
+	/**
+	 * A cascade inside a conditional-compilation region is seen, because this rule reads the
+	 * BRANCH-AWARE projection: in the plain one a `#if` region is ONE node whose branches are
+	 * flattened children with no statement list at all. Seen on openfl\'s `Lib.isXMLName`.
+	 */
+	public function testCascadeInsideConditionalRegionMerged(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Int {\n\t\t#if js\n\t\tif (a) return 1;\n\t\tif (b) return 1;\n\t\treturn 3;\n\t\t#end\n\t}\n}';
+		Assert.equals(1, violations(src).length, 'the branch-aware projection gives the region its own statement list');
+		Assert.equals(1, edits(src).length, 'and `fix` reads the same projection, or the finding would have no edit');
+	}
+
+	/**
+	 * The head of a run is the index whose predecessor is not a rung THIS rule would collect, and
+	 * "rung" has to mean a valued `return`: a leading `if (x) g();` is a rung by shape alone, and the
+	 * shape-only test hid the whole cascade behind it. A merged TAIL of a longer cascade is not
+	 * reported either - the head owns the run, and four values do not merge.
+	 */
+	public function testNonReturnStatementDoesNotHideTheCascade(): Void {
+		Assert.equals(
+			1, violations(wrap('if (x) g();\n\t\tif (a) return 1;\n\t\tif (b) return 1;\n\t\treturn 3;')).length,
+			'a leading non-return guard does not swallow the cascade behind it'
+		);
+		Assert.equals(
+			0, violations(wrap('if (a) return 0;\n\t\tif (b) return 1;\n\t\tif (c) return 1;\n\t\treturn 3;')).length,
+			'a mergeable tail of a longer run is the head\'s, and the head keeps its statements'
+		);
+	}
+
+	/**
+	 * The terminal-ternary fold is refused when a comment sits inside that spine, asked of the parsed
+	 * comment TOKENS rather than a text scan: a `//` inside a STRING literal is not a comment.
+	 */
+	public function testStringLiteralSlashesDoNotBlockTheFold(): Void {
+		Assert.isTrue(
+			claimsCascade('if (a) return "x";\n\t\treturn b ? "http://example.com" : "y";'),
+			'a `//` inside a string literal is not a comment'
+		);
+		Assert.isFalse(
+			claimsCascade('if (a) return "x";\n\t\treturn b ? /* why */ "p" : "y";'),
+			'a real comment inside the folded spine still refuses'
 		);
 	}
 
@@ -435,6 +503,34 @@ class PreferIfExpressionReturnCheckTest extends Test {
 		return PreferIfExpressionReturn.claimsChain(
 			head, source, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), plugin.refShape()
 		);
+	}
+
+	/**
+	 * Whether the rule CLAIMS the fall-through cascade that starts at the first `if` of `body` - the
+	 * question `prefer-ternary-return` asks before it collapses a pair of it.
+	 */
+	private function claimsCascade(body: String): Bool {
+		final source: String = wrap(body);
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
+		if (tree == null) throw new Exception('fixture does not parse: $source');
+		final ifKinds: Array<String> = plugin.refShape().ifStatementKinds ?? [];
+		final block: Null<QueryNode> = parentOfFirstIf(tree, ifKinds);
+		if (block == null) throw new Exception('fixture holds no if statement: $source');
+		final at: Int = block.children.findIndex(c -> ifKinds.contains(c.kind));
+		return PreferIfExpressionReturn.claimsCascade(
+			block.children, at, source, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), plugin.refShape()
+		);
+	}
+
+	/** The node whose child is the first `if` STATEMENT in document order, or null. */
+	private function parentOfFirstIf(node: QueryNode, ifKinds: Array<String>): Null<QueryNode> {
+		for (c in node.children) {
+			if (ifKinds.contains(c.kind)) return node;
+			final hit: Null<QueryNode> = parentOfFirstIf(c, ifKinds);
+			if (hit != null) return hit;
+		}
+		return null;
 	}
 
 	/** The first `if` STATEMENT in document order, or null. */

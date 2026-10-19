@@ -850,8 +850,10 @@ final class WriterKwRefLowering {
 		// captures no source-newline slots, so a plain-mode group would wrap
 		// only hard content and could still flip a stray ungrouped `Line` in a
 		// branch body from newline to space when it fits).
+		// The group is named (`BreakCommits.namedRegion`): a list holding the region lays itself out as the next rewrite
+		// reads the seams the broken group printed — as hardlines.
 		final case3Doc: Expr = c.branch.fmtHasFlag('condExprFitGroup') && kw.ctx.trivia
-			? macro (opt.conditionalExprFit ? _dgrp($concatDoc) : $concatDoc)
+			? macro (opt.conditionalExprFit ? anyparse.core.BreakCommits.namedRegion($concatDoc) : $concatDoc)
 			: concatDoc;
 		// ω-cond-indent-policy FixedZero/AlignedDecrease: a cond-comp ctor
 		// opting into `@:fmt(conditionalMarkerDedent)` (the `#if … #end`
