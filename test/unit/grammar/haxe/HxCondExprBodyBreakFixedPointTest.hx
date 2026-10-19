@@ -37,8 +37,8 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 	private static final CFG_DEFAULT: String = '{}';
 
 	/** A comprehension's open bracket cuddles its `for`, at 140 columns. */
-	private static final CFG_CUDDLED: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": '
-		+ '{"maxLineLength": 140, "comprehensionCuddledOpen": true}}';
+	private static final CFG_CUDDLED: String =
+		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true}}';
 
 	/**
 	 * `CFG_CUDDLED` with an object-literal rule that keeps a literal flat up to 140 columns of fields, whatever column it
@@ -56,17 +56,18 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 
 	/** The comprehension at `k = 30`, laid out in one write. */
 	private static final COMPREHENSION_30: String = 'class M {\n\tfunction f() {\n\t\tvar y = [for (x in xs) #if debug {\n'
-		+ '\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaaa,\n\t\t\tbeta: \'' + ''.lpad('k', 30) + '\'\n'
+		+ '\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaaa,\n\t\t\tbeta: \'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\'\n'
 		+ '\t\t} #else {alpha: x.aaaaaaaaaaaaaaaaaaaaaa} #end\n\t\t];\n\t}\n}';
 
 	/** The call at `k = 60`, laid out in one write. */
 	private static final CALL_60: String = 'class M {\n\tfunction f() {\n\t\tvar y = foo(aaaa, #if debug {\n'
-		+ '\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaaa,\n\t\t\tbeta: \'' + ''.lpad('k', 60) + '\'\n'
+		+ '\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaaa,\n\t\t\tbeta: \'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\'\n'
 		+ '\t\t} #else {alpha: x.aaaaaaaaaaaaaaaaaaaaaa} #end);\n\t}\n}';
 
 	/** The comprehension at `k = 85` under `CFG_FIT`: the region's own group breaks its directive seams. */
-	private static final FIT_85: String = 'class M {\n\tfunction f() {\n\t\tvar y = [ for (x in xs)\n\t\t\t#if debug\n'
-		+ '\t\t\t\t{\n\t\t\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaaa,\n\t\t\t\t\tbeta: \'' + ''.lpad('k', 85) + '\'\n'
+	private static final FIT_85: String = 'class M {\n\tfunction f() {\n\t\tvar y = [ for (x in xs)\n\t\t\t#if debug\n\t\t\t\t{\n'
+		+ '\t\t\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaaa,\n\t\t\t\t\tbeta: '
+		+ '\'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\'\n'
 		+ '\t\t\t\t}\n\t\t\t#else\n\t\t\t\t{alpha: x.aaaaaaaaaaaaaaaaaaaaaa}\n\t\t\t#end\n\t\t];\n\t}\n}';
 
 	public function new(): Void {
@@ -151,15 +152,15 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 	}
 
 	private static function comprehension(k: Int): String {
-		return statement('var y = [for (x in xs) ' + conditional(k) + '];');
+		return statement('var y = [for (x in xs) ${conditional(k)}];');
 	}
 
 	private static function call(k: Int): String {
-		return statement('var y = foo(aaaa, ' + conditional(k) + ');');
+		return statement('var y = foo(aaaa, ${conditional(k)});');
 	}
 
 	private static function callOfComprehension(k: Int): String {
-		return statement('var y = foo(aaaa, [for (x in xs) ' + conditional(k) + ']);');
+		return statement('var y = foo(aaaa, [for (x in xs) ${conditional(k)}]);');
 	}
 
 	private static function conditional(k: Int): String {
@@ -168,7 +169,7 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 	}
 
 	private static function statement(s: String): String {
-		return 'class M {\n\tfunction f() {\n\t\t' + s + '\n\t}\n}';
+		return 'class M {\n\tfunction f() {\n\t\t$s\n\t}\n}';
 	}
 
 }

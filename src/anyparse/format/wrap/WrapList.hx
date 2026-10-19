@@ -296,9 +296,10 @@ class WrapList {
 	 * A list that may still break inside an item at render time is laid out once more per such break, as if it had
 	 * happened, and offered as a chain of `Doc.BreakCommit`s: a list of ONE item for its own body breaking into Allman
 	 * position (`BodyAllman.tailBreak`), and every list but an object literal's field list for a list nested in an item that
-	 * is offered the same way, or a literal nested in it whose own break is named (`BreakCommits.named`). The next rewrite reads the break as source and lays the list out by the rules for a
-	 * multi-line item (a call around `bar(b, [for …])` opens one argument per line), so the first rewrite has to pick that
-	 * layout exactly when the break happens. A nested break is asked first: it is the one that can change the head.
+	 * is offered the same way, or a literal nested in it whose own break is named (`BreakCommits.named`). The next rewrite
+	 * reads the break as source and lays the list out by the rules for a multi-line item (a call around `bar(b, [for …])`
+	 * opens one argument per line), so the first rewrite has to pick that layout exactly when the break happens. A nested
+	 * break is asked first: it is the one that can change the head.
 	 */
 	public static function emit(
 		open: String, close: String, sep: String, items: Array<Doc>, opt: WriteOptions, openInside: Doc, closeInside: Doc,
@@ -1405,6 +1406,17 @@ class WrapList {
 	 */
 	private static inline function firstBreakIsArrayDelim(d: Doc): Bool {
 		return firstBreakIsDelimChar(d, '['.code);
+	}
+
+	/**
+	 * Whether a list a source trailing separator forces into the break-mode cascade (`forceExceeds`), with no hardline
+	 * and no line-length threshold rule, answers that cascade `NoWrap`: the flat layout a shadowing `noWrap` rule gives,
+	 * which `emitList` puts behind the unforced path's first-line probe.
+	 */
+	private static inline function forcedNoWrap(
+		forceExceeds: Bool, anyHardline: Bool, extraThresholds: Array<Int>, evalAt: (Bool, Array<Int>) -> WrapMode
+	): Bool {
+		return forceExceeds && !anyHardline && extraThresholds.length == 0 && evalAt(true, []) == NoWrap;
 	}
 
 	/**
@@ -4721,7 +4733,7 @@ class WrapList {
 		// a break default answers it flat: that flat layout still has to fit its line, behind the probe the unforced
 		// path puts there (`emitZeroThresholdAgree`). The first write lays the list out unforced; the next one reads
 		// the trailing comma it added and is forced, so without the probe it flattened the list past the limit.
-		return if (forceExceeds && !anyHardline && extraThresholds.length == 0 && evalAt(true, []) == NoWrap)
+		return if (forcedNoWrap(forceExceeds, anyHardline, extraThresholds, evalAt))
 			emitZeroThresholdAgree(
 				NoWrap, rules, items, opt, cols, open, close, openInside, closeInside, forceMode, leadFlat, leadBreak, shapeAt, leadFor,
 				defaultBreakMode

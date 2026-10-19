@@ -202,10 +202,9 @@ final class BreakCommits {
 				case BreakMark(_, token): token;
 				case _: null;
 			};
-			if (token != null && !tokens.contains(token)) {
-				tokens.push(token);
-				added = true;
-			}
+			if (token == null || tokens.contains(token)) continue;
+			tokens.push(token);
+			added = true;
 		}
 		return added;
 	}

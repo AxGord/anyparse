@@ -26797,9 +26797,9 @@
 		{
 			"name": "M-FORCED-NOWRAP-UNPROBED",
 			"type": "anyparse.format.wrap.WrapList",
-			"method": "emitList",
-			"find": "return if (forceExceeds && !anyHardline && extraThresholds.length == 0 && evalAt(true, []) == NoWrap)",
-			"replace": "return if (false)",
+			"method": "forcedNoWrap",
+			"find": "return forceExceeds && !anyHardline && extraThresholds.length == 0 && evalAt(true, []) == NoWrap;",
+			"replace": "return false;",
 			"note": "a list a source trailing separator forces into the break-mode cascade goes flat by a shadowing `noWrap` rule with no first-line probe, past the limit, where the unforced first write broke it"
 		}
 	]

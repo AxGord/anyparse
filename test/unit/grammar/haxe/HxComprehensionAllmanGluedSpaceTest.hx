@@ -31,14 +31,13 @@ final class HxComprehensionAllmanGluedSpaceTest extends Test {
 	/** The widest `k` the sweeps write. */
 	private static inline final MAX_K: Int = 120;
 
-	/**
-	 * Past these widths a token no break can split reaches the limit, on main as well: the inner comprehension's
-	 * iterable, the long iterator's last argument, the nested `for`'s string.
-	 */
+	/** Past this width the inner comprehension's iterable, a token no break splits, reaches the limit on main as well. */
 	private static inline final MAX_K_INNER: Int = 112;
 
+	/** Past this width the long iterator's last argument reaches the limit on main as well. */
 	private static inline final MAX_K_LONG_ITERATOR: Int = 103;
 
+	/** Past this width the nested `for`'s string reaches the limit on main as well. */
 	private static inline final MAX_K_NESTED_FOR: Int = 119;
 
 	/** The one width where main's fixed point of the long iterator is a column past the limit too (141 at 140). */
@@ -48,8 +47,8 @@ final class HxComprehensionAllmanGluedSpaceTest extends Test {
 	private static final CFG_DEFAULT: String = '{}';
 
 	/** A comprehension's open bracket cuddles its `for`, at 140 columns. */
-	private static final CFG_CUDDLED: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": '
-		+ '{"maxLineLength": 140, "comprehensionCuddledOpen": true}}';
+	private static final CFG_CUDDLED: String =
+		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true}}';
 
 	public function new(): Void {
 		super();
@@ -115,7 +114,7 @@ final class HxComprehensionAllmanGluedSpaceTest extends Test {
 	}
 
 	private static function statement(s: String): String {
-		return 'class M {\n\tfunction f() {\n\t\t' + s + '\n\t}\n}';
+		return 'class M {\n\tfunction f() {\n\t\t$s\n\t}\n}';
 	}
 
 }
