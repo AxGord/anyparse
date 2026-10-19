@@ -1,0 +1,14 @@
+# The typer's conformance harness (tools/TyperConformance.hx): the typing layers asked what the compiler answered —
+# the upstream display and misc suites of a pinned Haxe 4.3.7 clone, read from the clone, and a project's compiler
+# facts. Build from the repo root; the artifact is gitignored.
+#
+#   haxe tools/typer-conformance.hxml
+#   node bin/typer-conformance.js upstream <haxe-4.3.7-clone> [--list]
+#   (cd <project> && node <anyparse>/bin/typer-conformance.js facts [<configuration>] [--list])
+-cp src
+-cp tools
+-main TyperConformance
+-lib hxnodejs
+-D js-es=6
+-D analyzer-optimize
+-js bin/typer-conformance.js

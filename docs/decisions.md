@@ -4402,3 +4402,24 @@ decided the question; it may not become a record of runs.
   visit budget as `Budget`, where all three read "code at library code the run did not read". anyparse src
   prefer-keyvalue-loop: 39 such refusals -> 0 with and without the oracle, all 39 still declined by the next culprit the
   walk now reaches (std `haxe/Exception.hx`, project `toString`s) — branch `feat/infra-N50`
+
+## N56 (2026-10-19): one typing service, its cache keyed by declaration, a conformance harness
+
+- the typing layers hung off `SymbolIndex` side by side (`members`, `structural`) or stood alone (`NominalTypes.typeWalk`,
+  a fresh `ExpectedTypes` per binder), so nothing owned "a typing question" and no answer was ever kept → ONE
+  `TypingService` per index (`index.typing`): the signature layers (`MemberLookup`, `StructuralTypes`) built by it, the
+  body walk (`typeWalk`, `TypingHost`) and the expectation ladder (`expectations`) on it, and a `QueryCache` of answers
+  keyed by `DeclarationKey` (file + declaration offset, + member name). Moved as a pure move: all-rules byte-identical on
+  the four trees — branch `feat/infra-N56`
+- caching a closure walk keyed by the `seen` identity (`TypeRefIndex.seenKey`, file + NAME) was the obvious key and is
+  not a declaration key: two types of one name in one file would share it. The index folds the branches of an `#if` into
+  one declaration (`withAlternate`), so file + offset is the key that names exactly one declaration in every
+  configuration. Only a walk's FRESH root is cached — a walk entered with a caller's `seen` answers relative to that
+  caller, and a name-keyed question (`memberGetter`) unions every declaration of the name — branch `feat/infra-N56`
+- the conformance harness types the upstream Haxe 4.3.7 display and misc suites from a pinned clone, never from a copy
+  (the compiler is GPL, anyparse MIT), and a project's compiler facts. A first run read 46 DIFFERENT answers that were
+  the harness's own: a display position on a seam (`main(1|)` is the call's, not the literal's), a cursor on a
+  construction's type name (the display answers the constructor), the `... ` lines of an error chain, a macro's own
+  `Context.warning` read as a `$type`, the compiler's `AbGeneric.T` for a type parameter, and a definition or use whose
+  binding the reference walk does not resolve by scope (a member reached bare, a type name) — each is now a refusal the
+  harness counts UNSCORED, never a match — branch `feat/infra-N56`
