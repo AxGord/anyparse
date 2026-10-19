@@ -164,6 +164,8 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 	 * that is an operand of a chain. This fixture is what the shared paren-open gate decides, and a pin implemented as a
 	 * stricter gate there (rather than at the glue site) collapses it into a ragged `|| (a && b` / `&& c` split.
 	 */
+	@:pin('control')
+	@:killer('M-COLLAPSE-GLUE-REST-CHAIN-SKIPPED')
 	public function testChainOperandParenStillOpens(): Void {
 		Assert.equals(CHAIN_OPERAND_PAREN, triviaWrite(CHAIN_OPERAND_PAREN, GLUE_ON));
 		Assert.equals(CHAIN_OPERAND_PAREN, triviaWrite(CHAIN_OPERAND_PAREN, GLUE_OFF));

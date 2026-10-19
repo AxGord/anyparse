@@ -27,6 +27,8 @@ final class HxBinaryChainRestWidthTest extends Test {
 	 * A declaration whose physical line is ONE column past the limit (the trailing `;`): the chain breaks
 	 * before its last `&&`, never inside the `==` operand.
 	 */
+	@:pin('control')
+	@:killer('M-CHAIN-REST-FILL-GROUP-PLAIN', 'M-CHAIN-REST-SHAPE-UNTHREADED', 'M-CHAIN-REST-UNSET')
 	public function testDeclarationOneColumnOverBreaksAtAnd(): Void {
 		Assert.equals(
 			'class Sample {\n\n\tfunction run() {\n\t\tfinal ready:Bool = pendingMarkers.length == 0 && sessionCh'
@@ -40,6 +42,8 @@ final class HxBinaryChainRestWidthTest extends Test {
 	}
 
 	/** Two columns past the limit (the `;` and the un-flushed space after `=`): still the `&&`. */
+	@:pin('control')
+	@:killer('M-CHAIN-REST-PIVOT-PLAIN')
 	public function testDeclarationTwoColumnsOverBreaksAtAnd(): Void {
 		Assert.equals(
 			'class Sample {\n\n\tfunction run() {\n\t\tfinal ready:Bool = pendingMarkers.length == 0 && sessionCh'
@@ -105,6 +109,8 @@ final class HxBinaryChainRestWidthTest extends Test {
 	}
 
 	/** The `+` chain shares the pivot: one column past the limit it breaks before its last `+` instead of overflowing. */
+	@:pin('control')
+	@:killer('M-CHAIN-REST-ADD-PIVOT-PLAIN')
 	public function testAddChainOneColumnOverBreaksAtPlus(): Void {
 		Assert.equals(
 			'class Sample {\n\n\tfunction run() {\n\t\tfinal total:Int = pendingMarkersWidth + sessionChangedWidt'
@@ -118,6 +124,8 @@ final class HxBinaryChainRestWidthTest extends Test {
 	}
 
 	/** Two columns past the limit: still the `+`. */
+	@:pin('control')
+	@:killer('M-COLLAPSE-ADD-REBUILD-PLAIN')
 	public function testAddChainTwoColumnsOverBreaksAtPlus(): Void {
 		Assert.equals(
 			'class Sample {\n\n\tfunction run() {\n\t\tfinal total:Int = pendingMarkersWidth + sessionChangedWidt'

@@ -691,11 +691,13 @@ final class WriterPrattLowering {
 			final _chainNestSuppress: Bool = _condWrapForced || opt._callArgChainNest || _keepChainInParen;
 			// omega-chain-rest-width: the chain pivot and its fill group count the
 			// whole physical line (the trailing `;` / `)` and the space after `=`),
-			// except inside a condition wrap, whose own paren breaks first, and a
-			// paren that owns the wrap. A string interpolation needs no gate: its
-			// `NoWrap` override collapses the chain to one shape with no group. Read
-			// before the re-bind below clears `_keepChainInParen`.
-			final _restAware: Bool = !_condWrapForced && !opt._keepChainInParen;
+			// except inside a paren that owns the wrap. Neither a string
+			// interpolation nor a condition wrap needs a gate of its own: the first
+			// collapses the chain to a groupless NoWrap shape, the second breaks its
+			// `(` before the chain, which then has nothing after it on its line
+			// (measured: no output moves in the suite, client or anyparse). Read before
+			// the re-bind below clears `_keepChainInParen`.
+			final _restAware: Bool = !opt._keepChainInParen;
 			$headDecl;
 			final opt = $clearOptExpr;
 			final _leafOpen: Array<Bool> = [];

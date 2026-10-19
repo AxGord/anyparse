@@ -5,7 +5,7 @@ import utest.Test;
 
 /**
  * omega-opadd-op-first: under a fillLine-family `expressionWrapping`
- * (TM's config), an overflowing 3+-operand `+`/`-` chain breaks at its
+ * (the client's config), an overflowing 3+-operand `+`/`-` chain breaks at its
  * top-level operator seams per `opAddSubChain` (fillLine, beforeLast --
  * the operator LEADS the continuation) and leaves every operand's own
  * delimited group intact. The pre-slice engine committed the FORWARD
@@ -16,7 +16,7 @@ import utest.Test;
  * now width-gates that commit for a tagged pure-opAddSub chain. Glue
  * survives where the glued head genuinely fits (the fallback pin below).
  * Identifiers and string contents are synthetic, length-preserving
- * renames of the reported TM site.
+ * renames of the reported client site.
  */
 @:nullSafety(Strict)
 final class HxOpAddChainOperatorFirstSliceTest extends Test {
@@ -152,6 +152,8 @@ final class HxOpAddChainOperatorFirstSliceTest extends Test {
 	 * the slice reverted). One more literal column puts the glued first line at
 	 * 141 and the chain breaks at its operator seams instead.
 	 */
+	@:pin('control')
+	@:killer('M-COLLAPSE-CHAIN-GROUP-PLAIN-ONLY')
 	public function testGlueBoundaryOneColumnOverBreaks(): Void {
 		Assert.equals(
 			"class Sample {\n\n\tfunction run() {\n\t\tquery = 'SELECT itempath, bucket, link_key, tagid FROM items WHERE bucket = 1 AND "
