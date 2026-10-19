@@ -150,6 +150,8 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAParenMeasuresTheBreakBare :: control :: M-PAREN-MEASURES-COMMITTED',
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAStaticallyBrokenLambdaBodyStaysGlued :: control :: M-BREAK-READBACK-BARE',
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testOneAlternativePerBreak :: control :: M-BREAK-EVERY-NODE',
+		'unit.grammar.haxe.HxComprehensionAllmanGluedSpaceTest#testANestedForKeepsItsSpace :: control :: M-ALLMAN-GLUED-SPACE-UNGUARDED',
+		'unit.grammar.haxe.HxComprehensionAllmanGluedSpaceTest#testOneWriteIsAFixedPointAtTheLimit :: control :: M-ALLMAN-GLUED-SPACE-KEPT',
 		'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAFlatItemThatStillOverflowsCuddlesItsHead :: control :: M-CUDDLE-FLATONLY',
 		'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAnItemOverflowingTheGlueColumnCuddlesAndDropsItsBody :: control :: '
 			+ 'M-CUDDLE-FALLBACK-INDENT',

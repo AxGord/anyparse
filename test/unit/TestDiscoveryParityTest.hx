@@ -619,6 +619,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxCompareOperandBreakSliceTest',
 		'unit.grammar.haxe.HxComplexItemWrapTest',
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest',
+		'unit.grammar.haxe.HxComprehensionAllmanGluedSpaceTest',
 		'unit.grammar.haxe.HxComprehensionBlockHugSliceTest',
 		'unit.grammar.haxe.HxComprehensionBracketPolicyTest',
 		'unit.grammar.haxe.HxComprehensionChainIdempotencyTest',

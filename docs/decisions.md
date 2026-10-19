@@ -4436,3 +4436,11 @@ decided the question; it may not become a record of runs.
   far (at most `MEASURE_ROUNDS` = 4; a break taken once stays taken, which is what makes it terminate). A Doc where no
   break is taken costs the same one measure render as before; one where a break is taken costs one more. Arm
   `M-BREAKMARK-ONE-ROUND`.
+- The layout a list is offered for an Allman body break (`BodyAllman.tailBreak`) kept the glued placement's
+  `OptSpace(' ')` in front of the body; the hardline the Allman side opens with drops it at render, so the output never has
+  it, but a first line measured on that layout (the cuddled `[for (…)` head) counted it: at exactly the limit the first
+  write opened the bracket and the next, reading the Allman body back with no space before it, cuddled it (`u_fieldhead`
+  k=87, `w_innercomp` k=96/101, `u_longiter` k=37/62: 17 files, the pending-space skew of the N52 brief). The read-back
+  layout drops the space when the body is WHOLLY the decision (`decisionMapped` reads it); a body that only ENDS in one
+  (a nested `for`, whose own space precedes a keyword, not a break) keeps it — dropping it there glued `)for` in 680
+  files main settles in one write. Arms `M-ALLMAN-GLUED-SPACE-KEPT` / `-UNGUARDED`.

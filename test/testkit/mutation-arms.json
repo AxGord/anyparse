@@ -26777,6 +26777,22 @@
 			"find": "_dn(_cols, _dc([_dl(), $writeCall])) : _dc([_dt(' '), $namedCall]);",
 			"replace": "_dn(_cols, _dc([_dl(), $namedCall])) : _dc([_dt(' '), $namedCall]);",
 			"note": "an `#if` body under `conditionalExprFit` is named too, though the next write reads the region's directive seams back as well as the literal, so a ladder main settles in one write becomes the glued shape"
+		},
+		{
+			"name": "M-ALLMAN-GLUED-SPACE-KEPT",
+			"type": "anyparse.format.BodyAllman",
+			"method": "tailBreak",
+			"find": "case Doc.Concat([Doc.OptSpace(' '), body]) if (BreakCommits.decisionMapped(body, (brk, _) -> brk) != null):",
+			"replace": "case Doc.Concat([Doc.OptSpace(' '), body]) if (false):",
+			"note": "the layout a list is offered for an Allman body break keeps the glued placement's space, so a cuddled head measured on it counts a column the output never has and opens at exactly the limit"
+		},
+		{
+			"name": "M-ALLMAN-GLUED-SPACE-UNGUARDED",
+			"type": "anyparse.format.BodyAllman",
+			"method": "tailBreak",
+			"find": "case Doc.Concat([Doc.OptSpace(' '), body]) if (BreakCommits.decisionMapped(body, (brk, _) -> brk) != null):",
+			"replace": "case Doc.Concat([Doc.OptSpace(' '), body]):",
+			"note": "the space is dropped also before a body that only ends in the decision (a nested `for`), gluing `)for` in the offered layout"
 		}
 	]
 }

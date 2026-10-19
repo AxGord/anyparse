@@ -57,6 +57,11 @@ final class BodyAllman {
 			case Doc.IfFirstLineExceeds(_, Doc.LeadingBreak(cols, brk, token), _),
 				Doc.GroupWithRestProbe(Doc.IfBreak(Doc.LeadingBreak(cols, brk, token), _)) if (token != null):
 				{ brk: BodyFit.breakLayout(cols, BreakCommits.committed(brk, Doc.BodyGroup(brk))), token: token };
+			case Doc.Concat([Doc.OptSpace(' '), body]) if (BreakCommits.decisionMapped(body, (brk, _) -> brk) != null):
+				// The glued placement `gluedLayout` writes, the body wholly its decision: the break its Allman side opens
+				// with drops the pending space, so the layout the next rewrite reads back has none, and a first line
+				// measured on it must not count it. A body that only ENDS in the decision keeps the space before it.
+				tailBreak(body);
 			case Doc.WrapBoundary(inner):
 				final t: Null<{ brk: Doc, token: BreakToken }> = tailBreak(inner);
 				t == null ? null : { brk: Doc.WrapBoundary(t.brk), token: t.token };
