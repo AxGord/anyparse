@@ -144,8 +144,18 @@ final class EdgeConditions {
 		final key: String = '${edge.from}|${edge.file}:${span.from}-${span.to}';
 		final known: Null<Array<SiteFact>> = _facts[key];
 		if (known != null) return known;
-		final facts: Array<SiteFact> = [];
+		final facts: Array<SiteFact> = guardsAround(edge, span);
 		_facts[key] = facts;
+		return facts;
+	}
+
+	/**
+	 * What the conditions around the site `span` of `edge` fix there, read from its function's body down to the site. None
+	 * for a site inside a nested function, whose body runs whenever its value is called, under none of the conditions
+	 * around it — the answer every ask of the site gets, the facts read on the way down to it dropped.
+	 */
+	private function guardsAround(edge: CallEdge, span: Span): Array<SiteFact> {
+		final facts: Array<SiteFact> = [];
 		final fn: Null<QueryNode> = _trees.ofEdge(edge);
 		if (fn == null) return facts;
 		var node: QueryNode = fn;
@@ -153,11 +163,11 @@ final class EdgeConditions {
 			final at: Int = node.children.findIndex(c -> c.span != null && c.span.from <= span.from && c.span.to >= span.to);
 			if (at < 0) break;
 			final child: QueryNode = node.children[at];
-			// a nested function's body runs whenever its value is called, under none of the conditions around it
-			if (_nestedFnKinds.contains(child.kind)) return [];
-			for (f in guardFacts(node, at, edge.from, edge.file)) facts.push(f);
 			final childSpan: Null<Span> = child.span;
-			if (childSpan != null && childSpan.from == span.from && childSpan.to == span.to) break;
+			final exact: Bool = childSpan != null && childSpan.from == span.from && childSpan.to == span.to;
+			if (!exact && _nestedFnKinds.contains(child.kind)) return [];
+			for (f in guardFacts(node, at, edge.from, edge.file)) facts.push(f);
+			if (exact) break;
 			node = child;
 		}
 		return facts;
