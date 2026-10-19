@@ -195,9 +195,13 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 		);
 	}
 
-	/** A comment between the guards of a chain that must regroup refuses the reduction: the regrouped text has no place for it. */
-	@:killer('M-NARROWING-OR-GLUE-COMMENT-ADMITTED')
-	@:pin('control')
+	/**
+	 * A comment between the guards of a chain that must regroup refuses the reduction: the regrouped text has no place for it.
+	 * REGRESSION PIN (does NOT discriminate either gate alone): the fix's whole-span comment gate and `narrowingOr`'s glue
+	 * gate both refuse here, so cutting one leaves the other answering. The glue gate's killer is
+	 * `SimplifyBooleanTernaryCheckTest.testStrandedNullTestWithGlueCommentNotSimplified`, a host with no span gate of its own.
+	 */
+	@:pin('guard')
 	public function testStrandedNullTestWithCommentNotReduced(): Void {
 		Assert.equals(
 			'',

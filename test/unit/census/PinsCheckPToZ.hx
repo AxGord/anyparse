@@ -379,8 +379,7 @@ final class PinsCheckPToZ {
 		'unit.check.SimplifyBooleanReturnChainCheckTest#testNegatedConjunctionGuardRegroups :: control :: '
 			+ 'M-GUARD-CHAIN-NEGATED-RUN-DROPPED',
 		'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestRegroups :: control :: M-NARROWING-OR-FLAT',
-		'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestWithCommentNotReduced :: control :: '
-			+ 'M-NARROWING-OR-GLUE-COMMENT-ADMITTED',
+		'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestWithCommentNotReduced :: guard :: ',
 		'unit.check.SimplifyBooleanTernaryCheckTest#testCompoundNullTestBeforeReuseNotSimplified :: control :: '
 			+ 'M-NARROWING-OR-COMPOUND-ADMITTED',
 		'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestInBranchRegroups :: control :: M-TERNARY-OR-BRANCH-UNREAD',
@@ -389,6 +388,8 @@ final class PinsCheckPToZ {
 			+ 'M-NARROWING-OR-FLAT,M-OR-LEAVES-OR-OPAQUE',
 		'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestWithCommentNotSimplified :: control :: '
 			+ 'M-NARROWING-OR-INNER-COMMENT-ADMITTED',
+		'unit.check.SimplifyBooleanTernaryCheckTest#testStrandedNullTestWithGlueCommentNotSimplified :: control :: '
+			+ 'M-NARROWING-OR-GLUE-COMMENT-ADMITTED',
 		'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
 		'unit.check.StaticReflectionReachTest#testAClassReifyingBuildMacroKeepsTheGate :: control :: M-STATICREACH-REIFY-BLIND',
 		'unit.check.StaticReflectionReachTest#testAClassSourceInAnOpaqueRegionKeepsTheGate :: control :: '

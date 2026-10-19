@@ -324,6 +324,17 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		Assert.equals('', simplifyOf('return a == null // first\n\t|| b == null ? true : b.length > 0;'));
 	}
 
+	/**
+	 * A comment in the GLUE between two operands - outside every operand's span, so the operand check above cannot see it -
+	 * refuses a regrouped reduction too: the regrouped text is joined from the operands alone and would drop it.
+	 */
+	@:pin('control')
+	@:killer('M-NARROWING-OR-GLUE-COMMENT-ADMITTED')
+	public function testStrandedNullTestWithGlueCommentNotSimplified(): Void {
+		Assert.equals('', simplifyOf('return a == null || b == null ? true : /* why */ b.length > 0;'));
+		Assert.equals('', simplifyOf('return a == null || b == null ? true\n\t// why\n\t: b.length > 0;'));
+	}
+
 	/** `claimedSpans` over `source`, or null after failing the test when the fixture does not parse. */
 	private function claimsOf(source: String): Null<Map<String, Bool>> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
