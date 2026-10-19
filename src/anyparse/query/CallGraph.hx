@@ -4,6 +4,7 @@ import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
 using StringTools;
 using Lambda;
@@ -342,6 +343,12 @@ final class CallGraph {
 	/** The types that gained a node during the current `addFiles`. */
 	private final _grownTypes: Array<String> = [];
 
+	/**
+	 * `<type>\t<member>` -> its `virtualTargets`, kept only while `addFiles` records the edges of its files: no member and no
+	 * type is added or taken out meanwhile, and a call site per dispatch otherwise walks the type's whole subtree again.
+	 */
+	private var _dispatchMemo: Null<Map<String, Array<String>>> = null;
+
 	/** File -> the function-like nodes whose first declaration it holds: what taking the file out removes. */
 	private final _fileNodes: Map<String, Array<FnNode>> = [];
 
@@ -593,12 +600,19 @@ final class CallGraph {
 		final reading: Null<CallGraphFacts> = facts;
 		// a method a build macro made has no declaration to collect: the facts make its node (`CallGraphFacts.adopt`)
 		final adopted: Array<String> = reading == null ? [] : [for (p in parsed) for (id in reading.adopt(this, p.file)) id];
-		for (p in parsed) {
-			// a function the facts describe records its syntax's edges alone, none of its unresolved sites (`CallGraphFacts.mute`)
-			final faceted: Map<String, Array<FactNode>> = reading == null ? [] : reading.mute(this, p.file);
-			CallGraphEdges.collect(this, p);
-			reading?.recordMuted(this, faceted);
+		_dispatchMemo = [];
+		try {
+			for (p in parsed) {
+				// a function the facts describe records its syntax's edges alone, none of its unresolved sites (`CallGraphFacts.mute`)
+				final faceted: Map<String, Array<FactNode>> = reading == null ? [] : reading.mute(this, p.file);
+				CallGraphEdges.collect(this, p);
+				reading?.recordMuted(this, faceted);
+			}
+		} catch (exception: Exception) {
+			_dispatchMemo = null;
+			throw exception;
 		}
+		_dispatchMemo = null;
 		reading?.recordAdopted(this, adopted);
 		// the field initializers of every type read so far, which the facts read whole once its files are in
 		reading?.recordInitializers(this, [for (id in _initFiles.keys()) id]);
@@ -638,11 +652,24 @@ final class CallGraph {
 	/**
 	 * The virtual dispatch targets of `member` on `typeName`, recomputable after the graph grew: for each transitive loaded
 	 * subtype, the member it declares — or, lacking one, the one it inherits from a superclass off `typeName`'s own chain (a
-	 * class implementing an interface with a method its superclass declares), which a dispatch on `typeName` runs too.
+	 * class implementing an interface with a method its superclass declares), which a dispatch on `typeName` runs too. A
+	 * fresh list the caller may extend, read once per type and member while `addFiles` records edges (`_dispatchMemo`).
 	 */
 	public function virtualTargets(typeName: String, member: String): Array<String> {
+		final memo: Null<Map<String, Array<String>>> = _dispatchMemo;
+		if (memo == null) return dispatchTargets(typeName, member);
+		final key: String = '$typeName\t$member';
+		final known: Null<Array<String>> = memo[key];
+		if (known != null) return known.copy();
+		final found: Array<String> = dispatchTargets(typeName, member);
+		memo[key] = found.copy();
+		return found;
+	}
+
+	/** `virtualTargets` read anew: a walk over every loaded subtype of `typeName`. */
+	private function dispatchTargets(typeName: String, member: String): Array<String> {
 		final result: Array<String> = [];
-		// sets beside the lists, whose order is the answer: the `contains` scans were quadratic over a wide hierarchy (TM's
+		// sets beside the lists, whose order is the answer: the `contains` scans were quadratic over a wide hierarchy (the client's
 		// display list), and this runs per call site
 		final found: Map<String, Bool> = [];
 		final queue: Array<String> = [typeName];

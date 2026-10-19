@@ -26869,6 +26869,22 @@
 				"_sites.set(_graph.outEdges(edge.from)[0], site);"
 			],
 			"note": "the site memo keys by the caller (its first out-edge) instead of the edge: every call of a function answers the conditions of whichever site was read first"
+		},
+		{
+			"name": "M-CG-DISPATCH-MEMO-LEAKS",
+			"type": "anyparse.query.CallGraph",
+			"method": "addFiles",
+			"find": "\t_dispatchMemo = null;\n\treading?.recordAdopted(this, adopted);",
+			"replace": "\treading?.recordAdopted(this, adopted);",
+			"note": "the dispatch memo outlives the edges it was kept for: a query after a file is taken out answers the overrides read before"
+		},
+		{
+			"name": "M-CG-DISPATCH-MEMO-BY-TYPE",
+			"type": "anyparse.query.CallGraph",
+			"method": "virtualTargets",
+			"find": "final key: String = '$typeName\\t$member';",
+			"replace": "final key: String = typeName;",
+			"note": "the dispatch memo keys by the receiver type alone: the first member dispatched on a type answers for every other"
 		}
 	]
 }
