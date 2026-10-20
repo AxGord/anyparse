@@ -628,13 +628,14 @@ class ThreadSafetyConditionsTest extends Test {
 
 	/**
 	 * Every way a call may bind decides a guard together: the literal binds the abstract (the `String` stays `null`) or the
-	 * `String` (an `.svg`), and neither way runs the branch.
+	 * `String` (an `.svg`), and neither way runs the branch. The abstract's `@:from String` sits under `#if`, so whether the
+	 * literal casts to it is another build's question: both ways are followed.
 	 */
 	@:pin('control') @:killer('M-TS-ARG-SETS-UNKNOWN')
 	public function testEveryWayACallMayBindDecidesTogether(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
-			'abstract Align(Null<Int>) { @:from static function ofText(s:String):Align return null; }',
+			'abstract Align(Null<Int>) {\n#if !flash\n\t@:from static function ofText(s:String):Align return null;\n#end\n}',
 			'using StringTools;\nclass W { public static function make(?align:Align, ?hint:String, quiet:Bool = true):Void '
 			+ 'if (hint != null) { if (!hint.endsWith(\'.svg\')) Sys.sleep(1); } }',
 			'class A { public static function main():Void W.make(\'a.svg\', false); }'

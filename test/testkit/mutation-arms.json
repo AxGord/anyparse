@@ -22090,8 +22090,8 @@
 			"name": "M-NOMINAL-SOURCE-CALL",
 			"type": "anyparse.query.NominalTypes",
 			"method": "expressionTypeSource",
-			"find": "if (receiver != null)",
-			"replace": "if (receiver != null) return null; else if (false)",
+			"find": "final receiver: Null<String> = expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, [], true);",
+			"replace": "final receiver: Null<String> = null;",
 			"note": "the source mode reads no method call's return"
 		},
 		{
@@ -28500,7 +28500,7 @@
 			"type": "anyparse.query.SymbolIndexMembers",
 			"method": "signaturesOf",
 			"find": "for (meta in overloads) {",
-			"replace": "for (meta in []) {",
+			"replace": "for (meta in overloads.slice(0, 0)) {",
 			"note": "the `@:overload` annotations write no signature, so a call selects the member's own alone"
 		},
 		{
@@ -28556,7 +28556,7 @@
 			"type": "anyparse.query.MemberLookup",
 			"method": "returnNominalWalk",
 			"find": "if (m.hasOverloadMeta || m.isOverload) return null;",
-			"replace": "",
+			"replace": "if (false) return null;",
 			"note": "the name walk answers an overloaded member's own return, so `O.g(1)` is an `Int` though the call takes `(a:Int):Bool`"
 		},
 		{
@@ -28660,7 +28660,7 @@
 			"type": "anyparse.check.ArgumentValues",
 			"method": "ownSignatureSelected",
 			"find": "if (m == null || !m.hasOverloadMeta) return true;",
-			"replace": "return true;",
+			"replace": "if (m == null || true) return true;",
 			"note": "a call an `@:overload` of its callee takes is bound to the body's own parameters, though the arguments reach them by position"
 		},
 		{

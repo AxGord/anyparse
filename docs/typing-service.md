@@ -22,6 +22,7 @@ its hosts are functions of their arguments, and every remembered answer is insta
 | `casts` (`AbstractCasts`) | signature | the cast graph of each abstract: its `from` / `to` clauses per `#if` branch and its `@:from` / `@:to` members, each resolved once into a `TypeEnd` |
 | `unification` (`Unification`) | signature | whether a value of one type unifies with another (`tUnification.ml`), and whether an argument of one type is accepted where another is expected (`casts`, `abstractCast.ml`) |
 | `operators` (`OperatorOverloads`) | signature | the `@:op` overload an abstract selects for a binary operator over two operand types, and the type it yields (`operators.ml`) |
+| `calls` (`CallSelection`) | signature | the signature a call selects among a member's own and its overloads over the arguments' types, and the type it returns (`callUnification.ml`) |
 | `members` (`MemberLookup`) | signature | what a named type declares or inherits, with what declared type, return, visibility, accessor shape; the type a READ of a member carries and the declaration writing it (`memberRead`) |
 | `structural` (`StructuralTypes`) | signature | unification with an anonymous structure, membership of a builtin structural type (`Iterable`, `Iterator`) |
 | `extensions` (`StaticExtensions`) | body | which static extension `recv.name` binds in a file on a receiver of a declaration (`fields.ml`), and what a file's `using` statements bring |
@@ -54,7 +55,10 @@ four fresh-walk roots of `MemberLookup`: `lacksMember` (`lacksMemberClosure`), `
 `ancestorLinks` and `aliasTargets` (by `ofType`), `ancestorArguments` and `unifies` (by `ofPair`); and the T3 table `extensionBindings`
 (by `ofUse`), whose answer reads a file's `using` statements and declarations, never a body; and the T4 tables
 `castGraphs` (by `ofType`) and `casts` (by `ofPair`, for two declarations — a pair with a core value type on one side is
-computed each time, it is a few clauses long). The T4b overload question (`OperatorOverloads.binaryResult`) is no table:
+computed each time, it is a few clauses long). The T5 body table `callArguments` (by `ofSite`: the file, the declaration
+enclosing a call site, the site's offset — and the call's text and the file's length, since a `lint --fix` run asks again of
+an index built before it rewrote the file) holds what a call hands its callee, each argument typed once with no expected
+type; the T5 selection itself is no table: it walks the few signatures of one member over those arguments. The T4b overload question (`OperatorOverloads.binaryResult`) is no table:
 it is keyed by two ends and an operator and walks a few members of one declaration. `memberRead` is not a
 table of its own: its key would carry the receiver's written arguments, and it is composed of two cached answers
 (`declaredMember`, `ancestorArguments`) and a substitution. A walk entered with a
@@ -108,9 +112,9 @@ after it and closed five: a reference leaving out arguments its declaration give
 package-blind member walk answering a member written with its type's parameter unsubstituted, an expression inside a
 reification typed as code (now Unknown), and — on the facts side — ranges whose facts were not the text's own (the
 `this` an abstract's inlined accessor is handed, at the member's name; the code of an inlined body at the call's range;
-FU28 below). Left, by size: `@:overload` returns (T5), the compiler's code an inlined call with a default argument leaves
-at the call's range with no inline site recorded, and a `Dynamic`-typed std library member a project library declares
-with a type.
+FU28 below). Left, by size after T5 (below) closed the `@:overload` returns: the compiler's code an inlined call with a default
+argument leaves at the call's range with no inline site recorded (now reached by the source currency too), and a
+`Dynamic`-typed std library member a project library declares with a type.
 
 ## Where T2–T5 plug in
 
@@ -215,9 +219,28 @@ with a type.
   after; anyparse 56 / 29 → 0 / 8, a client corpus 200 / 121 → 2 / 1, Pony 95 / 111 → 3 / 8; MATCH counts within
   0.2 % of before on anyparse and the client corpus, Pony −2.2 % (ranges whose facts held an inlined body's code now
   decline).
-- **T5 — overloads.** Argument types computed once per call site (a body table keyed by the enclosing declaration and the
-  site's offset) and an overload chosen over them; a choice that depends on the expected type answers Unknown.
-  Consumers: `OperandCallees.selectsItsSignature`, `ArgumentSlots`.
+- **T5 — overloads (done, FU25 S1).** The index records each function's signatures (`MemberInfo.signatures`: its own, then
+  each `@:overload` annotation's function in written order; the return types read off the span info,
+  `SpanTypeInfo.returnTypeSources`, never a type parameter's bound beside them). `CallSelection` (`index.typing.calls`,
+  `callUnification.ml`): whether a call compiles against a signature is the compiler's greedy path over `Unification.casts`
+  per argument (`ArgumentSlots.compiles`), the own signature and then the annotations are tried in order and the first
+  that compiles binds (an `overload` static: the one compiling), a candidate that may compile binds when it is the last one
+  open (the code compiles), and a choice left open answers the return every open candidate agrees on. Arguments are typed
+  ONCE with no expected type (`CallArgument`; the body table above): a lambda or a literal the expected type types is
+  untyped, so a choice that depends on it answers Unknown. Consumers: the index host's call arms (`CallReturns`: a bare
+  call through the enclosing declaration, a static call through the declaration its file writes, a value's call through
+  every declaration of its type's name agreeing, the chain's arguments bound by `AncestorTable.boundType`), the name walk
+  (`MemberLookup.returnNominalWalk` refuses an overloaded member and a supertype declaring the member with a return it
+  cannot name: the superclass chain is where the compiler finds it, before the interfaces), `ArgumentValues` (an
+  `@:overload` callee's body parameters are bound only when its own signature is selected: the arguments reach the body by
+  position), `OperandCallees` (a lambda typed by the signature the arguments' count selects). Measured (source / nominal
+  DIFFERENT; UNKNOWN share): upstream 0 / 0 before and after (69.4 / 68.2 %); anyparse 0 / 8 → 3 / 3 (44.0 / 33.7 → 34.4 /
+  33.7 %), a client corpus 2 / 1 → 2 / 1 (35.8 / 23.0 → 28.2 / 22.7 %), Pony 3 / 8 → 3 / 4 (33.3 / 26.4 → 27.9 / 26.2 %).
+  The `@:overload` families are MATCH (`readFileSync` 5, `Socket.on` 4 — the latter the superclass-first walk, not an
+  overload); anyparse's three new source DIFFERENT are the inlined-default-argument facts family the nominal currency
+  already showed. MATCH lost: one (an object-literal argument, typed by the expected type); gained: source 49032 /
+  7376 / 603, nominal 25 / 213 / 24 (anyparse / client / Pony); the all-rules lint of four trees and the thread-safety
+  scores byte-identical.
 
 Each step lands as a table in `QueryCache` with its consumers moved onto it, and is measured on the harness: a step
 may lower an area's UNKNOWN share and may turn a DIFFERENT into a MATCH or an UNKNOWN, and must add no DIFFERENT.
