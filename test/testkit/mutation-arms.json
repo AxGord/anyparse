@@ -12162,7 +12162,7 @@
 			"type": "anyparse.query.CallGraphNodes",
 			"method": "collect",
 			"find": "final under: Null<String> = node.type?.name;",
-			"replace": "final under: Null<String> = node.children.find(c -> annotationKinds.contains(c.kind))?.name;",
+			"replace": "final under: Null<String> = node.children.find(c -> (shape.typeAnnotationKinds ?? []).contains(c.kind))?.name;",
 			"note": "an abstract's underlying type is read as its first annotation child, which is a type parameter's bound when one is declared"
 		},
 		{
