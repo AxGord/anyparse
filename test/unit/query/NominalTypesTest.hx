@@ -430,6 +430,23 @@ class NominalTypesTest extends Test {
 		Assert.isNull(sourceIn(text, 'probeNullable'), '`T` bound to `Null<Int>`, which the walk does not spell');
 	}
 
+	/**
+	 * A generic abstract's clauses read with the arguments it is applied to (`apply_params`, 4.3.7 probes): an argument
+	 * `true` misfits `E2<String, Float>` (`from String`, `from Float`), so `k(true)` and `m(true)` take the annotation
+	 * `(x:Bool)` — through a `typedef` alias and as written —, and `g(1)` keeps its own signature (`Int` widens to `Float`).
+	 */
+	@:pin('control') @:killer('M-CASTS-APPLIED-ALIAS') @:killer('M-CASTS-APPLIED-WRITTEN') @:killer('M-CASTS-APPLIED-GRAPH-PARAM')
+	public function testAGenericAbstractCastsThroughTheArgumentsItIsAppliedTo(): Void {
+		final text: String = 'package p;\n\nabstract E2<A, B>(Dynamic) from A to A from B to B {}\n\ntypedef Path = E2<String, Float>;\n\n'
+			+ 'extern class X {\n\t@:overload(function(x:Bool):Bool {})\n\tstatic function k(x:Path):String;\n\n'
+			+ '\t@:overload(function(x:Bool):Bool {})\n\tstatic function m(x:E2<String, Float>):String;\n\n'
+			+ '\t@:overload(function(x:Int):Bool {})\n\tstatic function g(x:Path):String;\n}\n\nclass C {\n\tfunction probeAlias() '
+			+ 'return X.k(true);\n\tfunction probeWritten() return X.m(true);\n\tfunction probeWidened() return X.g(1);\n}\n';
+		Assert.equals('Bool', nominalIn(text, 'probeAlias'), 'through a typedef alias');
+		Assert.equals('Bool', nominalIn(text, 'probeWritten'), 'as written');
+		Assert.equals('String', nominalIn(text, 'probeWidened'), 'the own signature takes a widened argument');
+	}
+
 	private static function nominal(fn: String): Null<String> {
 		final at: Probe = probeIn(SOURCE, fn);
 		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);

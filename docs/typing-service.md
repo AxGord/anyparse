@@ -241,6 +241,9 @@ argument leaves at the call's range with no inline site recorded (now reached by
   arguments bind it to (`TypeEnd.Param`; a declaration by its module path); Unknown for two bindings not known to be
   one, an untyped or a `Null<…>` argument; `MemberInfo.returnSource` is read off the span info, never a bound. Measured:
   tables unchanged but MATCH (source, client corpus +28).
+  Step 3, generic abstracts (FU25 S3): a generic abstract written with type arguments, or aliased by a plain `typedef`
+  with them, is an end of its own (`TypeEnd.Applied`) whose clauses read the arguments for its type parameters
+  (`AbstractCasts.appliedGraph`; invariant otherwise). Measured: tables and MATCH counts unchanged on all four trees.
   The `@:overload` families are MATCH (`readFileSync` 5, `Socket.on` 4 — the latter the superclass-first walk, not an
   overload); anyparse's three new source DIFFERENT are the inlined-default-argument facts family the nominal currency
   already showed. MATCH lost: one (an object-literal argument, typed by the expected type); gained: source 49032 /

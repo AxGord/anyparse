@@ -212,6 +212,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.CallSelectionTest#testATypeParameterTheArgumentsBindIsTheirType :: control :: '
 			+ 'M-CALLS-PARAM-FREE,M-CALLS-PARAM-AGREE,M-CALLS-PARAM-SPELLED,M-SIGNATURE-PARAM-BOUNDS',
 		'unit.query.CallSelectionTest#testAnAnnotationWritingNoFunctionLeavesNoSignatures :: control :: M-INDEX-SIGNATURES-BARE',
+		'unit.query.CallSelectionTest#testAnAppliedAbstractIsItselfAppliedAlike :: control :: M-CASTS-APPLIED-SAME',
 		'unit.query.CallSelectionTest#testTheCandidateACallBinds :: control :: '
 			+ 'M-CALLS-CHOSEN-FIRST,M-CALLS-CHOSEN-LAST-OPEN,M-CALLS-CHOSEN-PROPER',
 		'unit.query.CallSelectionTest#testTheSelectionOverTypedArguments :: control :: '
@@ -1207,6 +1208,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.NominalTypesTest#testABlindMemberReadWrittenWithAParameterHasNoAnswer :: control :: M-NOMINAL-BLIND-PARAMS',
 		'unit.query.NominalTypesTest#testAConstructionIsTheTypeItWrites :: control :: M-NOMINAL-CONSTRUCTED',
 		'unit.query.NominalTypesTest#testAConstructionReadsTheTypeArgumentsItWrites :: control :: M-CONSTRUCTION-CTOR-GAP',
+		'unit.query.NominalTypesTest#testAGenericAbstractCastsThroughTheArgumentsItIsAppliedTo :: control :: '
+			+ 'M-CASTS-APPLIED-ALIAS,M-CASTS-APPLIED-WRITTEN,M-CASTS-APPLIED-GRAPH-PARAM',
 		'unit.query.NominalTypesTest#testALiteralIsItsType :: control :: M-NOMINAL-LITERAL',
 		'unit.query.NominalTypesTest#testALocalWrittenWithNoTypeHoldsItsInitializersType :: control :: M-NOMINAL-LOCAL-INIT',
 		'unit.query.NominalTypesTest#testAMethodsTypeParameterIsBoundByTheArguments :: control :: '

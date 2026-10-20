@@ -322,6 +322,7 @@ final class SymbolIndexBuilder {
 					isAnonStruct: typeDecl.kind == TYPEDEF_DECL_KIND && node.children.exists(c -> c.kind == ANON_KIND),
 					aliasTargetNominal: aliasPath == null ? null : simpleName(aliasPath),
 					aliasTargetRaw: aliasPath,
+					aliasTargetWritten: writtenAliasOf(source, node, aliasPath),
 					hasRtti: carriesMeta(pendingMeta, shape.reflectedDeclMetaName),
 					hasBuild: carriesOwnBuildMacro(pendingMeta, shape),
 					hasAutoBuild: carriesAnyMeta(pendingMeta, shape.descendantBuildMacroMetaNames),
@@ -875,6 +876,8 @@ final class SymbolIndexBuilder {
 			isAnonStruct: first.isAnonStruct && alternate.isAnonStruct,
 			aliasTargetNominal: sameAlias ? first.aliasTargetNominal : null,
 			aliasTargetRaw: sameAlias ? first.aliasTargetRaw : null,
+			// one written target names one path: the same text keeps both
+			aliasTargetWritten: first.aliasTargetWritten == alternate.aliasTargetWritten ? first.aliasTargetWritten : null,
 			hasRtti: first.hasRtti || alternate.hasRtti,
 			hasBuild: first.hasBuild || alternate.hasBuild,
 			hasAutoBuild: first.hasAutoBuild || alternate.hasAutoBuild,
@@ -1032,6 +1035,12 @@ final class SymbolIndexBuilder {
 			case Nominal(path, _): path;
 			case _: null;
 		};
+	}
+
+	/** The source of the type slot of the `typedef` `node`, trimmed, when it aliases the type `aliasPath` names; null otherwise. */
+	private static function writtenAliasOf(source: String, node: QueryNode, aliasPath: Null<String>): Null<String> {
+		final at: Null<Span> = node.type?.span;
+		return aliasPath == null || at == null ? null : source.substring(at.from, at.to).trim();
 	}
 
 	/**

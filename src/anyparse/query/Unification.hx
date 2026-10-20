@@ -257,6 +257,7 @@ final class Unification {
 	private function graphOf(e: TypeEnd): Null<CastGraph> {
 		return switch e {
 			case Declared(r): _casts.graph(r);
+			case Applied(r, args): _casts.appliedGraph(r, args);
 			case Core(name): _casts.coreGraph(name);
 			case Dyn, Open, Param(_): null;
 		};
@@ -340,6 +341,7 @@ final class Unification {
 			case Dyn: '*';
 			case Open: '?';
 			case Param(name): '<$name';
+			case Applied(r, args): '${r.file.file}@${r.type.span.from}<${[for (a in args) endKey(a)].join(',')}>';
 		};
 	}
 

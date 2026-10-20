@@ -342,6 +342,7 @@ class BuildMacroMetaSeamTest extends Test {
 			isAnonStruct: false,
 			aliasTargetNominal: null,
 			aliasTargetRaw: null,
+			aliasTargetWritten: null,
 			hasRtti: false,
 			hasBuild: false,
 			hasAutoBuild: false,

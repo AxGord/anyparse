@@ -156,6 +156,21 @@ class CallSelectionTest extends Test {
 		Assert.equals('Int', calls.returnOf(t2, of('bounded'), [Typed(Core('Int'))], []), 'the bound takes it');
 	}
 
+	/**
+	 * An applied generic abstract unifies with itself applied alike and, its type parameters invariant, not with itself
+	 * applied otherwise: `Box<String>` and `Box<Int>` of an `abstract Box<T>(Int)` writing no clause (4.3.7).
+	 */
+	@:pin('control') @:killer('M-CASTS-APPLIED-SAME')
+	public function testAnAppliedAbstractIsItselfAppliedAlike(): Void {
+		final idx: SymbolIndex = CheckFixture.index(
+			[{ file: 'p/Box.hx', source: 'package p;\n\nabstract Box<T>(Int) {}\n' }], new HaxeQueryPlugin()
+		);
+		final box: ResolvedType = idx.refs.findDeclaredType('p/Box.hx', 'Box') ?? throw 'no declaration Box';
+		final strings: TypeEnd = Applied(box, [Core('String')]);
+		Assert.equals(Fits, idx.typing.unification.casts(strings, Applied(box, [Core('String')])), 'applied alike');
+		Assert.equals(Misfits, idx.typing.unification.casts(strings, Applied(box, [Core('Int')])), 'applied otherwise');
+	}
+
 	private static function member(name: String): Array<MemberInfo> {
 		return decl(index()).type.members.filter(m -> m.name == name);
 	}

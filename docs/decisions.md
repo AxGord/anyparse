@@ -5116,3 +5116,12 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   `Null<…>`: `id(n)` over `?n:Int` binds `Null<Int>` (probed), which an end does not spell (`CallArgument.Nullable`).
   Measured: two calls of a library's generic `tween(target, …)` over a nullable target, in a client corpus, were the
   case that showed it — branch `feat/fu-FU25`
+- **A generic abstract casts through the arguments it is applied to** (T5 step 3, `apply_params`): a type written
+  `E2<String, Float>`, or a plain `typedef` aliasing it (`TypeDeclInfo.aliasTargetWritten` keeps the arguments
+  `aliasTargetRaw` drops), stands for the abstract applied (`TypeEnd.Applied`), every argument an end the graph models
+  (else `Open`); its graph reads a clause written as one of its type parameters as the argument at that position
+  (`AbstractCasts.appliedGraph`) and every other clause or member naming one as no end. So `true` misfits
+  `E2<String, Float>` (`from String`, `from Float`) and an `@:overload` `(x:Bool)` binds, and `1` fits it through
+  `from Float` (probed: `g(1)` keeps the own signature). An applied abstract is itself applied ALIKE only — its type
+  parameters are invariant (`Box<String>` to `Box<Int>`: "String should be Int", probed). An alias re-entering itself
+  stands for no end — branch `feat/fu-FU25`

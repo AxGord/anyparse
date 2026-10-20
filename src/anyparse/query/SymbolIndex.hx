@@ -450,6 +450,13 @@ typedef TypeDeclInfo = {
 	var aliasTargetRaw: Null<String>;
 
 	/**
+	 * The type a plain `typedef` aliases as written, its type arguments included (`typedef P = E<String, Int>` ->
+	 * `E<String, Int>`); null exactly when `aliasTargetRaw` is. What the alias stands for when the arguments decide it (a
+	 * generic abstract's casts, `AbstractCasts.appliedAlias`).
+	 */
+	var aliasTargetWritten: Null<String>;
+
+	/**
 	 * True when the type declaration carries `@:rtti` metadata directly. Such a
 	 * class is serialized by reflecting on its runtime field NAMES (e.g. model
 	 * Node), so a naming autofix must not rename its fields. Feeds

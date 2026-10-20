@@ -27733,14 +27733,14 @@
 			"name": "M-CASTS-GRAPH-PARAMS",
 			"type": "anyparse.query.AbstractCasts",
 			"method": "graphOf",
-			"find": " || r.type.typeParamArity > 0) return null;",
-			"replace": ") return null;",
+			"find": "return r.type.typeParamArity > 0 ? null : graphWith(r, t -> writtenEnd(t, r, at, []));",
+			"replace": "return graphWith(r, t -> writtenEnd(t, r, at, []));",
 			"note": "an abstract with type parameters gets a graph, its clauses read without the arguments that bind them"
 		},
 		{
 			"name": "M-CASTS-TYPE-SELECTED",
 			"type": "anyparse.query.AbstractCasts",
-			"method": "graphOf",
+			"method": "graphWith",
 			"find": "clauses.exists(c -> c.typeSelected) || ",
 			"replace": "",
 			"note": "a `@:multiType` abstract, whose cast the compiler picks by its type arguments, is decided by its clauses"
@@ -27748,7 +27748,7 @@
 		{
 			"name": "M-CASTS-HAND-UNIFIED",
 			"type": "anyparse.query.AbstractCasts",
-			"method": "graphOf",
+			"method": "graphWith",
 			"find": " || _handUnified.contains(pathOf(r))) return null;",
 			"replace": ") return null;",
 			"note": "an abstract the compiler unifies by a hand-written arm (`EnumValue` takes every enum) is decided by its empty clauses"
@@ -27756,7 +27756,7 @@
 		{
 			"name": "M-CASTS-MEMBER-CERTAIN",
 			"type": "anyparse.query.AbstractCasts",
-			"method": "graphOf",
+			"method": "graphWith",
 			"find": "final certain: MemberInfo -> Bool = m -> single && !m.guarded;",
 			"replace": "final certain: MemberInfo -> Bool = m -> true;",
 			"note": "a conversion member under `#if`, or of a type two branches declare, casts in every build"
@@ -27764,7 +27764,7 @@
 		{
 			"name": "M-CASTS-BUILD-OPEN",
 			"type": "anyparse.query.AbstractCasts",
-			"method": "graphOf",
+			"method": "graphWith",
 			"find": "fieldsComplete: !r.type.hasBuild && !r.type.hasAutoBuild",
 			"replace": "fieldsComplete: true",
 			"note": "an abstract a build macro may give a conversion member is read as having none"
@@ -28750,6 +28750,38 @@
 			"find": "Nullable(end)",
 			"replace": "Typed(end)",
 			"note": "an argument of a `Null<…>` type binds a type parameter to the type inside, so `id(n)` over `?n:Int` is an `Int`"
+		},
+		{
+			"name": "M-CASTS-APPLIED-WRITTEN",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "endIn",
+			"find": "r == null ? Open : appliedEnd(r, [for (a in written) endIn(a, file, at, params)]);",
+			"replace": "Open;",
+			"note": "a generic abstract written with type arguments stands for no end, so `m(true)` over `E2<String, Float>` leaves both candidates open"
+		},
+		{
+			"name": "M-CASTS-APPLIED-ALIAS",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "appliedAlias",
+			"find": "final raw: Null<String> = r.type.aliasTargetWritten;",
+			"replace": "final raw: Null<String> = null;",
+			"note": "a typedef aliasing a generic abstract with type arguments stands for the bare abstract, so `k(true)` over `Path` leaves both candidates open"
+		},
+		{
+			"name": "M-CASTS-APPLIED-GRAPH-PARAM",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "appliedGraph",
+			"find": "i >= 0 ? args[i] : writtenEnd(t, r, at, []);",
+			"replace": "writtenEnd(t, r, at, []);",
+			"note": "a clause written as a type parameter is not read as its argument, so an applied abstract takes nothing through `from A`"
+		},
+		{
+			"name": "M-CASTS-APPLIED-SAME",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "same",
+			"find": "case [Applied(x, xs), Applied(y, ys)]:",
+			"replace": "case [Applied(x, xs), Applied(y, ys)] if (false):",
+			"note": "an applied abstract is not itself applied alike, so `Box<String>` misfits `Box<String>`"
 		}
 	]
 }
