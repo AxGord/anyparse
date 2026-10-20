@@ -65,23 +65,69 @@ final class FactText {
 
 	/**
 	 * Every positioned type `n` records for an expression, with the member name the expression's text must spell for it
-	 * to count (null when any text may carry it); a local's reads only when the asked text is a bare identifier (`bare`).
+	 * to count (null when any text may carry it): a local's reads only when the asked text is a bare identifier (`bare`),
+	 * each by the local's own name — a read the compiler placed at a member's name (the `this` an abstract's accessor is
+	 * handed) is not that text's — and a call's receiver only beside that call (`call`): a receiver the compiler placed
+	 * at a range whose call the source does not spell (an inlined body's) is not the text's either.
 	 */
-	public static function typedSites(n: FactNode, bare: Bool): Array<{ at: Null<FactPos>, type: String, member: Null<String> }> {
-		final out: Array<{ at: Null<FactPos>, type: String, member: Null<String> }> = [];
+	public static function typedSites(n: FactNode, bare: Bool): Array<TypedSite> {
+		final out: Array<TypedSite> = [];
 		for (c in n.calls) {
-			out.push({ at: c.at, type: c.result, member: calledMember(c) });
-			final receiver: Null<String> = c.receiver;
-			if (receiver != null) out.push({ at: c.receiverAt, type: receiver, member: null });
+			final member: Null<String> = calledMember(c);
+			out.push({
+				at: c.at,
+				type: c.result,
+				member: member,
+				call: null
+			});
+			final receiver: String = c.receiver ?? continue;
+			// the callee of a call naming no member (a function value's) is the value at the call's head: the text's own
+			final head: Bool = member == null && c.receiverAt?.span.from == c.at.span.from;
+			out.push({
+				at: c.receiverAt,
+				type: receiver,
+				member: null,
+				call: head ? null : { at: c.at, member: member }
+			});
 		}
-		for (f in n.fields) out.push({ at: f.at, type: f.type, member: f.field });
-		for (v in n.vars) out.push({ at: v.at, type: v.type, member: v.name });
-		if (bare) for (r in n.reads) out.push({ at: r.at, type: r.type, member: null });
-		for (s in n.strings) out.push({ at: s.at, type: s.operand, member: null });
-		for (f in n.flows) if (f.via == 'arg' || f.via == 'arr' || f.via == 'obj') out.push({ at: f.at, type: f.from, member: null });
+		for (f in n.fields) out.push({
+			at: f.at,
+			type: f.type,
+			member: f.field,
+			call: null
+		});
+		for (v in n.vars) out.push({
+			at: v.at,
+			type: v.type,
+			member: v.name,
+			call: null
+		});
+		if (bare) for (r in n.reads) out.push({
+			at: r.at,
+			type: r.type,
+			member: r.name,
+			call: null
+		});
+		for (s in n.strings) out.push({
+			at: s.at,
+			type: s.operand,
+			member: null,
+			call: null
+		});
+		for (f in n.flows) if (f.via == 'arg' || f.via == 'arr' || f.via == 'obj') out.push({
+			at: f.at,
+			type: f.from,
+			member: null,
+			call: null
+		});
 		for (x in n.news) {
 			final id: String = CompilerFacts.baseId(x.type);
-			out.push({ at: x.at, type: x.instance, member: SourceText.lastSegment(id) });
+			out.push({
+				at: x.at,
+				type: x.instance,
+				member: SourceText.lastSegment(id),
+				call: null
+			});
 		}
 		return out;
 	}
@@ -161,6 +207,21 @@ final class FactText {
 		return c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code);
 	}
 
+}
+
+/** One positioned type a node records for an expression (`FactText.typedSites`). */
+typedef TypedSite = {
+	final at: Null<FactPos>;
+	final type: String;
+
+	/** The member name the expression's text must spell for the site to count; null when any text may carry it. */
+	final member: Null<String>;
+
+	/**
+	 * For a call's receiver, that call: its range and the member it calls, which the source there must spell for the
+	 * receiver to count (null when the call names no member). Null for every other site.
+	 */
+	final call: Null<{ at: FactPos, member: Null<String> }>;
 }
 
 /** A node line's head, read without parsing the line. */

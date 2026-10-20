@@ -83,24 +83,32 @@ here keeps: the compiler's answer or Unknown, never another one. The UNKNOWN sha
   asks the type of every range the compiler gave a value type (`FactsTypeOracle.valueType`), by node kind.
 
 What the harness may not do is make an answer match. It compares two spellings of one type in one spelling (`TypeText`:
-qualifiers dropped, either function syntax, structure fields in name order; a nominal through its typedef alias hops) and
-refuses to pose a question it cannot place: a display position on a seam between two expressions, a cursor on a
-construction's type name (the display answers the constructor), a definition or use whose binding is not a local
-declaration or a parameter (the scope-correct part of the reference walk); and, in the facts, a range whose facts are
-not the text's own — the body an inlined call spliced there, a copy of an inline body typed in a caller's terms, the
-compiler's own code lowered into it (a std call into its target's runtime class), the implicit `this` a bare member read
-shares it with, a type the harness cannot expand to the typer's alias or `@:generic` spelling. Each refusal is counted
-UNSCORED, never as a match.
+qualifiers dropped, either function syntax — one unnamed type in parentheses before an arrow groups an argument of an
+old-style chain, `(A -> B) -> C -> D` taking two —, structure fields in name order, an optional field's type as the
+optional value's, `?a: Int` as `?a: Null<Int>` (4.3.7 prints it so, and the two assign both ways); a nominal through its
+typedef alias hops) and refuses to pose a question it cannot place: a display position on a seam between two
+expressions, a cursor on a construction's type name (the display answers the constructor), a definition or use whose
+binding is not a local declaration or a parameter (the scope-correct part of the reference walk); and, in the facts, a
+range whose facts are not the text's own — the body an inlined call spliced there, a copy of an inline body typed in a
+caller's terms, the compiler's own code lowered into it (a std call into its target's runtime class), the implicit `this`
+a bare member read shares it with, a type the harness cannot expand to the typer's alias or `@:generic` spelling, a
+typedef the index cannot follow (declared in several `#if` branches) that every typedef of its name the compiled build
+typed aliases to the compiler's type (`TypeFact.targets`). Each refusal is counted UNSCORED, never as a match.
 
 A DIFFERENT answer the harness cannot attribute to itself is an engine finding, input for the later steps; the run
 groups its `DIFFERENT` lines, and the findings standing on the tree this was written on are kinds, not sites: the
 written-source currency leaves out the implicit `Null<>` of an optional declaration (`?x: T`, an `@:optional` field),
 a callee's own type parameter reaches a call's answer unsubstituted (`T`), an expression inside a `macro` reification
 is typed as code rather than as the `Expr` it is, and the reference walk binds a name a reification pattern captures
-(`case macro $i{foo}:`) to the member of that name. T2 closed the first two (below); the kinds left after it are a
-typedef written without the arguments it aliases (`RadioButton` for `RadioButton<Void>`), an abstract over another type
-read through its `this` (`DiskSystemItemInternal`), a `for` binder whose iterable's element type is a structure, the
-inference of a local's type from more than its initializer, and the two reification kinds.
+(`case macro $i{foo}:`) to the member of that name. T2 closed the first two (below). FU28 measured the kinds left
+after it and closed four: a reference leaving out arguments its declaration gives defaults (`class Box<T = Void>` written
+`Box` — not a typedef alias, as first attributed), a bare call of a local function typed by the member it shadows, the
+package-blind member walk answering a member written with its type's parameter unsubstituted, and — on the facts side —
+ranges whose facts were not the text's own (the `this` an abstract's inlined accessor is handed, at the member's name;
+the code of an inlined body at the call's range; FU28 below). Left, by size: an expression
+inside a `macro` reification typed as code, `@:overload` returns (T5), the compiler's code an inlined call with a default
+argument leaves at the call's range with no inline site recorded, and a `Dynamic`-typed std library member a project
+library declares with a type.
 
 ## Where T2–T5 plug in
 
@@ -168,6 +176,28 @@ inference of a local's type from more than its initializer, and the two reificat
   4.3.7 (`docs/decisions.md`, FU18). Not reached: the call graph's index holds the project and the library bodies but not
   the std, so `ArgumentTypes` never resolves a std abstract (`UInt`) — that, and arithmetic over an abstract's `@:op`
   overloads (`UInt - UInt`), is what the client's `RoundedTextField.new` finding still waits for.
+- **FU28 — default type arguments, and what a facts range holds (done).** The index records each type parameter's
+  default (`TypeDeclInfo.typeParamDefaults`, through the span-info projection; a type several `#if` branches declare keeps
+  a default only where every branch writes it). `AncestorTable.withDefaults` binds the trailing parameters a reference
+  leaves out to them, and `AncestorTable.completed` writes them into a written type (4.3.7: `Box` names `Box<Int>` for
+  `class Box<T = Int>`, inside `Box` too, as an argument, through an extends link; a default that leaves out its own
+  arguments is completed in its own file). The source currency completes a binding's annotation (`NominalTypes.boundType`),
+  a member's written type in its host's file (`MemberLookup.memberReadType`) and a method's written return
+  (`returnSourceOf`); an extends link passes the defaults (`AncestorTable.linkOf`). Unknown where a parameter left out has
+  no default (no type the compiler accepts but `Dynamic`), the name may be a type parameter there, a default names a type
+  the reading file does not resolve to the same declaration, or a default reaches its own type. Two typer arcs were made
+  positive on the way: a bare call `f(x)` is the sibling member's only when `f` binds to a member declaration (a local
+  function shadowing it answers Unknown), and the package-blind member walk answers no member written with a parameter of
+  its type or of the member. On the compiler side, `CompilerFacts.typeOfExpressionAt` answers a range only when every
+  fact typed there is the text's: a local read records the local's name and counts only under it (the `this` an
+  abstract's inlined accessor is handed sits at the member's name), a call's receiver only beside a call its own file
+  spells at the call's range (an inlined body elsewhere taking the text as its receiver, or the function value a
+  memberless call calls), and a local the compiler declares at the range (a `?.` / `??` temporary, an inlined call's
+  parameter) only beside a site of the text's own; any other fact there — an inlined body's — makes the range no answer
+  instead of the sites left once it is passed over. Measured (source / nominal DIFFERENT): upstream 0 / 0 before and
+  after; anyparse 56 / 29 → 11 / 19, a client corpus 200 / 121 → 2 / 1, Pony 95 / 111 → 3 / 8; MATCH counts within
+  0.2 % of before on anyparse and the client corpus, Pony −2.2 % (ranges whose facts held an inlined body's code now
+  decline).
 - **T5 — overloads.** Argument types computed once per call site (a body table keyed by the enclosing declaration and the
   site's offset) and an overload chosen over them; a choice that depends on the expected type answers Unknown.
   Consumers: `OperandCallees.selectsItsSignature`, `ArgumentSlots`.

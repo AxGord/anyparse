@@ -975,7 +975,7 @@ final class PinsCheckPToZ {
 			+ 'M-FACTS-UNTYPED-DECLARED,M-FACTS-IDENT-READ,M-FACTS-GENERIC-RANGES,M-FACTS-BUILDS',
 		'unit.check.TypedFactsProbeTest#testHierarchyIsPackageQualifiedOverTheWholeTypedSet :: control :: M-FACTS-HIERARCHY',
 		'unit.check.TypedFactsProbeTest#testLoopsAndStringConversions :: control :: M-FACTS-ITER,M-FACTS-STRING-OPERAND,M-FACTS-TYPE-TEXT',
-		'unit.check.TypedFactsProbeTest#testPositionsAreSpanUnitsPastNonAsciiText :: control :: M-CODEPOINT-NATIVE,M-FACTS-READS',
+		'unit.check.TypedFactsProbeTest#testPositionsAreSpanUnitsPastNonAsciiText :: control :: M-CODEPOINT-NATIVE,M-FACTS-READS,M-FACTS-READ-EMIT-NAME',
 		'unit.check.TypedFactsProbeTest#testReflectionAndNativeSites :: control :: M-FACTS-REFLECT-NAME,M-FACTS-NATIVE',
 		'unit.check.TypedFactsProbeTest#testSplicedCodeIsTheCallersAndItsSiteIsUnknown :: control :: M-FACTS-INLINED-CALL,'
 			+ 'M-FACTS-INLINED-CHILD,M-FACTS-GENERATED,M-FACTS-SITE-UNKNOWN,M-FACTS-MACRO-EXPANSION,M-FACTS-SPLICE-OWN-ARGUMENTS',

@@ -8,6 +8,7 @@ import anyparse.check.RunScan;
 import anyparse.check.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.HaxelibResolver;
 import anyparse.query.IndexScope;
@@ -63,6 +64,9 @@ final class TyperConformance {
 
 	/** The access of a call fact whose callee the compiler inlined at the call site (`CompilerFacts.CallFact`). */
 	private static inline final INLINED_ACCESS: String = 'inlined';
+
+	/** The kind the facts give a typedef (`CompilerFacts.TypeFact`). */
+	private static inline final TYPEDEF_KIND: String = 'typedef';
 
 	/** A display assertion the harness scores: `eq("<type>", type(pos(N)))`. */
 	private static final TYPE_ASSERT: EReg = ~/^eq\("((?:[^"\\]|\\.)*)",\s*type\(pos\((\d+)\)\)\)$/;
@@ -305,13 +309,14 @@ final class TyperConformance {
 		}
 		Sys.println('facts: configurations ${oracle.facts.configurations}, dropped ${oracle.facts.dropped}');
 		final index: SymbolIndex = IndexScope.over(project.concat(library), plugin, [for (f in library) f.file]);
+		final aliases: Map<String, Array<Array<String>>> = typedefTargets(oracle);
 		var compiledFiles: Int = 0;
 		for (f in project) {
 			final key: String = FileSystem.fullPath(f.file);
 			final typer: Null<FileTyper> = FileTyper.within(plugin, index, f.file, f.source);
 			if (typer == null || !oracle.facts.compiled(key)) continue;
 			compiledFiles++;
-			typer.visit(factsCase.bind(report, oracle, key, f.file, typer));
+			typer.visit(factsCase.bind(report, oracle, aliases, key, f.file, typer));
 		}
 		Sys.println('facts: ${project.length} project files under ${config.resolutionRoots()}, $compiledFiles of them compiled');
 	}
@@ -338,7 +343,8 @@ final class TyperConformance {
 	 * the `haxe.PosInfos` object the compiler hands a `?pos` parameter at the call's own range.
 	 */
 	private static function factsCase(
-		report: Report, oracle: FactsTypeOracle, key: String, file: String, typer: FileTyper, node: QueryNode
+		report: Report, oracle: FactsTypeOracle, aliases: Map<String, Array<Array<String>>>, key: String, file: String, typer: FileTyper,
+		node: QueryNode
 	): Void {
 		final at: Null<Span> = node.span;
 		final compiled: Null<String> = at == null
@@ -363,20 +369,29 @@ final class TyperConformance {
 		else if (typer.isCall(node) && isPosInfos(normalized(compiled)))
 			report.unscored('facts/${node.kind}', '$label (the haxe.PosInfos argument the compiler adds at a call)')
 		else
-			typeAt(report, 'facts/${node.kind}', label, compiled, typer, node);
+			typeAt(report, 'facts/${node.kind}', label, compiled, typer, node, aliases);
 	}
 
 	/**
 	 * The typer's two answers for `node` — written source and nominal — scored against the compiler's `expected` type. A
 	 * typer name that is a typedef the compiler printed through (`Signal0` for `Priority<Listener0>`), or the class a
 	 * `@:generic` one expands to (`TypedPool_pony_ui_touch_Touch`), is the same type spelled another way: the nominal
-	 * follows the alias, and a source the harness cannot expand to the same text is unscored, not a match.
+	 * follows the alias, and a source the harness cannot expand to the same text is unscored, not a match. A typedef whose
+	 * alias the index cannot follow — one declared in several `#if` branches — but which every typedef of its name the
+	 * compiled build typed aliases to the compiler's type (`aliases`, `typedefTargets`) is unscored in both currencies: the
+	 * same type in that build, not shown to be in every one.
 	 */
 	private static function typeAt(
-		report: Report, area: String, label: String, expected: String, typer: FileTyper, node: Null<QueryNode>
+		report: Report, area: String, label: String, expected: String, typer: FileTyper, node: Null<QueryNode>,
+		?aliases: Map<String, Array<Array<String>>>
 	): Void {
 		final want: String = normalized(expected);
 		final outer: String = outerOf(want);
+		final typedefs: Map<String, Array<Array<String>>> = aliases ?? [];
+		final compiledAlias: (String) -> Bool = name -> {
+			final targets: Null<Array<Array<String>>> = typedefs[name];
+			targets != null && targets.length > 0 && targets.foreach(t -> t.length > 0 && t.foreach(x -> x == outer));
+		};
 		final source: Null<String> = node == null ? null : typer.source(node);
 		final nominal: Null<String> = node == null ? null : typer.nominal(node);
 		final named: Null<String> = nominal == null ? null : SourceText.lastSegment(nominal);
@@ -385,7 +400,7 @@ final class TyperConformance {
 			report.score('$area (source)', label, Unknown)
 		else if (normalized(source) == want)
 			report.score('$area (source)', label, Match)
-		else if (sourceOuter != null && typer.spellsAlike(sourceOuter, outer))
+		else if (sourceOuter != null && (typer.spellsAlike(sourceOuter, outer) || compiledAlias(sourceOuter)))
 			report.unscored('$area (source)', '$label (an alias or a generic expansion of $source)')
 		else
 			report.score('$area (source)', label, Different(source));
@@ -395,8 +410,27 @@ final class TyperConformance {
 			report.score('$area (nominal)', label, Match)
 		else if (typer.spellsAlike(named, outer))
 			report.unscored('$area (nominal)', '$label (a generic expansion of $named)')
+		else if (compiledAlias(named))
+			report.unscored('$area (nominal)', '$label (a typedef the compiled build aliases to it: $named)')
 		else
 			report.score('$area (nominal)', label, Different(named));
+	}
+
+	/**
+	 * Every typedef the compiled build typed, by simple name: for each, the outer simple names of the types a configuration
+	 * aliased it to (`TypeFact.targets`), in the spelling `typeAt` compares in.
+	 */
+	private static function typedefTargets(oracle: FactsTypeOracle): Map<String, Array<Array<String>>> {
+		final out: Map<String, Array<Array<String>>> = [];
+		for (id in oracle.facts.typeIds()) {
+			final t: Null<TypeFact> = oracle.facts.type(id);
+			if (t == null || t.kind != TYPEDEF_KIND) continue;
+			final name: String = SourceText.lastSegment(id);
+			final all: Array<Array<String>> = out[name] ?? [];
+			all.push([for (target in t.targets) outerOf(normalized(target))]);
+			out[name] = all;
+		}
+		return out;
 	}
 
 	private static function positionVerdict(expected: Span, found: Null<Span>): Verdict {
@@ -763,6 +797,9 @@ private final class FileTyper {
 @:nullSafety(Strict)
 private final class TypeText {
 
+	/** The wrapper an optional structure field's type is read through. */
+	private static inline final NULL_TYPE: String = 'Null';
+
 	private final _tokens: Array<String>;
 
 	private var _at: Int = 0;
@@ -798,12 +835,16 @@ private final class TypeText {
 		final t: String = next();
 		if (t == '(') {
 			final items: Array<String> = [];
+			var plain: Bool = true;
 			while (peek() != ')') {
+				plain = plain && peek() != '?' && !(_at + 1 < _tokens.length && _tokens[_at + 1] == ':');
 				items.push(argument());
 				if (peek() == ',') _at++;
 			}
 			_at++;
-			if (peek() == '->') {
+			// one unnamed type in parentheses before an arrow groups an argument of an old-style chain (4.3.7:
+			// `(A -> B) -> C -> D` takes two arguments), any other list is a new-style function's
+			if (peek() == '->' && !(plain && items.length == 1)) {
 				_at++;
 				return ['(${items.join(',')})->${type()}'];
 			}
@@ -842,7 +883,9 @@ private final class TypeText {
 			if (optional) _at++;
 			final name: String = next();
 			expect(':');
-			fields.push((optional ? '?' : '') + '$name:${type()}');
+			final t: String = type();
+			// an optional field's type is the optional value's (4.3.7: `{?a: Int}` is `{?a: Null<Int>}`, spelled so)
+			fields.push(optional ? '?$name:${t.startsWith('$NULL_TYPE<') ? t : '$NULL_TYPE<$t>'}' : '$name:$t');
 			if (peek() == ',' || peek() == ';') _at++;
 		}
 		_at++;

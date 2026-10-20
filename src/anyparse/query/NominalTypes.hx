@@ -250,7 +250,18 @@ final class NominalTypes {
 	public static function pathFinalMemberTypeSource(
 		path: Array<String>, rootType: String, index: SymbolIndex, ?transparentWrappers: Array<String>
 	): Null<String> {
-		final wrappers: Array<String> = transparentWrappers ?? [];
+		final host: Null<String> = pathFinalHost(path, rootType, index, transparentWrappers ?? []);
+		return host == null ? null : index.typing.members.memberTypeSourceOf(host, path[path.length - 1]);
+	}
+
+	/**
+	 * The simple name of the type whose member the last segment of `path` reads on the package-blind walk of
+	 * `pathFinalMemberTypeSource` — the type each intermediate member's written type reduces to, from `rootType` on — or
+	 * null when a link does not resolve.
+	 */
+	private static function pathFinalHost(
+		path: Array<String>, rootType: String, index: SymbolIndex, wrappers: Array<String>
+	): Null<String> {
 		var current: String = rootType;
 		for (i in 1...path.length - 1) {
 			final memberType: Null<String> = index.typing.members.memberTypeSourceOf(current, path[i]);
@@ -260,7 +271,7 @@ final class NominalTypes {
 			if (nominal == null) return null;
 			current = nominal;
 		}
-		return index.typing.members.memberTypeSourceOf(current, path[path.length - 1]);
+		return current;
 	}
 
 	/**
@@ -300,11 +311,19 @@ final class NominalTypes {
 		// The package-blind fallback never substitutes; in substitute mode it is only fed the
 		// root's NOMINAL, since a `Box<Item>` start source is not a name any member lookup matches.
 		if (rootType != null) {
-			final blind: Null<String> = pathFinalMemberTypeSource(
-				path, substituteTypeArgs ? outerNominalOf(startType, index.typeSyntax) ?? startType : startType, index, wrappers
-			);
-			// the substituting caller types a value: a written type that is no one type (`#if` inside it) is no answer there
-			return substituteTypeArgs && blind != null && !answerableType(blind, index.typeSyntax) ? null : blind;
+			final start: String = substituteTypeArgs ? outerNominalOf(startType, index.typeSyntax) ?? startType : startType;
+			final blind: Null<String> = pathFinalMemberTypeSource(path, start, index, wrappers);
+			if (!substituteTypeArgs || blind == null) return blind;
+			// the substituting caller types a value: a written type that is no one type (`#if` inside it) is no answer there, nor
+			// is one naming a parameter of the member's declaring type or of the member, which this walk never substitutes
+			final host: Null<String> = pathFinalHost(path, start, index, wrappers);
+			final params: Array<String> = host == null ? [] : [
+				for (d in index.typing.members.memberDeclarationsOf(host, path[path.length - 1]))
+					for (p in d.type.typeParamNames.concat(d.member.typeParamNames)) p
+			];
+			return !answerableType(blind, index.typeSyntax) || CallGraphNames.mentionsTypeName(blind, params, index.typeSyntax)
+				? null
+				: blind;
 		}
 		final firstSource: Null<String> = index.paths.resolvePathFinalMemberTypeSource(fromFile, path[0], [path[1]]);
 		if (firstSource == null) return null;
@@ -652,9 +671,10 @@ final class NominalTypes {
 
 	/**
 	 * The return type of an UNQUALIFIED call — a method of the enclosing type called without a
-	 * receiver (`l_benchTime(time)`). A callee name that resolves to a value BINDING is a local
-	 * function or a stored closure instead, whose return type the index cannot name, so it stays
-	 * null.
+	 * receiver (`l_benchTime(time)`). A callee name that binds to any declaration but a member — a
+	 * local or a parameter holding a closure, a local function (`function walk(…)` shadowing a
+	 * member `walk`), a module-level function — is another callee, whose return type the member
+	 * lookup does not name, so it stays null.
 	 */
 	private static function unqualifiedCallNominal(
 		callee: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex, method: String
@@ -662,13 +682,10 @@ final class NominalTypes {
 		final identKind: Null<String> = shape.identKind;
 		final span: Null<Span> = callee.span;
 		if (identKind == null || callee.kind != identKind || span == null) return null;
-		// A name that binds to a LOCAL — a closure or a parameter holding a function — is a
-		// different callee from a sibling METHOD, and the index cannot name a local's return type.
-		// The member declaration itself is not a refusal: the scope walk resolves a bare `f(x)` to
-		// the `FnMember f` that declares it, which is exactly the answer wanted here.
+		// Only a MEMBER binding is the sibling method: the scope walk resolves a bare `f(x)` to the
+		// `FnMember f` that declares it, and binds nothing for one a supertype declares
 		final binding: Null<QueryNode> = TypeResolver.bindingNodeFrom(method, span, root, shape);
-		final locals: Array<String> = (shape.localDeclKinds ?? []).concat(shape.paramKinds ?? []);
-		if (binding != null && locals.contains(binding.kind)) return null;
+		if (binding != null && !(shape.memberDeclKinds ?? []).contains(binding.kind)) return null;
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
 		return enclosing == null ? null : index.typing.members.returnNominalOf(enclosing, method);
 	}

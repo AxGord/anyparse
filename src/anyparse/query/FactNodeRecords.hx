@@ -200,8 +200,9 @@ final class FactNodeRecords {
 			record.vars, v -> place(v.p), fresh.bind('var'), (v, where) -> ({name: v.n, type: v.t, at: where }: VarFact), node.vars
 		);
 		FactMerge.collect(
-			record.reads, r -> place([for (i in 0...r.length - 1) (r[i]: Int)]), fresh.bind('read'), (r, where) -> ({
-				type: (r[r.length - 1]: String),
+			record.reads, r -> place([for (i in 0...r.length - 2) (r[i]: Int)]), fresh.bind('read'), (r, where) -> ({
+				type: (r[r.length - 2]: String),
+				name: (r[r.length - 1]: String),
 				at: where
 			}: LocalReadFact),
 			node.reads
@@ -378,7 +379,7 @@ typedef NodeRecord = {
 	}>;
 	final ?vars: Array<{ n: String, t: String, p: Array<Int> }>;
 
-	/** `[min, max, type]`, or `[file index, min, max, type]` for a foreign position. */
+	/** `[min, max, type, name]`, or `[file index, min, max, type, name]` for a foreign position. */
 	final ?reads: Array<Array<Any>>;
 	final ?exps: Array<{
 		?t: String,

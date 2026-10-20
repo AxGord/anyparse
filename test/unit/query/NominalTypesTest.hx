@@ -254,6 +254,35 @@ class NominalTypesTest extends Test {
 		Assert.equals('L<Item>', sourceAmong(branches, STD, 'probeL'), 'two writing one');
 	}
 
+	/**
+	 * A bare call `walk(1)` calls the member `walk` only where the name binds to that member: a local function of the
+	 * name shadows it, and its return type is not the member's (the nominal walk names none for it).
+	 */
+	@:pin('control') @:killer('M-NOMINAL-UNQUALIFIED-MEMBER')
+	public function testABareCallOfALocalFunctionIsNotTheMembers(): Void {
+		final text: String = 'package p;\n\nclass Item {}\n\nclass C {\n\tfunction walk(n: Int): Item return null;\n'
+			+ '\tfunction probeMember() return walk(1);\n\tfunction probeLocal() {\n\t\tfunction walk(n: Int): Int return n;\n'
+			+ '\t\treturn walk(1);\n\t}\n}\n';
+		Assert.equals('Item', nominalIn(text, 'probeMember'), 'the member');
+		Assert.isNull(nominalIn(text, 'probeLocal'), 'a local function shadowing it');
+	}
+
+	/**
+	 * A member read the import-aware walk cannot place (the receiver's type does not resolve from the reading file) falls
+	 * back to the package-blind walk, which substitutes nothing: a member written with its type's parameter
+	 * (`data: Array<T>`) then has no answer, rather than the parameter the receiver's argument binds.
+	 */
+	@:pin('control') @:killer('M-NOMINAL-BLIND-PARAMS')
+	public function testABlindMemberReadWrittenWithAParameterHasNoAnswer(): Void {
+		final others: Array<{ file: String, source: String }> = [
+			{ file: 'a/Pri.hx', source: 'package a;\n\nclass Pri<T> {\n\tpublic var data: Array<T>;\n\tpublic var size: Int;\n}\n' }
+		];
+		final text: String = 'package p;\n\nclass C {\n\tvar p: Pri<String>;\n\tfunction probeData() return p.data;\n'
+			+ '\tfunction probeSize() return p.size;\n}\n';
+		Assert.isNull(sourceAmong(text, others, 'probeData'), 'a member written with the parameter');
+		Assert.equals('Int', sourceAmong(text, others, 'probeSize'), 'one written without');
+	}
+
 	private static function nominal(fn: String): Null<String> {
 		final at: Probe = probeIn(SOURCE, fn);
 		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);

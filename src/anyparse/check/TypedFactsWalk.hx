@@ -541,7 +541,7 @@ final class TypedFactsWalk {
 			case TFunction(_):
 				child(e, null);
 			case TLocal(v):
-				if (!v.name.startsWith('`')) add('reads', '[${range(e.pos)},${q(localType(v))}]');
+				if (!v.name.startsWith('`')) add('reads', '[${range(e.pos)},${q(localType(v))},${q(v.name)}]');
 				final alias: Null<Alias> = _aliases[v.id];
 				if (alias != null) localRead(alias, v, use, substituted);
 			case TIdent(identifier):
@@ -1212,7 +1212,7 @@ final class TypedFactsWalk {
 	private static function wrapped(t: Type): Null<Type> {
 		return switch TypeTools.follow(t) {
 			case TAbstract(a, params):
-				// read once per abstract: each `a.get()` decodes the whole abstract, and a TM build asks ~47k times (11% of the macro)
+				// read once per abstract: each `a.get()` decodes the whole abstract, and a client build asks ~47k times (11% of the macro)
 				final key: String = a.toString();
 				if (!abstractBodies.exists(key)) {
 					final read: AbstractType = a.get();

@@ -4892,3 +4892,53 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   breaks by width and the `+` chain around it reads the operand flat, while the next write reads it source-broken
   (`anyHardline`); the break sits behind the comprehension body's `BodyGroup`, which offers do not cross (FU3). `t_filter`
   tc k=27 — the comprehension `if` body seam is re-decided on read-back (`strictFitLineShape`), the same fit-body limit.
+
+## FU28 (2026-10-20): typer facts harness — the DIFFERENT families, default type arguments, what a facts range holds
+
+- the facts harness's DIFFERENT lists (`tools/TyperConformance.hx facts`) classified into families before any fix
+  (anyparse 56 / 29 source / nominal, a client corpus 200 / 121, Pony 95 / 111). The largest client family, first
+  attributed to "a typedef alias used without type arguments", is a class with a DEFAULT type parameter
+  (`class Box<T = Void>` written `Box`; the compiler prints `Box<Void>`) — branch `feat/fu-FU28`
+- probed on Haxe 4.3.7 (`--interp`): `Box` is `Box<Int>` for `class Box<T = Int>`, inside `Box` too (`get(): Box`
+  returning `this` errors `Box.T should be Int`); trailing arguments only (`Two<Int>` is `Two<Int, String>`); a typedef,
+  an abstract and an interface alike; `extends Box` passes `Int`; a default leaving out its own arguments is completed
+  (`Outer<T = Inner>` is `Outer<Inner<Int>>`); a default naming another parameter is `Type not found`, a default naming
+  its own type overflows the compiler; every std generic written without arguments is `Not enough type parameters`
+  except `Dynamic` → `TypeDeclInfo.typeParamDefaults` + `AncestorTable.withDefaults` / `completed`, consumed by the
+  source currency's binding, member and return arcs and by `linkOf` — branch `feat/fu-FU28`
+- "matches or Unknown": a reference is completed only through a single resolved declaration, with every left-out
+  parameter defaulted, its name not a type parameter of the file (a name a parameter may hold is that parameter or the
+  type), and each default's types resolving from the reading file to the declarations they resolve to from the default's
+  own file (the default is written into another file's text); anything else is no answer, never the reference as
+  written. The nominal of a binding whose annotation's source is missing is not completed (the arguments were lost
+  with it) — branch `feat/fu-FU28`
+- a bare call's callee bound to a local declaration was refused by a NEGATIVE list (locals, parameters), so a local
+  FUNCTION shadowing a member was typed by the member's return → positive: the member's return only when the name binds
+  to a member declaration (`RefShape.memberDeclKinds`) or to nothing the scope walk sees (a supertype's member) —
+  branch `feat/fu-FU28`
+- the substituting path walk's package-blind fallback substitutes nothing, yet answered a member written with its
+  declaring type's parameter (`Array<T>` for a receiver `Pri<String>`) → no answer when the member's written type names
+  a parameter of its type or of the member (`NominalTypes.pathFinalHost` shared with `pathFinalMemberTypeSource`) —
+  branch `feat/fu-FU28`
+- the compiler side was the other half of the DIFFERENT lists: `CompilerFacts.typeOfExpressionAt` read a range's facts
+  as the text's after passing over the sites it recognised as foreign, so what was left could be foreign too — the
+  `this` an abstract's inlined property getter is handed is a local read placed at the member's name (a bare `whole`
+  inside the abstract typed as its underlying `Float`), an inlined body's calls and fields at its call's range (a
+  forwarded `brk()` typed `Array<Int>`). Positive instead: every fact at the range must be the text's — a local read
+  carries the local's name (`LocalReadFact.name`, recorded by the facts macro) and counts under it, a receiver counts
+  beside a call its own file spells at the call's range (a body inlined from another file takes the text as its
+  receiver) or as the callee of a memberless call, a local the compiler declares at the range (`?.` / `??` temporaries,
+  an inlined call's parameter, of the parameter's type) counts only beside a site of the text's own — and any other fact
+  makes the range no answer. Measured: the passing-over form (first cut) turned conflicts that used to decline into a
+  wrong single answer (Pony nominal DIFFERENT 111 → 135); the all-sites form ends at anyparse 11 / 19, the client corpus
+  2 / 1, Pony 3 / 8 with MATCH within 0.2 % on anyparse and the client corpus and −2.2 % on Pony — branch `feat/fu-FU28`
+- three harness spellings of one type (`TypeText`), each verified on 4.3.7 rather than assumed: an optional structure
+  field's type is the optional value's (`{?a: Int}` and `{?a: Null<Int>}` assign both ways and print alike, an explicit
+  `Null<…>` is not doubled); one unnamed type in parentheses before an arrow groups an argument of an old-style chain
+  (`(A -> B) -> C -> D` is a two-argument function; `(x: A) -> (y: B) -> C` does not parse); and a typedef the index
+  cannot follow (one declared in several `#if` branches) whose every compiled typedef of that name aliases the compiler's
+  type is UNSCORED in both currencies — the same type in that build, not shown to be in every one — branch `feat/fu-FU28`
+- NOT closed, by size: an expression inside a `macro` reification typed as code (11 / 11 on anyparse); `@:overload`
+  returns (T5; an extern's `readFileSync` overloads, a socket's `on`); an inlined call with a default argument whose
+  expansion leaves an argument flow at the call's range and no inline site (the facts macro records the inline call at
+  the enclosing statement); a std member typed `Dynamic` that a library declares with a type — branch `feat/fu-FU28`

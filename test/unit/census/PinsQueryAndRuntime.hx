@@ -1185,6 +1185,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.NewFileSliceTest#testImportsSectionRefusesABareKeyword :: control :: M-NEWFILE-BARE-KEYWORD-WRAPPED',
 		'unit.query.NewFileSliceTest#testImportsSectionRefusesAnUnusableLine :: control :: M-NEWFILE-IMPORT-ANY-LINE',
 		'unit.query.NewFileSliceTest#testImportsSectionTakesStatements :: control :: M-NEWFILE-IMPORT-DOUBLED',
+		'unit.query.NominalTypesTest#testABareCallOfALocalFunctionIsNotTheMembers :: control :: M-NOMINAL-UNQUALIFIED-MEMBER',
+		'unit.query.NominalTypesTest#testABlindMemberReadWrittenWithAParameterHasNoAnswer :: control :: M-NOMINAL-BLIND-PARAMS',
 		'unit.query.NominalTypesTest#testAConstructionIsTheTypeItWrites :: control :: M-NOMINAL-CONSTRUCTED',
 		'unit.query.NominalTypesTest#testAConstructionReadsTheTypeArgumentsItWrites :: control :: M-CONSTRUCTION-CTOR-GAP',
 		'unit.query.NominalTypesTest#testALiteralIsItsType :: control :: M-NOMINAL-LITERAL',

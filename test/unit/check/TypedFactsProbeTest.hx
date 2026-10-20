@@ -268,7 +268,7 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-CODEPOINT-NATIVE') @:killer('M-FACTS-READS')
+	@:pin('control') @:killer('M-CODEPOINT-NATIVE') @:killer('M-FACTS-READS') @:killer('M-FACTS-READ-EMIT-NAME')
 	public function testPositionsAreSpanUnitsPastNonAsciiText(): Void {
 		// the compiler counts codepoints, a Span counts the target's string units: an emoji before a site is two units
 		final source: String = 'class Main {\n\t// Привет 😀😀 мир\n\tstatic var s = "ёж😀";\n'

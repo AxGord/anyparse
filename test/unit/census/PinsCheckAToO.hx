@@ -258,6 +258,7 @@ final class PinsCheckAToO {
 		'unit.check.FactsTypeOracleE2ETest#testTheFirstWriteWaitsForTheFactsCompile :: guard :: ',
 		'unit.check.FactsTypeOracleTest#testAFieldTheConfigurationsTypeApartDeclines :: control :: M-FACTS-FIELD-TYPES',
 		'unit.check.FactsTypeOracleTest#testAFinalClassIsItsOwnHome :: control :: M-ORACLE-HOME-MODIFIED-TYPE',
+		'unit.check.FactsTypeOracleTest#testARangeHoldingCodeTheTextDoesNotSpellHasNoType :: control :: M-FACTS-READ-RECORD-NAME,M-FACTS-READ-NAME,M-FACTS-RECEIVER-CALL,M-FACTS-SPELLED-CALL,M-FACTS-FOREIGN-SITE,M-FACTS-TEMP-LOCAL,M-FACTS-TEMP-ALONE,M-FACTS-VALUE-CALLEE',
 		'unit.check.FactsTypeOracleTest#testARewriteDropsOnlyTheNodesThatReadIt :: control :: M-FACTS-MADE-FROM-ALL,M-FACTS-MADE-FROM-NONE',
 		'unit.check.FactsTypeOracleTest#testARewrittenFileIsReadAtTheTextTheCompileRead :: control :: '
 			+ 'M-FACTS-ORACLE-ORIGINAL,M-JOURNAL-SHIFT',
