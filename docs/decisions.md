@@ -5103,8 +5103,8 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   `returnTypes`): the query tree flattens a type parameter's bound beside the return (`function g<T:Int>(x:T) {}` has a
   `Named Int` child), so the last annotation child is a bound, not a return, for a function written with none. The
   signatures and `MemberInfo.returnSource` read the new map (`c.g(1)` over that `g` was typed `Int`); the query-tree
-  reader (`CallGraphNames.returnSourceOf`) stays for a function no index records (a local function, a lambda) — branch
-  `feat/fu-FU25`
+  reader (`CallGraphNames.returnSourceOf`) stayed for a function no index records (a local function, a lambda) until FU32
+  moved it onto the same map — branch `feat/fu-FU25`
 - **A method's own type parameter is bound by the arguments** (T5 step 2): a parameter written as one (`x:T`) takes any
   value, a bounded one (`<T:Int>`, `SpanTypeInfo.typeParamConstraints` into `CallSignature.typeParamConstraints`) a value
   unifying with every bound (`check_constraint`; `Unification.unifiesEnds`), so the bound takes part in the choice
@@ -5136,3 +5136,33 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   any build: every alternative writes the same enum abstract, which `castClausesOf` refuses because the name node is not
   the declaration node — branch `feat/fu-FU25`
 
+
+## FU32 (2026-10-20): typer small items — a return read off the span info everywhere, a namesake that inherits, a harness limit
+
+- **Every reader of a function's written return reads the span info** (`CallGraphNames.returnSourceOf(fn, returns)` over
+  `SpanTypeInfo.returnTypeSources`, `returnSourcesOf(plugin, source)`, the graph's door `CallGraph.returnSourcesIn`). FU25
+  moved the index's members onto that map and left the query-tree reader (the last annotation child) for the functions no
+  index records; it read a type parameter's bound as the return of a function written with none
+  (`function g<T:Foo>(x:T) return new Bar();` — 4.3.7 runs `Bar.run` for `g(f).run()`, local function and member alike —
+  and `mk<T:(c:Use)->Int>()` returning a lambda 4.3.7 types `(c : { on : Bool }) -> Int`). The tree reader is gone: the
+  call graph's nodes (members included — `DeclarationFacts.returnSources` was filled from it), `@:overload` agreement,
+  the per-declaration return list, the lock-alias class bounds and the operand binder's lambda expectation and local-call
+  tier all take the one map. A plugin with no batched span info proves no return type (Unknown) — branch `feat/fu-FU32`
+- **A namesake inheriting the member joins the agreement** (`MemberLookup.receiverDeclarationsOf`): the walk by simple
+  name used to read only the declarations of the name that declare the member themselves, so a receiver of one that
+  INHERITS it (`p.Socket extends Duplex`, `Duplex.write(...): Bool`) answered the other's own (`q.Socket.write(): Void`).
+  Every declaration of the name declaring none now adds the member its supertype chain reaches (`declaringMember`, read
+  where its file binds the links), and the name walk (`returnNominalWalk`) and the source currency's `returnSourceOf`
+  require all to agree, else Unknown; `CallReturns.selectedReturn` then decides where the call's arguments exclude a
+  namesake (`s.write('a', 1)` against a one-parameter namesake). Resolving the receiver to its one declaration needs a
+  currency that carries the file a type was written in — not done. The first cut (Unknown whenever a namesake inherits)
+  lost 12 MATCH per currency on a client corpus to std `_std` copies that agree; the agreement keeps them. Four
+  stay lost there, correctly: `_std` copies of a std output class one of which inherits a `flush()` written with no
+  return type — branch `feat/fu-FU32`
+- **An inlined call leaving out an argument of the type the facts give its range is UNSCORED** (`TyperConformance`,
+  `leavesAnInlinedArgumentOut`): the facts record an inlined call at the innermost expression around it (`CallFact.site`,
+  the enclosing statement), never at the call, so what they hold at the call's range is the default the compiler hands the
+  parameter left out (`json(140)` over `inline function json(w:Int, a:Bool = false):String` → `Bool`). A harness limit,
+  not an engine answer: unscored only when an `inlined` call of the callee's name has a site holding the range and its node
+  declares a parameter past the passed arguments of exactly that type — the first cut (any left-out parameter) also
+  unscored four calls whose range held the call's own `Void` — branch `feat/fu-FU32`

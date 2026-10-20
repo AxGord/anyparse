@@ -28,6 +28,7 @@ final class CallGraphNodes {
 		final bounds: Map<Int, Map<String, Array<String>>> = spanInfo == null
 			? []
 			: spanInfo.spanTypeInfo(entry.source).typeParamConstraints;
+		final returnSources: Map<Int, String> = g.returnSourcesIn(entry.source);
 		// a local `inline function` is a function of its own like any local one, though the grammar gives it a kind apart
 		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
@@ -40,7 +41,6 @@ final class CallGraphNodes {
 		final modifierBoundary: QueryNode -> Bool = c -> c.children.length > 0 || c.name != null;
 
 		final underlyingKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
-		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
 		final runKinds: Array<String> = CheckScan.modifierKinds(shape).concat(g._plugin.metaShape().metaKinds);
 
 		function walk(
@@ -94,10 +94,8 @@ final class CallGraphNodes {
 				else if (!first && !DeclarationFacts.sameBounds(g._facts.typeParamBounds[id], bounded))
 					g._facts.typeParamBounds.remove(id);
 				DeclarationFacts.settle(g._facts.returns, id, returnTypes[span.from], first);
-				DeclarationFacts.settle(
-					g._facts.returnSources, id, CallGraphNames.returnSourceOf(node, entry.source, annotationKinds), first
-				);
-				if (overloads != null) overloaded(g, id, node, overloads, entry.source, typeParams);
+				DeclarationFacts.settle(g._facts.returnSources, id, CallGraphNames.returnSourceOf(node, returnSources), first);
+				if (overloads != null) overloaded(g, id, node, overloads, entry.source, typeParams, returnSources);
 			} else if (span != null && lambdaKinds.contains(node.kind)) {
 				lambdaCounter++;
 				fnId = '${parentFn ?? (typeName ?? moduleType)}#$lambdaCounter';
@@ -141,13 +139,14 @@ final class CallGraphNodes {
 	 * parameters a call cannot read off its declaration: some other signature writes them differently. An offered
 	 * signature that does not read as a function differs in both, and so does every one when a signature declares type
 	 * parameters of its own (`typeParams`, by declaration offset): the same text names another type in each (review L3 G4,
-	 * `@:overload(function<T>(x:T):T {})` beside a class's own `T`).
+	 * `@:overload(function<T>(x:T):T {})` beside a class's own `T`). `returns`: the file's written return types
+	 * (`CallGraphNames.returnSourcesOf`).
 	 */
 	private static function overloaded(
-		g: CallGraph, id: String, fn: QueryNode, others: Array<QueryNode>, source: String, typeParams: Map<Int, Array<String>>
+		g: CallGraph, id: String, fn: QueryNode, others: Array<QueryNode>, source: String, typeParams: Map<Int, Array<String>>,
+		returns: Map<Int, String>
 	): Void {
 		final shape: RefShape = g._shape;
-		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		function params(f: QueryNode): String {
 			return [
@@ -158,7 +157,7 @@ final class CallGraphNodes {
 					}
 			].join(',');
 		}
-		final returned: Null<String> = CallGraphNames.returnSourceOf(fn, source, annotationKinds);
+		final returned: Null<String> = CallGraphNames.returnSourceOf(fn, returns);
 		final written: String = params(fn);
 		// an `@:overload` holding no function expression offers a signature nothing reads; one with type parameters of its own
 		// writes names no other signature means
@@ -167,7 +166,7 @@ final class CallGraphNodes {
 			return at != null && (typeParams[at.from] ?? []).length > 0;
 		}
 		final unread: Bool = others.length == 0 || [fn].concat(others).exists(ownParams);
-		if (unread || others.exists(o -> CallGraphNames.returnSourceOf(o, source, annotationKinds) != returned)) {
+		if (unread || others.exists(o -> CallGraphNames.returnSourceOf(o, returns) != returned)) {
 			g._facts.overloadedReturns[id] = true;
 			g._facts.returns.remove(id);
 			g._facts.returnSources.remove(id);

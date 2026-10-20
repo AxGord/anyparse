@@ -8,6 +8,8 @@ import anyparse.check.RunScan;
 import anyparse.check.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CompilerFacts.FactNode;
+import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.HaxelibResolver;
@@ -340,7 +342,8 @@ final class TyperConformance {
 	 * The facts case of `node` of `file` (table key `key`): the compiler's value type there asked of `typer`, unless the
 	 * facts at that range are not the text's own — the body an inlined call spliced there, a copy of an inline body typed in
 	 * a caller's terms, the compiler's own code lowered into the range, the implicit `this` a bare member read shares it with,
-	 * the `haxe.PosInfos` object the compiler hands a `?pos` parameter at the call's own range.
+	 * the `haxe.PosInfos` object the compiler hands a `?pos` parameter at the call's own range, the value an inlined call hands
+	 * a parameter it leaves out (`leavesAnInlinedArgumentOut`).
 	 */
 	private static function factsCase(
 		report: Report, oracle: FactsTypeOracle, aliases: Map<String, Array<Array<String>>>, key: String, file: String, typer: FileTyper,
@@ -368,8 +371,34 @@ final class TyperConformance {
 			report.unscored('facts/${node.kind}', '$label (the implicit receiver of a member read)')
 		else if (typer.isCall(node) && isPosInfos(normalized(compiled)))
 			report.unscored('facts/${node.kind}', '$label (the haxe.PosInfos argument the compiler adds at a call)')
+		else if (leavesAnInlinedArgumentOut(oracle, key, node, at, compiled, typer))
+			report.unscored('facts/${node.kind}', '$label (an inlined call leaving an argument out: the value it hands it, not the call)')
 		else
 			typeAt(report, 'facts/${node.kind}', label, compiled, typer, node, aliases);
+	}
+
+	/**
+	 * Whether `node`, at `at` of the file `key`, is a call the compiler inlined leaving out an argument of the type it typed
+	 * there (`compiled`): an `inlined` call fact of a method of the callee's name whose site holds the range, that method's
+	 * node declaring a parameter of that type past the arguments the call passes. The facts record an inlined call at the
+	 * innermost expression around it (`CallFact.site`, the enclosing statement), never at the call itself, so that type is the
+	 * value the compiler hands the parameter left out — its default — and not the call's: a limit of this harness, not an
+	 * answer of the typer.
+	 */
+	private static function leavesAnInlinedArgumentOut(
+		oracle: FactsTypeOracle, key: String, node: QueryNode, at: Span, compiled: String, typer: FileTyper
+	): Bool {
+		final callee: Null<String> = typer.isCall(node) && node.children.length > 0 ? node.children[0].name : null;
+		final passed: Int = node.children.length - 1;
+		final want: String = normalized(compiled);
+		return callee != null && oracle.facts.nodesAround(key, at).exists(n -> n.calls.exists(c -> {
+			final site: Null<FactPos> = c.site;
+			final target: Null<String> = c.target;
+			final method: Null<FactNode> = target == null ? null : oracle.facts.node(target);
+			c.access == INLINED_ACCESS && site != null && site.span.from <= at.from && at.to <= site.span.to && target != null
+				&& SourceText.lastSegment(target) == callee && method != null
+				&& method.params.slice(passed).exists(p -> normalized(p.type) == want);
+		}));
 	}
 
 	/**

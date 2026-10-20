@@ -282,7 +282,7 @@ final class Unification {
 	private function reaches(cur: ResolvedType, target: TypeEnd, seen: Array<String>): ArgumentFit {
 		if (!_refs.markSeen(cur, seen)) return Misfits;
 		var open: Bool = false;
-		for (link in _ancestors.links(cur)) if (!MemberLookup.dynamicSupertypeRef(link.raw)) {
+		for (link in _ancestors.links(cur)) if (!AncestorTable.dynamicSupertypeRef(link.raw)) {
 			final up: Null<ResolvedType> = link.decl == null ? null : _casts.followed(link.decl);
 			if (up == null || up.type.guarded) {
 				open = true;

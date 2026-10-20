@@ -870,13 +870,15 @@ final class NominalTypes {
 	}
 
 	/**
-	 * The return type every declaration of the method `method` on `typeName` writes, as written — null when they disagree,
-	 * when one writes none, when it names a type parameter of the method or of its declaring type (which the call binds), or
-	 * when `typeName` declares no such method directly (an inherited one returns through its supertype's arguments).
+	 * The return type every declaration of the method `method` a receiver of `typeName` may run writes, as written
+	 * (`MemberLookup.receiverDeclarationsOf`: the simple name's, and the one a declaration of it inheriting the method
+	 * reaches) — null when they disagree, when one writes none, when it names a type parameter of the method or of its
+	 * declaring type (which the call binds), or when no declaration of `typeName` declares such a method directly (an
+	 * inherited one returns through its supertype's arguments).
 	 */
 	private static function returnSourceOf(index: SymbolIndex, typeName: String, method: String): Null<String> {
 		var found: Null<String> = null;
-		final declared: Array<MemberDeclaration> = index.typing.members.memberDeclarationsOf(typeName, method);
+		final declared: Array<MemberDeclaration> = index.typing.members.receiverDeclarationsOf(typeName, method);
 		for (d in declared) {
 			// an overloaded member returns what the signature a call selects returns (`selectedReturn`)
 			if (d.member.hasOverloadMeta || d.member.isOverload) return null;

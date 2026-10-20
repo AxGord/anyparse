@@ -368,6 +368,25 @@ class OperandTypingTest extends Test {
 	}
 
 	/**
+	 * A function written with no return type declares none, whatever the bound of a type parameter writes beside it: 4.3.7
+	 * types `mk`'s lambda `(c : { on : Bool }) -> Int`, so `c` is no `Use`, and the local `loc<T:Use>(x:T)` returns the
+	 * structure it builds, so `loc(this)` is none either.
+	 */
+	@:pin('control') @:killer('M-BINDER-RETURN-ANNOTATION', 'M-BINDER-LOCAL-CALL-ANNOTATION')
+	public function testATypeParametersBoundIsNoReturnType(): Void {
+		final members: String = '\tfunction mk<T:(c:Use)->Int>() {\n\t\treturn c -> !c.on ? 1 : 2;\n\t}\n\n';
+		Assert.isFalse(inverts([lambdaUse(members, '')]), 'a bound beside no return type');
+		Assert.isTrue(inverts([
+			lambdaUse('\tfunction mk<T:Int>():(c:Use)->Int {\n\t\treturn c -> !c.on ? 1 : 2;\n\t}\n\n', '')
+		]), 'a written return beside a bound');
+		final local: String = 'function loc<T:Use>(x:T) return { on: false };\n\t\ttrace(!loc(this).on ? 1 : 2);';
+		Assert.isFalse(inverts([lambdaUse('', local)]), 'a local function');
+		Assert.isTrue(inverts([
+			lambdaUse('', 'function loc<T:Int>(x:T):Use return this;\n\t\ttrace(!loc(1).on ? 1 : 2);')
+		]), 'a local function writing its return');
+	}
+
+	/**
 	 * A parameter before the one a lambda would bind may be skipped — optional, or carrying a default value — and 4.3.7 tries
 	 * the lambda against it first: `opt(?a:(c:Use)->Int, cb:(c:FlagOn)->Void)` called with a `Void` lambda reports `c` as
 	 * `Use`, then binds it to `cb` as `FlagOn`, whose `on` is the overloading `Flag`. Unproven; a required one before it is not

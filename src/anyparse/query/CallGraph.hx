@@ -498,6 +498,11 @@ final class CallGraph {
 		return _entries[CallGraphNames.normalizePath(file)]?.source;
 	}
 
+	/** The written return types of the file text `source`, by declaration offset (`CallGraphNames.returnSourcesOf`). */
+	public inline function returnSourcesIn(source: String): Map<Int, String> {
+		return CallGraphNames.returnSourcesOf(_plugin, source);
+	}
+
 	/** The innermost declaration of a function-like node in `file` whose span contains `offset`, or null outside every function. */
 	public function declarationAt(file: String, offset: Int): Null<FnDeclaration> {
 		var best: Null<FnDeclaration> = null;

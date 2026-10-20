@@ -219,6 +219,23 @@ final class MemberLookup {
 	}
 
 	/**
+	 * Every declaration of `memberName` a receiver of a type named `typeName` may run, for a walk by the simple name: each one
+	 * a declaration of the name declares itself (`memberDeclarationsOf`) and, when there is one, the one each declaration of
+	 * the name declaring none reaches through its supertypes (`declaringMember`) — the direct ones do not answer for a
+	 * receiver of that one (a `p.Socket` inheriting `write` beside a `q.Socket` declaring its own). Empty when no declaration
+	 * of the name declares the member itself: the supertype walk answers then.
+	 */
+	public function receiverDeclarationsOf(typeName: String, memberName: String): Array<MemberDeclaration> {
+		final out: Array<MemberDeclaration> = memberDeclarationsOf(typeName, memberName);
+		if (out.length == 0) return out;
+		for (decl in _refs.named(typeName)) if (!decl.type.members.exists(m -> m.name == memberName)) {
+			final hit: Null<HostedMembers> = declaringMember(decl, memberName);
+			if (hit != null) for (m in hit.members) out.push({ type: hit.host.type, member: m, file: hit.host.file });
+		}
+		return out;
+	}
+
+	/**
 	 * Whether any indexed type declares a member named `member` as one of the member kinds `kinds` — an enum constructor of
 	 * that name, say, which a bare call builds with no import, the language resolving it against the expected type. Over every
 	 * type of every file, by the member's name alone.
@@ -360,7 +377,7 @@ final class MemberLookup {
 	public function typeProvablyLacksMember(typeName: String, member: String, ?fromFile: String, ?at: Int): Bool {
 		// A caller may pass `Dynamic` itself — it reaches an `interfaces` list from an
 		// `implements Dynamic<T>` clause — and it declares no named member (see `dynamicSupertypeRef`).
-		if (dynamicSupertypeRef(typeName)) return true;
+		if (AncestorTable.dynamicSupertypeRef(typeName)) return true;
 		final start: Null<ResolvedType> = _refs.resolveStartType(typeName, fromFile, at);
 		return start != null && declarationLacksMember(start, member);
 	}
@@ -599,7 +616,7 @@ final class MemberLookup {
 		// file (`resolveTypeRef` -> `simpleRefInScope`), so a simple name shared by several
 		// packages picks the one actually in scope instead of failing the whole proof. A
 		// reference resolving to zero OR to several decls is refused identically: unresolved.
-		for (link in _ancestors.links(cur)) if (!dynamicSupertypeRef(link.raw)) {
+		for (link in _ancestors.links(cur)) if (!AncestorTable.dynamicSupertypeRef(link.raw)) {
 			final anc: Null<ResolvedType> = link.decl;
 			if (anc == null || !lacksMemberClosure(anc, member, seen)) return false;
 		}
@@ -617,7 +634,7 @@ final class MemberLookup {
 			return next != null && !seen.contains(_refs.seenKey(next)) && freeOfExtensionTypes(next, seen);
 		}
 		for (link in _ancestors.links(cur)) {
-			final anc: Null<ResolvedType> = dynamicSupertypeRef(link.raw) ? null : link.decl;
+			final anc: Null<ResolvedType> = AncestorTable.dynamicSupertypeRef(link.raw) ? null : link.decl;
 			if (anc == null || !freeOfExtensionTypes(anc, seen)) return false;
 		}
 		return true;
@@ -663,7 +680,7 @@ final class MemberLookup {
 			return next == null || seen.contains(_refs.seenKey(next)) ? null : declaredMemberClosure(next, member, seen);
 		}
 		if (t.abstractForwardUnderlying != null) return null;
-		for (link in _ancestors.links(cur)) if (!dynamicSupertypeRef(link.raw)) {
+		for (link in _ancestors.links(cur)) if (!AncestorTable.dynamicSupertypeRef(link.raw)) {
 			final anc: Null<ResolvedType> = link.decl;
 			if (anc == null) continue;
 			final up: Null<DeclaredMember> = declaredMemberClosure(anc, member, seen);
@@ -702,7 +719,7 @@ final class MemberLookup {
 	/** `supertypeMemberProof`'s walk: `Declares` short-circuits, an unresolvable link is remembered and reported at the end. */
 	private function ancestorsProof(cur: ResolvedType, field: String, seen: Array<String>, built: Array<String>): SupertypeProof {
 		var unreachable: Bool = false;
-		for (link in _ancestors.links(cur)) if (!dynamicSupertypeRef(link.raw)) {
+		for (link in _ancestors.links(cur)) if (!AncestorTable.dynamicSupertypeRef(link.raw)) {
 			final anc: Null<ResolvedType> = link.decl;
 			switch anc == null ? SupertypeProof.Unreachable : hostProof(anc, field, seen, built) {
 				case SupertypeProof.Declares:
@@ -852,28 +869,28 @@ final class MemberLookup {
 	}
 
 	/**
-	 * `returnNominalOf`'s recursion: a direct member's return nominal (unanimous across
-	 * same-named types, else null), or — when no direct member — the unanimous nominal
-	 * resolved through the supertype closure. `seen` cycle-guards the walk.
+	 * `returnNominalOf`'s recursion: the return nominal of every declaration a receiver of the name may run
+	 * (`receiverDeclarationsOf`, unanimous, else null), or — when no declaration of the name declares the member — the
+	 * unanimous nominal resolved through the supertype closure. `seen` cycle-guards the walk.
 	 */
 	private function returnNominalWalk(typeName: String, memberName: String, seen: Array<String>): Null<String> {
 		if (seen.contains(typeName)) return null;
 		seen.push(typeName);
 		var found: Null<String> = null;
-		var direct: Int = 0;
-		for (decl in _refs.named(typeName)) for (m in decl.type.members) if (m.name == memberName) {
+		final declared: Array<MemberDeclaration> = receiverDeclarationsOf(typeName, memberName);
+		for (i => d in declared) {
+			final m: MemberInfo = d.member;
 			// an overloaded member returns what the signature a call selects returns (`CallSelection`), no name alone
 			if (m.hasOverloadMeta || m.isOverload) return null;
 			// a return written as a type parameter of the method or of its type names what each call binds, not a type
 			final own: Null<String> = m.returnNominal;
-			if (own != null && (m.typeParamNames.contains(own) || decl.type.typeParamNames.contains(own))) return null;
-			if (direct == 0)
+			if (own != null && (m.typeParamNames.contains(own) || d.type.typeParamNames.contains(own))) return null;
+			if (i == 0)
 				found = own;
 			else if (own != found)
 				return null;
-			direct++;
 		}
-		return direct > 0 ? found : inheritedReturnNominal(typeName, memberName, seen);
+		return declared.length > 0 ? found : inheritedReturnNominal(typeName, memberName, seen);
 	}
 
 	/**
@@ -933,17 +950,6 @@ final class MemberLookup {
 			supers++;
 		}
 		return inherited;
-	}
-
-	/**
-	 * Whether a supertype reference is `Dynamic`. `implements Dynamic<T>` marks dynamic FIELD
-	 * ACCESS and declares no NAMED member, so it can never be the inherited `_x` a rename would
-	 * redefine — it must be SKIPPED rather than counted as an unresolvable dead end, which would
-	 * wrongly block every `openfl` display subclass (`DisplayObject` carries such a clause under
-	 * `#if`). Matched on the last path segment, so a qualified spelling is skipped too.
-	 */
-	private static inline function dynamicSupertypeRef(raw: String): Bool {
-		return SourceText.lastSegment(raw) == 'Dynamic';
 	}
 
 	/**

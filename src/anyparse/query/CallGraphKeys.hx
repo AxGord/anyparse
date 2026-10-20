@@ -378,7 +378,7 @@ final class CallGraphKeys {
 				final fn: Null<QueryNode> = entry == null ? null : CallGraphNames.functionNodeAt(entry.tree, d.span.from, kinds);
 				final read: Null<String> = entry == null || fn == null
 					? null
-					: CallGraphNames.returnSourceOf(fn, entry.source, g._shape.typeAnnotationKinds ?? []);
+					: CallGraphNames.returnSourceOf(fn, g.returnSourcesIn(entry.source));
 				{ file: d.file, written: read };
 			}
 		];
