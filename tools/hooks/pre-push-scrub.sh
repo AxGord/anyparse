@@ -17,6 +17,7 @@ repo=$(git rev-parse --show-toplevel)
 guard="$repo/tools/scrub-guard.py"
 zero=0000000000000000000000000000000000000000
 status=0
+refused=""
 
 while read -r local_ref local_sha remote_ref remote_sha; do
     [ "$local_sha" = "$zero" ] && continue
@@ -32,10 +33,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     else
         base=$remote_sha
     fi
-    python3 "$guard" --range "$base..$local_sha" || status=$?
+    python3 "$guard" --range "$base..$local_sha" || { status=$?; refused="$refused $remote_ref"; }
 done
 
 if [ "$status" -ne 0 ]; then
-    echo "pre-push-scrub: refusing the push ($remote_ref): scrub the matches above first" >&2
+    echo "pre-push-scrub: refusing the push of${refused:- the refs above}: scrub the matches above first" >&2
 fi
 exit "$status"
