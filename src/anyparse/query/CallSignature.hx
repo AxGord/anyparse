@@ -25,12 +25,14 @@ typedef SignatureParam = {
 
 /**
  * One signature a call to a function may select (`callUnification.ml`, `unify_field_call`): the function's own, or one an
- * `@:overload` annotation on it writes — its parameters, its written return type, the type parameters it declares, and
- * the offset its types are written at (the function's declaration, or the annotation's function), where they resolve.
+ * `@:overload` annotation on it writes — its parameters, its written return type, the type parameters it declares with
+ * the bounds each is written with (`<T:Int>`: `T` -> `['Int']`; an unbounded one absent), and the offset its types are
+ * written at (the function's declaration, or the annotation's function), where they resolve.
  */
 typedef CallSignature = {
 	final params: Array<SignatureParam>;
 	final returnSource: Null<String>;
 	final typeParamNames: Array<String>;
+	final typeParamConstraints: Map<String, Array<String>>;
 	final at: Int;
 }

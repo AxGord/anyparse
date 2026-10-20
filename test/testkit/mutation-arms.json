@@ -28466,23 +28466,23 @@
 		{
 			"name": "M-SLOTS-COMPILES-DECIDED",
 			"type": "anyparse.query.ArgumentSlots",
-			"method": "compiles",
-			"find": "return safe ? Fits : MayFit;",
-			"replace": "return MayFit;",
+			"method": "compilerPath",
+			"find": "return { verdict: safe ? Fits : MayFit, bound: bound };",
+			"replace": "return { verdict: MayFit, bound: bound };",
 			"note": "a call decided at every step may still not compile, so no candidate surely does"
 		},
 		{
 			"name": "M-SLOTS-COMPILES-NONE",
 			"type": "anyparse.query.ArgumentSlots",
 			"method": "compiles",
-			"find": "if (all != null && all.length == 0) return Misfits;",
-			"replace": "",
+			"find": "return all != null && all.length == 0 ? Misfits : compilerPath(params, count, fit, skipSafe).verdict;",
+			"replace": "return compilerPath(params, count, fit, skipSafe).verdict;",
 			"note": "a call no way of which binds may still compile when its first fit is undecided"
 		},
 		{
 			"name": "M-SLOTS-COMPILES-UNSAFE-SKIP",
 			"type": "anyparse.query.ArgumentSlots",
-			"method": "compiles",
+			"method": "compilerPath",
 			"find": "if (!skipSafe(param)) safe = false;",
 			"replace": "",
 			"note": "a skip Flash refuses (a defaulted parameter of a type that is not nullable) still compiles surely"
@@ -28490,7 +28490,7 @@
 		{
 			"name": "M-SLOTS-COMPILES-MAYFIT",
 			"type": "anyparse.query.ArgumentSlots",
-			"method": "compiles",
+			"method": "compilerPath",
 			"find": "switch fit(arg, param) {",
 			"replace": "switch (fit(arg, param) == MayFit ? Fits : fit(arg, param)) {",
 			"note": "an undecided fit is taken as binding, so a call whose argument may not fit surely compiles"
@@ -28686,6 +28686,70 @@
 			"find": "return member.hasOverloadMeta ? ownMemberParams(binder, member, args) : localParams(binder, fn);",
 			"replace": "return member.hasOverloadMeta ? null : localParams(binder, fn);",
 			"note": "a bare call to an `@:overload` member of this file selects no parameter list"
+		},
+		{
+			"name": "M-CALLS-PARAM-INFER",
+			"type": "anyparse.query.CallSelection",
+			"method": "returnType",
+			"find": "? inferredReturn(k, written, args)",
+			"replace": "? null",
+			"note": "a return naming the signature's type parameter is never inferred from the arguments, so `id(1)` has no answer"
+		},
+		{
+			"name": "M-CALLS-PARAM-BOUND",
+			"type": "anyparse.query.CallSelection",
+			"method": "paramFit",
+			"find": "final bounds: Array<String> = k.signature.typeParamConstraints[name] ?? [];",
+			"replace": "final bounds: Array<String> = [];",
+			"note": "a type parameter's bound is not read, so `<T:Int>(a:T)` takes a `String` and `c('x')` binds the own signature"
+		},
+		{
+			"name": "M-CALLS-PARAM-FREE",
+			"type": "anyparse.query.CallSelection",
+			"method": "paramFit",
+			"find": "if (bounds.length == 0) return Fits;",
+			"replace": "if (bounds.length == 0) return MayFit;",
+			"note": "an unbounded type parameter is not known to take every value, so `id(u)` may not compile"
+		},
+		{
+			"name": "M-CALLS-PARAM-AGREE",
+			"type": "anyparse.query.CallSelection",
+			"method": "bindings",
+			"find": "if (out.exists(name) && !agreeing(out[name], end)) return null;",
+			"replace": "",
+			"note": "two arguments binding one type parameter to two types surely compile, the later binding winning"
+		},
+		{
+			"name": "M-CALLS-PARAM-SPELLED",
+			"type": "anyparse.query.CallSelection",
+			"method": "spelledEnd",
+			"find": "case Declared(r): ModuleScan.pathOfTypeIn(r.file, r.type.name);",
+			"replace": "case Declared(r): r.type.name;",
+			"note": "a bound type is spelled by its simple name, which the declaring file may resolve to another type"
+		},
+		{
+			"name": "M-SIGNATURE-PARAM-BOUNDS",
+			"type": "anyparse.query.SymbolIndexMembers",
+			"method": "signatureOf",
+			"find": "typeParamConstraints: maps.typeParamConstraints[span.from] ?? [],",
+			"replace": "typeParamConstraints: [],",
+			"note": "the index records no type parameter's bound"
+		},
+		{
+			"name": "M-INDEX-RETURN-SOURCE-SPAN",
+			"type": "anyparse.query.SymbolIndexMembers",
+			"method": "collectMembers",
+			"find": "returnSource: seams.functionKinds.contains(child.kind) ? maps.returnTypeSources[typeKey]?.trim() : null,",
+			"replace": "returnSource: seams.functionKinds.contains(child.kind) ? CallGraphNames.returnSourceOf(child, source, seams.annotationKinds) : null,",
+			"note": "a member's return is its last annotation child, so a type parameter's bound reads as the return of a function written with none"
+		},
+		{
+			"name": "M-CALLS-NULLABLE-UNBOUND",
+			"type": "anyparse.query.CallReturns",
+			"method": "callArguments",
+			"find": "Nullable(end)",
+			"replace": "Typed(end)",
+			"note": "an argument of a `Null<…>` type binds a type parameter to the type inside, so `id(n)` over `?n:Int` is an `Int`"
 		}
 	]
 }

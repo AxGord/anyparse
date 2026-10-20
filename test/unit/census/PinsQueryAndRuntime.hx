@@ -209,6 +209,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.CallSelectionTest#testAFunctionsSignaturesAreItsOwnThenEachAnnotations :: control :: '
 			+ 'M-INDEX-SIGNATURES-META,M-SIGNATURE-FORM-OPTIONAL,M-SIGNATURE-FORM-DEFAULTED,M-SIGNATURE-RETURN-SOURCE,'
 			+ 'M-SPANINFO-RETURN-SOURCES,M-SIGNATURE-RETURN-TRIM',
+		'unit.query.CallSelectionTest#testATypeParameterTheArgumentsBindIsTheirType :: control :: '
+			+ 'M-CALLS-PARAM-FREE,M-CALLS-PARAM-AGREE,M-CALLS-PARAM-SPELLED,M-SIGNATURE-PARAM-BOUNDS',
 		'unit.query.CallSelectionTest#testAnAnnotationWritingNoFunctionLeavesNoSignatures :: control :: M-INDEX-SIGNATURES-BARE',
 		'unit.query.CallSelectionTest#testTheCandidateACallBinds :: control :: '
 			+ 'M-CALLS-CHOSEN-FIRST,M-CALLS-CHOSEN-LAST-OPEN,M-CALLS-CHOSEN-PROPER',
@@ -1207,6 +1209,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.NominalTypesTest#testAConstructionReadsTheTypeArgumentsItWrites :: control :: M-CONSTRUCTION-CTOR-GAP',
 		'unit.query.NominalTypesTest#testALiteralIsItsType :: control :: M-NOMINAL-LITERAL',
 		'unit.query.NominalTypesTest#testALocalWrittenWithNoTypeHoldsItsInitializersType :: control :: M-NOMINAL-LOCAL-INIT',
+		'unit.query.NominalTypesTest#testAMethodsTypeParameterIsBoundByTheArguments :: control :: '
+			+ 'M-CALLS-PARAM-INFER,M-CALLS-PARAM-BOUND,M-INDEX-RETURN-SOURCE-SPAN,M-CALLS-NULLABLE-UNBOUND',
 		'unit.query.NominalTypesTest#testANamesakeNoSignatureOfWhichCompilesIsNotTheReceiver :: control :: M-NOMINAL-NAMESAKE-EXCLUDED',
 		'unit.query.NominalTypesTest#testAReferenceItCannotCompleteHasNoAnswer :: control :: M-ANCESTOR-DEFAULT-MISSING,M-ANCESTOR-BARE-TYPE,M-ANCESTOR-SCOPE-OFF,M-ANCESTOR-DEFAULT-VISIBLE,M-NOMINAL-BOUND-SCOPE,M-INDEX-ALTERNATE-DEFAULTS',
 		'unit.query.NominalTypesTest#testAReferenceLeavingArgumentsOutNamesTheirDefaults :: control :: M-ANCESTOR-DEFAULT-FILL,M-ANCESTOR-COMPLETE-OFF,M-ANCESTOR-LINK-DEFAULTS,M-MEMBER-READ-COMPLETE,M-NOMINAL-BOUND-COMPLETE,M-NOMINAL-RETURN-COMPLETE,M-INDEX-PARAM-DEFAULTS',

@@ -248,6 +248,12 @@ final class ModuleScan {
 		return at < 0 ? '' : runs[at];
 	}
 
+	/** The import path a type named `name` declared in `file` carries: the module itself for the main type, else `module.name`. */
+	public static function pathOfTypeIn(file: FileInfo, name: String): String {
+		final decl: Null<TypeDeclInfo> = file.types.find(t -> t.name == name);
+		return decl != null && decl.isMain ? file.module : '${file.module}.$name';
+	}
+
 	/**
 	 * The index in `runs` of the `as` / `in` keyword an alias import spells, or -1 when there
 	 * is none (or it leads the statement, which no path can precede). The one place that
@@ -406,12 +412,6 @@ final class ModuleScan {
 	private static function isMainTypeIn(file: FileInfo, name: String): Bool {
 		final decl: Null<TypeDeclInfo> = file.types.find(t -> t.name == name);
 		return decl != null && decl.isMain;
-	}
-
-	/** The import path a type named `name` declared in `file` carries: the module itself for the main type, else `module.name`. */
-	private static function pathOfTypeIn(file: FileInfo, name: String): String {
-		final decl: Null<TypeDeclInfo> = file.types.find(t -> t.name == name);
-		return decl != null && decl.isMain ? file.module : '${file.module}.$name';
 	}
 
 	/**

@@ -102,9 +102,7 @@ final class SymbolIndexMembers {
 							hasGetter: maps.propertyAccessors[typeKey] ?? false,
 							hasSetter: maps.propertyWriteAccessors[typeKey] ?? false,
 							returnNominal: maps.returnTypes[typeKey],
-							returnSource: seams.functionKinds.contains(child.kind)
-								? CallGraphNames.returnSourceOf(child, source, seams.annotationKinds)
-								: null,
+							returnSource: seams.functionKinds.contains(child.kind) ? maps.returnTypeSources[typeKey]?.trim() : null,
 							typeSource: typeSources[typeKey],
 							typeParamNames: maps.typeParamNames[typeKey] ?? [],
 							firstParamTypeSource: firstParamTypeSourceOf(child, typeSources, seams.paramKinds),
@@ -337,7 +335,8 @@ final class SymbolIndexMembers {
 	/**
 	 * The signature the function node `fn` writes — a member, or the function of an `@:overload` annotation: each parameter's
 	 * written type (keyed by the parameter's offset) and form, its written return type (`SpanTypeInfo.returnTypeSources`) and
-	 * its type parameters (both keyed by the node's offset). Null for a node with no span.
+	 * its type parameters with their bounds (`SpanTypeInfo.typeParamConstraints`; all keyed by the node's offset). Null for
+	 * a node with no span.
 	 */
 	private static function signatureOf(fn: QueryNode, maps: SpanTypeInfo, seams: MemberSeams): Null<CallSignature> {
 		final span: Null<Span> = fn.span;
@@ -352,6 +351,7 @@ final class SymbolIndexMembers {
 			params: params,
 			returnSource: maps.returnTypeSources[span.from]?.trim(),
 			typeParamNames: maps.typeParamNames[span.from] ?? [],
+			typeParamConstraints: maps.typeParamConstraints[span.from] ?? [],
 			at: span.from
 		};
 	}

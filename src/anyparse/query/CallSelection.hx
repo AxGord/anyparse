@@ -10,6 +10,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
+using StringTools;
 using Lambda;
 
 /** How a member's calls choose among its signatures (`callUnification.ml`, `overload_kind`). */
@@ -31,6 +32,12 @@ enum CallArgument {
 
 	/** A value of the type the end stands for, typed with no expected type: the same whichever signature is tried. */
 	Typed(end: TypeEnd);
+
+	/**
+	 * A value of the type `Null<…>` around the type the end stands for (`Null<T>` unifies as `T`): a type parameter it binds
+	 * is bound to the nullable type, which the end does not spell.
+	 */
+	Nullable(end: TypeEnd);
 
 	/** The `null` literal. */
 	NullValue;
@@ -130,19 +137,22 @@ final class CallSelection {
 	}
 
 	/**
-	 * The type a call binding the candidate `k` returns, on a receiver of the declaration `start` written with the type
-	 * arguments `receiverArgs`: its written return type as the compiler reads it where it is written, `k.host`'s type
-	 * parameters bound through `start`'s chain (`AncestorTable.boundType`). Null for a return written with no type (the body
-	 * infers it), one that is no one type, and one naming a type parameter of the candidate or the member — what the call's
-	 * arguments bind it to is not inferred.
+	 * The type a call binding the candidate `k` with the arguments `args` returns, on a receiver of the declaration `start`
+	 * written with the type arguments `receiverArgs`: its written return type as the compiler reads it where it is written,
+	 * `k.host`'s type parameters bound through `start`'s chain (`AncestorTable.boundType`), each type parameter of the
+	 * signature the arguments bind (`inferredReturn`) by the type it is bound to. Null for a return written with no type (the
+	 * body infers it), one that is no one type, and one naming a type parameter the arguments do not bind.
 	 */
-	public function returnType(start: ResolvedType, k: CallCandidate, receiverArgs: Array<String>): Null<String> {
+	public function returnType(
+		start: ResolvedType, k: CallCandidate, receiverArgs: Array<String>, args: Array<CallArgument>
+	): Null<String> {
 		final written: Null<String> = k.signature.returnSource;
 		final own: Array<String> = k.signature.typeParamNames.concat(k.member.typeParamNames);
-		return written == null || !NominalTypes.answerableType(written, _typeSyntax)
-			|| CallGraphNames.mentionsTypeName(written, own, _typeSyntax)
-			? null
-			: _ancestors.boundType(start, k.host, receiverArgs, written, k.signature.at, own);
+		if (written == null || !NominalTypes.answerableType(written, _typeSyntax)) return null;
+		final returned: Null<String> = CallGraphNames.mentionsTypeName(written, own, _typeSyntax)
+			? inferredReturn(k, written, args)
+			: written;
+		return returned == null ? null : _ancestors.boundType(start, k.host, receiverArgs, returned, k.signature.at, own);
 	}
 
 	/**
@@ -154,39 +164,132 @@ final class CallSelection {
 	public function returnOf(start: ResolvedType, c: CallCandidates, args: Array<CallArgument>, receiverArgs: Array<String>): Null<String> {
 		final verdicts: Array<ArgumentFit> = [for (k in c.candidates) verdict(k, args)];
 		final at: Null<Int> = chosen(c.kind, verdicts);
-		if (at != null) return returnType(start, c.candidates[at], receiverArgs);
+		if (at != null) return returnType(start, c.candidates[at], receiverArgs, args);
 		var agreed: Null<String> = null;
 		for (i => fits in verdicts) if (fits != Misfits) {
-			final returned: Null<String> = returnType(start, c.candidates[i], receiverArgs);
+			final returned: Null<String> = returnType(start, c.candidates[i], receiverArgs, args);
 			if (returned == null || agreed != null && agreed != returned) return null;
 			agreed = returned;
 		}
 		return agreed;
 	}
 
-	/** Whether a call passing `args` compiles against the candidate `k` (`ArgumentSlots.compiles`). */
+	/**
+	 * Whether a call passing `args` compiles against the candidate `k` (`ArgumentSlots.compiles`): `MayFit` rather than `Fits`
+	 * where two arguments bind one type parameter of the signature to types not known to be one (`bindings`).
+	 */
 	public function verdict(k: CallCandidate, args: Array<CallArgument>): ArgumentFit {
 		final signature: CallSignature = k.signature;
-		return ArgumentSlots.compiles(slotsOf(signature), args.length, (a, p) -> fit(k, args[a], p), p -> skipsSafely(signature, p));
+		final compiles: ArgumentFit = ArgumentSlots.compiles(
+			slotsOf(signature), args.length, (a, p) -> fit(k, args[a], p), p -> skipsSafely(signature, p)
+		);
+		// one type parameter two arguments bind to two types is bound to the first and asked to take the second
+		return compiles == Fits && bindings(k, args) == null ? MayFit : compiles;
 	}
 
 	/**
-	 * How the argument `arg` meets parameter `p` of the candidate `k`: a typed one cast to the parameter's type, resolved
-	 * where the signature writes it (`Unification.casts`); `null` fits a parameter written `?p`; every other pair — an
-	 * untyped argument, a parameter written with no type, with a type parameter of the signature, the member or its type, or
-	 * with a type the cast graph does not model — may fit.
+	 * How the argument `arg` meets parameter `p` of the candidate `k`: a parameter written as a type parameter of the signature
+	 * takes any value (`paramFit`, its bounds apart); a typed argument is cast to the parameter's type, resolved where the
+	 * signature writes it (`Unification.casts`); `null` fits a parameter written `?p`; every other pair — an untyped argument,
+	 * a parameter written with no type, with a type parameter in it, or with a type the cast graph does not model — may fit.
 	 */
 	private function fit(k: CallCandidate, arg: CallArgument, p: Int): ArgumentFit {
 		final param: SignatureParam = k.signature.params[p];
-		final written: Null<String> = param.type;
-		return switch arg {
-			case NullValue: param.form == Optional ? Fits : MayFit;
-			case Untyped: MayFit;
-			case Typed(given):
-				final params: Array<String> = k.signature.typeParamNames.concat(k.member.typeParamNames);
-				final wanted: TypeEnd = written == null ? Open : _casts.writtenEnd(written, k.host, k.signature.at, params);
+		return switch [arg, paramEnd(k, p)] {
+			case [_, Param(name)]: paramFit(k, name, arg);
+			case [NullValue, _]: param.form == Optional ? Fits : MayFit;
+			case [Untyped, _]: MayFit;
+			case [Typed(given), wanted], [Nullable(given), wanted]:
 				wanted.match(Open) || given.match(Open) ? MayFit : _unification.casts(given, wanted);
 		};
+	}
+
+	/**
+	 * The end parameter `p` of the candidate `k` is written with, where the signature writes it: `Param` for one written as a
+	 * type parameter the signature declares (`x:T`, `?x:T`), else `AbstractCasts.writtenEnd` (`Open` for a type parameter of
+	 * the member or its type, a type with arguments, a type written with none).
+	 */
+	private function paramEnd(k: CallCandidate, p: Int): TypeEnd {
+		final written: Null<String> = k.signature.params[p].type;
+		if (written == null) return Open;
+		final name: String = written.trim();
+		return k.signature.typeParamNames.contains(name)
+			? Param(name)
+			: _casts.writtenEnd(written, k.host, k.signature.at, k.signature.typeParamNames.concat(k.member.typeParamNames));
+	}
+
+	/**
+	 * How the argument `arg` meets a parameter written as the signature's type parameter `name`: an unbounded one takes any
+	 * value; a bounded one (`<T:Int>`) one whose type unifies with every bound (`Unification.unifiesEnds`, `check_constraint`)
+	 * — `Misfits` where it unifies with one bound not, `MayFit` where that is not decided or the argument is not typed.
+	 */
+	private function paramFit(k: CallCandidate, name: String, arg: CallArgument): ArgumentFit {
+		final bounds: Array<String> = k.signature.typeParamConstraints[name] ?? [];
+		if (bounds.length == 0) return Fits;
+		final given: Null<TypeEnd> = switch arg {
+			case Typed(end) if (!end.match(Open)): end;
+			case _: null;
+		};
+		if (given == null) return MayFit;
+		var all: ArgumentFit = Fits;
+		for (b in bounds) {
+			final bound: TypeEnd = _casts.writtenEnd(b, k.host, k.signature.at, k.signature.typeParamNames.concat(k.member.typeParamNames));
+			final one: ArgumentFit = bound.match(Open) ? MayFit : _unification.unifiesEnds(given, bound);
+			if (one == Misfits) return Misfits;
+			if (one == MayFit) all = MayFit;
+		}
+		return all;
+	}
+
+	/**
+	 * The type each type parameter of the candidate `k` that a parameter is written as is bound to by the arguments `args`,
+	 * on the compiler's way to bind them (`ArgumentSlots.compiledRun`, else the one way `ArgumentSlots.runs` leaves): the
+	 * argument's end, or null for a parameter an argument that is not typed binds. Null where that way is not known, and
+	 * where two arguments bind one parameter to ends not known to be one.
+	 */
+	private function bindings(k: CallCandidate, args: Array<CallArgument>): Null<Map<String, Null<TypeEnd>>> {
+		final signature: CallSignature = k.signature;
+		final slots: Array<SlotParam> = slotsOf(signature);
+		function fits(a: Int, p: Int): ArgumentFit {
+			return fit(k, args[a], p);
+		}
+		final compiled: Null<Array<Int>> = ArgumentSlots.compiledRun(slots, args.length, fits, p -> skipsSafely(signature, p));
+		final ways: Null<Array<Array<Int>>> = ArgumentSlots.runs(slots, args.length, fits);
+		final run: Null<Array<Int>> = compiled ?? (ways != null && ways.length == 1 ? ways[0] : null);
+		if (run == null) return null;
+		final out: Map<String, Null<TypeEnd>> = [];
+		for (a => p in run) switch paramEnd(k, p) {
+			case Param(name):
+				final end: Null<TypeEnd> = switch args[a] {
+					case Typed(e) if (!e.match(Open)): e;
+					case _: null;
+				};
+				if (out.exists(name) && !agreeing(out[name], end)) return null;
+				out[name] = end;
+			case _:
+		}
+		return out;
+	}
+
+	/**
+	 * `written`, the return type of the candidate `k`, with each type parameter of the signature the arguments `args` bind
+	 * (`bindings`) written as the type it is bound to, spelled so it resolves anywhere (`spelledEnd`). Null where one it names
+	 * is not bound to a type, or it names a type parameter of the member the signature does not declare.
+	 */
+	private function inferredReturn(k: CallCandidate, written: String, args: Array<CallArgument>): Null<String> {
+		final bound: Null<Map<String, Null<TypeEnd>>> = bindings(k, args);
+		final foreign: Array<String> = k.member.typeParamNames.filter(n -> !k.signature.typeParamNames.contains(n));
+		if (bound == null || CallGraphNames.mentionsTypeName(written, foreign, _typeSyntax)) return null;
+		final names: Array<String> = [];
+		final texts: Array<String> = [];
+		for (name in k.signature.typeParamNames) if (CallGraphNames.mentionsTypeName(written, [name], _typeSyntax)) {
+			final end: Null<TypeEnd> = bound[name];
+			final text: Null<String> = end == null ? null : spelledEnd(end);
+			if (text == null) return null;
+			names.push(name);
+			texts.push(text);
+		}
+		return CallGraphNames.substituteTypeParams(written, names, texts, _typeSyntax);
 	}
 
 	/** Whether a call may leave the parameter `p` of `signature` out on every target: written `?p`, its value nullable. */
@@ -211,6 +314,23 @@ final class CallSelection {
 		return [
 			for (p in signature.params) { optional: p.form == Optional || p.form == Defaulted, rest: p.form == Rest }
 		];
+	}
+
+	/**
+	 * The end `e` written so it names it in every file: a core value type by its name, a declaration by its module path
+	 * (`ModuleScan.pathOfTypeIn`); null for any other end.
+	 */
+	private static function spelledEnd(e: TypeEnd): Null<String> {
+		return switch e {
+			case Core(name): name;
+			case Declared(r): ModuleScan.pathOfTypeIn(r.file, r.type.name);
+			case _: null;
+		};
+	}
+
+	/** Whether two arguments binding one type parameter to `a` and to `b` bind it to one type: two ends known to be one. */
+	private static function agreeing(a: Null<TypeEnd>, b: Null<TypeEnd>): Bool {
+		return a != null && b != null && AbstractCasts.same(a, b);
 	}
 
 }

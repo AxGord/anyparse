@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.AbstractCasts.TypeEnd;
 import anyparse.query.CallSelection.CallArgument;
 import anyparse.query.CallSelection.CallCandidates;
 import anyparse.query.MemberLookup.HostedMembers;
@@ -131,7 +132,13 @@ final class CallReturns {
 							seen: []
 						};
 						final text: Null<String> = TypingService.typeWalk(a, c.shape, ARGUMENT_HOST, own);
-						text == null ? Untyped : Typed(index.typing.casts.endIn(text, fi, site.from, params));
+						final end: Null<TypeEnd> = text == null ? null : index.typing.casts.endIn(text, fi, site.from, params);
+						if (end == null)
+							Untyped
+						else if (text != null && NominalTypes.outerNominalOf(text, c.chain.typeSyntax) == c.shape.optionalValueTypeName)
+							Nullable(end)
+						else
+							Typed(end);
 					}
 			]
 		);

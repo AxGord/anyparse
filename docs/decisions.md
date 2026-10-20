@@ -5101,6 +5101,18 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   branch `feat/fu-FU25`
 - **A function's written return type is read off the span info** (`SpanTypeInfo.returnTypeSources`, beside
   `returnTypes`): the query tree flattens a type parameter's bound beside the return (`function g<T:Int>(x:T) {}` has a
-  `Named Int` child), so the last annotation child is a bound, not a return, for a function written with none. Only the
-  signatures read the new map; `MemberInfo.returnSource` keeps its child reading (step T5 (2), method type parameters,
-  is where that moves) — branch `feat/fu-FU25`
+  `Named Int` child), so the last annotation child is a bound, not a return, for a function written with none. The
+  signatures and `MemberInfo.returnSource` read the new map (`c.g(1)` over that `g` was typed `Int`); the query-tree
+  reader (`CallGraphNames.returnSourceOf`) stays for a function no index records (a local function, a lambda) — branch
+  `feat/fu-FU25`
+- **A method's own type parameter is bound by the arguments** (T5 step 2): a parameter written as one (`x:T`) takes any
+  value, a bounded one (`<T:Int>`, `SpanTypeInfo.typeParamConstraints` into `CallSignature.typeParamConstraints`) a value
+  unifying with every bound (`check_constraint`; `Unification.unifiesEnds`), so the bound takes part in the choice
+  (`c<T:Int>(a:T)` with `@:overload(function(a:String):Bool {})` takes the annotation for `c('x')`, probed). The call's
+  return names the type each such parameter is bound to (`TypeEnd.Param`, the type variable; `CallSelection.bindings`
+  over the compiler's way to bind the arguments): `id(1)` is an `Int`, a declaration spelled by its module path so it
+  resolves wherever the return is read. Unknown where two arguments bind it to types not known to be one (the second
+  must unify with the first: decided only when equal), where an argument binding it is not typed, and where it is a
+  `Null<…>`: `id(n)` over `?n:Int` binds `Null<Int>` (probed), which an end does not spell (`CallArgument.Nullable`).
+  Measured: two calls of a library's generic `tween(target, …)` over a nullable target, in a client corpus, were the
+  case that showed it — branch `feat/fu-FU25`

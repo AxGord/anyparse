@@ -109,7 +109,7 @@ final class AbstractCasts {
 		return switch e {
 			case Declared(r): _abstractKinds.contains(r.type.kind);
 			case Core(name): coreGraph(name) != null;
-			case Dyn, Open: false;
+			case Dyn, Open, Param(_): false;
 		};
 	}
 
@@ -289,6 +289,12 @@ enum TypeEnd {
 
 	/** A type the graph does not model: a type parameter, a type with arguments, a structure, a function, an unresolved name. */
 	Open;
+
+	/**
+	 * A type parameter of the signature a call is matched against — `T` of `function f<T:Int>(x:T)` — which the call binds
+	 * by unifying its arguments (`CallSelection`); every other reader takes it for `Open`.
+	 */
+	Param(name: String);
 
 }
 

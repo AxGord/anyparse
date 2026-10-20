@@ -236,6 +236,11 @@ argument leaves at the call's range with no inline site recorded (now reached by
   position), `OperandCallees` (a lambda typed by the signature the arguments' count selects). Measured (source / nominal
   DIFFERENT; UNKNOWN share): upstream 0 / 0 before and after (69.4 / 68.2 %); anyparse 0 / 8 → 3 / 3 (44.0 / 33.7 → 34.4 /
   33.7 %), a client corpus 2 / 1 → 2 / 1 (35.8 / 23.0 → 28.2 / 22.7 %), Pony 3 / 8 → 3 / 4 (33.3 / 26.4 → 27.9 / 26.2 %).
+  Step 2, method type parameters (FU25 S2): a parameter written as the signature's type parameter takes any value or,
+  bounded, one unifying with its bounds (`CallSignature.typeParamConstraints`), and the call's return names the type the
+  arguments bind it to (`TypeEnd.Param`; a declaration by its module path); Unknown for two bindings not known to be
+  one, an untyped or a `Null<…>` argument; `MemberInfo.returnSource` is read off the span info, never a bound. Measured:
+  tables unchanged but MATCH (source, client corpus +28).
   The `@:overload` families are MATCH (`readFileSync` 5, `Socket.on` 4 — the latter the superclass-first walk, not an
   overload); anyparse's three new source DIFFERENT are the inlined-default-argument facts family the nominal currency
   already showed. MATCH lost: one (an object-literal argument, typed by the expected type); gained: source 49032 /

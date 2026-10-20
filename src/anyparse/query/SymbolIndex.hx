@@ -110,7 +110,9 @@ typedef MemberInfo = {
 	/**
 	 * The member's VERBATIM declared RETURN type source (`Null<T>` and a dotted path preserved), or null
 	 * for a field / an unannotated return. The written form `returnNominal` reduces to a last segment,
-	 * which is what a reader binding the name in the declaring file's scope needs instead.
+	 * which is what a reader binding the name in the declaring file's scope needs instead. Read off the span
+	 * info (`SpanTypeInfo.returnTypeSources`), so a type parameter's bound, which the query tree flattens
+	 * beside the return (`function f<T:Int>(x:T) {}`), is never taken for one.
 	 */
 	var returnSource: Null<String>;
 

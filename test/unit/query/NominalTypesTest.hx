@@ -345,15 +345,16 @@ class NominalTypesTest extends Test {
 	@:killer('M-CALLS-FIRST-COMPILING') @:killer('M-CALLS-AGREED-RETURN') @:killer('M-SOURCE-SELECTED-STATIC')
 	@:killer('M-NOMINAL-STATIC-ALIAS') @:killer('M-NOMINAL-ARGUMENT-NULL') @:killer('M-NOMINAL-ARGUMENT-BOUND')
 	public function testAnOverloadedCallReturnsWhatTheSelectedSignatureReturns(): Void {
-		final text: String = 'package p;\n\nextern class O {\n\t@:overload(function(a:Int):Bool {})\n\t@:overload(function(a:Float):String {})\n'
-			+ '\tstatic function g(a:String):Int;\n\n\t@:overload(function(a:Float):String {})\n\t@:overload(function(a:Int):Bool {})\n'
-			+ '\tstatic function h(a:String):Int;\n\n\t@:overload(function(a:Int):Void {})\n\tstatic function z(a:String):Void;\n\n'
-			+ '\t@:overload(function(a:Float):Bool {})\n\tstatic function n(?s:String):Int;\n\n'
-			+ '\t@:overload(function(a:Int):Bool {})\n\tfunction m(a:String):Int;\n}\n\ntypedef OA = O;\n\n'
-			+ 'class C {\n\tvar o: O;\n\tfunction probeArity() return O.g(1);\n\tfunction probeOrder() return O.h(1);\n'
-			+ '\tfunction probeOpen(u) return O.g(u);\n\tfunction probeAgreed(u) return O.z(u);\n'
-			+ '\tfunction probeAlias() return OA.g(1);\n\tfunction probeNull() return O.n(null);\n'
-			+ '\tfunction probeBound(x:Int) return O.g(x);\n\tfunction probeValue() return o.m(1);\n}\n';
+		final text: String = 'package p;\n\nextern class O {\n\t@:overload(function(a:Int):Bool {})\n'
+			+ '\t@:overload(function(a:Float):String {})\n\tstatic function g(a:String):Int;\n\n'
+			+ '\t@:overload(function(a:Float):String {})\n\t@:overload(function(a:Int):Bool {})\n'
+			+ '\tstatic function h(a:String):Int;\n\n\t@:overload(function(a:Int):Void {})\n'
+			+ '\tstatic function z(a:String):Void;\n\n\t@:overload(function(a:Float):Bool {})\n'
+			+ '\tstatic function n(?s:String):Int;\n\n\t@:overload(function(a:Int):Bool {})\n\tfunction m(a:String):Int;\n'
+			+ '}\n\ntypedef OA = O;\n\nclass C {\n\tvar o: O;\n\tfunction probeArity() return O.g(1);\n'
+			+ '\tfunction probeOrder() return O.h(1);\n\tfunction probeOpen(u) return O.g(u);\n'
+			+ '\tfunction probeAgreed(u) return O.z(u);\n\tfunction probeAlias() return OA.g(1);\n\tfunction probeNull() '
+			+ 'return O.n(null);\n\tfunction probeBound(x:Int) return O.g(x);\n\tfunction probeValue() return o.m(1);\n}\n';
 		Assert.equals('Bool', nominalIn(text, 'probeArity'), 'the own signature refuses the argument');
 		Assert.equals('Bool', sourceIn(text, 'probeArity'), 'the own signature refuses the argument (source)');
 		Assert.equals('String', nominalIn(text, 'probeOrder'), 'the first annotation compiling binds');
@@ -391,8 +392,8 @@ class NominalTypesTest extends Test {
 	public function testABareCallIsTypedThroughTheEnclosingDeclarationsChain(): Void {
 		final text: String = 'package p;\n\nclass PBase {\n\tpublic function go(): Int return 0;\n}\n\nclass Img extends PBase {}\n\n'
 			+ 'class Sub extends Img {\n\tfunction probeGo() return go();\n}\n';
-		final other: String = 'package q;\n\nclass QBase {\n\t@:overload(function(a:Int):Void {})\n\tpublic function go(): String return null;\n}\n\n'
-			+ 'class Img extends QBase {}\n';
+		final other: String = 'package q;\n\nclass QBase {\n\t@:overload(function(a:Int):Void {})\n'
+			+ '\tpublic function go(): String return null;\n}\n\nclass Img extends QBase {}\n';
 		Assert.equals('Int', nominalAmong(text, [{ file: 'q/Img.hx', source: other }], 'probeGo'));
 		Assert.equals('Int', sourceAmong(text, [{ file: 'q/Img.hx', source: other }], 'probeGo'), 'the source currency');
 	}
@@ -403,10 +404,30 @@ class NominalTypesTest extends Test {
 	 */
 	@:pin('control') @:killer('M-NOMINAL-NAMESAKE-EXCLUDED')
 	public function testANamesakeNoSignatureOfWhichCompilesIsNotTheReceiver(): Void {
-		final text: String = 'package p;\n\nclass Buf {\n\t@:overload(function():Int {})\n\tpublic function size(a:Int): Int return 0;\n}\n\n'
-			+ 'class C {\n\tvar b: Buf;\n\tfunction probeSize() return b.size(1);\n}\n';
+		final text: String = 'package p;\n\nclass Buf {\n\t@:overload(function():Int {})\n\tpublic function size(a:Int): Int return 0;\n'
+			+ '}\n\nclass C {\n\tvar b: Buf;\n\tfunction probeSize() return b.size(1);\n}\n';
 		final other: String = 'package q;\n\nclass Buf {\n\tpublic function size(): String return null;\n}\n';
 		Assert.equals('Int', nominalAmong(text, [{ file: 'q/Buf.hx', source: other }], 'probeSize'));
+	}
+
+	/**
+	 * A method's own type parameter is bound by the arguments a call hands it (4.3.7: `id(1)` is an `Int`, and `id(n)` over
+	 * `?n:Int` a `Null<Int>`, which the walk does not spell, so no answer), and its bound decides which signature compiles:
+	 * `c('x')` — the own `<T:Int>(a:T)` refuses a `String`, the annotation `(a:String)` takes it — is a `Bool`. A function
+	 * written with no return type has none, though its bound `<T:Int>` writes a type beside it.
+	 */
+	@:pin('control') @:killer('M-CALLS-PARAM-INFER') @:killer('M-CALLS-PARAM-BOUND') @:killer('M-INDEX-RETURN-SOURCE-SPAN')
+	@:killer('M-CALLS-NULLABLE-UNBOUND')
+	public function testAMethodsTypeParameterIsBoundByTheArguments(): Void {
+		final text: String = 'package p;\n\nextern class O {\n\tstatic function id<T>(x:T):T;\n\n\t@:overload(function(a:String):Bool {})\n'
+			+ '\tstatic function c<T:Int>(a:T):Int;\n}\n\nclass G {\n\tpublic function new() {}\n\n\tpublic function g<T:Int>(x:T) {}\n'
+			+ '}\n\nclass C {\n\tvar o: G;\n\tfunction probeId() return O.id(1);\n\tfunction probeBound() return O.c(\'x\');\n'
+			+ '\tfunction probeNoReturn() return o.g(1);\n\tfunction probeNullable(?n:Int) return O.id(n);\n}\n';
+		Assert.equals('Int', nominalIn(text, 'probeId'), 'the argument binds `T`');
+		Assert.equals('Int', sourceIn(text, 'probeId'), 'the argument binds `T` (source)');
+		Assert.equals('Bool', nominalIn(text, 'probeBound'), 'the bound refuses the own signature');
+		Assert.isNull(sourceIn(text, 'probeNoReturn'), 'no return written');
+		Assert.isNull(sourceIn(text, 'probeNullable'), '`T` bound to `Null<Int>`, which the walk does not spell');
 	}
 
 	private static function nominal(fn: String): Null<String> {

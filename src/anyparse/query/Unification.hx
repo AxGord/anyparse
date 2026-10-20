@@ -91,6 +91,14 @@ final class Unification {
 		};
 	}
 
+	/**
+	 * Whether a value of the type `given` unifies with `wanted` (`unify`, an abstract cast through a clause allowed): what a
+	 * type parameter's bound asks of the type a call binds it to. `Fits`, `Misfits` or `MayFit`.
+	 */
+	public function unifiesEnds(given: TypeEnd, wanted: TypeEnd): ArgumentFit {
+		return unifyEnds(given, wanted, true, []);
+	}
+
 	/** `casts`' computation: a unification, else the cast the compiler would insert. */
 	private function castVerdict(given: TypeEnd, wanted: TypeEnd): ArgumentFit {
 		return either(unifyEnds(given, wanted, true, []), castPath(wanted, given, []));
@@ -105,12 +113,12 @@ final class Unification {
 		switch wanted {
 			case Dyn:
 				return Fits;
-			case Open:
+			case Open, Param(_):
 				return MayFit;
 			case _:
 		}
 		switch given {
-			case Dyn, Open:
+			case Dyn, Open, Param(_):
 				return MayFit;
 			case _:
 		}
@@ -250,7 +258,7 @@ final class Unification {
 		return switch e {
 			case Declared(r): _casts.graph(r);
 			case Core(name): _casts.coreGraph(name);
-			case Dyn, Open: null;
+			case Dyn, Open, Param(_): null;
 		};
 	}
 
@@ -331,6 +339,7 @@ final class Unification {
 			case Core(name): name;
 			case Dyn: '*';
 			case Open: '?';
+			case Param(name): '<$name';
 		};
 	}
 

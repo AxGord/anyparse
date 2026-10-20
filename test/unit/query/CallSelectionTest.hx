@@ -123,6 +123,39 @@ class CallSelectionTest extends Test {
 		Assert.isNull(calls.candidates(hosted('k', idx), false), 'off a value: the supertypes\' take part');
 	}
 
+	/**
+	 * A parameter written as the signature's type parameter takes any value, a bounded one one unifying with its bound, and
+	 * the call's return names the type the arguments bind it to, spelled by its module path; two arguments binding it to two
+	 * types leave the call undecided.
+	 */
+	@:pin('control') @:killer('M-CALLS-PARAM-FREE') @:killer('M-CALLS-PARAM-AGREE') @:killer('M-CALLS-PARAM-SPELLED')
+	@:killer('M-SIGNATURE-PARAM-BOUNDS')
+	public function testATypeParameterTheArgumentsBindIsTheirType(): Void {
+		final source: String = 'package p;\n\nextern class T2 {\n\tstatic function id<T>(x:T):T;\n\n'
+			+ '\tstatic function pair<T>(a:T, b:T):Array<T>;\n\n\tstatic function bounded<T:Int>(x:T):T;\n}\n';
+		final idx: SymbolIndex = CheckFixture.index([
+			{ file: 'p/T2.hx', source: source },
+			{ file: 'p/Foo.hx', source: 'package p;\n\nclass Foo {}\n' }
+		], new HaxeQueryPlugin());
+		final calls: CallSelection = idx.typing.calls;
+		final t2: ResolvedType = idx.refs.findDeclaredType('p/T2.hx', 'T2') ?? throw 'no declaration T2';
+		final foo: ResolvedType = idx.refs.findDeclaredType('p/Foo.hx', 'Foo') ?? throw 'no declaration Foo';
+		function of(name: String): CallCandidates {
+			final found: Null<HostedMembers> = idx.typing.members.declaringMember(t2, name);
+			final c: Null<CallCandidates> = found == null ? null : calls.candidates(found, true);
+			if (c == null) throw 'no candidates of $name';
+			return c;
+		}
+		Assert.equals('Int', calls.returnOf(t2, of('id'), [Typed(Core('Int'))], []), 'bound to a core type');
+		Assert.equals('p.Foo', calls.returnOf(t2, of('id'), [Typed(Declared(foo))], []), 'bound to a declaration');
+		Assert.equals(Fits, calls.verdict(of('id').candidates[0], [Untyped]), 'any value');
+		Assert.isNull(calls.returnOf(t2, of('id'), [Untyped], []), 'bound to an untyped value');
+		Assert.equals('Array<Int>', calls.returnOf(t2, of('pair'), [Typed(Core('Int')), Typed(Core('Int'))], []), 'agreeing');
+		Assert.equals(MayFit, calls.verdict(of('pair').candidates[0], [Typed(Core('Int')), Typed(Core('String'))]), 'two types');
+		Assert.equals(Misfits, calls.verdict(of('bounded').candidates[0], [Typed(Core('String'))]), 'the bound refuses');
+		Assert.equals('Int', calls.returnOf(t2, of('bounded'), [Typed(Core('Int'))], []), 'the bound takes it');
+	}
+
 	private static function member(name: String): Array<MemberInfo> {
 		return decl(index()).type.members.filter(m -> m.name == name);
 	}
