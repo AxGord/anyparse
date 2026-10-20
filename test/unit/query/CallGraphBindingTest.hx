@@ -31,6 +31,29 @@ class CallGraphBindingTest extends Test {
 	}
 
 	/**
+	 * A function written with no return type declares none, whatever the bound of a type parameter writes beside it: the
+	 * member `b<T:Foo>(x:T)` and the local function `g<T:Foo>(x:T)` both return a `Bar` (4.3.7: `g(f).run()` runs
+	 * `Bar.run`), so a call of either is never read as a `Foo`, the bound.
+	 */
+	@:pin('control') @:killer('M-GRAPH-RETURN-BOUND')
+	public function testATypeParametersBoundIsNoReturnType(): Void {
+		final g: CallGraph = graphOf([
+			'package app; class Foo { public function new() {} public function run():Void {} }',
+			'package app; class Bar { public function new() {} public function run():Void {} }',
+			'package app; class C { static function b<T:Foo>(x:T) return new Bar(); static function m(f:Foo):Void {'
+			+ ' function g<T:Foo>(x:T) return new Bar(); g(f).run(); } static function n(f:Foo):Void b(f).run(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.isFalse(targets('C.m').contains('Foo.run'), 'a local function: ${targets('C.m')}');
+		Assert.isFalse(targets('C.n').contains('Foo.run'), 'a member: ${targets('C.n')}');
+		Assert.isTrue(targets('C.n').contains('C.b'), 'the call itself');
+	}
+
+	/**
 	 * Review L3 G2 / G6 (`f2x/top-list(-rev)`, `proj-vec(-rev)`, `xfile-other`): a container is the std one only where the
 	 * file that WROTE its type binds the name to the std's declaration — a project type at a std path (`haxe/ds/Vector.hx`,
 	 * a root `List.hx`) shadows the std's on the class path (4.3.7, `hx/g2`), and a field type read in another file is what

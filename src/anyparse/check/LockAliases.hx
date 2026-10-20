@@ -349,7 +349,7 @@ final class LockAliases {
 			final source: Null<String> = target == null ? null : _graph.sourceOf(target.file);
 			final written: Null<String> = decl == null || source == null
 				? null
-				: CallGraphNames.returnSourceOf(decl, source, _shape.typeAnnotationKinds ?? []);
+				: CallGraphNames.returnSourceOf(decl, _graph.returnSourcesIn(source));
 			final found: Null<Array<String>> = written == null ? null : classTypeBounds(written, e.to);
 			if (found == null) return null;
 			for (b in found) bounds.push(b);

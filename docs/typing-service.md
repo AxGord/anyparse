@@ -97,7 +97,8 @@ expressions, a cursor on a construction's type name (the display answers the con
 binding is not a local declaration or a parameter (the scope-correct part of the reference walk); and, in the facts, a
 range whose facts are not the text's own — the body an inlined call spliced there, a copy of an inline body typed in a
 caller's terms, the compiler's own code lowered into it (a std call into its target's runtime class), the implicit `this`
-a bare member read shares it with, a type the harness cannot expand to the typer's alias or `@:generic` spelling, a
+a bare member read shares it with, the default an inlined call hands a parameter it leaves out (the facts place an inlined
+call at the statement around it, so its range holds only that value), a type the harness cannot expand to the typer's alias or `@:generic` spelling, a
 typedef the index cannot follow (declared in several `#if` branches) that every typedef of its name the compiled build
 typed aliases to the compiler's type (`TypeFact.targets`). Each refusal is counted UNSCORED, never as a match.
 
@@ -112,9 +113,9 @@ after it and closed five: a reference leaving out arguments its declaration give
 package-blind member walk answering a member written with its type's parameter unsubstituted, an expression inside a
 reification typed as code (now Unknown), and — on the facts side — ranges whose facts were not the text's own (the
 `this` an abstract's inlined accessor is handed, at the member's name; the code of an inlined body at the call's range;
-FU28 below). Left, by size after T5 (below) closed the `@:overload` returns: the compiler's code an inlined call with a default
-argument leaves at the call's range with no inline site recorded (now reached by the source currency too), and a
-`Dynamic`-typed std library member a project library declares with a type.
+FU28 below). Left, by size after T5 (below) closed the `@:overload` returns: a `Dynamic`-typed std library member a
+project library declares with a type, and the code of an inlined body at a call's range (FU32 below took the
+inlined-default-argument family out of the scored set and the package-blind namesake return out of the answers).
 
 ## Where T2–T5 plug in
 
@@ -253,6 +254,19 @@ argument leaves at the call's range with no inline site recorded (now reached by
   a declaration whose dead branch is another kind (an abstract in one build, a `typedef` to a target type in another)
   answers nothing; the builds' liveness exists only in a run that compiles them (`ReachLiveness`, `--no-oracle` reads
   none), and the index keeps no cast clauses for a declaration one branch of which is no abstract.
+
+- **FU32 — three small items (done).** A function's written return is read off the span info by EVERY reader
+  (`CallGraphNames.returnSourceOf(fn, returns)` over `SpanTypeInfo.returnTypeSources`; the call graph's nodes, its
+  per-declaration and `@:overload` reads, the lock-alias bounds, the operand binder): the query-tree reader took a type
+  parameter's bound for the return of a local function or a lambda written with none. The walk by simple name
+  (`MemberLookup.receiverDeclarationsOf`, read by `returnNominalWalk` and the source currency's `returnSourceOf`) asks
+  the member a declaration of the name INHERITS beside the ones declaring it (a `Socket` inheriting `write` beside a
+  namesake declaring `write(): Void`), all agreeing or Unknown, `CallReturns.selectedReturn` deciding where the
+  arguments exclude a namesake. The harness leaves unscored an inlined call leaving out an argument of the type its
+  range holds (`leavesAnInlinedArgumentOut`). Measured (source / nominal DIFFERENT; UNKNOWN share): upstream 0 / 0
+  before and after (69.4 / 68.2 %); anyparse 3 / 3 → 0 / 0 (34.4 / 33.7 %, three sites unscored), a client corpus
+  2 / 1 → 2 / 1 (28.2 / 22.7 %; four MATCH per currency now Unknown, `_std` copies disagreeing on an inherited return
+  written with none), Pony 3 / 4 → 2 / 3 (27.9 / 26.2 %; `socket.write` a MATCH).
 
 Each step lands as a table in `QueryCache` with its consumers moved onto it, and is measured on the harness: a step
 may lower an area's UNKNOWN share and may turn a DIFFERENT into a MATCH or an UNKNOWN, and must add no DIFFERENT.

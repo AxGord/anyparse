@@ -18,16 +18,21 @@ final class CallGraphNames {
 	}
 
 	/**
-	 * The written return type of the function `fn`: its last type annotation (one of `annotationKinds`)
-	 * that is its own child rather than a parameter's, or null when it declares none.
+	 * The written return type of the function or lambda `fn` among its file's `returns` (`returnSourcesOf`): what the grammar
+	 * reads in its return-type slot, never the bound of a type parameter the query tree flattens beside it. Null when `fn` is
+	 * written with none.
 	 */
-	public static function returnSourceOf(fn: QueryNode, source: String, annotationKinds: Array<String>): Null<String> {
-		var found: Null<String> = null;
-		for (c in fn.children) {
-			final at: Null<Span> = c.span;
-			if (at != null && annotationKinds.contains(c.kind)) found = source.substring(at.from, at.to);
-		}
-		return found;
+	public static function returnSourceOf(fn: QueryNode, returns: Map<Int, String>): Null<String> {
+		final at: Null<Span> = fn.span;
+		return at == null ? null : returns[at.from]?.trim();
+	}
+
+	/**
+	 * The written return type of every function of `source`, by the offset of its declaration (`SpanTypeInfo.returnTypeSources`):
+	 * none for a `plugin` with no batched span info, which then proves no return type.
+	 */
+	public static function returnSourcesOf(plugin: GrammarPlugin, source: String): Map<Int, String> {
+		return plugin is SpanTypeInfoProvider ? (cast plugin: SpanTypeInfoProvider).spanTypeInfo(source).returnTypeSources : [];
 	}
 
 	/**

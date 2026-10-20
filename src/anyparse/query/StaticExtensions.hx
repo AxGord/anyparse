@@ -195,7 +195,7 @@ final class StaticExtensions {
 			return next == null ? Open : typeStep(next, receiver, name, seen);
 		}
 		if (t.abstractForwardUnderlying != null) return Open;
-		final links: Array<AncestorLink> = _ancestors.links(cur).filter(l -> !MemberLookup.dynamicSupertypeRef(l.raw));
+		final links: Array<AncestorLink> = _ancestors.links(cur).filter(l -> !AncestorTable.dynamicSupertypeRef(l.raw));
 		// the superclass's list before every interface's (`typeloadFields.ml`: `inherit_using` of `csup`, then each interface)
 		final ordered: Array<AncestorLink> = links.filter(l -> !implemented(t, l)).concat(links.filter(l -> implemented(t, l)));
 		for (link in ordered) {

@@ -696,6 +696,8 @@ final class PinsCheckAToO {
 			+ 'M-BINDER-RESOLVE-USING-SHADOW,M-USING-DECLS-AMBIENT',
 		'unit.check.OperandTypingTest#testAStdIterableBindsTheElementOfWhatIsHandedToIt :: control :: M-BINDER-ITERABLE-OFF,M-BINDER-ITERABLE-ANY-TYPE',
 		'unit.check.OperandTypingTest#testASupertypeStaticReadBareIsNotTheSupertypes :: control :: M-BINDER-INHERITED-STATIC',
+		'unit.check.OperandTypingTest#testATypeParametersBoundIsNoReturnType :: control :: '
+			+ 'M-BINDER-RETURN-ANNOTATION,M-BINDER-LOCAL-CALL-ANNOTATION',
 		'unit.check.OperandTypingTest#testAUsedAliasLeavesTheExtensionUnproven :: control :: M-USING-HOSTS-ALIAS',
 		'unit.check.OperandTypingTest#testAnExtensionOfAnotherFirstParameterIsUnproven :: control :: M-BINDER-EXTENSION-FIRST-PARAM',
 		'unit.check.OperandTypingTest#testAnInheritedMemberPastAnUnreadSupertypeIsUnproven :: control :: M-BINDER-CLOSURE-UNRESOLVED',

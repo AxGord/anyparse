@@ -411,6 +411,30 @@ class NominalTypesTest extends Test {
 	}
 
 	/**
+	 * A namesake of the receiver's type that declares the member does not answer for one that inherits it: `s.write('a')` on
+	 * a `p.Socket` (whose `Duplex.write(a:String, ?b:Int): Bool`) beside a `q.Socket` declaring `write(a:String): Void` is
+	 * either type for a walk by simple name, so it has no answer; `s.write('a', 1)` compiles against `p.Socket`'s alone, so
+	 * it is a `Bool`. A namesake reaching no such member at all (`q.Pipe`) is no candidate, and the one declaring it answers.
+	 */
+	@:pin('control') @:killer('M-NOMINAL-RECEIVER-INHERITED', 'M-NOMINAL-RECEIVER-DECLARATIONS', 'M-SOURCE-RECEIVER-DECLARATIONS')
+	public function testANamesakeDeclaringTheMemberDoesNotAnswerForOneInheritingIt(): Void {
+		final text: String = 'package p;\n\nextern class Duplex {\n\tfunction write(a:String, ?b:Int):Bool;\n}\n\n'
+			+ 'extern class Socket extends Duplex {}\n\nextern class Pipe {\n\tfunction write(a:String):Bool;\n}\n\n'
+			+ 'class C {\n\tvar s: Null<Socket>;\n\tvar w: Pipe;\n\tfunction probeEither() return s.write(\'a\');\n'
+			+ '\tfunction probeArity() return s.write(\'a\', 1);\n\tfunction probePipe() return w.write(\'a\');\n}\n';
+		final others: Array<{ file: String, source: String }> = [
+			{ file: 'q/Socket.hx', source: 'package q;\n\nextern class Socket {\n\tfunction write(a:String):Void;\n}\n' },
+			{ file: 'q/Pipe.hx', source: 'package q;\n\nclass Pipe {}\n' }
+		];
+		Assert.isNull(nominalAmong(text, others, 'probeEither'), 'either namesake');
+		Assert.isNull(sourceAmong(text, others, 'probeEither'), 'either namesake (source)');
+		Assert.equals('Bool', nominalAmong(text, others, 'probeArity'), 'the namesake the call does not compile against');
+		Assert.equals('Bool', sourceAmong(text, others, 'probeArity'), 'the namesake the call does not compile against (source)');
+		Assert.equals('Bool', nominalAmong(text, others, 'probePipe'), 'a namesake reaching no such member');
+		Assert.equals('Bool', sourceAmong(text, others, 'probePipe'), 'a namesake reaching no such member (source)');
+	}
+
+	/**
 	 * A method's own type parameter is bound by the arguments a call hands it (4.3.7: `id(1)` is an `Int`, and `id(n)` over
 	 * `?n:Int` a `Null<Int>`, which the walk does not spell, so no answer), and its bound decides which signature compiles:
 	 * `c('x')` — the own `<T:Int>(a:T)` refuses a `String`, the annotation `(a:String)` takes it — is a `Bool`. A function

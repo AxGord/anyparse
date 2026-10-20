@@ -411,7 +411,7 @@ final class StructuralTypes {
 	 */
 	private function comparableTypeOf(typeSource: String, host: ResolvedType, seen: Array<String>): Null<ComparableType> {
 		final nominal: Null<String> = NominalTypes.outerNominalOf(typeSource, _typeSyntax);
-		if (nominal == null || MemberLookup.dynamicSupertypeRef(nominal)) return null;
+		if (nominal == null || AncestorTable.dynamicSupertypeRef(nominal)) return null;
 		if (host.type.typeParamNames.contains(nominal)) return null;
 		if (nominal == NULLABLE_WRAPPER_TYPE_NAME) {
 			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(typeSource, _typeSyntax);
@@ -432,7 +432,7 @@ final class StructuralTypes {
 		if (nominal == null) return MayFit;
 		final args: Array<String> = NominalTypes.typeArgumentSourcesOf(written, _typeSyntax) ?? [];
 		if (nominal == NULLABLE_WRAPPER_TYPE_NAME) return args.length == 1 ? writtenFits(receiver, args[0], m, host) : MayFit;
-		if (MemberLookup.dynamicSupertypeRef(nominal)) return args.length == 0 ? Fits : MayFit;
+		if (AncestorTable.dynamicSupertypeRef(nominal)) return args.length == 0 ? Fits : MayFit;
 		if (m.typeParamNames.contains(nominal) || host.type.typeParamNames.contains(nominal)) return MayFit;
 		if (nominal == ITERABLE_TYPE_NAME || nominal == ITERATOR_TYPE_NAME) {
 			final element: Null<String> = args.length == 1 ? args[0].trim() : null;

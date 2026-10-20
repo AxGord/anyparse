@@ -95,6 +95,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.CallGraphBindingTest#testAModuleLevelFunctionSeesItsModuleAndImportsNoClassChain :: control :: '
 			+ 'M-TS-MODULE-FN-CLASS-CHAIN,M-TS-MODULE-FN-IMPORTED-REF',
 		'unit.query.CallGraphBindingTest#testASupertypeIsTheTypeItsDeclaringFileBinds :: control :: M-SUPERS-BY-DECLARATION',
+		'unit.query.CallGraphBindingTest#testATypeParametersBoundIsNoReturnType :: control :: M-GRAPH-RETURN-BOUND',
 		'unit.query.CallGraphBindingTest#testDispatchTargetsArePerMemberAndFollowTheGraph :: control :: M-CG-DISPATCH-MEMO-LEAKS,M-CG-DISPATCH-MEMO-BY-TYPE',
 		'unit.query.CallGraphBindingTest#testEachBodyOfAModuleLevelFunctionUnderIfIsANodeOfItsOwn :: control :: '
 			+ 'M-GRAPH-BODY-SPLIT,M-GRAPH-BODY-EXPAND,M-GRAPH-BODY-EXACT,M-GRAPH-BODY-TARGETS,M-GRAPH-BODY-COPY-IN,M-GRAPH-BODY-PURGE,'
@@ -1215,6 +1216,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.NominalTypesTest#testALocalWrittenWithNoTypeHoldsItsInitializersType :: control :: M-NOMINAL-LOCAL-INIT',
 		'unit.query.NominalTypesTest#testAMethodsTypeParameterIsBoundByTheArguments :: control :: '
 			+ 'M-CALLS-PARAM-INFER,M-CALLS-PARAM-BOUND,M-INDEX-RETURN-SOURCE-SPAN,M-CALLS-NULLABLE-UNBOUND',
+		'unit.query.NominalTypesTest#testANamesakeDeclaringTheMemberDoesNotAnswerForOneInheritingIt :: control :: '
+			+ 'M-NOMINAL-RECEIVER-INHERITED,M-NOMINAL-RECEIVER-DECLARATIONS,M-SOURCE-RECEIVER-DECLARATIONS',
 		'unit.query.NominalTypesTest#testANamesakeNoSignatureOfWhichCompilesIsNotTheReceiver :: control :: M-NOMINAL-NAMESAKE-EXCLUDED',
 		'unit.query.NominalTypesTest#testAReferenceItCannotCompleteHasNoAnswer :: control :: M-ANCESTOR-DEFAULT-MISSING,M-ANCESTOR-BARE-TYPE,M-ANCESTOR-SCOPE-OFF,M-ANCESTOR-DEFAULT-VISIBLE,M-NOMINAL-BOUND-SCOPE,M-INDEX-ALTERNATE-DEFAULTS',
 		'unit.query.NominalTypesTest#testAReferenceLeavingArgumentsOutNamesTheirDefaults :: control :: M-ANCESTOR-DEFAULT-FILL,M-ANCESTOR-COMPLETE-OFF,M-ANCESTOR-LINK-DEFAULTS,M-MEMBER-READ-COMPLETE,M-NOMINAL-BOUND-COMPLETE,M-NOMINAL-RETURN-COMPLETE,M-INDEX-PARAM-DEFAULTS',

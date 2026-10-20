@@ -279,6 +279,17 @@ final class AncestorTable {
 		return a.file.file == b.file.file && a.type.span.from == b.type.span.from;
 	}
 
+	/**
+	 * Whether a supertype reference is `Dynamic`. `implements Dynamic<T>` marks dynamic FIELD
+	 * ACCESS and declares no NAMED member, so it can never be the inherited `_x` a rename would
+	 * redefine — it must be SKIPPED rather than counted as an unresolvable dead end, which would
+	 * wrongly block every `openfl` display subclass (`DisplayObject` carries such a clause under
+	 * `#if`). Matched on the last path segment, so a qualified spelling is skipped too.
+	 */
+	public static inline function dynamicSupertypeRef(raw: String): Bool {
+		return SourceText.lastSegment(raw) == 'Dynamic';
+	}
+
 }
 
 /** One `extends` / `implements` link of a type declaration (`AncestorTable.links`). */

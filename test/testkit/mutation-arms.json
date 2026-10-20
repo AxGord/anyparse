@@ -844,7 +844,7 @@
 			"name": "M-STRUCT-DYNAMIC-CLOSED",
 			"type": "anyparse.query.StructuralTypes",
 			"method": "comparableTypeOf",
-			"find": "if (nominal == null || MemberLookup.dynamicSupertypeRef(nominal)) return null;",
+			"find": "if (nominal == null || AncestorTable.dynamicSupertypeRef(nominal)) return null;",
 			"replace": "if (nominal == null) return null;",
 			"note": "`Dynamic` is compared as an ordinary nominal, so a structure member declared `Dynamic` refutes every type it unifies with"
 		},
@@ -12162,7 +12162,7 @@
 			"type": "anyparse.query.CallGraphNodes",
 			"method": "collect",
 			"find": "final under: Null<String> = node.type?.name;",
-			"replace": "final under: Null<String> = node.children.find(c -> annotationKinds.contains(c.kind))?.name;",
+			"replace": "final under: Null<String> = node.children.find(c -> (shape.typeAnnotationKinds ?? []).contains(c.kind))?.name;",
 			"note": "an abstract's underlying type is read as its first annotation child, which is a type parameter's bound when one is declared"
 		},
 		{
@@ -21646,7 +21646,7 @@
 			"name": "M-TS-OVERLOAD-AGREE",
 			"type": "anyparse.query.CallGraphNodes",
 			"method": "overloaded",
-			"find": "|| others.exists(o -> CallGraphNames.returnSourceOf(o, source, annotationKinds) != returned)",
+			"find": "|| others.exists(o -> CallGraphNames.returnSourceOf(o, returns) != returned)",
 			"replace": "|| others.length > 0",
 			"note": "signatures that all return the same type still leave the call untyped"
 		},
@@ -27146,7 +27146,7 @@
 			"name": "M-NOMINAL-RETURN-PARAM-NAME",
 			"type": "anyparse.query.MemberLookup",
 			"method": "returnNominalWalk",
-			"find": "if (own != null && (m.typeParamNames.contains(own) || decl.type.typeParamNames.contains(own))) return null;",
+			"find": "if (own != null && (m.typeParamNames.contains(own) || d.type.typeParamNames.contains(own))) return null;",
 			"replace": "",
 			"note": "a method returning a type parameter answers the parameter's name as a call's nominal"
 		},
@@ -28740,8 +28740,8 @@
 			"type": "anyparse.query.SymbolIndexMembers",
 			"method": "collectMembers",
 			"find": "returnSource: seams.functionKinds.contains(child.kind) ? maps.returnTypeSources[typeKey]?.trim() : null,",
-			"replace": "returnSource: seams.functionKinds.contains(child.kind) ? CallGraphNames.returnSourceOf(child, source, seams.annotationKinds) : null,",
-			"note": "a member's return is its last annotation child, so a type parameter's bound reads as the return of a function written with none"
+			"replace": "returnSource: seams.functionKinds.contains(child.kind) ? maps.returnTypeSources[typeKey]?.trim() ?? [for (bounds in maps.typeParamConstraints[typeKey] ?? []) for (b in bounds) b].pop() : null,",
+			"note": "a member written with no return type reads a type parameter's bound beside it as its return"
 		},
 		{
 			"name": "M-CALLS-NULLABLE-UNBOUND",
@@ -28782,6 +28782,54 @@
 			"find": "case [Applied(x, xs), Applied(y, ys)]:",
 			"replace": "case [Applied(x, xs), Applied(y, ys)] if (false):",
 			"note": "an applied abstract is not itself applied alike, so `Box<String>` misfits `Box<String>`"
+		},
+		{
+			"name": "M-GRAPH-RETURN-BOUND",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "collect",
+			"find": "g._facts.returnSources, id, CallGraphNames.returnSourceOf(node, returnSources), first",
+			"replace": "g._facts.returnSources, id, CallGraphNames.returnSourceOf(node, returnSources) ?? [for (b in bounds[span.from] ?? []) for (t in b) t].pop(), first",
+			"note": "a function written with no return type reads a type parameter's bound beside it as its return, so `g(f).run()` runs the bound's `run`"
+		},
+		{
+			"name": "M-BINDER-RETURN-ANNOTATION",
+			"type": "anyparse.check.OperandBinder",
+			"method": "returnOf",
+			"find": "final written: Null<String> = CallGraphNames.returnSourceOf(fn, _returns);",
+			"replace": "final written: Null<String> = [for (c in fn.children) if ((_shape.typeAnnotationKinds ?? []).contains(c.kind)) _source.substring(c.span?.from ?? 0, c.span?.to ?? 0)].pop();",
+			"note": "a function's result is its last annotation child, so a type parameter's bound beside no return type types the lambda it returns"
+		},
+		{
+			"name": "M-BINDER-LOCAL-CALL-ANNOTATION",
+			"type": "anyparse.check.OperandBinder",
+			"method": "localCallTier",
+			"find": "_declared.headTier(CallGraphNames.returnSourceOf(fn, _returns), from, _wrappers, _builtins)",
+			"replace": "_declared.headTier([for (c in fn.children) if ((_shape.typeAnnotationKinds ?? []).contains(c.kind)) _source.substring(c.span?.from ?? 0, c.span?.to ?? 0)].pop(), from, _wrappers, _builtins)",
+			"note": "a local function's result is its last annotation child, so a call of one written with no return type is its type parameter's bound"
+		},
+		{
+			"name": "M-NOMINAL-RECEIVER-INHERITED",
+			"type": "anyparse.query.MemberLookup",
+			"method": "receiverDeclarationsOf",
+			"find": "if (hit != null) for (m in hit.members) out.push({ type: hit.host.type, member: m, file: hit.host.file });",
+			"replace": "",
+			"note": "a namesake inheriting the member is left out, so the one declaring it answers for a receiver of either: `s.write('a')` is the namesake's `Void`"
+		},
+		{
+			"name": "M-NOMINAL-RECEIVER-DECLARATIONS",
+			"type": "anyparse.query.MemberLookup",
+			"method": "returnNominalWalk",
+			"find": "final declared: Array<MemberDeclaration> = receiverDeclarationsOf(typeName, memberName);",
+			"replace": "final declared: Array<MemberDeclaration> = memberDeclarationsOf(typeName, memberName);",
+			"note": "the name walk reads only the namesakes declaring the member, so `s.write('a')` is the namesake's `Void`"
+		},
+		{
+			"name": "M-SOURCE-RECEIVER-DECLARATIONS",
+			"type": "anyparse.query.NominalTypes",
+			"method": "returnSourceOf",
+			"find": "final declared: Array<MemberDeclaration> = index.typing.members.receiverDeclarationsOf(typeName, method);",
+			"replace": "final declared: Array<MemberDeclaration> = index.typing.members.memberDeclarationsOf(typeName, method);",
+			"note": "the source currency reads only the namesakes declaring the member, so `s.write('a')` is the namesake's `Void`"
 		}
 	]
 }

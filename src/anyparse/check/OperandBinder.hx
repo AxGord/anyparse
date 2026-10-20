@@ -112,8 +112,12 @@ final class OperandBinder {
 	/** This file's written type annotations by binding offset (`TypeInfoProvider.declaredTypeSources`). */
 	private final _annotations: Map<Int, String>;
 
+	/** This file's written return types by declaration offset (`CallGraphNames.returnSourcesOf`). */
+	private final _returns: Map<Int, String>;
+
 	private function new(
-		file: String, source: String, tree: QueryNode, shape: RefShape, index: SymbolIndex, provider: TypeInfoProvider
+		file: String, source: String, tree: QueryNode, shape: RefShape, index: SymbolIndex, provider: TypeInfoProvider,
+		returns: Map<Int, String>
 	) {
 		_file = file;
 		_source = source;
@@ -129,6 +133,7 @@ final class OperandBinder {
 		_fnKinds = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		_expectation = index.typing.expectations;
 		_annotations = provider.declaredTypeSources(source);
+		_returns = returns;
 	}
 
 	/** What the type `written` at offset `at` of this file binds to, with the type parameters in scope there. */
@@ -273,7 +278,7 @@ final class OperandBinder {
 		return if (member != null && !typedByItsReturn(member))
 			Unknown
 		else if (_fnKinds.contains(fn.kind))
-			_declared.headTier(CallGraphNames.returnSourceOf(fn, _source, _shape.typeAnnotationKinds ?? []), from, _wrappers, _builtins)
+			_declared.headTier(CallGraphNames.returnSourceOf(fn, _returns), from, _wrappers, _builtins)
 		else
 			Unknown;
 	}
@@ -335,7 +340,7 @@ final class OperandBinder {
 	/** The result type the function or lambda `fn` of this file writes, at its declaration; null for none. */
 	private function returnOf(fn: QueryNode): Null<Located> {
 		final from: Null<Int> = fn.span?.from;
-		final written: Null<String> = CallGraphNames.returnSourceOf(fn, _source, _shape.typeAnnotationKinds ?? []);
+		final written: Null<String> = CallGraphNames.returnSourceOf(fn, _returns);
 		return from == null || written == null ? null : { text: written, at: from };
 	}
 
@@ -488,7 +493,9 @@ final class OperandBinder {
 		plugin: GrammarPlugin, file: String, source: String, tree: QueryNode, index: SymbolIndex
 	): Null<OperandBinder> {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		return provider == null ? null : new OperandBinder(file, source, tree, plugin.refShape(), index, provider);
+		return provider == null
+			? null
+			: new OperandBinder(file, source, tree, plugin.refShape(), index, provider, CallGraphNames.returnSourcesOf(plugin, source));
 	}
 
 	/** The type names the grammar declares built in — a literal's type or a basic value type — each once. */
