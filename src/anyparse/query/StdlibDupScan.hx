@@ -68,7 +68,7 @@ typedef ScanResult = {
  * scanning a real 800-file tree for 27 stdlib names produced five hits and every one was a false
  * positive (a domain `filter` override, a null-safe `count`, a filesystem `exists`, a `clamp` the
  * Haxe stdlib does not have, a thin `parseInt` wrapper), while the motivating real case --
- * `CrashDumper.padDigit`, a hand-rolled `StringTools.lpad` -- matched no stdlib name at all. By
+ * `CrashReport.padDigit`, a hand-rolled `StringTools.lpad` -- matched no stdlib name at all. By
  * SIGNATURE it fails on the same case: `padDigit(Int, Int):String` shares neither arity nor types
  * with `lpad(String, String, Int):String`. The correspondence exists only MODULO AN ADAPTER (the
  * `Int` reaches the `String` slot through interpolation) plus a constant lifted from the body.

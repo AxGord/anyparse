@@ -23,7 +23,7 @@ import utest.Test;
  * … })` dispatched through `expressionIf:next` and broke onto two lines
  * while the identical arrow / method form stayed inline.
  *
- * Config mirrors TM's hxformat.json: `ifBody:fitLine`,
+ * Config mirrors the client's hxformat.json: `ifBody:fitLine`,
  * `expressionIf:next`. Trivia pair (matches `hxq fmt`).
  */
 @:nullSafety(Strict)

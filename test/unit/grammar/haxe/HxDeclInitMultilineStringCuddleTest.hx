@@ -18,8 +18,8 @@ import utest.Test;
  * shortens nothing, since the token's later lines are emitted byte for byte
  * either way.
  *
- * Live instances: TM `video/GlProgressOverlay.hx` (4) and
- * `video/GpuReadbackPipeline.hx` (2), GLSL shader sources held as multi-line
+ * Live instances: client `video/GlProgressCurtain.hx` (4) and
+ * `video/GpuDownloadPipeline.hx` (2), GLSL shader sources held as multi-line
  * string constants.
  *
  * Config pins the two knobs the probe reads -- tab indentation at width 4 and

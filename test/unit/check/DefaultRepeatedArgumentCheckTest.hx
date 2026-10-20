@@ -110,7 +110,7 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 	}
 
 	/**
-	 * The TM shape, across fix passes. Pass one defaults `step` and drops the trailing `COARSE_STEP`; the
+	 * The client shape, across fix passes. Pass one defaults `step` and drops the trailing `COARSE_STEP`; the
 	 * next pass must not then default `bottom` from the two `WIDE_*` calls, whose `WIDE_BOTTOM` is
 	 * followed by an explicit `WIDE_STEP` — dropping it bound `WIDE_STEP` to `bottom`. Every later pass
 	 * may only take a trailing argument off the shortened calls.
@@ -220,7 +220,7 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 	}
 
 	/**
-	 * TM's `SharedSyncLoopTest`: three sites pass `GHOST_ID` and a fourth passes `null`. In Haxe an explicit `null` handed
+	 * the client's `MirrorSyncLoopTest`: three sites pass `GHOST_ID` and a fourth passes `null`. In Haxe an explicit `null` handed
 	 * to a parameter with a default takes the DEFAULT (4.3.7, `--interp` and js: `f(null)` with `x:Null<Int> = 7` is 7), so
 	 * defaulting the parameter turned `seedGhost(null)` into `seedGhost(GHOST_ID)` and the test it drove failed. It
 	 * compiles, so no typecheck can catch it: the finding is refused.

@@ -11,9 +11,9 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * Wrapped list-literal emission — the three TM-driven policies that share
+ * Wrapped list-literal emission — the three client-driven policies that share
  * the sep-Star break-mode layout. Two are new here; `arrayMatrixWrap` is
- * pre-existing and covered because the three land together in TM's config
+ * pre-existing and covered because the three land together in the client's config
  * and only their combination reproduces the shipped shapes.
  *
  * 1. `emptyLines.uniformStatementBlanks: collapse` extended to
@@ -35,7 +35,7 @@ import utest.Test;
  * with plain tabs and every comma is followed by exactly one space.
  *
  * Options come from `HaxeFormatConfigLoader.loadHxFormatJson` on the
- * load-bearing subset of TM's own `hxformat.json` (tab indent, 140 columns,
+ * load-bearing subset of the client's own `hxformat.json` (tab indent, 140 columns,
  * `commaPolicy: after`) — a defaults-only probe would be config-blind to
  * the wrap cascade these shapes hit.
  */
@@ -45,11 +45,11 @@ class HxListLiteralEmissionSliceTest extends Test {
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	/** TM's load-bearing formatting keys, with all three policies off. */
+	/** the client's load-bearing formatting keys, with all three policies off. */
 	private static final BASE_JSON: String =
 		'{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140},"whitespace":{"commaPolicy":"after"}}';
 
-	/** Same, with `uniformStatementBlanks: collapse` (TM's own setting). */
+	/** Same, with `uniformStatementBlanks: collapse` (the client's own setting). */
 	private static final COLLAPSE_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140},'
 		+ '"whitespace":{"commaPolicy":"after"},"emptyLines":{"uniformStatementBlanks":"collapse"}}';
 
@@ -82,7 +82,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	/**
 	 * --- item (a): array-literal uniform element blanks ---
-	 * TM `TextAreaFormGroup.createCustomLabel` shape: two elements, one gap, blank.
+	 * client `TextAreaFormBlock.createCustomLabel` shape: two elements, one gap, blank.
 	 */
 	private static final ARR_TWO: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\n\t\t\tbeta\n\t\t];\n\t}\n}\n';
 
@@ -136,7 +136,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	/**
 	 * --- item (c): matrix rows ---
-	 * TM `PitchArea.mouseDownLinePen` shape: 3 rows of 2, ragged cell widths.
+	 * client `StageArea.mouseDownLinePen` shape: 3 rows of 2, ragged cell widths.
 	 */
 	private static final MATRIX: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\tSTRAIGHT_LINE, STRAIGHT_LINE_DASHED,\n'
 		+ '\t\t\tARC_LINE, ARC_LINE_DASHED,\n\t\t\tWAVE_LINE, WAVE_LINE_DASHED\n\t\t];\n\t}\n}\n';

@@ -138,7 +138,7 @@ final class HaxeIdentifierCase {
 
 	/**
 	 * The mechanical fix for a TYPE or an ENUM VALUE violating PascalCase: the shared `camelCore` with its first
-	 * letter capitalised (`__Printer` -> `Printer`, `PITCH_ACTIONS` -> `PitchActions`, `JSON_FIELD` -> `JsonField`,
+	 * letter capitalised (`__Printer` -> `Printer`, `STAGE_ACTIONS` -> `StageActions`, `JSON_FIELD` -> `JsonField`,
 	 * `goals` -> `Goals`). No keyword test: every Haxe keyword is lower-case. Not `inline` - passed as a
 	 * `NamingRule.normalize` function value.
 	 */
@@ -158,7 +158,7 @@ final class HaxeIdentifierCase {
 	 * join with capitalised heads, and lowercase the first letter. An all-uppercase segment is
 	 * lowercased whole (`MISSING_FILE` -> `missingFile`); a segment opening with an acronym run
 	 * keeps only that run's last character capitalised (`URLPath` -> `urlPath`); a mixed-case
-	 * segment is preserved (`coachingQualification_Id` -> `coachingQualificationId`). Null when
+	 * segment is preserved (`teachingQualification_Id` -> `teachingQualificationId`). Null when
 	 * nothing survives the strip (`_`, `__`), or when a separator falls between two DIGIT runs and
 	 * camelCase therefore cannot re-encode it (see the loop). The keyword test and the `_` prefix
 	 * belong to the callers - that is the whole of what the two corrections differ by.

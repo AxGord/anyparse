@@ -26,7 +26,7 @@ class HxReturnValueBreaksInsideTest extends Test {
 
 	/** Flat, the statement is 141 columns — one past the limit, and only because of the `;`. */
 	private static final SRC: String = 'class C {\n\tprivate inline function files(fileName:String, '
-		+ 'sessionXML:String):Array<APIFileUploadBase> {\n\t\treturn [new APIFileUploadBase(\'sessionxml\', '
+		+ 'sessionXML:String):Array<NetFileUploadBase> {\n\t\treturn [new NetFileUploadBase(\'sessionxml\', '
 		+ 'fileName, Mime.ApplicationOctetStream, ByteArray.fromBytes(Bytes.ofString(sessionXML)))];\n\t}\n}';
 
 	public function new(): Void {
@@ -39,7 +39,7 @@ class HxReturnValueBreaksInsideTest extends Test {
 		// bracket AND the element on its own continuation line. Asserting
 		// either alone would pass on a shape the other half rejects.
 		Assert.isTrue(
-			out.indexOf('\t\treturn [\n\t\t\tnew APIFileUploadBase(') != -1,
+			out.indexOf('\t\treturn [\n\t\t\tnew NetFileUploadBase(') != -1,
 			'expected `return [` glued with the element broken inside in:\n<$out>'
 		);
 	}

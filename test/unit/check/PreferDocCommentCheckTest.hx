@@ -167,7 +167,7 @@ class PreferDocCommentCheckTest extends Test {
 
 	/** TRAILING — commented-out code as a tail is still code. */
 	public function testTrailingCommentedOutCodeKept(): Void {
-		Assert.equals(0, violations("class C {\n\tpublic var d:Int = 0; // tmsMessages.getMessageById('59');\n}").length);
+		Assert.equals(0, violations("class C {\n\tpublic var d:Int = 0; // txtMessages.getMessageById('59');\n}").length);
 	}
 
 	/** TRAILING — a declaration that already has a doc is never given a second one. */
@@ -376,7 +376,7 @@ class PreferDocCommentCheckTest extends Test {
 			"public static inline final API_URL:String = 'https://example.test/api/';",
 			'private static var simulateOldToken:Bool = false;',
 			'import openfl.filters.GlowFilter;',
-			'private var initialPlayerHeight:Float;'
+			'private var initialSpriteHeight:Float;'
 		]) Assert.equals(0, violations('class C {\n\t// $line\n\tvar x:Int;\n}').length, 'converted code: $line');
 	}
 
@@ -404,7 +404,7 @@ class PreferDocCommentCheckTest extends Test {
 		// The same words WITHOUT the decoration are an ordinary run and still convert.
 		Assert.equals(1, violations('class C {\n\t// Mobile touch\n\tvar x:Int;\n}').length);
 		// A sentence is not turned into a divider by a leading dash.
-		Assert.equals(1, violations('class C {\n\t// - the count of items currently on the pitch\n\tvar x:Int;\n}').length);
+		Assert.equals(1, violations('class C {\n\t// - the count of items currently on the stage\n\tvar x:Int;\n}').length);
 	}
 
 	/**

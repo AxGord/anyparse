@@ -100,7 +100,7 @@ using StringTools;
  * (`mayImplementAbstractMethod`: Haxe impls carry no `override` and the base's
  * call is invisible to a single-file scan — unless the compiler's facts show no supertype
  * declares the name, `supertypeDecline`), its enclosing type carries no `@:rtti`
- * (drill-Node serialization by field name), `@:keep`, or `@:build`, and its name
+ * (model-Node serialization by field name), `@:keep`, or `@:build`, and its name
  * appears in no string literal anywhere in the RESOLUTION scope — report files
  * UNION the library, `ReflectionScan`'s scope, the only one a name-keyed
  * reflection question is asked in — where it would be a possible `Reflect.field`
@@ -253,7 +253,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * build. A flagged MEMBER is removed only when its initializer is side-effect-free (a body-bearing method always
 	 * qualifies, a body-less declaration never), it is not an abstract-method impl of an `extends` class (`mayImplementAbstractMethod`,
 	 * lifted when the compiler's facts clear the chain — `supertypeDecline`), its enclosing type carries no
-	 * `@:rtti` (drill-Node field-name serialization, via the index), `@:keep`, or
+	 * `@:rtti` (model-Node field-name serialization, via the index), `@:keep`, or
 	 * `@:build`, and its name appears in no string literal anywhere in the RESOLUTION scope — report
 	 * files UNION the library, which is `ReflectionScan`'s scope and the only one a name-keyed
 	 * reflection question is asked in — where it would be a possible `Reflect.field` target.

@@ -1111,7 +1111,7 @@ matches every self-increment-by-1 in `file.hx` and binds `$x` to the actual vari
 
 Without it a pattern cannot say "any arity", because the matcher's child loop
 gates on an exact length. "A `new` of ANY arity" therefore needed one pattern
-per arity — measured over TM's `src/`, `new $T()` / `new $T($a)` /
+per arity — measured over the client's `src/`, `new $T()` / `new $T($a)` /
 `new $T($a, $b)` see 932 / 881 / 1104 sites and the tail up to arity 12 adds
 1323 more, so a census written as the first pattern alone under-counts by 78 %.
 `new $T(...)` is all 4240 in one, and the count is exactly the sum of the
@@ -1144,7 +1144,7 @@ already matches `new Map<String,Int>()` today. When the type arguments are the
 question, write them out — `new $T<$K>(...)` matches only a construction that
 carries at least one type argument, because a metavar in a type-argument slot
 projects as `Named` and no value argument ever does (the partition is the
-plugin's own `typeAnnotationKinds`). Measured over TM's `src/`: 56 of the 4240
+plugin's own `typeAnnotationKinds`). Measured over the client's `src/`: 56 of the 4240
 constructions carry an explicit type argument, 21 carry two.
 
 Note also that the projection of type arguments is shallow and `NewExpr`-only:

@@ -7,7 +7,7 @@ import utest.Test;
 
 /**
  * A lock no sealed member names may be any object of its class: a hold of one stalls the main thread only when the main thread
- * takes a lock of that class somewhere, through any of its pairs (TM's `FoldersIncrementalCloudUpdatesCache.lock`, a `lockPairs`
+ * takes a lock of that class somewhere, through any of its pairs (the client's `FoldersIncrementalDeltaUpdatesCache.lock`, a `lockPairs`
  * entry only the sync workers ever take).
  */
 class ThreadSafetyUnnamedLockTest extends Test {

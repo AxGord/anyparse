@@ -92,7 +92,7 @@ class MagicNumberCheckTest extends Test {
 	/**
 	 * A CONSTRUCTOR is listed as `T.new`, the spelling Haxe itself gives a constructor used as a value
 	 * (`Point.new`): the entry matches the tail of the constructed type's path followed by `new`, so
-	 * `SpriteDefinition.new` reaches `new SpriteDefinition(…)` and `new data.SpriteDefinition(…)`, and type
+	 * `SpriteDescriptor.new` reaches `new SpriteDescriptor(…)` and `new data.SpriteDescriptor(…)`, and type
 	 * arguments are no part of the path (`Map.new` reaches `new Map<String, Int>(…)`). A bare `Other`
 	 * names a CALL `Other(…)`, never a constructor, so nothing is exempt unless configured.
 	 *
@@ -101,16 +101,16 @@ class MagicNumberCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-MAGIC-CALLARG-NEW-BLIND')
 	public function testAnIgnoredConstructorIsSpelledDotNew(): Void {
-		final src: String = 'class C {\n\tfunction g() {\n\t\tnew SpriteDefinition("a", 77);\n\t\tnew data.SpriteDefinition("b", 78);\n'
-			+ '\t\tnew Map<String, Int>(79);\n\t\tnew Other("c", 80);\n\t\tnew Blah.SpriteDefinitionX("d", 81);\n\t}\n}';
-		final calls: Array<String> = ['SpriteDefinition.new', 'Map.new', 'Other'];
+		final src: String = 'class C {\n\tfunction g() {\n\t\tnew SpriteDescriptor("a", 77);\n\t\tnew data.SpriteDescriptor("b", 78);\n'
+			+ '\t\tnew Map<String, Int>(79);\n\t\tnew Other("c", 80);\n\t\tnew Blah.SpriteDescriptorX("d", 81);\n\t}\n}';
+		final calls: Array<String> = ['SpriteDescriptor.new', 'Map.new', 'Other'];
 		final flagged: Array<String> = [for (v in withCalls(src, calls)) v.message.split(' ')[2]];
 		Assert.same(['80', '81'], flagged, 'a bare entry and a different type name reach no constructor');
 	}
 
 	/**
 	 * A value object BUILT IN PLACE as a direct argument of a listed callee carries that callee's data:
-	 * `new SpriteDefinition('players:east', new Point(-28, -77.65))` registers the sprite's offset, and the
+	 * `new SpriteDescriptor('sprites:east', new Point(-28, -77.65))` registers the sprite's offset, and the
 	 * `Point` is only its carrier. The context passes through `new` alone — an ordinary call
 	 * (`make(5)`) or an operator (`3 * k`) inside the argument resets it — and a `Point` built anywhere
 	 * else is untouched.
@@ -121,11 +121,11 @@ class MagicNumberCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-MAGIC-CALLARG-NESTED-NEW')
 	public function testAValueObjectBuiltInAListedArgumentIsExempt(): Void {
-		final src: String = 'class C {\n\tfunction g(k:Int) {\n\t\tnew SpriteDefinition("a", new Point(-28, -77.65));\n'
-			+ '\t\tnew SpriteDefinition("b", make(5));\n\t\tnew SpriteDefinition("c", new Point(3 * k, 6));\n'
+		final src: String = 'class C {\n\tfunction g(k:Int) {\n\t\tnew SpriteDescriptor("a", new Point(-28, -77.65));\n'
+			+ '\t\tnew SpriteDescriptor("b", make(5));\n\t\tnew SpriteDescriptor("c", new Point(3 * k, 6));\n'
 			+ '\t\tnew Point(9, 10);\n\t\tsetHitArea(-16, 4, 80, 64);\n\t}\n}';
 		final flagged: Array<String> = [
-			for (v in withCalls(src, ['SpriteDefinition.new', 'setHitArea'])) v.message.split(' ')[2]
+			for (v in withCalls(src, ['SpriteDescriptor.new', 'setHitArea'])) v.message.split(' ')[2]
 		];
 		Assert.same(['5', '3', '9', '10'], flagged, 'only what no listed callee receives directly or through a new stays flagged');
 	}

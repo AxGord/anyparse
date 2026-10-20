@@ -458,7 +458,7 @@ final class OracleGenerationTest extends Test {
 
 	/**
 	 * A DEV install is tracked through the repository directory whose `.dev` points at it, not through the name its
-	 * `haxelib.json` declares — here `my-lib` in the repository, `my_lib` in the json, as `mac-utils` / `mac_utils` in the
+	 * `haxelib.json` declares — here `my-lib` in the repository, `my_lib` in the json, as `os-utils` / `os_utils` in the
 	 * wild. `HAXELIB_PATH` points the run at a scratch repository.
 	 */
 	@:pin('control')

@@ -172,7 +172,7 @@ class ReplaceNodeSliceTest extends Test {
 	/**
 	 * A whole TYPE through `ClassDecl:<Name>`, the shape the op notes once called unreliable (a
 	 * mangled leading doc, then a `final` the span left behind). Neither reproduces since the
-	 * final-wrapper fold: an identity replace of every type declaration in two real trees (TM 1114
+	 * final-wrapper fold: an identity replace of every type declaration in two real trees (client 1114
 	 * types, anyparse 2199, with and without the doc in the new text) comes back byte-identical.
 	 * This pins the composite: a documented, annotated `final class` beside a second type, its
 	 * replacement copied as `source --select` prints it, with one member added.

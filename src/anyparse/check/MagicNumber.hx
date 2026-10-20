@@ -143,7 +143,7 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 	/**
 	 * The key-context flag for the `childIndex`-th child. A `keyHost` — a listed call or constructor, or a
 	 * constructor that is itself in key context (a value object built in place as a listed argument:
-	 * `new SpriteDefinition(id, new Point(-18, -83.75))`) — hands it to its ARGUMENTS: a call's children
+	 * `new SpriteDescriptor(id, new Point(-18, -83.75))`) — hands it to its ARGUMENTS: a call's children
 	 * after the callee, a constructor's after its type arguments (`QueryNode.typeArgCount`). A negation in
 	 * key context hands it to its operand, since Haxe has no negative literal (`f(-18)` is `Neg(IntLit 18)`).
 	 * Every other node resets it, so `t('x', 100 + k)` and `t('x', make(5))` keep their literals flagged.
@@ -304,9 +304,9 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 	/**
 	 * The callee path an `ignoreCallArguments` entry is matched against: a call's callee as written
 	 * (`NodeShape.calleePath` — `Lang.t(…)` is `[Lang, t]`), or for a constructor the constructed type's
-	 * path followed by the grammar's `RefShape.constructorName` — `new data.SpriteDefinition(…)` is
-	 * `[data, SpriteDefinition, new]`, the spelling Haxe itself gives a constructor used as a value
-	 * (`SpriteDefinition.new`). Type arguments are no part of the path. Empty for anything else, and for a
+	 * path followed by the grammar's `RefShape.constructorName` — `new data.SpriteDescriptor(…)` is
+	 * `[data, SpriteDescriptor, new]`, the spelling Haxe itself gives a constructor used as a value
+	 * (`SpriteDescriptor.new`). Type arguments are no part of the path. Empty for anything else, and for a
 	 * constructor when the grammar names no constructor, so no entry reaches it.
 	 */
 	private static function calledPath(node: QueryNode, cfg: MagicNumberCfg): Array<String> {

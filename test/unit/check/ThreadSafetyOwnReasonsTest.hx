@@ -18,7 +18,7 @@ class ThreadSafetyOwnReasonsTest extends Test {
 		+ '"shortSinks":["trace"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
 	/**
-	 * TM's `SerFile._mutex`: its only reason to be long was a `trace` under the hold — TM routes `trace` to its log
+	 * the client's `BinFile._mutex`: its only reason to be long was a `trace` under the hold — client routes `trace` to its log
 	 * writer, and the call resolves to nothing. A bare `shortSinks` name run once under the hold is brief.
 	 */
 	@:pin('control') @:killer('M-TS-BLIND-BRIEF-OFF') @:killer('M-TS-DOM-BRIEF-NAMES-IGNORED')
@@ -54,7 +54,7 @@ class ThreadSafetyOwnReasonsTest extends Test {
 	}
 
 	/**
-	 * TM's `FolderWatcher.reset`: it takes the tree lock and never gives it back — the next `update()` does — so the hold
+	 * the client's `VolumeWatcher.reset`: it takes the tree lock and never gives it back — the next `update()` does — so the hold
 	 * lasts past its end, however brief the calls its own window spans. (The second lock keeps it from being a lock
 	 * wrapper, whose take is its caller's hold.)
 	 */

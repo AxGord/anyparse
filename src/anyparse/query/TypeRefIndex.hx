@@ -222,7 +222,7 @@ final class TypeRefIndex {
 
 	/**
 	 * The declarations named `name`, each with its file, in index order — what every lookup by simple name opened with
-	 * as a scan of every type of every file. On TM that scan, through `declaringFiles` alone, was 140 of a 360 s
+	 * as a scan of every type of every file. On the client corpus that scan, through `declaringFiles` alone, was 140 of a 360 s
 	 * `--fix`. The files are the owning index's, which never changes them (`SymbolIndex.without` builds a new index), so
 	 * the table is built once. Iterated, never handed out: a caller gets its own array.
 	 */

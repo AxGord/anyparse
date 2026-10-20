@@ -365,7 +365,7 @@ final class StdlibDifferential {
 	 * fixed grid, deduplicated and capped so the cartesian product stays interpretable in seconds.
 	 *
 	 * Seeding from the body is the same idea that bounds the mapping search, applied to the INPUT
-	 * axis: a function branching on `'.drl'` is decided by strings around `'.drl'`, and by nothing
+	 * axis: a function branching on `'.mdl'` is decided by strings around `'.mdl'`, and by nothing
 	 * in a generic grid. Unseeded, a string predicate that branches on its own literals returns the
 	 * same answer for every grid value and therefore "matches" every shape-compatible pooled call.
 	 */
@@ -387,7 +387,7 @@ final class StdlibDifferential {
 
 	/**
 	 * A static-call entry. A `StringTools` static also carries its STATIC-EXTENSION spelling as a
-	 * disqualifier: a body written `path.endsWith('.drl')` is already calling
+	 * disqualifier: a body written `path.endsWith('.mdl')` is already calling
 	 * `StringTools.endsWith`, and reporting that back is the thin-wrapper false positive in its
 	 * most convincing disguise -- the finding is literally true and completely useless.
 	 */

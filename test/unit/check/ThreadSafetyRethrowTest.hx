@@ -15,7 +15,7 @@ class ThreadSafetyRethrowTest extends Test {
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Disk.make"],'
 		+ '"throwers":["Disk.make"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
-	/** The probe of the brief (`recall/probe-rethrow`): TM's `FolderWatcher.update`, `catch (e) { release; throw e; }`. */
+	/** The probe of the brief (`recall/probe-rethrow`): the client's `VolumeWatcher.update`, `catch (e) { release; throw e; }`. */
 	@:pin('control') @:killer('M-TS-RETHROW-OFF')
 	public function testACatchThatRethrowsRaises(): Void {
 		#if (sys || nodejs)
@@ -59,7 +59,7 @@ class ThreadSafetyRethrowTest extends Test {
 		#end
 	}
 
-	/** A project function named in `throwers` raises for its callers, whatever its body shows (TM's `badNamesHandler`). */
+	/** A project function named in `throwers` raises for its callers, whatever its body shows (the client's `badNamesHandler`). */
 	public function testAProjectFunctionNamedInThrowersRaises(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(

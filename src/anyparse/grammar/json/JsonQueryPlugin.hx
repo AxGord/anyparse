@@ -23,7 +23,7 @@ using StringTools;
  *
  * The tree is `JsonProjection`'s (`Document` / `JObject` / `Member` / `JArray` / `JString` / `JNumber` / `JBool` / `JNull`), so a
  * selector walks the document by key — `Member:rules >> Member:registers > JArray` — and picks an array element by its value
- * (`JString:api.APIRequest2.success`) or by its ordinal (`--nth`). A `--match` pattern is a JSON value whose `"$x"` / `"$_"` strings are
+ * (`JString:api.NetRequest2.success`) or by its ordinal (`--nth`). A `--match` pattern is a JSON value whose `"$x"` / `"$_"` strings are
  * metavariables.
  *
  * The writer is `JsonLayoutWriter`, FORMAT-PRESERVING: `writeRoundTrip` hands every parseable

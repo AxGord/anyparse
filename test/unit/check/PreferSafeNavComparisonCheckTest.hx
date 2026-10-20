@@ -197,7 +197,7 @@ class PreferSafeNavComparisonCheckTest extends Test {
 	}
 
 	/**
-	 * The TM shape that broke the compiler: an `inline` boolean guard whose body splices
+	 * The client shape that broke the compiler: an `inline` boolean guard whose body splices
 	 * into every call site, where the `&&` form narrows the CALLER's binding after
 	 * `if (!check(item)) return;`. The rewrite drops that narrowing at each site.
 	 */

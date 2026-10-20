@@ -101,7 +101,7 @@ final class ValueCarriers {
 		final escaped: Null<Array<String>> = _escaped();
 		if (escaped == null) return null;
 		final out: Array<String> = declared.copy();
-		// a set beside the list: `out.contains` made this quadratic in the escaped types (44 of TM's 533 `--fix` seconds)
+		// a set beside the list: `out.contains` made this quadratic in the escaped types (44 of the client's 533 `--fix` seconds)
 		final seen: Map<String, Bool> = [for (t in out) t => true];
 		for (t in escaped) if (!seen.exists(t)) {
 			seen[t] = true;

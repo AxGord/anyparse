@@ -61,9 +61,9 @@ class HoistEmbeddedAssignmentCheckTest extends Test {
 	/** Several handles in one literal all hoist, in source order — asserted as one string so neither half passes alone. */
 	public function testSeveralAssignmentsHoistInSourceOrder(): Void {
 		Assert.equals(
-			'class C {\n\tfunction f() {\n\t\t_pro = new P(1);\n\t\t_premier = new P(2);\n'
-			+ '\t\tcontent = new Row([_pro, new S(3), _premier]);\n\t}\n}\n',
-			applyFix('class C {\n\tfunction f() {\n\t\tcontent = new Row([_pro = new P(1), new S(3), _premier = new P(2)]);\n\t}\n}')
+			'class C {\n\tfunction f() {\n\t\t_pro = new P(1);\n\t\t_premium = new P(2);\n'
+			+ '\t\tcontent = new Row([_pro, new S(3), _premium]);\n\t}\n}\n',
+			applyFix('class C {\n\tfunction f() {\n\t\tcontent = new Row([_pro = new P(1), new S(3), _premium = new P(2)]);\n\t}\n}')
 		);
 	}
 
@@ -117,7 +117,7 @@ class HoistEmbeddedAssignmentCheckTest extends Test {
 	/**
 	 * A local declaration is a host too: `final col = new Col([_p = …]);` binds `col` only after its
 	 * initializer is fully evaluated, so the hoisted write already ran ahead of that binding. This is
-	 * the shape the TM `PremierPlan` / `ProPlan` sites have.
+	 * the shape the client `PremiumTier` / `TopTier` sites have.
 	 */
 	public function testLocalDeclarationInitializerHoisted(): Void {
 		Assert.equals(

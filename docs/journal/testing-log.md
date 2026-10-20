@@ -114,7 +114,7 @@ nothing; a single-file lint was paying for a project-wide typecheck), and
 reading it as CPU would have sent the work into the analyser instead.
 
 Read a profile for SHARES and take deltas from a separate unprofiled run:
-`--cpu-prof` overhead is not uniform across trees (+7% anyparse, +15% TM), so a
+`--cpu-prof` overhead is not uniform across trees (+7% anyparse, +15% client), so a
 profiled before/after pair is not a delta.
 
 ## From § Proving a comment-only change inert: the build is NOT a byte oracle
@@ -4178,7 +4178,7 @@ number leaves the key — `oversized-type`'s line extent goes, its member count
 stays, because that one moves only when a member is written. The blanket
 digit mask this replaced could not express that split at all, and on
 `duplicate-code` it also ate the statement count and any digit in the partner
-filename: 57% (anyparse) and 78% (tm) of that rule's findings shared a key with a
+filename: 57% (anyparse) and 78% (client) of that rule's findings shared a key with a
 sibling, where a substitution was invisible. The message keeps every number
 either way — identity and prose come apart, the numbers do not leave the report.
 

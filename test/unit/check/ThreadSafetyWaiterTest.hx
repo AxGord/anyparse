@@ -19,7 +19,7 @@ class ThreadSafetyWaiterTest extends Test {
 		+ '"shortSinks":["FileSystem.stat"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
 	/**
-	 * TM's `getFolderLastCloudActionAction2`: only the main thread holds `_a`, across a take of `_b` that a background
+	 * the client's `getFolderLastCloudActionAction2`: only the main thread holds `_a`, across a take of `_b` that a background
 	 * hold makes long, once per item — the main thread waits for `_b` (finding (a) at the take), and no thread it
 	 * stalls waits for `_a`: however often it is repeated, a wait for another lock is no work of the holder's own.
 	 */
@@ -35,7 +35,7 @@ class ThreadSafetyWaiterTest extends Test {
 		#end
 	}
 
-	/** TM's `FileListMoveFiles.moveItems`: the main thread's own per-item loop under the lock is the stall, and stays reported. */
+	/** the client's `ItemListMoveItems.moveItems`: the main thread's own per-item loop under the lock is the stall, and stays reported. */
 	@:pin('control') @:killer('M-TS-OWN-WORK-DROPPED')
 	public function testAMainOnlyHoldOverItsOwnLongWorkStays(): Void {
 		#if (sys || nodejs)

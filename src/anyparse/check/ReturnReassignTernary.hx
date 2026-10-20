@@ -112,7 +112,7 @@ using Lambda;
  * The merge is NOT chained with anything inside this check. After it lands, `x`'s only
  * remaining write may be its initializer, and the existing `prefer-final` then converts
  * `var x = init;` to `final x = init;` on a LATER pass of the `--fix` fixed-point loop.
- * The counter-case is an accumulator (the shape this rule was written from, TM
+ * The counter-case is an accumulator (the shape this rule was written from, client
  * `src/api/API.hx`): a `+=` in a preceding loop keeps `x` a `var`, so only the tail
  * merges and `prefer-final` correctly does not follow.
  *

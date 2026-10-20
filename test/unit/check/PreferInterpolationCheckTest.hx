@@ -275,7 +275,7 @@ class PreferInterpolationCheckTest extends Test {
 		Assert.equals(1, relaxedViolations(body('var u = make();\n\t\tvar s: String = Std.string(u);')).length);
 	}
 
-	/** The TM CloudDatabaseMigrationV1ToV2:217 shape end-to-end: relaxed run + fix. */
+	/** The client ShardDatabaseMigrationV1ToV2:217 shape end-to-end: relaxed run + fix. */
 	public function testOracleRelaxedFieldAccessInInterpolationBlockFixed(): Void {
 		final src: String = 'class C {\n\tfunction f(e:Entry):Void {\n\t\t'
 			+ "var s = '${!e.folder && e.cloudId != -1 ? Std.string(e.cloudId) : 'NULL'},';\n\t}\n}";
@@ -346,7 +346,7 @@ class PreferInterpolationCheckTest extends Test {
 	}
 
 	/**
-	 * A macro reads its arguments as SYNTAX, and one keyed by a literal's text (TM's `Lang.t('text')`) sees every rewrite of
+	 * A macro reads its arguments as SYNTAX, and one keyed by a literal's text (the client's `Lang.t('text')`) sees every rewrite of
 	 * this rule as a different key: both the constant fix and the `${Std.string(x)}` peel stay report-only there, refused by
 	 * the same `MacroGate` `fold-adjacent-string-literals` asks. The same shapes outside the macro call are still fixed.
 	 */

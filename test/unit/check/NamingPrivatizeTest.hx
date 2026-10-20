@@ -122,7 +122,7 @@ final class NamingPrivatizeTest extends Test {
 	/**
 	 * An unrelated class's OWN `private final _label` is another declaration, and its reads are bound to it, so
 	 * they do not count against the owner's: the arm privatizes, over the whole project and on a narrowed run
-	 * alike. The raw token count used to veto it (TM `SessionPDFPreview._scrollContainer` beside two other
+	 * alike. The raw token count used to veto it (client `ProjectPDFPreview._scrollContainer` beside two other
 	 * classes' private `_scrollContainer`), and the narrowed run then RENAMED what the whole one declined.
 	 */
 	@:pin('control')

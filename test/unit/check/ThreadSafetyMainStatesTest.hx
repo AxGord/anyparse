@@ -7,7 +7,7 @@ import utest.Test;
 
 /**
  * Repetition on the main thread read over its STATES (`MainRepeats`): a call a condition rules out under the value a
- * caller hands down carries no repetition from that caller — TM's `DrillVOModel.loadDrillData` loops over drills calling
+ * caller hands down carries no repetition from that caller — the client's `ModelVOModel.loadModelData` loops over models calling
  * `loadXML(path, false, …)`, whose `if (checkLimits)` SQL count never runs on that way.
  */
 class ThreadSafetyMainStatesTest extends Test {
@@ -43,7 +43,7 @@ class ThreadSafetyMainStatesTest extends Test {
 	}
 
 	/**
-	 * TM's `Token.blockedPost` → `blockedRequestInternal`: an object literal handed down is never null, and a `final`
+	 * the client's `Token.blockedPost` → `blockedRequestInternal`: an object literal handed down is never null, and a `final`
 	 * local bound to `data == null` is that test — the cache read under it never runs from the loop.
 	 */
 	@:pin('control') @:killer('M-TS-COND-FINAL-LOCAL') @:killer('M-TS-ARG-LITERAL-NONNULL') @:killer('M-TS-ARG-FINAL-LOCAL-READ')

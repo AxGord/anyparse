@@ -339,7 +339,7 @@ class PossibleNullDereferenceTest extends Test {
 	/**
 	 * A RE-READ of the entry the guard just read proves it present: the `if` spelling and the `&&`
 	 * spelling of `m[k] != null`, and the fill-then-read idiom `if (m[k] == null) m[k] = []; m[k].f`
-	 * (TM `src/macros/Lang.hx:73`, `:78`, `:94`), where the write and the negated check each prove
+	 * (client `src/macros/Lang.hx:73`, `:78`, `:94`), where the write and the negated check each prove
 	 * the entry on their own path.
 	 */
 	@:pin('control')

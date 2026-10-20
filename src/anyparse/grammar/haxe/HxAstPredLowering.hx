@@ -635,8 +635,8 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * `TextEngine.hx:1183`). Every OTHER fragment shape is an
 	 * independent guarded statement and the mandatory `;` is what makes
 	 * the Trivia-mode parser reject the postfix reading and re-read the
-	 * region as a statement-scope `Conditional` (TM
-	 * `GpuDirectPipeline.hx:48` — a blanket true glued the two into one
+	 * region as a statement-scope `Conditional` (client
+	 * `GpuInlinePipeline.hx:48` — a blanket true glued the two into one
 	 * postfix expression and rewrote the file). The condition atom is
 	 * skipped with a paren-depth scan, not a regex: `!(js && html5)`
 	 * carries spaces INSIDE its parens, so only a depth-0 space ends

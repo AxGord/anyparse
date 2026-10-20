@@ -210,7 +210,7 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 	public function testAlreadyBrokenItemKeepsCuddledShapeAndCallHug(): Void {
 		final src: String = 'class NodeHost {\n'
 			+ '\tprivate function updateNodeLabels(payload:NodePayload, nodes:Array<SceneNode<NodePayload>>):Void {\n'
-			+ '\t\tswitch payload.kind {\n\t\t\tcase UnitPayload.KIND_KEEPER, UnitPayload.KIND_FIELD, UnitPayload.KIND_BENCH:\n'
+			+ '\t\tswitch payload.kind {\n\t\t\tcase UnitPayload.KIND_HOLDER, UnitPayload.KIND_FIELD, UnitPayload.KIND_SPARE:\n'
 			+ '\t\t\t\tdispatchNodeUpdate([ for (sceneNode in nodes)\n\t\t\t\t\tif (payload.kind == sceneNode.kind) '
 			+ 'new UpdateNodePropsCommand(this, cast sceneNode, payload)\n\t\t\t\t]);\n\t\t\tcase _:\n\t\t}\n\t}\n}';
 		assertWrite(src, src, CFG_CALL);

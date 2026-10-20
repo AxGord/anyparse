@@ -46,10 +46,10 @@ final class HxHeritageLineWrapSliceTest extends Test {
 		final cfg: String = '{"wrapping":{"maxLineLength":140},'
 			+ '"whitespace":{"bracesConfig":{"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}}}}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
-		final input: String = '@:nullSafety final class Languages extends APISmartEntity<Array<Language>, Array<Language>, '
+		final input: String = '@:nullSafety final class Languages extends NetSmartEntity<Array<Language>, Array<Language>, '
 			+ 'Array<Language>, { includeTranslations:Bool }, ErrorResponse> {}';
 		final expected: String = '@:nullSafety final class Languages\n'
-			+ '\textends APISmartEntity<Array<Language>, Array<Language>, Array<Language>, { includeTranslations:Bool }, ErrorResponse> {}';
+			+ '\textends NetSmartEntity<Array<Language>, Array<Language>, Array<Language>, { includeTranslations:Bool }, ErrorResponse> {}';
 		final actualRaw: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), opts);
 		final actual: String = actualRaw.length > 0 && actualRaw.fastCodeAt(actualRaw.length - 1) == '\n'.code
 			? actualRaw.substr(0, actualRaw.length - 1)

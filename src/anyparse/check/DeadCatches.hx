@@ -16,7 +16,7 @@ using Lambda;
  * — blocks and expression statements, conditional-compilation regions, literals with no interpolation, comparisons, reads of a binding or
  * a plain field, and calls of a `nonThrowing` entry off a static path (with arguments of the same kinds), a field read off such a call's
  * value — anything else may throw, and the `catch` is a path. A `nonThrowing` entry's word is the project's: the call raises nothing and
- * hands back a value its field reads do not fault on (TM: hxcpp's `sys.FileSystem.stat`, which builds a zeroed record for a missing path;
+ * hands back a value its field reads do not fault on (client: hxcpp's `sys.FileSystem.stat`, which builds a zeroed record for a missing path;
  * a native prim returning a status code). A call off a value is not one: the value may be null, or computed by something that throws.
  */
 @:nullSafety(Strict)

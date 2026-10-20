@@ -12,7 +12,7 @@ import utest.Test;
  * so a declaration at exactly maxLineLength + 1 stayed flat. Sister of
  * `HxTernaryCallArgRestAwareTest` (call-argument position, trailing `,`).
  *
- * `CFG` is the Tactics Manager project's real `hxformat.json` verbatim (the
+ * `CFG` is the client project's real `hxformat.json` verbatim (the
  * config the reported site formats under); identifiers are fully synthetic.
  */
 @:nullSafety(Strict)

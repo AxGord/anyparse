@@ -302,7 +302,7 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 		if (receiver.kind != seams.identKind || declared == null) return null;
 		final typeName: String = declared;
 		// The default is written INSIDE the declaring type, where the qualifier is that type's own name
-		// — `drainIOThread(ms:Int = ThreadsUtil.DRAIN_TIMEOUT_MS)` inside `ThreadsUtil` compiles but
+		// — `drainIOThread(ms:Int = ThreadUtils.DRAIN_TIMEOUT_MS)` inside `ThreadUtils` compiles but
 		// reads as a stutter. Dropping it also merges the qualified and bare spellings of one constant
 		// into a single census bucket, which is what they are.
 		return if (!upperInitial(typeName) || entry.binders.exists(typeName) || scope.ambiguousTypes[typeName] == true)

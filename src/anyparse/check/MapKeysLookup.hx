@@ -67,7 +67,7 @@ using StringTools;
  *   a custom `keys()`-bearing type is not a map, and rewriting it emits code that does
  *   not compile. A PATH is resolved the same way a bare identifier is: its ROOT through
  *   the binding declaration (or, for `this`, the enclosing type), then each field segment
- *   through the run's `SymbolIndex`, so `session.files` with `SessionData.files :
+ *   through the run's `SymbolIndex`, so `session.files` with `ProjectData.files :
  *   Map<String, String>` reaches `Map` and `svc.registry` with a custom `Registry`
  *   reaches `Registry`. An UNRESOLVABLE receiver still flags — an anonymous-struct or
  *   un-annotated receiver would otherwise be lost wholesale — which is a deliberate
@@ -470,7 +470,7 @@ final class MapKeysLookup implements Check {
 	 * its root the same way (or, for the self reference, to the enclosing type declaration; or,
 	 * for a static TYPE-name root such as `Lib.application`, the unique type the root names in
 	 * scope) and then walks each field segment's member type through the run's `SymbolIndex`, so
-	 * `session.files` with `SessionData.files : Map<String, String>` resolves to `Map` and
+	 * `session.files` with `ProjectData.files : Map<String, String>` resolves to `Map` and
 	 * `svc.registry` with a custom `Registry` resolves to `Registry`.
 	 */
 	private static function receiverTypeName(

@@ -34,10 +34,10 @@ import utest.Test;
 		Assert.equals('unused public orphaned: no reference to it anywhere in scope', vs[0].message);
 	}
 
-	public function testCanarySystemDataReplaceWordShapeFlagged(): Void {
-		// The shape of TM's crashdumper/SystemData.hx `replaceWord`: a `public static function` in
+	public function testCanaryHostReportReplaceWordShapeFlagged(): Void {
+		// The shape of the client's crashreport/HostReport.hx `replaceWord`: a `public static function` in
 		// a plain, meta-free, supertype-free class, referenced nowhere.
-		final src: String = 'class SystemData {\n\tpublic static function replaceWord(line:String, word:String, replace:String):String {\n'
+		final src: String = 'class HostReport {\n\tpublic static function replaceWord(line:String, word:String, replace:String):String {\n'
 			+ '\t\tif (word == replace) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n'
 			+ '\t\treturn line;\n\t}\n}';
 		final vs: Array<Violation> = violations(src);

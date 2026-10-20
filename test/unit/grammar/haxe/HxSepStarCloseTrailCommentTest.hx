@@ -58,7 +58,7 @@ class HxSepStarCloseTrailCommentTest extends Test {
 
 	// --- 1. the named defect: the wrap-cascade path dropped the slot -----
 
-	/** The live TM shape: last array item is an object literal, no trailing comma. */
+	/** The live client shape: last array item is an object literal, no trailing comma. */
 	public inline function testArrayLastObjectLiteralKeepsCloseTrail(): Void {
 		assertUnchanged('class C {\n\tstatic function f() {\n\t\treturn [\n\t\t\t{a: 1},\n\t\t\t{a: 2} // last\n\t\t];\n\t}\n}', '// last');
 	}

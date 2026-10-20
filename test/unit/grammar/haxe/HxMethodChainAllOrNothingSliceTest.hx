@@ -26,7 +26,7 @@ import utest.Test;
  * link glued to the head with no re-probe of the resulting head width (so an
  * over-wide head kept the link and overflowed `maxLineLength`).
  *
- * Config is TM's real `hxformat.json` verbatim (minified). The compiled
+ * Config is the client's real `hxformat.json` verbatim (minified). The compiled
  * defaults are config-blind to it -- `maxLineLength` 140, tab indent,
  * `callParameter` fillLineWithLeadingBreak and `methodChainCuddledLinks` all
  * participate in every fixture below, and none of them is a compiled default.
@@ -39,7 +39,7 @@ import utest.Test;
 @:access(anyparse.format.wrap.WrapList)
 final class HxMethodChainAllOrNothingSliceTest extends Test {
 
-	/** TM's `hxformat.json`, minified. */
+	/** the client's `hxformat.json`, minified. */
 	private static final CFG: String = '{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,'
 		+ '"alignInlineSwitchCaseBody":true},' + '"emptyLines":{"maxAnywhereInFile":1,"afterBlocks":"remove","afterLeftCurly":"remove",'
 		+ '"beforeRightCurly":"remove","classEmptyLines":{"beginType":1,"endType":1},'
@@ -97,14 +97,14 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 		+ '\t\t).split(\'<br>\').filter(s -> s.trim() != \'\');\n\t}\n\n}';
 
 	/** The 151-column regression: the link stayed glued to a 130-column head and only its ARGUMENT wrapped. */
-	private static final OVERWIDE_HEAD_SRC: String = 'class RemoveItemAlert extends StopAlert {\n\n'
+	private static final OVERWIDE_HEAD_SRC: String = 'class RemoveItemAlert extends HaltAlert {\n\n'
 		+ '\tpublic function new(removeEvent:CatalogBlockEvent) {\n\t\tsuper(\n'
 		+ '\t\t\tt(\'Remove\', 31),\n\t\t\tt(\'Are you sure you want to remove item '
 		+ '<b>{value}</b>? This will cause a problem with catalog listing for this '
 		+ 'ite.\').findAndReplaceValue(\n\t\t\t\tremoveEvent.userEmail\n\t\t\t)\n\t\t);\n\t}\n\n}';
 
 	/** Same call, all-or-nothing: head line 130 columns, the single link on its own continuation line. */
-	private static final OVERWIDE_HEAD_EXP: String = 'class RemoveItemAlert extends StopAlert {\n\n'
+	private static final OVERWIDE_HEAD_EXP: String = 'class RemoveItemAlert extends HaltAlert {\n\n'
 		+ '\tpublic function new(removeEvent:CatalogBlockEvent) {\n\t\tsuper(\n\t\t\tt(\'Remove\', 31),\n'
 		+ '\t\t\tt(\'Are you sure you want to remove item <b>{value}</b>? This will cause a problem with catalog listing for this ite.\')\n'
 		+ '\t\t\t\t.findAndReplaceValue(removeEvent.userEmail)\n\t\t);\n\t}\n\n}';

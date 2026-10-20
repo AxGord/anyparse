@@ -234,7 +234,7 @@ final class LintCommand implements CliCommand {
 		// `Linter.run` drops its findings on the files that disable it.
 		final applyEnablement: Bool = o.ruleFilters.length == 0;
 		// Enablement is asked per DISTINCT config, not per file: every file of a directory gets the same memoised config,
-		// and the per-file form asked each of ~190 checks once per file (~0.17 s on the TM tree). `paths` is the run's
+		// and the per-file form asked each of ~190 checks once per file (~0.17 s on the client tree). `paths` is the run's
 		// file order, the order every later per-file question discovers configs in, so each once-per-document config
 		// warning prints where it did.
 		final fileConfigs: Array<LintConfig> = LintDocuments.distinctConfigs(paths, resolveConfig);
@@ -439,7 +439,7 @@ final class LintCommand implements CliCommand {
 	 * Start the builds' probe compiles (`ResolutionScope.buildsAhead`) when a check first waits on the facts, in a run that
 	 * started the facts compiles early (`factsEarly`, `startsFactsEarly`). Such a run nearly always asks a reach question, and
 	 * its first one escalates to the builds (`MemberReach.escalation`): started only when that question came, mid-way through
-	 * the first pass, the probes were waited on alone (TM: 11 s). Started with the facts at the run's start instead, they took
+	 * the first pass, the probes were waited on alone (client: 11 s). Started with the facts at the run's start instead, they took
 	 * the cores the first pass and the facts needed and bought nothing; started here they compile while the run waits anyway.
 	 * A write before the question still drops them unread (`buildsSettled`).
 	 */

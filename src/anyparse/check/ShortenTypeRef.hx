@@ -84,10 +84,10 @@ private typedef ScanContext = {
  * ## ARM 1 — the `pack.SubType` hybrid (why the rule exists)
  *
  * A SECONDARY (sub-module) type has two spellings that both compile:
- * `api.model.folders.FolderContent.FolderContentEntity` — the module-qualified path, which
- * always resolves — and `api.model.folders.FolderContentEntity`, the HYBRID a compiler prints
+ * `api.model.folders.FolderListing.FolderListingEntity` — the module-qualified path, which
+ * always resolves — and `api.model.folders.FolderListingEntity`, the HYBRID a compiler prints
  * and a hand-written annotation copies. The hybrid resolves ONLY while an
- * `import api.model.folders.FolderContent.FolderContentEntity;` happens to be in the file: drop
+ * `import api.model.folders.FolderListing.FolderListingEntity;` happens to be in the file: drop
  * that import (as an unused-import sweep eventually will, once the short name's last use goes)
  * and the reference stops compiling, at a site that never changed. The fix repairs it to a
  * spelling that stands on its own — the short name when the import is there, the
@@ -98,8 +98,8 @@ private typedef ScanContext = {
  * A dotted path written where the short name is ALREADY visible: an exact `import`, an alias,
  * a type declared in this module, the MAIN type of a same-package module, or an always-in-scope
  * builtin. `TypeRefPrinter` owns that judgement, `shadowedLocally` included — so a path kept
- * long BECAUSE the short name is taken (`api.model.folders.FolderContent` in a file whose bare
- * `FolderContent` means `api.namespace.FolderContent`, any name a wildcard / `using` binds, or
+ * long BECAUSE the short name is taken (`api.model.folders.FolderListing` in a file whose bare
+ * `FolderListing` means `api.namespace.FolderListing`, any name a wildcard / `using` binds, or
  * a name a `#if`-GUARDED import claims for a different path) is left exactly as written. No
  * occurrence threshold: one over-qualified use is one finding.
  *

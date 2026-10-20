@@ -31,7 +31,7 @@ final class HxValueIfBracketElseBreakSliceTest extends Test {
 	/** Pony-shaped config with `sameLine.expressionIf: next` — what both real trees set. */
 	private static final CFG_NEXT: String = cfg(false);
 
-	/** The same config with `sameLine.expressionIfFit` on, capped at two value branches — TM's setting. */
+	/** The same config with `sameLine.expressionIfFit` on, capped at two value branches — the client's setting. */
 	private static final CFG_FIT: String = cfg(true);
 
 	/** `CFG_FIT` with the bracket hug on: a `]` the knob glues still owns its `] else`, fit or no fit. */

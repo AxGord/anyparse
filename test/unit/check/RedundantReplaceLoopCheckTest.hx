@@ -41,14 +41,14 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	public function testCanarySiteOneFlaggedAndFixed(): Void {
-		// crashdumper/SessionData.hx:49 — ' ' -> '_', B does not contain S.
+		// crashreport/ProjectData.hx:49 — ' ' -> '_', B does not contain S.
 		assertFixCanonical(
 			wrapFn('while (now.indexOf(\' \') != -1) now = now.replace(\' \', \'_\');'), 'now = now.replace(\' \', \'_\');', 'while ('
 		);
 	}
 
 	public function testCanarySiteTwoFlaggedAndFixed(): Void {
-		// crashdumper/SessionData.hx:50 — ':' -> "'", B does not contain S.
+		// crashreport/ProjectData.hx:50 — ':' -> "'", B does not contain S.
 		assertFixCanonical(
 			wrapFn('while (now.indexOf(\':\') != -1) now = now.replace(\':\', "\'");'), 'now = now.replace(\':\', "\'");', 'while ('
 		);
@@ -244,7 +244,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	public function testCanaryReplaceWordFlagged(): Void {
-		// crashdumper/SystemData.hx:310 — the equality guard reads like protection but covers only
+		// crashreport/HostReport.hx:310 — the equality guard reads like protection but covers only
 		// the degenerate `word == replace`; a `replace` that merely CONTAINS `word` still loops.
 		final src: String = 'class C {\n\tpublic static function replaceWord(line:String, word:String, replace:String):String {\n'
 			+ '\t\tif (word == replace) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n'
@@ -258,7 +258,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	public function testCanaryStripWordFlagged(): Void {
-		// crashdumper/SystemData.hx:314 — S is the parameter `word`, B the literal `''`. Exactly
+		// crashreport/HostReport.hx:314 — S is the parameter `word`, B the literal `''`. Exactly
 		// why arm C must admit a literal / parameter MIX rather than demand two parameters.
 		final vs: Array<Violation> = violations(stripWordSource());
 		Assert.equals(1, vs.length);

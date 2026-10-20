@@ -1095,7 +1095,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	 * parameter, so the cross-file rename leaves them alone. The class-attributed half of the subtype scan
 	 * claims every bare read in a subtype for the owner; once the parameter's own occurrences were accounted
 	 * for, that half renamed `super.setup(accountScreen)` into `super.setup(_accountScreen)` - which compiles,
-	 * and passes the field where the argument was meant (TM `AccountType` and its four plans).
+	 * and passes the field where the argument was meant (client `AccountKind` and its four plans).
 	 */
 	@:pin('control')
 	@:killer('M-NAMING-FOREIGN-LOSES-TO-BARE')

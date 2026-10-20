@@ -34,12 +34,12 @@ typedef Src = {
  * haxe tools/parse-prof.hxml                       # -> bin/parse-prof.js
  * node bin/parse-prof.js tparse src 1 hxformat.json
  * node --cpu-prof --cpu-prof-interval=200 bin/parse-prof.js tparse src 1 hxformat.json
- * TM_SRC=<other-tree>/src node bin/parse-prof.js rt tools/bench-corpus.txt 6 hxformat.json
+ * ANYPARSE_BENCH_EXTRA=<manifest> CLIENT_SRC=<other-tree>/src node bin/parse-prof.js rt tools/bench-corpus.txt 6 hxformat.json
  * ```
  *
  * Arguments are `<mode> <dir-or-manifest> [reps] [hxformat.json]`. A directory is
  * walked recursively for `.hx`; anything else is read as a manifest, one path per
- * line, `#` comments skipped and `${NAME}` expanded from the environment.
+ * line, `#` comments skipped, `${NAME}` expanded from the environment and a line `@<manifest>` replaced by the paths of that manifest.
  *
  * Modes:
  *
@@ -283,7 +283,10 @@ final class ParseProf {
 
 	/**
 	 * A directory is walked recursively for `.hx`; anything else is read as a
-	 * manifest with one path per line (blank lines and `#` comments skipped).
+	 * manifest with one path per line (blank lines and `#` comments skipped). A
+	 * line `@<manifest>` includes another manifest in its place: the private half
+	 * of a corpus lives in a file outside the repository, named by an environment
+	 * variable (`@${ANYPARSE_BENCH_EXTRA}`), and an unset variable drops the line.
 	 */
 	private static function resolveTargets(target: String): Array<String> {
 		final out: Array<String> = [];
@@ -295,6 +298,10 @@ final class ParseProf {
 		for (line in sys.io.File.getContent(target).split('\n')) {
 			final path: String = expandEnv(line.trim());
 			if (path == '' || path.startsWith('#')) continue;
+			if (path.startsWith('@')) {
+				for (included in resolveTargets(path.substr(1))) out.push(included);
+				continue;
+			}
 			out.push(path);
 		}
 		return out;
@@ -303,9 +310,9 @@ final class ParseProf {
 	/**
 	 * Substitutes `${NAME}` from the environment in a manifest line, and drops
 	 * the line (empty result) when the variable is unset. The calibrated corpus
-	 * spans two trees and only one of them lives in this repository, so the
-	 * external half is written `${TM_SRC}/...` and simply disappears for anyone
-	 * who has not exported it - a manifest that half-resolves is still a usable
+	 * spans two trees and only one of them lives in this repository, so the external half is written
+	 * `${CLIENT_SRC}/...` (in a manifest the `@${ANYPARSE_BENCH_EXTRA}` line includes) and simply
+	 * disappears for anyone who has not exported both - a manifest that half-resolves is still a usable
 	 * corpus, a manifest that dies on a missing checkout is not.
 	 */
 	private static function expandEnv(line: String): String {

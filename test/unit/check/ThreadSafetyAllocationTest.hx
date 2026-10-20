@@ -8,7 +8,7 @@ import utest.Test;
 /**
  * Receiver flow from `new` (`AllocationSets`): a dispatch on a field every value of which is a `new` the project writes,
  * on the object a `new` builds, or on the running object handed down such a call, runs only the overrides those classes
- * resolve to — TM's `APIRequest2.doRequest` builds its `urlLoader` as a thread or simple loader, never the blocking one.
+ * resolve to — the client's `NetRequest2.doRequest` builds its `urlLoader` as a thread or simple loader, never the blocking one.
  */
 class ThreadSafetyAllocationTest extends Test {
 

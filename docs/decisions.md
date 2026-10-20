@@ -4966,3 +4966,28 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   `AbstractDecl`, `castClauses` null); and its flash branch is a `typedef` to `flash.text.TextFormatAlign`, a std target
   subtree the resolution scope does not hold (`StdResolver.resolutionSpecs`: `*.hx`, `haxe/`, `sys/`), so what the value
   is there cannot be read. A chain whose argument is `a - b` over two `UInt` fields is pruned — branch `feat/fu-FU24`
+
+## FU29 (2026-10-20) — no downstream project's names in this repository; the list that guards it lives outside
+
+- **This repository is public, and the projects it is measured on are not.** Nothing committed here (docs, decisions,
+  comments, tests, fixtures, tools, commit messages) names a downstream project or its code: no project name, no path
+  into its tree, no type / file / member name taken from it, no code quoted from it. A finding is described by its SHAPE
+  with neutral names, and a corpus effect as counts on "a client corpus". The details belong in private notes.
+- **Fixtures were renamed, never reshaped.** Every name that came from a client corpus was replaced by a neutral one of
+  the SAME LENGTH, so a width-, column- or order-sensitive fixture proves what it proved before (identical structure,
+  identical assertions, the suite's test and assertion counts unchanged). Two renames had to respect more than length:
+  an import-order fixture needs the new names to sort as the old ones did, and a parameter-naming fix derives its
+  expected name from the type, so the field name follows the type's rename. Generic vocabulary a client also happens
+  to use (`Main`, `Node`, `Grid`, `Store`, `Label`, `items`, ...) is anyparse's own and stays.
+- **One scrub, three uses.** The scrub is a git-filter-repo `--replace-text` map applied to the tree with filter-repo's
+  own semantics (literals first, then regexes, in file order; binary files skipped), so the same file rewrites the
+  unpublished history and reproduces this tree. It lives OUTSIDE the repository — a list of the names to keep out would
+  publish them — and is what `tools/scrub-guard.py` reads (`--list` or `ANYPARSE_SCRUB_LIST`): the tree, or with
+  `--range A..B` the lines a range adds and its commit messages; matches are reported by rule number, never by text.
+  `tools/hooks/pre-push-scrub.sh` runs it over what a push would publish. With no list configured both pass and say so,
+  so a clone without the private list is not blocked.
+- **A private corpus is named by the environment, never by the repository.** `tools/battery.sh` lints a second tree only
+  when `--client <tree>` or `ANYPARSE_CLIENT_TREE` names it (it used to default to a path on one machine);
+  `tools/bench-corpus.txt` includes its calibrated other half through `@${ANYPARSE_BENCH_EXTRA}`, a manifest kept outside
+  the repository (`tools/ParseProf.hx` learned `@<manifest>` include lines for it). Blast-cache baselines written under the
+  old file names are not read under the new `*-client.json` ones; a first run after this re-snapshots.

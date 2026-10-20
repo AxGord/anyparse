@@ -54,13 +54,13 @@ using StringTools;
  *
  * ```
  * for (o in sel) if (isLineTool(o.data.type)) {
- *     final tool:LineToolBase = cast o;
- *     final cmd:Command = new ChangeArrowStrokeCommand(tool, stroke);
+ *     final tool:PathToolBase = cast o;
+ *     final cmd:Command = new ChangeShapeStrokeCommand(tool, stroke);
  *     commands.push(cmd);
  * }
  * ```
  *
- * becomes `[for (o in sel) if (isLineTool(o.data.type)) new ChangeArrowStrokeCommand((cast o : LineToolBase), stroke)]`.
+ * becomes `[for (o in sel) if (isLineTool(o.data.type)) new ChangeShapeStrokeCommand((cast o : PathToolBase), stroke)]`.
  *
  * The inlining is EVALUATION-ORDER PRESERVING because each link is used exactly
  * once; that use lies in a LATER sibling statement than the declaration (so the
@@ -73,7 +73,7 @@ using StringTools;
  * `final a = f(); final b = g();` would run `g` before `f` and is refused.
  *
  * An inlined initializer keeps its declaration's type annotation as an ASCRIPTION
- * (`(cast o : LineToolBase)`) unless the boundary provably restates it. The
+ * (`(cast o : PathToolBase)`) unless the boundary provably restates it. The
  * annotation can be what TYPES the initializer — an unchecked `cast e` takes its
  * result type from the CONTEXT, `final d:Dynamic = x` widens, and
  * `final m:Map<String, Int> = new Map()` binds the type parameters — so dropping it

@@ -333,10 +333,10 @@ class LoopGuardCheckTest extends Test {
 
 	public function testHeaderIfCanaryShapeMerged(): Void {
 		final sig: String = 'os:Array<Obj>, allowedType:Bool, name:String';
-		final input: String = 'for (o in os) if (!o.locked) {\n\t\t\tif (o is PlayerBase && !(allowedType && name == o.type)) continue;\n'
+		final input: String = 'for (o in os) if (!o.locked) {\n\t\t\tif (o is SpriteBase && !(allowedType && name == o.type)) continue;\n'
 			+ '\t\t\ttrace(o);\n\t\t}';
 		final merged: String =
-			'for (o in os) if (!o.locked && (!(o is PlayerBase) || allowedType && name == o.type)) {\n\t\t\ttrace(o);\n\t\t}';
+			'for (o in os) if (!o.locked && (!(o is SpriteBase) || allowedType && name == o.type)) {\n\t\t\ttrace(o);\n\t\t}';
 		Assert.equals(wrapIn(sig, merged), applyFix(wrapIn(sig, input)));
 	}
 

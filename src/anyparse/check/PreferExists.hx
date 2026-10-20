@@ -44,7 +44,7 @@ import anyparse.runtime.Span;
  * static extension — so on a `Map` receiver the rewrite resolves to the key lookup and does not
  * compile (a lambda where a key is expected). The receiver's type is exactly what a structural
  * check cannot see, and a measured site over a real application iterates a
- * `Null<Map<Int, ObjectFrameData>>`, so this is a live hazard rather than a hypothetical. As a
+ * `Null<Map<Int, ObjectFrameInfo>>`, so this is a live hazard rather than a hypothetical. As a
  * `RiskyFix` the edit is applied speculatively and REVERTED when it breaks the build, and with
  * no compiler oracle configured the check is report-only. It is a `GroupedFix` for the same
  * reason: reverting the rewrite while keeping the `using Lambda;` the fix inserted would leave a

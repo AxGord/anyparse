@@ -136,7 +136,7 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	}
 
 	/**
-	 * The TM fixture sits inside `#if sys`, where the declaration and the `try` are children of
+	 * The client fixture sits inside `#if sys`, where the declaration and the `try` are children of
 	 * a conditional node rather than of a block — invisible to a plain-tree adjacency scan.
 	 */
 	public function testDeclPairInsideConditionalFixed(): Void {

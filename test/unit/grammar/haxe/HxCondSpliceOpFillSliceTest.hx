@@ -13,12 +13,12 @@ import utest.Test;
  * `opBeforeNewline`, and the gaps before `#end` and before the tail read their
  * own `BeforeNewline` slots. Every one of those is a hardline when the source
  * had a newline there and a space when it did not, so the SAME tree laid out
- * as many different ways as the source could spell it. On the TM site (`src/crashdumper/SystemData.hx`),
+ * as many different ways as the source could spell it. On the client site (`src/crashreport/HostReport.hx`),
  * over every legal whitespace spelling of one expression, the pre-slice writer produced almost as many
  * distinct outputs, including a line far past the limit from a source written flat — the width limit
  * was not enforced inside the region at all, because there was no decision to
- * enforce it with. The two TM sites that carry this shape
- * (`crashdumper/SystemData.hx`, `crashdumper/CrashDumper.hx`) disagreed with
+ * enforce it with. The two client sites that carry this shape
+ * (`crashreport/HostReport.hx`, `crashreport/CrashReport.hx`) disagreed with
  * each other for exactly this reason.
  *
  * THE POLICY. The rule assembles its fields as one run — condition, operand
@@ -42,14 +42,14 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCondSpliceOpFillSliceTest extends Test {
 
-	/** TM's own `hxformat.json` shape for the two sites this slice moves. */
+	/** the client's own `hxformat.json` shape for the two sites this slice moves. */
 	private static final CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4},'
 		+ '"wrapping":{"maxLineLength":140,"opAddSubChain":{"defaultWrap":"noWrap",'
 		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
 		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]}}}';
 
-	/** TM `src/crashdumper/SystemData.hx:135-140`, canonical. */
-	private static final SYSTEM_DATA: String = 'class C {\n\tpublic function toString():String {\n\t\treturn \'SystemData\\n{$${endl()}  '
+	/** client `src/crashreport/HostReport.hx:135-140`, canonical. */
+	private static final SYSTEM_DATA: String = 'class C {\n\tpublic function toString():String {\n\t\treturn \'HostReport\\n{$${endl()}  '
 		+ 'os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: $$osVersion\\n\'\n\t\t\t+ #if flash \'  playerType: \' + '
 		+ 'playerType + \'\\n\' + \'  playerVersion: \' + playerVersion + \'\\n\' + #end\n\t\t\t\'  totalMemory: '
 		+ '$${toGBStr(totalMemory)}\\n  cpuName: $$cpuName\\n  gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}';
@@ -62,28 +62,28 @@ final class HxCondSpliceOpFillSliceTest extends Test {
 	 * Every legal whitespace spelling of one region reaches one output. The
 	 * variants are the ones a human actually writes: the operator before
 	 * `#if` on either line, a break after the condition, a break mid-term
-	 * (between an operand and the operator that closes it — the shape TM's
+	 * (between an operand and the operator that closes it — the shape the client's
 	 * own source carries), a break before `#end`, and everything flat.
 	 */
 	public function testEveryLegalSpellingReachesOneOutput(): Void {
 		final spellings: Array<String> = [
 			SYSTEM_DATA,
-			// TM's source form: the run split mid-term at `+ '\n' + #end`.
-			'class C {\n\tpublic function toString():String {\n\t\treturn \'SystemData\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  '
+			// the client's source form: the run split mid-term at `+ '\n' + #end`.
+			'class C {\n\tpublic function toString():String {\n\t\treturn \'HostReport\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  '
 				+ 'osName: $$osName\\n  osVersion: $$osVersion\\n\'\n\t\t\t+ #if flash \'  playerType: \' + playerType + \'\\n\' + \'  '
 				+ 'playerVersion: \' + playerVersion\n\t\t\t+ \'\\n\' + #end\n\t\t\t\'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: '
 				+ '$$cpuName\\n  gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}',
 			// The operator on its own line, the condition alone on the next,
 			// and the run's trailing operator left dangling before `#end`.
 			'class C {\n\tpublic function toString():String {\n'
-				+ '\t\treturn \'SystemData\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: '
+				+ '\t\treturn \'HostReport\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: '
 				+ '$$osVersion\\n\'\n\t\t\t+\n\t\t\t#if flash\n\t\t\t\'  playerType: \' + playerType + \'\\n\' + \'  playerVersion: \' + '
 				+ 'playerVersion + \'\\n\' +\n\t\t\t#end\n\t\t\t\'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: $$cpuName\\n  '
 				+ 'gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}',
 			// The whole statement on ONE source line. Pre-slice this produced
 			// a 238-column output line: no break point existed inside the
 			// region, so the width limit had nothing to act on.
-			'class C {\n\tpublic function toString():String {\n\t\treturn \'SystemData\\n{$${endl()}  os: $$os\\n  osRaw: '
+			'class C {\n\tpublic function toString():String {\n\t\treturn \'HostReport\\n{$${endl()}  os: $$os\\n  osRaw: '
 				+ '$$osRaw\\n  osName: $$osName\\n  osVersion: $$osVersion\\n\' + #if flash \'  playerType: \' + playerType + \'\\n\' + '
 				+ '\'  playerVersion: \' + playerVersion + \'\\n\' + #end \'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: '
 				+ '$$cpuName\\n  gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}'

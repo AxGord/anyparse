@@ -9,8 +9,8 @@ using Lambda;
 
 /**
  * `boundedRepeats` / `repeatBudgetMs` (`BoundedRepeats`): a repetition an entry bounds — `max` turns, `costMs` each,
- * `max × costMs` under the budget — runs as once, so the short sinks it repeats stay short; anything else repeats (TM's
- * `StandardFileSystem.listFolder`: 414 children at most, two indexed SELECTs each).
+ * `max × costMs` under the budget — runs as once, so the short sinks it repeats stay short; anything else repeats (the client's
+ * `StandardDiskSystem.listFolder`: 414 children at most, two indexed SELECTs each).
  */
 class ThreadSafetyBoundedRepeatsTest extends Test {
 

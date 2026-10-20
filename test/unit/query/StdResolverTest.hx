@@ -146,8 +146,8 @@ class StdResolverTest extends Test {
 	 */
 	public function testIsStdFileRejectsANonStdRoot(): Void {
 		#if (sys || nodejs)
-		final fixture: String = CliFixture.writeDir('notstd', [{ name: 'CrashDumper.hx', source: 'class CrashDumper {}' }]);
-		final answer: Bool = stdFileUnder(fixture, 'CrashDumper.hx');
+		final fixture: String = CliFixture.writeDir('notstd', [{ name: 'CrashReport.hx', source: 'class CrashReport {}' }]);
+		final answer: Bool = stdFileUnder(fixture, 'CrashReport.hx');
 		CliFixture.removeDir(fixture);
 		Assert.isFalse(answer, 'a root without the std marker attributes nothing');
 		#else
