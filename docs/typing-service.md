@@ -219,7 +219,7 @@ argument leaves at the call's range with no inline site recorded (now reached by
   after; anyparse 56 / 29 → 0 / 8, a client corpus 200 / 121 → 2 / 1, Pony 95 / 111 → 3 / 8; MATCH counts within
   0.2 % of before on anyparse and the client corpus, Pony −2.2 % (ranges whose facts held an inlined body's code now
   decline).
-- **T5 — overloads (done, FU25 S1).** The index records each function's signatures (`MemberInfo.signatures`: its own, then
+- **T5 — overloads (steps 1–3 done, FU25).** The index records each function's signatures (`MemberInfo.signatures`: its own, then
   each `@:overload` annotation's function in written order; the return types read off the span info,
   `SpanTypeInfo.returnTypeSources`, never a type parameter's bound beside them). `CallSelection` (`index.typing.calls`,
   `callUnification.ml`): whether a call compiles against a signature is the compiler's greedy path over `Unification.casts`
@@ -236,19 +236,23 @@ argument leaves at the call's range with no inline site recorded (now reached by
   position), `OperandCallees` (a lambda typed by the signature the arguments' count selects). Measured (source / nominal
   DIFFERENT; UNKNOWN share): upstream 0 / 0 before and after (69.4 / 68.2 %); anyparse 0 / 8 → 3 / 3 (44.0 / 33.7 → 34.4 /
   33.7 %), a client corpus 2 / 1 → 2 / 1 (35.8 / 23.0 → 28.2 / 22.7 %), Pony 3 / 8 → 3 / 4 (33.3 / 26.4 → 27.9 / 26.2 %).
-  Step 2, method type parameters (FU25 S2): a parameter written as the signature's type parameter takes any value or,
-  bounded, one unifying with its bounds (`CallSignature.typeParamConstraints`), and the call's return names the type the
-  arguments bind it to (`TypeEnd.Param`; a declaration by its module path); Unknown for two bindings not known to be
-  one, an untyped or a `Null<…>` argument; `MemberInfo.returnSource` is read off the span info, never a bound. Measured:
-  tables unchanged but MATCH (source, client corpus +28).
-  Step 3, generic abstracts (FU25 S3): a generic abstract written with type arguments, or aliased by a plain `typedef`
-  with them, is an end of its own (`TypeEnd.Applied`) whose clauses read the arguments for its type parameters
-  (`AbstractCasts.appliedGraph`; invariant otherwise). Measured: tables and MATCH counts unchanged on all four trees.
   The `@:overload` families are MATCH (`readFileSync` 5, `Socket.on` 4 — the latter the superclass-first walk, not an
   overload); anyparse's three new source DIFFERENT are the inlined-default-argument facts family the nominal currency
   already showed. MATCH lost: one (an object-literal argument, typed by the expected type); gained: source 49032 /
   7376 / 603, nominal 25 / 213 / 24 (anyparse / client / Pony); the all-rules lint of four trees and the thread-safety
   scores byte-identical.
+  Step 2, method type parameters (FU25 S2): a parameter written as the signature's type parameter takes any value or,
+  bounded, one unifying with its bounds (`CallSignature.typeParamConstraints`), and the call's return names the type the
+  arguments bind it to (`TypeEnd.Param`; a declaration by its module path); Unknown for two bindings not known to be
+  one, an untyped or a `Null<…>` argument; `MemberInfo.returnSource` is read off the span info, never a bound. Measured:
+  tables unchanged, source MATCH +28 on the client corpus (+1 anyparse).
+  Step 3, generic abstracts (FU25 S3): a generic abstract written with type arguments, or aliased by a plain `typedef`
+  with them, is an end of its own (`TypeEnd.Applied`) whose clauses read the arguments for its type parameters
+  (`AbstractCasts.appliedGraph`; invariant otherwise). Measured: tables and MATCH counts unchanged on all four trees.
+  Not done (step 4, typing by the declared builds): an `#if` branch every declared build leaves dead is still read, so
+  a declaration whose dead branch is another kind (an abstract in one build, a `typedef` to a target type in another)
+  answers nothing; the builds' liveness exists only in a run that compiles them (`ReachLiveness`, `--no-oracle` reads
+  none), and the index keeps no cast clauses for a declaration one branch of which is no abstract.
 
 Each step lands as a table in `QueryCache` with its consumers moved onto it, and is measured on the harness: a step
 may lower an area's UNKNOWN share and may turn a DIFFERENT into a MATCH or an UNKNOWN, and must add no DIFFERENT.

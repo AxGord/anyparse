@@ -5125,3 +5125,14 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   `from Float` (probed: `g(1)` keeps the own signature). An applied abstract is itself applied ALIKE only — its type
   parameters are invariant (`Box<String>` to `Box<Int>`: "String should be Int", probed). An alias re-entering itself
   stands for no end — branch `feat/fu-FU25`
+- **Typing by the declared builds (T5 step 4) is NOT done, and why.** An `#if` branch every shipped build leaves dead
+  could be dropped when a split declaration is typed (a library enum abstract whose other branch is a `typedef` to a
+  target std type the resolution scope does not hold — the shape of `openfl.text.TextFormatAlign`). Two facts stand in
+  the way. The liveness of a branch across the builds is known only from their compiler facts (`ReachLiveness` over
+  `ReachBuilds`: `everDefined` is what makes a define's ABSENCE evidence, a define list alone being positive-only), so it
+  exists in a run that compiles them and in none under `--no-oracle`; and the index keeps no cast clauses or per-branch
+  members for a declaration one branch of which is no abstract (`TypeDeclInfo.castClauses` null), so there is no branch
+  record to drop. The split header `#if (haxe_ver >= 4.0) enum #else @:enum #end abstract` is a third, independent of
+  any build: every alternative writes the same enum abstract, which `castClausesOf` refuses because the name node is not
+  the declaration node — branch `feat/fu-FU25`
+
