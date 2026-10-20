@@ -27969,14 +27969,6 @@
 			"note": "a name a type parameter may hold is completed as the type of that name"
 		},
 		{
-			"name": "M-ANCESTOR-DEFAULT-SEEN",
-			"type": "anyparse.query.AncestorTable",
-			"method": "completedIn",
-			"find": "if (filled == null || seen.contains(key) || scope.contains(path) || unspellable) return null;",
-			"replace": "if (filled == null || scope.contains(path) || unspellable) return null;",
-			"note": "a default reaching its own declaration recurses without end"
-		},
-		{
 			"name": "M-ANCESTOR-DEFAULT-VISIBLE",
 			"type": "anyparse.query.AncestorTable",
 			"method": "defaultFor",

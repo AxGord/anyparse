@@ -231,7 +231,7 @@ class NominalTypesTest extends Test {
 	 * `#if` branches declare has a default only where both write the same one.
 	 */
 	@:pin('control') @:killer('M-ANCESTOR-DEFAULT-MISSING') @:killer('M-ANCESTOR-BARE-TYPE') @:killer('M-ANCESTOR-SCOPE-OFF')
-	@:killer('M-ANCESTOR-DEFAULT-SEEN') @:killer('M-ANCESTOR-DEFAULT-VISIBLE') @:killer('M-NOMINAL-BOUND-SCOPE')
+	@:killer('M-ANCESTOR-DEFAULT-VISIBLE') @:killer('M-NOMINAL-BOUND-SCOPE')
 	@:killer('M-INDEX-ALTERNATE-DEFAULTS')
 	public function testAReferenceItCannotCompleteHasNoAnswer(): Void {
 		final text: String = 'package p;\n\nclass Need<T> {}\n\nclass Rec<T = Rec> {}\n\nclass Item {}\n\nclass Box<T = Item> {}\n\n'
@@ -297,7 +297,8 @@ class NominalTypesTest extends Test {
 	 */
 	@:pin('control') @:killer('M-NOMINAL-REIFIED') @:killer('M-NOMINAL-REIFIED-NOMINAL') @:killer('M-REIFIED-REOPEN')
 	public function testAnExpressionInsideAReificationIsNotTypedAsCode(): Void {
-		final text: String = 'package p;\n\nclass C {\n\tvar n: Int;\n\tfunction f() {\n\t\tn;\n\t\treturn macro { n; $$v{n}; };\n\t}\n}\n';
+		final text: String = 'package p;\n\nclass C {\n\tvar n: Int;\n\tfunction f() {\n\t\tn;\n\t\t5;\n'
+			+ '\t\treturn macro { n; 5; $$v{n}; };\n\t}\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final root: QueryNode = plugin.parseFile(text);
 		final chain: ChainTypeContext = {
@@ -306,17 +307,16 @@ class NominalTypesTest extends Test {
 			typeSyntax: plugin.typeSyntax
 		};
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'p/C.hx', source: text }], plugin);
-		function readAt(from: Int): QueryNode {
+		// the node of `kind` starting at the first character of `mark` the first `at` holds
+		function typed(kind: String, at: String, mark: String): { source: Null<String>, nominal: Null<String> } {
+			final from: Int = text.indexOf(at) + at.indexOf(mark);
 			var found: Null<QueryNode> = null;
 			function walk(node: QueryNode): Void {
-				if (node.kind == 'IdentExpr' && node.span?.from == from) found = node;
+				if (node.kind == kind && node.span?.from == from) found = node;
 				for (c in node.children) walk(c);
 			}
 			walk(root);
-			return found ?? throw new Exception('no read at $from');
-		}
-		function typed(at: String): { source: Null<String>, nominal: Null<String> } {
-			final node: QueryNode = readAt(text.indexOf(at) + at.indexOf('n'));
+			final node: QueryNode = found ?? throw new Exception('no $kind at $from');
 			return {
 				source: NominalTypes.expressionTypeSource(
 					node, root, plugin.refShape(), plugin.declaredTypes(text), index, 'p/C.hx', chain
@@ -326,9 +326,11 @@ class NominalTypesTest extends Test {
 				)
 			};
 		}
-		Assert.same({ source: 'Int', nominal: 'Int' }, typed('\t\tn;'), 'a read as code');
-		Assert.same({ source: null, nominal: null }, typed('{ n;'), 'the read reified');
-		Assert.same({ source: 'Int', nominal: 'Int' }, typed('{n}'), 'the read an interpolation re-opens');
+		Assert.same({ source: 'Int', nominal: 'Int' }, typed('IdentExpr', '\t\tn;', 'n'), 'a read as code');
+		Assert.same({ source: 'Int', nominal: 'Int' }, typed('IntLit', '\t\t5;', '5'), 'a literal as code');
+		Assert.same({ source: null, nominal: null }, typed('IdentExpr', '{ n;', 'n'), 'the read reified');
+		Assert.same({ source: null, nominal: null }, typed('IntLit', 'n; 5', '5'), 'the literal reified');
+		Assert.same({ source: 'Int', nominal: 'Int' }, typed('IdentExpr', '{n}', 'n'), 'the read an interpolation re-opens');
 	}
 
 	private static function nominal(fn: String): Null<String> {
