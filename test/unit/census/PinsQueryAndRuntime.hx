@@ -1194,6 +1194,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.NominalTypesTest#testAReferenceItCannotCompleteHasNoAnswer :: control :: M-ANCESTOR-DEFAULT-MISSING,M-ANCESTOR-BARE-TYPE,M-ANCESTOR-SCOPE-OFF,M-ANCESTOR-DEFAULT-SEEN,M-ANCESTOR-DEFAULT-VISIBLE,M-NOMINAL-BOUND-SCOPE,M-INDEX-ALTERNATE-DEFAULTS',
 		'unit.query.NominalTypesTest#testAReferenceLeavingArgumentsOutNamesTheirDefaults :: control :: M-ANCESTOR-DEFAULT-FILL,M-ANCESTOR-COMPLETE-OFF,M-ANCESTOR-LINK-DEFAULTS,M-MEMBER-READ-COMPLETE,M-NOMINAL-BOUND-COMPLETE,M-NOMINAL-RETURN-COMPLETE,M-INDEX-PARAM-DEFAULTS',
 		'unit.query.NominalTypesTest#testATypeParameterReturnOrAnUnreadableTypeHasNoAnswer :: control :: M-NOMINAL-RETURN-PARAM-NAME,M-NOMINAL-UNREADABLE-WRITTEN',
+		'unit.query.NominalTypesTest#testAnExpressionInsideAReificationIsNotTypedAsCode :: control :: M-NOMINAL-REIFIED,M-NOMINAL-REIFIED-NOMINAL,M-REIFIED-REOPEN',
 		'unit.query.NominalTypesTest#testAnInheritedMemberReadsThroughItsChainsArguments :: control :: M-ANCESTOR-ARGS-OFF,M-MEMBER-READ-HOST-ARGS,M-NOMINAL-SELF-PARAMS',
 		'unit.query.NominalTypesTest#testAnOptionalParameterReadsAsNullable :: control :: M-NOMINAL-OPTIONAL-PARAM',
 		'unit.query.NominalTypesTest#testAnOptionalStructureFieldReadsAsNullable :: control :: M-MEMBER-OPTIONAL-READ,M-INDEX-OPTIONAL-FIELD',

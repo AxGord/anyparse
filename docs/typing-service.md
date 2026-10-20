@@ -101,14 +101,14 @@ written-source currency leaves out the implicit `Null<>` of an optional declarat
 a callee's own type parameter reaches a call's answer unsubstituted (`T`), an expression inside a `macro` reification
 is typed as code rather than as the `Expr` it is, and the reference walk binds a name a reification pattern captures
 (`case macro $i{foo}:`) to the member of that name. T2 closed the first two (below). FU28 measured the kinds left
-after it and closed four: a reference leaving out arguments its declaration gives defaults (`class Box<T = Void>` written
+after it and closed five: a reference leaving out arguments its declaration gives defaults (`class Box<T = Void>` written
 `Box` — not a typedef alias, as first attributed), a bare call of a local function typed by the member it shadows, the
-package-blind member walk answering a member written with its type's parameter unsubstituted, and — on the facts side —
-ranges whose facts were not the text's own (the `this` an abstract's inlined accessor is handed, at the member's name;
-the code of an inlined body at the call's range; FU28 below). Left, by size: an expression
-inside a `macro` reification typed as code, `@:overload` returns (T5), the compiler's code an inlined call with a default
-argument leaves at the call's range with no inline site recorded, and a `Dynamic`-typed std library member a project
-library declares with a type.
+package-blind member walk answering a member written with its type's parameter unsubstituted, an expression inside a
+reification typed as code (now Unknown), and — on the facts side — ranges whose facts were not the text's own (the
+`this` an abstract's inlined accessor is handed, at the member's name; the code of an inlined body at the call's range;
+FU28 below). Left, by size: `@:overload` returns (T5), the compiler's code an inlined call with a default argument leaves
+at the call's range with no inline site recorded, and a `Dynamic`-typed std library member a project library declares
+with a type.
 
 ## Where T2–T5 plug in
 
@@ -185,17 +185,19 @@ library declares with a type.
   a member's written type in its host's file (`MemberLookup.memberReadType`) and a method's written return
   (`returnSourceOf`); an extends link passes the defaults (`AncestorTable.linkOf`). Unknown where a parameter left out has
   no default (no type the compiler accepts but `Dynamic`), the name may be a type parameter there, a default names a type
-  the reading file does not resolve to the same declaration, or a default reaches its own type. Two typer arcs were made
+  the reading file does not resolve to the same declaration, or a default reaches its own type. Three typer arcs were made
   positive on the way: a bare call `f(x)` is the sibling member's only when `f` binds to a member declaration (a local
-  function shadowing it answers Unknown), and the package-blind member walk answers no member written with a parameter of
-  its type or of the member. On the compiler side, `CompilerFacts.typeOfExpressionAt` answers a range only when every
+  function shadowing it answers Unknown), the package-blind member walk answers no member written with a parameter of
+  its type or of the member, and neither currency types an expression inside a reification
+  (`TypeResolver.reified`: under a `RefShape.opaqueKinds` node with no `interpolationKinds` node between — the walk
+  `Refs` reads `MacroEmit` by). On the compiler side, `CompilerFacts.typeOfExpressionAt` answers a range only when every
   fact typed there is the text's: a local read records the local's name and counts only under it (the `this` an
   abstract's inlined accessor is handed sits at the member's name), a call's receiver only beside a call its own file
   spells at the call's range (an inlined body elsewhere taking the text as its receiver, or the function value a
   memberless call calls), and a local the compiler declares at the range (a `?.` / `??` temporary, an inlined call's
   parameter) only beside a site of the text's own; any other fact there — an inlined body's — makes the range no answer
   instead of the sites left once it is passed over. Measured (source / nominal DIFFERENT): upstream 0 / 0 before and
-  after; anyparse 56 / 29 → 11 / 19, a client corpus 200 / 121 → 2 / 1, Pony 95 / 111 → 3 / 8; MATCH counts within
+  after; anyparse 56 / 29 → 0 / 8, a client corpus 200 / 121 → 2 / 1, Pony 95 / 111 → 3 / 8; MATCH counts within
   0.2 % of before on anyparse and the client corpus, Pony −2.2 % (ranges whose facts held an inlined body's code now
   decline).
 - **T5 — overloads.** Argument types computed once per call site (a body table keyed by the enclosing declaration and the

@@ -431,7 +431,10 @@ final class NominalTypes {
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
 		?chain: ChainTypeContext, asReceiver: Bool = false
 	): Null<String> {
-		return expressionNominalWalk(node, root, shape, declaredTypes, index, file, chain, [], asReceiver);
+		// reified data has the type of the syntax tree it builds, never of its text as code
+		return TypeResolver.reified(node, root, shape)
+			? null
+			: expressionNominalWalk(node, root, shape, declaredTypes, index, file, chain, [], asReceiver);
 	}
 
 	/**
@@ -448,6 +451,8 @@ final class NominalTypes {
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
 		chain: ChainTypeContext
 	): Null<String> {
+		// reified data has the type of the syntax tree it builds, never of its text as code
+		if (TypeResolver.reified(node, root, shape)) return null;
 		final direct: Null<String> = valueTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, []);
 		if (direct != null || index == null || node.kind != shape.callKind || node.children.length == 0) return direct;
 		final callee: QueryNode = node.children[0];

@@ -283,6 +283,47 @@ class NominalTypesTest extends Test {
 		Assert.equals('Int', sourceAmong(text, others, 'probeSize'), 'one written without');
 	}
 
+	/**
+	 * An expression inside a reification (`macro { n; }`) is a value of the syntax tree the program builds, so neither
+	 * currency types it as the code its text spells; an interpolation (`$v{n}`) re-opens the code inside it, and the
+	 * same read outside a reification is typed as ever.
+	 */
+	@:pin('control') @:killer('M-NOMINAL-REIFIED') @:killer('M-NOMINAL-REIFIED-NOMINAL') @:killer('M-REIFIED-REOPEN')
+	public function testAnExpressionInsideAReificationIsNotTypedAsCode(): Void {
+		final text: String = 'package p;\n\nclass C {\n\tvar n: Int;\n\tfunction f() {\n\t\tn;\n\t\treturn macro { n; $$v{n}; };\n\t}\n}\n';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final root: QueryNode = plugin.parseFile(text);
+		final chain: ChainTypeContext = {
+			declaredTypeSources: plugin.declaredTypeSources(text),
+			source: text,
+			typeSyntax: plugin.typeSyntax
+		};
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'p/C.hx', source: text }], plugin);
+		function readAt(from: Int): QueryNode {
+			var found: Null<QueryNode> = null;
+			function walk(node: QueryNode): Void {
+				if (node.kind == 'IdentExpr' && node.span?.from == from) found = node;
+				for (c in node.children) walk(c);
+			}
+			walk(root);
+			return found ?? throw new Exception('no read at $from');
+		}
+		function typed(at: String): { source: Null<String>, nominal: Null<String> } {
+			final node: QueryNode = readAt(text.indexOf(at) + at.indexOf('n'));
+			return {
+				source: NominalTypes.expressionTypeSource(
+					node, root, plugin.refShape(), plugin.declaredTypes(text), index, 'p/C.hx', chain
+				),
+				nominal: NominalTypes.expressionTypeNominal(
+					node, root, plugin.refShape(), plugin.declaredTypes(text), index, 'p/C.hx', chain
+				)
+			};
+		}
+		Assert.same({ source: 'Int', nominal: 'Int' }, typed('\t\tn;'), 'a read as code');
+		Assert.same({ source: null, nominal: null }, typed('{ n;'), 'the read reified');
+		Assert.same({ source: 'Int', nominal: 'Int' }, typed('{n}'), 'the read an interpolation re-opens');
+	}
+
 	private static function nominal(fn: String): Null<String> {
 		final at: Probe = probeIn(SOURCE, fn);
 		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);

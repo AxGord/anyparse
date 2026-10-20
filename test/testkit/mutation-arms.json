@@ -28127,6 +28127,30 @@
 			"find": "final head: Bool = member == null && c.receiverAt?.span.from == c.at.span.from;",
 			"replace": "final head: Bool = false;",
 			"note": "the function value a call naming no member calls is not typed at its own range"
+		},
+		{
+			"name": "M-NOMINAL-REIFIED",
+			"type": "anyparse.query.NominalTypes",
+			"method": "expressionTypeSource",
+			"find": "if (TypeResolver.reified(node, root, shape)) return null;",
+			"replace": "{}",
+			"note": "an expression inside a reification is typed as the code its text spells"
+		},
+		{
+			"name": "M-REIFIED-REOPEN",
+			"type": "anyparse.query.TypeResolver",
+			"method": "reified",
+			"find": "else if (reopening.contains(cur.kind))\n\t\t\t\temit = false;",
+			"replace": "else if (false)\n\t\t\t\temit = false;",
+			"note": "an interpolation does not re-open the code inside it, so `$v{n}` is left untyped"
+		},
+		{
+			"name": "M-NOMINAL-REIFIED-NOMINAL",
+			"type": "anyparse.query.NominalTypes",
+			"method": "expressionTypeNominal",
+			"find": "return TypeResolver.reified(node, root, shape)",
+			"replace": "return false",
+			"note": "an expression inside a reification is given the nominal of the code its text spells"
 		}
 	]
 }

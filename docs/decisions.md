@@ -4938,7 +4938,12 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   (`(A -> B) -> C -> D` is a two-argument function; `(x: A) -> (y: B) -> C` does not parse); and a typedef the index
   cannot follow (one declared in several `#if` branches) whose every compiled typedef of that name aliases the compiler's
   type is UNSCORED in both currencies — the same type in that build, not shown to be in every one — branch `feat/fu-FU28`
-- NOT closed, by size: an expression inside a `macro` reification typed as code (11 / 11 on anyparse); `@:overload`
-  returns (T5; an extern's `readFileSync` overloads, a socket's `on`); an inlined call with a default argument whose
+- an expression inside a reification (`macro { n; }`) was typed as the code its text spells (`Int` for the compiler's
+  `Expr`) → neither currency types a node under a `RefShape.opaqueKinds` node with no `interpolationKinds` node between
+  (`TypeResolver.reified`, the walk `Refs` reads `MacroEmit` by; `$v{n}` re-opens the code inside it). Findings inside a
+  quotation were already dropped centrally (`ReificationScan.withoutQuoted`), so no lint verdict rests on those types —
+  the all-rules lint of the four trees stays byte-identical; anyparse DIFFERENT 11 / 19 → 0 / 8, MATCH unchanged —
+  branch `feat/fu-FU28`
+- NOT closed, by size: `@:overload` returns (T5; an extern's `readFileSync` overloads, a socket's `on`); an inlined call with a default argument whose
   expansion leaves an argument flow at the call's range and no inline site (the facts macro records the inline call at
   the enclosing statement); a std member typed `Dynamic` that a library declares with a type — branch `feat/fu-FU28`

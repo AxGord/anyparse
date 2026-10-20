@@ -107,6 +107,33 @@ final class TypeResolver {
 	}
 
 	/**
+	 * Whether `node` of `tree` is reified data rather than code: it lies strictly inside a reification
+	 * (`RefShape.opaqueKinds`, Haxe `macro …`) with no interpolation (`RefShape.interpolationKinds`, `$v{…}`) between
+	 * it and the nearest one — the walk `Refs` reads `MacroEmit` by. Such an expression is a value of the syntax tree
+	 * the program builds, never of the type its text would have as code. False when `node` is not under `tree`.
+	 */
+	public static function reified(node: QueryNode, tree: QueryNode, shape: RefShape): Bool {
+		final opaque: Array<String> = shape.opaqueKinds ?? [];
+		final span: Null<Span> = node.span;
+		if (opaque.length == 0 || span == null) return false;
+		final reopening: Array<String> = shape.interpolationKinds ?? [];
+		var emit: Bool = false;
+		var cur: QueryNode = tree;
+		while (cur != node) {
+			if (opaque.contains(cur.kind))
+				emit = true
+			else if (reopening.contains(cur.kind))
+				emit = false;
+			final next: Null<QueryNode> = cur.children.find(c ->
+				c == node || (c.span != null && c.span.from <= span.from && span.to <= c.span.to)
+			);
+			if (next == null) return false;
+			cur = next;
+		}
+		return emit;
+	}
+
+	/**
 	 * The innermost type declaration whose text holds the offset `at` — or, given `to`, the whole
 	 * range `at`...`to` — or null outside every one. The walk enters only the nodes that hold it.
 	 */
