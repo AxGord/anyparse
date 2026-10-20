@@ -27949,7 +27949,7 @@
 			"type": "anyparse.query.AncestorTable",
 			"method": "completedIn",
 			"find": "if (decl == null || args.length >= decl.type.typeParamNames.length || decl.type.name == _bareType) continue;",
-			"replace": "continue;",
+			"replace": "if (decl == null || args.length >= 0 || decl.type.name == _bareType) continue;",
 			"note": "no reference is completed, so a written `Box` stays `Box` where the compiler reads `Box<Int>`"
 		},
 		{
