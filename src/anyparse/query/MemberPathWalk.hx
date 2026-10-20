@@ -14,7 +14,7 @@ using Lambda;
  * simple-name walk it replaces — and it fails CLOSED at every hop.
  *
  * Split out of `SymbolIndex`. Each hop's member comes from `MemberLookup` and each hop's type from
- * the index's own reference resolution; the type-argument substitution is the member layer's (`MemberLookup.memberReadType`).
+ * the index's own reference resolution; the type-argument substitution is the member layer's (`MemberLookup.memberRead`).
  */
 @:nullSafety(Strict)
 final class MemberPathWalk {
@@ -63,7 +63,7 @@ final class MemberPathWalk {
 	 * `Box<Item>.payload : T` to `Item`, which is what makes a generic container's element member
 	 * reachable at all — the verbatim `T` resolves to no type.
 	 *
-	 * Each hop is a READ of the member (`MemberLookup.memberReadType`): the declaring type's parameters are bound through the
+	 * Each hop is a READ of the member (`MemberLookup.memberRead`): the declaring type's parameters are bound through the
 	 * receiver's arguments or, for an INHERITED member, through what the extends chain passes up
 	 * (`AncestorTable.argumentsTo`), and an optional structure field reads as its optional-value type; a hop whose type still
 	 * names a parameter nothing binds aborts THIS walk. Null on every unresolved / ambiguous link, exactly like the plain walk.
@@ -88,7 +88,7 @@ final class MemberPathWalk {
 	 *
 	 * `args` is re-seeded at every step from the effective member source, so the substitution
 	 * follows a chain of generic containers (`Array<Box<Item>>` → `Box<Item>` → `Item`). The fail-closed
-	 * rule that ends the walk when a parameter name survives substitution (`memberReadType` answers null) is
+	 * rule that ends the walk when a parameter name survives substitution (`memberRead` answers null) is
 	 * what keeps that sound: without it an unsubstituted `T` would travel forward as if it were a concrete
 	 * argument and could collide with the NEXT type's parameter of the same name, or with a project
 	 * type literally called `T` / `K` / `V`.
@@ -115,7 +115,7 @@ final class MemberPathWalk {
 			if (current == null) return null;
 			final cur: ResolvedType = current;
 			final effective: Null<String> = substitute
-				? _members.memberReadType(cur, memberPath[i], args)
+				? _members.memberRead(cur, memberPath[i], args)?.text
 				: _members.memberTypeSource(cur, memberPath[i]);
 			if (effective == null) return null;
 			// An INTERMEDIATE link is a receiver for the next segment, so a member-transparent
@@ -132,7 +132,7 @@ final class MemberPathWalk {
 		if (current == null) return null;
 		final last: ResolvedType = current;
 		final member: String = memberPath[memberPath.length - 1];
-		return substitute ? _members.memberReadType(last, member, args) : _members.memberTypeSource(last, member);
+		return substitute ? _members.memberRead(last, member, args)?.text : _members.memberTypeSource(last, member);
 	}
 
 }

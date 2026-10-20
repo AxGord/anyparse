@@ -1350,6 +1350,14 @@ typedef RefShape = {
 	@:optional var operatorOverloadMetaName: String;
 
 	/**
+	 * The annotation that lets an operator overload (`operatorOverloadMetaName`) take its two operands in either order — Haxe
+	 * `@:commutative`: when the operands do not fit its parameters as written, the compiler tries them swapped
+	 * (`operators.ml`, `find_abstract_binop_overload`). Unset: `OperatorOverloads` cannot tell whether a candidate whose
+	 * operands do not fit as written is tried swapped, and decides nothing past it.
+	 */
+	@:optional var commutativeOperatorMetaName: String;
+
+	/**
 	 * The annotation NAME that adds a further SIGNATURE to a function (Haxe `@:overload`): a call
 	 * may select that signature, and its return type, instead of the written one. Recorded as
 	 * `SymbolIndex.MemberInfo.hasOverloadMeta`, so a reader of a member's written return type can

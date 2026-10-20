@@ -695,7 +695,7 @@ final class RefactorSupport {
 	 * `SymbolIndex`'s import-aware walk supplies it (`resolveGenericPathFinalMemberTypeSource` over a one-segment member
 	 * path, the enclosing type's own parameters as its arguments), so the extends chain is followed to the SPECIFIC
 	 * supertype each clause names rather than to any same-simple-named type elsewhere in the scope, and an inherited
-	 * member written with a supertype's parameter reads as what the chain passes (`MemberLookup.memberReadType`).
+	 * member written with a supertype's parameter reads as what the chain passes (`MemberLookup.memberRead`).
 	 *
 	 * Null — the caller keeps its conservative branch — whenever: `ident` is not an identifier node;
 	 * it DOES resolve to a value binding; no enclosing type declaration covers it; or the member is
@@ -722,7 +722,7 @@ final class RefactorSupport {
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
 		if (enclosing == null) return null;
 		// read as `this` reads it: the enclosing type's own parameters are its arguments, so an inherited member declared with
-		// a supertype's parameter is read through what the extends chain passes (`MemberLookup.memberReadType`)
+		// a supertype's parameter is read through what the extends chain passes (`MemberLookup.memberRead`)
 		final params: Array<String> = index.refs.findDeclaredType(file, enclosing)?.type.typeParamNames ?? [];
 		final self: String = params.length == 0 ? enclosing : '$enclosing<${params.join(', ')}>';
 		return index.paths.resolveGenericPathFinalMemberTypeSource(file, self, [name]);

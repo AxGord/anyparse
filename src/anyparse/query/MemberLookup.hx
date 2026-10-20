@@ -42,7 +42,7 @@ final class MemberLookup {
 	/** Each declaration's supertype links and alias target, resolved once (`AncestorTable`): what every closure walk follows. */
 	private final _ancestors: AncestorTable;
 
-	/** `GrammarPlugin.typeSyntax` — how `memberReadType` reads and substitutes a member's written type. */
+	/** `GrammarPlugin.typeSyntax` — how `memberRead` reads and substitutes a member's written type. */
 	private final _typeSyntax: TypeSyntaxReader;
 
 	/** The type a read of an optional structure field is wrapped in (`RefShape.optionalValueTypeName`), null for none. */
@@ -119,7 +119,7 @@ final class MemberLookup {
 	 * `supertypesRaw` already carries the bare nominal `B` and the link resolves; and the answer is the
 	 * member's ACCESSOR SHAPE (`hasGetter`), never its TYPE — `public final d:T` is accessor-less
 	 * whatever `T` binds to. Nothing is substituted because nothing needs to be. A consumer that wants the member's
-	 * TYPE as a read carries it asks `memberReadType`, which binds the DECLARING type's parameters through what the
+	 * TYPE as a read carries it asks `memberRead`, which binds the DECLARING type's parameters through what the
 	 * extends chain passes (`AncestorTable.argumentsTo`): `class Base<T> {public final d:T;}` + `class Sub extends
 	 * Base<Int> {}` reads `d` as `Int`. Answering accessor shape rather than type is what makes the inherited arm
 	 * answerable at all.
@@ -524,15 +524,17 @@ final class MemberLookup {
 
 	/**
 	 * The type a READ of `member` carries on a value of `start` whose type arguments are `args` — written in the reader's
-	 * terms, positional to `start`'s type parameters (`start`'s own parameters for a read inside `start` itself). It is the
-	 * written type of the declaration nearest in `start`'s closure (`declaredMember`) with the declaring type's parameters
-	 * bound: to `args` when `start` declares the member, else to what `start`'s supertype chain passes up
-	 * (`AncestorTable.argumentsTo`) read through `args` — `Base<T>.item` read off a `Sub extends Base<Int>` is `Int`, never
-	 * `T`. An optional field of a structure (`?a: T`, `@:optional var b: T`) reads as the language's optional-value type
-	 * (`Null<T>`, 4.3.7; a class or interface field keeps `T`). Null when the member has no written type, or its type names a
-	 * parameter of the declaring type or of the member itself that nothing written here binds: the compiler's answer or none.
+	 * terms, positional to `start`'s type parameters (`start`'s own parameters for a read inside `start` itself) — with the
+	 * declaration writing the member (`MemberReading.host`, in whose file the answer is written, apart from the arguments of
+	 * `args` it substitutes). It is the written type of the declaration nearest in `start`'s closure (`declaredMember`) with
+	 * the declaring type's parameters bound: to `args` when `start` declares the member, else to what `start`'s supertype
+	 * chain passes up (`AncestorTable.argumentsTo`) read through `args` — `Base<T>.item` read off a `Sub extends Base<Int>` is
+	 * `Int`, never `T`. An optional field of a structure (`?a: T`, `@:optional var b: T`) reads as the language's
+	 * optional-value type (`Null<T>`, 4.3.7; a class or interface field keeps `T`). Null when the member has no written type,
+	 * or its type names a parameter of the declaring type or of the member itself that nothing written here binds: the
+	 * compiler's answer or none.
 	 */
-	public function memberReadType(start: ResolvedType, member: String, args: Array<String>): Null<String> {
+	public function memberRead(start: ResolvedType, member: String, args: Array<String>): Null<MemberReading> {
 		final found: Null<DeclaredMember> = declaredMember(start, member);
 		final written: Null<String> = found?.member.typeSource;
 		if (found == null || written == null) return null;
@@ -551,7 +553,11 @@ final class MemberLookup {
 			null
 		else
 			written;
-		return bound == null || !found.member.optional ? bound : NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax);
+		return bound == null ? null : {
+			text: found.member.optional ? NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax) : bound,
+			host: host,
+			member: found.member
+		};
 	}
 
 	/** `declaredMemberClosure` from `start` on a fresh walk, asked once per declaration and member name (`QueryCache.declaredMember`). */
@@ -1018,3 +1024,17 @@ typedef DeclaredMember = {
 	member: MemberInfo,
 	host: ResolvedType
 };
+
+/** What a read of a member carries (`MemberLookup.memberRead`): its type, and the declaration writing the member. */
+typedef MemberReading = {
+
+	/** The type the read carries. */
+	final text: String;
+
+	/** The declaration whose file writes the member (its type parameters substituted by the reader's arguments). */
+	final host: ResolvedType;
+
+	/** The member's record in that declaration. */
+	final member: MemberInfo;
+
+}

@@ -21,7 +21,8 @@ its hosts are functions of their arguments, and every remembered answer is insta
 | `ancestors` (`AncestorTable`) | signature | a declaration's supertype links (each resolved once), its alias target, what its chain passes to an ancestor's type parameters |
 | `casts` (`AbstractCasts`) | signature | the cast graph of each abstract: its `from` / `to` clauses per `#if` branch and its `@:from` / `@:to` members, each resolved once into a `TypeEnd` |
 | `unification` (`Unification`) | signature | whether a value of one type unifies with another (`tUnification.ml`), and whether an argument of one type is accepted where another is expected (`casts`, `abstractCast.ml`) |
-| `members` (`MemberLookup`) | signature | what a named type declares or inherits, with what declared type, return, visibility, accessor shape; the type a READ of a member carries (`memberReadType`) |
+| `operators` (`OperatorOverloads`) | signature | the `@:op` overload an abstract selects for a binary operator over two operand types, and the type it yields (`operators.ml`) |
+| `members` (`MemberLookup`) | signature | what a named type declares or inherits, with what declared type, return, visibility, accessor shape; the type a READ of a member carries and the declaration writing it (`memberRead`) |
 | `structural` (`StructuralTypes`) | signature | unification with an anonymous structure, membership of a builtin structural type (`Iterable`, `Iterator`) |
 | `extensions` (`StaticExtensions`) | body | which static extension `recv.name` binds in a file on a receiver of a declaration (`fields.ml`), and what a file's `using` statements bring |
 | `expectations` (`ExpectedTypes`) | body | the type a value is expected to have where it is written, and through it an untyped lambda parameter's |
@@ -53,7 +54,8 @@ four fresh-walk roots of `MemberLookup`: `lacksMember` (`lacksMemberClosure`), `
 `ancestorLinks` and `aliasTargets` (by `ofType`), `ancestorArguments` and `unifies` (by `ofPair`); and the T3 table `extensionBindings`
 (by `ofUse`), whose answer reads a file's `using` statements and declarations, never a body; and the T4 tables
 `castGraphs` (by `ofType`) and `casts` (by `ofPair`, for two declarations — a pair with a core value type on one side is
-computed each time, it is a few clauses long). `memberReadType` is not a
+computed each time, it is a few clauses long). The T4b overload question (`OperatorOverloads.binaryResult`) is no table:
+it is keyed by two ends and an operator and walks a few members of one declaration. `memberRead` is not a
 table of its own: its key would carry the receiver's written arguments, and it is composed of two cached answers
 (`declaredMember`, `ancestorArguments`) and a substitution. A walk entered with a
 caller's own `seen` set is never cached — its answer depends on what that caller already visited — and neither is a
@@ -109,7 +111,7 @@ inference of a local's type from more than its initializer, and the two reificat
   (`aliasTargets`), and what a chain passes to an ancestor's parameters in the start's terms (`argumentsTo`,
   `ancestorArguments`, `ofPair`; `tUnification.ml` `loop … apply_params`, the first link that reaches it). Every
   closure walk of `MemberLookup` follows `links` / `aliasTarget` instead of resolving each link again. On it,
-  `MemberLookup.memberReadType`: the type a READ of a member carries — the declaring type's parameters bound through the
+  `MemberLookup.memberRead` (named `memberReadType` before T4b): the type a READ of a member carries — the declaring type's parameters bound through the
   receiver's arguments or the chain, an optional structure field (`MemberInfo.optional`) as `Null<T>`; the index host
   wraps an optional parameter the same way, and a call returning a type parameter has no nominal (inferring what the
   call binds it to is T5). `Unification` (`index.typing.unification`, `unifies`, `ofPair`): `unify` over PLAIN types — a
@@ -165,9 +167,22 @@ inference of a local's type from more than its initializer, and the two reificat
   `StructuralTypes.receiverFitsParameter` (plain unification: an `@:from`-only parameter passes the receiver over, `Any`
   takes every one) and `memberCouldUnify` (a read-only member through `to` clauses), all through `Unification`;
   `TypedEventConstant` reads `castClauses` instead of re-parsing the declaring file. Each arm compiled first on Haxe
-  4.3.7 (`docs/decisions.md`, FU18). Not reached: the call graph's index holds the project and the library bodies but not
-  the std, so `ArgumentTypes` never resolves a std abstract (`UInt`) — that, and arithmetic over an abstract's `@:op`
-  overloads (`UInt - UInt`), is what the client's `RoundedTextField.new` finding still waits for.
+  4.3.7 (`docs/decisions.md`, FU18).
+- **T4b — std types for argument fits, `@:op` results, enum-abstract values (done, FU24).** `ArgumentTypes` resolves
+  every written type in the run's resolution index where it holds the file writing it (`heldFor`: the std and the
+  libraries resolve there; the call graph's own index answers otherwise, and still says which names are core), and a
+  field read — bare, off `this`, a static off its own type — carries the type `MemberLookup.memberRead` answers with
+  the file of the declaration writing it (`MemberReading.host`). `OperatorOverloads` (`index.typing.operators`,
+  `operators.ml`): the overload of a binary operator the left operand's abstract, else the right one's, selects — the
+  first in declaration order whose first parameter EQUALS the left operand's type and whose second the right operand
+  casts to (`Unification.casts`), mirrored on the right, swapped for a `@:commutative` one — every `#if` branch of the
+  abstract agreeing (`CastClauses.span`, `AbstractCasts.branchMembers`); `ArgumentTypes.arithmeticType` asks it past
+  core numbers. `AbstractCasts.holdsUntypedValue`: a value written with no type in every branch of an abstract is an
+  enum-abstract value, of the abstract (`ArgumentTypes.accessType` asks it; the index host's deep walk does not yet).
+  Measured on a client corpus: one false positive loses the call chain whose argument is `a - b` over `UInt` fields; its
+  other chains stay, each passing a value of an enum abstract shaped like `openfl.text.TextFormatAlign`, which stays
+  untyped — its first branch writes `enum` under `#if` (a split header the index reads as no abstract) and its flash
+  branch aliases a std target type the resolution scope does not hold (`flash.text.TextFormatAlign`).
 - **T5 — overloads.** Argument types computed once per call site (a body table keyed by the enclosing declaration and the
   site's offset) and an overload chosen over them; a choice that depends on the expected type answers Unknown.
   Consumers: `OperandCallees.selectsItsSignature`, `ArgumentSlots`.

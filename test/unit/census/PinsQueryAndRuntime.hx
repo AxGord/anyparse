@@ -357,6 +357,10 @@ final class PinsQueryAndRuntime {
 			+ 'M-KEEP-CANON-FALLBACK-UNGUARDED,M-GUARDED-SPLICE-NO-REFUSAL',
 		'unit.query.EditKeepingCanonicalGateTest#testTheFallbackRefusesAnEmptiedSlot :: control :: M-KEEP-CANON-FALLBACK-UNGUARDED',
 		'unit.query.EditKeepingCanonicalGateTest#testTheFallbackStillSplicesAHarmlessEdit :: control :: M-GUARDED-SPLICE-ALWAYS-REFUSES',
+		'unit.query.EnumValueTypeTest#testAValueWrittenWithNoTypeIsOfItsEnumAbstract :: control :: '
+			+ 'M-ENUM-VALUE-UNTYPED,M-ENUM-VALUE-STATIC',
+		'unit.query.EnumValueTypeTest#testEveryBranchMustDeclareTheValue :: control :: '
+			+ 'M-ENUM-VALUE-EVERY-BRANCH,M-ENUM-VALUE-UNREAD-BRANCHES,M-ENUM-VALUE-GUARDED',
 		'unit.query.ExtractConstantToSliceTest#testACasePatternIsRefused :: control :: M-EXTRACT-TO-CASE-PATTERN',
 		'unit.query.ExtractConstantToSliceTest#testALocalInitializerMovesIntoANewModuleOfAnotherPackage :: control :: M-EXTRACT-TO-DECL-TYPE-DROPPED',
 		'unit.query.ExtractConstantToSliceTest#testALocalShadowingTheTypeIsRefused :: control :: M-EXTRACT-TO-SHADOW-UNCHECKED',
@@ -1211,6 +1215,12 @@ final class PinsQueryAndRuntime {
 		'unit.query.OpaqueCondRegionScanTest#testTheNoteNamesTheLineTheRegionAndTheReason :: control :: M-OPAQUE-REGION-NONE',
 		'unit.query.OpaqueCondRegionScanTest#testTheQuoteIsTheGapsAndNotTheNodeSpan :: control :: M-OPAQUE-REGION-NODE-SPAN',
 		'unit.query.OpaqueCondRegionScanTest#testTheSplitTryReportsBothOfItsRegions :: control :: M-OPAQUE-REGION-NONE',
+		'unit.query.OperatorOverloadsTest#testAnOverloadNotDecidedInEveryBuildAnswersNothing :: control :: '
+			+ 'M-OPS-BRANCHES-AGREE,M-OPS-GUARDED,M-OPS-INSTANCE,M-CASTS-BRANCH-MEMBERS,M-OPS-RETURN-OPEN,M-OPS-MAYFIT,M-OPS-OPEN-OPERAND',
+		'unit.query.OperatorOverloadsTest#testTheFirstOverloadTakingTheOperandsBinds :: control :: M-OPS-FIRST-TAKEN,M-OPS-EXACT-EQUAL',
+		'unit.query.OperatorOverloadsTest#testTheLeftOperandsOverloadTypesTheOperation :: control :: M-OPS-LEFT-OFF',
+		'unit.query.OperatorOverloadsTest#testTheRightOperandsOverloadAndACommutativeOne :: control :: '
+			+ 'M-OPS-RIGHT-OFF,M-OPS-COMMUTATIVE-OFF,M-SHAPE-COMMUTATIVE-UNSET',
 		'unit.query.OrphanContinuationTest#testAddElementOfABareElseIsRefused :: control :: M-ORPHAN-GATE-OFF',
 		'unit.query.OrphanContinuationTest#testAnOrphanTheSourceAlreadyHadDoesNotBlockAnEdit :: control :: M-ORPHAN-FLOOR-ZERO',
 		'unit.query.OrphanContinuationTest#testCompilerRejectedShapesAreUnjustified :: control :: '
