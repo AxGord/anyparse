@@ -539,12 +539,11 @@ typedef TypeDeclInfo = {
 	var underlyingRaw: Null<String>;
 
 	/**
-	 * What an abstract declaration's header says about its implicit casts, one record per `#if` branch declaring it (one
-	 * for a declaration written once): the `from` / `to` clauses as written and whether they cast on transitively
-	 * (`CastClauses`). Null for every other kind, and for an abstract one branch of which declares something else (an
-	 * alias, a class) or whose header puts a clause under `#if` — its casts are then not written anywhere this reads.
+	 * Every `#if` branch declaring the type, in source order — one for a declaration written once (`DeclBranch`): its kind,
+	 * its range and, for an abstract, the casts its header writes. What one build of the type declares is one branch; which
+	 * branches a run's builds compile is `BuildBranches`'.
 	 */
-	var castClauses: Null<Array<CastClauses>>;
+	var branches: Array<DeclBranch>;
 
 	/**
 	 * True when the declaration sits inside a `#if` region. The index keeps ONE declaration per name
@@ -561,7 +560,7 @@ typedef TypeDeclInfo = {
 };
 
 /**
- * One `#if` branch of an abstract declaration's header, as its implicit casts read it (`TypeDeclInfo.castClauses`): the
+ * The header of one `#if` branch of an abstract declaration, as its implicit casts read it (`DeclBranch.clauses`): the
  * types its `from` and `to` clauses write, in source order and verbatim, and whether a cast through one of them allows a
  * further abstract cast (`RefShape.transitiveCastTypeMetaNames`) or picks its cast by type arguments
  * (`RefShape.typeSelectedAbstractMetaName`).
@@ -571,12 +570,26 @@ typedef CastClauses = {
 	final to: Array<String>;
 	final transitive: Bool;
 	final typeSelected: Bool;
+}
+
+/**
+ * One `#if` branch declaring a type (`TypeDeclInfo.branches`): what one build of it is.
+ */
+typedef DeclBranch = {
+	/** The declaration kind the branch writes (an abstract in one build, a `typedef` in another). */
+	final kind: String;
 
 	/**
 	 * The range of the branch's whole declaration, its members included: a member of the type (`TypeDeclInfo.members`, the
 	 * union of every branch's) belongs to this branch when its `declFrom` lies inside it.
 	 */
 	final span: Span;
+
+	/**
+	 * The casts the header of an abstract branch writes; null for a branch of any other kind, and for an abstract whose
+	 * header puts a clause under `#if` or is shared by `#if` branches (a split-header region names one branch's head only).
+	 */
+	final clauses: Null<CastClauses>;
 }
 
 /**
@@ -776,7 +789,9 @@ final class SymbolIndex {
 		_typeSyntax = plugin.typeSyntax;
 		refs = new TypeRefIndex(files, skipped, sources, plugin);
 		subtypes = new SubtypeGraph(files, sources, refs);
-		typing = new TypingService(files, refs, subtypes, plugin.typeSyntax, plugin.refShape());
+		typing = new TypingService(
+			files, refs, subtypes, plugin.typeSyntax, plugin.refShape(), new BuildBranches(plugin, file -> sources[file])
+		);
 		paths = new MemberPathWalk(files, refs, typing.members, plugin.typeSyntax);
 		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty);
 		traits = new TypeTraits(files, sources, refs);

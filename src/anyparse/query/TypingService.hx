@@ -23,6 +23,12 @@ final class TypingService {
 	/** Every remembered answer of the service's declaration-keyed questions. */
 	public final cache: QueryCache = new QueryCache();
 
+	/**
+	 * SIGNATURE: which `#if` branches of a declaration some build the run declares compiles (step T6); every branch when the
+	 * run knows none.
+	 */
+	public final builds: BuildBranches;
+
 	/** SIGNATURE: each declaration's supertype links, alias target and the arguments its chain passes to an ancestor. */
 	public final ancestors: AncestorTable;
 
@@ -62,12 +68,17 @@ final class TypingService {
 	/** BODY: the type a value is expected to have where the grammar `shape` writes it (`ExpectedTypes`). */
 	public final expectations: ExpectedTypes;
 
-	/** Built by the owning `SymbolIndex` over its immutable declaration tables and its grammar's `shape`. */
+	/**
+	 * Built by the owning `SymbolIndex` over its immutable declaration tables, its grammar's `shape` and which branches the
+	 * run's builds compile (`builds`).
+	 */
 	public function new(
-		files: Array<FileInfo>, refs: TypeRefIndex, subtypes: SubtypeGraph, typeSyntax: TypeSyntaxReader, shape: RefShape
+		files: Array<FileInfo>, refs: TypeRefIndex, subtypes: SubtypeGraph, typeSyntax: TypeSyntaxReader, shape: RefShape,
+		builds: BuildBranches
 	) {
+		this.builds = builds;
 		ancestors = new AncestorTable(refs, cache, typeSyntax, shape.rawDynamicTypeName);
-		casts = new AbstractCasts(refs, ancestors, cache, typeSyntax, shape);
+		casts = new AbstractCasts(refs, ancestors, cache, typeSyntax, shape, builds);
 		unification = new Unification(ancestors, cache, refs, casts, shape);
 		operators = new OperatorOverloads(casts, unification, shape);
 		members = new MemberLookup(refs, cache, ancestors, typeSyntax, shape.optionalValueTypeName);

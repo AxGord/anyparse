@@ -7,6 +7,7 @@ import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionSources;
 import anyparse.query.CallGraph;
 import anyparse.query.ReachLiveness.ReachBuilds;
+import anyparse.query.ReachLiveness.ReachConfiguration;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -37,30 +38,43 @@ final class QueryTestHelpers {
 	 * project, `library` the read-only rest of the resolution scope. What a `lint` run over a project
 	 * with `resolutionRoots` hands its checks; `allRootsMatched` false stands for a run where some
 	 * declared root matched nothing. `classpathComplete` stands for a run whose oracle list is declared complete: one
-	 * build that defines nothing and compiles exactly the project and `library`, every type they declare typed.
+	 * build that defines nothing and compiles exactly the project and `library`, every type they declare typed — or, given
+	 * `defines`, one such build per entry, which sets those defines.
 	 */
 	public static function projectPlugin(
 		project: Array<{ file: String, source: String }>, ?library: Array<{ file: String, source: String }>, allRootsMatched: Bool = true,
-		classpathComplete: Bool = true
+		classpathComplete: Bool = true, ?defines: Array<ReachConfiguration>
 	): CachingGrammarPlugin {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final libraryFiles: Array<{ file: String, source: String }> = library ?? [];
 		final cwd: String = Sys.getCwd();
+		final declared: Array<ReachConfiguration> = defines ?? [
+			{
+				name: 'complete',
+				defined: [],
+				everDefined: [],
+				values: [],
+				compiled: [],
+				types: []
+			}
+		];
 		function builds(): ReachBuilds {
 			final all: Array<{ file: String, source: String }> = project.concat(libraryFiles);
 			final index: SymbolIndex = CheckFixture.index(all, new HaxeQueryPlugin());
 			final types: Array<{ name: String, file: String }> = [];
 			for (fi in index.allFiles()) for (t in fi.types) types.push({ name: t.name, file: OracleCoverage.canonical(cwd, fi.file) });
+			final compiled: Array<String> = [for (f in all) OracleCoverage.canonical(cwd, f.file)];
 			return {
 				configurations: [
-					{
-						name: 'complete',
-						defined: [],
-						everDefined: [],
-						values: [],
-						compiled: [for (f in all) OracleCoverage.canonical(cwd, f.file)],
-						types: types
-					}
+					for (c in declared)
+						{
+							name: c.name,
+							defined: c.defined,
+							everDefined: c.everDefined,
+							values: c.values,
+							compiled: compiled,
+							types: types
+						}
 				],
 				library: libraryFiles
 			};
@@ -73,7 +87,9 @@ final class QueryTestHelpers {
 			rootsAllMatched: allRootsMatched
 		};
 		plugin.setResolutionScope(
-			classpathComplete ? { declared: true, sources: sources, builds: builds } : { declared: true, sources: sources }
+			classpathComplete || defines != null
+				? { declared: true, sources: sources, builds: builds }
+				: { declared: true, sources: sources }
 		);
 		return plugin;
 	}

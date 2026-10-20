@@ -614,6 +614,7 @@ final class PinsCheckPToZ {
 			+ 'M-ARGTYPE-RESOLUTION-OFF',
 		'unit.check.ThreadSafetyConditionsTest#testAnArgumentTypedByArithmeticBindsItsOwnParameter :: control :: M-WALK-ARITHMETIC-OFF,M-ARGTYPE-STATIC-OFF',
 		'unit.check.ThreadSafetyConditionsTest#testAnEnumAbstractValueIsOfItsAbstract :: control :: M-ENUM-VALUE-OFF',
+		'unit.check.ThreadSafetyConditionsTest#testAnEnumAbstractValueIsOfItsAbstractInEveryDeclaredBuild :: control :: M-BUILDS-FILTER-OFF',
 		'unit.check.ThreadSafetyConditionsTest#testAnInheritedConstructorTakesTheArgumentsOfItsSupertypes :: control :: M-TS-NEW-UNBOUND',
 		'unit.check.ThreadSafetyConditionsTest#testAnOmittedArgumentTakesItsBoolDefault :: control :: M-TS-DEFAULT-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testAnOmittedOptionalParameterIsNull :: control :: M-TS-NULL-PARAM-UNREAD',
