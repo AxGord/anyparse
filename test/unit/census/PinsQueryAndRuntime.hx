@@ -957,6 +957,7 @@ final class PinsQueryAndRuntime {
 			+ 'M-REACH-IMPORT-ALIAS,M-REACH-IMPORT-ALIAS-SELF',
 		'unit.query.MemberReachTest#testAStaticImportedUnderItsOwnNameIsTouched :: guard :: ',
 		'unit.query.MemberReachTest#testAStructureFunctionFieldBringsOnlyWhatItsTextSpells :: control :: M-REACH-INFERRED-ANON-METHOD',
+		'unit.query.MemberReachTest#testATypeReExportedUnderItsOwnNameStillHasOneDeclarationSite :: control :: M-REACH-SITE-SELF-ALIAS',
 		'unit.query.MemberReachTest#testAValueOfAnInterfaceOnlyASubtypeSharesCarriesTheMember :: control :: M-CARRY-SUBTYPE-MEET',
 		'unit.query.MemberReachTest#testAVersionComparisonIsDecidedByTheValueEveryBuildGivesIt :: control :: M-REACH-LIVE-VALUES',
 		'unit.query.MemberReachTest#testAliasWrittenInTheRegionItselfIsRefused :: control :: M-REACH-ESCAPE-GATE',
@@ -1028,7 +1029,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.MemberReachTest#testImplicitFunctionCallingAnExternMayChangeArrays :: control :: '
 			+ 'M-REACH-IMPLICIT-BODYLESS,M-REACH-FORWARDING-OP',
 		'unit.query.MemberReachTest#testImplicitMembersOnlyOfTypesInPlayCount :: control :: '
-			+ 'M-REACH-IMPLICIT-WRITTEN,M-REACH-EXTERN-IMPLICIT-QUIET,M-REACH-SITE-SELF-ALIAS',
+			+ 'M-REACH-IMPLICIT-WRITTEN,M-REACH-EXTERN-IMPLICIT-QUIET',
 		'unit.query.MemberReachTest#testImplicitMethodAnywhereMayRunAFunctionValue :: control :: '
 			+ 'M-REACH-IMPLICIT-PLACEHOLDER,M-REACH-CLOSURE-CHANNELS,M-REACH-CLOSURE-LIBRARY',
 		'unit.query.MemberReachTest#testImplicitOperatorIsRunFromArithmetic :: control :: M-GRAPH-OPERATOR-KIND,M-REACH-IMPLICIT-ADMIT',
