@@ -576,6 +576,8 @@ final class PinsCheckPToZ {
 		'unit.check.ThreadSafetyConditionsTest#testABareNeverInvokesNameMatchesAnUnresolvedCall :: control :: M-TS-NEVER-INVOKES-BY-NAME',
 		'unit.check.ThreadSafetyConditionsTest#testABoolLiteralArgumentDecidesTheCalleesBranch :: control :: '
 			+ 'M-TS-ARG-UNBOUND,M-TS-STATES-UNCONDITIONED',
+		'unit.check.ThreadSafetyConditionsTest#testACallAnOverloadTakesBindsNoneOfTheBodysParameters :: control :: '
+			+ 'M-TS-OVERLOAD-OWN-SELECTED,M-TS-OVERLOAD-VERDICTS',
 		'unit.check.ThreadSafetyConditionsTest#testAConstructionArgumentDecidesTheConstructorsBranch :: control :: M-TS-NEW-UNBOUND',
 		'unit.check.ThreadSafetyConditionsTest#testAFieldInitializersConstructionBindsItsArguments :: control :: M-TS-INIT-SITE-UNREAD',
 		'unit.check.ThreadSafetyConditionsTest#testAFieldsTypeResolvesWhereItsDeclarationWritesIt :: control :: '

@@ -238,6 +238,8 @@ class SpanInfoLowering extends PairedShapeLowering {
 			retField, field(ident('v'), RETURN_TYPE_FIELD), '_rv', macro {
 				final _rn: Null<String> = $e{call(nominalFnName(retRule), [ident('_rv')])};
 				if (_rn != null) b.returnTypes[_sp.from] = _rn;
+				final _rs: Null<anyparse.runtime.Span> = $e{call(spanOfFnName(retRule), [ident('_rv')])};
+				if (_rs != null) b.returnTypeSources[_sp.from] = source.substring(_rs.from, _rs.to);
 			}
 		));
 

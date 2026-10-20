@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.CoreValueTypes;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.CastClauses;
+import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -127,18 +128,26 @@ final class AbstractCasts {
 	}
 
 	/**
-	 * The end the type `text`, written in `host` at `at`, stands for: its `Null<…>` peeled (`Null<T>` unifies as `T` both
-	 * ways), the dynamic type written bare, the declaration it resolves to there (`declEnd`), a core value type no
-	 * declaration bears the name of; `Open` for a type parameter of `host` or one of `params`, a type written with
-	 * arguments, any other shape and a name that resolves to nothing.
+	 * The end the type `text`, written in `host` at `at`, stands for (`endIn`), a type parameter of `host` or one of `params`
+	 * standing for none (`Open`).
 	 */
 	public function writtenEnd(text: String, host: ResolvedType, at: Int, params: Array<String>): TypeEnd {
+		return endIn(text, host.file, at, params.concat(host.type.typeParamNames));
+	}
+
+	/**
+	 * The end the type `text`, written in the file `file` at `at`, stands for: its `Null<…>` peeled (`Null<T>` unifies as `T`
+	 * both ways), the dynamic type written bare, the declaration it resolves to there (`declEnd`), a core value type no
+	 * declaration bears the name of; `Open` for one of the type parameters `params`, a type written with arguments, any other
+	 * shape and a name that resolves to nothing.
+	 */
+	public function endIn(text: String, file: FileInfo, at: Int, params: Array<String>): TypeEnd {
 		final trimmed: String = text.trim();
 		return switch _typeSyntax(trimmed)?.shape {
 			case Nominal(path, args) if (path == _nullable && args.length == 1):
-				writtenEnd(NominalTypes.typeArgumentSourcesOf(trimmed, _typeSyntax)?.join(',') ?? '', host, at, params);
-			case Nominal(path, args) if (args.length == 0 && !params.contains(path) && !host.type.typeParamNames.contains(path)):
-				final r: Null<ResolvedType> = _refs.resolveTypeRef(path, host.file, at);
+				endIn(NominalTypes.typeArgumentSourcesOf(trimmed, _typeSyntax)?.join(',') ?? '', file, at, params);
+			case Nominal(path, args) if (args.length == 0 && !params.contains(path)):
+				final r: Null<ResolvedType> = _refs.resolveTypeRef(path, file, at);
 				r == null ? unresolvedEnd(path) : declEnd(r);
 			case _: Open;
 		};

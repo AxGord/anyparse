@@ -956,6 +956,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.CachingGrammarPluginTest',
 		'unit.query.CallGraphBindingTest',
 		'unit.query.CallGraphTest',
+		'unit.query.CallSelectionTest',
 		'unit.query.CallSitesTest',
 		'unit.query.CaseCaptureTest',
 		'unit.query.ChangeSigSliceTest',

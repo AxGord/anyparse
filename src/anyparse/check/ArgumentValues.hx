@@ -3,15 +3,20 @@ package anyparse.check;
 import anyparse.check.ArgumentTypes.WrittenType;
 import anyparse.core.IdentityMap;
 import anyparse.query.ArgumentSlots;
+import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.CallGraph;
+import anyparse.query.CallGraphNames;
 import anyparse.query.CallGraphTypes.HeldFile;
+import anyparse.query.CallSelection;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.Lit;
 import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.StdResolver;
+import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -78,6 +83,9 @@ final class ArgumentValues {
 	/** Each edge `bind` was asked of -> the valuation it hands under each caller valuation asked. */
 	private final _bound: IdentityMap<CallEdge, Map<String, String>> = new IdentityMap();
 
+	/** Each edge bound -> the ways it binds its arguments (`bindings`), boxed: its arguments are typed once, whatever the valuation. */
+	private final _runs: IdentityMap<CallEdge, { final runs: Null<Array<Array<Int>>>; }> = new IdentityMap();
+
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
 	private final _shape: RefShape;
@@ -89,11 +97,15 @@ final class ArgumentValues {
 	/** The written types of the arguments and how they meet the parameters (`ArgumentTypes`). */
 	private final _types: ArgumentTypes;
 
+	/** `GrammarPlugin.typeSyntax`. */
+	private final _typeSyntax: TypeSyntaxReader;
+
 	public function new(graph: CallGraph, trees: FunctionTrees, plugin: GrammarPlugin) {
 		_graph = graph;
 		_trees = trees;
 		_shape = plugin.refShape();
 		_types = new ArgumentTypes(graph, trees, plugin);
+		_typeSyntax = plugin.typeSyntax;
 		_ifKinds = ShapeVocab.conditionalKinds(_shape);
 		_builtKinds = builtKindsOf(_shape);
 	}
@@ -129,7 +141,9 @@ final class ArgumentValues {
 		if (args == null || callee == null) return unknownValuation;
 		final params: Array<QueryNode> = [for (c in callee.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
 		final calleeFile: String = _graph.node(edge.to)?.file ?? '';
-		final runs: Null<Array<Array<Int>>> = bindings(edge, args, params, calleeFile);
+		final known: Null<{ final runs: Null<Array<Array<Int>>>; }> = _runs.get(edge);
+		final runs: Null<Array<Array<Int>>> = known != null ? known.runs : bindings(edge, args, callee, params, calleeFile);
+		if (known == null) _runs.set(edge, { runs: runs });
 		if (runs == null || runs.length == 0) return unknownValuation;
 		final callerNames: Array<String> = tracked(edge.from);
 		final tested: Array<String> = stringTested(edge.to);
@@ -207,20 +221,51 @@ final class ArgumentValues {
 	}
 
 	/**
-	 * Every way the call of `edge` may bind its `args` to `params` of the callee declared in `calleeFile`
-	 * (`ArgumentSlots`), each argument typed where the caller writes it; null where there are too many to follow.
+	 * Every way the call of `edge` may bind its `args` to `params` of the function `callee` declared in `calleeFile`
+	 * (`ArgumentSlots`), each argument typed once where the caller writes it; null where there are too many to follow, and
+	 * where the call may select a signature-overload annotation of `callee` (`ownSignatureSelected`): the arguments then reach
+	 * its body by position, not by these parameters' slots.
 	 */
 	private function bindings(
-		edge: CallEdge, args: Array<QueryNode>, params: Array<QueryNode>, calleeFile: String
+		edge: CallEdge, args: Array<QueryNode>, callee: QueryNode, params: Array<QueryNode>, calleeFile: String
 	): Null<Array<Array<Int>>> {
 		final given: Array<Null<WrittenType>> = [for (a in args) _types.argumentType(a, edge.file, edge.from)];
 		final slots: Array<SlotParam> = [
 			for (p in params) { optional: skippable(p), rest: p.kind == _shape.restParamKind }
 		];
 		final wanted: Array<Null<String>> = [for (p in params) _types.annotationOf(p, calleeFile)];
-		return ArgumentSlots.runs(
-			slots, args.length, (a, p) -> _types.fit(args[a], given[a], wanted[p], calleeFile, slots[p].optional, edge.from, edge.to)
-		);
+		function fit(a: Int, p: Int): ArgumentFit {
+			return _types.fit(args[a], given[a], wanted[p], calleeFile, slots[p].optional, edge.from, edge.to);
+		}
+		final own: ArgumentFit = ArgumentSlots.compiles(slots, args.length, fit, p -> params[p].kind == _shape.optionalParamKind);
+		return ownSignatureSelected(edge, args, given, callee, calleeFile, own) ? ArgumentSlots.runs(slots, args.length, fit) : null;
+	}
+
+	/**
+	 * Whether the call of `edge` passing `args` (typed `given`) selects the signature the function `callee` of `calleeFile` is
+	 * written with, which compiles as `own` says: always for a function the index holds no signature overload of; for one
+	 * carrying `@:overload` annotations, when `CallSelection.chosen` picks it over each annotation's signature, every argument
+	 * cast to that signature's parameter types where `calleeFile` writes them (a type parameter of the annotation may fit).
+	 */
+	private function ownSignatureSelected(
+		edge: CallEdge, args: Array<QueryNode>, given: Array<Null<WrittenType>>, callee: QueryNode, calleeFile: String, own: ArgumentFit
+	): Bool {
+		final from: Null<Int> = callee.span?.from;
+		final m: Null<MemberInfo> = from == null ? null : _types.memberAt(calleeFile, from);
+		if (m == null || !m.hasOverloadMeta) return true;
+		if (m.signatures.length < 2) return false;
+		final verdicts: Array<ArgumentFit> = [own];
+		for (s in m.signatures.slice(1)) {
+			final slots: Array<SlotParam> = CallSelection.slotsOf(s);
+			final fit: (arg:Int, param:Int) -> ArgumentFit = (a, p) -> {
+				final wanted: Null<String> = s.params[p].type;
+				wanted == null || CallGraphNames.mentionsTypeName(wanted, s.typeParamNames, _typeSyntax)
+					? MayFit
+					: _types.fit(args[a], given[a], wanted, calleeFile, slots[p].optional, edge.from, edge.to);
+			};
+			verdicts.push(ArgumentSlots.compiles(slots, args.length, fit, p -> CallSelection.skipsSafely(s, p)));
+		}
+		return CallSelection.chosen(Meta, verdicts) == 0;
 	}
 
 	/**

@@ -80,6 +80,29 @@ final class AncestorTable {
 	}
 
 	/**
+	 * The type `written`, written in the declaration `host` at `at` by a member declaring the type parameters `own`, as a value
+	 * read off a receiver of the declaration `start` written with the type arguments `args` carries it: completed where it is
+	 * written (a reference leaving arguments out names their defaults, `completed`), `host`'s type parameters bound to what
+	 * `start`'s chain passes them (`argumentsTo`, `start`'s own bound to `args`). Null where a parameter of `host` it names is
+	 * not bound. What a member read (`MemberLookup.memberRead`) and a call's return (`CallSelection.returnType`) carry.
+	 */
+	public function boundType(
+		start: ResolvedType, host: ResolvedType, args: Array<String>, written: String, at: Int, own: Array<String>
+	): Null<String> {
+		final params: Array<String> = host.type.typeParamNames;
+		// the type as the compiler reads it where it is written: a reference leaving arguments out names their defaults
+		final complete: Null<String> = completed(written, host.file, at, params.concat(own));
+		if (complete == null) return null;
+		final passed: Null<Array<String>> = params.length == 0 ? [] : boundArguments(start, host, args);
+		return if (passed != null && passed.length >= params.length)
+			CallGraphNames.substituteTypeParams(complete, params, passed, _typeSyntax)
+		else if (CallGraphNames.mentionsTypeName(complete, params, _typeSyntax))
+			null
+		else
+			complete;
+	}
+
+	/**
 	 * `args`, the type arguments a reference to `decl` writes, with each trailing parameter it leaves out bound to the
 	 * default the declaration writes for it (`TypeDeclInfo.typeParamDefaults`; 4.3.7: `Box` names `Box<Int>` for
 	 * `class Box<T = Int>`, inside `Box` as well): `args` itself when it binds every parameter, null when a parameter it
@@ -113,6 +136,31 @@ final class AncestorTable {
 	 */
 	public function completed(source: String, from: FileInfo, at: Null<Int>, scope: Array<String>): Null<String> {
 		return completedIn(source, from, at, scope, []);
+	}
+
+	/**
+	 * Whether `r` or an ancestor its links reach carries a build macro (`@:build`, `@:autoBuild`) — one that may give the
+	 * declaration members, statics among them, no declaration shows. A link that does not resolve adds none.
+	 */
+	public function builtAtOrAbove(r: ResolvedType): Bool {
+		return builtFrom(r, []);
+	}
+
+	/**
+	 * What `start`'s chain passes `host`'s type parameters (`argumentsTo`), in the terms of `args`, the type arguments a
+	 * receiver of `start` is written with; null where a parameter of `start` it names is not bound by `args`.
+	 */
+	private function boundArguments(start: ResolvedType, host: ResolvedType, args: Array<String>): Null<Array<String>> {
+		final via: Null<Array<String>> = argumentsTo(start, host);
+		final own: Array<String> = start.type.typeParamNames;
+		return if (via == null || own.length == 0)
+			via
+		else if (args.length >= own.length)
+			[for (a in via) CallGraphNames.substituteTypeParams(a, own, args, _typeSyntax)]
+		else if (via.exists(a -> CallGraphNames.mentionsTypeName(a, own, _typeSyntax)))
+			null
+		else
+			via;
 	}
 
 	/** `completed`, `seen` the declarations whose defaults are being completed around it. */
@@ -174,14 +222,6 @@ final class AncestorTable {
 			case _:
 		}
 		return spelled;
-	}
-
-	/**
-	 * Whether `r` or an ancestor its links reach carries a build macro (`@:build`, `@:autoBuild`) — one that may give the
-	 * declaration members, statics among them, no declaration shows. A link that does not resolve adds none.
-	 */
-	public function builtAtOrAbove(r: ResolvedType): Bool {
-		return builtFrom(r, []);
 	}
 
 	/** `builtAtOrAbove` from `cur` up, `seen` the declarations already walked. */

@@ -699,6 +699,8 @@ final class PinsCheckAToO {
 		'unit.check.OperandTypingTest#testAUsedAliasLeavesTheExtensionUnproven :: control :: M-USING-HOSTS-ALIAS',
 		'unit.check.OperandTypingTest#testAnExtensionOfAnotherFirstParameterIsUnproven :: control :: M-BINDER-EXTENSION-FIRST-PARAM',
 		'unit.check.OperandTypingTest#testAnInheritedMemberPastAnUnreadSupertypeIsUnproven :: control :: M-BINDER-CLOSURE-UNRESOLVED',
+		'unit.check.OperandTypingTest#testAnOverloadTheArgumentCountSelectsTypesTheLambda :: control :: '
+			+ 'M-BINDER-OVERLOAD-SELECTED,M-BINDER-OVERLOAD-OWN-BARE,M-BINDER-CALLEE-OVERLOAD',
 		'unit.check.OperandTypingTest#testAnUnreadLaterUsingLeavesTheExtensionUnproven :: control :: M-BINDER-EXTENSION-UNINDEXED',
 		'unit.check.OperandTypingTest#testAnUntypedLambdaParameterTakesTheCalleesParameterType :: control :: '
 			+ 'M-BINDER-LAMBDA-PARAM-CUT,M-WALK-LAMBDA-PARAM-CUT,M-BINDER-ARGUMENT-CUT',
@@ -714,7 +716,8 @@ final class PinsCheckAToO {
 		'unit.check.OperandTypingTest#testEveryTypeOfAUsedModuleBringsItsExtensions :: control :: M-USING-HOSTS-MODULE',
 		'unit.check.OperandTypingTest#testTheLastUsingDeclaringTheExtensionWins :: control :: M-BINDER-EXTENSION-LAST-USING',
 		'unit.check.OperandTypingTest#testTheReceiversOwnUsingOutranksTheFiles :: control :: M-BINDER-EXTENSION-ATUSING',
-		'unit.check.OperandTypingTest#testWhatTheCallDoesNotBindStaysUnproven :: control :: M-BINDER-METHOD-SHADOWS-OFF,M-BINDER-CALLEE-OVERLOAD',
+		'unit.check.OperandTypingTest#testWhatTheCallDoesNotBindStaysUnproven :: control :: '
+			+ 'M-BINDER-METHOD-SHADOWS-OFF,M-BINDER-ARGUMENT-OVERLOAD',
 		'unit.check.OperatorOverloadGateTest#testDefaultLastAsksTheOperatorItWrites :: control :: '
 			+ 'M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND,M-NEGCOND-DEFAULT-LAST-EQ-UNASKED',
 		'unit.check.OperatorOverloadGateTest#testInvertTernarySkipsOverloadedNot :: control :: M-NEGCOND-OVERLOAD-BLIND',

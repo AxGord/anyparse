@@ -44,6 +44,12 @@ final class TypingService {
 	/** SIGNATURE: what a named type declares or inherits, and with what declared type, return type and visibility. */
 	public final members: MemberLookup;
 
+	/**
+	 * SIGNATURE: the signature a call selects among those of the member it calls — its own and its overloads — over its
+	 * arguments' types, and the type it returns (`callUnification.ml`, step T5).
+	 */
+	public final calls: CallSelection;
+
 	/** SIGNATURE: unification with an anonymous structure, and membership of a builtin structural type. */
 	public final structural: StructuralTypes;
 
@@ -65,6 +71,7 @@ final class TypingService {
 		unification = new Unification(ancestors, cache, refs, casts, shape);
 		operators = new OperatorOverloads(casts, unification, shape);
 		members = new MemberLookup(refs, cache, ancestors, typeSyntax, shape.optionalValueTypeName);
+		calls = new CallSelection(casts, unification, ancestors, typeSyntax);
 		structural = new StructuralTypes(files, refs, subtypes, members, typeSyntax, unification);
 		extensions = new StaticExtensions(refs, cache, ancestors, members, structural);
 		expectations = new ExpectedTypes(shape);

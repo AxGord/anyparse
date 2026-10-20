@@ -403,6 +403,29 @@ class OperandTypingTest extends Test {
 	}
 
 	/**
+	 * An `@:overload` member's call whose arguments' count leaves one signature that may compile selects it (the code
+	 * compiles; 4.3.7 `unify_field_call`), and its parameter types the lambda: `three(1, c -> …)` takes `(a:Int, cb:(c:Use)
+	 * -> Void)` — the own `(cb:(c:FlagOn) -> Void)` takes one argument — so `c` is `Use`; `three(c -> …)` takes the own one,
+	 * where `c.on` is the overloading `Flag`. Off another file's value alike (`b.over(1, c -> …)`).
+	 */
+	@:pin('control') @:killer('M-BINDER-OVERLOAD-SELECTED') @:killer('M-BINDER-OVERLOAD-OWN-BARE') @:killer('M-BINDER-CALLEE-OVERLOAD')
+	public function testAnOverloadTheArgumentCountSelectsTypesTheLambda(): Void {
+		final three: String = '\t@:overload(function(a:Int, cb:(c:Use)->Void):Void {})\n\tfunction three(cb:(c:FlagOn)->Void):Void {}\n\n';
+		Assert.isTrue(inverts([FLAG_ON, lambdaUse(three, 'three(1, c -> trace(!c.on ? 1 : 2));')]), 'the annotation');
+		Assert.isFalse(inverts([FLAG_ON, lambdaUse(three, 'three(c -> trace(!c.on ? 1 : 2));')]), 'the own signature');
+		final box: { file: String, source: String } = {
+			file: 'Box.hx',
+			source: 'class Box {\n\tpublic function new() {}\n\n'
+				+ '\t@:overload(function(a:Int, cb:(c:Use)->Void):Void {})\n\tpublic function over(cb:(c:FlagOn)->Void):Void {}\n}\n'
+		};
+		Assert.isTrue(inverts([
+			FLAG_ON,
+			box,
+			lambdaUse('', 'final b:Box = new Box();\n\t\tb.over(1, c -> trace(!c.on ? 1 : 2));')
+		]), 'off a value');
+	}
+
+	/**
 	 * A callee's type parameter types no lambda: `gen(new FlagOn(), c -> …)` binds `T` to `FlagOn` (4.3.7), whose `on` is the
 	 * overloading `Flag` — never the class `T` the module also declares. A `Dynamic` parameter is no function type.
 	 */
@@ -612,7 +635,7 @@ class OperandTypingTest extends Test {
 	 * What the call does not bind stays unproven: a type parameter the method declares itself, shadowing the type's (4.3.7:
 	 * `Unknown<0>`), a receiver written with no type arguments, a member `@:overload` offers another signature of.
 	 */
-	@:pin('control') @:killer('M-BINDER-METHOD-SHADOWS-OFF', 'M-BINDER-CALLEE-OVERLOAD')
+	@:pin('control') @:killer('M-BINDER-METHOD-SHADOWS-OFF', 'M-BINDER-ARGUMENT-OVERLOAD')
 	public function testWhatTheCallDoesNotBindStaysUnproven(): Void {
 		final box: { file: String, source: String } = {
 			file: 'Box.hx',

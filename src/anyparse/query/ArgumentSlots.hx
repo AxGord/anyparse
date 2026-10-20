@@ -53,6 +53,42 @@ final class ArgumentSlots {
 		return walk.overflow ? null : walk.out;
 	}
 
+	/**
+	 * Whether a call passing `count` arguments to `params` compiles, as far as `fit` decides each argument (`unify_call_args`,
+	 * 4.3.7): `Misfits` when no way to bind them compiles (`runs` answers none), `Fits` when the compiler's own way — an
+	 * argument that unifies binds the parameter it meets, one that does not skips an optional parameter while fewer
+	 * arguments than parameters are left, a rest parameter takes every argument left — is decided at every step and ends
+	 * bound, every skip one `skipSafe` allows (Flash refuses to skip a parameter whose type is not nullable,
+	 * `pf_can_skip_non_nullable_argument`); `MayFit` otherwise.
+	 */
+	public static function compiles(
+		params: Array<SlotParam>, count: Int, fit: (arg:Int, param:Int) -> ArgumentFit, skipSafe: (param:Int) -> Bool
+	): ArgumentFit {
+		final all: Null<Array<Array<Int>>> = runs(params, count, fit);
+		if (all != null && all.length == 0) return Misfits;
+		var arg: Int = 0;
+		var param: Int = 0;
+		var safe: Bool = true;
+		while (arg < count) {
+			if (param >= params.length) return Misfits;
+			final p: SlotParam = params[param];
+			switch fit(arg, param) {
+				case Fits:
+					arg++;
+					if (!p.rest) param++;
+				case Misfits if (!p.rest && p.optional && count - arg < params.length - param):
+					if (!skipSafe(param)) safe = false;
+					param++;
+				case Misfits:
+					return Misfits;
+				case MayFit:
+					return MayFit;
+			}
+		}
+		for (q in param ... params.length) if (!params[q].optional && !params[q].rest) return Misfits;
+		return safe ? Fits : MayFit;
+	}
+
 	/** Bind argument `arg` and the ones after it, meeting parameter `param` first. */
 	private static function step(walk: SlotWalk, arg: Int, param: Int): Void {
 		if (walk.overflow) return;

@@ -80,6 +80,9 @@ typedef MemberSeams = {
 	final optionalFieldMetaName: Null<String>;
 	final functionKinds: Array<String>;
 
+	/** The function expression kind (`RefShape.fnExprKind`): what a signature-overload annotation's argument is. */
+	final fnExprKind: Null<String>;
+
 	/** The FIELD member kinds (`RefShape.fieldDeclKinds`) — the only members an initializer is recorded for. */
 	final fieldKinds: Array<String>;
 	final annotationKinds: Array<String>;
@@ -146,17 +149,9 @@ final class SymbolIndexBuilder {
 				skipped.push(entry.file);
 				continue;
 			}
-			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
-			final writeAccessors: Map<Int, Bool> = provider != null ? provider.propertyWriteAccessors(entry.source) : [];
-			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];
-			final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
-			final typeParams: Map<Int, Array<String>> = provider != null ? provider.typeParamNames(entry.source) : [];
-			final defaults: Map<Int, Map<String, String>> = plugin is SpanTypeInfoProvider
-				? (cast plugin: SpanTypeInfoProvider).spanTypeInfo(entry.source).typeParamDefaults
-				: [];
 			infos.push(extractFileInfo(
-				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, typeParams, defaults, shape,
-				memberSeams, abstractKinds, plugin.typeSyntax
+				entry.file, entry.source, tree, spanInfoOf(plugin, provider, entry.source), shape, memberSeams, abstractKinds,
+				plugin.typeSyntax
 			));
 		}
 		attachAmbientImports(infos, plugin, shape, memberSeams, abstractKinds, provider);
@@ -179,10 +174,7 @@ final class SymbolIndexBuilder {
 		final shape: RefShape = plugin.refShape();
 		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		final memberSeams: MemberSeams = SymbolIndexMembers.memberSeamsOf(shape);
-		final info: FileInfo = extractFileInfo(
-			file, source, tree, maps.propertyAccessors, maps.propertyWriteAccessors, maps.returnTypes, maps.declaredTypeSources,
-			maps.typeParamNames, maps.typeParamDefaults, shape, memberSeams, abstractKinds, plugin.typeSyntax
-		);
+		final info: FileInfo = extractFileInfo(file, source, tree, maps, shape, memberSeams, abstractKinds, plugin.typeSyntax);
 		attachAmbientImports([info], plugin, shape, memberSeams, abstractKinds, plugin is TypeInfoProvider ? cast plugin : null);
 		return info;
 	}
@@ -264,10 +256,8 @@ final class SymbolIndexBuilder {
 	 * top-level import does not double it).
 	 */
 	private static function extractFileInfo(
-		file: String, source: String, tree: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>,
-		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, typeParams: Map<Int, Array<String>>,
-		typeParamDefaults: Map<Int, Map<String, String>>, shape: RefShape, memberSeams: MemberSeams, abstractKinds: Array<String>,
-		typeSyntax: TypeSyntaxReader
+		file: String, source: String, tree: QueryNode, maps: SpanTypeInfo, shape: RefShape, memberSeams: MemberSeams,
+		abstractKinds: Array<String>, typeSyntax: TypeSyntaxReader
 	): FileInfo {
 		final basename: String = RefactorSupport.moduleNameOf(file);
 		var pkg: String = '';
@@ -312,7 +302,7 @@ final class SymbolIndexBuilder {
 				final supersRaw: Array<String> = collectSupertypesRaw(node);
 				final aliasPath: Null<String> = aliasTargetPathOf(source, typeDecl, node, gn.guarded, typeSyntax);
 				final isAbstract: Bool = abstractKinds.contains(typeDecl.kind);
-				final paramNames: Array<String> = declTypeParams(typeParams, typeDecl);
+				final paramNames: Array<String> = declTypeParams(maps.typeParamNames, typeDecl);
 				final info: TypeDeclInfo = {
 					name: typeDecl.name,
 					kind: typeDecl.kind,
@@ -322,7 +312,7 @@ final class SymbolIndexBuilder {
 					isExtern: pendingExtern,
 					typeParamArity: paramNames.length,
 					typeParamNames: paramNames,
-					typeParamDefaults: declTypeParamDefaults(typeParamDefaults, typeDecl, paramNames),
+					typeParamDefaults: declTypeParamDefaults(maps.typeParamDefaults, typeDecl, paramNames),
 					supertypes: supersRaw.map(simpleName),
 					supertypesRaw: supersRaw,
 					supertypesWritten: collectSupertypesWritten(node, source),
@@ -339,9 +329,7 @@ final class SymbolIndexBuilder {
 					constructsFromLiteral: carriesAnyMeta(pendingMeta, shape.execution?.implicitConstructionTypeMetaNames),
 					bringsExtensions: carriesAnyMeta(pendingMeta, shape.execution?.extensionTypeMetaNames),
 					extensionTypesRaw: pendingUsings,
-					members: SymbolIndexMembers.collectMembers(
-						node, source, accessors, writeAccessors, returnTypes, typeSources, typeParams, memberSeams
-					),
+					members: SymbolIndexMembers.collectMembers(node, source, maps, memberSeams),
 					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
 					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta, shape) : null,
 					underlyingRaw: underlyingPathOf(typeDecl.nameNode, isAbstract, gn.guarded),
@@ -1115,11 +1103,8 @@ final class SymbolIndexBuilder {
 			null;
 		else
 			extractFileInfo(
-				ambient.file, ambient.source, tree, provider != null ? provider.propertyAccessors(ambient.source) : [],
-				provider != null ? provider.propertyWriteAccessors(ambient.source) : [],
-				provider != null ? provider.returnTypes(ambient.source) : [],
-				provider != null ? provider.declaredTypeSources(ambient.source) : [],
-				provider != null ? provider.typeParamNames(ambient.source) : [], [], shape, memberSeams, abstractKinds, plugin.typeSyntax
+				ambient.file, ambient.source, tree, providerSpanInfo(provider, ambient.source), shape, memberSeams, abstractKinds,
+				plugin.typeSyntax
 			).imports;
 		extracted[ambient.file] = imports;
 		return imports;
@@ -1128,6 +1113,32 @@ final class SymbolIndexBuilder {
 	/** `a` when `b` writes the same paths in the same order, else null: what two `#if` branches of one declaration agree on. */
 	private static function agreedPaths(a: Null<Array<String>>, b: Null<Array<String>>): Null<Array<String>> {
 		return a != null && b != null && a.join(',') == b.join(',') ? a : null;
+	}
+
+	/** The span-indexed maps of `source`: the plugin's batched bundle where it has one, else `providerSpanInfo`. */
+	private static function spanInfoOf(plugin: GrammarPlugin, provider: Null<TypeInfoProvider>, source: String): SpanTypeInfo {
+		return plugin is SpanTypeInfoProvider
+			? (cast plugin: SpanTypeInfoProvider).spanTypeInfo(source)
+			: providerSpanInfo(provider, source);
+	}
+
+	/**
+	 * The span-indexed maps of `source` as `provider`'s accessors answer each — none for no provider —, with the maps only the
+	 * batched bundle carries (bounds, defaults, return type sources) empty.
+	 */
+	private static function providerSpanInfo(provider: Null<TypeInfoProvider>, source: String): SpanTypeInfo {
+		return {
+			declaredTypes: provider != null ? provider.declaredTypes(source) : [],
+			returnTypes: provider != null ? provider.returnTypes(source) : [],
+			propertyAccessors: provider != null ? provider.propertyAccessors(source) : [],
+			propertyWriteAccessors: provider != null ? provider.propertyWriteAccessors(source) : [],
+			declaredTypeSources: provider != null ? provider.declaredTypeSources(source) : [],
+			castTargetSources: provider != null ? provider.castTargetSources(source) : [],
+			typeParamNames: provider != null ? provider.typeParamNames(source) : [],
+			typeParamConstraints: [],
+			typeParamDefaults: [],
+			returnTypeSources: []
+		};
 	}
 
 }

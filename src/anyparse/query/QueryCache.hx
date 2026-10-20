@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.AbstractCasts.CastGraph;
 import anyparse.query.AncestorTable.AncestorLink;
 import anyparse.query.ArgumentSlots.ArgumentFit;
+import anyparse.query.CallSelection.CallArgument;
 import anyparse.query.MemberLookup.DeclaredMember;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.SymbolIndex.ResolvedType;
@@ -47,6 +48,12 @@ final class QueryCache {
 
 	/** The static extension `recv.name` binds in a file on a receiver of a declaration (`StaticExtensions.binding`). */
 	public final extensionBindings: DeclarationQuery<Null<HostedMembers>> = new DeclarationQuery();
+
+	/**
+	 * BODY: what a call site hands its callee, each argument typed once with no expected type (`CallArgument`), by the site
+	 * and the declaration it is written in (`DeclarationKey.ofSite`): what every candidate signature is tried against.
+	 */
+	public final callArguments: DeclarationQuery<Array<CallArgument>> = new DeclarationQuery();
 
 	public function new() {}
 

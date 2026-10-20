@@ -122,6 +122,14 @@ typedef MemberInfo = {
 	var hasOverloadMeta: Bool;
 
 	/**
+	 * The signatures a call to the member may select, in the order the compiler tries them (`callUnification.ml`,
+	 * `unify_field_call`: the field's own type, then `cf_overloads`, which `init_meta_overloads` fills in written order):
+	 * the member's own, then the one each signature-overload annotation on it writes. Empty for a member that is no function.
+	 * What `OverloadSelection` picks from, the return type of each read off the span info (`SpanTypeInfo.returnTypeSources`).
+	 */
+	var signatures: Array<CallSignature>;
+
+	/**
 	 * The member's VERBATIM declared type SOURCE — the written `:Type` text (`Null<T>`
 	 * preserved), or null for an unannotated / inference-typed / function member (whose annotation
 	 * is a `returnType`, not a `type`). Drives cross-file `Type.staticField` read-type resolution.

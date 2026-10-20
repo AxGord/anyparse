@@ -333,6 +333,82 @@ class NominalTypesTest extends Test {
 		Assert.same({ source: 'Int', nominal: 'Int' }, typed('IdentExpr', '{n}', 'n'), 'the read an interpolation re-opens');
 	}
 
+	/**
+	 * A call to an `@:overload` member returns what the signature it selects returns (`CallSelection`, 4.3.7 probes: the
+	 * member's own signature first, then each annotation's in written order, the first compiling binds): `O.g(1)` — the own
+	 * `(a:String)` refuses an `Int`, `(a:Int)` takes it — is a `Bool`; `O.h(1)` takes `(a:Float)`, written before `(a:Int)`,
+	 * and is a `String`. An argument no arc types leaves every candidate open: `O.g(u)` is no answer, `O.z(u)` — each
+	 * candidate returning `Void` — is a `Void`. A static read through a `typedef` alias, `null` binding an optional `?s`, a
+	 * parameter typed where the file writes it, an instance member off a value: each decided alike. Both currencies.
+	 */
+	@:pin('control') @:killer('M-NOMINAL-SELECTED-STATIC') @:killer('M-NOMINAL-OVERLOAD-REFUSED') @:killer('M-SOURCE-OVERLOAD-REFUSED')
+	@:killer('M-CALLS-FIRST-COMPILING') @:killer('M-CALLS-AGREED-RETURN') @:killer('M-SOURCE-SELECTED-STATIC')
+	@:killer('M-NOMINAL-STATIC-ALIAS') @:killer('M-NOMINAL-ARGUMENT-NULL') @:killer('M-NOMINAL-ARGUMENT-BOUND')
+	public function testAnOverloadedCallReturnsWhatTheSelectedSignatureReturns(): Void {
+		final text: String = 'package p;\n\nextern class O {\n\t@:overload(function(a:Int):Bool {})\n\t@:overload(function(a:Float):String {})\n'
+			+ '\tstatic function g(a:String):Int;\n\n\t@:overload(function(a:Float):String {})\n\t@:overload(function(a:Int):Bool {})\n'
+			+ '\tstatic function h(a:String):Int;\n\n\t@:overload(function(a:Int):Void {})\n\tstatic function z(a:String):Void;\n\n'
+			+ '\t@:overload(function(a:Float):Bool {})\n\tstatic function n(?s:String):Int;\n\n'
+			+ '\t@:overload(function(a:Int):Bool {})\n\tfunction m(a:String):Int;\n}\n\ntypedef OA = O;\n\n'
+			+ 'class C {\n\tvar o: O;\n\tfunction probeArity() return O.g(1);\n\tfunction probeOrder() return O.h(1);\n'
+			+ '\tfunction probeOpen(u) return O.g(u);\n\tfunction probeAgreed(u) return O.z(u);\n'
+			+ '\tfunction probeAlias() return OA.g(1);\n\tfunction probeNull() return O.n(null);\n'
+			+ '\tfunction probeBound(x:Int) return O.g(x);\n\tfunction probeValue() return o.m(1);\n}\n';
+		Assert.equals('Bool', nominalIn(text, 'probeArity'), 'the own signature refuses the argument');
+		Assert.equals('Bool', sourceIn(text, 'probeArity'), 'the own signature refuses the argument (source)');
+		Assert.equals('String', nominalIn(text, 'probeOrder'), 'the first annotation compiling binds');
+		Assert.equals('String', sourceIn(text, 'probeOrder'), 'the first annotation compiling binds (source)');
+		Assert.isNull(nominalIn(text, 'probeOpen'), 'an untyped argument leaves three candidates');
+		Assert.isNull(sourceIn(text, 'probeOpen'), 'an untyped argument leaves three candidates (source)');
+		Assert.equals('Void', nominalIn(text, 'probeAgreed'), 'every candidate returns one type');
+		Assert.equals('Bool', nominalIn(text, 'probeAlias'), 'a static read through a typedef alias');
+		Assert.equals('Int', nominalIn(text, 'probeNull'), '`null` binds the optional `?s`');
+		Assert.equals('Bool', nominalIn(text, 'probeBound'), 'a parameter typed where this file writes it');
+		Assert.equals('Bool', nominalIn(text, 'probeValue'), 'an instance member off a value');
+		Assert.equals('Bool', sourceIn(text, 'probeValue'), 'an instance member off a value (source)');
+	}
+
+	/**
+	 * The superclass chain declares a member before an interface does (`raw_class_field`): `s.on()` on `class S extends E<S>
+	 * implements IE`, with `E<T>.on(): T` and `IE.on(): IE`, is an `S` — `E`'s parameter bound through the chain — never
+	 * the interface's `IE`, which the name walk used to take for a superclass return it could not name.
+	 */
+	@:pin('control') @:killer('M-NOMINAL-DECLARING-SUPER-POISON') @:killer('M-NOMINAL-SELECTED-VALUE') @:killer('M-SOURCE-SELECTED-VALUE')
+	public function testTheSuperclassChainDeclaresAMemberBeforeAnInterface(): Void {
+		final text: String = 'package p;\n\nclass E<T> {\n\tpublic function on(): T return null;\n}\n\ninterface IE {\n'
+			+ '\tfunction on(): IE;\n}\n\nclass S extends E<S> implements IE {}\n\nclass C {\n\tvar s: S;\n'
+			+ '\tfunction probeOn() return s.on();\n}\n';
+		Assert.equals('S', nominalIn(text, 'probeOn'));
+		Assert.equals('S', sourceIn(text, 'probeOn'), 'the source currency');
+	}
+
+	/**
+	 * A bare call to an inherited member is typed through the declaration the enclosing type extends, where its file
+	 * resolves it: `go()` in `Sub extends Img` (`p.Img`, whose `PBase.go(): Int`), beside a namesake `q.Img` whose base
+	 * overloads `go` — the name walk, unioning both `Img`s, answers neither.
+	 */
+	@:pin('control') @:killer('M-NOMINAL-SELECTED-BARE') @:killer('M-SOURCE-SELECTED-BARE')
+	public function testABareCallIsTypedThroughTheEnclosingDeclarationsChain(): Void {
+		final text: String = 'package p;\n\nclass PBase {\n\tpublic function go(): Int return 0;\n}\n\nclass Img extends PBase {}\n\n'
+			+ 'class Sub extends Img {\n\tfunction probeGo() return go();\n}\n';
+		final other: String = 'package q;\n\nclass QBase {\n\t@:overload(function(a:Int):Void {})\n\tpublic function go(): String return null;\n}\n\n'
+			+ 'class Img extends QBase {}\n';
+		Assert.equals('Int', nominalAmong(text, [{ file: 'q/Img.hx', source: other }], 'probeGo'));
+		Assert.equals('Int', sourceAmong(text, [{ file: 'q/Img.hx', source: other }], 'probeGo'), 'the source currency');
+	}
+
+	/**
+	 * A namesake of the receiver's type no signature of which the call compiles against is not its type (the code
+	 * compiles): `b.size(1)` on a `Buf` reads `p.Buf.size(a:Int): Int`, beside a `q.Buf` declaring only `size(): String`.
+	 */
+	@:pin('control') @:killer('M-NOMINAL-NAMESAKE-EXCLUDED')
+	public function testANamesakeNoSignatureOfWhichCompilesIsNotTheReceiver(): Void {
+		final text: String = 'package p;\n\nclass Buf {\n\t@:overload(function():Int {})\n\tpublic function size(a:Int): Int return 0;\n}\n\n'
+			+ 'class C {\n\tvar b: Buf;\n\tfunction probeSize() return b.size(1);\n}\n';
+		final other: String = 'package q;\n\nclass Buf {\n\tpublic function size(): String return null;\n}\n';
+		Assert.equals('Int', nominalAmong(text, [{ file: 'q/Buf.hx', source: other }], 'probeSize'));
+	}
+
 	private static function nominal(fn: String): Null<String> {
 		final at: Probe = probeIn(SOURCE, fn);
 		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);
@@ -340,6 +416,12 @@ class NominalTypesTest extends Test {
 
 	private static function nominalIn(text: String, fn: String): Null<String> {
 		final at: Probe = probeIn(text, fn);
+		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);
+	}
+
+	/** `nominalIn` with the files `others` indexed beside `text`. */
+	private static function nominalAmong(text: String, others: Array<{ file: String, source: String }>, fn: String): Null<String> {
+		final at: Probe = probeIn(text, fn, others);
 		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);
 	}
 

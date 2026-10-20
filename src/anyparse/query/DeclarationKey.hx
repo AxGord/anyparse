@@ -36,4 +36,14 @@ abstract DeclarationKey(String) to String {
 		return new DeclarationKey('${a.file.file}@${a.type.span.from}>${b.file.file}@${b.type.span.from}');
 	}
 
+	/**
+	 * The key of a question about the expression at offset `site` of the file `file`, written in the declaration starting at
+	 * `declaration` there, as the text `written` (of a file `length` characters long) spells it: a BODY question (what a call
+	 * site's arguments are typed), dropped with that declaration's body. The text is part of the key because a run that
+	 * rewrites a file (`lint --fix`) asks again of an index built before the rewrite.
+	 */
+	public static inline function ofSite(file: String, declaration: Int, site: Int, length: Int, written: String): DeclarationKey {
+		return new DeclarationKey('$file@$declaration#$site/$length:$written');
+	}
+
 }

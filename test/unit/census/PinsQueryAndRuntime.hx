@@ -206,6 +206,16 @@ final class PinsQueryAndRuntime {
 			+ 'M-GRAPH-DYNAMIC-RECEIVER,M-GRAPH-FIELD-FUNCTION-VALUE',
 		'unit.query.CallGraphTest#testUntypedPropertyAccessIsRecordedAgainstItsAccessor :: control :: '
 			+ 'M-GRAPH-ACCESS-RECORDED,M-GRAPH-ACCESS-COUNTED',
+		'unit.query.CallSelectionTest#testAFunctionsSignaturesAreItsOwnThenEachAnnotations :: control :: '
+			+ 'M-INDEX-SIGNATURES-META,M-SIGNATURE-FORM-OPTIONAL,M-SIGNATURE-FORM-DEFAULTED,M-SIGNATURE-RETURN-SOURCE,'
+			+ 'M-SPANINFO-RETURN-SOURCES,M-SIGNATURE-RETURN-TRIM',
+		'unit.query.CallSelectionTest#testAnAnnotationWritingNoFunctionLeavesNoSignatures :: control :: M-INDEX-SIGNATURES-BARE',
+		'unit.query.CallSelectionTest#testTheCandidateACallBinds :: control :: '
+			+ 'M-CALLS-CHOSEN-FIRST,M-CALLS-CHOSEN-LAST-OPEN,M-CALLS-CHOSEN-PROPER',
+		'unit.query.CallSelectionTest#testTheSelectionOverTypedArguments :: control :: '
+			+ 'M-CALLS-FIT-CAST,M-CALLS-PROPER-STATIC,M-CALLS-RETURN-AGREE',
+		'unit.query.CallSelectionTest#testWhetherACallCompilesAgainstASignature :: control :: '
+			+ 'M-SLOTS-COMPILES-DECIDED,M-SLOTS-COMPILES-NONE,M-SLOTS-COMPILES-UNSAFE-SKIP,M-SLOTS-COMPILES-MAYFIT',
 		'unit.query.CallSitesTest#testASecondLocalFunctionOfTheSameNameRefusesTheProof :: control :: M-NAME-CLASH-KINDS-NO-BINDERS',
 		'unit.query.CaseCaptureTest#testAlternativesShareTheFirstCapture :: control :: M-CAPTURE-ALT-SELF',
 		'unit.query.CaseCaptureTest#testBareCaptureBindsItsArm :: control :: M-CAPTURE-ARM-BIND',
@@ -1189,12 +1199,15 @@ final class PinsQueryAndRuntime {
 		'unit.query.NewFileSliceTest#testImportsSectionRefusesABareKeyword :: control :: M-NEWFILE-BARE-KEYWORD-WRAPPED',
 		'unit.query.NewFileSliceTest#testImportsSectionRefusesAnUnusableLine :: control :: M-NEWFILE-IMPORT-ANY-LINE',
 		'unit.query.NewFileSliceTest#testImportsSectionTakesStatements :: control :: M-NEWFILE-IMPORT-DOUBLED',
+		'unit.query.NominalTypesTest#testABareCallIsTypedThroughTheEnclosingDeclarationsChain :: control :: '
+			+ 'M-NOMINAL-SELECTED-BARE,M-SOURCE-SELECTED-BARE',
 		'unit.query.NominalTypesTest#testABareCallOfALocalFunctionIsNotTheMembers :: control :: M-NOMINAL-UNQUALIFIED-MEMBER',
 		'unit.query.NominalTypesTest#testABlindMemberReadWrittenWithAParameterHasNoAnswer :: control :: M-NOMINAL-BLIND-PARAMS',
 		'unit.query.NominalTypesTest#testAConstructionIsTheTypeItWrites :: control :: M-NOMINAL-CONSTRUCTED',
 		'unit.query.NominalTypesTest#testAConstructionReadsTheTypeArgumentsItWrites :: control :: M-CONSTRUCTION-CTOR-GAP',
 		'unit.query.NominalTypesTest#testALiteralIsItsType :: control :: M-NOMINAL-LITERAL',
 		'unit.query.NominalTypesTest#testALocalWrittenWithNoTypeHoldsItsInitializersType :: control :: M-NOMINAL-LOCAL-INIT',
+		'unit.query.NominalTypesTest#testANamesakeNoSignatureOfWhichCompilesIsNotTheReceiver :: control :: M-NOMINAL-NAMESAKE-EXCLUDED',
 		'unit.query.NominalTypesTest#testAReferenceItCannotCompleteHasNoAnswer :: control :: M-ANCESTOR-DEFAULT-MISSING,M-ANCESTOR-BARE-TYPE,M-ANCESTOR-SCOPE-OFF,M-ANCESTOR-DEFAULT-VISIBLE,M-NOMINAL-BOUND-SCOPE,M-INDEX-ALTERNATE-DEFAULTS',
 		'unit.query.NominalTypesTest#testAReferenceLeavingArgumentsOutNamesTheirDefaults :: control :: M-ANCESTOR-DEFAULT-FILL,M-ANCESTOR-COMPLETE-OFF,M-ANCESTOR-LINK-DEFAULTS,M-MEMBER-READ-COMPLETE,M-NOMINAL-BOUND-COMPLETE,M-NOMINAL-RETURN-COMPLETE,M-INDEX-PARAM-DEFAULTS',
 		'unit.query.NominalTypesTest#testATypeParameterReturnOrAnUnreadableTypeHasNoAnswer :: control :: M-NOMINAL-RETURN-PARAM-NAME,M-NOMINAL-UNREADABLE-WRITTEN',
@@ -1202,8 +1215,13 @@ final class PinsQueryAndRuntime {
 		'unit.query.NominalTypesTest#testAnInheritedMemberReadsThroughItsChainsArguments :: control :: M-ANCESTOR-ARGS-OFF,M-MEMBER-READ-HOST-ARGS,M-NOMINAL-SELF-PARAMS',
 		'unit.query.NominalTypesTest#testAnOptionalParameterReadsAsNullable :: control :: M-NOMINAL-OPTIONAL-PARAM',
 		'unit.query.NominalTypesTest#testAnOptionalStructureFieldReadsAsNullable :: control :: M-MEMBER-OPTIONAL-READ,M-INDEX-OPTIONAL-FIELD',
+		'unit.query.NominalTypesTest#testAnOverloadedCallReturnsWhatTheSelectedSignatureReturns :: control :: '
+			+ 'M-NOMINAL-SELECTED-STATIC,M-NOMINAL-OVERLOAD-REFUSED,M-SOURCE-OVERLOAD-REFUSED,M-CALLS-FIRST-COMPILING,'
+			+ 'M-CALLS-AGREED-RETURN,M-SOURCE-SELECTED-STATIC,M-NOMINAL-STATIC-ALIAS,M-NOMINAL-ARGUMENT-NULL,M-NOMINAL-ARGUMENT-BOUND',
 		'unit.query.NominalTypesTest#testDeclarationsWritingAReturnDifferentlyHaveNoSource :: control :: M-NOMINAL-RETURN-AGREE',
 		'unit.query.NominalTypesTest#testTheSourceModeKeepsTypeArguments :: control :: M-NOMINAL-SOURCE-CALL,M-NOMINAL-RETURN-TYPEPARAM',
+		'unit.query.NominalTypesTest#testTheSuperclassChainDeclaresAMemberBeforeAnInterface :: control :: '
+			+ 'M-NOMINAL-DECLARING-SUPER-POISON,M-NOMINAL-SELECTED-VALUE,M-SOURCE-SELECTED-VALUE',
 		'unit.query.NominalTypesTest#testTheWrittenTypeReadersPeelTheirWrappers :: control :: M-ELEMENT-PEEL,M-OUTER-PATH-PEEL',
 		'unit.query.NominalTypesTest#testThisInsideAnAbstractIsItsUnderlyingValue :: control :: M-NOMINAL-ABSTRACT-THIS',
 		'unit.query.OpaqueCondRegionScanTest#testABraceDeltaRuleAnswersTwoOfTheThreeRegionClassesWrong :: control :: '
