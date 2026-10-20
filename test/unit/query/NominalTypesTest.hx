@@ -5,6 +5,7 @@ import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import haxe.Exception;
+import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
 
@@ -28,10 +29,13 @@ class NominalTypesTest extends Test {
 		+ '\tfunction probeItems() return b.items();\n\tfunction probeGet() return b.get();\n'
 		+ '\tfunction probePick() return b.pick();\n\tfunction probePlain() return b.plain();\n}\n';
 
-	/** Declarations of standard-library names a fixture reads, each in the root-package module of its own name. */
+	/**
+	 * Stubs of standard-library declarations a fixture reads, where the index takes them for the std's own
+	 * (`QueryTestHelpers.stdPath`): the dynamic type a reference may name bare, and a class a default names.
+	 */
 	private static final STD: Array<{ file: String, source: String }> = [
-		{ file: 'Dynamic.hx', source: '@:coreType abstract Dynamic<T> from T to T {}\n' },
-		{ file: 'String.hx', source: 'extern class String {}\n' }
+		{ file: QueryTestHelpers.stdPath('StdTypes.hx'), source: '@:coreType abstract Dynamic<T> from T to T {}\n' },
+		{ file: QueryTestHelpers.stdPath('String.hx'), source: 'extern class String {}\n' }
 	];
 
 	@:pin('control')
@@ -238,6 +242,9 @@ class NominalTypesTest extends Test {
 		Assert.isNull(sourceAmong(text, STD, 'probeRec'), 'a default reaching its own type');
 		Assert.isNull(sourceAmong(text, STD, 'probeBox'), 'a name a type parameter of the file holds');
 		Assert.equals('Dynamic', sourceAmong(text, STD, 'probeDynamic'), 'the dynamic type written bare');
+		final rec: Probe = probeIn(text, 'probeRec', STD);
+		final recFile: Null<FileInfo> = rec.index.fileInfo('p/C.hx');
+		Assert.isNull(recFile == null ? 'no file' : rec.index.typing.ancestors.completed('Rec', recFile, null, []), 'asked directly');
 		final holder: Array<{ file: String, source: String }> = [
 			{ file: 'a/Holder.hx', source: 'package a;\n\nimport b.Hidden;\n\nclass Holder<T = Hidden> {}\n' },
 			{ file: 'b/Hidden.hx', source: 'package b;\n\nclass Hidden {}\n' }
