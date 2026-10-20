@@ -28151,6 +28151,22 @@
 			"find": "return TypeResolver.reified(node, root, shape)",
 			"replace": "return false",
 			"note": "an expression inside a reification is given the nominal of the code its text spells"
+		},
+		{
+			"name": "M-FACTTEXT-EMPTY-MENTION",
+			"type": "anyparse.query.FactText",
+			"method": "mentions",
+			"find": "if (name.length == 0) return false;",
+			"replace": "{}",
+			"note": "an empty name is mentioned by a text that ends in a non-word character, and the search for it never ends on one that ends in a word"
+		},
+		{
+			"name": "M-FACTTEXT-EMPTY-CALL",
+			"type": "anyparse.query.FactText",
+			"method": "spellsCall",
+			"find": "if (name.length == 0) return false;",
+			"replace": "{}",
+			"note": "an empty name is called by a text that opens a parenthesis, and the search for it never ends on most others"
 		}
 	]
 }

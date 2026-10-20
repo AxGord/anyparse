@@ -132,8 +132,10 @@ final class FactText {
 		return out;
 	}
 
-	/** Whether `text` holds `name` as a whole word. */
+	/** Whether `text` holds `name` as a whole word; never an empty `name`. */
 	public static function mentions(text: String, name: String): Bool {
+		// an empty name is no word, and searching for it never ends past the text's last offset
+		if (name.length == 0) return false;
 		var from: Int = text.indexOf(name);
 		while (from >= 0) {
 			final before: Int = from == 0 ? ' '.code : text.fastCodeAt(from - 1);
@@ -145,8 +147,9 @@ final class FactText {
 		return false;
 	}
 
-	/** Whether `text` holds a call of `name`: the whole word, then its argument list's `(`. */
+	/** Whether `text` holds a call of `name`: the whole word, then its argument list's `(`; never of an empty `name`. */
 	public static function spellsCall(text: String, name: String): Bool {
+		if (name.length == 0) return false;
 		var from: Int = text.indexOf(name);
 		while (from >= 0) {
 			final before: Int = from == 0 ? ' '.code : text.fastCodeAt(from - 1);

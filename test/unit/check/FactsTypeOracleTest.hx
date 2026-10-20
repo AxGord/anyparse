@@ -242,7 +242,7 @@ class FactsTypeOracleTest extends Test {
 	 */
 	@:pin('control') @:killer('M-FACTS-READ-RECORD-NAME') @:killer('M-FACTS-READ-NAME') @:killer('M-FACTS-RECEIVER-CALL')
 	@:killer('M-FACTS-SPELLED-CALL') @:killer('M-FACTS-FOREIGN-SITE') @:killer('M-FACTS-TEMP-LOCAL') @:killer('M-FACTS-TEMP-ALONE')
-	@:killer('M-FACTS-VALUE-CALLEE')
+	@:killer('M-FACTS-VALUE-CALLEE') @:killer('M-FACTTEXT-EMPTY-MENTION') @:killer('M-FACTTEXT-EMPTY-CALL')
 	public function testARangeHoldingCodeTheTextDoesNotSpellHasNoType(): Void {
 		final source: String = 'class A {\n\tfunction f() {\n\t\tvar v = b.c();\n\t\tvar w = x;\n\t\tcb(1);\n\t}\n}\n';
 		// the first `length` characters of the first occurrence of `text`
@@ -285,6 +285,9 @@ class FactsTypeOracleTest extends Test {
 		final value: String =
 			'{"a":"value","r":"(Int)->Void","rp":[${cb.from},${cb.to}],"rt":"Void","p":[${valueCall.from},${valueCall.to}]}';
 		Assert.equals('(Int)->Void', facts('', value).typeOfExpressionAt('A.hx', cb), 'the function value a call calls');
+		// a name recorded empty is spelled by no text (and the word search for it would not end on every text)
+		Assert.isFalse(FactText.mentions('a;', ''), 'an empty name mentioned');
+		Assert.isFalse(FactText.spellsCall('(', ''), 'an empty name called');
 	}
 
 	/** The type the oracle over `facts` gives the local `v` of `SRC`. */
