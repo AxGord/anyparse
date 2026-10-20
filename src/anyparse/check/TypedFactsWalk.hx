@@ -368,10 +368,11 @@ final class TypedFactsWalk {
 		if (inside || straddles) {
 			_splice = null;
 			_expansion = null;
-		} else if (saved && code)
-			spliced(e, info)
-		else if (splice != null && splicedCode(e, info, code) && !holds(splice, info) && (expansion == null || !holds(expansion, info)))
+		} else if (saved && code) {
+			spliced(e, info);
+		} else if (splice != null && splicedCode(e, info, code) && !holds(splice, info) && (expansion == null || !holds(expansion, info))) {
 			nestedSplice(e, info);
+		}
 		final current: Null<InlineMethod> = _splice;
 		if (current != null && holds(current, info)) _spliceSite = { min: info.min, max: info.max };
 	}
@@ -1212,7 +1213,7 @@ final class TypedFactsWalk {
 	private static function wrapped(t: Type): Null<Type> {
 		return switch TypeTools.follow(t) {
 			case TAbstract(a, params):
-				// read once per abstract: each `a.get()` decodes the whole abstract, and a TM build asks ~47k times (11% of the macro)
+				// read once per abstract: each `a.get()` decodes the whole abstract, and a client build asks ~47k times (11% of the macro)
 				final key: String = a.toString();
 				if (!abstractBodies.exists(key)) {
 					final read: AbstractType = a.get();

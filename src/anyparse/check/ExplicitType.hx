@@ -133,8 +133,9 @@ final class ExplicitType implements Check implements OracleAssisted {
 				final child: QueryNode = kids[i];
 				if (functions.contains(child.kind) && !MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary)) {
 					for (edit in functionOracleEdits(seams, child)) edits.push(edit);
-				} else if (fields.contains(child.kind))
+				} else if (fields.contains(child.kind)) {
 					pushEdit(edits, fieldOracleEdit(seams, child));
+				}
 				walk(child);
 			}
 		}
@@ -403,8 +404,9 @@ final class ExplicitType implements Check implements OracleAssisted {
 			final exempt: Bool = parentKind == enumAbstract || EnumAbstractForms.isValue(node.span, guarded);
 			if (!exempt && !LiteralInfer.hasTypeBeforeInit(node, source))
 				push(out, file, node.span, 'field declared without an explicit type');
-		} else if (functions.contains(node.kind))
+		} else if (functions.contains(node.kind)) {
 			checkFunction(out, file, source, node, params, bodies);
+		}
 		for (c in node.children) walk(out, file, source, c, node.kind, fields, functions, params, bodies, enumAbstract, guarded);
 	}
 

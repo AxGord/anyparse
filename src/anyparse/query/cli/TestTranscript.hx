@@ -189,7 +189,7 @@ final class TestTranscript {
 					case _:
 						warnings = n;
 				}
-			} else if (open >= 2 && resultsRe.match(line))
+			} else if (open >= 2 && resultsRe.match(line)) {
 				return {
 					assertions: assertions,
 					successes: successes,
@@ -198,8 +198,9 @@ final class TestTranscript {
 					warnings: warnings,
 					ok: line.indexOf('(success: true)') >= 0
 				};
-			else if (open == 1)
+			} else if (open == 1) {
 				open = 0;
+			}
 		}
 		return null;
 	}

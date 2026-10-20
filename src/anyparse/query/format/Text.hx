@@ -125,10 +125,11 @@ final class Text {
 			if (span != null) {
 				final pos: Position = lineIndex.lineColAt(span.from);
 				buf.add(flat ? '$file:${pos.line}:${pos.col}: ' : '  ${pos.line}:${pos.col}: ');
-			} else if (flat)
+			} else if (flat) {
 				buf.add('$file: ');
-			else
+			} else {
 				buf.add('  (no-span): ');
+			}
 			buf.add(h.annotation);
 			if (h.args.length > 0) {
 				buf.add('(');
@@ -167,10 +168,11 @@ final class Text {
 			if (span != null) {
 				final pos: Position = lineIndex.lineColAt(span.from);
 				buf.add(flat ? '$heading:${pos.line}:${pos.col}: ' : '  ${pos.line}:${pos.col}: ');
-			} else if (flat)
+			} else if (flat) {
 				buf.add('$heading: ');
-			else
+			} else {
 				buf.add('  (no-span): ');
+			}
 			final severity: Severity = v.severity;
 			buf.add('[${severity.label()}] ${v.message} (${v.rule})\n');
 		}

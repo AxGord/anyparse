@@ -85,8 +85,9 @@ final class BodySkip {
 			if (c == close) {
 				if (depth == 0) return opened.length == 0 ? i : pos;
 				depth--;
-			} else if (c == open)
+			} else if (c == open) {
 				depth++;
+			}
 			i++;
 		}
 		return pos;

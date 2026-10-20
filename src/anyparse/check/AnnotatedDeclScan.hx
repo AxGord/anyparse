@@ -142,8 +142,9 @@ final class AnnotatedDeclScan {
 				final span: Null<Span> = child.span;
 				if (annotated && span != null) out.push(span.from);
 				annotated = seed;
-			} else if (!seams.modifiers.contains(kind))
+			} else if (!seams.modifiers.contains(kind)) {
 				annotated = seed;
+			}
 			collect(child, seams, out, false);
 		}
 	}

@@ -139,12 +139,13 @@ final class ReachDefinesProbe {
 				seen[line] = true;
 				types.push(type);
 				if (!compiled.contains(type.file)) compiled.push(type.file);
-			} else if (line.startsWith(DEFINES_PREFIX))
+			} else if (line.startsWith(DEFINES_PREFIX)) {
 				arms++;
-			else if (line.startsWith(EARLY_PREFIX))
+			} else if (line.startsWith(EARLY_PREFIX)) {
 				defined = defines(line.substr(EARLY_PREFIX.length));
-			else if (line.startsWith(FINAL_PREFIX))
+			} else if (line.startsWith(FINAL_PREFIX)) {
 				everDefined = defines(line.substr(FINAL_PREFIX.length));
+			}
 		}
 		final early: Null<Array<String>> = defined;
 		final all: Null<Array<String>> = everDefined;

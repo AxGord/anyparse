@@ -264,8 +264,9 @@ final class CrossRename {
 			if (node.kind == MemberKinds.FIELD_ACCESS_KIND) {
 				add(qualifiedPathOffset(source, node, typeName, paths));
 				if (children.length > 0) add(namespaceReceiverOffset(source, children[0], typeName, paths.qualified, valueResolved));
-			} else if (MemberKinds.META_KINDS.contains(node.kind) && paths.grantMetas.contains(node.name ?? ''))
+			} else if (MemberKinds.META_KINDS.contains(node.kind) && paths.grantMetas.contains(node.name ?? '')) {
 				for (arg in children) add(grantOffset(source, arg, typeName, paths.grant));
+			}
 			for (c in children) walk(c);
 		}
 		walk(tree);

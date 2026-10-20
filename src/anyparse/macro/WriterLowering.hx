@@ -1230,8 +1230,9 @@ class WriterLowering {
 					parts.push(macro _dbg($grpInner));
 				}
 				condFitGroupStartIdx = -1;
-			} else if (!isCondFitSetter)
+			} else if (!isCondFitSetter) {
 				condFitGroupStartIdx = -1;
+			}
 			prevAnyStarNonEmpty = null;
 			// ω-metastmt-sep: a mandatory Ref ALWAYS emits content, so a
 			// bare-tryparse Star that starts right after it must seed the

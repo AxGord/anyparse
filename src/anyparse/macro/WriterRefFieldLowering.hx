@@ -172,13 +172,14 @@ final class WriterRefFieldLowering {
 				ctx, child, optParts, leadText, writeCall, prevBodyField, typePath, prevPadTrailing, trailText, trailOptText,
 				hasStructFieldTrailOptSlot, structTrailOptAccess
 			);
-		} else if (bodyPolicyFlag != null)
+		} else if (bodyPolicyFlag != null) {
 			emitOptionalBodyPolicyOnly(
 				ctx, child, optParts, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName, indentObjArgs,
 				prevTrailFieldName
 			);
-		else
+		} else {
 			emitOptionalAbsentOnBody(ctx, child, optParts, refName, writeCall, bareSep);
+		}
 		// ω-pad-trailing-ref: optional-Ref `@:fmt(padTrailing)` pushes a trailing
 		// space INSIDE optParts so the pad is emitted only when `_optVal != null`;
 		// the tracker expr `$fieldAccess != null` matches that runtime presence

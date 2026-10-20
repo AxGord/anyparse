@@ -361,8 +361,9 @@ final class NewCommand implements CliCommand {
 			final resolved: Null<String> = CliArgs.resolveCodeArg('new', o.bodiesArg == '-' ? '-' : null, o.bodiesFromFile);
 			if (resolved == null) return EXIT_RUNTIME;
 			bodiesRaw = resolved;
-		} else if (o.bodiesArg != null)
+		} else if (o.bodiesArg != null) {
 			bodiesRaw = o.bodiesArg;
+		}
 
 		final className: String = newFileClassName(filePath);
 		final pkg: String = derivePackage(filePath);

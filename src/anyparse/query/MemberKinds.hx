@@ -591,8 +591,9 @@ final class MemberKinds {
 		final bType: Null<QueryNode> = b.type;
 		if (aType == null || bType == null) {
 			if (aType != bType) return false;
-		} else if (!structurallyEqual(aType, bType))
+		} else if (!structurallyEqual(aType, bType)) {
 			return false;
+		}
 		if (a.children.length != b.children.length) return false;
 		for (k in 0...a.children.length) if (!structurallyEqual(a.children[k], b.children[k])) return false;
 		return true;
@@ -732,21 +733,22 @@ final class MemberKinds {
 	): Bool {
 		var pending: Bool = incoming;
 		for (child in host.children) {
-			if (child.kind == staticKind)
+			if (child.kind == staticKind) {
 				pending = true;
-			else if (members.contains(child.kind)) {
+			} else if (members.contains(child.kind)) {
 				if (pending) {
 					final sp: Null<Span> = child.span;
 					if (sp != null) out.push(sp.from);
 				}
 				pending = false;
-			} else if (descendsToMemberHost(host.kind, child.kind))
+			} else if (descendsToMemberHost(host.kind, child.kind)) {
 				// OR, not assignment: a `#if A static #end` region leaves `static` pending for the
 				// member after `#end` in the A build, and a region that consumed it leaves nothing —
 				// but `incoming` still reaches that member in the build where A is false. Over-marking
 				// is the safe direction for this function (a member the flat reading calls static is
 				// one no caller will move); dropping `incoming` was the unsafe one.
 				pending = collectStaticFroms(child, staticKind, members, pending, out) || pending;
+			}
 		}
 		return pending;
 	}

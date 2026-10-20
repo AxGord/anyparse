@@ -137,8 +137,9 @@ final class NullSafetyGate {
 				if (line.endsWith('.hxml')) {
 					if (depth >= MAX_INCLUDE_DEPTH || mayEnable(LintDocuments.resolveAgainstConfigDir(base, line), base, depth + 1))
 						return true;
-				} else if (line.startsWith('-') && !PLAIN_HXML_FLAGS.contains(line.split(' ')[0]))
+				} else if (line.startsWith('-') && !PLAIN_HXML_FLAGS.contains(line.split(' ')[0])) {
 					return true;
+				}
 			}
 			return false;
 		}

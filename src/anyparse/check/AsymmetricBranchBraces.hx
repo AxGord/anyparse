@@ -7,6 +7,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
 import anyparse.runtime.Span;
@@ -15,33 +16,30 @@ using Lambda;
 using StringTools;
 
 /**
- * Flags an `if` / `else` pair in which EXACTLY ONE branch is braced -
- * `if (a) { p(); q(); } else r();` or its mirror. `Info`: both spellings compile
- * and mean the same thing, and which one to keep is the project's taste, so the
- * rule is `DefaultOff` - opt in with `"asymmetric-branch-braces": { "enabled": true }`.
- * It is the lint twin of the writer's
- * `whitespace.bracesConfig.singleStatementBraces: "symmetric"` policy, for a
- * project whose `fmt` does not run that policy, and its fix takes the writer's
- * repair direction: the bare branch gains braces (`fix`).
+ * Flags an if / else-if chain whose branches disagree: one braced, another bare -
+ * `if (a) { p(); q(); } else r();`, its mirror, or `if (a) { p(); } else if (b) q();`.
+ * `Info`: both spellings compile and mean the same thing, and which one to keep is the
+ * project's taste, so the rule is `DefaultOff` - opt in with
+ * `"asymmetric-branch-braces": { "enabled": true }`. It is the lint twin of the writer's
+ * `whitespace.bracesConfig.singleStatementBraces: "symmetric"` policy (`chainForcesBraces`),
+ * for a project whose `fmt` does not run it, and its fix takes the writer's repair
+ * direction: the bare branches gain braces (`fix`).
  *
  * ## What is flagged, and what is not
  *
- * Exactly one of the two branches is the grammar's block-statement kind. Two
- * braced branches are symmetric; two bare ones are symmetric too - this is not a
+ * Two braced branches are symmetric; two bare ones are symmetric too - this is not a
  * "brace everything" rule, and `if (d.length != 4) throw '...';` is never flagged.
  *
- * TWO exemptions, the same two the writer's symmetric policy applies, for the same
- * reason: an `else` whose body is another `if` (`} else if (c) ...`) or a `switch`
- * (`} else switch s { ... }`). Both are keyword-headed else bodies the writer
- * deliberately glues to the `else` line, and each closes on a `}` of its own, so
- * the pair already reads symmetric. Bracing the `if` one would rebuild the exact
- * `else { if ... }` shape `collapsible-else-if` exists to remove. The exemption is
- * on the ELSE side only: a `switch` in THEN position opposite a braced `else` is a
- * genuine asymmetry and is flagged.
+ * TWO exemptions, the writer's own: an `else` whose body is another `if` (a chain link,
+ * not a branch) or a `switch` (neither braced nor bare). Both are keyword-headed else
+ * bodies the writer glues to the `else` line, each closing on a `}` of its own; bracing
+ * the `if` one would rebuild the `else { if ... }` shape `collapsible-else-if` removes.
+ * The exemption is ELSE-side only: a `switch` in THEN position is a branch.
  *
- * The reported span is the whole `if` statement, so the message can name both
- * branch positions - a span on one branch alone reads as if that branch were the
- * defect, and which of the two moves is the config's decision, not the check's.
+ * A chain is a finding with or without a final `else`, and once: the tail pair's own
+ * finding when that pair is the asymmetric one - spanning that `if`, its message naming
+ * the braced side - else one spanning the whole chain (`if (a) p(); else if (b) { q(); }
+ * else { r(); }` is braced in its tail and bare in its head).
  *
  * ## Grammar-agnostic
  *
@@ -84,9 +82,7 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 				span: found.span,
 				rule: RULE_ID,
 				severity: Severity.Info,
-				message: found.thenBraced
-					? 'the then branch is braced and the else branch is not - brace both or neither'
-					: 'the else branch is braced and the then branch is not - brace both or neither'
+				message: found.message
 			});
 		});
 	}
@@ -96,11 +92,11 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 	 * `singleStatementBraces: "symmetric"` (`SingleStmtBraces.needsSymmetryWrap`), its gates read off
 	 * the grammar's seams instead of the writer's constructor names.
 	 *
-	 * The unit is the whole if / else-if CHAIN the pair ends, as the writer's `chainForcesBraces`
-	 * makes it: only a chain's LAST pair can be a finding (every earlier link has an `if` as its else,
-	 * which is exempt), and bracing that pair alone would leave `if (a) x(); else if (b) { y(); } else { … }`,
-	 * braced in its tail and bare in its head. So every bare branch of the chain gains braces, or none
-	 * does. Gates, each answering for the whole chain:
+	 * The unit is the whole if / else-if CHAIN a finding names, as the writer's `chainForcesBraces`
+	 * makes it - its tail pair, or the chain itself (`chainFinding`): bracing a tail pair alone would
+	 * leave `if (a) x(); else if (b) { y(); } else { … }`, braced in its tail and bare in its head. So
+	 * every bare branch of the chain (`bareBranches`) gains braces, or none does - a chain with no
+	 * final `else` the same. Gates, each answering for the whole chain:
 	 *
 	 * - an edit inside a branch this call already braces (or around one) waits for the next pass, so
 	 *   no two edits of one call overlap;
@@ -130,7 +126,8 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 			tree: root,
 			seams: seams,
 			terminator: closer,
-			plugin: plugin
+			plugin: plugin,
+			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source))
 		};
 		final edits: Array<FixEdit> = [];
 		for (pair in collect(tree, seams)) {
@@ -145,25 +142,66 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 		return edits;
 	}
 
-	/** Every asymmetric if/else in `root`, in document order: the whole statement, which branch is braced, and the bare one. */
+	/**
+	 * Every finding in `root`, one per if / else-if chain, in document order (`chainFinding`).
+	 */
 	private static function collect(root: QueryNode, seams: Seams): Array<Asymmetry> {
 		final out: Array<Asymmetry> = [];
-		walk(root, seams, out);
+		walk(root, seams, out, false);
 		return out;
 	}
 
-	private static function walk(node: QueryNode, seams: Seams, out: Array<Asymmetry>): Void {
-		final span: Null<Span> = node.span;
-		if (span != null && seams.ifKinds.contains(node.kind) && node.children.length == IF_WITH_ELSE_CHILD_COUNT) {
-			final whole: Span = span;
-			final thenBranch: QueryNode = node.children[THEN_BRANCH_INDEX];
-			final elseBranch: QueryNode = node.children[ELSE_BRANCH_INDEX];
-			final thenBraced: Bool = thenBranch.kind == seams.blockStmtKind;
-			final elseBraced: Bool = elseBranch.kind == seams.blockStmtKind;
-			if (thenBraced != elseBraced && !(thenBraced && seams.exemptElseKinds.contains(elseBranch.kind)))
-				out.push({ span: whole, thenBraced: thenBraced, node: node });
-		}
-		for (child in node.children) walk(child, seams, out);
+	/**
+	 * Collects the finding of every chain HEAD below `node` - an `if` that is not the else of another (`link` false).
+	 */
+	private static function walk(node: QueryNode, seams: Seams, out: Array<Asymmetry>, link: Bool): Void {
+		final found: Null<Asymmetry> = link || !seams.ifKinds.contains(node.kind) ? null : chainFinding(node, seams);
+		if (found != null) out.push(found);
+		final elseLink: Null<QueryNode> = elseOf(node, seams);
+		for (child in node.children) walk(child, seams, out, child == elseLink && seams.ifKinds.contains(child.kind));
+	}
+
+	/**
+	 * The one finding of the if / else-if chain `head` starts, or null when its branches agree. The tail pair's own
+	 * finding comes first - its then branch braced and its else bare or the reverse, an `else switch` exempt - and is
+	 * what a pair, a one-link chain, always answers. Otherwise the chain is a finding when one of its branches is
+	 * braced and another is one the writer's `chainForcesBraces` would brace (`bareBranches`): a chain with no final
+	 * `else`, or one braced in its tail and bare in its head. Its span is the whole chain.
+	 */
+	private static function chainFinding(head: QueryNode, seams: Seams): Null<Asymmetry> {
+		final links: Array<QueryNode> = linksFrom(head, seams);
+		final tail: QueryNode = links[links.length - 1];
+		final last: Null<QueryNode> = elseOf(tail, seams);
+		final headSpan: Null<Span> = head.span;
+		final braced: Bool = last?.kind == seams.blockStmtKind
+			|| links.exists(l -> l.children[THEN_BRANCH_INDEX].kind == seams.blockStmtKind);
+		return pairFinding(tail, last, seams) ?? (
+			headSpan != null && braced && bareBranches(links, seams).length > 0
+				? { span: headSpan, node: head, message: 'the if/else-if chain braces some branches and not others - brace all or none' }
+				: null
+		);
+	}
+
+	/**
+	 * The finding of the pair `tail` ends with its else branch `last`: exactly one of the two braced, a braced then
+	 * opposite an exempt `else switch` excepted. Null when `last` is null - a chain with no final `else` has no pair.
+	 */
+	private static function pairFinding(tail: QueryNode, last: Null<QueryNode>, seams: Seams): Null<Asymmetry> {
+		final span: Null<Span> = tail.span;
+		final thenBraced: Bool = tail.children[THEN_BRANCH_INDEX].kind == seams.blockStmtKind;
+		return if (
+			last == null || span == null || thenBraced == (last.kind == seams.blockStmtKind) || thenBraced
+			&& seams.exemptElseKinds.contains(last.kind)
+		)
+			null
+		else
+			{
+				span: span,
+				node: tail,
+				message: thenBraced
+					? 'the then branch is braced and the else branch is not - brace both or neither'
+					: 'the else branch is braced and the then branch is not - brace both or neither'
+			};
 	}
 
 	/** `fix`'s answer for one asymmetric pair: the brace edits on every bare branch of its chain, or the gate that kept them bare. */
@@ -185,13 +223,31 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 			else
 				null;
 			if (statement == null) return Declined('a bare branch carries no terminator of its own, so it would not compile inside braces');
-			edits.push({ span: new Span(placed.from, placed.from + text.length), text: '{ $statement }' });
+			final open: Int = bracesOpenAt(site, placed.from);
+			final braced: String = open == placed.from ? '{ $statement }' : ' {${site.source.substring(open, placed.from)}$statement }';
+			edits.push({ span: new Span(open, placed.from + text.length), text: braced });
 		}
 		if (edits.exists(e -> taken.exists(t -> e.span.from < t.span.to && t.span.from < e.span.to)))
 			return Declined('it overlaps a branch this pass braces - the next pass takes it');
 		return chainBracedAfter(site, edits, links)
 			? Braced(edits)
 			: Declined('the braced chain does not parse back as the same if/else with every branch braced');
+	}
+
+	/**
+	 * Where a bare branch whose statement starts at `from` opens its braces: `from` itself, or - when comments of its
+	 * own sit between its header and the statement, each opening a line of its own (`SourceComments.ownLineCommentAbove`)
+	 * - right after the header's last token, so the braces take those notes in instead of leaving them between the
+	 * header and the `{`.
+	 */
+	private static function bracesOpenAt(site: FixSite, from: Int): Int {
+		var start: Int = from;
+		var open: Int = SourceComments.ownLineCommentAbove(site.source, site.comments, start, false);
+		while (open >= 0) {
+			start = open;
+			open = SourceComments.ownLineCommentAbove(site.source, site.comments, start, false);
+		}
+		return start == from ? from : site.source.substring(0, start).rtrim().length;
 	}
 
 	/**
@@ -207,6 +263,11 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 			head = path[at];
 			at--;
 		}
+		return linksFrom(head, seams);
+	}
+
+	/** The links of the chain `head` starts: `head`, then every `if` down its else-if spine. */
+	private static function linksFrom(head: QueryNode, seams: Seams): Array<QueryNode> {
 		final links: Array<QueryNode> = [head];
 		var next: Null<QueryNode> = elseOf(head, seams);
 		while (next != null && seams.ifKinds.contains(next.kind)) {
@@ -223,13 +284,16 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 			: null;
 	}
 
-	/** The branches of the chain `links` the writer would brace: every bare then, and a bare terminal else that is not a link. */
+	/**
+	 * The branches of the chain `links` the writer would brace: every bare then, and a bare terminal else that is
+	 * neither a link nor an exempt `else switch` - the writer glues that one to its `else` (`SYMMETRY_WRAP_SKIP_CTORS`).
+	 */
 	private static function bareBranches(links: Array<QueryNode>, seams: Seams): Array<QueryNode> {
 		final out: Array<QueryNode> = [
 			for (link in links) if (link.children[THEN_BRANCH_INDEX].kind != seams.blockStmtKind) link.children[THEN_BRANCH_INDEX]
 		];
 		final last: Null<QueryNode> = elseOf(links[links.length - 1], seams);
-		if (last != null && last.kind != seams.blockStmtKind) out.push(last);
+		if (last != null && last.kind != seams.blockStmtKind && !seams.exemptElseKinds.contains(last.kind)) out.push(last);
 		return out;
 	}
 
@@ -337,11 +401,11 @@ private typedef Seams = {
 	final lastChildClosedKinds: Array<String>;
 };
 
-/** One asymmetric if/else: the whole statement, whether the THEN branch is the braced one, and the `if` node itself. */
+/** One asymmetric if/else or chain: the reported span, the `if` node it is anchored on, and the message naming the defect. */
 private typedef Asymmetry = {
 	final span: Span;
-	final thenBraced: Bool;
 	final node: QueryNode;
+	final message: String;
 };
 
 /** The per-file context of `AsymmetricBranchBraces.fix`. */
@@ -351,6 +415,9 @@ private typedef FixSite = {
 	final seams: Seams;
 	final terminator: String;
 	final plugin: GrammarPlugin;
+
+	/** The file's comment tokens (`SourceComments.collectCommentTokens`): a bare branch's own comments go inside its braces. */
+	final comments: Array<CommentTok>;
 };
 
 /** What `fix` does with one asymmetric pair: the brace edits of its chain, or the gate that kept them bare. */

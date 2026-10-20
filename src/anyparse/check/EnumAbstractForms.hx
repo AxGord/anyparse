@@ -87,13 +87,14 @@ final class EnumAbstractForms {
 		for (child in node.children) {
 			if (seams.condKind != null && child.kind == seams.condKind) {
 				if (carriesEnumMarker(child, seams)) marked = true;
-			} else if (seams.metaName != null && child.name == seams.metaName)
+			} else if (seams.metaName != null && child.name == seams.metaName) {
 				marked = true;
-			else if (seams.abstracts.contains(child.kind)) {
+			} else if (seams.abstracts.contains(child.kind)) {
 				if (marked) out.push(child);
 				marked = false;
-			} else if (!seams.leading.contains(child.kind))
+			} else if (!seams.leading.contains(child.kind)) {
 				marked = false;
+			}
 			collectHosts(child, seams, out);
 		}
 	}

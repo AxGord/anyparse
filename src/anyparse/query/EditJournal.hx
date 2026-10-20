@@ -72,8 +72,11 @@ final class EditJournal {
 			if (step.after == goal) {
 				if (out.length >= MAX_PATHS) return false;
 				out.push(path.concat([step]));
-			} else if (!visited.contains(step.after) && !collect(step.after, goal, path.concat([step]), visited.concat([step.after]), out))
+			} else if (
+				!visited.contains(step.after) && !collect(step.after, goal, path.concat([step]), visited.concat([step.after]), out)
+			) {
 				return false;
+			}
 		}
 		return true;
 	}

@@ -16295,7 +16295,7 @@
 			"name": "M-EXTERN-BLIND-DECLARED",
 			"type": "anyparse.query.MemberReach",
 			"method": "externHanded",
-			"find": "\t\t\t} else if (!escaped && !facts.unchecked().byType(read) && declaredCarrier(g, read, declaring))\n\t\t\t\tinto.blind = true;",
+			"find": "\t\t\t} else if (!escaped && !facts.unchecked().byType(read) && declaredCarrier(g, read, declaring)) {\n\t\t\t\tinto.blind = true;\n\t\t\t}",
 			"replace": "\t\t\t}",
 			"note": "an extern handed an object carrying the member that never left the type system is taken to write none by its name"
 		},
@@ -27927,6 +27927,53 @@
 			"find": "_breakAsOnePerLine && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0",
 			"replace": "_breakAsOnePerLine",
 			"note": "every source-flat list is deferred, a flat one included, so a host under-measures a literal that still stands flat and glues past the limit"
+		},
+		{
+			"name": "M-ASYM-CHAIN-UNFLAGGED",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "chainFinding",
+			"find": "headSpan != null && braced && bareBranches(links, seams).length > 0",
+			"replace": "headSpan != null && false && bareBranches(links, seams).length > 0",
+			"note": "a chain whose braced and bare branches disagree outside its tail pair - one with no final else - is not a finding, although the writer symmetric mode braces it"
+		},
+		{
+			"name": "M-ASYM-CHAIN-PER-LINK",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "walk",
+			"find": "link || !seams.ifKinds.contains(node.kind)",
+			"replace": "!seams.ifKinds.contains(node.kind)",
+			"note": "every else-if link is read as the head of a chain of its own, so one chain reports its tail pair once per link above it"
+		},
+		{
+			"name": "M-ASYM-CHAIN-PAIR-SKIPPED",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "chainFinding",
+			"find": "return pairFinding(tail, last, seams) ?? (",
+			"replace": "return (",
+			"note": "an asymmetric tail pair is reported as the whole chain, losing the message that names which branch is braced"
+		},
+		{
+			"name": "M-ASYM-CHAIN-SWITCH-BRACED",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "bareBranches",
+			"find": " && !seams.exemptElseKinds.contains(last.kind)) out.push(last);",
+			"replace": ") out.push(last);",
+			"note": "a terminal else switch counts as a bare branch, so a braced chain ending in one is flagged and its switch braced, though the writer glues it to its else"
+		},
+		{
+			"name": "M-ASYM-FIX-COMMENT-OUTSIDE",
+			"type": "anyparse.check.AsymmetricBranchBraces",
+			"method": "bracesOpenAt",
+			"force": "from",
+			"note": "a bare branch is braced around its statement alone, leaving its own comments between the header and the `{`"
+		},
+		{
+			"name": "M-OWNLINE-COMMENT-TRAILING",
+			"type": "anyparse.query.SourceComments",
+			"method": "ownLineCommentAbove",
+			"find": "return open >= 0 && SourceText.startsItsLine(source, open) ? open : -1;",
+			"replace": "return open;",
+			"note": "a comment sharing its line with the code before it is read as the next statement own, so a header note moves inside the braces and a trailing note becomes the next declaration doc"
 		}
 	]
 }

@@ -475,12 +475,13 @@ final class MemberTouchScan {
 			if (!typedShape(f)) {
 				if (!expanded) return walk.unreadable;
 				walk.unread = true;
-			} else if (expanded)
-				for (run in expansionRuns(n, f, walk.view)) walk.out.push(run)
-			else if (walk.made || declarationHolding(walk.g, walk.node.id, f.at, walk.view) != null)
-				walk.out.push(f)
-			else
+			} else if (expanded) {
+				for (run in expansionRuns(n, f, walk.view)) walk.out.push(run);
+			} else if (walk.made || declarationHolding(walk.g, walk.node.id, f.at, walk.view) != null) {
+				walk.out.push(f);
+			} else {
 				return BySyntax;
+			}
 		}
 		return null;
 	}
@@ -835,8 +836,9 @@ final class MemberTouchScan {
 			if (!walk.made && nested.generated && expansionCode(walk.g, walk.node, n, nested.at, walk.view)) {
 				if (nested.fields.exists(f -> f.field == walk.name) || nested.calls.exists(c -> calledField(c.target) == walk.name))
 					walk.unread = true;
-			} else if (walk.made || CallGraphFacts.graphNodeOf(walk.g, walk.node, child, walk.view) == null)
+			} else if (walk.made || CallGraphFacts.graphNodeOf(walk.g, walk.node, child, walk.view) == null) {
 				walk.work.push(nested);
+			}
 		}
 		return true;
 	}

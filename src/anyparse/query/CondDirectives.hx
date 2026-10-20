@@ -385,9 +385,9 @@ final class CondDirectives {
 				i = quoted;
 				continue;
 			}
-			if (c == '('.code)
+			if (c == '('.code) {
 				depth++;
-			else if (c == ')'.code) {
+			} else if (c == ')'.code) {
 				depth--;
 				if (depth == 0) return i + 1;
 			}

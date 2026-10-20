@@ -40,9 +40,9 @@ final class FactsTypeText {
 		var depth: Int = 0;
 		for (i in open ... type.length) {
 			final c: Int = type.fastCodeAt(i);
-			if (c == '<'.code)
+			if (c == '<'.code) {
 				depth++;
-			else if (c == '>'.code && type.fastCodeAt(i - 1) != '-'.code) {
+			} else if (c == '>'.code && type.fastCodeAt(i - 1) != '-'.code) {
 				depth--;
 				if (depth == 0) return i == type.length - 1;
 			}

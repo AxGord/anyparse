@@ -240,18 +240,20 @@ final class SetModifier {
 			if (visibility.contains(name)) {
 				for (v in visibility) mods.remove(v);
 				if (!remove) mods.push(name);
-			} else if (remove)
-				mods.remove(name)
-			else if (!mods.contains(name))
+			} else if (remove) {
+				mods.remove(name);
+			} else if (!mods.contains(name)) {
 				mods.push(name);
+			}
 		}
 		final ranked: Array<String> = ORDER.filter(m -> mods.contains(m));
 		final out: Array<String> = [];
 		var next: Int = 0;
 		for (name in current) if (ORDER.contains(name)) {
 			if (next < ranked.length) out.push(ranked[next++]);
-		} else if (mods.contains(name))
+		} else if (mods.contains(name)) {
 			out.push(name);
+		}
 		while (next < ranked.length) out.push(ranked[next++]);
 		for (name in mods) if (!ORDER.contains(name) && !out.contains(name)) out.push(name);
 		return out.length > 0 ? '${out.join(' ')} ' : '';
@@ -290,9 +292,9 @@ final class SetModifier {
 			if (sibSpan == null) continue;
 			if (!modifierKinds.contains(sib.kind)) {
 				if (names.length > 0) crossed = true;
-				if (sib.kind == regionKind) for (child in sib.children) if (modifierKinds.contains(child.kind))
-					guarded.push(child.kind.toLowerCase())
-				else if (headKinds.contains(child.kind) && !anchored) {
+				if (sib.kind == regionKind) for (child in sib.children) if (modifierKinds.contains(child.kind)) {
+					guarded.push(child.kind.toLowerCase());
+				} else if (headKinds.contains(child.kind) && !anchored) {
 					anchor = sibSpan.from;
 					anchored = true;
 				}

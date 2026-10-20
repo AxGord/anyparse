@@ -1538,15 +1538,16 @@ final class RefShapeKindProjectionTest extends Test {
 	 * the shape carries the text, so a token that drifts is parsed in its new spelling.
 	 */
 	private static function slotTextsOf(value: Any, prefix: String, out: Map<String, String>): Void {
-		if (Std.isOfType(value, String))
+		if (Std.isOfType(value, String)) {
 			out[prefix] = cast value;
-		else if (Std.isOfType(value, Array)) {
+		} else if (Std.isOfType(value, Array)) {
 			final items: Array<Any> = cast value;
 			for (i in 0...items.length) slotTextsOf(items[i], prefix == '' ? '$i' : '$prefix.$i', out);
-		} else if (Std.isOfType(value, StringMap))
+		} else if (Std.isOfType(value, StringMap)) {
 			for (key => item in (cast value: StringMap<Any>)) slotTextsOf(item, prefix == '' ? key : '$prefix.$key', out);
-		else if (isAnonymousStructure(value))
+		} else if (isAnonymousStructure(value)) {
 			for (field in Reflect.fields(value)) slotTextsOf(Reflect.field(value, field), prefix == '' ? field : '$prefix.$field', out);
+		}
 	}
 
 	/** The string the `<field>#<slot>` address points at, or null when the shape no longer holds that slot. */

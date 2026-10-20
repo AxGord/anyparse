@@ -4892,3 +4892,32 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   breaks by width and the `+` chain around it reads the operand flat, while the next write reads it source-broken
   (`anyHardline`); the break sits behind the comprehension body's `BodyGroup`, which offers do not cross (FU3). `t_filter`
   tc k=27 — the comprehension `if` body seam is re-decided on read-back (`strictFitLineShape`), the same fit-body limit.
+
+## FU26 (2026-10-20) — `asymmetric-branch-braces` asks the question of a whole chain, final `else` or not
+
+- Gap (recorded by FU7): an else-if chain with no final `else` (`if (a) { x; } else if (b) y();`) was no finding, nor
+  was a final-else chain braced in its tail and bare in its head (`if (a) x(); else if (b) { y(); } else { z(); }`):
+  every non-tail link has an `if` as its else, so the pair test never saw them. `fmt` under
+  `singleStatementBraces: "symmetric"` braces both (`chainForcesBraces`), measured on fixtures with the start engine.
+- Detection now walks chain HEADS only (an `if` that is not another `if`'s else) and answers ONE finding per chain:
+  the tail pair's own finding, span and message unchanged, when that pair is the asymmetric one, else a finding spanning
+  the whole chain when a braced branch and a branch the writer would brace (`bareBranches`) coexist. The exemptions
+  stay the rule's: an `else if` is the spine, not a branch; a terminal `else switch` is neutral (it was already exempt
+  in a pair; `bareBranches` now leaves it out too, so the fix never braces it, as the writer glues it to its `else`).
+  A declaration and a conditional-compilation region are flagged and declined by the fix's existing gates, exactly as
+  in a pair; the fix is unchanged otherwise (all-or-nothing over the chain, terminator rules, reparse check).
+- Not mirrored, unchanged on purpose (pre-existing, pinned by `testASwitchInThenPositionIsStillFlagged`): a branch in
+  THEN position that is a `switch` or a bare `if` counts as bare and is braced by the fix, while the writer's
+  symmetric wrap skips both ctors (`SYMMETRY_WRAP_SKIP_CTORS`); and an unterminated bare expression takes its `;`
+  inside the braces where the writer leaves it bare (FU7's decision).
+  Neither anyparse nor a client corpus has such a site.
+- A bare branch's OWN comments - each opening a line of its own between its header and its statement - now go inside
+  its braces (`bracesOpenAt`): the braces open right after the header. Left outside (FU7's edit started at the
+  statement) they land between the header and the `{`, which is also what `fmt` does with such a branch under the
+  symmetric policy - three anyparse sites (`ValueEscapes` x2, `MemberKinds`) read `)` / `// note` / `{`. A comment
+  that shares its line with the header is the header's and stays. The "comment token directly above, opening its own
+  line" step is one shared primitive, `SourceComments.ownLineCommentAbove`, which `ElementSpan.docExtendedSpan` now
+  calls instead of its inline copy (block comments only there, as before).
+- anyparse src+test at the fixed point: 68 chain findings in 53 files, 0 declined; only braces / `;` /
+  whitespace differ; no follow-on rule fires. A client corpus with the rule enabled whose `fmt` runs
+  `singleStatementBraces: "remove"` (which makes chains symmetric already): 0 sites.
