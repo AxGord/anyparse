@@ -5136,3 +5136,30 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   any build: every alternative writes the same enum abstract, which `castClausesOf` refuses because the name node is not
   the declaration node — branch `feat/fu-FU25`
 
+- **Typing by the declared builds (T6, the step 4 T5 left).** The index keeps one record per `#if` branch of every
+  declaration (`TypeDeclInfo.branches`: the kind the branch writes, its range, an abstract's header clauses), replacing
+  `TypeDeclInfo.castClauses`, which a single branch of another kind (a `typedef` to a target type) nulled for the whole
+  declaration. `BuildBranches` (`TypingService.builds`) answers which of them some build the run declares may compile:
+  `ReachLiveness.live` over the builds the host probes (`SymbolIndexHost.reachBuilds`: the compiler oracle's
+  configurations, declared complete), the defines each build reported deciding a condition against the branch, a define
+  it never set (`everDefined`) counting as absent and one it set at any point as possibly present. `AbstractCasts` reads
+  only those branches — `clausesOf` (also the `TypedEventConstant` consumer, moved off the record), `branchMembers` (so
+  `holdsUntypedValue` and `OperatorOverloads`) and the cast graph's clauses and conversion members, a member only a dead
+  branch declares converting nothing. Three edges, each the conservative one: a declaration written once never asks for
+  the builds (the probe compiles every configuration, so it is asked only when the answer can change, and once); a run
+  with no builds known reads every branch; and a declaration no build compiles at all is read whole (no answer about it
+  can be checked against a build).
+  **Without the oracle the builds are not known, by decision.** A configuration's `defines` list names only the `-D`s
+  its command line adds; the target's own defines and those a library's `extraParams.hxml` or an initialization macro
+  sets reach only the compile (probed on 4.3.7: `--macro haxe.macro.Compiler.define('foo')` turns `#if foo` on, and
+  `-D flash` is refused from the command line, "a reserved compiler flag": a target define is set by the target alone),
+  and the generated hxml a `generate` entry names does not exist before `generate` runs. So a define the config leaves
+  out is no evidence that no build sets it — the positive-only list `LibraryBuild` reads for the opt-in library walk
+  states the same limit. Under `--no-oracle` every branch is read and nothing changes; the client-corpus false positive
+  this was built for goes in an oracle-enabled run only.
+  **The split `enum` header was misdiagnosed in FU25.** `#if (haxe_ver >= 4.0) enum #else @:enum #end abstract E(T)`
+  projects as a module-level conditional holding the keyword and the meta, followed by a plain abstract declaration
+  node, so `castClausesOf` reads that node (its name node is the declaration) and answers its clauses; the null was the
+  `typedef` branch's. 4.3.7 types `E.A` as `E` there (`$type`) and skips an optional `Float` parameter for it. The
+  index's kind stays the plain abstract kind (it mirrors the node); reading it as the enum-abstract kind would move the
+  answers of the rules keyed on that kind and is not this step — branch `feat/fu-FU31`
