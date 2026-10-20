@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.CoreValueTypes;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.CastClauses;
+import anyparse.query.SymbolIndex.DeclBranch;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
@@ -21,8 +22,9 @@ using StringTools;
  * `from` clause unequal to the abstract).
  *
  * A positive whitelist: a graph exists only for an abstract with no type parameter, whose header the index reads in
- * every branch (`TypeDeclInfo.castClauses`), that the compiler does not unify by hand (`RefShape.handUnifiedAbstractPaths`)
- * and whose casts are not picked by type arguments (`@:multiType`). Every other declaration answers null — not modelled.
+ * every branch some build of the run compiles (`clausesOf`, step T6), that the compiler does not unify by hand
+ * (`RefShape.handUnifiedAbstractPaths`) and whose casts are not picked by type arguments (`@:multiType`). Every other
+ * declaration answers null — not modelled.
  */
 @:nullSafety(Strict)
 final class AbstractCasts {
@@ -66,10 +68,15 @@ final class AbstractCasts {
 	/** The grammar's field member kinds (`RefShape.fieldDeclKinds`): an enum-abstract value is one. */
 	private final _fieldKinds: Array<String>;
 
+	/** Which `#if` branches of a declaration the run's builds compile: the only ones an answer reads. */
+	private final _builds: BuildBranches;
+
 	/** Built once by the owning `TypingService`. */
 	public function new(
-		refs: TypeRefIndex, ancestors: AncestorTable, cache: QueryCache, typeSyntax: TypeSyntaxReader, shape: RefShape
+		refs: TypeRefIndex, ancestors: AncestorTable, cache: QueryCache, typeSyntax: TypeSyntaxReader, shape: RefShape,
+		builds: BuildBranches
 	) {
+		_builds = builds;
 		_refs = refs;
 		_ancestors = ancestors;
 		_cache = cache;
@@ -180,26 +187,37 @@ final class AbstractCasts {
 	}
 
 	/**
-	 * The members of each `#if` branch declaring the abstract `r`, in source order (`CastClauses.span`): what one build of it
-	 * declares. Null for a declaration whose every branch the index does not read as an abstract (`TypeDeclInfo.castClauses`),
-	 * and for one with a type parameter.
+	 * The casts the header of each `#if` branch declaring `r` writes (`DeclBranch.clauses`), over the branches some build of
+	 * the run compiles (`BuildBranches`), in source order: null when one of them is no abstract, or an abstract whose clauses
+	 * the index does not read.
+	 */
+	public function clausesOf(r: ResolvedType): Null<Array<CastClauses>> {
+		final out: Array<CastClauses> = [];
+		for (b in _builds.of(r)) {
+			final clauses: Null<CastClauses> = b.clauses;
+			if (clauses == null) return null;
+			out.push(clauses);
+		}
+		return out;
+	}
+
+	/**
+	 * The members of each `#if` branch declaring the abstract `r` that some build of the run compiles, in source order
+	 * (`DeclBranch.span`): what one build of it declares. Null for a declaration one such branch of which the index does not
+	 * read as an abstract (`clausesOf`), and for one with a type parameter.
 	 */
 	public function branchMembers(r: ResolvedType): Null<Array<Array<MemberInfo>>> {
-		final clauses: Null<Array<CastClauses>> = r.type.castClauses;
-		return clauses == null || r.type.typeParamArity > 0 ? null : [
-			for (c in clauses) [
-				for (m in r.type.members) if (c.span.from <= m.declFrom && m.declFrom < c.span.to) m
-			]
-		];
+		final live: Array<DeclBranch> = _builds.of(r);
+		return clausesOf(r) == null || r.type.typeParamArity > 0 ? null : [for (b in live) membersOf(r, b)];
 	}
 
 	/**
 	 * Whether `name`, read off the type name of `r`, is a VALUE of `r` written with no type — an enum-abstract value, of type
 	 * `r` (`enum abstract E(Int) { var A = 1; final B = 2; }` reads `E.A : E`, Haxe 4.3.7, the deprecated `@:enum abstract`
-	 * alike): every `#if` branch of `r` is an abstract (`branchMembers`) declaring a field of that name with no written type,
-	 * not static and not under `#if`, which an abstract declares only as an enum value ("Cannot declare member variable in
-	 * abstract" otherwise). False for any other member, and for a declaration one branch of which is no abstract the index
-	 * reads (a `typedef` to a type of another build, an abstract whose `enum` keyword sits under `#if`).
+	 * alike): every `#if` branch of `r` some build compiles is an abstract (`branchMembers`) declaring a field of that name
+	 * with no written type, not static and not under `#if`, which an abstract declares only as an enum value ("Cannot declare
+	 * member variable in abstract" otherwise). False for any other member, and for a declaration one such branch of which is
+	 * no abstract the index reads (a `typedef` to a type of another build).
 	 */
 	public function holdsUntypedValue(r: ResolvedType, name: String): Bool {
 		final branches: Null<Array<Array<MemberInfo>>> = branchMembers(r);
@@ -241,11 +259,12 @@ final class AbstractCasts {
 	}
 
 	/**
-	 * The cast graph of the abstract `r` with each clause read by `clauseEnd`: null for a declaration that is no abstract,
-	 * one a branch of which the index does not read, a hand-unified or a `@:multiType` one.
+	 * The cast graph of the abstract `r` with each clause read by `clauseEnd`, over the branches some build of the run
+	 * compiles (`BuildBranches`): null for a declaration that is no abstract, one such branch of which the index does not
+	 * read, a hand-unified or a `@:multiType` one.
 	 */
 	private function graphWith(r: ResolvedType, clauseEnd: String -> TypeEnd): Null<CastGraph> {
-		final clauses: Null<Array<CastClauses>> = r.type.castClauses;
+		final clauses: Null<Array<CastClauses>> = clausesOf(r);
 		if (!_abstractKinds.contains(r.type.kind) || clauses == null) return null;
 		if (clauses.exists(c -> c.typeSelected) || _handUnified.contains(pathOf(r))) return null;
 		final branches: Array<CastBranch> = [
@@ -256,7 +275,8 @@ final class AbstractCasts {
 		final certain: MemberInfo -> Bool = m -> single && !m.guarded;
 		final fromFields: Array<CastField> = [];
 		final toFields: Array<CastField> = [];
-		for (m in r.type.members) if (MemberKinds.FN_DECL_KINDS.contains(m.kind)) {
+		final members: Array<MemberInfo> = [for (b in _builds.of(r)) for (m in membersOf(r, b)) m];
+		for (m in members) if (MemberKinds.FN_DECL_KINDS.contains(m.kind)) {
 			if (_fromMeta != null && m.metaNames.contains(_fromMeta) && m.isStatic)
 				fromFields.push({ end: inwardEnd(m, r), certain: certain(m) });
 			if (_toMeta != null && m.metaNames.contains(_toMeta) && !m.isStatic)
@@ -337,6 +357,13 @@ final class AbstractCasts {
 	/** The dotted path of the declaration `r`: its package, then its name. */
 	private static inline function pathOf(r: ResolvedType): String {
 		return r.file.pkg == '' ? r.type.name : '${r.file.pkg}.${r.type.name}';
+	}
+
+	/** The members of `r` the branch `b` declares: those whose declaration starts inside its range. */
+	private static function membersOf(r: ResolvedType, b: DeclBranch): Array<MemberInfo> {
+		return [
+			for (m in r.type.members) if (b.span.from <= m.declFrom && m.declFrom < b.span.to) m
+		];
 	}
 
 }

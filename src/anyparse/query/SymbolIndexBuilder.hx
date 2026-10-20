@@ -334,7 +334,13 @@ final class SymbolIndexBuilder {
 					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
 					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta, shape) : null,
 					underlyingRaw: underlyingPathOf(typeDecl.nameNode, isAbstract, gn.guarded),
-					castClauses: isAbstract ? castClausesOf(typeDecl, node, source, pendingMeta, shape) : null,
+					branches: [
+						{
+							kind: typeDecl.kind,
+							span: typeDecl.fullSpan,
+							clauses: isAbstract ? castClausesOf(typeDecl, node, source, pendingMeta, shape) : null
+						}
+					],
 					guarded: gn.guarded,
 					forwardedMembers: pendingForwarded
 				};
@@ -601,14 +607,14 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * The cast clauses of the abstract `decl` declares, read off the `node` that holds them (`TypeDeclInfo.castClauses`): one
-	 * record of the `from` and `to` types its header writes, verbatim, and the annotations `pendingMeta` puts on it. Null when
-	 * the header is shared by `#if` branches (a split-header region names one branch's head only), or puts a clause under
-	 * `#if` — what the header casts to is then not written in one place.
+	 * The casts the header of the abstract `decl` writes, read off the `node` that holds them (`DeclBranch.clauses`): the
+	 * `from` and `to` types, verbatim, and the annotations `pendingMeta` puts on it. Null when the header is shared by `#if`
+	 * branches (a split-header region names one branch's head only), or puts a clause under `#if` — what the header casts to
+	 * is then not written in one place.
 	 */
 	private static function castClausesOf(
 		decl: TypeDeclMatch, node: QueryNode, source: String, pendingMeta: Array<String>, shape: RefShape
-	): Null<Array<CastClauses>> {
+	): Null<CastClauses> {
 		final fromKind: Null<String> = shape.abstractFromClauseKind;
 		final toKind: Null<String> = shape.abstractToClauseKind;
 		if (fromKind == null || toKind == null || decl.nameNode != node) return null;
@@ -627,25 +633,12 @@ final class SymbolIndexBuilder {
 			if (span == null) return null;
 			written.push(source.substring(span.from, span.to));
 		}
-		return [
-			{
-				from: from,
-				to: to,
-				transitive: carriesAnyMeta(pendingMeta, shape.transitiveCastTypeMetaNames),
-				typeSelected: carriesMeta(pendingMeta, shape.typeSelectedAbstractMetaName),
-				span: decl.fullSpan
-			}
-		];
-	}
-
-	/**
-	 * The cast clauses of a type two `#if` branches declare (`withAlternate`): every branch's record, or null when either
-	 * branch's are unknown — a branch that declares no abstract has none.
-	 */
-	private static function bothCastClauses(
-		first: Null<Array<CastClauses>>, alternate: Null<Array<CastClauses>>
-	): Null<Array<CastClauses>> {
-		return first == null || alternate == null ? null : first.concat(alternate);
+		return {
+			from: from,
+			to: to,
+			transitive: carriesAnyMeta(pendingMeta, shape.transitiveCastTypeMetaNames),
+			typeSelected: carriesMeta(pendingMeta, shape.typeSelectedAbstractMetaName)
+		};
 	}
 
 	/** Whether `node` or a node under it is of one of `kinds`. */
@@ -891,7 +884,7 @@ final class SymbolIndexBuilder {
 				? first.abstractForwardUnderlying
 				: null,
 			underlyingRaw: first.underlyingRaw == alternate.underlyingRaw ? first.underlyingRaw : null,
-			castClauses: bothCastClauses(first.castClauses, alternate.castClauses),
+			branches: first.branches.concat(alternate.branches),
 			guarded: true,
 			forwardedMembers: forwarded == null || alsoForwarded == null ? null : union(forwarded, alsoForwarded)
 		};

@@ -87,6 +87,11 @@ final class PinsQueryAndRuntime {
 		'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 		'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 		'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
+		'unit.query.BuildBranchesTest#testABranchNoDeclaredBuildCompilesIsDropped :: control :: M-BUILDS-FILTER-OFF,M-BUILDS-HOST-OFF,M-CASTS-CLAUSES-LIVE,M-CASTS-BRANCHES-LIVE',
+		'unit.query.BuildBranchesTest#testADeclarationNoBuildCompilesIsReadWhole :: control :: M-BUILDS-NONE-LIVE',
+		'unit.query.BuildBranchesTest#testADroppedBranchsMembersConvertNothing :: control :: M-CASTS-MEMBERS-LIVE',
+		'unit.query.BuildBranchesTest#testEveryBranchIsReadWhenTheRunKnowsNoBuilds :: control :: M-BUILDS-NONE-KNOWN,M-CASTS-CLAUSES-NULL,M-INDEX-BRANCHES-ALTERNATE',
+		'unit.query.BuildBranchesTest#testTheBuildsAreAskedOnceAndOnlyForSeveralBranches :: control :: M-BUILDS-ONE-BRANCH,M-BUILDS-ASKED-ONCE',
 		'unit.query.CachingGrammarPluginTest#testRetainSourcesDropsOnlyTheSupersededTexts :: control :: '
 			+ 'M-RETAIN-SOURCES-KEEPS-ALL,M-RETAIN-SOURCES-DROPS-LIVE',
 		'unit.query.CallGraphBindingTest#testAClassExtendingAnAliasIsASubtypeOfItsTarget :: control :: M-TS-REACH-ALIAS-SUBTYPES',

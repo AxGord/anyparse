@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.check.ThreadSafety;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ReachLiveness.ReachConfiguration;
 import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import unit.cli.CliFixture;
@@ -1636,7 +1637,7 @@ class ThreadSafetyCheckTest extends Test {
 	 */
 	public static function violations(
 		config: String, sources: Array<String>, ?beside: Array<{ name: String, source: String }>, withNotice: Bool = false,
-		?library: Array<String>
+		?library: Array<String>, ?defines: Array<ReachConfiguration>
 	): Array<Violation> {
 		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }].concat(beside ?? []));
 		// Each source a root module named after its first type: the compiler binds a bare name to a module's MAIN type only.
@@ -1650,7 +1651,7 @@ class ThreadSafetyCheckTest extends Test {
 		];
 		final plugin: GrammarPlugin = libraryFiles == null
 			? new HaxeQueryPlugin()
-			: QueryTestHelpers.projectPlugin(files, libraryFiles, true, false);
+			: QueryTestHelpers.projectPlugin(files, libraryFiles, true, false, defines);
 		final result: Array<Violation> = Linter.run(files, plugin, [new ThreadSafety()]);
 		CliFixture.removeDir(dir);
 		// every reporting run says once which builtin sinks it applied (`ThreadSafetyPositiveSinksTest` reads it)

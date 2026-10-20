@@ -207,7 +207,7 @@ final class TypedEventConstant implements Check implements ConfigAware implement
 			return null;
 		}
 		final abstractType: Null<ResolvedType> = ConfiguredTypes.resolve(index, spec.typeAbstract);
-		if (abstractType != null && isStringAbstract(abstractType, seams)) return { base: base, abstractType: abstractType };
+		if (abstractType != null && isStringAbstract(abstractType, seams, index)) return { base: base, abstractType: abstractType };
 		problems.push(
 			'"typeAbstract" "${spec.typeAbstract}" is not an abstract of one type parameter over ${seams.stringType} '
 			+ 'converting from ${seams.stringType} and to ${seams.stringType} — rule inert'
@@ -227,13 +227,13 @@ final class TypedEventConstant implements Check implements ConfigAware implement
 
 	/**
 	 * Whether `t` is a plain abstract of `ABSTRACT_ARITY` type parameter over the string type whose header converts from
-	 * and to the string type in every branch declaring it (`TypeDeclInfo.castClauses`).
+	 * and to the string type in every branch declaring it some build compiles (`AbstractCasts.clausesOf` in `index`).
 	 */
-	private static function isStringAbstract(t: ResolvedType, seams: Seams): Bool {
+	private static function isStringAbstract(t: ResolvedType, seams: Seams, index: SymbolIndex): Bool {
 		final decl: TypeDeclInfo = t.type;
 		if (!seams.abstractKinds.contains(decl.kind) || decl.kind == seams.enumAbstractKind) return false;
 		if (decl.typeParamArity != ABSTRACT_ARITY || decl.underlyingRaw != seams.stringType) return false;
-		final clauses: Null<Array<CastClauses>> = decl.castClauses;
+		final clauses: Null<Array<CastClauses>> = index.typing.casts.clausesOf(t);
 		return clauses != null && clauses.foreach(c -> c.from.contains(seams.stringType) && c.to.contains(seams.stringType));
 	}
 

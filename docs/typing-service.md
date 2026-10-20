@@ -18,6 +18,7 @@ its hosts are functions of their arguments, and every remembered answer is insta
 
 | part | side | what it answers |
 |---|---|---|
+| `builds` (`BuildBranches`) | signature | which `#if` branches of a declaration some build the run declares may compile (every branch when the run knows no builds) |
 | `ancestors` (`AncestorTable`) | signature | a declaration's supertype links (each resolved once), its alias target, what its chain passes to an ancestor's type parameters |
 | `casts` (`AbstractCasts`) | signature | the cast graph of each abstract: its `from` / `to` clauses per `#if` branch and its `@:from` / `@:to` members, each resolved once into a `TypeEnd` |
 | `unification` (`Unification`) | signature | whether a value of one type unifies with another (`tUnification.ml`), and whether an argument of one type is accepted where another is expected (`casts`, `abstractCast.ml`) |
@@ -72,7 +73,8 @@ None is needed yet: a run builds its index, and so its service, once. When a mod
 watch mode, a Haxe-in-Haxe server), invalidation plugs in at `DeclarationQuery.answer`: each computation records the
 declarations it read (the `ResolvedType`s a closure walk visits are already in hand at each `markSeen`), and an edit to a
 file drops the keys of its declarations and every answer that read one of them. A body edit drops body answers only;
-a signature answer reads no body.
+a signature answer reads no body. The run's builds (`builds`, T6) are read once per index and never change under it: an
+answer that read them is one the index's run holds, the way the thirteen configurations already share every key.
 
 ## The conformance harness (T1)
 
@@ -163,8 +165,8 @@ inlined-default-argument family out of the scored set and the package-blind name
   nominal `Call` 7 UNKNOWN → MATCH; the all-rules lint of four trees byte-identical. Left for later: `PreferStaticExtension`'s
   `UsingScan.usingConflict` asks a hypothetical `using` the rewrite would insert, which this question does not model.
 - **T4 — the cast graph of abstracts (done, FU18).** The index records each abstract header's clauses per `#if` branch
-  (`TypeDeclInfo.castClauses`: the `from` / `to` types as written, `@:coreType` / `@:transitive`, `@:multiType`; null for
-  a branch that declares no abstract and for a clause under `#if`). `AbstractCasts` (`index.typing.casts`, table
+  (`TypeDeclInfo.castClauses`, since T6 `DeclBranch.clauses`: the `from` / `to` types as written, `@:coreType` /
+  `@:transitive`, `@:multiType`; null for a branch that declares no abstract and for a clause under `#if`). `AbstractCasts` (`index.typing.casts`, table
   `castGraphs` by `ofType`) resolves them once into `TypeEnd`s — a declaration, a core value type (a top-level
   declaration of a `coreValueTypes` name, or such a name nothing resolves), the dynamic type, `Open` — with the
   `@:from` / `@:to` members (`certain` only for a member of a one-branch declaration not under `#if`); no graph for an
@@ -179,8 +181,8 @@ inlined-default-argument family out of the scored set and the package-blind name
   Consumers: `ArgumentTypes.fit` (`castFit`: a core type against a plain name is now decided too),
   `StructuralTypes.receiverFitsParameter` (plain unification: an `@:from`-only parameter passes the receiver over, `Any`
   takes every one) and `memberCouldUnify` (a read-only member through `to` clauses), all through `Unification`;
-  `TypedEventConstant` reads `castClauses` instead of re-parsing the declaring file. Each arm compiled first on Haxe
-  4.3.7 (`docs/decisions.md`, FU18).
+  `TypedEventConstant` reads the clauses (since T6 `AbstractCasts.clausesOf`) instead of re-parsing the declaring file.
+  Each arm compiled first on Haxe 4.3.7 (`docs/decisions.md`, FU18).
 - **T4b — std types for argument fits, `@:op` results, enum-abstract values (done, FU24).** `ArgumentTypes` resolves
   every written type in the run's resolution index where it holds the file writing it (`heldFor`: the std and the
   libraries resolve there; the call graph's own index answers otherwise, and still says which names are core), and a
@@ -189,8 +191,8 @@ inlined-default-argument family out of the scored set and the package-blind name
   `operators.ml`): the overload of a binary operator the left operand's abstract, else the right one's, selects — the
   first in declaration order whose first parameter EQUALS the left operand's type and whose second the right operand
   casts to (`Unification.casts`), mirrored on the right, swapped for a `@:commutative` one — every `#if` branch of the
-  abstract agreeing (`CastClauses.span`, `AbstractCasts.branchMembers`); `ArgumentTypes.arithmeticType` asks it past
-  core numbers. `AbstractCasts.holdsUntypedValue`: a value written with no type in every branch of an abstract is an
+  abstract agreeing (the branch's range, since T6 `DeclBranch.span`; `AbstractCasts.branchMembers`);
+  `ArgumentTypes.arithmeticType` asks it past core numbers. `AbstractCasts.holdsUntypedValue`: a value written with no type in every branch of an abstract is an
   enum-abstract value, of the abstract (`ArgumentTypes.accessType` asks it; the index host's deep walk does not yet).
   Measured on a client corpus: one false positive loses the call chain whose argument is `a - b` over `UInt` fields; its
   other chains stay, each passing a value of an enum abstract shaped like `openfl.text.TextFormatAlign`, which stays
@@ -250,11 +252,7 @@ inlined-default-argument family out of the scored set and the package-blind name
   Step 3, generic abstracts (FU25 S3): a generic abstract written with type arguments, or aliased by a plain `typedef`
   with them, is an end of its own (`TypeEnd.Applied`) whose clauses read the arguments for its type parameters
   (`AbstractCasts.appliedGraph`; invariant otherwise). Measured: tables and MATCH counts unchanged on all four trees.
-  Not done (step 4, typing by the declared builds): an `#if` branch every declared build leaves dead is still read, so
-  a declaration whose dead branch is another kind (an abstract in one build, a `typedef` to a target type in another)
-  answers nothing; the builds' liveness exists only in a run that compiles them (`ReachLiveness`, `--no-oracle` reads
-  none), and the index keeps no cast clauses for a declaration one branch of which is no abstract.
-
+  Step 4, typing by the declared builds, is T6.
 - **FU32 — three small items (done).** A function's written return is read off the span info by EVERY reader
   (`CallGraphNames.returnSourceOf(fn, returns)` over `SpanTypeInfo.returnTypeSources`; the call graph's nodes, its
   per-declaration and `@:overload` reads, the lock-alias bounds, the operand binder): the query-tree reader took a type
@@ -268,5 +266,23 @@ inlined-default-argument family out of the scored set and the package-blind name
   2 / 1 → 2 / 1 (28.2 / 22.7 %; four MATCH per currency now Unknown, `_std` copies disagreeing on an inherited return
   written with none), Pony 3 / 4 → 2 / 3 (27.9 / 26.2 %; `socket.write` a MATCH).
 
+- **T6 — typing by the declared builds (done, FU31).** The index keeps one record per `#if` branch of every declaration
+  (`TypeDeclInfo.branches`, `DeclBranch`: the kind the branch writes, its range, an abstract's header clauses), so a
+  declaration whose branches are of different kinds — an abstract in one build, a `typedef` to a target type in another
+  — keeps its abstract branches' clauses. `BuildBranches` (`index.typing.builds`) answers which branches some build the
+  run declares may compile (`of`): `ReachLiveness.live` over the builds the host probes (`SymbolIndexHost.reachBuilds`,
+  the compiler oracle's configurations declared complete), read once per index and only for a declaration with more
+  than one branch; every branch when no build is known — under `--no-oracle` always, since a configuration's define
+  lists cannot show that no build sets a define (`docs/decisions.md`, FU31) — and when no build compiles any. Consumers:
+  `AbstractCasts.clausesOf` (the clauses of those branches, null when one is no abstract; also `TypedEventConstant`'s),
+  `branchMembers` (so `holdsUntypedValue` and `OperatorOverloads`) and the cast graph (clauses and conversion members
+  of those branches only). The split header `#if … enum #else @:enum #end abstract` needed nothing: it projects as a
+  conditional followed by a plain abstract node, whose clauses the index already read. Measured: the all-rules lint of
+  four trees and the three `--no-oracle` thread-safety scores byte-identical (nothing is known there); an oracle-enabled
+  thread-safety run on a client corpus loses exactly its one targeted false positive (a constructor reached with an
+  enum-abstract value whose library declaration aliases a target type under `#else`: 161 → 160 reported, FP 4 → 3,
+  recall 102/102). The harness builds its
+  index with no builds known, so its tables are unchanged: source / nominal DIFFERENT upstream 0 / 0, anyparse 3 / 3, a
+  client corpus 2 / 1, Pony 3 / 4, every per-case list byte-identical.
 Each step lands as a table in `QueryCache` with its consumers moved onto it, and is measured on the harness: a step
 may lower an area's UNKNOWN share and may turn a DIFFERENT into a MATCH or an UNKNOWN, and must add no DIFFERENT.

@@ -6,6 +6,7 @@ import anyparse.check.FunctionTrees;
 import anyparse.check.ThreadSafety;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CallGraph;
+import anyparse.query.ReachLiveness.ReachConfiguration;
 import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
@@ -448,14 +449,17 @@ class ThreadSafetyConditionsTest extends Test {
 
 	/**
 	 * Every message of a `Sys.sleep` run over `sources` (plus `Runner`, whose `create` is a spawn), `extra` added to the
-	 * rule's options (`"key":value,…` or empty), with `library` held by the resolution scope only, sorted.
+	 * rule's options (`"key":value,…` or empty), with `library` held by the
+	 * resolution scope only — under builds setting `defines`, one per entry — sorted.
 	 */
-	private static function sleepFindings(extra: String, sources: Array<String>, ?library: Array<String>): Array<String> {
+	private static function sleepFindings(
+		extra: String, sources: Array<String>, ?library: Array<String>, ?defines: Array<ReachConfiguration>
+	): Array<String> {
 		final found: Array<String> = [
 			for (v in ThreadSafetyCheckTest.violations(
 				'{"rules":{"thread-safety":{"sinks":["Sys.sleep","Lock.wait","Mutex.acquire"],"spawns":["Runner.create"]'
 				+ (extra.length > 0 ? ',$extra' : '') + '}}}',
-				['class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources), null, false, library
+				['class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources), null, false, library, defines
 			)) v.message
 		];
 		found.sort(Reflect.compare);
@@ -768,6 +772,47 @@ class ThreadSafetyConditionsTest extends Test {
 			'class W { public static function make(?w:Float, ?e:E, ?hint:String):Void if (hint != null) Sys.sleep(1); }',
 			'class A { public static function main():Void W.make(1, E.X); }'
 		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The value of an enum abstract a `#if !flash` branch declares and a `typedef` to a target type replaces under `#else`
+	 * (`docs/typing-service.md`, step T6): under builds that never define `flash` the `typedef` is no build's, so `E.X` is of
+	 * `E` and binds `?e:E` (`hint` stays null); with no build known, or one defining `flash`, the value may be of the target
+	 * type, so it may bind `hint`.
+	 */
+	@:pin('control') @:killer('M-BUILDS-FILTER-OFF')
+	public function testAnEnumAbstractValueIsOfItsAbstractInEveryDeclaredBuild(): Void {
+		#if (sys || nodejs)
+		final library: Array<String> = [
+			'package lib;\n#if !flash\nenum abstract E(Int) {\nvar X = 1;\n}\n#else\ntypedef E = flash.Other;\n#end'
+		];
+		final sources: Array<String> = [
+			'import lib.E;\nclass W { public static function make(?w:Float, ?e:E, ?hint:String):Void if (hint != null) Sys.sleep(1); }',
+			'import lib.E;\nclass A { public static function main():Void W.make(1, E.X); }'
+		];
+		final native: ReachConfiguration = {
+			name: 'native',
+			defined: ['cpp'],
+			everDefined: ['cpp'],
+			values: [],
+			compiled: [],
+			types: []
+		};
+		final flash: ReachConfiguration = {
+			name: 'flash',
+			defined: ['flash'],
+			everDefined: ['flash'],
+			values: [],
+			compiled: [],
+			types: []
+		};
+		final reached: Array<String> = ['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'];
+		Assert.same([], sleepFindings('', sources, library, [native]));
+		Assert.same(reached, sleepFindings('', sources, library), 'no build known');
+		Assert.same(reached, sleepFindings('', sources, library, [native, flash]), 'a build defining `flash`');
 		#else
 		Assert.pass('non-sys target');
 		#end

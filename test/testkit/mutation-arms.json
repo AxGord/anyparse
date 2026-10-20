@@ -28338,8 +28338,8 @@
 		{
 			"name": "M-CASTS-BRANCH-MEMBERS",
 			"type": "anyparse.query.AbstractCasts",
-			"method": "branchMembers",
-			"find": "for (m in r.type.members) if (c.span.from <= m.declFrom && m.declFrom < c.span.to) m",
+			"method": "membersOf",
+			"find": "for (m in r.type.members) if (b.span.from <= m.declFrom && m.declFrom < b.span.to) m",
 			"replace": "for (m in r.type.members) m",
 			"note": "every `#if` branch declares every branch's members, so two branches of `D` pick the same first overload"
 		},
@@ -28830,6 +28830,94 @@
 			"find": "final declared: Array<MemberDeclaration> = index.typing.members.receiverDeclarationsOf(typeName, method);",
 			"replace": "final declared: Array<MemberDeclaration> = index.typing.members.memberDeclarationsOf(typeName, method);",
 			"note": "the source currency reads only the namesakes declaring the member, so `s.write('a')` is the namesake's `Void`"
+		},
+		{
+			"name": "M-BUILDS-ONE-BRANCH",
+			"type": "anyparse.query.BuildBranches",
+			"method": "of",
+			"find": "if (all.length < 2) return all;",
+			"replace": "if (all.length < 1) return all;",
+			"note": "a declaration written once asks the builds too, so a run probes its builds for a question no build can change"
+		},
+		{
+			"name": "M-BUILDS-NONE-KNOWN",
+			"type": "anyparse.query.BuildBranches",
+			"method": "of",
+			"find": "if (liveness == null || source == null) return all;",
+			"replace": "if (liveness == null || source == null) return [];",
+			"note": "with no build known no branch is read, so a declaration one branch of which is a `typedef` types its value"
+		},
+		{
+			"name": "M-BUILDS-FILTER-OFF",
+			"type": "anyparse.query.BuildBranches",
+			"method": "of",
+			"find": "final kept: Array<DeclBranch> = all.filter(b -> liveness.live(file, source, b.span));",
+			"replace": "final kept: Array<DeclBranch> = all;",
+			"note": "a branch every declared build leaves out is still read, so a `typedef` branch to a target type keeps the value untyped"
+		},
+		{
+			"name": "M-BUILDS-NONE-LIVE",
+			"type": "anyparse.query.BuildBranches",
+			"method": "of",
+			"find": "return kept.length == 0 ? all : kept;",
+			"replace": "return kept;",
+			"note": "a declaration no build compiles reads as one with no branch, so every branch vacuously declares any value"
+		},
+		{
+			"name": "M-BUILDS-ASKED-ONCE",
+			"type": "anyparse.query.BuildBranches",
+			"method": "new",
+			"find": "if (!asked) {",
+			"replace": "if (true) {",
+			"note": "the builds are read again for every question about a declaration with several branches"
+		},
+		{
+			"name": "M-BUILDS-HOST-OFF",
+			"type": "anyparse.query.BuildBranches",
+			"method": "new",
+			"find": "final read: () -> Null<ReachBuilds> = host == null ? () -> null : host.reachBuilds;",
+			"replace": "final read: () -> Null<ReachBuilds> = () -> null;",
+			"note": "the run's builds are never read, so every branch stays read under builds that leave one out"
+		},
+		{
+			"name": "M-CASTS-CLAUSES-NULL",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "clausesOf",
+			"find": "if (clauses == null) return null;",
+			"replace": "if (clauses == null) continue;",
+			"note": "a branch that is no abstract is passed over, so a `typedef` branch no longer keeps the declaration unmodelled"
+		},
+		{
+			"name": "M-CASTS-CLAUSES-LIVE",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "clausesOf",
+			"find": "for (b in _builds.of(r)) {",
+			"replace": "for (b in r.type.branches) {",
+			"note": "the clauses of every branch are read, a dead `typedef` branch's included, so the cast graph is lost under the builds"
+		},
+		{
+			"name": "M-CASTS-BRANCHES-LIVE",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "branchMembers",
+			"find": "final live: Array<DeclBranch> = _builds.of(r);",
+			"replace": "final live: Array<DeclBranch> = r.type.branches;",
+			"note": "a dead branch's members count as one build's, so the value its `typedef` branch lacks is no value"
+		},
+		{
+			"name": "M-CASTS-MEMBERS-LIVE",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "graphWith",
+			"find": "final members: Array<MemberInfo> = [for (b in _builds.of(r)) for (m in membersOf(r, b)) m];",
+			"replace": "final members: Array<MemberInfo> = r.type.members;",
+			"note": "a conversion member only a dead branch declares converts, so `V` takes a `String` no build lets it take"
+		},
+		{
+			"name": "M-INDEX-BRANCHES-ALTERNATE",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "withAlternate",
+			"find": "branches: first.branches.concat(alternate.branches),",
+			"replace": "branches: first.branches,",
+			"note": "the alternate branch's record is lost, so a declaration whose `#else` is a `typedef` reads as one abstract"
 		}
 	]
 }
