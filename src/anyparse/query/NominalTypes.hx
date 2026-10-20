@@ -457,9 +457,33 @@ final class NominalTypes {
 		if (direct != null || index == null || node.kind != shape.callKind || node.children.length == 0) return direct;
 		final callee: QueryNode = node.children[0];
 		final method: Null<String> = callee.name;
+		final typing: IndexTyping = {
+			root: root,
+			shape: shape,
+			declaredTypes: declaredTypes,
+			chain: chain,
+			index: index,
+			file: file,
+			seen: []
+		};
+		if (method != null && callee.kind == shape.identKind) {
+			final owner: Null<TypeDeclMatch> = bareCallOwner(callee, root, shape);
+			return owner == null
+				? null
+				: CallReturns.selectedReturn(node, CallReturns.ownDeclaration(owner, index, file), method, null, typing);
+		}
 		if (method == null || callee.kind != shape.fieldAccessKind || callee.children.length != 1) return null;
 		final receiver: Null<String> = expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, [], true);
-		return receiver == null ? null : returnSourceOf(index, receiver, method);
+		if (receiver != null)
+			return returnSourceOf(index, receiver, method) ?? CallReturns.selectedReturn(
+				node, index.refs.resolvedDeclsNamed(receiver), method, false, typing
+			);
+		final typeName: Null<String> = staticReceiverName(callee.children[0], root, shape, index);
+		return typeName == null
+			? null
+			: CallReturns.selectedReturn(
+				node, CallReturns.writtenDeclaration(typeName, callee.children[0], index, file), method, true, typing
+			);
 	}
 
 	/**
@@ -675,39 +699,26 @@ final class NominalTypes {
 	}
 
 	/**
-	 * The return type of an UNQUALIFIED call — a method of the enclosing type called without a
-	 * receiver (`l_benchTime(time)`). A callee name that binds to any declaration but a member — a
-	 * local or a parameter holding a closure, a local function (`function walk(…)` shadowing a
-	 * member `walk`), a module-level function — is another callee, whose return type the member
-	 * lookup does not name, so it stays null.
+	 * The type declaration enclosing the bare call `callee` whose member it calls: the scope walk resolves a bare `f(x)` to
+	 * the `FnMember f` that declares it, and binds nothing for one a supertype declares — any other binding (a local function)
+	 * is no member. Null otherwise.
 	 */
-	private static function unqualifiedCallNominal(
-		callee: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex, method: String
-	): Null<String> {
-		final identKind: Null<String> = shape.identKind;
+	private static function bareCallOwner(callee: QueryNode, root: QueryNode, shape: RefShape): Null<TypeDeclMatch> {
 		final span: Null<Span> = callee.span;
-		if (identKind == null || callee.kind != identKind || span == null) return null;
-		// Only a MEMBER binding is the sibling method: the scope walk resolves a bare `f(x)` to the
-		// `FnMember f` that declares it, and binds nothing for one a supertype declares
+		final method: Null<String> = callee.name;
+		if (span == null || method == null) return null;
 		final binding: Null<QueryNode> = TypeResolver.bindingNodeFrom(method, span, root, shape);
-		if (binding != null && !(shape.memberDeclKinds ?? []).contains(binding.kind)) return null;
-		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
-		return enclosing == null ? null : index.typing.members.returnNominalOf(enclosing, method);
+		return binding != null && !(shape.memberDeclKinds ?? []).contains(binding.kind) ? null : TypeResolver.enclosingTypeDecl(root, span);
 	}
 
 	/**
-	 * The return type of a TYPE-qualified static call (`Tools.getBuildDate()`) — the one shape
-	 * where the receiver is not a VALUE at all, so asking it for a type answers null and the
-	 * member lookup never runs.
-	 *
-	 * Three conditions, all of them needed: the receiver is a bare identifier, it is upper-initial
-	 * (the language's own convention for a type reference — a lower-case receiver is a value whose
-	 * type simply did not resolve, and guessing there would name a package segment), and it names
-	 * no value binding in scope. Only then is the NAME itself the receiver type.
+	 * The type name `receiver` names as the receiver of a TYPE-qualified static call `T.m(…)` — the one shape where the
+	 * receiver is not a VALUE at all, so asking it for a type answers null. Three conditions, all of them needed: the receiver
+	 * is a bare identifier, it is upper-initial (the language's own convention for a type reference — a lower-case receiver is
+	 * a value whose type did not resolve, and guessing there would name a package segment), and it names no value binding in
+	 * scope; a file of `index` declares the name. Null for any other receiver.
 	 */
-	private static function staticCallNominal(
-		receiver: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex, method: String
-	): Null<String> {
+	private static function staticReceiverName(receiver: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex): Null<String> {
 		final identKind: Null<String> = shape.identKind;
 		final name: Null<String> = receiver.name;
 		final span: Null<Span> = receiver.span;
@@ -718,7 +729,7 @@ final class NominalTypes {
 		else if (index.refs.declaringFiles(name).length == 0)
 			null
 		else
-			index.typing.members.returnNominalOf(name, method);
+			name;
 	}
 
 	private static function expressionNominalWalk(
@@ -733,6 +744,7 @@ final class NominalTypes {
 		final fieldKind: Null<String> = shape.fieldAccessKind;
 		if (callKind == null || fieldKind == null || index == null) return null;
 		final resolved: SymbolIndex = index;
+		final members: MemberLookup = resolved.typing.members;
 		// Three shapes the path walk cannot reach, each turning a NULL into an answer rather than
 		// one answer into another — so a caller that read the null as "unknown" gains a type where
 		// it had none, and no existing answer moves. All three were measured as the reason
@@ -744,7 +756,23 @@ final class NominalTypes {
 		final callee: QueryNode = node.children[0];
 		final method: Null<String> = callee.name;
 		if (method == null) return null;
-		if (callee.kind == shape.identKind) return unqualifiedCallNominal(callee, root, shape, resolved, method);
+		final typing: Null<IndexTyping> = chain == null ? null : {
+			root: root,
+			shape: shape,
+			declaredTypes: declaredTypes,
+			chain: chain,
+			index: index,
+			file: file,
+			seen: seen
+		};
+		if (callee.kind == shape.identKind) {
+			final owner: Null<TypeDeclMatch> = bareCallOwner(callee, root, shape);
+			return owner == null
+				? null
+				: members.returnNominalOf(owner.name, method) ?? selectedNominal(
+					node, CallReturns.ownDeclaration(owner, resolved, file), method, null, typing
+				);
+		}
 		if (callee.kind != fieldKind || callee.children.length != 1) return null;
 		// The callee's own receiver is asked in RECEIVER mode: `tmp.trim()` on a `tmp: Null<String>`
 		// looks `trim` up on `String`. A receiver that is ITSELF a call keeps today's answer — its
@@ -752,9 +780,19 @@ final class NominalTypes {
 		// argument left to peel; recovering it needs a return-SOURCE lookup the index does not have.
 		final receiver: Null<String> =
 			expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, seen, true);
-		if (receiver == null) return staticCallNominal(callee.children[0], root, shape, resolved, method);
-		final member: Null<String> = resolved.typing.members.returnNominalOf(receiver, method);
-		return member ?? staticExtensionNominal(receiver, method, chain, resolved, file);
+		if (receiver == null) {
+			final typeName: Null<String> = staticReceiverName(callee.children[0], root, shape, resolved);
+			return typeName == null
+				? null
+				: members.returnNominalOf(typeName, method) ?? selectedNominal(
+					node, CallReturns.writtenDeclaration(typeName, callee.children[0], resolved, file), method, true, typing
+				);
+		}
+		final member: Null<String> = members.returnNominalOf(receiver, method);
+		return
+			member ?? selectedNominal(node, resolved.refs.resolvedDeclsNamed(receiver), method, false, typing) ?? staticExtensionNominal(
+				receiver, method, chain, resolved, file
+			);
 	}
 
 	/**
@@ -840,6 +878,8 @@ final class NominalTypes {
 		var found: Null<String> = null;
 		final declared: Array<MemberDeclaration> = index.typing.members.memberDeclarationsOf(typeName, method);
 		for (d in declared) {
+			// an overloaded member returns what the signature a call selects returns (`selectedReturn`)
+			if (d.member.hasOverloadMeta || d.member.isOverload) return null;
 			final params: Array<String> = d.type.typeParamNames.concat(d.member.typeParamNames);
 			// as the compiler reads it where it is written: a reference leaving arguments out names their defaults
 			final returned: Null<String> = d.member.returnSource;
@@ -1078,6 +1118,14 @@ final class NominalTypes {
 		return pathReceiverMemberTypeSource(path, rootSource, index, c.file, true, shape.memberTransparentWrapperTypeNames ?? []);
 	}
 
+	/** The nominal `selectedReturn` answers for the call `node`, or null; null with no `typing` (no chain context to type it in). */
+	private static function selectedNominal(
+		node: QueryNode, starts: Array<ResolvedType>, method: String, onType: Null<Bool>, typing: Null<IndexTyping>
+	): Null<String> {
+		final returned: Null<String> = typing == null ? null : CallReturns.selectedReturn(node, starts, method, onType, typing);
+		return returned == null || typing == null ? null : outerNominalOf(returned, typing.chain.typeSyntax);
+	}
+
 }
 
 /**
@@ -1141,7 +1189,7 @@ typedef WrittenConstruction = {
 }
 
 /** What the index host of `TypingService.typeWalk` reads with: the deep walk's arguments, `seen` its cycle guard. */
-private typedef IndexTyping = {
+typedef IndexTyping = {
 	final root: QueryNode;
 	final shape: RefShape;
 	final declaredTypes: Map<Int, String>;

@@ -3,8 +3,10 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.CoreValueTypes;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.CastClauses;
+import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using Lambda;
@@ -24,6 +26,9 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class AbstractCasts {
+
+	/** The aliases `appliedAlias` is reading right now, by declaration: one re-entering itself stands for no end. */
+	private final _expanding: Array<String> = [];
 
 	/** The name -> declaration layer each written clause and member type is resolved through. */
 	private final _refs: TypeRefIndex;
@@ -106,9 +111,9 @@ final class AbstractCasts {
 	/** Whether the end `e` is an abstract: a declaration of an abstract kind, or a core value type that is no class. */
 	public function isAbstract(e: TypeEnd): Bool {
 		return switch e {
-			case Declared(r): _abstractKinds.contains(r.type.kind);
+			case Declared(r), Applied(r, _): _abstractKinds.contains(r.type.kind);
 			case Core(name): coreGraph(name) != null;
-			case Dyn, Open: false;
+			case Dyn, Open, Param(_): false;
 		};
 	}
 
@@ -118,6 +123,8 @@ final class AbstractCasts {
 	 * `typedef` alias hops; `Open` for an alias that does not resolve, re-enters itself or names a structure.
 	 */
 	public function declEnd(r: ResolvedType): TypeEnd {
+		final applied: Null<TypeEnd> = appliedAlias(r);
+		if (applied != null) return applied;
 		final at: Null<ResolvedType> = followed(r);
 		if (at == null) return Open;
 		final name: String = at.type.name;
@@ -127,19 +134,31 @@ final class AbstractCasts {
 	}
 
 	/**
-	 * The end the type `text`, written in `host` at `at`, stands for: its `Null<…>` peeled (`Null<T>` unifies as `T` both
-	 * ways), the dynamic type written bare, the declaration it resolves to there (`declEnd`), a core value type no
-	 * declaration bears the name of; `Open` for a type parameter of `host` or one of `params`, a type written with
-	 * arguments, any other shape and a name that resolves to nothing.
+	 * The end the type `text`, written in `host` at `at`, stands for (`endIn`), a type parameter of `host` or one of `params`
+	 * standing for none (`Open`).
 	 */
 	public function writtenEnd(text: String, host: ResolvedType, at: Int, params: Array<String>): TypeEnd {
+		return endIn(text, host.file, at, params.concat(host.type.typeParamNames));
+	}
+
+	/**
+	 * The end the type `text`, written in the file `file` at `at`, stands for: its `Null<…>` peeled (`Null<T>` unifies as `T`
+	 * both ways), the dynamic type written bare, the declaration it resolves to there (`declEnd`), a core value type no
+	 * declaration bears the name of; `Open` for one of the type parameters `params`, a type written with arguments, any other
+	 * shape and a name that resolves to nothing.
+	 */
+	public function endIn(text: String, file: FileInfo, at: Int, params: Array<String>): TypeEnd {
 		final trimmed: String = text.trim();
 		return switch _typeSyntax(trimmed)?.shape {
 			case Nominal(path, args) if (path == _nullable && args.length == 1):
-				writtenEnd(NominalTypes.typeArgumentSourcesOf(trimmed, _typeSyntax)?.join(',') ?? '', host, at, params);
-			case Nominal(path, args) if (args.length == 0 && !params.contains(path) && !host.type.typeParamNames.contains(path)):
-				final r: Null<ResolvedType> = _refs.resolveTypeRef(path, host.file, at);
+				endIn(NominalTypes.typeArgumentSourcesOf(trimmed, _typeSyntax)?.join(',') ?? '', file, at, params);
+			case Nominal(path, args) if (args.length == 0 && !params.contains(path)):
+				final r: Null<ResolvedType> = _refs.resolveTypeRef(path, file, at);
 				r == null ? unresolvedEnd(path) : declEnd(r);
+			case Nominal(path, args) if (!params.contains(path)):
+				final r: Null<ResolvedType> = _refs.resolveTypeRef(path, file, at);
+				final written: Array<String> = NominalTypes.typeArgumentSourcesOf(trimmed, _typeSyntax) ?? [];
+				r == null ? Open : appliedEnd(r, [for (a in written) endIn(a, file, at, params)]);
 			case _: Open;
 		};
 	}
@@ -187,6 +206,23 @@ final class AbstractCasts {
 		return branches != null && branches.foreach(members -> members.exists(m -> m.name == name && isUntypedValue(m)));
 	}
 
+	/**
+	 * The cast graph of the generic abstract `r` applied to the type arguments `args` (`apply_params`): a clause written as
+	 * one of `r`'s type parameters reads as the argument at its position (`from T1` of `EitherType<String, Buffer>` is
+	 * `String`), one naming a parameter inside another type as none (`Open`), a member's type naming one likewise. Null
+	 * where `r` has no graph and for a count of arguments `r` does not declare; computed each time, a few clauses long.
+	 */
+	public function appliedGraph(r: ResolvedType, args: Array<TypeEnd>): Null<CastGraph> {
+		final params: Array<String> = r.type.typeParamNames;
+		final at: Int = r.type.span.from;
+		return params.length != args.length || params.length == 0
+			? null
+			: graphWith(r, t -> {
+				final i: Int = params.indexOf(t.trim());
+				i >= 0 ? args[i] : writtenEnd(t, r, at, []);
+			});
+	}
+
 	/** Whether `m` is a field written with no type, not static, not under `#if`: in an abstract, an enum value. */
 	private inline function isUntypedValue(m: MemberInfo): Bool {
 		return _fieldKinds.contains(m.kind) && !m.isStatic && !m.guarded && m.typeSource == null;
@@ -198,19 +234,22 @@ final class AbstractCasts {
 		return _core != null && _core.names.contains(path) ? Core(path) : Open;
 	}
 
-	/** `graph`'s computation. */
+	/** `graph`'s computation: a declaration with no type parameter, each clause resolved where it is written. */
 	private function graphOf(r: ResolvedType): Null<CastGraph> {
-		final clauses: Null<Array<CastClauses>> = r.type.castClauses;
-		if (!_abstractKinds.contains(r.type.kind) || clauses == null || r.type.typeParamArity > 0) return null;
-		if (clauses.exists(c -> c.typeSelected) || _handUnified.contains(pathOf(r))) return null;
 		final at: Int = r.type.span.from;
+		return r.type.typeParamArity > 0 ? null : graphWith(r, t -> writtenEnd(t, r, at, []));
+	}
+
+	/**
+	 * The cast graph of the abstract `r` with each clause read by `clauseEnd`: null for a declaration that is no abstract,
+	 * one a branch of which the index does not read, a hand-unified or a `@:multiType` one.
+	 */
+	private function graphWith(r: ResolvedType, clauseEnd: String -> TypeEnd): Null<CastGraph> {
+		final clauses: Null<Array<CastClauses>> = r.type.castClauses;
+		if (!_abstractKinds.contains(r.type.kind) || clauses == null) return null;
+		if (clauses.exists(c -> c.typeSelected) || _handUnified.contains(pathOf(r))) return null;
 		final branches: Array<CastBranch> = [
-			for (c in clauses)
-				{
-					from: [for (t in c.from) writtenEnd(t, r, at, [])],
-					to: [for (t in c.to) writtenEnd(t, r, at, [])],
-					transitive: c.transitive
-				}
+			for (c in clauses) { from: [for (t in c.from) clauseEnd(t)], to: [for (t in c.to) clauseEnd(t)], transitive: c.transitive }
 		];
 		// a member of a type two branches declare may be another branch's; one under `#if` another build's
 		final single: Bool = clauses.length == 1;
@@ -229,6 +268,40 @@ final class AbstractCasts {
 			toFields: toFields,
 			fieldsComplete: !r.type.hasBuild && !r.type.hasAutoBuild
 		};
+	}
+
+	/**
+	 * The end of the declaration `r` applied to the type-argument ends `args`: an abstract declaring that many type
+	 * parameters, every argument an end the graph models, stands for itself applied (`Applied`); `Open` otherwise.
+	 */
+	private function appliedEnd(r: ResolvedType, args: Array<TypeEnd>): TypeEnd {
+		final modelled: Bool = args.length > 0 && !args.exists(a -> a.match(Open | Param(_)));
+		return modelled && _abstractKinds.contains(r.type.kind) && r.type.typeParamArity == args.length ? Applied(r, args) : Open;
+	}
+
+	/**
+	 * The end a plain `typedef` alias `r` stands for when it aliases a generic abstract with type arguments
+	 * (`typedef FsPath = EitherType<String, Buffer>`): that abstract applied (`endIn` of its written target, where `r`
+	 * writes it); null for any other declaration, which `followed` reads. An alias whose target re-enters it stands for none.
+	 */
+	private function appliedAlias(r: ResolvedType): Null<TypeEnd> {
+		final raw: Null<String> = r.type.aliasTargetWritten;
+		if (r.type.kind != SymbolIndex.TYPEDEF_DECL_KIND || r.type.isAnonStruct || r.type.typeParamArity > 0 || raw == null) return null;
+		final target: Null<ResolvedType> = _ancestors.aliasTarget(r);
+		final applied: Bool = switch _typeSyntax(raw.trim())?.shape {
+			case Nominal(path, args):
+				path != _nullable && args.length > 0;
+			case _: false;
+		};
+		if (!applied || target == null) return null;
+		final aliased: TypeDeclInfo = target.type;
+		if (!_abstractKinds.contains(aliased.kind) || aliased.typeParamArity == 0) return null;
+		final key: String = '${r.file.file}@${r.type.span.from}';
+		if (_expanding.contains(key)) return Open;
+		_expanding.push(key);
+		final end: TypeEnd = endIn(raw, r.file, r.type.span.from, []);
+		_expanding.pop();
+		return end;
 	}
 
 	/**
@@ -253,6 +326,8 @@ final class AbstractCasts {
 	public static function same(a: TypeEnd, b: TypeEnd): Bool {
 		return switch [a, b] {
 			case [Declared(x), Declared(y)]: AncestorTable.same(x, y);
+			case [Applied(x, xs), Applied(y, ys)]:
+				AncestorTable.same(x, y) && xs.length == ys.length && [for (i in 0...xs.length) i].foreach(i -> same(xs[i], ys[i]));
 			case [Core(x), Core(y)]: x == y;
 			case [Dyn, Dyn]: true;
 			case _: false;
@@ -280,6 +355,18 @@ enum TypeEnd {
 
 	/** A type the graph does not model: a type parameter, a type with arguments, a structure, a function, an unresolved name. */
 	Open;
+
+	/**
+	 * A type parameter of the signature a call is matched against — `T` of `function f<T:Int>(x:T)` — which the call binds
+	 * by unifying its arguments (`CallSelection`); every other reader takes it for `Open`.
+	 */
+	Param(name: String);
+
+	/**
+	 * A generic abstract applied to type arguments — `EitherType<String, Buffer>` — each an end the graph models: its
+	 * clauses read with the arguments for its type parameters (`AbstractCasts.appliedGraph`, `apply_params`).
+	 */
+	Applied(r: ResolvedType, args: Array<TypeEnd>);
 
 }
 

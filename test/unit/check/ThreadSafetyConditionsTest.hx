@@ -241,6 +241,35 @@ class ThreadSafetyConditionsTest extends Test {
 		#end
 	}
 
+	/**
+	 * A call an `@:overload` of its callee takes hands the body its arguments by position, each parameter the annotation
+	 * skips padded with `null` (4.3.7 `-js`): `W.go(new Foo(), true)` takes `(?y:Int, x:Foo, flag:Bool)` — the own `x:Bar`
+	 * refuses a `Foo` — so the body's `x` is null there and `if (x == null)` runs; the own parameters' slots bind nothing.
+	 * A call its own signature takes (`W.go(new Bar())`: the annotation wants two arguments at least) binds them as written.
+	 */
+	@:pin('control') @:killer('M-TS-OVERLOAD-OWN-SELECTED') @:killer('M-TS-OVERLOAD-VERDICTS')
+	public function testACallAnOverloadTakesBindsNoneOfTheBodysParameters(): Void {
+		#if (sys || nodejs)
+		final types: Array<String> = [
+			'class Foo { public function new() {} }',
+			'class Bar { public function new() {} }',
+			'class W { @:overload(function(?y:Int, x:Foo, flag:Bool):Void {}) public static function go(x:Bar, ?flag:Bool):Void '
+				+ 'if (x == null) Sys.sleep(1); }'
+		];
+		Assert.same(
+			['main thread reaches blocking "Sys.sleep": A.main -> W.go -> Sys.sleep'],
+			sleepFindings('', types.concat(['class A { public static function main():Void W.go(new Foo(), true); }'])),
+			'the annotation binds'
+		);
+		Assert.same(
+			[], sleepFindings('', types.concat(['class A { public static function main():Void W.go(new Bar()); }'])),
+			'the own signature binds'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** A parameter the body writes holds what the write gave it, not the argument: the branch stays reachable. */
 	@:pin('control') @:killer('M-TS-PARAM-WRITE-IGNORED')
 	public function testAWrittenParameterIsNotTracked(): Void {
@@ -599,13 +628,14 @@ class ThreadSafetyConditionsTest extends Test {
 
 	/**
 	 * Every way a call may bind decides a guard together: the literal binds the abstract (the `String` stays `null`) or the
-	 * `String` (an `.svg`), and neither way runs the branch.
+	 * `String` (an `.svg`), and neither way runs the branch. The abstract's `@:from String` sits under `#if`, so whether the
+	 * literal casts to it is another build's question: both ways are followed.
 	 */
 	@:pin('control') @:killer('M-TS-ARG-SETS-UNKNOWN')
 	public function testEveryWayACallMayBindDecidesTogether(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
-			'abstract Align(Null<Int>) { @:from static function ofText(s:String):Align return null; }',
+			'abstract Align(Null<Int>) {\n#if !flash\n\t@:from static function ofText(s:String):Align return null;\n#end\n}',
 			'using StringTools;\nclass W { public static function make(?align:Align, ?hint:String, quiet:Bool = true):Void '
 			+ 'if (hint != null) { if (!hint.endsWith(\'.svg\')) Sys.sleep(1); } }',
 			'class A { public static function main():Void W.make(\'a.svg\', false); }'

@@ -53,6 +53,67 @@ final class ArgumentSlots {
 		return walk.overflow ? null : walk.out;
 	}
 
+	/**
+	 * Whether a call passing `count` arguments to `params` compiles, as far as `fit` decides each argument (`unify_call_args`,
+	 * 4.3.7): `Misfits` when no way to bind them compiles (`runs` answers none), `Fits` when the compiler's own way — an
+	 * argument that unifies binds the parameter it meets, one that does not skips an optional parameter while fewer
+	 * arguments than parameters are left, a rest parameter takes every argument left — is decided at every step and ends
+	 * bound, every skip one `skipSafe` allows (Flash refuses to skip a parameter whose type is not nullable,
+	 * `pf_can_skip_non_nullable_argument`); `MayFit` otherwise.
+	 */
+	public static function compiles(
+		params: Array<SlotParam>, count: Int, fit: (arg:Int, param:Int) -> ArgumentFit, skipSafe: (param:Int) -> Bool
+	): ArgumentFit {
+		final all: Null<Array<Array<Int>>> = runs(params, count, fit);
+		return all != null && all.length == 0 ? Misfits : compilerPath(params, count, fit, skipSafe).verdict;
+	}
+
+	/**
+	 * The parameter each argument binds on the compiler's own way (`compiles`), in argument order, when that way surely
+	 * compiles; null otherwise.
+	 */
+	public static function compiledRun(
+		params: Array<SlotParam>, count: Int, fit: (arg:Int, param:Int) -> ArgumentFit, skipSafe: (param:Int) -> Bool
+	): Null<Array<Int>> {
+		final path: CompilerPath = compilerPath(params, count, fit, skipSafe);
+		return path.verdict == Fits ? path.bound : null;
+	}
+
+	/**
+	 * The compiler's own way to bind `count` arguments to `params` (`unify_call_args`): an argument that unifies binds the
+	 * parameter it meets, one that does not skips an optional parameter while fewer arguments than parameters are left, a
+	 * rest parameter takes every argument left — followed while every fit on it is decided. Its verdict: `Misfits` where it
+	 * fails, `Fits` where it ends bound with every skip one `skipSafe` allows, `MayFit` otherwise; and the parameter each
+	 * argument it followed binds.
+	 */
+	private static function compilerPath(
+		params: Array<SlotParam>, count: Int, fit: (arg:Int, param:Int) -> ArgumentFit, skipSafe: (param:Int) -> Bool
+	): CompilerPath {
+		final bound: Array<Int> = [];
+		var arg: Int = 0;
+		var param: Int = 0;
+		var safe: Bool = true;
+		while (arg < count) {
+			if (param >= params.length) return { verdict: Misfits, bound: bound };
+			final p: SlotParam = params[param];
+			switch fit(arg, param) {
+				case Fits:
+					bound.push(param);
+					arg++;
+					if (!p.rest) param++;
+				case Misfits if (!p.rest && p.optional && count - arg < params.length - param):
+					if (!skipSafe(param)) safe = false;
+					param++;
+				case Misfits:
+					return { verdict: Misfits, bound: bound };
+				case MayFit:
+					return { verdict: MayFit, bound: bound };
+			}
+		}
+		for (q in param ... params.length) if (!params[q].optional && !params[q].rest) return { verdict: Misfits, bound: bound };
+		return { verdict: safe ? Fits : MayFit, bound: bound };
+	}
+
 	/** Bind argument `arg` and the ones after it, meeting parameter `param` first. */
 	private static function step(walk: SlotWalk, arg: Int, param: Int): Void {
 		if (walk.overflow) return;
@@ -88,4 +149,10 @@ private typedef SlotWalk = {
 	final bound: Array<Int>;
 	final out: Array<Array<Int>>;
 	var overflow: Bool;
+}
+
+/** The compiler's own way to bind a call's arguments (`ArgumentSlots.compilerPath`): its verdict, the parameter each bound. */
+private typedef CompilerPath = {
+	final verdict: ArgumentFit;
+	final bound: Array<Int>;
 }

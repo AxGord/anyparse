@@ -110,7 +110,9 @@ typedef MemberInfo = {
 	/**
 	 * The member's VERBATIM declared RETURN type source (`Null<T>` and a dotted path preserved), or null
 	 * for a field / an unannotated return. The written form `returnNominal` reduces to a last segment,
-	 * which is what a reader binding the name in the declaring file's scope needs instead.
+	 * which is what a reader binding the name in the declaring file's scope needs instead. Read off the span
+	 * info (`SpanTypeInfo.returnTypeSources`), so a type parameter's bound, which the query tree flattens
+	 * beside the return (`function f<T:Int>(x:T) {}`), is never taken for one.
 	 */
 	var returnSource: Null<String>;
 
@@ -120,6 +122,14 @@ typedef MemberInfo = {
 	 * so `returnSource` is not the only return type a call to it can have.
 	 */
 	var hasOverloadMeta: Bool;
+
+	/**
+	 * The signatures a call to the member may select, in the order the compiler tries them (`callUnification.ml`,
+	 * `unify_field_call`: the field's own type, then `cf_overloads`, which `init_meta_overloads` fills in written order):
+	 * the member's own, then the one each signature-overload annotation on it writes. Empty for a member that is no function.
+	 * What `OverloadSelection` picks from, the return type of each read off the span info (`SpanTypeInfo.returnTypeSources`).
+	 */
+	var signatures: Array<CallSignature>;
 
 	/**
 	 * The member's VERBATIM declared type SOURCE — the written `:Type` text (`Null<T>`
@@ -438,6 +448,13 @@ typedef TypeDeclInfo = {
 	 * answer is compared against another simple name.
 	 */
 	var aliasTargetRaw: Null<String>;
+
+	/**
+	 * The type a plain `typedef` aliases as written, its type arguments included (`typedef P = E<String, Int>` ->
+	 * `E<String, Int>`); null exactly when `aliasTargetRaw` is. What the alias stands for when the arguments decide it (a
+	 * generic abstract's casts, `AbstractCasts.appliedAlias`).
+	 */
+	var aliasTargetWritten: Null<String>;
 
 	/**
 	 * True when the type declaration carries `@:rtti` metadata directly. Such a

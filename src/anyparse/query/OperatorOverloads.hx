@@ -83,7 +83,7 @@ final class OperatorOverloads {
 					agreed = one;
 				}
 				return agreed ?? Undecided;
-			case Open:
+			case Open, Param(_), Applied(_, _):
 				return Undecided;
 			case _:
 				return NoneTaken;

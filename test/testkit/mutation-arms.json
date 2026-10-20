@@ -22090,8 +22090,8 @@
 			"name": "M-NOMINAL-SOURCE-CALL",
 			"type": "anyparse.query.NominalTypes",
 			"method": "expressionTypeSource",
-			"find": "return receiver == null ? null : returnSourceOf(index, receiver, method);",
-			"replace": "return null;",
+			"find": "final receiver: Null<String> = expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, [], true);",
+			"replace": "final receiver: Null<String> = null;",
 			"note": "the source mode reads no method call's return"
 		},
 		{
@@ -25167,17 +25167,17 @@
 		{
 			"name": "M-BINDER-ARGUMENT-OVERLOAD",
 			"type": "anyparse.check.OperandCallees",
-			"method": "selectsItsSignature",
-			"find": " && !m.hasOverloadMeta",
+			"method": "memberParams",
+			"find": "if (m.hasOverloadMeta && signature == null) return null;",
 			"replace": "",
-			"note": "a lambda passed to an @:overload member is typed by the written signature the call may not select"
+			"note": "a lambda passed to an @:overload member whose call selects no one signature is typed by the member's own, which the call may not select"
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-TWIN",
 			"type": "anyparse.check.OperandCallees",
 			"method": "selectsItsSignature",
-			"find": "owner.members.filter(o -> o.name == m.name).length == 1 && ",
-			"replace": "",
+			"find": "owner.members.filter(o -> o.name == m.name).length == 1",
+			"replace": "true",
 			"note": "a lambda passed to a member a #if declares twice is typed by one build's signature"
 		},
 		{
@@ -26598,7 +26598,7 @@
 			"name": "M-BINDER-CALLEE-INHERITED-OFF",
 			"type": "anyparse.check.OperandCallees",
 			"method": "bareCallParams",
-			"find": "? null : memberParams(binder, declared, [], 0, []);",
+			"find": "? null : memberParams(binder, declared, [], 0, [], args);",
 			"replace": "? null : null;",
 			"note": "a bare call to an inherited member selects no parameter list"
 		},
@@ -26614,8 +26614,8 @@
 			"name": "M-BINDER-OWNER-BINDINGS-OFF",
 			"type": "anyparse.check.OperandCallees",
 			"method": "memberCallParams",
-			"find": ": memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, []);",
-			"replace": ": memberParams(binder, declared, [], 0, []);",
+			"find": ": memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, [], args);",
+			"replace": ": memberParams(binder, declared, [], 0, [], args);",
 			"note": "the receiver's type arguments bind nothing, so `Box<Use>.each`'s `T` stays unbound"
 		},
 		{
@@ -26630,7 +26630,7 @@
 			"name": "M-BINDER-METHOD-SHADOWS-OFF",
 			"type": "anyparse.check.OperandCallees",
 			"method": "memberParams",
-			"find": "if (!m.typeParamNames.contains(k)) k => v",
+			"find": "if (!typeParams.contains(k)) k => v",
 			"replace": "k => v",
 			"note": "a method's own type parameter does not shadow its type's, so `Box<Use>.shadow<T>` reads `T` as `Use`"
 		},
@@ -26638,9 +26638,9 @@
 			"name": "M-BINDER-CALLEE-OVERLOAD",
 			"type": "anyparse.check.OperandCallees",
 			"method": "memberParams",
-			"find": "if (!OperandBinder.typedByItsReturn(m) || m.isOverload",
-			"replace": "if (m.isOverload",
-			"note": "an `@:overload` member of another file is read by its written signature, which the call may not select"
+			"find": "final written: Null<CallSignature> = signature == m.signatures[0] ? null : signature;",
+			"replace": "final written: Null<CallSignature> = null;",
+			"note": "the `@:overload` signature a call selects is read as the member's own, so `three(1, c -> …)` types `c` by the own `(cb:(c:FlagOn) -> Void)`"
 		},
 		{
 			"name": "M-BINDER-ITERABLE-OFF",
@@ -27128,8 +27128,8 @@
 		},
 		{
 			"name": "M-MEMBER-READ-HOST-ARGS",
-			"type": "anyparse.query.MemberLookup",
-			"method": "memberRead",
+			"type": "anyparse.query.AncestorTable",
+			"method": "boundType",
 			"find": "params.length == 0 ? [] : boundArguments(start, host, args);",
 			"replace": "params.length == 0 ? [] : null;",
 			"note": "no argument binds the declaring type's parameters, so a member written with one is unknown everywhere"
@@ -27733,14 +27733,14 @@
 			"name": "M-CASTS-GRAPH-PARAMS",
 			"type": "anyparse.query.AbstractCasts",
 			"method": "graphOf",
-			"find": " || r.type.typeParamArity > 0) return null;",
-			"replace": ") return null;",
+			"find": "return r.type.typeParamArity > 0 ? null : graphWith(r, t -> writtenEnd(t, r, at, []));",
+			"replace": "return graphWith(r, t -> writtenEnd(t, r, at, []));",
 			"note": "an abstract with type parameters gets a graph, its clauses read without the arguments that bind them"
 		},
 		{
 			"name": "M-CASTS-TYPE-SELECTED",
 			"type": "anyparse.query.AbstractCasts",
-			"method": "graphOf",
+			"method": "graphWith",
 			"find": "clauses.exists(c -> c.typeSelected) || ",
 			"replace": "",
 			"note": "a `@:multiType` abstract, whose cast the compiler picks by its type arguments, is decided by its clauses"
@@ -27748,7 +27748,7 @@
 		{
 			"name": "M-CASTS-HAND-UNIFIED",
 			"type": "anyparse.query.AbstractCasts",
-			"method": "graphOf",
+			"method": "graphWith",
 			"find": " || _handUnified.contains(pathOf(r))) return null;",
 			"replace": ") return null;",
 			"note": "an abstract the compiler unifies by a hand-written arm (`EnumValue` takes every enum) is decided by its empty clauses"
@@ -27756,7 +27756,7 @@
 		{
 			"name": "M-CASTS-MEMBER-CERTAIN",
 			"type": "anyparse.query.AbstractCasts",
-			"method": "graphOf",
+			"method": "graphWith",
 			"find": "final certain: MemberInfo -> Bool = m -> single && !m.guarded;",
 			"replace": "final certain: MemberInfo -> Bool = m -> true;",
 			"note": "a conversion member under `#if`, or of a type two branches declare, casts in every build"
@@ -27764,7 +27764,7 @@
 		{
 			"name": "M-CASTS-BUILD-OPEN",
 			"type": "anyparse.query.AbstractCasts",
-			"method": "graphOf",
+			"method": "graphWith",
 			"find": "fieldsComplete: !r.type.hasBuild && !r.type.hasAutoBuild",
 			"replace": "fieldsComplete: true",
 			"note": "an abstract a build macro may give a conversion member is read as having none"
@@ -27986,10 +27986,10 @@
 		},
 		{
 			"name": "M-MEMBER-READ-COMPLETE",
-			"type": "anyparse.query.MemberLookup",
-			"method": "memberRead",
-			"find": "final complete: Null<String> = _ancestors.completed(",
-			"replace": "final complete: Null<String> = written ?? _ancestors.completed(",
+			"type": "anyparse.query.AncestorTable",
+			"method": "boundType",
+			"find": "final complete: Null<String> = completed(",
+			"replace": "final complete: Null<String> = written ?? completed(",
 			"note": "a member's written type is read as written, so a member `self: Box` reads as `Box`"
 		},
 		{
@@ -28083,9 +28083,9 @@
 		{
 			"name": "M-NOMINAL-UNQUALIFIED-MEMBER",
 			"type": "anyparse.query.NominalTypes",
-			"method": "unqualifiedCallNominal",
-			"find": "if (binding != null && !(shape.memberDeclKinds ?? []).contains(binding.kind)) return null;",
-			"replace": "{}",
+			"method": "bareCallOwner",
+			"find": "return binding != null && !(shape.memberDeclKinds ?? []).contains(binding.kind) ? null : TypeResolver.enclosingTypeDecl(root, span);",
+			"replace": "return TypeResolver.enclosingTypeDecl(root, span);",
 			"note": "a bare call of a local function shadowing a member is typed by the member's return"
 		},
 		{
@@ -28398,6 +28398,390 @@
 			"find": "commutativeOperatorMetaName: '@:commutative',",
 			"replace": "",
 			"note": "the grammar names no commutativity annotation, so no overload is tried swapped and a misfit leaves the walk undecided"
+		},
+		{
+			"name": "M-CALLS-CHOSEN-FIRST",
+			"type": "anyparse.query.CallSelection",
+			"method": "chosen",
+			"find": "return verdicts[open[0]] == Fits || open.length == 1 ? open[0] : null;",
+			"replace": "return open.length == 1 ? open[0] : null;",
+			"note": "a candidate that surely compiles binds only when it is the last one open, so `[Misfits, Fits, Fits]` binds none"
+		},
+		{
+			"name": "M-CALLS-CHOSEN-LAST-OPEN",
+			"type": "anyparse.query.CallSelection",
+			"method": "chosen",
+			"find": "return verdicts[open[0]] == Fits || open.length == 1 ? open[0] : null;",
+			"replace": "return verdicts[open[0]] == Fits ? open[0] : null;",
+			"note": "an undecided candidate binds nothing even when it is the only one left that may compile"
+		},
+		{
+			"name": "M-CALLS-CHOSEN-PROPER",
+			"type": "anyparse.query.CallSelection",
+			"method": "chosen",
+			"find": "if (kind == Proper) return open.length == 1 ? open[0] : null;",
+			"replace": "",
+			"note": "an `overload` member is chosen like an `@:overload` one: the first compiling, though the compiler takes the most specific"
+		},
+		{
+			"name": "M-CALLS-FIRST-COMPILING",
+			"type": "anyparse.query.CallSelection",
+			"method": "chosen",
+			"find": "return verdicts[open[0]] == Fits || open.length == 1 ? open[0] : null;",
+			"replace": "return verdicts[open[open.length - 1]] == Fits || open.length == 1 ? open[open.length - 1] : null;",
+			"note": "the last candidate compiling binds, so `O.h(1)` takes `(a:Int)` (`Bool`) instead of the first-written `(a:Float)`"
+		},
+		{
+			"name": "M-CALLS-PROPER-STATIC",
+			"type": "anyparse.query.CallSelection",
+			"method": "candidates",
+			"find": "return !onType || members.exists(",
+			"replace": "return members.exists(",
+			"note": "an `overload` member read off a value selects among its own type's alone, though the supertypes' take part"
+		},
+		{
+			"name": "M-CALLS-RETURN-AGREE",
+			"type": "anyparse.query.CallSelection",
+			"method": "returnOf",
+			"find": "if (returned == null || agreed != null && agreed != returned) return null;",
+			"replace": "if (returned == null) return null;",
+			"note": "candidates left open that return different types answer the last one's"
+		},
+		{
+			"name": "M-CALLS-AGREED-RETURN",
+			"type": "anyparse.query.CallSelection",
+			"method": "returnOf",
+			"find": "return agreed;",
+			"replace": "return null;",
+			"note": "no candidate decided answers nothing, even when every candidate open returns one type"
+		},
+		{
+			"name": "M-CALLS-FIT-CAST",
+			"type": "anyparse.query.CallSelection",
+			"method": "fit",
+			"find": "wanted.match(Open) || given.match(Open) ? MayFit : _unification.casts(given, wanted);",
+			"replace": "MayFit;",
+			"note": "a typed argument decides no candidate, so `O.h(1)` leaves three open"
+		},
+		{
+			"name": "M-SLOTS-COMPILES-DECIDED",
+			"type": "anyparse.query.ArgumentSlots",
+			"method": "compilerPath",
+			"find": "return { verdict: safe ? Fits : MayFit, bound: bound };",
+			"replace": "return { verdict: MayFit, bound: bound };",
+			"note": "a call decided at every step may still not compile, so no candidate surely does"
+		},
+		{
+			"name": "M-SLOTS-COMPILES-NONE",
+			"type": "anyparse.query.ArgumentSlots",
+			"method": "compiles",
+			"find": "return all != null && all.length == 0 ? Misfits : compilerPath(params, count, fit, skipSafe).verdict;",
+			"replace": "return compilerPath(params, count, fit, skipSafe).verdict;",
+			"note": "a call no way of which binds may still compile when its first fit is undecided"
+		},
+		{
+			"name": "M-SLOTS-COMPILES-UNSAFE-SKIP",
+			"type": "anyparse.query.ArgumentSlots",
+			"method": "compilerPath",
+			"find": "if (!skipSafe(param)) safe = false;",
+			"replace": "",
+			"note": "a skip Flash refuses (a defaulted parameter of a type that is not nullable) still compiles surely"
+		},
+		{
+			"name": "M-SLOTS-COMPILES-MAYFIT",
+			"type": "anyparse.query.ArgumentSlots",
+			"method": "compilerPath",
+			"find": "switch fit(arg, param) {",
+			"replace": "switch (fit(arg, param) == MayFit ? Fits : fit(arg, param)) {",
+			"note": "an undecided fit is taken as binding, so a call whose argument may not fit surely compiles"
+		},
+		{
+			"name": "M-INDEX-SIGNATURES-META",
+			"type": "anyparse.query.SymbolIndexMembers",
+			"method": "signaturesOf",
+			"find": "for (meta in overloads) {",
+			"replace": "for (meta in overloads.slice(0, 0)) {",
+			"note": "the `@:overload` annotations write no signature, so a call selects the member's own alone"
+		},
+		{
+			"name": "M-INDEX-SIGNATURES-BARE",
+			"type": "anyparse.query.SymbolIndexMembers",
+			"method": "signaturesOf",
+			"find": "if (signature == null) return [];",
+			"replace": "if (signature == null) continue;",
+			"note": "an annotation writing no function (a bare `@:overload`) is passed over, so the own signature reads as the only candidate"
+		},
+		{
+			"name": "M-SIGNATURE-FORM-OPTIONAL",
+			"type": "anyparse.query.SymbolIndexMembers",
+			"method": "paramFormOf",
+			"find": "else if (p.kind == seams.optionalParamKind)",
+			"replace": "else if (false)",
+			"note": "a `?p` parameter reads as one every call binds, so `null` no longer surely fits it and no call may skip it"
+		},
+		{
+			"name": "M-SIGNATURE-FORM-DEFAULTED",
+			"type": "anyparse.query.SymbolIndexMembers",
+			"method": "paramFormOf",
+			"find": "else if (p.children.exists(c -> !seams.annotationKinds.contains(c.kind)))",
+			"replace": "else if (false)",
+			"note": "a parameter with a default reads as one every call binds"
+		},
+		{
+			"name": "M-SIGNATURE-RETURN-SOURCE",
+			"type": "anyparse.query.SymbolIndexMembers",
+			"method": "signatureOf",
+			"find": "returnSource: maps.returnTypeSources[span.from]?.trim(),",
+			"replace": "returnSource: null,",
+			"note": "no signature reads its return type"
+		},
+		{
+			"name": "M-SIGNATURE-RETURN-TRIM",
+			"type": "anyparse.query.SymbolIndexMembers",
+			"method": "signatureOf",
+			"find": "returnSource: maps.returnTypeSources[span.from]?.trim(),",
+			"replace": "returnSource: maps.returnTypeSources[span.from],",
+			"note": "a return type keeps the whitespace its span carries before an annotation's `{}`"
+		},
+		{
+			"name": "M-SPANINFO-RETURN-SOURCES",
+			"type": "anyparse.macro.SpanInfoLowering",
+			"method": "spanInfoWrites",
+			"find": "if (_rs != null) b.returnTypeSources[_sp.from] = source.substring(_rs.from, _rs.to);",
+			"replace": "",
+			"note": "the span info records no return type source, so no signature reads one"
+		},
+		{
+			"name": "M-NOMINAL-OVERLOAD-REFUSED",
+			"type": "anyparse.query.MemberLookup",
+			"method": "returnNominalWalk",
+			"find": "if (m.hasOverloadMeta || m.isOverload) return null;",
+			"replace": "if (false) return null;",
+			"note": "the name walk answers an overloaded member's own return, so `O.g(1)` is an `Int` though the call takes `(a:Int):Bool`"
+		},
+		{
+			"name": "M-NOMINAL-DECLARING-SUPER-POISON",
+			"type": "anyparse.query.MemberLookup",
+			"method": "inheritedReturnNominal",
+			"find": "if (rn == null && (typeDeclaresMember(sup, memberName) || supertypeDeclaresMember(sup, memberName))) return null;",
+			"replace": "",
+			"note": "a superclass declaring the member with a return the walk cannot name is passed over, so an interface's return answers"
+		},
+		{
+			"name": "M-SOURCE-OVERLOAD-REFUSED",
+			"type": "anyparse.query.NominalTypes",
+			"method": "returnSourceOf",
+			"find": "if (d.member.hasOverloadMeta || d.member.isOverload) return null;",
+			"replace": "",
+			"note": "the source walk answers an overloaded member's own return"
+		},
+		{
+			"name": "M-NOMINAL-SELECTED-STATIC",
+			"type": "anyparse.query.NominalTypes",
+			"method": "expressionNominalWalk",
+			"find": "node, CallReturns.writtenDeclaration(typeName, callee.children[0], resolved, file), method, true, typing",
+			"replace": "node, [], method, true, typing",
+			"note": "a static call the name walk cannot type selects no signature"
+		},
+		{
+			"name": "M-NOMINAL-SELECTED-VALUE",
+			"type": "anyparse.query.NominalTypes",
+			"method": "expressionNominalWalk",
+			"find": "member ?? selectedNominal(node, resolved.refs.resolvedDeclsNamed(receiver), method, false, typing)",
+			"replace": "member ?? selectedNominal(node, [], method, false, typing)",
+			"note": "a call off a value the name walk cannot type selects no signature"
+		},
+		{
+			"name": "M-NOMINAL-SELECTED-BARE",
+			"type": "anyparse.query.NominalTypes",
+			"method": "expressionNominalWalk",
+			"find": "node, CallReturns.ownDeclaration(owner, resolved, file), method, null, typing",
+			"replace": "node, [], method, null, typing",
+			"note": "a bare call the name walk cannot type selects no signature"
+		},
+		{
+			"name": "M-SOURCE-SELECTED-STATIC",
+			"type": "anyparse.query.NominalTypes",
+			"method": "expressionTypeSource",
+			"find": "node, CallReturns.writtenDeclaration(typeName, callee.children[0], index, file), method, true, typing",
+			"replace": "node, [], method, true, typing",
+			"note": "the source currency types no static call"
+		},
+		{
+			"name": "M-SOURCE-SELECTED-VALUE",
+			"type": "anyparse.query.NominalTypes",
+			"method": "expressionTypeSource",
+			"find": "node, index.refs.resolvedDeclsNamed(receiver), method, false, typing",
+			"replace": "node, [], method, false, typing",
+			"note": "the source currency types no call off a value the name walk cannot"
+		},
+		{
+			"name": "M-SOURCE-SELECTED-BARE",
+			"type": "anyparse.query.NominalTypes",
+			"method": "expressionTypeSource",
+			"find": ": CallReturns.selectedReturn(node, CallReturns.ownDeclaration(owner, index, file), method, null, typing);",
+			"replace": ": null;",
+			"note": "the source currency types no bare call"
+		},
+		{
+			"name": "M-NOMINAL-STATIC-ALIAS",
+			"type": "anyparse.query.CallReturns",
+			"method": "selectedReturn",
+			"find": "if (statics && (own == null || !AncestorTable.same(declared.host, own)) || misread) return null;",
+			"replace": "if (statics && !AncestorTable.same(declared.host, start) || misread) return null;",
+			"note": "a static read through a `typedef` alias is taken for an inherited one, so `OA.g(1)` has no answer"
+		},
+		{
+			"name": "M-NOMINAL-NAMESAKE-EXCLUDED",
+			"type": "anyparse.query.CallReturns",
+			"method": "selectedReturn",
+			"find": "if (candidates != null && calls.excludes(candidates, args)) continue;",
+			"replace": "",
+			"note": "a namesake no signature of which the call compiles against takes part in the agreement, so `b.size(1)` has no answer"
+		},
+		{
+			"name": "M-NOMINAL-ARGUMENT-NULL",
+			"type": "anyparse.query.CallReturns",
+			"method": "callArguments",
+			"find": "NullValue",
+			"replace": "Untyped",
+			"note": "a `null` argument is untyped, so it no longer surely fits an optional `?s`"
+		},
+		{
+			"name": "M-NOMINAL-ARGUMENT-BOUND",
+			"type": "anyparse.query.CallReturns",
+			"method": "argumentBound",
+			"find": "return written == null ? null : NominalTypes.boundType(from, written, c, true);",
+			"replace": "return null;",
+			"note": "a parameter or a local written with a type types no argument"
+		},
+		{
+			"name": "M-TS-OVERLOAD-OWN-SELECTED",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "ownSignatureSelected",
+			"find": "if (m == null || !m.hasOverloadMeta) return true;",
+			"replace": "if (m == null || true) return true;",
+			"note": "a call an `@:overload` of its callee takes is bound to the body's own parameters, though the arguments reach them by position"
+		},
+		{
+			"name": "M-TS-OVERLOAD-VERDICTS",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "ownSignatureSelected",
+			"find": "return CallSelection.chosen(Meta, verdicts) == 0;",
+			"replace": "return false;",
+			"note": "a call to an `@:overload` callee binds nothing even when its own signature is the one selected"
+		},
+		{
+			"name": "M-BINDER-OVERLOAD-SELECTED",
+			"type": "anyparse.check.OperandCallees",
+			"method": "selectedSignature",
+			"find": "return candidates == null ? null : calls.select(candidates, passed)?.signature;",
+			"replace": "return candidates == null ? null : candidates.candidates[0].signature;",
+			"note": "a call to an `@:overload` member always reads its own signature, which the call may not select"
+		},
+		{
+			"name": "M-BINDER-OVERLOAD-OWN-BARE",
+			"type": "anyparse.check.OperandCallees",
+			"method": "bareCallParams",
+			"find": "return member.hasOverloadMeta ? ownMemberParams(binder, member, args) : localParams(binder, fn);",
+			"replace": "return member.hasOverloadMeta ? null : localParams(binder, fn);",
+			"note": "a bare call to an `@:overload` member of this file selects no parameter list"
+		},
+		{
+			"name": "M-CALLS-PARAM-INFER",
+			"type": "anyparse.query.CallSelection",
+			"method": "returnType",
+			"find": "? inferredReturn(k, written, args)",
+			"replace": "? null",
+			"note": "a return naming the signature's type parameter is never inferred from the arguments, so `id(1)` has no answer"
+		},
+		{
+			"name": "M-CALLS-PARAM-BOUND",
+			"type": "anyparse.query.CallSelection",
+			"method": "paramFit",
+			"find": "final bounds: Array<String> = k.signature.typeParamConstraints[name] ?? [];",
+			"replace": "final bounds: Array<String> = [];",
+			"note": "a type parameter's bound is not read, so `<T:Int>(a:T)` takes a `String` and `c('x')` binds the own signature"
+		},
+		{
+			"name": "M-CALLS-PARAM-FREE",
+			"type": "anyparse.query.CallSelection",
+			"method": "paramFit",
+			"find": "if (bounds.length == 0) return Fits;",
+			"replace": "if (bounds.length == 0) return MayFit;",
+			"note": "an unbounded type parameter is not known to take every value, so `id(u)` may not compile"
+		},
+		{
+			"name": "M-CALLS-PARAM-AGREE",
+			"type": "anyparse.query.CallSelection",
+			"method": "bindings",
+			"find": "if (out.exists(name) && !agreeing(out[name], end)) return null;",
+			"replace": "",
+			"note": "two arguments binding one type parameter to two types surely compile, the later binding winning"
+		},
+		{
+			"name": "M-CALLS-PARAM-SPELLED",
+			"type": "anyparse.query.CallSelection",
+			"method": "spelledEnd",
+			"find": "case Declared(r): ModuleScan.pathOfTypeIn(r.file, r.type.name);",
+			"replace": "case Declared(r): r.type.name;",
+			"note": "a bound type is spelled by its simple name, which the declaring file may resolve to another type"
+		},
+		{
+			"name": "M-SIGNATURE-PARAM-BOUNDS",
+			"type": "anyparse.query.SymbolIndexMembers",
+			"method": "signatureOf",
+			"find": "typeParamConstraints: maps.typeParamConstraints[span.from] ?? [],",
+			"replace": "typeParamConstraints: [],",
+			"note": "the index records no type parameter's bound"
+		},
+		{
+			"name": "M-INDEX-RETURN-SOURCE-SPAN",
+			"type": "anyparse.query.SymbolIndexMembers",
+			"method": "collectMembers",
+			"find": "returnSource: seams.functionKinds.contains(child.kind) ? maps.returnTypeSources[typeKey]?.trim() : null,",
+			"replace": "returnSource: seams.functionKinds.contains(child.kind) ? CallGraphNames.returnSourceOf(child, source, seams.annotationKinds) : null,",
+			"note": "a member's return is its last annotation child, so a type parameter's bound reads as the return of a function written with none"
+		},
+		{
+			"name": "M-CALLS-NULLABLE-UNBOUND",
+			"type": "anyparse.query.CallReturns",
+			"method": "callArguments",
+			"find": "Nullable(end)",
+			"replace": "Typed(end)",
+			"note": "an argument of a `Null<…>` type binds a type parameter to the type inside, so `id(n)` over `?n:Int` is an `Int`"
+		},
+		{
+			"name": "M-CASTS-APPLIED-WRITTEN",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "endIn",
+			"find": "r == null ? Open : appliedEnd(r, [for (a in written) endIn(a, file, at, params)]);",
+			"replace": "Open;",
+			"note": "a generic abstract written with type arguments stands for no end, so `m(true)` over `E2<String, Float>` leaves both candidates open"
+		},
+		{
+			"name": "M-CASTS-APPLIED-ALIAS",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "appliedAlias",
+			"find": "final raw: Null<String> = r.type.aliasTargetWritten;",
+			"replace": "final raw: Null<String> = null;",
+			"note": "a typedef aliasing a generic abstract with type arguments stands for the bare abstract, so `k(true)` over `Path` leaves both candidates open"
+		},
+		{
+			"name": "M-CASTS-APPLIED-GRAPH-PARAM",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "appliedGraph",
+			"find": "i >= 0 ? args[i] : writtenEnd(t, r, at, []);",
+			"replace": "writtenEnd(t, r, at, []);",
+			"note": "a clause written as a type parameter is not read as its argument, so an applied abstract takes nothing through `from A`"
+		},
+		{
+			"name": "M-CASTS-APPLIED-SAME",
+			"type": "anyparse.query.AbstractCasts",
+			"method": "same",
+			"find": "case [Applied(x, xs), Applied(y, ys)]:",
+			"replace": "case [Applied(x, xs), Applied(y, ys)] if (false):",
+			"note": "an applied abstract is not itself applied alike, so `Box<String>` misfits `Box<String>`"
 		}
 	]
 }

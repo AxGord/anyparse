@@ -1,10 +1,15 @@
 package anyparse.query;
 
 import anyparse.query.CallGraphNames.DeclaredParams;
+import anyparse.query.CallSignature;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndexBuilder.MemberSeams;
 import anyparse.runtime.Span;
+
+using Lambda;
+using StringTools;
 
 /**
  * The MEMBER half of `SymbolIndexBuilder`'s extraction: one type body walked into its
@@ -47,12 +52,10 @@ final class SymbolIndexMembers {
 	 * member. The kind seams arrive pre-resolved as `seams`, so nothing here reads
 	 * `RefShape` directly.
 	 */
-	public static function collectMembers(
-		node: QueryNode, source: String, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>, returnTypes: Map<Int, String>,
-		typeSources: Map<Int, String>, typeParams: Map<Int, Array<String>>, seams: MemberSeams
-	): Array<MemberInfo> {
+	public static function collectMembers(node: QueryNode, source: String, maps: SpanTypeInfo, seams: MemberSeams): Array<MemberInfo> {
 		// noqa: complexity
 		final out: Array<MemberInfo> = [];
+		final typeSources: Map<Int, String> = maps.declaredTypeSources;
 		MemberKinds.eachMemberHost(node, n -> {
 			// `guarded` is a property of the HOST, not of the member's own modifier run:
 			// `eachMemberHost` descends INTO a conditional-compilation region, so a member
@@ -70,6 +73,7 @@ final class SymbolIndexMembers {
 			var runDynamic: Bool = false;
 			var runNoExtension: Bool = false;
 			var runOverloadMeta: Bool = false;
+			var runOverloads: Array<QueryNode> = [];
 			var runExtern: Bool = false;
 			var runOverload: Bool = false;
 			var runMetaNames: Array<String> = [];
@@ -95,14 +99,12 @@ final class SymbolIndexMembers {
 						);
 						out.push({
 							name: memberName,
-							hasGetter: accessors[typeKey] ?? false,
-							hasSetter: writeAccessors[typeKey] ?? false,
-							returnNominal: returnTypes[typeKey],
-							returnSource: seams.functionKinds.contains(child.kind)
-								? CallGraphNames.returnSourceOf(child, source, seams.annotationKinds)
-								: null,
+							hasGetter: maps.propertyAccessors[typeKey] ?? false,
+							hasSetter: maps.propertyWriteAccessors[typeKey] ?? false,
+							returnNominal: maps.returnTypes[typeKey],
+							returnSource: seams.functionKinds.contains(child.kind) ? maps.returnTypeSources[typeKey]?.trim() : null,
 							typeSource: typeSources[typeKey],
-							typeParamNames: typeParams[typeKey] ?? [],
+							typeParamNames: maps.typeParamNames[typeKey] ?? [],
 							firstParamTypeSource: firstParamTypeSourceOf(child, typeSources, seams.paramKinds),
 							paramTypeSources: params.params,
 							paramSkippableFrom: params.skippableFrom,
@@ -126,6 +128,7 @@ final class SymbolIndexMembers {
 							metaNames: runMetaNames,
 							excludedFromExtensions: runNoExtension,
 							hasOverloadMeta: runOverloadMeta,
+							signatures: seams.functionKinds.contains(child.kind) ? signaturesOf(child, runOverloads, maps, seams) : [],
 							guarded: guarded,
 							optional: n.kind == SymbolIndexBuilder.ANON_KIND && optionalField(child, runMetaNames, seams)
 						});
@@ -142,6 +145,7 @@ final class SymbolIndexMembers {
 					runDynamic = false;
 					runNoExtension = false;
 					runOverloadMeta = false;
+					runOverloads = [];
 					runExtern = false;
 					runOverload = false;
 					runMetaNames = [];
@@ -168,8 +172,10 @@ final class SymbolIndexMembers {
 					if (isConversionMeta(child, seams)) runImplicitConversion = true;
 					if (MemberKinds.META_KINDS.contains(child.kind) && seams.extensionExcludingMetaNames.contains(child.name ?? ''))
 						runNoExtension = true;
-					if (MemberKinds.META_KINDS.contains(child.kind) && child.name != null && child.name == seams.overloadMetaName)
+					if (MemberKinds.META_KINDS.contains(child.kind) && child.name != null && child.name == seams.overloadMetaName) {
 						runOverloadMeta = true;
+						runOverloads.push(child);
+					}
 					if (isImplicitCallMeta(child, seams)) {
 						runImplicitCall = true;
 						runImplicitMetas.push(child.name ?? '');
@@ -206,6 +212,7 @@ final class SymbolIndexMembers {
 			restParamKind: shape.restParamKind,
 			optionalFieldMetaName: shape.optionalFieldMetaName,
 			functionKinds: shape.functionKinds ?? [],
+			fnExprKind: shape.fnExprKind,
 			fieldKinds: shape.fieldDeclKinds ?? [],
 			annotationKinds: shape.typeAnnotationKinds ?? []
 		};
@@ -301,6 +308,64 @@ final class SymbolIndexMembers {
 		if (!seams.fieldKinds.contains(member.kind) || member.children.length == 0) return null;
 		final last: QueryNode = member.children[member.children.length - 1];
 		return seams.annotationKinds.contains(last.kind) ? null : last;
+	}
+
+	/**
+	 * The signatures a call to the function member `fn` may select (`MemberInfo.signatures`): its own, then the function each
+	 * signature-overload annotation of `overloads` writes, as written. Empty when one of those annotations writes no one
+	 * function (a bare `@:overload`, which marks a target-native overload instead): the candidates are then not known.
+	 */
+	private static function signaturesOf(
+		fn: QueryNode, overloads: Array<QueryNode>, maps: SpanTypeInfo, seams: MemberSeams
+	): Array<CallSignature> {
+		final own: Null<CallSignature> = signatureOf(fn, maps, seams);
+		if (own == null) return [];
+		final out: Array<CallSignature> = [own];
+		for (meta in overloads) {
+			final written: Null<QueryNode> = meta.children.length == 1 && meta.children[0].kind == seams.fnExprKind
+				? meta.children[0]
+				: null;
+			final signature: Null<CallSignature> = written == null ? null : signatureOf(written, maps, seams);
+			if (signature == null) return [];
+			out.push(signature);
+		}
+		return out;
+	}
+
+	/**
+	 * The signature the function node `fn` writes — a member, or the function of an `@:overload` annotation: each parameter's
+	 * written type (keyed by the parameter's offset) and form, its written return type (`SpanTypeInfo.returnTypeSources`) and
+	 * its type parameters with their bounds (`SpanTypeInfo.typeParamConstraints`; all keyed by the node's offset). Null for
+	 * a node with no span.
+	 */
+	private static function signatureOf(fn: QueryNode, maps: SpanTypeInfo, seams: MemberSeams): Null<CallSignature> {
+		final span: Null<Span> = fn.span;
+		if (span == null) return null;
+		final params: Array<SignatureParam> = [
+			for (c in fn.children) if (seams.paramKinds.contains(c.kind)) {
+				final at: Null<Span> = c.span;
+				{ type: at == null ? null : maps.declaredTypeSources[at.from], form: paramFormOf(c, seams) };
+			}
+		];
+		return {
+			params: params,
+			returnSource: maps.returnTypeSources[span.from]?.trim(),
+			typeParamNames: maps.typeParamNames[span.from] ?? [],
+			typeParamConstraints: maps.typeParamConstraints[span.from] ?? [],
+			at: span.from
+		};
+	}
+
+	/** How a call may leave the parameter node `p` out: `?p`, a default value (a child that is no annotation), rest, or not. */
+	private static function paramFormOf(p: QueryNode, seams: MemberSeams): ParamForm {
+		return if (p.kind == seams.restParamKind)
+			Rest
+		else if (p.kind == seams.optionalParamKind)
+			Optional
+		else if (p.children.exists(c -> !seams.annotationKinds.contains(c.kind)))
+			Defaulted
+		else
+			Plain;
 	}
 
 }

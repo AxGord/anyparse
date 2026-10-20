@@ -335,6 +335,8 @@ final class CallGraphTypes {
 			returnNominal: agreed(a.returnNominal, b.returnNominal),
 			returnSource: agreed(a.returnSource, b.returnSource),
 			hasOverloadMeta: a.hasOverloadMeta || b.hasOverloadMeta,
+			// two declarations are no one list of candidates a call selects from
+			signatures: [],
 			typeSource: agreed(a.typeSource, b.typeSource),
 			firstParamTypeSource: agreed(a.firstParamTypeSource, b.firstParamTypeSource),
 			paramTypeSources: [for (i in 0...arity) agreed(paramAt(a, i), paramAt(b, i))],

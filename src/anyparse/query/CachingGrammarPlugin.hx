@@ -907,7 +907,8 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 			castTargetSources: inner != null ? inner.castTargetSources(source) : [],
 			typeParamNames: inner != null ? inner.typeParamNames(source) : [],
 			typeParamConstraints: [],
-			typeParamDefaults: []
+			typeParamDefaults: [],
+			returnTypeSources: []
 		};
 	}
 

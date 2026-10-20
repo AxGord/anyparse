@@ -155,6 +155,18 @@ final class ArgumentTypes {
 	}
 
 	/**
+	 * The member record of the function declared at offset `from` of `file`, in the index its types resolve in (`heldFor`):
+	 * what it declares beyond its body's parameters — its signature overloads. Null for a function no type of the file
+	 * declares (a local function) and a file no index holds.
+	 */
+	public function memberAt(file: String, from: Int): Null<MemberInfo> {
+		final held: Null<HeldFile> = heldFor(file);
+		if (held == null) return null;
+		for (t in held.info.types) for (m in t.members) if (m.declFrom == from) return m;
+		return null;
+	}
+
+	/**
 	 * The core type `text` names (`RefShape.coreValueTypes`), a `Null<…>` peeled, when no indexed type bears its name; null
 	 * for any other type.
 	 */

@@ -5051,3 +5051,88 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   `tools/bench-corpus.txt` includes its calibrated other half through `@${ANYPARSE_BENCH_EXTRA}`, a manifest kept outside
   the repository (`tools/ParseProf.hx` learned `@<manifest>` include lines for it). Blast-cache baselines written under the
   old file names are not read under the new `*-client.json` ones; a first run after this re-snapshots.
+
+## FU25 (2026-10-20): typer step T5 — the signature a call selects among its overloads
+
+- **The candidates and their order are the compiler's** (`callUnification.ml` `unify_field_call`, `typeload.ml`
+  `init_meta_overloads`, Haxe 4.3.7, each probed on `--interp` and `-js`): an `@:overload` member's own signature first,
+  then each annotation's function in WRITTEN order (`cf :: cf_overloads`), and the first one that compiles binds
+  (`attempt_calls` stops there for `OverloadMeta`) — `h(a:String)` with `(a:Float)` written before `(a:Int)` takes
+  `(a:Float)` for `h(1)` (`String`), the reverse order `(a:Int)`. A non-extern function may carry `@:overload` too.
+  `MemberInfo.signatures` records the list; an annotation that writes no one function (a bare `@:overload`, a
+  target-native overload) leaves it empty, so a call to such a member answers nothing. The `overload` modifier tries every
+  candidate and keeps the most specific (`reduce_compatible`): modelled for a static only, and only when ONE candidate may
+  compile; off a value its candidates include the supertypes' (`Overloads.get_overloads`), so no answer — branch
+  `feat/fu-FU25`
+- **Whether a candidate compiles** is the compiler's greedy path (`unify_call_args`) over `Unification.casts` per argument
+  (`ArgumentSlots.compiles`): `Misfits` when no way to bind the arguments compiles (`ArgumentSlots.runs` answers none),
+  `Fits` when that path is decided at every step and ends bound, `MayFit` otherwise. A skip of a parameter written with a
+  default whose type is not nullable answers `MayFit`: Flash alone refuses it (`common.ml`
+  `pf_can_skip_non_nullable_argument`; js, hl and cpp accept `g(n:Int = 3, a:String)` called `g('x')`, probed) —
+  branch `feat/fu-FU25`
+- **The code compiles**, as `ArgumentSlots` already assumes: a candidate whose fit is not decided binds when it is the last
+  one that may compile (`readFileSync(entry)` takes `(filename:FsPath):Buffer`, every other candidate wanting two
+  arguments). Where no candidate is decided, a call returns the type every candidate that may bind it returns (all written
+  in one declaration), else nothing — branch `feat/fu-FU25`
+- **A choice that depends on the expected type answers Unknown.** Arguments are typed ONCE, with no expected type
+  (`CallArgument`): a literal, `null`, a binding whose annotation the call's file writes, a local by its initializer —
+  each resolved where that file writes it. A lambda, an object or array literal, a member read, a call: untyped, so every
+  candidate may take them. Measured: one MATCH of the old name walk is now Unknown on anyparse (`readFileSync(p,
+  { encoding: 'utf8' })` — the object literal is typed against each candidate's structure; the own signature's return was
+  right by luck). The table (`QueryCache.callArguments`) is keyed by the site and its declaration
+  (`DeclarationKey.ofSite`) and also by the call's text and the file's length: a `lint --fix` run asks again of an index
+  built before it rewrote the file — branch `feat/fu-FU25`
+- **The superclass chain declares a member before an interface does** (`raw_class_field`: own fields, `cl_super`, then
+  `cl_implements`): the name walk (`MemberLookup.returnNominalWalk`) used to pass over a supertype whose return it could
+  not name (`EventEmitter<TSelf>.on(): TSelf`) and answer an interface's (`IEventEmitter`) — now such a supertype makes
+  the walk unknown, and an overloaded member does too. The walk is by simple name, so a NAMESAKE's unknown poisons it as
+  well (a std type sharing a simple name with a project's); that is not undone — the call is then typed through the declarations the call's
+  file resolves (`CallReturns.selectedReturn`: the enclosing type of a bare call, the written type of a static call, every
+  declaration of a value's type name agreeing, one no candidate of which compiles being a namesake the receiver is not),
+  which binds the chain's arguments (`AncestorTable.boundType`: `S extends E<S>` reads `on()` as `S`) — branch
+  `feat/fu-FU25`
+- **An `@:overload` callee's body parameters are bound only when its own signature is selected.** The arguments reach the
+  body by POSITION, typed and padded as the selected signature binds them: `go(new Foo(), true)` selecting
+  `(?y:Int, x:Foo, flag:Bool)` over the own `(x:Bar, ?flag:Bool)` hands the body `x = null` (probed `-js`), where the
+  own parameters' slots would read `x` as the `Foo`. `ArgumentValues` therefore binds through the own slots only when
+  `CallSelection.chosen` picks the own signature, else hands the callee nothing known — branch `feat/fu-FU25`
+- **A lambda's parameter is typed by the signature the call selects** (`OperandCallees`), decided by the arguments' count
+  and `null` literals alone: every other argument the binder types is a lambda, which each candidate types differently —
+  branch `feat/fu-FU25`
+- **A function's written return type is read off the span info** (`SpanTypeInfo.returnTypeSources`, beside
+  `returnTypes`): the query tree flattens a type parameter's bound beside the return (`function g<T:Int>(x:T) {}` has a
+  `Named Int` child), so the last annotation child is a bound, not a return, for a function written with none. The
+  signatures and `MemberInfo.returnSource` read the new map (`c.g(1)` over that `g` was typed `Int`); the query-tree
+  reader (`CallGraphNames.returnSourceOf`) stays for a function no index records (a local function, a lambda) — branch
+  `feat/fu-FU25`
+- **A method's own type parameter is bound by the arguments** (T5 step 2): a parameter written as one (`x:T`) takes any
+  value, a bounded one (`<T:Int>`, `SpanTypeInfo.typeParamConstraints` into `CallSignature.typeParamConstraints`) a value
+  unifying with every bound (`check_constraint`; `Unification.unifiesEnds`), so the bound takes part in the choice
+  (`c<T:Int>(a:T)` with `@:overload(function(a:String):Bool {})` takes the annotation for `c('x')`, probed). The call's
+  return names the type each such parameter is bound to (`TypeEnd.Param`, the type variable; `CallSelection.bindings`
+  over the compiler's way to bind the arguments): `id(1)` is an `Int`, a declaration spelled by its module path so it
+  resolves wherever the return is read. Unknown where two arguments bind it to types not known to be one (the second
+  must unify with the first: decided only when equal), where an argument binding it is not typed, and where it is a
+  `Null<…>`: `id(n)` over `?n:Int` binds `Null<Int>` (probed), which an end does not spell (`CallArgument.Nullable`).
+  Measured: two calls of a library's generic `tween(target, …)` over a nullable target, in a client corpus, were the
+  case that showed it — branch `feat/fu-FU25`
+- **A generic abstract casts through the arguments it is applied to** (T5 step 3, `apply_params`): a type written
+  `E2<String, Float>`, or a plain `typedef` aliasing it (`TypeDeclInfo.aliasTargetWritten` keeps the arguments
+  `aliasTargetRaw` drops), stands for the abstract applied (`TypeEnd.Applied`), every argument an end the graph models
+  (else `Open`); its graph reads a clause written as one of its type parameters as the argument at that position
+  (`AbstractCasts.appliedGraph`) and every other clause or member naming one as no end. So `true` misfits
+  `E2<String, Float>` (`from String`, `from Float`) and an `@:overload` `(x:Bool)` binds, and `1` fits it through
+  `from Float` (probed: `g(1)` keeps the own signature). An applied abstract is itself applied ALIKE only — its type
+  parameters are invariant (`Box<String>` to `Box<Int>`: "String should be Int", probed). An alias re-entering itself
+  stands for no end — branch `feat/fu-FU25`
+- **Typing by the declared builds (T5 step 4) is NOT done, and why.** An `#if` branch every shipped build leaves dead
+  could be dropped when a split declaration is typed (a library enum abstract whose other branch is a `typedef` to a
+  target std type the resolution scope does not hold — the shape of `openfl.text.TextFormatAlign`). Two facts stand in
+  the way. The liveness of a branch across the builds is known only from their compiler facts (`ReachLiveness` over
+  `ReachBuilds`: `everDefined` is what makes a define's ABSENCE evidence, a define list alone being positive-only), so it
+  exists in a run that compiles them and in none under `--no-oracle`; and the index keeps no cast clauses or per-branch
+  members for a declaration one branch of which is no abstract (`TypeDeclInfo.castClauses` null), so there is no branch
+  record to drop. The split header `#if (haxe_ver >= 4.0) enum #else @:enum #end abstract` is a third, independent of
+  any build: every alternative writes the same enum abstract, which `castClausesOf` refuses because the name node is not
+  the declaration node — branch `feat/fu-FU25`
+

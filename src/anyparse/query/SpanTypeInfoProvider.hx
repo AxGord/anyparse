@@ -50,4 +50,12 @@ typedef SpanTypeInfo = {
 	 * `typeParamConstraints`, only the batched bundle carries it.
 	 */
 	final typeParamDefaults: Map<Int, Map<String, String>>;
+
+	/**
+	 * The verbatim source of each function's written return type, keyed like `returnTypes` (the node carrying the
+	 * `returnType` field) — every type the grammar reads there, a function or a structure type included, which `returnTypes`
+	 * reduces to a nominal or leaves out. A function written with no return type is absent: a type parameter's bound, which
+	 * the query tree flattens beside it, is never read as one. Like `typeParamConstraints`, only the batched bundle carries it.
+	 */
+	final returnTypeSources: Map<Int, String>;
 };

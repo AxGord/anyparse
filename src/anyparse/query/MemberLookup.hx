@@ -159,7 +159,9 @@ final class MemberLookup {
 	 * the base, since the direct lookup runs first). Conservative: a simple-name collision
 	 * whose matches disagree on the nominal — direct or inherited — yields null, so a
 	 * cross-file nullable-source resolution never fires on an unresolved name. Resolution is by
-	 * SIMPLE name (the index models no packages).
+	 * SIMPLE name (the index models no packages). Null for an overloaded member (its calls return what the signature they
+	 * select returns, `CallSelection`), and where a supertype declaring the member answers no nominal: the compiler finds it
+	 * there (the superclass chain before the interfaces), so another supertype's return is not the call's.
 	 */
 	public function returnNominalOf(typeName: String, memberName: String): Null<String> {
 		return returnNominalWalk(typeName, memberName, []);
@@ -545,19 +547,7 @@ final class MemberLookup {
 		)
 			return null;
 		final host: ResolvedType = found.host;
-		final params: Array<String> = host.type.typeParamNames;
-		// the type as the compiler reads it where it is written: a reference leaving arguments out names their defaults
-		final complete: Null<String> = _ancestors.completed(
-			written, host.file, found.member.declFrom, params.concat(found.member.typeParamNames)
-		);
-		if (complete == null) return null;
-		final passed: Null<Array<String>> = params.length == 0 ? [] : boundArguments(start, host, args);
-		final bound: Null<String> = if (passed != null && passed.length >= params.length)
-			CallGraphNames.substituteTypeParams(complete, params, passed, _typeSyntax)
-		else if (CallGraphNames.mentionsTypeName(complete, params, _typeSyntax))
-			null
-		else
-			complete;
+		final bound: Null<String> = _ancestors.boundType(start, host, args, written, found.member.declFrom, found.member.typeParamNames);
 		return bound == null ? null : {
 			text: found.member.optional ? NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax) : bound,
 			host: host,
@@ -573,24 +563,6 @@ final class MemberLookup {
 	/** `memberTypeSourceWalk` from `start` on a fresh walk, asked once per declaration and member name (`QueryCache.memberTypeSource`). */
 	private function memberTypeSource(start: ResolvedType, member: String): Null<String> {
 		return _cache.memberTypeSource.answer(DeclarationKey.ofMember(start, member), () -> memberTypeSourceWalk(start, member, []));
-	}
-
-	/**
-	 * The arguments `start`'s supertype chain passes to the parameters of its ancestor `host` (`AncestorTable.argumentsTo`),
-	 * read through `args`, the arguments of `start` itself; null when the chain writes none, or when what it passes names a
-	 * parameter of `start` that `args` does not bind.
-	 */
-	private function boundArguments(start: ResolvedType, host: ResolvedType, args: Array<String>): Null<Array<String>> {
-		final via: Null<Array<String>> = _ancestors.argumentsTo(start, host);
-		final own: Array<String> = start.type.typeParamNames;
-		return if (via == null || own.length == 0)
-			via
-		else if (args.length >= own.length)
-			[for (a in via) CallGraphNames.substituteTypeParams(a, own, args, _typeSyntax)]
-		else if (via.exists(a -> CallGraphNames.mentionsTypeName(a, own, _typeSyntax)))
-			null
-		else
-			via;
 	}
 
 	/**
@@ -890,6 +862,8 @@ final class MemberLookup {
 		var found: Null<String> = null;
 		var direct: Int = 0;
 		for (decl in _refs.named(typeName)) for (m in decl.type.members) if (m.name == memberName) {
+			// an overloaded member returns what the signature a call selects returns (`CallSelection`), no name alone
+			if (m.hasOverloadMeta || m.isOverload) return null;
 			// a return written as a type parameter of the method or of its type names what each call binds, not a type
 			final own: Null<String> = m.returnNominal;
 			if (own != null && (m.typeParamNames.contains(own) || decl.type.typeParamNames.contains(own))) return null;
@@ -899,11 +873,21 @@ final class MemberLookup {
 				return null;
 			direct++;
 		}
-		if (direct > 0) return found;
+		return direct > 0 ? found : inheritedReturnNominal(typeName, memberName, seen);
+	}
+
+	/**
+	 * `returnNominalWalk` of a type declaring no member of the name: the nominal every supertype of every declaration of
+	 * `typeName` declaring it answers, none answering null.
+	 */
+	private function inheritedReturnNominal(typeName: String, memberName: String, seen: Array<String>): Null<String> {
 		var inherited: Null<String> = null;
 		var supers: Int = 0;
-		for (decl in _refs.named(typeName)) for (sup in decl.type.supertypes) {
+		for (decl in _refs.named(typeName)) for (sup in decl.type.supertypes) if (!seen.contains(sup)) {
 			final rn: Null<String> = returnNominalWalk(sup, memberName, seen);
+			// a supertype declaring the member with a return the walk cannot name is where the compiler finds it (the superclass
+			// chain before the interfaces, `raw_class_field`): no other supertype's return is the call's
+			if (rn == null && (typeDeclaresMember(sup, memberName) || supertypeDeclaresMember(sup, memberName))) return null;
 			if (rn == null) continue;
 			if (supers == 0)
 				inherited = rn;
