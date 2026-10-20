@@ -1,8 +1,10 @@
 package anyparse.query;
 
+import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -26,11 +28,21 @@ final class AncestorTable {
 	/** `GrammarPlugin.typeSyntax` — how a written supertype's head and arguments are read. */
 	private final _typeSyntax: TypeSyntaxReader;
 
-	/** Built once by the owning `TypingService` over the index's name resolution and the service's cache. */
-	public function new(refs: TypeRefIndex, cache: QueryCache, typeSyntax: TypeSyntaxReader) {
+	/**
+	 * The one type a reference may name with its type parameters left out and no default for them (Haxe `Dynamic`,
+	 * `RefShape.rawDynamicTypeName`): every other one is a compile error (4.3.7: `Not enough type parameters`).
+	 */
+	private final _bareType: Null<String>;
+
+	/**
+	 * Built once by the owning `TypingService` over the index's name resolution and the service's cache; `bareType` is the
+	 * grammar's dynamic type name.
+	 */
+	public function new(refs: TypeRefIndex, cache: QueryCache, typeSyntax: TypeSyntaxReader, bareType: Null<String>) {
 		_refs = refs;
 		_cache = cache;
 		_typeSyntax = typeSyntax;
+		_bareType = bareType;
 	}
 
 	/**
@@ -65,6 +77,103 @@ final class AncestorTable {
 		return same(start, host)
 			? start.type.typeParamNames.copy()
 			: _cache.ancestorArguments.answer(DeclarationKey.ofPair(start, host), () -> chainTo(start, host, []));
+	}
+
+	/**
+	 * `args`, the type arguments a reference to `decl` writes, with each trailing parameter it leaves out bound to the
+	 * default the declaration writes for it (`TypeDeclInfo.typeParamDefaults`; 4.3.7: `Box` names `Box<Int>` for
+	 * `class Box<T = Int>`, inside `Box` as well): `args` itself when it binds every parameter, null when a parameter it
+	 * leaves out has no default. A default is in `decl`'s file's terms, and cannot name a parameter of `decl` (4.3.7:
+	 * `Type not found`).
+	 */
+	public function withDefaults(decl: ResolvedType, args: Array<String>): Null<Array<String>> {
+		final arity: Int = decl.type.typeParamNames.length;
+		if (args.length >= arity) return args;
+		final out: Array<String> = args.copy();
+		for (i in args.length ... arity) {
+			final value: Null<String> = decl.type.typeParamDefaults[i];
+			if (value == null) return null;
+			out.push(value);
+		}
+		return out;
+	}
+
+	/**
+	 * The written type `source`, as the file `from` writes it at `at`, with the arguments each named type in it leaves out
+	 * written in (`withDefaults`): `Array<Box>` is `Array<Box<Int>>` for `class Box<T = Int>`, `Pair<Int>` is
+	 * `Pair<Int, String>` for `class Pair<A, B = String>`, and a default that leaves arguments out is completed in its own
+	 * file in turn. The dynamic type, a name that resolves to no single declaration and a reference that writes every
+	 * argument are left as written.
+	 *
+	 * Null when the answer would not be the compiler's: a reference leaves out a parameter that has no default (not a type
+	 * the compiler accepts), its name is one of `scope` — the names a type parameter may hold where `source` is written, so
+	 * it may name that parameter instead — a default names a type `from` does not resolve to the declaration the default's
+	 * own file does (written into `source` it would name another one), a default reaches its own declaration again, or the
+	 * reference is not spelled as its plain path (a parenthesised one).
+	 */
+	public function completed(source: String, from: FileInfo, at: Null<Int>, scope: Array<String>): Null<String> {
+		return completedIn(source, from, at, scope, []);
+	}
+
+	/** `completed`, `seen` the declarations whose defaults are being completed around it. */
+	private function completedIn(source: String, from: FileInfo, at: Null<Int>, scope: Array<String>, seen: Array<String>): Null<String> {
+		final t: Null<TypeSyntax> = _typeSyntax(source);
+		if (t == null) return source;
+		final inserts: Array<{ at: Int, order: Int, text: String }> = [];
+		final all: Array<TypeSyntax> = t.descendants();
+		for (order in 0...all.length) switch all[order].shape {
+			case Nominal(path, args):
+				final d: TypeSyntax = all[order];
+				final decl: Null<ResolvedType> = _refs.resolveTypeRef(path, from, at);
+				if (decl == null || args.length >= decl.type.typeParamNames.length || decl.type.name == _bareType) continue;
+				final filled: Null<Array<String>> = withDefaults(decl, [for (a in args) a.text]);
+				final key: String = _refs.seenKey(decl);
+				final unspellable: Bool = !d.text.startsWith(path) || (args.length > 0 && !d.text.endsWith('>'));
+				// a name a type parameter may hold there is that parameter or this type: which one is not read here
+				if (filled == null || seen.contains(key) || scope.contains(path) || unspellable) return null;
+				final added: Array<String> = [];
+				for (value in filled.slice(args.length)) {
+					final spelled: Null<String> = defaultFor(value, decl, from, at, seen.concat([key]));
+					if (spelled == null) return null;
+					added.push(spelled);
+				}
+				inserts.push(
+					args.length == 0
+						? { at: d.span.from + path.length, order: order, text: '<${added.join(', ')}>' }
+						: { at: d.span.to - 1, order: order, text: ', ${added.join(', ')}' }
+				);
+			case _:
+		}
+		// an inner reference ending where its outer one's argument list closes is written in first
+		inserts.sort((a, b) -> a.at == b.at ? b.order - a.order : a.at - b.at);
+		final out: StringBuf = new StringBuf();
+		var copied: Int = 0;
+		for (i in inserts) {
+			out.add(source.substring(copied, i.at));
+			out.add(i.text);
+			copied = i.at;
+		}
+		out.add(source.substring(copied));
+		return out.toString();
+	}
+
+	/**
+	 * The default `value` of a parameter of `decl`, completed in `decl`'s file, as `from` (at `at`) may write it: null when
+	 * a type it names resolves from `from` to no declaration, or to another one than from `decl`'s file.
+	 */
+	private function defaultFor(value: String, decl: ResolvedType, from: FileInfo, at: Null<Int>, seen: Array<String>): Null<String> {
+		final spelled: Null<String> = completedIn(value, decl.file, decl.type.span.from, [], seen);
+		final t: Null<TypeSyntax> = spelled == null ? null : _typeSyntax(spelled);
+		if (spelled == null || t == null) return null;
+		for (d in t.descendants()) switch d.shape {
+			case Nominal(path, _):
+				final there: Null<ResolvedType> = _refs.resolveTypeRef(path, decl.file, decl.type.span.from);
+				final here: Null<ResolvedType> = _refs.resolveTypeRef(path, from, at);
+				if (there == null || here == null) return null;
+				if (!same(there, here)) return null;
+			case _:
+		}
+		return spelled;
 	}
 
 	/**
@@ -112,11 +221,16 @@ final class AncestorTable {
 			final args: Array<String> = NominalTypes.typeArgumentSourcesOf(w, _typeSyntax) ?? [];
 			if (!written.exists(a -> a.join(',') == args.join(','))) written.push(args);
 		}
+		final decl: Null<ResolvedType> = matches.length == 1 ? matches[0] : null;
+		// a link leaving trailing arguments out passes the defaults of the type it names (`extends Box` is `Box<Int>`)
+		final args: Null<Array<String>> = written.length != 1
+			? null
+			: decl == null ? written[0] : withDefaults(decl, written[0]) ?? written[0];
 		return {
 			raw: raw,
 			matches: matches,
-			decl: matches.length == 1 ? matches[0] : null,
-			args: written.length == 1 ? written[0] : null
+			decl: decl,
+			args: args
 		};
 	}
 

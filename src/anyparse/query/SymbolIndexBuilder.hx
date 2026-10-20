@@ -151,9 +151,12 @@ final class SymbolIndexBuilder {
 			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];
 			final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
 			final typeParams: Map<Int, Array<String>> = provider != null ? provider.typeParamNames(entry.source) : [];
+			final defaults: Map<Int, Map<String, String>> = plugin is SpanTypeInfoProvider
+				? (cast plugin: SpanTypeInfoProvider).spanTypeInfo(entry.source).typeParamDefaults
+				: [];
 			infos.push(extractFileInfo(
-				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, typeParams, shape, memberSeams,
-				abstractKinds, plugin.typeSyntax
+				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, typeParams, defaults, shape,
+				memberSeams, abstractKinds, plugin.typeSyntax
 			));
 		}
 		attachAmbientImports(infos, plugin, shape, memberSeams, abstractKinds, provider);
@@ -178,7 +181,7 @@ final class SymbolIndexBuilder {
 		final memberSeams: MemberSeams = SymbolIndexMembers.memberSeamsOf(shape);
 		final info: FileInfo = extractFileInfo(
 			file, source, tree, maps.propertyAccessors, maps.propertyWriteAccessors, maps.returnTypes, maps.declaredTypeSources,
-			maps.typeParamNames, shape, memberSeams, abstractKinds, plugin.typeSyntax
+			maps.typeParamNames, maps.typeParamDefaults, shape, memberSeams, abstractKinds, plugin.typeSyntax
 		);
 		attachAmbientImports([info], plugin, shape, memberSeams, abstractKinds, plugin is TypeInfoProvider ? cast plugin : null);
 		return info;
@@ -262,8 +265,9 @@ final class SymbolIndexBuilder {
 	 */
 	private static function extractFileInfo(
 		file: String, source: String, tree: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>,
-		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, typeParams: Map<Int, Array<String>>, shape: RefShape,
-		memberSeams: MemberSeams, abstractKinds: Array<String>, typeSyntax: TypeSyntaxReader
+		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, typeParams: Map<Int, Array<String>>,
+		typeParamDefaults: Map<Int, Map<String, String>>, shape: RefShape, memberSeams: MemberSeams, abstractKinds: Array<String>,
+		typeSyntax: TypeSyntaxReader
 	): FileInfo {
 		final basename: String = RefactorSupport.moduleNameOf(file);
 		var pkg: String = '';
@@ -318,6 +322,7 @@ final class SymbolIndexBuilder {
 					isExtern: pendingExtern,
 					typeParamArity: paramNames.length,
 					typeParamNames: paramNames,
+					typeParamDefaults: declTypeParamDefaults(typeParamDefaults, typeDecl, paramNames),
 					supertypes: supersRaw.map(simpleName),
 					supertypesRaw: supersRaw,
 					supertypesWritten: collectSupertypesWritten(node, source),
@@ -675,6 +680,17 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
+	 * The default type each of `names` — the type parameters `decl` declares — writes (`<T = Int>`), positional to `names`
+	 * and null for a parameter without one: `defaults` keyed by the node naming `decl`, then by parameter name.
+	 */
+	private static function declTypeParamDefaults(
+		defaults: Map<Int, Map<String, String>>, decl: TypeDeclMatch, names: Array<String>
+	): Array<Null<String>> {
+		final own: Map<String, String> = defaults[(decl.nameNode.span ?? decl.fullSpan).from] ?? [];
+		return [for (n in names) own[n]];
+	}
+
+	/**
 	 * The visibility-modifier kinds that DENY outside-the-module access — every entry of the
 	 * grammar's visibility set except the public one. Empty for a grammar that declares neither,
 	 * which indexes every type as non-private: the answer this record carried before the flag.
@@ -863,6 +879,7 @@ final class SymbolIndexBuilder {
 			isExtern: first.isExtern || alternate.isExtern,
 			typeParamArity: first.typeParamArity,
 			typeParamNames: first.typeParamNames,
+			typeParamDefaults: agreedDefaults(first, alternate),
 			supertypes: supertypes,
 			supertypesRaw: raw,
 			supertypesWritten: union(first.supertypesWritten, alternate.supertypesWritten),
@@ -887,6 +904,19 @@ final class SymbolIndexBuilder {
 			guarded: true,
 			forwardedMembers: forwarded == null || alsoForwarded == null ? null : union(forwarded, alsoForwarded)
 		};
+	}
+
+	/**
+	 * The defaults of `first`'s type parameters that `alternate` writes alike, positional to `first`'s, null for the rest:
+	 * a build of the other branch would fill such a parameter with another type, or with none.
+	 */
+	private static function agreedDefaults(first: TypeDeclInfo, alternate: TypeDeclInfo): Array<Null<String>> {
+		final other: Array<Null<String>> = alternate.typeParamDefaults;
+		return [
+			for (i in 0...first.typeParamNames.length) i < other.length && other[i] == first.typeParamDefaults[i]
+				? first.typeParamDefaults[i]
+				: null
+		];
 	}
 
 	/** Every entry of `a`, then each of `b` it lacks. */
@@ -1089,7 +1119,7 @@ final class SymbolIndexBuilder {
 				provider != null ? provider.propertyWriteAccessors(ambient.source) : [],
 				provider != null ? provider.returnTypes(ambient.source) : [],
 				provider != null ? provider.declaredTypeSources(ambient.source) : [],
-				provider != null ? provider.typeParamNames(ambient.source) : [], shape, memberSeams, abstractKinds, plugin.typeSyntax
+				provider != null ? provider.typeParamNames(ambient.source) : [], [], shape, memberSeams, abstractKinds, plugin.typeSyntax
 			).imports;
 		extracted[ambient.file] = imports;
 		return imports;

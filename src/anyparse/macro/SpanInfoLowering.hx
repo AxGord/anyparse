@@ -48,6 +48,9 @@ class SpanInfoLowering extends PairedShapeLowering {
 	/** Struct field holding a type parameter's first bound - the head of the `typeParamConstraints` collect. */
 	private static inline final CONSTRAINT_FIELD: String = 'constraint';
 
+	/** Struct field holding a type parameter's default type - the `typeParamDefaults` collect site. */
+	private static inline final DEFAULT_FIELD: String = 'defaultValue';
+
 	/** Accessor ids that denote a plain stored slot; anything else runs code. */
 	private static final STORED_ACCESSORS: Array<String> = ['default', 'null', 'never'];
 
@@ -268,6 +271,7 @@ class SpanInfoLowering extends PairedShapeLowering {
 		// identifier is built by hand.
 		final acc: Expr = ident('tp');
 		final bounds: Expr = constraintCollect(node);
+		final defaults: Expr = defaultCollect(node);
 		return macro {
 			final _tp: Null<String> = $n;
 			if (_tp != null && !$acc.contains(_tp)) $acc.push(_tp);
@@ -285,6 +289,13 @@ class SpanInfoLowering extends PairedShapeLowering {
 					_byName[_name] = _bounds;
 					b.typeParamConstraints[_sp.from] = _byName;
 				}
+				final _defaults: Array<String> = [];
+				$defaults;
+				if (_defaults.length > 0) {
+					final _byParam: Map<String, String> = b.typeParamDefaults[_sp.from] ?? [];
+					_byParam[_name] = _defaults[0];
+					b.typeParamDefaults[_sp.from] = _byParam;
+				}
 			}
 		};
 	}
@@ -299,24 +310,37 @@ class SpanInfoLowering extends PairedShapeLowering {
 		final first: Null<ShapeNode> = seqField(node, CONSTRAINT_FIELD);
 		final firstRule: Null<String> = first == null ? null : refOf(first);
 		if (first != null && firstRule != null && _nominalRules.contains(firstRule))
-			out.push(guardOptional(first, field(ident('v'), CONSTRAINT_FIELD), '_cf', boundPush(firstRule, ident('_cf'))));
+			out.push(guardOptional(first, field(ident('v'), CONSTRAINT_FIELD), '_cf', sourcePush(firstRule, ident('_cf'), '_bounds')));
 		final more: Null<ShapeNode> = seqField(node, CONSTRAINT_MORE_FIELD);
 		final clauseRule: Null<String> = more == null || more.kind != Star || more.children.length == 0 ? null : refOf(more.children[0]);
 		final clause: Null<ShapeNode> = clauseRule == null ? null : _shape.rules.get(clauseRule);
 		final clauseType: Null<ShapeNode> = clause == null ? null : seqField(clause, TYPE_FIELD);
 		final clauseTypeRule: Null<String> = clauseType == null ? null : refOf(clauseType);
 		if (clauseType != null && clauseTypeRule != null && _nominalRules.contains(clauseTypeRule) && !isOptional(clauseType)) {
-			final push: Expr = boundPush(clauseTypeRule, field(ident('_cm'), TYPE_FIELD));
+			final push: Expr = sourcePush(clauseTypeRule, field(ident('_cm'), TYPE_FIELD), '_bounds');
 			out.push(macro for (_cm in $e{field(ident('v'), CONSTRAINT_MORE_FIELD)}) $push);
 		}
 		return block(out);
 	}
 
-	/** Push the source `value`'s own span covers onto `_bounds`. */
-	private function boundPush(rule: String, value: Expr): Expr {
+	/**
+	 * The push of a type-parameter declaration's default type source onto `_defaults`: the `defaultValue` slot's verbatim
+	 * source when the declaration writes one (`<T = Int>`). A grammar whose type-parameter shape has no such slot, or whose
+	 * rule there has no span helper, contributes nothing.
+	 */
+	private function defaultCollect(node: ShapeNode): Expr {
+		final slot: Null<ShapeNode> = seqField(node, DEFAULT_FIELD);
+		final rule: Null<String> = slot == null ? null : refOf(slot);
+		return slot == null || rule == null || !_nominalRules.contains(rule)
+			? block([])
+			: guardOptional(slot, field(ident('v'), DEFAULT_FIELD), '_dv', sourcePush(rule, ident('_dv'), '_defaults'));
+	}
+
+	/** Push the source `value`'s own span covers onto the local array `list`. */
+	private function sourcePush(rule: String, value: Expr, list: String): Expr {
 		return macro {
 			final _bs: Null<anyparse.runtime.Span> = $e{call(spanOfFnName(rule), [value])};
-			if (_bs != null) _bounds.push(source.substring(_bs.from, _bs.to));
+			if (_bs != null) $i{list}.push(source.substring(_bs.from, _bs.to));
 		};
 	}
 

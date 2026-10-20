@@ -60,7 +60,7 @@ final class TypingService {
 	public function new(
 		files: Array<FileInfo>, refs: TypeRefIndex, subtypes: SubtypeGraph, typeSyntax: TypeSyntaxReader, shape: RefShape
 	) {
-		ancestors = new AncestorTable(refs, cache, typeSyntax);
+		ancestors = new AncestorTable(refs, cache, typeSyntax, shape.rawDynamicTypeName);
 		casts = new AbstractCasts(refs, ancestors, cache, typeSyntax, shape);
 		unification = new Unification(ancestors, cache, refs, casts, shape);
 		operators = new OperatorOverloads(casts, unification, shape);

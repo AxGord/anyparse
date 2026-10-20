@@ -70,7 +70,11 @@ final class NominalTypes {
 		literal: (typeName, _) -> typeName,
 		self: indexSelf,
 		binding: (ident, c) -> TypeResolver.identBindingFrom(ident, c.root, c.shape),
-		bound: (from, c) -> boundType(from, c.chain.declaredTypeSources[from] ?? c.declaredTypes[from], c),
+		bound: (from, c) -> {
+			final written: Null<String> = c.chain.declaredTypeSources[from];
+			// the nominal alone has lost the arguments written with it: it is no text to complete
+			written == null ? boundType(from, c.declaredTypes[from], c, false) : boundType(from, written, c, true);
+		},
 		initializer: (_, use, c) -> localInitializer(use, c.root, c.shape, c.chain.declaredTypeSources),
 		loopElement: forBindingElementTypeSource,
 		// the index resolves no call to a declaration (its call arc is the tabled statics), so it reads no callee's parameter
@@ -246,7 +250,18 @@ final class NominalTypes {
 	public static function pathFinalMemberTypeSource(
 		path: Array<String>, rootType: String, index: SymbolIndex, ?transparentWrappers: Array<String>
 	): Null<String> {
-		final wrappers: Array<String> = transparentWrappers ?? [];
+		final host: Null<String> = pathFinalHost(path, rootType, index, transparentWrappers ?? []);
+		return host == null ? null : index.typing.members.memberTypeSourceOf(host, path[path.length - 1]);
+	}
+
+	/**
+	 * The simple name of the type whose member the last segment of `path` reads on the package-blind walk of
+	 * `pathFinalMemberTypeSource` — the type each intermediate member's written type reduces to, from `rootType` on — or
+	 * null when a link does not resolve.
+	 */
+	private static function pathFinalHost(
+		path: Array<String>, rootType: String, index: SymbolIndex, wrappers: Array<String>
+	): Null<String> {
 		var current: String = rootType;
 		for (i in 1...path.length - 1) {
 			final memberType: Null<String> = index.typing.members.memberTypeSourceOf(current, path[i]);
@@ -256,7 +271,7 @@ final class NominalTypes {
 			if (nominal == null) return null;
 			current = nominal;
 		}
-		return index.typing.members.memberTypeSourceOf(current, path[path.length - 1]);
+		return current;
 	}
 
 	/**
@@ -296,11 +311,19 @@ final class NominalTypes {
 		// The package-blind fallback never substitutes; in substitute mode it is only fed the
 		// root's NOMINAL, since a `Box<Item>` start source is not a name any member lookup matches.
 		if (rootType != null) {
-			final blind: Null<String> = pathFinalMemberTypeSource(
-				path, substituteTypeArgs ? outerNominalOf(startType, index.typeSyntax) ?? startType : startType, index, wrappers
-			);
-			// the substituting caller types a value: a written type that is no one type (`#if` inside it) is no answer there
-			return substituteTypeArgs && blind != null && !answerableType(blind, index.typeSyntax) ? null : blind;
+			final start: String = substituteTypeArgs ? outerNominalOf(startType, index.typeSyntax) ?? startType : startType;
+			final blind: Null<String> = pathFinalMemberTypeSource(path, start, index, wrappers);
+			if (!substituteTypeArgs || blind == null) return blind;
+			// the substituting caller types a value: a written type that is no one type (`#if` inside it) is no answer there, nor
+			// is one naming a parameter of the member's declaring type or of the member, which this walk never substitutes
+			final host: Null<String> = pathFinalHost(path, start, index, wrappers);
+			final params: Array<String> = host == null ? [] : [
+				for (d in index.typing.members.memberDeclarationsOf(host, path[path.length - 1]))
+					for (p in d.type.typeParamNames.concat(d.member.typeParamNames)) p
+			];
+			return !answerableType(blind, index.typeSyntax) || CallGraphNames.mentionsTypeName(blind, params, index.typeSyntax)
+				? null
+				: blind;
 		}
 		final firstSource: Null<String> = index.paths.resolvePathFinalMemberTypeSource(fromFile, path[0], [path[1]]);
 		if (firstSource == null) return null;
@@ -408,7 +431,10 @@ final class NominalTypes {
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
 		?chain: ChainTypeContext, asReceiver: Bool = false
 	): Null<String> {
-		return expressionNominalWalk(node, root, shape, declaredTypes, index, file, chain, [], asReceiver);
+		// reified data has the type of the syntax tree it builds, never of its text as code
+		return TypeResolver.reified(node, root, shape)
+			? null
+			: expressionNominalWalk(node, root, shape, declaredTypes, index, file, chain, [], asReceiver);
 	}
 
 	/**
@@ -425,6 +451,8 @@ final class NominalTypes {
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
 		chain: ChainTypeContext
 	): Null<String> {
+		// reified data has the type of the syntax tree it builds, never of its text as code
+		if (TypeResolver.reified(node, root, shape)) return null;
 		final direct: Null<String> = valueTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, []);
 		if (direct != null || index == null || node.kind != shape.callKind || node.children.length == 0) return direct;
 		final callee: QueryNode = node.children[0];
@@ -648,9 +676,10 @@ final class NominalTypes {
 
 	/**
 	 * The return type of an UNQUALIFIED call — a method of the enclosing type called without a
-	 * receiver (`l_benchTime(time)`). A callee name that resolves to a value BINDING is a local
-	 * function or a stored closure instead, whose return type the index cannot name, so it stays
-	 * null.
+	 * receiver (`l_benchTime(time)`). A callee name that binds to any declaration but a member — a
+	 * local or a parameter holding a closure, a local function (`function walk(…)` shadowing a
+	 * member `walk`), a module-level function — is another callee, whose return type the member
+	 * lookup does not name, so it stays null.
 	 */
 	private static function unqualifiedCallNominal(
 		callee: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex, method: String
@@ -658,13 +687,10 @@ final class NominalTypes {
 		final identKind: Null<String> = shape.identKind;
 		final span: Null<Span> = callee.span;
 		if (identKind == null || callee.kind != identKind || span == null) return null;
-		// A name that binds to a LOCAL — a closure or a parameter holding a function — is a
-		// different callee from a sibling METHOD, and the index cannot name a local's return type.
-		// The member declaration itself is not a refusal: the scope walk resolves a bare `f(x)` to
-		// the `FnMember f` that declares it, which is exactly the answer wanted here.
+		// Only a MEMBER binding is the sibling method: the scope walk resolves a bare `f(x)` to the
+		// `FnMember f` that declares it, and binds nothing for one a supertype declares
 		final binding: Null<QueryNode> = TypeResolver.bindingNodeFrom(method, span, root, shape);
-		final locals: Array<String> = (shape.localDeclKinds ?? []).concat(shape.paramKinds ?? []);
-		if (binding != null && locals.contains(binding.kind)) return null;
+		if (binding != null && !(shape.memberDeclKinds ?? []).contains(binding.kind)) return null;
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
 		return enclosing == null ? null : index.typing.members.returnNominalOf(enclosing, method);
 	}
@@ -814,8 +840,12 @@ final class NominalTypes {
 		var found: Null<String> = null;
 		final declared: Array<MemberDeclaration> = index.typing.members.memberDeclarationsOf(typeName, method);
 		for (d in declared) {
-			final written: Null<String> = d.member.returnSource;
 			final params: Array<String> = d.type.typeParamNames.concat(d.member.typeParamNames);
+			// as the compiler reads it where it is written: a reference leaving arguments out names their defaults
+			final returned: Null<String> = d.member.returnSource;
+			final written: Null<String> = returned == null
+				? null
+				: index.typing.ancestors.completed(returned, d.file, d.member.declFrom, params);
 			if (written == null || found != null && written != found || CallGraphNames.mentionsTypeName(written, params, index.typeSyntax))
 				return null;
 			found = written;
@@ -991,19 +1021,35 @@ final class NominalTypes {
 	 * The type a read of the binding at `from` carries for the index host, its written type `written`: an optional
 	 * parameter's (`?x: T`, a node of `RefShape.optionalParamKind` starting at `from`) wrapped as an optional value
 	 * (`optionalValueType`), since 4.3.7 types a read of it as `Null<T>` with or without a default. Any other binding's as
-	 * written.
+	 * written — with the type arguments a reference in it leaves out written in (`AncestorTable.completed`: `b: Box` reads as
+	 * `Box<Int>` for `class Box<T = Int>`), null when they cannot be. With no index, or for a written type that is not the
+	 * whole text (`complete` false), nothing is completed.
 	 */
-	private static function boundType(from: Int, written: Null<String>, c: IndexTyping): Null<String> {
+	private static function boundType(from: Int, written: Null<String>, c: IndexTyping, complete: Bool): Null<String> {
 		final kind: Null<String> = c.shape.optionalParamKind;
 		// a written type the grammar does not read as one type (`#if lime Image #else Dynamic #end`) is no answer
-		return if (written == null || !answerableType(written, c.chain.typeSyntax))
+		if (written == null || !answerableType(written, c.chain.typeSyntax)) return null;
+		final index: Null<SymbolIndex> = c.index;
+		final fi: Null<FileInfo> = index?.fileInfo(c.file);
+		final full: Null<String> = !complete || index == null || fi == null
+			? written
+			: index.typing.ancestors.completed(written, fi, from, writtenTypeParams(fi));
+		return if (full == null)
 			null
-		else if (kind == null)
-			written
-		else if (startsKindAt(c.root, from, kind))
-			optionalValueType(written, c.shape.optionalValueTypeName, c.chain.typeSyntax)
+		else if (kind != null && startsKindAt(c.root, from, kind))
+			optionalValueType(full, c.shape.optionalValueTypeName, c.chain.typeSyntax)
 		else
-			written;
+			full;
+	}
+
+	/**
+	 * Every type parameter `fi` declares on a type or a member: a name the file may write for one rather than for a type
+	 * (`AncestorTable.completed`'s scope).
+	 */
+	private static function writtenTypeParams(fi: FileInfo): Array<String> {
+		return [
+			for (t in fi.types) for (p in t.typeParamNames.concat([for (m in t.members) for (q in m.typeParamNames) q])) p
+		];
 	}
 
 	/** Whether a node of `kind` starts at `from` under `node`, descending only into the nodes whose range holds `from`. */

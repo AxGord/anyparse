@@ -542,7 +542,7 @@ final class TypedFactsWalk {
 			case TFunction(_):
 				child(e, null);
 			case TLocal(v):
-				if (!v.name.startsWith('`')) add('reads', '[${range(e.pos)},${q(localType(v))}]');
+				if (!v.name.startsWith('`')) add('reads', '[${range(e.pos)},${q(localType(v))},${q(v.name)}]');
 				final alias: Null<Alias> = _aliases[v.id];
 				if (alias != null) localRead(alias, v, use, substituted);
 			case TIdent(identifier):

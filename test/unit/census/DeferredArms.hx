@@ -253,7 +253,8 @@ final class DeferredArms {
 		'M-CHAIN-REST-UNSET :: anyparse.macro.WriterPrattLowering#lowerInfixChain',
 		'M-CHAIN-REST-IN-KEPT-PAREN :: anyparse.macro.WriterPrattLowering#lowerInfixChain',
 		'M-COLLAPSE-COUNTED :: anyparse.macro.TriviaSepLowering#triviaSepNoTriviaBranch',
-		'M-COLLAPSE-ANY-RESULT :: anyparse.macro.TriviaSepLowering#triviaSepNoTriviaBranch'
+		'M-COLLAPSE-ANY-RESULT :: anyparse.macro.TriviaSepLowering#triviaSepNoTriviaBranch',
+		'M-FACTS-READ-EMIT-NAME :: anyparse.check.TypedFactsWalk#visit'
 	];
 
 }

@@ -284,6 +284,10 @@ typedef VarFact = {
 /** A read of a local, parameter or loop binder, with its type: the identifier's own range. */
 typedef LocalReadFact = {
 	final type: String;
+
+	/** The local's name as the compiler typed it: what a read of it written in the source spells. */
+	final name: String;
+
 	final at: FactPos;
 }
 
@@ -763,26 +767,60 @@ final class CompilerFacts {
 	 * a local's read or declaration, an argument, a concatenated operand — when the facts record one there and every
 	 * configuration agrees; null otherwise. The facts record expressions where they carry a question, not every expression.
 	 *
-	 * The compiler also puts code of its own at a source range — a lowered loop's `length` read sits at the whole `for` —
-	 * so a call or field fact answers only when the text at `span` names its member, and a read only when that text is a
-	 * bare identifier.
+	 * The compiler also puts code of its own at a source range — a lowered loop's `length` read sits at the whole `for`, an
+	 * inlined body's code at its call, the `this` an abstract's inlined accessor is handed at the member's name — so the
+	 * range answers only when EVERY fact typed there is the text's: a call or field fact naming a member the text names, a
+	 * read (only of a bare identifier) of the local the text names, a call's receiver beside a call its own file spells,
+	 * a local the compiler declares at the range beside one of those. Any other fact there makes it no answer.
 	 */
 	public function typeOfExpressionAt(file: String, span: Span): Null<String> {
 		final source: Null<String> = sourceOf(_key(file));
 		if (source == null) return null;
 		final text: String = source.substring(span.from, span.to).trim();
 		final seen: Array<String> = [];
-		final bare: Bool = FactText.bare(text);
-		for (n in nodesAround(file, span)) for (site in FactText.typedSites(n, bare)) {
+		var own: Bool = false;
+		for (n in nodesAround(file, span)) switch textSitesAt(n, file, span, text, seen) {
+			case null:
+				return null;
+			case found:
+				own = own || found;
+		}
+		return own && seen.length == 1 ? seen[0] : null;
+	}
+
+	/**
+	 * The types `n` records at exactly `span` of `file`, whose text is `text`, added to `seen` (`typeOfExpressionAt`):
+	 * whether one of them is a site of the text's own, or null when a fact there is not the text's.
+	 */
+	private function textSitesAt(n: FactNode, file: String, span: Span, text: String, seen: Array<String>): Null<Bool> {
+		// a local the compiler declares at the range holds a value there: the text's (`a?.b()`, `a ?? b`) or an inlined
+		// call's parameter the text is handed to, of that parameter's type — so it may type the range beside a site of the
+		// text's own, never alone
+		final held: Array<String> = [for (v in n.vars) if (same(v.at, file, span)) v.name];
+		var own: Bool = false;
+		for (site in FactText.typedSites(n, FactText.bare(text))) {
 			final at: Null<FactPos> = site.at;
 			final member: Null<String> = site.member;
-			if (
-				at != null && same(at, file, span) && site.type != '?' && !seen.contains(site.type)
-				&& (member == null || FactText.mentions(text, member))
-			)
-				seen.push(site.type);
+			if (at == null || !same(at, file, span) || site.type == '?') continue;
+			final named: Bool = member == null || FactText.mentions(text, member);
+			// code the text does not spell, typed at its range, is the compiler's: the range is not the text's alone
+			if (!(named || (member != null && held.contains(member))) || !spelledCall(site.call)) return null;
+			own = own || named;
+			if (!seen.contains(site.type)) seen.push(site.type);
 		}
-		return seen.length == 1 ? seen[0] : null;
+		return own;
+	}
+
+	/**
+	 * Whether a call's receiver site counts beside `call` (null: a site no call has): when its own file spells the call's
+	 * member at the call's range — an inlined body's call in its callee's file takes the text as its receiver, a call no
+	 * text there spells is the compiler's.
+	 */
+	private function spelledCall(call: Null<{ at: FactPos, member: Null<String> }>): Bool {
+		if (call == null) return true;
+		final member: Null<String> = call.member;
+		final there: Null<String> = sourceOf(call.at.file);
+		return member != null && there != null && FactText.mentions(there.substring(call.at.span.from, call.at.span.to), member);
 	}
 
 	/**

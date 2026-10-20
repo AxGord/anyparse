@@ -133,7 +133,8 @@ class SpanInfoCodegen {
 				declaredTypeSources: [],
 				castTargetSources: [],
 				typeParamNames: [],
-				typeParamConstraints: []
+				typeParamConstraints: [],
+				typeParamDefaults: []
 			};
 			final _r = root;
 			if (_r != null) $rootCall;
@@ -195,7 +196,8 @@ class SpanInfoCodegen {
 				declaredTypeSources: [],
 				castTargetSources: [],
 				typeParamNames: [],
-				typeParamConstraints: []
+				typeParamConstraints: [],
+				typeParamDefaults: []
 			};
 			final _r = root;
 			if (_r != null) $rootCall;

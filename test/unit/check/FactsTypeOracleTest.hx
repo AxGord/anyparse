@@ -232,6 +232,64 @@ class FactsTypeOracleTest extends Test {
 		Assert.isNull(apart.factsTypeAt('A.hx', call));
 	}
 
+	/**
+	 * A range carries the text's own value only when every fact the compiler typed there is that text's: a local's read
+	 * by the local's own name (the `this` an abstract's inlined accessor is handed sits at the member's name), a call by
+	 * the member the text calls, and a call's receiver beside a call the source spells there. Code the text does not spell
+	 * — an inlined body's — makes the range no answer, rather than the sites left once it is passed over. A local the
+	 * compiler declares at the range (a `?.` / `??` temporary, an inlined call's parameter) types it beside a site of the
+	 * text's own, never alone.
+	 */
+	@:pin('control') @:killer('M-FACTS-READ-RECORD-NAME') @:killer('M-FACTS-READ-NAME') @:killer('M-FACTS-RECEIVER-CALL')
+	@:killer('M-FACTS-SPELLED-CALL') @:killer('M-FACTS-FOREIGN-SITE') @:killer('M-FACTS-TEMP-LOCAL') @:killer('M-FACTS-TEMP-ALONE')
+	@:killer('M-FACTS-VALUE-CALLEE') @:killer('M-FACTTEXT-EMPTY-MENTION') @:killer('M-FACTTEXT-EMPTY-CALL')
+	public function testARangeHoldingCodeTheTextDoesNotSpellHasNoType(): Void {
+		final source: String = 'class A {\n\tfunction f() {\n\t\tvar v = b.c();\n\t\tvar w = x;\n\t\tcb(1);\n\t}\n}\n';
+		// the first `length` characters of the first occurrence of `text`
+		function spanOf(text: String, length: Int): Span {
+			final from: Int = source.indexOf(text);
+			return new Span(from, from + length);
+		}
+		function facts(reads: String, calls: String, vars: String = ''): CompilerFacts {
+			final fn: Span = spanOf('() {', source.indexOf('\t}\n}') + 2 - source.indexOf('() {'));
+			final dumped: String = '{"k":"facts","v":1,"inline":true}\n'
+				+ '{"k":"type","id":"A","f":"A.hx","p":[0,${source.length}],"kind":"class","pack":"","params":[],"fields":[]}\n'
+				+ '{"k":"node","id":"A.f","f":"A.hx","p":[${fn.from},${fn.to}],"kind":"method","owner":"A","t":"()->Void",'
+				+ '"params":[],"reads":[$reads],"calls":[$calls],"vars":[$vars]}\n{"k":"end","nodes":1,"types":1}\n';
+			return CompilerFacts.build(
+				[{ name: 'c0', text: dumped, file: path -> path }], file -> file == 'A.hx' ? source : null, file -> file
+			);
+		}
+		final x: Span = spanOf('x;', 1);
+		final b: Span = spanOf('b.c', 1);
+		final call: Span = spanOf('b.c()', 'b.c()'.length);
+		final own: String = '[${x.from},${x.to},"Int","x"]';
+		final handed: String = '[${x.from},${x.to},"Float","this"]';
+		final called: String = '{"t":"B.c","a":"FInstance","r":"B","rp":[${b.from},${b.to}],"rt":"Int","p":[${call.from},${call.to}]}';
+		final inlined: String = '{"t":"X.d","a":"FInstance","r":"X","rp":[${b.from},${b.to}],"rt":"Bool","p":[${call.from},${call.to}]}';
+		Assert.equals('Int', facts(own, '').typeOfExpressionAt('A.hx', x), 'a read of the local the text names');
+		Assert.isNull(facts(handed, '').typeOfExpressionAt('A.hx', x), 'a read of another local placed there');
+		Assert.isNull(facts('$own,$handed', '').typeOfExpressionAt('A.hx', x), 'beside one of its own');
+		Assert.equals('Int', facts('', called).typeOfExpressionAt('A.hx', call), 'the call the text spells');
+		Assert.equals('B', facts('', called).typeOfExpressionAt('A.hx', b), 'and its receiver');
+		Assert.isNull(facts('', inlined).typeOfExpressionAt('A.hx', b), 'the receiver of a call the text does not spell');
+		Assert.isNull(facts('', '$called,$inlined').typeOfExpressionAt('A.hx', call), 'a call it does not spell beside its own');
+		final temp: String = '{"n":"tmp","t":"Int","p":[${x.from},${x.to}]}';
+		final tempRead: String = '[${x.from},${x.to},"Int","tmp"]';
+		Assert.equals('Int', facts('$own,$tempRead', '', temp).typeOfExpressionAt('A.hx', x), 'a local the compiler declares there');
+		Assert.isNull(facts(tempRead, '', temp).typeOfExpressionAt('A.hx', x), 'such a local alone');
+		final other: String = '{"n":"tmp","t":"Null<Int>","p":[${x.from},${x.to}]}';
+		Assert.isNull(facts(own, '', other).typeOfExpressionAt('A.hx', x), 'one of another type than the text');
+		final cb: Span = spanOf('cb(1)', 2);
+		final valueCall: Span = spanOf('cb(1)', 'cb(1)'.length);
+		final value: String =
+			'{"a":"value","r":"(Int)->Void","rp":[${cb.from},${cb.to}],"rt":"Void","p":[${valueCall.from},${valueCall.to}]}';
+		Assert.equals('(Int)->Void', facts('', value).typeOfExpressionAt('A.hx', cb), 'the function value a call calls');
+		// a name recorded empty is spelled by no text (and the word search for it would not end on every text)
+		Assert.isFalse(FactText.mentions('a;', ''), 'an empty name mentioned');
+		Assert.isFalse(FactText.spellsCall('(', ''), 'an empty name called');
+	}
+
 	/** The type the oracle over `facts` gives the local `v` of `SRC`. */
 	private static function local(facts: CompilerFacts): OracleType {
 		return new FactsTypeOracle(facts, file -> SRC, null, PLUGIN).localType('A.hx', declOf(SRC), 'v', SRC.indexOf('var v') + 5);
