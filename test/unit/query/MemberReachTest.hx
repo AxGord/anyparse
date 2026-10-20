@@ -9,6 +9,7 @@ import anyparse.query.MemberReach;
 import anyparse.query.NullGuardedCode;
 import anyparse.query.QueryNode;
 import anyparse.query.ReachLiveness.ReachConfiguration;
+import anyparse.query.ReachProject;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import unit.QueryTestHelpers;
@@ -1474,7 +1475,7 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-IMPLICIT-WRITTEN') @:killer('M-REACH-EXTERN-IMPLICIT-QUIET') @:killer('M-REACH-SITE-SELF-ALIAS')
+	@:pin('control') @:killer('M-REACH-IMPLICIT-WRITTEN') @:killer('M-REACH-EXTERN-IMPLICIT-QUIET')
 	public function testImplicitMembersOnlyOfTypesInPlayCount(): Void {
 		// A library toString that grows an array runs only on an instance of its class — no code the run reads names
 		// `Loud`, so none is in play. An extern's own conversion runs target code that calls back only through a value
@@ -2199,6 +2200,29 @@ class MemberReachTest extends Test {
 			final holders: Array<String> = [for (p in scan.memberParams(tree)) '${p.type}.${p.method}#${p.index}'];
 			Assert.equals('Boot.create#0', holders.join(', '), fn);
 		}
+	}
+
+	/**
+	 * A typedef re-exporting a class under its own name is no second declaration of it: the one site of the name is the
+	 * class's (`ReachProject.siteOf`'s fallback past the index's one-declarer answer), while a name two classes of two
+	 * packages share, or none declares, has no site. This pins the lookup itself: the end-to-end answers that lean on it
+	 * can be reached another way (a library placeholder carries the canonical path of its type), which is what let an
+	 * arm cutting the fallback survive.
+	 */
+	@:pin('control') @:killer('M-REACH-SITE-SELF-ALIAS')
+	public function testATypeReExportedUnderItsOwnNameStillHasOneDeclarationSite(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'q/Quiet.hx', source: 'package q; class Quiet { public function new() {} }' },
+			{ file: 'Quiet.hx', source: 'typedef Quiet = q.Quiet;' },
+			{ file: 'a/Host.hx', source: 'package a; class Host {}' },
+			{ file: 'b/Host.hx', source: 'package b; class Host {}' }
+		];
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final scope: ReachProject = new ReachProject(plugin, CheckFixture.index(files, plugin), files);
+		Assert.equals('q/Quiet.hx', scope.siteOf('Quiet')?.file);
+		Assert.notNull(scope.declarationOf('Quiet'));
+		Assert.isNull(scope.siteOf('Host'));
+		Assert.isNull(scope.siteOf('Absent'));
 	}
 
 }
