@@ -4944,6 +4944,11 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   quotation were already dropped centrally (`ReificationScan.withoutQuoted`), so no lint verdict rests on those types —
   the all-rules lint of the four trees stays byte-identical; anyparse DIFFERENT 11 / 19 → 0 / 8, MATCH unchanged —
   branch `feat/fu-FU28`
+- two guards measured rather than assumed: a word search for an empty name (`FactText.mentions` / `spellsCall`) never
+  ended once its offset passed the text (an empty string's `indexOf` clamps at the length) — found by a mutant that
+  recorded reads with no name, now answers false; the guard that stops a default reaching its own type is kept with no
+  arm, since without it the recursion overflows into a throw a resolution step swallows and answers the same no type —
+  branch `feat/fu-FU28`
 - NOT closed, by size: `@:overload` returns (T5; an extern's `readFileSync` overloads, a socket's `on`); an inlined call with a default argument whose
   expansion leaves an argument flow at the call's range and no inline site (the facts macro records the inline call at
   the enclosing statement); a std member typed `Dynamic` that a library declares with a type — branch `feat/fu-FU28`
