@@ -58,6 +58,9 @@ final class AbstractCasts {
 	/** The language's nullable wrapper (Haxe `Null`), transparent to a unification. */
 	private final _nullable: Null<String>;
 
+	/** The grammar's field member kinds (`RefShape.fieldDeclKinds`): an enum-abstract value is one. */
+	private final _fieldKinds: Array<String>;
+
 	/** Built once by the owning `TypingService`. */
 	public function new(
 		refs: TypeRefIndex, ancestors: AncestorTable, cache: QueryCache, typeSyntax: TypeSyntaxReader, shape: RefShape
@@ -73,6 +76,7 @@ final class AbstractCasts {
 		_toMeta = shape.execution?.implicitOutwardConversionMetaName;
 		_dynamic = shape.rawDynamicTypeName;
 		_nullable = shape.optionalValueTypeName;
+		_fieldKinds = shape.fieldDeclKinds ?? [];
 	}
 
 	/**
@@ -154,6 +158,38 @@ final class AbstractCasts {
 			at = next;
 		}
 		return at;
+	}
+
+	/**
+	 * The members of each `#if` branch declaring the abstract `r`, in source order (`CastClauses.span`): what one build of it
+	 * declares. Null for a declaration whose every branch the index does not read as an abstract (`TypeDeclInfo.castClauses`),
+	 * and for one with a type parameter.
+	 */
+	public function branchMembers(r: ResolvedType): Null<Array<Array<MemberInfo>>> {
+		final clauses: Null<Array<CastClauses>> = r.type.castClauses;
+		return clauses == null || r.type.typeParamArity > 0 ? null : [
+			for (c in clauses) [
+				for (m in r.type.members) if (c.span.from <= m.declFrom && m.declFrom < c.span.to) m
+			]
+		];
+	}
+
+	/**
+	 * Whether `name`, read off the type name of `r`, is a VALUE of `r` written with no type — an enum-abstract value, of type
+	 * `r` (`enum abstract E(Int) { var A = 1; final B = 2; }` reads `E.A : E`, Haxe 4.3.7, the deprecated `@:enum abstract`
+	 * alike): every `#if` branch of `r` is an abstract (`branchMembers`) declaring a field of that name with no written type,
+	 * not static and not under `#if`, which an abstract declares only as an enum value ("Cannot declare member variable in
+	 * abstract" otherwise). False for any other member, and for a declaration one branch of which is no abstract the index
+	 * reads (a `typedef` to a type of another build, an abstract whose `enum` keyword sits under `#if`).
+	 */
+	public function holdsUntypedValue(r: ResolvedType, name: String): Bool {
+		final branches: Null<Array<Array<MemberInfo>>> = branchMembers(r);
+		return branches != null && branches.foreach(members -> members.exists(m -> m.name == name && isUntypedValue(m)));
+	}
+
+	/** Whether `m` is a field written with no type, not static, not under `#if`: in an abstract, an enum value. */
+	private inline function isUntypedValue(m: MemberInfo): Bool {
+		return _fieldKinds.contains(m.kind) && !m.isStatic && !m.guarded && m.typeSource == null;
 	}
 
 	/** The end a written name no declaration resolves stands for: the dynamic type, a core value type, else `Open`. */

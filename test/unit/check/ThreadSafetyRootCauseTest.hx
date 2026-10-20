@@ -19,7 +19,7 @@ class ThreadSafetyRootCauseTest extends Test {
 		+ '"Disk.stat","Disk.list"],"shortSinks":["Disk.stat","Disk.list"],"spawns":["Runner.create"],'
 		+ '"lockPairs":["Mutex.acquire/release"]}}}';
 
-	/** TM's `StandardFileSystem.saveXML`: under the mutation lock it waits for the tree lock `updateInternal` holds long. */
+	/** the client's `StandardDiskSystem.saveXML`: under the mutation lock it waits for the tree lock `updateInternal` holds long. */
 	@:pin('control') @:killer('M-TS-FOLD-OFF')
 	public function testAHoldLongOnlyByWaitingForAWarnedHolderIsInfo(): Void {
 		#if (sys || nodejs)
@@ -29,7 +29,7 @@ class ThreadSafetyRootCauseTest extends Test {
 		#end
 	}
 
-	/** TM's `saveXML`, whose `catch` reports over HTTP: a call only a `catch` runs is no reason the warning warns. */
+	/** the client's `saveXML`, whose `catch` reports over HTTP: a call only a `catch` runs is no reason the warning warns. */
 	@:pin('control') @:killer('M-TS-FOLD-NORMAL')
 	public function testACallOnlyACatchRunsLeavesTheFoldStanding(): Void {
 		#if (sys || nodejs)
@@ -56,7 +56,7 @@ class ThreadSafetyRootCauseTest extends Test {
 	}
 
 	/**
-	 * TM's `renameCloudFolderBlocked` over the loop `moveCloudFolderSubItemsAction2` runs under its own lock: a hold whose
+	 * the client's `renameCloudFolderBlocked` over the loop `moveCloudFolderSubItemsAction2` runs under its own lock: a hold whose
 	 * every way to a sink call passes a function holding a lock across it is that hold's work, one warning — the hold nearest
 	 * the call's. Two holds in one function covering each other keep the one nearest the work. A hold elsewhere across its
 	 * own call to the same sink, of the same lock or another, is a stall of its own.
@@ -81,8 +81,8 @@ class ThreadSafetyRootCauseTest extends Test {
 
 	/**
 	 * Two holds of one lock in two functions, each across its own call to the same sink, are two stalls on ONE thread as on
-	 * two (TM's `RemoteFileSystemBase.moveCloudFileBlocked` holding the batch lock across its own `getTimestamp` stat, beside
-	 * `addCloudActionValidated` reaching that stat through `addCloudAction2`; `StandardFileSystem.loadDrillContent` on the
+	 * two (the client's `RemoteDiskSystemBase.moveCloudFileBlocked` holding the batch lock across its own `getTimestamp` stat, beside
+	 * `addCloudActionValidated` reaching that stat through `addCloudAction2`; `StandardDiskSystem.loadModelContent` on the
 	 * I/O worker against `getText` on the sync worker): narrowing one hold frees nothing of the other, so neither covers.
 	 */
 	@:pin('control') @:killer('M-TS-FOLD-SITE-LOCK')
@@ -182,7 +182,7 @@ class ThreadSafetyRootCauseTest extends Test {
 		#end
 	}
 
-	/** TM's `FSUtil.deleteRecursive`: the sink calls one main-thread way into a function runs make one warning. */
+	/** the client's `PathIO.deleteRecursive`: the sink calls one main-thread way into a function runs make one warning. */
 	@:pin('control') @:killer('M-TS-WAY-OFF')
 	public function testSinkCallsOfOneWayMakeOneWarning(): Void {
 		#if (sys || nodejs)
@@ -195,7 +195,7 @@ class ThreadSafetyRootCauseTest extends Test {
 		#end
 	}
 
-	/** TM's `repairShareAttr`: the calls one loop repeats make one warning, keyed by the first. */
+	/** the client's `repairShareAttr`: the calls one loop repeats make one warning, keyed by the first. */
 	@:pin('control') @:killer('M-TS-LOOP-KEY')
 	public function testTheCallsOfOneLoopMakeOneWarning(): Void {
 		#if (sys || nodejs)
@@ -244,7 +244,7 @@ class ThreadSafetyRootCauseTest extends Test {
 	}
 
 	/**
-	 * A hold reaching a sink call once covers no hold repeating that call under its lock (TM's `FolderWatcher.rename`'s
+	 * A hold reaching a sink call once covers no hold repeating that call under its lock (the client's `VolumeWatcher.rename`'s
 	 * one stat against `updateInternal`'s walk over the tree): the repeating hold keeps the warning, and the one-call
 	 * hold folds onto it.
 	 */
@@ -264,8 +264,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	}
 
 	/**
-	 * A call reached through a function a cycle of calls re-enters repeats however the trail found it (TM's
-	 * `FolderWatcher.updateInternal`, whose `checkNode` walks the tree recursively): no hold reaching it once covers it.
+	 * A call reached through a function a cycle of calls re-enters repeats however the trail found it (the client's
+	 * `VolumeWatcher.updateInternal`, whose `checkNode` walks the tree recursively): no hold reaching it once covers it.
 	 */
 	@:pin('control') @:killer('M-TS-FOLD-SITE-CYCLE') @:killer('M-TS-CYCLE-REF')
 	public function testACallUnderARecursiveWalkRepeats(): Void {
@@ -342,7 +342,7 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * (review round 5, G3): `S.x` reaches the sleep through `p`, which holds `_y` across it, AND by calling `io` itself,
 	 * outside any hold of `_y`. Two calls reaching one sink are two ways; folding them to the first call's used to cover
 	 * the second by the first's, in whichever order they were written. With the take of a lock no sink, `p`'s first way
-	 * ends at the sleep too, as TM's `Mutex.acquire` (a `lockPairs` take, not a sink) does.
+	 * ends at the sleep too, as the client's `Mutex.acquire` (a `lockPairs` take, not a sink) does.
 	 */
 	@:pin('control') @:killer('M-TS-FOLD-SAME-WAY') @:killer('M-TS-FOLD-PARTS-ONCE')
 	public function testTwoCallsReachingOneSinkAreTwoWays(): Void {

@@ -15,7 +15,7 @@ using StringTools;
 
 /**
  * The `typed-event-constant` check: a `String` constant of an event class, used as a listener's or an event's type, is
- * reported and retyped to the declared event-type abstract over the class (`EventType<PopupEvent>`); a listener or a
+ * reported and retyped to the declared event-type abstract over the class (`EventType<ModalEvent>`); a listener or a
  * dispatch the retype would reject is reported as the latent bug it is, at the use, and its constant is left alone.
  * The candidate gates — an event class, a static final string, a use as an event type — and the reader's and the
  * index's verdicts on the declaration are each pinned by their own fixture.
@@ -32,98 +32,98 @@ class TypedEventConstantCheckTest extends Test {
 	private static final DISPATCHER: String = 'package ev;\n\nclass Dispatcher {\n\tpublic function new() {}\n\n'
 		+ '\tpublic function addEventListener<T>(type:EventType<T>, listener:T -> Void):Void {}\n\n'
 		+ '\tpublic function dispatchEvent(e:Event):Void {}\n}\n';
-	private static final POPUP_EVENT: String = 'package app;\n\nimport ev.Event;\n\nclass PopupEvent extends Event {\n'
+	private static final POPUP_EVENT: String = 'package app;\n\nimport ev.Event;\n\nclass ModalEvent extends Event {\n'
 		+ '\tpublic static inline final CLOSE:String = \'close\';\n\tpublic static inline final OPEN:String = \'open\';\n'
 		+ '\tpublic static final UNUSED:String = \'unused\';\n\tpublic static var MUT:String = \'mut\';\n}\n';
 	private static final MOUSE_EVENT: String = 'package app;\n\nimport ev.Event;\n\nclass MouseEv extends Event {}\n';
-	private static final SUB_POPUP: String = 'package app;\n\nclass SubPopup extends PopupEvent {}\n';
+	private static final SUB_POPUP: String = 'package app;\n\nclass SubPopup extends ModalEvent {}\n';
 	private static final NOT_EVENT: String =
 		'package app;\n\nclass NotEvent {\n\tpublic static inline final CLOSE:String = \'close\';\n}\n';
 	private static final CONFIG: String =
 		'{"rules":{"typed-event-constant":{"eventBase":"ev.Event","typeAbstract":"ev.EventType","listenerMethods":["addEventListener"]}}}';
 
 	public function testAConstantUsedAsAnEventTypeIsReportedAndRetyped(): Void {
-		final files: Array<{ file: String, source: String }> = project('d.addEventListener(PopupEvent.CLOSE, onEvent);');
+		final files: Array<{ file: String, source: String }> = project('d.addEventListener(ModalEvent.CLOSE, onEvent);');
 		final vs: Array<Violation> = violationsOf(files);
 		Assert.equals(1, vs.length, messages(vs));
 		Assert.equals('typed-event-constant', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
-		Assert.equals('app/PopupEvent.hx', vs[0].file);
-		Assert.isTrue(vs[0].message.indexOf('PopupEvent.CLOSE') != -1, vs[0].message);
-		Assert.same(['ev.EventType<PopupEvent>'], editTexts(files, 'app/PopupEvent.hx'));
+		Assert.equals('app/ModalEvent.hx', vs[0].file);
+		Assert.isTrue(vs[0].message.indexOf('ModalEvent.CLOSE') != -1, vs[0].message);
+		Assert.same(['ev.EventType<ModalEvent>'], editTexts(files, 'app/ModalEvent.hx'));
 	}
 
 	public function testTheAbstractIsSpelledShortWhereItIsAlreadyImported(): Void {
-		final files: Array<{ file: String, source: String }> = project('d.addEventListener(PopupEvent.CLOSE, onEvent);');
+		final files: Array<{ file: String, source: String }> = project('d.addEventListener(ModalEvent.CLOSE, onEvent);');
 		files[0] = {
-			file: 'app/PopupEvent.hx',
+			file: 'app/ModalEvent.hx',
 			source: POPUP_EVENT.replace('import ev.Event;\n', 'import ev.Event;\nimport ev.EventType;\n')
 		};
-		Assert.same(['EventType<PopupEvent>'], editTexts(files, 'app/PopupEvent.hx'));
+		Assert.same(['EventType<ModalEvent>'], editTexts(files, 'app/ModalEvent.hx'));
 	}
 
 	public function testADispatchedEventOfTheClassCountsAsAUse(): Void {
-		final vs: Array<Violation> = violationsOf(project('d.dispatchEvent(new SubPopup(PopupEvent.CLOSE));'));
+		final vs: Array<Violation> = violationsOf(project('d.dispatchEvent(new SubPopup(ModalEvent.CLOSE));'));
 		Assert.equals(1, vs.length, messages(vs));
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
-	/** The listener is handed a `PopupEvent` it declares to be a `MouseEv`: reported at the use, the constant left alone. */
+	/** The listener is handed a `ModalEvent` it declares to be a `MouseEv`: reported at the use, the constant left alone. */
 	@:pin('control') @:killer('M-EVENT-NO-MISMATCH')
 	public function testALambdaListenerOfAnotherEventClassIsALatentBug(): Void {
-		final files: Array<{ file: String, source: String }> = project('d.addEventListener(PopupEvent.OPEN, (e:MouseEv) -> {});');
+		final files: Array<{ file: String, source: String }> = project('d.addEventListener(ModalEvent.OPEN, (e:MouseEv) -> {});');
 		final vs: Array<Violation> = violationsOf(files);
 		Assert.equals(1, vs.length, messages(vs));
 		Assert.equals(Severity.Warning, vs[0].severity);
 		Assert.equals('app/Main.hx', vs[0].file);
-		Assert.equals('listener (e:MouseEv) -> {} of PopupEvent.OPEN expects MouseEv, the event is PopupEvent', vs[0].message);
-		Assert.equals('typing PopupEvent.OPEN EventType<PopupEvent> would not compile here', vs[0].declineReason);
-		Assert.same([], editTexts(files, 'app/PopupEvent.hx'));
+		Assert.equals('listener (e:MouseEv) -> {} of ModalEvent.OPEN expects MouseEv, the event is ModalEvent', vs[0].message);
+		Assert.equals('typing ModalEvent.OPEN EventType<ModalEvent> would not compile here', vs[0].declineReason);
+		Assert.same([], editTexts(files, 'app/ModalEvent.hx'));
 	}
 
 	@:pin('control') @:killer('M-EVENT-NO-MISMATCH')
 	public function testAMethodListenerOfASubclassIsALatentBug(): Void {
-		final vs: Array<Violation> = violationsOf(project('d.addEventListener(PopupEvent.OPEN, this.onSub);'));
+		final vs: Array<Violation> = violationsOf(project('d.addEventListener(ModalEvent.OPEN, this.onSub);'));
 		Assert.equals(1, vs.length, messages(vs));
-		Assert.equals('listener this.onSub of PopupEvent.OPEN expects SubPopup, the event is PopupEvent', vs[0].message);
+		Assert.equals('listener this.onSub of ModalEvent.OPEN expects SubPopup, the event is ModalEvent', vs[0].message);
 	}
 
 	@:pin('control') @:killer('M-EVENT-NO-MISMATCH')
 	public function testAFunctionTypedLocalListenerIsALatentBug(): Void {
 		final vs: Array<Violation> =
-			violationsOf(project('final held:MouseEv->Void = e -> {};\n\t\td.addEventListener(PopupEvent.OPEN, held);'));
+			violationsOf(project('final held:MouseEv->Void = e -> {};\n\t\td.addEventListener(ModalEvent.OPEN, held);'));
 		Assert.equals(1, vs.length, messages(vs));
-		Assert.equals('listener held of PopupEvent.OPEN expects MouseEv, the event is PopupEvent', vs[0].message);
+		Assert.equals('listener held of ModalEvent.OPEN expects MouseEv, the event is ModalEvent', vs[0].message);
 	}
 
 	@:pin('control') @:killer('M-EVENT-NO-MISMATCH')
 	public function testAnEventDispatchedAsAnotherClassIsALatentBug(): Void {
-		final vs: Array<Violation> = violationsOf(project('d.dispatchEvent(new Event(PopupEvent.CLOSE));'));
+		final vs: Array<Violation> = violationsOf(project('d.dispatchEvent(new Event(ModalEvent.CLOSE));'));
 		Assert.equals(1, vs.length, messages(vs));
 		Assert.equals(Severity.Warning, vs[0].severity);
-		Assert.isTrue(vs[0].message.startsWith('PopupEvent.CLOSE is dispatched as new Event(…), the event is PopupEvent'), vs[0].message);
+		Assert.isTrue(vs[0].message.startsWith('ModalEvent.CLOSE is dispatched as new Event(…), the event is ModalEvent'), vs[0].message);
 	}
 
 	public function testASupertypeListenerIsConsistent(): Void {
-		final vs: Array<Violation> = violationsOf(project('d.addEventListener(PopupEvent.OPEN, (e:Event) -> {});'));
+		final vs: Array<Violation> = violationsOf(project('d.addEventListener(ModalEvent.OPEN, (e:Event) -> {});'));
 		Assert.equals(1, vs.length, messages(vs));
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
 	@:pin('control') @:killer('M-EVENT-NO-USE-GATE')
 	public function testAConstantNeverUsedAsAnEventTypeIsNotReported(): Void {
-		Assert.equals(0, violationsOf(project('trace(PopupEvent.UNUSED);')).length);
+		Assert.equals(0, violationsOf(project('trace(ModalEvent.UNUSED);')).length);
 	}
 
 	/** A string handed to the constructor of a class that is no event is not an event type, and no dispatch to judge. */
 	@:pin('control') @:killer('M-EVENT-ANY-NEW-IS-A-USE') @:killer('M-EVENT-NO-USE-GATE')
 	public function testAConstructorOfANonEventClassIsNoUse(): Void {
-		Assert.equals(0, violationsOf(project('trace(new NotEvent(PopupEvent.UNUSED));')).length);
+		Assert.equals(0, violationsOf(project('trace(new NotEvent(ModalEvent.UNUSED));')).length);
 	}
 
 	@:pin('control') @:killer('M-EVENT-STATIC-VAR')
 	public function testAStaticVarIsNoConstant(): Void {
-		Assert.equals(0, violationsOf(project('d.addEventListener(PopupEvent.MUT, onEvent);')).length);
+		Assert.equals(0, violationsOf(project('d.addEventListener(ModalEvent.MUT, onEvent);')).length);
 	}
 
 	@:pin('control') @:killer('M-EVENT-NO-BASE-GATE')
@@ -132,7 +132,7 @@ class TypedEventConstantCheckTest extends Test {
 	}
 
 	public function testNoConfigIsInert(): Void {
-		Assert.equals(0, violationsOf(project('d.addEventListener(PopupEvent.CLOSE, onEvent);'), '{}').length);
+		Assert.equals(0, violationsOf(project('d.addEventListener(ModalEvent.CLOSE, onEvent);'), '{}').length);
 		Assert.equals('needs-config', new TypedEventConstant().skipReason('app/Main.hx', LintConfig.parse('{}')));
 		Assert.isNull(new TypedEventConstant().skipReason('app/Main.hx', LintConfig.parse(CONFIG)));
 	}
@@ -141,7 +141,7 @@ class TypedEventConstantCheckTest extends Test {
 	@:pin('control') @:killer('M-EVENT-ABSTRACT-TRUSTED')
 	public function testAnAbstractWithoutBothStringConversionsMakesTheRuleInert(): Void {
 		final config: String = CONFIG.replace('ev.EventType', 'ev.OneWay');
-		final files: Array<{ file: String, source: String }> = project('d.addEventListener(PopupEvent.CLOSE, onEvent);');
+		final files: Array<{ file: String, source: String }> = project('d.addEventListener(ModalEvent.CLOSE, onEvent);');
 		Assert.equals(0, violationsOf(files, config).length);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final problems: Array<String> = [];
@@ -184,7 +184,7 @@ class TypedEventConstantCheckTest extends Test {
 			+ '\tfunction run(d:Dispatcher):Void {\n\t\t$body\n\t}\n\n\tfunction onEvent(e:Event):Void {}\n\n'
 			+ '\tfunction onSub(e:SubPopup):Void {}\n}\n';
 		return [
-			{ file: 'app/PopupEvent.hx', source: POPUP_EVENT },
+			{ file: 'app/ModalEvent.hx', source: POPUP_EVENT },
 			{ file: 'app/Main.hx', source: main },
 			{ file: 'app/MouseEv.hx', source: MOUSE_EVENT },
 			{ file: 'app/SubPopup.hx', source: SUB_POPUP },

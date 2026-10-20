@@ -16,12 +16,12 @@ class ThreadSafetyRegistersTest extends Test {
 		+ '"registers":["addEventListener"],"nonBlocking":["D.new the dispatcher stands for a library class, no project native",'
 		+ '"D.addEventListener keeps the handler and runs nothing"]}}}';
 
-	/** The runtime's dispatcher (an openfl display object in TM): `registers` speaks for a registration it keeps itself. */
+	/** The runtime's dispatcher (an openfl display object in the client corpus): `registers` speaks for a registration it keeps itself. */
 	private static inline final DISPATCHER: String = 'extern class D { public function new();'
 		+ ' public function addEventListener(type:String, fn:String->Void):Void; }';
 
 	/**
-	 * TM's `FileListOperations.listenContent`: one rename handler registered on every list item renames once per event,
+	 * the client's `ItemListOperations.listenContent`: one rename handler registered on every list item renames once per event,
 	 * not once per item.
 	 */
 	@:pin('control') @:killer('M-TS-REGISTER-OWNER')
@@ -87,7 +87,7 @@ class ThreadSafetyRegistersTest extends Test {
 	}
 
 	/**
-	 * A `registers` entry naming a project member (`Req.success`, TM's `APIRequest2.success`) is the project's word on that
+	 * A `registers` entry naming a project member (`Req.success`, the client's `NetRequest2.success`) is the project's word on that
 	 * member, as a `runsOnce` one is: a loop around the registration repeats nothing (N46 E1). A bare name speaks for the
 	 * runtime's registrations only, and a project member it names stays a call that may run its value per item.
 	 */

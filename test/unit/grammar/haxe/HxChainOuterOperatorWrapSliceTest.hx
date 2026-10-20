@@ -13,7 +13,7 @@ import utest.Test;
  * INSIDE the parens.
  *
  * The fixtures are anonymised, LENGTH-PRESERVING renames of the reported
- * `CloudDatabase` family and its shape-siblings — every decision here is a
+ * `ShardDatabase` family and its shape-siblings — every decision here is a
  * width decision, so a shorter identifier would silently move the boundary.
  * Config mirrors `HxCallParamOuterFirstWrapSliceTest`: the same three cascades
  * (`callParameter`, `expressionWrapping`, `opAddSubChain`) at
@@ -173,7 +173,7 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	 * `maxLineLength - indent - cols < contWidth <= maxLineLength`; it cannot be
 	 * closed statically (the chain does not know its render indent) and closing
 	 * it at the walker belongs to the Doc.hx slot-inversion follow-up. It occurs
-	 * nowhere on the TM tree or on anyparse's own corpus.
+	 * nowhere on the client tree or on anyparse's own corpus.
 	 */
 	public function testTailOverflowingThisContinuationGluesButOpensTheCall(): Void {
 		final tail: String = "(bucket ? '1 AND bucket_entry_id = ' : '0 AND "

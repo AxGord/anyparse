@@ -519,8 +519,9 @@ final class ValueEscapes {
 			} else if (
 				target.kind == shape.identKind && name != null && at != null && TypeResolver.bindingNodeFrom(name, at, tree, shape) == null
 				&& libraryMember(TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name, name)
-			)
+			) {
 				return false;
+			}
 			final declared: Null<String> = declaredSourceOf(target);
 			return declared != null && typedPosition(declared);
 		}
@@ -543,24 +544,25 @@ final class ValueEscapes {
 			// code no build compiles, a reification and a macro's body run in no program
 			if ((shape.opaqueKinds ?? []).contains(kind) || !_live.live(file, source, node.span) || macroMember(file, tree, node)) return;
 			final first: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
-			if (first != null && (kind == shape.uncheckedCastKind || kind == shape.checkTypeKind))
+			if (first != null && (kind == shape.uncheckedCastKind || kind == shape.checkTypeKind)) {
 				value(first);
-			else if (first != null && (shape.throwKinds ?? []).contains(kind))
+			} else if (first != null && (shape.throwKinds ?? []).contains(kind)) {
 				// a catch may bind what is thrown as a catch-all
 				value(first);
-			else if (declKinds.contains(kind)) {
+			} else if (declKinds.contains(kind)) {
 				final init: Null<QueryNode> = CtorFieldFold.declInitializer(node, shape);
 				final annotated: Null<String> = node.span == null ? null : annotations[node.span?.from ?? 0];
 				if (init != null && annotated != null && !typedPosition(annotated)) value(init);
 			} else if (assignKinds.contains(kind) && node.children.length == 2) {
 				if (!assignedTypedly(node.children[0])) value(node.children[1]);
-			} else if (kind == shape.callKind || kind == shape.newExprKind)
+			} else if (kind == shape.callKind || kind == shape.newExprKind) {
 				call(node);
-			else if ((shape.valueReturnKinds ?? []).contains(kind) && first != null) {
+			} else if ((shape.valueReturnKinds ?? []).contains(kind) && first != null) {
 				if (!returnsTypedly(fn)) value(first);
-			} else if (arrowKinds.contains(kind) && node.children.length > 0)
+			} else if (arrowKinds.contains(kind) && node.children.length > 0) {
 				// the body's result is returned into a position nothing here types
 				bodyValue(node.children[node.children.length - 1]);
+			}
 			final inner: Null<QueryNode> = functions.contains(kind) ? node : fn;
 			for (c in node.children) walk(c, inner);
 		}

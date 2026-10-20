@@ -138,18 +138,14 @@ final class ElementSpan {
 		var from: Int = span.from;
 		var first: Bool = true;
 		while (true) {
-			var i: Int = from - 1;
-			while (i >= 0 && SourceText.isSpace(source.fastCodeAt(i))) i--;
-			if (i < 0) break;
-			// The preceding token must be a BLOCK comment ending exactly here. Asking the
-			// lexer which token that is (rather than scanning back for a `/*`) is what keeps
-			// an opener written inside the doc's own TEXT from being mistaken for its start.
-			final open: Int = SourceComments.commentEndingAt(tokens, i + 1, true);
+			// The preceding token must be a BLOCK comment ending exactly here, and open its own
+			// line. Asking the lexer which token that is (rather than scanning back for a `/*`)
+			// is what keeps an opener written inside the doc's own TEXT from being mistaken for
+			// its start; a comment sharing its line with preceding CODE trails THAT declaration —
+			// `var keep:Int; /* about keep */` reads as keep's note, however adjacent it looks
+			// from below — so attribution follows the line the reader sees it on.
+			final open: Int = SourceComments.ownLineCommentAbove(source, tokens, from, true);
 			if (open < 0) break;
-			// A comment sharing its line with preceding CODE trails THAT declaration —
-			// `var keep:Int; /* about keep */` reads as keep's note, however adjacent it
-			// looks from below — so attribution follows the line the reader sees it on.
-			if (!SourceText.startsItsLine(source, open)) break;
 			// A caller that DELETES what it absorbs passes `docOnly` and gets `/**` as the
 			// proof, because the block directly above a declaration is a licence header or a
 			// section banner at least as often as it is documentation, and deleting one of

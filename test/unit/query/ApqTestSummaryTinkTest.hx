@@ -13,14 +13,14 @@ import utest.Test;
 /**
  * `apq test-summary` — tink_testrunner (tink_unittest) transcript support.
  *
- * TM's unit suite (`openfl test macos -DUNIT_TESTS`) runs on
+ * the client's unit suite (`openfl test macos -DUNIT_TESTS`) runs on
  * tink_unittest/tink_testrunner, not utest — `Cli.parseTestSummary` only
  * recognized the utest `  testName: OK ...` shape, so a tink transcript
  * silently parsed to `0 tests / 0 assertions / 0 failures / 0 errors`
- * (reproduced against real TM logs, with and without ANSI stripped —
+ * (reproduced against real client logs, with and without ANSI stripped —
  * the line SHAPE never matched, ANSI was never the blocker).
  *
- * Fixture bytes are hand-built (not copied from the real TM log) to
+ * Fixture bytes are hand-built (not copied from the real client log) to
  * mirror `tink_testrunner`'s `BasicReporter`/`AnsiFormatter`
  * (haxelib tink_testrunner 0.9.0, src/tink/testrunner/Reporter.hx)
  * byte-for-byte:
@@ -32,7 +32,7 @@ import utest.Test;
  *  - Case-level throw (4-indent, dashed, no brackets): `- <red>message<r>`
  *  - Final summary (0-indent): `<g|red>N Assertion(s)   N Success   N
  *    Failure(s)   N Error(s)   <r>` — confirmed against a real green
- *    TM run: `1111 Assertions   1111 Success   0 Failure   0 Error   `.
+ *    client run: `1111 Assertions   1111 Success   0 Failure   0 Error   `.
  * `<y>`=yellow(33) `<c>`=cyan(36) `<g>`=green(32) `<red>`=red(31)
  * `<r>`=reset(39).
  */
@@ -41,7 +41,7 @@ class ApqTestSummaryTinkTest extends Test {
 
 	private static inline final ESC: String = '\x1b';
 
-	// --- All-passing transcript, ANSI-colored (the real TM shape) ---
+	// --- All-passing transcript, ANSI-colored (the real client shape) ---
 
 	public function testTinkAllPassingTranscriptParsed(): Void {
 		#if (sys || nodejs)
@@ -204,9 +204,9 @@ class ApqTestSummaryTinkTest extends Test {
 	}
 
 	// --- Pin against the exact real-log summary-line text observed in a
-	// green TM run (`/tmp/tm-unit-tests.txt`, `/tmp/tm-unit-tests-2.txt`):
+	// green client run (`/tmp/client-unit-tests.txt`, `/tmp/client-unit-tests-2.txt`):
 	// `1111 Assertions   1111 Success   0 Failure   0 Error   `. Numbers
-	// only — no TM class/test names, to keep the fixture generic. ---
+	// only — no client class/test names, to keep the fixture generic. ---
 
 	public function testTinkRealSummaryLineShapePinned(): Void {
 		#if (sys || nodejs)
@@ -214,7 +214,7 @@ class ApqTestSummaryTinkTest extends Test {
 		final transcript: String = '${suiteHeader('SampleFinalTest', 'src/tests/unit/SampleFinalTest.hx', 1)}\n'
 			+ '${caseHeader('trivial', 'src/tests/unit/SampleFinalTest.hx', 2)}\n'
 			+ '${assertRow(true, 'src/tests/unit/SampleFinalTest.hx', 3, 'ok')}\n$real\nTests completed - watchdog thread will exit '
-			+ 'gracefully\nStopping FileSystem background threads...\nFileSystem stopped\nEXIT=0\n';
+			+ 'gracefully\nStopping FileSystem background threads...\nDiskSystem stopped\nEXIT=0\n';
 		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(1111, r.assertions);
 		Assert.equals(1111, r.assertions); // Success mirrors assertions in an all-green run

@@ -4947,3 +4947,102 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - NOT closed, by size: `@:overload` returns (T5; an extern's `readFileSync` overloads, a socket's `on`); an inlined call with a default argument whose
   expansion leaves an argument flow at the call's range and no inline site (the facts macro records the inline call at
   the enclosing statement); a std member typed `Dynamic` that a library declares with a type — branch `feat/fu-FU28`
+
+## FU26 (2026-10-20) — `asymmetric-branch-braces` asks the question of a whole chain, final `else` or not
+
+- Gap (recorded by FU7): an else-if chain with no final `else` (`if (a) { x; } else if (b) y();`) was no finding, nor
+  was a final-else chain braced in its tail and bare in its head (`if (a) x(); else if (b) { y(); } else { z(); }`):
+  every non-tail link has an `if` as its else, so the pair test never saw them. `fmt` under
+  `singleStatementBraces: "symmetric"` braces both (`chainForcesBraces`), measured on fixtures with the start engine.
+- Detection now walks chain HEADS only (an `if` that is not another `if`'s else) and answers ONE finding per chain:
+  the tail pair's own finding, span and message unchanged, when that pair is the asymmetric one, else a finding spanning
+  the whole chain when a braced branch and a branch the writer would brace (`bareBranches`) coexist. The exemptions
+  stay the rule's: an `else if` is the spine, not a branch; a terminal `else switch` is neutral (it was already exempt
+  in a pair; `bareBranches` now leaves it out too, so the fix never braces it, as the writer glues it to its `else`).
+  A declaration and a conditional-compilation region are flagged and declined by the fix's existing gates, exactly as
+  in a pair; the fix is unchanged otherwise (all-or-nothing over the chain, terminator rules, reparse check).
+- Not mirrored, unchanged on purpose (pre-existing, pinned by `testASwitchInThenPositionIsStillFlagged`): a branch in
+  THEN position that is a `switch` or a bare `if` counts as bare and is braced by the fix, while the writer's
+  symmetric wrap skips both ctors (`SYMMETRY_WRAP_SKIP_CTORS`); and an unterminated bare expression takes its `;`
+  inside the braces where the writer leaves it bare (FU7's decision).
+  Neither anyparse nor a client corpus has such a site.
+- A bare branch's OWN comments - each opening a line of its own between its header and its statement - now go inside
+  its braces (`bracesOpenAt`): the braces open right after the header. Left outside (FU7's edit started at the
+  statement) they land between the header and the `{`, which is also what `fmt` does with such a branch under the
+  symmetric policy - three anyparse sites (`ValueEscapes` x2, `MemberKinds`) read `)` / `// note` / `{`. A comment
+  that shares its line with the header is the header's and stays. The "comment token directly above, opening its own
+  line" step is one shared primitive, `SourceComments.ownLineCommentAbove`, which `ElementSpan.docExtendedSpan` now
+  calls instead of its inline copy (block comments only there, as before).
+- anyparse src+test at the fixed point: 68 chain findings in 53 files, 0 declined; only braces / `;` /
+  whitespace differ; no follow-on rule fires. A client corpus with the rule enabled whose `fmt` runs
+  `singleStatementBraces: "remove"` (which makes chains symmetric already): 0 sites.
+
+## FU24 (2026-10-20): typer step T4b — std types for argument fits, `@:op` results, enum-abstract values
+
+- `ArgumentTypes` resolved every argument / parameter type in the CALL GRAPH's index (the project and the library bodies
+  the graph reads, no std), so a std abstract (`UInt`) or a library type the graph holds no body of never resolved and
+  stayed `MayFit` → `heldFor`: the run's resolution index (`IndexScope.resolutionIndexOf`, report + libraries + std)
+  where it holds the file writing the type, else the graph's entry (no resolution scope: as before). `coreName` keeps
+  asking the CALL GRAPH whether an indexed type bears a core name — the resolution index holds the std's `Int` /
+  `Float`, and asking it would make no name core — branch `feat/fu-FU24`
+- the type of a field read (bare, off `this`, a static off a type name) carried no file (`ownField` / `accessType` read
+  the graph's name-keyed `memberOnChain`), so a `UInt` field was never resolved → both read `MemberLookup.memberRead`
+  (the old `memberReadType` with the declaration writing the member: `MemberReading.host`, `.member`) through the
+  resolution index, the type carrying the declaring file — none for a supertype member whose type the chain substitutes
+  (the arguments are written in another file). A static is read off its OWN type only (statics are not inherited) —
+  branch `feat/fu-FU24`
+- arithmetic over an abstract was untyped (core numbers only) → `OperatorOverloads` (`index.typing.operators`,
+  `operators.ml` 4.3.7): the left operand's abstract first, the right one's when the left takes none
+  (`try_abstract_binop_overloads`); the overloads of the operator in DECLARATION order (probed: `subA(A,A):String` before
+  `subF(A,Float):Bool` gives `String`, the reverse order `Bool`); a candidate takes the operands when its first
+  parameter EQUALS the left operand's type (`type_eq EqStrict`: `X - X` passes `subI(a:Int, b:X)` over though `X to Int`)
+  and the right operand casts to the second (`Unification.casts`), mirrored for the right abstract, and a
+  `@:commutative` one also swapped (`RefShape.commutativeOperatorMetaName`); `Null<U>` operands take `U`'s overload
+  (probed, `type_eq` sees through `Null` there). Every `#if` branch of the abstract must pick an overload returning one
+  type: `CastClauses.span` (the branch's range) tells which members a branch declares (`AbstractCasts.branchMembers`) —
+  `UInt`'s flash branch picks `subI(UInt, Int):UInt`, the other `sub(UInt, UInt):UInt`, both `UInt` — branch `feat/fu-FU24`
+- "matches or Unknown" for the overload: no answer for an operand or a parameter type the cast graph does not model, a
+  candidate with type parameters, under `#if`, a signature overload, not taking two parameters (an instance overload
+  takes one), a cast `Unification.casts` cannot decide, an abstract a build macro may add an overload to, branches that
+  pick different types (`D - D` is `D` on `--interp`, `String` on `-js`, probed), and the language's own operator (no
+  overload taken: the walk's core arithmetic answers that). The expected type's promotion (`type_non_assign_op`'s
+  one-applicable-overload `with_type`) retypes an operand EXPRESSION only, never an identifier's or a field's type, which
+  are the operands the walk types — branch `feat/fu-FU24`
+- an enum-abstract value written with no type (`E.X`) had no type → `AbstractCasts.holdsUntypedValue`:
+  every `#if` branch of the declaration an abstract declaring a non-static, unguarded field of the name with no written
+  type — which an abstract declares only as an enum value ("Cannot declare member variable in abstract", probed), so the
+  deprecated `@:enum abstract` qualifies too — and the value is of the declaration (`var A = 1` / `final B = 2` / `var F;`
+  are `E`, `static var D = 4` is `Int`, probed). Asked by `ArgumentTypes.accessType` only; the index host's deep walk does
+  not ask yet (the facts harness keeps its tables) — branch `feat/fu-FU24`
+- NOT reached, measured on a client corpus: a library enum abstract of the shape of `openfl.text.TextFormatAlign` stays
+  untyped, so a false positive whose remaining call chains each pass one of its values keeps them. Two facts stand in the
+  way, each beyond this step: its first branch writes the `enum` keyword under `#if`
+  (`#if (haxe_ver >= 4.0) enum #else @:enum #end abstract`), which the index reads as a split header (kind
+  `AbstractDecl`, `castClauses` null); and its flash branch is a `typedef` to `flash.text.TextFormatAlign`, a std target
+  subtree the resolution scope does not hold (`StdResolver.resolutionSpecs`: `*.hx`, `haxe/`, `sys/`), so what the value
+  is there cannot be read. A chain whose argument is `a - b` over two `UInt` fields is pruned — branch `feat/fu-FU24`
+
+## FU29 (2026-10-20) — no downstream project's names in this repository; the list that guards it lives outside
+
+- **This repository is public, and the projects it is measured on are not.** Nothing committed here (docs, decisions,
+  comments, tests, fixtures, tools, commit messages) names a downstream project or its code: no project name, no path
+  into its tree, no type / file / member name taken from it, no code quoted from it. A finding is described by its SHAPE
+  with neutral names, and a corpus effect as counts on "a client corpus". The details belong in private notes.
+- **Fixtures were renamed, never reshaped.** Every name that came from a client corpus was replaced by a neutral one of
+  the SAME LENGTH, so a width-, column- or order-sensitive fixture proves what it proved before (identical structure,
+  identical assertions, the suite's test and assertion counts unchanged). Two renames had to respect more than length:
+  an import-order fixture needs the new names to sort as the old ones did, and a parameter-naming fix derives its
+  expected name from the type, so the field name follows the type's rename. Generic vocabulary a client also happens
+  to use (`Main`, `Node`, `Grid`, `Store`, `Label`, `items`, ...) is anyparse's own and stays.
+- **One scrub, three uses.** The scrub is a git-filter-repo `--replace-text` map applied to the tree with filter-repo's
+  own semantics (literals first, then regexes, in file order; binary files skipped), so the same file rewrites the
+  unpublished history and reproduces this tree. It lives OUTSIDE the repository — a list of the names to keep out would
+  publish them — and is what `tools/scrub-guard.py` reads (`--list` or `ANYPARSE_SCRUB_LIST`): the tree, or with
+  `--range A..B` the lines a range adds and its commit messages; matches are reported by rule number, never by text.
+  `tools/hooks/pre-push-scrub.sh` runs it over what a push would publish. With no list configured both pass and say so,
+  so a clone without the private list is not blocked.
+- **A private corpus is named by the environment, never by the repository.** `tools/battery.sh` lints a second tree only
+  when `--client <tree>` or `ANYPARSE_CLIENT_TREE` names it (it used to default to a path on one machine);
+  `tools/bench-corpus.txt` includes its calibrated other half through `@${ANYPARSE_BENCH_EXTRA}`, a manifest kept outside
+  the repository (`tools/ParseProf.hx` learned `@<manifest>` include lines for it). Blast-cache baselines written under the
+  old file names are not read under the new `*-client.json` ones; a first run after this re-snapshots.

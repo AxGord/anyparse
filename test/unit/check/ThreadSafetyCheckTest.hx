@@ -6,6 +6,7 @@ import anyparse.check.PositiveSinks;
 import anyparse.check.Severity;
 import anyparse.check.ThreadSafety;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.GrammarPlugin;
 import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import unit.cli.CliFixture;
@@ -906,7 +907,7 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/**
-	 * A hold only a `quietRoots` function runs is quiet too (TM's Help-menu cache wipe under the file-system locks): the
+	 * A hold only a `quietRoots` function runs is quiet too (the client's Help-menu cache wipe under the file-system locks): the
 	 * main thread waits there on purpose, and never for its own hold — while a hold some loud path also runs still reports.
 	 */
 	@:pin('control') @:killer('M-TS-QUIET-HOLD')
@@ -1192,7 +1193,7 @@ class ThreadSafetyCheckTest extends Test {
 	#end
 
 	/**
-	 * TM's deadlock: the main thread's `save` holds `_mutation` and takes `_batch` inside `Db.add`, while the spawned
+	 * the client's deadlock: the main thread's `save` holds `_mutation` and takes `_batch` inside `Db.add`, while the spawned
 	 * `download` holds `_batch` and calls `save`, which takes `_mutation`. One finding, at the call where the main
 	 * thread's hold reaches the other lock, naming both chains.
 	 */
@@ -1373,7 +1374,7 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** TM's `addCloudAction2`: a `throw` in a `switch` between the take and the release leaves the lock held. */
+	/** the client's `addCloudAction2`: a `throw` in a `switch` between the take and the release leaves the lock held. */
 	@:pin('control') @:killer('M-TS-THROW-UNRAISED')
 	public function testAThrowBetweenTakeAndReleaseLeavesTheLockHeld(): Void {
 		#if (sys || nodejs)
@@ -1428,7 +1429,7 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** The same `throw` ahead of the take — TM's fix — raises with nothing held. */
+	/** The same `throw` ahead of the take — the client's fix — raises with nothing held. */
 	public function testAThrowBeforeTheTakeIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same([], throwFindings('', [
@@ -1471,7 +1472,7 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** TM's `FolderWatcher.createDirectory`: a hold across a call that reaches a `throwers` entry with no `catch` on the way. */
+	/** the client's `VolumeWatcher.createDirectory`: a hold across a call that reaches a `throwers` entry with no `catch` on the way. */
 	@:pin('control') @:killer('M-TS-THROW-NO-PROPAGATION')
 	public function testAHoldAcrossACallReachingAThrowerEscapes(): Void {
 		#if (sys || nodejs)
@@ -1611,7 +1612,7 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/**
-	 * TM's shape: `Fs.save` holds `_mutation` (through a wrapper) and calls `Db.add`, which takes `_batch` itself;
+	 * the client's shape: `Fs.save` holds `_mutation` (through a wrapper) and calls `Db.add`, which takes `_batch` itself;
 	 * `Fs.download` holds `_batch` (through a wrapper) and calls `save`. `body` is `save`'s body, `start` the body of
 	 * `main`, which has made an `Fs` as `fs`.
 	 */
@@ -1631,10 +1632,11 @@ class ThreadSafetyCheckTest extends Test {
 
 	/**
 	 * The findings of a run over `sources` (as `F<i>.hx`) under `config`, in a directory that also holds `beside` on disk:
-	 * files of the project the run leaves out (`ProjectCoverage`).
+	 * files of the project the run leaves out (`ProjectCoverage`); with `library`, a resolution scope holding those sources too.
 	 */
 	public static function violations(
-		config: String, sources: Array<String>, ?beside: Array<{ name: String, source: String }>, withNotice: Bool = false
+		config: String, sources: Array<String>, ?beside: Array<{ name: String, source: String }>, withNotice: Bool = false,
+		?library: Array<String>
 	): Array<Violation> {
 		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }].concat(beside ?? []));
 		// Each source a root module named after its first type: the compiler binds a bare name to a module's MAIN type only.
@@ -1642,7 +1644,14 @@ class ThreadSafetyCheckTest extends Test {
 			for (entry in QueryTestHelpers.rootModules(sources)) { file: '$dir/${entry.file}', source: entry.source }
 		];
 		// Through `Linter.run`, not `run`: the `sinks` / `exclude` gate is `FileGated`, applied where findings enter the tool.
-		final result: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
+		// a `library` the resolution scope holds and the run does not (`QueryTestHelpers.projectPlugin`), under `lib/`
+		final libraryFiles: Null<Array<{ file: String, source: String }>> = library == null ? null : [
+			for (entry in QueryTestHelpers.rootModules(library)) { file: '$dir/lib/${entry.file}', source: entry.source }
+		];
+		final plugin: GrammarPlugin = libraryFiles == null
+			? new HaxeQueryPlugin()
+			: QueryTestHelpers.projectPlugin(files, libraryFiles, true, false);
+		final result: Array<Violation> = Linter.run(files, plugin, [new ThreadSafety()]);
 		CliFixture.removeDir(dir);
 		// every reporting run says once which builtin sinks it applied (`ThreadSafetyPositiveSinksTest` reads it)
 		return withNotice ? result : result.filter(v -> !(v.file == '' && StringTools.startsWith(v.message, PositiveSinks.NOTICE)));

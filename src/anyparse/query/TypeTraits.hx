@@ -66,7 +66,7 @@ final class TypeTraits {
 	/**
 	 * Whether `typeName` OR any type in its transitive supertype closure carries
 	 * `@:rtti` (resolved via the index). True marks a serialization-sensitive
-	 * hierarchy - a class reflected on its field NAMES at runtime (a drill Node) -
+	 * hierarchy - a class reflected on its field NAMES at runtime (a model Node) -
 	 * whose fields a naming autofix must not rename. An unresolved / ambiguous
 	 * supertype simply ends that branch (a safe miss, matching `isSubtype`); the
 	 * direct-`@:rtti` case is caught by the projection's `renameUnsafe` regardless.

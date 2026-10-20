@@ -133,7 +133,7 @@ final class ReachProject {
 
 	/**
 	 * Every declaration of the index that is no self-alias, by simple name, in index order: `siteOf`'s fallback, built once
-	 * per index. It scanned every type of every file per question, and on TM that was a quarter of a `--fix` run (147 of
+	 * per index. It scanned every type of every file per question, and on the client corpus that was a quarter of a `--fix` run (147 of
 	 * 533 s). The index is immutable and replaced whole (`readThrough`), so the table is rebuilt when it is.
 	 */
 	private function declarationsByName(): Map<String, Array<{ file: String, span: Span }>> {

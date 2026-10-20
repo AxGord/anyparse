@@ -96,7 +96,7 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 		+ '\t\titems.rank((p:Item, q:Item) -> if (p.orderKeyVal < q.orderKeyVal)\n\t\t\t-1\n\t\telse if ('
 		+ 'p.orderKeyVal > q.orderKeyVal)\n\t\t\t1\n\t\telse\n\t\t\t0 // equal\n\t\t);\n\t}\n}';
 
-	/** Same slot, two-arm chain - the reported `APIRequest2` shape. */
+	/** Same slot, two-arm chain - the reported `NetRequest2` shape. */
 	private static final TRAIL_ON_ELSE_VALUE_SRC: String = 'class C {\n\tfunction test() {\n\t\tAPIToken.instance.waitToken(success ->\n'
 		+ '\t\t\tif (success)\n\t\t\t\tdoRequest();\n\t\t\telse\n' + '\t\t\t\ttokenError() // Call error handlers\n\t\t);\n\t}\n}';
 

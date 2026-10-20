@@ -12,7 +12,7 @@ import utest.Test;
 /**
  * End-to-end coverage of the `avoid-dynamic` DynamicAccess bag arm (D4) through the whole
  * `lint --fix` + `compilerOracle` path: a `Dynamic` string-keyed bag whose written values
- * are `String` is converted to `DynamicAccess<String>` with map syntax, while the TM
+ * are `String` is converted to `DynamicAccess<String>` with map syntax, while the client
  * `Form.hx` shape — `result.setField(g.field, g.value)` with `g.value : Dynamic` — is left
  * report-only (its values unify to `Dynamic`, and `DynamicAccess<Dynamic>` is the rejected
  * typeless shape). The oracle names the `g.value` field-access type the structural pass

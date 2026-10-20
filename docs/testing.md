@@ -174,7 +174,8 @@ The native twin is `tools/bench-hxcpp.hxml`. Point `HXCPP_COMPILE_CACHE` at a pe
 
 ```sh
 HXCPP_COMPILE_CACHE=~/.hxcpp_cache haxe tools/bench-hxcpp.hxml   # -> bin/parse-prof-cpp/ParseProf
-CLIENT_SRC=<other-tree>/src tools/bench-ab.sh [--config <other-tree>/hxformat.json] tparse tools/bench-corpus.txt 9 6 \
+ANYPARSE_BENCH_EXTRA=<manifest> CLIENT_SRC=<other-tree>/src tools/bench-ab.sh [--config <other-tree>/hxformat.json] \
+  tparse tools/bench-corpus.txt 9 6 \
   js:bin/parse-prof.js cpp:bin/parse-prof-cpp/ParseProf
 ```
 
@@ -185,7 +186,7 @@ haxe -cp src -cp tools -main ParseProf -D analyzer-optimize -D no_gcc_strip -cpp
 /tmp/pp-sym/ParseProf tparse tools/bench-corpus.txt 90 hxformat.json & sample $! 30 1 -f /tmp/pp.sample
 ```
 
-Arguments are `<mode> <dir-or-manifest> [reps] [hxformat.json]`; a directory is walked for `.hx`, anything else is read as a manifest of paths with `#` comments and `${NAME}` environment expansion (`tools/bench-corpus.txt` is the calibrated one). The modes stack from the IO floor upwards — `read`, `tparse` (Fast-mode parser), `walk` (plus the `QueryNode` projection), `write` (writer alone, with the feeding parse subtracted), `rt` (exactly what `hxq fmt` runs), `lint`, and `perfile` for a per-file TSV that feeds corpus stratification. Each workload runs inside its own `phaseXxx` function so a V8 `--cpu-prof` tree can be attributed by nearest phase ancestor.
+Arguments are `<mode> <dir-or-manifest> [reps] [hxformat.json]`; a directory is walked for `.hx`, anything else is read as a manifest of paths with `#` comments, `${NAME}` environment expansion and `@<manifest>` includes (`tools/bench-corpus.txt` is the calibrated one; its other half is a manifest kept outside the repository, included through `@${ANYPARSE_BENCH_EXTRA}` and naming `${CLIENT_SRC}/...` paths — both unset, the corpus is the anyparse-only half). The modes stack from the IO floor upwards — `read`, `tparse` (Fast-mode parser), `walk` (plus the `QueryNode` projection), `write` (writer alone, with the feeding parse subtracted), `rt` (exactly what `hxq fmt` runs), `lint`, and `perfile` for a per-file TSV that feeds corpus stratification. Each workload runs inside its own `phaseXxx` function so a V8 `--cpu-prof` tree can be attributed by nearest phase ancestor.
 
 Measurement hygiene lives in `tools/bench-ab.sh`, and the rule it exists to enforce is that a before/after pair timed minutes apart on a shared machine drifts by more than the effects being measured: arms are interleaved and the per-arm median is what gets quoted. Battery timings are the opposite kind of number — deliberately concurrent wall clock — and must never be quoted as benchmark results.
 
@@ -224,6 +225,22 @@ Two oracles that do hold, and the discipline both need:
 **Self-test both.** Inject a one-token code mutation — flip a boolean argument, rename a ctor parameter — and confirm the method reports it; then edit a comment and confirm the method stays silent. A method that has not been shown to catch anything is not evidence. The other half of the discipline is the binary you compare against: after a self-test mutation, REBUILD before using that tree as a baseline again, or the "base" you compare with is the mutant.
 
 Neither oracle sees prose, and prose is where such a slice actually breaks things: moving a documented table out of a source file leaves every comment that named its old home pointing at nothing, and no gate in this project reads a cross-reference. Scan the tree for the old location's name after any such move.
+
+## Keeping a downstream project out of the repository
+
+This repository is public; the projects it is measured on are not (`docs/decisions.md` § FU29). The names to keep out
+live in a private git-filter-repo `--replace-text` file outside the repository, and `tools/scrub-guard.py` checks
+against it:
+
+```sh
+export ANYPARSE_SCRUB_LIST=<private map>        # never a path inside this repository
+python3 tools/scrub-guard.py                     # the tracked tree
+python3 tools/scrub-guard.py --range origin/main..HEAD   # what a push would add: diff lines + commit messages
+ln -s ../../tools/hooks/pre-push-scrub.sh .git/hooks/pre-push   # once per clone
+```
+
+A match prints `<where>:<line>: rule <n>` and exits 1; the matched text is never printed. Unset, the guard and the hook
+pass and say so.
 
 ## Mutation checks: testing the tests
 

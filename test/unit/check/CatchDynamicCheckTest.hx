@@ -184,10 +184,10 @@ class CatchDynamicCheckTest extends Test {
 		// `$msg` -> `$exception`, and adds the import — the shipped hand-conversion style.
 		// Double-quoted fixture keeps `$msg` literal in the source under test.
 		final out: String = applyFixLogging(
-			"class C { public function f():Void { try g() catch (msg:Dynamic) { trace('error creating SystemData : $msg'); } } }"
+			"class C { public function f():Void { try g() catch (msg:Dynamic) { trace('error creating HostReport : $msg'); } } }"
 		);
 		final expected: String = 'import haxe.Exception;\n\nclass C { public function f():Void { try g() catch (exception:Exception) {'
-			+ " trace('error creating SystemData : $exception'); } } }";
+			+ " trace('error creating HostReport : $exception'); } } }";
 		Assert.equals(expected, out);
 	}
 

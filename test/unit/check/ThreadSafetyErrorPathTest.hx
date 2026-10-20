@@ -23,7 +23,7 @@ class ThreadSafetyErrorPathTest extends Test {
 	private static inline final REPORT: String = 'class Report { public static function send():Void Sys.sleep(1); }';
 
 	/**
-	 * TM's `FolderWatcher.setTimestamp`: the hold spans a call whose only blocking leg is `catch` → `Error.reportError` →
+	 * the client's `VolumeWatcher.setTimestamp`: the hold spans a call whose only blocking leg is `catch` → `Error.reportError` →
 	 * a blocking PUT, so the hold and the main thread's take are long only on an error path.
 	 */
 	@:pin('control') @:killer('M-TS-ERROR-REACH-OFF') @:killer('M-TS-ERROR-HOLD-OFF') @:killer('M-TS-ERROR-TAKE-OFF')

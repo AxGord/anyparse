@@ -39,7 +39,7 @@ final class ProjectCoverage {
 	/**
 	 * Every `apqlint.json` this coverage read, parsed once: each run directory resolves its chain and then reads each
 	 * document of it again for its own declarations, so a single-config project used to parse its one document twice
-	 * per directory (~0.33 s on the TM tree). Only read here, never handed on.
+	 * per directory (~0.33 s on the client tree). Only read here, never handed on.
 	 */
 	private final _documents: DocumentMemo = [];
 

@@ -7,7 +7,7 @@ import utest.Test;
 
 /**
  * The catch-all of a `switch` over a closed `enum abstract` whose every value an earlier case names is no path
- * (`ExhaustiveSwitches`): TM's `FileList.reload` throws in the `case _` of a switch over `FileListViewType` (LIST, GRID),
+ * (`ExhaustiveSwitches`): the client's `ItemList.reload` throws in the `case _` of a switch over `ItemListViewType` (LIST, GRID),
  * built only by its constants and a `@:from` mapping every string onto them.
  */
 class ThreadSafetyExhaustiveTest extends Test {
@@ -145,7 +145,7 @@ class ThreadSafetyExhaustiveTest extends Test {
 	/**
 	 * The member must hold only values: an assignment of a `Dynamic` does not, nor does a String abstract's member nothing
 	 * initializes (null); a counting abstract's uninitialized member is `0`, a value only when one is `0` (review r4 `e6`,
-	 * `e7`; TM's `FileListSelect.viewType`).
+	 * `e7`; the client's `ItemListPicker.viewType`).
 	 */
 	@:pin('control') @:killer('M-TS-EXH-WRITES') @:killer('M-TS-EXH-UNINIT') @:killer('M-TS-EXH-ZERO') @:killer('M-TS-EXH-OPTIONAL')
 	public function testTheMemberHoldsOnlyValues(): Void {
@@ -170,7 +170,7 @@ class ThreadSafetyExhaustiveTest extends Test {
 	}
 
 	/**
-	 * TM's `FileList.reload` over `FileListSelect.viewType`: a getter reading another object's member, an optional
+	 * the client's `ItemList.reload` over `ItemListPicker.viewType`: a getter reading another object's member, an optional
 	 * parameter defaulted through a getter whose call returns a type a `@:from` function takes, a setter's parameter.
 	 */
 	@:pin('control') @:killer('M-TS-EXH-CONVERT-OFF') @:killer('M-TS-EXH-CONVERT-ANY')
@@ -283,8 +283,8 @@ class ThreadSafetyExhaustiveTest extends Test {
 	/**
 	 * A write of the member's name writes the member only where it may (`FieldWrites.mayWrite`): a reflective write of a
 	 * computed name on a fresh structure reaches no object of the member's type, nor does an own write of a field another
-	 * type declares; one on a `Dynamic` may be any object's (TM's `Form.get_data`, `result.setField(formGroup.field, …)` on a
-	 * fresh `{}`, kept `FileList.reload`'s catch-all over `FileListSelect.viewType` a path).
+	 * type declares; one on a `Dynamic` may be any object's (the client's `Form.get_data`, `result.setField(formGroup.field, …)` on a
+	 * fresh `{}`, kept `ItemList.reload`'s catch-all over `ItemListPicker.viewType` a path).
 	 */
 	@:pin('control') @:killer('M-TS-EXH-WRITES-ANY')
 	public function testAWriteElsewhereWritesTheMemberOnlyWhereItMay(): Void {

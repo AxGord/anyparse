@@ -466,8 +466,9 @@ final class SwitchChain {
 				if (texts == null) return null;
 				discs = [for (p in pairs) p.disc];
 				discTexts = texts;
-			} else if (!sameDiscriminants(known, pairs, source))
+			} else if (!sameDiscriminants(known, pairs, source)) {
 				return null;
+			}
 			rungs.push({ patterns: [for (p in pairs) p.pattern], values: [for (p in pairs) p.value], body: bodySpan });
 			final elseChild: Null<QueryNode> = cur.children.length >= CHAIN_WITH_ELSE_CHILD_COUNT ? cur.children[ELSE_SLOT_INDEX] : null;
 			if (elseChild == null) break;

@@ -494,7 +494,7 @@ class PreferSwitchCheckTest extends Test {
 	}
 
 	/**
-	 * The reported shape (a GridScale chain): a property-typed enum-abstract subject, braced bodies,
+	 * The reported shape (a MeshScale chain): a property-typed enum-abstract subject, braced bodies,
 	 * a statement after the chain — converted with an empty `case _:` closing it.
 	 */
 	@:pin('control')

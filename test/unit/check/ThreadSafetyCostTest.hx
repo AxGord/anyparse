@@ -22,7 +22,7 @@ class ThreadSafetyCostTest extends Test {
 
 	private static inline final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
 
-	/** TM's `CloudDatabase.getFilePathRequest`: one indexed SQL lookup on the main thread waits well under a frame. */
+	/** the client's `ShardDatabase.getFilePathRequest`: one indexed SQL lookup on the main thread waits well under a frame. */
 	@:pin('control') @:killer('M-TS-SHORT-SINKS-IGNORED')
 	public function testAShortSinkCalledOnceIsInfo(): Void {
 		#if (sys || nodejs)
@@ -45,7 +45,7 @@ class ThreadSafetyCostTest extends Test {
 		#end
 	}
 
-	/** TM's `moveCloudFolderSubItemsAction2`: a short call once per row is as long as the folder is big. */
+	/** the client's `moveCloudFolderSubItemsAction2`: a short call once per row is as long as the folder is big. */
 	@:pin('control') @:killer('M-TS-REPEAT-NO-LOOPS')
 	public function testAShortSinkInALoopWarns(): Void {
 		#if (sys || nodejs)
@@ -84,7 +84,7 @@ class ThreadSafetyCostTest extends Test {
 	}
 
 	/**
-	 * TM's folder icon: `getCloudIcon` asks the database once, but the file list builds an icon per visible item — a
+	 * the client's folder icon: `getCloudIcon` asks the database once, but the file list builds an icon per visible item — a
 	 * caller anywhere up the main thread's way repeats the short call.
 	 */
 	@:pin('control') @:killer('M-TS-REPEAT-UPWARD-NONE') @:killer('M-TS-OWNER-OFF')
@@ -102,7 +102,7 @@ class ThreadSafetyCostTest extends Test {
 		#end
 	}
 
-	/** TM's `FSUtil.deleteRecursive`: a function calling itself runs its short call once per level. */
+	/** the client's `PathIO.deleteRecursive`: a function calling itself runs its short call once per level. */
 	@:pin('control') @:killer('M-TS-REPEAT-NO-RECURSION') @:killer('M-TS-OWNER-SELF-MOVED')
 	public function testRecursionRepeatsAShortSink(): Void {
 		#if (sys || nodejs)
@@ -149,7 +149,7 @@ class ThreadSafetyCostTest extends Test {
 	}
 
 	/**
-	 * TM's `CloudDatabase._mutex` as a single lookup holds it: a background hold over one short call, and the main
+	 * the client's `ShardDatabase._mutex` as a single lookup holds it: a background hold over one short call, and the main
 	 * thread's take of that lock, both brief.
 	 */
 	@:pin('control') @:killer('M-TS-LONG-BY-ANY-SPAN')
@@ -204,7 +204,7 @@ class ThreadSafetyCostTest extends Test {
 
 
 	/**
-	 * TM's `FileListMoveFiles.moveItems`: one repeated call reaches four short sinks, which made four warnings at one
+	 * the client's `ItemListMoveItems.moveItems`: one repeated call reaches four short sinks, which made four warnings at one
 	 * line. The site owns ONE warning, keyed by the call it repeats, naming every short sink below it.
 	 */
 	@:pin('control') @:killer('M-TS-SITE-PER-SINK') @:killer('M-TS-SITE-GROW') @:killer('M-TS-SITE-SUBJECT')

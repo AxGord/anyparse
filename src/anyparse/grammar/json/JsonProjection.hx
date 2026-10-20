@@ -19,7 +19,7 @@ using StringTools;
  *  - `Member` — one `"key": value` entry, NAMED by its decoded key (`Member:thread-safety`), its
  *    one child the value. Its span runs from the key's opening quote to the value's last byte.
  *  - `JArray` — `[ … ]`, its children the element values in source order.
- *  - `JString` — named by its DECODED value (`JString:api.APIRequest2.success`).
+ *  - `JString` — named by its DECODED value (`JString:api.NetRequest2.success`).
  *  - `JNumber`, `JBool`, `JNull` — unnamed; address one by position or `--nth`.
  *
  * Every span but the root value's is tight: it starts at the value's first byte and ends after its

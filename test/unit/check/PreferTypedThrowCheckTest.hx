@@ -216,7 +216,7 @@ class PreferTypedThrowCheckTest extends Test {
 	/** A `String` catch in a PROJECT library root — not std — still degrades the whole rule. */
 	public function testProjectLibraryCatchDegrades(): Void {
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
-		final scoped: CachingGrammarPlugin = scopedPlugin(report, [{ file: 'vendor/crashdumper/CrashDumper.hx', source: STRING_CATCH }]);
+		final scoped: CachingGrammarPlugin = scopedPlugin(report, [{ file: 'vendor/crashreport/CrashReport.hx', source: STRING_CATCH }]);
 		final check: PreferTypedThrow = new PreferTypedThrow();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(1, vs.length);
@@ -251,7 +251,7 @@ class PreferTypedThrowCheckTest extends Test {
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
 		final scoped: CachingGrammarPlugin = scopedPlugin(report, [
 			{ file: Path.join([std, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH },
-			{ file: 'vendor/crashdumper/CrashDumper.hx', source: STRING_CATCH }
+			{ file: 'vendor/crashreport/CrashReport.hx', source: STRING_CATCH }
 		]);
 		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferTypedThrow(), report, scoped);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'the project clause still degrades, got: ${vs[0].message}');

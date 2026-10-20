@@ -78,15 +78,15 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 	}
 
 	public function testShapeACtorInitMoveFlagged(): Void {
-		final src: String = 'class LicenseButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n'
+		final src: String = 'class PermitsButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n'
 			+ '\tpublic function new() {\n\t\t_disabled = false;\n\t\tinit();\n\t}\n'
 			+ '\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool {\n\t\t_disabled = v;\n'
 			+ '\t\talpha = v ? 0.5 : 1;\n\t\treturn _disabled;\n\t}\n}';
-		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), [{ file: 'LicenseButton.hx', source: src }]).length);
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), [{ file: 'PermitsButton.hx', source: src }]).length);
 	}
 
 	public function testShapeACtorInitMoveFix(): Void {
-		final src: String = 'class LicenseButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n'
+		final src: String = 'class PermitsButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n'
 			+ '\tpublic function new() {\n\t\t_disabled = false;\n\t\tinit();\n\t}\n'
 			+ '\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool {\n\t\t_disabled = v;\n'
 			+ '\t\talpha = v ? 0.5 : 1;\n\t\treturn _disabled;\n\t}\n}';

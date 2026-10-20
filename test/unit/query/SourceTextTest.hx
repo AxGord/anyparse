@@ -24,7 +24,7 @@ class SourceTextTest extends Test {
 	@:killer('M-LOWER-CAMEL-FIRST-ONLY')
 	public function testLowerCamelLowersTheLeadingCapitalRun(): Void {
 		Assert.equals('point', SourceText.lowerCamel('Point'));
-		Assert.equals('rightPanelEvent', SourceText.lowerCamel('RightPanelEvent'));
+		Assert.equals('sidebarTabEvent', SourceText.lowerCamel('SidebarTabEvent'));
 		Assert.equals('urlLoader', SourceText.lowerCamel('URLLoader'));
 		Assert.equals('io', SourceText.lowerCamel('IO'));
 		Assert.equals('md5Hash', SourceText.lowerCamel('MD5Hash'));

@@ -17,7 +17,7 @@ import utest.Test;
  * carry no grouping information and `Collapse` strips them all; a
  * selective mix (or any comment between statements) is left byte-exact.
  *
- * Driving cases mirror TM `src/common/ui/DatePicker.hx`:
+ * Driving cases mirror client `src/common/ui/DatePicker.hx`:
  * `onNextMonthClick` [guard; blank; A; blank; B] fully collapses,
  * `onDateClick` [A; blank; B] collapses (2-statement uniform),
  * `onPreviousMonthClick` [guard; blank; A; B] stays untouched, and the

@@ -941,6 +941,7 @@ final class HaxeRefShape {
 			enumAbstractMetaName: '@:enum',
 			enumAbstractImplicitValues: { counting: ['Int', 'UInt'], naming: ['String'] },
 			operatorOverloadMetaName: '@:op',
+			commutativeOperatorMetaName: '@:commutative',
 			signatureOverloadMetaName: '@:overload',
 			overloadModifierKind: 'Overload',
 			genericFunctionMetaName: '@:generic',

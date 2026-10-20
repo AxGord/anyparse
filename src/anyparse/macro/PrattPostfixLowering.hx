@@ -853,7 +853,7 @@ final class PrattPostfixLowering {
 		// fails on the next token. Two live shapes need the rejection --
 		// `@:privateAccess { ... }` followed by an own-line
 		// `#if debug final t = ...; #end`
-		// (`TM-Haxe4/src/video/GpuDirectPipeline.hx:52`, the original dogfood
+		// (`video/GpuInlinePipeline.hx:52`, the original dogfood
 		// catch recorded when this gate was written), and a `switch { ... }`
 		// assignment followed by an own-line
 		// `#if (haxe_ver >= 4.10) if (...) #else if (...) #end`
@@ -891,7 +891,7 @@ final class PrattPostfixLowering {
 		// own-line statement region binds as a SAME-LINE splice tail --
 		// `try f() catch (_:Exception) {}` followed by an own-line
 		// `#if cpp ... #end` raw-swallowed the whole region (dogfood
-		// `utils/CleanExit.hx:36`); the glue then fed the region's flat width
+		// `utils/QuietExit.hx:36`); the glue then fed the region's flat width
 		// into the operand's rest-stack and wrapped a method chain that fit.
 		// `pendingTrivia.newlineBefore` is the same second newline source that
 		// `captureChainNewline` already ORs in (see `chainNlValue`). This scan

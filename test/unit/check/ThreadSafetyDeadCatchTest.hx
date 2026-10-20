@@ -6,8 +6,8 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * A `catch` whose `try` runs only `nonThrowing` calls is no path (`DeadCatches`): TM's
- * `FileSystemNativeExtensions.getMTime` wraps hxcpp's `FileSystem.stat` — which builds a zeroed record for a missing
+ * A `catch` whose `try` runs only `nonThrowing` calls is no path (`DeadCatches`): the client's
+ * `DiskSystemNativeExtensions.getMTime` wraps hxcpp's `FileSystem.stat` — which builds a zeroed record for a missing
  * path and never throws — in a `catch` reporting the error by a blocking request.
  */
 class ThreadSafetyDeadCatchTest extends Test {

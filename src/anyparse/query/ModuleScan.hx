@@ -84,8 +84,9 @@ final class ModuleScan {
 		for (child in tree.children) if (child.kind == regionKind) {
 			if (region != null) return null;
 			region = child;
-		} else if (RefactorSupport.typeDeclOf(child) != null)
+		} else if (RefactorSupport.typeDeclOf(child) != null) {
 			return null;
+		}
 		final guard: Null<QueryNode> = region;
 		return guard != null && regionDeclaresType(guard, regionKind)
 			&& singleBranchRegion(guard, source, shape, plugin.lexicalRegions(source))
@@ -389,13 +390,14 @@ final class ModuleScan {
 		var depth: Int = 0;
 		for (directive in CondDirectives.scan(source, shape, () -> regions)) {
 			if (directive.span.from < span.from || directive.span.to > span.to) continue;
-			if (directive.keyword == opener)
+			if (directive.keyword == opener) {
 				depth++;
-			else if (directive.keyword == closer) {
+			} else if (directive.keyword == closer) {
 				depth--;
 				if (depth == 0) return true;
-			} else if (depth == 1 && seams.contains(directive.keyword))
+			} else if (depth == 1 && seams.contains(directive.keyword)) {
 				return false;
+			}
 		}
 		return false;
 	}

@@ -435,7 +435,7 @@ final class JoinSingleUseLocal implements Check {
 	 * read a local invisibly and leave `CheckScan.soleReferenceNameFrom` counting one reference
 	 * where there are two. Deleting the declaration then unbinds the survivor: a `--fix` that
 	 * does not compile. Two are confirmed on real trees -- a braceless `$name` string
-	 * interpolation (TM-Haxe4 `src/video/VideoExportController.hx:239` captures `batchH` for a
+	 * interpolation (the client tree `src/video/VideoOutputController.hx:239` captures `batchH` for a
 	 * call and re-reads it from the `trace` on the next line) and a macro reification `$name`
 	 * (`DollarIdentExpr`, which `opaqueKinds` only guards when the macro is ON the path to the
 	 * read).

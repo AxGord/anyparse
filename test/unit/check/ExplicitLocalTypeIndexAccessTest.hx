@@ -21,7 +21,7 @@ import utest.Test;
 class ExplicitLocalTypeIndexAccessTest extends Test {
 
 	public inline function testFixMapIndexAccessIsNullableValue(): Void {
-		// The TM macro-context shape: `final foundKeys = strings[key];` on a
+		// The client macro-context shape: `final foundKeys = strings[key];` on a
 		// `Map<String, Array<String>>` — the VALUE parameter, wrapped `Null<…>` as Haxe types it.
 		assertFixContains('final m:Map<String, Array<String>> = [];\n\t\tfinal v = m["a"];', 'v:Null<Array<String>>');
 	}

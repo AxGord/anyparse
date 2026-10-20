@@ -7,7 +7,7 @@ import utest.Test;
 
 /**
  * A hold taken inside a hold of the same lock that every caller keeps is the enclosing hold's (`LockDominance.enclosed`):
- * TM's `StandardFileSystem.cloudLocalRenameAndMoveItem` takes `_batchMutex` inside the sync's own batch hold. Every
+ * the client's `StandardDiskSystem.cloudLocalRenameAndMoveItem` takes `_batchMutex` inside the sync's own batch hold. Every
  * caller is known only under `closedWorld`; the enclosing hold's warning must reach the enclosed one's function.
  */
 class ThreadSafetyEnclosedHoldTest extends Test {

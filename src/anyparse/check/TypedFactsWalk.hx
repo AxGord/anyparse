@@ -368,10 +368,11 @@ final class TypedFactsWalk {
 		if (inside || straddles) {
 			_splice = null;
 			_expansion = null;
-		} else if (saved && code)
-			spliced(e, info)
-		else if (splice != null && splicedCode(e, info, code) && !holds(splice, info) && (expansion == null || !holds(expansion, info)))
+		} else if (saved && code) {
+			spliced(e, info);
+		} else if (splice != null && splicedCode(e, info, code) && !holds(splice, info) && (expansion == null || !holds(expansion, info))) {
 			nestedSplice(e, info);
+		}
 		final current: Null<InlineMethod> = _splice;
 		if (current != null && holds(current, info)) _spliceSite = { min: info.min, max: info.max };
 	}

@@ -643,7 +643,8 @@ final class SymbolIndexBuilder {
 				from: from,
 				to: to,
 				transitive: carriesAnyMeta(pendingMeta, shape.transitiveCastTypeMetaNames),
-				typeSelected: carriesMeta(pendingMeta, shape.typeSelectedAbstractMetaName)
+				typeSelected: carriesMeta(pendingMeta, shape.typeSelectedAbstractMetaName),
+				span: decl.fullSpan
 			}
 		];
 	}

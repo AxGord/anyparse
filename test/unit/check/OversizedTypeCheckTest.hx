@@ -461,7 +461,7 @@ class OversizedTypeCheckTest extends Test {
 
 	/**
 	 * A CONSTANT TABLE is not a decomposition candidate (A13, the user's decision of 2026-10-18): the
-	 * size of a type counts its BEHAVIOUR, so the shape of TM's `Colors` (nothing but `static inline
+	 * size of a type counts its BEHAVIOUR, so the shape of the client's `Colors` (nothing but `static inline
 	 * final` colours) and `Dimensions` (142 of them plus a constructor) is one member here, not 61.
 	 */
 	@:pin('control')

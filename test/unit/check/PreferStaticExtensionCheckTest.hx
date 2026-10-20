@@ -580,7 +580,7 @@ class PreferStaticExtensionCheckTest extends Test {
 	}
 
 	public function testMethodCallReceiverRewritten(): Void {
-		// The TM shape: `StringTools.ltrim(str.substr(1))`. A method-call receiver carries the
+		// The client shape: `StringTools.ltrim(str.substr(1))`. A method-call receiver carries the
 		// method's RETURN type, so the shadow gate has a real type to prove absence against.
 		final out: String = fixResultOf(makerFiles('Ext.deco(m.make(), 1);'));
 		Assert.isTrue(out.indexOf('m.make().deco(1);') != -1, out);
@@ -627,7 +627,7 @@ class PreferStaticExtensionCheckTest extends Test {
 	}
 
 	public function testForBinderOverTabledStaticCallResolvesReceiver(): Void {
-		// The TM shape: `for (key in Reflect.fields(o)) StringTools.urlEncode(key)`. The iterable is
+		// The client shape: `for (key in Reflect.fields(o)) StringTools.urlEncode(key)`. The iterable is
 		// a TABLED stdlib static (`Reflect.fields` -> `Array<String>`), so the binder's element type
 		// is `String` and the receiver resolves — the finding drops the unresolved-receiver hedge
 		// and becomes fixable.

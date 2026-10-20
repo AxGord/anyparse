@@ -57,14 +57,14 @@ private typedef ClimbWalk = {
 /**
  * How often the main thread may run a call, read over the main-thread STATES — a function under a valuation of its
  * tracked parameters (`ThreadStates`) — upward from the call. A call its conditions rule out under the valuation a caller
- * hands down (`EdgeConditions.carried`) carries no repetition there — TM's `DrillVOModel.loadDrillData` calls
- * `loadXML(path, false, …)`, whose `if (checkLimits)` SQL count never runs on that way, however many drills the session
+ * hands down (`EdgeConditions.carried`) carries no repetition there — the client's `ModelVOModel.loadModelData` calls
+ * `loadXML(path, false, …)`, whose `if (checkLimits)` SQL count never runs on that way, however many models the project
  * planner loops over.
  *
  * Positive: a call runs once per main-thread run only when every way up from it ends at the entry point or at a
  * registration (`registers`) through calls none of which repeats. A way that meets a repeating call names it as an
  * owner; one that meets a value marshalled onto the main thread (`marshals`) names that registration, since the posts
- * come from a thread this walk does not count — TM's `ThreadsUtil` runs every pending task in one frame; one that ends
+ * come from a thread this walk does not count — the client's `ThreadUtils` runs every pending task in one frame; one that ends
  * at a function nothing the graph resolves runs, but the entry point, says so (`MainClimb.assumed`).
  */
 @:nullSafety(Strict)

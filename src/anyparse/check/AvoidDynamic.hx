@@ -560,9 +560,9 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		var pendingExclude: Bool = false;
 		for (child in kids) {
 			if (ctx.prefixKinds.contains(child.kind)) {
-				if (ctx.externKind != null && child.kind == ctx.externKind)
+				if (ctx.externKind != null && child.kind == ctx.externKind) {
 					pendingExclude = true;
-				else if (child.kind == 'Meta') {
+				} else if (child.kind == 'Meta') {
 					final nm: Null<String> = child.name;
 					if (nm != null && excludeMeta.contains(nm)) pendingExclude = true;
 				}

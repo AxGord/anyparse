@@ -7,7 +7,7 @@ import utest.Test;
 /**
  * A `spawns` entry written as an object (`{"call": "FileIO.readAndProcess", "main": [2]}`) runs the function values
  * handed to the call on another thread, as a plain entry does, but those at the argument positions `main` lists, which
- * it runs on the main thread later, as a `marshals` call does: TM's `FileIO.readAndProcess(path, process, onDone)` runs
+ * it runs on the main thread later, as a `marshals` call does: the client's `FileIO.readAndProcess(path, process, onDone)` runs
  * `process` on the I/O worker and `onDone` on the main thread. A position counts only where the call is proven to bind
  * that parameter; anywhere else the value runs as the plain entry says (N49).
  */

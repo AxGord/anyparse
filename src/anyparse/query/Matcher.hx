@@ -118,8 +118,9 @@ final class Matcher {
 					return false;
 				}
 			}
-		} else if (pname != iname)
+		} else if (pname != iname) {
 			return false;
+		}
 		return unifyType(pattern.type, input.type, eq, bindings, unwritten) && unifyChildren(pattern, input, eq, bindings, unwritten);
 	}
 
@@ -166,8 +167,9 @@ final class Matcher {
 		if (pTypes == 0 && iTypes > 0) {
 			final at: Null<Span> = input.span;
 			if (at != null) unwritten.push(TypeArguments(at));
-		} else if (!unifyRun(pc, 0, pTypes, ic, 0, iTypes, eq, bindings, unwritten))
+		} else if (!unifyRun(pc, 0, pTypes, ic, 0, iTypes, eq, bindings, unwritten)) {
 			return false;
+		}
 		return unifyRun(pc, pTypes, pc.length, ic, iTypes, ic.length, eq, bindings, unwritten);
 	}
 

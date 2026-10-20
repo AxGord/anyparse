@@ -110,7 +110,7 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	}
 
 	/**
-	 * The TM `PitchAreaX.addPlayerToPitchX` shape (anonymized): a braced branch whose own-line
+	 * The client `StageAreaX.addSpriteToStageX` shape (anonymized): a braced branch whose own-line
 	 * comment precedes its single assignment. It rides the branch's leading slot and KEEPS its
 	 * line — pulled onto the `else if (…)` line it would re-read as being about the condition.
 	 */
@@ -448,7 +448,7 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 
 	/**
 	 * The decl arm: a declaration whose initializer is the missing `else` of the chain right after it
-	 * folds into one initialized declaration, keyed on the declaration (TM `Grid.hx:698`'s shape).
+	 * folds into one initialized declaration, keyed on the declaration (client `Grid.hx:698`'s shape).
 	 */
 	@:pin('control') @:killer('M-DECLCHAIN-OWNED-BY-TERNARY')
 	public function testDeclElseLessChainFolded(): Void {

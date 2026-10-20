@@ -56,12 +56,12 @@ class StdlibDifferentialTest extends Test {
 
 	/**
 	 * A body written as a static EXTENSION is already calling the pooled member, so that member is
-	 * disqualified for it. `path.endsWith('.drl')` and `StringTools.endsWith(path, '.drl')` are one
+	 * disqualified for it. `path.endsWith('.mdl')` and `StringTools.endsWith(path, '.mdl')` are one
 	 * call written two ways, and only the qualified spelling used to be recognised -- which made
 	 * the most convincing false positive of all: a finding that is literally true and useless.
 	 */
 	public function testStaticExtensionSpellingDisqualifiesItsEntry(): Void {
-		final candidate: StdlibCandidate = one("class C {\n\tfunction isDrl(path:String):Bool return path.endsWith('.drl');\n}");
+		final candidate: StdlibCandidate = one("class C {\n\tfunction isMdl(path:String):Bool return path.endsWith('.mdl');\n}");
 		for (map in StdlibDifferential.mappings(candidate))
 			Assert.isTrue(map.display.indexOf('endsWith') < 0, 'the extension call came back as a finding: ${map.display}');
 	}

@@ -24,7 +24,7 @@ using StringTools;
 class MisplacedTypeDocCheckTest extends Test {
 
 	/**
-	 * The live incident shape (anonymised from a TM module): package, a dead author doc,
+	 * The live incident shape (anonymised from a client module): package, a dead author doc,
 	 * the import block, then the sole type.
 	 */
 	private static inline final DEAD_DOC: String = 'package widgets.canvas.parts.helpers;\n\n'

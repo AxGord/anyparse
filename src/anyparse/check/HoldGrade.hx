@@ -173,7 +173,7 @@ final class HoldGrade {
 	/**
 	 * The members whose finding (a) warnings report every long call `long` of the main-only hold `a` — the sink call
 	 * each one ends in (`LockTaint.blockingTrail`), warned at itself or at the repeating call that owns it, the hold's
-	 * own member included (TM's `FileListMoveFiles.moveItems` loop); null otherwise. The main thread's own long work is
+	 * own member included (the client's `ItemListMoveItems.moveItems` loop); null otherwise. The main thread's own long work is
 	 * finding (a)'s: a hold of it adds no second warning where (a) already names it.
 	 */
 	private static function reportedElsewhere(

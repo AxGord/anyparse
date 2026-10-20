@@ -297,8 +297,9 @@ final class Refs {
 							hits.push(new RefHit(
 								kind, nname, at, binding, isInterpRead(node.kind, shape), pattern?.undecided == true, pattern?.shadows
 							));
-						} else if (skipped != null && isMemberAccess(node.kind, shape))
+						} else if (skipped != null && isMemberAccess(node.kind, shape)) {
 							skipped[nname] = (skipped[nname] ?? 0) + 1;
+						}
 					}
 				}
 			}

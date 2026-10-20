@@ -301,8 +301,9 @@ final class PreferLineComment implements Check implements DefaultOff {
 			if (span == null) {
 				final deeper: Null<String> = innermostKind(child, from, to, null);
 				if (deeper != null) return deeper;
-			} else if (span.from <= from && span.to >= to)
+			} else if (span.from <= from && span.to >= to) {
 				return innermostKind(child, from, to, child.kind);
+			}
 		}
 		return fallback;
 	}

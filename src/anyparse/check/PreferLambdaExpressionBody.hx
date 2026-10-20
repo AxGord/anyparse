@@ -817,8 +817,9 @@ final class PreferLambdaExpressionBody implements Check {
 			if (c == ';'.code) {
 				semicolons++;
 				if (semicolons > 1) return false;
-			} else if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code)
+			} else if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) {
 				return false;
+			}
 		}
 		return true;
 	}

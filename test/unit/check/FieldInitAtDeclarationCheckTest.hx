@@ -330,7 +330,7 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	}
 
 	/**
-	 * The live regression this gate was bought by (TM `Goals3D`): the constructor FILLS an
+	 * The live regression this gate was bought by (client `Cones3D`): the constructor FILLS an
 	 * in-class static before the init reads it, so the hoisted right-hand side observes the
 	 * EMPTY array. The static is `final` — the binding is immutable, its CONTENTS are not —
 	 * which is why the exemption cannot be keyed on that keyword.

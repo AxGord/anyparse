@@ -40,19 +40,19 @@ private typedef SiteDoer = {
  * One warning per root cause across holds: a hold finding (b) warning whose every long call is long only through what
  * another warned hold already reports turns info, naming those holds. A call counts as covered when it waits for a lock
  * every hold making that lock long has its long work reported — its own warning, kept or folded, or the warning its info
- * finding names (TM's tree lock, held long by `FolderWatcher.updateInternal`, which `StandardFileSystem.saveXML` waits
+ * finding names (the client's tree lock, held long by `VolumeWatcher.updateInternal`, which `StandardDiskSystem.saveXML` waits
  * for under the mutation lock) — or when it ends in a sink call another warned hold is long by too,
- * at least as often — one that repeats under its hold is not covered by a hold reaching it once (TM's
- * `FolderWatcher.updateInternal` walk against `rename`'s one stat) — that is the covered hold's own: around it
- * in its function, or one whose function every way to the call passes (TM's
- * `RemoteFileSystemBase.renameCloudFolderBlocked` over the loop `CloudDatabase.moveCloudFolderSubItemsAction2` runs under
+ * at least as often — one that repeats under its hold is not covered by a hold reaching it once (the client's
+ * `VolumeWatcher.updateInternal` walk against `rename`'s one stat) — that is the covered hold's own: around it
+ * in its function, or one whose function every way to the call passes (the client's
+ * `RemoteDiskSystemBase.renameCloudFolderBlocked` over the loop `ShardDatabase.moveCloudFolderSubItemsAction2` runs under
  * its own lock). Any other hold across the same work — of another lock, or of the same lock in another function, on any
- * thread — is a stall of its own (TM's `moveCloudFileBlocked`, holding the batch lock across its own stat, beside
+ * thread — is a stall of its own (the client's `moveCloudFileBlocked`, holding the batch lock across its own stat, beside
  * `addCloudActionValidated` reaching that stat through `addCloudAction2`).
  * Positive: a lock long by a hand-off, an unresolved call, a release in another
  * function (a multi-lock helper's give excepted: it is its caller's release) or a hold with no finding
  * is not covered, nor is a hold long by what no call of it names. A hold waiting for a lock some hold with no finding reporting
- * its work makes long stays from the start (TM's `StandardFileSystem.getText`, waiting for the tree lock `listFolder` holds),
+ * its work makes long stays from the start (the client's `StandardDiskSystem.getText`, waiting for the tree lock `listFolder` holds),
  * so a cycle never keeps a hold that could fold onto it; holds covering each other round a cycle keep the first by
  * place and fold the rest onto it. A call is covered only when EVERY blocking call it reaches on any way is
  * (`LockTaint.blockingEnds`), and a hold covers another only by the work its finding names — the first way of each of its calls —
@@ -305,11 +305,11 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 	/**
 	 * Whether the warned hold `d` makes a sink call another one (at `i`) is long by, as often — repeating along its trail
 	 * where the other's may (`repeated`) —: a hold reaching it once reports no stall of one repeating it under its own lock
-	 * (TM's `FolderWatcher.rename`'s one stat against `updateInternal`'s walk over the whole tree). And it is the covered
+	 * (the client's `VolumeWatcher.rename`'s one stat against `updateInternal`'s walk over the whole tree). And it is the covered
 	 * hold's own: a hold around it in its function (`nests`), or one whose function every way of the covered hold to the call
 	 * passes — the work is that hold's, done for the covered one. A hold of the same lock in another function, whose own call
 	 * reaches the same sink, is a stall of its own whatever thread runs either: narrowing one hold frees nothing of the
-	 * other (TM's `moveCloudFileBlocked` holding the batch lock across its own `getTimestamp` stat beside
+	 * other (the client's `moveCloudFileBlocked` holding the batch lock across its own `getTimestamp` stat beside
 	 * `addCloudActionValidated`, which reaches that stat through `addCloudAction2`). Two holds of different locks one after
 	 * the other in one function are two stalls.
 	 */

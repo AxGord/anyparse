@@ -43,7 +43,7 @@ class ThreadSafetyLongLocksTest extends Test {
 	}
 
 	/**
-	 * TM's correlated `if (!batch) acquire … if (!batch) release`: the parameter is a fixed flag (`FixedFlags`), so the
+	 * the client's correlated `if (!batch) acquire … if (!batch) release`: the parameter is a fixed flag (`FixedFlags`), so the
 	 * window is traced once per value and no run takes without giving back — no leak. A take nothing gives back is one.
 	 */
 	@:pin('control') @:killer('M-TS-FLAGS-OFF')

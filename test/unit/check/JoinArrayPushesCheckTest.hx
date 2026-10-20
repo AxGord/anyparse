@@ -137,7 +137,7 @@ class JoinArrayPushesCheckTest extends Test {
 	// --- Path B: the field declaration, across the constructor prologue ---
 
 	/**
-	 * The `TextOptions` site the rule was written for: a `final` field initialised `[]`, a
+	 * The `TextFlavors` site the rule was written for: a `final` field initialised `[]`, a
 	 * constructor that calls `super()`, and a run of object-literal pushes after it.
 	 */
 	public function testMotivatingFieldSiteFlagged(): Void {
@@ -306,7 +306,7 @@ class JoinArrayPushesCheckTest extends Test {
 		Assert.isTrue(ids.contains('join-array-pushes'));
 	}
 
-	/** The `TextOptions` shape: a field-assigning prologue statement, `super()`, then object-literal pushes. */
+	/** The `TextFlavors` shape: a field-assigning prologue statement, `super()`, then object-literal pushes. */
 	private inline function motivating(): String {
 		return ctor(
 			'private final _d:Array<D<Int>> = [];',

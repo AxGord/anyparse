@@ -403,7 +403,7 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 	// must be qualified `this.x` (instance) / `C.x` (static) exactly as under a parameter.
 
 	public function testFixShadowedLoopVarUsesThis(): Void {
-		// The live ColorPickerSelector shape: `for (color in _palette) if (color == _color)`
+		// The live ColorPickerSwitcher shape: `for (color in _palette) if (color == _color)`
 		// renamed to `color == color` (always true) because the loop variable was invisible
 		// to the shadow scan.
 		final src: String = cls(

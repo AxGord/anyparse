@@ -8,8 +8,8 @@ import utest.Test;
 /**
  * A hold only the main thread runs stalls no other thread; what it reports is the main thread's own long work under
  * the lock — finding (a)'s. Where (a) already warns of that work at another member (the sink's own call, or the
- * repeating call that owns it), the hold adds no second warning (TM's `StandardFileSystem.deleteItem` over
- * `deleteItemInternal`'s per-child unlinks), or at the holder itself (TM's `FileListMoveFiles.moveItems` loop), the hold
+ * repeating call that owns it), the hold adds no second warning (the client's `StandardDiskSystem.deleteItem` over
+ * `deleteItemInternal`'s per-child unlinks), or at the holder itself (the client's `ItemListMoveItems.moveItems` loop), the hold
  * adds no second warning.
  */
 class ThreadSafetyMainOnlyTest extends Test {

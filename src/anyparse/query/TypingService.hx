@@ -35,6 +35,12 @@ final class TypingService {
 	 */
 	public final unification: Unification;
 
+	/**
+	 * SIGNATURE: the `@:op` overload an abstract selects for a binary operator over two operand types, and the type it
+	 * yields (`operators.ml`).
+	 */
+	public final operators: OperatorOverloads;
+
 	/** SIGNATURE: what a named type declares or inherits, and with what declared type, return type and visibility. */
 	public final members: MemberLookup;
 
@@ -57,6 +63,7 @@ final class TypingService {
 		ancestors = new AncestorTable(refs, cache, typeSyntax, shape.rawDynamicTypeName);
 		casts = new AbstractCasts(refs, ancestors, cache, typeSyntax, shape);
 		unification = new Unification(ancestors, cache, refs, casts, shape);
+		operators = new OperatorOverloads(casts, unification, shape);
 		members = new MemberLookup(refs, cache, ancestors, typeSyntax, shape.optionalValueTypeName);
 		structural = new StructuralTypes(files, refs, subtypes, members, typeSyntax, unification);
 		extensions = new StaticExtensions(refs, cache, ancestors, members, structural);

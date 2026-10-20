@@ -128,7 +128,7 @@ class JoinStringAppendCheckTest extends Test {
 	 * A `switch` case body is a statement list too, deliberately NOT one of
 	 * `ControlFlowSupport.blockKinds()` (that set's other consumers reason about
 	 * fall-through) — scanned separately via `caseBranchKind` / `defaultBranchKind`. The
-	 * `Method(cname, meth)` shape from the TM `CrashDumper.printStackItem` canary.
+	 * `Method(cname, meth)` shape from the client `CrashReport.printStackItem` canary.
 	 */
 	public function testSwitchCaseBodyFlagged(): Void {
 		final body: String =

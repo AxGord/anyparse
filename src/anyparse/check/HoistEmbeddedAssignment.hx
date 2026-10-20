@@ -83,8 +83,8 @@ private typedef HoistSite = {
  * - a ternary / short-circuit arm (`[c ? (_x = a) : b]`) -- hoisting would make it unconditional;
  * - a conditional-compilation region inside the literal (`ConditionalArgs` in the Haxe grammar) --
  *   hoisting would lift the write out of its `#if` guard, so a build that excludes the branch
- *   would get a write it never had. This is the shape that refuses the TM
- *   `RegisterLoginTypeForm` site, which otherwise reads exactly like the rest of the family.
+ *   would get a write it never had. This is the shape that refuses the client
+ *   `RegisterLoginKindForm` site, which otherwise reads exactly like the rest of the family.
  *
  * ## Evaluation order -- what moves, and the two gates that make it safe
  *

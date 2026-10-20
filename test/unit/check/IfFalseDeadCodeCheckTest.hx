@@ -207,7 +207,7 @@ class IfFalseDeadCodeCheckTest extends Test {
 
 	public function testFixUnwrapsMemberLevelTrueRegionPreservesIndent(): Void {
 		// A whole member wrapped in `#if true` unwraps to plain source with its
-		// original indentation intact (mirrors the SessionPDFPagePreview canary).
+		// original indentation intact (mirrors the ProjectPDFPagePreview canary).
 		final src: String = 'class C {\n\t#if true\n\tfunction live():Void {}\n\t#end\n}';
 		final out: String = applyFix(src);
 		Assert.equals('class C {\n\tfunction live():Void {}\n}', out);

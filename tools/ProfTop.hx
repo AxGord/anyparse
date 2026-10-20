@@ -54,7 +54,7 @@ typedef Profile = {
  * misreading it as CPU would have sent the work into the analyser instead.
  *
  * Read the profile for SHARES and measure deltas with a separate unprofiled
- * run: `--cpu-prof` overhead is not uniform (+7% on anyparse, +15% on the TM
+ * run: `--cpu-prof` overhead is not uniform (+7% on anyparse, +15% on the client
  * tree), so a profiled before/after pair is not a delta.
  */
 class ProfTop {

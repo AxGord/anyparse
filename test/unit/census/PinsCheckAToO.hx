@@ -68,13 +68,19 @@ final class PinsCheckAToO {
 			+ 'M-AMBIENT-IMPORT-BAND',
 		'unit.check.AnonTypeDupCheckTest#testAGroupIsAnchoredWhereTheRuleIsEnabled :: control :: M-ANON-ANCHOR-UNGATED',
 		'unit.check.AnonTypeDupCheckTest#testEachFileHeldToItsOwnChainThreshold :: control :: M-ANON-FIRST-FILE-CONFIG',
+		'unit.check.AsymmetricBranchBracesCheckTest#testANoElseChainWithABracedLinkIsFlagged :: control :: M-ASYM-CHAIN-UNFLAGGED',
+		'unit.check.AsymmetricBranchBracesCheckTest#testAnElseSwitchIsNeutralInAChain :: control :: M-ASYM-CHAIN-SWITCH-BRACED',
+		'unit.check.AsymmetricBranchBracesCheckTest#testFixBracesANoElseChain :: control :: M-ASYM-CHAIN-UNFLAGGED',
 		'unit.check.AsymmetricBranchBracesCheckTest#testFixBracesTheBareElse :: control :: M-ASYM-FIX-NO-EDIT',
 		'unit.check.AsymmetricBranchBracesCheckTest#testFixBracesTheWholeElseIfChain :: control :: M-ASYM-FIX-CHAIN-TAIL-ONLY',
 		'unit.check.AsymmetricBranchBracesCheckTest#testFixLeavesAConditionalRegionBare :: control :: M-ASYM-FIX-OPEN-TAIL-ANY',
 		'unit.check.AsymmetricBranchBracesCheckTest#testFixLeavesADeclarationBare :: control :: M-ASYM-FIX-DECL',
 		'unit.check.AsymmetricBranchBracesCheckTest#testFixLeavesANestedPairToTheNextPass :: control :: M-ASYM-FIX-NESTED-OVERLAP',
+		'unit.check.AsymmetricBranchBracesCheckTest#testFixTakesTheBranchsOwnCommentsInside :: control :: '
+			+ 'M-ASYM-FIX-COMMENT-OUTSIDE,M-OWNLINE-COMMENT-TRAILING',
 		'unit.check.AsymmetricBranchBracesCheckTest#testFixTerminatesAnUnterminatedExpression :: control :: '
 			+ 'M-ASYM-FIX-NO-TERMINATOR-ADDED,M-ASYM-FIX-UNTERMINATED',
+		'unit.check.AsymmetricBranchBracesCheckTest#testOneFindingPerChain :: control :: M-ASYM-CHAIN-PER-LINK,M-ASYM-CHAIN-PAIR-SKIPPED',
 		'unit.check.AvoidDynamicBagFixTest#testANullableValueIsNeverTypedByItsBareWrapper :: control :: M-BAG-NULL-OUTER',
 		'unit.check.AvoidDynamicBagFixTest#testAnInitializerOfAnotherTypeKeepsTheDeclaration :: control :: M-BAG-INITIALIZER',
 		'unit.check.AvoidDynamicCheckTest#testDynamicInsideIntersectionOrConditionalArgumentFlagged :: control :: '

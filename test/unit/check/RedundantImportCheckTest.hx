@@ -220,24 +220,24 @@ class RedundantImportCheckTest extends Test {
 	// --- the live repro shape ---
 
 	/**
-	 * The TM shape that motivated the rule: a fixer materialised two sub-type annotations into a
+	 * The client shape that motivated the rule: a fixer materialised two sub-type annotations into a
 	 * file whose modules were both already imported, and route 2 spliced an import for each into a
 	 * fresh run below the file's `using`.
 	 */
 	public function testTwoRunFileWithBothSubTypeImportsRedundant(): Void {
-		final src: String = 'package tests.unit;\n\nimport fs.FileSystemInterface;\nimport fs.cloud.CloudDatabase;\n\n'
-			+ 'using tink.CoreApi;\n\nimport fs.FileSystemInterface.FileSystemCloudAction;\n'
-			+ 'import fs.cloud.CloudDatabase.CloudDatabaseFilePath;\n\nclass T {\n\n\tvar a:FileSystemCloudAction;\n\n'
-			+ '\tvar b:CloudDatabaseFilePath;\n\n}\n';
+		final src: String = 'package tests.unit;\n\nimport fs.DiskSystemInterface;\nimport fs.cloud.ShardDatabase;\n\n'
+			+ 'using tink.CoreApi;\n\nimport fs.DiskSystemInterface.DiskSystemCloudAction;\n'
+			+ 'import fs.cloud.ShardDatabase.ShardDatabaseFilePath;\n\nclass T {\n\n\tvar a:DiskSystemCloudAction;\n\n'
+			+ '\tvar b:ShardDatabaseFilePath;\n\n}\n';
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'tests/unit/T.hx', source: src },
 			{
-				file: 'fs/FileSystemInterface.hx',
-				source: 'package fs;\n\ninterface FileSystemInterface {}\n\ntypedef FileSystemCloudAction = Int;\n'
+				file: 'fs/DiskSystemInterface.hx',
+				source: 'package fs;\n\ninterface DiskSystemInterface {}\n\ntypedef DiskSystemCloudAction = Int;\n'
 			},
 			{
-				file: 'fs/cloud/CloudDatabase.hx',
-				source: 'package fs.cloud;\n\nclass CloudDatabase {}\n\ntypedef CloudDatabaseFilePath = String;\n'
+				file: 'fs/cloud/ShardDatabase.hx',
+				source: 'package fs.cloud;\n\nclass ShardDatabase {}\n\ntypedef ShardDatabaseFilePath = String;\n'
 			}
 		];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -245,10 +245,10 @@ class RedundantImportCheckTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(2, vs.length);
 		final fixed: String = CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin, CheckFixture.index(files, plugin)));
-		Assert.isFalse(fixed.contains('import fs.FileSystemInterface.FileSystemCloudAction;'));
-		Assert.isFalse(fixed.contains('import fs.cloud.CloudDatabase.CloudDatabaseFilePath;'));
-		Assert.isTrue(fixed.contains('import fs.FileSystemInterface;'));
-		Assert.isTrue(fixed.contains('import fs.cloud.CloudDatabase;'));
+		Assert.isFalse(fixed.contains('import fs.DiskSystemInterface.DiskSystemCloudAction;'));
+		Assert.isFalse(fixed.contains('import fs.cloud.ShardDatabase.ShardDatabaseFilePath;'));
+		Assert.isTrue(fixed.contains('import fs.DiskSystemInterface;'));
+		Assert.isTrue(fixed.contains('import fs.cloud.ShardDatabase;'));
 	}
 
 	// --- registration ---

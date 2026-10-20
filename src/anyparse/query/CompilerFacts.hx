@@ -901,13 +901,13 @@ final class CompilerFacts {
 
 		for (raw in lines) {
 			final line: String = FactText.detached(raw);
-			if (line.startsWith('{"k":"node"'))
-				addNode(line, index, dump)
-			else if (line.startsWith('{"k":"type"'))
-				addType(Json.parse(line), dump, index)
-			else if (line.startsWith('{"k":"src"'))
-				addSource(Json.parse(line), dump)
-			else if (line.startsWith('{"k":"target"')) {
+			if (line.startsWith('{"k":"node"')) {
+				addNode(line, index, dump);
+			} else if (line.startsWith('{"k":"type"')) {
+				addType(Json.parse(line), dump, index);
+			} else if (line.startsWith('{"k":"src"')) {
+				addSource(Json.parse(line), dump);
+			} else if (line.startsWith('{"k":"target"')) {
 				final record: TargetRecord = Json.parse(line);
 				targets[index] = record.n;
 			} else if (line.startsWith('{"k":"file"')) {

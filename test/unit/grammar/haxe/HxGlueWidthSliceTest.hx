@@ -52,7 +52,7 @@ final class HxGlueWidthSliceTest extends Test {
 	/**
 	 * A `for` whose body is an `if` statement holding a block — the body's Doc
 	 * carries a hardline, so `fitLine` glues it. Anonymised from the reported
-	 * site (`TM editor/pitch/PitchArea.hx rePositionBenchPlayers`), preserving
+	 * site (`client editor/stage/StageArea.hx rePositionSpareSprites`), preserving
 	 * its lengths. Glued, the header line is 131 columns; broken, the body line
 	 * is 105.
 	 */
@@ -85,7 +85,7 @@ final class HxGlueWidthSliceTest extends Test {
 	 * shape gate 3 refuses.
 	 */
 	private static final BLOCK_BODY_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n'
-		+ '\t\t\tcase ItemKind.KIND_SUBSTITUTE_PLAYER_WITH_A_VERY_LONG_LABEL_INDEED: {\n'
+		+ '\t\t\tcase ItemKind.KIND_SUBSTITUTE_SPRITE_WITH_A_VERY_LONG_LABEL_INDEED: {\n'
 		+ '\t\t\t\tfoo();\n\t\t\t\tbar();\n\t\t\t}\n\t\t}\n\t}\n}\n';
 
 	/**
@@ -147,7 +147,7 @@ final class HxGlueWidthSliceTest extends Test {
 		// on a line of its own, so the glue is kept instead.
 		final out: String = write(BLOCK_BODY_SRC, caseFitJson(80));
 		Assert.isTrue(
-			out.indexOf('KIND_SUBSTITUTE_PLAYER_WITH_A_VERY_LONG_LABEL_INDEED: {\n') != -1,
+			out.indexOf('KIND_SUBSTITUTE_SPRITE_WITH_A_VERY_LONG_LABEL_INDEED: {\n') != -1,
 			'a body that breaks at its own brace must stay glued: <$out>'
 		);
 	}

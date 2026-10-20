@@ -172,8 +172,8 @@ class ThreadSafetyHandedValueTest extends Test {
 	}
 
 	/**
-	 * A value a constructor only stores into a `final` field runs where the field is called, not at the `new` (TM's
-	 * `FileList.reload` handing `_source.getThumbnail` to `new FileListGrid(...)` under the tree lock, round 7 L1b): the
+	 * A value a constructor only stores into a `final` field runs where the field is called, not at the `new` (the client's
+	 * `ItemList.reload` handing `_source.getThumbnail` to `new ItemListTile(...)` under the tree lock, round 7 L1b): the
 	 * hold around the `new` stays silent, and turns long again when the hold itself calls the field — directly, or through
 	 * a field another constructor stores it into. Any other shape keeps the value running where it is handed: the
 	 * parameter used otherwise or in a nested function, the field read otherwise (in any `#if` branch), a `var` field, a

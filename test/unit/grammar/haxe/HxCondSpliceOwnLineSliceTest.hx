@@ -78,7 +78,7 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 
 	/**
 	 * REGRESSION GUARD -- the original dogfood catch recorded in the gate's
-	 * own comment, live at `TM-Haxe4/src/video/GpuDirectPipeline.hx:52`: a
+	 * own comment, live at `video/GpuInlinePipeline.hx:52`: a
 	 * `@:privateAccess { ... }` block statement followed by an own-line
 	 * `#if debug ... #end` and then more statements. Swallowing the region
 	 * as a splice tail makes the whole function body fail on `h();`.
@@ -146,7 +146,7 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 	}
 
 	/**
-	 * REGRESSION GUARD -- `dogfood utils/CleanExit.hx:36`: a bare-body
+	 * REGRESSION GUARD -- `dogfood utils/QuietExit.hx:36`: a bare-body
 	 * expression `try` whose catch body is a `{}` block, followed by an
 	 * own-line `#if cpp ... #else ... #end` statement region.
 	 *
