@@ -545,7 +545,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	/**
 	 * `GrammarPlugin`: the inner shape with this wrapper's run-scoped `RefsCache` attached, so
 	 * `Refs.find` resolves through the memoized index instead of walking the tree per query. Built
-	 * ONCE per wrapper (`_refShape`): `_inner.refShape()` returns a fresh struct literal per call and
+	 * ONCE per wrapper (`_refShape`): `_inner.refShape()` builds a fresh shape per call and
 	 * the checks ask per file, which cost ~0.8 s of construction and garbage on the client tree. The
 	 * attach is a write to the inner plugin's fresh copy, so it leaks nowhere.
 	 */

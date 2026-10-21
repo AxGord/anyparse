@@ -945,8 +945,8 @@
 			"name": "M-OPAQUE-REGION-HAND-LIST",
 			"type": "anyparse.grammar.haxe.HaxeRefShape",
 			"method": "shape",
-			"find": "opaqueCondRegionKinds: HaxeQueryWalker.opaqueCondRegionKinds(),",
-			"replace": "opaqueCondRegionKinds: ['CondSpliceExpr', 'CondSpliceOpExpr', 'CondSpliceTail', 'CondSpliceStmt', 'CondSpliceBlockOpen', 'CondSpliceBlockTail', 'CondSpliceSwitchOpen', 'CondSpliceBlockClose', 'CondSpliceCase', 'CondSpliceMember', 'CondSharedBodyDecl'],",
+			"find": "table.opaqueCondRegionKinds = HaxeQueryWalker.opaqueCondRegionKinds();",
+			"replace": "table.opaqueCondRegionKinds = ['CondSpliceExpr', 'CondSpliceOpExpr', 'CondSpliceTail', 'CondSpliceStmt', 'CondSpliceBlockOpen', 'CondSpliceBlockTail', 'CondSpliceSwitchOpen', 'CondSpliceBlockClose', 'CondSpliceCase', 'CondSpliceMember', 'CondSharedBodyDecl'];",
 			"note": "the fallback-ctor family is enumerated by hand again, exactly as it stood on 2026-08-18 instead of being derived from the grammar's `@:condRegionRaw` terminals - the three raw-capture ctors the grammar gained two days later (both `return` splices and the metadata-prefixed `MetaCondStmt`) fall out of the gate and every name-driven op rewrites around such a region in silence"
 		},
 		{
@@ -3237,16 +3237,16 @@
 			"name": "M-AND-OPERATOR-TEXT-STALE",
 			"type": "anyparse.grammar.haxe.HaxeRefShape",
 			"method": "shape",
-			"find": "andOperatorText: '&&',",
-			"replace": "andOperatorText: '&',",
+			"find": "table.andOperatorText = '&&';",
+			"replace": "table.andOperatorText = '&';",
 			"note": "the declared logical-and token is respelled as the bitwise one, which still parses and still is an operator, so nothing in the tree breaks and the shape simply names text the parser reads as a different node"
 		},
 		{
 			"name": "M-CONSTRUCTOR-NAME-PADDED",
 			"type": "anyparse.grammar.haxe.HaxeRefShape",
 			"method": "shape",
-			"find": "constructorName: 'new',",
-			"replace": "constructorName: 'new ',",
+			"find": "table.constructorName = 'new';",
+			"replace": "table.constructorName = 'new ';",
 			"note": "the declared constructor name gains a trailing space, so the probe source is `function new () {}` - it still parses, the FnMember still SPANS text holding `new `, and only the projected NAME stops being the declared token. The span-containment reading this arm was written against is green on it; the name-slot reading is what goes red"
 		},
 		{
@@ -6260,8 +6260,8 @@
 			"name": "M-REACH-STRINGBUF-PURE",
 			"type": "anyparse.grammar.haxe.HaxeRefShape",
 			"method": "shape",
-			"find": "\t\t\t\t\t'Std.isOfType',\n\t\t\t\t\t'StringBuf.add',\n",
-			"replace": "\t\t\t\t\t'Std.isOfType',\n",
+			"find": "\t\t\t\t'Std.isOfType',\n\t\t\t\t'StringBuf.add',\n",
+			"replace": "\t\t\t\t'Std.isOfType',\n",
 			"note": "a string buffer write counts as code that may change the caller's array"
 		},
 		{
@@ -16087,7 +16087,7 @@
 			"name": "M-SHAPE-PURE-GETENV",
 			"type": "anyparse.grammar.haxe.HaxeRefShape",
 			"method": "shape",
-			"find": "'StringBuf.toString',\n\t\t\t\t\t// reads the process environment: no callback, on every target\n\t\t\t\t\t'Sys.getEnv'\n",
+			"find": "'StringBuf.toString',\n\t\t\t\t// reads the process environment: no callback, on every target\n\t\t\t\t'Sys.getEnv'\n",
 			"replace": "'StringBuf.toString'\n",
 			"note": "(precision) an environment read may run project code"
 		},
@@ -22500,8 +22500,8 @@
 			"name": "M-VOCAB-DOWHILE-EXPR-NOT-LOOP",
 			"type": "anyparse.grammar.haxe.HaxeRefShape",
 			"method": "shape",
-			"find": "doWhileLoopKinds: ['DoWhileStmt', 'DoWhileExpr'],",
-			"replace": "doWhileLoopKinds: ['DoWhileStmt'],",
+			"find": "table.doWhileLoopKinds = ['DoWhileStmt', 'DoWhileExpr'];",
+			"replace": "table.doWhileLoopKinds = ['DoWhileStmt'];",
 			"note": "a do-while in expression position (`() -> do x while (c)`) is no loop to any reader of the loop vocabulary"
 		},
 		{
@@ -22556,8 +22556,8 @@
 			"name": "M-VOCAB-WHILE-EXPR-NOT-BRANCH",
 			"type": "anyparse.grammar.haxe.HaxeRefShape",
 			"method": "shape",
-			"find": "'WhileStmt',\n\t\t\t\t'WhileExpr',\n\t\t\t\t'DoWhileStmt',\n\t\t\t\t'DoWhileExpr',",
-			"replace": "'WhileStmt',\n\t\t\t\t'DoWhileStmt',\n\t\t\t\t'DoWhileExpr',",
+			"find": "'WhileStmt',\n\t\t\t'WhileExpr',\n\t\t\t'DoWhileStmt',\n\t\t\t'DoWhileExpr',",
+			"replace": "'WhileStmt',\n\t\t\t'DoWhileStmt',\n\t\t\t'DoWhileExpr',",
 			"note": "a `while` comprehension or lambda body is no decision point: complexity counts nothing for it and a binding under it is hoisted"
 		},
 		{
@@ -28395,7 +28395,7 @@
 			"name": "M-SHAPE-COMMUTATIVE-UNSET",
 			"type": "anyparse.grammar.haxe.HaxeRefShape",
 			"method": "shape",
-			"find": "commutativeOperatorMetaName: '@:commutative',",
+			"find": "table.commutativeOperatorMetaName = '@:commutative';",
 			"replace": "",
 			"note": "the grammar names no commutativity annotation, so no overload is tried swapped and a misfit leaves the walk undecided"
 		},

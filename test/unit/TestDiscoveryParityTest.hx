@@ -94,6 +94,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.DiscoveryOnlyProbeTest',
 		'unit.ExtensionMethodsExtractionTest',
 		'unit.FixtureCompileCacheTest',
+		'unit.JvmStructureWidthTest',
 		'unit.LexicalRegionAgreementTest',
 		'unit.MutationArmAddressTest',
 		'unit.MutationArmsTest',

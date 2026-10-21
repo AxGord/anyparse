@@ -99,14 +99,7 @@ class ShapeVocabTest extends Test {
 
 	/** A shape naming only the seams `RefShape` requires. */
 	private static function bare(): RefShape {
-		return {
-			identKind: 'IdentExpr',
-			declHostKinds: [],
-			moduleValueDeclKinds: [],
-			scopeKinds: [],
-			writeParentKinds: [],
-			selfScopeDeclKinds: []
-		};
+		return new RefShape('IdentExpr', [], [], [], [], []);
 	}
 
 }

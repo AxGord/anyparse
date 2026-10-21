@@ -4321,3 +4321,28 @@ names the file, and counts it apart from a parse failure under its own word —
 the read side had been caught from the start, and still shares `failed` with the
 parse failures. The other 31 `writeFile` call sites in `Cli` still share the
 hazard.
+
+## J0 (2026-10-21) — the JVM probe's `ClassFormatError`, bisected and closed
+
+On `e5dafa9d6` (and on `249e7ab3f`) `java -jar bin/jvm-portability.jar` died before printing a gate line:
+
+```
+Exception in thread "main" java.lang.ClassFormatError: Too many arguments in method signature in class file haxe/generated/Anon560
+	at anyparse.grammar.haxe.HaxeRefShape.shape(src/anyparse/grammar/haxe/HaxeRefShape.hx:280)
+	at anyparse.grammar.haxe.HaxeQueryPlugin.refShape(src/anyparse/grammar/haxe/HaxeQueryPlugin.hx:361)
+	at anyparse.query.CachingGrammarPlugin.refShape(src/anyparse/query/CachingGrammarPlugin.hx:555)
+	at anyparse.check.MisplacedTypeDoc.resolveSeams(src/anyparse/check/MisplacedTypeDoc.hx:282)
+```
+
+`Anon560` was the `HaxeRefShape.shape` object literal: 273 constructor arguments; the `anyparse/query/RefShape`
+class `--jvm` emits for the typedef took 275. `git bisect run` over `5d4aa2b1a` (last commit whose message
+records `threw=0`; re-run: `gate: files=550 wrote=550 threw=0`) .. `e5dafa9d6`, 1024 commits, 10 builds, named
+`1b172a012` — `RefShape` went from 254 fields to 255 (`operatorWriteKinds`), and the run failed in the typedef's
+own class (`class file anyparse/query/RefShape`) while the literal was still at 253. 254 fields + the receiver =
+255 slots loads; 255 + 1 does not. `MisplacedTypeDoc.resolveSeams` was only the first caller of `refShape()`.
+
+After `RefShape` became a class: `gate: files=699 wrote=699 threw=0 lintdiff=1+0-`, `census @ e5dafa9d6-dirty:
+checks=193 findings=998`. `unit.JvmStructureWidthTest` run from a checkout of `e5dafa9d6` names exactly the two
+(`HaxeRefShape.hx:280: object literal 274 slots`, `GrammarPlugin.hx:457: RefShape 276 slots`) and is green on
+`1b172a012~1`. The widest anonymous constructor left in the jar is the macro-generated writer options (223
+arguments, 224 slots) — a structure the source sweep cannot see.

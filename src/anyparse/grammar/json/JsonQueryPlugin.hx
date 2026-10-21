@@ -59,19 +59,14 @@ final class JsonQueryPlugin implements GrammarPlugin {
 	}
 
 	public function refShape(): RefShape {
-		return {
-			identKind: '',
-			declHostKinds: [],
-			moduleValueDeclKinds: [],
-			scopeKinds: [],
-			writeParentKinds: [],
-			selfScopeDeclKinds: [],
-			arrayLiteralKind: JsonProjection.ARRAY,
-			objectLiteralKind: JsonProjection.OBJECT,
-			stringLiteralKinds: [JsonProjection.STRING],
-			commaContainerKinds: [JsonProjection.ARRAY, JsonProjection.OBJECT],
-			delimitedContainerKinds: [JsonProjection.ARRAY, JsonProjection.OBJECT]
-		};
+		// JSON binds no names: the six binding slots are empty.
+		final shape: RefShape = new RefShape('', [], [], [], [], []);
+		shape.arrayLiteralKind = JsonProjection.ARRAY;
+		shape.objectLiteralKind = JsonProjection.OBJECT;
+		shape.stringLiteralKinds = [JsonProjection.STRING];
+		shape.commaContainerKinds = [JsonProjection.ARRAY, JsonProjection.OBJECT];
+		shape.delimitedContainerKinds = [JsonProjection.ARRAY, JsonProjection.OBJECT];
+		return shape;
 	}
 
 	public function projectedKinds(): Array<String> {

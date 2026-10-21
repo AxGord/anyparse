@@ -452,11 +452,18 @@ interface GrammarPlugin {
  * appear in `declHostKinds` (the two bind into different frames). Catch-clause and
  * lambda-parameter bindings are NOT covered: they sit on transparent typedef-structs carrying
  * no runtime span, so no correct per-clause / per-param binding span is derivable here.
+ *
+ * A class, not a structure typedef: as one it outgrew the JVM constructor-argument limit
+ * (`unit.JvmStructureWidthTest`). The six slots above are its constructor's arguments.
  */
 @:nullSafety(Strict)
-typedef RefShape = {
-	var identKind: String;
-	var declHostKinds: Array<String>;
+final class RefShape {
+
+	public final identKind: String;
+	public final declHostKinds: Array<String>;
+	public final scopeKinds: Array<String>;
+	public final writeParentKinds: Array<String>;
+	public final selfScopeDeclKinds: Array<String>;
 
 	/**
 	 * Module-level kinds that declare a VALUE binding — Haxe's top-level `var` / `function` (4.2+)
@@ -479,10 +486,7 @@ typedef RefShape = {
 	 * and it misses `VarForm`, so an un-audited grammar would inherit the exact wrong-rewrite hole
 	 * this entry exists to close. A default nobody can state correctly belongs at the producer.
 	 */
-	var moduleValueDeclKinds: Array<String>;
-	var scopeKinds: Array<String>;
-	var writeParentKinds: Array<String>;
-	var selfScopeDeclKinds: Array<String>;
+	public var moduleValueDeclKinds: Array<String>;
 
 	/**
 	 * Kinds that open a scope frame for their OWN body while hosting no declaration of their own — a
@@ -498,7 +502,7 @@ typedef RefShape = {
 	 * two asymmetrically for exactly that reason. Optional; unset leaves arm bodies in their enclosing
 	 * frame, as before this field existed.
 	 */
-	@:optional var branchScopeKinds: Array<String>;
+	public var branchScopeKinds: Null<Array<String>>;
 
 	/**
 	 * Scope kinds whose declarations take effect only from their own position in the source
@@ -535,7 +539,7 @@ typedef RefShape = {
 	 * second has no fix at this layer; it needs the branch-aware projection, whose reachability from
 	 * `Refs.find` on the `rename` / `CrossRename` / CLI paths is unestablished.
 	 */
-	@:optional var positionScopedKinds: Array<String>;
+	public var positionScopedKinds: Null<Array<String>>;
 
 	/**
 	 * Type-declaration kinds whose DATA members are static WITHOUT carrying the modifier —
@@ -550,7 +554,7 @@ typedef RefShape = {
 	 * to a value of the type and therefore finds nothing for a type used as a namespace.
 	 * Optional; unset means the modifier alone decides, as before this field existed.
 	 */
-	@:optional var implicitStaticFieldHostKinds: Array<String>;
+	public var implicitStaticFieldHostKinds: Null<Array<String>>;
 
 	/**
 	 * Whether an identifier whose initial is UPPER-CASE can never BIND in a `case` pattern.
@@ -562,7 +566,7 @@ typedef RefShape = {
 	 * Optional; unset treats every pattern identifier as a possible binding, as before this
 	 * field existed.
 	 */
-	@:optional var upperInitialNeverCaptures: Bool;
+	public var upperInitialNeverCaptures: Null<Bool>;
 
 	/**
 	 * Run-scoped reference-resolution cache. A caching plugin wrapper attaches its
@@ -570,7 +574,7 @@ typedef RefShape = {
 	 * index instead of walking the tree per query. Optional — a bare grammar shape
 	 * leaves it unset and `Refs.find` walks directly, byte-identical behavior.
 	 */
-	@:optional var refsCache: RefsCache;
+	public var refsCache: Null<RefsCache>;
 
 	/**
 	 * Node kinds whose SUBTREE is a REIFICATION — source the surrounding program treats as data
@@ -596,7 +600,7 @@ typedef RefShape = {
 	 * Not to be confused with `parenOpaqueSubtreeKinds`, which carries this kind AND `Plain` — the
 	 * case-pattern wrapper the case rules must still process.
 	 */
-	@:optional var opaqueKinds: Array<String>;
+	public var opaqueKinds: Null<Array<String>>;
 
 	/**
 	 * The FIXED type the value of each quotation kind has, fully qualified — Haxe's `macro …` is a
@@ -605,7 +609,7 @@ typedef RefShape = {
 	 * type a reader may rely on. `explicit-type` reads it to type a `macro` function's returns, where
 	 * the display oracle is blind. Optional; unset means no quotation is typed.
 	 */
-	@:optional var quotationTypes: Map<String, String>;
+	public var quotationTypes: Null<Map<String, String>>;
 
 	/**
 	 * Node kinds whose text is a MODULE PATH rather than a reference to any binding — Haxe's
@@ -616,30 +620,29 @@ typedef RefShape = {
 	 * (`package touches;` beside `var touches`) or after a package another import traverses.
 	 * Optional; unset leaves those spans in the scan, as before this field existed.
 	 */
-	@:optional var modulePathKinds: Array<String>;
-
+	public var modulePathKinds: Null<Array<String>>;
 
 	/** Kinds that each add one decision point to a function's cyclomatic complexity. */
-	@:optional var branchKinds: Array<String>;
+	public var branchKinds: Null<Array<String>>;
 
 	/**
 	 * Function-declaration kinds — each is a measured cyclomatic-complexity unit;
 	 * branch counting stops at a nested one (it is measured on its own).
 	 */
-	@:optional var functionKinds: Array<String>;
+	public var functionKinds: Null<Array<String>>;
 
 	/**
 	 * Binary-operator kinds for which identical operands are suspicious — the
 	 * `identical-operands` check flags `a == a` / `a != a` / `a < a` / `a && a` and
 	 * the like. Optional; a grammar that leaves it unset makes the check a no-op.
 	 */
-	@:optional var comparisonKinds: Array<String>;
+	public var comparisonKinds: Null<Array<String>>;
 
 	/**
 	 * The assignment node kind — the `self-assignment` check flags a bare-identifier
 	 * assignment to itself (`x = x`). Optional; unset makes the check a no-op.
 	 */
-	@:optional var assignKind: String;
+	public var assignKind: Null<String>;
 
 	/**
 	 * The `+=` compound-assignment node kind (Haxe `AddAssign`) — the
@@ -647,7 +650,7 @@ typedef RefShape = {
 	 * the same target (optionally preceded by one plain `x = e0;`, `assignKind`) into
 	 * a single `x += e1 + e2 + …;`. Optional; unset makes the check a no-op.
 	 */
-	@:optional var addAssignKind: String;
+	public var addAssignKind: Null<String>;
 
 	/**
 	 * The function-call node kind — lets the `identical-operands` check EXCLUDE an
@@ -657,14 +660,14 @@ typedef RefShape = {
 	 * SEAM: `redundant-parens` reads it (with `arrayLiteralKind` / `newExprKind`) as
 	 * a SPLICING host — see `spliceSensitiveExprKinds`.
 	 */
-	@:optional var callKind: String;
+	public var callKind: Null<String>;
 
 	/**
 	 * The switch case-branch node kind — the `duplicate-case` check flags a second
 	 * unguarded branch whose pattern source repeats an earlier one. Optional; unset
 	 * makes the check a no-op.
 	 */
-	@:optional var caseBranchKind: String;
+	public var caseBranchKind: Null<String>;
 
 	/**
 	 * The OR-PATTERN node kind (Haxe `BitOr` — `case A | B:` projects as ONE case
@@ -673,7 +676,7 @@ typedef RefShape = {
 	 * to one separator, this or the multi-pattern comma. Optional; unset makes the
 	 * check a no-op.
 	 */
-	@:optional var orPatternKind: String;
+	public var orPatternKind: Null<String>;
 
 	/**
 	 * The parenthesized-expression node kind — the `redundant-parens` check flags a
@@ -682,7 +685,7 @@ typedef RefShape = {
 	 * makes `redundant-parens` a no-op and drops that one slot from
 	 * `prefer-ternary-expression`.
 	 */
-	@:optional var parenKind: String;
+	public var parenKind: Null<String>;
 
 	/**
 	 * How to SPELL a grouping node — the pair `ParenGuard` writes around a spliced
@@ -692,14 +695,14 @@ typedef RefShape = {
 	 * answer. Optional, and read only together with `parenKind`: a grammar declaring
 	 * either alone leaves the splice raw, exactly as before the guard existed.
 	 */
-	@:optional var parenDelimiters: { open: String, close: String };
+	public var parenDelimiters: Null<{ open: String, close: String }>;
 
 	/**
 	 * The boolean-literal node kind — lets the `constant-condition` check
 	 * recognise a literal `true` / `false` used as a condition. Optional; unset
 	 * makes the check a no-op.
 	 */
-	@:optional var boolLitKind: String;
+	public var boolLitKind: Null<String>;
 
 	/**
 	 * The nominal name of the NON-NULLABLE boolean type (Haxe `Bool`). Its ONE job is to
@@ -716,7 +719,7 @@ typedef RefShape = {
 	 *
 	 * Optional; unset makes every consumer fall back to its kind-only proof.
 	 */
-	@:optional var nonNullBoolTypeName: String;
+	public var nonNullBoolTypeName: Null<String>;
 
 	/**
 	 * Conditional node kinds whose `children[0]` is the condition — the
@@ -725,14 +728,14 @@ typedef RefShape = {
 	 * excluded (`while (true)` is an idiomatic infinite loop). Optional; unset
 	 * makes the check a no-op.
 	 */
-	@:optional var branchConditionKinds: Array<String>;
+	public var branchConditionKinds: Null<Array<String>>;
 
 	/**
 	 * The statement-scope empty-statement node kind — a stray `;` inside a body.
 	 * The `empty-statement` check flags every one and its `--fix` deletes it.
 	 * Optional; unset makes the check ignore statement-scope strays.
 	 */
-	@:optional var emptyStmtKind: String;
+	public var emptyStmtKind: Null<String>;
 
 	/**
 	 * The statement terminator (Haxe `;`). A conditional-compilation region
@@ -741,7 +744,7 @@ typedef RefShape = {
 	 * region although its PARENT's span owns it; `RegionTerminator` reads it so a fix moving the
 	 * region carries it along. Optional; unset makes every region own nothing past its span.
 	 */
-	@:optional var statementTerminator: String;
+	public var statementTerminator: Null<String>;
 
 	/**
 	 * The member-scope empty-statement node kind — a stray `;` after a class
@@ -749,7 +752,7 @@ typedef RefShape = {
 	 * check alongside `emptyStmtKind`. Optional; unset makes the check ignore
 	 * member-scope strays.
 	 */
-	@:optional var emptyMemberKind: String;
+	public var emptyMemberKind: Null<String>;
 
 	/**
 	 * Statement-position local declaration kinds — a plain local `var` / `final`
@@ -759,7 +762,7 @@ typedef RefShape = {
 	 * only when `x` resolves to one (a field's `x = x` may invoke a property setter,
 	 * so it is left alone). Optional — unset makes both treat it as empty.
 	 */
-	@:optional var localDeclKinds: Array<String>;
+	public var localDeclKinds: Null<Array<String>>;
 
 	/**
 	 * EXPRESSION-position local declaration kinds — the same local `var` / `final`
@@ -771,7 +774,7 @@ typedef RefShape = {
 	 * `guard-continue`'s shadowing gate is the motivating consumer. Optional —
 	 * unset treats the set as empty.
 	 */
-	@:optional var localDeclExprKinds: Array<String>;
+	public var localDeclExprKinds: Null<Array<String>>;
 
 	/**
 	 * STATIC local declaration kinds — a local binding whose storage outlives the call
@@ -782,7 +785,7 @@ typedef RefShape = {
 	 * (dead stores, init-at-declaration, type inference on a fresh slot). Optional —
 	 * unset treats the set as empty.
 	 */
-	@:optional var staticLocalDeclKinds: Array<String>;
+	public var staticLocalDeclKinds: Null<Array<String>>;
 
 	/**
 	 * Statement-position `if` kinds — the `redundant-else-after-return` check flags
@@ -790,7 +793,7 @@ typedef RefShape = {
 	 * `if` (`var x = if (c) a else b`) is excluded: its `else` is required. Optional;
 	 * unset makes the check a no-op.
 	 */
-	@:optional var ifStatementKinds: Array<String>;
+	public var ifStatementKinds: Null<Array<String>>;
 
 	/**
 	 * EXPRESSION-position `if` kinds (Haxe `IfExpr`) — the same `if` when it parses as a
@@ -812,7 +815,7 @@ typedef RefShape = {
 	 * Optional; unset leaves the if-expression shape unmatched for those checks (a bare
 	 * `ternaryKind` chain still converts to a switch).
 	 */
-	@:optional var ifExpressionKinds: Array<String>;
+	public var ifExpressionKinds: Null<Array<String>>;
 
 	/**
 	 * STATEMENT-position `try` / `catch` kinds (Haxe `TryCatchStmt`, plus the bare-body
@@ -823,7 +826,7 @@ typedef RefShape = {
 	 * `tryExpressionKinds`) to know when it is INSIDE a handled region. Optional; unset
 	 * makes both checks a no-op.
 	 */
-	@:optional var tryStatementKinds: Array<String>;
+	public var tryStatementKinds: Null<Array<String>>;
 
 	/**
 	 * EXPRESSION-position `try` kinds (Haxe `TryExpr`) — the value form the
@@ -837,34 +840,34 @@ typedef RefShape = {
 	 * following `catch` cannot re-parent onto it. Optional only for a grammar with no
 	 * expression-position `try` at all.
 	 */
-	@:optional var tryExpressionKinds: Array<String>;
+	public var tryExpressionKinds: Null<Array<String>>;
 
 	/**
 	 * Equality-operator kinds — the `comparison-to-boolean` check flags a comparison
 	 * against a boolean literal (`x == true` / `x != false`). Optional; unset makes the
 	 * check a no-op.
 	 */
-	@:optional var equalityKinds: Array<String>;
+	public var equalityKinds: Null<Array<String>>;
 
 	/**
 	 * The null-safe field-access node kind (`a?.b`) — lets `comparison-to-boolean` SKIP an
 	 * operand reached through `?.`, whose value may be `Null<Bool>`, so the `== true` is
 	 * load-bearing under strict null-safety rather than redundant. Optional.
 	 */
-	@:optional var nullSafeAccessKind: String;
+	public var nullSafeAccessKind: Null<String>;
 
 	/**
 	 * The logical-not node kind — the `double-negation` check flags `!!x` (a `notKind`
 	 * node directly wrapping another). Optional; unset makes the check a no-op.
 	 */
-	@:optional var notKind: String;
+	public var notKind: Null<String>;
 
 	/**
 	 * The statement-block node kind — lets `collapsible-if` unwrap a single-statement
 	 * `{ … }` then-branch to reach a nested `if`. Optional; unset means only a brace-free
 	 * nested `if` is collapsed.
 	 */
-	@:optional var blockStmtKind: String;
+	public var blockStmtKind: Null<String>;
 
 	/**
 	 * Condition node kinds that bind no tighter than `&&` on their RIGHT side — every operator looser than `&&`, plus the ones
@@ -873,20 +876,20 @@ typedef RefShape = {
 	 * `??`, which binds tighter than `&&`) so `if (a || c) if (b)` collapses to `if ((a || c) && b)`, not the
 	 * mis-precedenced `if (a || c && b)`. Optional.
 	 */
-	@:optional var andLowerPrecedenceKinds: Array<String>;
+	public var andLowerPrecedenceKinds: Null<Array<String>>;
 
 	/**
 	 * The logical-and operator text — the joiner `collapsible-if` emits between the two
 	 * merged conditions. Optional; unset disables the `collapsible-if` autofix.
 	 */
-	@:optional var andOperatorText: String;
+	public var andOperatorText: Null<String>;
 
 	/**
 	 * The ternary / conditional-expression node kind (`cond ? a : b`) — the
 	 * `prefer-null-coalescing` check rewrites a null-guarding ternary to `??`.
 	 * Optional; unset makes the check a no-op.
 	 */
-	@:optional var ternaryKind: String;
+	public var ternaryKind: Null<String>;
 
 	/**
 	 * Parent kinds in which a value-position chain may be rewritten to a switch
@@ -899,7 +902,7 @@ typedef RefShape = {
 	 * hosts are deliberately NOT listed yet and are follow-ups: a static member
 	 * initializer (`StaticVarStmt`) and a compound-assignment r-value.
 	 */
-	@:optional var switchExpressionHostKinds: Array<String>;
+	public var switchExpressionHostKinds: Null<Array<String>>;
 
 	/**
 	 * Parent kinds in which a value-position conditional chain may be rewritten to an
@@ -925,25 +928,25 @@ typedef RefShape = {
 	 * `prefer-if-expression-chain` check requires a chain head's PARENT kind to be one of
 	 * these. Optional; unset makes that check a no-op.
 	 */
-	@:optional var ifExpressionChainHostKinds: Array<String>;
+	public var ifExpressionChainHostKinds: Null<Array<String>>;
 
 	/**
 	 * The null-literal node kind (`null`) — lets `prefer-null-coalescing`
 	 * recognise the `… != null` / `… == null` guard. Optional.
 	 */
-	@:optional var nullLiteralKind: String;
+	public var nullLiteralKind: Null<String>;
 
 	/**
 	 * The equality (`==`) operator kind — `prefer-null-coalescing` needs to tell
 	 * `==` from `!=` to know which branch holds the guarded value. Optional.
 	 */
-	@:optional var eqKind: String;
+	public var eqKind: Null<String>;
 
 	/**
 	 * The inequality (`!=`) operator kind — the `!=`-form counterpart of `eqKind`
 	 * for `prefer-null-coalescing`. Optional.
 	 */
-	@:optional var notEqKind: String;
+	public var notEqKind: Null<String>;
 
 	/**
 	 * The logical-AND (`&&`) node kind — its two operands are `children[0]` /
@@ -952,14 +955,14 @@ typedef RefShape = {
 	 * from one of these (`Y && true` ≡ `Y`). Optional; unset disables the `&&`-drop
 	 * shape of those fixes.
 	 */
-	@:optional var logicalAndKind: String;
+	public var logicalAndKind: Null<String>;
 
 	/**
 	 * The logical-OR (`||`) node kind — the `||`-counterpart of `logicalAndKind`.
 	 * The same autofixes drop an always-FALSE disjunct from one of these
 	 * (`Y || false` ≡ `Y`). Optional; unset disables the `||`-drop shape.
 	 */
-	@:optional var logicalOrKind: String;
+	public var logicalOrKind: Null<String>;
 
 	/**
 	 * The `new T(...)` node kind — `prefer-array-literal` / `prefer-map-literal`
@@ -972,21 +975,21 @@ typedef RefShape = {
 	 * SEAM: `redundant-parens` reads it (with `callKind` / `arrayLiteralKind`) as a
 	 * SPLICING host — see `spliceSensitiveExprKinds`.
 	 */
-	@:optional var newExprKind: String;
+	public var newExprKind: Null<String>;
 
 	/**
 	 * The field-access node kind (`a.b`) — lets `prefer-interpolation` recognise the
 	 * `Std.string(...)` call it rewrites to string interpolation. Optional; unset makes
 	 * the check a no-op.
 	 */
-	@:optional var fieldAccessKind: String;
+	public var fieldAccessKind: Null<String>;
 
 	/**
 	 * The anonymous function-literal expression kind (`function(args) { … }`) —
 	 * `prefer-arrow-callback` flags one in call-argument position and rewrites it
 	 * to an arrow lambda. Optional; unset makes the check a no-op.
 	 */
-	@:optional var fnExprKind: String;
+	public var fnExprKind: Null<String>;
 
 	/**
 	 * The NAMED function-literal expression kind (`function name(args) { … }` in value
@@ -1004,7 +1007,7 @@ typedef RefShape = {
 	 * spelling. Read it through `ShapeVocab.nestedFunctionKinds`, never on its own. Optional — a
 	 * grammar with no named function literal leaves it unset.
 	 */
-	@:optional var namedFnExprKind: String;
+	public var namedFnExprKind: Null<String>;
 
 	/**
 	 * Node kinds that are TYPE annotations, never argument expressions — a `new T<…>`
@@ -1029,21 +1032,21 @@ typedef RefShape = {
 	 * `rename` refuses the shape) and unreachable in the Haxe grammar, where no `scopeKinds` ctor
 	 * occurs under a type.
 	 */
-	@:optional var typeAnnotationKinds: Array<String>;
+	public var typeAnnotationKinds: Null<Array<String>>;
 
 	/**
 	 * The force-unwrap field-access node kind (`a!.b`) — same child shape as
 	 * `fieldAccessKind` (the receiver is `children[0]`); `null-dereference` flags
 	 * one whose receiver is provably null by flow. Optional.
 	 */
-	@:optional var forceFieldAccessKind: String;
+	public var forceFieldAccessKind: Null<String>;
 
 	/**
 	 * The index-access node kind (`a[i]`) — the receiver is `children[0]`, the
 	 * index expression the second child; `null-dereference` flags one whose
 	 * receiver is provably null by flow. Optional.
 	 */
-	@:optional var indexAccessKind: String;
+	public var indexAccessKind: Null<String>;
 
 	/**
 	 * Mutable statement-position local declaration kinds — a plain local `var`
@@ -1052,7 +1055,7 @@ typedef RefShape = {
 	 * to `final`. A subset of `localDeclKinds`, which also lists the already-`final`
 	 * form. Optional — unset makes the check a no-op.
 	 */
-	@:optional var mutableLocalDeclKinds: Array<String>;
+	public var mutableLocalDeclKinds: Null<Array<String>>;
 
 	/**
 	 * The value-returning `return` statement kind (`return e;`) — the
@@ -1061,7 +1064,7 @@ typedef RefShape = {
 	 * is a distinct kind and is excluded (it has no ternary value). Optional;
 	 * unset makes the check a no-op.
 	 */
-	@:optional var returnStatementKind: String;
+	public var returnStatementKind: Null<String>;
 
 	/**
 	 * Conditional kinds whose condition is `children[0]` (`if` / `while`) — the
@@ -1073,7 +1076,7 @@ typedef RefShape = {
 	 * there is a second, redundant pair. A kind belongs here only if its condition
 	 * really is bracketed by the construct and really is `children[0]`.
 	 */
-	@:optional var conditionFirstChildKinds: Array<String>;
+	public var conditionFirstChildKinds: Null<Array<String>>;
 
 	/**
 	 * Conditional kinds whose condition is the LAST child (`do … while`) — the
@@ -1084,28 +1087,28 @@ typedef RefShape = {
 	 * SEAM: read by `redundant-parens` as a delimited position too — see
 	 * `conditionFirstChildKinds`.
 	 */
-	@:optional var conditionLastChildKinds: Array<String>;
+	public var conditionLastChildKinds: Null<Array<String>>;
 
 	/**
 	 * The parenthesized arrow-lambda kind (`() -> body`) — the `prefer-bind` check
 	 * rewrites a `() -> f(a, b)` (a single wrapped `callKind`, no parameters) to
 	 * `f.bind(a, b)`. Optional; unset makes the check a no-op.
 	 */
-	@:optional var parenLambdaKind: String;
+	public var parenLambdaKind: Null<String>;
 
 	/**
 	 * The `for` statement kind — the `redundant-map-iter-key` check flags a key-value
 	 * loop that discards its key (`for (_ => v in m)`), reading the iterator variable
 	 * from the node name. Optional; unset makes the check a no-op.
 	 */
-	@:optional var forStmtKind: String;
+	public var forStmtKind: Null<String>;
 
 	/**
 	 * Function-parameter node kinds (Haxe `Required` / `Optional` / `Rest`) — the
 	 * `unused-parameter` check inspects a function's direct children of these kinds.
 	 * Optional; unset makes the check a no-op.
 	 */
-	@:optional var paramKinds: Array<String>;
+	public var paramKinds: Null<Array<String>>;
 
 	/**
 	 * Supertype-clause node kinds (`extends` / `implements`) — the
@@ -1113,14 +1116,14 @@ typedef RefShape = {
 	 * as a contract candidate (an override / interface implementation, whose
 	 * signature is fixed elsewhere) and skips its parameters. Optional.
 	 */
-	@:optional var supertypeClauseKinds: Array<String>;
+	public var supertypeClauseKinds: Null<Array<String>>;
 
 	/**
 	 * The body-less function marker kind (Haxe `NoBody`, for an interface / abstract
 	 * method declaration) — the `unused-parameter` check skips a function carrying
 	 * one, having no body to reference its parameters in. Optional.
 	 */
-	@:optional var noBodyKind: String;
+	public var noBodyKind: Null<String>;
 
 	/**
 	 * The catch-clause node kind (Haxe `CatchClause`, carrying the exception
@@ -1128,7 +1131,7 @@ typedef RefShape = {
 	 * `swallowed-exception` check inspects each one. Optional; unset makes the check
 	 * a no-op.
 	 */
-	@:optional var catchClauseKind: String;
+	public var catchClauseKind: Null<String>;
 
 	/**
 	 * Deliberate control-exit node kinds (Haxe `ThrowStmt` / `ThrowExpr` /
@@ -1146,7 +1149,7 @@ typedef RefShape = {
 	 * subtree scan into a no-op that accepts every early return. Optional;
 	 * unset disables the swallowed-exception exemption.
 	 */
-	@:optional var controlExitKinds: Array<String>;
+	public var controlExitKinds: Null<Array<String>>;
 
 	/**
 	 * Literal-expression node kinds usable verbatim as a switch `case` pattern
@@ -1155,7 +1158,7 @@ typedef RefShape = {
 	 * a comparison against a constant (convertible to `case <lit>:`) from one against
 	 * an arbitrary expression. Optional; unset makes the check a no-op.
 	 */
-	@:optional var caseLiteralKinds: Array<String>;
+	public var caseLiteralKinds: Null<Array<String>>;
 
 	/**
 	 * The delimiters a switch over a TUPLE of discriminants writes around its subject
@@ -1166,7 +1169,7 @@ typedef RefShape = {
 	 * unset means the grammar offers no tuple form and both checks stay on the
 	 * single-discriminant shape.
 	 */
-	@:optional var tuplePatternDelimiters: { open: String, close: String };
+	public var tuplePatternDelimiters: Null<{ open: String, close: String }>;
 
 	/**
 	 * Declaration kinds whose members require an explicit visibility modifier — a
@@ -1174,7 +1177,7 @@ typedef RefShape = {
 	 * an enum abstract, whose values are). The `missing-visibility` check scans each
 	 * one's members. Optional; unset makes the check a no-op.
 	 */
-	@:optional var visibilityContainerKinds: Array<String>;
+	public var visibilityContainerKinds: Null<Array<String>>;
 
 	/**
 	 * Class / abstract member-host kinds (Haxe `VarMember` / `FinalMember` /
@@ -1183,14 +1186,14 @@ typedef RefShape = {
 	 * modifier siblings that precede it; `explicit-type` splits them into fields
 	 * (`fieldDeclKinds`) and the rest (functions). Optional.
 	 */
-	@:optional var memberDeclKinds: Array<String>;
+	public var memberDeclKinds: Null<Array<String>>;
 
 	/**
 	 * The visibility-modifier sibling kinds (Haxe `Public` / `Private`) — the
 	 * `missing-visibility` check treats a member-host preceded by none of these in
 	 * its modifier run as lacking explicit visibility. Optional; unset → no-op.
 	 */
-	@:optional var visibilityModifierKinds: Array<String>;
+	public var visibilityModifierKinds: Null<Array<String>>;
 
 	/**
 	 * The canonical modifier order — a modifier's rank is its index here. The
@@ -1201,7 +1204,7 @@ typedef RefShape = {
 	 * than emitting as a sibling modifier node. Modifiers absent from the list carry
 	 * no documented order and are ignored. Optional; unset makes the check a no-op.
 	 */
-	@:optional var modifierOrderKinds: Array<String>;
+	public var modifierOrderKinds: Null<Array<String>>;
 
 	/**
 	 * EVERY node kind the grammar projects as a leading modifier sibling before a
@@ -1217,7 +1220,7 @@ typedef RefShape = {
 	 * the ranked and named seams — the historical answer, and a SUBSET of this one.
 	 * Optional.
 	 */
-	@:optional var modifierKinds: Array<String>;
+	public var modifierKinds: Null<Array<String>>;
 
 	/**
 	 * The field member-host kinds (Haxe `VarMember` / `FinalMember`) — the subset of
@@ -1225,7 +1228,7 @@ typedef RefShape = {
 	 * annotation. The remaining `memberDeclKinds` are the function hosts whose
 	 * parameters and return type it checks. Optional; unset → no-op.
 	 */
-	@:optional var fieldDeclKinds: Array<String>;
+	public var fieldDeclKinds: Null<Array<String>>;
 
 	/**
 	 * The function-body marker kinds (Haxe `BlockBody` / `ExprBody` / `NoBody`) — `explicit-type`
@@ -1237,7 +1240,7 @@ typedef RefShape = {
 	 * consumer deriving the function boundary from "carries a body child" then reads a conditional
 	 * BODY as a nested function with no return type of its own.
 	 */
-	@:optional var functionBodyKinds: Array<String>;
+	public var functionBodyKinds: Null<Array<String>>;
 
 	/**
 	 * The subset of `functionBodyKinds` whose SINGLE child IS the expression the function
@@ -1252,48 +1255,48 @@ typedef RefShape = {
 	 * call can never fire on it while the identical arrow `(v) -> f(v)` does. Unset degrades
 	 * to that refusal, never to a wrong accept.
 	 */
-	@:optional var expressionBodyKinds: Array<String>;
+	public var expressionBodyKinds: Null<Array<String>>;
 
 	/**
 	 * The enum-abstract declaration kind (Haxe `EnumAbstractDecl`) — `explicit-type`
 	 * exempts its value members from the field type-annotation rule, their type being
 	 * the abstract's underlying type. Optional.
 	 */
-	@:optional var enumAbstractDeclKind: String;
+	public var enumAbstractDeclKind: Null<String>;
 
 	/**
 	 * The clause of an abstract declaration converting a value of another type into it implicitly (Haxe `from T`,
 	 * `FromClause`): with `abstractToClauseKind`, the edges of the cast graph `AbstractCasts` reads. Optional; unset reads
 	 * every abstract's casts as unknown.
 	 */
-	@:optional var abstractFromClauseKind: String;
+	public var abstractFromClauseKind: Null<String>;
 
 	/**
 	 * The clause of an abstract declaration converting a value of it into another type implicitly (Haxe `to T`,
 	 * `ToClause`): with `abstractFromClauseKind`, the edges of the cast graph `AbstractCasts` reads. Optional; unset reads
 	 * every abstract's casts as unknown.
 	 */
-	@:optional var abstractToClauseKind: String;
+	public var abstractToClauseKind: Null<String>;
 
 	/**
 	 * The type annotations under which an abstract's `from` / `to` clauses allow a further abstract cast (Haxe `@:coreType`,
 	 * `@:transitive`; `tUnification.ml`, `get_abstract_context`): through any other abstract's clause, the type at the far
 	 * end must unify with no abstract cast of its own. Optional; unset makes no abstract transitive.
 	 */
-	@:optional var transitiveCastTypeMetaNames: Array<String>;
+	public var transitiveCastTypeMetaNames: Null<Array<String>>;
 
 	/**
 	 * The type annotation of an abstract whose casts the compiler picks by its type arguments (Haxe `@:multiType`, `Map`;
 	 * a static extension on one is bound by a cast, not by unification): the cast graph does not model one. Optional.
 	 */
-	@:optional var typeSelectedAbstractMetaName: String;
+	public var typeSelectedAbstractMetaName: Null<String>;
 
 	/**
 	 * The paths of the abstracts the compiler unifies by hand rather than by their clauses (`tUnification.ml`, Haxe 4.3.7:
 	 * `Void`, `EnumValue`, `Class`, `Enum`, `haxe.NotVoid`, `haxe.FlatEnum`, `haxe.Function`, `haxe.Constructible`): a
 	 * unification one of them takes part in is not decided by the cast graph. Optional; unset lists none.
 	 */
-	@:optional var handUnifiedAbstractPaths: Array<String>;
+	public var handUnifiedAbstractPaths: Null<Array<String>>;
 
 	/**
 	 * The ANNOTATION name that turns an ordinary abstract declaration into an enum
@@ -1303,7 +1306,7 @@ typedef RefShape = {
 	 * reasoning about enum-abstract VALUES would fold them. Optional — unset means the
 	 * grammar has only the dedicated kind.
 	 */
-	@:optional var enumAbstractMetaName: String;
+	public var enumAbstractMetaName: Null<String>;
 
 	/**
 	 * The underlying type NAMES whose enum-abstract values the language fills in when a value is written
@@ -1317,7 +1320,7 @@ typedef RefShape = {
 	 * `case` patterns it would emit denote one value. Optional; unset leaves every uninitialized value
 	 * unknown, so a chain testing one is refused rather than proved distinct.
 	 */
-	@:optional var enumAbstractImplicitValues: { counting: Array<String>, naming: Array<String> };
+	public var enumAbstractImplicitValues: Null<{ counting: Array<String>, naming: Array<String> }>;
 
 	/**
 	 * The sigil(s) a metadata name is written with — Haxe `@:` for a compiler annotation and `@`
@@ -1332,7 +1335,7 @@ typedef RefShape = {
 	 * cannot tell a metadata name from a diagnostic message. Optional; unset keeps a metadata name
 	 * out of every symbol listing, as before this field existed.
 	 */
-	@:optional var metadataNamePrefixes: Array<String>;
+	public var metadataNamePrefixes: Null<Array<String>>;
 
 	/**
 	 * The ANNOTATION name a declaration carries to OVERLOAD an operator — Haxe `@:op`, whose
@@ -1347,7 +1350,7 @@ typedef RefShape = {
 	 * one or a type overload of it. Unset makes `OperatorSelection` inert, so every consumer keeps
 	 * the pre-seam behaviour of assuming the built-in operator.
 	 */
-	@:optional var operatorOverloadMetaName: String;
+	public var operatorOverloadMetaName: Null<String>;
 
 	/**
 	 * The annotation that lets an operator overload (`operatorOverloadMetaName`) take its two operands in either order — Haxe
@@ -1355,7 +1358,7 @@ typedef RefShape = {
 	 * (`operators.ml`, `find_abstract_binop_overload`). Unset: `OperatorOverloads` cannot tell whether a candidate whose
 	 * operands do not fit as written is tried swapped, and decides nothing past it.
 	 */
-	@:optional var commutativeOperatorMetaName: String;
+	public var commutativeOperatorMetaName: Null<String>;
 
 	/**
 	 * The annotation NAME that adds a further SIGNATURE to a function (Haxe `@:overload`): a call
@@ -1363,21 +1366,21 @@ typedef RefShape = {
 	 * `SymbolIndex.MemberInfo.hasOverloadMeta`, so a reader of a member's written return type can
 	 * tell when it is not the only candidate. Unset means the grammar has no such annotation.
 	 */
-	@:optional var signatureOverloadMetaName: String;
+	public var signatureOverloadMetaName: Null<String>;
 
 	/**
 	 * The modifier kind that declares a member as one of several same-named OVERLOADS (Haxe
 	 * `overload`). Recorded as `SymbolIndex.MemberInfo.isOverload`: a reference to such a member
 	 * names no single function, so it cannot be taken as a value. Unset means the grammar has none.
 	 */
-	@:optional var overloadModifierKind: String;
+	public var overloadModifierKind: Null<String>;
 
 	/**
 	 * The annotation name that makes a function GENERIC — compiled once per type argument, so it
 	 * has no single function value to close over (Haxe `@:generic`: `Cannot create closure on
 	 * generic function`). Read off `SymbolIndex.MemberInfo.metaNames`. Unset means none.
 	 */
-	@:optional var genericFunctionMetaName: String;
+	public var genericFunctionMetaName: Null<String>;
 
 	/**
 	 * The ANNOTATION names that make a member COMPILER-DISPATCHED — one the compiler selects and
@@ -1390,7 +1393,7 @@ typedef RefShape = {
 	 * what a TYPE does to a value crossing into it, this one what a MEMBER's signature is load-bearing
 	 * for. Unset makes every member read as ordinarily called.
 	 */
-	@:optional var dispatchedMemberMetaNames: Array<String>;
+	public var dispatchedMemberMetaNames: Null<Array<String>>;
 
 	/**
 	 * The metadata tags whose presence on a TYPE declaration means a MACRO generates that type's
@@ -1408,7 +1411,7 @@ typedef RefShape = {
 	 * private. Optional; unset → no declaration reads as macro-built, which is the right default
 	 * for a grammar that has no build macros.
 	 */
-	@:optional var typeBuildMacroMetaNames: Array<String>;
+	public var typeBuildMacroMetaNames: Null<Array<String>>;
 
 	/**
 	 * The metadata tag that PINS a declaration and its members against removal (Haxe `@:keep`, which
@@ -1416,7 +1419,7 @@ typedef RefShape = {
 	 * reflection). `unused-private --fix` refuses to delete a private member of a type carrying it —
 	 * the finding is still reported. Optional; unset → no declaration is pinned.
 	 */
-	@:optional var retainedDeclMetaName: String;
+	public var retainedDeclMetaName: Null<String>;
 
 	/**
 	 * The metadata tag that declares a type is emitted as a PLAIN NATIVE type for the host
@@ -1435,7 +1438,7 @@ typedef RefShape = {
 	 * class, so no gate is warranted there; the detail is recorded on `InlineConstant`. Optional; unset →
 	 * no declaration is foreign-facing, the right default for a grammar with no native-interop annotation.
 	 */
-	@:optional var nativeInteropDeclMetaName: String;
+	public var nativeInteropDeclMetaName: Null<String>;
 
 	/**
 	 * The metadata tags whose presence on a TYPE declaration means a macro generates the members of
@@ -1448,7 +1451,7 @@ typedef RefShape = {
 	 * to the union and to nothing else lands on the own-ward side, which can only make a consumer
 	 * more conservative. Optional; unset means every build-macro tag is own-ward.
 	 */
-	@:optional var descendantBuildMacroMetaNames: Array<String>;
+	public var descendantBuildMacroMetaNames: Null<Array<String>>;
 
 	/**
 	 * The metadata tag that makes a type's members reachable at RUNTIME BY NAME through reflected
@@ -1461,7 +1464,7 @@ typedef RefShape = {
 	 * type's fields; `TypeTraits.transitivelyCarriesRtti` propagates it down a hierarchy for the
 	 * naming autofix. Optional; unset → no declaration is reflected.
 	 */
-	@:optional var reflectedDeclMetaName: String;
+	public var reflectedDeclMetaName: Null<String>;
 
 	/**
 	 * The metadata tag by which a declaration TAKES access to another type's private members (Haxe
@@ -1478,7 +1481,7 @@ typedef RefShape = {
 	 * means threading a `RefShape` through predicates called once per member. Optional; unset → a
 	 * declaration takes no access it does not already have.
 	 */
-	@:optional var takesPrivateAccessMetaName: String;
+	public var takesPrivateAccessMetaName: Null<String>;
 
 	/**
 	 * The metadata tag that makes a wrapper type FORWARD member access to the type it wraps (Haxe
@@ -1487,7 +1490,7 @@ typedef RefShape = {
 	 * wrapper's own body holds, so a resolution index has to follow the underlying type instead of
 	 * answering "not declared". Optional; unset → a declaration forwards nothing.
 	 */
-	@:optional var forwardingDeclMetaName: String;
+	public var forwardingDeclMetaName: Null<String>;
 
 	/**
 	 * The metadata tag that turns a type's FIELDS into its constructor's parameters (Haxe
@@ -1497,7 +1500,7 @@ typedef RefShape = {
 	 * question neither retention nor reflection asks, and the third gate `static-constant` needs.
 	 * Optional; unset → a field declaration is part of no constructor signature.
 	 */
-	@:optional var implicitConstructorDeclMetaName: String;
+	public var implicitConstructorDeclMetaName: Null<String>;
 
 	/**
 	 * How the grammar SPELLS an enum-abstract declaration — the emission seam
@@ -1506,7 +1509,7 @@ typedef RefShape = {
 	 * that check report-only, exactly as it was before the fix existed; the DETECTOR reads
 	 * none of this.
 	 */
-	@:optional var enumAbstractSyntax: EnumAbstractSyntax;
+	public var enumAbstractSyntax: Null<EnumAbstractSyntax>;
 
 	/**
 	 * The type-declaration kinds whose NAME the compiler erases — no runtime lookup, serializer or
@@ -1515,7 +1518,7 @@ typedef RefShape = {
 	 * enum keeps its name at run time (`Type.getClassName`, `Type.resolveClass`, serialized data), where
 	 * a rename changes behaviour no typecheck sees. Optional; unset admits no type.
 	 */
-	@:optional var compileTimeTypeDeclKinds: Array<String>;
+	public var compileTimeTypeDeclKinds: Null<Array<String>>;
 
 	/**
 	 * The underlying types of an enum abstract whose IMPLICIT values do not depend on the value's name
@@ -1523,14 +1526,14 @@ typedef RefShape = {
 	 * name, so renaming the value changes it. The cross-file rename arm admits a value written without
 	 * an initializer only over one of these. Optional; unset admits only explicitly-valued values.
 	 */
-	@:optional var indexValuedEnumAbstractUnderlyings: Array<String>;
+	public var indexValuedEnumAbstractUnderlyings: Null<Array<String>>;
 
 	/**
 	 * Type metadata that changes how the compiler treats a declaration and that no tool, macro or runtime
 	 * resolves by the type's NAME (Haxe `@:forward`, `@:nullSafety`, `@:enum`, …). Every OTHER metadata on a
 	 * type refuses `naming`'s cross-file rename arm. Optional; unset makes every metadata refuse.
 	 */
-	@:optional var nameInertTypeMetaNames: Array<String>;
+	public var nameInertTypeMetaNames: Null<Array<String>>;
 
 	/**
 	 * The grammar's raw dynamic-type name (Haxe `Dynamic`) — the `avoid-dynamic`
@@ -1540,7 +1543,7 @@ typedef RefShape = {
 	 * the sanctioned top type (`Any`) is a different name and never flagged. Optional;
 	 * unset makes the `avoid-dynamic` check a no-op.
 	 */
-	@:optional var rawDynamicTypeName: String;
+	public var rawDynamicTypeName: Null<String>;
 
 	/**
 	 * The value-less `return` statement kind (Haxe `VoidReturnStmt`) — the
@@ -1548,7 +1551,7 @@ typedef RefShape = {
 	 * function body, where falling off the end is equivalent. Distinct from the
 	 * value-returning `returnStatementKind`. Optional; unset makes the check a no-op.
 	 */
-	@:optional var voidReturnKind: String;
+	public var voidReturnKind: Null<String>;
 
 	/**
 	 * Mutable field member-host kinds (Haxe `VarMember`) — a class `var` field, the
@@ -1556,7 +1559,7 @@ typedef RefShape = {
 	 * `prefer-final-field` check flags one whose initializer is never reassigned and
 	 * rewrites `var` to `final`. Optional; unset makes the check a no-op.
 	 */
-	@:optional var mutableFieldDeclKinds: Array<String>;
+	public var mutableFieldDeclKinds: Null<Array<String>>;
 
 	/**
 	 * The visibility keyword whose insertion preserves behaviour — the language's
@@ -1564,7 +1567,7 @@ typedef RefShape = {
 	 * inserts it to fix a member lacking explicit visibility; a grammar whose default
 	 * cannot be safely auto-inserted leaves it unset (report-only). Optional.
 	 */
-	@:optional var defaultVisibilityModifierText: String;
+	public var defaultVisibilityModifierText: Null<String>;
 
 	/**
 	 * The `override` modifier kind (Haxe `Override`) — the `missing-visibility`
@@ -1573,7 +1576,7 @@ typedef RefShape = {
 	 * override of a public method would lower visibility below the superclass — a
 	 * compile error). Optional; unset disables that exemption.
 	 */
-	@:optional var overrideModifierKind: String;
+	public var overrideModifierKind: Null<String>;
 
 	/**
 	 * The `dynamic` modifier kind (Haxe `Dynamic`) — a function carrying it is a
@@ -1583,7 +1586,7 @@ typedef RefShape = {
 	 * and removing it would break every external assignment. Optional; unset does
 	 * not exempt dynamic functions.
 	 */
-	@:optional var dynamicModifierKind: String;
+	public var dynamicModifierKind: Null<String>;
 
 	/**
 	 * The extern-modifier node kind (Haxe `Extern`) that, as a preceding sibling of a
@@ -1591,7 +1594,7 @@ typedef RefShape = {
 	 * `missing-visibility` autofix must not insert `private` there — it would lower an
 	 * externally-public member to private. Optional; unset disables the exemption.
 	 */
-	@:optional var externModifierKind: String;
+	public var externModifierKind: Null<String>;
 
 	/**
 	 * Meta names on a visibility container that make its members public by default
@@ -1599,7 +1602,7 @@ typedef RefShape = {
 	 * implicitly public, so the `missing-visibility` autofix leaves them report-only
 	 * rather than forcing `private`. Optional; unset → empty (no such meta).
 	 */
-	@:optional var publicDefaultMetaNames: Array<String>;
+	public var publicDefaultMetaNames: Null<Array<String>>;
 
 	/**
 	 * Operand kinds whose value may be null or whose non-nullness the analyzer
@@ -1612,7 +1615,7 @@ typedef RefShape = {
 	 * plain `Bool`, a method call annotated to return one. Optional; unset falls
 	 * back to the legacy `nullSafeAccessKind`-only skip.
 	 */
-	@:optional var nullableOperandKinds: Array<String>;
+	public var nullableOperandKinds: Null<Array<String>>;
 
 	/**
 	 * Numeric-literal node kinds (`IntLit` / `FloatLit` / `HexLit`) — the
@@ -1620,7 +1623,7 @@ typedef RefShape = {
 	 * `functionKinds` unit) whose value is not in the small exempt set.
 	 * Optional; a grammar that leaves it unset makes the check a no-op.
 	 */
-	@:optional var numericLiteralKinds: Array<String>;
+	public var numericLiteralKinds: Null<Array<String>>;
 
 	/**
 	 * Nested-function kinds (local `function` declarations) that fold into their
@@ -1629,7 +1632,7 @@ typedef RefShape = {
 	 * being wrapped in a local function. Unset -> every `functionKinds` entry is an
 	 * independent unit. NOT subtracted by the other checks that read `functionKinds`.
 	 */
-	@:optional var localFunctionKinds: Array<String>;
+	public var localFunctionKinds: Null<Array<String>>;
 
 	/**
 	 * Function-declaration kinds that are `inline` BY KIND rather than by a modifier
@@ -1640,7 +1643,7 @@ typedef RefShape = {
 	 * callers) reads this alongside `inlineModifierKind`. Optional — a grammar whose
 	 * inline-ness is always a modifier leaves it unset.
 	 */
-	@:optional var inlineFunctionKinds: Array<String>;
+	public var inlineFunctionKinds: Null<Array<String>>;
 
 	/**
 	 * Lambda / anonymous-function kinds — expression-position function values
@@ -1652,7 +1655,7 @@ typedef RefShape = {
 	 * SEAM: `prefer-local-function` reads it alongside `fnExprKind` as the set of literals whose
 	 * binding to a local it may hoist into a local function declaration.
 	 */
-	@:optional var lambdaKinds: Array<String>;
+	public var lambdaKinds: Null<Array<String>>;
 
 	/**
 	 * Object-literal field kind — a numeric literal that is the DIRECT value of such
@@ -1661,7 +1664,7 @@ typedef RefShape = {
 	 * under the operator node (not the field), so it stays flagged. Unset → no
 	 * object-field exemption.
 	 */
-	@:optional var objectFieldKind: String;
+	public var objectFieldKind: Null<String>;
 
 	/**
 	 * Kinds INSIDE an `opaqueKinds` reification subtree that RE-OPEN normal
@@ -1671,7 +1674,7 @@ typedef RefShape = {
 	 * an identifier under an interpolation IS a real compile-time reference.
 	 * Optional — unset leaves a reification subtree fully opaque.
 	 */
-	@:optional var interpolationKinds: Array<String>;
+	public var interpolationKinds: Null<Array<String>>;
 
 	/**
 	 * The identifier that qualifies an instance-member access with the enclosing
@@ -1680,7 +1683,7 @@ typedef RefShape = {
 	 * reducible to a bare reference when no local shadows the name. Optional —
 	 * unset disables the check.
 	 */
-	@:optional var selfReferenceText: Null<String>;
+	public var selfReferenceText: Null<String>;
 
 	/**
 	 * The identifier that denotes the BASE object — `super` in curly-brace
@@ -1693,7 +1696,7 @@ typedef RefShape = {
 	 * with it unset too the fallback answers false for every container
 	 * and the gate is ABSENT, not coarser.
 	 */
-	@:optional var superReferenceText: Null<String>;
+	public var superReferenceText: Null<String>;
 
 	/**
 	 * Type-declaration kinds whose `this` is the underlying value rather than an
@@ -1703,14 +1706,14 @@ typedef RefShape = {
 	 * members of these types. An OOP `abstract class` is a real class and is NOT
 	 * listed. Optional — unset means no such types exist.
 	 */
-	@:optional var underlyingThisTypeKinds: Array<String>;
+	public var underlyingThisTypeKinds: Null<Array<String>>;
 
 	/**
 	 * The `static` modifier kind (Haxe `Static`) — the `member-order` check uses it to
 	 * tell a static field/method (a constant / static-method-section member) from an
 	 * instance one. Optional; unset makes the check treat every member as instance.
 	 */
-	@:optional var staticModifierKind: String;
+	public var staticModifierKind: Null<String>;
 
 	/**
 	 * The `inline` modifier kind (Haxe `Inline`) — the `inline-constant` check reads it
@@ -1718,7 +1721,7 @@ typedef RefShape = {
 	 * place an inserted `inline` keyword after `static` and before `final` in canonical
 	 * modifier order. Optional; unset makes the check a no-op.
 	 */
-	@:optional var inlineModifierKind: String;
+	public var inlineModifierKind: Null<String>;
 
 	/**
 	 * The literal node kinds whose `static final` constant can be safely and beneficially
@@ -1732,21 +1735,21 @@ typedef RefShape = {
 	 * benefit (both are static-backed, allocation-free). A scalar instead folds to an
 	 * immediate at each use with zero duplication. Optional; unset makes the check a no-op.
 	 */
-	@:optional var inlineConstantLiteralKinds: Array<String>;
+	public var inlineConstantLiteralKinds: Null<Array<String>>;
 
 	/**
 	 * The constructor's member name (Haxe `new`) — the `member-order` check ranks the
 	 * constructor between the fields and the instance methods. Optional; unset means no
 	 * constructor is recognised (it sorts as an ordinary instance method).
 	 */
-	@:optional var constructorName: String;
+	public var constructorName: Null<String>;
 
 	/**
 	 * Name prefixes of property accessor methods (Haxe `get_` / `set_`) — the
 	 * `member-order` check ranks them immediately after the constructor, ahead of the
 	 * other instance methods. Optional; unset means accessors sort as ordinary methods.
 	 */
-	@:optional var accessorMethodPrefixes: Array<String>;
+	public var accessorMethodPrefixes: Null<Array<String>>;
 
 	/**
 	 * The conditional-compilation member kind (Haxe `Conditional`, a `#if … #end`
@@ -1760,10 +1763,10 @@ typedef RefShape = {
 	 * relies on that, refusing a switch whose arm list holds one — the region may hide a catch-all,
 	 * and the arms outside it may be the only ones a given build keeps.
 	 */
-	@:optional var conditionalMemberKind: String;
+	public var conditionalMemberKind: Null<String>;
 
 	/** The `#if` directive keyword (Haxe `#if`) opening a conditional region — read to recover its condition text. Optional. */
-	@:optional var conditionalIfKeyword: String;
+	public var conditionalIfKeyword: Null<String>;
 
 	/**
 	 * The `#else` / `#elseif` directive keywords. The `member-order` reorder cannot yet
@@ -1771,7 +1774,7 @@ typedef RefShape = {
 	 * children), so it bails a container whose member gaps contain one; `CondDirectives`
 	 * reads them as the branch half of its keyword vocabulary. Optional.
 	 */
-	@:optional var conditionalElseKeywords: Array<String>;
+	public var conditionalElseKeywords: Null<Array<String>>;
 
 	/**
 	 * The `#end` directive keyword (Haxe `#end`) closing a conditional region. Read by
@@ -1779,7 +1782,7 @@ typedef RefShape = {
 	 * and so the closer is never mistaken for a condition-bearing keyword; unset leaves the
 	 * closer out of the scanned set. Optional.
 	 */
-	@:optional var conditionalEndKeyword: String;
+	public var conditionalEndKeyword: Null<String>;
 
 	/**
 	 * The DECLARATION-STARTING keyword kinds a conditional-compilation region may contribute
@@ -1799,7 +1802,7 @@ typedef RefShape = {
 	 * Optional; unset leaves such a region indistinguishable from a sibling declaration, which
 	 * is correct for a grammar whose conditional regions cannot carry one.
 	 */
-	@:optional var condDeclPrefixKeywordKinds: Array<String>;
+	public var condDeclPrefixKeywordKinds: Null<Array<String>>;
 
 	/**
 	 * The node kinds that SWALLOW a conditional-compilation region as a RAW byte capture — the
@@ -1839,7 +1842,7 @@ typedef RefShape = {
 	 * no such gate — correct for a grammar with no conditional compilation, silent corruption
 	 * for one that has it, and a formatter that declines regions without saying so.
 	 */
-	@:optional var opaqueCondRegionKinds: Array<String>;
+	public var opaqueCondRegionKinds: Null<Array<String>>;
 
 	/**
 	 * Every node kind that denotes a conditional-compilation region, whether or not its interior
@@ -1856,7 +1859,7 @@ typedef RefShape = {
 	 * one. Optional; unset makes the predicate answer false everywhere, which is correct for a
 	 * grammar with no conditional compilation.
 	 */
-	@:optional var conditionalRegionKinds: Array<String>;
+	public var conditionalRegionKinds: Null<Array<String>>;
 
 	/**
 	 * Node kinds of an ORPHAN CONTINUATION — a clause the grammar accepts on its own although
@@ -1867,7 +1870,7 @@ typedef RefShape = {
 	 * only next to such a seam, and the writer-emit gate refuses a result holding more unjustified
 	 * ones than its input. Optional; unset makes that gate inert.
 	 */
-	@:optional var orphanContinuationKinds: Array<String>;
+	public var orphanContinuationKinds: Null<Array<String>>;
 
 	/**
 	 * Node kinds of an OPERAND-RUN conditional-compilation splice — a region whose
@@ -1886,7 +1889,7 @@ typedef RefShape = {
 	 * operands. Optional; unset leaves such a region as one opaque operand of whatever
 	 * encloses it, which is what every consumer did before the kind existed.
 	 */
-	@:optional var condOperandRunKinds: Array<String>;
+	public var condOperandRunKinds: Null<Array<String>>;
 
 	/**
 	 * Type names that are provably non-nullable on static targets — Haxe value
@@ -1896,7 +1899,7 @@ typedef RefShape = {
 	 * `TypeInfoProvider.declaredTypes`) to one of these. Optional; unset removes
 	 * the value-type half of that check.
 	 */
-	@:optional var nonNullableTypeNames: Array<String>;
+	public var nonNullableTypeNames: Null<Array<String>>;
 
 	/**
 	 * The metadata name (including the `@:` prefix, e.g. `@:nullSafety`) that marks
@@ -1905,7 +1908,7 @@ typedef RefShape = {
 	 * (present in `declaredTypes`) as non-null. Optional; unset disables the
 	 * null-safety half of that check, leaving only `nonNullableTypeNames`.
 	 */
-	@:optional var nullSafetyMetaName: String;
+	public var nullSafetyMetaName: Null<String>;
 
 	/**
 	 * Typed-cast / type-check expression kinds whose target type the
@@ -1915,7 +1918,7 @@ typedef RefShape = {
 	 * recovered via `TypeInfoProvider.castTargetTypes`. Optional; unset makes the
 	 * check a no-op.
 	 */
-	@:optional var typedCastKinds: Array<String>;
+	public var typedCastKinds: Null<Array<String>>;
 
 	/**
 	 * Nominal type names that stay nullable even under a null-safety meta — the
@@ -1924,7 +1927,7 @@ typedef RefShape = {
 	 * never treats one of these as non-null, so a `!= null` on it is reported as
 	 * load-bearing, not redundant. Optional; unset adds no exclusions.
 	 */
-	@:optional var nullableWrapperTypeNames: Array<String>;
+	public var nullableWrapperTypeNames: Null<Array<String>>;
 
 	/**
 	 * Nominal type names whose MEMBER SET is exactly their type argument's — a wrapper
@@ -1944,7 +1947,7 @@ typedef RefShape = {
 	 * on js, `-cpp` and `--interp` alike settles nothing — a null `String` operand DISAGREES on js and
 	 * `--interp` while agreeing on `-cpp`. Optional; unset disables the unwrap.
 	 */
-	@:optional var memberTransparentWrapperTypeNames: Array<String>;
+	public var memberTransparentWrapperTypeNames: Null<Array<String>>;
 
 	/**
 	 * The argument identifier of the null-safety meta that DISABLES checking
@@ -1952,7 +1955,7 @@ typedef RefShape = {
 	 * carries it, `unnecessary-null-check` does not treat the type as null-checked.
 	 * Optional; unset means any presence of `nullSafetyMetaName` counts as enabled.
 	 */
-	@:optional var nullSafetyDisableArg: String;
+	public var nullSafetyDisableArg: Null<String>;
 
 	/**
 	 * The node kind of an OPTIONAL parameter (Haxe `?x: T`, projected as
@@ -1963,7 +1966,7 @@ typedef RefShape = {
 	 * `nullLiteralKind`. `unnecessary-null-check` skips an operand bound to an optional
 	 * parameter. Optional; unset disables the skip.
 	 */
-	@:optional var optionalParamKind: String;
+	public var optionalParamKind: Null<String>;
 
 	/**
 	 * The node kind of a REST parameter (Haxe `...x: T`, projected as `Rest`), whose
@@ -1971,7 +1974,7 @@ typedef RefShape = {
 	 * parameter's written type source (`explicit-local-type`) exempt a rest parameter,
 	 * whose source `T` differs from its effective type. Optional; unset disables the skip.
 	 */
-	@:optional var restParamKind: String;
+	public var restParamKind: Null<String>;
 
 	/**
 	 * The type the language gives the VALUE of an optional declaration — a parameter of `optionalParamKind`, or a structure
@@ -1979,10 +1982,10 @@ typedef RefShape = {
 	 * without a default, `?x: Null<T>` as itself, a structure's `?a: T` / `@:optional var b: T` as `Null<T>`, while a class or
 	 * interface field carrying the annotation keeps `T`). The typing service wraps such a read in it. Optional; unset wraps nothing.
 	 */
-	@:optional var optionalValueTypeName: String;
+	public var optionalValueTypeName: Null<String>;
 
 	/** The annotation that makes a structure field optional (Haxe `@:optional`), beside the `optionalParamKind` form. Optional. */
-	@:optional var optionalFieldMetaName: String;
+	public var optionalFieldMetaName: Null<String>;
 
 	/**
 	 * How the language runs code no call site names, and what a reachability analysis may assume about code it reads:
@@ -1990,7 +1993,7 @@ typedef RefShape = {
 	 * Nested so this structure stays within the constructor arity a static target allows. Optional; unset reads as
 	 * every one of its fields unset.
 	 */
-	@:optional var execution: ExecutionShape;
+	public var execution: Null<ExecutionShape>;
 
 	/**
 	 * Node kinds whose direct children name a STRUCTURE FIELD rather than a lexical
@@ -2001,7 +2004,7 @@ typedef RefShape = {
 	 * exclusion `isMemberNamePosition` makes for the dotted `o.x` slot. Optional; unset
 	 * leaves the exclusion off.
 	 */
-	@:optional var structureFieldHostKinds: Array<String>;
+	public var structureFieldHostKinds: Null<Array<String>>;
 
 	/**
 	 * Node kinds that CONTINUE a variable declaration — every binding after the first in
@@ -2010,7 +2013,7 @@ typedef RefShape = {
 	 * statement's bound names must walk the chain rather than read the head's name alone.
 	 * Optional; unset means the grammar has no such continuation form.
 	 */
-	@:optional var localDeclContinuationKinds: Array<String>;
+	public var localDeclContinuationKinds: Null<Array<String>>;
 
 	/**
 	 * The null-coalescing operator node kind (`a ?? b`, Haxe `NullCoal`) — the
@@ -2018,7 +2021,7 @@ typedef RefShape = {
 	 * non-null (`TypeResolver.isProvablyNonNull`), making the right operand dead.
 	 * Optional; unset makes the check a no-op.
 	 */
-	@:optional var nullCoalesceKind: String;
+	public var nullCoalesceKind: Null<String>;
 
 	/**
 	 * The null-coalescing operator TEXT (`??`) — the emitter counterpart of
@@ -2029,7 +2032,7 @@ typedef RefShape = {
 	 * conditional-default arm), so a grammar without a coalescing operator is
 	 * byte-inert.
 	 */
-	@:optional var nullCoalesceOperatorText: String;
+	public var nullCoalesceOperatorText: Null<String>;
 
 	/**
 	 * The `is` type-check expression kind (`x is T`) — the `redundant-is-check`
@@ -2039,7 +2042,7 @@ typedef RefShape = {
 	 * covers the full written type, generics included). Optional; unset makes the
 	 * check a no-op.
 	 */
-	@:optional var isExprKind: String;
+	public var isExprKind: Null<String>;
 
 	/**
 	 * Type names that, as an EARLIER catch-clause exception type, catch every thrown
@@ -2047,7 +2050,7 @@ typedef RefShape = {
 	 * `unreachable-catch` check reads these. Optional; unset → only same-type and
 	 * subtype-after-supertype unreachability is detected.
 	 */
-	@:optional var catchAllTypeNames: Array<String>;
+	public var catchAllTypeNames: Null<Array<String>>;
 
 	/**
 	 * The fully-qualified path of the language's canonical exception TYPE — the wrapper a raw
@@ -2057,7 +2060,7 @@ typedef RefShape = {
 	 * fully-qualified path). Optional; unset makes that check a no-op — a grammar without a
 	 * canonical exception type has nothing to box into.
 	 */
-	@:optional var exceptionTypePath: String;
+	public var exceptionTypePath: Null<String>;
 
 	/**
 	 * The fully-qualified path of the type a raw (unboxed) thrown value is WRAPPED in by the
@@ -2066,14 +2069,14 @@ typedef RefShape = {
 	 * NOT a boxed one, so `prefer-typed-throw` adds its simple name to the clause types that
 	 * degrade the rule to report-only. Optional; unset just drops that one name from the gate.
 	 */
-	@:optional var rawThrowWrapperTypePath: String;
+	public var rawThrowWrapperTypePath: Null<String>;
 
 	/**
 	 * The runtime-CHECKED cast node kind (Haxe `cast(x, T)` — `TypedCastExpr`), which does a
 	 * runtime type test and throws on mismatch — distinct from the compile-time `(x : T)`
 	 * ascription. The `impossible-cast` check reads it. Optional; unset makes the check a no-op.
 	 */
-	@:optional var checkedCastKind: String;
+	public var checkedCastKind: Null<String>;
 
 	/**
 	 * The single-argument UNCHECKED cast expression kind — Haxe `cast expr`, no target type
@@ -2093,7 +2096,7 @@ typedef RefShape = {
 	 * means the wrapper arm never fires (an unchecked cast falls through to the conservative
 	 * default) and costs that purity reach.
 	 */
-	@:optional var uncheckedCastKind: String;
+	public var uncheckedCastKind: Null<String>;
 
 	/**
 	 * The compile-time type-check / ascription node kind (Haxe `(x : T)` — `ECheckTypeExpr`),
@@ -2101,7 +2104,7 @@ typedef RefShape = {
 	 * it (with `newExprKind`) to flag a `(new T(...) : T)` whose ascribed type only restates the
 	 * construction it wraps. Optional; unset makes the check a no-op.
 	 */
-	@:optional var checkTypeKind: String;
+	public var checkTypeKind: Null<String>;
 
 	/**
 	 * Identifier names that project as a plain identifier expression but denote a
@@ -2110,7 +2113,7 @@ typedef RefShape = {
 	 * unknown point, conservatively making every variable live. Optional; unset
 	 * loses that protection only for grammars that project jumps this way.
 	 */
-	@:optional var loopJumpNames: Array<String>;
+	public var loopJumpNames: Null<Array<String>>;
 
 	/**
 	 * The string-interpolation identifier kind (Haxe `Ident` — a simple `$name` inside a
@@ -2122,7 +2125,7 @@ typedef RefShape = {
 	 * binder-isolation count) or, for the `unused-*` family, a raw scope-bounded text scan that
 	 * never consults the index at all. Optional.
 	 */
-	@:optional var stringInterpIdentKind: String;
+	public var stringInterpIdentKind: Null<String>;
 
 	/**
 	 * The string-interpolation BLOCK kind (Haxe `Block` — a `${ … }` segment inside a
@@ -2134,7 +2137,7 @@ typedef RefShape = {
 	 * instead (see `HxInterpProjection`), so a consumer must check the child count rather
 	 * than assume one. Optional; unset makes that check's interpolation arm inert.
 	 */
-	@:optional var stringInterpBlockKind: String;
+	public var stringInterpBlockKind: Null<String>;
 
 	/**
 	 * The plain-TEXT fragment kind of an interpolating string literal (Haxe `Literal` — one
@@ -2151,7 +2154,7 @@ typedef RefShape = {
 	 * being kept out only by the quote marks its raw `name` happens to carry. Optional; unset leaves such a
 	 * consumer reporting literal content.
 	 */
-	@:optional var stringInterpTextKind: String;
+	public var stringInterpTextKind: Null<String>;
 
 	/**
 	 * The language's reserved words — identifiers no binding may be named. A check that
@@ -2161,7 +2164,7 @@ typedef RefShape = {
 	 * every camelCase format matches `dynamic` / `is` / `macro` just as it matches `event`.
 	 * Optional; unset means a deriving check has no reserved-word veto.
 	 */
-	@:optional var reservedWords: Array<String>;
+	public var reservedWords: Null<Array<String>>;
 
 	/**
 	 * Node kinds a local declaration projects for its TYPE ANNOTATION (Haxe `Anon`
@@ -2170,7 +2173,7 @@ typedef RefShape = {
 	 * — a decl's initializer is its last child EXCLUDING these, so flow engines
 	 * must not mistake the type for the init. Optional.
 	 */
-	@:optional var declTypeChildKinds: Array<String>;
+	public var declTypeChildKinds: Null<Array<String>>;
 
 	/**
 	 * The subset of `declTypeChildKinds` that sits INSIDE the annotation's own
@@ -2186,7 +2189,7 @@ typedef RefShape = {
 	 * unset means every type child ends the region, which is the pre-`TypeRef`
 	 * behaviour.
 	 */
-	@:optional var typeRefChildKinds: Array<String>;
+	public var typeRefChildKinds: Null<Array<String>>;
 
 	/**
 	 * The node kind of an ANONYMOUS STRUCTURE TYPE body (Haxe `Anon` — `{ x:Int }`
@@ -2198,14 +2201,14 @@ typedef RefShape = {
 	 * own type as `typeRefChildKinds` children or a nested body of this same kind.
 	 * Optional; unset makes `anon-type-dup` a no-op.
 	 */
-	@:optional var anonTypeKind: String;
+	public var anonTypeKind: Null<String>;
 
 	/**
 	 * The `default:` branch kind of a `switch` (Haxe `DefaultBranch` — a distinct
 	 * kind from `caseBranchKind`, with the branch body as its children) — the
 	 * null-flow engine joins it as an always-matching branch. Optional.
 	 */
-	@:optional var defaultBranchKind: String;
+	public var defaultBranchKind: Null<String>;
 
 	/**
 	 * The case-pattern wrapper kind (Haxe `Plain` — a `CaseBranch`'s first child;
@@ -2214,28 +2217,28 @@ typedef RefShape = {
 	 * null-flow engine recognises an exhaustive wildcard case through it,
 	 * rejecting guarded branches via that sibling. Optional.
 	 */
-	@:optional var plainCasePatternKind: String;
+	public var plainCasePatternKind: Null<String>;
 
 	/**
 	 * The wildcard pattern identifier (Haxe `_`) — an unguarded case whose whole
 	 * pattern is this identifier matches every subject, making the switch
 	 * exhaustive for the null-flow join. Optional.
 	 */
-	@:optional var wildcardPatternName: String;
+	public var wildcardPatternName: Null<String>;
 
 	/**
 	 * The expression-statement wrapper kind (Haxe `ExprStmt`) — a loop jump
 	 * (`loopJumpNames`) appears as this wrapping a lone identifier, which the
 	 * null-flow engine treats as a branch exit. Optional.
 	 */
-	@:optional var exprStatementKind: String;
+	public var exprStatementKind: Null<String>;
 
 	/**
 	 * The null-coalescing assignment kind (Haxe `x ??= e` — `NullCoalAssign`) —
 	 * assigning a definitely non-null value through it leaves the target non-null
 	 * on every path, which the null-flow engine narrows on. Optional.
 	 */
-	@:optional var nullCoalAssignKind: String;
+	public var nullCoalAssignKind: Null<String>;
 
 	/**
 	 * The write kinds (a subset of `writeParentKinds`) that store what an OPERATOR makes of the target's own value — every
@@ -2244,7 +2247,7 @@ typedef RefShape = {
 	 * write hands in. `thread-safety` reads it for what a write to a parameter stores (`ReflectiveValues`). Optional; unset
 	 * makes every such write one that may store anything.
 	 */
-	@:optional var operatorWriteKinds: Array<String>;
+	public var operatorWriteKinds: Null<Array<String>>;
 
 	/**
 	 * The `macro`-modifier node kind. A function declared with it runs at
@@ -2252,7 +2255,7 @@ typedef RefShape = {
 	 * declaration entirely (a runtime call site expands in place instead of
 	 * dispatching to it). Optional — unset treats every function as runtime.
 	 */
-	@:optional var macroModifierKind: String;
+	public var macroModifierKind: Null<String>;
 
 	/**
 	 * Operator node kinds that consume their operands as non-null numbers —
@@ -2263,7 +2266,7 @@ typedef RefShape = {
 	 * logical `&&` / `||` are intentionally excluded. Optional; unset makes the
 	 * check a no-op.
 	 */
-	@:optional var numericOperatorKinds: Array<String>;
+	public var numericOperatorKinds: Null<Array<String>>;
 
 	/**
 	 * Dotted `Receiver.method` signatures of calls whose result is a nullable
@@ -2273,7 +2276,7 @@ typedef RefShape = {
 	 * `fieldAccessKind` named `method` on an `identKind` receiver named
 	 * `Receiver`. Optional; unset makes the check a no-op.
 	 */
-	@:optional var nullableNumericReturnCalls: Array<String>;
+	public var nullableNumericReturnCalls: Null<Array<String>>;
 
 	/**
 	 * String-literal node kinds (Haxe `SingleStringExpr` / `DoubleStringExpr`) — every
@@ -2286,7 +2289,7 @@ typedef RefShape = {
 	 * node's name slot carries literal TEXT and not a symbol". Optional; unset makes each consumer fall
 	 * back to its own default, which for `unchecked-nullable` is losing the carve-out.
 	 */
-	@:optional var stringLiteralKinds: Array<String>;
+	public var stringLiteralKinds: Null<Array<String>>;
 
 	/**
 	 * The `stringLiteralKinds` members that project their content as SEGMENTS rather than
@@ -2300,7 +2303,7 @@ typedef RefShape = {
 	 * literal is masked whole or segment by segment. Optional; unset means no string kind
 	 * segments, so every one of them is read as a single leaf.
 	 */
-	@:optional var interpolatingStringKinds: Array<String>;
+	public var interpolatingStringKinds: Null<Array<String>>;
 
 	/**
 	 * The segment kinds of an `interpolatingStringKinds` literal, BESIDE `stringInterpTextKind`,
@@ -2315,7 +2318,7 @@ typedef RefShape = {
 	 * (`stringInterpIdentKind`, `stringInterpBlockKind`) are deliberately not here: a name read
 	 * through one is a real read. Optional; unset leaves the text segments alone.
 	 */
-	@:optional var stringInterpInertSegmentKinds: Array<String>;
+	public var stringInterpInertSegmentKinds: Null<Array<String>>;
 
 	/**
 	 * Literal kinds whose WHOLE span can neither BIND nor READ a name — Haxe's double-quoted
@@ -2329,7 +2332,7 @@ typedef RefShape = {
 	 * which is the conservative direction for its one consumer: an unmasked literal costs a
 	 * refused import, never a wrong one.
 	 */
-	@:optional var inertTextLiteralKinds: Array<String>;
+	public var inertTextLiteralKinds: Null<Array<String>>;
 
 	/**
 	 * The string-literal kinds whose `name` slot carries the RAW source slice INCLUDING its quote
@@ -2347,7 +2350,7 @@ typedef RefShape = {
 	 * Optional; unset makes every string kind's name slot read verbatim, quotes and all, which is
 	 * the behaviour before this field existed.
 	 */
-	@:optional var stringLiteralDelimiters: Map<String, String>;
+	public var stringLiteralDelimiters: Null<Map<String, String>>;
 
 	/**
 	 * Nominal type names whose index-access `x[k]` yields a nullable value (Haxe's
@@ -2358,7 +2361,7 @@ typedef RefShape = {
 	 * nominal, via `TypeResolver.identTypeName`) is one of these. Optional; unset
 	 * makes the check a no-op.
 	 */
-	@:optional var nullableIndexTypeNames: Array<String>;
+	public var nullableIndexTypeNames: Null<Array<String>>;
 
 	/**
 	 * Nominal type names whose `.get(key)` / `.set(key, value)` calls are INTERCHANGEABLE
@@ -2371,7 +2374,7 @@ typedef RefShape = {
 	 * unwrapped from `TypeInfoProvider.declaredTypeSources`) is one of these. Optional; unset
 	 * makes the check a no-op.
 	 */
-	@:optional var mapAbstractTypeNames: Array<String>;
+	public var mapAbstractTypeNames: Null<Array<String>>;
 
 	/**
 	 * Dotted `Type.method` signatures of INSTANCE calls whose result is nullable
@@ -2383,7 +2386,7 @@ typedef RefShape = {
 	 * `TypeResolver.identTypeName`) is `Type`. Optional; unset drops the
 	 * call-result half of the check.
 	 */
-	@:optional var nullableInstanceReturnCalls: Array<String>;
+	public var nullableInstanceReturnCalls: Null<Array<String>>;
 
 	/**
 	 * Return-type outer-nominal names that mark a function's result as nullable —
@@ -2397,7 +2400,7 @@ typedef RefShape = {
 	 * `Dynamic` / `Any` are intentionally excluded — a deref of an untyped value is
 	 * not a clear NPE. Optional; unset drops the call-return half of the check.
 	 */
-	@:optional var nullableReturnMarkerTypes: Array<String>;
+	public var nullableReturnMarkerTypes: Null<Array<String>>;
 
 	/**
 	 * Dotted `Type.method` instance-call sources EXCLUDED from the flow-sensitive
@@ -2416,7 +2419,7 @@ typedef RefShape = {
 	 * `TypeResolver.isProvablyNonNull`, needs the mode active at BOTH ends and moves none
 	 * of the real sites, whose host files carry none at all. So the honest cut is the name.
 	 */
-	@:optional var nullableFlowExcludedCalls: Array<String>;
+	public var nullableFlowExcludedCalls: Null<Array<String>>;
 
 	/**
 	 * Dotted `Type.method` calls that ASSERT their single plain-identifier argument is
@@ -2426,7 +2429,7 @@ typedef RefShape = {
 	 * guard is honoured. A project lists its own precondition helpers here. Optional; unset
 	 * models no assertion narrowing.
 	 */
-	@:optional var nullAssertionCalls: Array<String>;
+	public var nullAssertionCalls: Null<Array<String>>;
 
 	/**
 	 * Dotted `Type.method` calls asserting their first argument (a boolean
@@ -2438,7 +2441,7 @@ typedef RefShape = {
 	 * adds a `NonNull` fact, so it cannot delete a guard), honouring an
 	 * `Assert.isTrue(u != null); u.field` precondition. Optional; unset models none.
 	 */
-	@:optional var assertTrueCalls: Array<String>;
+	public var assertTrueCalls: Null<Array<String>>;
 
 	/**
 	 * Dotted `Type.method` calls asserting their first argument (a boolean
@@ -2447,7 +2450,7 @@ typedef RefShape = {
 	 * or a disjunction of such) has its `MaybeNull` fact cleared after the call
 	 * (`maybe`-only). Optional; unset models none.
 	 */
-	@:optional var assertFalseCalls: Array<String>;
+	public var assertFalseCalls: Null<Array<String>>;
 
 	/**
 	 * Map membership-test method names (`exists`) — the calls the flow engine reads as
@@ -2468,7 +2471,7 @@ typedef RefShape = {
 	 * flow checks are unaffected. Optional; unset disables the exists-guard
 	 * suppression.
 	 */
-	@:optional var mapExistsMethods: Array<String>;
+	public var mapExistsMethods: Null<Array<String>>;
 
 	/**
 	 * The map-literal ENTRY node kind — the `key => value` pair inside a map literal
@@ -2477,7 +2480,7 @@ typedef RefShape = {
 	 * to store no null. Optional; unset leaves a non-empty map literal unprovable, and
 	 * the check then reports without fixing.
 	 */
-	@:optional var mapLiteralEntryKind: String;
+	public var mapLiteralEntryKind: Null<String>;
 
 	/**
 	 * Field names that denote a collection's element count (`length`) — the
@@ -2486,7 +2489,7 @@ typedef RefShape = {
 	 * check, while a threshold comparison against a domain value (`score ==
 	 * 100`) stays flagged. Optional; unset removes the carve-out.
 	 */
-	@:optional var sizeFieldNames: Array<String>;
+	public var sizeFieldNames: Null<Array<String>>;
 
 	/**
 	 * Type-declaration kinds whose CONSTRUCTORS/values are referenceable as bare
@@ -2496,7 +2499,7 @@ typedef RefShape = {
 	 * `unused-import` avoid deleting a needed enum import. Optional; unset drops
 	 * the carve-out.
 	 */
-	@:optional var bareConstructorTypeKinds: Array<String>;
+	public var bareConstructorTypeKinds: Null<Array<String>>;
 
 	/**
 	 * Type-declaration kinds whose values carry a RUNTIME CONSTRUCTOR TAG that a
@@ -2508,7 +2511,7 @@ typedef RefShape = {
 	 * primitives and a switch over them compiles to plain comparisons, which a null
 	 * subject simply fails to match. Optional; unset makes the check a no-op.
 	 */
-	@:optional var runtimeTaggedTypeKinds: Array<String>;
+	public var runtimeTaggedTypeKinds: Null<Array<String>>;
 
 	/**
 	 * Method names that take or return a STRING POSITION / offset (`substr`,
@@ -2518,7 +2521,7 @@ typedef RefShape = {
 	 * + 5)`, `s.substr(0, 4)`): the number is a position, not a hidden quantity.
 	 * Optional; unset removes the carve-out.
 	 */
-	@:optional var positionMethodNames: Array<String>;
+	public var positionMethodNames: Null<Array<String>>;
 
 	/**
 	 * Additive-operator node kinds (`Add` / `Sub`) — let the `magic-number` check see
@@ -2526,7 +2529,7 @@ typedef RefShape = {
 	 * in a size (`s.length - 3`) or string-position (`charCodeAt(i + 5)`) context.
 	 * Optional; unset removes those carve-outs.
 	 */
-	@:optional var additiveKinds: Array<String>;
+	public var additiveKinds: Null<Array<String>>;
 
 	/**
 	 * Switch node kinds (`SwitchStmt` / `SwitchStmtBare` / `SwitchExpr` /
@@ -2536,7 +2539,7 @@ typedef RefShape = {
 	 * conditional node is not mistaken for a second switch. Optional; unset falls back
 	 * to per-`case` cyclomatic counting.
 	 */
-	@:optional var switchKinds: Array<String>;
+	public var switchKinds: Null<Array<String>>;
 
 	/**
 	 * STATEMENT-position `switch` kinds (Haxe `SwitchStmt` / `SwitchStmtBare`) — the
@@ -2548,7 +2551,7 @@ typedef RefShape = {
 	 * guard that evaluates false resumes matching — sound only where the arm list may
 	 * leave a value unmatched. Optional; unset makes that check a no-op.
 	 */
-	@:optional var switchStatementKinds: Array<String>;
+	public var switchStatementKinds: Null<Array<String>>;
 
 	/**
 	 * Subject TYPE names whose statement `switch` the compiler never
@@ -2560,7 +2563,7 @@ typedef RefShape = {
 	 * type nobody has thought of fails closed. Optional; unset makes `empty-case-arm` a
 	 * no-op.
 	 */
-	@:optional var openSwitchSubjectTypes: Array<String>;
+	public var openSwitchSubjectTypes: Null<Array<String>>;
 
 	/**
 	 * The unary-negation node kind (`Neg`) — a `-1` initializer parses as a negation
@@ -2568,7 +2571,7 @@ typedef RefShape = {
 	 * see a negative-literal constant (`X_UNKNOWN = -1`) as numeric. Optional; unset
 	 * treats a negation-wrapped value as non-numeric.
 	 */
-	@:optional var negationKind: String;
+	public var negationKind: Null<String>;
 
 	/**
 	 * Maps a literal-expression node kind to the name of the type it denotes —
@@ -2577,7 +2580,7 @@ typedef RefShape = {
 	 * of a statically-certain type. Optional; unset gives the autofix nothing to infer
 	 * from literals.
 	 */
-	@:optional var literalTypeNames: Map<String, String>;
+	public var literalTypeNames: Null<Map<String, String>>;
 
 	/**
 	 * The language's core value types, as a typer decides which parameter a call binds an argument to by them
@@ -2588,7 +2591,7 @@ typedef RefShape = {
 	 * other type — an abstract converting through `@:from` / `@:to`, a type parameter, `Dynamic` — is undecided.
 	 * Optional; unset decides nothing.
 	 */
-	@:optional var coreValueTypes: CoreValueTypes;
+	public var coreValueTypes: Null<CoreValueTypes>;
 
 	/**
 	 * The binary operators whose result over core numbers (`coreValueTypes`) is a core number: the `integer` type when
@@ -2596,16 +2599,16 @@ typedef RefShape = {
 	 * `$type`: `Int + Int`, `Int % Int` are `Int`, `Int / Int` and any `Float` operand `Float`); `negationKind` keeps its
 	 * operand's type. Optional; unset types no arithmetic.
 	 */
-	@:optional var arithmeticKinds: Array<String>;
+	public var arithmeticKinds: Null<Array<String>>;
 
-	@:optional var realArithmeticKinds: Array<String>;
+	public var realArithmeticKinds: Null<Array<String>>;
 
 	/**
 	 * The static extensions that test the ends of a string, as a guard over a string the analysis knows is decided:
 	 * `module` declares them (Haxe `StringTools`), `suffix` tests the end (`endsWith`), `prefix` the start
 	 * (`startsWith`). Optional; unset decides no such guard.
 	 */
-	@:optional var stringAffixTests: { module: String, suffix: String, prefix: String };
+	public var stringAffixTests: Null<{ module: String, suffix: String, prefix: String }>;
 
 	/**
 	 * The std structure a value is iterable as (Haxe `Iterable`), and the std types that unify with it, each by the type
@@ -2615,9 +2618,9 @@ typedef RefShape = {
 	 * (1); a `haxe.ds.Vector` has no `iter` (it is no `Iterable`), and an `Iterator` is none either. Optional; unset binds
 	 * nothing.
 	 */
-	@:optional var iterableTypeName: String;
+	public var iterableTypeName: Null<String>;
 
-	@:optional var iterableElementTypeParams: Map<String, Int>;
+	public var iterableElementTypeParams: Null<Map<String, Int>>;
 
 	/**
 	 * The array-literal node kind (Haxe `ArrayExpr`, whose children are the element
@@ -2633,7 +2636,7 @@ typedef RefShape = {
 	 * not a shape test, because the shapes that merely LOOK like one (a constructor call, a
 	 * conditional-compilation expression) leak — see `StringLiteralDup.isTable`.
 	 */
-	@:optional var arrayLiteralKind: String;
+	public var arrayLiteralKind: Null<String>;
 
 	/**
 	 * The object-literal node kind (Haxe `ObjectLit`, whose children are the
@@ -2642,7 +2645,7 @@ typedef RefShape = {
 	 * move a null guard into the catch clauses. Optional; unset just narrows that
 	 * whitelist by one shape.
 	 */
-	@:optional var objectLiteralKind: String;
+	public var objectLiteralKind: Null<String>;
 
 	/**
 	 * The DELIMITED container kinds — nodes whose source ends at their own closing delimiter and whose
@@ -2652,7 +2655,7 @@ typedef RefShape = {
 	 * bodies are recognised separately (`RefactorSupport.typeDeclOf`). JSON: `Array` and `Object`.
 	 * Optional; unset leaves `--append` with the type bodies only.
 	 */
-	@:optional var delimitedContainerKinds: Array<String>;
+	public var delimitedContainerKinds: Null<Array<String>>;
 
 	/**
 	 * The COMMA container kinds — the delimited containers whose entries are separated by `,`, so an
@@ -2664,7 +2667,7 @@ typedef RefShape = {
 	 * cannot say which an insert needs. Haxe: `ArrayExpr`, `ObjectLit`, `Call`, `NewExpr`. JSON:
 	 * `Array`, `Object`. Optional; unset makes only an adjacent `,` count.
 	 */
-	@:optional var commaContainerKinds: Array<String>;
+	public var commaContainerKinds: Null<Array<String>>;
 
 	/**
 	 * Node kinds whose span ENDS with the closing delimiter of a comma-separated list
@@ -2688,7 +2691,7 @@ typedef RefShape = {
 	 * and declare the rest in `mandatoryTrailingCommaChildKinds` (Haxe's `Anon` mixes
 	 * both). Optional; unset leaves the check with only its parameter-list arm.
 	 */
-	@:optional var trailingCommaHostKinds: Array<String>;
+	public var trailingCommaHostKinds: Null<Array<String>>;
 
 	/**
 	 * Node kinds an ELEMENT of a comma-separated list may have whose following `,` is
@@ -2703,7 +2706,7 @@ typedef RefShape = {
 	 * kind missing here is a `--fix` that produces source the compiler rejects.
 	 * Optional; unset vetoes nothing.
 	 */
-	@:optional var mandatoryTrailingCommaChildKinds: Array<String>;
+	public var mandatoryTrailingCommaChildKinds: Null<Array<String>>;
 
 	/**
 	 * Maps a String method name to the FIXED type its call returns on a String
@@ -2718,7 +2721,7 @@ typedef RefShape = {
 	 * stays report-only — coverage never trumps soundness. Optional; unset disables
 	 * the string-receiver method-return inference.
 	 */
-	@:optional var stringLiteralMethodReturns: Map<String, String>;
+	public var stringLiteralMethodReturns: Null<Map<String, String>>;
 
 	/**
 	 * Maps a simple `Type.method` name of a stdlib / macro-API STATIC function to the
@@ -2732,7 +2735,7 @@ typedef RefShape = {
 	 * deliberately ABSENT, so it stays report-only. Optional; unset disables the
 	 * static-method-return inference.
 	 */
-	@:optional var staticMethodReturns: Map<String, String>;
+	public var staticMethodReturns: Null<Map<String, String>>;
 
 	/**
 	 * Maps a simple `Type.method` name of a stdlib INSTANCE method to the FIXED,
@@ -2753,7 +2756,7 @@ typedef RefShape = {
 	 * inference (`Map.get` → `Null<V>`) is deliberately ABSENT. Optional; unset disables
 	 * the fallback.
 	 */
-	@:optional var instanceMethodReturns: Map<String, String>;
+	public var instanceMethodReturns: Null<Map<String, String>>;
 
 	/**
 	 * Node kinds that constitute a value-returning `return <expr>` — both the statement
@@ -2768,7 +2771,7 @@ typedef RefShape = {
 	 * and `prefer-ternary-return` (`returnStatementKind`) must agree on what a value
 	 * return is: a plugin that sets one without the other makes the two checks disagree.
 	 */
-	@:optional var valueReturnKinds: Array<String>;
+	public var valueReturnKinds: Null<Array<String>>;
 
 	/**
 	 * Node kinds that constitute a `throw` (Haxe `ThrowStmt` / `ThrowExpr`). The
@@ -2777,7 +2780,7 @@ typedef RefShape = {
 	 * annotating `: Void` would break a caller that uses the call as a value.
 	 * Optional; unset disables the throw guard.
 	 */
-	@:optional var throwKinds: Array<String>;
+	public var throwKinds: Null<Array<String>>;
 
 	/**
 	 * The block-body node kind (`BlockBody`) — a function whose body is a `{ … }` block.
@@ -2789,7 +2792,7 @@ typedef RefShape = {
 	 * SEAM: must be one of `functionBodyKinds` — the block flavor of that function-body
 	 * marker set (`BlockBody`, alongside `ExprBody` / `NoBody`).
 	 */
-	@:optional var blockBodyKind: String;
+	public var blockBodyKind: Null<String>;
 
 	/**
 	 * The language's unit / void type NAME exactly as it is written in a return-type
@@ -2799,7 +2802,7 @@ typedef RefShape = {
 	 * return type is refused and only the un-annotated / no-value-return inference path
 	 * remains.
 	 */
-	@:optional var voidTypeName: String;
+	public var voidTypeName: Null<String>;
 
 	/**
 	 * The metadata tag requesting a final class (Haxe `@:final`) — the
@@ -2807,7 +2810,7 @@ typedef RefShape = {
 	 * replaces the meta with the `final` class modifier. Optional; unset (or a
 	 * missing class-decl kind) makes the check a no-op.
 	 */
-	@:optional var finalClassMetaName: String;
+	public var finalClassMetaName: Null<String>;
 
 	/**
 	 * The metadata tags whose presence on a type declaration means the language forbids STATIC
@@ -2816,21 +2819,21 @@ typedef RefShape = {
 	 * this first; `naming`'s constant-hoist arm does. Optional; unset → no type is refused, which
 	 * is the right default for a grammar whose statics are unconditional.
 	 */
-	@:optional var staticlessTypeMetaNames: Array<String>;
+	public var staticlessTypeMetaNames: Null<Array<String>>;
 
 	/**
 	 * The plain class-declaration node kind (Haxe `ClassDecl`) — a `finalClassMetaName`
 	 * meta on one is a `@:final class` the modifier replaces; the `prefer-final-class`
 	 * fix removes the meta and inserts `final ` before the class keyword. Optional.
 	 */
-	@:optional var plainClassDeclKind: String;
+	public var plainClassDeclKind: Null<String>;
 
 	/**
 	 * The already-`final` class-declaration node kind (Haxe `FinalDecl`, the `final
 	 * class` projection) — a `finalClassMetaName` meta on one is a REDUNDANT `@:final
 	 * final class`; the `prefer-final-class` fix removes the meta only. Optional.
 	 */
-	@:optional var finalClassDeclKind: String;
+	public var finalClassDeclKind: Null<String>;
 
 	/**
 	 * The member-host kind of a `final`-modified method (Haxe `FinalModifiedMember`).
@@ -2842,7 +2845,7 @@ typedef RefShape = {
 	 * (`override -> public/private -> static -> inline -> final`). Optional; unset
 	 * makes the check ignore method `final`.
 	 */
-	@:optional var finalModifierMemberKind: String;
+	public var finalModifierMemberKind: Null<String>;
 
 	/**
 	 * The sentinel entry in `modifierOrderKinds` that ranks a `final`-modified
@@ -2850,21 +2853,21 @@ typedef RefShape = {
 	 * is folded into `finalModifierMemberKind` — so it exists only to give `final` a
 	 * rank in the order table. Optional; paired with `finalModifierMemberKind`.
 	 */
-	@:optional var finalModifierRankKind: String;
+	public var finalModifierRankKind: Null<String>;
 
 	/**
 	 * The `break` statement node kind — lets `prefer-find` confirm the second statement
 	 * of a `{ r = x; break; }` first-match loop body is a `break` (not a `continue`,
 	 * which finds the last match). Optional; unset disables `prefer-find`'s break form.
 	 */
-	@:optional var breakStatementKind: String;
+	public var breakStatementKind: Null<String>;
 
 	/**
 	 * The `continue` statement node kind (Haxe `ContinueStmt`) — lets `loop-guard`
 	 * recognise a leading `if (c) continue;` loop-body guard. Optional; unset makes the
 	 * check a no-op.
 	 */
-	@:optional var continueStatementKind: String;
+	public var continueStatementKind: Null<String>;
 
 	/**
 	 * Loop-statement kinds whose LAST child is the loop body (Haxe `ForStmt` /
@@ -2884,7 +2887,7 @@ typedef RefShape = {
 	 *
 	 * Optional; unset makes `loop-guard` a no-op.
 	 */
-	@:optional var loopStatementKinds: Array<String>;
+	public var loopStatementKinds: Null<Array<String>>;
 
 	/**
 	 * Loop kinds whose FIRST child is the loop body and whose condition is the LAST
@@ -2894,21 +2897,21 @@ typedef RefShape = {
 	 * off `children[0]` to de-nest a trailing `if (c) { … }` into an `if (!c) continue;`
 	 * guard. Optional; unset makes `guard-continue` skip do-while loops.
 	 */
-	@:optional var doWhileLoopKinds: Array<String>;
+	public var doWhileLoopKinds: Null<Array<String>>;
 
 	/**
 	 * The range / interval node kind (`a...b`) — lets `prefer-find` skip a loop over a
 	 * range: its `IntIterator` is not an `Iterable`, so a `Lambda.find` rewrite would
 	 * not compile. Optional; unset means range loops are not specially excluded.
 	 */
-	@:optional var intervalKind: String;
+	public var intervalKind: Null<String>;
 
 	/**
 	 * The `while` statement node kind (Haxe `WhileStmt`) — lets `prefer-range-loop`
 	 * recognise a `while (i < B)` counter loop adjacent to its `var i = A;`
 	 * declaration. Optional; unset makes the check a no-op.
 	 */
-	@:optional var whileStmtKind: String;
+	public var whileStmtKind: Null<String>;
 
 	/**
 	 * The kind of a `while` in EXPRESSION position — the header of a `while` array comprehension
@@ -2916,27 +2919,27 @@ typedef RefShape = {
 	 * form. Optional: a grammar without a while-comprehension leaves it unset, and the checks that
 	 * read it then see the statement form only.
 	 */
-	@:optional var whileExprKind: String;
+	public var whileExprKind: Null<String>;
 
 	/**
 	 * The strict less-than comparison node kind (Haxe `Lt`) — `prefer-range-loop`
 	 * flags only the `i < B` condition form (`<=` / reversed / `!=` are not an
 	 * `A...B` range). Optional; unset makes the check a no-op.
 	 */
-	@:optional var ltKind: String;
+	public var ltKind: Null<String>;
 
 	/**
 	 * The post-increment node kind (Haxe `PostIncr`, `i++`) — `prefer-range-loop`
 	 * requires the loop body's trailing statement to be exactly `i++`. Optional;
 	 * unset makes the check a no-op.
 	 */
-	@:optional var postIncrKind: String;
+	public var postIncrKind: Null<String>;
 
 	/**
 	 * The pre-increment node kind (Haxe `PreIncr`, `++i`) — `prefer-count` accepts it beside
 	 * `postIncrKind` as the counter's step. Optional; unset narrows that rule to `i++` / `i += 1`.
 	 */
-	@:optional var preIncrKind: String;
+	public var preIncrKind: Null<String>;
 
 	/**
 	 * Top-level type-declaration kinds that constitute a documentable public API
@@ -2946,7 +2949,7 @@ typedef RefShape = {
 	 * `private` modifier makes it module-private). Optional; unset makes the check's
 	 * type-level requirement a no-op.
 	 */
-	@:optional var typeDeclKinds: Array<String>;
+	public var typeDeclKinds: Null<Array<String>>;
 
 	/**
 	 * The module's own package / namespace declaration kind (Haxe `PackageDecl`) — the
@@ -2955,7 +2958,7 @@ typedef RefShape = {
 	 * package statement, which belongs to the file) from a doc written for the module's
 	 * type but stranded above the imports. Optional; unset makes that check a no-op.
 	 */
-	@:optional var packageDeclKind: String;
+	public var packageDeclKind: Null<String>;
 
 	/**
 	 * Member-host container kinds whose members are IMPLICITLY public (Haxe
@@ -2964,7 +2967,7 @@ typedef RefShape = {
 	 * every member of one of these as public API. Optional; unset means no such
 	 * container exists.
 	 */
-	@:optional var interfaceDeclKinds: Array<String>;
+	public var interfaceDeclKinds: Null<Array<String>>;
 
 	/**
 	 * The public-visibility modifier kind (Haxe `Public`) — the entry of
@@ -2973,7 +2976,7 @@ typedef RefShape = {
 	 * public API. Optional; unset makes the check treat class/abstract members as
 	 * never explicitly public.
 	 */
-	@:optional var publicModifierKind: String;
+	public var publicModifierKind: Null<String>;
 
 	/**
 	 * Type-declaration kinds that are PLAIN CLASSES — nominal types with no
@@ -2985,7 +2988,7 @@ typedef RefShape = {
 	 * a builtin-typed value through an implicit conversion or aliasing, so the
 	 * candidate stays poisoned. Optional; unset disables the targeting bail.
 	 */
-	@:optional var classDeclKinds: Array<String>;
+	public var classDeclKinds: Null<Array<String>>;
 
 	/**
 	 * Maps a container type's SIMPLE name to the index of the type parameter that
@@ -2996,7 +2999,7 @@ typedef RefShape = {
 	 * here; any other container type leaves the write unresolved. Optional; unset
 	 * makes every index-access receiver unresolved.
 	 */
-	@:optional var indexedElementTypeParams: Map<String, Int>;
+	public var indexedElementTypeParams: Null<Map<String, Int>>;
 
 	/**
 	 * SIMPLE names of the ARRAY type — the sequential container whose `push` appends one element
@@ -3011,7 +3014,7 @@ typedef RefShape = {
 	 * Optional; unset leaves every ANNOTATED binding unprovable, which costs REACH — a consumer
 	 * then fires only on the inferred form.
 	 */
-	@:optional var arrayTypeNames: Array<String>;
+	public var arrayTypeNames: Null<Array<String>>;
 
 	/**
 	 * Scope-introducing node kinds whose OWN name binds the ITERATION KEY-OR-ELEMENT and whose
@@ -3030,7 +3033,7 @@ typedef RefShape = {
 	 * the same way. Optional; unset makes the for-binding element-type arm a no-op (every
 	 * binder stays unresolved, which is the conservative direction).
 	 */
-	@:optional var iterationBindingKinds: Array<String>;
+	public var iterationBindingKinds: Null<Array<String>>;
 
 	/**
 	 * Node kinds carrying the VALUE binder of a key-value iteration — the `v` in Haxe's
@@ -3050,7 +3053,7 @@ typedef RefShape = {
 	 * (`iterationElementTypeParams`) would then type a key as the element and license a rewrite on
 	 * it. Unset is only safe when no loop in the grammar binds a second name.
 	 */
-	@:optional var iterationValueBinderKinds: Array<String>;
+	public var iterationValueBinderKinds: Null<Array<String>>;
 
 	/**
 	 * Maps a container type's SIMPLE name to the index of the type parameter a `for` iteration
@@ -3070,7 +3073,7 @@ typedef RefShape = {
 	 * versa — so they must not be merged. Optional; unset makes the for-binding element-type
 	 * arm a no-op.
 	 */
-	@:optional var iterationElementTypeParams: Map<String, Int>;
+	public var iterationElementTypeParams: Null<Map<String, Int>>;
 
 	/**
 	 * The paths a container name of `indexedElementTypeParams` / `iterationElementTypeParams` denotes as the STANDARD type
@@ -3079,7 +3082,7 @@ typedef RefShape = {
 	 * provably one of these paths (`CallGraphImports.isStandard`) leaves the listed parameter alone. Optional; unset
 	 * makes the call graph read no container's listed parameter.
 	 */
-	@:optional var standardContainerPaths: Map<String, Array<String>>;
+	public var standardContainerPaths: Null<Map<String, Array<String>>>;
 
 	/**
 	 * The containers whose single-binder iteration yields EXACTLY the values its key-value
@@ -3090,7 +3093,7 @@ typedef RefShape = {
 	 * to another type is told apart from one naming the standard type. A container whose
 	 * key-value iterator re-reads by key (a map) does not belong here. Optional; unset admits none.
 	 */
-	@:optional var valueIterationTypes: Map<String, String>;
+	public var valueIterationTypes: Null<Map<String, String>>;
 
 	/**
 	 * The containers whose key-value iteration RE-READS each value by key (a map), keyed by SIMPLE
@@ -3102,7 +3105,7 @@ typedef RefShape = {
 	 * extended outside the standard library — `NominalTypes.keyedIterationContainer` vetoes it, since
 	 * a subclass may override the iterators. Optional; unset admits none.
 	 */
-	@:optional var keyedIterationTypes: Map<String, String>;
+	public var keyedIterationTypes: Null<Map<String, String>>;
 
 	/**
 	 * For a `keyedIterationTypes` entry that is not itself the class its values are — an abstract over
@@ -3110,7 +3113,7 @@ typedef RefShape = {
 	 * `EnumValueMap`) — the simple names of the classes it may hold, whose subclasses
 	 * `NominalTypes.keyedIterationContainer` vetoes. A type with no entry holds only itself. Optional.
 	 */
-	@:optional var keyedIterationHolders: Map<String, Array<String>>;
+	public var keyedIterationHolders: Null<Map<String, Array<String>>>;
 
 	/**
 	 * Module-level declarations that bind an imported type under a LOCAL name — Haxe's
@@ -3118,7 +3121,7 @@ typedef RefShape = {
 	 * about which type a SIMPLE name denotes in a file must consult them: the alias hides any
 	 * standard type of the same name. Optional; unset means the grammar has no import alias.
 	 */
-	@:optional var importAliasKinds: Array<String>;
+	public var importAliasKinds: Null<Array<String>>;
 
 	/**
 	 * Expression kinds whose SUBTREE escapes the type system (Haxe `untyped` —
@@ -3127,7 +3130,7 @@ typedef RefShape = {
 	 * opaque reification: every write target there is an unresolved write with an
 	 * unknown RHS. Optional; unset means no such escape hatch exists.
 	 */
-	@:optional var untypedKinds: Array<String>;
+	public var untypedKinds: Null<Array<String>>;
 
 	/**
 	 * Case-pattern BINDER kinds that carry the bound name on the node itself with
@@ -3137,7 +3140,7 @@ typedef RefShape = {
 	 * shadowers that disable identifier-receiver resolution for the file.
 	 * Optional; unset means only `plainCasePatternKind` subtrees are scanned.
 	 */
-	@:optional var casePatternBinderKinds: Array<String>;
+	public var casePatternBinderKinds: Null<Array<String>>;
 
 	/**
 	 * Case-pattern node kinds that EVALUATE an expression while MATCHING — the Haxe
@@ -3146,7 +3149,7 @@ typedef RefShape = {
 	 * has to refuse these: reaching one newly RUNS its expression, exactly what a case
 	 * guard would. Optional; unset models a family whose patterns evaluate nothing.
 	 */
-	@:optional var casePatternExtractorKinds: Array<String>;
+	public var casePatternExtractorKinds: Null<Array<String>>;
 
 	/**
 	 * Type-declaration kinds with ALIASING semantics — a value's field access does
@@ -3156,7 +3159,7 @@ typedef RefShape = {
 	 * the write would be filed away from the type it actually mutates — and falls
 	 * back to the unresolved bail. Optional; unset rejects nothing.
 	 */
-	@:optional var aliasingDeclKinds: Array<String>;
+	public var aliasingDeclKinds: Null<Array<String>>;
 
 	/**
 	 * Node kinds EVERY child of which sits in a DELIMITED expression slot — one the
@@ -3179,7 +3182,7 @@ typedef RefShape = {
 	 * `prefer-ternary-expression` (with `delimitedTailChildKinds` / `parenKind` also unset)
 	 * accept no slot at all, i.e. inert.
 	 */
-	@:optional var delimitedAllChildKinds: Array<String>;
+	public var delimitedAllChildKinds: Null<Array<String>>;
 
 	/**
 	 * Node kinds whose children are delimited EXCEPT the first — a head plus a
@@ -3197,7 +3200,7 @@ typedef RefShape = {
 	 * `prefer-ternary-expression` for the slot a bare `?:` may land in (child 0
 	 * excluded there too). Optional; unset lists no such host.
 	 */
-	@:optional var delimitedTailChildKinds: Array<String>;
+	public var delimitedTailChildKinds: Null<Array<String>>;
 
 	/**
 	 * Expression kinds whose own syntax can CONSUME the separator that ends a
@@ -3221,7 +3224,7 @@ typedef RefShape = {
 	 * whose closing token already bounds the construct. Optional; unset excludes
 	 * nothing.
 	 */
-	@:optional var separatorGreedyExprKinds: Array<String>;
+	public var separatorGreedyExprKinds: Null<Array<String>>;
 
 	/**
 	 * Expression kinds whose meaning is POSITION-SENSITIVE — the construct expands to
@@ -3241,7 +3244,7 @@ typedef RefShape = {
 	 * kind is deliberately conservative there: it costs a missed cleanup, never a
 	 * wrong rewrite. Optional; unset excludes nothing.
 	 */
-	@:optional var spliceSensitiveExprKinds: Array<String>;
+	public var spliceSensitiveExprKinds: Null<Array<String>>;
 
 	/**
 	 * Expression kinds that bind STRICTLY TIGHTER than the ternary `?:` operator, so a
@@ -3270,7 +3273,7 @@ typedef RefShape = {
 	 * Optional; unset drops `redundant-parens`' ternary-condition arm AND makes
 	 * `prefer-ternary-expression` a no-op (it has no other source of accepted branch kinds).
 	 */
-	@:optional var ternaryConditionUnwrapKinds: Array<String>;
+	public var ternaryConditionUnwrapKinds: Null<Array<String>>;
 
 	/**
 	 * Expression kinds that are ATOMIC on their own — SELF-DELIMITING, so no operator
@@ -3285,7 +3288,7 @@ typedef RefShape = {
 	 * `/` into a line comment (`(~/x/)/a` -> `~/x//a`). Read by `redundant-parens` for
 	 * its opt-in `atoms` arm, with `atomChainKinds`; optional, unset drops that arm.
 	 */
-	@:optional var atomExprKinds: Array<String>;
+	public var atomExprKinds: Null<Array<String>>;
 
 	/**
 	 * Expression kinds that are TRANSPARENT LINKS — atomic exactly when every child is
@@ -3299,7 +3302,7 @@ typedef RefShape = {
 	 * load-bearing. Read by `redundant-parens` with `atomExprKinds`; optional, unset
 	 * leaves the atom vocabulary to the self-delimiting kinds alone.
 	 */
-	@:optional var atomChainKinds: Array<String>;
+	public var atomChainKinds: Null<Array<String>>;
 
 	/**
 	 * Operator kinds that compute a value from their operands and do NOTHING ELSE — no store,
@@ -3321,7 +3324,7 @@ typedef RefShape = {
 	 * Optional; unset leaves the derived vocabulary to literals, identifiers and grouping —
 	 * fewer rewrites, never a wrong one.
 	 */
-	@:optional var pureOperatorKinds: Array<String>;
+	public var pureOperatorKinds: Null<Array<String>>;
 
 	/**
 	 * Expression kinds whose ROOT binds tighter than every operator the grammar has, so an
@@ -3343,7 +3346,7 @@ typedef RefShape = {
 	 * Optional; unset leaves the self-delimiting atoms as the only unwrapped roots — the
 	 * substitution then parenthesises more than it must, which is always safe.
 	 */
-	@:optional var maximalPrecedenceRootKinds: Array<String>;
+	public var maximalPrecedenceRootKinds: Null<Array<String>>;
 
 	/**
 	 * Groups of binary operator kinds that share ONE precedence tier and associate to
@@ -3360,7 +3363,7 @@ typedef RefShape = {
 	 * `sameOperatorLeft` arm; optional, unset drops that arm. The RIGHT operand is never
 	 * a candidate under any grouping — `a / (b * c)` is a different computation.
 	 */
-	@:optional var leftAssociativeBinaryFamilies: Array<Array<String>>;
+	public var leftAssociativeBinaryFamilies: Null<Array<Array<String>>>;
 
 	/**
 	 * Binary operator kinds of the COMPARISON tier — the hosts whose parenthesized
@@ -3382,7 +3385,7 @@ typedef RefShape = {
 	 * Read by `redundant-parens` with `comparisonOperandUnwrapKinds`; optional, unset
 	 * drops that arm.
 	 */
-	@:optional var comparisonOperandHostKinds: Array<String>;
+	public var comparisonOperandHostKinds: Null<Array<String>>;
 
 	/**
 	 * The ARITHMETIC CORE of the kinds that bind strictly tighter than the comparison
@@ -3423,7 +3426,7 @@ typedef RefShape = {
 	 * `redundant-parens` with `comparisonOperandHostKinds`; optional, unset drops that
 	 * arm.
 	 */
-	@:optional var comparisonOperandUnwrapKinds: Array<String>;
+	public var comparisonOperandUnwrapKinds: Null<Array<String>>;
 
 	/**
 	 * Binary operator kinds of the ADDITIVE tier — the hosts whose parenthesized operands
@@ -3443,7 +3446,7 @@ typedef RefShape = {
 	 * breaks nothing. Read by `redundant-parens` with `additiveOperandUnwrapKinds`;
 	 * optional, unset drops that arm.
 	 */
-	@:optional var additiveOperandHostKinds: Array<String>;
+	public var additiveOperandHostKinds: Null<Array<String>>;
 
 	/**
 	 * The kinds binding STRICTLY tighter than the additive tier that also parse alike
@@ -3470,7 +3473,7 @@ typedef RefShape = {
 	 * outward on unwrap. Read by `redundant-parens` with `additiveOperandHostKinds`;
 	 * optional, unset drops that arm.
 	 */
-	@:optional var additiveOperandUnwrapKinds: Array<String>;
+	public var additiveOperandUnwrapKinds: Null<Array<String>>;
 
 	/**
 	 * Expression kinds that CAPTURE EVERYTHING TO THEIR RIGHT — a construct whose extent
@@ -3493,7 +3496,7 @@ typedef RefShape = {
 	 * compiler about exactly this extent, so both trees look equivalent while the real
 	 * ones are not. Optional; unset leaves every slot judging the root alone.
 	 */
-	@:optional var rightGreedyExprKinds: Array<String>;
+	public var rightGreedyExprKinds: Null<Array<String>>;
 
 	/**
 	 * The UNARY MINUS kinds. Content whose leftmost token is one of them keeps its
@@ -3505,7 +3508,7 @@ typedef RefShape = {
 	 * `redundant-parens`; optional, unset judges the root alone, which is what those arms
 	 * did before.
 	 */
-	@:optional var unaryMinusKinds: Array<String>;
+	public var unaryMinusKinds: Null<Array<String>>;
 
 	/**
 	 * Kinds that PREFIX an expression with an annotation binding to whatever that
@@ -3525,7 +3528,7 @@ typedef RefShape = {
 	 * this rule off that list instead over-suppresses: a ternary condition written as `case _: (v <= 2) ? a
 	 * : b;` stops being reported. Optional, unset excludes nothing.
 	 */
-	@:optional var prefixAnnotationKinds: Array<String>;
+	public var prefixAnnotationKinds: Null<Array<String>>;
 
 	/**
 	 * Host kinds whose DIRECT `parenKind` child keeps its parentheses — either the
@@ -3544,7 +3547,7 @@ typedef RefShape = {
 	 * concern, so — unlike `parenOpaqueSubtreeKinds` — it is read whether or not a project opted an arm in.
 	 * Optional, unset excludes nothing.
 	 */
-	@:optional var parenRequiredHostKinds: Array<String>;
+	public var parenRequiredHostKinds: Null<Array<String>>;
 
 	/**
 	 * Kinds whose ENTIRE SUBTREE the opt-in `redundant-parens` operand arms leave alone,
@@ -3554,7 +3557,20 @@ typedef RefShape = {
 	 * PATTERN body, whose syntax is matched structurally rather than by expression
 	 * precedence. Optional; unset suppresses nothing.
 	 */
-	@:optional var parenOpaqueSubtreeKinds: Array<String>;
+	public var parenOpaqueSubtreeKinds: Null<Array<String>>;
+
+	public function new(
+		identKind: String, declHostKinds: Array<String>, moduleValueDeclKinds: Array<String>, scopeKinds: Array<String>,
+		writeParentKinds: Array<String>, selfScopeDeclKinds: Array<String>
+	) {
+		this.identKind = identKind;
+		this.declHostKinds = declHostKinds;
+		this.moduleValueDeclKinds = moduleValueDeclKinds;
+		this.scopeKinds = scopeKinds;
+		this.writeParentKinds = writeParentKinds;
+		this.selfScopeDeclKinds = selfScopeDeclKinds;
+	}
+
 }
 
 /** The language's core value types (`RefShape.coreValueTypes`, which says what each field means). */
