@@ -45,7 +45,8 @@ final class PinsGrammarAndCli {
 		'unit.cli.CliCommandSeamTest#testTheRegistryHandsOutAFreshCommandPerCall :: control :: M-CLI-COMMANDS-MEMOISED',
 		'unit.cli.CliCommandSeamTest#testTheRequireMatchFlagDoesNotSurviveItsRun :: control :: M-CLI-REQUIREMATCH-STATIC',
 		'unit.cli.CliUnknownSubcommandTest#testAPluralMissNamesTheSingularCommands :: control :: M-CLI-UNKNOWN-NO-PLURAL-PROBE',
-		'unit.cli.ExtractConstantToCliTest#testTheAddressedModeWritesTheSourceAndTheModule :: control :: M-EXTRACT-CONSTANT-ADDRESSED-UNROUTED',
+		'unit.cli.ExtractConstantToCliTest#testTheAddressedModeWritesTheSourceAndTheModule :: control :: '
+			+ 'M-EXTRACT-CONSTANT-ADDRESSED-UNROUTED',
 		'unit.cli.JsonEditCliTest#testAfterTheSoleEntryOfAnArray :: control :: M-COMMA-CONTAINER-KINDS-UNREAD',
 		'unit.cli.JsonEditCliTest#testAppendIntoAnArray :: control :: M-LAYOUT-SPLICE-BYPASSED,M-PICK-PLUGIN-FOR-IGNORES-PATH',
 		'unit.cli.JsonEditCliTest#testSortedInsert :: control :: M-JSON-LITERAL-NONE',
@@ -112,14 +113,17 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxArrowBlockIfOverflowSliceTest#testOverflowingBlockIfBreaksAfterArrow :: control :: M-ARROW-HEAD-WIDTH-NONE',
 		'unit.grammar.haxe.HxBinaryChainRestWidthTest#testAddChainOneColumnOverBreaksAtPlus :: control :: M-CHAIN-REST-ADD-PIVOT-PLAIN',
 		'unit.grammar.haxe.HxBinaryChainRestWidthTest#testAddChainTwoColumnsOverBreaksAtPlus :: control :: M-COLLAPSE-ADD-REBUILD-PLAIN',
-		'unit.grammar.haxe.HxBinaryChainRestWidthTest#testDeclarationOneColumnOverBreaksAtAnd :: control :: M-CHAIN-REST-FILL-GROUP-PLAIN,M-CHAIN-REST-SHAPE-UNTHREADED,M-CHAIN-REST-UNSET',
+		'unit.grammar.haxe.HxBinaryChainRestWidthTest#testDeclarationOneColumnOverBreaksAtAnd :: control :: '
+			+ 'M-CHAIN-REST-FILL-GROUP-PLAIN,M-CHAIN-REST-SHAPE-UNTHREADED,M-CHAIN-REST-UNSET',
 		'unit.grammar.haxe.HxBinaryChainRestWidthTest#testDeclarationTwoColumnsOverBreaksAtAnd :: control :: M-CHAIN-REST-PIVOT-PLAIN',
 		'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBeforeAMultilineMember :: control :: M-BLANK-MULTILINE-OFF',
 		'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBetweenMultilineAndSingleLine :: control :: '
 			+ 'M-BLANK-MULTILINE-OFF',
 		'unit.grammar.haxe.HxCallArgLambdaBodyChainIndentTest#testArrowSwitchCaseBodyChainIndents :: control :: M-STMT-LIST-CALLARG-CASE',
-		'unit.grammar.haxe.HxCallArgLambdaBodyChainIndentTest#testFinalInFirstLambdaArgChainIndents :: control :: M-STMT-LIST-CALLARG-BLOCK',
-		'unit.grammar.haxe.HxCallArgLambdaBodyChainIndentTest#testReturnInSoleLambdaArgChainIndents :: control :: M-STMT-LIST-CALLARG-BARRIER',
+		'unit.grammar.haxe.HxCallArgLambdaBodyChainIndentTest#testFinalInFirstLambdaArgChainIndents :: control :: '
+			+ 'M-STMT-LIST-CALLARG-BLOCK',
+		'unit.grammar.haxe.HxCallArgLambdaBodyChainIndentTest#testReturnInSoleLambdaArgChainIndents :: control :: '
+			+ 'M-STMT-LIST-CALLARG-BARRIER',
 		'unit.grammar.haxe.HxCallGroupRestProbeCasePatternTest#testCasePatternCtorInsideACollectionStaysGlued :: control :: '
 			+ 'M-PATTERN-RESTPROBE-UNSET',
 		'unit.grammar.haxe.HxCaseBodyControlFlowGlueTest#testABracelessControlFlowBodyGoesBelowAndSpreads :: control :: '
@@ -133,6 +137,8 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxChainStaircaseSliceTest#testIsIdempotentAcrossThreePasses :: control :: M-CHAIN-STAIRCASE-OFF',
 		'unit.grammar.haxe.HxChainStaircaseSliceTest#testTornConditionParenIsGone :: control :: M-CHAIN-STAIRCASE-OFF',
 		'unit.grammar.haxe.HxChainStaircaseSliceTest#testWholeChainOverTheLimitStaircases :: control :: M-CHAIN-STAIRCASE-OFF',
+		'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testALineEndingBlockCommentKeepsTheCatchOnTheNextLine :: control :: '
+			+ 'M-CATCH-BLOCK-LINE-END-GLUED',
 		'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testDoWhileKeepsTheKeywordGlued :: control :: M-CLOSE-TRAIL-BLOCK-BREAKS',
 		'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testEmptyBlockKeepsTheKeywordGlued :: control :: M-CLOSE-TRAIL-EMPTY-HARD',
 		'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testEmptyBlockLineCommentKeepsTheKeywordAtItsIndent :: control :: '
@@ -158,10 +164,13 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testValueElseKeepsItsIndent :: control :: M-PENDING-HARDLINE-BLANK-FLUSHED',
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAChainFollowsTheBreak :: control :: M-BREAK-COMMITTED-BARE',
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testALambdaBodyFollowsTheBreak :: control :: M-BREAK-COMMITTED-BARE',
-		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testALiteralHostKeepsItsAllmanDecision :: control :: M-BREAK-OBJECT-LITERAL-HOST',
-		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAMultiArgumentHostFollowsTheBreak :: control :: M-BREAK-MULTI-ITEM-HOST-OFF',
+		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testALiteralHostKeepsItsAllmanDecision :: control :: '
+			+ 'M-BREAK-OBJECT-LITERAL-HOST',
+		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAMultiArgumentHostFollowsTheBreak :: control :: '
+			+ 'M-BREAK-MULTI-ITEM-HOST-OFF',
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAParenMeasuresTheBreakBare :: control :: M-PAREN-MEASURES-COMMITTED',
-		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAStaticallyBrokenLambdaBodyStaysGlued :: control :: M-BREAK-READBACK-BARE',
+		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testAStaticallyBrokenLambdaBodyStaysGlued :: control :: '
+			+ 'M-BREAK-READBACK-BARE',
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest#testOneAlternativePerBreak :: control :: M-BREAK-EVERY-NODE',
 		'unit.grammar.haxe.HxComprehensionAllmanGluedSpaceTest#testANestedForKeepsItsSpace :: control :: M-ALLMAN-GLUED-SPACE-UNGUARDED',
 		'unit.grammar.haxe.HxComprehensionAllmanGluedSpaceTest#testOneWriteIsAFixedPointAtTheLimit :: control :: M-ALLMAN-GLUED-SPACE-KEPT',
@@ -236,7 +245,8 @@ final class PinsGrammarAndCli {
 			+ 'M-DROPPED-SEP-UNREHOMED,M-TAIL-ABSENT-FIELD-STOPS,M-TAIL-ARRAY-SLOT-UNREAD,M-TAIL-CALL-SLOT-UNREAD,'
 			+ 'M-TAIL-INFIX-UNREAD,M-TAIL-OPERAND-UNREAD,M-TAIL-PREFIX-UNREAD,M-TAIL-TERNARY-UNREAD',
 		'unit.grammar.haxe.HxDroppedSepCommentTest#testAKeptSeparatorKeepsTheCommentAfterIt :: control :: M-DROPPED-SEP-KEPT-REHOMED',
-		'unit.grammar.haxe.HxDroppedSepCommentTest#testATailThatCapturesNothingKeepsTheCommentOnTheElement :: control :: M-TAIL-ONLY-KNOWN-METAS',
+		'unit.grammar.haxe.HxDroppedSepCommentTest#testATailThatCapturesNothingKeepsTheCommentOnTheElement :: control :: '
+			+ 'M-TAIL-ONLY-KNOWN-METAS',
 		'unit.grammar.haxe.HxDroppedSepCommentTest#testAnOccupiedTailKeepsBothComments :: control :: '
 			+ 'M-TAIL-SLOT-OVERWRITTEN,M-TAIL-ALT-SLOT-OVERWRITTEN,M-TAIL-WRITTEN-SEMICOLON-IGNORED',
 		'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBareBodyElseIfTrailsCommentAfterCondition :: control :: '
@@ -266,6 +276,12 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxExprForGuardGlueSliceTest#testArrowForForBlockGluesTheWholeSpine :: control :: M-STRICT-HEAD-DELIM-OFF',
 		'unit.grammar.haxe.HxExprForGuardGlueSliceTest#testArrowForIfBlockGluesTheWholeSpine :: control :: M-STRICT-HEAD-DELIM-OFF',
 		'unit.grammar.haxe.HxExprParenBrokenChainTest#testABrokenChainOpensAtItsIndent :: control :: M-PAREN-BROKEN-CHAIN-PINNED',
+		'unit.grammar.haxe.HxExprParenBrokenChainTest#testAChainOnlyAnOperandBrokeOpensAsWithoutKeep :: control :: '
+			+ 'M-PAREN-KEPT-CHAIN-OPERAND',
+		'unit.grammar.haxe.HxExprParenBrokenChainTest#testAKeptBrokenChainAfterAReturnBreakStaysGlued :: control :: '
+			+ 'M-PAREN-KEPT-CHAIN-OPENS',
+		'unit.grammar.haxe.HxExprParenBrokenChainTest#testAKeptChainInAParenIsOneWriteUnderEveryReturnPolicy :: control :: '
+			+ 'M-PAREN-KEPT-CHAIN-SOURCE-NEST',
 		'unit.grammar.haxe.HxExprParenBrokenChainTest#testOneWriteIsAFixedPointAcrossTheBoundary :: control :: M-PAREN-BROKEN-CHAIN-PINNED',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testCallArgumentListBreaksInsteadOfTheFirstParen :: control :: '
 			+ 'M-PAREN-LIST-BREAK',
@@ -273,7 +289,8 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testCollapseTailParenIsNotABreakPoint :: control :: M-PAREN-SIBLING-COLLAPSE',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testLambdaParenMeasuresItsOwnBreakableContent :: control :: '
 			+ 'M-PAREN-EXACT-CONTENT',
-		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testNestedCallBreaksItsOuterArgumentList :: control :: M-CHAIN-REST-IN-KEPT-PAREN',
+		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testNestedCallBreaksItsOuterArgumentList :: control :: '
+			+ 'M-CHAIN-REST-IN-KEPT-PAREN',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testPinnedArgumentListIsMeasuredFlat :: control :: M-PAREN-FLATTEN-REGION',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testSecondParenOpensWhenOnlyItCrossesDiv :: control :: M-PAREN-SIBLING-FLAT',
 		'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testUnmeasuredRestNodeEndsColumnPredictions :: control :: M-PAREN-EXACT-REST',
@@ -343,8 +360,10 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxObjectLitForcedNoWrapProbeTest#testOneWriteIsAFixedPointAtEveryWidth :: control :: M-FORCED-NOWRAP-UNPROBED',
 		'unit.grammar.haxe.HxObjectLitLineLengthRuleFixedPointTest#testAWidthRuleLiteralInAComprehensionSettlesInOneWrite :: control :: '
 			+ 'M-WIDTH-RULE-DECISION-UNREAD,M-WIDTH-RULE-TAIL-UNREAD',
-		'unit.grammar.haxe.HxOpAddChainOperatorFirstSliceTest#testGlueBoundaryOneColumnOverBreaks :: control :: M-COLLAPSE-CHAIN-GROUP-PLAIN-ONLY',
-		'unit.grammar.haxe.HxParenTernaryOpenWrapSliceTest#testFillLineExpressionWrapOpensParenOpAddSub :: control :: M-COLLAPSE-GLUE-TERNARY',
+		'unit.grammar.haxe.HxOpAddChainOperatorFirstSliceTest#testGlueBoundaryOneColumnOverBreaks :: control :: '
+			+ 'M-COLLAPSE-CHAIN-GROUP-PLAIN-ONLY',
+		'unit.grammar.haxe.HxParenTernaryOpenWrapSliceTest#testFillLineExpressionWrapOpensParenOpAddSub :: control :: '
+			+ 'M-COLLAPSE-GLUE-TERNARY',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAKeywordANewerHaxeAddedStillNamesAVersionGatedDeclaration :: control :: '
 			+ 'M-RESERVED-VERSIONED-REFUSED',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoFunctionParameterOrBinderName :: control :: '
@@ -408,7 +427,8 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxStaticLocalStmtSliceTest#testStaticLocalsRoundTrip :: control :: M-KWLEAD-NEVER-WORD',
 		'unit.grammar.haxe.HxStaticLocalStmtSliceTest#testStaticVarWriterEquals :: control :: M-KWLEAD-NEVER-WORD',
 		'unit.grammar.haxe.HxTrailingCommentOverflowSliceTest#testCodeAtTheWidthStillCounts :: control :: M-TCO-OVERWIDE-CODE-MOVED',
-		'unit.grammar.haxe.HxTrailingCommentOverflowSliceTest#testEverythingOutsideThePositiveListStays :: control :: M-TCO-DIRECTIVE-MOVED,M-TCO-LEADING-IGNORED,M-TCO-OVERWIDE-CODE-MOVED',
+		'unit.grammar.haxe.HxTrailingCommentOverflowSliceTest#testEverythingOutsideThePositiveListStays :: control :: '
+			+ 'M-TCO-DIRECTIVE-MOVED,M-TCO-LEADING-IGNORED,M-TCO-OVERWIDE-CODE-MOVED',
 		'unit.grammar.haxe.HxTrailingCommentOverflowSliceTest#testMultiLineCodeKeepsItsComment :: control :: M-TCO-MULTILINE-MOVED',
 		'unit.grammar.haxe.HxTrailingCommentOverflowSliceTest#testOverflowingStatementCommentMovesAbove :: control :: M-TCO-KNOB-IGNORED',
 		'unit.grammar.haxe.HxTrailingCommentOverflowSliceTest#testTheWidthBoundaryIsInclusive :: control :: M-TCO-BOUNDARY',

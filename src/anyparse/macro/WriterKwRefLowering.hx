@@ -424,10 +424,7 @@ final class WriterKwRefLowering {
 		final keepOpenGate: Expr = wrapOpenNewlineExpr != null
 			? macro ($wrapOpenNewlineExpr && anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0)
 			: macro false;
-		// A pure `+`/`-` chain is pinned flat (`HardFlatten`) on the open side only while it CAN be one line: an
-		// operand that already broke (an array its rule lays out one item per line) leaves hardlines a force-flat
-		// region renders as bare newlines at column 0. Such a chain opens as it does under an `expressionWrapping`
-		// rule — the paren's indent and the chain's own breaks, still behind the paren's width probe.
+		final opAddSubShape: Expr = opAddSubParenShape(leadDoc);
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			final _wrapTrail: anyparse.core.Doc = $trailDoc;
@@ -451,22 +448,7 @@ final class WriterKwRefLowering {
 						: $keepOpenGate
 							? _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail])
 							: anyparse.format.wrap.WrapList.isPureOpAddSubChain(_wrapInner)
-								? (
-									anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
-										|| anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0
-										? _dfle(opt.lineWidth + 1, _dc([
-											$leadDoc,
-											_dn(_cols, _dc([_dhl(), _wrapInner])),
-											_dhl(),
-											_wrapTrail
-										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-										: _dfle(opt.lineWidth + 1, _dc([
-											$leadDoc,
-											_dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])),
-											_dhl(),
-											_wrapTrail
-										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-								)
+								? $opAddSubShape
 								: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
 									? (
 										anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
@@ -503,6 +485,37 @@ final class WriterKwRefLowering {
 			};
 			anyparse.core.BreakCommits.followBare($innerDoc, _parenShape);
 		};
+	}
+
+	/**
+	 * The expression-paren shape for a pure `+`/`-` chain, read against the runtime locals `_wrapInner`, `_wrapTrail` and
+	 * `_cols` of `kwRefWrapHardFlatten`.
+	 *
+	 * The open side pins the chain flat (`HardFlatten`) only while it CAN be one line: an operand that already broke (an
+	 * array its rule lays out one item per line) leaves hardlines a force-flat region renders as bare newlines at column
+	 * 0, so such a chain opens as it does under an `expressionWrapping` rule — the paren's indent and the chain's own
+	 * breaks, behind the paren's width probe. A `WrapMode.Keep` chain its source broke at its OWN operators
+	 * (`breaksAtOwnAddSubOperator`) reproduces that line structure in the paren its source glued (an open one takes
+	 * `keepOpenGate`) at every width, as it already did within the limit: opening it adds two breaks the source does
+	 * not have. It reads no source bit the `return` / `=` policy may overrule, so one write stays a fixed point.
+	 */
+	private static function opAddSubParenShape(leadDoc: Expr): Expr {
+		return macro (
+			opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
+				&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) == null
+				&& anyparse.format.wrap.WrapList.breaksAtOwnAddSubOperator(_wrapInner)
+				? _dc([$leadDoc, _wrapInner, _wrapTrail])
+				: anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+					|| anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0
+					? _dfle(
+						opt.lineWidth + 1, _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail]),
+						_dc([$leadDoc, _wrapInner, _wrapTrail])
+					)
+					: _dfle(
+						opt.lineWidth + 1, _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])), _dhl(), _wrapTrail]),
+						_dc([$leadDoc, _wrapInner, _wrapTrail])
+					)
+		);
 	}
 
 	/**

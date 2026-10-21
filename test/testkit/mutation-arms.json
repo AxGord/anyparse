@@ -26296,7 +26296,7 @@
 		{
 			"name": "M-PAREN-BROKEN-CHAIN-PINNED",
 			"type": "anyparse.macro.WriterKwRefLowering",
-			"method": "kwRefWrapHardFlatten",
+			"method": "opAddSubParenShape",
 			"find": "|| anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0",
 			"replace": "|| false",
 			"note": "an expression paren around a `+`/`-` chain an operand already broke pins that chain flat again when no `expressionWrapping` rule is set, so every continuation line renders at column 0 and the next write re-indents it"
@@ -28918,6 +28918,38 @@
 			"find": "branches: first.branches.concat(alternate.branches),",
 			"replace": "branches: first.branches,",
 			"note": "the alternate branch's record is lost, so a declaration whose `#else` is a `typedef` reads as one abstract"
+		},
+		{
+			"name": "M-PAREN-KEPT-CHAIN-OPENS",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "opAddSubParenShape",
+			"find": "opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep",
+			"replace": "false",
+			"note": "a `keep` chain its source broke opens the paren its source glued again, adding a break after `(` and before `)` the source does not have"
+		},
+		{
+			"name": "M-PAREN-KEPT-CHAIN-SOURCE-NEST",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "opAddSubParenShape",
+			"find": "? _dc([$leadDoc, _wrapInner, _wrapTrail])",
+			"replace": "? (opt._varKwNewline ? _dc([$leadDoc, _wrapInner, _wrapTrail]) : _dn(_cols, _dc([$leadDoc, _wrapInner, _wrapTrail])))",
+			"note": "the glued paren nests its kept chain by the SOURCE break after `return`, which the `return` policy may drop or add, so one write is no longer a fixed point"
+		},
+		{
+			"name": "M-CATCH-BLOCK-LINE-END-GLUED",
+			"type": "anyparse.macro.WriterTriviaStarEmitLowering",
+			"method": "buildCloseTrailingFirstSepOverride",
+			"find": "guard: macro _ct != null && _t.newlineBefore",
+			"replace": "guard: macro false",
+			"note": "a block comment that ended its source line after the try body's `}` glues the first `catch` onto its line again under a same-line policy"
+		},
+		{
+			"name": "M-PAREN-KEPT-CHAIN-OPERAND",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "opAddSubParenShape",
+			"find": "&& anyparse.format.wrap.WrapList.breaksAtOwnAddSubOperator(_wrapInner)",
+			"replace": "&& anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0",
+			"note": "a kept chain broken only inside an operand (an array one item per line) counts as one its source broke, so its paren stays glued instead of opening"
 		}
 	]
 }

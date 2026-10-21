@@ -35,6 +35,12 @@ final class HxExprParenBrokenChainTest extends Test {
 		+ '"maxLineLength": 140, "arrayWrap": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": '
 		+ '"anyItemLength >= n", "value": 30}], "type": "onePerLine"}]}}}';
 
+	/** `opAddSubChain` kept: every chain reproduces the line breaks its source put at its own operators. */
+	private static final CFG_KEEP: String = '{"wrapping": {"opAddSubChain": {"defaultWrap": "keep", "rules": []}}}';
+
+	/** A parenthesised `-` chain, one operand of the kept chains below. */
+	private static final TERM: String = '(aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbb)';
+
 	/** An array the compiled defaults break one item per line, inside a parenthesised chain that has to open. */
 	private static final ARRAY_OPERAND: String = 'class M {\n\tfunction f() {\n\t\tvar v = (\n\t\t\tbaseValue\n\t\t\t\t+ [\n'
 		+ '\t\t\t\t\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n\t\t\t\t\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n'
@@ -70,6 +76,55 @@ final class HxExprParenBrokenChainTest extends Test {
 		}
 	}
 
+	/**
+	 * A kept chain its source broke stays in the paren its source glued, past the line limit, with its continuation lines
+	 * at the value's indent after a source break following `return`.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-KEPT-CHAIN-OPENS')
+	public function testAKeptBrokenChainAfterAReturnBreakStaysGlued(): Void {
+		final expected: String = keptShape('return\n\t\t\t1 * (', '\t\t\t', ');');
+		Assert.equals(expected, HxWriteFixture.triviaWrite(keptShape('return\n\t\t\t\t1 * (', '\t\t\t\t\t\t', ');'), CFG_KEEP));
+		Assert.equals(expected, HxWriteFixture.triviaWrite(expected, CFG_KEEP));
+	}
+
+	/**
+	 * The glued layout reads no source bit the `return` policy may overrule, so one write is a fixed point whether the
+	 * policy keeps, drops or adds the break after `return`.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-KEPT-CHAIN-SOURCE-NEST')
+	public function testAKeptChainInAParenIsOneWriteUnderEveryReturnPolicy(): Void {
+		for (policy in ['same', 'next', 'keep', 'fitLine']) {
+			final config: String = '{"wrapping": {"opAddSubChain": {"defaultWrap": "keep", "rules": []}}, '
+				+ '"sameLine": {"returnBody": "$policy", "returnBodySingleLine": "$policy"}}';
+			for (head in ['return\n\t\t\t(', 'return (']) {
+				final once: String = HxWriteFixture.triviaWrite(
+					'class M {\n\tfunction f() {\n\t\t${head}aaaa +\n\t\t\tbbbb);\n\t}\n}', config
+				);
+				Assert.equals(once, HxWriteFixture.triviaWrite(once, config), '$policy: ${head.replace('\n', '\\n')}');
+			}
+		}
+	}
+
+	/**
+	 * A kept chain whose only break is inside an operand — an array laid out one item per line — is not a chain its source
+	 * broke: its paren opens as it does without `keep`.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-KEPT-CHAIN-OPERAND')
+	public function testAChainOnlyAnOperandBrokeOpensAsWithoutKeep(): Void {
+		final src: String = 'class M {\n\tfunction f() {\n\t\tvar v = (baseValue + [aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, '
+			+ 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, ccccccccccccccccccccccccccccccccccccccccc, '
+			+ 'dddddddddddddddddddddddddd].length) * factorValue;\n\t}\n}';
+		final expected: String = 'class M {\n\tfunction f() {\n\t\tvar v = (\n\t\t\tbaseValue + [\n'
+			+ '\t\t\t\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n\t\t\t\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n'
+			+ '\t\t\t\tccccccccccccccccccccccccccccccccccccccccc,\n\t\t\t\tdddddddddddddddddddddddddd\n'
+			+ '\t\t\t].length\n\t\t) * factorValue;\n\t}\n}';
+		Assert.equals(expected, HxWriteFixture.triviaWrite(src, CFG_KEEP));
+		Assert.equals(expected, HxWriteFixture.triviaWrite(expected, CFG_KEEP));
+	}
+
 	private static function assertOneWriteWithinLimit(src: String, config: String, limit: Int, k: Int): Void {
 		final once: String = HxWriteFixture.triviaWrite(src, config);
 		Assert.equals(once, HxWriteFixture.triviaWrite(once, config), 'k=$k config=$config\n$src');
@@ -84,6 +139,12 @@ final class HxExprParenBrokenChainTest extends Test {
 	private static function comprehensionShape(k: Int): String {
 		return 'class M {\n\tfunction f() {\n\t\tvar y = (baseValue + [for (x in xs) {alpha: x.aaaaaaaaaaaaaaaaaaaaa, k: \''
 			+ ''.lpad('k', k) + '\'}].length) * factorValue;\n\t}\n}';
+	}
+
+	/** `head`, four `TERM`s and a source break, `indent`, two more `TERM`s and `tail`: a statement over the line limit. */
+	private static function keptShape(head: String, indent: String, tail: String): String {
+		final four: String = [for (_ in 0...4) TERM].join(' + ');
+		return 'class M {\n\tfunction f() {\n\t\t$head$four +\n$indent$TERM + $TERM$tail\n\t}\n}';
 	}
 
 }

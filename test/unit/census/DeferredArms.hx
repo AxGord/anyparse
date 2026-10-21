@@ -229,7 +229,7 @@ final class DeferredArms {
 		'M-RESERVED-VERSIONED-REFUSED :: anyparse.grammar.haxe.HxVarNameLit#MetaCall:@:re',
 		'M-XREN-EXTENDS-HEAD-UNEMITTED :: anyparse.macro.QueryWalkerLowering#typeRefsDescendCore',
 		'M-QUERY-NAME-IGNORED :: anyparse.macro.QueryWalkerLowering#lowerNameSeq',
-		'M-PAREN-BROKEN-CHAIN-PINNED :: anyparse.macro.WriterKwRefLowering#kwRefWrapHardFlatten',
+		'M-PAREN-BROKEN-CHAIN-PINNED :: anyparse.macro.WriterKwRefLowering#opAddSubParenShape',
 		'M-BREAKMARK-FIT-NAMED :: anyparse.macro.WriterPolicyLowering#nestBodyOnSourceNewlineWrap',
 		'M-DROPPED-SEP-UNREHOMED :: anyparse.macro.TriviaSepLowering#triviaSepArrDecls',
 		'M-TAIL-SLOT-OVERWRITTEN :: anyparse.macro.TriviaTailRehome#starField',
@@ -255,7 +255,11 @@ final class DeferredArms {
 		'M-COLLAPSE-COUNTED :: anyparse.macro.TriviaSepLowering#triviaSepNoTriviaBranch',
 		'M-COLLAPSE-ANY-RESULT :: anyparse.macro.TriviaSepLowering#triviaSepNoTriviaBranch',
 		'M-FACTS-READ-EMIT-NAME :: anyparse.check.TypedFactsWalk#visit',
-		'M-SPANINFO-RETURN-SOURCES :: anyparse.macro.SpanInfoLowering#spanInfoWrites'
+		'M-SPANINFO-RETURN-SOURCES :: anyparse.macro.SpanInfoLowering#spanInfoWrites',
+		'M-PAREN-KEPT-CHAIN-OPENS :: anyparse.macro.WriterKwRefLowering#opAddSubParenShape',
+		'M-PAREN-KEPT-CHAIN-SOURCE-NEST :: anyparse.macro.WriterKwRefLowering#opAddSubParenShape',
+		'M-CATCH-BLOCK-LINE-END-GLUED :: anyparse.macro.WriterTriviaStarEmitLowering#buildCloseTrailingFirstSepOverride',
+		'M-PAREN-KEPT-CHAIN-OPERAND :: anyparse.macro.WriterKwRefLowering#opAddSubParenShape'
 	];
 
 }

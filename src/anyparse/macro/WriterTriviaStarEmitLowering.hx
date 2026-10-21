@@ -512,13 +512,16 @@ final class WriterTriviaStarEmitLowering {
 	 * separator when the immediately preceding struct field was a bare
 	 * Ref to a trivia-bearing type. Iterates the prev body's Alt branches
 	 * looking for close-trailing branches (Star + `@:trail` + `@:trivia`)
-	 * — currently only `HxStatement.BlockStmt`. For each, emits a case
-	 * `BlockStmt(_, _ct)` with guard `_ct != null` mapping to `_de()`
-	 * (the body's writer already terminated with `\n`, so any sep would
-	 * leak ` ` between the indent and the next sibling). The default
-	 * case falls through to `sepExpr`. Returns `null` when no override
-	 * is needed (no prev body, non-bearing target, or no close-trailing
-	 * branches in the Alt) so the caller skips the override path.
+	 * — currently only `HxStatement.BlockStmt`. For each, binds the
+	 * comment as `_ct`: a LINE comment maps to `_de()` (its guarded emitter
+	 * already ended the line, so any sep would leak ` ` between the indent
+	 * and the next sibling); a BLOCK comment that ended its source line (the
+	 * first element's `newlineBefore`) maps to a hardline, as the later
+	 * elements' separator already does; a block comment the source glued
+	 * falls through to `sepExpr`, the separator the policy gives with no
+	 * comment. Returns `null` when no override is needed (no prev body,
+	 * non-bearing target, or no close-trailing branches in the Alt) so the
+	 * caller skips the override path.
 	 */
 	private static function buildCloseTrailingFirstSepOverride(
 		ctx: WriterStarEmitLowering.StarEmitCtx, prevBareRefBody: Null<PrevBodyInfo>, sepExpr: Expr
@@ -544,6 +547,7 @@ final class WriterTriviaStarEmitLowering {
 				pos: Context.currentPos()
 			};
 			cases.push({ values: [pattern], guard: macro _ct != null && StringTools.startsWith(_ct, '//'), expr: macro _de() });
+			cases.push({ values: [pattern], guard: macro _ct != null && _t.newlineBefore, expr: macro _dhl() });
 		}
 		if (cases.length == 0) return null;
 		cases.push({ values: [macro _], guard: null, expr: sepExpr });
