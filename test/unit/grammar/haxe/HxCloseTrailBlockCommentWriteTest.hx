@@ -70,6 +70,19 @@ final class HxCloseTrailBlockCommentWriteTest extends Test {
 		);
 	}
 
+	/**
+	 * A block comment that ENDS its source line after the try body's `}` keeps the first `catch` on the next line under
+	 * every `sameLine.tryCatch` placement, as a line comment does there and as the same comment after a catch body's `}`
+	 * already did for the next `catch`.
+	 */
+	@:pin('control')
+	@:killer('M-CATCH-BLOCK-LINE-END-GLUED')
+	public function testALineEndingBlockCommentKeepsTheCatchOnTheNextLine(): Void {
+		final statements: String =
+			'try {\n\t\t\tf();\n\t\t} /* c */\n\t\tcatch (e:Dynamic) {\n\t\t\tg();\n\t\t} /* d */\n\t\tcatch (e:String) {}';
+		assertSeam('tryCatch', statements, statements);
+	}
+
 	/** An EMPTY block's close-trailing comment, statement `else` and `while`. */
 	@:pin('control')
 	@:killer('M-CLOSE-TRAIL-EMPTY-HARD')

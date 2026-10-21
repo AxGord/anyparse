@@ -5194,3 +5194,9 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   `typedef` branch's. 4.3.7 types `E.A` as `E` there (`$type`) and skips an optional `Float` parameter for it. The
   index's kind stays the plain abstract kind (it mirrors the node); reading it as the enum-abstract kind would move the
   answers of the rules keyed on that kind and is not this step — branch `feat/fu-FU31`
+
+## C0 (2026-10-21) — two corpus fixtures that moved PASS→FAIL after 2026-09-20, bisected
+
+- FU26 (`asymmetric-branch-braces`) broke `issue_339_line_comment_before_catch` → no: bisect names `7f60f9fa7`, whose glued-keyword rule also glued a block comment that ENDED its source line before the first `catch` (later catches kept it via `_t.newlineBefore`) → `7f60f9fa7`
+- N52b (`Doc.BreakMark`) broke `opadd_chain_keep` → no: bisect names `85ea6604c`, whose `flatLength < 0` gate also opens a paren the source glued around a `keep` chain broken at its own operators, which the old `CollapseProbe(HardFlatten)` gate left glued without trailing content → `85ea6604c`
+- a glued paren around a broken `keep` chain nests by the source break after `return` / `=` → no: the `return` policy (fitLine by default, decided at render) may drop or add that break, so one write stops being a fixed point; the paren co-indents with the line the value starts on → `batch/hxqb-C0`

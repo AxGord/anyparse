@@ -1108,6 +1108,59 @@ class WrapList {
 	}
 
 	/**
+	 * True iff an `isPureOpAddSubChain` chain carries a hard break at one of its OWN top-level operator gaps (or before
+	 * its head) — a break its `WrapMode.Keep` shape reproduced from the source — as opposed to one that only an operand
+	 * renders (a block lambda, a broken array or object literal), which `flatLength < 0` cannot tell apart.
+	 *
+	 * The chain's separators and the breaks around them are direct children of one `Concat` at the shallowest
+	 * `WrapBoundary` depth holding a `+` / `-` separator; an operand's own breaks sit inside the operand.
+	 */
+	public static function breaksAtOwnAddSubOperator(d: Doc): Bool {
+		var opDepth: Int = -1;
+		var broken: Bool = false;
+		function isHard(n: Doc): Bool {
+			return switch n {
+				case Line(flat): flat.charAt(0) == '\n';
+				case _: false;
+			};
+		}
+		function isAddSub(n: Doc): Bool {
+			return switch n {
+				case Text(t):
+					t.trim() == '+' || t.trim() == '-';
+				case _: false;
+			};
+		}
+		function w(n: Doc, depth: Int): Void {
+			switch n {
+				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
+					CollapseAddProbe(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _), BreakCommit(_, i):
+					w(i, depth);
+				case WrapBoundary(i):
+					w(i, depth + 1);
+				case IfBreak(b, _), IfWidthExceeds(_, b, _), IfFirstLineExceeds(_, b, _), IfLineExceeds(_, b, _),
+					IfResidualLineExceeds(_, b, _), IfFullLineExceeds(_, b, _), IfNaturalFirstLineExceeds(_, b, _),
+					IfNaturalFirstLineExceedsWithRest(_, b, _), IfNaturalFirstLineFitsOpenDelim(_, b, _),
+					IfArrowContinuationFits(_, _, _, b, _), IfArrowContinuationFitsWithRest(_, _, _, b, _),
+					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _), IfTrailingCommentOverflows(_, _, _, _, b):
+					w(b, depth);
+				case Concat(items):
+					if (items.exists(isAddSub)) {
+						if (opDepth < 0 || depth < opDepth) {
+							opDepth = depth;
+							broken = false;
+						}
+						if (depth == opDepth && items.exists(isHard)) broken = true;
+					}
+					for (it in items) w(it, depth);
+				case _:
+			}
+		}
+		w(d, 0);
+		return broken;
+	}
+
+	/**
 	 * True iff `d`'s first visible Text leaf starts with a COLLECTION open
 	 * delimiter — `[` (array literal) or `{` (object / map literal). The
 	 * narrower sibling of `startsWithOpenDelim`: that matches `(` too (paren-
