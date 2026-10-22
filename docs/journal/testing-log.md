@@ -4402,3 +4402,12 @@ denominator as its anyparse figure). Source roots, % of UNKNOWN: member-not-foun
 other 14.2, pattern-capture 7.0, declared-type-not-read 5.8, operator-result 5.6, type-expression 5.3,
 F2-inferred-signature 3.8, construction 3.4, loop-element 2.6, F3-literal-or-lambda-value 1.1, F1 0.8,
 F3-lambda-parameter 0.8, index-access 0.8, string-segment 0.5, check-type 0.4.
+
+### 2026-10-22 — typer `--census` on a client corpus copy (parent, main `97b2f130e`)
+
+`facts --list --census` (all oracle configurations) on a copy of a client corpus (`git archive HEAD` + working
+sources; the original's `git diff` hash identical before and after): UNKNOWN source 36 517 / 130 034 = 28.1 %,
+nominal 30 244 / 130 034 = 23.3 %; 1 min 44 s wall. Source roots, % of UNKNOWN: declaration-node 18.1,
+member-not-found 16.9, other 13.7, construction 12.4, type-expression 11.0, index-access 6.4,
+F3-literal-or-lambda-value 5.8, operator-result 3.8, F2-inferred-signature 3.7, declared-type-not-read 2.7,
+loop-element 2.5, F3-lambda-parameter 1.9, pattern-capture 0.6, string-segment 0.6, check-type 0.0, F1 not seen.
