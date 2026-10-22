@@ -182,12 +182,16 @@ final class HaxeSpawn {
 		+ ' kids[i] = null; running--; done++;' + ' if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);'
 		+ ' if (done === jobs.length) emit(JSON.stringify(out)); else start(); }'
 		+ 'function start() { while (running < limit && next < jobs.length) { const i = next++; if (out[i]) continue; running++;'
-		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false; const what = j.shell == null ? 'haxe' : 'the command';"
-		+ " const opts = { cwd: j.cwd == null ? undefined : j.cwd, stdio: [j.tethered ? 'pipe' : 'ignore', 'pipe', 'pipe'],"
-		+ ' detached: group };'
+		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false; const prog = j.cmd == null ? 'haxe' : j.cmd;"
+		+ " const what = j.shell == null ? prog : 'the command'; let input = j.tethered ? 'pipe' : 'ignore';"
+		+ " if (j.stdin != null && !j.tethered) try { input = require('fs').openSync(j.stdin, 'r'); } catch (err) {"
+		+ " finish(i, { status: null, out: '', err: '', failure: 'could not open ' + j.stdin + ' as the standard input of ' + what,"
+		+ ' overflowed: false }); continue; }' + " const opts = { cwd: j.cwd == null ? undefined : j.cwd, stdio: [input, 'pipe', 'pipe'],"
+		+ ' env: j.env == null ? undefined : Object.assign({}, process.env, j.env), detached: group };'
 		+ " const c = j.tethered ? cp.spawn(process.execPath, ['-e', TETHER, '--', group ? '1' : '0', JSON.stringify(j.shell == null"
-		+ " ? { cmd: 'haxe', args: j.args } : { cmd: j.shell, args: [], shell: true })], opts)"
-		+ " : j.shell == null ? cp.spawn('haxe', j.args, opts) : cp.spawn(j.shell, Object.assign({ shell: true }, opts));"
+		+ ' ? { cmd: prog, args: j.args } : { cmd: j.shell, args: [], shell: true })], opts)'
+		+ ' : j.shell == null ? cp.spawn(prog, j.args, opts) : cp.spawn(j.shell, Object.assign({ shell: true }, opts));'
+		+ " if (typeof input === 'number') require('fs').closeSync(input);"
 		+ " c.tethered = j.tethered === true; if (c.tethered) c.stdin.on('error', () => {}); kids[i] = c; recordGroup(j, c);"
 		+ ' if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);'
 		+ " c.stdout.on('data', d => { size += d.length; if (size > max) { over = true; kill(c); } else o.push(d); });"
@@ -219,10 +223,50 @@ final class HaxeSpawn {
 	 * inherit a limit it never chose — which is the drift this class was extracted to end.
 	 */
 	public static function run(args: Array<String>, cwd: Null<String>, maxBuffer: Int): HaxeRun {
+		return exec({ args: args, cwd: cwd }, maxBuffer);
+	}
+
+	/**
+	 * Run the one job `job` to its end in this process — its `cmd` (`haxe` when absent) over `args`, no shell in between —
+	 * capturing both streams under a `maxBuffer` byte cap, killed after `timeout` ms when that is positive (the program
+	 * alone: a process group is the driver's). Never throws; the same three answers as `run`. A `shell` job needs the
+	 * process driver (`runAll`) and is refused, and so is an `env`, `stdin` or `timeout` on a target without node's
+	 * process API.
+	 */
+	public static function exec(job: SpawnJob, maxBuffer: Int): HaxeRun {
+		final program: String = job.cmd ?? 'haxe';
+		if (job.shell != null) return {
+			status: null,
+			out: '',
+			err: '',
+			failure: 'a shell job runs through the process driver',
+			overflowed: false
+		};
 		#if nodejs
+		final cwd: Null<String> = job.cwd;
 		final options: Dynamic = { encoding: 'utf8', maxBuffer: maxBuffer, env: childEnv() };
 		if (cwd != null) Reflect.setField(options, 'cwd', cwd);
-		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', args, options);
+		// over the inherited environment, which `options.env` already holds
+		final env: Null<DynamicAccess<String>> = job.env;
+		if (env != null) for (key in Reflect.fields(env)) Reflect.setField(options.env, key, Reflect.field(env, key));
+		final timeout: Int = job.timeout ?? 0;
+		if (timeout > 0) {
+			Reflect.setField(options, 'timeout', timeout);
+			Reflect.setField(options, 'killSignal', 'SIGKILL');
+		}
+		final stdin: Null<String> = job.stdin;
+		final input: Null<Int> = stdin == null
+			? null
+			: try js.node.Fs.openSync(stdin, 'r') catch (exception: haxe.Exception) return {
+				status: null,
+				out: '',
+				err: '',
+				failure: 'could not open $stdin as the standard input of $program (${exception.message})',
+				overflowed: false
+			};
+		if (input != null) Reflect.setField(options, 'stdio', [input, 'pipe', 'pipe']);
+		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(program, job.args, options);
+		if (input != null) js.node.Fs.closeSync(input);
 		final out: String = streamText(res.stdout);
 		final err: String = streamText(res.stderr);
 		final launchError: Null<Dynamic> = (res.error: Dynamic);
@@ -233,28 +277,34 @@ final class HaxeSpawn {
 			failure: '',
 			overflowed: false
 		};
-		// ENOBUFS is the compiler having run FINE and out-written `maxBuffer`; every other
-		// spawn error means `haxe` never ran at all. Both leave the caller without a status,
-		// but only the first leaves it with output worth reading.
-		final code: Null<Dynamic> = Reflect.field(launchError, 'code');
-		final overflowed: Bool = code != null && '$code' == 'ENOBUFS';
+		final code: String = '${Reflect.field(launchError, 'code')}';
 		return {
 			status: null,
 			out: out,
 			err: err,
-			failure: overflowed
-				? 'haxe out-wrote its $maxBuffer byte output buffer'
-				: 'could not launch haxe (${Reflect.field(launchError, 'message')})',
-			overflowed: overflowed
+			failure: switch code {
+				// the program ran FINE and out-wrote `maxBuffer`, or ran past `timeout` and was killed: both leave output
+				// worth reading, while every other spawn error means it never ran at all
+				case 'ENOBUFS': '$program out-wrote its $maxBuffer byte output buffer';
+				case 'ETIMEDOUT': '$program timed out after $timeout ms';
+				case _: 'could not launch $program (${Reflect.field(launchError, 'message')})';
+			},
+			overflowed: code == 'ENOBUFS'
 		};
 		#elseif sys
-		return processRun('haxe', args, 'haxe');
+		return job.env != null || job.stdin != null || (job.timeout ?? 0) > 0 ? {
+			status: null,
+			out: '',
+			err: '',
+			failure: 'an env, stdin or timeout of a child process requires the nodejs target',
+			overflowed: false
+		} : processRun(program, job.args, program);
 		#else
 		return {
 			status: null,
 			out: '',
 			err: '',
-			failure: 'a haxe child process requires a sys or nodejs target',
+			failure: 'a child process requires a sys or nodejs target',
 			overflowed: false
 		};
 		#end
@@ -505,7 +555,7 @@ final class HaxeSpawn {
 			}
 			final shell: Null<String> = job.shell;
 			final result: HaxeRun = shell == null
-				? run(job.args, job.cwd, maxBuffer)
+				? exec(job, maxBuffer)
 				: #if (sys && !nodejs) runShell(shell, job.cwd) #else {
 					status: null,
 					out: '',
@@ -590,6 +640,19 @@ final class HaxeSpawn {
 typedef SpawnJob = {
 	var args: Array<String>;
 	var cwd: Null<String>;
+
+	/** The program `args` are handed to, as an argument vector with no shell in between; `haxe` when absent. */
+	var ?cmd: String;
+
+	/** Variables set over this process's environment for the job alone. */
+	var ?env: haxe.DynamicAccess<String>;
+
+	/**
+	 * A file whose bytes are the job's standard input — a file, never a pipe (`docs/decisions.md`, "F1"); none when absent,
+	 * and none for a `tethered` job, whose standard input is its tether.
+	 */
+	var ?stdin: String;
+
 	var ?shell: String;
 	var ?timeout: Int;
 

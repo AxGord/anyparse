@@ -107,7 +107,8 @@
 # PROCESS's own private temp root (`unit.cli.CliFixture.isolateTempDir`), which every
 # `node bin/test.js` claims so two concurrent runs cannot name the same fixture; the
 # runner removes it on completion, and this sweep is what covers a SIGKILLed one.
-TMPL_PREFIXES=${TMPL_PREFIXES:-'anyparse-mutcheck anyparse-mutarm apq-battery apq-suite-shard apq-suite'}
+# `apq-dev` is a `devkit.TempDir` of `bin/dev.js` (and of the suite's devkit tests).
+TMPL_PREFIXES=${TMPL_PREFIXES:-'anyparse-mutcheck anyparse-mutarm apq-battery apq-suite-shard apq-suite apq-dev'}
 
 # The stamp a claimed directory carries. Dotted so no tool's own glob or
 # report ever sees it.

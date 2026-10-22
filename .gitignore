@@ -13,3 +13,4 @@ dump/
 .claude/
 bin/parse-prof-cpp/
 bin/.suite-timings.tsv
+__pycache__/
