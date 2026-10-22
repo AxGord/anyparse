@@ -561,8 +561,6 @@ final class MoveMember {
 		final srcSourceNN: String = srcSource;
 		final srcTreeNN: QueryNode = srcTree;
 		final srcDeclNN: TypeDeclMatch = srcDecl;
-		final destTreeNN: QueryNode = destTree;
-		final destSourceNN: String = destSource;
 		final srcInfoNN: FileInfo = srcInfo;
 		final destInfoNN: FileInfo = destInfo;
 		return POk({
@@ -570,7 +568,7 @@ final class MoveMember {
 			srcModule: ModuleScan.moduleOf(srcTreeNN, srcFile),
 			srcTypeName: srcTypeName,
 			destTypeName: destTypeName,
-			destModule: ModuleScan.moduleOf(destTreeNN, destHit.file),
+			destModule: ModuleScan.moduleOf(destTree, destHit.file),
 			index: index,
 			sourceOf: sourceOf,
 			trees: trees,
@@ -582,7 +580,7 @@ final class MoveMember {
 			fieldsAdded: fieldsAdded,
 			destFile: destHit.file,
 			destDecl: destHit.decl,
-			destSource: destSourceNN,
+			destSource: destSource,
 			srcInfo: srcInfoNN,
 			destInfo: destInfoNN,
 			shape: plugin.refShape()
