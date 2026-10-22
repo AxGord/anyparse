@@ -29522,6 +29522,46 @@
 			"find": "for (k in localDeclKinds) if (!mutableKinds.contains(k) && !continuationKinds.contains(k)) k",
 			"replace": "for (k in localDeclKinds) if (false) k",
 			"note": "only parameters count as invariant, so a capture of a final local read several statements later stops collapsing"
+		},
+		{
+			"name": "M-TERNARY-MLB-INLINE-NONE",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hardlineChainShape",
+			"find": "return inlineMultilineBranch ? IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(items, ops)) : broken;",
+			"replace": "return broken;",
+			"note": "the inline verdict is never read, so `ternaryMultilineBranch: inline` breaks the ternary like `break`"
+		},
+		{
+			"name": "M-TERNARY-MLB-OPTION-IGNORED",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "multilineBranchInlineExpr",
+			"find": "return macro $optAccess && ($pred($i{argNames[1]}) || $pred($i{argNames[2]}));",
+			"replace": "return macro ($pred($i{argNames[1]}) || $pred($i{argNames[2]}));",
+			"note": "the option is not consulted, so `break` and an absent key keep a block-holding ternary glued like `inline`"
+		},
+		{
+			"name": "M-TERNARY-MLB-NO-DESCENT",
+			"type": "anyparse.grammar.haxe.HxTernaryBranchBlocks",
+			"method": "holdsBlock",
+			"find": "case _: params.exists(param -> holdsBlock(param, depth + 1));",
+			"replace": "case _: false;",
+			"note": "a block below the branch top (a function argument, an object-literal value) is not found, so `inline` breaks those ternaries"
+		},
+		{
+			"name": "M-TERNARY-MLB-PATH-UNSEARCHED",
+			"type": "anyparse.grammar.haxe.HxTernaryBranchBlocks",
+			"method": "holdsMultilineBlock",
+			"find": "for (i in 1...params.length) if (holdsBlock(params[i], 0)) return true;",
+			"replace": "for (i in 1...params.length) if (false) return true;",
+			"note": "the operands after the opening group are skipped along with it, so `[a, b].map(function() {…})` is not acted on"
+		},
+		{
+			"name": "M-TERNARY-MLB-NO-WIDTH-GUARD",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hardlineChainShape",
+			"find": "IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(items, ops))",
+			"replace": "shapeNoWrap(items, ops)",
+			"note": "`inline` glues the ternary whatever the width, so a first line past the limit overflows"
 		}
 	]
 }
