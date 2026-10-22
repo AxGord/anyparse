@@ -14,6 +14,7 @@ import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.HaxelibResolver;
 import anyparse.query.IndexScope;
+import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
@@ -44,9 +45,13 @@ using StringTools;
  * project root, compiles the project's oracles (`apqlint.json`) with the facts hook and asks the type of every range the
  * compiler typed.
  *
+ * `--census` roots every UNKNOWN type answer (`UnknownCauses`) and prints the tallies after the table, which it leaves
+ * byte-identical: the share of each inference form and of each gap that needs none, the denominator the typer's next steps
+ * are measured against.
+ *
  *   haxe tools/typer-conformance.hxml
- *   node bin/typer-conformance.js upstream <haxe-4.3.7-clone> [--list]
- *   (cd <project> && node <anyparse>/bin/typer-conformance.js facts [<configuration-substring>] [--list])
+ *   node bin/typer-conformance.js upstream <haxe-4.3.7-clone> [--list] [--census]
+ *   (cd <project> && node <anyparse>/bin/typer-conformance.js facts [<configuration-substring>] [--list] [--census])
  */
 @:nullSafety(Strict)
 final class TyperConformance {
@@ -113,7 +118,7 @@ final class TyperConformance {
 	public static function main(): Void {
 		final args: Array<String> = Sys.args();
 		final list: Bool = args.remove('--list');
-		final report: Report = new Report(list);
+		final report: Report = new Report(list, args.remove('--census'));
 		switch args {
 			case ['upstream', clone]:
 				upstream(clone, report);
@@ -122,7 +127,9 @@ final class TyperConformance {
 			case ['facts', configuration]:
 				facts(configuration, report);
 			case _:
-				Sys.println('usage: typer-conformance upstream <haxe-4.3.7-clone> [--list] | facts [<configuration>] [--list]');
+				Sys.println(
+					'usage: typer-conformance upstream <haxe-4.3.7-clone> [--list] [--census] | facts [<configuration>] [--list] [--census]'
+				);
 				Sys.exit(2);
 		}
 		report.print();
@@ -443,6 +450,7 @@ final class TyperConformance {
 			report.unscored('$area (nominal)', '$label (a typedef the compiled build aliases to it: $named)')
 		else
 			report.score('$area (nominal)', label, Different(named));
+		censusRoots(report, area, label, typer, node, source == null, named == null);
 	}
 
 	/**
@@ -583,6 +591,19 @@ final class TyperConformance {
 		for (path in paths) into.push({ file: path, source: File.getContent(path) });
 	}
 
+	/** Under `--census`, the roots of the typer's UNKNOWN answers for `node`: in the written-source currency, the nominal one. */
+	private static function censusRoots(
+		report: Report, area: String, label: String, typer: FileTyper, node: Null<QueryNode>, unknownSource: Bool, unknownNominal: Bool
+	): Void {
+		if (unknownSource) report.unknownRoot('source', area, label, rootOf.bind(typer, node, true));
+		if (unknownNominal) report.unknownRoot('nominal', area, label, rootOf.bind(typer, node, false));
+	}
+
+	/** The root of the typer's UNKNOWN for `node` in the written-source (`sourceCurrency`) or the nominal currency. */
+	private static function rootOf(typer: FileTyper, node: Null<QueryNode>, sourceCurrency: Bool): UnknownCause {
+		return node == null ? { root: Other, detail: 'no node asked' } : typer.unknownCause(node, sourceCurrency);
+	}
+
 }
 
 /** One display test: where it is, the module its doc comment compiles to, and its body's statements. */
@@ -613,6 +634,8 @@ private final class FileTyper {
 	private final _chain: ChainTypeContext;
 	private final _nominal: Null<(QueryNode) -> Null<String>>;
 
+	private var _causes: Null<UnknownCauses> = null;
+
 	private function new(
 		plugin: CachingGrammarPlugin, index: SymbolIndex, file: String, source: String, tree: QueryNode, provider: TypeInfoProvider
 	) {
@@ -634,6 +657,11 @@ private final class FileTyper {
 	/** Every node of the file, outer before inner. */
 	public inline function visit(f: (QueryNode) -> Void): Void {
 		visitUnder(_tree, f);
+	}
+
+	/** Whether `node` is a call of the grammar. */
+	public inline function isCall(node: QueryNode): Bool {
+		return node.kind == _shape.callKind;
 	}
 
 	/** The written type source the deep walk gives `node` (`NominalTypes.expressionTypeSource`), or null. */
@@ -717,11 +745,6 @@ private final class FileTyper {
 			&& TypeResolver.enclosingTypeName(_tree, at) == compiled;
 	}
 
-	/** Whether `node` is a call of the grammar. */
-	public inline function isCall(node: QueryNode): Bool {
-		return node.kind == _shape.callKind;
-	}
-
 	/** The innermost node spanning exactly `span`, or null. */
 	public function exactly(span: Span): Null<QueryNode> {
 		var found: Null<QueryNode> = null;
@@ -762,6 +785,13 @@ private final class FileTyper {
 			}
 		}
 		return out;
+	}
+
+	/** The root of the UNKNOWN this typer answers for `node` in the written-source (`sourceCurrency`) or the nominal currency. */
+	public function unknownCause(node: QueryNode, sourceCurrency: Bool): UnknownCause {
+		final causes: UnknownCauses = _causes ?? new UnknownCauses(this, _tree, _shape, _index);
+		_causes = causes;
+		return causes.of(node, sourceCurrency);
 	}
 
 	/** `root` and every node under it, outer before inner. */
@@ -813,6 +843,441 @@ private final class FileTyper {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return tree == null || provider == null ? null : new FileTyper(plugin, index, file, source, tree, provider);
+	}
+
+}
+
+/**
+ * Where an UNKNOWN answer of the typer comes from, as `--census` tallies it. The `F` roots are the inference forms
+ * (`docs/typing-service.md`): a monomorph a local's body binds, a signature a body or an initializer gives, a type an
+ * expected type gives; the others are what the typing layers do not answer yet without any inference.
+ */
+private enum abstract UnknownRoot(String) to String {
+
+	/** A local declared without a type or a parameter of a local function: a monomorph its uses bind. */
+	var LocalMonomorph = 'F1-local-monomorph';
+
+	/** A member written without its return or its field type: the signature its body or initializer gives. */
+	var InferredSignature = 'F2-inferred-signature';
+
+	/** A lambda parameter written without a type: the one the lambda's expected type gives it. */
+	var LambdaParameter = 'F3-lambda-parameter';
+
+	/** A literal or a lambda value typed from the type expected where it stands. */
+	var ExpectedLiteral = 'F3-literal-or-lambda-value';
+
+	/** A declaration node (`final x: T = …`, a local function): the compiler types it, the typer is not asked it. */
+	var DeclarationNode = 'declaration-node';
+
+	/** A type name read as a value, `Class<T>`. */
+	var TypeExpression = 'type-expression';
+
+	/** A member the receiver's type does not declare: a static extension, a std gap, a structure. */
+	var MemberNotFound = 'member-not-found';
+
+	/** A member, a local or a parameter with its type written, read without that type. */
+	var DeclaredTypeNotRead = 'declared-type-not-read';
+
+	/** A name a pattern or another binder declares. */
+	var PatternCapture = 'pattern-capture';
+
+	var LoopElement = 'loop-element';
+	var IndexAccess = 'index-access';
+
+	/** A construction in the written-source currency. */
+	var Construction = 'construction';
+
+	var OperatorResult = 'operator-result';
+
+	/** `(e : T)`, its type written. */
+	var CheckType = 'check-type';
+
+	/** A segment of an interpolated string. */
+	var StringSegment = 'string-segment';
+
+	var Other = 'other';
+}
+
+/** The root of one UNKNOWN answer and what in the code led to it. */
+private typedef UnknownCause = {
+	final root: UnknownRoot;
+	final detail: String;
+}
+
+/**
+ * The roots of the UNKNOWN answers of one `FileTyper` (`--census`): from the expression asked through what it is made
+ * of — an identifier to its binding, a call to its callee, a member access to its receiver, a declaration to its
+ * initializer — to the first thing the typer could not answer. An estimate that measures the typer, never one of its
+ * answers: a kind with no rule here is rooted at its first unanswered child, and a callee parameter naming a single
+ * capital letter is taken for a class type parameter.
+ */
+@:nullSafety(Strict)
+private final class UnknownCauses {
+
+	/** Past this many hops a chain is cut and rooted as other. */
+	private static inline final MAX_DEPTH: Int = 16;
+
+	/** The wrapper a nullable receiver's type is read through. */
+	private static inline final NULL_WRAPPER: String = 'Null<';
+
+	/** The kind of the `k => v` binder of a `for`. */
+	private static inline final KEY_VALUE_BINDER: String = 'KeyValueBinder';
+
+	/** The kind of a written type annotation among a declaration's children. */
+	private static inline final ANNOTATION_KIND: String = ':';
+
+	/** The kind of a literal segment of an interpolated string. */
+	private static inline final STRING_SEGMENT_KIND: String = 'Literal';
+
+	private static inline final FN_MEMBER_KIND: String = 'FnMember';
+
+	/** The kinds whose value is the result of an operator over typed operands. */
+	private static final OPERATOR_KINDS: Array<String> = [
+		'Add',
+		'Sub',
+		'Mul',
+		'Div',
+		'Neg',
+		'Mod',
+		'AddAssign',
+		'SubAssign',
+		'Interval',
+		'NullCoal',
+		'Ternary',
+		'PostIncr',
+		'PreIncr'
+	];
+
+	/** The operator kinds whose value is a `Bool` whatever their operands. */
+	private static final BOOL_OPERATOR_KINDS: Array<String> = [
+		'Eq', 'NotEq', 'Lt', 'Gt', 'LtEq', 'GtEq', 'Lte', 'Gte', 'And', 'Or', 'Not', 'Is'
+	];
+
+	/** The kinds a written return type of a function declaration takes. */
+	private static final RETURN_TYPE_KINDS: Array<String> = ['Named', 'Anon', 'ArrowFn', 'Arrow', 'TypeRef'];
+
+	private final _memo: Map<String, UnknownCause> = [];
+	private final _hitsByName: Map<String, Array<RefHit>> = [];
+	private final _parents: Map<QueryNode, QueryNode> = [];
+	private final _typer: FileTyper;
+	private final _shape: RefShape;
+	private final _index: SymbolIndex;
+	private final _tree: QueryNode;
+	private final _lambdaKinds: Array<String>;
+	private final _accessKinds: Array<String>;
+
+	public function new(typer: FileTyper, tree: QueryNode, shape: RefShape, index: SymbolIndex) {
+		_typer = typer;
+		_tree = tree;
+		_shape = shape;
+		_index = index;
+		_lambdaKinds = (shape.lambdaKinds ?? []).concat([
+			for (k in [shape.fnExprKind, shape.namedFnExprKind, shape.parenLambdaKind]) if (k != null) k
+		]);
+		_accessKinds = [
+			for (k in [shape.fieldAccessKind, shape.nullSafeAccessKind, shape.forceFieldAccessKind]) if (k != null) k
+		];
+		final stack: Array<QueryNode> = [tree];
+		while (stack.length > 0) {
+			final n: QueryNode = stack.pop() ?? tree;
+			for (c in n.children) {
+				_parents[c] = n;
+				stack.push(c);
+			}
+		}
+	}
+
+	/** The root of the UNKNOWN the typer answers for `node` in the written-source (`sourceCurrency`) or the nominal currency. */
+	public function of(node: QueryNode, sourceCurrency: Bool): UnknownCause {
+		return try cause(node, sourceCurrency, 0) catch (exception: Exception) rooted(Other, 'exception ${exception.message}');
+	}
+
+	/** An initializer that leaves its local a monomorph: `null`, `[]`. */
+	private inline function isMonomorphSeed(init: QueryNode): Bool {
+		return init.kind == _shape.nullLiteralKind || init.kind == _shape.arrayLiteralKind && init.children.length == 0;
+	}
+
+	/** `node`'s root, memoised; a chain that comes back to a node it is still walking is rooted as a cycle. */
+	private function cause(node: QueryNode, sc: Bool, depth: Int): UnknownCause {
+		final at: Null<Span> = node.span;
+		final key: String = '$sc:${node.kind}:${at?.from}:${at?.to}';
+		final known: Null<UnknownCause> = _memo[key];
+		if (known != null) return known;
+		_memo[key] = rooted(Other, 'cycle');
+		final found: UnknownCause = depth > MAX_DEPTH ? rooted(Other, 'deep chain') : causeOf(node, sc, depth);
+		_memo[key] = found;
+		return found;
+	}
+
+	private function causeOf(node: QueryNode, sc: Bool, depth: Int): UnknownCause {
+		final k: String = node.kind;
+		if (k == _shape.parenKind && node.children.length == 1) return cause(node.children[0], sc, depth + 1);
+		if (_lambdaKinds.contains(k)) return rooted(ExpectedLiteral, 'lambda value${expectedTag(node)}');
+		if (k == _shape.objectLiteralKind || k == _shape.nullLiteralKind) return rooted(ExpectedLiteral, '$k${expectedTag(node)}');
+		if (k == _shape.arrayLiteralKind) return rooted(ExpectedLiteral, '${node.children.length == 0 ? '[]' : k}${expectedTag(node)}');
+		if (k == _shape.newExprKind) return rooted(Construction, k);
+		if (k == _shape.checkTypeKind) return rooted(CheckType, k);
+		if (isLocalDeclaration(k)) return declarationCause(node, sc, depth);
+		if ((_shape.localFunctionKinds ?? []).contains(k)) return rooted(DeclarationNode, 'local function');
+		if (BOOL_OPERATOR_KINDS.contains(k)) return rooted(OperatorResult, 'bool-valued operator');
+		if (k == _shape.identKind) return identCause(node, sc, depth);
+		if (k == _shape.callKind) return callCause(node, sc, depth);
+		if (_accessKinds.contains(k)) return accessCause(node, sc, depth, false);
+		return childCause(node, sc, depth);
+	}
+
+	/** A kind with no rule of its own: its first unanswered operand, or the kind itself when the typer answers every one. */
+	private function childCause(node: QueryNode, sc: Bool, depth: Int): UnknownCause {
+		for (c in node.children) if (isExpr(c) && !typed(c, sc)) return cause(c, sc, depth + 1);
+		final k: String = node.kind;
+		final root: UnknownRoot = if (OPERATOR_KINDS.contains(k))
+			OperatorResult
+		else if (k == _shape.indexAccessKind)
+			IndexAccess
+		else if (k == STRING_SEGMENT_KIND)
+			StringSegment
+		else
+			Other;
+		return rooted(root, k);
+	}
+
+	/** A local declaration asked as a node: typed by its initializer, or the monomorph of one with none. */
+	private function declarationCause(node: QueryNode, sc: Bool, depth: Int): UnknownCause {
+		if (annotated(node)) return rooted(DeclarationNode, 'annotated declaration');
+		final init: Null<QueryNode> = initOf(node);
+		if (init == null) return rooted(LocalMonomorph, 'declaration without an initializer');
+		if (isMonomorphSeed(init)) return rooted(LocalMonomorph, 'declaration initialized with ${init.kind}');
+		if (typed(init, sc)) return rooted(DeclarationNode, 'unannotated declaration, its initializer typed');
+		final inner: UnknownCause = cause(init, sc, depth + 1);
+		final inferred: Bool = [LocalMonomorph, InferredSignature, LambdaParameter, ExpectedLiteral].contains(inner.root);
+		return rooted(inferred ? inner.root : DeclarationNode, 'unannotated declaration <- ${inner.root}: ${inner.detail}');
+	}
+
+	private function identCause(node: QueryNode, sc: Bool, depth: Int): UnknownCause {
+		final name: Null<String> = node.name;
+		if (name == null) return rooted(Other, 'nameless identifier');
+		if (name == _shape.selfReferenceText) return rooted(Other, name);
+		final b: Null<QueryNode> = hitOf(node)?.bindingNode;
+		if (b == null)
+			return _index.refs.declsNamed(name).length > 0
+				? rooted(TypeExpression, 'type name as value')
+				: memberCause(enclosingType(node), name, false);
+		final bk: String = b.kind;
+		if ((_shape.localDeclKinds ?? []).contains(bk)) return localCause(b, sc, depth);
+		if ((_shape.paramKinds ?? []).contains(bk)) return paramCause(b);
+		if ((_shape.iterationBindingKinds ?? []).contains(bk) || bk == KEY_VALUE_BINDER) return loopCause(b, sc, depth);
+		if ((_shape.localFunctionKinds ?? []).contains(bk)) return rooted(Other, 'local function value');
+		if ((_shape.fieldDeclKinds ?? []).contains(bk))
+			return annotated(b)
+				? rooted(DeclaredTypeNotRead, 'annotated member read bare')
+				: rooted(InferredSignature, 'member field without a type');
+		if (bk == FN_MEMBER_KIND) return rooted(Other, 'method value');
+		return rooted(PatternCapture, 'identifier bound to $bk');
+	}
+
+	/** A read of the local `decl` declares. */
+	private function localCause(decl: QueryNode, sc: Bool, depth: Int): UnknownCause {
+		if (annotated(decl)) return rooted(DeclaredTypeNotRead, 'annotated local');
+		final init: Null<QueryNode> = initOf(decl);
+		if (init == null) return rooted(LocalMonomorph, 'local without an initializer');
+		if (isMonomorphSeed(init)) return rooted(LocalMonomorph, 'local initialized with ${init.kind}');
+		return typed(init, sc) ? rooted(DeclaredTypeNotRead, 'local whose initializer is typed') : cause(init, sc, depth + 1);
+	}
+
+	/** A read of the parameter `param`: written, a lambda's (its expected type), or another function's. */
+	private function paramCause(param: QueryNode): UnknownCause {
+		if (annotated(param)) return rooted(DeclaredTypeNotRead, 'annotated parameter');
+		final fn: Null<QueryNode> = _parents[param];
+		final fk: String = fn?.kind ?? '?';
+		if (fn != null && _lambdaKinds.contains(fk)) return rooted(LambdaParameter, 'lambda parameter${expectedTag(fn)}${calleeWhy(fn)}');
+		if ((_shape.localFunctionKinds ?? []).contains(fk)) return rooted(LocalMonomorph, 'local function parameter without a type');
+		return rooted(LocalMonomorph, 'parameter without a type in $fk');
+	}
+
+	/** A read of a loop's binder `binder`: the element of what the loop iterates. */
+	private function loopCause(binder: QueryNode, sc: Bool, depth: Int): UnknownCause {
+		final loop: Null<QueryNode> = binder.kind == KEY_VALUE_BINDER ? _parents[binder] : binder;
+		final iterated: Null<QueryNode> = loop?.children.find(c -> c.kind != KEY_VALUE_BINDER);
+		if (iterated == null) return rooted(LoopElement, 'loop binder');
+		return typed(iterated, sc) ? rooted(LoopElement, 'loop binder, its iterable typed') : cause(iterated, sc, depth + 1);
+	}
+
+	private function callCause(node: QueryNode, sc: Bool, depth: Int): UnknownCause {
+		if (node.children.length == 0) return rooted(Other, 'shapeless call');
+		final callee: QueryNode = node.children[0];
+		final ck: String = callee.kind;
+		if (_accessKinds.contains(ck)) return accessCause(callee, sc, depth, true);
+		if (ck != _shape.identKind) return typed(callee, sc) ? rooted(Other, 'call of a typed $ck') : cause(callee, sc, depth + 1);
+		final b: Null<QueryNode> = hitOf(callee)?.bindingNode;
+		if (b == null) return memberCause(enclosingType(node), callee.name ?? '', true);
+		if ((_shape.localFunctionKinds ?? []).contains(b.kind))
+			return returnAnnotated(b)
+				? rooted(DeclaredTypeNotRead, 'call of an annotated local function')
+				: rooted(InferredSignature, 'call of a local function without a return type');
+		if (b.kind == FN_MEMBER_KIND)
+			return returnAnnotated(b)
+				? rooted(DeclaredTypeNotRead, 'bare call of an annotated member')
+				: rooted(InferredSignature, 'call of a member function without a return type');
+		return typed(callee, sc) ? rooted(Other, 'call of a typed function value') : cause(callee, sc, depth + 1);
+	}
+
+	/** A member access `access` (`call`: as a callee): the receiver's root while it is unanswered, else the member's. */
+	private function accessCause(access: QueryNode, sc: Bool, depth: Int, call: Bool): UnknownCause {
+		if (access.children.length == 0) return rooted(Other, 'shapeless member access');
+		final recv: QueryNode = access.children[0];
+		final named: Null<String> = staticReceiver(recv);
+		if (named != null) return memberCause(named, access.name ?? '', call);
+		if (!typed(recv, sc)) return cause(recv, sc, depth + 1);
+		return memberCause(receiverType(recv, sc), access.name ?? '', call);
+	}
+
+	/** The member `name` of `typeName` read or (`call`) called. */
+	private function memberCause(typeName: Null<String>, name: String, call: Bool): UnknownCause {
+		final what: String = call ? 'call' : 'read';
+		if (typeName == null) return rooted(Other, '$what with no receiver type');
+		final decls: Array<MemberDeclaration> = _index.typing.members.receiverDeclarationsOf(SourceText.lastSegment(typeName), name);
+		if (decls.length == 0) return rooted(MemberNotFound, '$what of a member the receiver type does not declare');
+		if (!call) {
+			final fields: Array<MemberDeclaration> = decls.filter(d -> d.member.signatures.length == 0);
+			if (fields.length == 0) return rooted(Other, 'method value');
+			return fields.exists(d -> d.member.typeSource == null)
+				? rooted(InferredSignature, 'member field without a type')
+				: rooted(DeclaredTypeNotRead, 'read of an annotated member');
+		}
+		if (decls.exists(d -> d.member.hasOverloadMeta || d.member.isOverload)) return rooted(Other, 'call of an overloaded member');
+		final fns: Array<MemberDeclaration> = decls.filter(d -> d.member.signatures.length > 0);
+		if (fns.length == 0) return rooted(Other, 'call of a field value');
+		if (fns.exists(d -> d.member.returnSource == null && !d.member.isMacro && d.member.name != 'new'))
+			return rooted(InferredSignature, 'call of a member function without a return type');
+		if (fns.exists(d -> d.member.typeParamNames.length > 0)) return rooted(Other, 'call of a generic method');
+		return rooted(DeclaredTypeNotRead, 'call of an annotated member');
+	}
+
+	/** Why `lambda`, an argument of a call, gets no expected type for its parameters: the callee and what it declares there. */
+	private function calleeWhy(lambda: QueryNode): String {
+		var arg: QueryNode = lambda;
+		var p: Null<QueryNode> = _parents[lambda];
+		while (p != null && p.kind == _shape.parenKind) {
+			arg = p;
+			p = _parents[p];
+		}
+		if (p == null || p.kind != _shape.callKind || p.children[0] == arg) return '';
+		final index: Int = p.children.indexOf(arg) - 1;
+		final callee: QueryNode = p.children[0];
+		final name: String = callee.name ?? '';
+		if (callee.kind == _shape.identKind) {
+			final b: Null<QueryNode> = hitOf(callee)?.bindingNode;
+			if (b != null) return ' / callee bound to ${b.kind}';
+			final enclosing: Null<String> = enclosingType(callee);
+			return enclosing == null ? ' / no enclosing type' : parameterWhy(enclosing, name, index);
+		}
+		if (callee.kind != _shape.fieldAccessKind && callee.kind != _shape.nullSafeAccessKind) return ' / callee ${callee.kind}';
+		final recv: QueryNode = callee.children[0];
+		final host: Null<String> = staticReceiver(recv) ?? (typed(recv, true) ? receiverType(recv, true) : null);
+		return host == null ? ' / receiver untyped' : parameterWhy(host, name, index);
+	}
+
+	/** What the member `name` of `typeName` declares for its parameter `index`. */
+	private function parameterWhy(typeName: String, name: String, index: Int): String {
+		final decls: Array<MemberDeclaration> = _index.typing.members.receiverDeclarationsOf(SourceText.lastSegment(typeName), name);
+		if (decls.length == 0) return ' / callee not declared on the receiver type (extension, std, structure)';
+		final m: MemberInfo = decls[0].member;
+		if (m.hasOverloadMeta || m.isOverload) return ' / overloaded callee';
+		final pt: Null<String> = index >= 0 && index < m.paramTypeSources.length ? m.paramTypeSources[index] : null;
+		if (pt == null) return ' / callee parameter untyped or out of range';
+		final written: String = pt;
+		if (m.typeParamNames.exists(t -> new EReg('\\b$t\\b', '').match(written)))
+			return ' / callee parameter mentions a METHOD type parameter';
+		if (~/\b[A-Z]\b/.match(written)) return ' / callee parameter mentions a CLASS type parameter';
+		return ' / callee parameter concrete';
+	}
+
+	/** Where `node` stands, the slot its expected type would come from. */
+	private function expectedTag(node: QueryNode): String {
+		final p: Null<QueryNode> = _parents[node];
+		if (p == null) return ' [no parent]';
+		final pk: String = p.kind;
+		if (pk == _shape.callKind) return p.children[0] == node ? ' [callee]' : ' [call argument]';
+		if (pk == _shape.newExprKind) return ' [constructor argument]';
+		if ((_shape.localDeclKinds ?? []).contains(pk)) return annotated(p) ? ' [annotated local]' : ' [unannotated local]';
+		if ((_shape.fieldDeclKinds ?? []).contains(pk)) return annotated(p) ? ' [annotated member]' : ' [unannotated member]';
+		if ((_shape.valueReturnKinds ?? []).contains(pk)) return ' [return]';
+		if (pk == 'Assign') return ' [assignment]';
+		if (pk == 'Field') return ' [object field]';
+		if (pk == _shape.arrayLiteralKind) return ' [array element]';
+		if (pk == _shape.parenKind) return expectedTag(p);
+		return ' [$pk]';
+	}
+
+	/** Whether the typer answers `node` in the currency asked. */
+	private function typed(node: QueryNode, sc: Bool): Bool {
+		return (sc ? _typer.source(node) : _typer.nominal(node)) != null;
+	}
+
+	/** Whether `kind` declares a local as a statement of its own, not as the continuation of another's. */
+	private function isLocalDeclaration(kind: String): Bool {
+		return (_shape.localDeclKinds ?? []).contains(kind) && !(_shape.localDeclContinuationKinds ?? []).contains(kind);
+	}
+
+	/** A local declaration's initializer: its child that is neither its annotation nor a continuation declaring another local. */
+	private function initOf(decl: QueryNode): Null<QueryNode> {
+		final continuations: Array<String> = _shape.localDeclContinuationKinds ?? [];
+		return decl.children.find(c -> c.kind != ANNOTATION_KIND && !continuations.contains(c.kind));
+	}
+
+	private function isExpr(c: QueryNode): Bool {
+		return !c.kind.endsWith('Stmt') && !c.kind.endsWith('Body') && c.kind != ANNOTATION_KIND && c.kind != _shape.caseBranchKind;
+	}
+
+	/** The reference hit at `node`'s range, or the innermost one holding it. */
+	private function hitOf(node: QueryNode): Null<RefHit> {
+		final name: Null<String> = node.name;
+		final at: Null<Span> = node.span;
+		if (name == null || at == null) return null;
+		final hits: Array<RefHit> = _hitsByName[name] ?? hitsNamed(name);
+		return hits.find(h -> h.span.from == at.from && h.span.to == at.to) ?? hits.find(h -> h.span.from <= at.from && at.to <= h.span.to);
+	}
+
+	/** The reference walk's hits of `name` in the file, kept for the next identifier of that name. */
+	private function hitsNamed(name: String): Array<RefHit> {
+		final found: Array<RefHit> = try Refs.find(name, _tree, _shape) catch (exception: Exception) [];
+		_hitsByName[name] = found;
+		return found;
+	}
+
+	private function enclosingType(node: QueryNode): Null<String> {
+		final at: Null<Span> = node.span;
+		return at == null ? null : TypeResolver.enclosingTypeName(_tree, at);
+	}
+
+	/** The simple name of the type the typer gives `recv`, its `Null<>` and type arguments dropped. */
+	private function receiverType(recv: QueryNode, sc: Bool): Null<String> {
+		final answered: Null<String> = sc ? _typer.source(recv) : _typer.nominal(recv);
+		if (answered == null) return null;
+		var t: String = answered.trim();
+		while (t.startsWith(NULL_WRAPPER) && t.endsWith('>')) t = t.substring(NULL_WRAPPER.length, t.length - 1).trim();
+		final open: Int = t.indexOf('<');
+		return SourceText.lastSegment(open < 0 ? t : t.substring(0, open));
+	}
+
+	/** The type `recv` names when it is an identifier binding no value but a type declaration of the index. */
+	private function staticReceiver(recv: QueryNode): Null<String> {
+		final name: Null<String> = recv.name;
+		return recv.kind == _shape.identKind && name != null && hitOf(recv)?.bindingNode == null && _index.refs.declsNamed(name).length > 0
+			? name
+			: null;
+	}
+
+	private static inline function rooted(root: UnknownRoot, detail: String): UnknownCause {
+		return { root: root, detail: detail };
+	}
+
+	private static function annotated(node: QueryNode): Bool {
+		return node.type != null || node.children.exists(c -> c.kind == ANNOTATION_KIND);
+	}
+
+	private static function returnAnnotated(fn: QueryNode): Bool {
+		return fn.children.exists(c -> RETURN_TYPE_KINDS.contains(c.kind));
 	}
 
 }
@@ -957,14 +1422,33 @@ private final class Report {
 	/** A share as a percentage. */
 	private static inline final PERCENT: Int = 100;
 
+	/** The labels `--census` keeps of one detail. */
+	private static inline final CAUSE_SAMPLES: Int = 3;
+
+	/** The two currencies a type answer is scored in, as the area names spell them. */
+	private static final CURRENCIES: Array<String> = ['source', 'nominal'];
+
 	private final _areas: Array<String> = [];
 	private final _counts: Map<String, Array<Int>> = [];
 	private final _different: Array<String> = [];
 	private final _unscored: Map<String, Int> = [];
-	private final _list: Bool;
 
-	public function new(list: Bool) {
+	/** The UNKNOWN answers `--census` rooted, by `<currency>\t<area>\t<root>`. */
+	private final _roots: Map<String, Int> = [];
+
+	/** Per currency, the UNKNOWN answers rooted, by root. */
+	private final _rootTotals: Map<String, Map<String, Int>> = [];
+
+	/** The UNKNOWN answers `--census` rooted, by `<currency>\t<root>\t<detail>`, and the first labels of each. */
+	private final _causes: Map<String, Int> = [];
+
+	private final _samples: Map<String, Array<String>> = [];
+	private final _list: Bool;
+	private final _census: Bool;
+
+	public function new(list: Bool, census: Bool) {
 		_list = list;
+		_census = census;
 	}
 
 	/** One answer of `area` for the assertion `label`. */
@@ -990,14 +1474,61 @@ private final class Report {
 		if (_list) Sys.println('$area\tUNSCORED\t$label');
 	}
 
+	/**
+	 * Under `--census`, the root of one UNKNOWN answer of `area` in `currency`, classified then and only then (`classify`):
+	 * tallied by area and root, and by root and detail with the first labels of each as samples.
+	 */
+	public function unknownRoot(currency: String, area: String, label: String, classify: () -> UnknownCause): Void {
+		if (!_census) return;
+		final cause: UnknownCause = classify();
+		final root: String = '$currency\t$area\t${cause.root}';
+		_roots[root] = (_roots[root] ?? 0) + 1;
+		final totals: Map<String, Int> = _rootTotals[currency] ?? [];
+		totals[cause.root] = (totals[cause.root] ?? 0) + 1;
+		_rootTotals[currency] = totals;
+		final detail: String = '$currency\t${cause.root}\t${cause.detail}';
+		_causes[detail] = (_causes[detail] ?? 0) + 1;
+		final samples: Array<String> = _samples[detail] ?? [];
+		if (samples.length < CAUSE_SAMPLES) samples.push(label);
+		_samples[detail] = samples;
+	}
+
 	public function print(): Void {
 		Sys.println('area\tcases\tmatch\tunknown\tdifferent\tunknown%\tunscored');
 		for (area in _areas) {
 			final c: Array<Int> = counts(area);
-			final share: String = c[0] == 0 ? '-' : '${Math.round(PER_MILLE * c[2] / c[0]) * PERCENT / PER_MILLE}';
-			Sys.println('$area\t${c[0]}\t${c[1]}\t${c[2]}\t${c[3]}\t$share\t${_unscored[area] ?? 0}');
+			Sys.println('$area\t${c[0]}\t${c[1]}\t${c[2]}\t${c[3]}\t${share(c[2], c[0])}\t${_unscored[area] ?? 0}');
 		}
 		for (d in _different) Sys.println('DIFFERENT  $d');
+		if (_census) printCensus();
+	}
+
+	/**
+	 * The `--census` lines after the table: `CENSUS <currency> <area> <root> <n>`, `CENSUS-CAUSE <currency> <root> <detail>
+	 * <n> <samples>`, and per currency `CENSUS-UNKNOWN <currency> <unknown> <cases> <unknown%>` (the share of the scored
+	 * answers, the table's) then `CENSUS-TOTAL <currency> <root> <n> <share of its UNKNOWN>`. The roots of a currency
+	 * sum to its UNKNOWN answers, or the run fails: an UNKNOWN left unrooted is a hole in the harness, not a reading.
+	 */
+	private function printCensus(): Void {
+		for (key in sortedKeys(_roots)) Sys.println('CENSUS\t$key\t${_roots[key]}');
+		for (key in sortedKeys(_causes)) Sys.println('CENSUS-CAUSE\t$key\t${_causes[key]}\t${(_samples[key] ?? []).join(' | ')}');
+		for (currency in CURRENCIES) {
+			var cases: Int = 0;
+			var unknown: Int = 0;
+			for (area in _areas) if (area.endsWith(' ($currency)')) {
+				cases += counts(area)[0];
+				unknown += counts(area)[2];
+			}
+			Sys.println('CENSUS-UNKNOWN\t$currency\t$unknown\t$cases\t${share(unknown, cases)}');
+			final totals: Map<String, Int> = _rootTotals[currency] ?? [];
+			var rooted: Int = 0;
+			for (root in sortedKeys(totals)) {
+				final n: Int = totals[root] ?? 0;
+				rooted += n;
+				Sys.println('CENSUS-TOTAL\t$currency\t$root\t$n\t${share(n, unknown)}');
+			}
+			if (rooted != unknown) throw new Exception('census: $rooted roots for $unknown UNKNOWN answers in the $currency currency');
+		}
 	}
 
 	private function counts(area: String): Array<Int> {
@@ -1007,6 +1538,17 @@ private final class Report {
 		_counts[area] = fresh;
 		_areas.push(area);
 		return fresh;
+	}
+
+	/** `part` of `whole` as a percentage to a tenth, `-` of nothing. */
+	private static function share(part: Int, whole: Int): String {
+		return whole == 0 ? '-' : '${Math.round(PER_MILLE * part / whole) * PERCENT / PER_MILLE}';
+	}
+
+	private static function sortedKeys<V>(map: Map<String, V>): Array<String> {
+		final keys: Array<String> = [for (k in map.keys()) k];
+		keys.sort(Reflect.compare);
+		return keys;
 	}
 
 }
