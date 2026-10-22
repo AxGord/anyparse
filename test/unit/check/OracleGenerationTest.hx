@@ -657,7 +657,9 @@ final class OracleGenerationTest extends Test {
 		OracleGeneration.release(configs);
 		for (name in ['g1', 'g2']) js.Syntax.code("require('fs').appendFileSync({0}, 'x')", '$dir/$name.input');
 		File.saveContent('$dir/configs.json', haxe.Json.stringify(configs));
-		final child: String = 'APQ_TEST_CHILD=prepare APQ_TEST_CHILD_INPUT=$dir/configs.json APQ_ORACLE_LOCK_WAIT=10000 '
+		// a deadlocked run gives up only at its deadline, so finishing inside it is the proof; generous, so load cannot reach it
+		final lockWait: Int = 60000;
+		final child: String = 'APQ_TEST_CHILD=prepare APQ_TEST_CHILD_INPUT=$dir/configs.json APQ_ORACLE_LOCK_WAIT=$lockWait '
 			+ '"${js.Node.process.execPath}" "${js.Syntax.code('process.argv[1]')}"';
 		final started: Float = Date.now().getTime();
 		final children: Array<HaxeRun> = HaxeSpawn.runAll([
@@ -672,7 +674,7 @@ final class OracleGenerationTest extends Test {
 		}
 		final answers: String = File.getContent('$dir/a.json') + File.getContent('$dir/b.json');
 		Assert.equals('[null,null][null,null]', answers, 'no configuration was lost to a lock');
-		Assert.isTrue(spent < 8000, 'and neither run waited for the other\'s deadline: $spent ms');
+		Assert.isTrue(spent < lockWait, 'and neither run waited for the other\'s deadline: $spent ms');
 		Assert.equals(4, runs(dir), 'each generation ran once more, for both runs');
 		CliFixture.removeDir(dir);
 		#else
@@ -833,16 +835,23 @@ final class OracleGenerationTest extends Test {
 	}
 
 	/**
-	 * A generation that moves again every time it is regenerated is unavailable after a bounded number of tries. A
-	 * background writer appending to the hxml stands in for another run that keeps rewriting the tree.
+	 * A generation that moves again every time it is regenerated is unavailable after a bounded number of tries. Its
+	 * input is a FIFO fed an ever-growing counter, so every read of it blocks for the next number: each look at the group
+	 * sees it moved, with no race against a background writer the scheduler may not run in time. The feeder ignores
+	 * SIGPIPE — a reader that closes between its open and its write must not end it, or the next read blocks forever.
 	 */
 	@:pin('control')
 	@:killer('M-GENERATE-REJUDGE-UNBOUNDED')
 	public function testAGenerationThatKeepsGoingStaleIsUnavailable(): Void {
 		#if nodejs
 		final dir: String = fixture();
-		final restless: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
-		final writer: Dynamic = js.node.ChildProcess.spawn('sh', ['-c', 'while :; do echo "# moved" >> gen.hxml; done'], { cwd: dir });
+		final fifo: String = '$dir/restless.fifo';
+		js.node.ChildProcess.spawnSync('mkfifo', [fifo]);
+		final restless: OracleConfig = entry(dir, WRITE, [fifo]);
+		final writer: Dynamic = js.node.ChildProcess.spawn('sh', [
+			'-c',
+			"trap '' PIPE; n=0; while :; do n=$((n + 1)); echo $n > restless.fifo; done"
+		], { cwd: dir, stdio: 'ignore' });
 		var ready: Array<OracleConfig> = [];
 		CliFixture.always(() -> writer.kill(), () -> ready = OracleGeneration.prepare([restless]).oracles);
 		Assert.isTrue((ready[0]?.unavailable ?? '').contains('went stale again'), 'it is given up on: ${ready[0]?.unavailable}');
