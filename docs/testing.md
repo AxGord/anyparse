@@ -640,7 +640,7 @@ It is a portability PROBE, not a dependency: nothing anyparse ships needs a JVM.
 
 #### What the probe actually covers — NOT a package
 
-`src/anyparse/query` and `src/anyparse/check` are the probe's **default input** — the files it READS and lints (`JvmPortability.DEFAULT_SCOPE`), not a coverage claim. What it **compiles** is `-main dev.JvmPortability` with `-cp src -cp tools/src`, and Haxe types only the modules that main reaches: `anyparse/query/cli` contributes **zero** entries to the jar, and the addressing/mutation family (`Address`, `Patch`, `ReplaceNode`, `Selector`, `Engine`, `NewFile`, `MoveSymbol`, `MutationVerdict`, …) and the oracle family (`OracleCache`, `CompilerServer`, `CompilerOracle`, `HaxeSpawn`, `FixVerifier`, `OracleCoverage`) are absent too. So a green probe after a slice in `query/cli` proves the slice's code compiles for **js**, and nothing more. `tools/battery.sh` gets the trigger right — it re-runs the probe when anything under `src`, `tools/JvmPortability.hx` or the hxml moved. Widening what the probe TYPES is a separate question (`--macro include('anyparse.query.cli')`, which would first have to survive `-lib hxnodejs` not being there).
+`src/anyparse/query` and `src/anyparse/check` are the probe's **default input** — the files it READS and lints (`JvmPortability.DEFAULT_SCOPE`), not a coverage claim. What it **compiles** is `-main dev.JvmPortability` with `-cp src -cp tools/src`, and Haxe types only the modules that main reaches: `anyparse/query/cli` contributes **zero** entries to the jar, and the addressing/mutation family (`Address`, `Patch`, `ReplaceNode`, `Selector`, `Engine`, `NewFile`, `MoveSymbol`, `MutationVerdict`, …) and the oracle family (`OracleCache`, `CompilerServer`, `CompilerOracle`, `HaxeSpawn`, `FixVerifier`, `OracleCoverage`) are absent too. So a green probe after a slice in `query/cli` proves the slice's code compiles for **js**, and nothing more. `tools/battery.sh` gets the trigger right — it re-runs the probe when anything under `src`, `tools/src/dev/JvmPortability.hx` or the hxml moved. Widening what the probe TYPES is a separate question (`--macro include('anyparse.query.cli')`, which would first have to survive `-lib hxnodejs` not being there).
 
 #### Reading the two output lines
 
@@ -823,6 +823,15 @@ live in the one suite: `test-js-common.hxml` carries `-cp tools/src`, tests go t
 and are discovered like any other; a tool test may spawn `node -e` scripts or `git` in a `TempDir`, never the private
 scrub list (its parity fixtures are synthetic). A command run alone (not through a pool) is killed on timeout, but a
 child it spawned is not — route a command that forks through `Pool`.
+
+Subcommands: `scrub-guard`, `clone-census`, `worker-build`, `tmp-lifecycle`, `fixture-cache shim|prune|tally`,
+`jvm-portability`, `typer-conformance`, `edge-diff`, `parse-prof`, `prof-top`, `bench-ab`, `lint-warn` (the body of
+`tools/hooks/hxq-lint-warn.sh` — the hook stays silent without a built `bin/dev.js`), `gate-probe`, `lint-warn-probe` (the
+two hooks' acceptance matrices). The Haxe tools live in `tools/src/dev` (package `dev`); `tools/jvm-portability.hxml` and
+`tools/bench-hxcpp.hxml` compile `dev.JvmPortability` / `dev.ParseProf` for `--jvm` / hxcpp, because that compile is the
+check. Data lives in `tools/data/`. `tools/tmp-lifecycle.sh`, `tools/fixture-cache.sh` (sourced) and
+`tools/worker-build.sh` stay until their shell callers move; their twins are `devkit.TmpLifecycle`, `devkit.FixtureCache`
+and `dev.WorkerBuild`, and `TmpLifecycleTest` holds the two sweep predicates to one answer.
 
 ### Scratch directories: every tool's, and who removes them
 

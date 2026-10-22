@@ -109,7 +109,7 @@ final class TmpLifecycle {
 	 */
 	public function isOrphan(dir: String, now: Int): Bool {
 		if (isKept(dir)) return false;
-		final limit: Int = if (FileSystem.exists(Path.join([dir, stamp]))) {
+		final limit: Int = if (FileSystem.exists(Path.join([dir, stamp])) && !FileSystem.isDirectory(Path.join([dir, stamp]))) {
 			final pid: Null<String> = ownerPid(dir);
 			if (pid != null && isAlive(pid)) return false;
 			graceSeconds;
