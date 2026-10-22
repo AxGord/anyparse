@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.CoreValueTypes;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -98,9 +99,8 @@ final class TypingService {
 		final node: QueryNode = host.peel(raw, ctx);
 		final name: Null<String> = node.name;
 		final kind: String = node.kind;
-		final literalType: Null<String> = shape.literalTypeNames?.get(kind);
-		final literal: Null<(typeName:String, ctx:C) -> Null<T>> = host.literal;
-		if (literalType != null) return literal == null ? null : literal(literalType, ctx);
+		final carried: Null<T> = carriedType(node, shape, host, ctx);
+		if (carried != null) return carried;
 		if ((kind == shape.identKind || kind == shape.stringInterpIdentKind) && name != null)
 			return name == shape.selfReferenceText ? host.self(node, ctx) : identifierType(node, shape, host, ctx);
 		if (host.isAccess(kind, ctx) && name != null && node.children.length > 0) return host.access(node, ctx);
@@ -136,6 +136,55 @@ final class TypingService {
 			: host.loopElement(from, ctx) ?? (parameter == null ? null : parameter(from, ident, ctx));
 		reading.pop();
 		return held;
+	}
+
+	/**
+	 * The type a shape that is or writes its own type gives `node`: a literal (`RefShape.literalTypeNames`; an integer one
+	 * only spelled as the integer type, `spellsAnotherType`), a text segment of an interpolating string the string type; an
+	 * ascription `(e : T)`, the type it writes (`TypingHost.ascribed`). Null for any other shape, and for a host
+	 * typing that one none.
+	 */
+	private static function carriedType<T, C>(node: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
+		final literal: Null<(typeName:String, ctx:C) -> Null<T>> = host.literal;
+		final ascribed: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.ascribed;
+		final literalType: Null<String> = shape.literalTypeNames?.get(node.kind) ?? (
+			node.kind == shape.stringInterpTextKind ? interpolatingStringType(shape) : null
+		);
+		return if (literalType != null && literal != null && !spellsAnotherType(node, literalType, shape))
+			literal(literalType, ctx)
+		else if (node.kind == shape.checkTypeKind && node.children.length > 0 && ascribed != null)
+			ascribed(node, ctx)
+		else
+			null;
+	}
+
+	/**
+	 * Whether the literal `node`, which the grammar maps to the integer type (`CoreValueTypes.integer`), is one the compiler
+	 * types as another: its text, `_` dropped, neither decimal digits nor `CoreValueTypes.hexLiteralPrefix` and hex digits (a
+	 * suffix), or a decimal number past `CoreValueTypes.integerMax`. The walk gives such a literal no type.
+	 */
+	private static function spellsAnotherType(node: QueryNode, typeName: String, shape: RefShape): Bool {
+		final core: Null<CoreValueTypes> = shape.coreValueTypes;
+		if (core == null || typeName != core.integer) return false;
+		var digits: String = (node.name ?? '').split('_').join('');
+		final hex: Null<String> = core.hexLiteralPrefix;
+		if (hex != null && digits.startsWith(hex)) return !~/^[0-9A-Fa-f]+$/.match(digits.substr(hex.length));
+		if (!~/^[0-9]+$/.match(digits)) return true;
+		final max: Null<String> = core.integerMax;
+		while (digits.length > 1 && digits.charAt(0) == '0') digits = digits.substr(1);
+		return max != null && (digits.length > max.length || digits.length == max.length && digits > max);
+	}
+
+	/**
+	 * The type a text segment of an interpolating string carries (`RefShape.stringInterpTextKind`): the one
+	 * `RefShape.literalTypeNames` gives every interpolating string literal kind, a piece of whose text it is. Null when
+	 * they name none or disagree.
+	 */
+	private static function interpolatingStringType(shape: RefShape): Null<String> {
+		final names: Array<String> = [
+			for (k in shape.interpolatingStringKinds ?? []) shape.literalTypeNames?.get(k) ?? ''
+		];
+		return names.length == 0 || names.contains('') || names.filter(n -> n != names[0]).length > 0 ? null : names[0];
 	}
 
 	/** Whether `node` is arithmetic the walk types by its operands: a binary `RefShape.arithmeticKinds` operator, or the negation. */
@@ -180,6 +229,12 @@ typedef TypingHost<T, C> = {
 
 	/** The value of a literal whose type `RefShape.literalTypeNames` names `typeName`; null for a host typing none. */
 	final literal: Null<(typeName:String, ctx:C) -> Null<T>>;
+
+	/**
+	 * The type the ascription `node` (`RefShape.checkTypeKind`, `(e : T)`) gives the value it holds: the type it writes,
+	 * which the value is checked against; null for a host typing none.
+	 */
+	final ascribed: Null<(node:QueryNode, ctx:C) -> Null<T>>;
 
 	/** What the self reference `node` denotes. */
 	final self: (node:QueryNode, ctx:C) -> Null<T>;

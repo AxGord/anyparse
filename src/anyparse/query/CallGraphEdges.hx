@@ -638,6 +638,7 @@ final class CallGraphEdges {
 			peel: (node, _) -> unwrap(node),
 			isAccess: (kind, _) -> isAccessKind(kind),
 			literal: null,
+			ascribed: null,
 			self: (_, currentType) -> selfTypeOf(currentType),
 			binding: (ident, _) -> {
 				final name: Null<String> = ident.name;

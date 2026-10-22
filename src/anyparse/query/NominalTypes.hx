@@ -67,6 +67,7 @@ final class NominalTypes {
 		peel: (node, _) -> node,
 		isAccess: (kind, c) -> kind == c.shape.fieldAccessKind,
 		literal: (typeName, _) -> typeName,
+		ascribed: indexAscribed,
 		self: indexSelf,
 		binding: (ident, c) -> TypeResolver.identBindingFrom(ident, c.root, c.shape),
 		bound: (from, c) -> {
@@ -431,9 +432,11 @@ final class NominalTypes {
 		?chain: ChainTypeContext, asReceiver: Bool = false
 	): Null<String> {
 		// reified data has the type of the syntax tree it builds, never of its text as code
-		return TypeResolver.reified(node, root, shape)
-			? null
-			: expressionNominalWalk(node, root, shape, declaredTypes, index, file, chain, [], asReceiver);
+		if (TypeResolver.reified(node, root, shape)) return null;
+		final walked: Null<String> = expressionNominalWalk(node, root, shape, declaredTypes, index, file, chain, [], asReceiver);
+		if (walked != null || chain == null) return walked;
+		final door: Null<String> = ValueDoors.typeSource(node, root, shape, declaredTypes, chain, index, file, asReceiver);
+		return door == null ? null : outerNominalOf(door, chain.typeSyntax);
 	}
 
 	/**
@@ -453,7 +456,9 @@ final class NominalTypes {
 		// reified data has the type of the syntax tree it builds, never of its text as code
 		if (TypeResolver.reified(node, root, shape)) return null;
 		final direct: Null<String> = valueTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, []);
-		if (direct != null || index == null || node.kind != shape.callKind || node.children.length == 0) return direct;
+		if (direct != null) return direct;
+		if (index == null || node.kind != shape.callKind || node.children.length == 0)
+			return ValueDoors.typeSource(node, root, shape, declaredTypes, chain, index, file, false);
 		final callee: QueryNode = node.children[0];
 		final method: Null<String> = callee.name;
 		final typing: IndexTyping = {
@@ -1070,17 +1075,36 @@ final class NominalTypes {
 		final kind: Null<String> = c.shape.optionalParamKind;
 		// a written type the grammar does not read as one type (`#if lime Image #else Dynamic #end`) is no answer
 		if (written == null || !answerableType(written, c.chain.typeSyntax)) return null;
-		final index: Null<SymbolIndex> = c.index;
-		final fi: Null<FileInfo> = index?.fileInfo(c.file);
-		final full: Null<String> = !complete || index == null || fi == null
-			? written
-			: index.typing.ancestors.completed(written, fi, from, writtenTypeParams(fi));
+		final full: Null<String> = complete ? completedType(written, from, c) : written;
 		return if (full == null)
 			null
 		else if (kind != null && startsKindAt(c.root, from, kind))
 			optionalValueType(full, c.shape.optionalValueTypeName, c.chain.typeSyntax)
 		else
 			full;
+	}
+
+	/**
+	 * `written`, a type the reading file writes at `at`, with the type arguments a reference in it leaves out written in
+	 * (`AncestorTable.completed`), null when they cannot be; unchanged with no index.
+	 */
+	private static function completedType(written: String, at: Int, c: IndexTyping): Null<String> {
+		final index: Null<SymbolIndex> = c.index;
+		final fi: Null<FileInfo> = index?.fileInfo(c.file);
+		return index == null || fi == null ? written : index.typing.ancestors.completed(written, fi, at, writtenTypeParams(fi));
+	}
+
+	/**
+	 * The type the ascription `node` (`(e : T)`) gives the value it holds, for the index host: the type it writes
+	 * (`ChainTypeContext.castTargetSources`), completed where it is written (`completedType`). Null with no such table, and
+	 * when it writes none the grammar reads as one type.
+	 */
+	private static function indexAscribed(node: QueryNode, c: IndexTyping): Null<String> {
+		final targets: Null<() -> Map<Int, String>> = c.chain.castTargetSources;
+		final at: Null<Span> = node.span;
+		if (targets == null || at == null) return null;
+		final written: Null<String> = TypeResolver.castTargetWithin(at, targets());
+		return written == null || !answerableType(written, c.chain.typeSyntax) ? null : completedType(written, at.from, c);
 	}
 
 	/**
@@ -1172,6 +1196,12 @@ typedef ChainTypeContext = {
 	/** Source text of the file being probed — the for-binding arm reads the loop HEADER text to refuse the key-value form. */
 	final source: String;
 
+
+	/**
+	 * The written target type of each ascription and typed cast of the file (`TypeInfoProvider.castTargetSources`), read when
+	 * first asked; unset, the deep mode types no ascription.
+	 */
+	@:optional final castTargetSources: () -> Map<Int, String>;
 
 	/** `GrammarPlugin.typeSyntax` — how the deep mode reads a written type's wrapper and arguments. */
 	final typeSyntax: TypeSyntaxReader;

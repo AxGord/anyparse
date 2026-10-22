@@ -2991,6 +2991,13 @@ final class RefShape {
 	public var classDeclKinds: Null<Array<String>>;
 
 	/**
+	 * The type a type NAME read as a value carries, by the kind of the declaration it names: the name given here applied
+	 * to the type (Haxe 4.3.7 `type_module_type`: a class or an interface is a `Class<T>`, an enum an `Enum<T>`). A kind
+	 * it does not list names no value the typer spells. Optional; unset types no type name read as a value.
+	 */
+	public var typeValueTypeNames: Null<Map<String, String>>;
+
+	/**
 	 * Maps a container type's SIMPLE name to the index of the type parameter that
 	 * its index-access `x[k]` yields (Haxe `Map<K, V>` → 1, `Array<T>` → 0).
 	 * `FieldWriteIndex` uses it to resolve the receiver of a
@@ -3579,6 +3586,19 @@ typedef CoreValueTypes = {
 	final widens: Map<String, Array<String>>;
 	final integer: String;
 	final real: String;
+
+	/**
+	 * The largest DECIMAL literal of the `integer` type, spelled (Haxe `2147483647`): 4.3.7 types a decimal literal past it
+	 * as the `real` type, so no such literal is typed as `integer`. Optional; unset bounds none.
+	 */
+	@:optional final integerMax: String;
+
+	/**
+	 * The prefix of a hexadecimal integer literal (Haxe `0x`). An integer literal is typed as the `integer` type only when its
+	 * text, `_` separators dropped, is decimal digits or this prefix and hex digits — anything else carries a suffix the
+	 * compiler types otherwise (`1i64` is a `haxe.Int64`, `1u32` a `UInt`). Optional; unset admits decimal digits only.
+	 */
+	@:optional final hexLiteralPrefix: String;
 
 	/**
 	 * The `names` the language declares as classes (Haxe `String`); every other one is an abstract the compiler represents
