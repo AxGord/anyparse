@@ -18,8 +18,8 @@ using Lambda;
 /**
  * Flags a redundant intermediate local: an IMMUTABLE single-variable declaration whose
  * initializer is a TRIVIAL PURE READ and whose one and only reference sits in the
- * immediately following sibling statement, so the read can be substituted at the use and the
- * declaration line dropped:
+ * immediately following sibling statement -- or in any later one, when the source is a binding
+ * nothing writes -- so the read can be substituted at the use and the declaration line dropped:
  *
  * ```haxe
  * final logoBmd:Null<BitmapData> = _userLogoBmd;
@@ -39,7 +39,7 @@ using Lambda;
  *
  * ## What is flagged
  *
- * Two CONSECUTIVE statements of one statement list (`ControlFlowSupport.blockKinds`) where
+ * A declaration and a later statement of one statement list (`ControlFlowSupport.blockKinds`) where
  * every gate below holds. Each gate is a structurally-provable shape invariant, so the fix is
  * not `RiskyFix`; every gate fails CLOSED (an unset seam, an unresolved type or an unexpected
  * node shape refuses the site).
@@ -80,8 +80,13 @@ using Lambda;
  *   initializer text is copied verbatim but its free identifiers re-resolve where they land, so
  *   an intervening binder captures the copy: `final x = n; try p catch (n:Dynamic) use(x);` would
  *   become `use(n)` reading the exception -- output that COMPILES and is silently wrong.
- * - THE READ SITS IN THE IMMEDIATELY FOLLOWING SIBLING statement. Adjacency is load-bearing:
- *   an intervening statement could mutate the source between the capture and the read.
+ * - THE READ SITS IN THE IMMEDIATELY FOLLOWING SIBLING statement, or in a LATER sibling only over
+ *   an INVARIANT source: a bare read of a parameter or `final` local of the enclosing function that
+ *   no write anywhere resolves to. For any other source adjacency is load-bearing -- an
+ *   intervening statement could mutate it between the capture and the read. Over an invariant
+ *   source intermediate statements may read it, and a loop or a preceding call around the read is
+ *   harmless; the next two gates are then replaced by one: no nested function or reification on
+ *   the path to the read.
  * - THE READ IS EVALUATED AT MOST ONCE, EAGERLY. No node on the path from the next statement
  *   down to the read may be a nested function or a loop: a LAMBDA or nested function defers
  *   the read past the eager capture (a timing change), and a LOOP evaluates it once per
@@ -157,7 +162,9 @@ final class JoinSingleUseLocal implements Check {
 				span: m.declSpan,
 				rule: 'join-single-use-local',
 				severity: Severity.Info,
-				message: 'this local only captures a trivial read and can be inlined into the next statement'
+				message: m.later
+					? 'this local only captures a value nothing writes and can be inlined at its one read, statements later'
+					: 'this local only captures a trivial read and can be inlined into the next statement'
 			}: Violation)
 		];
 	}
@@ -222,15 +229,20 @@ final class JoinSingleUseLocal implements Check {
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (support == null) return null;
 		final barriers: Array<String> = barrierKinds(shape);
+		final continuationKinds: Array<String> = shape.localDeclContinuationKinds ?? [];
 		return {
 			localDeclKinds: localDeclKinds,
 			mutableKinds: mutableKinds,
-			continuationKinds: shape.localDeclContinuationKinds ?? [],
+			continuationKinds: continuationKinds,
 			identKind: shape.identKind,
 			fieldAccessKind: shape.fieldAccessKind,
 			returnKind: shape.returnStatementKind,
 			blockKinds: support.blockKinds(),
 			barrierKinds: barriers,
+			deferringKinds: deferringKinds(shape),
+			invariantBinderKinds: [
+				for (k in localDeclKinds) if (!mutableKinds.contains(k) && !continuationKinds.contains(k)) k
+			].concat(shape.paramKinds ?? []),
 			branchKinds: shape.branchKinds ?? [],
 			memberNamingKinds: memberNamingKinds(shape),
 			shape: shape
@@ -253,14 +265,23 @@ final class JoinSingleUseLocal implements Check {
 	}
 
 	/**
+	 * The node kinds that DEFER a read past the eager capture — every function-like kind (`ShapeVocab.functionLikeKinds`, a
+	 * named function expression included). `opaqueKinds` joins them because a reification subtree's uses are spliced rather
+	 * than written, so no textual scan can price the substitution there.
+	 */
+	private static function deferringKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = ShapeVocab.functionLikeKinds(shape);
+		for (k in shape.opaqueKinds ?? []) if (!out.contains(k)) out.push(k);
+		return out;
+	}
+
+	/**
 	 * The node kinds that make a read REPEATED or DEFERRED relative to the eager, once-only capture it would replace —
-	 * every function-like kind (`ShapeVocab.functionLikeKinds`, a named function expression included) and every loop
-	 * (`ShapeVocab.loopKinds`, a comprehension's included). `opaqueKinds` joins them because a reification subtree's uses are
-	 * spliced rather than written, so no textual scan can price the substitution there.
+	 * every `deferringKinds` kind plus every loop (`ShapeVocab.loopKinds`, a comprehension's included).
 	 */
 	private static function barrierKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = ShapeVocab.functionLikeKinds(shape);
-		for (k in ShapeVocab.loopKinds(shape).concat(shape.opaqueKinds ?? [])) if (!out.contains(k)) out.push(k);
+		final out: Array<String> = deferringKinds(shape);
+		for (k in ShapeVocab.loopKinds(shape)) if (!out.contains(k)) out.push(k);
 		return out;
 	}
 
@@ -272,7 +293,7 @@ final class JoinSingleUseLocal implements Check {
 		if (s.blockKinds.contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length - 1) {
-				final m: Null<Match> = matchPair(kids[i], kids[i + 1], node, source, comments, s, tree, declTypeSources);
+				final m: Null<Match> = matchPair(kids, i, source, comments, s, tree, declTypeSources);
 				if (m != null) out.push(m);
 			}
 		}
@@ -280,13 +301,14 @@ final class JoinSingleUseLocal implements Check {
 	}
 
 	/**
-	 * The inline match for a `decl` immediately followed by `next`, or null when any gate
-	 * declines (see the class doc for every one of them, in this order).
+	 * The inline match for the declaration `kids[at]` and its read in a later sibling, or null when any
+	 * gate declines (see the class doc for every one of them, in this order).
 	 */
 	private static function matchPair(
-		decl: QueryNode, next: QueryNode, block: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
-		s: Seams, tree: QueryNode, declTypeSources: () -> Map<Int, String>
+		kids: Array<QueryNode>, at: Int, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, tree: QueryNode,
+		declTypeSources: () -> Map<Int, String>
 	): Null<Match> {
+		final decl: QueryNode = kids[at];
 		final name: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
 		if (name == null || declSpan == null) return null;
@@ -298,16 +320,20 @@ final class JoinSingleUseLocal implements Check {
 		final initSpan: Null<Span> = init.span;
 		if (initSpan == null || !isTrivialPureRead(init, s) || readsMutableLocal(init, tree, s)) return null;
 
-		if (isJoinReturnShape(next, name, s)) return null;
+		if (isJoinReturnShape(kids[at + 1], name, s)) return null;
 
 		final declNameFrom: Null<Int> = CheckScan.soleReferenceNameFrom(name, declSpan, tree, s.shape);
 		if (declNameFrom == null) return null;
 		if (CheckScan.escapesConditionalRegion(name, declSpan, tree, s.shape)) return null;
 		final read: Null<RefHit> = soleReadHit(name, declSpan, tree, s.shape);
 		if (read == null) return null;
-		// ADJACENCY: `pathTo` is the gate -- it yields null unless the read sits inside the
-		// IMMEDIATELY following sibling, so a read further down the list never matches.
-		if (!readPositionIsSafe(next, read.span, init, s)) return null;
+		final holder: Int = holderIndex(kids, at, read.span);
+		if (holder < 0) return null;
+		final later: Bool = holder > at + 1;
+		final placed: Bool = later
+			? laterReadIsSafe(kids[holder], read.span, init, declSpan, tree, s)
+			: readPositionIsSafe(kids[holder], read.span, init, s);
+		if (!placed) return null;
 
 		if (!annotationIsNeutral(declTypeSources()[declNameFrom], init, s, tree, declTypeSources)) return null;
 		if (commentInDroppedRegion(comments, dropSpan)) return null;
@@ -322,7 +348,8 @@ final class JoinSingleUseLocal implements Check {
 			declSpan: keySpan,
 			dropSpan: dropSpan,
 			readSpan: new Span(tokenFrom, tokenFrom + name.length),
-			initSource: source.substring(initSpan.from, initSpan.to)
+			initSource: source.substring(initSpan.from, initSpan.to),
+			later: later
 		};
 	}
 
@@ -370,11 +397,15 @@ final class JoinSingleUseLocal implements Check {
 	 */
 	private static function readsMutableLocal(init: QueryNode, tree: QueryNode, s: Seams): Bool {
 		if (init.kind != s.identKind) return false;
+		final bindingFrom: Null<Int> = bindingHitOf(init, tree, s)?.bindingSpan?.from;
+		return bindingFrom != null && TypeResolver.mayBeLocalOrParam(tree, bindingFrom, s.mutableKinds, []);
+	}
+
+	/** The resolution of the identifier `init` spells, or null when it carries no name or span or resolves to nothing. */
+	private static function bindingHitOf(init: QueryNode, tree: QueryNode, s: Seams): Null<RefHit> {
 		final name: Null<String> = init.name;
 		final span: Null<Span> = init.span;
-		if (name == null || span == null) return false;
-		final bindingFrom: Null<Int> = TypeResolver.resolveBindingFrom(name, span, tree, s.shape);
-		return bindingFrom != null && TypeResolver.mayBeLocalOrParam(tree, bindingFrom, s.mutableKinds, []);
+		return name == null || span == null ? null : TypeResolver.resolveBindingHit(name, span, tree, s.shape);
 	}
 
 	/** Whether `next` is exactly `return <name>;` -- the pair `join-return` claims. */
@@ -432,8 +463,8 @@ final class JoinSingleUseLocal implements Check {
 	 * read a local invisibly and leave `CheckScan.soleReferenceNameFrom` counting one reference
 	 * where there are two. Deleting the declaration then unbinds the survivor: a `--fix` that
 	 * does not compile. Two are confirmed on real trees -- a braceless `$name` string
-	 * interpolation (the client tree `src/video/VideoOutputController.hx:239` captures `batchH` for a
-	 * call and re-reads it from the `trace` on the next line) and a macro reification `$name`
+	 * interpolation (a client tree captures a local for a call and re-reads
+	 * it from a `trace` on the next line) and a macro reification `$name`
 	 * (`DollarIdentExpr`, which `opaqueKinds` only guards when the macro is ON the path to the
 	 * read).
 	 *
@@ -513,8 +544,8 @@ final class JoinSingleUseLocal implements Check {
 	 * Whether the read at `readSpan` sits in a position the substitution may take over, judged on
 	 * its path down from the next statement `next`. Three conditions, all fail-closed:
 	 *
-	 * - the read IS inside `next` at all (`pathTo` yields null otherwise) -- this is the adjacency
-	 *   gate: a read further down the statement list never resolves to a path here;
+	 * - the read IS inside `next` at all (`pathTo` yields null otherwise), which
+	 *   is the immediately following sibling `holderIndex` placed it in;
 	 * - it is evaluated at most once and eagerly (`evaluatedOnceEagerly`);
 	 * - nothing impure runs before it (`nothingImpureBefore`);
 	 * - and, for a FIELD-CHAIN initializer only, the path is unconditional. A bare identifier may
@@ -527,6 +558,59 @@ final class JoinSingleUseLocal implements Check {
 		final path: Null<Array<QueryNode>> = pathToSpan(next, readSpan);
 		return path != null && evaluatedOnceEagerly(path, s) && nothingImpureBefore(path, s)
 			&& (init.kind == s.identKind || !pathIsConditional(path, s));
+	}
+
+	/**
+	 * The index of the sibling after `kids[at]` whose span holds `readSpan`, or -1 when the read lies in no later
+	 * statement of the list.
+	 */
+	private static function holderIndex(kids: Array<QueryNode>, at: Int, readSpan: Span): Int {
+		for (j in at + 1...kids.length) {
+			final span: Null<Span> = kids[j].span;
+			if (span != null && span.from <= readSpan.from && readSpan.to <= span.to) return j;
+		}
+		return -1;
+	}
+
+	/**
+	 * Whether a read in the LATER sibling `holder` -- one or more statements after the immediately following one --
+	 * may take the substitution. The source must be invariant (`invariantSource`), which is what makes everything the
+	 * adjacent path guards irrelevant: no intermediate statement, preceding call or loop around the read can make the
+	 * re-read differ from the capture. Only a nested function or a reification on the path still refuses, since it
+	 * moves the read into a closure with its own capture semantics.
+	 */
+	private static function laterReadIsSafe(
+		holder: QueryNode, readSpan: Span, init: QueryNode, declSpan: Span, tree: QueryNode, s: Seams
+	): Bool {
+		final path: Null<Array<QueryNode>> = pathToSpan(holder, readSpan);
+		return path != null && invariantSource(init, declSpan, tree, s) && !path.exists(n -> s.deferringKinds.contains(n.kind));
+	}
+
+	/**
+	 * Whether the initializer is a bare read of a binding whose value provably never changes: a PARAMETER or an
+	 * immutable local (`invariantBinderKinds`, a positive whitelist) of the function enclosing the declaration, which
+	 * nothing in the tree writes. A field read, a dotted chain or an unresolved name fails closed -- any call between
+	 * may write a field. An outer function's parameter fails too: inside the nested
+	 * function it is a capture of a binding that function does not own, and the whitelist admits owned ones only.
+	 */
+	private static function invariantSource(init: QueryNode, declSpan: Span, tree: QueryNode, s: Seams): Bool {
+		final hit: Null<RefHit> = bindingHitOf(init, tree, s);
+		if (hit == null) return false;
+		final binder: Null<QueryNode> = hit.bindingNode;
+		final binding: Null<Span> = hit.bindingSpan;
+		if (binder == null || binding == null || !s.invariantBinderKinds.contains(binder.kind)) return false;
+		final fnSpan: Null<Span> = BinderScan.enclosingFunctionSubtree(tree, declSpan.from, s.shape).span;
+		if (fnSpan == null || binding.from < fnSpan.from || binding.to > fnSpan.to) return false;
+		return !sourceWritten(hit.name, binding, tree, s);
+	}
+
+	/**
+	 * Whether any write in the tree -- an assignment, a compound assignment, an increment, in a nested closure or a loop
+	 * alike -- resolves to the binding at `binding`. Position-blind on purpose: a write after the read is harmless in
+	 * straight-line code, but under a loop it precedes the next iteration's read, and pricing that is flow analysis.
+	 */
+	private static function sourceWritten(name: String, binding: Span, tree: QueryNode, s: Seams): Bool {
+		return Refs.find(name, tree, s.shape).exists(h -> h.kind == RefKind.Write && h.bindingSpan?.from == binding.from);
 	}
 
 	/** Whether any comment overlaps `dropSpan`, the declaration line the fix deletes whole. */
@@ -583,6 +667,8 @@ private typedef Seams = {
 	var returnKind: Null<String>;
 	var blockKinds: Array<String>;
 	var barrierKinds: Array<String>;
+	var deferringKinds: Array<String>;
+	var invariantBinderKinds: Array<String>;
 	var branchKinds: Array<String>;
 	var memberNamingKinds: Array<String>;
 	var shape: RefShape;
@@ -590,11 +676,13 @@ private typedef Seams = {
 
 /**
  * An inlinable pair: the declaration span (finding key), the line-wide region the fix drops,
- * the identifier token the fix overwrites, and the initializer text it writes there.
+ * the identifier token the fix overwrites, the initializer text it writes there, and whether the
+ * read sits past the immediately following statement.
  */
 private typedef Match = {
 	var declSpan: Span;
 	var dropSpan: Span;
 	var readSpan: Span;
 	var initSource: String;
+	var later: Bool;
 }

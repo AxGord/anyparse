@@ -180,7 +180,6 @@ final class IfExpressionChain {
 	public static function collect(
 		head: QueryNode, ifKinds: Array<String>, blockStmtKind: String, minBranches: Int = MIN_CHAIN_BRANCHES
 	): Null<IfChain> {
-		final min: Int = minBranches;
 		final branches: Array<{ cond: QueryNode, stmt: QueryNode }> = [];
 		var current: QueryNode = head;
 		while (true) {
@@ -195,7 +194,7 @@ final class IfExpressionChain {
 				final terminal: Null<QueryNode> = singleStmt(elseBranch, blockStmtKind);
 				return if (terminal == null)
 					null
-				else if (branches.length >= min)
+				else if (branches.length >= minBranches)
 					{ branches: branches, terminal: terminal }
 				else
 					null;
@@ -242,7 +241,6 @@ final class IfExpressionChain {
 	public static function collectCascade(
 		kids: Array<QueryNode>, at: Int, ifKinds: Array<String>, blockStmtKind: String, minBranches: Int = MIN_CHAIN_BRANCHES
 	): Null<IfChain> {
-		final min: Int = minBranches;
 		final branches: Array<{ cond: QueryNode, stmt: QueryNode }> = [];
 		var i: Int = at;
 		while (i < kids.length) {
@@ -252,7 +250,7 @@ final class IfExpressionChain {
 			branches.push({ cond: node.children[0], stmt: thenStmt });
 			i++;
 		}
-		return branches.length < min || i >= kids.length ? null : { branches: branches, terminal: kids[i] };
+		return branches.length < minBranches || i >= kids.length ? null : { branches: branches, terminal: kids[i] };
 	}
 
 	/**

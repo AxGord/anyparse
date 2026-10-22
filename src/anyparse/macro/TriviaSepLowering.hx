@@ -766,9 +766,7 @@ final class TriviaSepLowering {
 			expr: ESwitch(knobExpr, [{ values: [nextPat], expr: macro _doh(), guard: null }], macro _de()),
 			pos: Context.currentPos()
 		};
-		final triviaLeadDoc: Expr = knobNextOrEmpty;
 		final wrapLeadFlatDoc: Expr = macro _de();
-		final wrapLeadBreakDoc: Expr = knobNextOrEmpty;
 		// ω-anontype-right-curly: when the call site reads
 		// `@:fmt(rightCurly('<knob>'))`, build a Doc that picks `_de()`
 		// for `RightCurlyPlacement.Inline` (close glued to last body
@@ -814,9 +812,9 @@ final class TriviaSepLowering {
 			keepCheckExpr: keepCheckExpr,
 			ignoreCheckExpr: ignoreCheckExpr,
 			noWrapFlatCheckExpr: noWrapFlatCheckExpr,
-			triviaLeadDoc: triviaLeadDoc,
+			triviaLeadDoc: knobNextOrEmpty,
 			wrapLeadFlatDoc: wrapLeadFlatDoc,
-			wrapLeadBreakDoc: wrapLeadBreakDoc,
+			wrapLeadBreakDoc: knobNextOrEmpty,
 			wrapTrailBreakDoc: wrapTrailBreakDoc,
 			triviaTrailDocKeepAware: triviaTrailDocKeepAware
 		};
