@@ -6,6 +6,8 @@
 # passes a per-worker `-js <workdir>/test.js` instead.
 -cp src
 -cp test
+# The developer tools' own library and CLI (`tools/dev.hxml`), so their tests run in this one suite.
+-cp tools/src
 -lib utest
 -lib hxnodejs
 -main RunTests

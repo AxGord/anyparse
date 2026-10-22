@@ -1,0 +1,12 @@
+# The developer CLI: `tools/src/dev` (subcommands) over `tools/src/devkit` (processes, pools, temp dirs, argv).
+# Build from the repo root; the artifact is gitignored.
+#
+#   haxe tools/dev.hxml
+#   node bin/dev.js --help
+-cp src
+-cp tools/src
+-main dev.Dev
+-lib hxnodejs
+-D js-es=6
+-D analyzer-optimize
+-js bin/dev.js

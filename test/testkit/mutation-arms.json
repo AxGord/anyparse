@@ -3699,7 +3699,7 @@
 		{
 			"name": "M-SPAWN-RUN-IGNORES-CWD",
 			"type": "anyparse.check.HaxeSpawn",
-			"method": "run",
+			"method": "exec",
 			"find": "if (cwd != null) Reflect.setField(options, 'cwd', cwd);",
 			"replace": "",
 			"note": "a single haxe spawn runs in the process cwd whatever the configuration's dir says, so a relative -cp resolves against the wrong tree and the typecheck and every probe answer about a different project"
@@ -22237,7 +22237,7 @@
 		{
 			"name": "M-GC-RUN-INHERITS",
 			"type": "anyparse.check.HaxeSpawn",
-			"method": "run",
+			"method": "exec",
 			"find": "maxBuffer: maxBuffer, env: childEnv() }",
 			"replace": "maxBuffer: maxBuffer }",
 			"note": "a single haxe spawn inherits the caller's environment untouched, so every typecheck run through `run` pays the default collector again"
