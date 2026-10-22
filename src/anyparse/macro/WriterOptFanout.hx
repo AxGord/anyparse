@@ -298,7 +298,12 @@ final class WriterOptFanout {
 	 * the allocation off every non-switch Star. Emitted only when the opt
 	 * typedef carries `_caseSiblingFlatWidth:Int`.
 	 */
-	private static function setCaseSiblingWidthField(optionsCT: ComplexType): Field {
+	private static function setCaseSiblingWidthField(optionsCT: ComplexType, hasOffer: Bool): Field {
+		// The offer rides with the width it stands beside, so a nested switch overwrites both.
+		final same: Expr = hasOffer
+			? macro o._caseSiblingFlatWidth == w && o._caseSiblingOffer == offer
+			: macro o._caseSiblingFlatWidth == w;
+		final setOffer: Expr = hasOffer ? macro _c._caseSiblingOffer = offer : macro {};
 		return {
 			name: '_setCaseSiblingWidth',
 			access: [APrivate, AStatic, AInline],
@@ -306,13 +311,15 @@ final class WriterOptFanout {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'w', type: macro :Int },
+					{ name: 'offer', type: macro :Null<anyparse.format.SiblingBreakOffer> },
 					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
 				expr: macro {
-					if (o._caseSiblingFlatWidth == w) return o;
+					if ($same) return o;
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._caseSiblingFlatWidth = w;
+					$setOffer;
 					return _c;
 				}
 			}),
@@ -1345,7 +1352,8 @@ final class WriterOptFanout {
 			fields.push(clearElseIfBranchField(optionsCT));
 		}
 		// ω-case-sibling-symmetry: per-switch widest-sibling width fanout.
-		if (optionsHasField(optionsTypePath, '_caseSiblingFlatWidth')) fields.push(setCaseSiblingWidthField(optionsCT));
+		if (optionsHasField(optionsTypePath, '_caseSiblingFlatWidth'))
+			fields.push(setCaseSiblingWidthField(optionsCT, optionsHasField(optionsTypePath, '_caseSiblingOffer')));
 		if (hasValueIfBranch) {
 			fields.push(setValueIfBranchField(optionsCT));
 			fields.push(clearValueIfBranchField(optionsCT));

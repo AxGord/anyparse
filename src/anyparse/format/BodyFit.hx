@@ -1,6 +1,10 @@
 package anyparse.format;
 
+import anyparse.core.BreakCommits;
+import anyparse.core.BreakToken;
+import anyparse.core.D;
 import anyparse.core.Doc;
+import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
 import anyparse.format.wrap.WrapList;
 
@@ -124,6 +128,11 @@ final class BodyFit {
 	 * such a unit — its first line shares the label line — but a coordinated break
 	 * still moves it, since it sits inside the probe's break branch like everyone else.
 	 *
+	 * `siblingOffer` is the group's second number, the one its widest unit measures once
+	 * its named break is committed (`siblingBreakOffer`): a `BreakCommit` on that break's
+	 * token picks it when the measure render takes the break, which is the layout the next
+	 * rewrite reads, with that unit's literal broken in its source.
+	 *
 	 * `refuseGlue` replaces the glue outcome with `breakLayout`, and it is the CALLER's
 	 * verdict rather than anything measured here: the case-body path passes it when the
 	 * body's single statement is keyword-led control flow, whose continuation lines
@@ -137,7 +146,8 @@ final class BodyFit {
 	 * PEN COLUMN, which no emitter-side walk can see, so the pre-pass never learns it.
 	 */
 	public static function fitLineLayout(
-		cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, siblingWidth: Int = SIBLING_NONE, refuseGlue: Bool = false
+		cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, siblingWidth: Int = SIBLING_NONE, refuseGlue: Bool = false,
+		?siblingOffer: SiblingBreakOffer
 	): Doc {
 		final flat: Int = WrapList.flatLength(body);
 		final own: Doc = if (flat != -1)
@@ -148,7 +158,10 @@ final class BodyFit {
 			final glued: Doc = Doc.Concat([Doc.OptSpace(' '), body]);
 			glueLayout(cols, body, nestGluedBody ? Doc.Nest(cols, glued) : glued, lineWidth);
 		}
-		return siblingWidth < 0 ? own : Doc.IfIndentWidthExceeds(siblingWidth, lineWidth, breakLayout(cols, body), own);
+		final plain: Doc = siblingLayout(cols, body, lineWidth, siblingWidth, own);
+		return siblingOffer == null
+			? plain
+			: Doc.BreakCommit(siblingLayout(cols, body, lineWidth, siblingOffer.width, own), plain, siblingOffer.token);
 	}
 
 	/**
@@ -439,6 +452,69 @@ final class BodyFit {
 		final copy: Array<Doc> = items.copy();
 		copy[i] = rebuilt;
 		return Doc.Concat(copy);
+	}
+
+	/**
+	 * The alternative placement number a case list offers beside the one its widest-sibling pre-pass measured, when its
+	 * WIDEST unit `widest` holds exactly one named break (`BreakCommits.nested`, bodies included): the number the pre-pass
+	 * reads once that break is committed, as the next rewrite reads it back. A unit the committed break leaves with no
+	 * flat width stops measuring and leaves `second` (the widest of the others) in charge, unless its single statement is
+	 * `controlFlow`, which then leads the spread the way the pre-pass's control-flow verdict does. The token is fresh: the
+	 * pre-pass measured a throwaway write, so the emitted widest unit is tied to it by `aliasSiblingBreak`. Null when the
+	 * break does not change the number.
+	 */
+	public static function siblingBreakOffer(widest: Doc, second: Int, controlFlow: Bool): Null<SiblingBreakOffer> {
+		final commits: Array<Doc> = BreakCommits.outermostPerToken(BreakCommits.nested(widest));
+		if (commits.length != 1) return null;
+		return switch commits[0] {
+			case Doc.BreakCommit(brk, _, token) if (token != null):
+				final committed: Int = WrapList.flatLength(BreakCommits.replaced(widest, commits[0], brk));
+				final width: Int = if (committed >= 0)
+					committed > second ? committed : second;
+				else if (controlFlow)
+					SIBLING_FORCE_BREAK;
+				else
+					second;
+				width == WrapList.flatLength(widest) ? null : { width: width, token: new BreakToken() };
+			case _:
+				null;
+		};
+	}
+
+	/**
+	 * `elem`, the emitted widest unit of a case list, with its one named break also naming `offer`'s token, so the
+	 * measure render that takes that break takes the offer with it for every sibling. `elem` itself when there is no
+	 * offer or the unit no longer holds exactly one named break.
+	 */
+	public static function aliasSiblingBreak(elem: Doc, offer: Null<SiblingBreakOffer>): Doc {
+		if (offer == null) return elem;
+		final alias: BreakToken = offer.token;
+		var named: Null<BreakToken> = null;
+		for (node in BreakCommits.outermostPerToken(BreakCommits.nested(elem))) switch node {
+			case Doc.BreakCommit(_, _, token) if (token != null && token != alias):
+				if (named != null) return elem;
+				named = token;
+			case _:
+		}
+		final target: Null<BreakToken> = named;
+		if (target == null) return elem;
+		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
+		function walk(n: Doc): Doc {
+			final hit: Null<Doc> = memo.get(n);
+			if (hit != null) return hit;
+			final out: Doc = switch n {
+				case Doc.BreakMark(inner, token) if (token == target): Doc.BreakMark(Doc.BreakMark(walk(inner), token), alias);
+				case _: D.mapChildrenShared(n, walk);
+			};
+			memo.set(n, out);
+			return out;
+		}
+		return walk(elem);
+	}
+
+	/** `own` coordinated by the sibling number `width`, or `own` itself when `width` asks for no coordination. */
+	private static inline function siblingLayout(cols: Int, body: Doc, lineWidth: Int, width: Int, own: Doc): Doc {
+		return width < 0 ? own : Doc.IfIndentWidthExceeds(width, lineWidth, breakLayout(cols, body), own);
 	}
 
 	/**

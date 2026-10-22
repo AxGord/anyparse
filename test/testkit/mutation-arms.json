@@ -26336,7 +26336,7 @@
 			"name": "M-PAREN-MEASURES-COMMITTED",
 			"type": "anyparse.core.BreakCommits",
 			"method": "followBare",
-			"find": "(with, _) -> shape(bare(with[0]))",
+			"find": "(with, _) -> shape(bare(with[0], memo))",
 			"replace": "(with, _) -> shape(with[0])",
 			"note": "an expression paren measures a committed literal break deferred, so the paren that opens for every narrower literal glues once the literal breaks: one write still, but onto the other fixed point than the one the paren reached before"
 		},
@@ -27812,7 +27812,7 @@
 		{
 			"name": "M-CHAIN-REST-SHAPE-UNTHREADED",
 			"type": "anyparse.format.wrap.BinaryChainEmit",
-			"method": "emit",
+			"method": "layout",
 			"find": "r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, restAware",
 			"replace": "r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, false",
 			"note": "`restAware` never reaches the shapes, so the fill group stays plain and undoes the rest-aware pivot's break"
@@ -28950,6 +28950,62 @@
 			"find": "&& anyparse.format.wrap.WrapList.breaksAtOwnAddSubOperator(_wrapInner)",
 			"replace": "&& anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0",
 			"note": "a kept chain broken only inside an operand (an array one item per line) counts as one its source broke, so its paren stays glued instead of opening"
+		},
+		{
+			"name": "M-THRESHOLD-ARG-UNNAMED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "namedThresholdLiteral",
+			"find": "? BreakCommits.named(item) : item;",
+			"replace": "? item : item;",
+			"note": "an object-literal argument deciding its own threshold break is no longer named, so the argument list lays itself out from the flat literal and the next write, reading the broken literal back committed, packs the list differently"
+		},
+		{
+			"name": "M-SIBLING-OFFER-UNALIASED",
+			"type": "anyparse.format.BodyFit",
+			"method": "aliasSiblingBreak",
+			"find": "return walk(elem);",
+			"replace": "return elem;",
+			"note": "the emitted widest case unit no longer ties its named break to the sibling offer, so the measure render never takes the offer and the switch spreads on the flat width the next write no longer reads"
+		},
+		{
+			"name": "M-NAMED-FIT-PIVOT",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "namedThresholdLiteral",
+			"find": "'{'.code) && renderPivotBreakArm(item) != null ?",
+			"replace": "'{'.code) ?",
+			"note": "an object-literal argument under a FIT cascade is named too, though the next write re-decides it instead of reading it back committed, so a call the source opened one argument per line is rewritten into a hug"
+		},
+		{
+			"name": "M-CHAIN-OFFER-OFF",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emit",
+			"find": "(item, _, broken) -> WrapList.flatLength(item) >= 0 && WrapList.flatLength(broken) < 0",
+			"replace": "(item, _, broken) -> false",
+			"note": "a binary chain or ternary no longer re-lays itself out for an operand whose nested break commits, so a ternary hugs a call whose literal broke and the next write, reading that literal back with a hardline, breaks the ternary"
+		},
+		{
+			"name": "M-OFFER-COPIES-WHOLE",
+			"type": "anyparse.core.D",
+			"method": "mapChildrenShared",
+			"find": "return changed ? out : d;",
+			"replace": "return out;",
+			"note": "a rewrite copies every node it walks instead of sharing what it leaves unchanged, so each offered alternative copies its host whole and nested hosts grow the Doc exponentially in depth"
+		},
+		{
+			"name": "M-OFFER-REPLACES-BOTH-SIDES",
+			"type": "anyparse.core.BreakCommits",
+			"method": "replaced",
+			"find": "f == flat ? n : BreakCommit(brk, f, token);",
+			"replace": "f == flat ? n : BreakCommit(walk(brk), f, token);",
+			"note": "an offer also rewrites the other breaks' alternatives it passes, so every nested host re-walks and re-copies all of them and a deep paren chain writes in a high power of its depth"
+		},
+		{
+			"name": "M-OFFER-REPLACED-COPIES",
+			"type": "anyparse.core.BreakCommits",
+			"method": "replaced",
+			"find": "\t\t\tfinal out: Doc = switch n {\n\t\t\t\tcase BreakCommit(brk, flat, token):\n\t\t\t\t\tfinal f: Doc = walk(flat);\n\t\t\t\t\tf == flat ? n : BreakCommit(brk, f, token);\n\t\t\t\tcase _: D.mapChildrenShared(n, walk);\n\t\t\t};",
+			"replace": "\t\t\tfinal out: Doc = D.mapChildren(n, walk);",
+			"note": "an offer copies every node it walks again, both sides of every other break included, so each nested host copies the alternatives below it whole and the build grows exponentially with the nesting depth"
 		}
 	]
 }

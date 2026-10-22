@@ -5204,3 +5204,10 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 ## J0 (2026-10-21) — the JVM probe's `ClassFormatError`, bisected
 
 - the probe died on a wide structure from the typer / compiler-facts series → no: bisect names `1b172a012` (thread-safety R4 F1), whose `RefShape.operatorWriteKinds` was the grammar vocabulary's 255th field, one constructor slot past the JVM's 255 with the receiver → `1b172a012`
+
+## X0 (2026-10-22) — the cross-config one-pass set grew from two files to four
+
+- the writer regressed after the baseline was last recorded → no: the engine of `3acb01f88` diverges on today's `MainSinkReport.hx` / `UnusedLoopBinder.hx` too, and their text before `42260d627` / `4d980a383` converges on both engines; the source edits exposed mechanism A (a host measures an object literal's threshold-pivot flat arm, while the next rewrite reads the literal the first one broke back as committed) in two hosts → `<X0 merge SHA>`
+- naming every `{`-led call argument (`BreakCommits.named`) → no: a FIT-pivot literal (`ignore` + `exceedsMaxLineLength`) is re-decided by the next rewrite, not read back committed, so three of Pony's stable files were rewritten into hugs; only a threshold pivot is named → `<X0 merge SHA>`
+- naming the call-argument literal fixes every host above the call → no: a ternary around the call measured the committed literal deferred and hugged the call, while the next rewrite breaks it on the operand's hardline; a binary chain (ternary included) now offers its committed operand too (`BinaryChainEmit.emit`) → `<X0 merge SHA>`
+- the nesting blow-up of the offers placed in the measure render walking nested `BreakCommit`s → no: profiled, all of it was build-time `BreakCommits.replaced` / `bare` copying every node they walked, the other breaks' `brk` sides included; they now share unchanged subtrees and `replaced` leaves `brk` sides alone → `<X0 merge SHA>`

@@ -734,6 +734,16 @@ branch_fmt() {
     # Measured with `fmt --list --one-pass` over this arm's scratch root: the
     # set went from these four files to the two below, and the remaining two are
     # other families, untouched.
+    #
+    # `MainSinkReport.hx` and `UnusedLoopBinder.hx` joined unrecorded when their
+    # own SOURCE changed, not the writer: the engine from before either join
+    # diverges on today's text too, and their earlier text converges on both
+    # engines. Both were the threshold-pivot object literal read flat by a host
+    # the next rewrite reads it committed in — a call argument one call deeper
+    # (`WrapList.namedThresholdLiteral`) and the widest case unit of a sibling
+    # spread (`BodyFit.siblingBreakOffer`) — and both left once those hosts
+    # follow the break the way `BreakCommits` lets an `#if` branch literal's
+    # list follow it. The set is back to the two files below.
     cat > "$work/fmt-xconfig.base" <<'XCFG'
 src/anyparse/check/UnnecessarySwitch.hx
 src/anyparse/macro/ParseDispatchLowering.hx

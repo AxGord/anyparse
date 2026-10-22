@@ -687,6 +687,7 @@ final class TriviaBlockLowering {
 			uniformStmtBlanks: uniformStmtBlanks,
 			elemPushExpr: triviaBlockElemPushExpr(relocateTrailingComments),
 			caseSiblingWidthExpr: caseSiblingWidthExpr,
+			caseSiblingOfferDecl: caseSym ? caseSiblingOfferLocals() : macro {},
 			blankAroundMarkExpr: blankAround.markExpr,
 			blankAroundSeenExpr: blankAround.seenExpr,
 			blankAroundApplyExpr: blankAround.applyExpr
@@ -719,7 +720,7 @@ final class TriviaBlockLowering {
 		// element's opt. ALWAYS written, never inherited, so a nested switch
 		// overwrites the enclosing one's width instead of coordinating against
 		// it. Flag off ⇒ the identical Expr as before.
-		final elemOptExpr: Expr = caseSiblingSymmetry ? macro _setCaseSiblingWidth($elemOptBase, _csW) : elemOptBase;
+		final elemOptExpr: Expr = caseSiblingSymmetry ? macro _setCaseSiblingWidth($elemOptBase, _csW, _csO) : elemOptBase;
 		// ω-value-yielded-if-tail-barrier (SI-2): the per-element opt arg. When
 		// `clearExprPositionNonTail` is set (BlockExpr / BlockStmt), every block
 		// statement EXCEPT the tail gets `_clearExprPosition` so a discarded
@@ -769,10 +770,10 @@ final class TriviaBlockLowering {
 			);
 		} else
 			elemOptExpr;
-		return {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]),
-			pos: Context.currentPos()
-		};
+		final call: Expr = { expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]), pos: Context.currentPos() };
+		// The widest unit, written again for the emit, names its break afresh: tie that break to the offer every
+		// sibling carries.
+		return caseSiblingSymmetry ? macro anyparse.format.BodyFit.aliasSiblingBreak($call, _si == _csWK ? _csO : null) : call;
 	}
 
 	/**
@@ -1257,9 +1258,13 @@ final class TriviaBlockLowering {
 		final emptyTrailExpr: Expr = c.emptyTrailExpr;
 		final emptyDocExpr: Expr = c.emptyDocExpr;
 		final caseSiblingWidthExpr: Expr = c.caseSiblingWidthExpr;
+		final caseSiblingOfferDecl: Expr = c.caseSiblingOfferDecl;
 		final elseBody: Expr = triviaBlockElseBody(c);
 		return macro {
 			final _arr = $fieldAccess;
+			// The pre-pass may leave the alternative number it offers here (`BodyFit.siblingBreakOffer`), with the
+			// index of the element whose break it waits for.
+			$caseSiblingOfferDecl;
 			final _csW: Int = $caseSiblingWidthExpr;
 			final _trailLC: Array<String> = $trailLC;
 			final _trailBB: Bool = $trailBB;
@@ -1323,6 +1328,15 @@ final class TriviaBlockLowering {
 					: opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0
 			)
 			: macro (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0);
+	}
+
+	/**
+	 * The `_csO` / `_csWK` locals a case-list Star's pre-pass leaves its sibling offer in, as ONE `EVars`: a spliced block
+	 * would scope them away from the element loop that reads them.
+	 */
+	private static function caseSiblingOfferLocals(): Expr {
+		return macro var _csO: Null<anyparse.format.SiblingBreakOffer> = null,
+			_csWK: Int = -1;
 	}
 
 }

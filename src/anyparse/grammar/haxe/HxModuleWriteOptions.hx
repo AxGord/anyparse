@@ -11,6 +11,7 @@ import anyparse.format.OperatorSpacing;
 import anyparse.format.OptionalSemicolon;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
+import anyparse.format.SiblingBreakOffer;
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
@@ -728,6 +729,11 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// pre-pass, never inherited, so a nested switch coordinates its own
 	// cases rather than the enclosing switch's.
 	_caseSiblingFlatWidth: Int,
+	// The pre-pass's alternative number for the same switch: the width it reads once the one named break inside the
+	// widest unit is committed (`BodyFit.siblingBreakOffer`), offered beside `_caseSiblingFlatWidth` so the measure render
+	// picks the one the next rewrite will read. Null when no break can change the verdict; written with the width, never
+	// inherited.
+	_caseSiblingOffer: Null<SiblingBreakOffer>,
 	// ω-expressionif-collapse — narrow companion to `_inExprPosition`, set
 	// ONLY on the immediate value of a value-yielded `if`/`else` branch
 	// (`HxIfExpr.thenBranch` / `elseBranch` carrying

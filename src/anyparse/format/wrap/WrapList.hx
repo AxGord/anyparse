@@ -306,6 +306,7 @@ class WrapList {
 		open: String, close: String, sep: String, items: Array<Doc>, opt: WriteOptions, openInside: Doc, closeInside: Doc,
 		keepInnerWhenEmpty: Bool, rules: WrapRules, ?options: WrapListOptions
 	): Doc {
+		final items: Array<Doc> = open == '(' && items.length > 1 ? items.map(namedThresholdLiteral) : items;
 		final plain: Doc = emitList(open, close, sep, items, opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
 		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return emitList(open, close, sep, with, opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
@@ -4778,6 +4779,17 @@ class WrapList {
 			emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
 		else
 			WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
+	}
+
+	/**
+	 * An argument that is an object literal still deciding its own THRESHOLD break (`renderPivotBreakArm`), named
+	 * (`BreakCommits.named`) so the argument list lays itself out as the next rewrite reads that break back: an object
+	 * literal's Star force-commits a source-multi-line literal, so that rewrite measures the argument multi-line. A fit
+	 * pivot is re-decided by the next rewrite rather than read back committed, and a sole argument stays the bare
+	 * decision `BodyAllman` reads, so neither is named. Any other argument comes back as it is.
+	 */
+	private static function namedThresholdLiteral(item: Doc): Doc {
+		return DocMeasure.firstVisibleTextStartsWith(item, '{'.code) && renderPivotBreakArm(item) != null ? BreakCommits.named(item) : item;
 	}
 
 }
