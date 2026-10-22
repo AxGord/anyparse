@@ -151,7 +151,7 @@ final class JoinSingleUseLocal implements Check {
 	}
 
 	public function description(): String {
-		return 'a single-use local capturing a trivial read, inlinable into the next statement';
+		return 'a single-use local capturing a trivial read, inlinable into its one read';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
