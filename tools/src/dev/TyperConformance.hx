@@ -11,12 +11,14 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.TypeFact;
+import anyparse.query.ComposedValues;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.HaxelibResolver;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.NominalTypes;
+import anyparse.query.OperatorOverloads.OperatorResult;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
@@ -60,7 +62,10 @@ using StringTools;
 final class TyperConformance {
 
 	public static inline final USAGE: String =
-		'usage: dev typer-conformance upstream <haxe-4.3.7-clone> | facts [<configuration>]  [--list] [--census]';
+		'usage: dev typer-conformance upstream <haxe-4.3.7-clone> | facts [<configuration>] | probes [<dir>]  [--list] [--census]';
+
+	/** The probe corpus `probes` runs when it is given no directory: the tree's own, one project per directory. */
+	private static inline final PROBES_DIR: String = 'tools/typer-facts';
 
 	/** The group of the test function's name in `displayTests`' header pattern. */
 	private static inline final TEST_NAME_GROUP: Int = 3;
@@ -130,6 +135,7 @@ final class TyperConformance {
 		final args: Array<String> = argv.copy();
 		final list: Bool = args.remove('--list');
 		final report: Report = new Report(list, args.remove('--census'));
+		var gated: Bool = false;
 		switch args {
 			case ['upstream', clone]:
 				upstream(clone, report);
@@ -137,14 +143,34 @@ final class TyperConformance {
 				facts(null, report);
 			case ['facts', configuration]:
 				facts(configuration, report);
+			case ['probes']:
+				gated = true;
+				probes(Path.join([Repo.resolve(null), PROBES_DIR]), report);
+			case ['probes', dir]:
+				gated = true;
+				probes(dir, report);
 			case _:
-				Sys.println(
-					'usage: typer-conformance upstream <haxe-4.3.7-clone> [--list] [--census] | facts [<configuration>] [--list] [--census]'
-				);
+				Sys.println(USAGE);
 				return 2;
 		}
 		report.print();
-		return 0;
+		// the probe corpus is a gate: one answer that is not the compiler's fails it
+		return gated && report.differences() > 0 ? 1 : 0;
+	}
+
+	/**
+	 * Every probe project under `dir` — each directory holding an `apqlint.json` that names a compiler oracle — run as
+	 * `facts` in it, into one report: shapes no census tree holds, each compiled by the compiler and asked of the typer.
+	 */
+	private static function probes(dir: String, report: Report): Void {
+		final start: String = Sys.getCwd();
+		final names: Array<String> = FileSystem.readDirectory(dir).filter(n -> FileSystem.exists(Path.join([dir, n, 'apqlint.json'])));
+		names.sort(Reflect.compare);
+		for (name in names) {
+			Sys.setCwd(Path.join([dir, name]));
+			facts(null, report);
+		}
+		Sys.setCwd(start);
 	}
 
 	/** The display and misc suites of the clone at `clone`. */
@@ -735,15 +761,27 @@ private final class FileTyper {
 	}
 
 	/**
-	 * Whether `node` is an operator (`isOperator`) an `inline` overload of its kind, declared by the type of an operand, may
-	 * take: the compiler splices the overload's body in at the operator's range, its operands bound there, so the facts at
-	 * that range type the spliced code, not the operator's value.
+	 * Whether `node` is an operator (`isOperator`) an `inline` overload of its kind may take — the one the typer picks
+	 * (`ComposedValues.operatorOverload`), else any an operand's type declares: the compiler splices the overload's body in at
+	 * the operator's range, its operands bound there, so the facts at that range type the spliced code, not the operator's value.
 	 */
 	public function inlinedOverload(node: QueryNode): Bool {
 		if (!isOperator(node)) return false;
-		for (operand in node.children) {
-			final written: Null<String> = source(operand);
-			final peeled: Null<String> = written == null
+		final operands: Array<String> = [for (operand in node.children) source(operand) ?? ''];
+		final typing: IndexTyping = {
+			root: _tree,
+			shape: _shape,
+			declaredTypes: _declared,
+			chain: _chain,
+			index: _index,
+			file: _file,
+			seen: []
+		};
+		// the overload the typer takes decides; where it takes none, any inline one of the kind may have been spliced
+		final chosen: Null<OperatorResult> = operands.contains('') ? null : ComposedValues.operatorOverload(node, operands, typing);
+		if (chosen != null) return chosen.member.isInline;
+		for (written in operands) {
+			final peeled: Null<String> = written == ''
 				? null
 				: NominalTypes.memberLookupReceiverSource(written, _shape.memberTransparentWrapperTypeNames ?? [], _chain.typeSyntax);
 			final name: Null<String> = peeled == null ? null : NominalTypes.outerNominalOf(peeled, _chain.typeSyntax);
@@ -1555,6 +1593,11 @@ private final class Report {
 	public function new(list: Bool, census: Bool) {
 		_list = list;
 		_census = census;
+	}
+
+	/** How many answers were DIFFERENT. */
+	public inline function differences(): Int {
+		return _different.length;
 	}
 
 	/** One answer of `area` for the assertion `label`. */

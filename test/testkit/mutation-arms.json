@@ -28322,8 +28322,8 @@
 			"name": "M-OPS-RETURN-OPEN",
 			"type": "anyparse.query.OperatorOverloads",
 			"method": "branchSelection",
-			"find": "return end.match(Open) ? Undecided : Chosen({ end: end, text: returned, host: decl });",
-			"replace": "return Chosen({ end: end, text: returned, host: decl });",
+			"find": "return end.match(Open)",
+			"replace": "return false",
 			"note": "an overload returning a type the cast graph does not model is an answer"
 		},
 		{
@@ -29570,9 +29570,8 @@
 		{
 			"name": "M-COMPOSED-OVERLOAD-NULL",
 			"type": "anyparse.query.ComposedValues",
-			"method": "indexArithmetic",
-			"find": "return left == null || right == null ? null : index.typing.operators.binaryResult(node.kind, left, right)?.text;",
-			"replace": "return null;",
+			"method": "operatorOverload",
+			"force": "null",
 			"note": "an operator an abstract's overload takes carries no type, though 4.3.7 types it as the overload's return"
 		},
 		{
@@ -29626,6 +29625,54 @@
 			"method": "branchesType",
 			"force": "null",
 			"note": "a conditional nothing is expected of carries no type, though 4.3.7 types `c ? 1 : 2.5` as `Float`"
+		},
+		{
+			"name": "M-COMPOSED-DEFAULTS-UNWRITTEN",
+			"type": "anyparse.query.ComposedValues",
+			"method": "indexConstruction",
+			"find": "if (arity == 0 && decls.exists(d -> d.type.typeParamArity > 0)) return null;",
+			"replace": "if (false) return null;",
+			"note": "a generic construction written with no argument is completed with its defaults, though 4.3.7 makes `new Def()` a monomorph the code binds later"
+		},
+		{
+			"name": "M-COMPOSED-UNIFIED-NULLABLE-DROPPED",
+			"type": "anyparse.query.ComposedValues",
+			"method": "unifiedType",
+			"find": "final nullable: Bool = parts.exists(p -> NominalTypes.outerNominalOf(p, c.chain.typeSyntax) == wrapper);",
+			"replace": "final nullable: Bool = false;",
+			"note": "a nullable number is unified with a bare one as the bare type, though 4.3.7 types `[n, 1]` of a `Null<Int>` as `Array<Null<Int>>`"
+		},
+		{
+			"name": "M-COMPOSED-OPTIONAL-FIELD-BARE",
+			"type": "anyparse.query.ComposedValues",
+			"method": "expectedStructure",
+			"find": "? NominalTypes.optionalValueType(fieldType, shape.optionalValueTypeName, c.chain.typeSyntax)",
+			"replace": "? fieldType",
+			"note": "a written optional field is read as its declared type, though 4.3.7 types `b: 2` for `?b: Int` as `b: Null<Int>`"
+		},
+		{
+			"name": "M-COMPOSED-DYNAMIC-FIELD-LITERAL",
+			"type": "anyparse.query.ComposedValues",
+			"method": "writtenFieldType",
+			"find": "if (literal) return spelled(declared, c) == shape.rawDynamicTypeName ? declared : typed;",
+			"replace": "if (literal) return typed;",
+			"note": "a literal written for a `Dynamic` field keeps its own type, though 4.3.7 types the field as `Dynamic`"
+		},
+		{
+			"name": "M-COMPOSED-MAP-UNDER-DYNAMIC",
+			"type": "anyparse.query.ComposedValues",
+			"method": "expectedType",
+			"find": "if (!object && node.children.exists(e -> e.kind == shape.mapLiteralEntryKind)) return null;",
+			"replace": "if (false) return null;",
+			"note": "a map literal under `Dynamic` is typed as an array of it, though 4.3.7 types it as a `haxe.ds.Map`"
+		},
+		{
+			"name": "M-OVERLOAD-GUARDED-SOURCE-ORDER",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "branchSelection",
+			"find": "if (members.exists(m -> m.guarded && m.operatorOverloads.contains(kind))) return Undecided;",
+			"replace": "if (false) return Undecided;",
+			"note": "the index order is taken for the source order, so an unguarded overload listed before a `#if` one the compiler tries first is picked"
 		}
 	]
 }

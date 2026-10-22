@@ -340,24 +340,30 @@ std gap. Readings: `docs/journal/testing-log.md`.
   expects; `element` now handed the index access itself) and carries every operator a core value type takes
   (`RefShape.booleanOperatorKinds`, the compound assignments, the logical not). The rules over core value types are ONE
   shared function (`TypingService.coreOperatorType`, `compoundKeepsTarget`), the argument typer's arithmetic reading it
-  too. The index host's arcs live in `ComposedValues`: a construction is the type it writes, the defaults it leaves out
-  written in (`new Box()` of a generic `Box` a monomorph: Unknown); an index access reads an array's element or the
+  too. The index host's arcs live in `ComposedValues`: a construction is the type it writes, the trailing arguments it
+  leaves out their defaults (`new Two<Int>()` of `Two<A, B = Item>` is `Two<Int, Item>`); a generic one written with no
+  argument is a monomorph the code binds later (`new Box(item)`, `new Def()` of `Def<T = Item>` too: Unknown); an index access reads an array's element or the
   read access an abstract takes (`OperatorOverloads.indexRead`, `abstractCast.ml` `find_array_read_access`: the first
   instance `@:arrayAccess` / `@:op([])` member taking the key, the only one when one is declared); an operator over core
   value types is the language's own (`Int + Float` is `Float`, `s + 1` `String`, `n + 1` of a `Null<Int>` `Int`, a
-  comparison `Bool`, `n += 1` of a `Null<Int>` `Null<Int>`), over an abstract what its overload yields; the binder of a
+  comparison `Bool`, `n += 1` of a `Null<Int>` `Null<Int>`), over an abstract what its overload yields (Unknown where an
+  overload of the kind sits under `#if`: the compiler tries them in source order, the index lists those last); the binder of a
   loop over an interval of two integers is the integer type; an enum-abstract value read off its type is of the abstract
   (`AbstractCasts.holdsUntypedValue`). A literal where nothing is expected of it (a local written with no type, a loop's
   iterable, a receiver, a part of such a literal) is of its parts' types (`unify_min` where they agree: one type, or
-  core numbers widening to the real one); where a type is expected (`ExpectedTypes` with the index host's
+  core numbers widening to the real one, a nullable one making it nullable: `[n, 1]` of a `Null<Int>` is
+  `Array<Null<Int>>`); where a type is expected (`ExpectedTypes` with the index host's
   `ExpectationHost`: a declaration's annotation, the parameter a call's selected signature binds the argument to —
   `CallReturns.selectedParameter`, `CallSelection.parameterRun` —, an array's element, a structure's field), the type
-  4.3.7 prints: `Array<Dynamic>` under `Dynamic`, the expected array type, and against a structure of plain fields the
-  fields the literal writes, each of its value's type where `type_eq` keeps it and the field's where the compiler casts,
-  plus the optional ones it leaves out. `[]` and `null` stay Unknown (T7b). The index host peels parentheses, and
+  4.3.7 prints: `Array<Dynamic>` under `Dynamic` (a map literal refused: a `haxe.ds.Map`), the expected array type, and against a structure of plain fields the
+  fields the literal writes, each of its value's type where `type_eq` keeps it and the field's where the compiler casts
+  (a written optional field's being `Null<T>`, a literal's for a `Dynamic` field `Dynamic`), plus the optional ones it
+  leaves out. `[]` and `null` stay Unknown (T7b). The index host peels parentheses, and
   `MemberLookup.memberRead` reads only the declarations of a member some build compiles (`BuildBranches.declarations`),
   answering where they agree. The harness leaves unscored a `should be` error at an operator's range (an operand's) and
-  an operator an operand's abstract takes with an `inline` overload (its spliced body's facts). Not answered: a `Map`
+  an operator the typer takes with an `inline` overload, or that no overload decides while an operand's type declares an
+  inline one (its spliced body's facts). The shapes no census tree holds live in a probe corpus checked as a gate
+  (`dev typer-conformance probes`, `tools/typer-facts/`: one project per directory, DIFFERENT 0 or exit 1). Not answered: a `Map`
   read (`Map.get` writes no return), a field access on a receiver that is no path (`[1, 2].length`), a conditional
   something is expected of, an argument of an overloaded or a generic callee. Measured on the base tree (UNKNOWN share
   source / nominal; roots source construction / index / operator / literal): anyparse 14.7 / 14.1 → 12.9 / 13.1 %,

@@ -768,10 +768,12 @@ The checks read like a sequence, but their dependencies are far sparser than the
 build ──┬─ suite ── corpus          build = apq.js + test.js + a recon typecheck
         │                           corpus reads the snapshot the suite wrote
         ├─ fmt
-        ├─ jvm probe                only when the core moved
+        ├─ typer probes ── jvm probe   the jvm probe only when the core moved
         └─ oracle ── lint ── blast  lint reuses the oracle's verdict;
                                     blast diffs lint's own output
 ```
+
+`typer probes` runs `dev typer-conformance probes` over `tools/typer-facts/`: one compiled project per directory, each a set of shapes no census tree holds, typed by the compiler (the facts hook) and by the typer; a DIFFERENT answer exits 1. A new shape the typer got wrong goes there as a probe, with the review that found it — not into a unit test alone, which pins what the typer says rather than what the compiler says. The corpus sits outside `test/` because test discovery types every module under the test classpath, and a probe project is a program of its own (its own `-main`, packages that would collide).
 
 `build` stays sequential because everything else executes what it produces. Its third compile is a TYPECHECK, not a build: `haxe recon.hxml --no-output` is the only gate that reaches `test/_ReconSkipParse.hx` — `-main RunTests` types every module in a package under `test/`, but `_ReconSkipParse` sits at the test ROOT, which discovery skips as an entry point, so without this step it can rot against any `src/` signature it calls. `recon.hxml` writes the repo-relative `bin/recon.js`, so a worker that builds it for real is isolated by its own worktree.
 

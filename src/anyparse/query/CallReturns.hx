@@ -19,37 +19,11 @@ using Lambda;
 /**
  * The type a call returns in the index's written-source currency (`NominalTypes`) where the typing service selects the
  * signature it binds (`CallSelection`, step T5): the receiver's declarations as the call's file resolves them, the
- * arguments typed once, with no expected type, by the arcs whose type this file writes (`ARGUMENT_HOST`).
+ * arguments typed once, with no expected type, by the arcs whose type this file writes (`argumentHost`).
  */
 @:nullSafety(Strict)
 @:access(anyparse.query.NominalTypes)
 final class CallReturns {
-
-	/**
-	 * `INDEX_HOST` narrowed to the arcs whose type is WRITTEN in the file being read, which is where `callArguments` resolves
-	 * it: a literal, a binding's annotation, a local's initializer. A member read, a call, the self reference or a loop element
-	 * answer a type written in another file (or a name only), so they type no argument.
-	 */
-	private static final ARGUMENT_HOST: TypingHost<String, IndexTyping> = {
-		peel: (node, _) -> node,
-		isAccess: (kind, c) -> kind == c.shape.fieldAccessKind,
-		literal: (typeName, _) -> typeName,
-		ascribed: NominalTypes.indexAscribed,
-		self: (_, _) -> null,
-		binding: (ident, c) -> TypeResolver.identBindingFrom(ident, c.root, c.shape),
-		bound: argumentBound,
-		initializer: (_, use, c) -> NominalTypes.localInitializer(use, c.root, c.shape, c.chain.declaredTypeSources),
-		loopElement: (_, _) -> null,
-		parameter: null,
-		unbound: (_, _) -> null,
-		access: (_, _) -> null,
-		element: null,
-		call: (_, _) -> null,
-		construction: null,
-		contextual: null,
-		arithmetic: null,
-		reading: c -> c.seen
-	};
 
 	/**
 	 * The type the call `node` of `method` returns where the typing service selects its signature (`CallSelection`), on a
@@ -109,6 +83,35 @@ final class CallReturns {
 		final fi: Null<FileInfo> = index.fileInfo(file);
 		final found: Null<ResolvedType> = fi == null ? null : index.refs.resolveTypeRef(name, fi, at.span?.from);
 		return found == null ? index.refs.resolvedDeclsNamed(name) : [found];
+	}
+
+	/**
+	 * `INDEX_HOST` narrowed to the arcs whose type is WRITTEN in the file being read, which is where `callArguments` resolves
+	 * it: a literal, a binding's annotation, a local's initializer. A member read, a call, the self reference or a loop element
+	 * answer a type written in another file (or a name only), so they type no argument. Built per question: the index host
+	 * reaches this class through its composed values, so no static of it may read the index host's back.
+	 */
+	private static function argumentHost(): TypingHost<String, IndexTyping> {
+		return {
+			peel: (node, _) -> node,
+			isAccess: (kind, c) -> kind == c.shape.fieldAccessKind,
+			literal: (typeName, _) -> typeName,
+			ascribed: NominalTypes.indexAscribed,
+			self: (_, _) -> null,
+			binding: (ident, c) -> TypeResolver.identBindingFrom(ident, c.root, c.shape),
+			bound: argumentBound,
+			initializer: (_, use, c) -> NominalTypes.localInitializer(use, c.root, c.shape, c.chain.declaredTypeSources),
+			loopElement: (_, _) -> null,
+			parameter: null,
+			unbound: (_, _) -> null,
+			access: (_, _) -> null,
+			element: null,
+			call: (_, _) -> null,
+			construction: null,
+			contextual: null,
+			arithmetic: null,
+			reading: c -> c.seen
+		};
 	}
 
 	/**
@@ -177,7 +180,7 @@ final class CallReturns {
 							file: c.file,
 							seen: []
 						};
-						final text: Null<String> = TypingService.typeWalk(a, c.shape, ARGUMENT_HOST, own);
+						final text: Null<String> = TypingService.typeWalk(a, c.shape, argumentHost(), own);
 						final end: Null<TypeEnd> = text == null ? null : index.typing.casts.endIn(text, fi, site.from, params);
 						if (end == null)
 							Untyped

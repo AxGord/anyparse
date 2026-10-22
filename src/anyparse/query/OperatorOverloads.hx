@@ -6,6 +6,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 
+using Lambda;
+
 /**
  * The operator overload an abstract's `@:op` members select for a binary operator, and the type it yields
  * (`docs/typing-service.md`, step T4b; Haxe 4.3.7 `operators.ml`, `try_abstract_binop_overloads` and
@@ -150,6 +152,8 @@ final class OperatorOverloads {
 	private function branchSelection(
 		decl: ResolvedType, members: Array<MemberInfo>, kind: String, left: TypeEnd, right: TypeEnd, onLeft: Bool
 	): OverloadPick {
+		// the index lists a member under `#if` after the branch's other members, the compiler tries them in source order
+		if (members.exists(m -> m.guarded && m.operatorOverloads.contains(kind))) return Undecided;
 		for (m in members) if (m.operatorOverloads.contains(kind)) {
 			final params: Null<Array<TypeEnd>> = candidateParams(decl, m);
 			final written: Null<String> = m.returnSource;
@@ -162,7 +166,14 @@ final class OperatorOverloads {
 			if (taken == MayFit || taken == Misfits && _commutativeMeta == null) return Undecided;
 			if (taken == Fits) {
 				final end: TypeEnd = _casts.writtenEnd(returned, decl, m.declFrom, []);
-				return end.match(Open) ? Undecided : Chosen({ end: end, text: returned, host: decl });
+				return end.match(Open)
+					? Undecided
+					: Chosen({
+						end: end,
+						text: returned,
+						host: decl,
+						member: m
+					});
 			}
 		}
 		return NoneTaken;
@@ -217,6 +228,9 @@ typedef OperatorResult = {
 
 	/** The abstract declaring the overload, in whose file `text` is written. */
 	final host: ResolvedType;
+
+	/** The overload itself. */
+	final member: MemberInfo;
 
 }
 

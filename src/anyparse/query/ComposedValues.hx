@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin.CoreValueTypes;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NominalTypes.IndexTyping;
 import anyparse.query.NominalTypes.WrittenConstruction;
+import anyparse.query.OperatorOverloads.OperatorResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
@@ -27,29 +28,14 @@ using Lambda;
 final class ComposedValues {
 
 	/**
-	 * What `ExpectedTypes` asks the index host of a literal's position: the written type expected of it, as the file writing
-	 * it reads it, or none (`Expectation.free`, a value of its own). A position it does not read — an assignment, a `return`,
-	 * an argument the signature does not decide — expects nothing it can tell, so null.
-	 */
-	private static final EXPECTATIONS: ExpectationHost<Expectation, IndexTyping> = {
-		declared: declaredExpectation,
-		assigned: (_, _) -> null,
-		returned: (_, _) -> null,
-		argument: (call, at, _, c) -> argumentExpectation(call, at, c),
-		element: elementExpectation,
-		field: fieldExpectation,
-		read: (written, c) -> written.free ? null : c.chain.typeSyntax(written.text),
-		part: (of, text, _) -> {text: text, file: of.file, free: false }
-	};
-
-	/**
 	 * The type the construction `node` (`new T<…>(…)`) makes, for the index host: the type it writes, resolved where it is
-	 * written, with the type arguments a reference in it leaves out written in (`completedType`; 4.3.7 `$type`: `new Box<Int>()`
-	 * is `Box<Int>`) — where the file resolves the name to several declarations (a std type a target's `_std` copy
-	 * re-declares), as written when every one of them takes exactly the arguments it writes. Null for a type parameter's
-	 * name (a generic function's `new T()` makes what its call binds), a generic type whose arguments the construction leaves
-	 * to inference (`new Box(item)`, a `Box<Item>` nothing spells; `new Box()`, a monomorph), a generic type a build macro
-	 * may make another type of, and a name the file resolves to no declaration.
+	 * written, the trailing arguments it leaves out its defaults (`completedType`; 4.3.7 `$type`: `new Box<Int>()` is
+	 * `Box<Int>`, `new Two<Int>()` of `Two<A, B = Item>` `Two<Int, Item>`) — where the file resolves the name to several
+	 * declarations (a std type a target's `_std` copy re-declares), as written when every one of them takes exactly the
+	 * arguments it writes. Null for a type parameter's name (a generic function's `new T()` makes what its call binds), a
+	 * generic type written with no argument (`new Box(item)`, a `Box<Item>` nothing spells; `new Def()`, a monomorph the code
+	 * binds later, defaults or none), a generic type a build macro may make another type of, and a name the file resolves to
+	 * no declaration.
 	 */
 	public static function indexConstruction(node: QueryNode, c: IndexTyping): Null<String> {
 		final index: Null<SymbolIndex> = c.index;
@@ -63,6 +49,9 @@ final class ComposedValues {
 		final arity: Int = written.args.length;
 		// a build macro may make each application of a generic type a type of its own (`@:genericBuild`)
 		if (decls.length == 0 || decls.exists(d -> d.type.hasBuild && d.type.typeParamArity > 0)) return null;
+		// written with no argument, a generic type's are monomorphs even where it declares defaults (4.3.7: `new Def()` of
+		// `Def<T = Item>` is a `Def<?>` the code binds later); the defaults fill only the arguments a reference leaves out
+		if (arity == 0 && decls.exists(d -> d.type.typeParamArity > 0)) return null;
 		if (decls.length == 1) return NominalTypes.completedType(written.text, at.from, c);
 		return decls.foreach(d -> d.type.typeParamArity == arity) ? written.text : null;
 	}
@@ -120,10 +109,7 @@ final class ComposedValues {
 		if (c.shape.execution?.compoundAssignOperators?.exists(node.kind) == true)
 			return TypingService.compoundKeepsTarget(node.kind, cores, c.shape) ? operands[0] : null;
 		final core: Null<String> = TypingService.coreOperatorType(node.kind, cores, c.shape);
-		if (core != null || operands.length != 2) return core;
-		final left: Null<TypeEnd> = operandEnd(operands[0], index, c);
-		final right: Null<TypeEnd> = operandEnd(operands[1], index, c);
-		return left == null || right == null ? null : index.typing.operators.binaryResult(node.kind, left, right)?.text;
+		return core ?? operatorOverload(node, operands, c)?.text;
 	}
 
 	/**
@@ -174,6 +160,37 @@ final class ComposedValues {
 			null
 		else
 			expectedType(node, expected, c);
+	}
+
+	/**
+	 * The `@:op` overload the binary operator `node` takes between operands of the types `operands`, as the index reads it
+	 * (`OperatorOverloads.binaryResult`): null where it decides none, a core operation included.
+	 */
+	public static function operatorOverload(node: QueryNode, operands: Array<String>, c: IndexTyping): Null<OperatorResult> {
+		final index: Null<SymbolIndex> = c.index;
+		if (index == null || operands.length != 2) return null;
+		final left: Null<TypeEnd> = operandEnd(operands[0], index, c);
+		final right: Null<TypeEnd> = operandEnd(operands[1], index, c);
+		return left == null || right == null ? null : index.typing.operators.binaryResult(node.kind, left, right);
+	}
+
+	/**
+	 * What `ExpectedTypes` asks the index host of a literal's position: the written type expected of it, as the file writing
+	 * it reads it, or none (`Expectation.free`, a value of its own). A position it does not read — an assignment, a `return`,
+	 * an argument the signature does not decide — expects nothing it can tell, so null. Built per question, so no static of
+	 * this class reads the index host back while the statics initialize.
+	 */
+	private static function expectationHost(): ExpectationHost<Expectation, IndexTyping> {
+		return {
+			declared: declaredExpectation,
+			assigned: (_, _) -> null,
+			returned: (_, _) -> null,
+			argument: (call, at, _, c) -> argumentExpectation(call, at, c),
+			element: elementExpectation,
+			field: fieldExpectation,
+			read: (written, c) -> written.free ? null : c.chain.typeSyntax(written.text),
+			part: (of, text, _) -> {text: text, file: of.file, free: false }
+		};
 	}
 
 	/**
@@ -228,6 +245,8 @@ final class ComposedValues {
 		final object: Bool = node.kind == shape.objectLiteralKind;
 		final loops: Array<String> = (shape.iterationBindingKinds ?? []).concat([for (k in [shape.whileExprKind]) if (k != null) k]);
 		if (!object && node.children.length == 1 && loops.contains(node.children[0].kind)) return null;
+		// a literal of map entries is a map (`haxe.ds.Map`), whatever is expected of it
+		if (!object && node.children.exists(e -> e.kind == shape.mapLiteralEntryKind)) return null;
 		final syntax: TypeSyntaxReader = c.chain.typeSyntax;
 		final peeled: String = NominalTypes.memberLookupReceiverSource(
 			expected.text, shape.memberTransparentWrapperTypeNames ?? [], syntax
@@ -263,12 +282,16 @@ final class ComposedValues {
 		final parts: Array<String> = [];
 		for (f in fields) {
 			final value: Null<QueryNode> = written[f.name];
-			final declared: String = f.typeSource ?? '';
+			final fieldType: String = f.typeSource ?? '';
 			if (value == null) {
 				if (!f.optional) return null;
-				parts.push('?${f.name}: $declared');
+				parts.push('?${f.name}: $fieldType');
 				continue;
 			}
+			// a written optional field holds the optional value's type (4.3.7: `?b: Int` written `b: 2` is `b: Null<Int>`)
+			final declared: String = f.optional
+				? NominalTypes.optionalValueType(fieldType, shape.optionalValueTypeName, c.chain.typeSyntax)
+				: fieldType;
 			final shown: Null<String> = writtenFieldType(value, declared, c);
 			if (shown == null) return null;
 			parts.push('${f.name}: $shown');
@@ -277,12 +300,13 @@ final class ComposedValues {
 	}
 
 	/**
-	 * The type a structure field written `declared` holds where an object literal writes `value` for it, as 4.3.7 prints the
-	 * literal (`type_fields`): the value's own type where it is spelled as the field's, or a literal typed against the field;
-	 * of one core value type, the nullable spelling of the two (`Int` written for `Null<Int>` and `Null<Int>` for an
-	 * optional `Int` both hold a `Null<Int>`) — of one the language declares as a class (`String`), the value's, a class
-	 * being nullable already —; the declared type where the compiler casts a value of another core type to
-	 * it (`Int` written for `Float`), and where a function literal is typed against a function type. Null otherwise.
+	 * The type a structure field of the type `declared` holds where an object literal writes `value` for it, as 4.3.7 prints
+	 * the literal (`type_fields`): the value's own type where it is spelled as the field's, and a literal typed against the
+	 * field — under the dynamic type the field's, the literal cast to it; of one core value type, the nullable spelling of the
+	 * two (`Int` written for `Null<Int>` and `Null<Int>` for an optional `Int` both hold a `Null<Int>`) — of one the language
+	 * declares as a class (`String`), the value's, a class being nullable already —; the declared type where the compiler
+	 * casts a value of another core type to it (`Int` written for `Float` or `Null<Float>`), and where a function literal is
+	 * typed against a function type. Null otherwise.
 	 */
 	private static function writtenFieldType(value: QueryNode, declared: String, c: IndexTyping): Null<String> {
 		final shape: RefShape = c.shape;
@@ -292,7 +316,8 @@ final class ComposedValues {
 		final typed: Null<String> = TypingService.typeWalk(value, shape, NominalTypes.INDEX_HOST, c);
 		if (typed == null) return null;
 		final literal: Bool = bare.kind == shape.objectLiteralKind || bare.kind == shape.arrayLiteralKind;
-		if (literal || ~/\s+/g.replace(typed, '') == ~/\s+/g.replace(declared, '')) return typed;
+		if (literal) return spelled(declared, c) == shape.rawDynamicTypeName ? declared : typed;
+		if (~/\s+/g.replace(typed, '') == ~/\s+/g.replace(declared, '')) return typed;
 		final cores: Array<String> = shape.coreValueTypes?.names ?? [];
 		final given: String = spelled(typed, c);
 		final wanted: String = spelled(declared, c);
@@ -302,7 +327,7 @@ final class ComposedValues {
 			null
 		else if (given == wanted)
 			nullable(typed) || classes.contains(given) ? typed : declared
-		else if (nullable(typed) || nullable(declared))
+		else if (nullable(typed))
 			null
 		else
 			declared;
@@ -457,7 +482,7 @@ final class ComposedValues {
 		if (index == null || path.length < 2) return null;
 		final lineage: Array<QueryNode> = path.slice(0, path.length - 1);
 		final indices: Array<Int> = [for (i in 0...lineage.length) lineage[i].children.indexOf(path[i + 1])];
-		return index.typing.expectations.expectedAt(lineage, indices, lineage.length - 1, EXPECTATIONS, c);
+		return index.typing.expectations.expectedAt(lineage, indices, lineage.length - 1, expectationHost(), c);
 	}
 
 	/**
@@ -523,7 +548,9 @@ final class ComposedValues {
 
 	/**
 	 * The one type values of the types `parts` take together, as `unify_min` picks it where they agree: the type every one
-	 * has, else over core numbers the real type; null for several other types.
+	 * has; else, every one a core number or a nullable one, the real type when one is real, else the integer type, a
+	 * nullable one making it nullable (4.3.7: `[n, 1]` of a `Null<Int>` is `Array<Null<Int>>`, `[n, 1.0]`
+	 * `Array<Null<Float>>`). Null for several other types.
 	 */
 	private static function unifiedType(parts: Array<String>, c: IndexTyping): Null<String> {
 		final core: Null<CoreValueTypes> = c.shape.coreValueTypes;
@@ -531,7 +558,16 @@ final class ComposedValues {
 		if (core == null || parts.length == 0) return null;
 		if (spelled.foreach(s -> s == spelled[0])) return parts[0];
 		final numbers: Array<Null<String>> = [for (p in parts) coreTypeOf(p, c)];
-		return numbers.foreach(n -> n == core.integer || n == core.real) ? core.real : null;
+		if (!numbers.foreach(n -> n == core.integer || n == core.real)) return null;
+		final base: String = numbers.contains(core.real) ? core.real : core.integer;
+		final wrapper: Null<String> = c.shape.optionalValueTypeName;
+		final nullable: Bool = parts.exists(p -> NominalTypes.outerNominalOf(p, c.chain.typeSyntax) == wrapper);
+		return if (!nullable)
+			base
+		else if (wrapper == null)
+			null
+		else
+			'$wrapper<$base>';
 	}
 
 	/**
