@@ -4,8 +4,6 @@ import haxe.Exception;
 import unit.miniblockstrict.MiniBlockStrict;
 import unit.miniblockstrict.MiniBlockStrictParser;
 import unit.miniblockstrict.MiniBlockStrictWriter;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Session 9 pilot for the BlockBody Star `sepStartsElement` flag

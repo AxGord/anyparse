@@ -7,8 +7,6 @@ import anyparse.query.format.json.LintFindingJson;
 import haxe.Json;
 import unit.check.ThreadSafetyCheckTest;
 import unit.check.ThreadSafetyLongLocksTest;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

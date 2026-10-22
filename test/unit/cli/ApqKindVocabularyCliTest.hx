@@ -4,8 +4,6 @@ package unit.cli;
 import sys.FileSystem;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The node-kind VOCABULARY gate at the CLI boundary: a kind no rule of the grammar projects is

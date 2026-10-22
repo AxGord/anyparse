@@ -18,7 +18,6 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;

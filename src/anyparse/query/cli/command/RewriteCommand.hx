@@ -1,10 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
-import anyparse.query.cli.CliContext;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq rewrite` — structural search-and-replace (search-pattern metavars).

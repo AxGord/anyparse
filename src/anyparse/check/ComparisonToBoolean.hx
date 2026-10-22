@@ -1,15 +1,12 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.query.BoolExprShape;
 import anyparse.query.DeclaredNullity;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;

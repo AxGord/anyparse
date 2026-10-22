@@ -11,7 +11,6 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using Lambda;
-using StringTools;
 
 /**
  * The cast graph of the abstracts the index holds (`docs/typing-service.md`, step T4): for each abstract declaration, the

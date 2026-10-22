@@ -1,9 +1,7 @@
 package anyparse.check;
 
 import anyparse.query.BoolExprShape;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding.Tier;
 

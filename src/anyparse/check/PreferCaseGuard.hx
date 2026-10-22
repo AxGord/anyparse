@@ -1,12 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatConfigDiscovery;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;

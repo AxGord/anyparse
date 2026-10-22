@@ -3,8 +3,6 @@ package unit.format;
 import anyparse.format.DirectiveCondition;
 import anyparse.format.OperatorSpacing;
 import unit.grammar.haxe.HxWriteFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `whitespace.conditionalCompilationBinop` - operator spacing inside a `#if` / `#elseif`

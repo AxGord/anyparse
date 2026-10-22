@@ -11,7 +11,6 @@ import testkit.MutationArms.ArmTable;
 import testkit.MutationArms.MutationArm;
 
 using Lambda;
-using StringTools;
 
 /**
  * What one discovery pass over the test tree found.

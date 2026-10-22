@@ -2,8 +2,6 @@ package unit.core;
 
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `DocMeasure.firstVisibleTextStartsWith` — the left-spine walker promoted out of

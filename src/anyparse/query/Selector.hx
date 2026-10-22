@@ -2,8 +2,6 @@ package anyparse.query;
 
 import anyparse.query.Pattern.KindEquivalence;
 
-using StringTools;
-
 /**
  * Parsed `--select` path expression.
  *

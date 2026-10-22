@@ -8,7 +8,6 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

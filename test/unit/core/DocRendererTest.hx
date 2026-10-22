@@ -4,8 +4,6 @@ import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.core.Renderer;
 import anyparse.format.IndentChar;
-import utest.Assert;
-import utest.Test;
 
 /**
 	Tests for the core Doc IR and its renderer. These are the most

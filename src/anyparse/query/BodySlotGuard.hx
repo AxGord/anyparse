@@ -5,8 +5,6 @@ import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
-
 /**
  * The structural half of the writer-emit gate: whether an edit set would leave a
  * brace-less construct's body slot EMPTY.

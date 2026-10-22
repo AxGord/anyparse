@@ -9,7 +9,6 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 
 using Lambda;
-using StringTools;
 
 /**
  * Structural search-and-replace — the fusion of `search` (find a pattern with

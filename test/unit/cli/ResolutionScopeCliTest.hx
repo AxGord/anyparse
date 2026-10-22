@@ -6,8 +6,6 @@ import sys.io.File;
 import anyparse.query.Cli;
 import anyparse.query.HaxelibResolver;
 import anyparse.query.StdResolver;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

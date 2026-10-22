@@ -2,7 +2,6 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 
-using StringTools;
 using Lambda;
 
 /**

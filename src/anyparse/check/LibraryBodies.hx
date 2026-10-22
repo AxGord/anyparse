@@ -1,11 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.Check.Violation;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CallGraph;
 import anyparse.query.Glob;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.ReachLiveness;
 import anyparse.runtime.Span;
 import haxe.io.Path;

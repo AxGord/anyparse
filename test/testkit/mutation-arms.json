@@ -3575,8 +3575,8 @@
 			"name": "M-HOIST-SITE-ORDER",
 			"type": "anyparse.check.HoistCommonImport",
 			"method": "contextOf",
-			"find": "ArraySort.sort(sites, (a, b) -> (governedAt[b] ?? []).length - (governedAt[a] ?? []).length);",
-			"replace": "ArraySort.sort(sites, (a, b) -> (governedAt[a] ?? []).length - (governedAt[b] ?? []).length);",
+			"find": "final wider: Int = (governedAt[b] ?? []).length - (governedAt[a] ?? []).length;",
+			"replace": "final wider: Int = (governedAt[a] ?? []).length - (governedAt[b] ?? []).length;",
 			"note": "the narrowest position is weighed first, so a statement lands in a nested source AND in its parent and the nested copy repeats what the parent already puts in force"
 		},
 		{
@@ -29006,6 +29006,44 @@
 			"find": "\t\t\tfinal out: Doc = switch n {\n\t\t\t\tcase BreakCommit(brk, flat, token):\n\t\t\t\t\tfinal f: Doc = walk(flat);\n\t\t\t\t\tf == flat ? n : BreakCommit(brk, f, token);\n\t\t\t\tcase _: D.mapChildrenShared(n, walk);\n\t\t\t};",
 			"replace": "\t\t\tfinal out: Doc = D.mapChildren(n, walk);",
 			"note": "an offer copies every node it walks again, both sides of every other break included, so each nested host copies the alternatives below it whole and the build grows exponentially with the nesting depth"
+		},
+		{
+			"name": "M-IMPORT-MODULE-TAIL-UNKNOWN",
+			"type": "anyparse.query.SymbolIndex",
+			"method": "namesBoundBy",
+			"find": "return rest.length == 1 && SourceText.isUpperInitial(leaf) ? [leaf] : [];",
+			"replace": "return (publicTypes[SourceText.parentPath(imp.raw)] ?? []).contains(leaf) ? [leaf] : null;",
+			"note": "a path past its module binds a known set only when the index declares that very type, so a static-field import or one of a type a build macro makes reads as an unknown set, counts as a second binder of every statement, and refuses every hoist in a directory where one module imports a function"
+		},
+		{
+			"name": "M-HOIST-RECEIVER-UNVOUCHED",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "reachesEveryReceiver",
+			"force": "true",
+			"note": "every governed module is taken to resolve a statement it would receive, so a library import lands in an ambient source governing a module another build compiles without that library, and that build stops on the ambient source"
+		},
+		{
+			"name": "M-HOIST-RECEIVER-EVIDENCE-BLIND",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "resolvesInto",
+			"force": "false",
+			"note": "a receiver's own statements never vouch for the classpath entry it already compiles with, so every statement from a library is withheld wherever one governed module does not spell it"
+		},
+		{
+			"name": "M-HOIST-IMPLICIT-TIER-BLIND",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "reachesEveryReceiver",
+			"find": "if (resolve.refs.names.implicitImportFiles().exists(found -> originOf(found) == origin)) return true;",
+			"replace": "if (false) return true;",
+			"note": "the language's implicit tier no longer vouches for a receiver, so an allow-listed using of a top-level std module is withheld from every directory where one module spells no other std statement"
+		},
+		{
+			"name": "M-HOIST-TIE-NEAREST-FIRST",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "contextOf",
+			"find": "wider != 0 ? wider : order.indexOf(b) - order.indexOf(a);",
+			"replace": "wider != 0 ? wider : order.indexOf(a) - order.indexOf(b);",
+			"note": "of two sites governing the same modules the nested one is weighed first, so a parent whose every module sits under one child takes the statement its child already took and one chain carries it twice"
 		}
 	]
 }

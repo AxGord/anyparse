@@ -1,12 +1,9 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.ValueIterationProof.ValueIteration;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberReach;
 import anyparse.query.NominalTypes;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;

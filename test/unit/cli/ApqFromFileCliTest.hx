@@ -5,8 +5,6 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end probe for the `--from-file` code-input mode shared by the

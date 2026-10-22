@@ -1,14 +1,11 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
-import anyparse.check.Check.Violation;
 import anyparse.query.CallSites;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
-import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.RemoveParam;
 import anyparse.query.SourceText;

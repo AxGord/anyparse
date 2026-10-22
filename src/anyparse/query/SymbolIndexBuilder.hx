@@ -18,7 +18,6 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
 
-using StringTools;
 using Lambda;
 
 /**

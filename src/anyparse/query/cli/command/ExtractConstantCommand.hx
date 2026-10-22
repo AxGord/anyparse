@@ -1,10 +1,8 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
-import anyparse.query.cli.CliContext;
 import haxe.Exception;
 
-using StringTools;
 using Lambda;
 
 #if (sys || nodejs)

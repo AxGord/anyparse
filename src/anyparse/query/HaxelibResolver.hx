@@ -8,8 +8,6 @@ import haxe.io.Path;
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 #end
 
-using StringTools;
-
 /**
  * Resolves a haxelib library NAME to its on-disk source directory, so an
  * `apqlint.json` can declare a resolution-scope library by name

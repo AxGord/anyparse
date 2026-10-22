@@ -2,8 +2,6 @@ package unit.runtime;
 
 import anyparse.runtime.Input;
 import anyparse.runtime.StringInput;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Smoke tests for the `Input` abstraction via `StringInput`.

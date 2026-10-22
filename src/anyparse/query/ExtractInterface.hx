@@ -9,7 +9,6 @@ import anyparse.query.TypeExtraction.SourceClass;
 import anyparse.runtime.Span;
 import haxe.ds.Either;
 
-using StringTools;
 using Lambda;
 
 /**

@@ -2,9 +2,6 @@ package anyparse.query;
 
 import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
 import anyparse.query.ConfigFinder.ConfigFile;
-
-using StringTools;
-
 #if (sys || nodejs)
 import sys.FileSystem;
 #end

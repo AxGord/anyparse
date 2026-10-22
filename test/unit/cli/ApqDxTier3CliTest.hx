@@ -6,8 +6,6 @@ import sys.io.File;
 #end
 import anyparse.query.Cli;
 import anyparse.query.cli.TestTranscript;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end probes for the DX Tier-3 batch:

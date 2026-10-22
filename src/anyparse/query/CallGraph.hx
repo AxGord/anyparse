@@ -6,7 +6,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
 using Lambda;
 
 /**

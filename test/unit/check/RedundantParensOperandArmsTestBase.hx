@@ -8,7 +8,6 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.QueryNode;
 import anyparse.query.format.Text;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

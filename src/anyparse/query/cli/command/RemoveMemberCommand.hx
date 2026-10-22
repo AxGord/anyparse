@@ -2,11 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.MemberKinds;
-import anyparse.query.cli.CliContext;
 import anyparse.query.cli.PostWriteFix;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * A member named the way `RemoveMember` addresses one: the enclosing type's name and the

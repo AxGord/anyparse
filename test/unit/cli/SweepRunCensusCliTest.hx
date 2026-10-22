@@ -6,8 +6,6 @@ import sys.io.File;
 #end
 import anyparse.query.Cli;
 import anyparse.query.cli.command.SweepCommand;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end probe for `apq sweep --run` — the corpus census re-derived

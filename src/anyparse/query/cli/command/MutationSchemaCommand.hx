@@ -3,10 +3,7 @@ package anyparse.query.cli.command;
 import anyparse.query.ExitCode.*;
 import anyparse.query.MutationSchema.SchemaArm;
 import anyparse.query.MutationSchema.SchemaFile;
-import anyparse.query.cli.CliContext;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq mutation-schema` — compose declared arms into one build behind a run-time switch, for mutation-arm.

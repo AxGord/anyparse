@@ -1,14 +1,11 @@
 package anyparse.check;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.check.Check.Violation;
 import anyparse.check.LoopScan.IndexedLoopHeader;
 import anyparse.check.LoopScan.LoopFileScan;
 import anyparse.check.LoopScan.LoopSeams;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberReach;
 import anyparse.query.OccurrenceScan;
-import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
 using StringTools;

@@ -16,7 +16,6 @@ import anyparse.runtime.Span;
 import haxe.ds.Either;
 
 using Lambda;
-using StringTools;
 
 /**
  * `move-to-helper`: move one or more members of a CLASS into a static helper type — a new one, created beside the

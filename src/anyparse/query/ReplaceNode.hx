@@ -6,8 +6,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
-
 /**
  * How the node to replace is addressed. Modelled as a sum type so the
  * CLI passes one value and the operation resolves uniformly:

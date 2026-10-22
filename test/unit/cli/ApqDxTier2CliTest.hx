@@ -6,8 +6,6 @@ import sys.io.File;
 #end
 import anyparse.query.Cli;
 import unit.grammar.haxe.HxSharpErrorSliceTest;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end probes for the v7 Tier-2 DX additions:

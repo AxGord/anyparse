@@ -3,10 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.CrossFileAnchored;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.DuplicateCode.DupMode;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

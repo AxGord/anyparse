@@ -1,9 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.MemberSlots.OrderedMember;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.OccurrenceScan;
-import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
 using Lambda;

@@ -3,8 +3,6 @@ package unit.core;
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
 import anyparse.core.Renderer;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The two RENDER-DECISION consumers of `Renderer`'s first-line walk, pinned at the seam they share: the `bgPrefix`

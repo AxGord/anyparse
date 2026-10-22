@@ -7,8 +7,6 @@ import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

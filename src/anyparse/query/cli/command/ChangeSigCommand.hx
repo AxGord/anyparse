@@ -3,11 +3,8 @@ package anyparse.query.cli.command;
 import anyparse.query.ChangeSig;
 import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq change-sig` — reorder a function's parameters + call-site args.

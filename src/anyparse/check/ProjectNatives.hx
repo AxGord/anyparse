@@ -1,10 +1,8 @@
 package anyparse.check;
 
 import anyparse.query.CallGraph;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
-import anyparse.query.QueryNode;
 import anyparse.query.ReachHazards;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;

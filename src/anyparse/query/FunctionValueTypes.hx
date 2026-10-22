@@ -12,7 +12,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

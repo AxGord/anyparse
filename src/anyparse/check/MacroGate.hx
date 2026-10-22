@@ -1,8 +1,6 @@
 package anyparse.check;
 
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
-import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding.NameTarget;

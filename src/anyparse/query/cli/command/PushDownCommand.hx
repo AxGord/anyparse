@@ -1,7 +1,6 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.cli.CliCommand;
-import anyparse.query.cli.CliContext;
 
 /**
  * `apq push-down` — move an instance member down to a subclass.

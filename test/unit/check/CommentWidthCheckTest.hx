@@ -11,7 +11,6 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.io.File;
-import unit.CheckFixture;
 import unit.ConfigTrees;
 import utest.Assert;
 import utest.Test;

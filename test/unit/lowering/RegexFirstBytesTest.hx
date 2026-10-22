@@ -1,8 +1,6 @@
 package unit.lowering;
 
 import anyparse.macro.RegexFirstBytes;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The contract of the first-byte classifier the Alt dispatch guards and the

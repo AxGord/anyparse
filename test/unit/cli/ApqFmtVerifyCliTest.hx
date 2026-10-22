@@ -1,8 +1,6 @@
 package unit.cli;
 
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end probe for `apq fmt --verify` — the audit that formats each file in

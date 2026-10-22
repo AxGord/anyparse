@@ -16,8 +16,6 @@ import anyparse.query.cli.command.FmtCommand;
 import anyparse.query.cli.command.LintFixLedger;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The run-summary COUNT lines, pinned against the tree they describe.

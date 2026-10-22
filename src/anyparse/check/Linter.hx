@@ -7,13 +7,11 @@ import anyparse.check.Check.FileGated;
 import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.Supersedes;
 import anyparse.check.Check.VersionGated;
-import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.SimplifyBooleanTernary;
 import anyparse.check.SimplifyNegatedCompound;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
 
 using Lambda;

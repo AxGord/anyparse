@@ -5,7 +5,6 @@ import anyparse.check.CondRegionMerge;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.query.CanonicalEdit;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

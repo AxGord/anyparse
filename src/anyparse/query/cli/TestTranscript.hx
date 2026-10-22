@@ -7,7 +7,6 @@ import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.SourceText;
 import haxe.Exception;
 
-using StringTools;
 using Lambda;
 
 /**

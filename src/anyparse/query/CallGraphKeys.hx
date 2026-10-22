@@ -9,7 +9,6 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.ValueNameBinding.ImportedStatics;
 
 using Lambda;
-using StringTools;
 
 /**
  * The types one file writes, spelled as a `CallGraph` keys them (`CallGraphImports.typeOf`),

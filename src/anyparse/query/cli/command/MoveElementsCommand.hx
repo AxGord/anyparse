@@ -3,12 +3,8 @@ package anyparse.query.cli.command;
 import anyparse.query.Address.AddressSpec;
 import anyparse.query.ExitCode.*;
 import anyparse.query.MoveElements;
-import anyparse.query.cli.CliContext;
 import haxe.Exception;
 import haxe.ds.Either;
-
-using StringTools;
-
 #if (sys || nodejs)
 import sys.FileSystem;
 #end

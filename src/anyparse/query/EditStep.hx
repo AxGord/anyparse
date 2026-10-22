@@ -2,8 +2,6 @@ package anyparse.query;
 
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /** One rewrite an `EditJournal` recorded: `edits` spliced into `before`, settled by the writer as `after`. */
 @:nullSafety(Strict)
 final class EditStep {

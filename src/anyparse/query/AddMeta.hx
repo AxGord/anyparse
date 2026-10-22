@@ -5,8 +5,6 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Add one `@:metadata` entry to an existing declaration — the annotation
  * counterpart of `AddImport`, and the verb the mutation-op family was missing

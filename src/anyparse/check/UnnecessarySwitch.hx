@@ -1,14 +1,11 @@
 package anyparse.check;
 
 import anyparse.check.CasePatternScan.CaseSeams;
-import anyparse.check.Check.Violation;
 import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

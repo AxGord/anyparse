@@ -1,7 +1,5 @@
 package anyparse.query.cli.command;
 
-import anyparse.query.cli.CliContext;
-
 /**
  * `apq callers` — transitive call tree INTO a function (approximate call graph).
  *

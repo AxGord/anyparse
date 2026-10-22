@@ -1,11 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberLookup.SupertypeProof;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
-import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;

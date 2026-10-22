@@ -8,7 +8,6 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 
 using Lambda;
-using StringTools;
 
 /**
  * The validity predicate over a parsed tree that the parse itself cannot be: which ORPHAN

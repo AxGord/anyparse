@@ -1,8 +1,6 @@
 package unit.lowering;
 
 import unit.grammar.haxe.HxWriteFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `BeforeLeading` trivia slot — `WriterTriviaSlotLowering.buildBeforeLeadingSep` wraps a bare

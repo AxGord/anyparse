@@ -7,7 +7,6 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * The DIRECTIVE-DELIMITED BRANCH — what `apq cond` reports, and the one thing at this layer that

@@ -8,7 +8,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

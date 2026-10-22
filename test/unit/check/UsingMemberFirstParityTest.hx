@@ -8,7 +8,6 @@ import anyparse.query.MoveMember;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.StdResolver;
 import anyparse.query.StdTypes;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

@@ -8,7 +8,6 @@ import anyparse.check.ThreadSafety;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ReachLiveness.ReachConfiguration;
-import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import unit.cli.CliFixture;
 import utest.Assert;

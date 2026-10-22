@@ -2,15 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.CrossFileAnchored;
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.SpanRender.SpanOverride;
 import anyparse.query.BinderScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

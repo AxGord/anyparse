@@ -5,7 +5,6 @@ import anyparse.check.InlineConstant;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.StaticConstant;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

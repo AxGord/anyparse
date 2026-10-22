@@ -5,12 +5,9 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.Rename;
 import anyparse.query.cli.CliArgs;
-import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
-
-using StringTools;
 
 /**
  * `apq rename` — scope-correct, format-preserving symbol rename.

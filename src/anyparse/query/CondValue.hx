@@ -1,7 +1,6 @@
 package anyparse.query;
 
 using Lambda;
-using StringTools;
 
 /**
  * The value one operand of a conditional-compilation condition takes, as the Haxe compiler's evaluator holds it

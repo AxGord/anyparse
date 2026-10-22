@@ -1,6 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
 import anyparse.check.GuardScan.GuardSeams;
 import anyparse.check.GuardScan.GuardSplice;
@@ -8,9 +7,7 @@ import anyparse.check.GuardScan.GuardedIf;
 import anyparse.check.IfExpressionChain.ShieldSeams;
 import anyparse.query.BinderScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.OccurrenceScan;
-import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

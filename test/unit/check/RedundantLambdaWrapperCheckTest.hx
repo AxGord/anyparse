@@ -7,7 +7,6 @@ import anyparse.check.PreferBind;
 import anyparse.check.RedundantLambdaWrapper;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

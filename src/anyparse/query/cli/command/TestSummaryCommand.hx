@@ -4,7 +4,6 @@ import anyparse.query.Cli.TestSummaryFailureKind;
 import anyparse.query.Cli.TestSummaryFailureLocus;
 import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.ExitCode.*;
-import anyparse.query.cli.CliContext;
 import haxe.Exception;
 
 /**

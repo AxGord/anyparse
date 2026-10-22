@@ -17,7 +17,6 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import haxe.ds.Either;
 
-using StringTools;
 using Lambda;
 
 /**

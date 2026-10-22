@@ -5,7 +5,6 @@ import anyparse.check.DuplicateCase;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

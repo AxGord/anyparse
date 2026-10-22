@@ -9,7 +9,6 @@ import anyparse.query.SymbolIndexBuilder.MemberSeams;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * The MEMBER half of `SymbolIndexBuilder`'s extraction: one type body walked into its

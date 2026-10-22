@@ -1,8 +1,6 @@
 package unit.cli;
 
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end probe for `apq fmt --one-pass` — the gate for the one class no

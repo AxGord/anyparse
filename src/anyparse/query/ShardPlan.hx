@@ -3,7 +3,6 @@ package anyparse.query;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * One class, or one slice of it, placed on one shard — the `<shard>\t<token>` row `--format lines` prints. A whole

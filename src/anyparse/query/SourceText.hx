@@ -1,6 +1,5 @@
 package anyparse.query;
 
-using StringTools;
 using Lambda;
 
 import anyparse.runtime.Span;

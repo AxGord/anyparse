@@ -10,8 +10,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.cli.command.LintFixDriver;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `lint --fix` lets the facts compiles it started ahead finish before its first disk write: a compile still typing when a

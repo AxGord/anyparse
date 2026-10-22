@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NodeShape;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;

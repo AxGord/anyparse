@@ -1,11 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.Check.Violation;
 import anyparse.check.NullableSource.NullableSourceCfg;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;

@@ -9,7 +9,6 @@ import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 
 using Lambda;
-using StringTools;
 
 /** What one resolution tier says about a name — and, from `TypeNameBinding.tierOf`, what the whole order says. */
 enum Tier {
@@ -260,6 +259,11 @@ final class TypeNameBinding {
 	/** The indexed files of module `module` (`pkg.Mod`, a root module by its bare name), in index order. */
 	public function filesOfModule(module: String): Array<FileInfo> {
 		return (tables().modules[module] ?? []).copy();
+	}
+
+	/** The indexed std files of the module every module of the language imports without a statement (`StdTypes`). */
+	public function implicitImportFiles(): Array<FileInfo> {
+		return tables().stdTypes.copy();
 	}
 
 	/**

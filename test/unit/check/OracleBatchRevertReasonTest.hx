@@ -6,7 +6,6 @@ import sys.io.File;
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.cli.command.LintFixVerify;
-import anyparse.query.cli.command.LintFixVerify.OracleBatchResult;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;

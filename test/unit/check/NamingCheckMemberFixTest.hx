@@ -9,7 +9,6 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 

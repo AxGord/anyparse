@@ -2,7 +2,6 @@ package unit.check;
 
 import anyparse.check.AvoidDynamic;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

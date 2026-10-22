@@ -5,8 +5,6 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `extract-interface` and `extract-superclass` GENERATE a whole module and hand

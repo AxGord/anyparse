@@ -1,15 +1,12 @@
 package anyparse.check;
 
 import anyparse.check.CaseValueKey.CaseValueSeams;
-import anyparse.check.Check.Violation;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CondRegionScan;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;

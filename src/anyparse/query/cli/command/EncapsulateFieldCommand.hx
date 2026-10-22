@@ -2,10 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
-import anyparse.query.cli.CliContext;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq encapsulate-field` — turn a var field into a get/set property (@:isVar).

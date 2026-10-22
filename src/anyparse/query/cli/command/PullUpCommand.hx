@@ -2,9 +2,6 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.MoveSymbol;
-import anyparse.query.cli.CliContext;
-
-using StringTools;
 
 /**
  * `apq pull-up` — move an instance member up to its superclass.

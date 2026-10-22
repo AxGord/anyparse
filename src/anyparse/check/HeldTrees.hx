@@ -1,7 +1,6 @@
 package anyparse.check;
 
 import anyparse.query.CallGraph;
-import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
 using Lambda;

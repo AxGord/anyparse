@@ -9,11 +9,8 @@ import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.OrphanContinuation;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
-import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * Parsed options for `apq fmt` — `lang`, `write` (rewrite in place) vs `list` (name changed files only),

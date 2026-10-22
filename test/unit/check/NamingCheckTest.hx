@@ -9,7 +9,6 @@ import anyparse.grammar.haxe.HaxeNamingSupport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingPolicy;
-import unit.CheckFixture;
 import utest.Assert;
 
 using Lambda;

@@ -1,7 +1,5 @@
 package testkit;
 
-using StringTools;
-
 #if nodejs
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.HaxeSpawn;

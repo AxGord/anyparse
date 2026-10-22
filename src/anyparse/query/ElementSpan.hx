@@ -4,7 +4,6 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

@@ -3,8 +3,6 @@ package anyparse.check;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;
 import anyparse.query.CondRegionScan;
-import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.runtime.Span;
 

@@ -6,7 +6,6 @@ import sys.io.File;
 import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FactsTypeOracle;
-import anyparse.check.FactsTypeOracle.FactsDecline;
 import anyparse.check.HaxeSpawn;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;

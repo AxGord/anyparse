@@ -5,8 +5,6 @@ import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Rendered transitive call tree for `apq callees` / `apq callers` — the two
  * subcommands share this walker because they differ only in edge direction:

@@ -5,7 +5,6 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * The COMMENT-ATTACHMENT half of the writer-emit gate: whether an edit set would leave a

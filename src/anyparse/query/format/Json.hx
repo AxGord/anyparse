@@ -26,8 +26,6 @@ import anyparse.query.format.json.AstSearchMatchesWriter;
 import anyparse.query.format.json.AstSearchSpan;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * JSON renderer for `apq ast` output.
  *

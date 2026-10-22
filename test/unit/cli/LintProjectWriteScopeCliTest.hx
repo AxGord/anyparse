@@ -1,8 +1,6 @@
 package unit.cli;
 
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The write proof of `prefer-final-public-field` / `prefer-read-only-field` over a lint scope

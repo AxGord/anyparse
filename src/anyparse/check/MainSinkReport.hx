@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.BoundedRepeats.BoundedRepeat;
 import anyparse.check.Check.FindingData;
 import anyparse.check.Check.RepeatSite;
-import anyparse.check.Check.Violation;
 import anyparse.check.ErrorPaths.PathCosts;
 import anyparse.check.LockTaint.BlockingTrail;
 import anyparse.check.MainRepeats.MainClimb;

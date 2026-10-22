@@ -3,7 +3,6 @@ package anyparse.query;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * A written type as its grammar reads it (`GrammarPlugin.typeSyntax`): the parts an analysis

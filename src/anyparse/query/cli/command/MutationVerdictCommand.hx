@@ -3,10 +3,7 @@ package anyparse.query.cli.command;
 import anyparse.query.BuildFailure.BuildFailureResult;
 import anyparse.query.ExitCode.*;
 import anyparse.query.MutationVerdict.MutationVerdictResult;
-import anyparse.query.cli.CliContext;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq mutation-verdict` — classify one utest transcript as KILLED/SURVIVED/… for mutation-check.

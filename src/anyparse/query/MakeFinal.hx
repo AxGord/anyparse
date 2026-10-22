@@ -6,7 +6,6 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /** One scope file parsed once. */

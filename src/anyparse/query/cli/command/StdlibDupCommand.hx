@@ -3,11 +3,9 @@ package anyparse.query.cli.command;
 import anyparse.core.TempScratch;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
-import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
 using Lambda;
 
 #if (sys || nodejs)

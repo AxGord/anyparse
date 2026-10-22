@@ -1,10 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.CanonicalEdit.EditResult;
-import anyparse.query.cli.CliContext;
 import anyparse.query.ExitCode.*;
-
-using StringTools;
 
 /**
  * `apq safe-delete` — remove a member only if unreferenced across the scope.

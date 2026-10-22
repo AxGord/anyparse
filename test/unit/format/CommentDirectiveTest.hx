@@ -1,8 +1,6 @@
 package unit.format;
 
 import anyparse.format.comment.CommentDirective;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `CommentDirective`: the one answer the writer's trailing-comment move (FU12) and the comment reflow share on

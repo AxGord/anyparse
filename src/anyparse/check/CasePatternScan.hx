@@ -1,11 +1,9 @@
 package anyparse.check;
 
 import anyparse.query.CasePatterns;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.PatternNameScope;
-import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;

@@ -4,8 +4,6 @@ package unit.cli;
 import sys.io.File;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq safe-delete` is canonical-gated, so it must read the `hxformat.json`

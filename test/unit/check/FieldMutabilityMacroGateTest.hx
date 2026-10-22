@@ -5,7 +5,6 @@ import anyparse.check.InlineConstant;
 import anyparse.check.PreferFinal;
 import anyparse.check.PreferFinalField;
 import anyparse.check.TrivialGetter;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

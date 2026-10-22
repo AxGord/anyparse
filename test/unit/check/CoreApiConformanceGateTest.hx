@@ -11,7 +11,6 @@ import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.MakeFinal;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

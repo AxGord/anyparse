@@ -31,7 +31,6 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * The reach analysis's reading of the compiler's facts (`CompilerFacts`): which function bodies the facts describe

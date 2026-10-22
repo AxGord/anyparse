@@ -1,10 +1,7 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.SwitchChain.ChainScope;
 import anyparse.check.SwitchChain.ChainSeams;
-import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

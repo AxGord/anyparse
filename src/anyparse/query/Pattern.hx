@@ -3,7 +3,6 @@ package anyparse.query;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * Parsed `apq search` pattern — a `QueryNode` tree augmented with

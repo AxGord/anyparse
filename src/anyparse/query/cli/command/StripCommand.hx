@@ -2,12 +2,10 @@ package anyparse.query.cli.command;
 
 import anyparse.query.Cli.ReconCluster;
 import anyparse.query.ExitCode.*;
-import anyparse.query.cli.CliContext;
 import anyparse.query.cli.command.ReconCommand.ReconWalkResult;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
 
-using StringTools;
 using Lambda;
 
 #if (sys || nodejs)

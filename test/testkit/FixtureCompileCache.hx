@@ -11,8 +11,6 @@ import js.node.Fs;
 import js.node.Zlib;
 import js.node.fs.Stats;
 
-using StringTools;
-
 /**
  * A content-addressed REPLAY of the fixture compiles the reach probes run, for `tools/mutation-check.sh`.
  *

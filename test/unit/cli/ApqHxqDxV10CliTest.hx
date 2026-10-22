@@ -7,8 +7,6 @@ import anyparse.check.FixVerifier.FixRevertCause;
 import anyparse.query.Cli;
 import anyparse.query.cli.command.LintFixVerify;
 import anyparse.query.cli.command.SweepCommand;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

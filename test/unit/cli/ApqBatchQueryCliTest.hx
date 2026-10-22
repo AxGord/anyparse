@@ -2,8 +2,6 @@ package unit.cli;
 
 import anyparse.query.Cli;
 import anyparse.query.cli.CliArgs;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Several queries in ONE walk, and the argument grammar that makes them

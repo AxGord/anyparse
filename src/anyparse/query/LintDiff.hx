@@ -7,8 +7,6 @@ import anyparse.query.format.json.LintReportJsonParser;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
 
-using StringTools;
-
 /**
  * `apq lint-diff` — compare two `apq lint --format json --all` snapshots as MULTISETS of
  * `(file, rule, severity, message)` keys — `(file, rule, severity, family, function, subject)` for a record carrying a

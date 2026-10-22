@@ -8,8 +8,6 @@ import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliRegistry;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 #if (sys || nodejs)
 import sys.io.File;
 #end

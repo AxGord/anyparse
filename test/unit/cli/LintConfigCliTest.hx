@@ -2,8 +2,6 @@ package unit.cli;
 
 import anyparse.check.LintConfig;
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end wiring of an `apqlint.json` sitting in the linted file's

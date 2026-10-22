@@ -5,7 +5,6 @@ import anyparse.check.Linter;
 import anyparse.check.RedundantParens;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

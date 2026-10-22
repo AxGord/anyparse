@@ -5,7 +5,6 @@ import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.LintConfig.OracleConfig;
 
 using Lambda;
-using StringTools;
 
 /**
  * What the two safe-pass oracle measurements decided: carry on, carry on but say the

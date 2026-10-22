@@ -3,8 +3,6 @@ package unit;
 import anyparse.check.OracleCoverage;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.CachingGrammarPlugin.LibrarySources;
-import anyparse.query.CachingGrammarPlugin.ResolutionSources;
 import anyparse.query.CallGraph;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.ReachLiveness.ReachConfiguration;

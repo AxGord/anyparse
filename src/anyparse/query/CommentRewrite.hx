@@ -8,8 +8,6 @@ import anyparse.query.SourceComments.CommentTok;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
-
 /**
  * One physical line of a text that lies in a comment and renders wider than the configured width:
  * its verbatim text and its width in rendered columns. The width gate compares two LISTS of these

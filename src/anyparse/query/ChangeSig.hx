@@ -4,8 +4,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SignatureEdit.SignatureTarget;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Outcome of a `ChangeSig.changeSig` call. `Ok` carries the
  * format-preserving rewritten source plus an optional advisory (a

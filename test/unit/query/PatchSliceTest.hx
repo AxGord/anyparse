@@ -4,7 +4,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.Patch;
 import anyparse.query.ReplaceNode;
-import anyparse.query.ReplaceNode.ReplaceTarget;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;

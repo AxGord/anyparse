@@ -8,7 +8,6 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 
 using Lambda;
-using StringTools;
 
 /**
  * Patch a fragment INSIDE one addressed node — the surgical counterpart of

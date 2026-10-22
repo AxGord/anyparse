@@ -5,8 +5,6 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end tests for `apq rename` WITHOUT `--scope` when the cursor sits on a MEMBER

@@ -1,7 +1,6 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 
 using Lambda;

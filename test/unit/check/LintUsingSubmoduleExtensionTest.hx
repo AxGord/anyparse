@@ -3,7 +3,6 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

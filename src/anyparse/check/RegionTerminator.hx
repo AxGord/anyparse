@@ -1,7 +1,5 @@
 package anyparse.check;
 
-import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
 using StringTools;

@@ -8,7 +8,6 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.ShadowingParameter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

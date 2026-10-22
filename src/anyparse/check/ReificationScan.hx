@@ -1,10 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.QuotationAware;
-import anyparse.check.Check.Violation;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
 using Lambda;

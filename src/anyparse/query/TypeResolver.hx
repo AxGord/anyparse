@@ -7,7 +7,6 @@ import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * Minimal type-aware purity resolution for the analysis layer. Recovers a

@@ -5,8 +5,6 @@ import anyparse.macro.GeneratedRule;
 import haxe.macro.ComplexTypeTools;
 import haxe.macro.Expr;
 import haxe.macro.ExprTools;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The contract of `BranchOutlining`, the pass that moves each enum-branch trial out of its rule into a helper.

@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.NullFlow.NullFacts;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.QueryNode;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 import haxe.Exception;

@@ -2,14 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.ConstantFieldScan.ConstantFieldSeams;
 import anyparse.query.CallGraph;
 import anyparse.query.Clusters;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeInfoProvider;

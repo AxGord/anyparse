@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.LintConfig;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 
 using StringTools;

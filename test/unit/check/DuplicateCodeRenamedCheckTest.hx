@@ -10,7 +10,6 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

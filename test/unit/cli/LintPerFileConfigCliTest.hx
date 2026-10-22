@@ -8,8 +8,6 @@ import anyparse.check.Complexity;
 import anyparse.check.LintConfig;
 import anyparse.query.Cli;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Per-file `apqlint.json` discovery across a multi-directory lint run. A rule

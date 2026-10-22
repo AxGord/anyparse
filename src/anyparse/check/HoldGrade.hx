@@ -1,6 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.ThreadSafety.CostNote;
 import anyparse.check.ThreadSafety.FindingFamily;

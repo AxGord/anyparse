@@ -5,8 +5,6 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `lint` end to end over a `macro` quotation. The reification gate drops every rule's quoted findings except a

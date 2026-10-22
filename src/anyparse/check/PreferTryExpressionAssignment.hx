@@ -1,14 +1,11 @@
 package anyparse.check;
 
 import anyparse.check.AssignmentTreeHoist.LvalueRef;
-import anyparse.check.Check.Violation;
 import anyparse.check.TryExpressionShape.TryParts;
 import anyparse.check.TryExpressionShape.TrySeams;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
-import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;

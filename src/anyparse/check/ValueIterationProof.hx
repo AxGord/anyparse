@@ -1,10 +1,8 @@
 package anyparse.check;
 
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberReach;
 import anyparse.query.MemberTouchScan;
 import anyparse.query.NominalTypes;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

@@ -1,7 +1,6 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
-import anyparse.check.Check.Violation;
 import anyparse.check.MemberInitDeps.InitConstraintKind;
 import anyparse.check.MemberInitDeps.InitOrderConstraint;
 import anyparse.check.MemberOrderReason.OrderKeys;
@@ -9,9 +8,7 @@ import anyparse.check.MemberSlots.MemberRank;
 import anyparse.check.MemberSlots.OrderedMember;
 import anyparse.check.MemberSpacing.LayoutIssue;
 import anyparse.check.MemberSpacing.SpacingPolicy;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;

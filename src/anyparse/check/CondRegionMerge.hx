@@ -1,8 +1,6 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.query.CondDirectives;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;

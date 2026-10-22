@@ -1,9 +1,7 @@
 package anyparse.check;
 
 import anyparse.query.CallGraph;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
-import anyparse.query.QueryNode;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 

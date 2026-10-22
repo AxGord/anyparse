@@ -2,17 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
-import anyparse.check.Check.Violation;
 import anyparse.check.ValueIterationProof.ValueIteration;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberReach;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
-import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;

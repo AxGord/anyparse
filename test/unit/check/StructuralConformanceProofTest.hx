@@ -1,7 +1,6 @@
 package unit.check;
 
 import anyparse.check.PreferFinalPublicField;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

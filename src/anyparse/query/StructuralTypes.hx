@@ -6,7 +6,6 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
-using StringTools;
 using Lambda;
 
 /**

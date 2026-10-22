@@ -3,8 +3,6 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Conservative text scans for the cross-file questions a member-access rewrite has to answer:
  * "is this member NAME written here" (does a SUBTYPE write an inherited member, does an

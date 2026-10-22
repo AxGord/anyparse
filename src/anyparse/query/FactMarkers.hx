@@ -3,7 +3,6 @@ package anyparse.query;
 import anyparse.query.CompilerFacts.FactNode;
 
 using Lambda;
-using StringTools;
 
 /**
  * A marker a facts node carries (`FactNode.incomplete`), read: the vocabulary `TypedFactsWalk` and `CompilerFacts` write,

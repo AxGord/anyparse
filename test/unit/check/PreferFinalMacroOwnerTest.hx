@@ -3,7 +3,6 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.Linter;
 import anyparse.query.cli.command.LintCommand;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

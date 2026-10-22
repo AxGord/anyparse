@@ -3,10 +3,7 @@ package anyparse.query.cli.command;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliCommand;
-import anyparse.query.cli.CliContext;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq make-final` — the CROSS-FILE (`--scope`) EDIT shape of the command seam.

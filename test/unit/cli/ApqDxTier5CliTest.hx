@@ -6,8 +6,6 @@ import sys.io.File;
 #end
 import anyparse.query.Cli;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

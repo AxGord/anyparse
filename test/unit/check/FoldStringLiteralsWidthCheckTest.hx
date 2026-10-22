@@ -7,7 +7,6 @@ import anyparse.grammar.haxe.HxStringEscape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 
 using StringTools;

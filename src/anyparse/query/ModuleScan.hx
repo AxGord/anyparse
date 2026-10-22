@@ -8,7 +8,6 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

@@ -1,14 +1,11 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParenGuard;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

@@ -3,9 +3,6 @@ package anyparse.query.cli.command;
 import anyparse.query.ExitCode.*;
 import anyparse.query.ExtractConstantTo;
 import haxe.Exception;
-
-using StringTools;
-
 #if (sys || nodejs)
 import sys.FileSystem;
 #end

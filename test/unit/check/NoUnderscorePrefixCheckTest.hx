@@ -13,7 +13,6 @@ import anyparse.query.Cli;
 import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
-import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;

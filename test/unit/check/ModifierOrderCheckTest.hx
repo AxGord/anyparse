@@ -6,7 +6,6 @@ import anyparse.check.ModifierOrder;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriter;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

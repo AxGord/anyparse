@@ -1,7 +1,5 @@
 package anyparse.query;
 
-using StringTools;
-
 /**
  * The map between two ways of counting a position in one source text: in codepoints, which is how the Haxe compiler
  * reports `Position.min`/`max`, and in the target's own string units, which is what an anyparse `Span` counts — UTF-16

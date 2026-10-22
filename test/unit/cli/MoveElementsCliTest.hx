@@ -5,8 +5,6 @@ import sys.io.File;
 #end
 import anyparse.query.Cli;
 import haxe.crypto.Md5;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

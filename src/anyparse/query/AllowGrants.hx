@@ -6,7 +6,6 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * What a Haxe `@:allow` grant actually reaches, read per MEMBER rather than per file.

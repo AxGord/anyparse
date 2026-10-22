@@ -16,7 +16,6 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

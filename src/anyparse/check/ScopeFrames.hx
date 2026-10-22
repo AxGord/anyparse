@@ -1,8 +1,5 @@
 package anyparse.check;
 
-import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
-
 /**
  * The name-visibility model the de-nesting checks share: which bindings are already live where a
  * statement run is about to be moved TO, so a de-nested local cannot silently re-declare — or

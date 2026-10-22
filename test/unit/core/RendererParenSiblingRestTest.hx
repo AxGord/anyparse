@@ -2,8 +2,6 @@ package unit.core;
 
 import anyparse.core.Doc;
 import anyparse.core.Renderer;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

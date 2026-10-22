@@ -13,7 +13,6 @@ import haxe.DynamicAccess;
 import haxe.Json;
 
 using Lambda;
-using StringTools;
 
 /**
  * Machine-readable renderers for analysis-check violations — the JSON and

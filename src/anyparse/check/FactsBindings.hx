@@ -4,7 +4,6 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.CasePatterns;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NominalTypes;
-import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
 using Lambda;

@@ -15,7 +15,6 @@ import anyparse.query.TypingService.TypingHost;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * Nominal-type resolution over written type SOURCES and the query tree: what type does

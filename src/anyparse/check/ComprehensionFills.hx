@@ -5,7 +5,6 @@ import anyparse.check.PreferComprehension.ComprehensionCtx;
 import anyparse.check.PreferComprehension.ComprehensionSeams;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.NominalTypes;
-import anyparse.query.QueryNode;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 

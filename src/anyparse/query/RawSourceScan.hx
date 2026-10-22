@@ -3,7 +3,6 @@ package anyparse.query;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

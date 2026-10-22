@@ -7,7 +7,6 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 import haxe.Exception;
 
 using Lambda;
-using StringTools;
 
 /**
  * The written member types of the Haxe std core — the toplevel, `haxe/` and `sys/` (`StdResolver.resolutionSpecs`), the

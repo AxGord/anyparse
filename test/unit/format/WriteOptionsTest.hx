@@ -15,8 +15,6 @@ import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueWriteOptions;
 import anyparse.grammar.json.JValueWriter;
 import anyparse.grammar.json.JsonFormat;
-import utest.Assert;
-import utest.Test;
 
 /**
  * σ infrastructure regression: confirm the generated `write()` entry

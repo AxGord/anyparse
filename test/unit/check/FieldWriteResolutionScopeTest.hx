@@ -4,7 +4,6 @@ import anyparse.check.PreferFinalPublicField;
 import anyparse.check.PreferReadOnlyField;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

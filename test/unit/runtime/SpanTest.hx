@@ -2,8 +2,6 @@ package unit.runtime;
 
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Tests for `Span` — zero-width construction, `toString` shape, and

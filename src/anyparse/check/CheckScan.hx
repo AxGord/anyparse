@@ -1,10 +1,8 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
@@ -14,7 +12,6 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
