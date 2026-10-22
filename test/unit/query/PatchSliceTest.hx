@@ -318,6 +318,91 @@ class PatchSliceTest extends Test {
 	}
 
 	/**
+	 * A fragment that OPENS inside the doc block and runs on into the declaration — the dedented
+	 * copy of the doc's closing line plus the member under it — and inserts a declaration between
+	 * the two. The edit starts in trivia, so the declaration it starts at is no declaration at all:
+	 * the guard must watch the block the edit starts inside, not whatever enclosing type the offset
+	 * resolves to, and must find that block's end where the replacement leaves it.
+	 *
+	 * CONTROL for the enclosing doc watch. KILLED by arm `M-PATCH-ENCLOSING-DOC-UNWATCHED`.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-ENCLOSING-DOC-UNWATCHED')
+	public function testAnInsertFromAFragmentOpeningInsideTheDocRefused(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		switch Patch.patchNode(
+			source, BySelector('ClassDecl:C'), ' */\n\tfunction b() {}', ' */\n\tfunction ins() {}\n\n\tfunction b() {}', false,
+			new HaxeQueryPlugin()
+		) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('moves the `/**` block above `b` onto `ins`', message);
+		}
+	}
+
+	/**
+	 * The same opening, rewriting the doc and renaming the declaration under it in one fragment, is
+	 * an ordinary edit: the block still documents the declaration it was written for.
+	 */
+	public function testARewriteOpeningInsideTheDocThatRenamesTheDeclarationApplies(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		final expected: String = 'class C {\n\t/**\n\t * About bee.\n\t */\n\tfunction bee() {}\n}\n';
+		assertPatch(
+			source, BySelector('ClassDecl:C'), ' * About b.\n\t */\n\tfunction b() {}', ' * About bee.\n\t */\n\tfunction bee() {}',
+			expected
+		);
+	}
+
+	/**
+	 * Deleting the documented declaration and keeping the one after it leaves the block above a
+	 * declaration that already stood there undocumented. Nothing in the text tells that from
+	 * deleting the second and renaming the first onto its name, and the name test and the growth
+	 * test both read it as a rename — so the guard asks whether the doc's new owner was already a
+	 * declaration of the container before the edit.
+	 *
+	 * CONTROL for the pre-declared new owner. KILLED by arm `M-PATCH-NEW-OWNER-PREDECLARED-UNCHECKED`.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-NEW-OWNER-PREDECLARED-UNCHECKED')
+	public function testDeletingTheDocumentedOneWithTheNextRefused(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n\n\tfunction z() {}\n}\n';
+		switch Patch.patchNode(
+			source, BySelector('ClassDecl:C'), 'function b() {}\n\n\tfunction z() {}', 'function z() {}', false, new HaxeQueryPlugin()
+		) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('moves the `/**` block above `b` onto `z`', message);
+		}
+	}
+
+	/**
+	 * The fragment does not have to carry the next declaration: deleting the documented one alone
+	 * leaves its block above the next across a blank line, which still attaches it.
+	 *
+	 * CONTROL for the pre-declared new owner. KILLED by arm `M-PATCH-NEW-OWNER-PREDECLARED-UNCHECKED`.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-NEW-OWNER-PREDECLARED-UNCHECKED')
+	public function testDeletingTheDocumentedDeclarationAloneRefused(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n\n\tfunction z() {}\n}\n';
+		switch Patch.patchNode(source, BySelector('ClassDecl:C'), '\tfunction b() {}\n\n', '', false, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('moves the `/**` block above `b` onto `z`', message);
+		}
+	}
+
+	/** The refusal's remedy: the same deletion with the doc block inside the fragment takes the doc with it. */
+	public function testDeletingTheDocumentedDeclarationWithItsDocApplies(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n\n\tfunction z() {}\n}\n';
+		final expected: String = 'class C {\n\tfunction z() {}\n}\n';
+		assertPatch(source, BySelector('ClassDecl:C'), '/**\n\t * About b.\n\t */\n\tfunction b() {}\n\n\t', '', expected);
+	}
+
+	/**
 	 * The hole the container-GREW signal leaves, and why the name test stays beside it: a payload
 	 * that inserts a declaration above the documented member AND deletes a different one keeps the
 	 * count level, so growth sees nothing — but the original name survives, so `siblingDeclares`
@@ -359,30 +444,28 @@ class PatchSliceTest extends Test {
 	}
 
 	/**
-	 * A multi-pair payload each of whose pairs applies alone was refused as a doc
-	 * TRANSFER, and WHICH deltas refuse was decided by arithmetic rather than by the edit.
-	 * Both pairs sit under the same class-level doc block, so the guard watches that one block
-	 * once per edit — and it mapped the block's end into the spliced text by the TOTAL delta of
-	 * every preceding edit, including the edits that lie AFTER it. From the second edit on the
-	 * recorded end was pushed past itself, and where it landed decided the verdict: on this
-	 * fixture at base, small paddings of the first pair applied, a middle band refused naming
-	 * `LIB` as the doc's new owner, and larger ones applied again. A refusal WINDOW is the
-	 * signature of a position error, not of a doc that moved, so the fixture sweeps the range
-	 * instead of pinning one delta — a band of its cells was red at base.
+	 * A multi-pair payload each of whose pairs applies alone must apply at every delta. Each pair
+	 * edits INSIDE a member's doc, so each watches that block, and the first block's end lands where
+	 * it belongs only if it is moved by the edits BEFORE it and not by the second pair's growth after
+	 * it — counted anyway, it falls on the next member at some deltas and refuses a transfer that
+	 * never happened. A refusal WINDOW is the signature of a position error, not of a doc that moved,
+	 * so the fixture sweeps the delta instead of pinning one.
+	 *
+	 * CONTROL for the shift arithmetic. KILLED by arm `M-PATCH-DOCEND-SHIFTS-EVERY-EDIT`.
 	 */
 	@:pin('control')
 	@:killer('M-PATCH-DOCEND-SHIFTS-EVERY-EDIT')
-	public function testGrowingPairsUnderOneClassDocAcceptedAtEveryDelta(): Void {
+	public function testGrowingPairsInsideTwoMemberDocsAcceptedAtEveryDelta(): Void {
 		final head: String = '/**\n * Class doc.\n */\nclass Foo {\n\tstatic final LIB:String = \'x\';\n\n\t/**\n\t * First doc.\n\t */\n'
 			+ '\tfunction m1():Void {}\n\n\t/**\n\t * Second doc.\n\t */\n\tfunction m2():Void {}\n}\n';
-		for (pad in [1, 5, 10, 15, 20, 30, 40, 60]) {
-			final padding: String = [for (i in 0...pad) 'x'].join('');
+		for (pad in [1, 5, 10, 15, 20, 23, 24, 25, 26, 30, 40, 60]) {
+			final padding: String = [for (_ in 0...pad) 'x'].join('');
 			final pairs: Array<{ oldText: String, newText: String }> = [
 				{ oldText: ' * First doc.', newText: ' * First doc.$padding' },
-				{ oldText: ' * Second doc.', newText: ' * Second doc, expanded.' }
+				{ oldText: ' * Second doc.', newText: ' * Second doc.$padding' }
 			];
 			final expected: String = head.replace(' * First doc.', ' * First doc.$padding')
-				.replace(' * Second doc.', ' * Second doc, expanded.');
+				.replace(' * Second doc.', ' * Second doc.$padding');
 			switch Patch.patchNodeMany(head, BySelector('ClassDecl:Foo'), pairs, false, new HaxeQueryPlugin()) {
 				case Ok(text):
 					Assert.equals(expected, text);

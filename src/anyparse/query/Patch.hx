@@ -150,6 +150,15 @@ final class Patch {
 	}
 
 	/**
+	 * Whether a comment token is an attached doc block: a `/**` block that starts its own line. A
+	 * comment sharing its line with preceding code trails THAT declaration, and a plain banner
+	 * comment is not documentation — the attribution `RefactorSupport.docExtendedSpan` applies.
+	 */
+	private static inline function isDocBlock(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
+		return !tok.isLine && SourceText.startsItsLine(source, tok.from) && source.fastCodeAt(tok.from + 2) == '*'.code;
+	}
+
+	/**
 	 * `locate` over the declaration's slice, and — for a fragment that does not occur there at all
 	 * — over the slice widened back over the declaration's OWN leading doc block, which is trivia
 	 * before the node. That is what lets the doc-orphan refusal's remedy (widen the fragment over
@@ -169,28 +178,21 @@ final class Patch {
 	}
 
 	/**
-	 * Why this pair would ORPHAN a doc comment, or null when it would not.
+	 * Why this payload would move a doc comment onto a declaration it was not written for, or null.
 	 *
-	 * A declaration's `/** ... *\/` is trivia BEFORE its node, so a fragment copied from
-	 * `apq source --select` starts at the declaration KEYWORD and the doc sits above the
-	 * match. A payload that keeps that declaration and puts a NEW one ahead of it therefore
-	 * splices between the doc and what it documents: the doc silently transfers to the
-	 * insertion and the documented declaration is left bare. `apq patch` reported `wrote
-	 * <file>`, the build stayed green, and no gate in this project could see it — the writer
-	 * re-emits the comment verbatim and `fragmented-doc-comment` only fires when the
-	 * insertion happens to carry a doc of its own.
+	 * A declaration's `/** ... *\/` is trivia BEFORE its node, so a payload that keeps the documented
+	 * declaration and puts a new one ahead of it splices between the doc and what it documents, and
+	 * one that deletes the documented declaration leaves the doc above the next. The writer re-emits
+	 * the comment verbatim and `apq patch` reports `wrote <file>`; no build or lint sees the move.
 	 *
-	 * The shape is exact, so the refusal is: an ATTACHED `/**` block ends directly above the
-	 * match (`RefactorSupport.docExtendedSpan`, the same attachment model `set-doc` and
-	 * `move-member` use — a plain banner comment is not a doc and never triggers this), and
-	 * the new text still holds the old fragment's opening line but no longer OPENS with it.
-	 * An ordinary in-place edit does not repeat that line ahead of itself, and a payload that
-	 * drops the line entirely is replacing the declaration the doc belongs to, which is not an
-	 * orphan.
-	 *
-	 * The remedy in the message is verified, not suggested: widening the old fragment upward
-	 * to include the doc block makes the doc part of the match, so it travels with the
-	 * declaration and the insertion lands above the whole unit.
+	 * Each edit watches ONE block: the doc it starts inside, else the doc directly above the
+	 * declaration run it starts at (`declGroupStart`, then `docBlockAbove`). The payload is spliced
+	 * and reparsed, and a watched block whose owner NAME changed is a transfer when the old name
+	 * still stands in the container, when the new owner was already declared there, or when the
+	 * bytes the block documents now hold more declarations than before; a changed name with none of
+	 * the three is a rename and applies. A fragment that starts AT the block's opening carries the
+	 * whole block, so where it lands is the payload's to say — which is why widening the fragment
+	 * over the doc is the remedy the refusal names.
 	 */
 	private static function docOrphanRefusal(
 		source: String, tree: QueryNode, sorted: Array<{ span: Span, text: String }>, plugin: GrammarPlugin
@@ -198,23 +200,33 @@ final class Patch {
 		// ONE lexical pass for the whole call. `docExtendedSpan` re-lexes the file on every call,
 		// and asking it per edit costs a large share of the op on a big file patched with `--all`.
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
-		final watched: Array<{ region: Span, owner: String, declared: Int }> = [];
-		// One entry per BLOCK, not per edit. An edit starting inside a comment resolves no node
-		// of its own, so every such edit in a payload watches the same enclosing type's doc, and
-		// would otherwise re-resolve that one block against the spliced tree below once per edit.
+		final watched: Array<{
+			doc: Span,
+			node: QueryNode,
+			owner: String,
+			ownerEnd: Int,
+			declared: Int
+		}> = [];
+		// One entry per BLOCK, not per edit: several edits of one payload can start inside the same
+		// block, or in trivia that resolves to the same enclosing type, and each would otherwise
+		// re-resolve that one block against the spliced tree below.
 		final seen: Array<Int> = [];
 		for (edit in sorted) {
-			final end: Int = docBlockEnd(source, comments, declGroupStart(source, tree, edit.span.from));
-			if (end < 0 || seen.contains(end)) continue;
-			seen.push(end);
-			final node: Null<QueryNode> = docOwnerNode(source, tree, comments, end);
+			final doc: Null<Span> = enclosingDoc(source, comments, edit.span.from) ?? docBlockAbove(
+				source, comments, declGroupStart(source, tree, edit.span.from)
+			);
+			if (doc == null || seen.contains(doc.to)) continue;
+			seen.push(doc.to);
+			final node: Null<QueryNode> = docOwnerNode(source, tree, comments, doc.to);
 			final owner: Null<String> = node == null ? null : declName(node);
 			final ownerSpan: Null<Span> = node?.span;
 			if (node == null || owner == null || ownerSpan == null) continue;
 			watched.push({
-				region: new Span(shiftedEnd(sorted, end), shiftedEnd(sorted, ownerSpan.to)),
+				doc: doc,
+				node: node,
 				owner: owner,
-				declared: declsInRegion(tree, node, new Span(end, containingEnd(sorted, ownerSpan.to)))
+				ownerEnd: shiftedEnd(sorted, ownerSpan.to),
+				declared: declsInRegion(tree, node, new Span(doc.to, containingEnd(sorted, ownerSpan.to)))
 			});
 		}
 		if (watched.length == 0) return null;
@@ -224,32 +236,29 @@ final class Patch {
 		final splicedComments: Array<{ from: Int, to: Int, isLine: Bool }> =
 			SourceComments.collectCommentTokens(plugin.lexicalRegions(spliced));
 		for (w in watched) {
-			final ownerNode: Null<QueryNode> = docOwnerNode(spliced, after, splicedComments, w.region.from);
+			final docEnd: Int = splicedDocEnd(spliced, splicedComments, sorted, w.doc);
+			final ownerNode: Null<QueryNode> = docOwnerNode(spliced, after, splicedComments, docEnd);
 			if (ownerNode == null) continue;
 			final owner: QueryNode = ownerNode;
 			final now: Null<String> = declName(owner);
 			if (now == null || now == w.owner) continue;
-			// A RENAME of the documented declaration reaches this point by construction —
-			// the doc's owner name changed because the declaration was renamed, not because
-			// a new one was pushed between them — and refusing it made `patch` decline the
-			// single most ordinary edit a documented member ever gets. Two independent
-			// signals separate it from a TRANSFER, and each covers the other's hole:
+			// A RENAME of the documented declaration reaches this point by construction — the doc's
+			// owner name changed because the declaration was renamed — and refusing it made `patch`
+			// decline the single most ordinary edit a documented member ever gets. Three signals
+			// separate it from a TRANSFER, each covering a hole the others leave:
 			//
-			// - `siblingDeclares`: a transfer leaves the original declaration standing
-			//   beside the insertion, so BOTH names survive in the container.
-			// - the watched REGION grew: the bytes that held the documented declaration hold
-			//   two now, so something was pushed in under the doc. This half is what catches
-			//   the COMPOUND payload that inserts a declaration AND renames the one it stole
-			//   the doc from — there the old name is gone, so the name test alone reads it as
-			//   a rename and lets the theft through at rc 0.
-			//
-			// The growth is read off the REGION and not off the container, because a container
-			// grows for reasons that have nothing to do with this doc: renaming a documented
-			// member and inserting an unrelated one beside it — two pairs that each apply alone
-			// — was refused as a transfer, naming a member the payload never moved.
+			// - `stands`: an insertion leaves the original declaration standing beside it, so BOTH
+			//   names survive in the container.
+			// - `took`: a deletion leaves the doc above a declaration that already stood in the
+			//   container, where a rename gives it a name nothing there held.
+			// - `grew`: the bytes that held the documented declaration hold more now — the compound
+			//   payload that inserts a declaration AND renames the one it stole the doc from. It is
+			//   read off that REGION, not the container, because a container grows for reasons that
+			//   have nothing to do with this doc.
 			final stands: Bool = siblingDeclares(after, owner, w.owner);
-			final grew: Bool = w.declared >= 0 && declsInRegion(after, owner, w.region) > w.declared;
-			if (stands || grew) return transferRefusal(w.owner, now, stands);
+			final took: Bool = siblingDeclares(tree, w.node, now);
+			final grew: Bool = w.declared >= 0 && declsInRegion(after, owner, new Span(docEnd, w.ownerEnd)) > w.declared;
+			if (stands || took || grew) return transferRefusal(w.owner, now, stands, took);
 		}
 		return null;
 	}
@@ -259,19 +268,16 @@ final class Patch {
 	 * BEFORE it, and, for the one edit that CONTAINS it, mapped onto the end of that edit's
 	 * replacement.
 	 *
-	 * The running total this replaced added EVERY preceding edit's delta. An edit whose start falls inside
-	 * a comment resolves no node of its own, so the block it is watched against is the enclosing TYPE's —
-	 * one block however many such edits a payload holds — and from the second edit on the recorded end was
-	 * pushed past itself onto whatever declaration the offset landed in. The transfer/rename discriminator
-	 * then compared a module's declaration count against a type body's, which grows by construction. Which
-	 * multi-pair payloads that refused was decided by the delta's SIZE, so refusals came in a WINDOW: the
-	 * signature of a position error and not of a doc that moved.
+	 * The running total this replaced added EVERY preceding edit's delta, so with several edits
+	 * watched against one block the recorded end was pushed past itself onto whatever declaration
+	 * the offset landed in, and refusals came in a WINDOW decided by the delta's size: the signature
+	 * of a position error, not of a doc that moved.
 	 *
-	 * The CONTAINING edit answered `-1` and dropped the watch, on the reading that a rewritten
-	 * block carries no position to map. It carries one — the block still ends where the
-	 * replacement does — and skipping was a fail-OPEN: a first pair rewriting the doc's last two
-	 * lines and a second turning `function b() {}` into `function c() {}`
-	 * above a kept `b` moved the block onto `c` with nothing watched at all.
+	 * For the CONTAINING edit the end of its replacement is right for a declaration that edit
+	 * rewrote, and only a fallback for a doc block's end, which `splicedDocEnd` reads off the token
+	 * still starting where the block did. Answering `-1` there and dropping the watch was a
+	 * fail-OPEN: a first pair rewriting the doc's last two lines and a second turning `function b()
+	 * {}` into `function c() {}` above a kept `b` moved the block onto `c` with nothing watched.
 	 */
 	private static function shiftedEnd(sorted: Array<{ span: Span, text: String }>, at: Int): Int {
 		var shifted: Int = at;
@@ -359,23 +365,44 @@ final class Patch {
 	}
 
 	/**
-	 * Where the `/**` block directly above `at` ends, or -1 when no attached doc block is there.
+	 * The `/**` block directly above `at`, or null when no attached doc block is there.
 	 *
 	 * This asks the pre-lexed `comments` list rather than `RefactorSupport.docExtendedSpan`, which re-lexes
 	 * the whole file per call, so a big file patched with `--all` pays one whole-file lex per resolved
-	 * range. `startsItsLine` is the same attribution rule `docExtendedSpan` applies — a comment sharing its
-	 * line with preceding code trails THAT declaration — and the `/**` test is its `docOnly` clause, which
-	 * keeps a plain banner comment from counting as documentation.
+	 * range. `isDocBlock` is the attribution rule `docExtendedSpan` applies.
 	 */
-	private static function docBlockEnd(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int): Int {
+	private static function docBlockAbove(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int): Null<Span> {
 		var i: Int = at - 1;
 		while (i >= 0 && SourceText.isSpace(source.fastCodeAt(i))) i--;
-		if (i < 0) return -1;
-		for (tok in comments) if (
-			tok.to == i + 1 && !tok.isLine && SourceText.startsItsLine(source, tok.from) && source.fastCodeAt(tok.from + 2) == '*'.code
-		)
-			return tok.to;
-		return -1;
+		if (i < 0) return null;
+		final tok: Null<{ from: Int, to: Int, isLine: Bool }> = comments.find(t -> t.to == i + 1 && isDocBlock(source, t));
+		return tok == null ? null : new Span(tok.from, tok.to);
+	}
+
+	/**
+	 * The doc block `at` falls strictly inside, or null. An edit starting there starts in trivia, so
+	 * the declaration run it would be asked about is whatever ENCLOSES the block — the type around a
+	 * member's doc — and a fragment opening on the doc's closing line and inserting a declaration
+	 * under it moved the doc with nothing watched.
+	 */
+	private static function enclosingDoc(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int): Null<Span> {
+		final tok: Null<{ from: Int, to: Int, isLine: Bool }> = comments.find(t -> t.from < at && at < t.to && isDocBlock(source, t));
+		return tok == null ? null : new Span(tok.from, tok.to);
+	}
+
+	/**
+	 * Where the watched `doc` block ends in the spliced text: the end of the doc token that still
+	 * starts where the block started. `shiftedEnd` of the block's end answers the end of a
+	 * replacement that opened inside the block and ran past it — past every declaration that
+	 * replacement wrote — so it is only the fallback, for a payload that rewrote the block's
+	 * opening and left no token where it started.
+	 */
+	private static function splicedDocEnd(
+		source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, sorted: Array<{ span: Span, text: String }>, doc: Span
+	): Int {
+		final from: Int = shiftedEnd(sorted, doc.from);
+		final tok: Null<{ from: Int, to: Int, isLine: Bool }> = comments.find(t -> t.from == from && isDocBlock(source, t));
+		return tok == null ? shiftedEnd(sorted, doc.to) : tok.to;
 	}
 
 	/**
@@ -448,20 +475,25 @@ final class Patch {
 	 * tail the signal that fired actually supports.
 	 *
 	 * `stands`: the documented declaration is still there beside the insertion, so the transfer is
-	 * a fact and the message states it. Otherwise the payload ALSO erased that name, and all that
-	 * is established is a region that held one declaration and holds two now: either the old one
-	 * was renamed and a second pushed in under the doc, or a new one was pushed ahead of a rename.
-	 * Nothing in the text tells those apart, and the message used to assert the theft anyway —
-	 * naming a declaration as left undocumented that the payload had renamed.
+	 * a fact and the message states it. `took`: the doc landed on a declaration that was already
+	 * there, which a deletion of the documented one and a deletion of the other plus a rename onto
+	 * its name both produce. Otherwise the payload ALSO erased the old name, and all that is
+	 * established is a region that holds more declarations than it did: either the old one was
+	 * renamed and a second pushed in under the doc, or a new one was pushed ahead of a rename.
 	 */
-	private static function transferRefusal(was: String, now: String, stands: Bool): String {
-		final why: String = stands
-			? 'the doc would silently transfer to the insertion and `$was` would be left undocumented'
-			: '`$was` is no longer declared there, so the replacement either renamed it, leaving the doc where it belongs, or '
+	private static function transferRefusal(was: String, now: String, stands: Bool, took: Bool): String {
+		final why: String = if (stands)
+			'the doc would silently transfer to the insertion and `$was` would be left undocumented'
+		else if (took)
+			'`$now` was already declared there, so the replacement either deleted `$was` and left its doc on `$now`, or deleted '
+				+ '`$now` and renamed `$was` onto its name; nothing in the text tells those apart'
+		else
+			'`$was` is no longer declared there, so the replacement either renamed it, leaving the doc where it belongs, or '
 				+ 'pushed `$now` in under the doc ahead of it; nothing in the text tells those apart';
 		return 'the edit moves the `/**` block above `$was` onto `$now` — $why. Widen the old fragment upward to include the doc block '
-			+ 'and repeat it in the replacement, so the doc travels with the declaration it documents; a fragment that is not in the '
-			+ 'addressed declaration is also looked for in that declaration\'s own doc, so the same address reaches it';
+			+ 'and repeat it in the replacement above the declaration it documents, or leave it out when that declaration is deleted; a '
+			+ 'fragment that is not in the addressed declaration is also looked for in that declaration\'s own doc, so the same address '
+			+ 'reaches it';
 	}
 
 	/**
