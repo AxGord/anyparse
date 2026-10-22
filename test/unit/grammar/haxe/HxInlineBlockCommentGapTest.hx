@@ -36,7 +36,9 @@ class HxInlineBlockCommentGapTest extends Test {
 		// reaches it too (the lead commit stashes it), so it is KEPT, moved
 		// after the type: `function bar():Void /* r */ {}`.
 		['return_type_body_gap', 'class Foo {\n\tfunction bar(): Int /* r */ {}\n}\n'],
-		['return_type', 'class Foo {\n\tfunction bar(): /* r */ Void {}\n}\n']
+		['return_type', 'class Foo {\n\tfunction bar(): /* r */ Void {}\n}\n'],
+		// An enum constructor's parameters are the trivia list a function's are, so the comment rides the element slot.
+		['enum_ctor_arg', 'enum Foo {\n\tA(/* c */ x: Int);\n}\n']
 	];
 
 	/** Seams the Trivia parser captures — the round trip keeps the comment. */
@@ -129,7 +131,6 @@ class HxInlineBlockCommentGapTest extends Test {
 		['field_init', 'class Foo {\n\tvar x: Int = /* f */ 1;\n}\n'],
 		['typeparam', 'class Foo {\n\tvar x: Array</* t */ Int>;\n}\n'],
 		['extends_lead', 'class Foo extends /* e */ Bar {}\n'],
-		['enum_ctor_arg', 'enum Foo {\n\tA(/* c */ x: Int);\n}\n'],
 		['anon_field', 'typedef T = {\n\ta: /* a */ Int,\n}\n']
 	];
 

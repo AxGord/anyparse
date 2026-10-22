@@ -1329,6 +1329,16 @@ class WrapList {
 	}
 
 	/**
+	 * True iff no list writer may append a trailing separator the source did not write after this rendered item: it
+	 * opens a preprocessor region, whose branches carry their own separators (an empty branch, or one already ending on
+	 * a separator, would compile to `, ,`), or it already ends on a `;` terminator (`var a:Int;` in a class-notation
+	 * structure).
+	 */
+	public static function refusesTrailingSeparator(item: Doc): Bool {
+		return DocMeasure.opensDirectiveRegion(item) || DocMeasure.endsWithSemi(item);
+	}
+
+	/**
 	 * Wrap `body` with `lead` unless `lead` is `Empty` — avoids a
 	 * pointless single-element `Concat` for the common no-lead path.
 	 */
@@ -3446,7 +3456,7 @@ class WrapList {
 	 * line. Every other elided gap stays soft — `chunkFill` drops just its comma.
 	 */
 	private static function regionAfterElidedSep(items: Array<Doc>, i: Int, sepBeforeFlags: Null<Array<Bool>>): Bool {
-		return skipSepBefore(sepBeforeFlags, i) && DocMeasure.firstVisibleTextStartsWith(items[i], '#'.code);
+		return skipSepBefore(sepBeforeFlags, i) && DocMeasure.opensDirectiveRegion(items[i]);
 	}
 
 	/**
@@ -4614,6 +4624,15 @@ class WrapList {
 		};
 	}
 
+	/**
+	 * The list's trailing separator: the caller's answer, except after a last item that refuses one
+	 * (`refusesTrailingSeparator`), where only a separator the source wrote survives.
+	 */
+	private static function appendsTrailingComma(items: Array<Doc>, axes: ResolvedWrapListOptions): Bool {
+		return axes.appendTrailingComma
+			&& (axes.flatTrailingComma || items.length == 0 || !refusesTrailingSeparator(items[items.length - 1]));
+	}
+
 	/** `emit` for one layout of the list, with its items as they stand. */
 	private static function emitList(
 		open: String, close: String, sep: String, items: Array<Doc>, opt: WriteOptions, openInside: Doc, closeInside: Doc,
@@ -4623,7 +4642,7 @@ class WrapList {
 		// values. `forceMode`, `sepBeforeFlags` and `sourceBreakBefore` stay nullable:
 		// null is their meaningful state.
 		final axes: ResolvedWrapListOptions = resolveAxes(options);
-		final appendTrailingComma: Bool = axes.appendTrailingComma;
+		final appendTrailingComma: Bool = appendsTrailingComma(items, axes);
 		final leadFlat: Doc = axes.leadFlat;
 		final leadBreak: Doc = axes.leadBreak;
 		final forceExceeds: Bool = axes.forceExceeds;

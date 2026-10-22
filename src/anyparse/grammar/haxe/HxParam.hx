@@ -32,11 +32,9 @@ package anyparse.grammar.haxe;
  * the writer's `triviaSepStarExpr` `_emitSep` gate honours `sepAfter=false` to suppress the
  * inter-element comma — the mechanism object-literal fields with a missing source comma use.
  *
- * Used by `HxFnDecl.params` and `HxEnumCtorDecl.params`. The runtime sep-elide is specific to
- * the `@:trivia` Star path; `HxEnumCtorDecl.params` is non-trivia, so cond-comp inside a
- * parameterised enum constructor's params does not byte-roundtrip the no-comma adjacency
- * form. Lambda-style `?param` routes through `HxLambdaParam`; call-site spread `f(...args)`
- * is `HxExpr.Spread`, not a variant of this enum.
+ * Used by `HxFnDecl.params` and `HxEnumCtorDecl.params`, both `@:trivia` Stars, so the
+ * sep-elide holds in either. Lambda-style `?param` routes through `HxLambdaParam`; call-site
+ * spread `f(...args)` is `HxExpr.Spread`, not a variant of this enum.
  */
 @:peg
 enum HxParam {

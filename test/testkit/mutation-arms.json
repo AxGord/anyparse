@@ -29184,6 +29184,54 @@
 			"method": "overlappingFile",
 			"force": "null",
 			"note": "the edits two cross-file fixes make in one file are merged unchecked, so where they overlap the later silently swallows the earlier and the run reports both as landed"
+		},
+		{
+			"name": "M-ENUM-CTOR-PARAMS-PLAIN",
+			"type": "anyparse.grammar.haxe.HxEnumCtorDecl",
+			"method": "HxEnumCtorDecl",
+			"kind": "TypedefDecl",
+			"find": "@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
+			"replace": "@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
+			"note": "an enum constructor's parameters capture no per-element separator, so every gap gets a comma and a region already ending on its own is followed by `#end, c:Int`"
+		},
+		{
+			"name": "M-TRAIL-AFTER-REGION",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "refusesTrailingSeparator",
+			"find": "return DocMeasure.opensDirectiveRegion(item) || DocMeasure.endsWithSemi(item);",
+			"replace": "return DocMeasure.endsWithSemi(item);",
+			"note": "a region ending the list takes the trailing comma again, which compiles to `, ,` once its branch is off"
+		},
+		{
+			"name": "M-TRAIL-AFTER-SEMI",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "refusesTrailingSeparator",
+			"find": "return DocMeasure.opensDirectiveRegion(item) || DocMeasure.endsWithSemi(item);",
+			"replace": "return DocMeasure.opensDirectiveRegion(item);",
+			"note": "a class-notation structure field takes the trailing comma after its own `;`"
+		},
+		{
+			"name": "M-TRAIL-CASCADE-UNGATED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "appendsTrailingComma",
+			"force": "axes.appendTrailingComma",
+			"note": "the wrap cascade appends the trailing comma whatever the last item ends on"
+		},
+		{
+			"name": "M-TRAIL-FORCEMULTI-UNGATED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiLineExpr",
+			"find": "? $appendTrailingCommaExpr && ($flatTrailingCommaExpr || !anyparse.format.wrap.WrapList.refusesTrailingSeparator(_elem))",
+			"replace": "? $appendTrailingCommaExpr",
+			"note": "a list laid out one item per line by a comment appends the trailing comma after a region ending it"
+		},
+		{
+			"name": "M-TRAIL-CALL-FORCEMULTI-UNGATED",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "lowerPostfixForceMultiDoc",
+			"find": "final _mTrail: Bool = _mLast && $tcExpr && !anyparse.format.wrap.WrapList.refusesTrailingSeparator(_docs[_mj]);",
+			"replace": "final _mTrail: Bool = _mLast && $tcExpr;",
+			"note": "call arguments laid out one per line by a line comment append the trailing comma after a region ending them"
 		}
 	]
 }
