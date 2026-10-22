@@ -390,21 +390,15 @@ class CondQueryTest extends Test {
 	}
 
 	/**
-	 * A `RefShape` carrying only the six fields the typedef requires, plus whichever whole-literal
+	 * A `RefShape` carrying only the six fields its constructor requires, plus whichever whole-literal
 	 * kinds and metadata sigils the caller names — the smallest SECOND vocabulary this class can
 	 * hand `namesIn`, and the only way to exercise a grammar that declares none.
 	 */
 	private static function minimalShape(?stringLiteralKinds: Array<String>, ?metadataNamePrefixes: Array<String>): RefShape {
-		return {
-			identKind: 'Ident',
-			declHostKinds: [],
-			moduleValueDeclKinds: [],
-			scopeKinds: [],
-			writeParentKinds: [],
-			selfScopeDeclKinds: [],
-			stringLiteralKinds: stringLiteralKinds,
-			metadataNamePrefixes: metadataNamePrefixes
-		};
+		final shape: RefShape = new RefShape('Ident', [], [], [], [], []);
+		shape.stringLiteralKinds = stringLiteralKinds;
+		shape.metadataNamePrefixes = metadataNamePrefixes;
+		return shape;
 	}
 
 }

@@ -5200,3 +5200,7 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - FU26 (`asymmetric-branch-braces`) broke `issue_339_line_comment_before_catch` → no: bisect names `7f60f9fa7`, whose glued-keyword rule also glued a block comment that ENDED its source line before the first `catch` (later catches kept it via `_t.newlineBefore`) → `7f60f9fa7`
 - N52b (`Doc.BreakMark`) broke `opadd_chain_keep` → no: bisect names `85ea6604c`, whose `flatLength < 0` gate also opens a paren the source glued around a `keep` chain broken at its own operators, which the old `CollapseProbe(HardFlatten)` gate left glued without trailing content → `85ea6604c`
 - a glued paren around a broken `keep` chain nests by the source break after `return` / `=` → no: the `return` policy (fitLine by default, decided at render) may drop or add that break, so one write stops being a fixed point; the paren co-indents with the line the value starts on → `batch/hxqb-C0`
+
+## J0 (2026-10-21) — the JVM probe's `ClassFormatError`, bisected
+
+- the probe died on a wide structure from the typer / compiler-facts series → no: bisect names `1b172a012` (thread-safety R4 F1), whose `RefShape.operatorWriteKinds` was the grammar vocabulary's 255th field, one constructor slot past the JVM's 255 with the receiver → `1b172a012`

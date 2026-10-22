@@ -15,6 +15,8 @@ final class PinsCheckAToO {
 
 	public static final PINS: Array<String> = [
 		'unit.FixtureCompileCacheTest#testACompileWritingIntoItsCwdIsNotRecorded :: control :: M-FIXTURE-CACHE-CWD-WRITE',
+		'unit.JvmStructureWidthTest#testAStructureOneSlotOverTheLimitIsReported :: guard :: ',
+		'unit.JvmStructureWidthTest#testNoStructureInTheCompiledTreeOutgrowsAJvmConstructor :: guard :: ',
 		'unit.MutationArmAddressTest#testEveryDeclaredArmAddressesALiveMember :: control :: M-ARM-PATH-FLAT,M-ARM-KIND-UNSPELLED',
 		'unit.MutationArmAddressTest#testEveryFragmentArmStillCutsItsNode :: control :: M-ARM-FRAGMENT-NONE',
 		'unit.MutationArmAddressTest#testTheDeferredArmsAreTheOnesTheWalkAnswersFor :: control :: M-ARM-PATH-FLAT',

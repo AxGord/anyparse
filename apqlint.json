@@ -158,7 +158,8 @@
 				"CompilerFacts <= 78 members: C2 moved its node-record decoding out (`FactNodeRecords`) and its node-site queries (`FactSites`); every member left serves the one fact table and its caches and reads the same fields.",
 				"ReachGraph <= 98 members: C2 moved its library-call predicates out (`LibraryCalls`, `ReachProject.declarationOf`); every member left reads the graph growth state.",
 				"TypedFactsMacro <= 57 members: C2 moved its type-string printer out (`TypedFactsTypeStrings`); what is left is the fact-record writer, every member of it reading the same fields.",
-				"CallGraph <= 67 members: its members are the public question surface 86 files read (C2 and B9 measured it); N13 moved `collectEdges` out (`CallGraphEdges.collect`) and kept that surface unchanged on purpose."
+				"CallGraph <= 67 members: its members are the public question surface 86 files read (C2 and B9 measured it); N13 moved `collectEdges` out (`CallGraphEdges.collect`) and kept that surface unchanged on purpose.",
+				"RefShape <= 320 members / 3600 lines: the grammar vocabulary a plugin hands every check, one slot per seam a check reads, so it grows a slot at a time. A class only because, as a structure typedef (which this rule does not size), it outgrew the JVM constructor-argument limit (J0, docs/testing.md); nesting its slots in groups is the decomposition, and it moves the read of every consumer."
 			]
 		},
 		"prefer-count": {

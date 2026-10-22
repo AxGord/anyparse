@@ -621,10 +621,11 @@ The runner being js-only says nothing about the library. Parser, writer and the 
 haxe -cp src -main <harness> -D analyzer-optimize --jvm out.jar
 ```
 
-Two things break this quietly, and both did:
+Three things break this quietly, and all three did:
 
 - **A bare `import js.node.…` at module scope.** The *uses* were behind `#if nodejs`; the import was not, and an import is resolved unconditionally. Guard the import with the same condition as its uses.
 - **A `final` field in a structure `typedef` that a bare object literal has to be inferred INTO.** A `final` structure field lowers to a `never` setter. Where the expected type is written at the literal that costs nothing — `GrammarPlugin.LayoutMetrics` keeps its `final` fields and builds for every target. The error appears where the literal's own anonymous type is inferred FIRST and the typedef then has to unify with it, typically through a type parameter (`Inconsistent setter for field certain : never should be default`). One variable — same source, same flags, target swapped — `--jvm` rejects it while `-js` and `-neko` accept it, which is exactly what makes a `--jvm` build worth running.
+- **A structure wider than a JVM constructor.** `--jvm` lowers a structure typedef, an inline structure type and every object literal's field set to a class whose constructor takes one argument per field, and a JVM method signature holds 255 argument slots: the receiver takes one, a `Float` or `Int64` field two. The BUILD stays green past the limit — the class is refused when it is LOADED, so the jar dies at run time (`ClassFormatError: Too many arguments in method signature in class file …`) on whatever first touches it. `RefShape` crossed it at its 255th field (`1b172a012`); it is a class now, whose fields are assigned one by one and carry no limit. `unit.JvmStructureWidthTest` sweeps `src` and `tools` on the js runner and names every structure past the limit, so the next one fails the suite instead of only the probe. It reads slots off the SOURCE, so it cannot see a structure a macro assembles — the generated writer options are one, the widest anonymous class left in the jar — and for those the probe stays the only gate.
 
 The committed harness is the cheapest way to re-check this:
 
