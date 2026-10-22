@@ -108,7 +108,7 @@ class UsingMemberFirstParityTest extends Test {
 	}
 
 	/** A `@:forward` abstract hands an access it does not declare to its underlying type, whose extension binds: kept. */
-	@:pin('control') @:killer('M-USING-FORWARD-DECIDED')
+	@:pin('guard')
 	public function testAForwardAbstractReceiverKeepsTheUsing(): Void {
 		agree(
 			'p.Ext', 'class D {\n\tpublic function new() {}\n}\n\n@:forward abstract Fq(D) from D {}', 'f(x:Fq):String return x.tag();',

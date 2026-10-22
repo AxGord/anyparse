@@ -1090,7 +1090,7 @@ final class PinsCheckPToZ {
 		'unit.check.UsingInsertRefusalTest#testStaticExtensionCoveredAnchorRefuses :: control :: M-PSE-USING-INSERT-SILENT',
 		'unit.check.UsingInsertRefusalTest#testStaticExtensionUncoveredAnchorAppendsOneEdit :: guard :: ',
 		'unit.check.UsingInsertRefusalTest#testUncoveredAnchorStillInserts :: guard :: ',
-		'unit.check.UsingMemberFirstParityTest#testAForwardAbstractReceiverKeepsTheUsing :: control :: M-USING-FORWARD-DECIDED',
+		'unit.check.UsingMemberFirstParityTest#testAForwardAbstractReceiverKeepsTheUsing :: guard :: ',
 		'unit.check.UsingMemberFirstParityTest#testAGuardedMemberKeepsTheUsing :: control :: M-MEMBER-BINDS-GUARDED',
 		'unit.check.UsingMemberFirstParityTest#testAProjectTypeSharingTheStdNameKeepsTheUsing :: control :: M-MEMBER-DOOR-SHADOW',
 		'unit.check.UsingMemberFirstParityTest#testAStaticOfTheNameKeepsTheUsing :: control :: M-MEMBER-BINDS-STATIC',
