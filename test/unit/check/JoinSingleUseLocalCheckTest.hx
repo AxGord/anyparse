@@ -26,7 +26,7 @@ class JoinSingleUseLocalCheckTest extends Test {
 	// --- positive: the motivating shape and its fix ---
 
 	/**
-	 * The `VideoStampMark` site the rule was written for: an annotated capture of a
+	 * The site the rule was written for: an annotated capture of a
 	 * `Null<T>` field, read once by a safe-nav call on the next line.
 	 */
 	public function testMotivatingSiteFlagged(): Void {
@@ -383,8 +383,7 @@ class JoinSingleUseLocalCheckTest extends Test {
 	 * A braceless `$name` string interpolation is a read `Refs` does not index, so the
 	 * sole-reference count misses it and calls the local single-use when it is not. Deleting the
 	 * declaration would leave the interpolation bound to nothing -- output that does not compile.
-	 * Found on the client tree `src/video/VideoOutputController.hx:239`, where a captured `batchH` is
-	 * passed to a call and re-read from a `trace` on the next line.
+	 * Found on a client tree, where a captured local is passed to a call and re-read from a `trace` on the next line.
 	 */
 	public function testInterpolationReadNotFlagged(): Void {
 		Assert.equals(0, violations(wrapField("final x = _f;\n\t\tuse(x);\n\t\ttrace('got $x');")).length);
@@ -420,6 +419,109 @@ class JoinSingleUseLocalCheckTest extends Test {
 			Assert.equals(1, violations(wrapField('$nested\n\t\tuse(x);')).length, nested);
 	}
 
+	// --- a read in a LATER sibling statement: only over a source nothing can write ---
+
+	/**
+	 * A parameter captured into a `final` and read several statements later: nothing can write the
+	 * parameter, so the capture is pure noise and one fix pass leaves `return value;` with no local.
+	 */
+	@:pin('control')
+	@:killer('M-JSUL-SOURCE-ALWAYS-WRITTEN')
+	@:killer('M-JSUL-LATER-HOLDER-ADJACENT-ONLY')
+	public function testParamCaptureReadLaterCollapses(): Void {
+		final src: String = 'class C {\n\tprivate function set_caption(value:String):String {\n\t\tfinal caption:String = value;\n'
+			+ "\t\t_view.text = value ?? '';\n\t\t_view.x = (width - _view.width) / 2;\n"
+			+ '\t\t_view.y = (height - _view.height) / 2;\n\t\treturn caption;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('statements later') != -1, 'unexpected message: ${vs[0].message}');
+		final out: String = applyFixOnce(src);
+		Assert.isTrue(out.indexOf('return value;') != -1, 'expected the parameter returned in: $out');
+		Assert.equals(-1, out.indexOf('final caption'));
+	}
+
+	/** A write of the parameter anywhere in the function refuses the later read, before it as well as after it. */
+	@:pin('guard')
+	@:killer('M-JSUL-SOURCE-NEVER-WRITTEN')
+	public function testWrittenParamSourceNotFlagged(): Void {
+		for (write in ['value = null;', "value += 'x';", 'n++;']) {
+			final source: String = write.charAt(0) == 'n' ? 'n' : 'value';
+			Assert.equals(0, violations(wrapValue('final c = $source;\n\t\tg();\n\t\tuse(c);\n\t\t$write')).length, 'after: $write');
+			Assert.equals(0, violations(wrapValue('final c = $source;\n\t\t$write\n\t\tuse(c);')).length, 'before: $write');
+		}
+	}
+
+	/**
+	 * The strict-null-safety narrowing case: a nullable parameter a closure WRITES is not narrowed by
+	 * Haxe at the later read, so `len(value)` does not compile where `len(c)` does.
+	 */
+	@:pin('guard')
+	@:killer('M-JSUL-SOURCE-NEVER-WRITTEN')
+	public function testParamWrittenInClosureNotFlagged(): Void {
+		final body: String = 'if (value == null) return 0;\n\t\tfinal c = value;\n\t\trun(() -> value = null);\n\t\treturn len(c);';
+		Assert.equals(0, violations(wrapValue(body)).length);
+	}
+
+	/** A `var` local can be written between the capture and the later read. */
+	public function testMutableLocalSourceReadLaterNotFlagged(): Void {
+		Assert.equals(0, violations(wrapValue('var src = h();\n\t\tfinal c = src;\n\t\tg();\n\t\tuse(c);')).length);
+	}
+
+	/** A field chain has no local binding to prove unwritten: any call between may write the field. */
+	public function testFieldChainSourceReadLaterNotFlagged(): Void {
+		Assert.equals(0, violations(wrapValue('final c = value.length;\n\t\tg();\n\t\tuse(c);')).length);
+		Assert.equals(0, violations(wrapValue('final c = this.n;\n\t\tg();\n\t\tuse(c);')).length);
+	}
+
+	/** A catch binder is neither a parameter nor a `final` local: outside the positive whitelist, even unwritten. */
+	@:pin('guard')
+	@:killer('M-JSUL-LATER-SOURCE-ANY-BINDER')
+	public function testCatchBinderSourceReadLaterNotFlagged(): Void {
+		final body: String = 'try g() catch (e:Dynamic) {\n\t\t\tfinal c = e;\n\t\t\tg();\n\t\t\tuse(c);\n\t\t}';
+		Assert.equals(0, violations(wrapValue(body)).length);
+	}
+
+	/** A parameter of an OUTER function is captured, not owned: outside the positive whitelist, even unwritten. */
+	@:pin('guard')
+	@:killer('M-JSUL-LATER-SOURCE-ANY-SCOPE')
+	public function testOuterFunctionParamSourceNotFlagged(): Void {
+		final body: String = 'run(function() {\n\t\t\tfinal c = value;\n\t\t\tg();\n\t\t\tuse(c);\n\t\t});';
+		Assert.equals(0, violations(wrapValue(body)).length);
+	}
+
+	/** A read inside a lambda declared between defers it into a closure with its own capture semantics. */
+	@:pin('guard')
+	@:killer('M-JSUL-LATER-DEFERRED-ALLOWED')
+	public function testLaterReadInLambdaNotFlagged(): Void {
+		Assert.equals(0, violations(wrapValue('final c = value;\n\t\tg();\n\t\tfinal cb = () -> use(c);\n\t\trun(cb);')).length);
+	}
+
+	/** Two later reads: not a single-use local. */
+	public function testTwoLaterReadsNotFlagged(): Void {
+		Assert.equals(0, violations(wrapValue('final c = value;\n\t\tg();\n\t\tuse(c);\n\t\tuse(c);')).length);
+	}
+
+	/** Control: a loop repeats the read, but over a source nothing writes every repetition reads the same value. */
+	@:pin('control')
+	@:killer('M-JSUL-LATER-LOOP-BARRIER')
+	public function testLaterReadInLoopStillFlagged(): Void {
+		Assert.equals(1, violations(wrapValue('final c = value;\n\t\tg();\n\t\tfor (i in it) use(c);')).length);
+	}
+
+	/** Control: an immutable local of the function is a source as stable as a parameter. */
+	@:pin('control')
+	@:killer('M-JSUL-LATER-SOURCE-PARAMS-ONLY')
+	public function testFinalLocalSourceReadLaterStillFlagged(): Void {
+		Assert.equals(1, violations(wrapValue('final src = h();\n\t\tfinal c = src;\n\t\tg();\n\t\tuse(c);')).length);
+	}
+
+	/** Intermediate statements may READ the source: a read cannot change it. */
+	public function testIntermediateReadOfSourceStillFlagged(): Void {
+		final out: String = applyFixOnce(wrapValue('final c = value;\n\t\tuse(value);\n\t\tg();\n\t\treturn len(c);'));
+		Assert.isTrue(out.indexOf('return len(value);') != -1, 'expected the parameter inlined in: $out');
+		Assert.equals(-1, out.indexOf('final c'));
+	}
+
 	/** Wrap a statement body in a class carrying one typed field, so a field capture resolves a declared type. */
 	private inline function wrapField(body: String): String {
 		return wrapTyped('private final _f:Null<T>;', body);
@@ -433,6 +535,11 @@ class JoinSingleUseLocalCheckTest extends Test {
 	/** Wrap a statement body in a method taking `n` / `p` params -- the initializer-re-binding fixtures. */
 	private function wrapParams(body: String): String {
 		return 'class C {\n\tprivate final _f:Null<T>;\n\n\tfunction f(n:Int, p:Int) {\n\t\t$body\n\t}\n}';
+	}
+
+	/** Wrap a statement body in a method taking a nullable `value` and an `n` -- the later-sibling-read fixtures. */
+	private function wrapValue(body: String): String {
+		return 'class C {\n\tprivate final n:Int;\n\n\tfunction f(value:Null<String>, n:Int):Int {\n\t\t$body\n\t}\n}';
 	}
 
 	/** Wrap a statement body in a method with an explicit return type -- the `join-return` overlap fixtures. */

@@ -1362,6 +1362,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.StaticExtensionsTest#testTheLastUsingBindsAndARejectingOnePassesOver :: control :: M-BINDER-EXTENSION-LAST-USING,M-BINDER-EXTENSION-FIRST-PARAM',
 		'unit.query.StaticExtensionsTest#testTheTypesOwnUsingBindsBeforeTheFilesAndPassesOverIntoThem :: control :: M-BINDER-EXTENSION-ATUSING,M-EXT-TYPE-USING-FORWARD',
 		'unit.query.StaticExtensionsTest#testWhatAFirstParameterAccepts :: control :: M-EXT-NULL-PARAM-OPEN,M-EXT-DYNAMIC-PARAM-OPEN,M-UNIFY-GENERIC-GIVEN',
+		'unit.query.StaticExtensionsTest#testWhatOneUsingOffersAndWhetherAnAccessMayBindThroughIt :: control :: '
+			+ 'M-USING-OFFER-OPEN,M-USING-BOUND-ELSEWHERE',
 		'unit.query.StaticExtensionsTest#testWhatTheWalkDoesNotProve :: control :: M-EXT-FIELD-FIRST,M-EXT-PRIVATE-OPEN,M-BINDER-EXTENSION-GUARDED-USING',
 		'unit.query.StdResolverTest#testAWrapperFirstOnPathYieldsToTheCompilerAfterIt :: control :: M-STD-FIRST-HAXE-ONLY',
 		'unit.query.StdResolverTest#testHomebrewIsProbedBeforeUsrLocal :: guard :: ',

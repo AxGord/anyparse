@@ -4597,7 +4597,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TEXT-CONVERTS')
 	public function testAnAbstractsConversionAnInterpolationCallsIsItsTextUnderTheTruth(): Void {
-		// `${c}` of an abstract calls its `toString` statically, at the value (the client's `VideoOutputController`: `${exception.stack}`)
+		// `${c}` of an abstract calls its `toString` statically, at the value
 		final cs: String = 'abstract Cs(Int) from Int {\n\tpublic function toString():String return \'c\';\n}\n';
 		assertMatch(
 			hubAsk(utilWith('public static function other(c:Cs):String return \'c $${c}\';', ['Cs.hx' => cs])), r -> r.match(Proven)

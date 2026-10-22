@@ -766,9 +766,7 @@ final class TriviaSepLowering {
 			expr: ESwitch(knobExpr, [{ values: [nextPat], expr: macro _doh(), guard: null }], macro _de()),
 			pos: Context.currentPos()
 		};
-		final triviaLeadDoc: Expr = knobNextOrEmpty;
 		final wrapLeadFlatDoc: Expr = macro _de();
-		final wrapLeadBreakDoc: Expr = knobNextOrEmpty;
 		// ω-anontype-right-curly: when the call site reads
 		// `@:fmt(rightCurly('<knob>'))`, build a Doc that picks `_de()`
 		// for `RightCurlyPlacement.Inline` (close glued to last body
@@ -814,9 +812,9 @@ final class TriviaSepLowering {
 			keepCheckExpr: keepCheckExpr,
 			ignoreCheckExpr: ignoreCheckExpr,
 			noWrapFlatCheckExpr: noWrapFlatCheckExpr,
-			triviaLeadDoc: triviaLeadDoc,
+			triviaLeadDoc: knobNextOrEmpty,
 			wrapLeadFlatDoc: wrapLeadFlatDoc,
-			wrapLeadBreakDoc: wrapLeadBreakDoc,
+			wrapLeadBreakDoc: knobNextOrEmpty,
 			wrapTrailBreakDoc: wrapTrailBreakDoc,
 			triviaTrailDocKeepAware: triviaTrailDocKeepAware
 		};
@@ -964,6 +962,7 @@ final class TriviaSepLowering {
 		final openText: String = c.openText;
 		final closeText: String = c.closeText;
 		final sepText: String = c.sepText;
+		final gluedLeadExpr: Expr = triviaSepGluedLeadExpr();
 		// ω-complex-item-count: the per-element AST classification, computed
 		// once over the captured element array. `null` when the Star does not
 		// carry `@:fmt(complexItems)` — the engine then counts 0 and the chunk
@@ -1028,7 +1027,7 @@ final class TriviaSepLowering {
 				}
 				: macro {};
 			// ω-cascade-emits-comments: wrap each per-element Doc with its
-			// leading comments (each followed by a hardline) and an inline
+			// leading comments (a glued single-line block comment followed by a space, any other by a hardline) and an inline
 			// block-style trailing comment (line-style trailings are not
 			// cascade-emittable — the engine inserts the separator AFTER
 			// the item, which would land INSIDE a `// ...` line comment;
@@ -1064,10 +1063,13 @@ final class TriviaSepLowering {
 						_parts.push(_dt(' '));
 						_pendingAfterSep = null;
 					}
+					// Single-line block comments the source glued to the element stay on its
+					// line (`triviaSepGluedLeadExpr`); every other leading comment ends its line.
+					final _glueLeads: Bool = $gluedLeadExpr;
 					var _ci2: Int = 0;
 					while (_ci2 < _t.leadingComments.length) {
 						_parts.push(leadingCommentDocRun(_t.leadingComments, _ci2, opt));
-						_parts.push(_dhl());
+						_parts.push(_glueLeads ? _dt(' ') : _dhl());
 						_ci2++;
 					}
 					_parts.push(_elemBase);
@@ -1192,13 +1194,16 @@ final class TriviaSepLowering {
 	 */
 	private static function triviaSepPredicateScanExpr(reflowSourceMultiline: Bool, uniformStmtBlanks: Bool, triviaElemCall: Expr): Expr {
 		final blankHardlineExpr: Expr = triviaSepBlankHardlineExpr(uniformStmtBlanks);
+		final gluedLeadExpr: Expr = triviaSepGluedLeadExpr();
 		return macro {
 			var _ti: Int = 0;
 			while (_ti < _arr.length) {
 				final _t = _arr[_ti];
 				if ($blankHardlineExpr) _requiresHardline = true;
+				// A leading comment that ends its line rides the cascade as a hardline inside the item, which a pure
+				// `noWrap` cascade lays out flat around it; only the force-multi layout keeps it on every rewrite.
 				if (_t.leadingComments.length > 0) {
-					if (_ignoreEmit)
+					if (_ignoreEmit && (!_noWrapRules || $gluedLeadExpr))
 						_hasInlineableTrivia = true;
 					else
 						_requiresHardline = true;
@@ -1240,6 +1245,15 @@ final class TriviaSepLowering {
 				_ti++;
 			}
 		};
+	}
+
+	/**
+	 * Sep-Star predicate: do element `_t`'s leading comments share its line? Only single-line block comments the
+	 * source glued to the element do; every other leading comment ends its line. References the runtime `_t` local.
+	 */
+	private static function triviaSepGluedLeadExpr(): Expr {
+		return macro _t.leadingCommentsGlued == true
+			&& Lambda.foreach(_t.leadingComments, _c -> StringTools.startsWith(_c, '/*') && _c.indexOf('\n') < 0);
 	}
 
 	/**
@@ -1354,7 +1368,8 @@ final class TriviaSepLowering {
 			// literals (no `reflowSourceMultiline`) therefore keep their
 			// legacy source-multiline force-multi shape. Drives the fork's
 			// `noWrap()` flat-with-comment-break layout below.
-			final _noWrapFlat: Bool = $v{c.reflowSourceMultiline} && $noWrapFlatCheckExpr && !_keepEmit && !_ignoreEmit;
+			final _noWrapRules: Bool = $noWrapFlatCheckExpr;
+			final _noWrapFlat: Bool = $v{c.reflowSourceMultiline} && _noWrapRules && !_keepEmit && !_ignoreEmit;
 			// ω-arraymatrix-wrap: `NoMatrixWrap` ignores the source grid
 			// entirely — like the `Ignore` policy it DROPS source newlines
 			// so the cascade (not the force-multi path) drives layout: a

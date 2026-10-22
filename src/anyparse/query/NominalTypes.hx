@@ -724,7 +724,7 @@ final class NominalTypes {
 	 * a value whose type did not resolve, and guessing there would name a package segment), and it names no value binding in
 	 * scope; a file of `index` declares the name. Null for any other receiver.
 	 */
-	private static function staticReceiverName(receiver: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex): Null<String> {
+	public static function staticReceiverName(receiver: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex): Null<String> {
 		final identKind: Null<String> = shape.identKind;
 		final name: Null<String> = receiver.name;
 		final span: Null<Span> = receiver.span;

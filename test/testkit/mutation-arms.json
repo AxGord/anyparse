@@ -23090,8 +23090,8 @@
 			"name": "M-CARRY-USING-UNUSED",
 			"type": "anyparse.query.DependencyCarry",
 			"method": "usingLinesToCarry",
-			"find": "if (methods != null && !OccurrenceScan.usingExtensionCalled(declText, imp.raw, methods, at -> memberBound(declSpan.from + at)))",
-			"replace": "if (methods == null && declText == '')",
+			"find": "if (methods != null && !sites.calledThrough(imp.raw, methods, declSpan.from, declSpan.to)) continue;",
+			"replace": "if (methods == null && path == '') continue;",
 			"note": "a `using` whose extensions the moved code calls none of is carried anyway"
 		},
 		{
@@ -25844,24 +25844,24 @@
 			"name": "M-USING-MEMBER-FIRST-OFF",
 			"type": "anyparse.query.OccurrenceScan",
 			"method": "methodCalledInSource",
-			"find": "if (!qualifiedBySkip(at - 1) && (memberBound == null || !memberBound(at))) return true;",
+			"find": "if (!qualifiedBySkip(at - 1) && (notAUse == null || !notAUse(at))) return true;",
 			"replace": "if (!qualifiedBySkip(at - 1)) return true;",
-			"note": "a `.method` call binding a member of its receiver's type counts as an extension use again"
+			"note": "a `.method` access the `using` provably takes no part in counts as an extension use again"
 		},
 		{
 			"name": "M-UNUSED-USING-NO-DOOR",
 			"type": "anyparse.check.UnusedImport",
 			"method": "addUsingViolation",
-			"find": "OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods, scan.memberBound)",
+			"find": "scan.sites.calledThrough(imp.raw, methods)",
 			"replace": "OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods)",
-			"note": "unused-import stops asking the member-first door"
+			"note": "unused-import stops asking the door"
 		},
 		{
 			"name": "M-CARRY-USING-DOOR-OFFSET",
-			"type": "anyparse.query.DependencyCarry",
-			"method": "usingLinesToCarry",
-			"find": "at -> memberBound(declSpan.from + at)",
-			"replace": "memberBound",
+			"type": "anyparse.check.UsingSites",
+			"method": "calledThrough",
+			"find": "at -> !mayBindThrough(from + at, raw)",
+			"replace": "at -> !mayBindThrough(at, raw)",
 			"note": "the carry asks the door at declaration-relative offsets"
 		},
 		{
@@ -25914,10 +25914,10 @@
 		},
 		{
 			"name": "M-MEMBER-DOOR-SHADOW",
-			"type": "anyparse.check.CheckScan",
-			"method": "memberBoundAccesses",
-			"find": "!NominalTypes.shadowedByNonStdType(resolved, nominal) && StdTypes.declaresInstanceMember(plugin, nominal, name)",
-			"replace": "StdTypes.declaresInstanceMember(plugin, nominal, name)",
+			"type": "anyparse.check.UsingSites",
+			"method": "siteAt",
+			"find": "!NominalTypes.shadowedByNonStdType(index, nominal) && StdTypes.declaresInstanceMember(_plugin, nominal, name)",
+			"replace": "StdTypes.declaresInstanceMember(_plugin, nominal, name)",
 			"note": "the std listing answers for a name a project type takes"
 		},
 		{
@@ -29160,7 +29160,7 @@
 			"name": "M-SINK-USING-RANK-BLIND",
 			"type": "anyparse.check.HoistCommonImport",
 			"method": "sinkSound",
-			"find": "if (statement.isUsing && imp.kind == ImportKind.Using) return false;",
+			"find": "if (statement.isUsing && imp.kind == ImportKind.Using && ctx.contested(file, statement.path, imp.raw)) return false;",
 			"replace": "if (statement.isUsing && imp.guarded) return false;",
 			"note": "another using in the reader's chain is no rival, so a sunk using turns own and outranks it, and every extension method both declare resolves to the sunk one"
 		},
@@ -29354,6 +29354,174 @@
 			"find": "if (!~/^[0-9]+$/.match(digits)) return true;",
 			"replace": "if (!~/^[0-9]+$/.match(digits)) return false;",
 			"note": "an integer literal with a suffix is typed as the integer type, though 4.3.7 types `1i64` as a `haxe.Int64` and `1u32` as a `UInt`"
+		},
+		{
+			"name": "M-TRAIL-REGION-UNDER-COMMENT",
+			"type": "anyparse.core.DocMeasure",
+			"method": "opensDirectiveRegion",
+			"force": "firstVisibleTextStartsWith(d, '#'.code)",
+			"note": "a comment in front of a region ending the list hides the region, so the trailing-comma knob writes `#end,` again"
+		},
+		{
+			"name": "M-LEAD-BLOCK-COMMENT-END",
+			"type": "anyparse.core.DocMeasure",
+			"method": "leadCharOf",
+			"find": "i = end + 2;",
+			"replace": "i = end + 1;",
+			"note": "the scan resumes inside the closing `*/` of a leading block comment and reads its `/` as the item's first token"
+		},
+		{
+			"name": "M-CASCADE-LEAD-BREAKS",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepNoTriviaBranch",
+			"find": "_parts.push(_glueLeads ? _dt(' ') : _dhl());",
+			"replace": "_parts.push(_dhl());",
+			"note": "the wrap cascade breaks after a block comment the source glued to its parameter, so the next write moves the parameter"
+		},
+		{
+			"name": "M-CLOSE-LOOP-LEAD-UNGLUED",
+			"type": "anyparse.macro.StarLoopLowering",
+			"method": "buildTriviaCloseLoopBody",
+			"find": "leadingCommentsGlued: _lead.leadingComments.length > 0 && !_lead.newlineAfterLeadingComments,",
+			"replace": "",
+			"note": "a closed trivia list records no glued leading comment, so a parameter's glued block comment is written on a line of its own"
+		},
+		{
+			"name": "M-NOWRAP-LEAD-IN-CASCADE",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepPredicateScanExpr",
+			"find": "if (_ignoreEmit && (!_noWrapRules || $gluedLeadExpr))",
+			"replace": "if (_ignoreEmit)",
+			"note": "a pure noWrap cascade takes an own-line comment and writes it after the previous parameter's comma"
+		},
+		{
+			"name": "M-CALL-SOURCE-TRAIL-OFF",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerPostfixStar",
+			"find": "final tcExpr: Expr = trailingCommaExpr(branch, isTriviaStar ? postfixSourceTrailExpr() : null);",
+			"replace": "final tcExpr: Expr = trailingCommaExpr(branch);",
+			"note": "a call laid out one argument per line drops the trailing comma its source wrote"
+		},
+		{
+			"name": "M-CALL-FLAT-SOURCE-TRAIL-OFF",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerPostfixCascadeCall",
+			"find": "final flatTcExpr: Expr = c.isTriviaStar ? postfixSourceTrailExpr() : macro false;",
+			"replace": "final flatTcExpr: Expr = macro false;",
+			"note": "a call that stays on one line drops the trailing comma its source wrote"
+		},
+		{
+			"name": "M-USING-OFFER-OPEN",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "offers",
+			"force": "MayFit",
+			"note": "a module whose every candidate rejects the receiver may still offer the access, so a `using` no access binds stays and a rival rejecting the receiver contests it"
+		},
+		{
+			"name": "M-USING-BOUND-ELSEWHERE",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "mayBindThrough",
+			"force": "offers(path, receiver, name) != Misfits",
+			"note": "an access another `using` provably binds first still counts as a use of every module accepting the receiver"
+		},
+		{
+			"name": "M-USING-STATIC-RECEIVER",
+			"type": "anyparse.check.UsingSites",
+			"method": "staticSite",
+			"force": "Unknown",
+			"note": "a static of the type a type expression names no longer binds first, so `Type.name(...)` keeps every `using` offering `name`"
+		},
+		{
+			"name": "M-USING-CONTEST-ANY",
+			"type": "anyparse.check.UsingSites",
+			"method": "contested",
+			"force": "true",
+			"note": "any other `using` in scope contests the statement again, so redundant-import, hoist and sink refuse past a rival no access of the module shares"
+		},
+		{
+			"name": "M-UNUSED-USING-SELF-MENTION",
+			"type": "anyparse.check.UnusedImport",
+			"method": "addUsingViolation",
+			"find": "referenced(scans.filter(s -> !declaring.contains(s.file)), SourceText.lastSegment(imp.raw))",
+			"replace": "referenced(scans, SourceText.lastSegment(imp.raw))",
+			"note": "the declaring module's own declaration reads as a use of an ambient `using` of it, so a dead one is never reported"
+		},
+		{
+			"name": "M-USING-STATIC-SHADOW",
+			"type": "anyparse.check.UsingSites",
+			"method": "staticSite",
+			"find": "if (!ValueDoors.bindsNoValue(recv, typeName, span, fi, tree, _plugin.refShape(), _file, index)) return Unknown;",
+			"replace": "",
+			"note": "a value spelled like a type — an inherited field, a module-level field, an imported static or constructor — reads as that type, so its static seems to bind and a `using` the value needs is deleted"
+		},
+		{
+			"name": "M-USING-FORWARD-DECIDED",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "forwardsAccess",
+			"force": "false",
+			"note": "a `@:forward` abstract receiver is judged by its own type, so every extension its underlying type takes reads as rejecting it and the `using` that answers the forwarded access is deleted"
+		},
+		{
+			"name": "M-JSUL-SOURCE-ALWAYS-WRITTEN",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "sourceWritten",
+			"force": "true",
+			"note": "every source reads as written somewhere, so a parameter nothing writes stops collapsing into a later read"
+		},
+		{
+			"name": "M-JSUL-SOURCE-NEVER-WRITTEN",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "sourceWritten",
+			"force": "false",
+			"note": "no source reads as written, so a parameter assigned before or after the read, or from a closure, is inlined into a later statement that may see another value"
+		},
+		{
+			"name": "M-JSUL-LATER-HOLDER-ADJACENT-ONLY",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "holderIndex",
+			"find": "for (j in at + 1...kids.length) {",
+			"replace": "for (j in at + 1...at + 2) {",
+			"note": "only the immediately following sibling is searched for the read, so a capture read several statements later is never found"
+		},
+		{
+			"name": "M-JSUL-LATER-DEFERRED-ALLOWED",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "laterReadIsSafe",
+			"find": "&& !path.exists(n -> s.deferringKinds.contains(n.kind));",
+			"replace": ";",
+			"note": "a later read inside a lambda declared between is accepted, moving the read into a closure"
+		},
+		{
+			"name": "M-JSUL-LATER-LOOP-BARRIER",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "laterReadIsSafe",
+			"find": "s.deferringKinds.contains(n.kind)",
+			"replace": "s.barrierKinds.contains(n.kind)",
+			"note": "a loop on the path refuses a later read even though the invariant source makes every repetition read the same value"
+		},
+		{
+			"name": "M-JSUL-LATER-SOURCE-ANY-BINDER",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "invariantSource",
+			"find": "|| !s.invariantBinderKinds.contains(binder.kind)) return false;",
+			"replace": ") return false;",
+			"note": "any resolved binder counts as invariant, so a catch binder outside the parameter and final-local whitelist is inlined into a later read"
+		},
+		{
+			"name": "M-JSUL-LATER-SOURCE-ANY-SCOPE",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "invariantSource",
+			"find": "if (fnSpan == null || binding.from < fnSpan.from || binding.to > fnSpan.to) return false;",
+			"replace": "if (fnSpan == null) return false;",
+			"note": "an outer function's parameter counts as owned by the nested function, so its capture is inlined into a later read past the whitelist"
+		},
+		{
+			"name": "M-JSUL-LATER-SOURCE-PARAMS-ONLY",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "readSeams",
+			"find": "for (k in localDeclKinds) if (!mutableKinds.contains(k) && !continuationKinds.contains(k)) k",
+			"replace": "for (k in localDeclKinds) if (false) k",
+			"note": "only parameters count as invariant, so a capture of a final local read several statements later stops collapsing"
 		},
 		{
 			"name": "M-COMPOSED-CONSTRUCTION-NULL",

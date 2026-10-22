@@ -18,9 +18,9 @@ using Lambda;
  * does not count at all — the file's own import statements, plus its comment regions, since a
  * comment resolves no type. `commentRegions` is the same comment list under its OTHER job: a `.`
  * inside a comment qualifies nothing, so the dotted-tail test has to know where comments are
- * even for an occurrence outside them. Both hoisted once per file. `memberBound` is the file's
- * member-first door (`CheckScan.memberBoundAccesses`), which the `using` arm asks of each
- * extension-shaped occurrence; it parses and types the file only when first asked.
+ * even for an occurrence outside them. Both hoisted once per file. `sites` is the file's door
+ * to the typing service (`UsingSites`), which the `using` arm asks of each extension-shaped
+ * occurrence; it parses and types the file only when first asked.
  */
 private typedef FileScan = {
 	file: String,
@@ -28,7 +28,7 @@ private typedef FileScan = {
 	excluded: Array<Span>,
 	commentRegions: Array<Span>,
 	matchMask: Array<Span>,
-	memberBound: (Int) -> Bool
+	sites: UsingSites
 };
 
 /**
@@ -104,9 +104,11 @@ private typedef ImportEvidence = {
  *    unverifiable `Info`.
  *  - `using pkg.Mod;` — in use when its bound name is referenced (a static /
  *    type use such as `StringTools.fastCodeAt`) OR one of the extension
- *    methods it provides is called as `.method(` — one binding a MEMBER of its
- *    receiver's type excluded, since Haxe resolves that before any extension
- *    (`CheckScan.memberBoundAccesses`, the door `move-member` asks too). Verified-unused when the
+ *    methods it provides is called as `.method(` at an access the statement may
+ *    bind — asked of the typing service through `UsingSites`, the door
+ *    `move-member` asks too: an access binding a member of its receiver's type,
+ *    another `using`'s extension, or one whose every candidate here rejects the
+ *    receiver is no use, and an access it cannot type is one. Verified-unused when the
  *    module's methods are known (`knownExtensionMethods`, a `Warning` that
  *    `--fix` deletes); an unknown module stays an `Info`. See
  *    `addUsingViolation`.
@@ -249,20 +251,10 @@ final class UnusedImport implements Check {
 		if (scans == null) return null;
 		final evidence: ImportEvidence = evidenceOf(index, plugin);
 		return [
-			for (imp in info.imports) {
-				final declaring: Array<String> = imp.kind == ImportKind.Using ? [
-					for (r in evidence.resolveIndex.refs.resolveQualifiedRefAll(imp.raw)) r.file.file
-				] : [];
-				[
-					for (scan in readersOf(scans, imp, info.file, evidence.resolveIndex))
-						if (
-							declaring.contains(scan.file)
-								? extensionCalledIn(scan, imp, plugin, evidence)
-								: !provenDeadIn(scan, info.file, imp, plugin, evidence)
-						)
-							scan.file
-				];
-			}
+			for (imp in info.imports) [
+				for (scan in readersOf(scans, imp, info.file, evidence.resolveIndex))
+					if (!provenDeadIn(scan, info.file, imp, plugin, evidence)) scan.file
+			]
 		];
 	}
 
@@ -328,7 +320,7 @@ final class UnusedImport implements Check {
 			excluded: [for (imp in imports) imp.span].concat(comments),
 			commentRegions: comments,
 			matchMask: [for (r in regions) if (r.kind == LexRegionKind.RegexLit) new Span(r.from, r.to)],
-			memberBound: CheckScan.memberBoundAccesses(source, plugin, file, index)
+			sites: new UsingSites(source, plugin, file, index)
 		};
 	}
 
@@ -368,12 +360,6 @@ final class UnusedImport implements Check {
 		return verdict.exists(v -> v.severity == Severity.Warning);
 	}
 
-	/** Whether `scan` calls one of the extension methods the `using` `imp` brings — true when they cannot be listed. */
-	private static function extensionCalledIn(scan: FileScan, imp: ImportInfo, plugin: GrammarPlugin, evidence: ImportEvidence): Bool {
-		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? evidence.reportMembersByModule[imp.raw];
-		return methods == null || OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods, scan.memberBound);
-	}
-
 	/**
 	 * Everything a run knows about the modules its statements name, over `index` and the resolution scope the
 	 * plugin carries: the type names each module declares, which a plain module import binds all of; the
@@ -400,7 +386,7 @@ final class UnusedImport implements Check {
 			reportMembersByPath: resolveIndex == index ? membersByPath : membersByImportPath(index),
 			// Every top-level type of a module contributes static extensions, so the `using` arm reads a
 			// per-MODULE set; report-scoped for the same reason.
-			reportMembersByModule: membersByModule(index)
+			reportMembersByModule: UsingSites.membersByModule(index)
 		};
 	}
 
@@ -430,7 +416,7 @@ final class UnusedImport implements Check {
 			case ImportKind.Wild:
 				addWildViolation(out, file, imp, scans, evidence.reportMembersByPath);
 			case ImportKind.Using:
-				addUsingViolation(out, file, imp, scans, plugin, evidence.reportMembersByModule);
+				addUsingViolation(out, file, imp, scans, plugin, evidence);
 			case _:
 				final bound: String = imp.alias ?? SourceText.lastSegment(imp.raw);
 				if (referenced(scans, bound)) return;
@@ -502,8 +488,10 @@ final class UnusedImport implements Check {
 	/**
 	 * Append the verdict for a `using` import. It is in use when its bound name is
 	 * referenced outside the imports — a static / type reference such as
-	 * `MetaInspect.foo()` or `StringTools.fastCodeAt()` — OR when one of its
-	 * extension methods is invoked as a `.method` call. When neither holds:
+	 * `MetaInspect.foo()` or `StringTools.fastCodeAt()`, outside a module declaring
+	 * what the statement names, where that is its own declaration — OR when one of
+	 * its extension methods is invoked as a `.method` call it may bind
+	 * (`UsingSites.calledThrough`). When neither holds:
 	 *
 	 *  - the module's extension methods are KNOWN — a stdlib `using` the std probe
 	 *    reads, or a module the REPORT set declares, whose members the index
@@ -519,17 +507,19 @@ final class UnusedImport implements Check {
 	 * `using pkg.MetaInspect` family of a macro-heavy tree — was unverifiable.
 	 */
 	private static function addUsingViolation(
-		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, plugin: GrammarPlugin,
-		reportMembersByModule: Map<String, Array<String>>
+		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, plugin: GrammarPlugin, evidence: ImportEvidence
 	): Void {
-		final bound: String = SourceText.lastSegment(imp.raw);
-		if (referenced(scans, bound)) return;
-		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? reportMembersByModule[imp.raw];
+		// A bare mention in the module declaring what the statement names is that module's own declaration, never a use.
+		final declaring: Array<String> = [
+			for (r in evidence.resolveIndex.refs.resolveQualifiedRefAll(imp.raw)) r.file.file
+		];
+		if (referenced(scans.filter(s -> !declaring.contains(s.file)), SourceText.lastSegment(imp.raw))) return;
+		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? evidence.reportMembersByModule[imp.raw];
 		if (methods == null) {
 			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': $MSG_USING_UNTRACKED', DECLINE_USING_UNTRACKED));
 			return;
 		}
-		if (scans.exists(scan -> OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods, scan.memberBound))) return;
+		if (scans.exists(scan -> scan.sites.calledThrough(imp.raw, methods))) return;
 		out.push(make(file, imp, Severity.Warning, 'unused using \'${imp.raw}\''));
 	}
 
@@ -586,24 +576,6 @@ final class UnusedImport implements Check {
 			final memberPath: String = t.isMain ? info.module : '${info.module}.${t.name}';
 			map[memberPath] = [for (m in t.members) m.name];
 		}
-		return map;
-	}
-
-	/**
-	 * Member names keyed by MODULE — the union over EVERY top-level type the module
-	 * declares, main and sub-module alike.
-	 *
-	 * This is the set `using pkg.Mod;` actually brings into scope: a static extension
-	 * is contributed by every type in the module, not only by the one that shares its
-	 * name. `membersByImportPath` answers a different question (what does THIS path
-	 * name), and reading it in the `using` arm made the check assert that
-	 * `Math.abs(ms).toFixed('000')` was not an extension call, because `toFixed` lives
-	 * in the sub-module type `pony.Tools.FloatTools`. That produced a verified-unused
-	 * Warning, and `--fix` deleted the `using` and broke the build.
-	 */
-	private static function membersByModule(index: SymbolIndex): Map<String, Array<String>> {
-		final map: Map<String, Array<String>> = [];
-		for (info in index.allFiles()) map[info.module] = [for (t in info.types) for (m in t.members) m.name];
 		return map;
 	}
 
