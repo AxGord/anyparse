@@ -48,11 +48,13 @@ class ApqFmtVerifyCliTest extends Test {
 
 	public function testTokenChangingReformatFailsVerification(): Void {
 		#if (sys || nodejs)
-		// The trailing comma in `g(a, b,)` is dropped by the writer — a real token
-		// change, and exactly the class of divergence the audit exists to surface.
-		final dir: String = CliFixture.writeDir(
-			'apq_fmt_verify_token', [{ name: 'A.hx', source: 'class A {\n\tfunction f() {\n\t\tg(a, b,);\n\t}\n}\n' }]
-		);
+		// `wrapping.trailingComma: remove` drops the trailing comma of a multi-line
+		// list — a real token change, and exactly the class of divergence the audit
+		// exists to surface.
+		final dir: String = CliFixture.writeDir('apq_fmt_verify_token', [
+			{ name: 'hxformat.json', source: '{"wrapping": {"trailingComma": "remove"}}\n' },
+			{ name: 'A.hx', source: 'class A {\n\tfunction f() {\n\t\tvar x = [\n\t\t\t1,\n\t\t\t2,\n\t\t];\n\t}\n}\n' }
+		]);
 		Assert.notEquals(0, Cli.run(['fmt', dir, '--verify']));
 		CliFixture.removeDir(dir);
 		#else

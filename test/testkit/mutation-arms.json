@@ -29356,6 +29356,61 @@
 			"note": "an integer literal with a suffix is typed as the integer type, though 4.3.7 types `1i64` as a `haxe.Int64` and `1u32` as a `UInt`"
 		},
 		{
+			"name": "M-TRAIL-REGION-UNDER-COMMENT",
+			"type": "anyparse.core.DocMeasure",
+			"method": "opensDirectiveRegion",
+			"force": "firstVisibleTextStartsWith(d, '#'.code)",
+			"note": "a comment in front of a region ending the list hides the region, so the trailing-comma knob writes `#end,` again"
+		},
+		{
+			"name": "M-LEAD-BLOCK-COMMENT-END",
+			"type": "anyparse.core.DocMeasure",
+			"method": "leadCharOf",
+			"find": "i = end + 2;",
+			"replace": "i = end + 1;",
+			"note": "the scan resumes inside the closing `*/` of a leading block comment and reads its `/` as the item's first token"
+		},
+		{
+			"name": "M-CASCADE-LEAD-BREAKS",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepNoTriviaBranch",
+			"find": "_parts.push(_glueLeads ? _dt(' ') : _dhl());",
+			"replace": "_parts.push(_dhl());",
+			"note": "the wrap cascade breaks after a block comment the source glued to its parameter, so the next write moves the parameter"
+		},
+		{
+			"name": "M-CLOSE-LOOP-LEAD-UNGLUED",
+			"type": "anyparse.macro.StarLoopLowering",
+			"method": "buildTriviaCloseLoopBody",
+			"find": "leadingCommentsGlued: _lead.leadingComments.length > 0 && !_lead.newlineAfterLeadingComments,",
+			"replace": "",
+			"note": "a closed trivia list records no glued leading comment, so a parameter's glued block comment is written on a line of its own"
+		},
+		{
+			"name": "M-NOWRAP-LEAD-IN-CASCADE",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepPredicateScanExpr",
+			"find": "if (_ignoreEmit && (!_noWrapRules || $gluedLeadExpr))",
+			"replace": "if (_ignoreEmit)",
+			"note": "a pure noWrap cascade takes an own-line comment and writes it after the previous parameter's comma"
+		},
+		{
+			"name": "M-CALL-SOURCE-TRAIL-OFF",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerPostfixStar",
+			"find": "final tcExpr: Expr = trailingCommaExpr(branch, isTriviaStar ? postfixSourceTrailExpr() : null);",
+			"replace": "final tcExpr: Expr = trailingCommaExpr(branch);",
+			"note": "a call laid out one argument per line drops the trailing comma its source wrote"
+		},
+		{
+			"name": "M-CALL-FLAT-SOURCE-TRAIL-OFF",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerPostfixCascadeCall",
+			"find": "final flatTcExpr: Expr = c.isTriviaStar ? postfixSourceTrailExpr() : macro false;",
+			"replace": "final flatTcExpr: Expr = macro false;",
+			"note": "a call that stays on one line drops the trailing comma its source wrote"
+		},
+		{
 			"name": "M-USING-OFFER-OPEN",
 			"type": "anyparse.query.StaticExtensions",
 			"method": "offers",

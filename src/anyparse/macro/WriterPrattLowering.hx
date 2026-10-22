@@ -975,12 +975,14 @@ final class WriterPrattLowering {
 					_ck;
 				}
 				: macro null;
+			final flatTcExpr: Expr = c.isTriviaStar ? postfixSourceTrailExpr() : macro false;
 			final wrapListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
 				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, {
 					appendTrailingComma: $tcExpr,
 					groupRestProbe: $groupRestProbeExpr,
 					sepBeforeFlags: _sepBeforeFlags,
 					keepCloseGlued: $keepCloseGluedExpr,
+					flatTrailingComma: $flatTcExpr,
 					complexItemKinds: $complexKindsExpr
 				}
 			);
@@ -996,6 +998,14 @@ final class WriterPrattLowering {
 		return macro fillList(
 			$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false, $v{fillDouble}
 		);
+	}
+
+	/**
+	 * The separator a trivia postfix Star's source wrote after its last argument (`_args[last].sepAfter`), which
+	 * `keep` writes back in every layout; a plain Star records no separators.
+	 */
+	private static function postfixSourceTrailExpr(): Expr {
+		return macro _args.length > 0 && _args[_args.length - 1].sepAfter;
 	}
 
 	/**
@@ -1108,7 +1118,7 @@ final class WriterPrattLowering {
 		};
 
 		final argsAccess: Expr = macro $i{argNames[1]};
-		final tcExpr: Expr = trailingCommaExpr(branch);
+		final tcExpr: Expr = trailingCommaExpr(branch, isTriviaStar ? postfixSourceTrailExpr() : null);
 		// ω-call-parens: a `@:postfix('(', ')')` ctor with
 		// `@:fmt(callParens)` opts into a runtime-switched space before
 		// the open delim, mirroring `funcParamParens` on a struct Star.
