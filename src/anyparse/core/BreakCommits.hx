@@ -76,14 +76,27 @@ final class BreakCommits {
 		return found;
 	}
 
-	/** `d` with every occurrence of the node `target` replaced by `by`. */
-	public static function replaced(d: Doc, target: Doc, by: Doc): Doc {
+	/**
+	 * `d` with every occurrence of the node `target` replaced by `by` on the side every walker reads: a `BreakCommit`'s
+	 * `brk` is another break's alternative and comes back as it is, the way `nested` never looks there, so each offer
+	 * copies only the path to its own break and nested hosts stay polynomial in depth. `holds`, when given, records which
+	 * nodes have a `BreakCommit` anywhere below them: a subtree with none comes back unwalked, one map for every target.
+	 */
+	public static function replaced(d: Doc, target: Doc, by: Doc, ?holds: DocIdentityMap<Bool>): Doc {
 		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
+		final pruned: Bool = holds != null;
+		final index: DocIdentityMap<Bool> = holds ?? new DocIdentityMap();
 		function walk(n: Doc): Doc {
 			if (n == target) return by;
+			if (pruned && !holdsCommit(n, index)) return n;
 			final hit: Null<Doc> = memo.get(n);
 			if (hit != null) return hit;
-			final out: Doc = D.mapChildren(n, walk);
+			final out: Doc = switch n {
+				case BreakCommit(brk, flat, token):
+					final f: Doc = walk(flat);
+					f == flat ? n : BreakCommit(brk, f, token);
+				case _: D.mapChildrenShared(n, walk);
+			};
 			memo.set(n, out);
 			return out;
 		}
@@ -122,9 +135,10 @@ final class BreakCommits {
 		throughBodies: Bool = false
 	): Doc {
 		var out: Doc = plain;
+		final holds: DocIdentityMap<Bool> = new DocIdentityMap();
 		for (i => item in items) for (inner in outermostPerToken(nested(item, throughBodies))) switch inner {
 			case BreakCommit(brk, _, token) if (token != null):
-				final broken: Doc = replaced(item, inner, brk);
+				final broken: Doc = replaced(item, inner, brk, holds);
 				if (wanted == null || wanted(item, i, broken)) {
 					final with: Array<Doc> = items.copy();
 					with[i] = broken;
@@ -143,7 +157,10 @@ final class BreakCommits {
 	 * or it settles on the other of its two fixed points.
 	 */
 	public static function followBare(inner: Doc, shape: Doc -> Doc): Doc {
-		return offerItemBreaks([inner], shape(inner), (with, _) -> shape(bare(with[0])), true);
+		// One memo for every alternative: they share all but the path to their own break, so each shared subtree is
+		// stripped once.
+		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
+		return offerItemBreaks([inner], shape(inner), (with, _) -> shape(bare(with[0], memo)), true);
 	}
 
 	/**
@@ -208,21 +225,20 @@ final class BreakCommits {
 		if (hit != null) return hit;
 		final out: Doc = switch d {
 			case BreakCommit(brk, flat, token): commit(token != null && tokens.contains(token) ? brk : flat, tokens, memo);
-			case _: D.mapChildren(d, c -> commit(c, tokens, memo));
+			case _: D.mapChildrenShared(d, c -> commit(c, tokens, memo));
 		};
 		memo.set(d, out);
 		return out;
 	}
 
-	/** `d` with every committed break (a `BreakCommit` with no token) replaced by its bare `brk`. */
-	private static function bare(d: Doc): Doc {
-		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
+	/** `d` with every committed break (a `BreakCommit` with no token) replaced by its bare `brk`, through `memo`. */
+	private static function bare(d: Doc, memo: DocIdentityMap<Doc>): Doc {
 		function walk(n: Doc): Doc {
 			final hit: Null<Doc> = memo.get(n);
 			if (hit != null) return hit;
 			final out: Doc = switch n {
 				case BreakCommit(brk, _, null): walk(brk);
-				case _: D.mapChildren(n, walk);
+				case _: D.mapChildrenShared(n, walk);
 			};
 			memo.set(n, out);
 			return out;
@@ -266,6 +282,19 @@ final class BreakCommits {
 			case Concat(_) | Nest(_, _): D.mapChildren(d, hardSeams);
 			case _: d;
 		};
+	}
+
+	/** True iff `n` is a `BreakCommit` or has one anywhere below it, on either side of every node; memoized in `holds`. */
+	private static function holdsCommit(n: Doc, holds: DocIdentityMap<Bool>): Bool {
+		final hit: Null<Bool> = holds.get(n);
+		if (hit != null) return hit;
+		var found: Bool = n.match(BreakCommit(_, _, _));
+		if (!found) D.mapChildren(n, c -> {
+			if (!found && holdsCommit(c, holds)) found = true;
+			c;
+		});
+		holds.set(n, found);
+		return found;
 	}
 
 }

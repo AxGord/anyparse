@@ -259,6 +259,21 @@ class D {
 	}
 
 	/**
+	 * `mapChildren`, but `d` itself when `f` hands every child back unchanged: a rewrite that touches one node copies only
+	 * the path to it and shares every other subtree, so repeated rewrites of one Doc (each committed alternative a host
+	 * offers) stay linear in what they change instead of copying the whole tree each time.
+	 */
+	public static function mapChildrenShared(d: Doc, f: Doc -> Doc): Doc {
+		var changed: Bool = false;
+		final out: Doc = mapChildren(d, c -> {
+			final r: Doc = f(c);
+			if (r != c) changed = true;
+			r;
+		});
+		return changed ? out : d;
+	}
+
+	/**
 	 * Flatten a conditional `If*` kind by descending into its flat branch, or
 	 * `null` when `d` is not an `If*`. Every variant forwards to its flat side —
 	 * the broken branch is moot once an outer `flatten` commits to flat shape.

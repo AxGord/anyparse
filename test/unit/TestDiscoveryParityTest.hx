@@ -515,6 +515,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.ScratchIsolationGateTest',
 		'unit.cli.SweepRunCensusCliTest',
 		'unit.core.BodyGroupPrefixChargeConsumerTest',
+		'unit.core.BreakCommitsReplacedTest',
 		'unit.core.DocMeasureFillStackTest',
 		'unit.core.DocMeasureFirstVisibleTextTest',
 		'unit.core.DocRendererTest',

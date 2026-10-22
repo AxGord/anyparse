@@ -7,6 +7,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatFixedPoint;
+import haxe.Timer;
 import utest.Assert;
 import utest.Test;
 
@@ -310,6 +311,29 @@ class WrapFlatSourceFixedPointTest extends Test {
 	/** An object literal that always breaks one-per-line, under every other default. */
 	private static final COMMITTED_LITERAL: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": '
 		+ '{"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": []}}}';
+
+	/**
+	 * Pony's `objectLiteral` FIT cascade (`ignore` + `exceedsMaxLineLength → onePerLine`) beside its `callParameter`
+	 * one: the next rewrite DECIDES a source-multi-line literal again rather than reading it back committed.
+	 */
+	private static final FIT_PIVOT_ARG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
+		+ '"objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], '
+		+ '"type": "onePerLine"}]}, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": '
+		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": '
+		+ '"totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}, "whitespace": {"bracesConfig": {"objectLiteralBraces": '
+		+ '{"openingPolicy": "after", "closingPolicy": "before"}}}}';
+
+	/**
+	 * `CALL_TERNARY_NESTED`'s literal and `callParameter` cascades beside a `ternaryExpression` cascade that breaks a
+	 * ternary only when it overflows: the ternary re-decides on the next rewrite, it does not read an argument's break.
+	 */
+	private static final TERNARY_CALL_ARG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": ['
+		+ '{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], '
+		+ '"type": "noWrap"}]}, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": '
+		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": '
+		+ '"totalItemLength <= n", "value": 100}], "type": "noWrap"}]}, "ternaryExpression": {"defaultWrap": "noWrap", "rules": '
+		+ '[{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLineAfterFirst", "location": "beforeLast"}]}}}';
 
 	public function new(): Void {
 		super();
@@ -970,6 +994,101 @@ class WrapFlatSourceFixedPointTest extends Test {
 			Assert.isTrue(once.indexOf(c.glued) != -1, 'expected the glued shape the next pass produces, got:\n<$once>');
 			Assert.equals(once, write(once, COMMITTED_LITERAL), 'one round trip must land on the fixed point');
 		}
+	}
+
+	/**
+	 * A case unit whose only over-wide part is a threshold-pivot literal must not lead the sibling
+	 * spread: the next pass reads that literal back as committed, where the unit measures no flat
+	 * width and its siblings stay on their labels.
+	 */
+	@:pin('control')
+	@:killer('M-SIBLING-OFFER-UNALIASED')
+	public function testPivotCaseUnitDoesNotLeadTheSiblingSpread(): Void {
+		final src: String = 'class C {\n\tfunction f(): Candidate {\n\t\treturn switch kind {\n'
+			+ '\t\t\tcase Provable: dropped(\'the key binder is never read; iterate the values alone, the loop never reads it\', null);\n'
+			+ '\t\t\tcase Keyed:\n\t\t\t\tdropped(\n\t\t\t\t\t\'the key binder is never read; drop it if nothing the loop runs changes the '
+			+ 'map, else rename it to a wildcard\',\n\t\t\t\t\t{ iterable: iterable, body: bodySpan }\n\t\t\t\t);\n'
+			+ '\t\t\tcase Unprovable: renamed(keyToken, \'the key binder is never read; rename it to a wildcard\');\n\t\t};\n\t}\n}';
+		final once: String = write(src, CASE_BODY_OBJECT);
+		Assert.isTrue(
+			once.indexOf('\t\t\tcase Provable: dropped(') != -1 && once.indexOf('\t\t\tcase Unprovable: renamed(') != -1,
+			'the fitting siblings must stay on their labels:\n<$once>'
+		);
+		Assert.isTrue(
+			once.indexOf('\t\t\tcase Keyed:\n\t\t\t\tdropped(\'the key binder') != -1 && once.indexOf('a wildcard\', {\n') != -1,
+			'the pivot unit must break its own literal below its label:\n<$once>'
+		);
+		Assert.equals(once, write(once, CASE_BODY_OBJECT), 'one round trip must land on the fixed point');
+	}
+
+	/**
+	 * A call argument that carries a threshold-pivot literal one call deeper must pack on its
+	 * first line like the committed argument the next pass reads back, instead of opening a line
+	 * of its own because its flat arm overflows.
+	 */
+	@:pin('control')
+	@:killer('M-THRESHOLD-ARG-UNNAMED')
+	public function testNestedPivotCallArgPacksOnPassOne(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\treportSite(graph, edge, targets, siteCost(sites, costs, edge, { long: '
+			+ 'long.exists(site.key), normal: normal.exists(site.key), caught: caught.exists(site.key), more: 1 }), inSink);\n\t}\n}';
+		final once: String = write(src, CASE_BODY_OBJECT);
+		Assert.isTrue(
+			once.indexOf('\t\treportSite(graph, edge, targets, siteCost(sites, costs, edge, {\n\t\t\tlong: long.exists(site.key),\n') != -1,
+			'the nested call must pack onto the outer call line:\n<$once>'
+		);
+		Assert.equals(once, write(once, CASE_BODY_OBJECT), 'one round trip must land on the fixed point');
+	}
+
+	/**
+	 * A literal argument under a FIT cascade is not named: its next rewrite re-decides it, so the call the source opened
+	 * one argument per line is already the fixed point and must come back byte for byte.
+	 */
+	@:pin('control')
+	@:killer('M-NAMED-FIT-PIVOT')
+	public function testFitPivotArgumentKeepsItsOpenCall(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tnew DownloadReader(\n\t\t\txml,\n\t\t\t{\n\t\t\t\tdebug: ac.debug,\n'
+			+ '\t\t\t\tapp: ac.app,\n\t\t\t\tbefore: false,\n\t\t\t\tsection: BASection.Prepare,\n\t\t\t\tpath: \'\',\n\t\t\t\tunits: [],\n'
+			+ '\t\t\t\tallowCfg: true,\n\t\t\t\tcordova: false\n\t\t\t},\n\t\t\tconfigHandler\n\t\t);\n\t}\n}\n';
+		Assert.equals(src, write(src, FIT_PIVOT_ARG), 'the opened call is the fixed point and must not hug its literal');
+	}
+
+	/**
+	 * A threshold-pivot literal argument of a call that is a ternary BRANCH: the ternary breaks on its own overflow in one
+	 * write, as it does on the next, instead of hugging the call on the first write and breaking it on the second.
+	 */
+	@:pin('control')
+	@:killer('M-CHAIN-OFFER-OFF')
+	public function testPivotArgUnderATernaryBreaksTheTernaryOnPassOne(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal cost = flag ? siteCost(sites, costs, edge, targets, graph, { long: '
+			+ 'long.exists(site.key), normal: normal.exists(site.key), caught: caught.exists(site.key), more: 1 }) : null;\n\t}\n}';
+		final once: String = write(src, TERNARY_CALL_ARG);
+		Assert.isTrue(
+			once.indexOf('\t\tfinal cost = flag\n\t\t\t? siteCost(sites, costs, edge, targets, graph, {\n') != -1,
+			'the ternary must break before its branches:\n<$once>'
+		);
+		Assert.equals(once, write(once, TERNARY_CALL_ARG), 'one round trip must land on the fixed point');
+	}
+
+	/**
+	 * Offering a committed break to every host above it (`BreakCommits.offerItemBreaks`) must stay polynomial in the
+	 * nesting depth: a paren chain five deep and a call nine deep, each level holding its own threshold-pivot literal,
+	 * write in a small fraction of a second, where copying every alternative whole grew the Doc exponentially.
+	 */
+	@:pin('control')
+	@:killer('M-OFFER-REPLACED-COPIES')
+	public function testNestedNamedBreaksWriteInPolynomialTime(): Void {
+		inline function literal(k: Int): String
+			return '{ long: long.exists(site.key), normal: normal.exists(site.key), caught: caught.exists(site.key), more: $k }';
+		var chain: String = 'siteCost(sites, costs, ${literal(99)})';
+		for (k in 0...5) chain = '(siteCost(sites, costs, ${literal(k)}) || $chain)';
+		var call: String = 'call0(sites, costs, ${literal(0)}, ${literal(0)})';
+		for (k in 1...9) call = 'call$k(sites, costs, ${literal(k)}, $call)';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x = $chain;\n\t\tfinal y = $call;\n\t}\n}';
+		final started: Float = Timer.stamp();
+		final once: String = write(src, TERNARY_CALL_ARG);
+		final seconds: Float = Timer.stamp() - started;
+		Assert.isTrue(seconds < 1.5, 'nested named breaks took ${seconds}s to write');
+		Assert.isTrue(once.indexOf('call8(') != -1 && once.indexOf('more: 99') != -1, 'the write must keep every level:\n<$once>');
 	}
 
 	private static function write(src: String, config: String): String {
