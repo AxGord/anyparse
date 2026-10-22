@@ -5204,3 +5204,7 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 ## J0 (2026-10-21) — the JVM probe's `ClassFormatError`, bisected
 
 - the probe died on a wide structure from the typer / compiler-facts series → no: bisect names `1b172a012` (thread-safety R4 F1), whose `RefShape.operatorWriteKinds` was the grammar vocabulary's 255th field, one constructor slot past the JVM's 255 with the receiver → `1b172a012`
+
+## n22/U27 (2026-08-20, recorded 2026-10-22 before its branch was deleted)
+
+- a fix collapsing a null-guarded return (`return x != null && <tail>`) into `?.` / `??` → no: one site in a client corpus once the census pattern was corrected, every corpus measured keeps the guarded form as its house style, the `?.`/`??` arm is unsound without a type proof (it diverges when the tail itself yields null), and the family is already covered by `prefer-ternary-return` + `simplify-boolean-ternary` with the one refusal documented as `PreferTernaryReturn.isStuckBooleanCollapse` — `bc1c2399e` (branch-only, never merged)
