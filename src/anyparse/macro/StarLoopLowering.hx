@@ -457,6 +457,7 @@ final class StarLoopLowering {
 					trailingComment: _trailing,
 					trailingBeforeSep: _trailingBeforeSep != null,
 					sepAfter: _sepAfter,
+					leadingCommentsGlued: _lead.leadingComments.length > 0 && !_lead.newlineAfterLeadingComments,
 					node: _node,
 				});
 			}

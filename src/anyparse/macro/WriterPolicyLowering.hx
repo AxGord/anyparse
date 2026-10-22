@@ -706,18 +706,22 @@ final class WriterPolicyLowering {
 	 * Return a `Bool`-valued expression for the `trailingComma` argument
 	 * of `sepList`. Returns `macro false` when the node carries no
 	 * `@:fmt(trailingComma("flagName"))` knob, else `macro opt.<flagName>` so
-	 * the knob is resolved at runtime against the caller's options.
+	 * the knob is resolved at runtime against the caller's options — or'd with
+	 * `sourceTrail`, the separator the source wrote after the last element,
+	 * when the caller has that signal (the `keep` half of the writer contract).
 	 *
 	 * Read from the node that owns the separated list — an enum branch
 	 * (Case 4 Star / postfix Star) or a struct Star field.
 	 */
-	private static function trailingCommaExpr(node: ShapeNode): Expr {
+	private static function trailingCommaExpr(node: ShapeNode, ?sourceTrail: Expr): Expr {
 		final flagName: Null<String> = node.fmtReadString('trailingComma');
+		if (flagName == null) return macro false;
+		final knob: Expr = optFieldAccess(flagName);
 		// ω-multiline-trailing-comma-remove: the plain / postfix Star path
 		// (`HxExpr.Call.args`) reaches its trailing separator through this
 		// helper, not through `triviaSepTrailExprs` — apply the same veto here
 		// so one policy answers the question for every list that opts in.
-		return flagName == null ? macro false : keepsTrailingCommaExpr(optFieldAccess(flagName), node.fmtHasFlag('trailingCommaRemovable'));
+		return keepsTrailingCommaExpr(sourceTrail == null ? knob : macro $sourceTrail || $knob, node.fmtHasFlag('trailingCommaRemovable'));
 	}
 
 	/**

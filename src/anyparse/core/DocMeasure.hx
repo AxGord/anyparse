@@ -445,9 +445,12 @@ final class DocMeasure {
 		return s != null && s.length > 0 && s.fastCodeAt(0) == c;
 	}
 
-	/** True iff this rendered list item opens a preprocessor region (`#if …`): its left spine starts on `#`. */
+	/**
+	 * True iff this rendered list item opens a preprocessor region (`#if …`): the first source
+	 * token on its left spine, past any leading comment the item carries, is `#`.
+	 */
 	public static function opensDirectiveRegion(d: Doc): Bool {
-		return firstVisibleTextStartsWith(d, '#'.code);
+		return leadTokenChar(d, []) == '#'.code;
 	}
 
 	/**
@@ -729,6 +732,64 @@ final class DocMeasure {
 				true;
 			case _: false;
 		};
+	}
+
+	/**
+	 * The first source character `d` renders past whitespace and comments (`leadCharOf`), or `-1` while
+	 * the text read so far holds none. `seen` accumulates the visible text in render order, a line break
+	 * as a newline so a `//` comment ends there, because one leading comment may span several leaves.
+	 */
+	private static function leadTokenChar(d: Doc, seen: Array<String>): Int {
+		return switch d {
+			case Text(s), OptSpace(s):
+				seen.push(s);
+				leadCharOf(seen.join(''));
+			case Line(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
+				seen.push('\n');
+				-1;
+			case Empty, OptSpaceSkipAfterHardline:
+				-1;
+			case Concat(arr), Fill(arr, _, _), FillWithRestProbe(arr, _, _), FillBreakAfterWrap(arr, _, _):
+				var hit: Int = -1;
+				for (it in arr) if (hit == -1) hit = leadTokenChar(it, seen);
+				hit;
+			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
+				HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
+				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _):
+				leadTokenChar(i, seen);
+			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
+				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
+				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
+				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
+				leadTokenChar(flat, seen);
+		};
+	}
+
+	/**
+	 * The first character of `s` past whitespace, `//` comments to their line end and
+	 * `/* … *\/` comments, or `-1` while `s` holds none of it or ends inside a comment.
+	 */
+	private static function leadCharOf(s: String): Int {
+		var i: Int = 0;
+		while (i < s.length) {
+			final c: Int = s.fastCodeAt(i);
+			final next: Int = i + 1 < s.length ? s.fastCodeAt(i + 1) : -1;
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
+				i++;
+			} else if (c == '/'.code && next == '/'.code) {
+				final end: Int = s.indexOf('\n', i + 2);
+				if (end < 0) return -1;
+				i = end + 1;
+			} else if (c == '/'.code && next == '*'.code) {
+				final end: Int = s.indexOf('*/', i + 2);
+				if (end < 0) return -1;
+				i = end + 2;
+			} else {
+				return c == '/'.code && next == -1 ? -1 : c;
+			}
+		}
+		return -1;
 	}
 
 	/** The leftmost visible character of `s`, or `-1` when `s` holds only whitespace. */
