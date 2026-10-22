@@ -85,6 +85,15 @@ final class ConfigFinder {
 	}
 
 	/**
+	 * `path` absolute against the process directory — the form every walk here names a file it found in — so a
+	 * path a caller holds and one a walk answered compare equal exactly when they name one file. Unchanged on a
+	 * target with no file IO.
+	 */
+	public static function absolute(path: String): String {
+		return #if (sys || nodejs) sys.FileSystem.absolutePath(path) #else path #end;
+	}
+
+	/**
 	 * The nearest directory at or above `dir` holding one of `PROJECT_ROOT_MARKERS` — the project root the inheriting
 	 * walk stops at — or null when none does, or the target has no file IO.
 	 */

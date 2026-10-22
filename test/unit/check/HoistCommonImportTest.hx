@@ -1,11 +1,15 @@
 package unit.check;
 
-import anyparse.check.Check.CrossFileEdits;
-import anyparse.check.Check.Violation;
+import anyparse.check.Check;
+import anyparse.check.EmptyAmbientSource;
 import anyparse.check.HoistCommonImport;
+import anyparse.check.LintConfig;
+import anyparse.check.Naming;
+import anyparse.check.UnusedImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.StdResolver;
+import anyparse.query.cli.command.LintFixDriver;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 import unit.cli.CliFixture;
@@ -118,6 +122,17 @@ class HoistCommonImportTest extends Test {
 	private static final LIBRARY_FILES: Array<{ file: String, source: String }> = [
 		{ file: '/nonexistent-hoistqq-lib/qqz/Zqqwwee.hx', source: 'package qqz;\n\nclass Zqqwwee {}\n' },
 		{ file: '/nonexistent-hoistqq-lib/qqz/Yqqwwee.hx', source: 'package qqz;\n\nclass Yqqwwee {}\n' }
+	];
+
+	/** An ambient source carrying a statement ONE of the five modules it governs reads. */
+	private static final SINK_TREE: Array<TreeFile> = [
+		{ name: 'src/qqz/Rqqwwee.hx', source: 'package qqz;\n\nclass Rqqwwee {}\n' },
+		{ name: 'src/aqq/import.hx', source: 'import qqz.Rqqwwee;\n' },
+		{ name: 'src/aqq/OneQq.hx', source: 'package aqq;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n' },
+		{ name: 'src/aqq/TwoQq.hx', source: 'package aqq;\n\nclass TwoQq {}\n' },
+		{ name: 'src/aqq/ThreeQq.hx', source: 'package aqq;\n\nclass ThreeQq {}\n' },
+		{ name: 'src/aqq/FourQq.hx', source: 'package aqq;\n\nclass FourQq {}\n' },
+		{ name: 'src/aqq/FiveQq.hx', source: 'package aqq;\n\nclass FiveQq {}\n' }
 	];
 
 	/**
@@ -462,6 +477,169 @@ class HoistCommonImportTest extends Test {
 		Assert.equals(2, slicesOf(NESTED_TREE).groups);
 	}
 
+	/** A statement fewer than the sink share of its source's modules read is reported on the source itself. */
+	@:pin('control')
+	@:killer('M-SINK-NEVER-SOUND')
+	public function testSinksAStatementTooFewModulesRead(): Void {
+		Assert.equals('src/aqq/import.hx:qqz.Rqqwwee', sunk(SINK_TREE));
+	}
+
+	/** Two readers of five is a share at the sink threshold's other side: the statement stays where it is. */
+	@:pin('control')
+	@:killer('M-SINK-SHARE-BLIND')
+	public function testKeepsAStatementEnoughModulesRead(): Void {
+		Assert.equals(
+			'', sunk(SINK_TREE.map(entry -> entry.name == 'src/aqq/TwoQq.hx' ? {
+				name: entry.name,
+				source: 'package aqq;\n\nclass TwoQq {\n\n\tvar a:Rqqwwee;\n\n}\n'
+			} : entry))
+		);
+	}
+
+	/** A sink threshold at or above the hoist one would put one share on both sides, so it is not honoured. */
+	@:pin('control')
+	@:killer('M-SINK-HYSTERESIS-OFF')
+	public function testASinkThresholdNotBelowTheHoistOneIsIgnored(): Void {
+		Assert.equals('', sunk(SINK_TREE.concat([
+			{ name: 'apqlint.json', source: '{ "rules": { "hoist-common-import": { "threshold": 50, "sinkThreshold": 50 } } }\n' }
+		])));
+	}
+
+	/** The fix spells the statement in its one reader and deletes the source it leaves with nothing in it. */
+	@:pin('control')
+	@:killer('M-SINK-NEVER-SOUND')
+	public function testTheSinkDeletesTheSourceItEmpties(): Void {
+		Assert.equals(
+			'GONE :: package aqq;||import qqz.Rqqwwee;||class OneQq {||\tvar a:Rqqwwee;||}|',
+			'${fileAfter(SINK_TREE, 'src/aqq/import.hx')} :: ${fileAfter(SINK_TREE, 'src/aqq/OneQq.hx')}'
+		);
+	}
+
+	/** A source keeping another statement, or a comment, is EDITED: deleting it would take them along. */
+	@:pin('guard')
+	public function testTheSinkKeepsASourceThatCarriesMore(): Void {
+		final commented: Array<TreeFile> = SINK_TREE.map(entry -> entry.name == 'src/aqq/import.hx' ? {
+			name: entry.name,
+			source: '// shared\nimport qqz.Rqqwwee;\n'
+		} : entry);
+		Assert.equals('// shared||', fileAfter(commented, 'src/aqq/import.hx'));
+	}
+
+	/**
+	 * A NEARER source binding the same name to another type is what the reader reads, and the own copy a
+	 * sink writes would outrank it — `OneQq`'s `Rqqwwee` would turn from `wqq`'s into `qqz`'s. Refused.
+	 */
+	@:pin('control')
+	@:killer('M-SINK-RIVAL-BLIND')
+	public function testRefusesASinkWhereANearerSourceBindsTheName(): Void {
+		Assert.equals('', sunk([
+			for (entry in SINK_TREE) entry.name == 'src/aqq/OneQq.hx' ? {
+				name: 'src/aqq/bqq/OneQq.hx',
+				source: 'package aqq.bqq;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n'
+			} : entry
+		].concat([
+			{ name: 'src/wqq/Rqqwwee.hx', source: 'package wqq;\n\nclass Rqqwwee {}\n' },
+			{ name: 'src/aqq/bqq/import.hx', source: 'import wqq.Rqqwwee;\n' }
+		])));
+	}
+
+	/** An OWN rival import of the name is refused the same way: the own copy sorts after it and the last one wins. */
+	@:pin('control')
+	@:killer('M-SINK-OWN-RIVAL-BLIND')
+	public function testRefusesASinkWhereTheReaderImportsARival(): Void {
+		Assert.equals(
+			'',
+			sunk(
+				SINK_TREE.map(entry -> entry.name == 'src/aqq/OneQq.hx' ? {
+					name: entry.name,
+					source: 'package aqq;\n\nimport eqq.Rqqwwee;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n'
+				} : entry)
+					.concat([{ name: 'src/eqq/Rqqwwee.hx', source: 'package eqq;\n\nclass Rqqwwee {}\n' }])
+			)
+		);
+	}
+
+	/** A sunk `using` lands ABOVE the reader's own ones — the lowest extension priority, the rank it held in the source. */
+	@:pin('guard')
+	public function testASunkUsingKeepsItsRankBelowTheReadersOwn(): Void {
+		Assert.equals(
+			'package aqq;||using qqz.Sqqwwee;|using qqz.Rqqwwee;||class OneQq {||\tfunction f(s:String):String {|'
+			+ '\t\treturn s.tqq();|\t}||}|',
+			fileAfter(usingSinkTree(''), 'src/aqq/OneQq.hx')
+		);
+	}
+
+	/** Another `using` anywhere in the reader's chain would rank BELOW the own copy a sink writes. Refused. */
+	@:pin('control')
+	@:killer('M-SINK-USING-RANK-BLIND')
+	public function testRefusesAUsingSinkWhereTheChainCarriesAnotherUsing(): Void {
+		Assert.equals('', sunk(usingSinkTree('using qqz.Pqqwwee;\n')));
+	}
+
+	/**
+	 * A fix run over both directions leaves a tree the next run has nothing to do on: a share between the two
+	 * thresholds stays wherever it is, and a sink threshold at or above the hoist one, which would send a
+	 * hoisted statement straight back, is not honoured.
+	 */
+	@:pin('control')
+	@:killer('M-SINK-HYSTERESIS-OFF')
+	public function testAFixedTreeIsAFixedPointOfBothDirections(): Void {
+		#if (sys || nodejs)
+		final tree: Array<TreeFile> = [
+			for (entry in COMMON_TREE) { name: entry.name, source: entry.source.replace('a: ', 'a:') }
+		];
+		final verdicts: Array<String> = [];
+		for (config in ['{}', '{ "rules": { "hoist-common-import": { "sinkThreshold": 70 } } }']) {
+			final root: String = CliFixture.writeTree('apq_hoist_fixpoint', tree);
+			CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+				fixOnDisk(root, config);
+				final first: String = diskOf(root);
+				fixOnDisk(root, config);
+				verdicts.push('${sys.FileSystem.exists('$root/src/import.hx')}|${first == diskOf(root)}');
+			});
+		}
+		Assert.equals('true|true,true|true', verdicts.join(','));
+		#else
+		Assert.pass();
+		#end
+	}
+
+	/**
+	 * A sink and a cross-file rename of ANOTHER rule landing in one reader in the same pass both reach it: the
+	 * reader's edits from the two are merged into one set, so the sink's must be the insertion alone — a
+	 * whole-file rewrite would swallow the rename and leave `OneQq` reading a member that is gone.
+	 */
+	@:pin('control')
+	@:killer('M-SINK-WHOLE-FILE')
+	public function testASinkAndARenameInOneReaderBothLand(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree(
+			'apq_hoist_sink_rename',
+			SINK_TREE.map(entry -> switch entry.name {
+				case 'src/aqq/OneQq.hx': {
+					name: entry.name,
+					source: 'package aqq;\n\nclass OneQq extends qqz.Base {\n\n\tfunction f():Int {\n\t\treturn shape;\n\t}\n\n'
+						+ '\tvar a:Rqqwwee;\n\n}\n'
+				};
+				case _: entry;
+			})
+				.concat([
+					{ name: 'src/qqz/Base.hx', source: 'package qqz;\n\nclass Base {\n\n\tprivate var shape:Int = 0;\n\n}\n' }
+				])
+		);
+		var out: String = '';
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+			fixOnDisk(root, '{}', [new Naming(), new HoistCommonImport()]);
+			final reader: String = sys.io.File.getContent('$root/src/aqq/OneQq.hx');
+			out = '${reader.indexOf('import qqz.Rqqwwee;') >= 0}|${reader.indexOf('return _shape;') >= 0}'
+				+ '|${sys.io.File.getContent('$root/src/qqz/Base.hx').indexOf('_shape') >= 0}';
+		});
+		Assert.equals('true|true|true', out);
+		#else
+		Assert.pass();
+		#end
+	}
+
 	/** `tree` with this rule's own fix applied — the ambient sources it writes, and the modules without what it lifted. */
 	private function applied(tree: Array<TreeFile>): Array<TreeFile> {
 		#if (sys || nodejs)
@@ -475,6 +653,10 @@ class HoistCommonImportTest extends Test {
 				final created: Null<String> = part.create;
 				if (created != null) {
 					byName[name] = created;
+					continue;
+				}
+				if (part.remove == true) {
+					byName.remove(name);
 					continue;
 				}
 				var source: String = byName[name] ?? '';
@@ -515,6 +697,37 @@ class HoistCommonImportTest extends Test {
 		#else
 		return '';
 		#end
+	}
+
+	/** Every SINK finding over `tree` as `<source>:<path>`, tree-relative and sorted — the findings that land on an ambient source. */
+	private function sunk(tree: Array<TreeFile>): String {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('apq_hoist_sink', tree);
+		var out: String = '';
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+			final rendered: Array<String> = [
+				for (v in reportOf(
+					tree, root
+				)) if (v.message.indexOf(' is read by ') >= 0) '${relative(v.file, root)}:${quoted(v.message, 0)}'
+			];
+			rendered.sort((a, b) -> if (a < b)
+				-1
+			else if (a > b)
+				1
+			else
+				0);
+			out = rendered.join(',');
+		});
+		return out;
+		#else
+		return '';
+		#end
+	}
+
+	/** `name`'s text once this rule's fix is applied to `tree`, each newline as `|` — or `GONE` when the fix deleted it. */
+	private function fileAfter(tree: Array<TreeFile>, name: String): String {
+		final entry: Null<TreeFile> = applied(tree).find(file -> file.name == name);
+		return entry == null ? 'GONE' : entry.source.replace('\n', '|');
 	}
 
 	/** The ambient source text the FIRST slice writes, with each newline as `|`. */
@@ -657,5 +870,78 @@ class HoistCommonImportTest extends Test {
 			{ name: 'src/aqq/FourQq.hx', source: 'package aqq;\n\nclass FourQq {}\n' }
 		];
 	}
+
+	/**
+	 * An ambient `using qqz.Sqqwwee;` that one of five modules calls — `OneQq`, which keeps a `using` of its
+	 * own — with `parent` as the text of an ambient source one directory up when it is not empty. Both
+	 * `using` modules a source carries are on this fixture's allow-list.
+	 */
+	private static function usingSinkTree(parent: String): Array<TreeFile> {
+		final extension: (
+			String, String
+		) -> String = (type, method) ->
+			'package qqz;\n\nclass $type {\n\n\tpublic static function $method(s:String):String {\n\t\treturn s;\n\t}\n\n}\n';
+		final tree: Array<TreeFile> = [
+			{
+				name: 'apqlint.json',
+				source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee", "qqz.Pqqwwee"] } } }\n'
+			},
+			{ name: 'src/qqz/Sqqwwee.hx', source: extension('Sqqwwee', 'tqq') },
+			{ name: 'src/qqz/Rqqwwee.hx', source: extension('Rqqwwee', 'uqq') },
+			{ name: 'src/qqz/Pqqwwee.hx', source: extension('Pqqwwee', 'vqq') },
+			{ name: 'src/aqq/import.hx', source: 'using qqz.Sqqwwee;\n' },
+			{
+				name: 'src/aqq/OneQq.hx',
+				source: 'package aqq;\n\nusing qqz.Rqqwwee;\n\nclass OneQq {\n\n\tfunction f(s:String):String {\n\t\treturn s.tqq();\n'
+					+ '\t}\n\n}\n'
+			}
+		].concat([
+			for (module in ['TwoQq', 'ThreeQq', 'FourQq', 'FiveQq'])
+				{
+					name: 'src/aqq/$module.hx',
+					source: 'package aqq;\n\nclass $module {}\n'
+				}
+		]);
+		return parent == '' ? tree : tree.concat([{ name: 'src/import.hx', source: parent }]);
+	}
+
+	#if (sys || nodejs)
+	/** One `lint --fix` over every `.hx` under `root`, by both import-moving directions and the two rules that clean up after them. */
+	private static function fixOnDisk(root: String, config: String, ?checks: Array<Check>): Void {
+		final files: Array<{ file: String, source: String }> = [
+			for (path in modulesUnder(root)) { file: path, source: sys.io.File.getContent(path) }
+		];
+		CliFixture.captureStderr(() ->
+			LintFixDriver.runLintFix(
+				files, checks ?? [new HoistCommonImport(), new UnusedImport(), new EmptyAmbientSource()], new HaxeQueryPlugin(),
+				_ -> LintConfig.parse(config), false, null, [], true, null, false
+			)
+		);
+	}
+
+	/** Every `.hx` file under `dir` with its text, sorted by path — the tree as a fix left it on disk. */
+	private static function diskOf(dir: String): String {
+		return [for (path in modulesUnder(dir)) '$path=${sys.io.File.getContent(path)}'].join('\n');
+	}
+
+	/** Every `.hx` path under `dir`, sorted. */
+	private static function modulesUnder(dir: String): Array<String> {
+		final out: Array<String> = [];
+		for (name in sys.FileSystem.readDirectory(dir)) {
+			final path: String = '$dir/$name';
+			if (sys.FileSystem.isDirectory(path))
+				for (inner in modulesUnder(path)) out.push(inner)
+			else if (name.endsWith('.hx'))
+				out.push(path);
+		}
+		out.sort((a, b) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
+		return out;
+	}
+	#end
 
 }
