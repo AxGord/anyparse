@@ -36,7 +36,7 @@ typedef MutationVerdictResult = {
  *
  * This lives here, and not in `tools/mutation-check.sh`, because the shell copy was a SECOND utest-report
  * parser: `apq test-summary` had existed for exactly this job since before the script was written, and
- * `suite-shard.sh` comments that it reuses it precisely so a divergent parser cannot grow. One grew anyway,
+ * the shard runner reuses it precisely so a divergent parser cannot grow. One grew anyway,
  * and the price is on record: two separate bugs lived in the duplicate — a red run reported SURVIVED, and a
  * utest header found by position rather than by SHAPE — neither reachable by any test, because a shell
  * function is not testable.
