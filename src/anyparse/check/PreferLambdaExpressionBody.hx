@@ -1,15 +1,12 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.IfExpressionChain.ShieldSeams;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FormatConfigDiscovery;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

@@ -9,7 +9,6 @@ import anyparse.query.ScopeFiles.ParsedFile;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
 using Lambda;
 
 /** Move direction along the inheritance axis. */

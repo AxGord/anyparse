@@ -7,7 +7,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.cli.command.LintCommand;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

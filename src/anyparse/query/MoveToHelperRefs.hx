@@ -11,7 +11,6 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * The edits one `move-to-helper` run collects (`MoveToHelper`): the source-coordinate edits that travel with the moved

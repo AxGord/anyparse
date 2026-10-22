@@ -6,7 +6,6 @@ import anyparse.runtime.BodySkip.SkipMark;
 import anyparse.runtime.BodySkip.SkipMarkRole;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

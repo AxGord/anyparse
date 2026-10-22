@@ -3,8 +3,6 @@ package anyparse.check;
 import anyparse.check.BoundedRepeats.BoundedRepeat;
 import anyparse.check.LockTaint.ChainLists;
 import anyparse.query.CallGraph;
-import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
 using StringTools;

@@ -2,8 +2,6 @@ package unit.format;
 
 import anyparse.core.Doc;
 import anyparse.format.wrap.WrapList;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `WrapList.groupifyInlineBodies` is a hand-written copy of `D.mapChildren`'s

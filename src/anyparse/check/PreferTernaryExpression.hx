@@ -1,15 +1,12 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
-import anyparse.check.Check.Violation;
 import anyparse.check.NegatedCondition.InversionSeams;
 import anyparse.check.NegatedCondition.InversionSite;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.ParenGuard;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

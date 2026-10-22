@@ -2,18 +2,15 @@ package anyparse.check;
 
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.BinderScan;
 import anyparse.query.CtorFieldWrite;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;

@@ -1,7 +1,6 @@
 package anyparse.query;
 
 using Lambda;
-using StringTools;
 
 /**
  * Why a mutated tree refused to compile.

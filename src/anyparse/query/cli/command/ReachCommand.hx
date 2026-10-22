@@ -2,10 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
-import anyparse.query.cli.CliContext;
 import anyparse.query.ExitCode.*;
-
-using StringTools;
 
 /**
  * `apq reach` — shortest call path(s) --from A --to B over the call graph.

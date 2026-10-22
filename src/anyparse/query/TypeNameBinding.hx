@@ -9,7 +9,6 @@ import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 
 using Lambda;
-using StringTools;
 
 /** What one resolution tier says about a name — and, from `TypeNameBinding.tierOf`, what the whole order says. */
 enum Tier {

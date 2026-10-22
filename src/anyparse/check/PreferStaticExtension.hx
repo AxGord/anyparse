@@ -1,18 +1,15 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
-import anyparse.check.Check.Violation;
 import anyparse.check.StaticExtensionFacts.ExtensionFactsVerdict;
 import anyparse.check.UsingScan.UsingConflict;
 import anyparse.check.UsingScan.UsingHeader;
 import anyparse.check.UsingScan.UsingScope;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;

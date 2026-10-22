@@ -8,7 +8,6 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.CheckstyleConfigLoader;
 import sys.FileSystem;
 import sys.io.File;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

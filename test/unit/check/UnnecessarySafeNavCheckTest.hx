@@ -5,7 +5,6 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnnecessarySafeNav;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

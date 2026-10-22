@@ -6,7 +6,6 @@ import anyparse.runtime.Span;
 import haxe.Json;
 
 using Lambda;
-using StringTools;
 
 /**
  * One compile's facts as `TypedFactsProbe` wrote them: the configuration's `name`, the JSON Lines `text`, and `file`,

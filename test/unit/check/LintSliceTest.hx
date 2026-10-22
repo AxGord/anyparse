@@ -15,7 +15,6 @@ import anyparse.query.format.Text;
 import anyparse.runtime.Span;
 import haxe.DynamicAccess;
 import haxe.Json;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

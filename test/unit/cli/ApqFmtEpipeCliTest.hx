@@ -4,8 +4,6 @@ package unit.cli;
 import sys.FileSystem;
 import sys.io.File;
 #end
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

@@ -1,12 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;

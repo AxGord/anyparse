@@ -124,6 +124,14 @@
 		"hoist-branch-string-affix": {
 			"enabled": true
 		},
+		"hoist-common-import": {
+			"enabled": true,
+			"threshold": 50,
+			"usingAllowList": [
+				"StringTools",
+				"Lambda"
+			]
+		},
 		"hoist-embedded-assignment": {
 			"enabled": true
 		},

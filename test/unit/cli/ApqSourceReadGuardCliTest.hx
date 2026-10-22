@@ -4,8 +4,6 @@ package unit.cli;
 import sys.FileSystem;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq source <file>` with nothing narrowing the read: REFUSED past a line

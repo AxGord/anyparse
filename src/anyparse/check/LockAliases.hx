@@ -2,9 +2,7 @@ package anyparse.check;
 
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.TreePath;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;

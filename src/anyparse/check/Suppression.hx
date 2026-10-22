@@ -1,6 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments;
 import anyparse.runtime.LineIndex;

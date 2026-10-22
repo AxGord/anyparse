@@ -1,7 +1,5 @@
 package anyparse.query;
 
-using StringTools;
-
 /** One `APQ_TEST` token: the class substring it selects, and which slice of that class's tests it runs. */
 typedef ShardToken = {
 	cls: String,

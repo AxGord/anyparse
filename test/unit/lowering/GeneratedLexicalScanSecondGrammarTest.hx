@@ -4,8 +4,6 @@ import anyparse.grammar.haxe.HaxeLexicalRegions;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import unit.minilex.MiniLexScan;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The generated lexical pass asked the one question no Haxe-only pin can ask: does it KNOW

@@ -5,8 +5,6 @@ import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxStatement;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The block-ended Star's WHITESPACE REWIND — `StarLoopLowering.buildBlockEndedByteCheck`

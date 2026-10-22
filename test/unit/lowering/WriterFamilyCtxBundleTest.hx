@@ -2,8 +2,6 @@ package unit.lowering;
 
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

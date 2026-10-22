@@ -5,8 +5,6 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq resolve-define <DEFINE> <scope>` — the write-twin of `apq cond`, end to end.

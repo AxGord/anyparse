@@ -6,7 +6,6 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

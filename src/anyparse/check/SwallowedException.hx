@@ -1,11 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.Check.Violation;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
-import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;

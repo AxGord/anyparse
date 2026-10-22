@@ -2,10 +2,7 @@ package anyparse.check;
 
 import anyparse.check.CasePatternScan.CaseSeams;
 import anyparse.check.CasePatternScan.PatternBinder;
-import anyparse.check.Check.Violation;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

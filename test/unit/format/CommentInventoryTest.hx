@@ -3,8 +3,6 @@ package unit.format;
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentScan;
 import anyparse.grammar.haxe.HaxeLexicalRegions;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The comment scan and the whitespace-loose comparison behind the writer's

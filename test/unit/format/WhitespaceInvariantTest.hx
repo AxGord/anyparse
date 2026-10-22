@@ -1,8 +1,6 @@
 package unit.format;
 
 import anyparse.format.WhitespaceInvariant;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The non-whitespace invariant behind `apq fmt --verify`.

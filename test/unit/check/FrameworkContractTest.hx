@@ -14,7 +14,6 @@ import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

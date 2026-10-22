@@ -1,7 +1,6 @@
 package anyparse.check;
 
 import anyparse.check.Check.GroupedEdit;
-import anyparse.check.Check.Violation;
 import anyparse.check.LoopScan.LoopSeams;
 import anyparse.check.PurityScan.PurityCtx;
 import anyparse.check.UsingScan.UsingHeader;
@@ -9,14 +8,12 @@ import anyparse.check.UsingScan.UsingScope;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;

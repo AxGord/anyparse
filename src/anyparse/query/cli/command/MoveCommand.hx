@@ -5,12 +5,9 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.MoveSymbol;
-import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
-
-using StringTools;
 
 /**
  * Parsed options for `apq move` — `lang`, `write`, the `scope` to search, the source address

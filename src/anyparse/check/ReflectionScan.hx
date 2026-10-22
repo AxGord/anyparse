@@ -1,8 +1,6 @@
 package anyparse.check;
 
-import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;

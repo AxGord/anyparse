@@ -1,12 +1,9 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;

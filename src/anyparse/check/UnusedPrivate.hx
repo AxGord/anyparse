@@ -2,10 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FrameworkAware;
-import anyparse.check.Check.Violation;
 import anyparse.check.FactsTypeOracle.InheritedMember;
 import anyparse.check.ReflectionScan.ReflectionSurface;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
@@ -16,7 +14,6 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;

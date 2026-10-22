@@ -3,10 +3,7 @@ package anyparse.query.cli.command;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.PositionalScan;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
-import anyparse.query.cli.CliContext;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq declares` — declaration site(s) of one named type (ambiguity check).

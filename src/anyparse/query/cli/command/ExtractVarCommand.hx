@@ -2,11 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.ExtractVar;
-import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq extract-var` — hoist an expression into a new local final.

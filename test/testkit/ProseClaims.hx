@@ -1,7 +1,5 @@
 package testkit;
 
-using StringTools;
-
 /**
  * The prose conventions a fixture's doc comment uses to claim a role, read as
  * data — the other half of `@:pin` / `@:killer`.

@@ -1,6 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.HoldGrade.FoldHold;
 import anyparse.check.HoldGrade.GradedHold;
 import anyparse.check.LockSites.LockAcquire;

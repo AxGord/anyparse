@@ -1,8 +1,6 @@
 package anyparse.check;
 
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.Check.Violation;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportBindings;
 import anyparse.query.IndexScope;
 import anyparse.query.SourceText;

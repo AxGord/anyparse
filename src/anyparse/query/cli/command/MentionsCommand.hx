@@ -8,11 +8,9 @@ import anyparse.query.Lit.LitHit;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Uses.UsesHit;
 import anyparse.query.cli.CliArgs;
-import anyparse.query.cli.CliContext;
 import anyparse.query.format.Text;
 import haxe.Exception;
 
-using StringTools;
 using Lambda;
 
 /**

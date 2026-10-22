@@ -2,11 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
-import anyparse.check.Check.Violation;
 import anyparse.check.DynamicShape.DynCtx;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.TreePath;
 import anyparse.query.TypeInfoProvider;

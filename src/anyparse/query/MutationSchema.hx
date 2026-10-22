@@ -4,7 +4,6 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 
 using Lambda;
-using StringTools;
 
 /** One declared arm handed to `MutationSchema.compose`: its run id, its address and the whole file with its cut applied. */
 typedef SchemaArm = {

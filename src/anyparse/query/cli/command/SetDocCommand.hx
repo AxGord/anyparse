@@ -2,13 +2,10 @@ package anyparse.query.cli.command;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
-import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliUsage;
 import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * Parsed options for `apq set-doc` — `lang`, `write` / `reformat`, the target `file`, the address

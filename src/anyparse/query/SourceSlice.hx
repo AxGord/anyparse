@@ -3,8 +3,6 @@ package anyparse.query;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Parser-agnostic source-slice helpers for the `--source` / `--doc`
  * render-layer opt-ins.

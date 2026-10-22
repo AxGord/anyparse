@@ -7,7 +7,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * FOLDING a conditional-compilation region a define DECIDES — the write-twin of `apq cond`, the

@@ -7,7 +7,6 @@ import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.CompilerFacts.TypeFact;
 
 using Lambda;
-using StringTools;
 
 /**
  * What target-language code reaches, read off the compiler's facts, under the stated assumption `FactsEscapes` makes — one

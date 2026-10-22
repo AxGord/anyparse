@@ -2,8 +2,6 @@ package anyparse.check;
 
 import anyparse.check.CheckScan.NegationSeams;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
-import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
 /**

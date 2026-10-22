@@ -12,7 +12,6 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;

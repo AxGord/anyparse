@@ -2,7 +2,6 @@ package unit.check;
 
 import anyparse.check.FoldStringLiterals;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 
 using StringTools;

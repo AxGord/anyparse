@@ -10,7 +10,6 @@ import anyparse.check.FixVerifier;
 import anyparse.check.PreferInline;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
-import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;

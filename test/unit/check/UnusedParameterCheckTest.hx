@@ -7,7 +7,6 @@ import anyparse.check.Severity;
 import anyparse.check.UnusedParameter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

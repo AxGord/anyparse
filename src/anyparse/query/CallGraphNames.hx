@@ -6,7 +6,6 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /** The name arithmetic `CallGraph` resolves with: type declarations, module names, dotted paths, written type heads. */
 @:nullSafety(Strict)

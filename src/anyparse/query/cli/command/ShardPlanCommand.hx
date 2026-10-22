@@ -5,9 +5,6 @@ import anyparse.query.ShardPlan.ClassWeight;
 import anyparse.query.ShardPlan.ShardPlacement;
 import anyparse.query.ShardPlan.ShardPlanResult;
 import anyparse.query.cli.CliArgs;
-import anyparse.query.cli.CliContext;
-
-using StringTools;
 
 /**
  * `apq shard-plan` — deal a runner's test classes onto N APQ_TEST shards.

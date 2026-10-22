@@ -9,7 +9,6 @@ import anyparse.query.CallSignature;
 import anyparse.query.CallSignature.ParamForm;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.NominalTypes;
-import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;

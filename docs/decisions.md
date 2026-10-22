@@ -5204,3 +5204,8 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 ## J0 (2026-10-21) — the JVM probe's `ClassFormatError`, bisected
 
 - the probe died on a wide structure from the typer / compiler-facts series → no: bisect names `1b172a012` (thread-safety R4 F1), whose `RefShape.operatorWriteKinds` was the grammar vocabulary's 255th field, one constructor slot past the JVM's 255 with the receiver → `1b172a012`
+
+## S229 (2026-10-22) — `import.hx` adoption by `hoist-common-import`
+
+- a path past its module (`pkg.Mod.field`, a macro-made `pkg.Mod.Sub`) binds an UNKNOWN name set → no: by the compiler's case rule it binds at most its leaf; the unknown answer made one function import a second binder of every statement and withheld whole directories → `bf7830896`
+- a statement is safe to add to a module that did not spell it once every name it binds keeps its meaning → no: `test/import.hx` carrying `utest.Assert` broke `recon.hxml`, a second `-main` compiling test helpers without utest; a receiver must already compile with the statement's classpath entry → `69c5fc500`

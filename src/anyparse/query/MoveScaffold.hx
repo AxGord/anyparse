@@ -8,7 +8,6 @@ import anyparse.query.MoveMember.ScaffoldField;
 import anyparse.query.MoveMember.ViaResult;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

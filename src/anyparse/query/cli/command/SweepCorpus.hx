@@ -9,7 +9,6 @@ import sys.io.File;
 #end
 
 using Lambda;
-using StringTools;
 
 /**
  * One fixture's census row — the same pair `bin/.last-sweep.json` records

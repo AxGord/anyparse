@@ -2,9 +2,6 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.MoveSymbol;
-import anyparse.query.cli.CliContext;
-
-using StringTools;
 
 /**
  * `apq move-member` — move members to another type (any package if all static), rewriting call sites.

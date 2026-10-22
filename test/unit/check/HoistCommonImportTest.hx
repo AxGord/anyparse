@@ -8,7 +8,6 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.StdResolver;
 import anyparse.runtime.Span;
 import haxe.io.Path;
-import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;

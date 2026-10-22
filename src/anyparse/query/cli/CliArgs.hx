@@ -1,7 +1,5 @@
 package anyparse.query.cli;
 
-using StringTools;
-
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.query.SourceText;

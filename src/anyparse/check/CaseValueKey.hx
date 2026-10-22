@@ -1,6 +1,5 @@
 package anyparse.check;
 
-import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 
 using StringTools;

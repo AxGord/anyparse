@@ -4,7 +4,6 @@ import anyparse.check.Check;
 import anyparse.check.DocMeasurementClaim;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

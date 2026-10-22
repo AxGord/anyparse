@@ -3,8 +3,6 @@ package anyparse.query;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Replace the comment at a cursor — the comment counterpart of `set-doc`
  * (which is declaration-doc-only and block-comment-only). Inline line

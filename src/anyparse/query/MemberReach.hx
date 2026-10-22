@@ -40,7 +40,6 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.ValueCarriers.CarryRelation;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

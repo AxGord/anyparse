@@ -2,12 +2,9 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.ReplaceNode.ReplaceTarget;
-import anyparse.query.cli.CliContext;
 import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq remove-element` — remove a sibling element by cursor (inverse of add-element).

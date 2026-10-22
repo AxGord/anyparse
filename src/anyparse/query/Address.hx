@@ -8,8 +8,6 @@ import anyparse.runtime.EditDistance;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
-
 /**
  * The outcome of resolving one target address: the byte offset the op's
  * downstream resolver consumes, plus the resolved node when the mode yields

@@ -5,8 +5,6 @@ import sys.io.File;
 import sys.FileSystem;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

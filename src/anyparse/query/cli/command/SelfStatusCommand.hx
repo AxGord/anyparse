@@ -2,12 +2,9 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs;
-import anyparse.query.cli.CliContext;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * Corpus-walk tallies for `apq self-status`: how many project files `parseable`, how many `skipParse`,

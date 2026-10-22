@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.MemberSlots.OrderedMember;
 import anyparse.query.FormatConfigDiscovery;
-import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
 
 using Lambda;

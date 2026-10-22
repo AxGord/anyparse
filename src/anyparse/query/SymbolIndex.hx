@@ -4,7 +4,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

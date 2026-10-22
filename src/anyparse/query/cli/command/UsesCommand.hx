@@ -4,12 +4,10 @@ import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.Uses.UsesHit;
 import anyparse.query.cli.CliArgs;
-import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliWalk;
 import anyparse.query.format.Text;
 import haxe.Exception;
 
-using StringTools;
 using Lambda;
 
 /**

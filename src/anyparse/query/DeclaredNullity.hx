@@ -7,7 +7,6 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /** How far a declared type is known to exclude null. */
 enum abstract Nullity(Int) {

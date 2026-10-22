@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;
-import anyparse.query.GrammarPlugin;
 
 using Lambda;
 

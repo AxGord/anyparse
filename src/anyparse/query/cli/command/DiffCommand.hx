@@ -2,11 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.Diff;
 import anyparse.query.ExitCode.*;
-import anyparse.query.cli.CliContext;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq diff` — structural AST diff between two files.

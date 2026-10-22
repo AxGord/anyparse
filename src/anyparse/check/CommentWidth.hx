@@ -1,13 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.query.CondRegionScan;
 import anyparse.query.FormatConfigDiscovery;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;

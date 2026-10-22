@@ -3,8 +3,6 @@ package unit.cli;
 import anyparse.query.Cli;
 import anyparse.query.ExitCode;
 import anyparse.query.cli.CliRegistry;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq <not-a-command>` answers with the nearest real names, not with the whole help page.

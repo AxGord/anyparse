@@ -5,8 +5,6 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
-
 /**
  * Add a member declaration to a type body — a structural INSERT
  * operation built on the query engine.

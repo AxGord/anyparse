@@ -18,7 +18,6 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * What a FACETED function node (`FactsView.bodyFacts`) contributes to a `CallGraph`

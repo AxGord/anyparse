@@ -1,7 +1,6 @@
 package unit.check;
 
 import anyparse.check.CompilerOracle;
-import anyparse.check.CompilerOracle.OracleBaseline;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCoverage;
 import anyparse.check.OracleRunMemo;

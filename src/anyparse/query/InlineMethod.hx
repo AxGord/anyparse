@@ -4,8 +4,6 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Inline a method / function into its call sites — the method analog of
  * `Inline` (inline-variable), and the third refactoring built on the

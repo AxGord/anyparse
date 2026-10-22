@@ -1,16 +1,13 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.query.CondRegionScan;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.ElementSpan;
 import anyparse.query.FieldWriteIndex;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberReach;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.ShapeVocab;

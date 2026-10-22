@@ -3,7 +3,6 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.Linter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

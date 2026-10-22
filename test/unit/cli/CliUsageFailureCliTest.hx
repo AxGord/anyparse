@@ -4,8 +4,6 @@ import anyparse.query.Cli;
 #if (sys || nodejs)
 import sys.FileSystem;
 #end
-import utest.Assert;
-import utest.Test;
 
 /**
  * `CliArgs.expectValue` / `parseLimit` / `pickPlugin` throw a plain-string

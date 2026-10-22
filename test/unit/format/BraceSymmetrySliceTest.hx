@@ -1,8 +1,6 @@
 package unit.format;
 
 import unit.grammar.haxe.HxWriteFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `whitespace.bracesConfig.singleStatementBraces: "symmetric"` - the ADD direction of a policy

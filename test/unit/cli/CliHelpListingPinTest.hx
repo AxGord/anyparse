@@ -2,8 +2,6 @@ package unit.cli;
 
 import anyparse.query.Cli;
 import anyparse.query.cli.CliRegistry;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

@@ -4,7 +4,6 @@ import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

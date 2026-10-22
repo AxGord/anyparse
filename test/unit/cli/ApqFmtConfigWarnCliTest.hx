@@ -4,8 +4,6 @@ package unit.cli;
 import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq: <hxformat.json>: N key(s) hxq does not implement …` is printed

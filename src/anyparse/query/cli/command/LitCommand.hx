@@ -8,12 +8,10 @@ import anyparse.query.Matcher.Match;
 import anyparse.query.SourceComments;
 import anyparse.query.cli.CliArgs.PositionalScan;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
-import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliWalk;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
 using Lambda;
 
 /**

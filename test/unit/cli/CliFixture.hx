@@ -1,7 +1,6 @@
 package unit.cli;
 
 import anyparse.core.TempScratch;
-import utest.Assert;
 #if (sys || nodejs)
 import haxe.Exception;
 import haxe.io.Path;

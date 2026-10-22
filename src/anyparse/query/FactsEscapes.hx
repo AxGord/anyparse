@@ -10,7 +10,6 @@ import anyparse.query.FactsNativeReach.NativeHand;
 import anyparse.query.GrammarPlugin.RefShape;
 
 using Lambda;
-using StringTools;
 
 /**
  * `ValueEscapes` read off the compiler's facts when they are the truth (`FactsView.truth`): the types whose instances may

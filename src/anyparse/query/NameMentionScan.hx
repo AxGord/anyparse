@@ -6,7 +6,6 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**

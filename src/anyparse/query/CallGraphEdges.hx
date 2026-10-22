@@ -16,7 +16,6 @@ import anyparse.query.ValueNameBinding.ModuleValues;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
 using Lambda;
 
 /**

@@ -5,7 +5,6 @@ import anyparse.check.PreferFinal;
 import anyparse.check.PreferFinalField;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

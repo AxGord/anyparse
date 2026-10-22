@@ -2,8 +2,6 @@ package unit.cli;
 
 import anyparse.query.Cli;
 import anyparse.query.cli.CliIo;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The walk progress heartbeat, gated on stderr being a TERMINAL.

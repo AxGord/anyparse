@@ -1,8 +1,6 @@
 package unit.cli;
 
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq mentions <Name>` answers the IMPORT that makes a simple name resolve.

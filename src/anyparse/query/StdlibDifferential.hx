@@ -5,7 +5,6 @@ import anyparse.query.StdlibDupScan.StdlibCandidate;
 import haxe.Exception;
 
 using Lambda;
-using StringTools;
 
 #if nodejs
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;

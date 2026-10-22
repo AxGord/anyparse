@@ -1,9 +1,6 @@
 package anyparse.query.cli.command;
 
-import anyparse.query.cli.CliContext;
 import anyparse.query.ExitCode.*;
-
-using StringTools;
 
 /**
  * `apq writer-probe` — emit trivia + plain writer outputs side-by-side.

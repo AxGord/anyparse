@@ -2,10 +2,8 @@ package anyparse.check;
 
 import anyparse.query.CondDirectives;
 import anyparse.query.ElementSpan;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.runtime.Span;

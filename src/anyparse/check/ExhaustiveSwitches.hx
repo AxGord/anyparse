@@ -3,8 +3,6 @@ package anyparse.check;
 import anyparse.check.FieldWrites.FieldWriteSite;
 import anyparse.check.HeldTrees.HeldDecl;
 import anyparse.query.CallGraph;
-import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;

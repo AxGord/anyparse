@@ -4,8 +4,6 @@ import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.LockSites.LockGive;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 

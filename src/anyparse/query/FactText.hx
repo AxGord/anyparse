@@ -6,8 +6,6 @@ import anyparse.query.CompilerFacts.FactPos;
 import haxe.Json;
 import haxe.io.Bytes;
 
-using StringTools;
-
 /**
  * The text side of the compiler facts: reading a facts line without parsing it, the content hash a facts file records
  * per file, and whether a fact the compiler placed at a source range is about the expression written there.

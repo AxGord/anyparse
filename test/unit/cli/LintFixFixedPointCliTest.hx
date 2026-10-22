@@ -5,8 +5,6 @@ import sys.io.File;
 #end
 import anyparse.query.Cli;
 import anyparse.query.cli.command.LintFixLedger;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end proof that `apq lint --fix` iterates to a FIXED POINT in a

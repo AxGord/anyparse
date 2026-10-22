@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.query.CallGraph;
 import anyparse.query.FactsView;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.ReachProject;
 import anyparse.query.SymbolIndex;

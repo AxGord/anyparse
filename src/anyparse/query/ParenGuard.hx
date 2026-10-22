@@ -4,8 +4,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
-
 /**
  * One edit staged for `ParenGuard.guard`: `text` replaces `span` in the source,
  * and each entry of `holes` is a range WITHIN `text` that was spliced in from

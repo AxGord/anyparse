@@ -1,9 +1,6 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;

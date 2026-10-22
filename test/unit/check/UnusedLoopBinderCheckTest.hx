@@ -6,7 +6,6 @@ import anyparse.check.Severity;
 import anyparse.check.UnusedLoopBinder;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

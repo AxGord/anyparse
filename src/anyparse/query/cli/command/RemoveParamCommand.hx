@@ -4,11 +4,8 @@ import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RemoveParam;
 import anyparse.query.SourceText;
-import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq remove-param` — remove a function parameter + call-site args.

@@ -6,7 +6,6 @@ import anyparse.check.PreferIfExpressionAssignment;
 import anyparse.check.PreferTernaryAssignment;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

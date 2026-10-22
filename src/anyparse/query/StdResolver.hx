@@ -5,9 +5,6 @@ import haxe.io.Path;
 #if nodejs
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 #end
-
-using StringTools;
-
 #if (sys || nodejs)
 import sys.FileSystem;
 #end

@@ -1,13 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.DeclaredNullity;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;

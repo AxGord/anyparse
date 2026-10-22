@@ -4,7 +4,6 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
-import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 

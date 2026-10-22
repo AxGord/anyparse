@@ -5,8 +5,6 @@ import anyparse.core.Renderer;
 import anyparse.format.IndentChar;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

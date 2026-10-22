@@ -2,16 +2,13 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
-import anyparse.check.Check.Violation;
 import anyparse.check.ElementLoopRewrite.BinderChoice;
 import anyparse.check.ElementLoopRewrite.ReachGate;
 import anyparse.check.LoopScan.IndexedLoopHeader;
 import anyparse.check.LoopScan.IntervalLoopSeams;
 import anyparse.check.LoopScan.LoopFileScan;
 import anyparse.check.LoopScan.LoopSeams;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;

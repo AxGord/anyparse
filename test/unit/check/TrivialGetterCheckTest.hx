@@ -6,7 +6,6 @@ import anyparse.check.Severity;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
-import unit.CheckFixture;
 import utest.Assert;
 
 /**

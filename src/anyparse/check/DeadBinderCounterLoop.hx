@@ -1,16 +1,13 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.LoopScan.LoopSeams;
 import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
-import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;

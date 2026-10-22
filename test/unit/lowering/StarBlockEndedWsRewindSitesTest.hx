@@ -6,8 +6,6 @@ import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxStatement;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The block-ended Star's whitespace rewind is emitted at FOUR macro sites, not one.

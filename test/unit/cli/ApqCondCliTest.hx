@@ -4,8 +4,6 @@ package unit.cli;
 import sys.FileSystem;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq cond <DEFINE> <scope>` — the branch BODIES of every `#if` region that mentions a define.

@@ -9,7 +9,6 @@ import haxe.Exception;
 import haxe.Json;
 
 using Lambda;
-using StringTools;
 
 /** One scoring bucket — a family, or the whole rule — counted over keys, not findings. */
 typedef LintScoreBucket = {

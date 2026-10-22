@@ -1,8 +1,6 @@
 package anyparse.check;
 
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
-import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;

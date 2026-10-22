@@ -4,8 +4,6 @@ import haxe.Exception;
 import unit.miniblock.MiniBlock;
 import unit.miniblock.MiniBlockParser;
 import unit.miniblock.MiniBlockWriter;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Session 2 pilot for the BlockBody Star tail-relax refactor

@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferIndexAccess;
 import anyparse.check.Severity;
-import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;

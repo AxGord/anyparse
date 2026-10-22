@@ -7,8 +7,6 @@ import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintFixDriver;
 import anyparse.query.cli.command.LintFixLedger;
-import utest.Assert;
-import utest.Test;
 
 /**
  * What a `--fix` run says when it wrote NOTHING, which is the run it usually is.

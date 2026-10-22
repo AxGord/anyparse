@@ -2,8 +2,6 @@ package unit.cli;
 
 import haxe.Exception;
 import haxe.io.Path;
-import utest.Assert;
-import utest.Test;
 #if (sys || nodejs)
 import sys.FileSystem;
 #end

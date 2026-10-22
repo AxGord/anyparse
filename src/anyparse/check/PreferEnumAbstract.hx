@@ -3,11 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan.ReflectionSurface;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

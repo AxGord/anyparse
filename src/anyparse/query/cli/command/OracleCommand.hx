@@ -6,11 +6,8 @@ import anyparse.check.LintConfig;
 import anyparse.check.OracleCache;
 import anyparse.check.OracleDeclaration;
 import anyparse.check.OracleGeneration;
-import anyparse.query.cli.CliContext;
 import anyparse.query.ExitCode.*;
 import haxe.io.Path;
-
-using StringTools;
 
 /**
  * `apq oracle` — typecheck the project once and record the verdict for lint.

@@ -3,9 +3,6 @@ package anyparse.query.cli.command;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.Clusters.ClusterReport;
 import anyparse.query.ExitCode.*;
-import anyparse.query.cli.CliContext;
-
-using StringTools;
 
 /**
  * `apq clusters` — partition a type's members by call-edge connectivity (hub bucket + components).

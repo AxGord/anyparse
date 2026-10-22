@@ -2,13 +2,10 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliCommand;
-import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliUsage;
 import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq set-comment` — the SINGLE-FILE EDIT shape of the command seam.

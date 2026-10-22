@@ -2,14 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.Check.Violation;
 import anyparse.check.MacroGate.CallRef;
 import anyparse.check.MacroGate.MacroIndex;
 import anyparse.query.DeclaredNullity;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;

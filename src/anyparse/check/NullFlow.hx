@@ -5,7 +5,6 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
-import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.RefsCache;
 import anyparse.query.ShapeVocab;

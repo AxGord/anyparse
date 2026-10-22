@@ -1,8 +1,6 @@
 package unit.cli;
 
 import unit.check.ProcessProbe;
-import utest.Assert;
-import utest.Test;
 
 /**
  * No `haxe --wait` server a `lint --fix` run starts outlives the run, however the run is ended: SIGTERM of `apq`, SIGKILL

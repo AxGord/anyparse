@@ -1,6 +1,5 @@
 package anyparse.query.cli;
 
-using StringTools;
 using Lambda;
 
 import anyparse.query.cli.CliWalk.QuerySkip;

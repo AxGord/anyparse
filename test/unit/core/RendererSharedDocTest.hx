@@ -3,8 +3,6 @@ package unit.core;
 import anyparse.core.Doc;
 import anyparse.core.Renderer;
 import haxe.Timer;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The renderer's search for a collapse candidate's `CollapseProbe` walks a Doc that is a DAG: a

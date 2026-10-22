@@ -4,8 +4,6 @@ import anyparse.check.LockAliases.Occurrence;
 import anyparse.check.LockWindow.HeldWindow;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.ReachAdmission;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;

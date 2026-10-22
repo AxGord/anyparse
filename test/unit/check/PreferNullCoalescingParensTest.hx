@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.PreferNullCoalescing;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

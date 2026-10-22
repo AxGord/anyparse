@@ -2,10 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
-import anyparse.query.cli.CliContext;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq symbols` — list top-level type declarations across a scope (cross-file).

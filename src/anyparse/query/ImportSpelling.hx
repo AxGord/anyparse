@@ -1,7 +1,5 @@
 package anyparse.query;
 
-using StringTools;
-
 /**
  * An `import` / `using` argument as the caller spelled it: the keyword it opened with, or null for
  * a bare module path, and the path with the keyword and the closing `;` taken off.

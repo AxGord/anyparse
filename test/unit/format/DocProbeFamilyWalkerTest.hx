@@ -3,8 +3,6 @@ package unit.format;
 import anyparse.core.Doc;
 import anyparse.format.wrap.BinaryChainEmit;
 import anyparse.format.wrap.WrapList;
-import utest.Assert;
-import utest.Test;
 
 /**
  * PROBE FAMILY walker sweep — the eight spine walkers that enumerated the `If*` ctors by hand and fell through

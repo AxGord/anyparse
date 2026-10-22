@@ -1,8 +1,6 @@
 package anyparse.check;
 
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.Check.Violation;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;

@@ -5,8 +5,6 @@ import anyparse.query.cli.CliArgs;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
 
-using StringTools;
-
 /**
  * The call graph `callees` / `callers` / `reach` / `clusters` all build.
  *

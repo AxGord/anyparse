@@ -16,7 +16,6 @@ import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * S-expression renderer for `apq ast` output.

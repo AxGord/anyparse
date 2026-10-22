@@ -3,7 +3,6 @@ package anyparse.query;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * Outcome of an `ExtractVar.extractVar` call. `Ok` carries the

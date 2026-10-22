@@ -8,8 +8,6 @@ import anyparse.query.ScopeFiles.ParsedFile;
 import anyparse.query.ScopeFiles.ScopeParse;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Outcome of a `CrossRename.crossRenameType` call. `Ok` carries the
  * per-file rewrites (only files that actually changed) plus a non-null

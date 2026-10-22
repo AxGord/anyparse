@@ -2,8 +2,6 @@ package unit.core;
 
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `DocMeasure.pushFillReversed` — a fill's items land on the flat-walk stack last first with the

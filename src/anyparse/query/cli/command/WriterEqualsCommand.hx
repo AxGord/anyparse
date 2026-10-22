@@ -1,11 +1,8 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
-import anyparse.query.cli.CliContext;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq writer-equals` — byte-equality check on writer output (trivia + --plain).

@@ -77,7 +77,6 @@ import anyparse.query.cli.command.WriterEqualsCommand;
 import anyparse.query.cli.command.WriterProbeCommand;
 
 using Lambda;
-using StringTools;
 
 /**
  * The inventory of `apq` subcommands the dispatcher and `apq --help` both read.

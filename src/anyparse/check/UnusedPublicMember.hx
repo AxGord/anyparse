@@ -4,17 +4,14 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.Check.Violation;
 import anyparse.check.PublicReach.MemberRun;
 import anyparse.query.ElementSpan;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

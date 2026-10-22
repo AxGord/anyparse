@@ -2,7 +2,6 @@ package unit.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.UnusedPrivate;
-import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;

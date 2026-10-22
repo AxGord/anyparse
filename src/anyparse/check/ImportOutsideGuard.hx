@@ -1,13 +1,10 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportBindings;
 import anyparse.query.ImportOrder;
 import anyparse.query.IndexScope;
 import anyparse.query.ModuleScan;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

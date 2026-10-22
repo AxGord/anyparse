@@ -22,7 +22,6 @@ import anyparse.runtime.Span;
 import haxe.Json;
 
 using Lambda;
-using StringTools;
 
 /**
  * A facts file's NODE record (`{"k":"node",…}`, written by `TypedFactsMacro`) and its decoding into the

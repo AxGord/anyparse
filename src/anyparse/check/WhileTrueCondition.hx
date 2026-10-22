@@ -1,13 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
 import anyparse.check.LoopScan.LoopJumpSeams;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

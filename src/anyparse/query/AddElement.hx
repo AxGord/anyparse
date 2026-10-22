@@ -12,7 +12,6 @@ import anyparse.runtime.Span;
 import haxe.ds.Either;
 
 using Lambda;
-using StringTools;
 
 /**
  * Which side of the cursor's element the new element is inserted on.

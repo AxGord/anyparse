@@ -11,7 +11,6 @@ import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

@@ -7,7 +7,6 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * `encapsulate-field` — turn a stored `var` field into a property with

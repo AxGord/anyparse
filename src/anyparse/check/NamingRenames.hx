@@ -1,12 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.CrossFileEdits;
-import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan.ScopeFile;
 import anyparse.query.AllowGrants;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.NamingPolicy.ImplicitReach;
 import anyparse.query.NamingPolicy.NamedDecl;
@@ -16,7 +14,6 @@ import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.Rename;

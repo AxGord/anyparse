@@ -1,6 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
 import anyparse.check.IfExpressionChain.Carried;
 import anyparse.check.IfExpressionChain.CarrySeat;
@@ -8,9 +7,7 @@ import anyparse.check.SwitchChain.ChainScope;
 import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;

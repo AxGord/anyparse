@@ -1,7 +1,6 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.QueryNode;
 
 /**
  * The parameters of a function that decide two or more of its `if`s, that nothing in it writes and whose name

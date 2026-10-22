@@ -3,8 +3,6 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Metadata-on-declaration walker for `apq meta`.
  *

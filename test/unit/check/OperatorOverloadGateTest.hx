@@ -11,7 +11,6 @@ import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

@@ -6,7 +6,6 @@ import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 
 using Lambda;
-using StringTools;
 
 /**
  * The simple names ONE import-family line binds, split by the RANK the compiler resolves them at.

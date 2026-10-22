@@ -4,8 +4,6 @@ package unit.cli;
 import sys.FileSystem;
 #end
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq lit --include-directives` / `--kind Directive` — the conditional-compilation reach of the

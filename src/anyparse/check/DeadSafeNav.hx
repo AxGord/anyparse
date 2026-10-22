@@ -1,10 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
-import anyparse.check.Check.Violation;
 import anyparse.check.NullFlowScan.IdentOperand;
 import anyparse.query.DeclaredNullity;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;

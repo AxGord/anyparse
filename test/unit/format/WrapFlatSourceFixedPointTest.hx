@@ -7,8 +7,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatFixedPoint;
-import utest.Assert;
-import utest.Test;
 
 /**
  * ω-flat-source-fixed-point — ONE writer round trip must land where every

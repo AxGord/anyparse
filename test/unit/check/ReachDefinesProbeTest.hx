@@ -2,7 +2,6 @@ package unit.check;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.ReachDefinesProbe;
-import anyparse.check.ReachDefinesProbe.AheadBuilds;
 import anyparse.core.TempScratch;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import haxe.Exception;

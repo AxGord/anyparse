@@ -11,7 +11,6 @@ import anyparse.runtime.Span;
 import haxe.ds.Either;
 
 using Lambda;
-using StringTools;
 
 /**
  * `extract-constant` ADDRESSED mode — move ONE expression into a `static final` of a type that may live in

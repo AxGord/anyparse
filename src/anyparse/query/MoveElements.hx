@@ -8,8 +8,6 @@ import anyparse.runtime.Span;
 import haxe.crypto.Md5;
 import haxe.ds.Either;
 
-using StringTools;
-
 /**
  * `move-elements` — move a contiguous SLICE of one array literal's elements into another array literal, in
  * another member or another module, keeping their order and text: the split a long hand-kept list takes when it

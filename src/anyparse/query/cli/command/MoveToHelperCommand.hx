@@ -2,11 +2,9 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.MoveSymbol;
-import anyparse.query.cli.CliContext;
 import haxe.Exception;
 
 using Lambda;
-using StringTools;
 
 /**
  * `apq move-to-helper` — move members of a class into a static helper type that takes the class as its first parameter.

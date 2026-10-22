@@ -1,12 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.MemberSlots.MemberRank;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.HoistedConstant;
@@ -14,7 +12,6 @@ import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
-import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;

@@ -7,7 +7,6 @@ import anyparse.runtime.SameItems;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * The conditional-compilation branch projection: the pure `(tree, source, seams) -> tree` rewrite

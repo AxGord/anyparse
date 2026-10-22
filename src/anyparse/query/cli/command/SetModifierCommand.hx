@@ -3,11 +3,8 @@ package anyparse.query.cli.command;
 import anyparse.check.CheckScan;
 import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * `apq set-modifier` — flip visibility / add-remove modifiers at a cursor (no retype).

@@ -9,7 +9,6 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 
 using Lambda;
-using StringTools;
 
 /**
  * Backend for `apq new` — deterministic file CREATION, the create-side

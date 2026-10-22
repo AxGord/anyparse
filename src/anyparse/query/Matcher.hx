@@ -5,8 +5,6 @@ import anyparse.query.Pattern.Metavar;
 import anyparse.query.Pattern.PatternStar;
 import anyparse.runtime.Span;
 
-using StringTools;
-
 /**
  * Pattern-vs-input structural matcher for `apq search`.
  *

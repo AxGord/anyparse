@@ -1,8 +1,6 @@
 package unit.cli;
 
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq lit` (and the shared `CliWalk.effectiveAutoLimit` / `limitEntries` / `reportCapHit` seam it

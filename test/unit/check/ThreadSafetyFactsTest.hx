@@ -10,7 +10,6 @@ import anyparse.check.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
-import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;

@@ -1,8 +1,6 @@
 package unit.runtime;
 
 import anyparse.runtime.CommonPrefix;
-import utest.Assert;
-import utest.Test;
 
 /** `CommonPrefix.of` — the longest shared prefix, character for character, and the empty string when the first characters differ. */
 class CommonPrefixTest extends Test {

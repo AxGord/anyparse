@@ -1,7 +1,5 @@
 package anyparse.query;
 
-using StringTools;
-
 #if (sys || nodejs)
 import sys.FileSystem;
 #end

@@ -8,7 +8,6 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;

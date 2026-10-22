@@ -1,9 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.LambdaLoopScan.LambdaLoopKind;
-import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

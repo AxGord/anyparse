@@ -4,15 +4,12 @@ import anyparse.check.Check.OracleType;
 import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitType;
 import anyparse.check.FactsTypeOracle;
-import anyparse.check.FactsTypeOracle.FactsDecline;
 import anyparse.check.FactsTypeSpelling;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CompilerFacts;
-import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.EditJournal;
 import anyparse.query.FactText;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 

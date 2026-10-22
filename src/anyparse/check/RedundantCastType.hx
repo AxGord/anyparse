@@ -1,12 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.ExpectedType.CastScan;
 import anyparse.check.ExpectedType.CastSite;
 import anyparse.check.ExpectedType.FileTypes;
-import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;

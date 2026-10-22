@@ -25,7 +25,6 @@ import anyparse.query.LintDiff.LintDiffTally;
 import anyparse.query.LintDiff.LintMessageIdentities;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SourceText;
-import anyparse.query.cli.CliContext;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
@@ -34,7 +33,6 @@ import haxe.io.Path;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 
-using StringTools;
 using Lambda;
 
 #if (sys || nodejs)
