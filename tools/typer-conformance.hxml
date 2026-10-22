@@ -3,8 +3,8 @@
 # facts. Build from the repo root; the artifact is gitignored.
 #
 #   haxe tools/typer-conformance.hxml
-#   node bin/typer-conformance.js upstream <haxe-4.3.7-clone> [--list]
-#   (cd <project> && node <anyparse>/bin/typer-conformance.js facts [<configuration>] [--list])
+#   node bin/typer-conformance.js upstream <haxe-4.3.7-clone> [--list] [--census]
+#   (cd <project> && node <anyparse>/bin/typer-conformance.js facts [<configuration>] [--list] [--census])
 -cp src
 -cp tools
 -main TyperConformance

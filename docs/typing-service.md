@@ -119,6 +119,24 @@ FU28 below). Left, by size after T5 (below) closed the `@:overload` returns: a `
 project library declares with a type, and the code of an inlined body at a call's range (FU32 below took the
 inlined-default-argument family out of the scored set and the package-blind namesake return out of the answers).
 
+`--census` says where the UNKNOWN answers come from, without touching the table: it prints after it, and the table
+is byte-identical with and without the flag. Each UNKNOWN type answer, in each currency, is walked from the expression
+asked through what it is made of — an identifier to its binding, a call to its callee, a member access to its receiver, a
+declaration to its initializer — to the first thing the typer could not answer, and rooted there (`UnknownCauses`). The
+roots are the three inference forms (`F1-local-monomorph`: a local declared without a type or a local function's
+parameter; `F2-inferred-signature`: a member written without its return or field type; `F3-lambda-parameter` and
+`F3-literal-or-lambda-value`: a type the expected type gives) and the gaps that need no inference: the doors of the index
+host (`type-expression`, `declaration-node`, `string-segment`, `check-type`), `member-not-found`,
+`declared-type-not-read`, `pattern-capture`, `loop-element`, `index-access`, `construction`, `operator-result`, `other`.
+Lines: `CENSUS <currency> <area> <root> <n>`; `CENSUS-CAUSE <currency> <root> <detail> <n> <samples>`, the walk's own
+reason under a root (for `F3-lambda-parameter`, what the callee declares at the lambda's position — not declared on the
+receiver type, a method or a class type parameter, a concrete type); per currency `CENSUS-UNKNOWN <currency> <unknown>
+<cases> <unknown%>` (the share of the scored answers, as the table counts it) and `CENSUS-TOTAL <currency> <root> <n>
+<share of the UNKNOWN>`. The roots of a currency sum to its UNKNOWN answers or the run fails. The roots are an estimate that measures
+the typer, never an answer of it: a kind with no rule is rooted at its first unanswered child, a callee parameter naming
+a lone capital letter is taken for a class type parameter, and `member-not-found` does not tell a static extension from a
+std gap. Readings: `docs/journal/testing-log.md`.
+
 ## Where T2–T5 plug in
 
 - **T2 — ancestor table, `unify` memo (done, FU4).** `AncestorTable` (`index.typing.ancestors`): each declaration's

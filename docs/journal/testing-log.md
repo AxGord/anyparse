@@ -4346,3 +4346,50 @@ checks=193 findings=998`. `unit.JvmStructureWidthTest` run from a checkout of `e
 (`HaxeRefShape.hx:280: object literal 274 slots`, `GrammarPlugin.hx:457: RefShape 276 slots`) and is green on
 `1b172a012~1`. The widest anonymous constructor left in the jar is the macro-generated writer options (223
 arguments, 224 slots) — a structure the source sweep cannot see.
+
+## T7h (2026-10-22) — `typer-conformance --census`: where the UNKNOWN answers come from
+
+On `a70309399`. The tables of both sources are byte-identical with and without `--census` (`cmp` of the whole `--list`
+output, the `CENSUS*` lines taken out), and the new binary's output without the flag is byte-identical to the base
+binary's. The roots of each currency sum to its UNKNOWN exactly (the run checks it and throws otherwise).
+
+**The brief's anyparse share was a denominator slip.** `facts` on anyparse (`test-js.hxml`, 2272 project files, 1851
+compiled): source 520 318 cases / 341 562 MATCH / 178 756 UNKNOWN / 0 DIFFERENT; nominal 520 318 / 345 190 / 175 128 / 0.
+The T7-0 brief's "оценено 341 562, UNKNOWN 52.3 %" divided by the MATCH count (its aggregator read the `match` column as
+the case count); the share of the scored answers is **34.4 %** source, **33.7 %** nominal. The per-root "% of UNKNOWN"
+figures were right. `CENSUS-UNKNOWN` now prints the share the table counts, so no aggregator is needed.
+
+anyparse roots, `<n> (% of UNKNOWN)`, source / nominal — every brief § 2 row reproduced exactly; its "прочее" 8 107 is
+`string-segment` 4 923 + `other` 3 184 (nominal: 4 923 + 2 328):
+
+| root | source | nominal |
+|---|---:|---:|
+| `type-expression` | 49 091 (27.5) | 49 091 (28.0) |
+| `declaration-node` | 47 238 (26.4) | 47 238 (27.0) |
+| `member-not-found` | 14 478 (8.1) | 13 291 (7.6) |
+| `declared-type-not-read` | 14 228 (8.0) | 13 749 (7.9) |
+| `F3-lambda-parameter` | 11 952 (6.7) | 11 952 (6.8) |
+| `pattern-capture` | 9 479 (5.3) | 9 479 (5.4) |
+| `loop-element` | 5 357 (3.0) | 8 692 (5.0) |
+| `string-segment` | 4 923 (2.8) | 4 923 (2.8) |
+| `index-access` | 4 739 (2.7) | 4 741 (2.7) |
+| `F3-literal-or-lambda-value` | 4 683 (2.6) | 4 683 (2.7) |
+| `construction` | 4 450 (2.5) | — |
+| `other` | 3 184 (1.8) | 2 328 (1.3) |
+| `operator-result` | 2 533 (1.4) | 2 540 (1.5) |
+| `check-type` | 1 607 (0.9) | 1 607 (0.9) |
+| `F2-inferred-signature` | 812 (0.5) | 812 (0.5) |
+| `F1-local-monomorph` | 2 (0.0) | 2 (0.0) |
+
+`F3-lambda-parameter` by `CENSUS-CAUSE` (source): callee not declared on the receiver type 4 428, callee parameter names a
+method type parameter 1 772, a class type parameter 1 745, callee bound to a member (bare call) 1 365, concrete parameter
+1 303, receiver untyped 770, object field 269, annotated local 152, return 84. `F2`: member field without a type 764,
+member function without a return type 44, local function 4.
+
+upstream (Haxe 4.3.7 `tests/display` + `tests/misc`): source 173 cases / 120 UNKNOWN (69.4 %), nominal 173 / 118
+(68.2 %), DIFFERENT 0. Roots, source: `F2` 1, `F3-lambda-parameter` 1, `F3-literal-or-lambda-value` 9, `other` 54,
+`declaration-node` 14, `member-not-found` 10, `declared-type-not-read` 6, `type-expression` 6, `operator-result` 5,
+`construction` 5, `check-type` 5, `pattern-capture` 2, `loop-element` 1, `string-segment` 1 — the scratch classifier's
+buckets exactly, its "other" 55 = `other` 54 + `string-segment` 1.
+
+Pony was not re-measured here (the worker had no access to the Pony tree).
