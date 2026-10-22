@@ -149,8 +149,8 @@ function testCurlyLispRoundTrip() {
 Not unit tests. Separate binaries that measure throughput and memory on realistic inputs. The goal is to detect performance regressions between commits and to compare anyparse against the tools it is replacing (haxe-formatter, ax3, native `JSON.parse`).
 
 Benchmarks target each Haxe backend separately because performance differs significantly:
-- `tools/parse-prof.hxml` — Node.js, the target everything ships on today
-- `tools/bench-hxcpp.hxml` — native, the same `tools/ParseProf.hx` over the same
+- `node bin/dev.js parse-prof` (`tools/dev.hxml`) — Node.js, the target everything ships on today
+- `tools/bench-hxcpp.hxml` — native, the same `tools/src/dev/ParseProf.hx` over the same
   `src/` with the same `-D analyzer-optimize`, so the two arms differ only in
   the backend
 
@@ -162,46 +162,46 @@ Each benchmark outputs structured JSON with throughput, timing breakdowns, and m
 
 ### The profiling harness
 
-`tools/ParseProf.hx` builds straight out of `src/` with the flags the shipped CLI uses, so what you profile is the codegen that ships:
+`tools/src/dev/ParseProf.hx` builds straight out of `src/` with the flags the shipped CLI uses, so what you profile is the codegen that ships:
 
 ```sh
-haxe tools/parse-prof.hxml                                  # -> bin/parse-prof.js
-node bin/parse-prof.js tparse src 1 hxformat.json
-node --cpu-prof --cpu-prof-interval=200 bin/parse-prof.js rt src 3 hxformat.json
+haxe tools/dev.hxml                                         # -> bin/dev.js
+node bin/dev.js parse-prof tparse src 1 hxformat.json
+node --cpu-prof --cpu-prof-interval=200 bin/dev.js parse-prof rt src 3 hxformat.json
 ```
 
-The native twin is `tools/bench-hxcpp.hxml`. Point `HXCPP_COMPILE_CACHE` at a persistent directory (or every build is cold), and pass the binary to `tools/bench-ab.sh` as any other arm — an arm path that does not end in `.js` is executed directly instead of under `node`:
+The native twin is `tools/bench-hxcpp.hxml`. Point `HXCPP_COMPILE_CACHE` at a persistent directory (or every build is cold), and pass the binary to `node bin/dev.js bench-ab` as any other arm — a `.js` arm is a `bin/dev.js` build run as `node <arm> parse-prof …`, any other arm is executed directly:
 
 ```sh
 HXCPP_COMPILE_CACHE=~/.hxcpp_cache haxe tools/bench-hxcpp.hxml   # -> bin/parse-prof-cpp/ParseProf
-ANYPARSE_BENCH_EXTRA=<manifest> CLIENT_SRC=<other-tree>/src tools/bench-ab.sh [--config <other-tree>/hxformat.json] \
-  tparse tools/bench-corpus.txt 9 6 \
-  js:bin/parse-prof.js cpp:bin/parse-prof-cpp/ParseProf
+ANYPARSE_BENCH_EXTRA=<manifest> CLIENT_SRC=<other-tree>/src node bin/dev.js bench-ab [--config <other-tree>/hxformat.json] \
+  tparse tools/data/bench-corpus.txt 9 6 \
+  js:bin/dev.js cpp:bin/parse-prof-cpp/ParseProf
 ```
 
 There is no `--cpu-prof` on a native binary; the equivalent is macOS `sample`, and it needs symbols the release link strips. Rebuild the SAME objects with `-D no_gcc_strip` into a scratch output (the compile cache makes it a relink, so the code being sampled is the code that was timed), then sample the run; read the capture per THREAD, since hxcpp's idle GC threads swamp the flat list, and resolve `??? + 0x<offset>` frames against `nm -n` with a `0x100000000` base:
 
 ```sh
-haxe -cp src -cp tools -main ParseProf -D analyzer-optimize -D no_gcc_strip -cpp /tmp/pp-sym
-/tmp/pp-sym/ParseProf tparse tools/bench-corpus.txt 90 hxformat.json & sample $! 30 1 -f /tmp/pp.sample
+haxe -cp src -cp tools/src -main dev.ParseProf -D analyzer-optimize -D no_gcc_strip -cpp /tmp/pp-sym
+/tmp/pp-sym/ParseProf tparse tools/data/bench-corpus.txt 90 hxformat.json & sample $! 30 1 -f /tmp/pp.sample
 ```
 
-Arguments are `<mode> <dir-or-manifest> [reps] [hxformat.json]`; a directory is walked for `.hx`, anything else is read as a manifest of paths with `#` comments, `${NAME}` environment expansion and `@<manifest>` includes (`tools/bench-corpus.txt` is the calibrated one; its other half is a manifest kept outside the repository, included through `@${ANYPARSE_BENCH_EXTRA}` and naming `${CLIENT_SRC}/...` paths — both unset, the corpus is the anyparse-only half). The modes stack from the IO floor upwards — `read`, `tparse` (Fast-mode parser), `walk` (plus the `QueryNode` projection), `write` (writer alone, with the feeding parse subtracted), `rt` (exactly what `hxq fmt` runs), `lint`, and `perfile` for a per-file TSV that feeds corpus stratification. Each workload runs inside its own `phaseXxx` function so a V8 `--cpu-prof` tree can be attributed by nearest phase ancestor.
+Arguments are `<mode> <dir-or-manifest> [reps] [hxformat.json]`; a directory is walked for `.hx`, anything else is read as a manifest of paths with `#` comments, `${NAME}` environment expansion and `@<manifest>` includes (`tools/data/bench-corpus.txt` is the calibrated one; its other half is a manifest kept outside the repository, included through `@${ANYPARSE_BENCH_EXTRA}` and naming `${CLIENT_SRC}/...` paths — both unset, the corpus is the anyparse-only half). The modes stack from the IO floor upwards — `read`, `tparse` (Fast-mode parser), `walk` (plus the `QueryNode` projection), `write` (writer alone, with the feeding parse subtracted), `rt` (exactly what `hxq fmt` runs), `lint`, and `perfile` for a per-file TSV that feeds corpus stratification. Each workload runs inside its own `phaseXxx` function so a V8 `--cpu-prof` tree can be attributed by nearest phase ancestor.
 
-Measurement hygiene lives in `tools/bench-ab.sh`, and the rule it exists to enforce is that a before/after pair timed minutes apart on a shared machine drifts by more than the effects being measured: arms are interleaved and the per-arm median is what gets quoted. Battery timings are the opposite kind of number — deliberately concurrent wall clock — and must never be quoted as benchmark results.
+Measurement hygiene lives in `dev bench-ab`, and the rule it exists to enforce is that a before/after pair timed minutes apart on a shared machine drifts by more than the effects being measured: arms are interleaved and the per-arm median is what gets quoted. Battery timings are the opposite kind of number — deliberately concurrent wall clock — and must never be quoted as benchmark results.
 
-### Reading a capture: `tools/ProfTop.hx`
+### Reading a capture: `dev prof-top`
 
 A `.cpuprofile` is a call tree, not a report. `ProfTop` rolls one up by SELF time per function and prints the top rows:
 
 ```sh
 node --cpu-prof --cpu-prof-dir=/tmp/prof --cpu-prof-interval=200 \
-  bin/parse-prof.js tparse tools/bench-corpus.txt 2 hxformat.json
-haxe -cp tools --run ProfTop /tmp/prof/*.cpuprofile 20
-haxe -cp tools --run ProfTop /tmp/prof/*.cpuprofile 10 --under phaseWrite
+  bin/dev.js parse-prof tparse tools/data/bench-corpus.txt 2 hxformat.json
+node bin/dev.js prof-top /tmp/prof/*.cpuprofile 20
+node bin/dev.js prof-top /tmp/prof/*.cpuprofile 10 --under phaseWrite
 ```
 
-No build step — it is a `--run` script over the std library (`--interp` does not work: it eats the trailing arguments as its own). Self time comes from `samples` + `timeDeltas` rather than `hitCount`, so a custom `--cpu-prof-interval` still reports real microseconds. `--under <fn>` narrows the rollup to samples whose stack passes through a frame of that name; it matches the rendered row label, and Haxe class names do not survive into JS frame names, so `--under phaseWrite` works where `--under CompilerServer` matches nothing.
+Self time comes from `samples` + `timeDeltas` rather than `hitCount`, so a custom `--cpu-prof-interval` still reports real microseconds. `--under <fn>` narrows the rollup to samples whose stack passes through a frame of that name; it matches the rendered row label, and Haxe class names do not survive into JS frame names, so `--under phaseWrite` works where `--under CompilerServer` matches nothing.
 
 Two reading rules. **`spawnSync` and friends are BLOCKED WAIT, not CPU**: a profile samples whatever frame is on the stack, and a synchronous child-process call sits there for the whole child's lifetime, so a fat `spawnSync` row says "we waited on children" and optimising our own code cannot shrink it. And read a profile for SHARES, taking deltas from a separate unprofiled run: `--cpu-prof` overhead is not uniform across trees, so a profiled before/after pair is not a delta.
 
@@ -640,7 +640,7 @@ It is a portability PROBE, not a dependency: nothing anyparse ships needs a JVM.
 
 #### What the probe actually covers — NOT a package
 
-`src/anyparse/query` and `src/anyparse/check` are the probe's **default input** — the files it READS and lints (`JvmPortability.DEFAULT_SCOPE`), not a coverage claim. What it **compiles** is `-main JvmPortability` with `-cp src -cp tools`, and Haxe types only the modules that main reaches: `anyparse/query/cli` contributes **zero** entries to the jar, and the addressing/mutation family (`Address`, `Patch`, `ReplaceNode`, `Selector`, `Engine`, `NewFile`, `MoveSymbol`, `MutationVerdict`, …) and the oracle family (`OracleCache`, `CompilerServer`, `CompilerOracle`, `HaxeSpawn`, `FixVerifier`, `OracleCoverage`) are absent too. So a green probe after a slice in `query/cli` proves the slice's code compiles for **js**, and nothing more. `tools/battery.sh` gets the trigger right — it re-runs the probe when anything under `src`, `tools/JvmPortability.hx` or the hxml moved. Widening what the probe TYPES is a separate question (`--macro include('anyparse.query.cli')`, which would first have to survive `-lib hxnodejs` not being there).
+`src/anyparse/query` and `src/anyparse/check` are the probe's **default input** — the files it READS and lints (`JvmPortability.DEFAULT_SCOPE`), not a coverage claim. What it **compiles** is `-main dev.JvmPortability` with `-cp src -cp tools/src`, and Haxe types only the modules that main reaches: `anyparse/query/cli` contributes **zero** entries to the jar, and the addressing/mutation family (`Address`, `Patch`, `ReplaceNode`, `Selector`, `Engine`, `NewFile`, `MoveSymbol`, `MutationVerdict`, …) and the oracle family (`OracleCache`, `CompilerServer`, `CompilerOracle`, `HaxeSpawn`, `FixVerifier`, `OracleCoverage`) are absent too. So a green probe after a slice in `query/cli` proves the slice's code compiles for **js**, and nothing more. `tools/battery.sh` gets the trigger right — it re-runs the probe when anything under `src`, `tools/src/dev/JvmPortability.hx` or the hxml moved. Widening what the probe TYPES is a separate question (`--macro include('anyparse.query.cli')`, which would first have to survive `-lib hxnodejs` not being there).
 
 #### Reading the two output lines
 
@@ -824,6 +824,15 @@ and are discovered like any other; a tool test may spawn `node -e` scripts or `g
 scrub list (its parity fixtures are synthetic). A command run alone (not through a pool) is killed on timeout, but a
 child it spawned is not — route a command that forks through `Pool`.
 
+Subcommands: `scrub-guard`, `clone-census`, `worker-build`, `tmp-lifecycle`, `fixture-cache shim|prune|tally`,
+`jvm-portability`, `typer-conformance`, `edge-diff`, `parse-prof`, `prof-top`, `bench-ab`, `lint-warn` (the body of
+`tools/hooks/hxq-lint-warn.sh` — the hook stays silent without a built `bin/dev.js`), `gate-probe`, `lint-warn-probe` (the
+two hooks' acceptance matrices). The Haxe tools live in `tools/src/dev` (package `dev`); `tools/jvm-portability.hxml` and
+`tools/bench-hxcpp.hxml` compile `dev.JvmPortability` / `dev.ParseProf` for `--jvm` / hxcpp, because that compile is the
+check. Data lives in `tools/data/`. `tools/tmp-lifecycle.sh`, `tools/fixture-cache.sh` (sourced) and
+`tools/worker-build.sh` stay until their shell callers move; their twins are `devkit.TmpLifecycle`, `devkit.FixtureCache`
+and `dev.WorkerBuild`, and `TmpLifecycleTest` holds the two sweep predicates to one answer.
+
 ### Scratch directories: every tool's, and who removes them
 
 Six tools create a directory under `TMPDIR`, and every one removes it or leaves it claimed for the startup sweep — a directory kept forever is how a disk fills.
@@ -887,7 +896,7 @@ apq sweep --run --corpus <dir> --save <path>   # a census of any fixture tree
 
 ### The cross-config `--one-pass` arm
 
-The `fmt` branch's first two arms pair each tree with its own `hxformat.json`. Between them they cover two (tree, config) pairs and no third, and the third is where the writer's convergence tail lives: a file settles in one rewrite under one config and needs two under another, so "`--one-pass` is green here" says nothing about any config but ours. The third arm formats `src test tools` under `tools/xconfig-hxformat.json` — a vendored, fully specified config kept in the repo so the arm is hermetic (the source tree's working copy differs from its committed one; re-vendor from a commit). It runs on a scratch root of SYMLINKS with the vendored config at the root, because config discovery walks up from each file's directory lexically, so an interrupted battery cannot leave the repo holding a foreign config the way a swap could.
+The `fmt` branch's first two arms pair each tree with its own `hxformat.json`. Between them they cover two (tree, config) pairs and no third, and the third is where the writer's convergence tail lives: a file settles in one rewrite under one config and needs two under another, so "`--one-pass` is green here" says nothing about any config but ours. The third arm formats `src test tools` under `tools/data/xconfig-hxformat.json` — a vendored, fully specified config kept in the repo so the arm is hermetic (the source tree's working copy differs from its committed one; re-vendor from a commit). It runs on a scratch root of SYMLINKS with the vendored config at the root, because config discovery walks up from each file's directory lexically, so an interrupted battery cannot leave the repo holding a foreign config the way a swap could.
 
 What it gates is narrow on purpose. `--list` is NOT a gate here — under a foreign config the whole tree legitimately drifts. The gate is the `--one-pass` SET, compared for EQUALITY against a baseline written into `branch_fmt` (a file leaving the set is progress in the convergence tail and belongs in the list as much as one joining it). A set comparison alone would be satisfiable by a PARTIAL run, so the arm additionally requires the run's own `apq fmt --list:` summary line, printed last, as the completion proof; both summary lines are replayed to stderr rather than re-derived, and the arm silences the config advisory (`APQ_NO_CONFIG_WARN=1`).
 

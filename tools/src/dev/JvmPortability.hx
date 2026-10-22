@@ -1,3 +1,5 @@
+package dev;
+
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;

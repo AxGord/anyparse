@@ -16,7 +16,19 @@ final class Dev {
 	/** Each subcommand with its entry and its usage line, in the order `--help` lists them. */
 	private static final COMMANDS: Array<Subcommand> = [
 		{ name: 'scrub-guard', main: ScrubGuard.main, usage: ScrubGuard.USAGE },
-		{ name: 'clone-census', main: CloneCensus.main, usage: CloneCensus.USAGE }
+		{ name: 'clone-census', main: CloneCensus.main, usage: CloneCensus.USAGE },
+		{ name: 'worker-build', main: WorkerBuild.main, usage: WorkerBuild.USAGE },
+		{ name: 'tmp-lifecycle', main: Tmp.main, usage: Tmp.USAGE },
+		{ name: 'fixture-cache', main: FixtureCacheCli.main, usage: FixtureCacheCli.USAGE },
+		{ name: 'jvm-portability', main: JvmProbe.main, usage: JvmProbe.USAGE },
+		{ name: 'typer-conformance', main: TyperConformance.main, usage: TyperConformance.USAGE },
+		{ name: 'edge-diff', main: EdgeDiff.main, usage: EdgeDiff.USAGE },
+		{ name: 'parse-prof', main: ParseProf.run, usage: ParseProf.USAGE },
+		{ name: 'prof-top', main: ProfTop.main, usage: ProfTop.USAGE },
+		{ name: 'bench-ab', main: BenchAb.main, usage: BenchAb.USAGE },
+		{ name: 'lint-warn', main: LintWarn.main, usage: LintWarn.USAGE },
+		{ name: 'gate-probe', main: HookProbe.gate, usage: HookProbe.GATE_USAGE },
+		{ name: 'lint-warn-probe', main: HookProbe.lintWarn, usage: HookProbe.LINT_WARN_USAGE }
 	];
 
 	public static function main(): Void {

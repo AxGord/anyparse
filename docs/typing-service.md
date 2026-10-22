@@ -78,7 +78,7 @@ answer that read them is one the index's run holds, the way the thirteen configu
 
 ## The conformance harness (T1)
 
-`tools/TyperConformance.hx` (`haxe tools/typer-conformance.hxml`) asks the typing layers questions the compiler has
+`tools/src/dev/TyperConformance.hx` (`node bin/dev.js typer-conformance`, built by `haxe tools/dev.hxml`) asks the typing layers questions the compiler has
 answered and scores each answer MATCH (the compiler's), UNKNOWN (declined) or DIFFERENT. The rule is the one every layer
 here keeps: the compiler's answer or Unknown, never another one. The UNKNOWN share of an area is its coverage.
 

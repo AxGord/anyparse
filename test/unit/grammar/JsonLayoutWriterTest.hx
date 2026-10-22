@@ -26,7 +26,7 @@ class JsonLayoutWriterTest extends Test {
 		'hxformat.json',
 		'test/apqlint.json',
 		'test/testkit/mutation-arms.json',
-		'tools/xconfig-hxformat.json'
+		'tools/data/xconfig-hxformat.json'
 	];
 
 	private final _plugin: JsonQueryPlugin = new JsonQueryPlugin();

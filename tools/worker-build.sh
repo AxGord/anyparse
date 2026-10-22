@@ -20,6 +20,10 @@
 # test.js with the CWD set to the tree it was built from.
 #
 # Usage: tools/worker-build.sh <workdir> [both|apq|test]
+#
+# Its Haxe twin is `node bin/dev.js worker-build` (tools/src/dev/WorkerBuild.hx),
+# same arguments, same verdicts. This file stays while tools/mutation-check.sh
+# runs it inside a fresh worktree, where no bin/dev.js has been built yet.
 set -euo pipefail
 
 if [ "$#" -lt 1 ]; then

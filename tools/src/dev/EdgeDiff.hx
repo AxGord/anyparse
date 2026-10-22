@@ -1,4 +1,4 @@
-package;
+package dev;
 
 import anyparse.check.LintConfig;
 import anyparse.check.OracleGeneration;
@@ -23,17 +23,18 @@ import sys.io.File;
  * compiler facts — and write, for every function the facts replaced, the records each reading gives it: its edges but
  * lexical containment, its unresolved calls and its unresolved accesses, one JSON line per function.
  *
- *   haxe tools/edge-diff.hxml
- *   (cd <project> && node <anyparse>/bin/edge-diff.js <out.jsonl>)
+ *   haxe tools/dev.hxml
+ *   (cd <project> && node <anyparse>/bin/dev.js edge-diff <out.jsonl>)
  */
 @:nullSafety(Strict)
 final class EdgeDiff {
 
-	public static function main(): Void {
-		final args: Array<String> = Sys.args();
+	public static inline final USAGE: String = 'usage: dev edge-diff <out.jsonl>';
+
+	public static function main(args: Array<String>): Int {
 		if (args.length != 1) {
 			Sys.println('usage: edge-diff <out.jsonl>');
-			Sys.exit(2);
+			return 2;
 		}
 		final cwd: String = Sys.getCwd();
 		final config: LintConfig = LintConfig.discover(Path.join([cwd, 'EdgeDiff.hx']));
@@ -71,6 +72,7 @@ final class EdgeDiff {
 		}
 		File.saveContent(args[0], out.join('\n') + '\n');
 		Sys.println('functions ${functions}, faceted ${out.length}');
+		return 0;
 	}
 
 	/** Every `.hx` file under `dir`, read. */

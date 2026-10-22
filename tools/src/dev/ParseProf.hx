@@ -1,3 +1,5 @@
+package dev;
+
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.grammar.haxe.HaxeFormat;
@@ -23,7 +25,7 @@ typedef Src = {
 /**
  * Fast-parse / writer profiling and A-B harness for the anyparse core.
  *
- * Built straight out of `src/`, like `tools/JvmPortability.hx`, and deliberately
+ * Built straight out of `src/`, like `JvmPortability`, and deliberately
  * portable except for one js-only clock: `haxe.Timer.stamp()` on js resolves to
  * milliseconds and a single file parses in about one, so per-file numbers need
  * `performance.now()`.
@@ -31,10 +33,10 @@ typedef Src = {
  * Build and run:
  *
  * ```sh
- * haxe tools/parse-prof.hxml                       # -> bin/parse-prof.js
- * node bin/parse-prof.js tparse src 1 hxformat.json
- * node --cpu-prof --cpu-prof-interval=200 bin/parse-prof.js tparse src 1 hxformat.json
- * ANYPARSE_BENCH_EXTRA=<manifest> CLIENT_SRC=<other-tree>/src node bin/parse-prof.js rt tools/bench-corpus.txt 6 hxformat.json
+ * haxe tools/dev.hxml                              # -> bin/dev.js
+ * node bin/dev.js parse-prof tparse src 1 hxformat.json
+ * node --cpu-prof --cpu-prof-interval=200 bin/dev.js parse-prof tparse src 1 hxformat.json
+ * ANYPARSE_BENCH_EXTRA=<manifest> CLIENT_SRC=<other-tree>/src node bin/dev.js parse-prof rt tools/data/bench-corpus.txt 6 hxformat.json
  * ```
  *
  * Arguments are `<mode> <dir-or-manifest> [reps] [hxformat.json]`. A directory is
@@ -57,10 +59,13 @@ typedef Src = {
  * Each workload runs inside its own named `phaseXxx` function so a V8 `--cpu-prof`
  * tree can be attributed by nearest phase ancestor.
  *
- * Measurement hygiene lives in `tools/bench-ab.sh`: measured runs are sequential
+ * Measurement hygiene lives in `dev bench-ab`: measured runs are sequential
  * and interleaved, and the median is what counts.
  */
 final class ParseProf {
+
+	public static inline final USAGE: String =
+		'usage: dev parse-prof <read|tparse|walk|write|rt|lint|perfile> <dir-or-manifest> [reps] [hxformat.json]';
 
 	/** Microseconds in a second: per-file costs are reported in microseconds. */
 	private static inline final US_PER_SECOND: Float = 1000000;
@@ -79,8 +84,15 @@ final class ParseProf {
 	/** Seconds spent in untimed setup (`preparse`), subtracted from the phase total. */
 	private static var excluded: Float = 0;
 
+	/**
+	 * The entry of the native build (`tools/bench-hxcpp.hxml`); `bin/dev.js` calls `run`.
+	 */
 	public static function main(): Void {
-		final args: Array<String> = Sys.args();
+		Sys.exit(run(Sys.args()));
+	}
+
+	/** The harness over `args`; answers the exit status. */
+	public static function run(args: Array<String>): Int {
 		final mode: String = args.length > 0 ? args[0] : 'tparse';
 		final target: String = args.length > 1 ? args[1] : 'src';
 		final reps: Int = args.length > 2 ? (Std.parseInt(args[2]) ?? 1) : 1;
@@ -104,6 +116,7 @@ final class ParseProf {
 		}
 		final elapsed: Float = now() - t0 - excluded;
 		Sys.println('MODE=$mode files=${sources.length} reps=$reps bytes=$bytes ms=${ms(elapsed)} msPerRep=${ms(elapsed / reps)} $tally');
+		return 0;
 	}
 
 	// ------------------------------------------------------------- workloads
