@@ -5,7 +5,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.HoistCommonImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.StdResolver;
 import anyparse.runtime.Span;
+import haxe.io.Path;
 import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -111,6 +113,12 @@ class HoistCommonImportTest extends Test {
 			source: 'package aqq.bqq;\n\nimport qqz.Yqqwwee;\nimport qqz.Zqqwwee;\n\nclass FiveQq {\n\n\tvar a: Zqqwwee;\n'
 				+ '\tvar b: Yqqwwee;\n\n}\n'
 		}
+	];
+
+	/** Two types of a LIBRARY — a classpath entry of its own, outside every directory a fixture writes. */
+	private static final LIBRARY_FILES: Array<{ file: String, source: String }> = [
+		{ file: '/nonexistent-hoistqq-lib/qqz/Zqqwwee.hx', source: 'package qqz;\n\nclass Zqqwwee {}\n' },
+		{ file: '/nonexistent-hoistqq-lib/qqz/Yqqwwee.hx', source: 'package qqz;\n\nclass Yqqwwee {}\n' }
 	];
 
 	/**
@@ -327,17 +335,75 @@ class HoistCommonImportTest extends Test {
 		);
 	}
 
+	/**
+	 * A statement whose module comes from ANOTHER classpath entry, a library, reaches `FourQq`, which holds nothing from that
+	 * entry — and a build compiling `FourQq` without the library would stop on the ambient source. Withheld.
+	 */
+	@:pin('control')
+	@:killer('M-HOIST-RECEIVER-UNVOUCHED')
+	public function testWithholdsAStatementAReceiverMayNotResolve(): Void {
+		Assert.equals('', planned(COMMON_TREE.filter(entry -> entry.name.startsWith('src/aqq/')), LIBRARY_FILES));
+	}
+
+	/**
+	 * A receiver that already compiles with the library's entry and package vouches for the statement it receives — and the site
+	 * holding every module only through its one child is weighed before that child, so the chain carries the statement once.
+	 */
+	@:pin('control')
+	@:killer('M-HOIST-RECEIVER-EVIDENCE-BLIND')
+	@:killer('M-HOIST-TIE-NEAREST-FIRST')
+	public function testAReceiverAlreadyCompilingTheEntryVouchesForIt(): Void {
+		Assert.equals(
+			'src/aqq/OneQq.hx:qqz.Zqqwwee@src/import.hx,src/aqq/ThreeQq.hx:qqz.Zqqwwee@src/import.hx,'
+			+ 'src/aqq/TwoQq.hx:qqz.Zqqwwee@src/import.hx',
+			planned(
+				COMMON_TREE.filter(entry -> entry.name.startsWith('src/aqq/')).map(entry -> entry.name == 'src/aqq/FourQq.hx' ? {
+					name: entry.name,
+					source: 'package aqq;\n\nimport qqz.Yqqwwee;\n\nclass FourQq {\n\n\tvar b: Yqqwwee;\n\n}\n'
+				} : entry),
+				LIBRARY_FILES
+			)
+		);
+	}
+
+	/** The language's implicit tier reaches every module without a statement, so its entry and package vouch for every receiver. */
+	@:pin('control')
+	@:killer('M-HOIST-IMPLICIT-TIER-BLIND')
+	public function testTheImplicitTierVouchesForEveryReceiver(): Void {
+		final std: Null<String> = StdResolver.stdDir();
+		if (std == null) {
+			Assert.pass();
+			return;
+		}
+		final head: String = 'package aqq;\n\nusing StringTools;\n';
+		Assert.equals(
+			'src/aqq/OneQq.hx:StringTools@src/import.hx,src/aqq/ThreeQq.hx:StringTools@src/import.hx,'
+			+ 'src/aqq/TwoQq.hx:StringTools@src/import.hx',
+			planned([
+				{ name: 'src/aqq/OneQq.hx', source: '$head\nclass OneQq {}\n' },
+				{ name: 'src/aqq/TwoQq.hx', source: '$head\nclass TwoQq {}\n' },
+				{ name: 'src/aqq/ThreeQq.hx', source: '$head\nclass ThreeQq {}\n' },
+				{ name: 'src/aqq/FourQq.hx', source: 'package aqq;\n\nclass FourQq {}\n' }
+			], [{ file: Path.join([std, 'StdTypes.hx']), source: 'abstract Voidqq {}\n' }])
+		);
+	}
+
 	/** A second run over the tree the fix produced has nothing left to do. */
 	@:pin('guard')
 	public function testASecondRunHasNothingToDo(): Void {
 		Assert.equals('', planned(applied(COMMON_TREE)));
 	}
 
-	/** A module whose directory contradicts its package has a chain nobody can bound, so no verdict is made under it. */
+	/**
+	 * A module whose directory contradicts its package has a chain nobody can bound, so no verdict is made
+	 * under it. It spells the statement itself, so it is no receiver the availability gate would withhold for.
+	 */
 	@:pin('control')
 	@:killer('M-HOIST-SHORT-CHAIN')
 	public function testWithholdsOnAnUnboundedChain(): Void {
-		Assert.equals('', planned(COMMON_TREE.concat([{ name: 'src/aqq/StrayQq.hx', source: 'package wrongqq;\n\nclass StrayQq {}\n' }])));
+		Assert.equals('', planned(COMMON_TREE.concat([
+			{ name: 'src/aqq/StrayQq.hx', source: 'package wrongqq;\n\nimport qqz.Zqqwwee;\n\nclass StrayQq {\n\n\tvar a: Zqqwwee;\n\n}\n' }
+		])));
 	}
 
 	/** A directory with fewer modules than the minimum has no share worth reading. */
@@ -428,13 +494,15 @@ class HoistCommonImportTest extends Test {
 	 * Every finding over `tree` as `<module>:<path>@<site>`, tree-relative and SORTED — the governed
 	 * order is a directory listing's, which is the filesystem's to decide.
 	 */
-	private function planned(tree: Array<TreeFile>): String {
+	private function planned(tree: Array<TreeFile>, ?libraries: Array<{ file: String, source: String }>): String {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeTree('apq_hoist_plan', tree);
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final rendered: Array<String> = [
-				for (v in reportOf(tree, root)) '${relative(v.file, root)}:${quoted(v.message, 0)}@${relative(quoted(v.message, 1), root)}'
+				for (v in reportOf(
+					tree, root, libraries
+				)) '${relative(v.file, root)}:${quoted(v.message, 0)}@${relative(quoted(v.message, 1), root)}'
 			];
 			rendered.sort((a, b) -> if (a < b)
 				-1
@@ -500,8 +568,11 @@ class HoistCommonImportTest extends Test {
 	}
 
 	/** The rule's report over the whole tree written under `root`. */
-	private function reportOf(tree: Array<TreeFile>, root: String): Array<Violation> {
-		return CheckFixture.violationsIn(new HoistCommonImport(), analysed(tree, root));
+	private function reportOf(tree: Array<TreeFile>, root: String, ?libraries: Array<{ file: String, source: String }>): Array<Violation> {
+		final files: Array<{ file: String, source: String }> = analysed(tree, root);
+		return libraries == null
+			? CheckFixture.violationsIn(new HoistCommonImport(), files)
+			: CheckFixture.violationsIn(new HoistCommonImport(), files, StdScope.plugin(files, libraries));
 	}
 
 	/** The rule's cross-file fix over the whole tree written under `root`, justified by its own report. */

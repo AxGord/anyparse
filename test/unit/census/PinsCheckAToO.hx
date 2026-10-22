@@ -368,6 +368,8 @@ final class PinsCheckAToO {
 		'unit.check.HoistCommonImportTest#testANamesakePushesTheStatementToADeeperSite :: guard :: ',
 		'unit.check.HoistCommonImportTest#testANestedSiteTakesOnlyWhatItsParentDidNot :: control :: '
 			+ 'M-HOIST-SITE-ORDER,M-HOIST-CHAIN-INHERITED',
+		'unit.check.HoistCommonImportTest#testAReceiverAlreadyCompilingTheEntryVouchesForIt :: control :: '
+			+ 'M-HOIST-RECEIVER-EVIDENCE-BLIND,M-HOIST-TIE-NEAREST-FIRST',
 		'unit.check.HoistCommonImportTest#testASecondRunHasNothingToDo :: guard :: ',
 		'unit.check.HoistCommonImportTest#testASubTypeImportIgnoresItsSiblings :: control :: M-HOIST-NEVER-SOUND',
 		'unit.check.HoistCommonImportTest#testCreatesTheAmbientSourceAsAWholeFile :: guard :: ',
@@ -389,6 +391,8 @@ final class PinsCheckAToO {
 		'unit.check.HoistCommonImportTest#testRefusesAStaticWildcard :: guard :: ',
 		'unit.check.HoistCommonImportTest#testRefusesAUsingOffTheAllowList :: guard :: ',
 		'unit.check.HoistCommonImportTest#testRefusesAnAlias :: guard :: ',
+		'unit.check.HoistCommonImportTest#testTheImplicitTierVouchesForEveryReceiver :: control :: M-HOIST-IMPLICIT-TIER-BLIND',
+		'unit.check.HoistCommonImportTest#testWithholdsAStatementAReceiverMayNotResolve :: control :: M-HOIST-RECEIVER-UNVOUCHED',
 		'unit.check.HoistCommonImportTest#testWithholdsBelowTheMinimumModuleCount :: control :: M-HOIST-MIN-MODULES',
 		'unit.check.HoistCommonImportTest#testWithholdsOnAnUnboundedChain :: control :: M-HOIST-SHORT-CHAIN',
 		'unit.check.HoistCommonImportTest#testWithholdsWhereTheChainCarriesAGuardedStatement :: control :: M-HOIST-GUARDED-BLIND',

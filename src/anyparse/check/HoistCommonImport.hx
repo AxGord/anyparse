@@ -14,9 +14,11 @@ import anyparse.query.ImportBindings;
 import anyparse.query.IndexScope;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeNameBinding;
 import anyparse.query.cli.CliArgs;
 import anyparse.runtime.Span;
 import haxe.ds.ArraySort;
+import haxe.io.Path;
 
 using StringTools;
 using Lambda;
@@ -250,6 +252,11 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 		return '${imp.kind == ImportKind.Using ? USING_WORD : IMPORT_WORD}|${imp.raw}';
 	}
 
+	/** The classpath entry half of an `originOf` answer. */
+	private static inline function classpathOf(origin: String): String {
+		return origin.substring(0, origin.lastIndexOf('|'));
+	}
+
 	/**
 	 * Every candidate statement under `governed`, with the count of modules that HOLD it and the ones
 	 * it may be lifted out of.
@@ -423,9 +430,14 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 		// the count orders the containment with no path arithmetic. Weighing the widest position first
 		// is what makes a statement land as HIGH as its share reaches while a nested position takes
 		// only what its parents did not — and the two together leave no statement in two sources of one
-		// chain, which is the shape that would read as a redundant import of its own parent. The sort
-		// is stable, so ties keep discovery order and the plan is deterministic.
-		ArraySort.sort(sites, (a, b) -> (governedAt[b] ?? []).length - (governedAt[a] ?? []).length);
+		// chain, which is the shape that would read as a redundant import of its own parent. A tie is a
+		// parent whose every module sits under one child: discovery lists a module's ladder nearest
+		// first, so the LATER of two tied sites is the ancestor and goes first, which also keeps the
+		// plan deterministic.
+		ArraySort.sort(sites, (a, b) -> {
+			final wider: Int = (governedAt[b] ?? []).length - (governedAt[a] ?? []).length;
+			wider != 0 ? wider : order.indexOf(b) - order.indexOf(a);
+		});
 		final widest: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
 		return {
 			sites: sites,
@@ -500,7 +512,7 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	 * site would insert itself above one and re-rank the extensions.
 	 */
 	private static function hoistSound(statement: Hoistable, site: String, ctx: HoistContext, resolve: SymbolIndex): Bool {
-		if (retargetsSomeModule(statement, site, ctx, resolve)) return false;
+		if (retargetsSomeModule(statement, site, ctx, resolve) || !reachesEveryReceiver(statement, site, ctx, resolve)) return false;
 		for (file in ctx.governedAt[site] ?? []) {
 			final info: Null<FileInfo> = ctx.infoOf[file];
 			if (info == null || !info.ambientImportsBounded) return false;
@@ -557,6 +569,54 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 		return info.imports.exists(
 			imp -> imp.kind == ImportKind.Wild && imp.raw.endsWith('.*') && imp.raw.substr(0, imp.raw.length - 2) == rival.pkg
 		);
+	}
+
+	/**
+	 * Whether every module `site` governs can resolve `statement` in every build that compiles it.
+	 *
+	 * A module that already holds the statement does. One that does not RECEIVES it, and a build compiling a receiver without
+	 * the classpath entry the statement's module comes from stops on the ambient source, not on any code — a second `-main`
+	 * beside the oracle's build is exactly such a build, and no compile this run makes would see it. So a receiver is vouched for
+	 * only by positive evidence: it lives under the same classpath entry, or it already holds an unguarded statement resolving under
+	 * that entry AND top-level package — one entry can carry packages a target refuses, as a language library carries per-target ones.
+	 */
+	private static function reachesEveryReceiver(statement: Hoistable, site: String, ctx: HoistContext, resolve: SymbolIndex): Bool {
+		final targets: Array<ResolvedType> = resolve.refs.resolveQualifiedRefAll(statement.path);
+		if (targets.length != 1) return false;
+		final origin: String = originOf(targets[0].file);
+		// Every module holds the implicit tier without a statement, so the entry and package it comes from vouch for any receiver.
+		if (resolve.refs.names.implicitImportFiles().exists(found -> originOf(found) == origin)) return true;
+		final key: String = keyOf(statement);
+		for (file in ctx.governedAt[site] ?? []) {
+			final info: Null<FileInfo> = ctx.infoOf[file];
+			if (info == null) return false;
+			if (classpathOf(origin) == classpathOf(originOf(info))) continue;
+			final held: Array<ImportInfo> = info.imports.concat([for (group in info.ambientImports) for (imp in group.imports) imp]);
+			if (!held.exists(imp -> !imp.guarded && (statementKeyOf(imp) == key || resolvesInto(imp, origin, resolve)))) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * The classpath entry `info` was found under, and its top-level package — what a build has to carry to compile it. A
+	 * file whose directory does not end in its package path answers its own path as the entry, which no other origin shares.
+	 */
+	private static function originOf(info: FileInfo): String {
+		final dir: String = Path.directory(info.file);
+		if (info.pkg == '') return '$dir|';
+		final pkgDir: String = info.pkg.split('.').join('/');
+		return if (dir == pkgDir)
+			'|${info.pkg.split('.')[0]}'
+		else if (dir.endsWith('/$pkgDir'))
+			'${dir.substring(0, dir.length - pkgDir.length - 1)}|${info.pkg.split('.')[0]}'
+		else
+			'${info.file}|';
+	}
+
+	/** Whether the module `imp` names is declared under `origin` — a statement the receiver already compiles with. */
+	private static function resolvesInto(imp: ImportInfo, origin: String, resolve: SymbolIndex): Bool {
+		final module: Null<String> = TypeNameBinding.splitPath(imp.aliasTarget ?? imp.raw)?.module;
+		return module != null && resolve.refs.names.filesOfModule(module).exists(found -> originOf(found) == origin);
 	}
 
 	/**

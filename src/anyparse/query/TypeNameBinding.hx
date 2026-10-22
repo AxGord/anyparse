@@ -262,6 +262,11 @@ final class TypeNameBinding {
 		return (tables().modules[module] ?? []).copy();
 	}
 
+	/** The indexed std files of the module every module of the language imports without a statement (`StdTypes`). */
+	public function implicitImportFiles(): Array<FileInfo> {
+		return tables().stdTypes.copy();
+	}
+
 	/**
 	 * The types an explicit `import` or `using` of `path` puts in simple-name scope: every non-private type of
 	 * a module, the one type `pkg.Mod.Sub` names, none for a static-field import (`pkg.Mod.field`,
