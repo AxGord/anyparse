@@ -29044,6 +29044,47 @@
 			"find": "wider != 0 ? wider : order.indexOf(b) - order.indexOf(a);",
 			"replace": "wider != 0 ? wider : order.indexOf(a) - order.indexOf(b);",
 			"note": "of two sites governing the same modules the nested one is weighed first, so a parent whose every module sits under one child takes the statement its child already took and one chain carries it twice"
+		},
+		{
+			"name": "M-COND-PARAM-ELSE-PLAIN",
+			"type": "anyparse.grammar.haxe.HxConditionalParam",
+			"method": "HxConditionalParam",
+			"kind": "TypedefDecl",
+			"find": "@:optional @:kw('#else') @:trivia @:sep(',', sepFaithful)",
+			"replace": "@:optional @:kw('#else') @:sep(',', sepFaithful)",
+			"note": "the `#else` arm of a parameter region captures no per-element separator, so the comma it writes before `#end` is lost and that arm compiles two parameters with nothing between them"
+		},
+		{
+			"name": "M-COND-PARAM-ELSEIF-PLAIN",
+			"type": "anyparse.grammar.haxe.HxElseifParam",
+			"method": "HxElseifParam",
+			"kind": "TypedefDecl",
+			"find": "@:trivia @:sep(',', sepFaithful)",
+			"replace": "@:sep(',')",
+			"note": "an `#elseif` arm of a parameter region captures no per-element separator, so the comma it writes before the next directive is lost"
+		},
+		{
+			"name": "M-ELIDED-GAP-HARD",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "startsChunk",
+			"find": "regionAfterElidedSep(items, i, sepBeforeFlags)",
+			"replace": "skipSepBefore(sepBeforeFlags, i)",
+			"note": "every gap the source left without a separator is a forced line break again, so a parameter list that fits breaks after `#end`"
+		},
+		{
+			"name": "M-REGION-GLUED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "regionAfterElidedSep",
+			"force": "false",
+			"note": "a region behind an elided separator glues onto the previous parameter's line, where `= false #if air, …` re-parses as a splice tail of the default value"
+		},
+		{
+			"name": "M-ELIDED-SEP-KEPT",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "chunkFill",
+			"find": "final elided: Bool = [for (k in from + 1...to) skipSepBefore(sepBeforeFlags, k)].contains(true);",
+			"replace": "final elided: Bool = false;",
+			"note": "a fill run packs with one uniform separator, so a gap the source left comma-less gains a comma beside the one its region already wrote"
 		}
 	]
 }

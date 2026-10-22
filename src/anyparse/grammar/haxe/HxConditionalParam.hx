@@ -27,23 +27,22 @@ package anyparse.grammar.haxe;
  * `body` and `elseBody` carry `@:fmt(padLeading, padTrailing)`, closing the boundary gaps
  * against `#if <cond>` / `#else` / `#end`; inter-element trivia is `HxFnDecl.params`'s job.
  *
- * Both bodies carry `@:sep(',', sepFaithful)`, for two different reasons. On `body` (with
- * `@:trivia`, the trio `HxConditionalArgs.body` uses) `sepFaithful` is what makes a separator
- * INSIDE the region round-trip: `#if js ?parentDom:String, #end` writes the trailing comma
- * back where the source put it. Without it the tryparse rewind swallowed that comma and the
- * outer Star emitted none either (its own `sepAfter` is false), so under `-D js` the output
- * read two parameters with no separator — output that PARSES here, so the round-trip gate
- * never saw it; only the Haxe compiler did. On `elseBody` (`@:optional @:kw('#else')
- * @:tryparse`) the flag is what makes a sep legal on the `emitOptionalKwStarFieldSteps` path:
- * that path rejects a bare `@:sep` because termination is undefined without either
- * `blockEnded(...)` or per-element `sepAfter` capture, and `sepFaithful` supplies the latter;
- * without any sep a comma-separated `#else` body fail-rewound after its first param
- * (`#else direction:TextDirection = LEFT_TO_RIGHT, script:TextScript = COMMON #end`).
+ * Every arm's body (`body`, each `HxElseifParam.body`, `elseBody`) carries `@:trivia
+ * @:sep(',', sepFaithful)`, the trio `HxConditionalArgs` uses: only a trivia Star captures the
+ * per-element `sepAfter`, so only it writes a separator INSIDE the region back where the
+ * source put it — `#if js ?parentDom:String, #end`, `#else baz:Int, #end`. Without it the
+ * tryparse rewind swallowed that comma and the outer Star emitted none either (its own
+ * `sepAfter` is false), so with that arm compiled the output read two parameters with no
+ * separator — output that PARSES here, so the round-trip gate never saw it; only the Haxe
+ * compiler did. On `elseBody` (`@:optional @:kw('#else') @:tryparse`) the flag is also what
+ * makes a sep legal on the `emitOptionalKwStarFieldSteps` path, which rejects a bare `@:sep`
+ * because termination is undefined without either `blockEnded(...)` or per-element `sepAfter`
+ * capture; without any sep a comma-separated `#else` body fail-rewound after its first param.
  */
 @:peg
 typedef HxConditionalParam = {
 	var cond: HxPpCondLit;
 	@:trivia @:sep(',', sepFaithful) @:tryparse @:fmt(padLeading, padTrailing, sepBeforeOpt, softFill) var body: Array<HxParam>;
 	@:tryparse var elseifs: Array<HxElseifParam>;
-	@:optional @:kw('#else') @:sep(',', sepFaithful) @:tryparse @:fmt(padLeading, padTrailing) var elseBody: Null<Array<HxParam>>;
+	@:optional @:kw('#else') @:trivia @:sep(',', sepFaithful) @:tryparse @:fmt(padLeading, padTrailing) var elseBody: Null<Array<HxParam>>;
 };
