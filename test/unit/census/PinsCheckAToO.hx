@@ -493,15 +493,24 @@ final class PinsCheckAToO {
 		'unit.check.InvertNegatedIfElseCheckTest#testTernaryNonTopLevelNotNotFlagged :: control :: M-NEGCOND-ANY-KIND',
 		'unit.check.InvertNegatedIfElseCheckTest#testTernaryParenCommentReportOnly :: control :: M-NEGCOND-COMMENT-AFTER-KEPT',
 		'unit.check.JoinSingleUseLocalCheckTest#testAnnotationRestatesSourceFlagged :: control :: M-JSUL-ANNOTATION-NEVER-NEUTRAL',
+		'unit.check.JoinSingleUseLocalCheckTest#testCatchBinderSourceReadLaterNotFlagged :: guard :: M-JSUL-LATER-SOURCE-ANY-BINDER',
 		'unit.check.JoinSingleUseLocalCheckTest#testCommentBetweenStatementsStillFlagged :: control :: M-JSUL-COMMENT-ANY-IN-FILE',
 		'unit.check.JoinSingleUseLocalCheckTest#testConditionalBareIdentStillFlagged :: control :: M-JSUL-BARE-IDENT-NOT-SAFE',
 		'unit.check.JoinSingleUseLocalCheckTest#testConditionalRegionWithoutStrayReadStillFlagged :: control :: '
 			+ 'M-JSUL-UNINDEXED-NAME-ALWAYS',
+		'unit.check.JoinSingleUseLocalCheckTest#testFinalLocalSourceReadLaterStillFlagged :: control :: M-JSUL-LATER-SOURCE-PARAMS-ONLY',
 		'unit.check.JoinSingleUseLocalCheckTest#testImmutableLocalCaptureStillFlagged :: control :: M-JSUL-LOCAL-CAPTURE-ANY',
 		'unit.check.JoinSingleUseLocalCheckTest#testInitIdentNotReboundStillFlagged :: control :: M-JSUL-INIT-IDENT-ALWAYS-REBOUND',
+		'unit.check.JoinSingleUseLocalCheckTest#testLaterReadInLambdaNotFlagged :: guard :: M-JSUL-LATER-DEFERRED-ALLOWED',
+		'unit.check.JoinSingleUseLocalCheckTest#testLaterReadInLoopStillFlagged :: control :: M-JSUL-LATER-LOOP-BARRIER',
+		'unit.check.JoinSingleUseLocalCheckTest#testOuterFunctionParamSourceNotFlagged :: guard :: M-JSUL-LATER-SOURCE-ANY-SCOPE',
+		'unit.check.JoinSingleUseLocalCheckTest#testParamCaptureReadLaterCollapses :: control :: '
+			+ 'M-JSUL-SOURCE-ALWAYS-WRITTEN,M-JSUL-LATER-HOLDER-ADJACENT-ONLY',
+		'unit.check.JoinSingleUseLocalCheckTest#testParamWrittenInClosureNotFlagged :: guard :: M-JSUL-SOURCE-NEVER-WRITTEN',
 		'unit.check.JoinSingleUseLocalCheckTest#testTrailingStatementWithoutInterpolationStillFlagged :: control :: '
 			+ 'M-JSUL-UNINDEXED-NAME-ALWAYS',
 		'unit.check.JoinSingleUseLocalCheckTest#testUnconditionalFieldChainStillFlagged :: control :: M-JSUL-PATH-ALWAYS-CONDITIONAL',
+		'unit.check.JoinSingleUseLocalCheckTest#testWrittenParamSourceNotFlagged :: guard :: M-JSUL-SOURCE-NEVER-WRITTEN',
 		'unit.check.LintConfigInheritanceTest#testAnUnnamedKeyFallsThroughToTheAncestor :: control :: '
 			+ 'M-REFLECTIVE-MERGE,M-HOLDERS-MERGE,M-OWNED-MERGE',
 		'unit.check.LintConfigTest#testReachSkipsBranchesOnlyUnderADeclaredCompleteOracleList :: control :: M-REACH-CONFIGS-COMPLETE',

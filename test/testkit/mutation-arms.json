@@ -29354,6 +29354,68 @@
 			"find": "if (!~/^[0-9]+$/.match(digits)) return true;",
 			"replace": "if (!~/^[0-9]+$/.match(digits)) return false;",
 			"note": "an integer literal with a suffix is typed as the integer type, though 4.3.7 types `1i64` as a `haxe.Int64` and `1u32` as a `UInt`"
+		},
+		{
+			"name": "M-JSUL-SOURCE-ALWAYS-WRITTEN",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "sourceWritten",
+			"force": "true",
+			"note": "every source reads as written somewhere, so a parameter nothing writes stops collapsing into a later read"
+		},
+		{
+			"name": "M-JSUL-SOURCE-NEVER-WRITTEN",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "sourceWritten",
+			"force": "false",
+			"note": "no source reads as written, so a parameter assigned before or after the read, or from a closure, is inlined into a later statement that may see another value"
+		},
+		{
+			"name": "M-JSUL-LATER-HOLDER-ADJACENT-ONLY",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "holderIndex",
+			"find": "for (j in at + 1...kids.length) {",
+			"replace": "for (j in at + 1...at + 2) {",
+			"note": "only the immediately following sibling is searched for the read, so a capture read several statements later is never found"
+		},
+		{
+			"name": "M-JSUL-LATER-DEFERRED-ALLOWED",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "laterReadIsSafe",
+			"find": "&& !path.exists(n -> s.deferringKinds.contains(n.kind));",
+			"replace": ";",
+			"note": "a later read inside a lambda declared between is accepted, moving the read into a closure"
+		},
+		{
+			"name": "M-JSUL-LATER-LOOP-BARRIER",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "laterReadIsSafe",
+			"find": "s.deferringKinds.contains(n.kind)",
+			"replace": "s.barrierKinds.contains(n.kind)",
+			"note": "a loop on the path refuses a later read even though the invariant source makes every repetition read the same value"
+		},
+		{
+			"name": "M-JSUL-LATER-SOURCE-ANY-BINDER",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "invariantSource",
+			"find": "|| !s.invariantBinderKinds.contains(binder.kind)) return false;",
+			"replace": ") return false;",
+			"note": "any resolved binder counts as invariant, so a catch binder outside the parameter and final-local whitelist is inlined into a later read"
+		},
+		{
+			"name": "M-JSUL-LATER-SOURCE-ANY-SCOPE",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "invariantSource",
+			"find": "if (fnSpan == null || binding.from < fnSpan.from || binding.to > fnSpan.to) return false;",
+			"replace": "if (fnSpan == null) return false;",
+			"note": "an outer function's parameter counts as owned by the nested function, so its capture is inlined into a later read past the whitelist"
+		},
+		{
+			"name": "M-JSUL-LATER-SOURCE-PARAMS-ONLY",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "readSeams",
+			"find": "for (k in localDeclKinds) if (!mutableKinds.contains(k) && !continuationKinds.contains(k)) k",
+			"replace": "for (k in localDeclKinds) if (false) k",
+			"note": "only parameters count as invariant, so a capture of a final local read several statements later stops collapsing"
 		}
 	]
 }
