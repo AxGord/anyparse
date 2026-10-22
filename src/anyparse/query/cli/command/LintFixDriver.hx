@@ -527,7 +527,7 @@ final class LintFixDriver {
 	 * The first file two of a component's edits overlap in, or null. The edits of one file come from every
 	 * slice of the component — several rules' — and `CanonicalEdit.applyEdits` trusts them not to overlap, so a
 	 * whole-file edit beside a rename would silently swallow the rename. Two edits starting at one offset
-	 * overlap too, since which goes first is then nobody's decision; an identical pair is one edit.
+	 * overlap too, since which goes first is then nobody's decision — an identical pair included, since both would be applied.
 	 */
 	private static function overlappingFile(slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }>): Null<String> {
 		for (slice in slices) {
@@ -537,8 +537,7 @@ final class LintFixDriver {
 				final prev: Span = sorted[i - 1].span;
 				final next: Span = sorted[i].span;
 				final start: Int = next.from;
-				final same: Bool = prev.from == start && prev.to == next.to && sorted[i - 1].text == sorted[i].text;
-				if (!same && (start < prev.to || start == prev.from)) return slice.file;
+				if (start < prev.to || start == prev.from) return slice.file;
 			}
 		}
 		return null;
