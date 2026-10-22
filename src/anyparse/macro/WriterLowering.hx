@@ -2357,6 +2357,7 @@ typedef SepStarCtx = {
 	final typedefBetweenExpr: Expr;
 	final blankBeforeExpr: Expr;
 	final appendTrailingCommaExpr: Expr;
+	final flatTrailingCommaExpr: Expr;
 	final triviaLeadDoc: Expr;
 	final triviaTrailDocKeepAware: Expr;
 	final keepMatrixComputeExpr: Expr;

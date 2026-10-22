@@ -228,13 +228,21 @@ final class PinsGrammarAndCli {
 			+ 'M-REGION-OFFER-THROUGH-BODIES,M-NESTED-THROUGH-BODIES',
 		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAnElseifRegionInAComprehensionSettlesInOneWrite :: control :: '
 			+ 'M-REGION-SEAMS-BOUNDED',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testALineCommentedListAddsNoTrailingCommaAfterARegion :: control :: '
+			+ 'M-TRAIL-AFTER-REGION,M-TRAIL-FORCEMULTI-UNGATED,M-TRAIL-CALL-FORCEMULTI-UNGATED',
 		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testAnElidedOuterCommaAfterARegionIsNoLineBreak :: control :: '
 			+ 'M-ELIDED-GAP-HARD,M-ELIDED-SEP-KEPT',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testEnumCtorParamsKeepTheirSeparatorsAroundARegion :: control :: '
+			+ 'M-ENUM-CTOR-PARAMS-PLAIN',
 		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testParamsKeepTheCommaInsideAnElseifRegion :: control :: M-COND-PARAM-ELSEIF-PLAIN',
 		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testParamsKeepTheCommaInsideTheElseRegion :: control :: '
 			+ 'M-COND-PARAM-ELSE-PLAIN,M-ELIDED-SEP-KEPT',
 		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testParamsUnderLeadingBreakFillGainNoComma :: control :: '
 			+ 'M-REGION-GLUED,M-ELIDED-SEP-KEPT',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testTheTrailingCommaKnobAddsNoneAfterAClassNotationField :: control :: '
+			+ 'M-TRAIL-AFTER-SEMI',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testTheTrailingCommaKnobAddsNoneAfterARegionEndingTheList :: control :: '
+			+ 'M-TRAIL-AFTER-REGION,M-TRAIL-CASCADE-UNGATED',
 		'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured :: control :: '
 			+ 'M-WORDOP-NO-RESTORE',
 		'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionCollapsesEmptyCatchBody :: control :: '
