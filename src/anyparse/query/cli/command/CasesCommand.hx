@@ -7,8 +7,6 @@ import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliWalk.SkipEntry;
 import haxe.Exception;
 
-using Lambda;
-
 /**
  * `apq cases` — the READ-ONLY WALK shape of the command seam.
  *

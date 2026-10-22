@@ -10,8 +10,6 @@ import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 
-using Lambda;
-
 /**
  * `--doc` / `--source` opt-ins: `SourceSlice` slice + leading-doc
  * reconstruction, and the render-layer wiring for `refs` (text + json).

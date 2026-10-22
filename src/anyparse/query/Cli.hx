@@ -13,8 +13,6 @@ import anyparse.query.cli.UsageFailure;
 import anyparse.query.cli.WriteFailure;
 import anyparse.runtime.Span;
 
-using Lambda;
-
 #if (sys || nodejs)
 #end
 
