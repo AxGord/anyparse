@@ -295,6 +295,38 @@ class HoistCommonImportTest extends Test {
 		);
 	}
 
+	/**
+	 * A static-FIELD import binds no type, and a path naming a type the index never sees binds at most that one name,
+	 * even inside a module no file declares: neither is a second binder of a statement it shares a module with nothing of.
+	 */
+	@:pin('control')
+	@:killer('M-IMPORT-MODULE-TAIL-UNKNOWN')
+	public function testAFieldOrUnseenSubTypeImportIsNoSecondBinder(): Void {
+		final kqq: TreeFile = {
+			name: 'src/qqz/Kqqwwee.hx',
+			source: 'package qqz;\n\nclass Kqqwwee {\n\n\tpublic static function hqq(): Int {\n\t\treturn 1;\n\t}\n\n}\n'
+		};
+		Assert.equals(
+			'src/aqq/OneQq.hx:qqz.Zqqwwee@src/import.hx,src/aqq/ThreeQq.hx:qqz.Zqqwwee@src/import.hx,'
+			+ 'src/aqq/TwoQq.hx:qqz.Zqqwwee@src/import.hx',
+			planned(COMMON_TREE.map(entry -> switch entry.name {
+				case 'src/aqq/OneQq.hx': {
+					name: entry.name,
+					source: entry.source.replace('import qqz.Zqqwwee;', 'import qqz.Kqqwwee.hqq;\nimport qqz.Zqqwwee;')
+				};
+				case 'src/aqq/TwoQq.hx': {
+					name: entry.name,
+					source: entry.source.replace('import qqz.Zqqwwee;', 'import qqz.Kqqwwee.Gqqwwee;\nimport qqz.Zqqwwee;')
+				};
+				case 'src/aqq/ThreeQq.hx': {
+					name: entry.name,
+					source: entry.source.replace('import qqz.Zqqwwee;', 'import qqz.Pqqwwee.Hqqwwee;\nimport qqz.Zqqwwee;')
+				};
+				case _: entry;
+			}).concat([kqq]))
+		);
+	}
+
 	/** A second run over the tree the fix produced has nothing left to do. */
 	@:pin('guard')
 	public function testASecondRunHasNothingToDo(): Void {

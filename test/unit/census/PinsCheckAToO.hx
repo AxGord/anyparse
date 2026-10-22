@@ -364,6 +364,7 @@ final class PinsCheckAToO {
 		'unit.check.HaxeSpawnTest#testAWedgedDriverIsKilledAtItsBound :: control :: M-DRIVER-UNBOUNDED',
 		'unit.check.HaxeSpawnTest#testTheDriverBoundScalesWithTheJobs :: control :: M-DRIVER-BOUND-IGNORES-ROUNDS',
 		'unit.check.HaxeSpawnTest#testTheDriverReadsItsJobsFromNoPipe :: control :: M-DRIVER-READS-STDIN',
+		'unit.check.HoistCommonImportTest#testAFieldOrUnseenSubTypeImportIsNoSecondBinder :: control :: M-IMPORT-MODULE-TAIL-UNKNOWN',
 		'unit.check.HoistCommonImportTest#testANamesakePushesTheStatementToADeeperSite :: guard :: ',
 		'unit.check.HoistCommonImportTest#testANestedSiteTakesOnlyWhatItsParentDidNot :: control :: '
 			+ 'M-HOIST-SITE-ORDER,M-HOIST-CHAIN-INHERITED',

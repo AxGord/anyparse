@@ -1165,11 +1165,11 @@ final class SymbolIndex {
 	 *
 	 * A statement naming a MODULE binds every type the module declares, not only the leaf — checked
 	 * against the compiler, which resolved a governed module's own same-package `Oth` to a SIBLING of
-	 * the imported `Mod` nobody had named. A path naming one type inside a module binds only that
-	 * type, an alias only the alias, and a wildcard no name a caller can enumerate — which is not the
+	 * the imported `Mod` nobody had named. A path naming one type inside a module binds only that type, a static-field
+	 * path no type, an alias only the alias, and a wildcard no name a caller can enumerate — which is not the
 	 * same as an unknown set, since a wildcard is outranked by every explicit statement anyway.
 	 *
-	 * NULL is the answer for a statement whose module `publicTypes` does not carry: the names are
+	 * NULL is the answer for a statement naming a MODULE `publicTypes` does not carry: the names are
 	 * unknown, and a caller deciding what a name means must refuse rather than fall back to the leaf.
 	 */
 	public static function namesBoundBy(imp: ImportInfo, publicTypes: Map<String, Array<String>>): Null<Array<String>> {
@@ -1181,12 +1181,12 @@ final class SymbolIndex {
 				return [imp.alias ?? imp.raw];
 			case _:
 		}
-		final asModule: Null<Array<String>> = publicTypes[imp.raw];
-		if (asModule != null) return asModule;
-		// A path one segment longer than a module it names binds the ONE type inside it.
-		final dot: Int = imp.raw.lastIndexOf('.');
-		final parent: Null<Array<String>> = dot <= 0 ? null : publicTypes[imp.raw.substring(0, dot)];
-		return parent != null && parent.contains(leaf) ? [leaf] : null;
+		// Past its module, by the compiler's case rule, a path names at most ONE type — a sub-type, or a static
+		// field, which binds none — whether or not the index holds the module: a module a build macro makes
+		// has no file to read. Only a path naming the module itself needs the module's type set.
+		final rest: Null<Array<String>> = TypeNameBinding.splitPath(imp.raw)?.rest;
+		if (rest == null || rest.length == 0) return publicTypes[imp.raw];
+		return rest.length == 1 && SourceText.isUpperInitial(leaf) ? [leaf] : [];
 	}
 
 	/**

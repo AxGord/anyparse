@@ -28950,6 +28950,14 @@
 			"find": "&& anyparse.format.wrap.WrapList.breaksAtOwnAddSubOperator(_wrapInner)",
 			"replace": "&& anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0",
 			"note": "a kept chain broken only inside an operand (an array one item per line) counts as one its source broke, so its paren stays glued instead of opening"
+		},
+		{
+			"name": "M-IMPORT-MODULE-TAIL-UNKNOWN",
+			"type": "anyparse.query.SymbolIndex",
+			"method": "namesBoundBy",
+			"find": "return rest.length == 1 && SourceText.isUpperInitial(leaf) ? [leaf] : [];",
+			"replace": "return (publicTypes[SourceText.parentPath(imp.raw)] ?? []).contains(leaf) ? [leaf] : null;",
+			"note": "a path past its module binds a known set only when the index declares that very type, so a static-field import or one of a type a build macro makes reads as an unknown set, counts as a second binder of every statement, and refuses every hoist in a directory where one module imports a function"
 		}
 	]
 }
