@@ -31,11 +31,7 @@ final class Tmp {
 		if (sweep && list) throw new UsageError('--list and --sweep are two runs');
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
 		if (sweep) {
-			if ((Sys.getEnv('APQ_TMP_NO_SWEEP') ?? '') == '') {
-				final swept: Int = dirs.sweep(TmpLifecycle.now(), Repo.ofScript());
-				final noun: String = swept == 1 ? 'directory' : 'directories';
-				if (swept > 0) Sys.stderr().writeString('tmp-lifecycle: swept $swept orphaned scratch $noun under ${dirs.root}\n');
-			}
+			dirs.startupSweep(Repo.ofScript());
 			Sys.println('tmp-lifecycle: sweep done');
 			return 0;
 		}

@@ -38,7 +38,7 @@ import js.node.fs.Stats;
  * - **What the compile wrote is a diff of the roots**, taken around the real run; a file outside the roots cannot be
  *   written by a whitelisted compile, because no whitelisted path leads there.
  *
- * `tools/mutation-check.sh` and `tools/suite-shard.sh` share one store kept across runs, renewing
+ * `tools/mutation-check.sh` and `dev shard` share one store kept across runs, renewing
  * an entry on every hit and dropping one unused for a week (`tools/fixture-cache.sh`). A cache that outlives a run
  * outlives the compiler install it recorded, so that runner's stamp names the binary by path, version, size and mtime.
  */

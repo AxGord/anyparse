@@ -927,7 +927,7 @@ under *Grammar platform* above) are part of this direction and already in place.
 ```sh
 haxe test-js.hxml           # compile the runner to bin/test.js
 node bin/test.js            # run the whole suite (~21s)
-tools/suite-shard.sh -n 4   # the same suite across 4 processes (~9s)
+node bin/dev.js shard -n 4  # the same suite across 4 processes (build: haxe tools/dev.hxml)
 ```
 
 js/node is the only supported runner: the suite itself calls `js.node.*`

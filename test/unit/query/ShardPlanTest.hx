@@ -234,7 +234,7 @@ class ShardPlanTest extends Test {
 	 * name now turns the suite red instead of quietly shrinking a shard.
 	 *
 	 * It reaches `planClasses` rather than `plan` because that is the door
-	 * `tools/suite-shard.sh` uses since the registration layer became generated:
+	 * `dev shard` uses since the registration layer became generated:
 	 * the script asks the runner itself (`node bin/test.js --list-classes`) and
 	 * hands the answer to `apq shard-plan --classes`. Planning the list the run
 	 * will ACTUALLY register is the whole point of that door — parsing

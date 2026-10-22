@@ -6,7 +6,7 @@
 #   - tools/mutation-check.sh, every track of a run sharing it: a mutation
 #     changes what the engine does with the compiler's answer, not the answer
 #     (a mutated probe macro is a different key).
-#   - tools/suite-shard.sh: the fixture
+#   - `node bin/dev.js shard` (through the Haxe twin below): the fixture
 #     compiles are most of the suite's CPU (MemberReachFactsTest alone ran 1007
 #     of them, 265 of its 271 s) and an engine edit that leaves the probe
 #     macros alone leaves every key alone. An entry no run has hit for
@@ -21,8 +21,7 @@
 # place, is a different stamp.
 #
 # Its Haxe twin is `devkit.FixtureCache` (`node bin/dev.js fixture-cache`), which
-# behaves the same; this file stays while suite-shard.sh and mutation-check.sh
-# source it.
+# behaves the same; this file stays while mutation-check.sh sources it.
 #
 # fc_shim <repo> <entries-dir> <bin-dir> [<tally-file>]
 #   builds the replay program (once per content of FixtureCompileCache.hx, kept

@@ -26,7 +26,7 @@ class RunTests {
 		if (listing()) return;
 		// Every fixture path this suite writes is built from a process-local counter and a
 		// millisecond clock, so two suite processes started together — a parallel mutation-arm
-		// sweep, a `suite-shard.sh` shard set, a second worker on the same machine — generate the
+		// sweep, a `dev shard` shard set, a second worker on the same machine — generate the
 		// SAME names under one shared `$TMPDIR` and delete each other's files mid-test. A private
 		// temp root per process is what keeps them apart. A COMPLETED run leaves nothing at
 		// all where the old scheme accumulated; an INTERRUPTED one leaves one claimed directory
@@ -42,7 +42,7 @@ class RunTests {
 		// so `APQ_TEST=RemoveParam` runs RemoveParamSliceTest and `APQ_TEST=Apq`
 		// runs all `Apq*` tests; comma-separated to run a slice + its siblings.
 		// A token `<class>#<i>/<k>` runs one slice of a class's tests (`ShardFilter`):
-		// `tools/suite-shard.sh` deals a class heavier than a shard as several. A token
+		// `dev shard` deals a class heavier than a shard as several. A token
 		// `test:<text>` runs the tests whose `<class>.<method>` contains `<text>`
 		// (`tools/mutation-check.sh --killer-first`).
 		final filterEnv: Null<String> = Sys.getEnv('APQ_TEST');
@@ -158,7 +158,7 @@ class RunTests {
 	 * `--list-arms` print one view of the generated registry and exit before a
 	 * single fixture runs.
 	 *
-	 * `tools/suite-shard.sh` deals its shard plan off the first of them, so the
+	 * `dev shard` deals its shard plan off the first of them, so the
 	 * class list a shard is filtered by is the one the runner will actually
 	 * register. Nothing re-derives that list by parsing a source file — the
 	 * generated registry is the only place it exists.
