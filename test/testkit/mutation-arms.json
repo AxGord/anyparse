@@ -3214,15 +3214,46 @@
 			"name": "M-PATCH-STRADDLED-DOC-UNWATCHED",
 			"type": "anyparse.query.Patch",
 			"method": "docOrphanRefusal",
-			"find": "if (end < 0 || seen.contains(end)) continue;",
-			"replace": "if (end < 0 || seen.contains(end) || sorted.exists(e -> e.span.from < end && e.span.to > end)) continue;",
+			"find": "if (doc == null || seen.contains(doc.to)) continue;",
+			"replace": "if (doc == null || seen.contains(doc.to) || sorted.exists(e -> e.span.from < doc.to && e.span.to > doc.to)) continue;",
 			"note": "the retired `-1` answer comes back as a skip: a payload whose first pair rewrites the watched doc block drops the watch altogether, so a second pair pushing a declaration in under that block transfers the doc at rc 0"
+		},
+		{
+			"name": "M-PATCH-ENCLOSING-DOC-UNWATCHED",
+			"type": "anyparse.query.Patch",
+			"method": "enclosingDoc",
+			"force": "null",
+			"note": "an edit starting inside a doc block watches whatever the enclosing type's doc is instead, so a fragment opening on the doc's closing line and inserting a declaration under it moves the doc at rc 0"
+		},
+		{
+			"name": "M-PATCH-SPLICED-DOC-START-UNREAD",
+			"type": "anyparse.query.Patch",
+			"method": "splicedDocEnd",
+			"find": "final starting: Null<{ from: Int, to: Int, isLine: Bool }> = comments.find(t -> t.from == from && isDocBlock(source, t));",
+			"replace": "final starting: Null<{ from: Int, to: Int, isLine: Bool }> = null;",
+			"note": "the watched block's spliced end is no longer read off the doc token still starting where it did, so a fragment opening on the doc's closing line maps that end past the whole replacement and the declaration it inserts under the doc takes it at rc 0"
+		},
+		{
+			"name": "M-PATCH-SPLICED-DOC-OPENING-UNREAD",
+			"type": "anyparse.query.Patch",
+			"method": "splicedDocEnd",
+			"find": "final tok: Null<{ from: Int, to: Int, isLine: Bool }> = starting ?? comments.find(t ->\n\tt.from < from && from <= t.to && isDocBlock(source, t)\n);",
+			"replace": "final tok: Null<{ from: Int, to: Int, isLine: Bool }> = starting;",
+			"note": "a doc whose opening another pair rewrote is no longer found by the token its moved start falls inside, so the arithmetic end lands past the second pair's replacement and a declaration that pair inserts under the doc takes it at rc 0"
+		},
+		{
+			"name": "M-PATCH-NEW-OWNER-PREDECLARED-UNCHECKED",
+			"type": "anyparse.query.Patch",
+			"method": "docOrphanRefusal",
+			"find": "final took: Bool = siblingDeclares(tree, w.node, now);",
+			"replace": "final took: Bool = false;",
+			"note": "a doc whose new owner was already declared in the container reads as a rename, so deleting the documented declaration leaves its doc on the next one at rc 0"
 		},
 		{
 			"name": "M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE",
 			"type": "anyparse.query.Patch",
 			"method": "docOrphanRefusal",
-			"find": "final grew: Bool = w.declared >= 0 && declsInRegion(after, owner, w.region) > w.declared;",
+			"find": "final grew: Bool = w.declared >= 0 && declsInRegion(after, owner, new Span(docEnd, w.ownerEnd)) > w.declared;",
 			"replace": "final grew: Bool = w.declared >= 0 && declsInRegion(after, owner, new Span(0, spliced.length)) > w.declared;",
 			"note": "the growth is counted over the whole container again, so a pair renaming a documented member and a pair inserting anywhere else in the same container are refused together as a doc transfer that never happened"
 		},
@@ -29184,6 +29215,54 @@
 			"method": "overlappingFile",
 			"force": "null",
 			"note": "the edits two cross-file fixes make in one file are merged unchecked, so where they overlap the later silently swallows the earlier and the run reports both as landed"
+		},
+		{
+			"name": "M-ENUM-CTOR-PARAMS-PLAIN",
+			"type": "anyparse.grammar.haxe.HxEnumCtorDecl",
+			"method": "HxEnumCtorDecl",
+			"kind": "TypedefDecl",
+			"find": "@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
+			"replace": "@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
+			"note": "an enum constructor's parameters capture no per-element separator, so every gap gets a comma and a region already ending on its own is followed by `#end, c:Int`"
+		},
+		{
+			"name": "M-TRAIL-AFTER-REGION",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "refusesTrailingSeparator",
+			"find": "return DocMeasure.opensDirectiveRegion(item) || DocMeasure.endsWithSemi(item);",
+			"replace": "return DocMeasure.endsWithSemi(item);",
+			"note": "a region ending the list takes the trailing comma again, which compiles to `, ,` once its branch is off"
+		},
+		{
+			"name": "M-TRAIL-AFTER-SEMI",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "refusesTrailingSeparator",
+			"find": "return DocMeasure.opensDirectiveRegion(item) || DocMeasure.endsWithSemi(item);",
+			"replace": "return DocMeasure.opensDirectiveRegion(item);",
+			"note": "a class-notation structure field takes the trailing comma after its own `;`"
+		},
+		{
+			"name": "M-TRAIL-CASCADE-UNGATED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "appendsTrailingComma",
+			"force": "axes.appendTrailingComma",
+			"note": "the wrap cascade appends the trailing comma whatever the last item ends on"
+		},
+		{
+			"name": "M-TRAIL-FORCEMULTI-UNGATED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiLineExpr",
+			"find": "? $appendTrailingCommaExpr && ($flatTrailingCommaExpr || !anyparse.format.wrap.WrapList.refusesTrailingSeparator(_elem))",
+			"replace": "? $appendTrailingCommaExpr",
+			"note": "a list laid out one item per line by a comment appends the trailing comma after a region ending it"
+		},
+		{
+			"name": "M-TRAIL-CALL-FORCEMULTI-UNGATED",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "lowerPostfixForceMultiDoc",
+			"find": "final _mTrail: Bool = _mLast && $tcExpr && !anyparse.format.wrap.WrapList.refusesTrailingSeparator(_docs[_mj]);",
+			"replace": "final _mTrail: Bool = _mLast && $tcExpr;",
+			"note": "call arguments laid out one per line by a line comment append the trailing comma after a region ending them"
 		},
 		{
 			"name": "M-DOOR-TYPE-VALUE-NULL",

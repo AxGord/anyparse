@@ -261,7 +261,10 @@ final class DeferredArms {
 		'M-CATCH-BLOCK-LINE-END-GLUED :: anyparse.macro.WriterTriviaStarEmitLowering#buildCloseTrailingFirstSepOverride',
 		'M-PAREN-KEPT-CHAIN-OPERAND :: anyparse.macro.WriterKwRefLowering#opAddSubParenShape',
 		'M-COND-PARAM-ELSE-PLAIN :: anyparse.grammar.haxe.HxConditionalParam#TypedefDecl:HxConditionalParam',
-		'M-COND-PARAM-ELSEIF-PLAIN :: anyparse.grammar.haxe.HxElseifParam#TypedefDecl:HxElseifParam'
+		'M-COND-PARAM-ELSEIF-PLAIN :: anyparse.grammar.haxe.HxElseifParam#TypedefDecl:HxElseifParam',
+		'M-ENUM-CTOR-PARAMS-PLAIN :: anyparse.grammar.haxe.HxEnumCtorDecl#TypedefDecl:HxEnumCtorDecl',
+		'M-TRAIL-FORCEMULTI-UNGATED :: anyparse.macro.TriviaSepLowering#triviaSepForceMultiLineExpr',
+		'M-TRAIL-CALL-FORCEMULTI-UNGATED :: anyparse.macro.WriterChainLowering#lowerPostfixForceMultiDoc'
 	];
 
 }

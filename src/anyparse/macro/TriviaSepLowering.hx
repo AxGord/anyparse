@@ -309,6 +309,7 @@ final class TriviaSepLowering {
 			typedefBetweenExpr: typedefBetweenExpr,
 			blankBeforeExpr: blankBeforeExpr,
 			appendTrailingCommaExpr: appendTrailingCommaExpr,
+			flatTrailingCommaExpr: flatTrailingCommaExpr,
 			triviaLeadDoc: triviaLeadDoc,
 			triviaTrailDocKeepAware: triviaTrailDocKeepAware,
 			keepMatrixComputeExpr: keepMatrixComputeExpr,
@@ -472,7 +473,7 @@ final class TriviaSepLowering {
 	 * before-or-after the sep. References the runtime `_elem`/`_line`/`_si`/
 	 * `_t`/`_arr`/`_inner` locals declared in the force-multi loop.
 	 */
-	private static function triviaSepForceMultiLineExpr(appendTrailingCommaExpr: Expr, sepText: String): Expr {
+	private static function triviaSepForceMultiLineExpr(appendTrailingCommaExpr: Expr, flatTrailingCommaExpr: Expr, sepText: String): Expr {
 		return macro {
 			var _line: anyparse.core.Doc = _elem;
 			// ω-objectlit-source-inter-sep: inter-element comma
@@ -485,7 +486,9 @@ final class TriviaSepLowering {
 			// `field:` slots and no separator between
 			// them.
 			final _isLast: Bool = _si == _arr.length - 1;
-			final _emitSep: Bool = _isLast ? $appendTrailingCommaExpr : _t.sepAfter;
+			final _emitSep: Bool = _isLast
+				? $appendTrailingCommaExpr && ($flatTrailingCommaExpr || !anyparse.format.wrap.WrapList.refusesTrailingSeparator(_elem))
+				: _t.sepAfter;
 			final _tc: Null<String> = _t.trailingComment;
 			// ω-trivia-trailing-before-sep: emit `elem /*c*/, next`
 			// instead of `elem, /*c*/ next` when the source captured
@@ -521,7 +524,7 @@ final class TriviaSepLowering {
 		final triviaTrailDocKeepAware: Expr = c.triviaTrailDocKeepAware;
 		final triviaElemCall: Expr = c.triviaElemCall;
 		final leadBreakExpr: Expr = triviaSepForceMultiLeadExpr();
-		final lineExpr: Expr = triviaSepForceMultiLineExpr(c.appendTrailingCommaExpr, c.sepText);
+		final lineExpr: Expr = triviaSepForceMultiLineExpr(c.appendTrailingCommaExpr, c.flatTrailingCommaExpr, c.sepText);
 		final balcEmitExpr: Expr = triviaBalcEmitExpr(c.uniformStmtBlanks);
 		return macro {
 			final _inner: Array<anyparse.core.Doc> = [];

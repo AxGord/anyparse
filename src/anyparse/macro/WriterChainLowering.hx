@@ -383,7 +383,8 @@ final class WriterChainLowering {
 				// last element when the config asks for a trailing one OR the source
 				// itself put one (which is what an after-separator comment proves).
 				final _mLast: Bool = _mj == _docs.length - 1;
-				if ((!_mLast && _args[_mj].sepAfter) || (_mLast && $tcExpr) || _mAfterSep != null) _mInner.push(_dt($v{c.elemSep}));
+				final _mTrail: Bool = _mLast && $tcExpr && !anyparse.format.wrap.WrapList.refusesTrailingSeparator(_docs[_mj]);
+				if ((!_mLast && _args[_mj].sepAfter) || _mTrail || _mAfterSep != null) _mInner.push(_dt($v{c.elemSep}));
 				if (_mAfterSep != null) _mInner.push(trailingCommentDocVerbatim(_mAfterSep, opt));
 				_mj++;
 			}
