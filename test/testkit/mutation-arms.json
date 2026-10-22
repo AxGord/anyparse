@@ -29085,6 +29085,105 @@
 			"find": "final elided: Bool = [for (k in from + 1...to) skipSepBefore(sepBeforeFlags, k)].contains(true);",
 			"replace": "final elided: Bool = false;",
 			"note": "a fill run packs with one uniform separator, so a gap the source left comma-less gains a comma beside the one its region already wrote"
+		},
+		{
+			"name": "M-SINK-NEVER-SOUND",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "sinkSound",
+			"force": "false",
+			"note": "no ambient statement is ever judged safe to send back to its readers, so the reverse direction proposes nothing and a statement one module reads stays in the source of a whole directory"
+		},
+		{
+			"name": "M-SINK-SHARE-BLIND",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "sinkSite",
+			"find": "if (candidate == null || reading.length == 0 || reading.length * PERCENT >= sink * governed.length) continue;",
+			"replace": "if (candidate == null || reading.length == 0) continue;",
+			"note": "the reader share is never read, so every ambient statement any module reads is sent back into its readers however many of them there are"
+		},
+		{
+			"name": "M-SINK-HYSTERESIS-OFF",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "sinkSite",
+			"find": "if (sink >= (cfg.intOption(RULE_ID, 'threshold') ?? DEFAULT_THRESHOLD)) return;",
+			"replace": "if (sink < 0) return;",
+			"note": "a sink threshold at or above the hoist one is honoured, so one share sits on both sides and a fix run moves the same statement into the ambient source and back out of it pass after pass"
+		},
+		{
+			"name": "M-SINK-RIVAL-BLIND",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "sinkSound",
+			"find": "if (imp.guarded || SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;",
+			"replace": "if (imp.guarded) return false;",
+			"note": "a nearer ambient source binding the same name to another type is no rival, so the own copy a sink writes outranks it and the reader's name turns to the sunk statement's type"
+		},
+		{
+			"name": "M-SINK-OWN-RIVAL-BLIND",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "sinkSound",
+			"find": "!(statementKeyOf(imp) == key && !imp.guarded) && SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)",
+			"replace": "false",
+			"note": "a reader's own import of the same name is no rival, so the own copy a sink writes lands beside it and whichever sorts last takes the name"
+		},
+		{
+			"name": "M-SINK-USING-RANK-BLIND",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "sinkSound",
+			"find": "if (statement.isUsing && imp.kind == ImportKind.Using) return false;",
+			"replace": "if (statement.isUsing && imp.guarded) return false;",
+			"note": "another using in the reader's chain is no rival, so a sunk using turns own and outranks it, and every extension method both declare resolves to the sunk one"
+		},
+		{
+			"name": "M-EMPTY-AMBIENT-NEVER",
+			"type": "anyparse.check.EmptyAmbientSource",
+			"method": "blankness",
+			"force": "null",
+			"note": "no ambient source is ever empty, so the file an emptying fix leaves behind stays on disk unreported"
+		},
+		{
+			"name": "M-EMPTY-AMBIENT-KEEPS",
+			"type": "anyparse.check.EmptyAmbientSource",
+			"method": "crossFileFix",
+			"force": "[]",
+			"note": "a blank ambient source is reported and never deleted, so every emptying fix leaves its file behind"
+		},
+		{
+			"name": "M-FIX-REMOVE-IGNORED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "commitRemoves",
+			"force": "[]",
+			"note": "a slice that removes a file is staged and never committed, so a fix that deletes a file reports success and leaves it on disk"
+		},
+		{
+			"name": "M-FIX-REMOVE-NO-RESTORE",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "reconcileSafePass",
+			"find": "if (original == null || files.exists(entry -> entry.file == path)) continue;",
+			"replace": "if (original == null || true) continue;",
+			"note": "the safe-pass revert restores the files the run still holds only, so a deletion the oracle rejected stays deleted and the tree the revert claims green does not compile"
+		},
+		{
+			"name": "M-FIX-AMBIENT-HELD",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "writeAmbientSources",
+			"find": "CliIo.writeFiles(ambient);",
+			"replace": "ambient.resize(0);",
+			"note": "an ambient source a pass rewrote stays in memory until the end of the run, so every later pass resolves the chain from the statements the source no longer carries"
+		},
+		{
+			"name": "M-SINK-WHOLE-FILE",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "sinkSlice",
+			"find": "edits: [narrowedEdit(sourceOf[file] ?? '', textOf[file] ?? '')]",
+			"replace": "edits: [{ span: new Span(0, (sourceOf[file] ?? '').length), text: textOf[file] ?? '' }]",
+			"note": "a sink rewrites each reader as one whole-file edit, so a cross-file rename another rule makes in that reader in the same pass overlaps it and one of the two is lost"
+		},
+		{
+			"name": "M-FIX-OVERLAP-BLIND",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "overlappingFile",
+			"force": "null",
+			"note": "the edits two cross-file fixes make in one file are merged unchecked, so where they overlap the later silently swallows the earlier and the run reports both as landed"
 		}
 	]
 }

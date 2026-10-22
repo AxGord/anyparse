@@ -127,6 +127,7 @@
 		"hoist-common-import": {
 			"enabled": true,
 			"threshold": 50,
+			"sinkThreshold": 25,
 			"usingAllowList": [
 				"StringTools",
 				"Lambda"
