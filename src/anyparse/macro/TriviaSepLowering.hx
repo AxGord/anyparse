@@ -1029,7 +1029,7 @@ final class TriviaSepLowering {
 				}
 				: macro {};
 			// ω-cascade-emits-comments: wrap each per-element Doc with its
-			// leading comments (each followed by a space) and an inline
+			// leading comments (a glued single-line block comment followed by a space, any other by a hardline) and an inline
 			// block-style trailing comment (line-style trailings are not
 			// cascade-emittable — the engine inserts the separator AFTER
 			// the item, which would land INSIDE a `// ...` line comment;
