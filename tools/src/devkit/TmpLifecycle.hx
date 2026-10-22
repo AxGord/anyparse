@@ -156,6 +156,17 @@ final class TmpLifecycle {
 		return swept;
 	}
 
+	/**
+	 * The sweep a tool runs at startup: `sweep` now, with a line on stderr naming how many directories went — unless
+	 * `APQ_TMP_NO_SWEEP` is set.
+	 */
+	public function startupSweep(?repo: String): Void {
+		if ((Sys.getEnv('APQ_TMP_NO_SWEEP') ?? '') != '') return;
+		final swept: Int = sweep(now(), repo);
+		final noun: String = swept == 1 ? 'directory' : 'directories';
+		if (swept > 0) Sys.stderr().writeString('tmp-lifecycle: swept $swept orphaned scratch $noun under $root\n');
+	}
+
 	/** The configuration the environment gives, as `tools/tmp-lifecycle.sh` reads it. */
 	public static function fromEnv(): TmpLifecycle {
 		return new TmpLifecycle(

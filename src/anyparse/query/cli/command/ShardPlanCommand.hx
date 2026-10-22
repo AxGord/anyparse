@@ -104,7 +104,7 @@ final class ShardPlanCommand implements CliCommand {
 		}
 		final shardCount: Int = shards;
 
-		// The generated-registry door. `tools/suite-shard.sh` asks the runner
+		// The generated-registry door. `dev shard` asks the runner
 		// itself (`node bin/test.js --list-classes`) and hands the answer here,
 		// so the plan is made from the list the run will actually register
 		// rather than from a re-derivation of it out of source text.
@@ -166,7 +166,7 @@ final class ShardPlanCommand implements CliCommand {
 		CliIo.sysPrint('Usage: apq shard-plan (--runner <RunTests.hx> | --classes <list>) --shards <N>\n');
 		CliIo.sysPrint('                      [--weights <timings>] [--format lines|filters]\n');
 		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Deal N APQ_TEST shards for tools/suite-shard.sh, from one of two class lists.\n');
+		CliIo.sysPrint('Deal N APQ_TEST shards (the split `node bin/dev.js shard` runs), from one of two class lists.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('  --classes <path>  one fully-qualified class name per line, blank lines\n');
 		CliIo.sysPrint('                    ignored — what `node bin/test.js --list-classes` prints,\n');

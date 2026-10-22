@@ -11,7 +11,7 @@ import sys.FileSystem;
  *
  * `RunTests.main` calls `CliFixture.isolateTempDir()` before it registers a single fixture, and
  * that call is the whole of what keeps two concurrent suite processes — a `mutation-arm.sh`
- * sweep, a `suite-shard.sh` shard set, a second worker on the same machine — from generating the
+ * sweep, a `dev shard` shard set, a second worker on the same machine — from generating the
  * same fixture directory name and deleting each other's files mid-test. Nothing checked
  * it: delete the call and this suite stays green, because the damage lands in ANOTHER process's
  * transcript and only under concurrency.

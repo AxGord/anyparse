@@ -155,7 +155,7 @@ final class ShardPlan {
 	 * classes of `tools/suite-shard.sh -n 8 --timings` on 2026-10-05 (901 classes, 470 s in all; the other 877 average
 	 * 37 ms). In-suite rather than isolated: an isolated run re-pays the resolution warm-up that the monolith pays once,
 	 * which overstates every class touching the resolution library and produces a worse split. A run's own measurement
-	 * (`--weights`, which `tools/suite-shard.sh` refreshes after every green run) overrides a row here.
+	 * (`--weights`, which `dev shard` refreshes after every green run) overrides a row here.
 	 *
 	 * Stale weights cost BALANCE, never correctness — no gate reads them, so
 	 * a class whose cost has drifted lands on a busier shard and nothing else.

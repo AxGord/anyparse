@@ -18,6 +18,7 @@ final class Dev {
 		{ name: 'scrub-guard', main: ScrubGuard.main, usage: ScrubGuard.USAGE },
 		{ name: 'clone-census', main: CloneCensus.main, usage: CloneCensus.USAGE },
 		{ name: 'worker-build', main: WorkerBuild.main, usage: WorkerBuild.USAGE },
+		{ name: 'shard', main: Shard.main, usage: Shard.USAGE },
 		{ name: 'tmp-lifecycle', main: Tmp.main, usage: Tmp.USAGE },
 		{ name: 'fixture-cache', main: FixtureCacheCli.main, usage: FixtureCacheCli.USAGE },
 		{ name: 'jvm-portability', main: JvmProbe.main, usage: JvmProbe.USAGE },

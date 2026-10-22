@@ -1,7 +1,5 @@
 package anyparse.query.cli.command;
 
-import anyparse.query.Cli.TestSummaryFailureKind;
-import anyparse.query.Cli.TestSummaryFailureLocus;
 import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.ExitCode.*;
 import haxe.Exception;
@@ -144,56 +142,20 @@ final class TestSummaryCommand implements CliCommand {
 		// name, so it parses as neither a test row nor a failure row: the counts
 		// line for a filter that matched nothing reads all-zero, i.e. green.
 		if (result.noTests) CliIo.sysPrint('no tests executed: the filter matched no test class\n');
-		final ff: Null<TestSummaryFailureLocus> = result.firstFailure;
-		if (ff != null) {
-			final classQual: String = ff.className.length > 0 ? '${ff.className}.' : '';
-			final lineFrag: String = ff.line >= 0 ? '  line:${ff.line}' : '';
-			final msgFrag: String = ff.message.length > 0 ? '  ${ff.message}' : '';
-			final label: String = ff.kind == TestSummaryFailureKind.Error ? 'error' : 'failure';
-			CliIo.sysPrint('first $label: $classQual${ff.testName}$lineFrag$msgFrag\n');
-		}
+		final locus: Null<String> = TestTranscript.firstFailureLine(result);
+		if (locus != null) CliIo.sysPrint('$locus\n');
 		return exitStatus == null ? EXIT_OK : reconcileExitStatus((exitStatus: Int), result, src);
 	}
 
 	/**
-	 * Reconcile a transcript against the exit status its RUNNER returned —
-	 * `--exit-status <N>`, the only reader of which is `tools/suite-shard.sh`,
-	 * one call per shard.
-	 *
-	 * A transcript is not self-validating. Counting it answers what it SAYS;
-	 * it cannot answer whether the process that wrote it got to the end. The
-	 * two disagreements this catches are the same defect pointing opposite
-	 * ways, and each prints a report that reads GREEN on its own:
-	 *
-	 *  - exited non-zero, reports no failing test — the run died before
-	 *    finishing (a shard killed after one row summarised to a single green
-	 *    test at exit 0, and the caller then added those counts to its total as
-	 *    if the missing thousands had passed);
-	 *  - exited zero, reports failures — the runner swallowed its own verdict.
-	 *
-	 * The counts line is still printed either way: a caller that parses it
-	 * must keep getting it, and the disagreement is an EXTRA line plus a
-	 * non-zero exit, never a withheld answer.
+	 * Reconcile a transcript against the exit status its RUNNER returned (`--exit-status <N>`; the rule is
+	 * `TestTranscript.exitStatusDisagreement`). The counts line is printed either way: a caller that parses it must keep
+	 * getting it, and the disagreement is an EXTRA line plus a non-zero exit, never a withheld answer.
 	 */
 	private static function reconcileExitStatus(status: Int, result: TestSummaryResult, src: String): Int {
-		final red: Int = result.failures + result.errors;
-		// The whole contract in one line: a run exits non-zero exactly when its
-		// report names a failing test. Written as the equivalence rather than as
-		// two negated branches so the agreeing case is the guard and neither
-		// disagreement has to be spelled twice.
-		if ((status != 0) == (red > 0)) return EXIT_OK;
-		if (status != 0) {
-			CliIo.sysPrint(
-				'exit-status disagreement: the run exited $status while its transcript reports 0 failures / 0 errors — '
-				+ 'the report does not explain the exit (a run that died before finishing, a filter that matched nothing, '
-				+ 'or a failure that never reached stdout) ($src)\n'
-			);
-			return EXIT_RUNTIME;
-		}
-		CliIo.sysPrint(
-			'exit-status disagreement: the run exited 0 while its transcript reports '
-			+ '${result.failures} failures / ${result.errors} errors ($src)\n'
-		);
+		final disagreement: Null<String> = TestTranscript.exitStatusDisagreement(status, result, src);
+		if (disagreement == null) return EXIT_OK;
+		CliIo.sysPrint('$disagreement\n');
 		return EXIT_RUNTIME;
 	}
 

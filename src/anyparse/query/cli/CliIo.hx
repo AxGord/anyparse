@@ -332,21 +332,26 @@ final class CliIo {
 	 * without raising — the user always gets the requested totals.
 	 */
 	public static function warnIfTestJsStale(cmd: String): Void {
+		final why: Null<String> = testJsStaleness('bin/test.js', '');
+		if (why != null) CliIo.stderr('apq $cmd: WARNING: $why\n');
+	}
+
+	/**
+	 * Why the totals of a run of the test runner `testJs` are not to be trusted — a `.hx` under `<root>/src` or `<root>/test`
+	 * is newer than it — or null when none is, the runner is missing, or the check cannot be made.
+	 */
+	public static function testJsStaleness(testJs: String, root: String): Null<String> {
 		#if (sys || nodejs)
-		final binPath: String = 'bin/test.js';
-		if (!FileSystem.exists(binPath)) return;
+		if (!FileSystem.exists(testJs)) return null;
 		try {
-			final binTime: Float = FileSystem.stat(binPath).mtime.getTime();
-			if (anyHxNewerThan('src', binTime) || anyHxNewerThan('test', binTime)) {
-				CliIo.stderr(
-					'apq $cmd: WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before '
-					+ 'trusting these totals\n'
-				);
-			}
+			final binTime: Float = FileSystem.stat(testJs).mtime.getTime();
+			if (anyHxNewerThan(Path.join([root, 'src']), binTime) || anyHxNewerThan(Path.join([root, 'test']), binTime))
+				return 'src/ or test/ is newer than $testJs — re-run `haxe test-js.hxml && node bin/test.js` before trusting these totals';
 		} catch (_: Exception) {
 			// best-effort: skip the staleness advisory on any FS error
 		}
 		#end
+		return null;
 	}
 
 	private static function anyHxNewerThan(root: String, threshold: Float): Bool {

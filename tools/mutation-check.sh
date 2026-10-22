@@ -552,7 +552,7 @@ write_verdict() {
 # The whole classifier lives in `apq mutation-verdict`. It used to live
 # here, as ~130 lines of awk that re-implemented a utest transcript
 # parser `apq test-summary` had already carried for longer than this
-# script has existed — and which suite-shard.sh reuses precisely so a
+# script has existed — and which `dev shard` reuses precisely so a
 # second, divergent one cannot grow. One grew anyway, and the price is
 # on record: both fdb44864 ("a red run can no longer be reported
 # SURVIVED") and ff3f20ae ("find the utest header by SHAPE") were bugs
@@ -867,7 +867,7 @@ fi
 # probes), the same fixtures in every track. `testkit.FixtureCompileCache`
 # replays such a compile from a content-addressed record — every input by
 # content, every path placeheld — shared by every track of this run AND by
-# every run and every suite-shard.sh run before it (the store
+# every run and every `dev shard` run before it (the store
 # tools/fixture-cache.sh keeps; why keeping it is sound is documented there).
 # A mutated facts macro is a different key, so it compiles for real. The
 # replay program is built from THIS tree, never from a track's: the tracks'

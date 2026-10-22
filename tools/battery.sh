@@ -41,7 +41,7 @@
 # slice.
 #
 # Every format-aware step is delegated to the CLI this project already builds
-# (`apq lint-diff`, `apq sweep`, `apq test-summary` via suite-shard.sh) rather
+# (`apq lint-diff`, `apq sweep`, the sharded suite through `dev shard`) rather
 # than re-implemented here. Shell orchestrates processes; anything that has to
 # UNDERSTAND a file is a subcommand, testable in the suite and dogfooding our
 # own JSON parser. That is why this script needs no jq and no python.
@@ -51,7 +51,7 @@
 # The steps read like a sequence but their dependencies are far sparser, so
 # they run as four concurrent BRANCHES:
 #
-#   build ──┬─ suite ── corpus          build = apq.js + test.js + a recon typecheck
+#   build ──┬─ suite ── corpus          build = apq.js + test.js + dev.js + a recon typecheck
 #           │                           corpus reads what the suite wrote
 #           ├─ fmt
 #           ├─ jvm probe                only when src/ or the probe moved
@@ -71,7 +71,7 @@
 # the jvm probe's `bin/jvm-portability.jar` by nobody. Adding a fifth branch
 # means re-checking that, not assuming it: `docs/testing.md` § "The step
 # graph: four branches, one join" carries the full rationale, and
-# `tools/suite-shard.sh`'s shared-path inventory is written for shard-vs-shard
+# `dev shard`'s shared-path inventory is written for shard-vs-shard
 # only.
 #
 # What fails the run: any build error (the recon typecheck included), a red or
@@ -161,7 +161,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 # The repo comes from THIS SCRIPT's location, never the CWD — same rule as
-# suite-shard.sh and worker-build.sh. Everything below then runs from the repo
+# worker-build.sh and bin/dev.js. Everything below then runs from the repo
 # root, because the runner and the CLI both resolve fixtures, hxformat.json and
 # apqlint.json against the process CWD.
 script_dir=$(cd -P "$(dirname "$0")" && pwd)
@@ -393,11 +393,6 @@ replay_branch() {
 
 # --- preflight ---------------------------------------------------------
 
-if ! command -v hxq > /dev/null 2>&1; then
-    echo "battery.sh: hxq is not on PATH — suite-shard.sh computes its shard plan through it" >&2
-    exit 2
-fi
-
 # The corpus round-trip layer is silent when this is unset: the suite still
 # reports green, just with ~950 fewer fixtures exercised. A battery that
 # cannot tell "corpus clean" from "corpus not run" is worse than no corpus
@@ -440,17 +435,21 @@ fi
 # --- 1. builds ---------------------------------------------------------
 #
 # Sequential relative to everything else, because everything else executes
-# what it produces. The three compiles inside it are parallel: two independent
-# outputs from independent hxml plus an output-less typecheck, and the group is
-# the single longest stretch the concurrency below cannot dissolve.
+# what it produces. The four compiles inside it are parallel: three independent
+# outputs from independent hxml (`bin/dev.js` runs the sharded suite) plus an
+# output-less typecheck, and the group is the single longest stretch the
+# concurrency below cannot dissolve.
 step_begin "build (parallel)"
 apq_rc=0
 test_rc=0
+dev_rc=0
 recon_rc=0
 haxe bin/apq-js.hxml > "$work/build-apq.log" 2>&1 &
 build_apq_pid=$!
 haxe test-js.hxml > "$work/build-test.log" 2>&1 &
 build_test_pid=$!
+haxe tools/dev.hxml > "$work/build-dev.log" 2>&1 &
+build_dev_pid=$!
 # `recon.hxml` is the ONLY hxml that reaches `test/_ReconSkipParse.hx`, and nothing
 # ran it. (`-main RunTests` now types every module in a package under `test/` —
 # the discovery macro asks for each one — but `_ReconSkipParse` is a root-level
@@ -466,6 +465,7 @@ haxe recon.hxml --no-output > "$work/build-recon.log" 2>&1 &
 build_recon_pid=$!
 wait "$build_apq_pid" || apq_rc=$?
 wait "$build_test_pid" || test_rc=$?
+wait "$build_dev_pid" || dev_rc=$?
 wait "$build_recon_pid" || recon_rc=$?
 if [ "$apq_rc" -ne 0 ]; then
     cat "$work/build-apq.log" >&2
@@ -474,6 +474,10 @@ fi
 if [ "$test_rc" -ne 0 ]; then
     cat "$work/build-test.log" >&2
     fail "test-js.hxml did not build"
+fi
+if [ "$dev_rc" -ne 0 ]; then
+    cat "$work/build-dev.log" >&2
+    fail "tools/dev.hxml did not build"
 fi
 if [ "$recon_rc" -ne 0 ]; then
     cat "$work/build-recon.log" >&2
@@ -520,13 +524,13 @@ branch_suite() {
     # and `.err`, so a step log named after its branch would collide with the
     # branch's own stderr and interleave the two.
     # shellcheck disable=SC2086
-    tools/suite-shard.sh $shard_args > "$work/suite-run.log" 2> "$work/suite-run.err" || suite_rc=$?
+    node bin/dev.js shard $shard_args > "$work/suite-run.log" 2> "$work/suite-run.err" || suite_rc=$?
     cat "$work/suite-run.log"
     if [ -s "$work/suite-run.err" ]; then
         cat "$work/suite-run.err" >&2
     fi
     if [ "$suite_rc" -ne 0 ]; then
-        fail "the suite is not green (see $work/suite-run.log; suite-shard.sh keeps its own per-shard logs on failure)"
+        fail "the suite is not green (see $work/suite-run.log; dev shard keeps its own per-shard logs on failure)"
     fi
 
     read -r now_tests now_asserts <<EOF

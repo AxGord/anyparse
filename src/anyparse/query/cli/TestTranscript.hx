@@ -143,6 +143,35 @@ final class TestTranscript {
 			counted: sawUtestReport(block, tests, failures, errors)
 		};
 	}
+	/**
+	 * The locus line printed under the counts of a red transcript — `first failure: <Class>.<test>  line:N  <message>` —
+	 * or null when the transcript names no failing test.
+	 */
+	public static function firstFailureLine(result: TestSummaryResult): Null<String> {
+		final ff: Null<TestSummaryFailureLocus> = result.firstFailure;
+		if (ff == null) return null;
+		final classQual: String = ff.className.length > 0 ? '${ff.className}.' : '';
+		final lineFrag: String = ff.line >= 0 ? '  line:${ff.line}' : '';
+		final msgFrag: String = ff.message.length > 0 ? '  ${ff.message}' : '';
+		final label: String = ff.kind == TestSummaryFailureKind.Error ? 'error' : 'failure';
+		return 'first $label: $classQual${ff.testName}$lineFrag$msgFrag';
+	}
+
+	/**
+	 * Why the transcript `src`, parsed into `result`, does not explain the exit `status` its run returned — or null when it
+	 * does. A run exits non-zero exactly when its report names a failing test; a transcript is not self-validating, so a run
+	 * that died mid-way reads green on its own, and only its status says otherwise.
+	 */
+	public static function exitStatusDisagreement(status: Int, result: TestSummaryResult, src: String): Null<String> {
+		final red: Int = result.failures + result.errors;
+		if ((status != 0) == (red > 0)) return null;
+		return status != 0
+			? 'exit-status disagreement: the run exited $status while its transcript reports 0 failures / 0 errors — '
+				+ 'the report does not explain the exit (a run that died before finishing, a filter that matched nothing, '
+				+ 'or a failure that never reached stdout) ($src)'
+			: 'exit-status disagreement: the run exited 0 while its transcript reports '
+				+ '${result.failures} failures / ${result.errors} errors ($src)';
+	}
 
 	/**
 	 * utest's end-of-run header block, or null when the transcript carries
