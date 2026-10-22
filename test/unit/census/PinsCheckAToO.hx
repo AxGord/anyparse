@@ -897,6 +897,9 @@ final class PinsCheckAToO {
 			+ 'M-ORPHAN-UNREADABLE-SUBTYPE-OWNER-WIDE,M-ORPHAN-REPORT-OWNER-WIDE',
 		'unit.check.OrphanAccessorCheckTest#testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows :: control :: '
 			+ 'M-ORPHAN-ARMS-SHARE-REASON',
+		'unit.check.OverriddenInlineCheckTest#testFixDropsInlineOnTheOverriddenEndOnly :: control :: M-OVERRIDDEN-INLINE-FIX-NONE',
+		'unit.check.OverriddenInlineCheckTest#testOverrideThroughALaterExtendsBranchFlagsBothEnds :: control :: '
+			+ 'M-OVERRIDDEN-DECLS-FIRST-LINK',
 		'unit.check.OversizedTypeCheckTest#testACeilingLessGrantIsRefusedWithAMigrationMessage :: control :: '
 			+ 'M-OVERSIZED-LEGACY-GRANT,M-OVERSIZED-PROBLEM-SILENT',
 		'unit.check.OversizedTypeCheckTest#testACeilingNotAboveTheThresholdIsRefused :: control :: M-OVERSIZED-CEILING-AT-THRESHOLD',

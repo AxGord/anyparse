@@ -300,6 +300,27 @@ class PreferInlineCheckTest extends Test {
 		Assert.equals(0, CheckFixture.violationsIn(new PreferInline(), files).length);
 	}
 
+	@:pin('control')
+	@:killer('M-SUPERTYPES-FIRST-WRITTEN-ONLY')
+	public function testSubtypeExtendingThroughALaterBranchSkips(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'x/Other.hx', source: 'package x;\n\nclass Other {\n\tpublic function new() {}\n}' },
+			{
+				file: 'a/Client.hx',
+				source: 'package a;\n\nclass Client {\n\tpublic function new() {}\n\n\tpublic function send():Void {}\n}'
+			},
+			{
+				file: 'net/Client.hx',
+				source: 'package net;\n\nclass Client #if node extends x.Other #elseif flash extends a.Client #end {\n'
+					+ '\toverride public function send():Void {}\n}'
+			}
+		];
+		Assert.equals(
+			0, CheckFixture.violationsIn(new PreferInline(), files).length,
+			'every #if branch of an extends clause is a superclass in some build, so the elseif one still overrides send'
+		);
+	}
+
 	/**
 	 * The implemented interface's SIMPLE name is shared by another package, and the class's own
 	 * imports say which one it means: the interface gate resolves instead of blocking on
