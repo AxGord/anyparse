@@ -145,6 +145,20 @@ class HxCondListSeparatorWriteTest extends Test {
 		assertWritesOnce(source, source);
 	}
 
+	@:pin('control')
+	@:killer('M-TRAIL-REGION-UNDER-COMMENT')
+	@:killer('M-LEAD-BLOCK-COMMENT-END')
+	public function testALeadingCommentDoesNotHideARegionFromTheTrailingCommaKnob(): Void {
+		// The region test read the item's first visible text, and a comment glued in front of `#if` is that text: `#end,` came back.
+		final source: String = 'class A {\n\tfunction p(a:Int, /* c */ #if x b:Int #end) {}\n\n\tfunction c() {\n'
+			+ '\t\tv(1, /* c */ #if x 2, #end);\n\t\tv(1,\n\t\t\t// c\n\t\t\t#if x 2, #end);\n\t}\n}\n\nenum E {\n'
+			+ '\tA(a:Int, /* c */ #if x b:Int #end);\n}\n';
+		final expected: String = 'class A {\n\tfunction p(\n\t\ta:Int,\n\t\t/* c */ #if x b:Int #end\n\t) {}\n\n\tfunction c() {\n\t\tv(\n'
+			+ '\t\t\t1,\n\t\t\t/* c */ #if x 2, #end\n\t\t);\n\t\tv(\n\t\t\t1,\n\t\t\t// c\n\t\t\t#if x 2, #end\n\t\t);\n\t}\n}\n\n'
+			+ 'enum E {\n\tA(\n\t\ta:Int,\n\t\t/* c */ #if x b:Int #end\n\t);\n}\n';
+		assertWritesOnce(source, expected);
+	}
+
 	/** `source` is already what the writer produces for it — the byte contract a canonical file has. */
 	private function assertFixedPoint(source: String): Void {
 		Assert.equals(source, roundTrip(source));

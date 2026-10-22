@@ -135,6 +135,8 @@ final class PinsGrammarAndCli {
 			+ 'M-STMT-LIST-CALLARG-BLOCK',
 		'unit.grammar.haxe.HxCallArgLambdaBodyChainIndentTest#testReturnInSoleLambdaArgChainIndents :: control :: '
 			+ 'M-STMT-LIST-CALLARG-BARRIER',
+		'unit.grammar.haxe.HxCallArgsTrailingCommaKeepTest#testABrokenCallKeepsItsTrailingComma :: control :: M-CALL-SOURCE-TRAIL-OFF',
+		'unit.grammar.haxe.HxCallArgsTrailingCommaKeepTest#testAFlatCallKeepsItsTrailingComma :: control :: M-CALL-FLAT-SOURCE-TRAIL-OFF',
 		'unit.grammar.haxe.HxCallGroupRestProbeCasePatternTest#testCasePatternCtorInsideACollectionStaysGlued :: control :: '
 			+ 'M-PATTERN-RESTPROBE-UNSET',
 		'unit.grammar.haxe.HxCaseBodyControlFlowGlueTest#testABracelessControlFlowBodyGoesBelowAndSpreads :: control :: '
@@ -232,6 +234,8 @@ final class PinsGrammarAndCli {
 			+ 'M-REGION-OFFER-THROUGH-BODIES,M-NESTED-THROUGH-BODIES',
 		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAnElseifRegionInAComprehensionSettlesInOneWrite :: control :: '
 			+ 'M-REGION-SEAMS-BOUNDED',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testALeadingCommentDoesNotHideARegionFromTheTrailingCommaKnob :: control :: '
+			+ 'M-TRAIL-REGION-UNDER-COMMENT,M-LEAD-BLOCK-COMMENT-END',
 		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testALineCommentedListAddsNoTrailingCommaAfterARegion :: control :: '
 			+ 'M-TRAIL-AFTER-REGION,M-TRAIL-FORCEMULTI-UNGATED,M-TRAIL-CALL-FORCEMULTI-UNGATED',
 		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testAnElidedOuterCommaAfterARegionIsNoLineBreak :: control :: '
@@ -388,6 +392,10 @@ final class PinsGrammarAndCli {
 			+ 'M-WIDTH-RULE-DECISION-UNREAD,M-WIDTH-RULE-TAIL-UNREAD',
 		'unit.grammar.haxe.HxOpAddChainOperatorFirstSliceTest#testGlueBoundaryOneColumnOverBreaks :: control :: '
 			+ 'M-COLLAPSE-CHAIN-GROUP-PLAIN-ONLY',
+		'unit.grammar.haxe.HxParamLeadingCommentWriteTest#testAGluedBlockCommentStaysOnItsParameterLine :: control :: '
+			+ 'M-CASCADE-LEAD-BREAKS,M-CLOSE-LOOP-LEAD-UNGLUED',
+		'unit.grammar.haxe.HxParamLeadingCommentWriteTest#testAnOwnLineCommentUnderNoWrapLaysTheParametersOutOnePerLine :: control :: '
+			+ 'M-NOWRAP-LEAD-IN-CASCADE',
 		'unit.grammar.haxe.HxParenTernaryOpenWrapSliceTest#testFillLineExpressionWrapOpensParenOpAddSub :: control :: '
 			+ 'M-COLLAPSE-GLUE-TERNARY',
 		'unit.grammar.haxe.HxReservedNameSliceTest#testAKeywordANewerHaxeAddedStillNamesAVersionGatedDeclaration :: control :: '
