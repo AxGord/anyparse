@@ -89,4 +89,11 @@ final class CmdTest extends Test {
 		Assert.raises(() -> Command.of([]));
 	}
 
+	public function testADynamicOrAnyValueIsOneArgument(): Void {
+		final dyn: Dynamic = 'a b'; // noqa: avoid-dynamic
+		Assert.same(['echo', 'a b'], cmd('echo $dyn').argv, 'a Dynamic value is never split into characters');
+		final any: Any = 'q r';
+		Assert.same(['echo', 'q r'], cmd('echo $any').argv, 'an Any value is never split into characters');
+	}
+
 }

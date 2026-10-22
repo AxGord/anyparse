@@ -229,18 +229,20 @@ Neither oracle sees prose, and prose is where such a slice actually breaks thing
 ## Keeping a downstream project out of the repository
 
 This repository is public; the projects it is measured on are not (`docs/decisions.md` § FU29). The names to keep out
-live in a private git-filter-repo `--replace-text` file outside the repository, and `tools/scrub-guard.py` checks
-against it:
+live in a private git-filter-repo `--replace-text` file outside the repository, and `node bin/dev.js scrub-guard`
+(`tools/src/dev/ScrubGuard.hx`) checks against it:
 
 ```sh
 export ANYPARSE_SCRUB_LIST=<private map>        # never a path inside this repository
-python3 tools/scrub-guard.py                     # the tracked tree
-python3 tools/scrub-guard.py --range origin/main..HEAD   # what a push would add: diff lines + commit messages
+haxe tools/dev.hxml                              # once: bin/dev.js
+node bin/dev.js scrub-guard                      # the tracked tree
+node bin/dev.js scrub-guard --range origin/main..HEAD   # what a push would add: diff lines + commit messages
 ln -s ../../tools/hooks/pre-push-scrub.sh .git/hooks/pre-push   # once per clone
 ```
 
 A match prints `<where>:<line>: rule <n>` and exits 1; the matched text is never printed. Unset, the guard and the hook
-pass and say so.
+pass and say so. A `regex:` rule is a JavaScript regular expression; a leading Python inline-flag group (`(?i)`) becomes
+its flags, and a rule JavaScript cannot compile is a usage error naming its number. Usage errors exit 2.
 
 ## Mutation checks: testing the tests
 
@@ -805,13 +807,26 @@ A rule that writes a source MEASUREMENT into its own prose re-keys on an edit th
 
 Its two non-zero exits are different on purpose: **1** means the comparison ran and the snapshots disagree, which `--allow-blast` waives; **2** means it could not run at all — a snapshot missing, unreadable or malformed — and that fails the battery whatever flags you pass. Waiving expected movement must never waive a gate that never executed.
 
-### `tools/clone-census.py` — the clone-rule census
+### `dev clone-census` — the clone-rule census
 
-`tools/clone-census.py <label> <t2-report> <t1-report> <repo-root> [--after <t2> <t1>] [--removed FILE]` reads the `duplicate-code-renamed` and `duplicate-code` reports (`--flat` text or `--format json`, taken with the CWD at the repo root) and prints findings, families, occurrences, the purely-renamed and cross-file shares, and the bare-run share — the last one by a text regex that is deliberately NOT the engine's predicate (`DuplicateCode.isBareStmt` is structural), so that `--after` can print how the two readings agree on what a filter change removed and kept. Runs are resolved through `hxq ast --json`, so the tool needs `hxq` on the PATH and honours `HXQ_BIN`; `--cache DIR` keeps each file's `hxq ast --json` output across runs, and without it nothing is left under `TMPDIR`. Both reports of an `--after` pair are resolved against the one `<repo-root>` given, so run it on the tree the reports describe.
+`node bin/dev.js clone-census <label> <t2-report> <t1-report> <repo-root> [--after <t2> <t1>] [--removed FILE] [--cache DIR]` reads the `duplicate-code-renamed` and `duplicate-code` reports (`--flat` text or `--format json`, taken with the CWD at the repo root) and prints findings, families, occurrences, the purely-renamed and cross-file shares, and the bare-run share — the last one by a text regex that is deliberately NOT the engine's predicate (`DuplicateCode.isBareStmt` is structural), so that `--after` can print how the two readings agree on what a filter change removed and kept. Runs are resolved through `hxq ast --json`, so the tool needs `hxq` on the PATH and honours `HXQ_BIN`; `--cache DIR` keeps each file's `hxq ast --json` output across runs, and without it nothing is left under `TMPDIR`. Both reports of an `--after` pair are resolved against the one `<repo-root>` given, so run it on the tree the reports describe.
+
+### Developer tools: `devkit` and `bin/dev.js`
+
+`tools/src/devkit` is what a developer script is written against: `cmd` (template → argv at compile time; a value is one
+argument whatever it holds, an `Array<String>` filling a word splices, `"…"` groups literal text, `$$` is `$`), an
+immutable `Command` (`at`/`env`/`timeout`/`input`/`pipe` with pipefail), `Result` (`ok`, `lines()`, `check()` →
+`CommandFailed`), `Pool.of(n).map` (overlapping processes through `HaxeSpawn.runAll`), `TempDir`, `Summary` (passed /
+FAILED / not run / skipped — a step that could not run fails the verdict) and `Args`. Every process goes through
+`HaxeSpawn` — no other spawn code. `tools/src/dev` holds `bin/dev.js`'s subcommands (`haxe tools/dev.hxml`). Their tests
+live in the one suite: `test-js-common.hxml` carries `-cp tools/src`, tests go to `test/unit/devkit` / `test/unit/dev`
+and are discovered like any other; a tool test may spawn `node -e` scripts or `git` in a `TempDir`, never the private
+scrub list (its parity fixtures are synthetic). A command run alone (not through a pool) is killed on timeout, but a
+child it spawned is not — route a command that forks through `Pool`.
 
 ### Scratch directories: every tool's, and who removes them
 
-Five tools create a directory under `TMPDIR`, and every one removes it or leaves it claimed for the startup sweep — a directory kept forever is how a disk fills.
+Six tools create a directory under `TMPDIR`, and every one removes it or leaves it claimed for the startup sweep — a directory kept forever is how a disk fills.
 
 | tool | prefix | success | failure / interrupt |
 |---|---|---|---|
@@ -820,6 +835,7 @@ Five tools create a directory under `TMPDIR`, and every one removes it or leaves
 | `tools/mutation-check.sh` | `anyparse-mutcheck.` | removed when every track was KILLED | kept, path printed |
 | `tools/mutation-arm.sh` | `anyparse-mutarm.` | removed | kept, path printed |
 | `node bin/test.js` (the suite itself) | `apq-suite.` | removed | kept, swept once the pid is gone |
+| `bin/dev.js` (`devkit.TempDir`) | `apq-dev.` | removed | removed on a throw; a SIGKILLed one is swept (stamped) |
 
 The suite's is `unit.cli.CliFixture.isolateTempDir` — `mkdtemp` plus the same `.apq-owner` stamp, so a SIGKILLed run is reaped by the sweep like the other four; nothing prints on failure because the directory holds only fixtures (why it exists: § "Declared arms", the private-temp-root paragraph). `mutation-arm.sh` runs `mutation-check.sh` as a child, never `exec`s into it — an `exec` takes the caller's EXIT trap out of the process. SIGKILL is the half no trap closes, and it is the common case under an agent harness, so every tool sweeps orphans at STARTUP through `tools/tmp-lifecycle.sh`.
 

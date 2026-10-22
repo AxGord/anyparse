@@ -57,9 +57,14 @@ final class Cmd {
 		}
 	}
 
-	/** Whether `value` types as an array of strings — the one value type that splices into several arguments. */
+	/** Whether `value` IS an array of strings — the one value type that splices into several arguments (not `Dynamic`/`Any`). */
 	private static function isArray(value: Expr): Bool {
-		return Context.unify(Context.typeof(value), Context.resolveType(macro :Array<String>, value.pos));
+		return switch Context.followWithAbstracts(Context.typeof(value)) {
+			case TInst(_.get() => { pack: [], name: 'Array' }, _): Context.unify(
+				Context.typeof(value), Context.resolveType(macro :Array<String>, value.pos)
+			);
+			case _: false;
+		};
 	}
 
 	/** The position `offset` characters into the string literal at `pos` (past its opening quote). */
