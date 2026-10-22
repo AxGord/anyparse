@@ -29522,6 +29522,30 @@
 			"find": "for (k in localDeclKinds) if (!mutableKinds.contains(k) && !continuationKinds.contains(k)) k",
 			"replace": "for (k in localDeclKinds) if (false) k",
 			"note": "only parameters count as invariant, so a capture of a final local read several statements later stops collapsing"
+		},
+		{
+			"name": "M-SUPERTYPES-FIRST-WRITTEN-ONLY",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "collectSupertypesRaw",
+			"find": "if (nm != null) out.push(nm);",
+			"replace": "if (nm != null && out.length == 0) out.push(nm);",
+			"note": "a declaration keeps only its first written supertype, so a class extending one superclass per #if branch is indexed under the first branch alone and prefer-inline inlines a method a later branch's subclass overrides"
+		},
+		{
+			"name": "M-OVERRIDDEN-DECLS-FIRST-LINK",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "overriddenDeclarations",
+			"find": "if (anc == null) continue;",
+			"replace": "if (anc == null || i > 0) continue;",
+			"note": "only the first written superclass link is walked, so an override whose superclass is named in a later #if branch binds to nothing and overridden-inline misses the inline method it overrides in that build"
+		},
+		{
+			"name": "M-OVERRIDDEN-INLINE-FIX-NONE",
+			"type": "anyparse.check.OverriddenInline",
+			"method": "fix",
+			"find": "if (span != null)",
+			"replace": "if (span != null && false)",
+			"note": "the fix finds the overridden method's inline modifier and deletes nothing, so --fix leaves the override failing in every build that compiles it"
 		}
 	]
 }

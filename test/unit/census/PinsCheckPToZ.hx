@@ -141,6 +141,7 @@ final class PinsCheckPToZ {
 		'unit.check.PreferInlineCheckTest#testOwnFileBuildMacroTokenCostsNoResolutionIndex :: control :: M-INLINE-LOCAL-BUILD-MACRO',
 		'unit.check.PreferInlineCheckTest#testQualifiedSupertypeKeySplitsTheTwinFromTheRealSubtypesOwner :: control :: '
 			+ 'M-INLINE-SUBTYPE-REPORT-INDEX',
+		'unit.check.PreferInlineCheckTest#testSubtypeExtendingThroughALaterBranchSkips :: control :: M-SUPERTYPES-FIRST-WRITTEN-ONLY',
 		'unit.check.PreferInterpolationCheckTest#testConstantAfterAShorthandReadBracesTheRead :: control :: '
 			+ 'M-INTERP-CONSTANT-BLOCK-IGNORED',
 		'unit.check.PreferInterpolationCheckTest#testEveryInterpolatedConstantKindBecomesItsPrintedText :: control :: '

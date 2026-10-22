@@ -277,6 +277,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.OracleRunMemoTest',
 		'unit.check.OracleRunWiringTest',
 		'unit.check.OrphanAccessorCheckTest',
+		'unit.check.OverriddenInlineCheckTest',
 		'unit.check.OversizedTypeCheckTest',
 		'unit.check.OwnedTypesCheckTest',
 		'unit.check.PendingRunsTest',

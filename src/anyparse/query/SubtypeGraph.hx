@@ -524,6 +524,34 @@ final class SubtypeGraph {
 	}
 
 	/**
+	 * Every declaration an `override` of one of `names` on `start` may override, in ANY build: per written superclass
+	 * link — each `#if` branch of an `extends` clause is one, so every build's superclass is asked — the nearest ancestor
+	 * declaring one of the names, nearest level first, each once. Only `extends` edges are walked (Haxe grants `override`
+	 * against a superclass member, never an interface's), each resolved import-aware where it is written; a link the index
+	 * cannot resolve ends its path silently, so an empty answer means "none known", never "none".
+	 */
+	public function overriddenDeclarations(start: ResolvedType, names: Array<String>): Array<ResolvedType> {
+		final out: Array<ResolvedType> = [];
+		final found: Array<String> = [];
+		final seen: Array<String> = [];
+		var level: Array<ResolvedType> = [start];
+		while (level.length > 0) {
+			final next: Array<ResolvedType> = [];
+			for (cur in level) if (_refs.markSeen(cur, seen)) for (i in 0...cur.type.supertypesRaw.length) {
+				if (i < cur.type.supertypes.length && cur.type.interfaces.contains(cur.type.supertypes[i])) continue;
+				final anc: Null<ResolvedType> = _refs.resolveTypeRef(cur.type.supertypesRaw[i], cur.file, cur.type.span.from);
+				if (anc == null) continue;
+				if (!anc.type.members.exists(m -> names.contains(m.name)))
+					next.push(anc);
+				else if (_refs.markSeen(anc, found))
+					out.push(anc);
+			}
+			level = next;
+		}
+		return out;
+	}
+
+	/**
 	 * The simple names of every type in `owner`'s transitive SUBTYPE closure, `owner` excluded unless the
 	 * closure names it back. Over-approximated the way `subtypeFiles` is, so a caller may only read a
 	 * name here as "may be a subtype" — a veto, never a proof of relation.
@@ -920,35 +948,14 @@ final class SubtypeGraph {
 	}
 
 	/**
-	 * The nearest ancestor of `start` declaring any of `names` — the type whose member an `override`
-	 * on `start` actually overrides — or null when no ancestor declares one (an ancestor outside the
-	 * index ends its branch silently, so null means "unknown", never "none"). Only `extends` edges are
-	 * walked: Haxe grants `override` against a SUPERCLASS member, never against an interface's, so
-	 * attributing an override to an interface that merely names the same member would drop a real
-	 * superclass link the index could not resolve. Resolution is import-aware (`supertypesRaw` +
-	 * `resolveTypeRef`), so it answers for the SINGLE written supertype rather than unioning every
-	 * same-simple-name decl, and it needs only the chain up to the declaring type — an unindexed
-	 * ancestor ABOVE that one cannot make it fail. When several ancestors at the same distance declare
-	 * a name, `owner` wins: the caller reads a match against `owner` as "blocked", the conservative side.
+	 * The type whose member an `override` of one of `names` on `start` overrides, read off
+	 * `overriddenDeclarations`: `owner` when it is one of them — the caller reads a match against
+	 * `owner` as "blocked", the conservative side — else the first, else null ("unknown", never "none").
 	 */
 	private function overriddenDeclarer(start: ResolvedType, names: Array<String>, owner: String): Null<String> {
-		final seen: Array<String> = [];
-		var level: Array<ResolvedType> = [start];
-		while (level.length > 0) {
-			final next: Array<ResolvedType> = [];
-			for (cur in level) if (_refs.markSeen(cur, seen)) {
-				for (i in 0...cur.type.supertypesRaw.length) {
-					if (i < cur.type.supertypes.length && cur.type.interfaces.contains(cur.type.supertypes[i])) continue;
-					final anc: Null<ResolvedType> = _refs.resolveTypeRef(cur.type.supertypesRaw[i], cur.file, cur.type.span.from);
-					if (anc != null) next.push(anc);
-				}
-			}
-			final declarers: Array<ResolvedType> = next.filter(a -> a.type.members.exists(m -> names.contains(m.name)));
-			if (declarers.exists(a -> a.type.name == owner)) return owner;
-			if (declarers.length > 0) return declarers[0].type.name;
-			level = next;
-		}
-		return null;
+		final declarers: Array<ResolvedType> = overriddenDeclarations(start, names);
+		if (declarers.exists(a -> a.type.name == owner)) return owner;
+		return declarers.length > 0 ? declarers[0].type.name : null;
 	}
 
 	/**

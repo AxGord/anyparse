@@ -371,6 +371,9 @@ final class Linter {
 			// is therefore free.
 			new FieldInitInConstructor(),
 			new PreferInline(),
+			// Beside the rule that writes `inline`: that one refuses a method a subtype overrides, this one drops `inline`
+			// from exactly such a method, so neither can claim — or undo — the other's finding.
+			new OverriddenInline(),
 			new InlineConstant(),
 			new StaticConstant(),
 			// Claims an `Assign` node that sits inside an array / object literal; every other
