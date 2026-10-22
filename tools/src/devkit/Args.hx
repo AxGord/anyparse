@@ -40,13 +40,23 @@ final class Args {
 	}
 
 	/**
-	 * The positionals, once every flag and option is taken: exactly `names.length` of them, named by `names` in a
-	 * refusal. An unknown option or a missing or extra positional throws `UsageError`.
+	 * The positionals, once every flag and option is taken: the `names.length` required ones, named by `names` in a
+	 * refusal, then at most `optional.length` more. An unknown option or a missing or extra positional throws `UsageError`.
 	 */
-	public function positionals(names: Array<String>): Array<String> {
+	public function positionals(names: Array<String>, ?optional: Array<String>): Array<String> {
+		final all: Array<String> = rest(names);
+		final most: Int = names.length + (optional?.length ?? 0);
+		if (all.length > most) throw new UsageError('unexpected ${all.slice(most).join(' ')}');
+		return all;
+	}
+
+	/**
+	 * Every positional, once every flag and option is taken: the `names.length` required ones first, named by `names` in
+	 * a refusal, then any number more. An unknown option or a missing positional throws `UsageError`.
+	 */
+	public function rest(names: Array<String>): Array<String> {
 		final all: Array<String> = left();
 		if (all.length < names.length) throw new UsageError('missing ${names.slice(all.length).join(' ')}');
-		if (all.length > names.length) throw new UsageError('unexpected ${all.slice(names.length).join(' ')}');
 		return all;
 	}
 

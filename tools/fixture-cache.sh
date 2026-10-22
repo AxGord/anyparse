@@ -20,6 +20,10 @@
 # by its resolved path, `-version`, size and mtime: an upgrade, or a rebuild in
 # place, is a different stamp.
 #
+# Its Haxe twin is `devkit.FixtureCache` (`node bin/dev.js fixture-cache`), which
+# behaves the same; this file stays while suite-shard.sh and mutation-check.sh
+# source it.
+#
 # fc_shim <repo> <entries-dir> <bin-dir> [<tally-file>]
 #   builds the replay program (once per content of FixtureCompileCache.hx, kept
 #   beside the entries), writes <bin-dir>/haxe and returns 0, or prints why not

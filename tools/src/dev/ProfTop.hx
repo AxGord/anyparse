@@ -1,3 +1,5 @@
+package dev;
+
 /** One `callFrame` of a V8 `--cpu-prof` capture. */
 typedef ProfileFrame = {
 	var functionName: Null<String>;
@@ -27,13 +29,9 @@ typedef Profile = {
  * Roll a V8 `--cpu-prof` capture up by SELF time per function.
  *
  * ```sh
- * node --cpu-prof --cpu-prof-dir=/tmp/prof --cpu-prof-interval=200 bin/parse-prof.js tparse tools/bench-corpus.txt 2 hxformat.json
- * haxe -cp tools --run ProfTop /tmp/prof/*.cpuprofile 20 [--under <fn>]
+ * node --cpu-prof --cpu-prof-dir=/tmp/prof --cpu-prof-interval=200 bin/dev.js parse-prof tparse tools/data/bench-corpus.txt 2 hxformat.json
+ * node bin/dev.js prof-top /tmp/prof/*.cpuprofile 20 [--under <fn>]
  * ```
- *
- * No build: it is a `--run` script over the std library, the tier the language
- * policy puts standalone logic in. `--interp` would NOT work — it consumes the
- * trailing arguments as its own.
  *
  * Self time is summed from `samples` + `timeDeltas` rather than `hitCount`, so a
  * capture whose sampling interval was overridden still reports real
@@ -59,6 +57,8 @@ typedef Profile = {
  */
 class ProfTop {
 
+	public static inline final USAGE: String = 'usage: dev prof-top <file.cpuprofile> [topN] [--under <fn>] [--not-under <fn>]';
+
 	/** Rows printed when the caller names no count. */
 	private static inline final DEFAULT_TOP: Int = 25;
 
@@ -78,12 +78,10 @@ class ProfTop {
 
 	private static inline final MS_WIDTH: Int = 9;
 
-	public static function main(): Void {
-		final args: Array<String> = Sys.args();
+	public static function main(args: Array<String>): Int {
 		if (args.length < 1) {
-			Sys.println('usage: ProfTop <file.cpuprofile> [topN] [--under <fn>] [--not-under <fn>]');
-			Sys.exit(2);
-			return;
+			Sys.println('usage: prof-top <file.cpuprofile> [topN] [--under <fn>] [--not-under <fn>]');
+			return 2;
 		}
 		var top: Int = DEFAULT_TOP;
 		var under: String = '';
@@ -102,6 +100,7 @@ class ProfTop {
 			i++;
 		}
 		report(args[0], top, under, notUnder);
+		return 0;
 	}
 
 	/** Parse one capture, roll it up, print the top `top` rows by self time. */
@@ -128,7 +127,8 @@ class ProfTop {
 			total += delta;
 		}
 		final rows: Array<{ label: String, us: Float }> = [for (key => us in self) { label: key, us: us }];
-		rows.sort((a, b) -> b.us > a.us ? 1 : (b.us < a.us ? -1 : 0));
+		// a tie is broken by label: the rows come out of a map, whose order is the target's
+		rows.sort((a, b) -> b.us > a.us ? 1 : (b.us < a.us ? -1 : Reflect.compare(a.label, b.label)));
 		final scope: String = (under == '' ? '' : ' (under $under)') + (notUnder == '' ? '' : ' (not under $notUnder)');
 		Sys.println('total ${round(total / US_PER_MS)} ms across ${samples.length} samples$scope');
 		final shown: Int = rows.length < top ? rows.length : top;

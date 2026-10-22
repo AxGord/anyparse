@@ -1,9 +1,9 @@
 # The calibrated Fast-parse bench corpus: 99 files, ~7% of the parse cost of
 # the two reference trees, chosen so that A/B deltas measured on it reproduce
-# the deltas on the full trees. Feed it to tools/ParseProf.hx:
+# the deltas on the full trees. Feed it to `dev parse-prof`:
 #
 #   ANYPARSE_BENCH_EXTRA=<private-manifest> CLIENT_SRC=<other-tree>/src \
-#     node bin/parse-prof.js tparse tools/bench-corpus.txt 6 hxformat.json
+#     node bin/dev.js parse-prof tparse tools/data/bench-corpus.txt 6 hxformat.json
 #
 # Half the corpus lives in a tree that is not in this repository, and so does
 # the list of its files: the `@${ANYPARSE_BENCH_EXTRA}` line below includes a
@@ -13,7 +13,7 @@
 #
 # HOW IT WAS CHOSEN (reproduce with `perfile` + the recipe in
 # /Users/axg/anyparse-o1-parse-profile.md):
-#   1. `node bin/parse-prof.js perfile <tree> 3 hxformat.json` on both trees -
+#   1. `node bin/dev.js parse-prof perfile <tree> 3 hxformat.json` on both trees -
 #      per-file bytes, lines, parse us, round-trip us, node count and a
 #      node-kind census.
 #   2. Stratify into 4 size buckets (<2K, <8K, <32K, >=32K) x 4 construct

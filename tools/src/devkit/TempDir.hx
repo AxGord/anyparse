@@ -16,7 +16,7 @@ final class TempDir {
 	public static inline final PREFIX: String = 'apq-dev';
 
 	/** The owner stamp the sweep reads (`TMPL_STAMP`). */
-	private static inline final STAMP: String = '.apq-owner';
+	public static inline final STAMP: String = '.apq-owner';
 
 	public final path: String;
 

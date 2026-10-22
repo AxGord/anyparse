@@ -3,7 +3,9 @@
 # tmp-lifecycle.sh — one owner for the scratch directories tools/ creates.
 #
 # Sourced by every tool that calls `mktemp -d`, and runnable on its own as
-# `tools/tmp-lifecycle.sh --list | --sweep`.
+# `tools/tmp-lifecycle.sh --list | --sweep`. Its Haxe twin is
+# `devkit.TmpLifecycle` (`node bin/dev.js tmp-lifecycle`): same prefixes, stamp,
+# marker and predicate. This file stays while the shell tools source it.
 #
 # WHY THIS EXISTS, measured. On 2026-09-05 this machine reached 99% full —
 # 51 GiB free of 3.6 TiB — and the biggest single consumer was this
