@@ -5230,3 +5230,8 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 
 - a path past its module (`pkg.Mod.field`, a macro-made `pkg.Mod.Sub`) binds an UNKNOWN name set → no: by the compiler's case rule it binds at most its leaf; the unknown answer made one function import a second binder of every statement and withheld whole directories → `bf7830896`
 - a statement is safe to add to a module that did not spell it once every name it binds keeps its meaning → no: `test/import.hx` carrying `utest.Assert` broke `recon.hxml`, a second `-main` compiling test helpers without utest; a receiver must already compile with the statement's classpath entry (necessary, not sufficient: the entry does not carry the statement module's own dependencies — open until every build is declared to the oracle) → `69c5fc500`
+
+## W1 (2026-10-22) — P0a: the comma of a parameter region's `#else` arm, and the break after `#end`
+
+- the `#else` arm's comma before `#end` is dropped by the conditional element's emitter → no: `HxConditionalParam.elseBody` (and `HxElseifParam.body`) carried no `@:trivia`, so no per-element `sepAfter` was captured to write it back; `HxConditionalArgs`, the argument-list twin, already had the trio → `batch/hxqb-W1`
+- the hardline after `#end` is the conditional element's own trailing break → no: `WrapList.shapeFillLine` split the fill at EVERY separator the source elided and joined the chunks with a forced line (`05961212e`), so the `#if`-only form `(#if false bar:Int, #end foobar:Int)` broke too, and `fillLineWithLeadingBreak` packed one uniform separator and doubled the comma; only an elided gap IN FRONT of a region keeps the break, because glued after a default value `#if air, …` re-parses as a splice tail of that value → `batch/hxqb-W1`

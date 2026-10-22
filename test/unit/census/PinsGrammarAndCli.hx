@@ -228,6 +228,13 @@ final class PinsGrammarAndCli {
 			+ 'M-REGION-OFFER-THROUGH-BODIES,M-NESTED-THROUGH-BODIES',
 		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAnElseifRegionInAComprehensionSettlesInOneWrite :: control :: '
 			+ 'M-REGION-SEAMS-BOUNDED',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testAnElidedOuterCommaAfterARegionIsNoLineBreak :: control :: '
+			+ 'M-ELIDED-GAP-HARD,M-ELIDED-SEP-KEPT',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testParamsKeepTheCommaInsideAnElseifRegion :: control :: M-COND-PARAM-ELSEIF-PLAIN',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testParamsKeepTheCommaInsideTheElseRegion :: control :: '
+			+ 'M-COND-PARAM-ELSE-PLAIN,M-ELIDED-SEP-KEPT',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testParamsUnderLeadingBreakFillGainNoComma :: control :: '
+			+ 'M-REGION-GLUED,M-ELIDED-SEP-KEPT',
 		'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured :: control :: '
 			+ 'M-WORDOP-NO-RESTORE',
 		'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionCollapsesEmptyCatchBody :: control :: '

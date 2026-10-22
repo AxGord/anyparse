@@ -1,6 +1,10 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.HaxeModuleTriviaParser;
+import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -52,6 +56,47 @@ class HxCondListSeparatorWriteTest extends Test {
 		// builds never compile, which is why it survived a whole tree.
 		final source: String = 'class A {\n\tpublic function new(?size:Int, #if js ?parentDom:String, #end sizeUpdate:Bool = true) {}\n}\n';
 		Assert.stringContains('?parentDom:String, #end', roundTrip(source) ?? '');
+	}
+
+	@:pin('control')
+	@:killer('M-COND-PARAM-ELSE-PLAIN')
+	@:killer('M-ELIDED-SEP-KEPT')
+	public function testParamsKeepTheCommaInsideTheElseRegion(): Void {
+		// Without it the `#else` arm reads `baz:Int foobar:Int` — a program only the Haxe compiler rejects.
+		assertFixedPoint('class A {\n\tstatic function foo(#if false bar:Int, #else baz:Int, #end foobar:Int) {}\n}\n');
+	}
+
+	@:pin('control')
+	@:killer('M-ELIDED-GAP-HARD')
+	@:killer('M-ELIDED-SEP-KEPT')
+	public function testAnElidedOuterCommaAfterARegionIsNoLineBreak(): Void {
+		// The comma the source put inside the region stands in for the outer one; the gap after `#end` is still a soft
+		// gap, so a list that fits stays on its line.
+		assertFixedPoint('class A {\n\tfunction f(#if false ?bar:Int, #end ?foobar:Int) {}\n}\n');
+	}
+
+	@:pin('control')
+	@:killer('M-REGION-GLUED')
+	@:killer('M-ELIDED-SEP-KEPT')
+	public function testParamsUnderLeadingBreakFillGainNoComma(): Void {
+		// `fillLineWithLeadingBreak` packed the list with one uniform separator, so a comma the source wrote inside
+		// a region came back doubled outside it — `a:Bool = false, , b:Int` once `air` is defined.
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping": {"functionSignature": {"defaultWrap": "fillLineWithLeadingBreak", "rules": []}}}'
+		);
+		final source: String = 'class A {\n\tfunction f(a:Bool = false\n\t\t#if air, b:Int #end) {}\n\n'
+			+ '\tfunction g(#if x c:Int, #else d:Int, #end e:Int) {}\n}\n';
+		// The region keeps its own line: glued after `false` it would re-parse as a splice tail of the default value.
+		final expected: String = 'class A {\n\tfunction f(\n\t\ta:Bool = false\n\t\t#if air, b:Int #end\n\t) {}\n\n\tfunction g(\n'
+			+ '\t\t#if x c:Int, #else d:Int, #end e:Int\n\t) {}\n}\n';
+		Assert.equals(expected, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts));
+	}
+
+	@:pin('control')
+	@:killer('M-COND-PARAM-ELSEIF-PLAIN')
+	public function testParamsKeepTheCommaInsideAnElseifRegion(): Void {
+		final written: String = roundTrip('class A {\n\tfunction f(#if a x:Int, #elseif b y:Int, #else w:Int, #end q:Int) {}\n}\n') ?? '';
+		Assert.stringContains('#elseif b y:Int,', written);
 	}
 
 	/** `source` is already what the writer produces for it — the byte contract a canonical file has. */

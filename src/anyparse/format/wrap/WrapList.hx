@@ -2610,7 +2610,7 @@ class WrapList {
 		// so they share its seam.
 		if (mode != FillLineWithLeadingBreak || items.length <= 1 || !hasBlockLambda || lastItemEndsWithLineComment(items)) return null;
 		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
-		final openShape: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
+		final openShape: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, null, sepBeforeFlags);
 		return IfFirstLineExceeds(lineWidth, openShape, glueShape);
 	}
 
@@ -2699,7 +2699,7 @@ class WrapList {
 		final glueItems: Array<Doc> = collArm == null ? items : [for (i in 0...items.length) i == collIdx ? collArm : items[i]];
 		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, glueItems, openInside, closeInside, sepBeforeFlags);
 		final openShape: Doc = mode == FillLineWithLeadingBreak
-			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds)
+			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds, sepBeforeFlags)
 			: shapeFillLine(
 				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
 				keepCloseGlued, complexItemKinds
@@ -2763,7 +2763,7 @@ class WrapList {
 				keepCloseGlued, complexItemKinds
 			);
 			case FillLineWithLeadingBreak:
-				shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds);
+				shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds, sepBeforeFlags);
 			case PackedOrOnePerLine:
 				shapePackedOrOnePerLine(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
 			// ω-keep-objectlit: Keep cascade hits are pre-empted by the
@@ -3435,7 +3435,36 @@ class WrapList {
 	private static function startsChunk(
 		items: Array<Doc>, i: Int, sepBeforeFlags: Null<Array<Bool>>, complexItemKinds: Null<Array<Int>>
 	): Bool {
-		return hasLeadingHardline(items[i]) || skipSepBefore(sepBeforeFlags, i) || chunkBreakBefore(items, complexItemKinds, i);
+		return hasLeadingHardline(items[i]) || regionAfterElidedSep(items, i, sepBeforeFlags)
+			|| chunkBreakBefore(items, complexItemKinds, i);
+	}
+
+	/**
+	 * A separator the source left out in front of an item that opens a preprocessor region (`#if …`) is a line break, not
+	 * a soft gap: glued onto the line of the item before it, the region reads as a continuation of THAT item
+	 * (`x:Bool = false #if air, …` parses as a splice tail of `false`), so the parse it came from survives only on its own
+	 * line. Every other elided gap stays soft — `chunkFill` drops just its comma.
+	 */
+	private static function regionAfterElidedSep(items: Array<Doc>, i: Int, sepBeforeFlags: Null<Array<Bool>>): Bool {
+		return skipSepBefore(sepBeforeFlags, i) && DocMeasure.firstVisibleTextStartsWith(items[i], '#'.code);
+	}
+
+	/**
+	 * The `make` Fill (`Fill` / `FillWithRestProbe` / `FillBreakAfterWrap`) over the multi-item run `items[from...to]`.
+	 * When the source left a gap of the run without its separator (`sepBeforeFlags`), each separator it did write rides on
+	 * the item before it and the Fill's own separator is the bare soft gap, so a comma-less gap packs or breaks like any
+	 * other instead of forcing a line or gaining a comma the source never had.
+	 */
+	private static function chunkFill(
+		items: Array<Doc>, from: Int, to: Int, sep: String, softSep: Doc, sepBeforeFlags: Null<Array<Bool>>, tailReserve: Int,
+		make: (Array<Doc>, Doc, Int) -> Doc
+	): Doc {
+		final elided: Bool = [for (k in from + 1...to) skipSepBefore(sepBeforeFlags, k)].contains(true);
+		final fillItems: Array<Doc> = elided ? [
+			for (k in from ... to) k + 1 < to && !skipSepBefore(sepBeforeFlags, k + 1) ? Concat([items[k], Text(sep)]) : items[k]
+		] : items.slice(from, to);
+		final fillSep: Doc = elided ? Line(' ') : softSep;
+		return make(fillItems, fillSep, tailReserve);
 	}
 
 	private static function shapeFillLine(
@@ -3453,7 +3482,7 @@ class WrapList {
 		// Hand it to the leading-break variant, whose forced break after the open
 		// delim keeps the comment on the line it came from.
 		if (items.length > 0 && DocMeasure.firstVisibleTextStartsWith(items[0], '/'.code))
-			return shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds);
+			return shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds, sepBeforeFlags);
 		// Per-gap sep awareness (slice ω-fillline-pergap-sep): items split
 		// into chunks at every leading-hardline boundary. Within each
 		// chunk items pack via `Fill(chunk, softSep)` (Wadler fillSep —
@@ -3581,16 +3610,9 @@ class WrapList {
 		var chunkStart: Int = 0;
 		for (i in 1...items.length + 1) {
 			final atEnd: Bool = i == items.length;
-			// `sepBeforeFlags[i] == true` also forces a chunk
-			// split before `items[i]` so the inter-element slot routes
-			// through the chunk-boundary path (where the `Text(sep)`
-			// gate below honours the same flag). Without this, both
-			// elements would land in one chunk and be packed via
-			// `Fill(chunk, softSep)` with a uniform sep — no
-			// per-pair elision possible. Closes whitespace/issue_582
-			// where the outer `,` was elided in favour of the cond-comp
-			// body's own leading sep but neither element starts with a
-			// hardline at the Doc level.
+			// A source-elided separator (`sepBeforeFlags[i]`) is a chunk
+			// boundary only in front of a region (`regionAfterElidedSep`);
+			// elsewhere the gap stays soft and `chunkFill` drops its comma.
 			final hardLed: Bool = !atEnd && startsChunk(items, i, sepBeforeFlags, complexItemKinds);
 			if (!(atEnd || hardLed)) continue;
 			if (chunkStart > 0) {
@@ -3608,7 +3630,6 @@ class WrapList {
 			if (i - chunkStart == 1) {
 				bodyParts.push(items[chunkStart]);
 			} else {
-				final chunk: Array<Doc> = items.slice(chunkStart, i);
 				// Only the LAST chunk reserves cols for the tail —
 				// earlier chunks are followed by a forced `,\n` chunk
 				// boundary so their last-item-fit decision can't push
@@ -3625,9 +3646,9 @@ class WrapList {
 				// line. Earlier chunks are followed by a forced `,\n`
 				// boundary so rest-probe is irrelevant there — bare Fill
 				// preserves byte-equivalent legacy behavior.
-				bodyParts.push(
-					groupRestProbe && atEnd ? FillWithRestProbe(chunk, softSep, tailReserve) : Fill(chunk, softSep, tailReserve)
-				);
+				bodyParts.push(chunkFill(
+					items, chunkStart, i, sep, softSep, sepBeforeFlags, tailReserve, groupRestProbe && atEnd ? FillWithRestProbe : Fill
+				));
 			}
 			chunkStart = i;
 		}
@@ -3779,7 +3800,8 @@ class WrapList {
 	 * matching fork's `calcIndent + additionalIndent`.
 	 */
 	private static function shapeFillLineWithLeadingBreak(
-		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool, ?complexItemKinds: Array<Int>
+		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool, ?complexItemKinds: Array<Int>,
+		?sepBeforeFlags: Array<Bool>
 	): Doc {
 		final softSep: Doc = Concat([Text(sep), Line(' ')]);
 		// Tail reserve identical in structure to `shapeFillLine` but
@@ -3808,10 +3830,13 @@ class WrapList {
 		// unchanged.
 		final inner: Doc = if (items.length == 1)
 			items[0];
-		else if (hasChunkOwnLine(items, complexItemKinds))
-			chunkedFill(sep, items, softSep, tailReserve, complexItemKinds);
+		else if (
+			hasChunkOwnLine(items, complexItemKinds)
+			|| [for (i in 1...items.length) regionAfterElidedSep(items, i, sepBeforeFlags)].contains(true)
+		)
+			chunkedFill(sep, items, softSep, tailReserve, complexItemKinds, sepBeforeFlags);
 		else
-			FillBreakAfterWrap(items, softSep, tailReserve);
+			chunkFill(items, 0, items.length, sep, softSep, sepBeforeFlags, tailReserve, FillBreakAfterWrap);
 		final tail: Doc = appendTrailingComma ? Text(sep) : Empty;
 		// No `openInside` / `closeInside` padding: this shape ALWAYS breaks
 		// after the open delim and before the close, so an inside-of-delimiter
@@ -3838,18 +3863,22 @@ class WrapList {
 	 * hardline. Only the LAST chunk reserves cols for the trailing tail —
 	 * earlier chunks end at a forced break, so no tail shares their line.
 	 */
-	private static function chunkedFill(sep: String, items: Array<Doc>, softSep: Doc, tailReserve: Int, kinds: Null<Array<Int>>): Doc {
+	private static function chunkedFill(
+		sep: String, items: Array<Doc>, softSep: Doc, tailReserve: Int, kinds: Null<Array<Int>>, sepBeforeFlags: Null<Array<Bool>>
+	): Doc {
 		final parts: Array<Doc> = [];
 		var chunkStart: Int = 0;
 		for (i in 1...items.length + 1) {
 			final atEnd: Bool = i == items.length;
-			if (!(atEnd || chunkBreakBefore(items, kinds, i))) continue;
+			if (!(atEnd || chunkBreakBefore(items, kinds, i) || regionAfterElidedSep(items, i, sepBeforeFlags))) continue;
 			if (chunkStart > 0) {
-				parts.push(Text(sep));
+				if (!skipSepBefore(sepBeforeFlags, chunkStart)) parts.push(Text(sep));
 				parts.push(Line('\n'));
 			}
 			parts.push(
-				i - chunkStart == 1 ? items[chunkStart] : FillBreakAfterWrap(items.slice(chunkStart, i), softSep, atEnd ? tailReserve : 0)
+				i - chunkStart == 1
+					? items[chunkStart]
+					: chunkFill(items, chunkStart, i, sep, softSep, sepBeforeFlags, atEnd ? tailReserve : 0, FillBreakAfterWrap)
 			);
 			chunkStart = i;
 		}

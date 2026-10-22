@@ -19,8 +19,10 @@ package anyparse.grammar.haxe;
  *
  * The member-scope import/using blank-line cascades on `HxElseifDecl.body`
  * are NOT mirrored: fn parameters carry no analogous grouping model.
- * Inter-element trivia is the responsibility of the outer
- * `HxFnDecl.params` Star (`@:trivia` there), not of the cond-comp body.
+ * `@:trivia` + `sepFaithful` on `body` for the reason
+ * `HxConditionalParam.body` carries them: only a trivia Star captures the
+ * per-element `sepAfter` that writes a comma before the next `#else` /
+ * `#end` back where the source put it.
  *
  * Position constraint at the call site (`HxConditionalParam`): the
  * `elseifs` Star MUST appear before the `elseBody` field so the
@@ -30,5 +32,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxElseifParam = {
 	@:kw('#elseif') var cond: HxPpCondLit;
-	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxParam>;
+	@:trivia @:sep(',', sepFaithful) @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxParam>;
 };
