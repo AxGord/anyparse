@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.AncestorTable.AncestorLink;
+import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
@@ -72,6 +73,33 @@ final class StaticExtensions {
 	 */
 	public function binding(fi: FileInfo, receiver: ResolvedType, name: String): Null<HostedMembers> {
 		return _cache.extensionBindings.answer(DeclarationKey.ofUse(fi.file, receiver, name), bindingOf.bind(fi, receiver, name));
+	}
+
+	/**
+	 * Whether `recv.name` in the file `fi`, on a receiver of the declaration `receiver`, may bind through `using <path>` —
+	 * whether that statement takes part in the access at all. Where the walk proves a binding (`binding`), only when the
+	 * bound type is one the path brings; where it proves none or decides nothing, unless every candidate the path brings
+	 * passes the receiver over (`offers`). The question a rule deleting or moving a `using` asks of each access.
+	 */
+	public function mayBindThrough(fi: FileInfo, receiver: ResolvedType, name: String, path: String): Bool {
+		final bound: Null<HostedMembers> = binding(fi, receiver, name);
+		if (bound == null) return offers(path, receiver, name) != Misfits;
+		final hosts: Null<UsingHosts> = usingHosts(path);
+		return hosts == null || hosts.types.exists(h -> h.file.file == bound.host.file.file && h.type.name == bound.host.type.name);
+	}
+
+	/**
+	 * What `using <path>` offers `recv.name` on a receiver of the declaration `receiver`, whatever else is in scope: `Fits`
+	 * when a candidate it brings binds there, `Misfits` when every candidate passes the receiver over or none is declared,
+	 * `MayFit` when the walk decides nothing (the path does not read, a candidate it cannot type, a first parameter that may
+	 * or may not accept the receiver).
+	 */
+	public function offers(path: String, receiver: ResolvedType, name: String): ArgumentFit {
+		return switch pathStep(path, receiver, name) {
+			case Bound(_): Fits;
+			case Passed: Misfits;
+			case Open: MayFit;
+		};
 	}
 
 	/**

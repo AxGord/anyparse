@@ -59,6 +59,20 @@ class AmbientImportRulesTest extends Test {
 		{ name: 'src/lib/Other.hx', source: 'package lib;\n\nclass Other {}\n' }
 	];
 
+	/**
+	 * An ambient `using` whose module lies under the directory it governs and never calls its own statics extension-style:
+	 * the module's only mention of the name is its own declaration, which no `using` is needed for.
+	 */
+	private static final SELF_MENTION_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/import.hx', source: 'using aaa.Extqqw;\n' },
+		{
+			name: 'src/aaa/Extqqw.hx',
+			source: 'package aaa;\n\nclass Extqqw {\n\n\tpublic static function tagqqw(s: String): String {\n\t\treturn \'S\' + s;\n'
+				+ '\t}\n\n\tpublic static function twiceqqw(s: String): String {\n\t\treturn Extqqw.tagqqw(s);\n\t}\n\n}\n'
+		},
+		{ name: 'src/lib/Other.hx', source: 'package lib;\n\nclass Other {}\n' }
+	];
+
 	/** An ambient statement whose target module lies INSIDE the subtree the source governs. */
 	private static final DECLARER_TREE: Array<{ name: String, source: String }> = [
 		{ name: 'src/import.hx', source: 'import a.Zqq;\n' },
@@ -90,12 +104,43 @@ class AmbientImportRulesTest extends Test {
 		{ name: 'src/outer/inner/Modq.hx', source: 'package outer.inner;\n\nimport a.T;\n\nclass Modq {}\n' }
 	];
 
-	/** A file whose own `using` an ambient source repeats, with a SECOND own `using` beside it. */
+	/**
+	 * A file whose own `using` an ambient source repeats, with a SECOND own `using` beside it that offers the same access:
+	 * both modules extend a `Wqqz` with `zqq`, and the file calls it on one.
+	 */
 	private static final USING_RIVAL_TREE: Array<{ name: String, source: String }> = [
-		{ name: 'src/a/Sqq.hx', source: 'package a;\n\nclass Sqq {}\n' },
-		{ name: 'src/b/Rqq.hx', source: 'package b;\n\nclass Rqq {}\n' },
+		{ name: 'src/a/Wqqz.hx', source: 'package a;\n\nclass Wqqz {}\n' },
+		{ name: 'src/a/Sqq.hx', source: 'package a;\n\nclass Sqq {\n\tpublic static function zqq(w:Wqqz):Int return 1;\n}\n' },
+		{
+			name: 'src/b/Rqq.hx',
+			source: 'package b;\n\nimport a.Wqqz;\n\nclass Rqq {\n\tpublic static function zqq(w:Wqqz):Int return 2;\n}\n'
+		},
 		{ name: 'src/lib/import.hx', source: 'using a.Sqq;\n' },
-		{ name: 'src/lib/Modq.hx', source: 'package lib;\n\nusing b.Rqq;\nusing a.Sqq;\n\nclass Modq {}\n' }
+		{
+			name: 'src/lib/Modq.hx',
+			source: 'package lib;\n\nimport a.Wqqz;\n\nusing b.Rqq;\nusing a.Sqq;\n\nclass Modq {\n'
+				+ '\tstatic function f(w:Wqqz):Int return w.zqq();\n}\n'
+		}
+	];
+
+	/**
+	 * The same shape with a rival whose `zqq` rejects the receiver: it offers no access of the file, so the deleted
+	 * statement's position is nobody's to take.
+	 */
+	private static final USING_QUIET_RIVAL_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/a/Wqqz.hx', source: 'package a;\n\nclass Wqqz {}\n' },
+		{ name: 'src/a/Oqqz.hx', source: 'package a;\n\nclass Oqqz {}\n' },
+		{ name: 'src/a/Sqq.hx', source: 'package a;\n\nclass Sqq {\n\tpublic static function zqq(w:Wqqz):Int return 1;\n}\n' },
+		{
+			name: 'src/b/Rqq.hx',
+			source: 'package b;\n\nimport a.Oqqz;\n\nclass Rqq {\n\tpublic static function zqq(o:Oqqz):Int return 2;\n}\n'
+		},
+		{ name: 'src/lib/import.hx', source: 'using a.Sqq;\n' },
+		{
+			name: 'src/lib/Modq.hx',
+			source: 'package lib;\n\nimport a.Wqqz;\n\nusing b.Rqq;\nusing a.Sqq;\n\nclass Modq {\n'
+				+ '\tstatic function f(w:Wqqz):Int return w.zqq();\n}\n'
+		}
 	];
 
 	/** The same shape with the rival `using` gone, so the two positions are interchangeable. */
@@ -208,6 +253,21 @@ class AmbientImportRulesTest extends Test {
 	}
 
 	@:pin('control')
+	@:killer('M-UNUSED-USING-SELF-MENTION')
+	public function testTheDeclaringModulesOwnDeclarationIsNoUseOfAnAmbientUsing(): Void {
+		#if (sys || nodejs)
+		// The module's mentions of its own name — its declaration, a qualified static call — bind that declaration and need
+		// no `using`. Checked against the compiler: the tree compiles with the ambient statement and without it.
+		Assert.equals(
+			'src/import.hx:aaa.Extqqw', findings(SELF_MENTION_TREE, ['src/import.hx', 'src/aaa/Extqqw.hx', 'src/lib/Other.hx']),
+			'a self-mention is no read of an ambient `using`'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
 	@:killer('M-AMBIENT-DECLARER-READS')
 	public function testTheModuleAnAmbientStatementImportsIsNotOneOfItsReaders(): Void {
 		#if (sys || nodejs)
@@ -277,6 +337,22 @@ class AmbientImportRulesTest extends Test {
 		Assert.equals(
 			'src/lib/Modq.hx:a.Sqq', redundantFindings(USING_RIVAL_CONTROL, 'src/lib/Modq.hx'),
 			'with no rival `using` the ambient statement holds the same position'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-USING-CONTEST-ANY')
+	@:killer('M-USING-OFFER-OPEN')
+	public function testAnOwnUsingGoesWhereNoRivalOffersItsAccesses(): Void {
+		#if (sys || nodejs)
+		// The rival declares the method for another receiver, so it is passed over at the one access either could take.
+		// Checked against the compiler: the file prints the same with its own statement and without it.
+		Assert.equals(
+			'src/lib/Modq.hx:a.Sqq', redundantFindings(USING_QUIET_RIVAL_TREE, 'src/lib/Modq.hx'),
+			'a rival rejecting the receiver takes no position'
 		);
 		#else
 		Assert.pass('non-sys target');

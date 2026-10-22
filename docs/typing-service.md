@@ -26,7 +26,7 @@ its hosts are functions of their arguments, and every remembered answer is insta
 | `calls` (`CallSelection`) | signature | the signature a call selects among a member's own and its overloads over the arguments' types, and the type it returns (`callUnification.ml`) |
 | `members` (`MemberLookup`) | signature | what a named type declares or inherits, with what declared type, return, visibility, accessor shape; the type a READ of a member carries and the declaration writing it (`memberRead`) |
 | `structural` (`StructuralTypes`) | signature | unification with an anonymous structure, membership of a builtin structural type (`Iterable`, `Iterator`) |
-| `extensions` (`StaticExtensions`) | body | which static extension `recv.name` binds in a file on a receiver of a declaration (`fields.ml`), and what a file's `using` statements bring |
+| `extensions` (`StaticExtensions`) | body | which static extension `recv.name` binds in a file on a receiver of a declaration (`fields.ml`), what a file's `using` statements bring, what one `using` offers a receiver (`offers`) and whether an access may bind through it (`mayBindThrough`) |
 | `expectations` (`ExpectedTypes`) | body | the type a value is expected to have where it is written, and through it an untyped lambda parameter's |
 | `typeWalk` + `TypingHost` | body | the type an expression carries: the walk owns the shapes, a host answers each in its own currency |
 | `cache` (`QueryCache`) | — | the remembered answers, one `DeclarationQuery` table per question |
@@ -178,7 +178,7 @@ std gap. Readings: `docs/journal/testing-log.md`.
   `NominalTypes.staticExtensionNominal` (`ChainTypeContext.usings` deleted), `CallGraphImports.staticExtensionsOf`
   (`usingTypes`), `ArgumentValues.affixResolves` (`bindingUsing`); deleted: `ValueNameBinding`'s using walk
   (`usingTypes`, `usingHosts`, `usingDeclarations`, `extensionDeclaration`, `bindingUsing`, `builtAtOrAbove` →
-  `AncestorTable.builtAtOrAbove`), `UsingScan.extensionUsings`, `StructuralTypes.extensionReturnNominal`. Measured:
+  `AncestorTable.builtAtOrAbove`), `UsingScan.extensionUsings`, `StructuralTypes.extensionReturnNominal`. Later consumers: `UsingSites` (`anyparse.check`), the one answer to whether a `using` takes part in an access — `offers` is `pathStep` asked of one path whatever else is in scope, `mayBindThrough` the binding when the walk proves one and `offers` when it does not — read by `unused-import`, `redundant-import`, `hoist-common-import` and the move carry in place of a text scan by method name. Measured:
   upstream DIFFERENT 0 before and after; facts DIFFERENT unchanged (anyparse 56 / 29, client 200 / 121, Pony 95 / 111), client
   nominal `Call` 7 UNKNOWN → MATCH; the all-rules lint of four trees byte-identical. Left for later: `PreferStaticExtension`'s
   `UsingScan.usingConflict` asks a hypothetical `using` the rewrite would insert, which this question does not model.

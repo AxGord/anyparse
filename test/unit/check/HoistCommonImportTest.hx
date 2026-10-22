@@ -43,6 +43,13 @@ class HoistCommonImportTest extends Test {
 	/** What `hoistedSites` puts between two slices — never a `;`, which every statement it renders ends with. */
 	private static inline final SITE_SEPARATOR: String = ' :: ';
 
+	/** A class body calling `tqq` extension-style on a `String` — the access a rival `using` declaring `tqq` contests. */
+	private static inline final CALLS_TQQ: String = '\n\n\tfunction f(s:String):String {\n\t\treturn s.tqq();\n\t}\n\n';
+
+	/** What `planned` reports for `usingTree` whose three modules also keep a rival `using` no access contests. */
+	private static inline final HOISTED_PAST_RIVAL: String = 'src/aqq/OneQq.hx:qqz.Sqqwwee@src/import.hx,src/aqq/ThreeQq.hx:qqz.Sqqwwee@src/import.hx,'
+		+ 'src/aqq/TwoQq.hx:qqz.Sqqwwee@src/import.hx';
+
 	/** Four modules of one package spelling one import, and a fifth that does not. */
 	private static final COMMON_TREE: Array<TreeFile> = [
 		{ name: 'src/qqz/Zqqwwee.hx', source: 'package qqz;\n\nclass Zqqwwee {}\n' },
@@ -226,11 +233,27 @@ class HoistCommonImportTest extends Test {
 		Assert.equals('using qqz.Sqqwwee;|', hoisted(usingTree('qqz.Sqqwwee', '')));
 	}
 
-	/** A module keeping a `using` this rule cannot vouch for keeps its OWN statement: hoisting it would demote it. */
+	/**
+	 * A module where another `using` may take one of the hoisted one's accesses keeps its OWN statement: hoisting it would
+	 * demote it below the rival, which declares the same method for the same receiver.
+	 */
 	@:pin('control')
 	@:killer('M-HOIST-USING-DEMOTION')
 	public function testKeepsAnAllowListedUsingWhereARivalRemains(): Void {
-		Assert.equals('', planned(usingTree('qqz.Sqqwwee', 'using qqz.Rqqwwee;\n')));
+		final tree: Array<TreeFile> = usingTree('qqz.Sqqwwee', 'using qqz.Cqqwwee;\n', CALLS_TQQ).concat([
+			{
+				name: 'src/qqz/Cqqwwee.hx',
+				source: 'package qqz;\n\nclass Cqqwwee {\n\n\tpublic static function tqq(s: String): String {\n\t\treturn s;\n\t}\n\n}\n'
+			}
+		]);
+		Assert.equals('', planned(tree));
+	}
+
+	/** A rival `using` contesting no access of the module — it declares no method the hoisted one does — leaves it free to move. */
+	@:pin('control')
+	@:killer('M-USING-CONTEST-ANY')
+	public function testHoistsAnAllowListedUsingPastARivalNoAccessContests(): Void {
+		Assert.equals(HOISTED_PAST_RIVAL, planned(usingTree('qqz.Sqqwwee', 'using qqz.Rqqwwee;\n', CALLS_TQQ)));
 	}
 
 	/**
@@ -569,11 +592,22 @@ class HoistCommonImportTest extends Test {
 		);
 	}
 
-	/** Another `using` anywhere in the reader's chain would rank BELOW the own copy a sink writes. Refused. */
+	/**
+	 * Another `using` in the reader's chain that offers one of the sunk one's accesses would rank BELOW the own copy a sink
+	 * writes. Refused.
+	 */
 	@:pin('control')
 	@:killer('M-SINK-USING-RANK-BLIND')
 	public function testRefusesAUsingSinkWhereTheChainCarriesAnotherUsing(): Void {
-		Assert.equals('', sunk(usingSinkTree('using qqz.Pqqwwee;\n')));
+		Assert.equals('', sunk(usingSinkTree('using qqz.Cqqwwee;\n')));
+	}
+
+	/** A `using` in the reader's chain contesting none of the sunk one's accesses takes nothing from it: the sink goes ahead. */
+	@:pin('control')
+	@:killer('M-USING-CONTEST-ANY')
+	public function testSinksAUsingPastAChainRivalNoAccessContests(): Void {
+		Assert.equals(sunk(usingSinkTree('')), sunk(usingSinkTree('using qqz.Pqqwwee;\n')));
+		Assert.notEquals('', sunk(usingSinkTree('using qqz.Pqqwwee;\n')));
 	}
 
 	/**
@@ -848,11 +882,11 @@ class HoistCommonImportTest extends Test {
 	}
 
 	/**
-	 * Three of six modules carrying `using <path>;` plus `extra`, with `path` on the allow-list this
-	 * fixture's own `apqlint.json` declares — a `using` of a local module, since a direct run resolves
-	 * no library.
+	 * Three of six modules carrying `using <path>;` plus `extra` and the class body `body`, with `path` on the
+	 * allow-list this fixture's own `apqlint.json` declares — a `using` of a local module, since a direct run
+	 * resolves no library.
 	 */
-	private static function usingTree(path: String, extra: String): Array<TreeFile> {
+	private static function usingTree(path: String, extra: String, body: String = ''): Array<TreeFile> {
 		final head: String = 'package aqq;\n\nusing $path;\n$extra';
 		return [
 			{ name: 'apqlint.json', source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee"] } } }\n' },
@@ -864,9 +898,9 @@ class HoistCommonImportTest extends Test {
 				name: 'src/qqz/Rqqwwee.hx',
 				source: 'package qqz;\n\nclass Rqqwwee {\n\n\tpublic static function uqq(s: String): String {\n\t\treturn s;\n\t}\n\n}\n'
 			},
-			{ name: 'src/aqq/OneQq.hx', source: '$head\nclass OneQq {}\n' },
-			{ name: 'src/aqq/TwoQq.hx', source: '$head\nclass TwoQq {}\n' },
-			{ name: 'src/aqq/ThreeQq.hx', source: '$head\nclass ThreeQq {}\n' },
+			{ name: 'src/aqq/OneQq.hx', source: '$head\nclass OneQq {$body}\n' },
+			{ name: 'src/aqq/TwoQq.hx', source: '$head\nclass TwoQq {$body}\n' },
+			{ name: 'src/aqq/ThreeQq.hx', source: '$head\nclass ThreeQq {$body}\n' },
 			{ name: 'src/aqq/FourQq.hx', source: 'package aqq;\n\nclass FourQq {}\n' }
 		];
 	}
@@ -889,6 +923,7 @@ class HoistCommonImportTest extends Test {
 			{ name: 'src/qqz/Sqqwwee.hx', source: extension('Sqqwwee', 'tqq') },
 			{ name: 'src/qqz/Rqqwwee.hx', source: extension('Rqqwwee', 'uqq') },
 			{ name: 'src/qqz/Pqqwwee.hx', source: extension('Pqqwwee', 'vqq') },
+			{ name: 'src/qqz/Cqqwwee.hx', source: extension('Cqqwwee', 'tqq') },
 			{ name: 'src/aqq/import.hx', source: 'using qqz.Sqqwwee;\n' },
 			{
 				name: 'src/aqq/OneQq.hx',

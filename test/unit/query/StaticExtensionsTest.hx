@@ -1,7 +1,9 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.MemberLookup.HostedMembers;
+import anyparse.query.StaticExtensions;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
 import unit.cli.CliFixture;
@@ -30,6 +32,33 @@ class StaticExtensionsTest extends Test {
 		]);
 		Assert.equals('B.f', binding(index, 'p/Main.hx', 'Str', 'f'), 'the last `using` first');
 		Assert.equals('A.r', binding(index, 'p/Main.hx', 'Str', 'r'), 'a first parameter rejecting the receiver is passed over');
+	}
+
+	/**
+	 * What one `using` offers an access whatever else is in scope (`offers`), and whether the access may bind through it
+	 * (`mayBindThrough`): a module whose candidate rejects the receiver, or declares none, offers nothing; one the last
+	 * `using` outranks offers the access but takes no part in it.
+	 */
+	@:pin('control') @:killer('M-USING-OFFER-OPEN') @:killer('M-USING-BOUND-ELSEWHERE')
+	public function testWhatOneUsingOffersAndWhetherAnAccessMayBindThroughIt(): Void {
+		final index: SymbolIndex = indexOf([
+			'p/A.hx' => 'package p;\n\nclass A {\n\tpublic static function f(s:Str):Int return 0;\n}\n',
+			'p/B.hx' => 'package p;\n\nclass B {\n\tpublic static function f(s:Str):Int return 0;\n\n'
+			+ '\tpublic static function g(o:Other):Int return 0;\n}\n',
+			'p/Main.hx' => 'package p;\n\nusing p.A;\nusing p.B;\n\nclass Main {}\n'
+		]);
+		final str: ResolvedType = index.refs.resolvedDeclsNamed('Str')[0];
+		final main: Null<FileInfo> = index.fileInfo('p/Main.hx');
+		final extensions: StaticExtensions = index.typing.extensions;
+		Assert.equals(Fits, extensions.offers('p.A', str, 'f'));
+		Assert.equals(Misfits, extensions.offers('p.B', str, 'g'), 'a first parameter rejecting the receiver');
+		Assert.equals(Misfits, extensions.offers('p.A', str, 'g'), 'a name the module does not declare');
+		if (main == null) {
+			Assert.fail('no fixture p/Main.hx');
+			return;
+		}
+		Assert.isFalse(extensions.mayBindThrough(main, str, 'f', 'p.A'), 'the last `using` binds first');
+		Assert.isTrue(extensions.mayBindThrough(main, str, 'f', 'p.B'));
 	}
 
 	@:pin('control') @:killer('M-EXT-DECL-TWO-HOSTS') @:killer('M-EXT-MODULE-FIELDS-OPEN')
