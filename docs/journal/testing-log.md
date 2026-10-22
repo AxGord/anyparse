@@ -4393,3 +4393,12 @@ upstream (Haxe 4.3.7 `tests/display` + `tests/misc`): source 173 cases / 120 UNK
 buckets exactly, its "other" 55 = `other` 54 + `string-segment` 1.
 
 Pony was not re-measured here (the worker had no access to the Pony tree).
+
+### 2026-10-22 — typer `--census` on a Pony copy (parent, main `ecfb0ab02`)
+
+`facts --list --census` in a fresh `cp -R` of Pony (containment `git diff | shasum` = `421c0a08…` before and after):
+UNKNOWN source 3086 / 11089 = 27.8 %, nominal 2898 / 11089 = 26.1 % (the T7-0 brief's 38.6 % had the same wrong
+denominator as its anyparse figure). Source roots, % of UNKNOWN: member-not-found 28.4, declaration-node 19.5,
+other 14.2, pattern-capture 7.0, declared-type-not-read 5.8, operator-result 5.6, type-expression 5.3,
+F2-inferred-signature 3.8, construction 3.4, loop-element 2.6, F3-literal-or-lambda-value 1.1, F1 0.8,
+F3-lambda-parameter 0.8, index-access 0.8, string-segment 0.5, check-type 0.4.
