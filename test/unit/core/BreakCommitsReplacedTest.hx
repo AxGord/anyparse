@@ -3,8 +3,6 @@ package unit.core;
 import anyparse.core.BreakCommits;
 import anyparse.core.BreakToken;
 import anyparse.core.Doc;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `BreakCommits.replaced` copies only the path to its target, on the side every walker reads — the bound that keeps a
