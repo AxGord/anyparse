@@ -1,6 +1,5 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.check.UsingSites;
@@ -73,6 +72,45 @@ class UsingSitesTest extends Test {
 		Assert.isFalse(CheckFixture.violationsIn(new UnusedImport(), scope).exists(v -> v.file == 'p/Src.hx'));
 	}
 
+	/**
+	 * A `@:forward` abstract hands an access it does not declare to its underlying type, where that type's extensions bind:
+	 * without the statement 4.3.7 reads `p.Fwdqqw has no field zqqap`. Neither the abstract nor a `typedef` of it decides the
+	 * candidate, so the access stays a use.
+	 */
+	@:pin('control') @:killer('M-USING-FORWARD-DECIDED')
+	public function testAForwardAbstractReceiverKeepsTheModule(): Void {
+		final forward: Array<{ file: String, source: String }> = [
+			{ file: 'p/Fwdqqw.hx', source: 'package p;\n\n@:forward abstract Fwdqqw(Wqqw) from Wqqw {}\n' },
+			{ file: 'p/FwdAliasqqw.hx', source: 'package p;\n\ntypedef FwdAliasqqw = Fwdqqw;\n' }
+		];
+		Assert.equals('', unusedIn('using p.ZapWqqw;\n', 'f(x:Fwdqqw):Int return x.zqqap();', forward));
+		Assert.equals('', unusedIn('using p.ZapWqqw;\n', 'f(x:FwdAliasqqw):Int return x.zqqap();', forward), 'through a typedef');
+	}
+
+	/**
+	 * An identifier names a VALUE before a type: a module-level field, a static field imported by name or by a type's
+	 * wildcard, an imported enum's constructor. `Kqqw.zqqap()` then reads that value and binds the extension — each form,
+	 * without the statement, fails to compile on 4.3.7.
+	 */
+	@:pin('control') @:killer('M-USING-STATIC-SHADOW')
+	public function testAValueSpelledLikeATypeIsNoTypeExpression(): Void {
+		final values: Array<{ file: String, source: String }> = [
+			{ file: 'p/Holdqqw.hx', source: 'package p;\n\nclass Holdqqw {\n\tpublic static var Kqqw:Wqqw = new Wqqw();\n}\n' },
+			{ file: 'p/Shapeqqw.hx', source: 'package p;\n\nenum Shapeqqw {\n\tKqqw;\n}\n' },
+			{
+				file: 'p/ZapShapeqqw.hx',
+				source: 'package p;\n\nclass ZapShapeqqw {\n\tpublic static function zqqap(s:Shapeqqw):Int return 7;\n}\n'
+			}
+		];
+		final call: String = 'class Src {\n\tpublic static function f():Int return Kqqw.zqqap();\n}\n';
+		Assert.equals(
+			'', unusedInSource('package p;\n\nusing p.ZapWqqw;\n\nfinal Kqqw:Wqqw = new Wqqw();\n\n$call', values), 'module-level field'
+		);
+		Assert.equals('', unusedInSource('package p;\n\nimport p.Holdqqw.Kqqw;\n\nusing p.ZapWqqw;\n\n$call', values), 'field import');
+		Assert.equals('', unusedInSource('package p;\n\nimport p.Holdqqw.*;\n\nusing p.ZapWqqw;\n\n$call', values), 'type wildcard');
+		Assert.equals('', unusedInSource('package p;\n\nimport p.Shapeqqw;\n\nusing p.ZapShapeqqw;\n\n$call', values), 'enum constructor');
+	}
+
 	/** The access the statement does bind keeps it, and a receiver the run cannot type keeps it too. */
 	@:pin('guard')
 	public function testAnAccessTheModuleBindsOrCannotBeTypedKeepsIt(): Void {
@@ -115,12 +153,16 @@ class UsingSitesTest extends Test {
 
 	/** The `unused using` paths `unused-import` reports on `p/Src.hx` holding `usings` and the static function `member`. */
 	private static function unusedIn(usings: String, member: String, ?extra: Array<{ file: String, source: String }>): String {
-		final scope: Array<{ file: String, source: String }> = TYPES.concat(extra ?? [])
-			.concat([{ file: 'p/Src.hx', source: srcOf(usings, member) }]);
-		final found: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), scope);
+		return unusedInSource(srcOf(usings, member), extra ?? []);
+	}
+
+	/** The `unused using` paths `unused-import` reports on `p/Src.hx` written as `source`, beside `TYPES` and `extra`. */
+	private static function unusedInSource(source: String, extra: Array<{ file: String, source: String }>): String {
+		final scope: Array<{ file: String, source: String }> = TYPES.concat(extra).concat([{ file: 'p/Src.hx', source: source }]);
 		return [
-			for (v in found) if (v.file == 'p/Src.hx' && v.severity == Severity.Warning && v.message.indexOf('unused using') == 0)
-				v.message.split('\'')[1]
+			for (v in CheckFixture.violationsIn(new UnusedImport(), scope))
+				if (v.file == 'p/Src.hx' && v.severity == Severity.Warning && v.message.indexOf('unused using') == 0)
+					v.message.split('\'')[1]
 		].join(',');
 	}
 

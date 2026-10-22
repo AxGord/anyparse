@@ -7,6 +7,7 @@ import anyparse.query.OccurrenceScan;
 import anyparse.query.ShapeVocab;
 import anyparse.query.StdTypes;
 import anyparse.query.SymbolIndex;
+import anyparse.query.ValueDoors;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -104,7 +105,7 @@ final class UsingSites {
 		final index: Null<SymbolIndex> = door.index;
 		final recv: QueryNode = access.children[0];
 		final typeName: Null<String> = index == null ? null : NominalTypes.staticReceiverName(recv, tree, _plugin.refShape(), index);
-		if (index != null && typeName != null) return staticSite(index, typeName, name, at);
+		if (index != null && typeName != null) return staticSite(index, recv, tree, typeName, name, at);
 		final nominal: Null<String> = try typeOf(recv) catch (exception: Exception) null;
 		if (nominal == null) return Unknown;
 		final indexed: Null<Bool> = index?.typing.members.instanceMemberBinds(nominal, name, _file, at);
@@ -119,17 +120,15 @@ final class UsingSites {
 
 	/**
 	 * `Type.name` on a type expression: the type's own static of the name binds, and no `using` takes part — unless the
-	 * type or the static is under `#if`, or it declares none, where an extension taking the class may. An enclosing type
-	 * that may declare or inherit a field spelled like the type keeps the access unknown: that field, not the type, is
-	 * what the identifier names there.
+	 * identifier may name a value first (`ValueDoors.bindsNoValue`: a field of the enclosing type, a module-level field, a
+	 * static or constructor an import brings), the type or the static is under `#if`, or it declares none, where an extension
+	 * taking the class may.
 	 */
-	private function staticSite(index: SymbolIndex, typeName: String, name: String, at: Int): AccessSite {
+	private function staticSite(index: SymbolIndex, recv: QueryNode, tree: QueryNode, typeName: String, name: String, at: Int): AccessSite {
 		final fi: Null<FileInfo> = index.fileInfo(_file);
-		if (fi == null) return Unknown;
-		final own: FileInfo = fi;
-		final enclosing: Array<TypeDeclInfo> = own.types.filter(t -> at >= t.span.from && at < t.span.to);
-		if (enclosing.length == 0 || enclosing.exists(t -> !index.typing.members.declarationLacksMember({ file: own, type: t }, typeName)))
-			return Unknown;
+		final span: Null<Span> = recv.span;
+		if (fi == null || span == null) return Unknown;
+		if (!ValueDoors.bindsNoValue(recv, typeName, span, fi, tree, _plugin.refShape(), _file, index)) return Unknown;
 		final start: Null<ResolvedType> = index.refs.resolveStartType(typeName, _file, at);
 		if (start == null || start.type.guarded) return Unknown;
 		final statics: Array<MemberInfo> = start.type.members.filter(m -> m.name == name && m.isStatic);

@@ -143,6 +143,26 @@ class AmbientImportRulesTest extends Test {
 		}
 	];
 
+	/**
+	 * An own `using` an ambient source repeats, a rival above it declaring the same method, and the call on a `@:forward`
+	 * abstract: both modules answer the access the abstract hands to its underlying type, so the rival contests it.
+	 */
+	private static final USING_FORWARD_RIVAL_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/a/Wqqz.hx', source: 'package a;\n\nclass Wqqz {}\n' },
+		{ name: 'src/a/Fwdqqz.hx', source: 'package a;\n\n@:forward abstract Fwdqqz(Wqqz) from Wqqz {}\n' },
+		{ name: 'src/a/Sqq.hx', source: 'package a;\n\nclass Sqq {\n\tpublic static function zqq(w:Wqqz):Int return 1;\n}\n' },
+		{
+			name: 'src/b/Rqq.hx',
+			source: 'package b;\n\nimport a.Wqqz;\n\nclass Rqq {\n\tpublic static function zqq(w:Wqqz):Int return 2;\n}\n'
+		},
+		{ name: 'src/lib/import.hx', source: 'using a.Sqq;\n' },
+		{
+			name: 'src/lib/Modq.hx',
+			source: 'package lib;\n\nimport a.Fwdqqz;\n\nusing b.Rqq;\nusing a.Sqq;\n\nclass Modq {\n'
+				+ '\tstatic function f(w:Fwdqqz):Int return w.zqq();\n}\n'
+		}
+	];
+
 	/** The same shape with the rival `using` gone, so the two positions are interchangeable. */
 	private static final USING_RIVAL_CONTROL: Array<{ name: String, source: String }> = [
 		{ name: 'src/a/Sqq.hx', source: 'package a;\n\nclass Sqq {}\n' },
@@ -354,6 +374,18 @@ class AmbientImportRulesTest extends Test {
 			'src/lib/Modq.hx:a.Sqq', redundantFindings(USING_QUIET_RIVAL_TREE, 'src/lib/Modq.hx'),
 			'a rival rejecting the receiver takes no position'
 		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-USING-FORWARD-DECIDED')
+	public function testARivalOfAForwardedAccessContests(): Void {
+		#if (sys || nodejs)
+		// The abstract declares no `zqq`, so 4.3.7 hands the access to `Wqqz`, where both modules take it: deleting the own
+		// statement would hand it to the rival.
+		Assert.equals('', redundantFindings(USING_FORWARD_RIVAL_TREE, 'src/lib/Modq.hx'), 'the rival answers the forwarded access');
 		#else
 		Assert.pass('non-sys target');
 		#end

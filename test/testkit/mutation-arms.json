@@ -29395,9 +29395,16 @@
 			"name": "M-USING-STATIC-SHADOW",
 			"type": "anyparse.check.UsingSites",
 			"method": "staticSite",
-			"find": "if (enclosing.length == 0 || enclosing.exists(t -> !index.typing.members.declarationLacksMember({ file: own, type: t }, typeName)))",
-			"replace": "if (enclosing.length == 0)",
-			"note": "a field of the enclosing type spelled like a type reads as that type, so its static seems to bind and a `using` the field's value needs is deleted"
+			"find": "if (!ValueDoors.bindsNoValue(recv, typeName, span, fi, tree, _plugin.refShape(), _file, index)) return Unknown;",
+			"replace": "",
+			"note": "a value spelled like a type — an inherited field, a module-level field, an imported static or constructor — reads as that type, so its static seems to bind and a `using` the value needs is deleted"
+		},
+		{
+			"name": "M-USING-FORWARD-DECIDED",
+			"type": "anyparse.query.StaticExtensions",
+			"method": "forwardsAccess",
+			"force": "false",
+			"note": "a `@:forward` abstract receiver is judged by its own type, so every extension its underlying type takes reads as rejecting it and the `using` that answers the forwarded access is deleted"
 		}
 	]
 }

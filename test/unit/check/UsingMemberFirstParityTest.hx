@@ -107,6 +107,15 @@ class UsingMemberFirstParityTest extends Test {
 		agree('p.Ext', 'class D {\n\tpublic function new() {}\n}', 'f(d:D):String return d.tag();', true);
 	}
 
+	/** A `@:forward` abstract hands an access it does not declare to its underlying type, whose extension binds: kept. */
+	@:pin('control') @:killer('M-USING-FORWARD-DECIDED')
+	public function testAForwardAbstractReceiverKeepsTheUsing(): Void {
+		agree(
+			'p.Ext', 'class D {\n\tpublic function new() {}\n}\n\n@:forward abstract Fq(D) from D {}', 'f(x:Fq):String return x.tag();',
+			true
+		);
+	}
+
 	/**
 	 * A project type sharing the std name the receiver's type spells keeps the statement: the std listing answers only
 	 * for a name no project type takes (`NominalTypes.shadowedByNonStdType`), since the typer's nominal is a simple name.

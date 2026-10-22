@@ -92,9 +92,11 @@ final class StaticExtensions {
 	 * What `using <path>` offers `recv.name` on a receiver of the declaration `receiver`, whatever else is in scope: `Fits`
 	 * when a candidate it brings binds there, `Misfits` when every candidate passes the receiver over or none is declared,
 	 * `MayFit` when the walk decides nothing (the path does not read, a candidate it cannot type, a first parameter that may
-	 * or may not accept the receiver).
+	 * or may not accept the receiver) — and always for a receiver that forwards (`forwardsAccess`), whose underlying type's
+	 * extensions answer an access the receiver itself does not declare.
 	 */
 	public function offers(path: String, receiver: ResolvedType, name: String): ArgumentFit {
+		if (forwardsAccess(receiver, [])) return MayFit;
 		return switch pathStep(path, receiver, name) {
 			case Bound(_): Fits;
 			case Passed: Misfits;
@@ -271,6 +273,18 @@ final class StaticExtensions {
 			case Misfits: Passed;
 			case MayFit: Open;
 		};
+	}
+
+	/**
+	 * Whether `r`, through its `typedef` aliases, is a `@:forward` abstract — 4.3.7 hands an access it does not declare to
+	 * the underlying type, where that type's extensions bind (`p.trim()` on a forward abstract over `String` compiles with
+	 * `using StringTools` only) — or an alias that does not resolve.
+	 */
+	private function forwardsAccess(r: ResolvedType, seen: Array<String>): Bool {
+		if (r.type.kind != SymbolIndex.TYPEDEF_DECL_KIND || r.type.isAnonStruct) return r.type.abstractForwardUnderlying != null;
+		if (!_refs.markSeen(r, seen)) return true;
+		final next: Null<ResolvedType> = _ancestors.aliasTarget(r);
+		return next == null || forwardsAccess(next, seen);
 	}
 
 	/**

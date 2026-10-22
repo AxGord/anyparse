@@ -47,6 +47,7 @@ final class PinsCheckAToO {
 			+ 'M-AMBIENT-GOVERNANCE-COMPLETE',
 		'unit.check.AmbientImportRulesTest#testAGuardedBinderInTheNearestGroupKeepsTheOwnStatement :: control :: '
 			+ 'M-AMBIENT-REDUNDANT-GUARDED-SKIP',
+		'unit.check.AmbientImportRulesTest#testARivalOfAForwardedAccessContests :: control :: M-USING-FORWARD-DECIDED',
 		'unit.check.AmbientImportRulesTest#testASiblingTheNearerGroupDecidesKeepsTheOwnStatement :: control :: M-IMPORT-LEAF-ONLY-NAMES',
 		'unit.check.AmbientImportRulesTest#testAnAmbientImportAModuleUnderItUsesIsNotReported :: control :: M-AMBIENT-GOVERNANCE-BLIND',
 		'unit.check.AmbientImportRulesTest#testAnAmbientImportNoModuleUnderItUsesIsStillReported :: control :: M-AMBIENT-GOVERNANCE-SHORT',
@@ -396,6 +397,7 @@ final class PinsCheckAToO {
 		'unit.check.HoistCommonImportTest#testHoistsAnAllowListedUsingPastARivalNoAccessContests :: control :: M-USING-CONTEST-ANY',
 		'unit.check.HoistCommonImportTest#testHoistsAnImportMostModulesSpell :: control :: M-HOIST-NEVER-SOUND',
 		'unit.check.HoistCommonImportTest#testKeepsAStatementEnoughModulesRead :: control :: M-SINK-SHARE-BLIND',
+		'unit.check.HoistCommonImportTest#testKeepsAUsingWhoseForwardedAccessARivalAnswers :: control :: M-USING-FORWARD-DECIDED',
 		'unit.check.HoistCommonImportTest#testKeepsAnAllowListedUsingWhereARivalRemains :: control :: M-HOIST-USING-DEMOTION',
 		'unit.check.HoistCommonImportTest#testOneSlicePerSite :: guard :: ',
 		'unit.check.HoistCommonImportTest#testRefusesAGuardedStatement :: guard :: ',

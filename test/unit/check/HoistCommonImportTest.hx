@@ -257,6 +257,34 @@ class HoistCommonImportTest extends Test {
 	}
 
 	/**
+	 * A module whose call on a `@:forward` abstract both its `using` statements answer — through the abstract's underlying
+	 * type — keeps its own: hoisting the winning one would demote it below the rival.
+	 */
+	@:pin('control')
+	@:killer('M-USING-FORWARD-DECIDED')
+	public function testKeepsAUsingWhoseForwardedAccessARivalAnswers(): Void {
+		final extension: (String) -> String = type ->
+			'package qqz;\n\nclass $type {\n\n\tpublic static function tqq(w: Wqqz): String {\n\t\treturn \'$type\';\n\t}\n\n}\n';
+		final module: (String) -> TreeFile = name -> {
+			name: 'src/aqq/$name.hx',
+			source: 'package aqq;\n\nimport qqz.Fwqqz;\n\nusing qqz.Cqqwwee;\nusing qqz.Sqqwwee;\n\nclass $name {\n\n'
+				+ '\tfunction f(x: Fwqqz): String {\n\t\treturn x.tqq();\n\t}\n\n}\n'
+		};
+		final tree: Array<TreeFile> = [
+			{ name: 'apqlint.json', source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee"] } } }\n' },
+			{ name: 'src/qqz/Wqqz.hx', source: 'package qqz;\n\nclass Wqqz {}\n' },
+			{ name: 'src/qqz/Fwqqz.hx', source: 'package qqz;\n\n@:forward abstract Fwqqz(Wqqz) from Wqqz {}\n' },
+			{ name: 'src/qqz/Sqqwwee.hx', source: extension('Sqqwwee') },
+			{ name: 'src/qqz/Cqqwwee.hx', source: extension('Cqqwwee') },
+			module('OneQq'),
+			module('TwoQq'),
+			module('ThreeQq'),
+			{ name: 'src/aqq/FourQq.hx', source: 'package aqq;\n\nclass FourQq {}\n' }
+		];
+		Assert.isFalse(planned(tree).indexOf('qqz.Sqqwwee') >= 0);
+	}
+
+	/**
 	 * Two hoisted usings keep their SOURCE order, which is their priority (Haxe ranks static extensions
 	 * in reverse declaration order). The inserting seat puts each fresh `using` above the header's first
 	 * one, so the rule inserts them last-first; inserted first-first they would come out reversed.
