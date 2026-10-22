@@ -29536,7 +29536,7 @@
 			"method": "indexConstruction",
 			"find": "if (decls.length == 1) return NominalTypes.completedType(written.text, at.from, c);",
 			"replace": "if (decls.length == 1) return written.text;",
-			"note": "a construction leaving a generic type's arguments to inference is typed as its bare name, a type the compiler never gives it"
+			"note": "a construction leaving out arguments its type gives defaults is typed as written, `Pair<Int>`, though 4.3.7 completes it as `Pair<Int, Item>`"
 		},
 		{
 			"name": "M-COMPOSED-ELEMENT-NULL",

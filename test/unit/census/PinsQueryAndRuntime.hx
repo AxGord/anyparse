@@ -280,9 +280,9 @@ final class PinsQueryAndRuntime {
 			+ 'M-FACTS-SPLICE-UNATTRIBUTED,M-FACTS-SPLICE-HARMLESS,M-FACTS-SPLICE-INNERMOST,M-FACTS-SPLICE-SECOND-SITE',
 		'unit.query.ComposedValuesTest#testACompoundAssignmentIsOfItsTargetsType :: control :: M-COMPOUND-KEEPS-TARGET-FALSE',
 		'unit.query.ComposedValuesTest#testAConditionalExpectedOfNothingUnifiesItsBranches :: control :: M-COMPOSED-BRANCHES-NULL',
-		'unit.query.ComposedValuesTest#testAConstructionIsTheTypeItWrites :: control :: M-COMPOSED-CONSTRUCTION-NULL',
-		'unit.query.ComposedValuesTest#testAConstructionLeavingArgumentsToInferenceIsUnknown :: control :: '
-			+ 'M-COMPOSED-CONSTRUCTION-AS-WRITTEN,M-COMPOSED-DEFAULTS-UNWRITTEN',
+		'unit.query.ComposedValuesTest#testAConstructionIsTheTypeItWrites :: control :: '
+			+ 'M-COMPOSED-CONSTRUCTION-NULL,M-COMPOSED-CONSTRUCTION-AS-WRITTEN',
+		'unit.query.ComposedValuesTest#testAConstructionLeavingArgumentsToInferenceIsUnknown :: control :: M-COMPOSED-DEFAULTS-UNWRITTEN',
 		'unit.query.ComposedValuesTest#testALiteralExpectedOfATypeIsTheTypeItPicks :: control :: M-COMPOSED-EXPECTED-NULL',
 		'unit.query.ComposedValuesTest#testALiteralExpectedOfNothingIsOfItsParts :: control :: M-COMPOSED-PARTS-NULL',
 		'unit.query.ComposedValuesTest#testALiteralForADynamicFieldIsDynamic :: control :: '

@@ -12,30 +12,32 @@ import utest.Test;
 class ComposedValuesTest extends Test {
 
 	/** The fixture module: each case is the node of a kind starting at a marked text. */
-	private static final SOURCE: String = 'package p;\n\ntypedef Inner = { x: Int };\n\ntypedef Num = { v: Float };\n\ntypedef Opt = {'
-		+ ' a: Float, ?b: Int, ?c: String, ?k: Item, ?p: Plain };\n\ntypedef Dyn = { m: Dynamic, ?d: Dynamic };\n\ntypedef Outer = {'
-		+ ' a: Int, inner: Inner, ?list: Array<Int> };\n\nabstract U(Int) from Int to Int {\n\t@:op(A + B) static function add(a: U, b: '
-		+ 'U): U return a;\n\n\t@:arrayAccess function get(i: Int): String return "";\n}\n\nabstract Two(Int) from Int {\n\t@:arrayAccess '
-		+ 'function byInt(i: Int): Float return 1.0;\n\n\t@:arrayAccess function byName(s: String): Bool return true;\n}\n\nabstract '
-		+ 'W(Int) {\n#if !x\n\t@:op(A * B) static function mulA(a: W, b: W): W return a;\n#end\n\n\t@:op(A * B) static function mulB(a: '
-		+ 'W, b: Float): Float return 1.0;\n}\n\nabstract Plain(Int) from Int to Int {}\n\nenum abstract Color(Int) {\n\tvar Red = 1;\n'
-		+ '}\n\nclass Box<T> {\n\tpublic function new(?t: T) {}\n}\n\nclass Item {}\n\nclass Def<T = Item> {\n\tpublic function new() {}\n'
-		+ '}\n\nclass C {\n\tstatic function take(o: Outer) {}\n\n\tstatic function any(o: Dynamic) {}\n\n\tstatic function num(o: Num) '
-		+ '{}\n\n\tstatic function opt(o: Opt) {}\n\n\tstatic function dyn(o: Dyn) {}\n\n\tfunction f<T>(n: Null<Int>, i: Int, fl: Flo'
-		+ 'at, s: String, u: U, two: Two, plain: Plain, a: Array<Int>, na: Null<Array<Int>>, d: Dynamic, w: W, it: Item) {\n\t\tnew '
-		+ 'Box<Int>();\n\t\tnew Box(i);\n\t\tnew Def();\n\t\tnew T();\n\t\ta[0];\n\t\tna[0];\n\t\tu[0];\n\t\ttwo[0];\n\t\ttwo["k"];\n'
-		+ '\t\td[0];\n\t\ti + fl;\n\t\ts + i;\n\t\tn + 1;\n\t\t-n;\n\t\ti < fl;\n\t\tn += 1;\n\t\tu + u;\n\t\tplain + 1;\n\t\tfor ('
-		+ 'k in 0...i) trace(k);\n\t\tColor.Red;\n\t\tfinal xs = [1, 2.5];\n\t\tfinal o = { a: 1, b: "x" };\n\t\tfinal none = [];\n'
+	private static final SOURCE: String = 'package p;\n\ntypedef Inner = { x: Int };\n\ntypedef Num = { v: Float };\n\n'
+		+ 'typedef Opt = { a: Float, ?b: Int, ?c: String, ?k: Item, ?p: Plain };\n\ntypedef Dyn = { m: Dynamic, ?d: Dynamic };\n\n'
+		+ 'typedef Outer = { a: Int, inner: Inner, ?list: Array<Int> };\n\nabstract U(Int) from Int to Int {\n'
+		+ '\t@:op(A + B) static function add(a: U, b: U): U return a;\n\n\t@:arrayAccess function get(i: Int): String return "";\n}\n\n'
+		+ 'abstract Two(Int) from Int {\n\t@:arrayAccess function byInt(i: Int): Float return 1.0;\n\n\t@:arrayAccess function byName(s: '
+		+ 'String): Bool return true;\n}\n\nabstract W(Int) {\n#if !x\n\t@:op(A * B) static function mulA(a: W, b: W): W return a;\n'
+		+ '#end\n\n\t@:op(A * B) static function mulB(a: W, b: W): Float return 1.0;\n}\n\nabstract Plain(Int) from Int to Int {}\n\n'
+		+ 'enum abstract Color(Int) {\n\tvar Red = 1;\n}\n\nclass Box<T> {\n\tpublic function new(?t: T) {}\n}\n\nclass Item {}\n\n'
+		+ 'class Def<T = Item> {\n\tpublic function new() {}\n}\n\nclass Pair<A, B = Item> {\n\tpublic function new() {}\n}\n\nclass C {\n'
+		+ '\tstatic function take(o: Outer) {}\n\n\tstatic function any(o: Dynamic) {}\n\n\tstatic function num(o: Num) {}\n\n\tstatic '
+		+ 'function opt(o: Opt) {}\n\n\tstatic function dyn(o: Dyn) {}\n\n\tfunction f<T>(n: Null<Int>, i: Int, fl: Float, s: String, u: '
+		+ 'U, two: Two, plain: Plain, a: Array<Int>, na: Null<Array<Int>>, d: Dynamic, w: W, it: Item) {\n\t\tnew Box<Int>();\n\t\tnew '
+		+ 'Box(i);\n\t\tnew Def();\n\t\tnew Pair<Int>();\n\t\tnew T();\n\t\ta[0];\n\t\tna[0];\n\t\tu[0];\n\t\ttwo[0];\n\t\ttwo["k"];\n'
+		+ '\t\td[0];\n\t\ti + fl;\n\t\ts + i;\n\t\tn + 1;\n\t\t-n;\n\t\ti < fl;\n\t\tn += 1;\n\t\tu + u;\n\t\tplain + 1;\n\t\tfor (k i'
+		+ 'n 0...i) trace(k);\n\t\tColor.Red;\n\t\tfinal xs = [1, 2.5];\n\t\tfinal o = { a: 1, b: "x" };\n\t\tfinal none = [];\n'
 		+ '\t\tfinal pick = i < 0 ? 1 : 2.5;\n\t\tany([1, 2]);\n\t\ttake({ a: 1, inner: { x: 2 } });\n\t\tnum({ v: 1 });\n\t\t(n + 1);\n'
 		+ '\t\tfinal nxs = [n, 1];\n\t\tfinal nfl = [n, 1.5];\n\t\tfinal npick = i < 0 ? n : 1;\n\t\topt({ a: 1, b: 2 });\n\t\topt({ a: '
 		+ '1.5, k: it });\n\t\topt({ a: 2.5, p: plain });\n\t\tdyn({ m: [1], d: { q: 1 } });\n\t\tany(["k" => 1]);\n\t\tw * w;\n\t}\n}\n';
 
-	@:pin('control') @:killer('M-COMPOSED-CONSTRUCTION-NULL')
+	@:pin('control') @:killer('M-COMPOSED-CONSTRUCTION-NULL', 'M-COMPOSED-CONSTRUCTION-AS-WRITTEN')
 	public function testAConstructionIsTheTypeItWrites(): Void {
 		Assert.equals('Box<Int>', source('NewExpr', 'new Box<Int>'), 'with the arguments it writes');
+		Assert.equals('Pair<Int, Item>', source('NewExpr', 'new Pair<Int>'), 'the default of an argument it leaves out');
 	}
 
-	@:pin('control') @:killer('M-COMPOSED-CONSTRUCTION-AS-WRITTEN', 'M-COMPOSED-DEFAULTS-UNWRITTEN')
+	@:pin('control') @:killer('M-COMPOSED-DEFAULTS-UNWRITTEN')
 	public function testAConstructionLeavingArgumentsToInferenceIsUnknown(): Void {
 		Assert.isNull(source('NewExpr', 'new Box(i)'), 'a `Box<Int>` nothing spells');
 		Assert.isNull(source('NewExpr', 'new T()'), 'a type parameter makes what its call binds');
