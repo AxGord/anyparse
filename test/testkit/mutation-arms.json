@@ -22019,8 +22019,8 @@
 			"name": "M-VALUES-IMPORTED-CTOR",
 			"type": "anyparse.query.ValueNameBinding",
 			"method": "importMayBring",
-			"find": "types == null || carriesValue(types, name)",
-			"replace": "types == null",
+			"find": "(types == null || carriesValue(types, name) || split.rest.length == 0",
+			"replace": "(types == null || split.rest.length == 0",
 			"note": "an import that puts an enum in scope brings none of its constructors, so a bare pattern naming one reads as a capture"
 		},
 		{
@@ -22065,9 +22065,9 @@
 		{
 			"name": "M-NOMINAL-LITERAL",
 			"type": "anyparse.query.TypingService",
-			"method": "typeWalk",
-			"find": "if (literalType != null) return literal == null ? null : literal(literalType, ctx);",
-			"replace": "if (literalType != null) return null;",
+			"method": "carriedType",
+			"find": "return if (literalType != null && literal != null && !pastIntegerRange(node, literalType, shape))",
+			"replace": "return if (literalType != null && literal != null && false)",
 			"note": "a literal types as nothing, so `'x'.ext()` has an unresolved receiver"
 		},
 		{
@@ -29243,6 +29243,29 @@
 			"method": "interpolatingStringType",
 			"force": "null",
 			"note": "a text segment of an interpolated string carries no type"
+		},
+		{
+			"name": "M-DOOR-USING-TYPES-BLIND",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importMayBring",
+			"find": "besideType && (types == null || carriesValue(types, name));",
+			"replace": "false;",
+			"note": "beside a type a `using` brings no constructor, so a constructor a module it names may hold is taken for the type of that name"
+		},
+		{
+			"name": "M-DOOR-ANY-CONSTRUCTOR-BLIND",
+			"type": "anyparse.query.ValueDoors",
+			"method": "bindsNoValue",
+			"find": " && index.values.hostsOfValue(name).length == 0",
+			"replace": "",
+			"note": "a constructor of an enum nothing imports, which an expected type resolves first, is taken for the type of that name"
+		},
+		{
+			"name": "M-WALK-INTEGER-RANGE-FALSE",
+			"type": "anyparse.query.TypingService",
+			"method": "pastIntegerRange",
+			"force": "false",
+			"note": "a decimal literal past the integer range is typed as the integer type, though 4.3.7 types `3000000000` as a `Float`"
 		}
 	]
 }

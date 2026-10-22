@@ -1010,6 +1010,7 @@ final class HaxeRefShape {
 			widens: ['Int' => ['Float']],
 			integer: 'Int',
 			real: 'Float',
+			integerMax: '2147483647',
 			classNames: ['String']
 		};
 		table.arithmeticKinds = ['Add', 'Sub', 'Mul', 'Div', 'Mod'];

@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.CoreValueTypes;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -98,9 +99,6 @@ final class TypingService {
 		final node: QueryNode = host.peel(raw, ctx);
 		final name: Null<String> = node.name;
 		final kind: String = node.kind;
-		final literalType: Null<String> = shape.literalTypeNames?.get(kind);
-		final literal: Null<(typeName:String, ctx:C) -> Null<T>> = host.literal;
-		if (literalType != null) return literal == null ? null : literal(literalType, ctx);
 		final carried: Null<T> = carriedType(node, shape, host, ctx);
 		if (carried != null) return carried;
 		if ((kind == shape.identKind || kind == shape.stringInterpIdentKind) && name != null)
@@ -141,20 +139,36 @@ final class TypingService {
 	}
 
 	/**
-	 * The type a shape that writes or is its own type gives `node`: a text segment of an interpolating string, the string
-	 * type; an ascription `(e : T)`, the type it writes (`TypingHost.ascribed`). Null for any other shape, and for a host
+	 * The type a shape that is or writes its own type gives `node`: a literal (`RefShape.literalTypeNames`; an integer
+	 * one only within `CoreValueTypes.integerMax`), a text segment of an interpolating string the string type; an
+	 * ascription `(e : T)`, the type it writes (`TypingHost.ascribed`). Null for any other shape, and for a host
 	 * typing that one none.
 	 */
 	private static function carriedType<T, C>(node: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
 		final literal: Null<(typeName:String, ctx:C) -> Null<T>> = host.literal;
 		final ascribed: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.ascribed;
-		final segmentType: Null<String> = node.kind == shape.stringInterpTextKind ? interpolatingStringType(shape) : null;
-		return if (segmentType != null && literal != null)
-			literal(segmentType, ctx)
+		final literalType: Null<String> = shape.literalTypeNames?.get(node.kind) ?? (
+			node.kind == shape.stringInterpTextKind ? interpolatingStringType(shape) : null
+		);
+		return if (literalType != null && literal != null && !pastIntegerRange(node, literalType, shape))
+			literal(literalType, ctx)
 		else if (node.kind == shape.checkTypeKind && node.children.length > 0 && ascribed != null)
 			ascribed(node, ctx)
 		else
 			null;
+	}
+
+	/**
+	 * Whether the literal `node`, of the integer type (`CoreValueTypes.integer`), spells a decimal number past
+	 * `CoreValueTypes.integerMax`: the compiler types it as another type, so the walk gives it none.
+	 */
+	private static function pastIntegerRange(node: QueryNode, typeName: String, shape: RefShape): Bool {
+		final core: Null<CoreValueTypes> = shape.coreValueTypes;
+		final max: Null<String> = core?.integerMax;
+		var digits: String = (node.name ?? '').split('_').join('');
+		if (core == null || max == null || typeName != core.integer || !~/^[0-9]+$/.match(digits)) return false;
+		while (digits.length > 1 && digits.charAt(0) == '0') digits = digits.substr(1);
+		return digits.length > max.length || digits.length == max.length && digits > max;
 	}
 
 	/**

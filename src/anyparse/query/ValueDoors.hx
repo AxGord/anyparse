@@ -98,7 +98,7 @@ final class ValueDoors {
 		final enclosing: Null<TypeDeclMatch> = TypeResolver.enclosingTypeDecl(c.root, at);
 		final own: Null<ResolvedType> = enclosing == null ? null : index.refs.findDeclaredType(c.file, enclosing.name);
 		if (enclosing != null && (own == null || !index.typing.members.declarationLacksMember(own, name))) return false;
-		return !index.values.mayImportValueBesideType(fi, name);
+		return !index.values.mayImportValueBesideType(fi, name) && index.values.hostsOfValue(name).length == 0;
 	}
 
 }

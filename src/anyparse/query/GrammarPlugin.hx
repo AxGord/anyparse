@@ -3588,6 +3588,12 @@ typedef CoreValueTypes = {
 	final real: String;
 
 	/**
+	 * The largest DECIMAL literal of the `integer` type, spelled (Haxe `2147483647`): 4.3.7 types a decimal literal past it
+	 * as the `real` type, so no such literal is typed as `integer`. Optional; unset bounds none.
+	 */
+	@:optional final integerMax: String;
+
+	/**
 	 * The `names` the language declares as classes (Haxe `String`); every other one is an abstract the compiler represents
 	 * itself (`@:coreType`), declaring no `@:from` / `@:to` member — the arm of an implicit cast (`abstractCast.ml`) a pair
 	 * takes depends on which side is an abstract.

@@ -318,14 +318,17 @@ std gap. Readings: `docs/journal/testing-log.md`.
   initializer's (none for one binding several values); a type name read as a value `Class<T>` / `Enum<T>`
   (`RefShape.typeValueTypeNames`), only where the name binds none of the values 4.3.7 looks it up as first (`typer.ml`
   `type_ident_raise`: a local, a member of the enclosing type or one it inherits, a module-level field, a constructor or
-  value of a type of the module, what an import may bring — `ValueNameBinding.mayImportValueBesideType`, which reads an
-  import spelling the name as the type it names rather than as a possible static) and names one declaration with no type
-  parameter. Not answered: an abstract read as a value (`Abstract<T>`, which the facts never record), a generic type,
+  value of a type of the module, what an import or a `using` may bring — `ValueNameBinding.mayImportValueBesideType`,
+  which reads an import spelling the name as the type it names rather than as a possible static — and a constructor or
+  value ANY type of the index hosts, which an expected type resolves before a type, imported or not:
+  `ValueNameBinding.hostsOfValue`) and names one declaration with no type parameter. A decimal literal past the integer
+  type's range is no answer (`CoreValueTypes.integerMax`: 4.3.7 types `3000000000` as `Float`). Not answered: an abstract read as a value (`Abstract<T>`, which the facts never record), a generic type,
   a local function's declaration (a function type the walk does not spell), a name the index resolves to several
   declarations (the std's per-target `_std` copies of `Std`, `sys.FileSystem`) or that an unindexed import may bring.
   Measured (UNKNOWN share source / nominal, each currency's DIFFERENT, the base re-run on the same copy): anyparse 34.4 /
-  33.7 → 14.6 / 14.0 %, DIFFERENT 0 / 0; upstream 69.4 / 68.2 → 60.2 / 59.0 %, 0 / 0; Pony 27.8 / 26.1 → 21.4 / 19.8 %,
-  2 / 3 unchanged; a client corpus 28.2 / 23.3 → 21.2 / 16.4 %, 14 / 13 unchanged (identical lists); no MATCH lost on
-  any of the four; the all-rules lint of four trees and the three thread-safety scores byte-identical.
+  33.7 → 14.7 / 14.1 %, DIFFERENT 0 / 0; upstream 69.4 / 68.2 → 60.2 / 59.0 %, 0 / 0; Pony 27.8 / 26.1 → 21.4 / 19.8 %,
+  2 / 3 unchanged; a client corpus 28.2 / 23.3 → 21.3 / 16.5 %, 14 / 13 → 2 / 1 (the integer literals past the range);
+  no MATCH lost and no DIFFERENT added on any of the four; the all-rules lint of four trees and the three thread-safety
+  scores byte-identical.
 Each step lands as a table in `QueryCache` with its consumers moved onto it, and is measured on the harness: a step
 may lower an area's UNKNOWN share and may turn a DIFFERENT into a MATCH or an UNKNOWN, and must add no DIFFERENT.

@@ -1415,6 +1415,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.UnificationTest#testAnyTakesEveryValue :: control :: M-CASTS-DYNAMIC-END',
 		'unit.query.UnificationTest#testOnlyPlainTypesAreDecided :: control :: M-UNIFY-ALIAS-STOP,M-UNIFY-SELF-OPEN',
 		'unit.query.UnificationTest#testTheChainPassesItsArgumentsInTheStartsTerms :: control :: M-ANCESTOR-ARGS-OFF',
+		'unit.query.ValueDoorsTest#testAConstructorOfAnEnumNothingImportsShadowsTheType :: control :: M-DOOR-ANY-CONSTRUCTOR-BLIND',
+		'unit.query.ValueDoorsTest#testADecimalLiteralPastTheIntegerRangeIsUnknown :: control :: M-WALK-INTEGER-RANGE-FALSE',
 		'unit.query.ValueDoorsTest#testADeclarationBindingSeveralValuesIsUnknown :: control :: M-DOOR-DECLARATION-SEVERAL',
 		'unit.query.ValueDoorsTest#testADeclarationIsTheTypeOfTheValueItBinds :: control :: M-DOOR-DECLARATION-NULL',
 		'unit.query.ValueDoorsTest#testADeclarationWrittenWithATypeIsThatTypeWhateverItsInitializer :: control :: M-DOOR-DECLARATION-WRITTEN-FIRST',
@@ -1439,6 +1441,7 @@ final class PinsQueryAndRuntime {
 			+ 'M-MACRO-VALUE-UNLISTED,M-MACRO-EXTENSIONS-ONLY',
 		'unit.query.ValueNameBindingTest#testAnotherRegionOfTheSameConditionIsAnAlternative :: control :: '
 			+ 'M-COND-ALTERNATIVE-REGIONS,M-COND-ALTERNATIVE-SPLIT',
+		'unit.query.ValueNameBindingTest#testBesideATypeAUsingBringsTheValuesOfItsModulesTypes :: control :: M-DOOR-USING-TYPES-BLIND',
 		'unit.runtime.SameItemsTest#testDifferentLengthsDiffer :: guard :: ',
 		'unit.runtime.SameItemsTest#testEqualItemsInOrderAreTheSame :: guard :: ',
 		'unit.runtime.SameItemsTest#testSameLengthDifferentItemsDiffer :: control :: M-SAMEITEMS-LENGTH-ONLY',

@@ -42,13 +42,21 @@ final class ValueNameBinding {
 	/** The type kinds whose every member is a value by its bare name where the type is in scope: an enum's, an abstract's. */
 	private final _valueHostKinds: Array<String>;
 
+	/** Every file of the index, whose value hosts `hostsOfValue` reads. */
+	private final _files: Array<FileInfo>;
+
+	/** Bare value name -> the types of the index hosting a value of it (`hostsOfValue`), built on first need. */
+	private var _hostsByValue: Null<Map<String, Array<String>>> = null;
+
 	public function new(
-		refs: TypeRefIndex, ancestors: AncestorTable, enumConstructorKinds: Array<String>, valueHostKinds: Array<String>
+		refs: TypeRefIndex, ancestors: AncestorTable, enumConstructorKinds: Array<String>, valueHostKinds: Array<String>,
+		files: Array<FileInfo>
 	) {
 		_refs = refs;
 		_ancestors = ancestors;
 		_enumConstructorKinds = enumConstructorKinds;
 		_valueHostKinds = valueHostKinds;
+		_files = files;
 	}
 
 	/**
@@ -66,12 +74,34 @@ final class ValueNameBinding {
 
 	/**
 	 * `mayImportValue` for a name some import of `fi` may name as a TYPE: an import whose last segment spells `name` brings a
-	 * static only where its path decodes to one (`importedStatics`), never merely because it spells the name — what a bare
-	 * name read as a value is before a type the file imports (4.3.7 `type_ident`).
+	 * static only where its path decodes to one (`importedStatics`), never merely because it spells the name; and a `using`
+	 * brings the types of its module, whose constructors and values a bare name reads before a type (4.3.7 `type_ident`).
 	 */
 	public function mayImportValueBesideType(fi: FileInfo, name: String): Bool {
 		final statics: ImportedStatics = importedStatics(fi, name);
-		return statics.unknown || statics.statics.length > 0 || importsOf(fi).exists(imp -> importMayBring(imp, name, false));
+		return statics.unknown || statics.statics.length > 0 || importsOf(fi).exists(imp -> importMayBring(imp, name, true));
+	}
+
+	/**
+	 * The types of the index hosting a value spelled `name` by its bare name — a constructor of an enum, a member of a
+	 * value-host type (`_valueHostKinds`): 4.3.7 reads a bare name as a constructor or value of the EXPECTED type before a
+	 * type, imported or not, so any of them may be what the name means where a type of it is expected.
+	 */
+	public function hostsOfValue(name: String): Array<String> {
+		var table: Null<Map<String, Array<String>>> = _hostsByValue;
+		if (table == null) {
+			final built: Map<String, Array<String>> = [];
+			for (fi in _files) for (t in fi.types) for (m in t.members) if (
+				_valueHostKinds.contains(t.kind) || _enumConstructorKinds.contains(m.kind)
+			) {
+				final hosts: Array<String> = built[m.name] ?? [];
+				if (!hosts.contains(t.name)) hosts.push(t.name);
+				built[m.name] = hosts;
+			}
+			_hostsByValue = built;
+			table = built;
+		}
+		return table[name] ?? [];
 	}
 
 	/**
@@ -186,12 +216,16 @@ final class ValueNameBinding {
 
 	/**
 	 * Whether the one statement `imp` may bring a constructor, a value or a module-level field named `name` into unqualified
-	 * scope (`mayImportValue`); a `using` brings none, a package wildcard none, an alias only what the one
-	 * type it names carries (4.3.7: `import p.Mod as M;` brings neither `modX` nor a sub-type's constructor).
+	 * scope (`mayImportValue`); a package wildcard none, an alias only what the one type it names carries (4.3.7: `import
+	 * p.Mod as M;` brings neither `modX` nor a sub-type's constructor). Beside a type (`besideType`) an import spelling `name`
+	 * is a static only where `importedStatics` decodes one, and a `using` brings its module's types' constructors and values;
+	 * otherwise a `using` brings none.
 	 */
-	private function importMayBring(imp: ImportInfo, name: String, spelledMayBeStatic: Bool = true): Bool {
+	private function importMayBring(imp: ImportInfo, name: String, besideType: Bool = false): Bool {
 		return switch imp.kind {
-			case ImportKind.Using: false;
+			case ImportKind.Using:
+				final types: Null<Array<ResolvedType>> = besideType ? _refs.names.importedTypes(imp.raw) : [];
+				besideType && (types == null || carriesValue(types, name));
 			case ImportKind.Alias:
 				final target: Null<String> = imp.aliasTarget;
 				imp.alias == name
@@ -206,7 +240,7 @@ final class ValueNameBinding {
 				final split: Null<ImportPath> = TypeNameBinding.splitPath(imp.raw);
 				final types: Null<Array<ResolvedType>> = _refs.names.importedTypes(imp.raw);
 				// a static-field import brings its one field, which the last segment spells
-				spelledMayBeStatic && SourceText.lastSegment(imp.raw) == name || split != null
+				!besideType && SourceText.lastSegment(imp.raw) == name || split != null
 					&& SourceText.isUpperInitial(SourceText.lastSegment(imp.raw))
 					&& (types == null || carriesValue(types, name) || split.rest.length == 0
 						&& _refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.exists(m -> m.name == name)));

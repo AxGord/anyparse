@@ -197,6 +197,19 @@ class ValueNameBindingTest extends Test {
 		Assert.isFalse(may('A6.hx', 'lowctor'), 'a package wildcard brings types');
 	}
 
+	@:pin('control')
+	@:killer('M-DOOR-USING-TYPES-BLIND')
+	public function testBesideATypeAUsingBringsTheValuesOfItsModulesTypes(): Void {
+		final index: SymbolIndex = indexOf([
+			'pk/Tools.hx' => 'package pk;\n\nenum UMode {\n\tUsg;\n}\n\nclass Tools {}\n',
+			'B1.hx' => 'using pk.Tools;\n\nclass B1 {}\n',
+			'B2.hx' => 'import pk.Tools;\n\nclass B2 {}\n'
+		]);
+		Assert.isTrue(index.values.mayImportValueBesideType(fileOf(index, 'B1.hx'), 'Usg'), 'a constructor of a type the using brings');
+		Assert.isFalse(index.values.mayImportValue(fileOf(index, 'B1.hx'), 'Usg'), 'which a bare pattern does not compare against');
+		Assert.isFalse(index.values.mayImportValueBesideType(fileOf(index, 'B2.hx'), 'Tools'), 'an import of the type is the type');
+	}
+
 	/**
 	 * The import a bare call may be routed through out of the index's sight (`unlistedImportOf`, the macro gate's question): a
 	 * static-field import of a module the index does not hold, a `using` of one; a wildcard over an indexed type it lists is

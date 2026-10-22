@@ -4439,3 +4439,20 @@ currency, declarations whose type is no named one (a structure, a function).
 
 The all-rules lint (`--no-oracle --all`) of the three recall trees and the anyparse base tree is byte-identical between
 the two engines, and so are the three thread-safety scores.
+
+**Re-measured after review, on main `b30684da3` merged** (base: main's engine and harness built from an `archive` of
+main). Two DIFFERENTs the reviewer compiled were closed before the merge: a constructor a `using` brings, and one of an
+expected enum nothing imports, each shadowing a type of its name; and a decimal literal past the integer range
+(`3000000000`, a `Float`) is no longer typed `Int`. Base → slice, source / nominal:
+
+| source | `type-expression` | `declaration-node` | UNKNOWN share | DIFFERENT |
+|---|---|---|---|---|
+| anyparse | 49 412 → 1 175 | 47 453 → 640 / 1 034 | 34.4 / 33.7 → 14.7 / 14.1 % | 0 / 0 → 0 / 0 |
+| upstream | 6 → 3 | 14 → 2 | 69.4 / 68.2 → 60.2 / 59.0 % | 0 / 0 → 0 / 0 |
+| Pony | 164 → 113 | 603 → 13 / 23 | 27.8 / 26.1 → 21.4 / 19.8 % | 2 / 3 → 2 / 3 |
+| a client corpus | 4 043 → 1 955 | 6 629 → 52 / 88 | 28.2 / 23.3 → 21.3 / 16.5 % | 14 / 13 → 2 / 1 |
+
+`string-segment` and `check-type` are 0 on all four. No MATCH lost and no DIFFERENT added per case on any of the four;
+the client corpus's twelve IntLit DIFFERENTs per currency were the out-of-range literals. All-rules lint and the three
+thread-safety scores byte-identical between main's engine and the slice's.
+
