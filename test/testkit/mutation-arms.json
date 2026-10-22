@@ -27996,8 +27996,8 @@
 			"name": "M-NOMINAL-BOUND-COMPLETE",
 			"type": "anyparse.query.NominalTypes",
 			"method": "boundType",
-			"find": ": index.typing.ancestors.completed(written, fi, from, writtenTypeParams(fi));",
-			"replace": ": written;",
+			"find": "final full: Null<String> = complete ? completedType(written, from, c) : written;",
+			"replace": "final full: Null<String> = written;",
 			"note": "a binding's annotation is read as written, so `b: Box` reads as `Box`"
 		},
 		{
@@ -28140,8 +28140,8 @@
 			"name": "M-NOMINAL-REIFIED-NOMINAL",
 			"type": "anyparse.query.NominalTypes",
 			"method": "expressionTypeNominal",
-			"find": "return TypeResolver.reified(node, root, shape)",
-			"replace": "return false",
+			"find": "if (TypeResolver.reified(node, root, shape)) return null;",
+			"replace": "{}",
 			"note": "an expression inside a reification is given the nominal of the code its text spells"
 		},
 		{
@@ -29044,6 +29044,65 @@
 			"find": "wider != 0 ? wider : order.indexOf(b) - order.indexOf(a);",
 			"replace": "wider != 0 ? wider : order.indexOf(a) - order.indexOf(b);",
 			"note": "of two sites governing the same modules the nested one is weighed first, so a parent whose every module sits under one child takes the statement its child already took and one chain carries it twice"
+		},
+		{
+			"name": "M-DOOR-TYPE-VALUE-NULL",
+			"type": "anyparse.query.ValueDoors",
+			"method": "typeValueSource",
+			"force": "null",
+			"note": "a type name read as a value carries no type, though 4.3.7 types it as its class or enum value"
+		},
+		{
+			"name": "M-DOOR-TYPE-VALUE-GENERIC",
+			"type": "anyparse.query.ValueDoors",
+			"method": "typeValueSource",
+			"find": "named == null || named.type.typeParamNames.length > 0",
+			"replace": "named == null",
+			"note": "a generic type read as a value is spelled without the arguments its value carries"
+		},
+		{
+			"name": "M-DOOR-TYPE-VALUE-SHADOWED-TRUE",
+			"type": "anyparse.query.ValueDoors",
+			"method": "bindsNoValue",
+			"force": "true",
+			"note": "a name a member or a module constructor binds is typed as the type of that name"
+		},
+		{
+			"name": "M-DOOR-DECLARATION-NULL",
+			"type": "anyparse.query.ValueDoors",
+			"method": "declarationTypeSource",
+			"force": "null",
+			"note": "a local declaration carries no type, though 4.3.7 types it as the value it binds"
+		},
+		{
+			"name": "M-DOOR-DECLARATION-SEVERAL",
+			"type": "anyparse.query.ValueDoors",
+			"method": "declarationTypeSource",
+			"find": "if (at == null || decl.children.exists(child -> continuations.contains(child.kind))) return null;",
+			"replace": "if (at == null) return null;",
+			"note": "a declaration binding several values is typed as its first"
+		},
+		{
+			"name": "M-DOOR-DECLARATION-WRITTEN-FIRST",
+			"type": "anyparse.query.ValueDoors",
+			"method": "declarationTypeSource",
+			"find": "if (c.chain.declaredTypeSources.exists(from) || c.declaredTypes.exists(from)) return NominalTypes.INDEX_HOST.bound(from, c);",
+			"replace": "",
+			"note": "a declaration written with a type is typed by its initializer"
+		},
+		{
+			"name": "M-WALK-ASCRIBED-NULL",
+			"type": "anyparse.query.NominalTypes",
+			"method": "indexAscribed",
+			"force": "null",
+			"note": "an ascription `(e : T)` carries no type, though 4.3.7 types it as `T`"
+		},
+		{
+			"name": "M-WALK-SEGMENT-NULL",
+			"type": "anyparse.query.TypingService",
+			"method": "interpolatingStringType",
+			"force": "null",
+			"note": "a text segment of an interpolated string carries no type"
 		}
 	]
 }

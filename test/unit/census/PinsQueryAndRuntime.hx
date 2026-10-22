@@ -1415,6 +1415,14 @@ final class PinsQueryAndRuntime {
 		'unit.query.UnificationTest#testAnyTakesEveryValue :: control :: M-CASTS-DYNAMIC-END',
 		'unit.query.UnificationTest#testOnlyPlainTypesAreDecided :: control :: M-UNIFY-ALIAS-STOP,M-UNIFY-SELF-OPEN',
 		'unit.query.UnificationTest#testTheChainPassesItsArgumentsInTheStartsTerms :: control :: M-ANCESTOR-ARGS-OFF',
+		'unit.query.ValueDoorsTest#testADeclarationBindingSeveralValuesIsUnknown :: control :: M-DOOR-DECLARATION-SEVERAL',
+		'unit.query.ValueDoorsTest#testADeclarationIsTheTypeOfTheValueItBinds :: control :: M-DOOR-DECLARATION-NULL',
+		'unit.query.ValueDoorsTest#testADeclarationWrittenWithATypeIsThatTypeWhateverItsInitializer :: control :: M-DOOR-DECLARATION-WRITTEN-FIRST',
+		'unit.query.ValueDoorsTest#testAGenericTypeReadAsAValueIsUnknown :: control :: M-DOOR-TYPE-VALUE-GENERIC',
+		'unit.query.ValueDoorsTest#testAStringSegmentIsAString :: control :: M-WALK-SEGMENT-NULL',
+		'unit.query.ValueDoorsTest#testATypeNameReadAsAValueIsItsClassValue :: control :: M-DOOR-TYPE-VALUE-NULL',
+		'unit.query.ValueDoorsTest#testAValueOfTheTypesNameShadowsTheType :: control :: M-DOOR-TYPE-VALUE-SHADOWED-TRUE',
+		'unit.query.ValueDoorsTest#testAnAscriptionIsTheTypeItWrites :: control :: M-WALK-ASCRIBED-NULL',
 		'unit.query.ValueNameBindingTest#testAModuleFieldComesBeforeAnyImport :: control :: '
 			+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
 		'unit.query.ValueNameBindingTest#testAModuleValueUnderIfBindsInTheBuildsCompilingIt :: control :: '

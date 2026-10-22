@@ -1180,6 +1180,12 @@ final class HaxeRefShape {
 		table.packageDeclKind = 'PackageDecl';
 		table.publicModifierKind = 'Public';
 		table.classDeclKinds = ['ClassDecl', 'AbstractClassDecl'];
+		table.typeValueTypeNames = [
+			'ClassDecl' => 'Class',
+			'AbstractClassDecl' => 'Class',
+			'InterfaceDecl' => 'Class',
+			'EnumDecl' => 'Enum'
+		];
 		table.indexedElementTypeParams = ['Map' => 1, 'Array' => 0, 'Vector' => 0];
 		// Haxe iteration semantics: `Array<T>` / `haxe.ds.Vector<T>` / `List<T>` yield `T`;
 		// `Iterable<T>` yields `T` through the `iterator():Iterator<T>` it declares, and an

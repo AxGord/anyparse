@@ -11,6 +11,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.TypeFact;
+import anyparse.query.CtorFieldFold;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.HaxelibResolver;
 import anyparse.query.IndexScope;
@@ -22,6 +23,7 @@ import anyparse.query.Refs;
 import anyparse.query.SourceText;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -71,6 +73,11 @@ final class TyperConformance {
 
 	/** The access of a call fact whose callee the compiler inlined at the call site (`CompilerFacts.CallFact`). */
 	private static inline final INLINED_ACCESS: String = 'inlined';
+
+	/** The type a class read as a value has, and an enum's (`Class<T>`, `Enum<T>`). */
+	private static inline final CLASS_VALUE: String = 'Class';
+
+	private static inline final ENUM_VALUE: String = 'Enum';
 
 	/** The kind the facts give a typedef (`CompilerFacts.TypeFact`). */
 	private static inline final TYPEDEF_KIND: String = 'typedef';
@@ -264,7 +271,8 @@ final class TyperConformance {
 		];
 		final typers: Map<String, Null<FileTyper>> = [];
 		final projectName: String = Path.withoutDirectory(dir);
-		for (line in File.getContent(stderr).split('\n')) {
+		final lines: Array<String> = File.getContent(stderr).split('\n');
+		for (at => line in lines) {
 			if (!MESSAGE.match(line.trim())) continue;
 			final file: String = Path.normalize(MESSAGE.matched(1));
 			final text: String = MESSAGE.matched(MESSAGE_TEXT_GROUP);
@@ -276,6 +284,11 @@ final class TyperConformance {
 			final label: String = '$projectName/${Path.withoutDirectory(stderr)}: ${line.trim()}';
 			if (expected == null) {
 				report.unscored('misc/other', label);
+				continue;
+			}
+			// a chain under the error (`... have:` / `... want:`) makes its own pair the innermost one that failed, a part
+			if (!warning && chained(lines, at)) {
+				report.unscored(area, '$label (the error names a part of the type, its chain the whole)');
 				continue;
 			}
 			if (!typers.exists(file)) typers[file] = FileTyper.over(plugin, project, std, file);
@@ -293,8 +306,22 @@ final class TyperConformance {
 				report.unscored('misc/other', label);
 				continue;
 			}
-			typeAt(report, area, label, expected, typer, node);
+			// an error at an ascription's range names the type of the value failing the type written there
+			typeAt(report, area, label, expected, typer, warning ? node : typer.failingValue(node));
 		}
+	}
+
+	/**
+	 * Whether the chain under the error at `lines[at]` — its `... ` lines — holds a `have:` line: the error's own
+	 * `A should be B` then names the innermost pair that failed, a part of the expression's type, and `have` a view of
+	 * the whole that is not the type's own spelling (a class shown as the structure it was unified as).
+	 */
+	private static function chained(lines: Array<String>, at: Int): Bool {
+		for (line in lines.slice(at + 1)) {
+			if (!line.contains(' : ... ')) return false;
+			if (line.contains(' : ... have: ')) return true;
+		}
+		return false;
 	}
 
 	/** Every range the compiler typed in the project in the working directory, asked of the typer. */
@@ -372,8 +399,10 @@ final class TyperConformance {
 		);
 		if (spliced)
 			report.unscored('facts/${node.kind}', '$label (inlined code)')
-		else if (typer.namesNoClassOf(node, compiled))
+		else if (typer.namesNoValueOf(node, compiled, CLASS_VALUE))
 			report.unscored('facts/${node.kind}', '$label (the compiler\'s own code at that range)')
+		else if (typer.isIdentifier(node) && typer.namesNoValueOf(node, compiled, ENUM_VALUE))
+			report.unscored('facts/${node.kind}', '$label (the enum value a constructor read bare is read off)')
 		else if (typer.implicitReceiver(node, outerOf(normalized(compiled))))
 			report.unscored('facts/${node.kind}', '$label (the implicit receiver of a member read)')
 		else if (typer.isCall(node) && isPosInfos(normalized(compiled)))
@@ -625,6 +654,9 @@ private enum Verdict {
 @:nullSafety(Strict)
 private final class FileTyper {
 
+	/** The kind of a written type annotation among a node's children. */
+	private static inline final ANNOTATION_KIND: String = ':';
+
 	private final _file: String;
 	private final _source: String;
 	private final _tree: QueryNode;
@@ -645,7 +677,12 @@ private final class FileTyper {
 		_shape = plugin.refShape();
 		_index = index;
 		_declared = provider.declaredTypes(source);
-		_chain = { declaredTypeSources: provider.declaredTypeSources(source), source: source, typeSyntax: plugin.typeSyntax };
+		_chain = {
+			declaredTypeSources: provider.declaredTypeSources(source),
+			source: source,
+			castTargetSources: TypeInfoMemo.castTargetSources(provider, source),
+			typeSyntax: plugin.typeSyntax
+		};
 		_nominal = CheckScan.typeNominalResolver(source, plugin, tree, file, index, false, false);
 	}
 
@@ -657,6 +694,11 @@ private final class FileTyper {
 	/** Every node of the file, outer before inner. */
 	public inline function visit(f: (QueryNode) -> Void): Void {
 		visitUnder(_tree, f);
+	}
+
+	/** Whether `node` is a bare identifier of the grammar. */
+	public inline function isIdentifier(node: QueryNode): Bool {
+		return node.kind == _shape.identKind;
 	}
 
 	/** Whether `node` is a call of the grammar. */
@@ -726,14 +768,16 @@ private final class FileTyper {
 	}
 
 	/**
-	 * Whether `compiled` is the value of a class (`Class<HxOverrides>`) that the text of `node` does not name: the compiler
-	 * lowered the expression into code of its own there (a std call into a call of its target's runtime class).
+	 * Whether `compiled` is the value of a type, `wrapper` applied to it (`Class<HxOverrides>`, `Enum<Doc>`), that the text of
+	 * `node` does not name: the compiler lowered the expression into code of its own there (a std call into a call of its
+	 * target's runtime class), or the text reads a constructor bare (`Text`) off the enum's value it types at that range.
 	 */
-	public function namesNoClassOf(node: QueryNode, compiled: String): Bool {
+	public function namesNoValueOf(node: QueryNode, compiled: String, wrapper: String): Bool {
 		final at: Null<Span> = node.span;
-		final named: EReg = ~/^Class<([\w.]+)>$/;
+		final named: EReg = new EReg('^$wrapper<([\\w.]+)>$$', '');
 		return at != null && named.match(compiled) && !_source.substring(at.from, at.to).contains(SourceText.lastSegment(named.matched(1)));
 	}
+
 
 	/**
 	 * Whether `node` is a bare identifier and `compiled` the simple name of the type declaration holding it: a bare read of
@@ -785,6 +829,22 @@ private final class FileTyper {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * The value an ascription `node` holds — the expression of `(e : T)`, the initializer of a local declaration — or `node`
+	 * itself for any other: a `should be` error at an ascription's range reports that value failing the type written there.
+	 */
+	public function failingValue(node: QueryNode): QueryNode {
+		final types: Array<String> = (_shape.typeAnnotationKinds ?? []).concat([ANNOTATION_KIND]);
+		final values: Array<QueryNode> = node.children.filter(c -> !types.contains(c.kind));
+		final held: Null<QueryNode> = if (node.kind == _shape.checkTypeKind && values.length == 1)
+			values[0]
+		else if ((_shape.localDeclKinds ?? []).contains(node.kind))
+			CtorFieldFold.declInitializer(node, _shape)
+		else
+			null;
+		return held ?? node;
 	}
 
 	/** The root of the UNKNOWN this typer answers for `node` in the written-source (`sourceCurrency`) or the nominal currency. */

@@ -65,6 +65,16 @@ final class ValueNameBinding {
 	}
 
 	/**
+	 * `mayImportValue` for a name some import of `fi` may name as a TYPE: an import whose last segment spells `name` brings a
+	 * static only where its path decodes to one (`importedStatics`), never merely because it spells the name — what a bare
+	 * name read as a value is before a type the file imports (4.3.7 `type_ident`).
+	 */
+	public function mayImportValueBesideType(fi: FileInfo, name: String): Bool {
+		final statics: ImportedStatics = importedStatics(fi, name);
+		return statics.unknown || statics.statics.length > 0 || importsOf(fi).exists(imp -> importMayBring(imp, name, false));
+	}
+
+	/**
 	 * The path of the first import of `fi` (its own, then its ambient chain's) that may bind the bare call name `name` to a
 	 * function the index cannot list — what a gate asks before it trusts that no import routes the call out of sight
 	 * (`MacroIndex.unresolvedBinding`): a static-field import or an alias of a static whose owner the index does not hold, a
@@ -179,7 +189,7 @@ final class ValueNameBinding {
 	 * scope (`mayImportValue`); a `using` brings none, a package wildcard none, an alias only what the one
 	 * type it names carries (4.3.7: `import p.Mod as M;` brings neither `modX` nor a sub-type's constructor).
 	 */
-	private function importMayBring(imp: ImportInfo, name: String): Bool {
+	private function importMayBring(imp: ImportInfo, name: String, spelledMayBeStatic: Bool = true): Bool {
 		return switch imp.kind {
 			case ImportKind.Using: false;
 			case ImportKind.Alias:
@@ -196,7 +206,8 @@ final class ValueNameBinding {
 				final split: Null<ImportPath> = TypeNameBinding.splitPath(imp.raw);
 				final types: Null<Array<ResolvedType>> = _refs.names.importedTypes(imp.raw);
 				// a static-field import brings its one field, which the last segment spells
-				SourceText.lastSegment(imp.raw) == name || split != null && SourceText.isUpperInitial(SourceText.lastSegment(imp.raw))
+				spelledMayBeStatic && SourceText.lastSegment(imp.raw) == name || split != null
+					&& SourceText.isUpperInitial(SourceText.lastSegment(imp.raw))
 					&& (types == null || carriesValue(types, name) || split.rest.length == 0
 						&& _refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.exists(m -> m.name == name)));
 		};

@@ -5230,3 +5230,9 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 
 - a path past its module (`pkg.Mod.field`, a macro-made `pkg.Mod.Sub`) binds an UNKNOWN name set → no: by the compiler's case rule it binds at most its leaf; the unknown answer made one function import a second binder of every statement and withheld whole directories → `bf7830896`
 - a statement is safe to add to a module that did not spell it once every name it binds keeps its meaning → no: `test/import.hx` carrying `utest.Assert` broke `recon.hxml`, a second `-main` compiling test helpers without utest; a receiver must already compile with the statement's classpath entry (necessary, not sufficient: the entry does not carry the statement module's own dependencies — open until every build is declared to the oracle) → `69c5fc500`
+
+## T7-doors (2026-10-22) — the index host's doors
+
+- a `should be` error names the type of the expression at its range → no: under a `... have:` / `... want:` chain it names the innermost pair that failed (an array's element, a structure's field), and `have` is a view of the whole, not its spelling (a class shown as the structure it was unified as) — the harness leaves such an error unscored → `ea99a4358`
+- an error at a declaration's or an ascription's range is about that node's own type → no: it reports the VALUE failing the written type; the harness asks the initializer, the ascribed expression → `ea99a4358`
+- `ValueNameBinding.mayImportValue` decides whether a type name read as a value is the type → no: it reads every import whose last segment spells the name as a possible static-field import, so every type a file imports looked shadowed; `mayImportValueBesideType` reads such an import as the type it names, a static only where the path decodes to one → `35d9c6bdb`

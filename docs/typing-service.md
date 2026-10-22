@@ -38,7 +38,10 @@ edit unable to change a signature answer.
 The walk has four hosts, each a consumer of the service: the index host (`NominalTypes`, a type source as written,
 resolved where it is written), the call graph's (`CallGraphEdges`, a type source keyed the way the graph keys types), the
 operand binder's (`OperandBinder`, what a written type BINDS to, a `TypeNameBinding.Tier`) and the argument typer's
-(`ArgumentTypes`). The call graph keeps its own `ExpectedTypes`: it may run with no index, so with no service.
+(`ArgumentTypes`). The call graph keeps its own `ExpectedTypes`: it may run with no index, so with no service. The index
+host's entry points (`expressionTypeSource`, `expressionTypeNominal`) answer two more shapes past the walk, only for the
+node asked and never on the way to a receiver or an argument (`ValueDoors`): a local declaration and a type name read as
+a value.
 
 ## Cache keys
 
@@ -102,7 +105,11 @@ caller's terms, the compiler's own code lowered into it (a std call into its tar
 a bare member read shares it with, the default an inlined call hands a parameter it leaves out (the facts place an inlined
 call at the statement around it, so its range holds only that value), a type the harness cannot expand to the typer's alias or `@:generic` spelling, a
 typedef the index cannot follow (declared in several `#if` branches) that every typedef of its name the compiled build
-typed aliases to the compiler's type (`TypeFact.targets`). Each refusal is counted UNSCORED, never as a match.
+typed aliases to the compiler's type (`TypeFact.targets`), the value of an enum a constructor read bare is read off
+(`Enum<E>` at `Text`, the text naming no `E`). A `should be` error at an ascription's range — `(e : T)`, a local
+declaration — is asked of the value failing the written type, and one with a `... have:` chain under it is not asked: its
+own pair is the innermost that failed (an element, a field), and `have` a view of the whole that is not the type's
+spelling (a class shown as the structure it was unified as). Each refusal is counted UNSCORED, never as a match.
 
 A DIFFERENT answer the harness cannot attribute to itself is an engine finding, input for the later steps; the run
 groups its `DIFFERENT` lines, and the findings standing on the tree this was written on are kinds, not sites: the
@@ -302,5 +309,23 @@ std gap. Readings: `docs/journal/testing-log.md`.
   recall 102/102). The harness builds its
   index with no builds known, so its tables are unchanged: source / nominal DIFFERENT upstream 0 / 0, anyparse 3 / 3, a
   client corpus 2 / 1, Pony 3 / 4, every per-case list byte-identical.
+- **T7-doors — what an expression asked as a value of its own carries, with no inference (done).** Four of the
+  census's roots needed no monomorph. The walk carries two more shapes for every host: a text segment of an interpolated
+  string is the string literal's type (`RefShape.stringInterpTextKind`), an ascription `(e : T)` the type it writes
+  (`TypingHost.ascribed`; the index host and the argument typer read it off `TypeInfoProvider.castTargetSources`, handed
+  in as `ChainTypeContext.castTargetSources`, the other hosts type none). Past the walk the index host's entry points
+  answer the node asked (`ValueDoors`): a local declaration the type a read of it carries — its written type, else its
+  initializer's (none for one binding several values); a type name read as a value `Class<T>` / `Enum<T>`
+  (`RefShape.typeValueTypeNames`), only where the name binds none of the values 4.3.7 looks it up as first (`typer.ml`
+  `type_ident_raise`: a local, a member of the enclosing type or one it inherits, a module-level field, a constructor or
+  value of a type of the module, what an import may bring — `ValueNameBinding.mayImportValueBesideType`, which reads an
+  import spelling the name as the type it names rather than as a possible static) and names one declaration with no type
+  parameter. Not answered: an abstract read as a value (`Abstract<T>`, which the facts never record), a generic type,
+  a local function's declaration (a function type the walk does not spell), a name the index resolves to several
+  declarations (the std's per-target `_std` copies of `Std`, `sys.FileSystem`) or that an unindexed import may bring.
+  Measured (UNKNOWN share source / nominal, each currency's DIFFERENT, the base re-run on the same copy): anyparse 34.4 /
+  33.7 → 14.6 / 14.0 %, DIFFERENT 0 / 0; upstream 69.4 / 68.2 → 60.2 / 59.0 %, 0 / 0; Pony 27.8 / 26.1 → 21.4 / 19.8 %,
+  2 / 3 unchanged; a client corpus 28.2 / 23.3 → 21.2 / 16.4 %, 14 / 13 unchanged (identical lists); no MATCH lost on
+  any of the four; the all-rules lint of four trees and the three thread-safety scores byte-identical.
 Each step lands as a table in `QueryCache` with its consumers moved onto it, and is measured on the harness: a step
 may lower an area's UNKNOWN share and may turn a DIFFERENT into a MATCH or an UNKNOWN, and must add no DIFFERENT.

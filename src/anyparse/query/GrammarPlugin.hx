@@ -2991,6 +2991,13 @@ final class RefShape {
 	public var classDeclKinds: Null<Array<String>>;
 
 	/**
+	 * The type a type NAME read as a value carries, by the kind of the declaration it names: the name given here applied
+	 * to the type (Haxe 4.3.7 `type_module_type`: a class or an interface is a `Class<T>`, an enum an `Enum<T>`). A kind
+	 * it does not list names no value the typer spells. Optional; unset types no type name read as a value.
+	 */
+	public var typeValueTypeNames: Null<Map<String, String>>;
+
+	/**
 	 * Maps a container type's SIMPLE name to the index of the type parameter that
 	 * its index-access `x[k]` yields (Haxe `Map<K, V>` → 1, `Array<T>` → 0).
 	 * `FieldWriteIndex` uses it to resolve the receiver of a

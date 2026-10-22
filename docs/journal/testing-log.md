@@ -4411,3 +4411,31 @@ nominal 30 244 / 130 034 = 23.3 %; 1 min 44 s wall. Source roots, % of UNKNOWN: 
 member-not-found 16.9, other 13.7, construction 12.4, type-expression 11.0, index-access 6.4,
 F3-literal-or-lambda-value 5.8, operator-result 3.8, F2-inferred-signature 3.7, declared-type-not-read 2.7,
 loop-element 2.5, F3-lambda-parameter 1.9, pattern-capture 0.6, string-segment 0.6, check-type 0.0, F1 not seen.
+
+## T7-doors (2026-10-22) — the index host's doors: type expression, declaration, string segment, ascription
+
+On `e224c73ae`; the base engine and the slice's engine on the same trees (anyparse: an `archive` copy of the base, so the
+per-case labels line up; Pony and a client corpus: one copy each, the base re-run on it after the first run had
+generated the copy's oracle sources). Door roots, source / nominal currency, base → slice:
+
+| source | `type-expression` | `declaration-node` | `string-segment` | `check-type` | UNKNOWN share | DIFFERENT |
+|---|---|---|---|---|---|---|
+| anyparse | 49 282 → 1 005 | 47 343 → 640 / 1 033 | 5 002 → 0 | 1 607 → 0 | 34.4 / 33.7 → 14.6 / 14.0 % | 0 / 0 → 0 / 0 |
+| upstream | 6 → 3 | 14 → 2 | 1 → 0 | 5 → 0 | 69.4 / 68.2 → 60.2 / 59.0 % | 0 / 0 → 0 / 0 |
+| Pony | 164 → 113 | 603 → 13 / 23 | 16 → 0 | 12 → 0 | 27.8 / 26.1 → 21.4 / 19.8 % | 2 / 3 → 2 / 3 |
+| a client corpus | 4 043 → 1 861 | 6 629 → 52 / 88 | 218 → 0 | 16 → 0 | 28.2 / 23.3 → 21.2 / 16.4 % | 14 / 13 → 14 / 13 |
+
+MATCH answers (both currencies summed) anyparse 687 779 → 889 416, upstream 122 → 148, Pony 16 189 → 17 491, the client
+corpus 193 616 → 211 391; no case MATCH on the base is anything else on the slice, and every DIFFERENT list is
+identical. Scored cases fell where the harness now refuses a question it could not place — mostly the `Enum<E>` the
+compiler types at a constructor read bare: anyparse 521 632 → 518 909, Pony 11 089 → 11 012, the client corpus
+130 377 → 130 209; upstream 173 → 166, the seven `should be` errors carrying a `... have:` chain (all seven UNKNOWN on
+the base).
+
+What stays: `type-expression` on anyparse is mostly std names the index resolves to several declarations (the
+per-target `_std` copies: `StringTools` 2, `sys.FileSystem` 11, `Std` 12) and test files importing an unindexed module
+that may bring a value of the name; `declaration-node` is the local functions (606 on anyparse), plus, in the nominal
+currency, declarations whose type is no named one (a structure, a function).
+
+The all-rules lint (`--no-oracle --all`) of the three recall trees and the anyparse base tree is byte-identical between
+the two engines, and so are the three thread-safety scores.
