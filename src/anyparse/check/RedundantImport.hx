@@ -89,28 +89,41 @@ final class RedundantImport implements Check implements RiskyFix {
 		// The VALUE names a statement binds, from the reader the import-moving checks share: a deletion
 		// that changes no TYPE can still hand a bare constructor or module-level field to another binder.
 		final bindings: ImportBindings = new ImportBindings(() -> resolveIndex, plugin);
+		// Which accesses a `using` takes part in, asked of the typing service per file; a file the run holds no source of
+		// contests every rival.
+		final sourceOf: Map<String, String> = [];
+		for (entry in files) sourceOf[entry.file] = entry.source;
+		final members: Map<String, Array<String>> = UsingSites.membersByModule(resolveIndex);
+		final methodsOf: (String) -> Null<Array<String>> = raw -> plugin.knownExtensionMethods(raw) ?? members[raw];
 		final violations: Array<Violation> = [];
-		for (info in index.allFiles()) for (imp in info.imports) {
-			final module: Null<String> = redundantModuleOf(info, imp, resolveIndex, bindings);
-			final ambient: Null<String> = module != null ? null : ambientProviderOf(info, imp, resolveIndex, publicTypes, bindings);
-			if (module != null)
-				violations.push({
-					file: info.file,
-					span: imp.span,
-					rule: RULE_ID,
-					severity: Severity.Warning,
-					message: 'redundant import \'${imp.raw}\': \'$module\' is imported here and already binds \''
-					+ '${SourceText.lastSegment(imp.raw)}\''
-				});
-			else if (ambient != null)
-				violations.push({
-					file: info.file,
-					span: imp.span,
-					rule: RULE_ID,
-					severity: Severity.Warning,
-					message: 'redundant ${imp.kind == ImportKind.Using ? 'using' : 'import'} \'${imp.raw}\': \'$ambient\' already puts the '
-					+ 'same statement in force in every module here'
-				});
+		for (info in index.allFiles()) {
+			final source: Null<String> = sourceOf[info.file];
+			final sites: Null<UsingSites> = source == null ? null : new UsingSites(source, plugin, info.file, index);
+			for (imp in info.imports) {
+				final module: Null<String> = redundantModuleOf(info, imp, resolveIndex, bindings);
+				final contests: (ImportInfo) -> Bool = contestsOf(sites, imp, methodsOf);
+				final ambient: Null<String> = module != null
+					? null
+					: ambientProviderOf(info, imp, resolveIndex, publicTypes, bindings, contests);
+				if (module != null)
+					violations.push({
+						file: info.file,
+						span: imp.span,
+						rule: RULE_ID,
+						severity: Severity.Warning,
+						message: 'redundant import \'${imp.raw}\': \'$module\' is imported here and already binds \''
+						+ '${SourceText.lastSegment(imp.raw)}\''
+					});
+				else if (ambient != null)
+					violations.push({
+						file: info.file,
+						span: imp.span,
+						rule: RULE_ID,
+						severity: Severity.Warning,
+						message: 'redundant ' + (imp.kind == ImportKind.Using ? 'using' : 'import')
+						+ ' \'${imp.raw}\': \'$ambient\' already puts the same statement in force in every module here'
+					});
+			}
 		}
 		return violations;
 	}
@@ -162,11 +175,12 @@ final class RedundantImport implements Check implements RiskyFix {
 	 * statement load-bearing, and it is the case this refuses on.
 	 */
 	private static function ambientProviderOf(
-		info: FileInfo, imp: ImportInfo, index: SymbolIndex, publicTypes: Map<String, Array<String>>, bindings: ImportBindings
+		info: FileInfo, imp: ImportInfo, index: SymbolIndex, publicTypes: Map<String, Array<String>>, bindings: ImportBindings,
+		contests: (ImportInfo) -> Bool
 	): Null<String> {
 		if (imp.guarded || !info.ambientImportsBounded) return null;
 		if (imp.kind != ImportKind.Import && imp.kind != ImportKind.Using) return null;
-		if (imp.kind == ImportKind.Using && usingCompetitorInScope(info, imp)) return null;
+		if (imp.kind == ImportKind.Using && usingCompetitorInScope(info, imp, contests)) return null;
 		// The identity argument below is made per TYPE name. A statement that also binds a VALUE — a
 		// constructor, an enum-abstract value, a module-level field — would need it made per value,
 		// against a precedence where constructors outrank fields across the ambient boundary; until
@@ -201,25 +215,36 @@ final class RedundantImport implements Check implements RiskyFix {
 	}
 
 	/**
-	 * Whether a `using` other than `imp` and its ambient twins is in scope for `info` — the gate that
-	 * keeps the identity argument honest for the one kind it does not hold for.
+	 * Whether a `using` other than `imp` and its ambient twins is in scope for `info` and CONTESTS it — the gate that keeps
+	 * the identity argument honest for the one kind it does not hold for.
 	 *
 	 * A `using` binds a NAME and a POSITION in the static-extension order, and the position is what an
 	 * identical statement elsewhere does NOT reproduce. Checked against the compiler rather than
 	 * assumed: extensions are tried in REVERSE declaration order, every own statement outranks every
-	 * ambient one, a NEARER
-	 * ambient group outranks a farther one, and within one file the last declaration wins. So deleting
-	 * the file's own statement hands each method to whichever competitor is next in that order, and
-	 * only an EMPTY field of competitors makes the two positions interchangeable. Naming the method
-	 * that would actually move needs a receiver-aware collision test, which this rule does not have.
+	 * ambient one, a NEARER ambient group outranks a farther one, and within one file the last declaration wins. So deleting
+	 * the file's own statement can hand a method to whichever rival is next in that order — but only at an access both may
+	 * bind: a name both modules may extend with, on a receiver neither passes over or one the typing service cannot read
+	 * (`contests`, `UsingSites.contested`). A rival contesting no access leaves every access where it was.
 	 *
 	 * An ambient `using` of the SAME module is not a competitor: it names the module this statement
 	 * names, so whichever of them wins, the method resolves to the same static.
 	 */
-	private static function usingCompetitorInScope(info: FileInfo, imp: ImportInfo): Bool {
-		for (o in info.imports) if (o.kind == ImportKind.Using && (o.span.from != imp.span.from || o.span.to != imp.span.to)) return true;
-		for (group in info.ambientImports) for (o in group.imports) if (o.kind == ImportKind.Using && o.raw != imp.raw) return true;
+	private static function usingCompetitorInScope(info: FileInfo, imp: ImportInfo, contests: (ImportInfo) -> Bool): Bool {
+		for (o in info.imports) if (o.kind == ImportKind.Using && (o.span.from != imp.span.from || o.span.to != imp.span.to) && contests(o))
+			return true;
+		for (group in info.ambientImports)
+			for (o in group.imports)
+				if (o.kind == ImportKind.Using && o.raw != imp.raw && contests(o)) return true;
 		return false;
+	}
+
+	/** Whether a rival `using` contests `imp` in the file `sites` reads (`UsingSites.contested`); every rival, with no source. */
+	private static function contestsOf(
+		sites: Null<UsingSites>, imp: ImportInfo, methodsOf: (String) -> Null<Array<String>>
+	): (ImportInfo) -> Bool {
+		if (sites == null) return rival -> true;
+		final present: UsingSites = sites;
+		return rival -> present.contested(imp.raw, rival.raw, methodsOf);
 	}
 
 	/**

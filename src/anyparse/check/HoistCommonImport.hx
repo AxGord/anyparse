@@ -80,6 +80,12 @@ private typedef HoistContext = {
 
 	/** What each statement binds, by rank — the reader the import-moving checks share. */
 	final bindings: ImportBindings;
+
+	/**
+	 * Whether `using <path>` and `using <other>` may both offer one access the module `file` writes (`UsingSites.contested`)
+	 * — the only place moving one of them past the other can change what binds; true for a module the run holds no source of.
+	 */
+	final contested: (file:String, path:String, other:String) -> Bool;
 }
 
 /**
@@ -137,7 +143,8 @@ private typedef Plans = {
  * already has the right one is simply unaffected.
  *
  * A `using` binds a name AND a position: hoisting one out of a module demotes it below every own
- * `using` that stays, so it is removed only where every remaining own `using` is on the allow-list.
+ * `using` that stays, so it is removed only where no other `using` in scope contests one of its
+ * accesses (`UsingSites.contested`, asked of the typing service per access).
  * Adding one to a module that had none is safe in the other direction — the new candidates sit below
  * every own `using` and below every field.
  *
@@ -261,7 +268,7 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	private function planFor(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, index: Null<SymbolIndex>): Plans {
 		final report: SymbolIndex = index ?? IndexScope.report(files, plugin);
 		final resolve: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
-		final ctx: HoistContext = contextOf(report, plugin);
+		final ctx: HoistContext = contextOf(report, plugin, files);
 		final plans: Array<HoistPlan> = [];
 		for (site in ctx.sites) planSite(site, ctx, resolve, plans);
 		final sinks: Array<SinkPlan> = [];
@@ -375,7 +382,7 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 					census.keys.push(key);
 				}
 				if (!held.contains(key)) held.push(key);
-				if (removable(info, statement, allow)) noteSpeller(census, key, file, imp.span);
+				if (removable(info, statement, ctx)) noteSpeller(census, key, file, imp.span);
 			}
 			for (key in held) census.holders[key] = (census.holders[key] ?? 0) + 1;
 		}
@@ -592,7 +599,9 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	 * directory, so a run holding half of it would decide on half the evidence — and the governed set
 	 * is the seam's, never a walk of this rule's own.
 	 */
-	private static function contextOf(report: SymbolIndex, plugin: GrammarPlugin): HoistContext {
+	private static function contextOf(
+		report: SymbolIndex, plugin: GrammarPlugin, files: Array<{ file: String, source: String }>
+	): HoistContext {
 		final infoOf: Map<String, FileInfo> = [];
 		final ladderOf: Map<String, Array<String>> = [];
 		final existingAt: Map<String, Array<ImportInfo>> = [];
@@ -634,8 +643,31 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 			existingAt: existingAt,
 			decided: [],
 			publicTypes: SymbolIndex.publicTypesByModule(widest),
-			bindings: new ImportBindings(() -> widest, plugin)
+			bindings: new ImportBindings(() -> widest, plugin),
+			contested: contestOf(files, plugin, report, widest)
 		};
+	}
+
+	/**
+	 * The run's `HoistContext.contested`: one `UsingSites` per module, made on the first question about it, and a module's
+	 * method set from the std probe or `widest`; a module the run holds no source of contests every rival.
+	 */
+	private static function contestOf(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, report: SymbolIndex, widest: SymbolIndex
+	): (String, String, String) -> Bool {
+		final sourceOf: Map<String, String> = [];
+		for (entry in files) sourceOf[entry.file] = entry.source;
+		final members: Map<String, Array<String>> = UsingSites.membersByModule(widest);
+		final methodsOf: (String) -> Null<Array<String>> = raw -> plugin.knownExtensionMethods(raw) ?? members[raw];
+		final sitesOf: Map<String, UsingSites> = [];
+		function contested(file: String, path: String, other: String): Bool {
+			final source: Null<String> = sourceOf[file];
+			if (source == null) return true;
+			final sites: UsingSites = sitesOf[file] ?? new UsingSites(source, plugin, file, report);
+			sitesOf[file] = sites;
+			return sites.contested(path, other, methodsOf);
+		}
+		return contested;
 	}
 
 	/** Record one sound statement's hoist into `site`, so a parent site counts the modules this one serves. */
@@ -705,7 +737,7 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 			if (info == null || !info.ambientImportsBounded) return false;
 			for (group in info.ambientImports) for (imp in group.imports) {
 				if (imp.guarded || SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;
-				if (statement.isUsing && imp.kind == ImportKind.Using) return false;
+				if (statement.isUsing && imp.kind == ImportKind.Using && ctx.contested(file, statement.path, imp.raw)) return false;
 			}
 			var binders: Int = 0;
 			for (imp in info.imports) if (SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) {
@@ -744,7 +776,7 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 				ConfigFinder.absolute(group.file) != at || statementKeyOf(imp) != key
 			) {
 				if (imp.guarded || SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;
-				if (statement.isUsing && imp.kind == ImportKind.Using) return false;
+				if (statement.isUsing && imp.kind == ImportKind.Using && ctx.contested(file, statement.path, imp.raw)) return false;
 			}
 		}
 		return true;
@@ -840,15 +872,22 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	}
 
 	/**
-	 * Whether `statement` may be REMOVED from `info` — always, for an import; for a `using`, only when
-	 * every own `using` the module keeps is on the allow-list.
+	 * Whether `statement` may be REMOVED from `info` — always, for an import; for a `using`, only when no other
+	 * `using` in the module's scope contests one of its accesses (`HoistContext.contested`).
 	 *
-	 * Hoisting a `using` demotes it below every own `using` that stays, so a module carrying one this
-	 * rule cannot vouch for keeps its own statement instead and is left unaffected: own outranks
+	 * Hoisting a `using` demotes it below every own `using` that stays and moves it among the ambient ones, so a module
+	 * where a rival may take one of its accesses keeps its own statement instead and is left unaffected: own outranks
 	 * ambient either way.
 	 */
-	private static function removable(info: FileInfo, statement: Hoistable, allow: Array<String>): Bool {
-		return !statement.isUsing || info.imports.foreach(imp -> imp.kind != ImportKind.Using || allow.contains(imp.raw));
+	private static function removable(info: FileInfo, statement: Hoistable, ctx: HoistContext): Bool {
+		return !statement.isUsing || !rivalUsings(info, statement.path).exists(o -> ctx.contested(info.file, statement.path, o.raw));
+	}
+
+	/** The `using` statements in scope of `info` naming another module than `path`: its own, then its chain's. */
+	private static function rivalUsings(info: FileInfo, path: String): Array<ImportInfo> {
+		final out: Array<ImportInfo> = info.imports.filter(imp -> imp.kind == ImportKind.Using && imp.raw != path);
+		for (group in info.ambientImports) for (imp in group.imports) if (imp.kind == ImportKind.Using && imp.raw != path) out.push(imp);
+		return out;
 	}
 
 	/**

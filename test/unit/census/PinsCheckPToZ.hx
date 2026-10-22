@@ -1090,6 +1090,7 @@ final class PinsCheckPToZ {
 		'unit.check.UsingInsertRefusalTest#testStaticExtensionCoveredAnchorRefuses :: control :: M-PSE-USING-INSERT-SILENT',
 		'unit.check.UsingInsertRefusalTest#testStaticExtensionUncoveredAnchorAppendsOneEdit :: guard :: ',
 		'unit.check.UsingInsertRefusalTest#testUncoveredAnchorStillInserts :: guard :: ',
+		'unit.check.UsingMemberFirstParityTest#testAForwardAbstractReceiverKeepsTheUsing :: guard :: ',
 		'unit.check.UsingMemberFirstParityTest#testAGuardedMemberKeepsTheUsing :: control :: M-MEMBER-BINDS-GUARDED',
 		'unit.check.UsingMemberFirstParityTest#testAProjectTypeSharingTheStdNameKeepsTheUsing :: control :: M-MEMBER-DOOR-SHADOW',
 		'unit.check.UsingMemberFirstParityTest#testAStaticOfTheNameKeepsTheUsing :: control :: M-MEMBER-BINDS-STATIC',
@@ -1099,7 +1100,16 @@ final class PinsCheckPToZ {
 		'unit.check.UsingMemberFirstParityTest#testAnOwnMemberCallNeedsNoUsing :: control :: '
 			+ 'M-USING-MEMBER-FIRST-OFF,M-UNUSED-USING-NO-DOOR,M-CARRY-USING-DOOR-OFFSET',
 		'unit.check.UsingMemberFirstParityTest#testTheStdListingProvesOnlyAnUnguardedInstanceMember :: control :: '
-			+ 'M-STD-MEMBER-STATIC,M-STD-MEMBER-VIA-GUARD,M-STD-MEMBER-ANY-CANDIDATE'
+			+ 'M-STD-MEMBER-STATIC,M-STD-MEMBER-VIA-GUARD,M-STD-MEMBER-ANY-CANDIDATE',
+		'unit.check.UsingSitesTest#testAFieldSpelledLikeATypeIsNoTypeExpression :: control :: M-USING-STATIC-SHADOW',
+		'unit.check.UsingSitesTest#testAForwardAbstractReceiverKeepsTheModule :: control :: M-USING-FORWARD-DECIDED',
+		'unit.check.UsingSitesTest#testAModuleARivalOutranksIsUnused :: control :: M-USING-BOUND-ELSEWHERE',
+		'unit.check.UsingSitesTest#testAModuleWhoseCandidatesRejectTheReceiverIsUnused :: control :: M-USING-OFFER-OPEN',
+		'unit.check.UsingSitesTest#testARivalContestsOnlyAnAccessBothMayOffer :: control :: M-USING-OFFER-OPEN,M-USING-CONTEST-ANY',
+		'unit.check.UsingSitesTest#testAStaticOfATypeExpressionIsNoUse :: control :: M-USING-STATIC-RECEIVER',
+		'unit.check.UsingSitesTest#testATypeArgumentOnTheFirstParameterKeepsEveryModule :: guard :: ',
+		'unit.check.UsingSitesTest#testAValueSpelledLikeATypeIsNoTypeExpression :: control :: M-USING-STATIC-SHADOW',
+		'unit.check.UsingSitesTest#testAnAccessTheModuleBindsOrCannotBeTypedKeepsIt :: guard :: '
 	];
 
 }

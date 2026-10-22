@@ -47,15 +47,20 @@ final class PinsCheckAToO {
 			+ 'M-AMBIENT-GOVERNANCE-COMPLETE',
 		'unit.check.AmbientImportRulesTest#testAGuardedBinderInTheNearestGroupKeepsTheOwnStatement :: control :: '
 			+ 'M-AMBIENT-REDUNDANT-GUARDED-SKIP',
+		'unit.check.AmbientImportRulesTest#testARivalOfAForwardedAccessContests :: control :: M-USING-FORWARD-DECIDED',
 		'unit.check.AmbientImportRulesTest#testASiblingTheNearerGroupDecidesKeepsTheOwnStatement :: control :: M-IMPORT-LEAF-ONLY-NAMES',
 		'unit.check.AmbientImportRulesTest#testAnAmbientImportAModuleUnderItUsesIsNotReported :: control :: M-AMBIENT-GOVERNANCE-BLIND',
 		'unit.check.AmbientImportRulesTest#testAnAmbientImportNoModuleUnderItUsesIsStillReported :: control :: M-AMBIENT-GOVERNANCE-SHORT',
 		'unit.check.AmbientImportRulesTest#testAnOwnStatementBindingAConstructorIsKeptBesideTheAmbientCopy :: control :: '
 			+ 'M-REDUNDANT-AMBIENT-VALUES',
+		'unit.check.AmbientImportRulesTest#testAnOwnUsingGoesWhereNoRivalOffersItsAccesses :: control :: '
+			+ 'M-USING-CONTEST-ANY,M-USING-OFFER-OPEN',
 		'unit.check.AmbientImportRulesTest#testAnOwnUsingIsKeptWhereAnotherUsingCouldTakeItsPosition :: control :: '
 			+ 'M-AMBIENT-REDUNDANT-USING-POSITION',
 		'unit.check.AmbientImportRulesTest#testTheDeclaringModuleIsAReaderOfAnAmbientUsingOfItself :: control :: '
 			+ 'M-AMBIENT-DECLARER-READS-USING',
+		'unit.check.AmbientImportRulesTest#testTheDeclaringModulesOwnDeclarationIsNoUseOfAnAmbientUsing :: control :: '
+			+ 'M-UNUSED-USING-SELF-MENTION',
 		'unit.check.AmbientImportRulesTest#testTheGovernedSetIsReadEvenWhenTheRunWasGivenTheAmbientSourceAlone :: control :: '
 			+ 'M-AMBIENT-GOVERNANCE-BLIND',
 		'unit.check.AmbientImportRulesTest#testTheModuleAnAmbientStatementImportsIsNotOneOfItsReaders :: control :: '
@@ -389,8 +394,10 @@ final class PinsCheckAToO {
 		'unit.check.HoistCommonImportTest#testExtendsAnExistingAmbientSource :: control :: M-HOIST-NEVER-SOUND',
 		'unit.check.HoistCommonImportTest#testHoistedUsingsKeepTheirSourceOrder :: control :: M-HOIST-USINGS-SOURCE-ORDER',
 		'unit.check.HoistCommonImportTest#testHoistsAnAllowListedUsing :: control :: M-HOIST-NEVER-SOUND',
+		'unit.check.HoistCommonImportTest#testHoistsAnAllowListedUsingPastARivalNoAccessContests :: control :: M-USING-CONTEST-ANY',
 		'unit.check.HoistCommonImportTest#testHoistsAnImportMostModulesSpell :: control :: M-HOIST-NEVER-SOUND',
 		'unit.check.HoistCommonImportTest#testKeepsAStatementEnoughModulesRead :: control :: M-SINK-SHARE-BLIND',
+		'unit.check.HoistCommonImportTest#testKeepsAUsingWhoseForwardedAccessARivalAnswers :: control :: M-USING-FORWARD-DECIDED',
 		'unit.check.HoistCommonImportTest#testKeepsAnAllowListedUsingWhereARivalRemains :: control :: M-HOIST-USING-DEMOTION',
 		'unit.check.HoistCommonImportTest#testOneSlicePerSite :: guard :: ',
 		'unit.check.HoistCommonImportTest#testRefusesAGuardedStatement :: guard :: ',
@@ -407,6 +414,7 @@ final class PinsCheckAToO {
 		'unit.check.HoistCommonImportTest#testRefusesAUsingSinkWhereTheChainCarriesAnotherUsing :: control :: M-SINK-USING-RANK-BLIND',
 		'unit.check.HoistCommonImportTest#testRefusesAnAlias :: guard :: ',
 		'unit.check.HoistCommonImportTest#testSinksAStatementTooFewModulesRead :: control :: M-SINK-NEVER-SOUND',
+		'unit.check.HoistCommonImportTest#testSinksAUsingPastAChainRivalNoAccessContests :: control :: M-USING-CONTEST-ANY',
 		'unit.check.HoistCommonImportTest#testTheImplicitTierVouchesForEveryReceiver :: control :: M-HOIST-IMPLICIT-TIER-BLIND',
 		'unit.check.HoistCommonImportTest#testTheSinkDeletesTheSourceItEmpties :: control :: M-SINK-NEVER-SOUND',
 		'unit.check.HoistCommonImportTest#testTheSinkKeepsASourceThatCarriesMore :: guard :: ',
