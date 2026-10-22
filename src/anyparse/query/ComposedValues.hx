@@ -261,7 +261,9 @@ final class ComposedValues {
 			'$array<$dyn>';
 		if (!object) return arrayElementOf(peeled, c) == null ? null : peeled;
 		final fields: Null<Array<MemberInfo>> = structureFields(peeled, expected.file, c);
-		return fields == null ? null : expectedStructure(node, fields, c);
+		// the fields' types are written in the file declaring the structure
+		final host: Null<ResolvedType> = fields == null ? null : structureDecl(peeled, expected.file, c);
+		return fields == null || host == null ? null : expectedStructure(node, fields, host.file, c);
 	}
 
 	/**
@@ -271,7 +273,7 @@ final class ComposedValues {
 	 * the structure does not declare, one it leaves out that is not optional, and a value of another type (a cast the
 	 * compiler makes there).
 	 */
-	private static function expectedStructure(node: QueryNode, fields: Array<MemberInfo>, c: IndexTyping): Null<String> {
+	private static function expectedStructure(node: QueryNode, fields: Array<MemberInfo>, file: FileInfo, c: IndexTyping): Null<String> {
 		final shape: RefShape = c.shape;
 		final written: Map<String, QueryNode> = [];
 		for (child in node.children) {
@@ -292,7 +294,7 @@ final class ComposedValues {
 			final declared: String = f.optional
 				? NominalTypes.optionalValueType(fieldType, shape.optionalValueTypeName, c.chain.typeSyntax)
 				: fieldType;
-			final shown: Null<String> = writtenFieldType(value, declared, c);
+			final shown: Null<String> = writtenFieldType(value, declared, file, c);
 			if (shown == null) return null;
 			parts.push('${f.name}: $shown');
 		}
@@ -306,9 +308,10 @@ final class ComposedValues {
 	 * two (`Int` written for `Null<Int>` and `Null<Int>` for an optional `Int` both hold a `Null<Int>`) — of one the language
 	 * declares as a class (`String`), the value's, a class being nullable already —; the declared type where the compiler
 	 * casts a value of another core type to it (`Int` written for `Float` or `Null<Float>`), and where a function literal is
-	 * typed against a function type. Null otherwise.
+	 * typed against a function type. A `T` written for a `Null<T>` keeps its type where a `T` may be null already (a class's,
+	 * an enum's, a structure's: `nullableValue`), else holds the `Null<T>`. Null otherwise.
 	 */
-	private static function writtenFieldType(value: QueryNode, declared: String, c: IndexTyping): Null<String> {
+	private static function writtenFieldType(value: QueryNode, declared: String, file: FileInfo, c: IndexTyping): Null<String> {
 		final shape: RefShape = c.shape;
 		final bare: QueryNode = BoolExprShape.unwrapParens(value, shape.parenKind);
 		final functions: Array<String> = (shape.lambdaKinds ?? []).concat([for (k in [shape.fnExprKind]) if (k != null) k]);
@@ -317,20 +320,7 @@ final class ComposedValues {
 		if (typed == null) return null;
 		final literal: Bool = bare.kind == shape.objectLiteralKind || bare.kind == shape.arrayLiteralKind;
 		if (literal) return spelled(declared, c) == shape.rawDynamicTypeName ? declared : typed;
-		if (~/\s+/g.replace(typed, '') == ~/\s+/g.replace(declared, '')) return typed;
-		final cores: Array<String> = shape.coreValueTypes?.names ?? [];
-		final given: String = spelled(typed, c);
-		final wanted: String = spelled(declared, c);
-		final nullable: String -> Bool = t -> NominalTypes.outerNominalOf(t, c.chain.typeSyntax) == shape.optionalValueTypeName;
-		final classes: Array<String> = shape.coreValueTypes?.classNames ?? [];
-		return if (!cores.contains(given) || !cores.contains(wanted))
-			null
-		else if (given == wanted)
-			nullable(typed) || classes.contains(given) ? typed : declared
-		else if (nullable(typed))
-			null
-		else
-			declared;
+		return ~/\s+/g.replace(typed, '') == ~/\s+/g.replace(declared, '') ? typed : heldType(typed, declared, file, c);
 	}
 
 	/** The type source `text`, its `Null<…>` wrappers peeled and its whitespace dropped: one spelling of one written type. */
@@ -378,14 +368,7 @@ final class ComposedValues {
 			case Nominal(path, args) if (args.length == 0): path;
 			case _: null;
 		};
-		if (index == null || file == null || path == null) return null;
-		var decl: Null<ResolvedType> = index.refs.resolveTypeRef(path, file);
-		final seen: Array<String> = [];
-		while (decl != null && decl.type.aliasTargetRaw != null && !decl.type.isAnonStruct) {
-			if (decl.type.typeParamArity > 0 || !index.refs.markSeen(decl, seen)) return null;
-			decl = index.typing.ancestors.aliasTarget(decl);
-		}
-		return decl;
+		return index == null || file == null || path == null ? null : throughAliases(index.refs.resolveTypeRef(path, file), index);
 	}
 
 	/**
@@ -603,6 +586,78 @@ final class ComposedValues {
 	private static function annotatedAt(decl: QueryNode, c: IndexTyping): Bool {
 		final from: Int = decl.span?.from ?? -1;
 		return from < 0 || c.chain.declaredTypeSources.exists(from) || c.declaredTypes.exists(from);
+	}
+
+	/**
+	 * Whether a value of the type `text`, written in `file`, may be null by itself (4.3.7 `is_nullable`), which decides what a
+	 * written optional field of it holds: an object — of a class, an interface or an enum (`typeValueTypeNames`), a
+	 * structure, the dynamic type, a core value type the language declares as a class, the built-in array — may (the field
+	 * holds the value's type); a core value type the compiler represents itself and a function type may not (it holds
+	 * `Null<T>`). Null for anything else, an abstract included: it is what it wraps unless it says `@:notNull`.
+	 */
+	private static function nullableValue(text: String, file: FileInfo, c: IndexTyping): Null<Bool> {
+		final shape: RefShape = c.shape;
+		final index: Null<SymbolIndex> = c.index;
+		final path: Null<String> = switch c.chain.typeSyntax(text)?.shape {
+			case Function(_, _, _): return false;
+			case Structure(_): return true;
+			case Nominal(path, _): path;
+			case _: null;
+		};
+		if (path == null || index == null || path == shape.optionalValueTypeName) return null;
+		if (path == shape.rawDynamicTypeName) return true;
+		final classes: Array<String> = (shape.coreValueTypes?.classNames ?? []).concat(shape.arrayTypeNames ?? []);
+		if ((shape.coreValueTypes?.names ?? []).contains(path) || classes.contains(path))
+			return NominalTypes.shadowedByNonStdType(index, path) ? null : classes.contains(path);
+		final decl: Null<ResolvedType> = throughAliases(index.refs.resolveTypeRef(path, file), index);
+		final objects: Map<String, String> = shape.typeValueTypeNames ?? [];
+		return decl != null && (decl.type.isAnonStruct || objects.exists(decl.type.kind)) ? true : null;
+	}
+
+	/**
+	 * The type a field of the type `declared`, written in `file`, holds where a value of the type `typed`, spelled apart from
+	 * it, is written for it (`writtenFieldType`): for a `Null<T>` field, a `T` value's own type where a `T` may be null
+	 * already (`nullableValue`: `type_eq` takes the two as one), else the `Null<T>`; between core value types, the rules
+	 * `writtenFieldType` names. Null otherwise.
+	 */
+	private static function heldType(typed: String, declared: String, file: FileInfo, c: IndexTyping): Null<String> {
+		final shape: RefShape = c.shape;
+		final cores: Array<String> = shape.coreValueTypes?.names ?? [];
+		final given: String = spelled(typed, c);
+		final wrapper: Null<String> = shape.optionalValueTypeName;
+		final inner: String = wrapper == null ? declared : NominalTypes.memberLookupReceiverSource(declared, [wrapper], c.chain.typeSyntax);
+		if (
+			inner != declared && ~/\s+/g.replace(typed, '') == ~/\s+/g.replace(inner, '') && !cores.contains(given)
+		) return switch nullableValue(inner, file, c) {
+			case true: typed;
+			case false: declared;
+			case null: null;
+		};
+		final wanted: String = spelled(declared, c);
+		final nullable: String -> Bool = t -> NominalTypes.outerNominalOf(t, c.chain.typeSyntax) == wrapper;
+		final classes: Array<String> = shape.coreValueTypes?.classNames ?? [];
+		return if (!cores.contains(given) || !cores.contains(wanted))
+			null
+		else if (given == wanted)
+			nullable(typed) || classes.contains(given) ? typed : declared
+		else if (nullable(typed))
+			null
+		else
+			declared;
+	}
+
+	/**
+	 * `decl` with the typedefs that name another declaration followed to it, stopping at a structure; null through a generic
+	 * typedef, a cycle, or a target the index does not resolve.
+	 */
+	private static function throughAliases(decl: Null<ResolvedType>, index: SymbolIndex): Null<ResolvedType> {
+		var at: Null<ResolvedType> = decl;
+		final seen: Array<String> = [];
+		while (at != null && at.type.aliasTargetRaw != null && !at.type.isAnonStruct) {
+			if (at.type.typeParamArity > 0 || !index.refs.markSeen(at, seen)) return null;
+			at = index.typing.ancestors.aliasTarget(at);
+		}
+		return at;
 	}
 
 }

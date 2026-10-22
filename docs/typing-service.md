@@ -357,7 +357,8 @@ std gap. Readings: `docs/journal/testing-log.md`.
   `CallReturns.selectedParameter`, `CallSelection.parameterRun` —, an array's element, a structure's field), the type
   4.3.7 prints: `Array<Dynamic>` under `Dynamic` (a map literal refused: a `haxe.ds.Map`), the expected array type, and against a structure of plain fields the
   fields the literal writes, each of its value's type where `type_eq` keeps it and the field's where the compiler casts
-  (a written optional field's being `Null<T>`, a literal's for a `Dynamic` field `Dynamic`), plus the optional ones it
+  (a written optional field's `Null<T>`, a value of a `T` that may be null already — a class's, an enum's, a
+  structure's — keeping its own, an abstract's Unknown; a literal's for a `Dynamic` field `Dynamic`), plus the optional ones it
   leaves out. `[]` and `null` stay Unknown (T7b). The index host peels parentheses, and
   `MemberLookup.memberRead` reads only the declarations of a member some build compiles (`BuildBranches.declarations`),
   answering where they agree. The harness leaves unscored a `should be` error at an operator's range (an operand's) and

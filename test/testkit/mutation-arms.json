@@ -29673,6 +29673,22 @@
 			"find": "if (members.exists(m -> m.guarded && m.operatorOverloads.contains(kind))) return Undecided;",
 			"replace": "if (false) return Undecided;",
 			"note": "the index order is taken for the source order, so an unguarded overload listed before a `#if` one the compiler tries first is picked"
+		},
+		{
+			"name": "M-COMPOSED-NULLABLE-KEEPS-OWN",
+			"type": "anyparse.query.ComposedValues",
+			"method": "heldType",
+			"find": "case true: typed;",
+			"replace": "case true: declared;",
+			"note": "a class instance written for an optional field of its class is read as `Null<C>`, though 4.3.7 types `k: it` for `?k: Item` as `k: Item`"
+		},
+		{
+			"name": "M-COMPOSED-NULLABLE-ABSTRACT-DECIDED",
+			"type": "anyparse.query.ComposedValues",
+			"method": "nullableValue",
+			"find": "return decl != null && (decl.type.isAnonStruct || objects.exists(decl.type.kind)) ? true : null;",
+			"replace": "return true;",
+			"note": "every declared type is taken as nullable, so an abstract over `Int` written for an optional field keeps its type, though 4.3.7 types it `Null<A>`"
 		}
 	]
 }

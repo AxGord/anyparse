@@ -290,7 +290,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.ComposedValuesTest#testALoopOverAnIntervalBindsTheIntegerType :: control :: M-COMPOSED-INTERVAL-NULL',
 		'unit.query.ComposedValuesTest#testANullablePartMakesTheUnifiedTypeNullable :: control :: M-COMPOSED-UNIFIED-NULLABLE-DROPPED',
 		'unit.query.ComposedValuesTest#testAParenthesizedValueIsTheValues :: control :: M-INDEX-HOST-PARENS-KEPT',
-		'unit.query.ComposedValuesTest#testAWrittenOptionalFieldHoldsANullableValue :: control :: M-COMPOSED-OPTIONAL-FIELD-BARE',
+		'unit.query.ComposedValuesTest#testAWrittenOptionalFieldHoldsANullableValue :: control :: '
+			+ 'M-COMPOSED-OPTIONAL-FIELD-BARE,M-COMPOSED-NULLABLE-KEEPS-OWN,M-COMPOSED-NULLABLE-ABSTRACT-DECIDED',
 		'unit.query.ComposedValuesTest#testAnAbstractsReadAccessIsTheOneTheKeyCastsTo :: control :: M-INDEX-READ-FIRST',
 		'unit.query.ComposedValuesTest#testAnEnumAbstractValueIsOfTheAbstract :: control :: M-COMPOSED-ENUM-VALUE-NULL',
 		'unit.query.ComposedValuesTest#testAnIndexAccessReadsTheElement :: control :: M-COMPOSED-ELEMENT-NULL',
