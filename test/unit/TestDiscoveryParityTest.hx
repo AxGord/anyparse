@@ -1110,6 +1110,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.TypingServiceTest',
 		'unit.query.UncheckedConversionsTest',
 		'unit.query.UnificationTest',
+		'unit.query.ValueDoorsTest',
 		'unit.query.ValueNameBindingTest',
 		'unit.query.WriteSitesTest',
 		'unit.runtime.CommonPrefixTest',

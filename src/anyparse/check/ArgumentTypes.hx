@@ -62,6 +62,7 @@ final class ArgumentTypes {
 		peel: (node, s) -> s.types.unwrap(node),
 		isAccess: (kind, s) -> kind == s.types._shape.fieldAccessKind,
 		literal: (typeName, _) -> {text: typeName, file: null },
+		ascribed: null,
 		self: (_, _) -> null,
 		binding: (ident, s) -> s.types.bindingOf(ident, s),
 		bound: (from, s) -> {

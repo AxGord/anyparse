@@ -32,6 +32,7 @@ final class CallReturns {
 		peel: (node, _) -> node,
 		isAccess: (kind, c) -> kind == c.shape.fieldAccessKind,
 		literal: (typeName, _) -> typeName,
+		ascribed: NominalTypes.indexAscribed,
 		self: (_, _) -> null,
 		binding: (ident, c) -> TypeResolver.identBindingFrom(ident, c.root, c.shape),
 		bound: argumentBound,

@@ -1272,10 +1272,16 @@ final class PinsQueryAndRuntime {
 			+ 'M-ORPHAN-SEAM-END-NEVER,M-ORPHAN-SEAM-END-SELF-ONLY,M-ORPHAN-SEAM-END-UNTRIMMED,M-ORPHAN-NO-CASE-ARMS',
 		'unit.query.PatchSliceTest#testATransferUnderADocRewrittenByTheSamePayloadRefused :: control :: M-PATCH-STRADDLED-DOC-UNWATCHED',
 		'unit.query.PatchSliceTest#testATypeDocIsReachableThroughItsOwnAddress :: control :: M-PATCH-OWN-DOC-UNSEARCHED',
+		'unit.query.PatchSliceTest#testAnInsertFromAFragmentOpeningInsideTheDocRefused :: control :: M-PATCH-ENCLOSING-DOC-UNWATCHED,'
+			+ 'M-PATCH-SPLICED-DOC-START-UNREAD',
+		'unit.query.PatchSliceTest#testAnInsertUnderADocWhoseOpeningAnotherPairRewritesRefused :: control :: '
+			+ 'M-PATCH-SPLICED-DOC-OPENING-UNREAD',
+		'unit.query.PatchSliceTest#testDeletingTheDocumentedDeclarationAloneRefused :: control :: M-PATCH-NEW-OWNER-PREDECLARED-UNCHECKED',
+		'unit.query.PatchSliceTest#testDeletingTheDocumentedOneWithTheNextRefused :: control :: M-PATCH-NEW-OWNER-PREDECLARED-UNCHECKED',
 		'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 		'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 		'unit.query.PatchSliceTest#testFinalClassHeaderIsInTheSearchRegion :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
-		'unit.query.PatchSliceTest#testGrowingPairsUnderOneClassDocAcceptedAtEveryDelta :: control :: M-PATCH-DOCEND-SHIFTS-EVERY-EDIT',
+		'unit.query.PatchSliceTest#testGrowingPairsInsideTwoMemberDocsAcceptedAtEveryDelta :: control :: M-PATCH-DOCEND-SHIFTS-EVERY-EDIT',
 		'unit.query.PatchSliceTest#testInsertAheadOfADocumentedFinalClassRefused :: control :: M-PATCH-DOC-OWNER-WRAPPER-BLIND',
 		'unit.query.PatchSliceTest#testInsertAheadOfTheDocBlockThroughTheMemberAccepted :: control :: M-PATCH-OWN-DOC-UNSEARCHED',
 		'unit.query.PatchSliceTest#testRenamePlusAnUnrelatedInsertElsewhereApplies :: control :: M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE',
@@ -1417,6 +1423,17 @@ final class PinsQueryAndRuntime {
 		'unit.query.UnificationTest#testAnyTakesEveryValue :: control :: M-CASTS-DYNAMIC-END',
 		'unit.query.UnificationTest#testOnlyPlainTypesAreDecided :: control :: M-UNIFY-ALIAS-STOP,M-UNIFY-SELF-OPEN',
 		'unit.query.UnificationTest#testTheChainPassesItsArgumentsInTheStartsTerms :: control :: M-ANCESTOR-ARGS-OFF',
+		'unit.query.ValueDoorsTest#testAConstructorOfAnEnumNothingImportsShadowsTheType :: control :: M-DOOR-ANY-CONSTRUCTOR-BLIND',
+		'unit.query.ValueDoorsTest#testADecimalLiteralPastTheIntegerRangeIsUnknown :: control :: M-WALK-INTEGER-RANGE-FALSE',
+		'unit.query.ValueDoorsTest#testADeclarationBindingSeveralValuesIsUnknown :: control :: M-DOOR-DECLARATION-SEVERAL',
+		'unit.query.ValueDoorsTest#testADeclarationIsTheTypeOfTheValueItBinds :: control :: M-DOOR-DECLARATION-NULL',
+		'unit.query.ValueDoorsTest#testADeclarationWrittenWithATypeIsThatTypeWhateverItsInitializer :: control :: M-DOOR-DECLARATION-WRITTEN-FIRST',
+		'unit.query.ValueDoorsTest#testAGenericTypeReadAsAValueIsUnknown :: control :: M-DOOR-TYPE-VALUE-GENERIC',
+		'unit.query.ValueDoorsTest#testAStringSegmentIsAString :: control :: M-WALK-SEGMENT-NULL',
+		'unit.query.ValueDoorsTest#testATypeNameReadAsAValueIsItsClassValue :: control :: M-DOOR-TYPE-VALUE-NULL',
+		'unit.query.ValueDoorsTest#testAValueOfTheTypesNameShadowsTheType :: control :: M-DOOR-TYPE-VALUE-SHADOWED-TRUE',
+		'unit.query.ValueDoorsTest#testAnAscriptionIsTheTypeItWrites :: control :: M-WALK-ASCRIBED-NULL',
+		'unit.query.ValueDoorsTest#testAnIntegerLiteralWithASuffixIsUnknown :: control :: M-WALK-INTEGER-SUFFIX-OPEN',
 		'unit.query.ValueNameBindingTest#testAModuleFieldComesBeforeAnyImport :: control :: '
 			+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
 		'unit.query.ValueNameBindingTest#testAModuleValueUnderIfBindsInTheBuildsCompilingIt :: control :: '
@@ -1433,6 +1450,7 @@ final class PinsQueryAndRuntime {
 			+ 'M-MACRO-VALUE-UNLISTED,M-MACRO-EXTENSIONS-ONLY',
 		'unit.query.ValueNameBindingTest#testAnotherRegionOfTheSameConditionIsAnAlternative :: control :: '
 			+ 'M-COND-ALTERNATIVE-REGIONS,M-COND-ALTERNATIVE-SPLIT',
+		'unit.query.ValueNameBindingTest#testBesideATypeAUsingBringsTheValuesOfItsModulesTypes :: control :: M-DOOR-USING-TYPES-BLIND',
 		'unit.runtime.SameItemsTest#testDifferentLengthsDiffer :: guard :: ',
 		'unit.runtime.SameItemsTest#testEqualItemsInOrderAreTheSame :: guard :: ',
 		'unit.runtime.SameItemsTest#testSameLengthDifferentItemsDiffer :: control :: M-SAMEITEMS-LENGTH-ONLY',

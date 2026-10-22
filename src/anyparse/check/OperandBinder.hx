@@ -52,6 +52,7 @@ final class OperandBinder {
 		peel: (node, _) -> node,
 		isAccess: (kind, b) -> kind == b._shape.fieldAccessKind,
 		literal: null,
+		ascribed: null,
 		self: (node, b) -> b.selfTier(node),
 		binding: (ident, b) -> b.hitOf(ident)?.bindingSpan?.from,
 		bound: (from, b) -> b._annotations.exists(from) ? b._declared.writtenHeadTier(from, b._wrappers, b._builtins) : null,

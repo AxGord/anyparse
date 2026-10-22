@@ -26,6 +26,11 @@ import utest.Test;
  */
 class HxCondListSeparatorWriteTest extends Test {
 
+	/** Every list one item per line with the trailing-comma knob on, the configuration that appended `,` after `#end`. */
+	private static final TRAILING_ONE_PER_LINE: String = '{"wrapping": {"functionSignature": {"defaultWrap": "onePerLine", "rules": []}, '
+		+ '"callParameter": {"defaultWrap": "onePerLine", "rules": []}, "anonType": {"defaultWrap": "fillLine", "rules": []}}, '
+		+ '"trailingCommas": {"callArgumentDefault": "yes", "functionParameterDefault": "yes", "anonTypeDefault": "yes"}}';
+
 	public inline function testMetaArgsKeepTheCommaOutsideTheRegionWhenTheSourceDoes(): Void {
 		assertFixedPoint('@:forward(empty, #if flag changeEmpty #end, onTake)\nabstract A(Int) {}\n');
 	}
@@ -99,11 +104,59 @@ class HxCondListSeparatorWriteTest extends Test {
 		Assert.stringContains('#elseif b y:Int,', written);
 	}
 
+	@:pin('control')
+	@:killer('M-ENUM-CTOR-PARAMS-PLAIN')
+	public function testEnumCtorParamsKeepTheirSeparatorsAroundARegion(): Void {
+		// An enum constructor's parameters are a function's: with no per-element `sepAfter` every gap got a comma, so a region
+		// already ending on its own was followed by `#end, c:Int` — `a:Int, , c:Int` under `-D x`.
+		assertFixedPoint('enum E {\n\tA(#if x a:Int, #else b:Int, #end c:Int);\n\tB(#if x a:Int, #end c:Int);\n}\n');
+	}
+
+	@:pin('control')
+	@:killer('M-TRAIL-AFTER-REGION')
+	@:killer('M-TRAIL-CASCADE-UNGATED')
+	public function testTheTrailingCommaKnobAddsNoneAfterARegionEndingTheList(): Void {
+		// `#if x b:Int #end,` compiles to `a:Int, ,` once `x` is off: the region's branches carry their own separators.
+		final source: String =
+			'class A {\n\tfunction p(a:Int, #if x b:Int #end) {}\n\n\tfunction c() {\n\t\tv(1, #if x 2, #end);\n\t}\n}\n';
+		final expected: String = 'class A {\n\tfunction p(\n\t\ta:Int,\n\t\t#if x b:Int #end\n\t) {}\n\n\tfunction c() {\n\t\tv(\n'
+			+ '\t\t\t1,\n\t\t\t#if x 2, #end\n\t\t);\n\t}\n}\n';
+		assertWritesOnce(source, expected);
+	}
+
+	@:pin('control')
+	@:killer('M-TRAIL-AFTER-REGION')
+	@:killer('M-TRAIL-FORCEMULTI-UNGATED')
+	@:killer('M-TRAIL-CALL-FORCEMULTI-UNGATED')
+	public function testALineCommentedListAddsNoTrailingCommaAfterARegion(): Void {
+		// A line comment routes both lists past the wrap cascade into their one-per-line loops, which append on their own.
+		final source: String = 'class A {\n\tfunction q(a:Int, // c\n\t\t#if x b:Int #end) {}\n\n\tfunction c() {\n\t\tv(1, // c\n'
+			+ '\t\t\t#if x 2, #end);\n\t}\n}\n';
+		final expected: String = 'class A {\n\tfunction q(\n\t\ta:Int, // c\n\t\t#if x b:Int #end\n\t) {}\n\n\tfunction c() {\n\t\tv(\n'
+			+ '\t\t\t1, // c\n\t\t\t#if x 2, #end\n\t\t);\n\t}\n}\n';
+		assertWritesOnce(source, expected);
+	}
+
+	@:pin('control')
+	@:killer('M-TRAIL-AFTER-SEMI')
+	public function testTheTrailingCommaKnobAddsNoneAfterAClassNotationField(): Void {
+		// `var b:Int;,` is no structure at all: a field that ends on its own `;` takes no separator after it.
+		final source: String = 'class A {\n\tvar s:{var a:Int; var b:Int;};\n}\n\ntypedef T = {\n\tvar a:Int;\n\tvar d:Int;\n};\n';
+		assertWritesOnce(source, source);
+	}
+
 	/** `source` is already what the writer produces for it — the byte contract a canonical file has. */
 	private function assertFixedPoint(source: String): Void {
 		Assert.equals(source, roundTrip(source));
 	}
 
 	private function roundTrip(source: String): Null<String> return new HaxeQueryPlugin().writeRoundTrip(source);
+
+	/** Under `TRAILING_ONE_PER_LINE`, `source` writes as `expected`, and `expected` writes as itself. */
+	private function assertWritesOnce(source: String, expected: String): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(TRAILING_ONE_PER_LINE);
+		Assert.equals(expected, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts));
+		Assert.equals(expected, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(expected), opts));
+	}
 
 }

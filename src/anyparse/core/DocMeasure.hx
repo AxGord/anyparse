@@ -445,6 +445,11 @@ final class DocMeasure {
 		return s != null && s.length > 0 && s.fastCodeAt(0) == c;
 	}
 
+	/** True iff this rendered list item opens a preprocessor region (`#if …`): its left spine starts on `#`. */
+	public static function opensDirectiveRegion(d: Doc): Bool {
+		return firstVisibleTextStartsWith(d, '#'.code);
+	}
+
 	/**
 	 * The `Text` leaf this Doc's left spine reaches first, or `null` when the
 	 * spine holds no visible text. Same walk — and the same "an exhausted

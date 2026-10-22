@@ -17,6 +17,7 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -353,6 +354,7 @@ final class CheckScan {
 		final chain: ChainTypeContext = {
 			declaredTypeSources: provider.declaredTypeSources(source),
 			source: source,
+			castTargetSources: TypeInfoMemo.castTargetSources(provider, source),
 			typeSyntax: plugin.typeSyntax
 		};
 		return node -> NominalTypes.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain, asReceiver);

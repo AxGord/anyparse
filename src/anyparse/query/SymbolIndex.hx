@@ -797,7 +797,7 @@ final class SymbolIndex {
 		final shape: RefShape = plugin.refShape();
 		values = new ValueNameBinding(
 			refs, typing.ancestors, shape.execution?.enumConstructorKinds ?? [],
-			(shape.bareConstructorTypeKinds ?? []).concat(shape.aliasingDeclKinds ?? [])
+			(shape.bareConstructorTypeKinds ?? []).concat(shape.aliasingDeclKinds ?? []), files
 		);
 	}
 

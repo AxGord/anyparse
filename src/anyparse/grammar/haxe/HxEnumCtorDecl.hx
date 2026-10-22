@@ -19,6 +19,10 @@ package anyparse.grammar.haxe;
  * for empty list, then sep-separated loop. Zero-param constructors
  * `Ctor()` parse as `params: []`.
  *
+ * `params` is laid out as the function signature it is: a `@:trivia` Star with `HxFnDecl.params`'
+ * wrap set, so a `#if` region keeps exactly the separators the source wrote (per-element
+ * `sepAfter`) and a comment between parameters rides its element instead of being dropped.
+ *
  * `returnType` is the GADT result type (`Errored(e:Error):Status<Error>;`), absent on a
  * plain constructor, which therefore stays byte-identical.
  *
@@ -29,6 +33,7 @@ package anyparse.grammar.haxe;
 typedef HxEnumCtorDecl = {
 	var name: HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
-	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams')) var params: Array<HxParam>;
+	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),
+		bodyAwareCompactIndent, groupRestProbe, ignoreSourceNewlinesForWrap) var params: Array<HxParam>;
 	@:optional @:fmt(typeHintColon) @:lead(':') var returnType: Null<HxType>;
 };
