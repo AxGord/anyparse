@@ -1202,8 +1202,8 @@ private final class UnknownCauses {
 		if ((_shape.localDeclKinds ?? []).contains(pk)) return annotated(p) ? ' [annotated local]' : ' [unannotated local]';
 		if ((_shape.fieldDeclKinds ?? []).contains(pk)) return annotated(p) ? ' [annotated member]' : ' [unannotated member]';
 		if ((_shape.valueReturnKinds ?? []).contains(pk)) return ' [return]';
-		if (pk == 'Assign') return ' [assignment]';
-		if (pk == 'Field') return ' [object field]';
+		if (pk == _shape.assignKind) return ' [assignment]';
+		if (pk == _shape.objectFieldKind) return ' [object field]';
 		if (pk == _shape.arrayLiteralKind) return ' [array element]';
 		if (pk == _shape.parenKind) return expectedTag(p);
 		return ' [$pk]';

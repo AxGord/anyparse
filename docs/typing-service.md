@@ -119,7 +119,7 @@ FU28 below). Left, by size after T5 (below) closed the `@:overload` returns: a `
 project library declares with a type, and the code of an inlined body at a call's range (FU32 below took the
 inlined-default-argument family out of the scored set and the package-blind namesake return out of the answers).
 
-`--census` (T7h) says where the UNKNOWN answers come from, without touching the table: it prints after it, and the table
+`--census` says where the UNKNOWN answers come from, without touching the table: it prints after it, and the table
 is byte-identical with and without the flag. Each UNKNOWN type answer, in each currency, is walked from the expression
 asked through what it is made of — an identifier to its binding, a call to its callee, a member access to its receiver, a
 declaration to its initializer — to the first thing the typer could not answer, and rooted there (`UnknownCauses`). The
