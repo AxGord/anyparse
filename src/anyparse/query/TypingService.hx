@@ -139,8 +139,8 @@ final class TypingService {
 	}
 
 	/**
-	 * The type a shape that is or writes its own type gives `node`: a literal (`RefShape.literalTypeNames`; an integer
-	 * one only within `CoreValueTypes.integerMax`), a text segment of an interpolating string the string type; an
+	 * The type a shape that is or writes its own type gives `node`: a literal (`RefShape.literalTypeNames`; an integer one
+	 * only spelled as the integer type, `spellsAnotherType`), a text segment of an interpolating string the string type; an
 	 * ascription `(e : T)`, the type it writes (`TypingHost.ascribed`). Null for any other shape, and for a host
 	 * typing that one none.
 	 */
@@ -150,7 +150,7 @@ final class TypingService {
 		final literalType: Null<String> = shape.literalTypeNames?.get(node.kind) ?? (
 			node.kind == shape.stringInterpTextKind ? interpolatingStringType(shape) : null
 		);
-		return if (literalType != null && literal != null && !pastIntegerRange(node, literalType, shape))
+		return if (literalType != null && literal != null && !spellsAnotherType(node, literalType, shape))
 			literal(literalType, ctx)
 		else if (node.kind == shape.checkTypeKind && node.children.length > 0 && ascribed != null)
 			ascribed(node, ctx)
@@ -159,16 +159,20 @@ final class TypingService {
 	}
 
 	/**
-	 * Whether the literal `node`, of the integer type (`CoreValueTypes.integer`), spells a decimal number past
-	 * `CoreValueTypes.integerMax`: the compiler types it as another type, so the walk gives it none.
+	 * Whether the literal `node`, which the grammar maps to the integer type (`CoreValueTypes.integer`), is one the compiler
+	 * types as another: its text, `_` dropped, neither decimal digits nor `CoreValueTypes.hexLiteralPrefix` and hex digits (a
+	 * suffix), or a decimal number past `CoreValueTypes.integerMax`. The walk gives such a literal no type.
 	 */
-	private static function pastIntegerRange(node: QueryNode, typeName: String, shape: RefShape): Bool {
+	private static function spellsAnotherType(node: QueryNode, typeName: String, shape: RefShape): Bool {
 		final core: Null<CoreValueTypes> = shape.coreValueTypes;
-		final max: Null<String> = core?.integerMax;
+		if (core == null || typeName != core.integer) return false;
 		var digits: String = (node.name ?? '').split('_').join('');
-		if (core == null || max == null || typeName != core.integer || !~/^[0-9]+$/.match(digits)) return false;
+		final hex: Null<String> = core.hexLiteralPrefix;
+		if (hex != null && digits.startsWith(hex)) return !~/^[0-9A-Fa-f]+$/.match(digits.substr(hex.length));
+		if (!~/^[0-9]+$/.match(digits)) return true;
+		final max: Null<String> = core.integerMax;
 		while (digits.length > 1 && digits.charAt(0) == '0') digits = digits.substr(1);
-		return digits.length > max.length || digits.length == max.length && digits > max;
+		return max != null && (digits.length > max.length || digits.length == max.length && digits > max);
 	}
 
 	/**

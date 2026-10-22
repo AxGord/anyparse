@@ -639,6 +639,14 @@ final class RefShapeKindProjectionTest extends Test {
 			},
 			{
 				field: 'coreValueTypes',
+				slot: 'hexLiteralPrefix',
+				kind: 'HexLit',
+				names: NAME_OPENS,
+				before: 'class C { var a = ',
+				after: 'FF; }'
+			},
+			{
+				field: 'coreValueTypes',
 				slot: 'integerMax',
 				kind: 'IntLit',
 				names: NAME_IS,

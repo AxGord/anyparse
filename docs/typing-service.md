@@ -321,9 +321,11 @@ std gap. Readings: `docs/journal/testing-log.md`.
   value of a type of the module, what an import or a `using` may bring — `ValueNameBinding.mayImportValueBesideType`,
   which reads an import spelling the name as the type it names rather than as a possible static — and a constructor or
   value ANY type of the index hosts, which an expected type resolves before a type, imported or not:
-  `ValueNameBinding.hostsOfValue`) and names one declaration with no type parameter. A decimal literal past the integer
-  type's range is no answer (`CoreValueTypes.integerMax`: 4.3.7 types `3000000000` as `Float`). Not answered: an abstract read as a value (`Abstract<T>`, which the facts never record), a generic type,
-  a local function's declaration (a function type the walk does not spell), a name the index resolves to several
+  `ValueNameBinding.hostsOfValue`) and names one declaration with no type parameter. An integer literal is the integer
+  type only spelled as one — decimal digits within `CoreValueTypes.integerMax`, or `hexLiteralPrefix` and hex digits;
+  4.3.7 types `3000000000` as `Float`, `1i64` as `haxe.Int64`, `1u32` as `UInt` — and no answer otherwise. Not
+  answered: an abstract read as a value (`Abstract<T>`, which the facts never record), a generic type, a local
+  function's declaration (a function type the walk does not spell), a name the index resolves to several
   declarations (the std's per-target `_std` copies of `Std`, `sys.FileSystem`) or that an unindexed import may bring.
   Measured (UNKNOWN share source / nominal, each currency's DIFFERENT, the base re-run on the same copy): anyparse 34.4 /
   33.7 → 14.7 / 14.1 %, DIFFERENT 0 / 0; upstream 69.4 / 68.2 → 60.2 / 59.0 %, 0 / 0; Pony 27.8 / 26.1 → 21.4 / 19.8 %,

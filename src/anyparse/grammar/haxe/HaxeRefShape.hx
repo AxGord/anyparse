@@ -1011,6 +1011,7 @@ final class HaxeRefShape {
 			integer: 'Int',
 			real: 'Float',
 			integerMax: '2147483647',
+			hexLiteralPrefix: '0x',
 			classNames: ['String']
 		};
 		table.arithmeticKinds = ['Add', 'Sub', 'Mul', 'Div', 'Mod'];

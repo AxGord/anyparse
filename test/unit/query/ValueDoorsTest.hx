@@ -25,7 +25,8 @@ class ValueDoorsTest extends Test {
 		+ '\tvar Shadow: Int;\n\n\tfunction f(x: Int) {\n\t\tItem;\n\t\tE;\n\t\tI;\n\t\tBox;\n\t\tShadow;\n\t\tItemCtor;\n'
 		+ '\t\tfinal written: Array<Int> = [];\n\t\tfinal inferred = 5;\n\t\tfinal open = null;\n'
 		+ '\t\tvar first: Int = 1, second = 2;\n\t\t(x : Float);\n\t\tfinal held = (x : Float);\n\t\theld;\n'
-		+ '\t\t\'a $$x b\';\n\t\tfinal big = 3000000000;\n\t}\n}\n';
+		+ '\t\t\'a $$x b\';\n\t\tfinal big = 3000000000;\n\t\tfinal wide = 1i64;\n\t\tfinal unsigned = 1u32;\n'
+		+ '\t\tfinal wideHex = 0xFFi64;\n\t\tfinal hex = 0xFF;\n\t\tfinal grouped = 1_000;\n\t}\n}\n';
 
 	@:pin('control')
 	@:killer('M-DOOR-TYPE-VALUE-NULL')
@@ -109,6 +110,16 @@ class ValueDoorsTest extends Test {
 		Assert.same({ source: null, nominal: null }, typed('IntLit', '3000000000'), 'the compiler types it as a Float');
 		Assert.same({ source: null, nominal: null }, typed('FinalStmt', 'final big'), 'and the local it initializes');
 		Assert.same({ source: 'Int', nominal: 'Int' }, typed('FinalStmt', 'final inferred'), 'one within the range is an Int');
+	}
+
+	@:pin('control')
+	@:killer('M-WALK-INTEGER-SUFFIX-OPEN')
+	public function testAnIntegerLiteralWithASuffixIsUnknown(): Void {
+		Assert.same({ source: null, nominal: null }, typed('FinalStmt', 'final wide'), 'a `haxe.Int64`');
+		Assert.same({ source: null, nominal: null }, typed('FinalStmt', 'final unsigned'), 'a `UInt`');
+		Assert.same({ source: null, nominal: null }, typed('FinalStmt', 'final wideHex'), 'a hex `haxe.Int64`');
+		Assert.same({ source: 'Int', nominal: 'Int' }, typed('FinalStmt', 'final hex'), 'a plain hex literal is an Int');
+		Assert.same({ source: 'Int', nominal: 'Int' }, typed('FinalStmt', 'final grouped'), 'so is a decimal one with separators');
 	}
 
 	@:pin('control')

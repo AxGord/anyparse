@@ -3594,6 +3594,13 @@ typedef CoreValueTypes = {
 	@:optional final integerMax: String;
 
 	/**
+	 * The prefix of a hexadecimal integer literal (Haxe `0x`). An integer literal is typed as the `integer` type only when its
+	 * text, `_` separators dropped, is decimal digits or this prefix and hex digits — anything else carries a suffix the
+	 * compiler types otherwise (`1i64` is a `haxe.Int64`, `1u32` a `UInt`). Optional; unset admits decimal digits only.
+	 */
+	@:optional final hexLiteralPrefix: String;
+
+	/**
 	 * The `names` the language declares as classes (Haxe `String`); every other one is an abstract the compiler represents
 	 * itself (`@:coreType`), declaring no `@:from` / `@:to` member — the arm of an implicit cast (`abstractCast.ml`) a pair
 	 * takes depends on which side is an abstract.

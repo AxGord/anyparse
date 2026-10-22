@@ -1431,6 +1431,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.ValueDoorsTest#testATypeNameReadAsAValueIsItsClassValue :: control :: M-DOOR-TYPE-VALUE-NULL',
 		'unit.query.ValueDoorsTest#testAValueOfTheTypesNameShadowsTheType :: control :: M-DOOR-TYPE-VALUE-SHADOWED-TRUE',
 		'unit.query.ValueDoorsTest#testAnAscriptionIsTheTypeItWrites :: control :: M-WALK-ASCRIBED-NULL',
+		'unit.query.ValueDoorsTest#testAnIntegerLiteralWithASuffixIsUnknown :: control :: M-WALK-INTEGER-SUFFIX-OPEN',
 		'unit.query.ValueNameBindingTest#testAModuleFieldComesBeforeAnyImport :: control :: '
 			+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
 		'unit.query.ValueNameBindingTest#testAModuleValueUnderIfBindsInTheBuildsCompilingIt :: control :: '
