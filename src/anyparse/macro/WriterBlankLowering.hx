@@ -340,6 +340,7 @@ final class WriterBlankLowering {
 			expr: ECall(macro $i{elemFn}, [macro _csUnits[_csK], macro _csOpt]),
 			pos: Context.currentPos()
 		};
+		final offerExpr: Expr = caseSiblingOfferExpr(controlFlowFn);
 		// omega-case-body-controlflow-glue: emitted ONLY when the element rule's
 		// body Star carries `@:fmt(refuseGlueOnControlFlowRoot)` - the same meta
 		// that turns the glue into a break. Null (flag absent) drops the arm, so
@@ -378,10 +379,14 @@ final class WriterBlankLowering {
 						if (_csForce)
 							_csMax = anyparse.format.BodyFit.SIBLING_FORCE_BREAK;
 						else {
-							final _csOpt = _setCaseSiblingWidth(opt, anyparse.format.BodyFit.SIBLING_PROBING);
+							final _csOpt = _setCaseSiblingWidth(opt, anyparse.format.BodyFit.SIBLING_PROBING, null);
+							var _csSecond: Int = anyparse.format.BodyFit.SIBLING_NONE;
+							var _csWidest: Null<anyparse.core.Doc> = null;
+							var _csWidestK: Int = -1;
 							var _csK: Int = 0;
 							while (_csK < _csUnits.length) {
-								final _csFlat: Int = anyparse.format.wrap.WrapList.flatLength($unitProbeCall);
+								final _csDoc: anyparse.core.Doc = $unitProbeCall;
+								final _csFlat: Int = anyparse.format.wrap.WrapList.flatLength(_csDoc);
 								// omega-case-body-controlflow-glue: a unit that
 								// cannot render flat AND holds a single
 								// control-flow statement is refused the glue by
@@ -389,9 +394,16 @@ final class WriterBlankLowering {
 								// own label — the same verdict the structural pass
 								// reaches, but only measurable here.
 								$controlFlowForce;
-								if (_csFlat > _csMax) _csMax = _csFlat;
+								if (_csFlat > _csMax) {
+									_csSecond = _csMax;
+									_csMax = _csFlat;
+									_csWidest = _csDoc;
+									_csWidestK = _csK;
+								} else if (_csFlat > _csSecond)
+									_csSecond = _csFlat;
 								_csK++;
 							}
+							$offerExpr;
 						}
 					}
 				}
@@ -547,6 +559,30 @@ final class WriterBlankLowering {
 				_docs.push(_dt(StringTools.startsWith(_line, _prefix) ? _line.substr(_prefix.length) : StringTools.ltrim(_line)));
 			}
 			return _dc(_docs);
+		};
+	}
+
+	/**
+	 * The tail of the widest-sibling pre-pass's width loop: when one unit alone is the widest (`_csWidest`, ahead of
+	 * `_csSecond`) and the switch is not already forced, a break named inside it can take it out of the measure on the next
+	 * rewrite, so the number that rewrite would read is offered beside this one (`BodyFit.siblingBreakOffer`, into `_csO`).
+	 * Only for a unit that IS its element (`_csWK`), so the emit loop can tie that element's break to the offer.
+	 * `controlFlowFn` is the unit's control-flow verdict, `false` when the Star carries none.
+	 */
+	private static function caseSiblingOfferExpr(controlFlowFn: Null<Expr>): Expr {
+		final controlFlow: Expr = controlFlowFn == null ? macro false : {
+			expr: ECall(controlFlowFn, [macro _csUnits[_csWidestK]]),
+			pos: Context.currentPos()
+		};
+		return macro {
+			final _csW0: Null<anyparse.core.Doc> = _csWidest;
+			if (
+				_csW0 != null && _csMax != anyparse.format.BodyFit.SIBLING_FORCE_BREAK && _csMax > _csSecond && _csWidestK < _arr.length
+				&& _csUnits[_csWidestK] == _arr[_csWidestK].node
+			) {
+				_csO = anyparse.format.BodyFit.siblingBreakOffer(_csW0, _csSecond, $controlFlow);
+				_csWK = _csWidestK;
+			}
 		};
 	}
 

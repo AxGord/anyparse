@@ -349,6 +349,7 @@ final class HaxeFormat implements TextFormat {
 		metadataFunctionLineEnd: MetadataLineEndPolicy.None,
 		_inExprPosition: false,
 		_caseSiblingFlatWidth: -1,
+		_caseSiblingOffer: null,
 		_inElseIfBranch: false,
 		_inValueIfBranch: false,
 		_inArrowLambdaBody: false,

@@ -1062,7 +1062,8 @@ final class TriviaTryparseLowering {
 		return macro {
 			final _caseBody: anyparse.core.Doc = if (_fitCase)
 				anyparse.format.BodyFit.fitLineLayout(
-					_cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt.lineWidth, opt._caseSiblingFlatWidth, $glueRefusalExpr
+					_cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt.lineWidth, opt._caseSiblingFlatWidth, $glueRefusalExpr,
+					opt._caseSiblingOffer
 				);
 			else
 				opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs));

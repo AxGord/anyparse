@@ -1,5 +1,6 @@
 package anyparse.format.wrap;
 
+import anyparse.core.BreakCommits;
 import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
@@ -38,7 +39,161 @@ using Lambda;
 @:nullSafety(Strict)
 final class BinaryChainEmit {
 
+	/**
+	 * OVERFLOW-ONLY wrap for a right-associative `=` chain (`a = b = c = value`),
+	 * whose nested `Assign(l, Assign(l, …))` spine the caller has already flattened
+	 * into `items`. An assign chain has NO `WrapRules` class of its own — it is not
+	 * wrapped until the line overflows — so the decision is a single probe rather
+	 * than a rule enumeration.
+	 *
+	 * The FLAT SHAPE is built right-nested from the tail so it stays byte- and
+	 * tree-identical to the per-level `Concat` the plain lowering emits. Its
+	 * `OptSpace(' ')` is load-bearing: it drops the trailing space when the RHS opens
+	 * with a hardline, so it must NOT be folded into a `Text(' =')` on this side.
+	 *
+	 * The BREAK SHAPE reuses `shapeFillLine(…, AfterLast)`, the established
+	 * binop-chain fill convention. `AfterLast` suffixes the operator to the previous
+	 * operand (`a =\n\tb = value`), the only placement that reads for an assignment,
+	 * since a continuation line led by `= b` would look like a fresh statement.
+	 * Packing comes for free from the shared `Fill`, and the shared `Nest` puts the
+	 * continuation one indent level in.
+	 *
+	 * The GATE is `IfNaturalFirstLineExceeds`, not `Group` / `IfLineExceeds`: the
+	 * natural probe resolves inner `Group`s by their OWN `fitsFlat`, so
+	 * `x = call(reallyLongArgs…)`, whose call folds its own arguments, has a SHORT
+	 * natural first line and does not fire — where a flat-width pivot would measure
+	 * the un-wrapped RHS and break the `=` at every such site. The probe's render arm
+	 * already honours `Frame.forceFlat`, so a chain inside a force-flat region
+	 * collapses to the flat shape without a `WrapBoundary` wrapper; adding one would
+	 * defeat that.
+	 *
+	 * The threshold is `opt.lineWidth + 1` per the project's width convention: every
+	 * exceeds-maxLineLength probe compares against `lineWidth + 1`, because the render
+	 * arm fires on `>=` while the config predicate means "strictly past the limit".
+	 * The two gates disagree only where an operand's inner `Group` wraps and no longer
+	 * re-glues, and `+ 1` is right there — a prefix landing ON column `lineWidth`
+	 * stays glued, where a bare `lineWidth` would break a line that legally fits.
+	 *
+	 * The continuation always nests one indent level — unlike `emit` this engine takes
+	 * no `nestSuppress`, because an assignment never sits directly inside a cond
+	 * paren-wrap whose `Nest` it would compound with.
+	 */
+	public static function emitAssignChain(items: Array<Doc>, opt: WriteOptions): Doc {
+		// The caller only routes a genuine chain here (its own `case Assign`
+		// arm guarantees head + one inner left + terminal), so a shorter list
+		// is a wiring bug, not an input — surface it instead of folding a
+		// degenerate `Doc`. Mirror `MethodChainEmit.shapeOnePerLineAfterFirst`.
+		if (items.length < 3) throw 'BinaryChainEmit.emitAssignChain: caller-side chain guard violated (items=${items.length})';
+		var flat: Doc = items[items.length - 1];
+		var i: Int = items.length - 2;
+		while (i >= 0) {
+			flat = Concat([items[i], Text(' '), Text('='), OptSpace(' '), flat]);
+			i--;
+		}
+		final ops: Array<String> = [for (_ in 1...items.length) '='];
+		final indentUnit: Int = indentUnitOf(opt);
+		return IfNaturalFirstLineExceeds(opt.lineWidth + 1, shapeFillLine(items, ops, indentUnit, indentUnit, AfterLast), flat);
+	}
+
+	/**
+	 * The chain of `items`, offered once more per break nested in an operand whose committed form carries a hardline the
+	 * plain operand does not (`BreakCommits.offerItemBreaks`): the next rewrite reads that break from its source, and an
+	 * operand with a hardline commits the chain to its break shape (`anyHardline`), so the first rewrite lays the chain out
+	 * the same way exactly when the break happens.
+	 */
 	public static function emit(
+		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
+		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
+		?afterComments: Array<Null<Doc>>, restAware: Bool = false, ?forceKeepLocation: Null<WrappingLocation>
+	): Doc {
+		function laidOut(with: Array<Doc>, _: Int): Doc {
+			return layout(
+				with, ops, opt, rules, nestSuppress, condWrapForced, sourceBreakBefore, headBreak, forceKeep, afterComments, restAware,
+				forceKeepLocation
+			);
+		}
+		return BreakCommits.offerItemBreaks(
+			items, laidOut(items, -1), laidOut, (item, _, broken) -> WrapList.flatLength(item) >= 0 && WrapList.flatLength(broken) < 0
+		);
+	}
+
+	/** One indent level in columns, per the configured indent character. */
+	private static inline function indentUnitOf(opt: WriteOptions): Int {
+		return opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+	}
+
+	private static inline function sameRule(
+		a: { mode: WrapMode, location: WrappingLocation }, b: { mode: WrapMode, location: WrappingLocation }
+	): Bool {
+		return a.mode == b.mode && a.location == b.location;
+	}
+
+	/**
+	 * True for modes that lay the chain across multiple lines
+	 * (`OnePerLine` / `OnePerLineAfterFirst` / `FillLine` /
+	 * `FillLineWithLeadingBreak`). `NoWrap` / `Keep` / `Ignore` keep the
+	 * chain inline. Used by the ω-chain-keep-flat unwrap pivot.
+	 */
+	private static inline function isBreakMode(m: WrapMode): Bool {
+		return m == OnePerLine || m == OnePerLineAfterFirst || m == FillLine || m == FillLineWithLeadingBreak;
+	}
+
+	/**
+	 * The chain's LAST operand is a BARE paren-expr — it both leads with `(` and ends with its own
+	 * `)` — while operand-1 does not itself open a delimiter. The shape gate the two trailing-paren
+	 * glue arms share: `(a - b) / 2` leads with `(` but is a Div whose paren covers only the
+	 * numerator, so `endsWithCloseDelim` refuses it and the chain breaks `beforeLast` instead.
+	 */
+	private static inline function hasBareParenTail(items: Array<Doc>): Bool {
+		return leadingOperandOpensDelim(items[items.length - 1], true) && WrapList.endsWithCloseDelim(items[items.length - 1])
+			&& !leadingOperandOpensDelim(items[0]);
+	}
+
+	/**
+	 * `ops` is a ternary's degenerate two-op chain (`?` then `:`) — the mixfix
+	 * shape `WriterLowering.lowerTernaryBranch` dispatches into this engine.
+	 * Says nothing about `items`; the two callers that also need the operand
+	 * count check it themselves.
+	 */
+	private static inline function isTernaryOps(ops: Array<String>): Bool {
+		return ops.length == 2 && ops[0] == '?' && ops[1] == ':'; // noqa: magic-number
+	}
+
+	/**
+	 * Does this `mode` at this `location` reach a shaper that honours the
+	 * `cuddleLast` flag? The two one-operand-per-line shapes do; `Keep` is
+	 * source-faithful by contract, the fill family breaks its gaps by packing rather
+	 * than at a fixed separator, and `NoWrap` is already glued. Asked so a
+	 * probe-gated cuddle wraps only the shapes that CAN differ.
+	 *
+	 * It takes the LOCATION as well as the mode, and the second axis is not
+	 * cosmetic even though it costs no layout: both shapers read the flag only in
+	 * their `BeforeLast` arm, so under `defaultLocation: "afterLast"` the two slots
+	 * a cuddle-gated shape wraps are the SAME layout twice and the pair of width
+	 * probes bracketing them can only ever pick between identical Docs. Asking
+	 * about the mode alone therefore built two dead probe nodes per admitted
+	 * ternary — three on the probe-gated leg, whose outer probe is dead there too
+	 * — with measured byte-identical output, which is why no write fixture can
+	 * pin it and `HxTernaryCuddleProbeShapeTest` counts the emitted nodes
+	 * instead. That class pins the structural leg's two; the gated leg's three is
+	 * unpinned.
+	 */
+	private static inline function honoursCuddleLast(mode: WrapMode, location: WrappingLocation): Bool {
+		return (mode == WrapMode.OnePerLine || mode == WrapMode.OnePerLineAfterFirst) && location == WrappingLocation.BeforeLast;
+	}
+
+	/**
+	 * True iff any operand `Doc` is a top-level function call
+	 * (`DocMeasure.operandIsCall`). The ω-opbool-reeval gate mirrors fork
+	 * `hasSimpleCallParamBreaksBetween` (an inner `POpen` that wrapped); a chain
+	 * with NO call operand can never have a callParameter wrap to re-evaluate
+	 * after, so the marker is skipped (byte-inert).
+	 */
+	private static inline function containsCallOperand(items: Array<Doc>): Bool {
+		return items.exists(DocMeasure.operandIsCall);
+	}
+
+	private static function layout(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
 		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
 		?afterComments: Array<Null<Doc>>, restAware: Bool = false,
@@ -200,138 +355,6 @@ final class BinaryChainEmit {
 			emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt)
 		else
 			WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
-	}
-
-	/**
-	 * OVERFLOW-ONLY wrap for a right-associative `=` chain (`a = b = c = value`),
-	 * whose nested `Assign(l, Assign(l, …))` spine the caller has already flattened
-	 * into `items`. An assign chain has NO `WrapRules` class of its own — it is not
-	 * wrapped until the line overflows — so the decision is a single probe rather
-	 * than a rule enumeration.
-	 *
-	 * The FLAT SHAPE is built right-nested from the tail so it stays byte- and
-	 * tree-identical to the per-level `Concat` the plain lowering emits. Its
-	 * `OptSpace(' ')` is load-bearing: it drops the trailing space when the RHS opens
-	 * with a hardline, so it must NOT be folded into a `Text(' =')` on this side.
-	 *
-	 * The BREAK SHAPE reuses `shapeFillLine(…, AfterLast)`, the established
-	 * binop-chain fill convention. `AfterLast` suffixes the operator to the previous
-	 * operand (`a =\n\tb = value`), the only placement that reads for an assignment,
-	 * since a continuation line led by `= b` would look like a fresh statement.
-	 * Packing comes for free from the shared `Fill`, and the shared `Nest` puts the
-	 * continuation one indent level in.
-	 *
-	 * The GATE is `IfNaturalFirstLineExceeds`, not `Group` / `IfLineExceeds`: the
-	 * natural probe resolves inner `Group`s by their OWN `fitsFlat`, so
-	 * `x = call(reallyLongArgs…)`, whose call folds its own arguments, has a SHORT
-	 * natural first line and does not fire — where a flat-width pivot would measure
-	 * the un-wrapped RHS and break the `=` at every such site. The probe's render arm
-	 * already honours `Frame.forceFlat`, so a chain inside a force-flat region
-	 * collapses to the flat shape without a `WrapBoundary` wrapper; adding one would
-	 * defeat that.
-	 *
-	 * The threshold is `opt.lineWidth + 1` per the project's width convention: every
-	 * exceeds-maxLineLength probe compares against `lineWidth + 1`, because the render
-	 * arm fires on `>=` while the config predicate means "strictly past the limit".
-	 * The two gates disagree only where an operand's inner `Group` wraps and no longer
-	 * re-glues, and `+ 1` is right there — a prefix landing ON column `lineWidth`
-	 * stays glued, where a bare `lineWidth` would break a line that legally fits.
-	 *
-	 * The continuation always nests one indent level — unlike `emit` this engine takes
-	 * no `nestSuppress`, because an assignment never sits directly inside a cond
-	 * paren-wrap whose `Nest` it would compound with.
-	 */
-	public static function emitAssignChain(items: Array<Doc>, opt: WriteOptions): Doc {
-		// The caller only routes a genuine chain here (its own `case Assign`
-		// arm guarantees head + one inner left + terminal), so a shorter list
-		// is a wiring bug, not an input — surface it instead of folding a
-		// degenerate `Doc`. Mirror `MethodChainEmit.shapeOnePerLineAfterFirst`.
-		if (items.length < 3) throw 'BinaryChainEmit.emitAssignChain: caller-side chain guard violated (items=${items.length})';
-		var flat: Doc = items[items.length - 1];
-		var i: Int = items.length - 2;
-		while (i >= 0) {
-			flat = Concat([items[i], Text(' '), Text('='), OptSpace(' '), flat]);
-			i--;
-		}
-		final ops: Array<String> = [for (_ in 1...items.length) '='];
-		final indentUnit: Int = indentUnitOf(opt);
-		return IfNaturalFirstLineExceeds(opt.lineWidth + 1, shapeFillLine(items, ops, indentUnit, indentUnit, AfterLast), flat);
-	}
-
-	/** One indent level in columns, per the configured indent character. */
-	private static inline function indentUnitOf(opt: WriteOptions): Int {
-		return opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
-	}
-
-	private static inline function sameRule(
-		a: { mode: WrapMode, location: WrappingLocation }, b: { mode: WrapMode, location: WrappingLocation }
-	): Bool {
-		return a.mode == b.mode && a.location == b.location;
-	}
-
-	/**
-	 * True for modes that lay the chain across multiple lines
-	 * (`OnePerLine` / `OnePerLineAfterFirst` / `FillLine` /
-	 * `FillLineWithLeadingBreak`). `NoWrap` / `Keep` / `Ignore` keep the
-	 * chain inline. Used by the ω-chain-keep-flat unwrap pivot.
-	 */
-	private static inline function isBreakMode(m: WrapMode): Bool {
-		return m == OnePerLine || m == OnePerLineAfterFirst || m == FillLine || m == FillLineWithLeadingBreak;
-	}
-
-	/**
-	 * The chain's LAST operand is a BARE paren-expr — it both leads with `(` and ends with its own
-	 * `)` — while operand-1 does not itself open a delimiter. The shape gate the two trailing-paren
-	 * glue arms share: `(a - b) / 2` leads with `(` but is a Div whose paren covers only the
-	 * numerator, so `endsWithCloseDelim` refuses it and the chain breaks `beforeLast` instead.
-	 */
-	private static inline function hasBareParenTail(items: Array<Doc>): Bool {
-		return leadingOperandOpensDelim(items[items.length - 1], true) && WrapList.endsWithCloseDelim(items[items.length - 1])
-			&& !leadingOperandOpensDelim(items[0]);
-	}
-
-	/**
-	 * `ops` is a ternary's degenerate two-op chain (`?` then `:`) — the mixfix
-	 * shape `WriterLowering.lowerTernaryBranch` dispatches into this engine.
-	 * Says nothing about `items`; the two callers that also need the operand
-	 * count check it themselves.
-	 */
-	private static inline function isTernaryOps(ops: Array<String>): Bool {
-		return ops.length == 2 && ops[0] == '?' && ops[1] == ':'; // noqa: magic-number
-	}
-
-	/**
-	 * Does this `mode` at this `location` reach a shaper that honours the
-	 * `cuddleLast` flag? The two one-operand-per-line shapes do; `Keep` is
-	 * source-faithful by contract, the fill family breaks its gaps by packing rather
-	 * than at a fixed separator, and `NoWrap` is already glued. Asked so a
-	 * probe-gated cuddle wraps only the shapes that CAN differ.
-	 *
-	 * It takes the LOCATION as well as the mode, and the second axis is not
-	 * cosmetic even though it costs no layout: both shapers read the flag only in
-	 * their `BeforeLast` arm, so under `defaultLocation: "afterLast"` the two slots
-	 * a cuddle-gated shape wraps are the SAME layout twice and the pair of width
-	 * probes bracketing them can only ever pick between identical Docs. Asking
-	 * about the mode alone therefore built two dead probe nodes per admitted
-	 * ternary — three on the probe-gated leg, whose outer probe is dead there too
-	 * — with measured byte-identical output, which is why no write fixture can
-	 * pin it and `HxTernaryCuddleProbeShapeTest` counts the emitted nodes
-	 * instead. That class pins the structural leg's two; the gated leg's three is
-	 * unpinned.
-	 */
-	private static inline function honoursCuddleLast(mode: WrapMode, location: WrappingLocation): Bool {
-		return (mode == WrapMode.OnePerLine || mode == WrapMode.OnePerLineAfterFirst) && location == WrappingLocation.BeforeLast;
-	}
-
-	/**
-	 * True iff any operand `Doc` is a top-level function call
-	 * (`DocMeasure.operandIsCall`). The ω-opbool-reeval gate mirrors fork
-	 * `hasSimpleCallParamBreaksBetween` (an inner `POpen` that wrapped); a chain
-	 * with NO call operand can never have a callParameter wrap to re-evaluate
-	 * after, so the marker is skipped (byte-inert).
-	 */
-	private static inline function containsCallOperand(items: Array<Doc>): Bool {
-		return items.exists(DocMeasure.operandIsCall);
 	}
 
 	/**

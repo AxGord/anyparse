@@ -5205,6 +5205,22 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 
 - the probe died on a wide structure from the typer / compiler-facts series → no: bisect names `1b172a012` (thread-safety R4 F1), whose `RefShape.operatorWriteKinds` was the grammar vocabulary's 255th field, one constructor slot past the JVM's 255 with the receiver → `1b172a012`
 
+## n22/U27 (2026-08-20, recorded 2026-10-22 before its branch was deleted)
+
+- a fix collapsing a null-guarded return (`return x != null && <tail>`) into `?.` / `??` → no: one site in a client corpus once the census pattern was corrected, every corpus measured keeps the guarded form as its house style, the `?.`/`??` arm is unsound without a type proof (it diverges when the tail itself yields null), and the family is already covered by `prefer-ternary-return` + `simplify-boolean-ternary` with the one refusal documented as `PreferTernaryReturn.isStuckBooleanCollapse` — `bc1c2399e` (branch-only, never merged)
+
+## X0 (2026-10-22) — the cross-config one-pass set grew from two files to four
+
+- the writer regressed after the baseline was last recorded → no: the engine of `3acb01f88` diverges on today's `MainSinkReport.hx` / `UnusedLoopBinder.hx` too, and their text before `42260d627` / `4d980a383` converges on both engines; the source edits exposed mechanism A (a host measures an object literal's threshold-pivot flat arm, while the next rewrite reads the literal the first one broke back as committed) in two hosts → ``d995ce391``
+- naming every `{`-led call argument (`BreakCommits.named`) → no: a FIT-pivot literal (`ignore` + `exceedsMaxLineLength`) is re-decided by the next rewrite, not read back committed, so three of Pony's stable files were rewritten into hugs; only a threshold pivot is named → ``d995ce391``
+- naming the call-argument literal fixes every host above the call → no: a ternary around the call measured the committed literal deferred and hugged the call, while the next rewrite breaks it on the operand's hardline; a binary chain (ternary included) now offers its committed operand too (`BinaryChainEmit.emit`) → ``d995ce391``
+- the nesting blow-up of the offers placed in the measure render walking nested `BreakCommit`s → no: profiled, all of it was build-time `BreakCommits.replaced` / `bare` copying every node they walked, the other breaks' `brk` sides included; they now share unchanged subtrees and `replaced` leaves `brk` sides alone → ``d995ce391``
+
+## Writer contract (2026-10-22, user decision on the authorial-layout audit)
+
+- the writer keeps reading the source's line layout (`keep` modes, "as in the source" defaults: a broken list stays broken, the break after `@:meta`, typedef bodies, `#if` bodies, `;`/`,` presence) → no: its output is a function of the AST, the options, the comments and the blank lines (collapsed to N) — every other source fact is canonicalized; reading the source's layout is what produces the one-write class (the next rewrite reads a layout the previous one wrote), and no project in use enables `keep`; the trailing comma stays the one authorial lever (a list with one is laid out one item per line); token presence is lint's business (`empty-statement`), never the formatter's — Q-AUTH audit
+- a lighter trivia mode by default with a heavier one switched on by any `keep` in the config → no: the trivia scan is needed for comments and blank lines anyway and a line-break flag costs almost nothing on top of it, while a second generated trivia parser and writer per grammar costs more code than the `keep` branches it would isolate; if `keep` is ever needed again, add it then as a separate extended trivia mode (capture slots + writer branches) selected by the config, on top of the canonical path — not by re-threading source layout through the canonical writer
+
 ## S229 (2026-10-22) — `import.hx` adoption by `hoist-common-import`
 
 - a path past its module (`pkg.Mod.field`, a macro-made `pkg.Mod.Sub`) binds an UNKNOWN name set → no: by the compiler's case rule it binds at most its leaf; the unknown answer made one function import a second binder of every statement and withheld whole directories → `bf7830896`
