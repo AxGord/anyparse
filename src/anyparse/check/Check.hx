@@ -434,6 +434,15 @@ typedef CrossFileEdits = {
 	 * that no edit list can express. `edits` must be empty beside it.
 	 */
 	@:optional final create: Null<String>;
+
+	/**
+	 * True when this slice DELETES the file — one the run already holds. `edits` must be empty beside it,
+	 * and no other slice of the component may edit or create the same path.
+	 *
+	 * Its own member for the reason `create` is one: a delete is refused where the file is not held, and
+	 * its revert RESTORES the bytes the run started from, which no edit list can express.
+	 */
+	@:optional final remove: Null<Bool>;
 };
 
 /** One edit set of a cross-file `RiskyArm`: the finding it fixes and its per-file slices, verified and reverted as one. */

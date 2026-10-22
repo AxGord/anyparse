@@ -350,7 +350,9 @@ final class LintFixDriver {
 				// has to see this path too. `naming` fixes a non-confined member ONLY here, and a ledger
 				// blind to it would report the one rule that renames across files as having answered
 				// nothing at all — the exact shape of claim this whole block exists to stop making.
-				for (slice in rename) ledgerFor(ledger, check.id()).edits += slice.edits.length;
+				// A created or deleted file is one edit, as `applyCrossFileRenames` counts it.
+				for (slice in rename)
+					ledgerFor(ledger, check.id()).edits += slice.edits.length + (slice.create != null || slice.remove == true ? 1 : 0);
 			}
 		}
 		fixedDelta += applyCrossFileRenames(
@@ -409,6 +411,7 @@ final class LintFixDriver {
 				fixedDelta += landed;
 			}
 		}
+		writeAmbientSources(nextActive, cached, baselineBeforeCreate);
 		return { nextActive: nextActive, fixedDelta: fixedDelta };
 	}
 
@@ -431,7 +434,14 @@ final class LintFixDriver {
 		for (component in crossFileComponents(renames)) {
 			final slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }> = [];
 			final creates: Array<{ file: String, text: String }> = [];
-			splitComponent(component, slices, creates);
+			final removes: Array<String> = [];
+			splitComponent(component, slices, creates, removes);
+			if (!removesHold(removes, slices, creates, files)) continue;
+			final clash: Null<String> = overlappingFile(slices);
+			if (clash != null) {
+				CliIo.stderr('apq lint --fix: two cross-file fixes edit one span of $clash — their component is skipped this pass\n');
+				continue;
+			}
 			// Validated BEFORE anything is edited, and refused when the path is already there: the
 			// removals a hoisting fix makes only compile beside the file it creates, so the create is
 			// the half that must be known good first.
@@ -442,31 +452,29 @@ final class LintFixDriver {
 			if (made == null) continue;
 			// Re-bound: strict null-safety does not carry a narrowed local into a comprehension.
 			final createdNow: Array<{ file: String, source: String }> = made;
-			final staged: Null<Array<{ file: String, source: String }>> = CanonicalEdit.stageCrossFileRename(
-				slices, file -> fileSourceOf(files, file),
-				(file, source, edits) -> CanonicalEdit.canonicalize(source, edits, false, cached, optsByFile[file])
-			);
+			// A component that only deletes stages no edit, which the staging seat reads as nothing to commit.
+			final staged: Null<Array<{ file: String, source: String }>> = slices.length == 0 && removes.length > 0
+				? []
+				: CanonicalEdit.stageCrossFileRename(
+					slices, file -> fileSourceOf(files, file),
+					(file, source, edits) -> CanonicalEdit.canonicalize(source, edits, false, cached, optsByFile[file])
+				);
 			if (staged == null) continue;
 			// On DISK inside the pass, not with the wave at the end, because an ambient source is read
 			// from disk by the very resolution the next pass runs — a file this pass created and only
 			// held in memory would leave every later pass answering from the chain that was.
-			if (createdNow.length > 0 && beforeCreate != null) beforeCreate();
+			if (createdNow.length + removes.length > 0 && beforeCreate != null) beforeCreate();
 			commitCreates(createdNow, files, optsByFile, created, touchedThisPass, changedFiles, nextActive);
-			for (s in staged) for (entry in files) if (entry.file == s.file) {
-				entry.source = s.source;
-				if (!touchedThisPass.contains(s.file)) touchedThisPass.push(s.file);
-				if (!changedFiles.contains(s.file)) changedFiles.push(s.file);
-				if (!containsFile(nextActive, s.file)) nextActive.push(entry);
-				break;
-			}
+			final removed: Array<String> = commitRemoves(removes, files, touchedThisPass, changedFiles, nextActive, editsOf);
+			commitStaged(staged, files, touchedThisPass, changedFiles, nextActive);
 			// A component is committed whole, so the safe-pass revert must roll it back whole:
 			// reverting half a rename leaves the tree worse off than reverting all of it, and
 			// reverting the removals without the created file leaves a tree that does not compile.
-			final unit: Array<String> = [for (m in createdNow) m.file].concat([for (s in staged) s.file]);
+			final unit: Array<String> = [for (m in createdNow) m.file].concat(removed).concat([for (s in staged) s.file]);
 			if (unit.length > 1) coupled.push(unit);
 			for (m in createdNow) countEdits(editsOf, m.file, 1);
 			for (slice in slices) countEdits(editsOf, slice.file, slice.edits.length);
-			total += createdNow.length;
+			total += createdNow.length + removed.length;
 			for (slice in slices) total += slice.edits.length;
 		}
 		return total;
@@ -474,18 +482,22 @@ final class LintFixDriver {
 
 	/**
 	 * Split one component's slices into the per-file EDIT sets (unioned, since distinct slices of one
-	 * component touch distinct spans) and the whole-file CREATES. A create carries no edits, so the
-	 * two never meet in one slice; a path named by two creates is taken once.
+	 * component touch distinct spans), the whole-file CREATES and the whole-file REMOVES. A create or a
+	 * remove carries no edits, so neither meets an edit in one slice; a path named twice is taken once.
 	 */
 	private static function splitComponent(
 		component: Array<Array<CrossFileEdits>>, slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }>,
-		creates: Array<{ file: String, text: String }>
+		creates: Array<{ file: String, text: String }>, removes: Array<String>
 	): Void {
 		final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
 		for (rename in component) for (slice in rename) {
 			final whole: Null<String> = slice.create;
 			if (whole != null) {
 				if (!creates.exists(c -> c.file == slice.file)) creates.push({ file: slice.file, text: whole });
+				continue;
+			}
+			if (slice.remove == true) {
+				if (!removes.contains(slice.file)) removes.push(slice.file);
 				continue;
 			}
 			var edits: Null<Array<{ span: Span, text: String }>> = byFile[slice.file];
@@ -496,6 +508,39 @@ final class LintFixDriver {
 			}
 			for (e in slice.edits) edits.push(e);
 		}
+	}
+
+	/**
+	 * Whether every path a component removes is a file the run HOLDS and no other slice of the component
+	 * writes: an edit or a create beside a delete of the same path is a component that contradicts itself.
+	 */
+	private static function removesHold(
+		removes: Array<String>, slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }>,
+		creates: Array<{ file: String, text: String }>, files: Array<{ file: String, source: String }>
+	): Bool {
+		return removes.foreach(
+			path -> fileSourceOf(files, path) != null && !slices.exists(s -> s.file == path) && !creates.exists(c -> c.file == path)
+		);
+	}
+
+	/**
+	 * The first file two of a component's edits overlap in, or null. The edits of one file come from every
+	 * slice of the component — several rules' — and `CanonicalEdit.applyEdits` trusts them not to overlap, so a
+	 * whole-file edit beside a rename would silently swallow the rename. Two edits starting at one offset
+	 * overlap too, since which goes first is then nobody's decision — an identical pair included, since both would be applied.
+	 */
+	private static function overlappingFile(slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }>): Null<String> {
+		for (slice in slices) {
+			final sorted: Array<FixEdit> = slice.edits.copy();
+			sorted.sort((a, b) -> a.span.from != b.span.from ? a.span.from - b.span.from : a.span.to - b.span.to);
+			for (i in 1...sorted.length) {
+				final prev: Span = sorted[i - 1].span;
+				final next: Span = sorted[i].span;
+				final start: Int = next.from;
+				if (start < prev.to || start == prev.from) return slice.file;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -517,6 +562,59 @@ final class LintFixDriver {
 			if (!changedFiles.contains(m.file)) changedFiles.push(m.file);
 			if (!containsFile(nextActive, m.file)) nextActive.push(m);
 		}
+	}
+
+	/**
+	 * Delete each file a slice removes and drop it from the run, answering the paths that went. A path the
+	 * run started with and no longer holds is one it DELETED, so the safe-pass revert finds it by the
+	 * snapshot alone and writes those bytes back. A path the filesystem refuses to delete stays held.
+	 */
+	private static function commitRemoves(
+		removes: Array<String>, files: Array<{ file: String, source: String }>, touchedThisPass: Array<String>,
+		changedFiles: Array<String>, nextActive: Array<{ file: String, source: String }>, editsOf: Null<Map<String, Int>>
+	): Array<String> {
+		final removed: Array<String> = [];
+		for (path in removes) if (CliIo.deletePath(path)) {
+			final held: Null<{ file: String, source: String }> = files.find(entry -> entry.file == path);
+			if (held != null) files.remove(held);
+			final queued: Null<{ file: String, source: String }> = nextActive.find(entry -> entry.file == path);
+			if (queued != null) nextActive.remove(queued);
+			if (!touchedThisPass.contains(path)) touchedThisPass.push(path);
+			if (!changedFiles.contains(path)) changedFiles.push(path);
+			countEdits(editsOf, path, 1);
+			removed.push(path);
+		}
+		return removed;
+	}
+
+	/** Take each staged rewrite into the run: its file's source, and the pass's touched, changed and next-active sets. */
+	private static function commitStaged(
+		staged: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, touchedThisPass: Array<String>,
+		changedFiles: Array<String>, nextActive: Array<{ file: String, source: String }>
+	): Void {
+		for (s in staged) for (entry in files) if (entry.file == s.file) {
+			entry.source = s.source;
+			if (!touchedThisPass.contains(s.file)) touchedThisPass.push(s.file);
+			if (!changedFiles.contains(s.file)) changedFiles.push(s.file);
+			if (!containsFile(nextActive, s.file)) nextActive.push(entry);
+			break;
+		}
+	}
+
+	/**
+	 * Put every AMBIENT source this pass rewrote on disk now, as a created one already is: the next pass
+	 * resolves the chain from disk, and a rewrite held in memory only would answer every later pass from
+	 * statements the source no longer carries. The safe-pass revert restores them from the snapshot.
+	 */
+	private static function writeAmbientSources(
+		changed: Array<{ file: String, source: String }>, plugin: CachingGrammarPlugin, beforeWrite: Null<() -> Void>
+	): Void {
+		final ambient: Array<{ path: String, content: String }> = [
+			for (entry in changed) if (plugin.ambientImportGovernance(entry.file) != null) { path: entry.file, content: entry.source }
+		];
+		if (ambient.length == 0) return;
+		if (beforeWrite != null) beforeWrite();
+		CliIo.writeFiles(ambient);
 	}
 
 	/**
@@ -1072,6 +1170,20 @@ final class LintFixDriver {
 					content: original
 				});
 			}
+			// The other half of the same question: a path the snapshot holds and the run no longer does was DELETED by
+			// this round, so its revert writes the snapshot's bytes back and the file rejoins `files`.
+			for (path in list) {
+				final original: Null<String> = originalOf[path];
+				if (original == null || files.exists(entry -> entry.file == path)) continue;
+				files.push({
+					file: path,
+					source: original
+				});
+				undo.push({
+					path: path,
+					content: original
+				});
+			}
 			CliIo.writeFiles(undo);
 			for (path in remove) {
 				CliIo.deletePath(path);
@@ -1115,6 +1227,13 @@ final class LintFixDriver {
 		files: Array<{ file: String, source: String }>, snapshot: Map<String, String>
 	): Array<{ file: String, source: String }> {
 		return [for (entry in files) if (entry.source != snapshot[entry.file]) entry];
+	}
+
+	/** Every path `snapshot` holds that `files` no longer does — a file the run DELETED since the snapshot was taken. */
+	private static function goneSince(files: Array<{ file: String, source: String }>, snapshot: Map<String, String>): Array<String> {
+		return [
+			for (file in snapshot.keys()) if (!files.exists(entry -> entry.file == file)) file
+		];
 	}
 
 	/**
@@ -1174,14 +1293,14 @@ final class LintFixDriver {
 		final fixed: Int = converge(verifiedChanged);
 		// Over ALL files, not just `verifiedChanged`: a cross-file rename in this round commits slices
 		// into files the verified phases never touched.
-		final rewritten: Array<String> = [for (entry in changedSince(files, verifiedOf)) entry.file];
+		final rewritten: Array<String> = [for (entry in changedSince(files, verifiedOf)) entry.file].concat(goneSince(files, verifiedOf));
 		if (rewritten.length == 0) return quiet;
 		for (f in rewritten) if (!changedFiles.contains(f)) changedFiles.push(f);
 		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracles, created);
 		// What the round KEPT: a file its net reverted is back at the verified bytes, so neither it nor its edits are counted.
 		var kept: Int = fixed;
 		for (file in pass.revertedFiles) kept -= editsOf[file] ?? 0;
-		final keptFiles: Int = changedSince(files, verifiedOf).length;
+		final keptFiles: Int = changedSince(files, verifiedOf).length + goneSince(files, verifiedOf).length;
 		return {
 			reverted: pass.reverted,
 			revertedFiles: pass.revertedFiles,
@@ -1252,8 +1371,14 @@ final class LintFixDriver {
 			);
 		var takenBack: Int = 0;
 		for (file in outcome.revertedFiles) takenBack += editsOf[file] ?? 0;
+		// A file the run deleted is still a change: it is no longer held, and the snapshot still has its bytes.
 		final stillChanged: Array<String> = [
-			for (file in changedFiles) if (files.exists(entry -> entry.file == file && entry.source != originalOf[file])) file
+			for (file in changedFiles)
+				if (
+					files.exists(entry -> entry.file == file && entry.source != originalOf[file]) || originalOf.exists(file)
+					&& !files.exists(entry -> entry.file == file)
+				)
+					file
 		];
 		changedFiles.resize(0);
 		for (file in stillChanged) changedFiles.push(file);

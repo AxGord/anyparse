@@ -1,4 +1,4 @@
-package;
+package dev;
 
 import anyparse.check.CheckScan;
 import anyparse.check.FactsTypeOracle;
@@ -51,12 +51,15 @@ using StringTools;
  * byte-identical: the share of each inference form and of each gap that needs none, the denominator the typer's next steps
  * are measured against.
  *
- *   haxe tools/typer-conformance.hxml
- *   node bin/typer-conformance.js upstream <haxe-4.3.7-clone> [--list] [--census]
- *   (cd <project> && node <anyparse>/bin/typer-conformance.js facts [<configuration-substring>] [--list] [--census])
+ *   haxe tools/dev.hxml
+ *   node bin/dev.js typer-conformance upstream <haxe-4.3.7-clone> [--list] [--census]
+ *   (cd <project> && node <anyparse>/bin/dev.js typer-conformance facts [<configuration-substring>] [--list] [--census])
  */
 @:nullSafety(Strict)
 final class TyperConformance {
+
+	public static inline final USAGE: String =
+		'usage: dev typer-conformance upstream <haxe-4.3.7-clone> | facts [<configuration>]  [--list] [--census]';
 
 	/** The group of the test function's name in `displayTests`' header pattern. */
 	private static inline final TEST_NAME_GROUP: Int = 3;
@@ -122,8 +125,8 @@ final class TyperConformance {
 	/** A unification error's text, at the top of its chain: `<A> should be <B>`. */
 	private static final SHOULD_BE: EReg = ~/^(?:error: )?(.+) should be (.+)$/;
 
-	public static function main(): Void {
-		final args: Array<String> = Sys.args();
+	public static function main(argv: Array<String>): Int {
+		final args: Array<String> = argv.copy();
 		final list: Bool = args.remove('--list');
 		final report: Report = new Report(list, args.remove('--census'));
 		switch args {
@@ -137,9 +140,10 @@ final class TyperConformance {
 				Sys.println(
 					'usage: typer-conformance upstream <haxe-4.3.7-clone> [--list] [--census] | facts [<configuration>] [--list] [--census]'
 				);
-				Sys.exit(2);
+				return 2;
 		}
 		report.print();
+		return 0;
 	}
 
 	/** The display and misc suites of the clone at `clone`. */

@@ -8,6 +8,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.query.AddImport;
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ConfigFinder;
 import anyparse.query.ImportBindings;
 import anyparse.query.IndexScope;
 import anyparse.query.SourceText;
@@ -93,11 +94,35 @@ private typedef HoistCensus = {
 }
 
 /**
+ * One decided SINK: `statement` leaves the ambient source `site`, where it stands at `span`, and is spelled in
+ * each module of `into` — the readers that do not spell it already. `readers` of `governed` modules read it.
+ */
+private typedef SinkPlan = {
+	final site: String;
+	final statement: Hoistable;
+	final span: Span;
+	final readers: Int;
+	final governed: Int;
+	final into: Array<String>;
+}
+
+/** Both directions of one run's decision, taken from one view of the directories so they cannot disagree. */
+private typedef Plans = {
+	final hoists: Array<HoistPlan>;
+	final sinks: Array<SinkPlan>;
+}
+
+/**
  * Flags an `import` (or an allow-listed `using`) that stands in at least a threshold share of the
  * modules one directory's AMBIENT SOURCE would govern, and moves it there: the fix creates or
  * extends that source and deletes the statement from every module it hoisted from.
  *
  * DEFAULT OFF — where a project keeps its shared imports is a convention, not a defect.
+ *
+ * The reverse direction is the same decision: a statement an EXISTING ambient source carries that too
+ * few of its modules read — `unused-import`'s readers, asked one module at a time — goes back into those
+ * readers and leaves the source, which the fix deletes when nothing but whitespace stays. Its threshold
+ * sits strictly below the hoist's, so no share is on both sides of the two.
  *
  * The positions an ambient source could occupy come from the grammar, and the modules one governs
  * come from the same seam the rules judging such a file already read, so there is one notion of "the
@@ -128,6 +153,13 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	/** How many modules a directory must govern before a share of them means anything. */
 	public static inline final DEFAULT_MIN_MODULES: Int = 3;
 
+	/**
+	 * The share of a directory's modules BELOW which an ambient statement goes back into the modules that read
+	 * it, as a percentage. Only a value strictly below the hoist threshold is honoured, so no share is ever on
+	 * both sides and the two directions cannot move one statement back and forth.
+	 */
+	public static inline final DEFAULT_SINK_THRESHOLD: Int = 25;
+
 	private static inline final RULE_ID: String = 'hoist-common-import';
 
 	/** The denominator a percentage threshold is read against. */
@@ -141,6 +173,9 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 
 	/** The fragment before the SHARE in a message — the anchor `messageIdentity` masks from. */
 	private static inline final SHARE_LEAD: String = ' stands in ';
+
+	/** The fragment before the READER share in a sink message — the second anchor `messageIdentity` masks from. */
+	private static inline final READ_LEAD: String = ' is read by ';
 
 	/** The `using` modules allowed in an ambient source unless a project names its own list. */
 	private static final DEFAULT_USING_ALLOW: Array<String> = ['StringTools', 'Lambda'];
@@ -159,16 +194,18 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	}
 
 	public function description(): String {
-		return 'an import most modules of a directory spell, which the directory\'s ambient source could carry';
+		return 'an import most modules of a directory spell, which the directory\'s ambient source could carry — or an ambient one too '
+			+ 'few of them read, which belongs back in its readers';
 	}
 
 	public function messageIdentity(message: String): String {
-		return MessageMask.maskAfter(message, SHARE_LEAD);
+		return MessageMask.maskAfter(MessageMask.maskAfter(message, SHARE_LEAD), READ_LEAD);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (plan in planFor(files, plugin, null)) for (spelled in plan.from)
+		final plans: Plans = planFor(files, plugin, null);
+		final out: Array<Violation> = [
+			for (plan in plans.hoists) for (spelled in plan.from)
 				{
 					file: spelled.file,
 					span: spelled.span,
@@ -178,6 +215,15 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 						+ '${plan.governed} module(s) governed by \'${plan.site}\' — it belongs there'
 				}
 		];
+		for (plan in plans.sinks) out.push({
+			file: plan.site,
+			span: plan.span,
+			rule: RULE_ID,
+			severity: Severity.Warning,
+			message: 'ambient ${plan.statement.isUsing ? USING_WORD : IMPORT_WORD} \'${plan.statement.path}\'$READ_LEAD${plan.readers} of '
+			+ '${plan.governed} module(s) it governs — it belongs back in the modules that read it'
+		});
+		return out;
 	}
 
 	/** The whole fix is cross-file — a hoist is one ambient source plus a deletion in every module it lifted from. */
@@ -190,33 +236,40 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	): Array<Array<CrossFileEdits>> {
 		final sourceOf: Map<String, String> = [];
 		for (entry in files) sourceOf[entry.file] = entry.source;
-		final plans: Array<HoistPlan> = planFor(files, plugin, index);
+		final plans: Plans = planFor(files, plugin, index);
 		final out: Array<Array<CrossFileEdits>> = [];
 		final sites: Array<String> = [];
-		for (plan in plans) if (!sites.contains(plan.site)) sites.push(plan.site);
+		for (plan in plans.hoists) if (!sites.contains(plan.site)) sites.push(plan.site);
 		for (site in sites) {
-			final slice: Null<Array<CrossFileEdits>> = siteSlice(site, plans, violations, sourceOf, plugin);
+			final slice: Null<Array<CrossFileEdits>> = siteSlice(site, plans.hoists, violations, sourceOf, plugin);
 			if (slice != null) out.push(slice);
 		}
+		// A sink waits a pass when a hoist of this one writes one of its files: two slices rewriting one file
+		// would hand the driver overlapping edits. Neither direction moves a statement the other does.
+		final sunk: Null<Array<CrossFileEdits>> = sinkSlice(plans.sinks, violations, sourceOf, plugin);
+		if (sunk != null && !sunk.exists(part -> out.exists(slice -> slice.exists(other -> other.file == part.file)))) out.push(sunk);
 		return out;
 	}
 
 	/**
 	 * Every hoist this file set supports, deepest site first and with a statement an ancestor site
-	 * also takes dropped from its descendants.
+	 * also takes dropped from its descendants — and every sink, from the same view of the directories.
 	 *
 	 * `run` and `crossFileFix` both derive from here, so the report and the edits cannot disagree
 	 * about which statement moves where.
 	 */
-	private function planFor(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, index: Null<SymbolIndex>
-	): Array<HoistPlan> {
+	private function planFor(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, index: Null<SymbolIndex>): Plans {
 		final report: SymbolIndex = index ?? IndexScope.report(files, plugin);
 		final resolve: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
 		final ctx: HoistContext = contextOf(report, plugin);
 		final plans: Array<HoistPlan> = [];
 		for (site in ctx.sites) planSite(site, ctx, resolve, plans);
-		return plans;
+		final sinks: Array<SinkPlan> = [];
+		for (site in ctx.sites) sinkSite(site, ctx, report, plugin, sinks);
+		return {
+			hoists: plans,
+			sinks: sinks
+		};
 	}
 
 	/**
@@ -237,6 +290,45 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 			final count: Int = census.holders[key] ?? 0;
 			if (statement == null || lifted == null || lifted.length == 0 || above.contains(key)) continue;
 			if (count * PERCENT >= threshold * governed.length) take(statement, lifted, count, site, ctx, resolve, plans);
+		}
+	}
+
+	/**
+	 * Weigh one EXISTING ambient source and append every statement too few of its modules read — under the
+	 * gates a hoist is weighed under, and a threshold strictly below the hoist's.
+	 *
+	 * A statement no module reads is left to `unused-import`, whose fix deletes it outright.
+	 */
+	private function sinkSite(site: String, ctx: HoistContext, report: SymbolIndex, plugin: GrammarPlugin, sinks: Array<SinkPlan>): Void {
+		final info: Null<FileInfo> = ctx.infoOf[site];
+		final governed: Array<String> = ctx.governedAt[site] ?? [];
+		if (info == null || info.imports.length == 0) return;
+		final cfg: LintConfig = LintConfig.resolveWith(_resolveConfig, site);
+		final sink: Int = cfg.intOption(RULE_ID, 'sinkThreshold') ?? DEFAULT_SINK_THRESHOLD;
+		if (governed.length < (cfg.intOption(RULE_ID, 'minModules') ?? DEFAULT_MIN_MODULES)) return;
+		if (sink >= (cfg.intOption(RULE_ID, 'threshold') ?? DEFAULT_THRESHOLD)) return;
+		final readers: Null<Array<Array<String>>> = UnusedImport.ambientReaders(info, plugin, report);
+		if (readers == null) return;
+		final allow: Array<String> = cfg.stringListOption(RULE_ID, 'usingAllowList') ?? DEFAULT_USING_ALLOW;
+		for (i in 0...info.imports.length) {
+			final candidate: Null<Hoistable> = hoistableOf(info.imports[i], allow, ctx.publicTypes, ctx.bindings);
+			final reading: Array<String> = readers[i];
+			if (candidate == null || reading.length == 0 || reading.length * PERCENT >= sink * governed.length) continue;
+			// Re-bound: strict null-safety does not carry the narrowing past the next statement into a literal.
+			final statement: Hoistable = candidate;
+			if (!sinkSound(statement, site, reading, ctx)) continue;
+			final key: String = keyOf(statement);
+			sinks.push({
+				site: site,
+				statement: statement,
+				span: info.imports[i].span,
+				readers: reading.length,
+				governed: governed.length,
+				into: [
+					for (file in reading) if (!(ctx.infoOf[file]?.imports ?? []).exists(imp -> !imp.guarded && statementKeyOf(imp) == key))
+						file
+				]
+			});
 		}
 	}
 
@@ -350,6 +442,103 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 				]
 			};
 		return [head].concat(removals);
+	}
+
+	/**
+	 * Every justified sink as ONE slice set, or null when none survives: each ambient source without the
+	 * statements that leave it — DELETED when nothing but whitespace stays — and each reader with the
+	 * statements it now spells. One set, because two sources may sink into one reader. A reader takes the
+	 * lines the sink inserted and nothing else, since another rule's cross-file edits of the same reader in
+	 * the same pass are merged with them.
+	 *
+	 * A statement some reader cannot take, the writer refusing that file, stays where it is in every file:
+	 * removing it from the source without spelling it in each reader would leave that reader unbound.
+	 */
+	private static function sinkSlice(
+		sinks: Array<SinkPlan>, violations: Array<Violation>, sourceOf: Map<String, String>, plugin: GrammarPlugin
+	): Null<Array<CrossFileEdits>> {
+		final textOf: Map<String, String> = [];
+		final readers: Array<String> = [];
+		final leaving: Map<String, Array<Span>> = [];
+		final sites: Array<String> = [];
+		for (plan in sinks) if (justified(violations, { file: plan.site, span: plan.span })) {
+			final next: Null<Map<String, String>> = spelledInto(plan, textOf, sourceOf, plugin);
+			if (next == null) continue;
+			for (file => text in next) {
+				textOf[file] = text;
+				if (!readers.contains(file)) readers.push(file);
+			}
+			final spans: Array<Span> = leaving[plan.site] ?? [];
+			spans.push(plan.span);
+			leaving[plan.site] = spans;
+			if (!sites.contains(plan.site)) sites.push(plan.site);
+		}
+		if (sites.length == 0) return null;
+		final out: Array<CrossFileEdits> = [
+			for (site in sites) {
+				final spans: Array<Span> = leaving[site] ?? [];
+				remainsBlank(sourceOf[site] ?? '', spans)
+					? {
+						file: site,
+						edits: [],
+						remove: true
+					}
+					: {
+						file: site,
+						edits: [for (span in spans) { span: span, text: '' }]
+					};
+			}
+		];
+		for (file in readers) out.push({
+			file: file,
+			edits: [narrowedEdit(sourceOf[file] ?? '', textOf[file] ?? '')]
+		});
+		return out;
+	}
+
+	/**
+	 * The texts of `plan`'s receiving readers with its statement added, each over its text so far in `textOf`
+	 * — or null when the writer refuses one, since then none may take it.
+	 */
+	private static function spelledInto(
+		plan: SinkPlan, textOf: Map<String, String>, sourceOf: Map<String, String>, plugin: GrammarPlugin
+	): Null<Map<String, String>> {
+		final next: Map<String, String> = [];
+		for (file in plan.into) {
+			final current: Null<String> = textOf[file] ?? sourceOf[file];
+			if (current == null) return null;
+			switch AddImport.addImport(
+				current, plan.statement.path, plan.statement.isUsing, false, plugin, CliArgs.discoverFormatConfig(file)
+			) {
+				case EditResult.Ok(text, _):
+					next[file] = text;
+				case EditResult.Err(_):
+					return null;
+			}
+		}
+		return next;
+	}
+
+	/** Whether `source` holds nothing but whitespace once every span of `spans` is cut out of it. */
+	private static function remainsBlank(source: String, spans: Array<Span>): Bool {
+		final ordered: Array<Span> = spans.copy();
+		ordered.sort((a, b) -> b.from - a.from);
+		var rest: String = source;
+		for (span in ordered) rest = rest.substring(0, span.from) + rest.substr(span.to);
+		return rest.trim().length == 0;
+	}
+
+	/** The one edit taking `before` to `after`, their common prefix and suffix left out of its span. */
+	private static function narrowedEdit(before: String, after: String): FixEdit {
+		final limit: Int = before.length < after.length ? before.length : after.length;
+		var head: Int = 0;
+		while (head < limit && before.charCodeAt(head) == after.charCodeAt(head)) head++;
+		var tail: Int = 0;
+		while (tail < limit - head && before.charCodeAt(before.length - 1 - tail) == after.charCodeAt(after.length - 1 - tail)) tail++;
+		return {
+			span: new Span(head, before.length - tail),
+			text: after.substring(head, after.length - tail)
+		};
 	}
 
 	/** Whether a violation of this rule in THIS call asks for `spelled`'s deletion. */
@@ -524,6 +713,39 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 				binders++;
 			}
 			if (binders > 1) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Whether spelling `statement` in each of its `readers` leaves every name it binds there bound as before —
+	 * the evidence a removal from `site` needs, since a module that reads nothing of it loses nothing.
+	 *
+	 * Own explicit statements outrank the chain and a nearer source outranks a farther one, so a reader holding
+	 * ANY other binder of one of its names, own or ambient, could be reading that one, and the own copy would
+	 * now outrank it: refused rather than proven. A wildcard is no rival, since an explicit statement outranks
+	 * every wildcard from either position. A `using` binds a position as well: the own copy lands ABOVE every
+	 * own `using`, the lowest rank, which keeps its rank against them, and is refused where the chain carries
+	 * another `using` it would now outrank. A chain carrying a guarded statement withholds the verdict, as it
+	 * does for a hoist.
+	 */
+	private static function sinkSound(statement: Hoistable, site: String, readers: Array<String>, ctx: HoistContext): Bool {
+		final key: String = keyOf(statement);
+		// A chain names its sources the way its walk found them, which need not be how the run spells the site.
+		final at: String = ConfigFinder.absolute(site);
+		for (file in readers) {
+			final info: Null<FileInfo> = ctx.infoOf[file];
+			if (info == null || !info.ambientImportsBounded) return false;
+			for (imp in info.imports) if (
+				!(statementKeyOf(imp) == key && !imp.guarded) && SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)
+			)
+				return false;
+			for (group in info.ambientImports) for (imp in group.imports) if (
+				ConfigFinder.absolute(group.file) != at || statementKeyOf(imp) != key
+			) {
+				if (imp.guarded || SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;
+				if (statement.isUsing && imp.kind == ImportKind.Using) return false;
+			}
 		}
 		return true;
 	}

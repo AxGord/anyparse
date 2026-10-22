@@ -8,12 +8,14 @@
 #
 # A bare hxml-include line and every relative path inside an hxml resolve
 # against the CWD, so run this from the repo root:
+#   node bin/dev.js jvm-portability          # builds, runs, and gates on the probe's verdict
 #   haxe tools/jvm-portability.hxml && java -jar bin/jvm-portability.jar
 #
-# Running it needs a JVM; anyparse itself never does.
+# Running it needs a JVM; anyparse itself never does. It stays a JVM build of
+# its own beside tools/dev.hxml: compiling for --jvm IS the check.
 -cp src
--cp tools
--main JvmPortability
+-cp tools/src
+-main dev.JvmPortability
 # Mirrors bin/apq-js-common.hxml so the probe exercises the shipped codegen.
 -D analyzer-optimize
 --jvm bin/jvm-portability.jar

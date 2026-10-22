@@ -32,6 +32,21 @@ private typedef FileScan = {
 };
 
 /**
+ * What one run knows about the modules its import statements name, built once and asked per statement.
+ * `resolveIndex` is the resolution index, or the report index when the plugin has no resolution scope;
+ * the three `report*` maps stay report-scoped because the arms reading them DELETE on a complete symbol
+ * set, which a partially indexed library cannot vouch for.
+ */
+private typedef ImportEvidence = {
+	final resolveIndex: SymbolIndex;
+	final moduleTypes: Map<String, Array<String>>;
+	final bindings: ImportBindings;
+	final membersByPath: Map<String, Array<String>>;
+	final reportMembersByPath: Map<String, Array<String>>;
+	final reportMembersByModule: Map<String, Array<String>>;
+};
+
+/**
  * Flags `import` / `using` statements whose bound name is never referenced
  * elsewhere in the same file. Import extraction (kind / alias / span,
  * skip-parse handling) rides on the cross-file `SymbolIndex`; the "is it
@@ -180,45 +195,14 @@ final class UnusedImport implements Check {
 		// report-scoped member set (kept report-scoped so a wildcard / `using`
 		// verdict never widens).
 		final index: SymbolIndex = IndexScope.report(files, plugin);
-		// The resolution index — report files UNION configured library roots (openfl /
-		// lime) — when the plugin carries a resolution scope, else the report index.
-		// Named-import liveness and existence resolve against it, so an unused library
-		// import becomes a verifiable deletable Warning, while a library import kept
-		// live by a secondary type / bare enum constructor stays live.
-		final resolveIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
-		// Top-level type names per resolution-scoped module — a plain module import
-		// binds ALL of them, so the used-check must consult every name.
-		final moduleTypes: Map<String, Array<String>> = [];
-		for (info in resolveIndex.allFiles()) moduleTypes[info.module] = [for (t in info.types) t.name];
-		// The VALUE names each statement binds — the constructors / enum-abstract values of every type
-		// it imports and a module's module-level fields — read by the one reader the import-moving
-		// checks share, over the same resolution index.
-		final bindings: ImportBindings = new ImportBindings(() -> resolveIndex, plugin);
-		// Members keyed by importable path from the resolution index — drives the
-		// named-import existence gate (a module resolvable in the report set OR the
-		// library is verifiable).
-		final membersByPath: Map<String, Array<String>> = membersByImportPath(resolveIndex);
-		// Report-scoped members, for the two arms whose SYMBOL SET must be known in
-		// full before they may warn: a static wildcard (`import pkg.Type.*;`) and a
-		// `using` the std probe does not recognise. Neither verdict may widen to the
-		// library, so on an out-of-report type both stay unverifiable Infos. Reuse
-		// the resolution map when no scope.
-		final reportMembersByPath: Map<String, Array<String>> = resolveIndex == index ? membersByPath : membersByImportPath(index);
-		// The `using` arm's own set: every top-level type of the module contributes
-		// static extensions, so a per-PATH map (which names one type) under-reports
-		// it. Report-scoped for the same reason as `reportMembersByPath` — a verdict
-		// that may DELETE the statement must not rest on a partially-indexed library.
-		final reportMembersByModule: Map<String, Array<String>> = membersByModule(index);
+		final evidence: ImportEvidence = evidenceOf(index, plugin);
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
-			final scans: Null<Array<FileScan>> = readerScans(info, sourceOf, plugin, index);
+			final scans: Null<Array<FileScan>> = readerScans(info, plugin.ambientImportGovernance(info.file), sourceOf, plugin, index);
 			if (scans == null) continue;
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
-				addViolation(
-					violations, info.file, imp, readersOf(scans, imp, info.file, resolveIndex), plugin, moduleTypes, bindings,
-					membersByPath, reportMembersByPath, reportMembersByModule
-				);
+				addViolation(violations, info.file, imp, readersOf(scans, imp, info.file, evidence.resolveIndex), plugin, evidence);
 		}
 		return violations;
 	}
@@ -246,6 +230,40 @@ final class UnusedImport implements Check {
 			if (span != null) edits.push({ span: span, text: '' });
 		}
 		return edits;
+	}
+
+	/**
+	 * For each statement of the ambient source `info`, aligned with `info.imports`, the governed modules that
+	 * READ it; null when `info` is no ambient source or its governed set could not be established.
+	 *
+	 * A module reads a statement unless this rule's own test, asked of that module ALONE, proves the
+	 * statement dead there. Every verdict the test cannot reach counts as a read, which is the direction a
+	 * caller taking the statement away from the non-readers must err in. The declaring module of an
+	 * imported type is no reader, exactly as in `run`; the declaring module of a `using` reads it through an
+	 * extension-style call only, since every bare mention of the name there binds its own declaration.
+	 */
+	public static function ambientReaders(info: FileInfo, plugin: GrammarPlugin, index: SymbolIndex): Null<Array<Array<String>>> {
+		final governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance(info.file);
+		if (governance == null) return null;
+		final scans: Null<Array<FileScan>> = readerScans(info, governance, [], plugin, index);
+		if (scans == null) return null;
+		final evidence: ImportEvidence = evidenceOf(index, plugin);
+		return [
+			for (imp in info.imports) {
+				final declaring: Array<String> = imp.kind == ImportKind.Using ? [
+					for (r in evidence.resolveIndex.refs.resolveQualifiedRefAll(imp.raw)) r.file.file
+				] : [];
+				[
+					for (scan in readersOf(scans, imp, info.file, evidence.resolveIndex))
+						if (
+							declaring.contains(scan.file)
+								? extensionCalledIn(scan, imp, plugin, evidence)
+								: !provenDeadIn(scan, info.file, imp, plugin, evidence)
+						)
+							scan.file
+				];
+			}
+		];
 	}
 
 	/** Whether `imp`'s full module path is in a checkstyle `ignoreModules` list. */
@@ -276,9 +294,8 @@ final class UnusedImport implements Check {
 	 * judged against itself every one reads as dead and `fix` deletes a load-bearing import.
 	 */
 	private static function readerScans(
-		info: FileInfo, sourceOf: Map<String, String>, plugin: GrammarPlugin, index: SymbolIndex
+		info: FileInfo, governance: Null<AmbientImportGovernance>, sourceOf: Map<String, String>, plugin: GrammarPlugin, index: SymbolIndex
 	): Null<Array<FileScan>> {
-		final governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance(info.file);
 		return if (governance == null)
 			[scanOf(info.file, sourceOf[info.file] ?? '', plugin, info.imports, index)]
 		else if (governance.bounded)
@@ -342,6 +359,51 @@ final class UnusedImport implements Check {
 		return declaring.length == 0 ? scans : scans.filter(s -> !declaring.contains(s.file));
 	}
 
+	/** Whether this rule's own test, asked of the one reader `scan`, proves `imp` dead there — a deletable verdict, never an advisory. */
+	private static function provenDeadIn(
+		scan: FileScan, file: String, imp: ImportInfo, plugin: GrammarPlugin, evidence: ImportEvidence
+	): Bool {
+		final verdict: Array<Violation> = [];
+		addViolation(verdict, file, imp, [scan], plugin, evidence);
+		return verdict.exists(v -> v.severity == Severity.Warning);
+	}
+
+	/** Whether `scan` calls one of the extension methods the `using` `imp` brings — true when they cannot be listed. */
+	private static function extensionCalledIn(scan: FileScan, imp: ImportInfo, plugin: GrammarPlugin, evidence: ImportEvidence): Bool {
+		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? evidence.reportMembersByModule[imp.raw];
+		return methods == null || OccurrenceScan.usingExtensionCalled(scan.source, imp.raw, methods, scan.memberBound);
+	}
+
+	/**
+	 * Everything a run knows about the modules its statements name, over `index` and the resolution scope the
+	 * plugin carries: the type names each module declares, which a plain module import binds all of; the
+	 * value names each statement binds; and the member sets the existence gate and the wildcard and `using`
+	 * arms read.
+	 */
+	private static function evidenceOf(index: SymbolIndex, plugin: GrammarPlugin): ImportEvidence {
+		// The resolution index — report files UNION configured library roots — when the plugin carries a
+		// resolution scope, else the report index. Named-import liveness and existence resolve against it, so
+		// an unused library import becomes a verifiable deletable Warning, while a library import kept live by
+		// a secondary type / bare enum constructor stays live.
+		final resolveIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
+		final moduleTypes: Map<String, Array<String>> = [];
+		for (info in resolveIndex.allFiles()) moduleTypes[info.module] = [for (t in info.types) t.name];
+		final membersByPath: Map<String, Array<String>> = membersByImportPath(resolveIndex);
+		return {
+			resolveIndex: resolveIndex,
+			moduleTypes: moduleTypes,
+			bindings: new ImportBindings(() -> resolveIndex, plugin),
+			membersByPath: membersByPath,
+			// A static wildcard and a `using` the std probe does not recognise must know their SYMBOL SET in
+			// full before they may warn, so neither verdict widens to the library: report-scoped, reusing the
+			// resolution map when there is no scope.
+			reportMembersByPath: resolveIndex == index ? membersByPath : membersByImportPath(index),
+			// Every top-level type of a module contributes static extensions, so the `using` arm reads a
+			// per-MODULE set; report-scoped for the same reason.
+			reportMembersByModule: membersByModule(index)
+		};
+	}
+
 	/**
 	 * Append the verdict for one import. A wildcard (`import pkg.*;`) is an
 	 * unverifiable `Info`; a `using` is delegated to `addUsingViolation`; every
@@ -360,15 +422,15 @@ final class UnusedImport implements Check {
 	 * the live.
 	 */
 	private static function addViolation(
-		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, plugin: GrammarPlugin,
-		moduleTypes: Map<String, Array<String>>, bindings: ImportBindings, membersByPath: Map<String, Array<String>>,
-		reportMembersByPath: Map<String, Array<String>>, reportMembersByModule: Map<String, Array<String>>
+		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, plugin: GrammarPlugin, evidence: ImportEvidence
 	): Void {
+		final moduleTypes: Map<String, Array<String>> = evidence.moduleTypes;
+		final membersByPath: Map<String, Array<String>> = evidence.membersByPath;
 		switch imp.kind {
 			case ImportKind.Wild:
-				addWildViolation(out, file, imp, scans, reportMembersByPath);
+				addWildViolation(out, file, imp, scans, evidence.reportMembersByPath);
 			case ImportKind.Using:
-				addUsingViolation(out, file, imp, scans, plugin, reportMembersByModule);
+				addUsingViolation(out, file, imp, scans, plugin, evidence.reportMembersByModule);
 			case _:
 				final bound: String = imp.alias ?? SourceText.lastSegment(imp.raw);
 				if (referenced(scans, bound)) return;
@@ -386,7 +448,7 @@ final class UnusedImport implements Check {
 				// secondary enum's too) and a module-level field of the module (`modfn()` needs
 				// `import v.Fns;` though `Fns` is never named) — deleting the only binder breaks the
 				// build, deleting the LAST of two silently hands the name to the other.
-				if (imp.kind == ImportKind.Import && valuesKeepAlive(out, file, imp, scans, bindings, membersByPath)) return;
+				if (imp.kind == ImportKind.Import && valuesKeepAlive(out, file, imp, scans, evidence.bindings, membersByPath)) return;
 				if (imp.kind == ImportKind.Import && !membersByPath.exists(imp.raw)) {
 					out.push(make(file, imp, Severity.Info, 'import \'${imp.raw}\': $MSG_NOT_IN_SCOPE', DECLINE_NOT_IN_SCOPE));
 					return;

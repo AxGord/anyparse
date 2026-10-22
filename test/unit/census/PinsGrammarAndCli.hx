@@ -58,6 +58,10 @@ final class PinsGrammarAndCli {
 		'unit.cli.LintExplainLongCliTest#testNothingToExplainIsSaid :: control :: M-LINT-EXPLAIN-NO-ENVELOPE',
 		'unit.cli.LintFixFactsSettleTest#testTheFactsSettleBeforeTheFirstWrite :: control :: M-FIX-FACTS-SETTLED',
 		'unit.cli.LintFixQuietDefaultTest#testTheRuleAccountingWaitsForAnEditOrForVerbose :: control :: M-LINT-FIX-CENSUS-UNGATED',
+		'unit.cli.LintFixRemoveTest#testAPassPutsAnAmbientSourceItRewroteOnDisk :: control :: M-FIX-AMBIENT-HELD',
+		'unit.cli.LintFixRemoveTest#testARemoveDeletesTheFile :: control :: M-FIX-REMOVE-IGNORED',
+		'unit.cli.LintFixRemoveTest#testARevertRestoresADeletedFileByteForByte :: control :: M-FIX-REMOVE-NO-RESTORE',
+		'unit.cli.LintFixRemoveTest#testOverlappingCrossFileEditsAreSkipped :: control :: M-FIX-OVERLAP-BLIND',
 		'unit.cli.LintQuotationAwareCliTest#testAQuotedRedundantParensFindingIsFixed :: control :: M-PARENS-QUOTED-DROPPED',
 		'unit.cli.LintQuotationAwareCliTest#testAQuotedRedundantParensFindingReports :: control :: M-PARENS-QUOTED-DROPPED',
 		'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
@@ -228,6 +232,13 @@ final class PinsGrammarAndCli {
 			+ 'M-REGION-OFFER-THROUGH-BODIES,M-NESTED-THROUGH-BODIES',
 		'unit.grammar.haxe.HxCondExprFitRegionFixedPointTest#testAnElseifRegionInAComprehensionSettlesInOneWrite :: control :: '
 			+ 'M-REGION-SEAMS-BOUNDED',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testAnElidedOuterCommaAfterARegionIsNoLineBreak :: control :: '
+			+ 'M-ELIDED-GAP-HARD,M-ELIDED-SEP-KEPT',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testParamsKeepTheCommaInsideAnElseifRegion :: control :: M-COND-PARAM-ELSEIF-PLAIN',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testParamsKeepTheCommaInsideTheElseRegion :: control :: '
+			+ 'M-COND-PARAM-ELSE-PLAIN,M-ELIDED-SEP-KEPT',
+		'unit.grammar.haxe.HxCondListSeparatorWriteTest#testParamsUnderLeadingBreakFillGainNoComma :: control :: '
+			+ 'M-REGION-GLUED,M-ELIDED-SEP-KEPT',
 		'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured :: control :: '
 			+ 'M-WORDOP-NO-RESTORE',
 		'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionCollapsesEmptyCatchBody :: control :: '

@@ -28,7 +28,7 @@ final class JvmStructureWidthTest extends Test {
 	private static inline final SLOT_LIMIT: Int = 255;
 
 	/** The roots `tools/jvm-portability.hxml` compiles from. */
-	private static final ROOTS: Array<String> = ['src', 'tools'];
+	private static final ROOTS: Array<String> = ['src', 'tools/src'];
 
 	/**
 	 * Every structure under the probe's roots fits a JVM constructor.

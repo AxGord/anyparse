@@ -638,7 +638,7 @@ branch_fmt() {
     # files of THIS repo need a second rewrite to settle, and nothing in the
     # battery, the suite or the corpus can see them.
     #
-    # The config is vendored (`tools/xconfig-hxformat.json`, a verbatim copy of
+    # The config is vendored (`tools/data/xconfig-hxformat.json`, a verbatim copy of
     # the Pony project's committed one at `b6b94e37` — a fully specified
     # 751-line config, and the one the measurement was made with) rather than
     # read from a personal checkout, so the arm is hermetic and its baseline
@@ -666,7 +666,7 @@ branch_fmt() {
     local xroot="$work/xconfig"
     rm -rf "$xroot"
     mkdir -p "$xroot"
-    cp "$repo/tools/xconfig-hxformat.json" "$xroot/hxformat.json"
+    cp "$repo/tools/data/xconfig-hxformat.json" "$xroot/hxformat.json"
     ln -s "$repo/src" "$xroot/src"
     ln -s "$repo/test" "$xroot/test"
     ln -s "$repo/tools" "$xroot/tools"
@@ -690,7 +690,7 @@ branch_fmt() {
     # (`flatLength(body) == -1`) fires and puts `{` back on its own line, after
     # which the shape is stable. The gate reads a property the WRITER produces,
     # not one the source states — the same family as the two entries above.
-    # Minimal repro (`tools/xconfig-hxformat.json` beside it, two single round
+    # Minimal repro (`tools/data/xconfig-hxformat.json` beside it, two single round
     # trips through `apq ast <f> --writer-output`):
     #
     #   final binders: Array<Expr> = [
@@ -931,7 +931,7 @@ case "$jvm_mode" in
             # that added a field to a `@:peg` structure typedef, i.e. exactly the
             # structure-unification regression the probe exists to catch (T26, run by
             # hand instead).
-            if git diff --quiet "$base_key" -- src tools/JvmPortability.hx tools/jvm-portability.hxml; then
+            if git diff --quiet "$base_key" -- src tools/src/dev/JvmPortability.hx tools/jvm-portability.hxml; then
                 jvm_skip_note="neither src/ nor the probe moved since $base_key"
             else
                 run_jvm=1
