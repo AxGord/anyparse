@@ -274,8 +274,8 @@ final class Patch {
 	 * of a position error, not of a doc that moved.
 	 *
 	 * For the CONTAINING edit the end of its replacement is right for a declaration that edit
-	 * rewrote, and only a fallback for a doc block's end, which `splicedDocEnd` reads off the token
-	 * still starting where the block did. Answering `-1` there and dropping the watch was a
+	 * rewrote, and only a fallback for a doc block's end, which `splicedDocEnd` reads off the doc
+	 * token over the block's start. Answering `-1` there and dropping the watch was a
 	 * fail-OPEN: a first pair rewriting the doc's last two lines and a second turning `function b()
 	 * {}` into `function c() {}` above a kept `b` moved the block onto `c` with nothing watched.
 	 */
@@ -392,16 +392,20 @@ final class Patch {
 
 	/**
 	 * Where the watched `doc` block ends in the spliced text: the end of the doc token that still
-	 * starts where the block started. `shiftedEnd` of the block's end answers the end of a
+	 * starts where the block started or, when an edit rewrote the block's opening, of the doc token
+	 * the arithmetic start now falls inside. `shiftedEnd` of the block's own end answers the end of a
 	 * replacement that opened inside the block and ran past it — past every declaration that
-	 * replacement wrote — so it is only the fallback, for a payload that rewrote the block's
-	 * opening and left no token where it started.
+	 * replacement wrote — so it is the answer only for a payload that left no doc over the block's
+	 * start at all, i.e. rewrote it into something that documents nothing.
 	 */
 	private static function splicedDocEnd(
 		source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, sorted: Array<{ span: Span, text: String }>, doc: Span
 	): Int {
 		final from: Int = shiftedEnd(sorted, doc.from);
-		final tok: Null<{ from: Int, to: Int, isLine: Bool }> = comments.find(t -> t.from == from && isDocBlock(source, t));
+		final starting: Null<{ from: Int, to: Int, isLine: Bool }> = comments.find(t -> t.from == from && isDocBlock(source, t));
+		final tok: Null<{ from: Int, to: Int, isLine: Bool }> = starting ?? comments.find(t ->
+			t.from < from && from <= t.to && isDocBlock(source, t)
+		);
 		return tok == null ? shiftedEnd(sorted, doc.to) : tok.to;
 	}
 

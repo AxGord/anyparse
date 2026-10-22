@@ -324,16 +324,43 @@ class PatchSliceTest extends Test {
 	 * the guard must watch the block the edit starts inside, not whatever enclosing type the offset
 	 * resolves to, and must find that block's end where the replacement leaves it.
 	 *
-	 * CONTROL for the enclosing doc watch. KILLED by arm `M-PATCH-ENCLOSING-DOC-UNWATCHED`.
+	 * CONTROL for the enclosing doc watch and for the block's end read off its token. KILLED by arms
+	 * `M-PATCH-ENCLOSING-DOC-UNWATCHED` and `M-PATCH-SPLICED-DOC-START-UNREAD`.
 	 */
 	@:pin('control')
 	@:killer('M-PATCH-ENCLOSING-DOC-UNWATCHED')
+	@:killer('M-PATCH-SPLICED-DOC-START-UNREAD')
 	public function testAnInsertFromAFragmentOpeningInsideTheDocRefused(): Void {
 		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
 		switch Patch.patchNode(
 			source, BySelector('ClassDecl:C'), ' */\n\tfunction b() {}', ' */\n\tfunction ins() {}\n\n\tfunction b() {}', false,
 			new HaxeQueryPlugin()
 		) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('moves the `/**` block above `b` onto `ins`', message);
+		}
+	}
+
+	/**
+	 * The block's start can move INSIDE an edit too: a first pair rewriting the doc's opening lines
+	 * and a second opening on its closing line to insert a declaration under it. No token starts
+	 * where the arithmetic puts the block, so the guard looks for the doc token that position falls
+	 * inside — the arithmetic answer alone is the end of the second pair's replacement, past `ins`
+	 * and `b`, and the doc moved onto `ins` at rc 0.
+	 *
+	 * CONTROL for the rewritten opening. KILLED by arm `M-PATCH-SPLICED-DOC-OPENING-UNREAD`.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-SPLICED-DOC-OPENING-UNREAD')
+	public function testAnInsertUnderADocWhoseOpeningAnotherPairRewritesRefused(): Void {
+		final source: String = 'class C {\n\tfunction a() {}\n\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'function a() {}\n\n\t/**\n\t * About', newText: 'function a() {}\n\n\t/**\n\t * Regarding' },
+			{ oldText: ' */\n\tfunction b() {}', newText: ' */\n\tfunction ins() {}\n\n\tfunction b() {}' }
+		];
+		switch Patch.patchNodeMany(source, BySelector('ClassDecl:C'), pairs, false, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
 			case Err(message):

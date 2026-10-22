@@ -1272,7 +1272,10 @@ final class PinsQueryAndRuntime {
 			+ 'M-ORPHAN-SEAM-END-NEVER,M-ORPHAN-SEAM-END-SELF-ONLY,M-ORPHAN-SEAM-END-UNTRIMMED,M-ORPHAN-NO-CASE-ARMS',
 		'unit.query.PatchSliceTest#testATransferUnderADocRewrittenByTheSamePayloadRefused :: control :: M-PATCH-STRADDLED-DOC-UNWATCHED',
 		'unit.query.PatchSliceTest#testATypeDocIsReachableThroughItsOwnAddress :: control :: M-PATCH-OWN-DOC-UNSEARCHED',
-		'unit.query.PatchSliceTest#testAnInsertFromAFragmentOpeningInsideTheDocRefused :: control :: M-PATCH-ENCLOSING-DOC-UNWATCHED',
+		'unit.query.PatchSliceTest#testAnInsertFromAFragmentOpeningInsideTheDocRefused :: control :: M-PATCH-ENCLOSING-DOC-UNWATCHED,'
+			+ 'M-PATCH-SPLICED-DOC-START-UNREAD',
+		'unit.query.PatchSliceTest#testAnInsertUnderADocWhoseOpeningAnotherPairRewritesRefused :: control :: '
+			+ 'M-PATCH-SPLICED-DOC-OPENING-UNREAD',
 		'unit.query.PatchSliceTest#testDeletingTheDocumentedDeclarationAloneRefused :: control :: M-PATCH-NEW-OWNER-PREDECLARED-UNCHECKED',
 		'unit.query.PatchSliceTest#testDeletingTheDocumentedOneWithTheNextRefused :: control :: M-PATCH-NEW-OWNER-PREDECLARED-UNCHECKED',
 		'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
