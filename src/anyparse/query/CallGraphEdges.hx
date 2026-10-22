@@ -655,7 +655,7 @@ final class CallGraphEdges {
 			parameter: null,
 			unbound: unboundTypeSource,
 			access: accessTypeSource,
-			element: (container, _) -> elementTypeSource(container),
+			element: (_, container, _) -> elementTypeSource(container),
 			call: callTypeSource,
 			// a value a `new` makes is of the type it names, read where written — its type arguments left to what the language infers
 			construction: (made, _) -> {
@@ -663,6 +663,7 @@ final class CallGraphEdges {
 				final name: Null<String> = made.name;
 				at == null || name == null ? null : keys.keyed(name, at.from);
 			},
+			contextual: null,
 			arithmetic: null,
 			reading: _ -> unannotatedReads
 		};

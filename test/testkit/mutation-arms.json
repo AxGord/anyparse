@@ -5638,8 +5638,8 @@
 			"name": "M-GRAPH-ELEMENT-RECEIVER",
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
-			"find": "element: (container, _) -> elementTypeSource(container),",
-			"replace": "element: (container, _) -> null,",
+			"find": "element: (_, container, _) -> elementTypeSource(container),",
+			"replace": "element: (_, container, _) -> null,",
 			"note": "an element receiver a[i] stays untyped, so a[i].x = v runs no setter"
 		},
 		{
@@ -27153,7 +27153,7 @@
 			"name": "M-MEMBER-OPTIONAL-READ",
 			"type": "anyparse.query.MemberLookup",
 			"method": "memberRead",
-			"find": "text: found.member.optional ? NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax) : bound,",
+			"find": "text: first.optional ? NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax) : bound,",
 			"replace": "text: bound,",
 			"note": "an optional structure field reads as its written type, not `Null<T>`"
 		},
@@ -28258,8 +28258,8 @@
 			"name": "M-ARGTYPE-OVERLOAD-OFF",
 			"type": "anyparse.check.ArgumentTypes",
 			"method": "arithmeticType",
-			"find": "return operands.length == 2 ? overloadType(node.kind, operands, scope) : null;",
-			"replace": "return null;",
+			"find": "overloadType(node.kind, operands, scope)",
+			"replace": "null",
 			"note": "arithmetic over an abstract is untyped, so `a - b` over an abstract with an `@:op` overload may land on any optional parameter"
 		},
 		{
@@ -28657,7 +28657,7 @@
 		{
 			"name": "M-NOMINAL-STATIC-ALIAS",
 			"type": "anyparse.query.CallReturns",
-			"method": "selectedReturn",
+			"method": "agreedOver",
 			"find": "if (statics && (own == null || !AncestorTable.same(declared.host, own)) || misread) return null;",
 			"replace": "if (statics && !AncestorTable.same(declared.host, start) || misread) return null;",
 			"note": "a static read through a `typedef` alias is taken for an inherited one, so `OA.g(1)` has no answer"
@@ -28665,7 +28665,7 @@
 		{
 			"name": "M-NOMINAL-NAMESAKE-EXCLUDED",
 			"type": "anyparse.query.CallReturns",
-			"method": "selectedReturn",
+			"method": "agreedOver",
 			"find": "if (candidates != null && calls.excludes(candidates, args)) continue;",
 			"replace": "",
 			"note": "a namesake no signature of which the call compiles against takes part in the agreement, so `b.size(1)` has no answer"
@@ -28929,9 +28929,9 @@
 		{
 			"name": "M-CASTS-BRANCHES-LIVE",
 			"type": "anyparse.query.AbstractCasts",
-			"method": "branchMembers",
-			"find": "final live: Array<DeclBranch> = _builds.of(r);",
-			"replace": "final live: Array<DeclBranch> = r.type.branches;",
+			"method": "liveMembers",
+			"find": "return clausesOf(r) == null ? null : [for (b in _builds.of(r)) membersOf(r, b)];",
+			"replace": "return clausesOf(r) == null ? null : [for (b in r.type.branches) membersOf(r, b)];",
 			"note": "a dead branch's members count as one build's, so the value its `typedef` branch lacks is no value"
 		},
 		{
@@ -29354,6 +29354,110 @@
 			"find": "if (!~/^[0-9]+$/.match(digits)) return true;",
 			"replace": "if (!~/^[0-9]+$/.match(digits)) return false;",
 			"note": "an integer literal with a suffix is typed as the integer type, though 4.3.7 types `1i64` as a `haxe.Int64` and `1u32` as a `UInt`"
+		},
+		{
+			"name": "M-COMPOSED-CONSTRUCTION-NULL",
+			"type": "anyparse.query.ComposedValues",
+			"method": "indexConstruction",
+			"force": "null",
+			"note": "a construction carries no type, though 4.3.7 types `new Box<Int>()` as `Box<Int>`"
+		},
+		{
+			"name": "M-COMPOSED-CONSTRUCTION-AS-WRITTEN",
+			"type": "anyparse.query.ComposedValues",
+			"method": "indexConstruction",
+			"find": "if (decls.length == 1) return NominalTypes.completedType(written.text, at.from, c);",
+			"replace": "if (decls.length == 1) return written.text;",
+			"note": "a construction leaving a generic type's arguments to inference is typed as its bare name, a type the compiler never gives it"
+		},
+		{
+			"name": "M-COMPOSED-ELEMENT-NULL",
+			"type": "anyparse.query.ComposedValues",
+			"method": "indexElement",
+			"force": "null",
+			"note": "an index access carries no type, though 4.3.7 types `a[0]` of an `Array<Int>` as `Int`"
+		},
+		{
+			"name": "M-INDEX-READ-FIRST",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "branchIndexRead",
+			"find": "if (fit == Fits) return m;",
+			"replace": "return m;",
+			"note": "an abstract's first read access is taken whatever key it casts, so a `String` key reads the `Int` access's element"
+		},
+		{
+			"name": "M-COMPOSED-OPERATOR-NULL",
+			"type": "anyparse.query.ComposedValues",
+			"method": "indexArithmetic",
+			"force": "null",
+			"note": "an operator over core values carries no type, though 4.3.7 types `i + f` as `Float` and `s + i` as `String`"
+		},
+		{
+			"name": "M-COMPOUND-KEEPS-TARGET-FALSE",
+			"type": "anyparse.query.TypingService",
+			"method": "compoundKeepsTarget",
+			"force": "false",
+			"note": "a compound assignment carries no type, though 4.3.7 types `n += 1` of a `Null<Int>` as `Null<Int>`"
+		},
+		{
+			"name": "M-COMPOSED-OVERLOAD-NULL",
+			"type": "anyparse.query.ComposedValues",
+			"method": "indexArithmetic",
+			"find": "return left == null || right == null ? null : index.typing.operators.binaryResult(node.kind, left, right)?.text;",
+			"replace": "return null;",
+			"note": "an operator an abstract's overload takes carries no type, though 4.3.7 types it as the overload's return"
+		},
+		{
+			"name": "M-COMPOSED-INTERVAL-NULL",
+			"type": "anyparse.query.ComposedValues",
+			"method": "intervalElement",
+			"force": "null",
+			"note": "the binder of a loop over `0...n` carries no type, though 4.3.7 types it as `Int`"
+		},
+		{
+			"name": "M-COMPOSED-ENUM-VALUE-NULL",
+			"type": "anyparse.query.ComposedValues",
+			"method": "enumAbstractValue",
+			"force": "null",
+			"note": "an enum-abstract value read off its type carries no type, though 4.3.7 types `E.A` as `E`"
+		},
+		{
+			"name": "M-COMPOSED-PARTS-NULL",
+			"type": "anyparse.query.ComposedValues",
+			"method": "partsType",
+			"force": "null",
+			"note": "a literal nothing is expected of carries no type, though 4.3.7 types `[1, 2.5]` as `Array<Float>`"
+		},
+		{
+			"name": "M-COMPOSED-EXPECTED-NULL",
+			"type": "anyparse.query.ComposedValues",
+			"method": "expectedType",
+			"force": "null",
+			"note": "a literal a type is expected of carries no type, though 4.3.7 types `[1, 2]` handed to a `Dynamic` parameter as `Array<Dynamic>`"
+		},
+		{
+			"name": "M-INDEX-HOST-PARENS-KEPT",
+			"type": "anyparse.query.NominalTypes",
+			"method": "INDEX_HOST",
+			"kind": "FinalMember",
+			"find": "peel: (node, c) -> BoolExprShape.unwrapParens(node, c.shape.parenKind),",
+			"replace": "peel: (node, _) -> node,",
+			"note": "a parenthesized value carries no type, though parentheses change none"
+		},
+		{
+			"name": "M-MEMBER-READ-BRANCHES-FIRST",
+			"type": "anyparse.query.MemberLookup",
+			"method": "memberRead",
+			"find": "if (live.exists(m -> m.typeSource != written || m.optional != first.optional)) return null;",
+			"replace": "if (false) return null;",
+			"note": "a member two `#if` branches write differently reads as the first branch's type, though a build of the other compiles the other"
+		},
+		{
+			"name": "M-COMPOSED-BRANCHES-NULL",
+			"type": "anyparse.query.ComposedValues",
+			"method": "branchesType",
+			"force": "null",
+			"note": "a conditional nothing is expected of carries no type, though 4.3.7 types `c ? 1 : 2.5` as `Float`"
 		}
 	]
 }

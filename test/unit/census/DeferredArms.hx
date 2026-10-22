@@ -264,7 +264,8 @@ final class DeferredArms {
 		'M-COND-PARAM-ELSEIF-PLAIN :: anyparse.grammar.haxe.HxElseifParam#TypedefDecl:HxElseifParam',
 		'M-ENUM-CTOR-PARAMS-PLAIN :: anyparse.grammar.haxe.HxEnumCtorDecl#TypedefDecl:HxEnumCtorDecl',
 		'M-TRAIL-FORCEMULTI-UNGATED :: anyparse.macro.TriviaSepLowering#triviaSepForceMultiLineExpr',
-		'M-TRAIL-CALL-FORCEMULTI-UNGATED :: anyparse.macro.WriterChainLowering#lowerPostfixForceMultiDoc'
+		'M-TRAIL-CALL-FORCEMULTI-UNGATED :: anyparse.macro.WriterChainLowering#lowerPostfixForceMultiDoc',
+		'M-INDEX-HOST-PARENS-KEPT :: anyparse.query.NominalTypes#FinalMember:INDEX_HOST'
 	];
 
 }

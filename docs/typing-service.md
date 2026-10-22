@@ -22,7 +22,7 @@ its hosts are functions of their arguments, and every remembered answer is insta
 | `ancestors` (`AncestorTable`) | signature | a declaration's supertype links (each resolved once), its alias target, what its chain passes to an ancestor's type parameters |
 | `casts` (`AbstractCasts`) | signature | the cast graph of each abstract: its `from` / `to` clauses per `#if` branch and its `@:from` / `@:to` members, each resolved once into a `TypeEnd` |
 | `unification` (`Unification`) | signature | whether a value of one type unifies with another (`tUnification.ml`), and whether an argument of one type is accepted where another is expected (`casts`, `abstractCast.ml`) |
-| `operators` (`OperatorOverloads`) | signature | the `@:op` overload an abstract selects for a binary operator over two operand types, and the type it yields (`operators.ml`) |
+| `operators` (`OperatorOverloads`) | signature | the `@:op` overload an abstract selects for a binary operator over two operand types, and the type it yields (`operators.ml`); the read access an index access takes on an abstract (`indexRead`, `abstractCast.ml`) |
 | `calls` (`CallSelection`) | signature | the signature a call selects among a member's own and its overloads over the arguments' types, and the type it returns (`callUnification.ml`) |
 | `members` (`MemberLookup`) | signature | what a named type declares or inherits, with what declared type, return, visibility, accessor shape; the type a READ of a member carries and the declaration writing it (`memberRead`) |
 | `structural` (`StructuralTypes`) | signature | unification with an anonymous structure, membership of a builtin structural type (`Iterable`, `Iterator`) |
@@ -39,6 +39,9 @@ The walk has four hosts, each a consumer of the service: the index host (`Nomina
 resolved where it is written), the call graph's (`CallGraphEdges`, a type source keyed the way the graph keys types), the
 operand binder's (`OperandBinder`, what a written type BINDS to, a `TypeNameBinding.Tier`) and the argument typer's
 (`ArgumentTypes`). The call graph keeps its own `ExpectedTypes`: it may run with no index, so with no service. The index
+host's arcs over a value composed of others — a construction, an element read by index, an operator, an array or object
+literal, an interval's loop element, an enum-abstract value — live in `ComposedValues`, which reads what a literal is
+expected to be through `ExpectedTypes` with the index host's own `ExpectationHost`. The index
 host's entry points (`expressionTypeSource`, `expressionTypeNominal`) answer two more shapes past the walk, only for the
 node asked and never on the way to a receiver or an argument (`ValueDoors`): a local declaration and a type name read as
 a value.
@@ -218,7 +221,7 @@ std gap. Readings: `docs/journal/testing-log.md`.
   casts to (`Unification.casts`), mirrored on the right, swapped for a `@:commutative` one — every `#if` branch of the
   abstract agreeing (the branch's range, since T6 `DeclBranch.span`; `AbstractCasts.branchMembers`);
   `ArgumentTypes.arithmeticType` asks it past core numbers. `AbstractCasts.holdsUntypedValue`: a value written with no type in every branch of an abstract is an
-  enum-abstract value, of the abstract (`ArgumentTypes.accessType` asks it; the index host's deep walk does not yet).
+  enum-abstract value, of the abstract (`ArgumentTypes.accessType` asks it, and since T7c the index host, `ComposedValues.enumAbstractValue`).
   Measured on a client corpus: one false positive loses the call chain whose argument is `a - b` over `UInt` fields; its
   other chains stay, each passing a value of an enum abstract shaped like `openfl.text.TextFormatAlign`, which stays
   untyped — its first branch writes `enum` under `#if` (a split header the index reads as no abstract) and its flash
@@ -332,5 +335,34 @@ std gap. Readings: `docs/journal/testing-log.md`.
   2 / 3 unchanged; a client corpus 28.2 / 23.3 → 21.3 / 16.5 %, 14 / 13 → 2 / 1 (the integer literals past the range);
   no MATCH lost and no DIFFERENT added on any of the four; the all-rules lint of four trees and the three thread-safety
   scores byte-identical.
+- **T7c — values composed of others, with no monomorph (done).** The walk gains two arcs every host may answer
+  (`TypingHost.contextual`: an array or object literal, a conditional — a value whose type depends on what its position
+  expects; `element` now handed the index access itself) and carries every operator a core value type takes
+  (`RefShape.booleanOperatorKinds`, the compound assignments, the logical not). The rules over core value types are ONE
+  shared function (`TypingService.coreOperatorType`, `compoundKeepsTarget`), the argument typer's arithmetic reading it
+  too. The index host's arcs live in `ComposedValues`: a construction is the type it writes, the defaults it leaves out
+  written in (`new Box()` of a generic `Box` a monomorph: Unknown); an index access reads an array's element or the
+  read access an abstract takes (`OperatorOverloads.indexRead`, `abstractCast.ml` `find_array_read_access`: the first
+  instance `@:arrayAccess` / `@:op([])` member taking the key, the only one when one is declared); an operator over core
+  value types is the language's own (`Int + Float` is `Float`, `s + 1` `String`, `n + 1` of a `Null<Int>` `Int`, a
+  comparison `Bool`, `n += 1` of a `Null<Int>` `Null<Int>`), over an abstract what its overload yields; the binder of a
+  loop over an interval of two integers is the integer type; an enum-abstract value read off its type is of the abstract
+  (`AbstractCasts.holdsUntypedValue`). A literal where nothing is expected of it (a local written with no type, a loop's
+  iterable, a receiver, a part of such a literal) is of its parts' types (`unify_min` where they agree: one type, or
+  core numbers widening to the real one); where a type is expected (`ExpectedTypes` with the index host's
+  `ExpectationHost`: a declaration's annotation, the parameter a call's selected signature binds the argument to —
+  `CallReturns.selectedParameter`, `CallSelection.parameterRun` —, an array's element, a structure's field), the type
+  4.3.7 prints: `Array<Dynamic>` under `Dynamic`, the expected array type, and against a structure of plain fields the
+  fields the literal writes, each of its value's type where `type_eq` keeps it and the field's where the compiler casts,
+  plus the optional ones it leaves out. `[]` and `null` stay Unknown (T7b). The index host peels parentheses, and
+  `MemberLookup.memberRead` reads only the declarations of a member some build compiles (`BuildBranches.declarations`),
+  answering where they agree. The harness leaves unscored a `should be` error at an operator's range (an operand's) and
+  an operator an operand's abstract takes with an `inline` overload (its spliced body's facts). Not answered: a `Map`
+  read (`Map.get` writes no return), a field access on a receiver that is no path (`[1, 2].length`), a conditional
+  something is expected of, an argument of an overloaded or a generic callee. Measured on the base tree (UNKNOWN share
+  source / nominal; roots source construction / index / operator / literal): anyparse 14.7 / 14.1 → 12.9 / 13.1 %,
+  4510 / 4756 / 2564 / 4791 → 40 / 390 / 122 / 2593; upstream 60.2 / 59.0 → 57.9 / 57.3 %; Pony 21.4 / 19.8 → 19.3 /
+  18.4 %; a client corpus 21.3 / 16.5 → 16.8 / 15.5 %, 4556 / 2334 / 1384 / 2100 → 95 / 0 / 159 / 1886; DIFFERENT 0 / 0,
+  0 / 0, 2 / 3, 2 / 1 unchanged, no MATCH lost on any of the four.
 Each step lands as a table in `QueryCache` with its consumers moved onto it, and is measured on the harness: a step
 may lower an area's UNKNOWN share and may turn a DIFFERENT into a MATCH or an UNKNOWN, and must add no DIFFERENT.

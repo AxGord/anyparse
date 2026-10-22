@@ -382,13 +382,22 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	}
 
 	public function testIntervalLoopBinderKeepsWrap(): Void {
-		// An `Interval` iterable is not a nominal path at all, so `valueTypeSourceDeep` answers
-		// null for it and the binder stays unresolved. Pins that the arm reads the iterable's
-		// DECLARED type and never guesses `Int` from the loop's shape.
+		// The binder of a loop over an interval is the integer type only where the walk types both bounds as it
+		// (`ComposedValues.intervalElement`): a bound of no known type leaves the binder unresolved, and the arm never
+		// guesses `Int` from the loop's shape.
+		final model: String = MODEL_STR;
+		final params: String = 'q:Bool, n:Dynamic';
+		final source: String = wrapTyped('for (i in 0...n) {\n\t\t\tvar b = !(!q || i < 0);\n\t\t}', params);
+		final fixed: String = wrapTyped('for (i in 0...n) {\n\t\t\tvar b = q && !(i < 0);\n\t\t}', params);
+		Assert.equals(fixed, fixedWith(source, model));
+	}
+
+	public function testIntervalOfIntegersBindsAnInteger(): Void {
+		// 4.3.7 types the binder of `0...10` as `Int` (`forLoop.ml`): the arm flips the comparison
 		final model: String = MODEL_STR;
 		final params: String = 'q:Bool';
 		final source: String = wrapTyped('for (i in 0...10) {\n\t\t\tvar b = !(!q || i < 0);\n\t\t}', params);
-		final fixed: String = wrapTyped('for (i in 0...10) {\n\t\t\tvar b = q && !(i < 0);\n\t\t}', params);
+		final fixed: String = wrapTyped('for (i in 0...10) {\n\t\t\tvar b = q && i >= 0;\n\t\t}', params);
 		Assert.equals(fixed, fixedWith(source, model));
 	}
 

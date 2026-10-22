@@ -26,6 +26,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypingService;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
@@ -310,9 +311,25 @@ final class TyperConformance {
 				report.unscored('misc/other', label);
 				continue;
 			}
-			// an error at an ascription's range names the type of the value failing the type written there
-			typeAt(report, area, label, expected, typer, warning ? node : typer.failingValue(node));
+			if (warning)
+				typeAt(report, area, label, expected, typer, node)
+			else
+				shouldBe(report, area, label, expected, typer, node);
 		}
+	}
+
+	/**
+	 * The `should be` error `label` at the range of `node`, its value of type `expected`, asked of `typer`: the value failing
+	 * the type written there for an ascription's range; not asked at an operator's range, where the compiler reports an
+	 * operand failing what the operator wants (`operators.ml`), not the operator's own value.
+	 */
+	private static function shouldBe(
+		report: Report, area: String, label: String, expected: String, typer: FileTyper, node: QueryNode
+	): Void {
+		if (typer.isOperator(node))
+			report.unscored(area, '$label (an operand\'s error, reported at the operator\'s range)')
+		else
+			typeAt(report, area, label, expected, typer, typer.failingValue(node));
 	}
 
 	/**
@@ -396,11 +413,13 @@ final class TyperConformance {
 			};
 		if (at == null || compiled == null) return;
 		final label: String = '$file:${at.from}: $compiled';
-		final spliced: Bool = oracle.facts.nodesAround(key, at).exists(
-			n ->
-				n.inlinedFrom != null
-				|| n.calls.exists(c -> c.access == INLINED_ACCESS && c.site?.span.from == at.from && c.site?.span.to == at.to)
-		);
+		// an operator an inlined overload takes holds the overload's body at its range, its operands bound there
+		final spliced: Bool = typer.inlinedOverload(node)
+			|| oracle.facts.nodesAround(key, at).exists(
+				n ->
+					n.inlinedFrom != null
+					|| n.calls.exists(c -> c.access == INLINED_ACCESS && c.site?.span.from == at.from && c.site?.span.to == at.to)
+			);
 		if (spliced)
 			report.unscored('facts/${node.kind}', '$label (inlined code)')
 		else if (typer.namesNoValueOf(node, compiled, CLASS_VALUE))
@@ -705,9 +724,33 @@ private final class FileTyper {
 		return node.kind == _shape.identKind;
 	}
 
+	/** Whether `node` is an operator the walk types by its operands (`TypingService.isArithmetic`). */
+	public inline function isOperator(node: QueryNode): Bool {
+		return TypingService.isArithmetic(node, _shape);
+	}
+
 	/** Whether `node` is a call of the grammar. */
 	public inline function isCall(node: QueryNode): Bool {
 		return node.kind == _shape.callKind;
+	}
+
+	/**
+	 * Whether `node` is an operator (`isOperator`) an `inline` overload of its kind, declared by the type of an operand, may
+	 * take: the compiler splices the overload's body in at the operator's range, its operands bound there, so the facts at
+	 * that range type the spliced code, not the operator's value.
+	 */
+	public function inlinedOverload(node: QueryNode): Bool {
+		if (!isOperator(node)) return false;
+		for (operand in node.children) {
+			final written: Null<String> = source(operand);
+			final peeled: Null<String> = written == null
+				? null
+				: NominalTypes.memberLookupReceiverSource(written, _shape.memberTransparentWrapperTypeNames ?? [], _chain.typeSyntax);
+			final name: Null<String> = peeled == null ? null : NominalTypes.outerNominalOf(peeled, _chain.typeSyntax);
+			final declares: ResolvedType -> Bool = d -> d.type.members.exists(m -> m.isInline && m.operatorOverloads.contains(node.kind));
+			if (name != null && _index.refs.resolvedDeclsNamed(name).exists(declares)) return true;
+		}
+		return false;
 	}
 
 	/** The written type source the deep walk gives `node` (`NominalTypes.expressionTypeSource`), or null. */
@@ -781,7 +824,6 @@ private final class FileTyper {
 		final named: EReg = new EReg('^$wrapper<([\\w.]+)>$$', '');
 		return at != null && named.match(compiled) && !_source.substring(at.from, at.to).contains(SourceText.lastSegment(named.matched(1)));
 	}
-
 
 	/**
 	 * Whether `node` is a bare identifier and `compiled` the simple name of the type declaration holding it: a bare read of

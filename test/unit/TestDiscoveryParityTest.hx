@@ -987,6 +987,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.CommentRewriteSliceTest',
 		'unit.query.CommentWeldDeletionSliceTest',
 		'unit.query.CompilerFactsTest',
+		'unit.query.ComposedValuesTest',
 		'unit.query.CondBranchSplitTest',
 		'unit.query.CondQueryTest',
 		'unit.query.CondRegionKindDerivationTest',

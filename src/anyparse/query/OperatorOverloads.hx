@@ -37,12 +37,20 @@ final class OperatorOverloads {
 	/** The annotation of an overload taking its operands in either order (`RefShape.commutativeOperatorMetaName`), or null. */
 	private final _commutativeMeta: Null<String>;
 
+	/** The annotation of an index access (`ExecutionShape.indexAccessMetaName`), or null. */
+	private final _indexMeta: Null<String>;
+
+	/** The operator kind an overload of the index operator records (`ExecutionShape.indexOperatorOverloadKind`), or null. */
+	private final _indexOperator: Null<String>;
+
 	/** Built once by the owning `TypingService`. */
 	public function new(casts: AbstractCasts, unification: Unification, shape: RefShape) {
 		_casts = casts;
 		_unification = unification;
 		_abstractKinds = shape.underlyingThisTypeKinds ?? [];
 		_commutativeMeta = shape.commutativeOperatorMetaName;
+		_indexMeta = shape.execution?.indexAccessMetaName;
+		_indexOperator = shape.execution?.indexOperatorOverloadKind;
 	}
 
 	/**
@@ -62,9 +70,57 @@ final class OperatorOverloads {
 		};
 	}
 
+	/**
+	 * The read access an index access with a key of type `key` (null: untyped) takes on a value of the abstract `decl`
+	 * (`abstractCast.ml`, `find_array_read_access`, reached when the abstract declares any index access): of its members
+	 * carrying the index-access annotation or overloading the index operator, in declaration order, the first instance one
+	 * taking the key alone that the key casts to — the only one when it declares one, the code compiling — every `#if` branch
+	 * some build compiles taking one returning the same written type. Null for a declaration that is no abstract the index
+	 * reads in each such branch, one a build macro may add members to, a candidate the walk does not model (static, under
+	 * `#if`, with type parameters, a signature overload) and a choice not decided.
+	 */
+	public function indexRead(decl: ResolvedType, key: Null<TypeEnd>): Null<MemberInfo> {
+		if (!_abstractKinds.contains(decl.type.kind) || decl.type.hasBuild || decl.type.hasAutoBuild) return null;
+		final branches: Null<Array<Array<MemberInfo>>> = _casts.liveMembers(decl);
+		if (branches == null) return null;
+		var agreed: Null<MemberInfo> = null;
+		for (members in branches) {
+			final one: Null<MemberInfo> = branchIndexRead(decl, members, key);
+			if (one == null || agreed != null && agreed.returnSource != one.returnSource) return null;
+			agreed = one;
+		}
+		return agreed;
+	}
+
+	/** Whether `m` is an index access of its abstract: annotated as one, or an overload of the index operator. */
+	private inline function isIndexAccess(m: MemberInfo): Bool {
+		final meta: String = _indexMeta ?? '';
+		final indexOperator: String = _indexOperator ?? '';
+		return meta != '' && m.metaNames.contains(meta) || indexOperator != '' && m.operatorOverloads.contains(indexOperator);
+	}
+
 	/** Whether the overload `m` takes its operands in either order. */
 	private inline function isCommutative(m: MemberInfo): Bool {
 		return _commutativeMeta != null && m.metaNames.contains(_commutativeMeta);
+	}
+
+	/** The read access one branch of `decl`, declaring `members`, takes for a key of type `key` (`indexRead`). */
+	private function branchIndexRead(decl: ResolvedType, members: Array<MemberInfo>, key: Null<TypeEnd>): Null<MemberInfo> {
+		final reads: Array<MemberInfo> = [];
+		for (m in members) if (isIndexAccess(m)) {
+			if (m.isStatic || m.guarded || m.typeParamNames.length > 0 || m.isOverload || m.hasOverloadMeta) return null;
+			if (m.paramTypeSources.length == 1) reads.push(m);
+		}
+		if (reads.length < 2) return reads.length == 1 ? reads[0] : null;
+		for (m in reads) {
+			final param: Null<String> = m.paramTypeSources[0];
+			final fit: ArgumentFit = key == null || param == null
+				? MayFit
+				: _unification.casts(key, _casts.writtenEnd(param, decl, m.declFrom, []));
+			if (fit == Fits) return m;
+			if (fit == MayFit) return null;
+		}
+		return null;
 	}
 
 	/**

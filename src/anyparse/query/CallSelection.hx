@@ -174,6 +174,22 @@ final class CallSelection {
 	}
 
 	/**
+	 * The parameter of the candidate `k` each argument of a call passing `args` binds, in argument order, on the compiler's
+	 * way to bind them (`ArgumentSlots.compiledRun`, else the one way `ArgumentSlots.runs` leaves); null where that way is not
+	 * known.
+	 */
+	public function parameterRun(k: CallCandidate, args: Array<CallArgument>): Null<Array<Int>> {
+		final signature: CallSignature = k.signature;
+		final slots: Array<SlotParam> = slotsOf(signature);
+		function fits(a: Int, p: Int): ArgumentFit {
+			return fit(k, args[a], p);
+		}
+		final compiled: Null<Array<Int>> = ArgumentSlots.compiledRun(slots, args.length, fits, p -> skipsSafely(signature, p));
+		final ways: Null<Array<Array<Int>>> = ArgumentSlots.runs(slots, args.length, fits);
+		return compiled ?? (ways != null && ways.length == 1 ? ways[0] : null);
+	}
+
+	/**
 	 * Whether a call passing `args` compiles against the candidate `k` (`ArgumentSlots.compiles`): `MayFit` rather than `Fits`
 	 * where two arguments bind one type parameter of the signature to types not known to be one (`bindings`).
 	 */
@@ -242,19 +258,12 @@ final class CallSelection {
 
 	/**
 	 * The type each type parameter of the candidate `k` that a parameter is written as is bound to by the arguments `args`,
-	 * on the compiler's way to bind them (`ArgumentSlots.compiledRun`, else the one way `ArgumentSlots.runs` leaves): the
+	 * on the compiler's way to bind them (`parameterRun`): the
 	 * argument's end, or null for a parameter an argument that is not typed binds. Null where that way is not known, and
 	 * where two arguments bind one parameter to ends not known to be one.
 	 */
 	private function bindings(k: CallCandidate, args: Array<CallArgument>): Null<Map<String, Null<TypeEnd>>> {
-		final signature: CallSignature = k.signature;
-		final slots: Array<SlotParam> = slotsOf(signature);
-		function fits(a: Int, p: Int): ArgumentFit {
-			return fit(k, args[a], p);
-		}
-		final compiled: Null<Array<Int>> = ArgumentSlots.compiledRun(slots, args.length, fits, p -> skipsSafely(signature, p));
-		final ways: Null<Array<Array<Int>>> = ArgumentSlots.runs(slots, args.length, fits);
-		final run: Null<Array<Int>> = compiled ?? (ways != null && ways.length == 1 ? ways[0] : null);
+		final run: Null<Array<Int>> = parameterRun(k, args);
 		if (run == null) return null;
 		final out: Map<String, Null<TypeEnd>> = [];
 		for (a => p in run) switch paramEnd(k, p) {

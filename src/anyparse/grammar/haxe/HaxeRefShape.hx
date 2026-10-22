@@ -1010,12 +1010,15 @@ final class HaxeRefShape {
 			widens: ['Int' => ['Float']],
 			integer: 'Int',
 			real: 'Float',
+			boolean: 'Bool',
 			integerMax: '2147483647',
 			hexLiteralPrefix: '0x',
 			classNames: ['String']
 		};
 		table.arithmeticKinds = ['Add', 'Sub', 'Mul', 'Div', 'Mod'];
 		table.realArithmeticKinds = ['Div'];
+		table.booleanOperatorKinds = ['Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'And', 'Or'];
+		table.plainStructureFieldKinds = ['Required', 'Optional'];
 		table.stringAffixTests = { module: 'StringTools', suffix: 'endsWith', prefix: 'startsWith' };
 		table.iterableTypeName = 'Iterable';
 		table.iterableElementTypeParams = ['Array' => 0, 'List' => 0, 'Iterable' => 0, 'Map' => 1];

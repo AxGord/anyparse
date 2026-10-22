@@ -128,13 +128,8 @@ class ValueDoorsTest extends Test {
 		Assert.same({ source: 'String', nominal: 'String' }, typed('Literal', 'a $$x'), 'a piece of a string literal');
 	}
 
-	/** Both currencies' answers for the node of `kind` starting at the first character of the first `at` of `SOURCE`. */
-	private static function typed(kind: String, at: String): { source: Null<String>, nominal: Null<String> } {
-		return typedIn(SOURCE, 'p/C.hx', [], kind, at);
-	}
-
 	/** `typed` over the file `file` holding `text`, the files `others` indexed beside it. */
-	private static function typedIn(
+	public static function typedIn(
 		text: String, file: String, others: Array<{ file: String, source: String }>, kind: String, at: String
 	): { source: Null<String>, nominal: Null<String> } {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -159,6 +154,11 @@ class ValueDoorsTest extends Test {
 			source: NominalTypes.expressionTypeSource(node, root, plugin.refShape(), declared, index, file, chain),
 			nominal: NominalTypes.expressionTypeNominal(node, root, plugin.refShape(), declared, index, file, chain)
 		};
+	}
+
+	/** Both currencies' answers for the node of `kind` starting at the first character of the first `at` of `SOURCE`. */
+	private static function typed(kind: String, at: String): { source: Null<String>, nominal: Null<String> } {
+		return typedIn(SOURCE, 'p/C.hx', [], kind, at);
 	}
 
 }

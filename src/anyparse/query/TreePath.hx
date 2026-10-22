@@ -26,15 +26,16 @@ final class TreePath {
 	 * child of the one before it, which is what lets a caller split each level into the
 	 * siblings before and after the path. Null when `target` is not in `root`.
 	 */
-	public static function pathTo(root: QueryNode, target: QueryNode): Null<Array<QueryNode>> {
-		if (root == target) return [root];
-		for (child in root.children) {
-			final below: Null<Array<QueryNode>> = pathTo(child, target);
-			if (below == null) continue;
-			below.unshift(root);
-			return below;
-		}
-		return null;
+	public static inline function pathTo(root: QueryNode, target: QueryNode): Null<Array<QueryNode>> {
+		return chain(root, target, false);
+	}
+
+	/**
+	 * `pathTo` searching only the nodes whose range holds `target`'s (one carrying no span is searched through): the same
+	 * chain where every node lies within its parent's range, at the cost of the depth rather than of the tree.
+	 */
+	public static inline function pathAround(root: QueryNode, target: QueryNode): Null<Array<QueryNode>> {
+		return chain(root, target, true);
 	}
 
 	/** The parent of `target` in `root`, or null when `target` is the root or not present. */
@@ -75,6 +76,21 @@ final class TreePath {
 	public static function spansExactly(node: QueryNode, span: Span): Bool {
 		final at: Null<Span> = node.span;
 		return at != null && at.from == span.from && at.to == span.to;
+	}
+
+	/** `pathTo`, searching only the nodes whose range holds `target`'s when `pruned` (`pathAround`). */
+	private static function chain(root: QueryNode, target: QueryNode, pruned: Bool): Null<Array<QueryNode>> {
+		if (root == target) return [root];
+		final at: Null<Span> = pruned ? target.span : null;
+		for (child in root.children) {
+			final span: Null<Span> = child.span;
+			if (at != null && span != null && (at.from < span.from || at.to > span.to)) continue;
+			final below: Null<Array<QueryNode>> = chain(child, target, pruned);
+			if (below == null) continue;
+			below.unshift(root);
+			return below;
+		}
+		return null;
 	}
 
 }
