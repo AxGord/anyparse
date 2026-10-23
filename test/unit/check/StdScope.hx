@@ -34,11 +34,12 @@ final class StdScope {
 
 	/**
 	 * `report` in a resolution scope beside the std stubs and any non-std `libraries` (a `resolutionLibs`
-	 * half), and the run's `builds` when given; throws when this machine has no discoverable std.
+	 * half), and the run's `builds` reader when given — a project declaring its build list complete, whose builds the
+	 * reader may not know; throws when this machine has no discoverable std.
 	 */
 	public static function plugin(
 		report: Array<{ file: String, source: String }>, ?libraries: Array<{ file: String, source: String }>, complete: Bool = true,
-		?builds: ReachBuilds
+		?builds: () -> Null<ReachBuilds>
 	): CachingGrammarPlugin {
 		final std: Null<String> = StdResolver.stdDir();
 		if (std == null) throw new Exception('no installed Haxe std on this machine: the std-container proof cannot be exercised');
@@ -61,7 +62,7 @@ final class StdScope {
 			rootsAllMatched: complete
 		};
 		scoped.setResolutionScope(
-			builds == null ? { declared: true, sources: sources } : { declared: true, sources: sources, builds: () -> builds }
+			builds == null ? { declared: true, sources: sources } : { declared: true, sources: sources, builds: builds }
 		);
 		return scoped;
 	}

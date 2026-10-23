@@ -435,7 +435,8 @@ final class LintCommand implements CliCommand {
 			sources: resolution.sources,
 			builds: probe,
 			buildsAhead: start,
-			buildsSettled: settled
+			buildsSettled: settled,
+			buildsHeld: heldNote('no build this run compiled said which files it parses')
 		};
 	}
 
@@ -456,7 +457,27 @@ final class LintCommand implements CliCommand {
 			}
 			return builds;
 		}
-		return { declared: resolution.declared, sources: resolution.sources, builds: load };
+		return {
+			declared: resolution.declared,
+			sources: resolution.sources,
+			builds: load,
+			buildsHeld: heldNote('this --no-oracle run found no builds stored for its exact input — a run with the oracle stores them')
+		};
+	}
+
+	/**
+	 * The run's `ResolutionScope.buildsHeld`: says once per consumer that it held for want of the builds, and `why` the run
+	 * knows none.
+	 */
+	private static function heldNote(why: String): (String) -> Void {
+		final told: Array<String> = [];
+		return consumer -> {
+			if (told.contains(consumer)) return;
+			told.push(consumer);
+			CliIo.stderr(
+				'apq lint: $consumer held what only the builds can vouch for — reachConfigurationsComplete is declared, but $why\n'
+			);
+		};
 	}
 
 	/** `builds` carrying the bounds the project declares on what a computed name may make or obtain, where it declares them. */

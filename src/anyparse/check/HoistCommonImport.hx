@@ -95,6 +95,12 @@ private typedef HoistContext = {
 	 * demand: it costs one probe compile per build.
 	 */
 	final parsingBuilds: () -> Null<Map<String, Array<Int>>>;
+
+	/**
+	 * Whether a statement `parsingBuilds` cannot answer for is held rather than vouched for by classpath evidence: the run
+	 * declared its build list complete, so that evidence vouches for nothing a build of the list reads.
+	 */
+	final holdsWithoutBuilds: () -> Bool;
 }
 
 /**
@@ -654,7 +660,8 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 			publicTypes: SymbolIndex.publicTypesByModule(widest),
 			bindings: new ImportBindings(() -> widest, plugin),
 			contested: contestOf(files, plugin, report, widest),
-			parsingBuilds: parsingBuildsOf(plugin)
+			parsingBuilds: parsingBuildsOf(plugin),
+			holdsWithoutBuilds: () -> plugin is SymbolIndexHost && (cast plugin: SymbolIndexHost).holdForUnknownBuilds(RULE_ID)
 		};
 	}
 
@@ -838,10 +845,11 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	 *
 	 * A module that already holds the statement does. One that does not RECEIVES it, and a build compiling a receiver without
 	 * the classpath entry the statement's module comes from stops on the ambient source, not on any code. A run that knows
-	 * every build the project has asks them (`parsedWithEveryReceiver`). Otherwise a second `-main` beside the oracle's build
-	 * is exactly such a build, which no compile this run makes would see, so a receiver is vouched for only by positive
-	 * evidence: it lives under the same classpath entry, or it already holds an unguarded statement resolving under that entry
-	 * AND top-level package — one entry can carry packages a target refuses, as a language library carries per-target ones.
+	 * every build the project has asks them (`parsedWithEveryReceiver`), and holds when it cannot. Otherwise a second
+	 * `-main` beside the oracle's build is exactly such a build, which no compile this run makes would see, so a receiver is
+	 * vouched for only by positive evidence: it lives under the same classpath entry, or it already holds an unguarded
+	 * statement resolving under that entry AND top-level package — one entry can carry packages a target refuses, as a
+	 * language library carries per-target ones.
 	 */
 	private static function reachesEveryReceiver(statement: Hoistable, site: String, ctx: HoistContext, resolve: SymbolIndex): Bool {
 		final targets: Array<ResolvedType> = resolve.refs.resolveQualifiedRefAll(statement.path);
@@ -851,6 +859,7 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 		if (resolve.refs.names.implicitImportFiles().exists(found -> originOf(found) == origin)) return true;
 		final parsing: Null<Map<String, Array<Int>>> = ctx.parsingBuilds();
 		if (parsing != null) return parsedWithEveryReceiver(targets[0].file.file, site, ctx, parsing);
+		if (ctx.holdsWithoutBuilds()) return false;
 		final key: String = keyOf(statement);
 		for (file in ctx.governedAt[site] ?? []) {
 			final info: Null<FileInfo> = ctx.infoOf[file];

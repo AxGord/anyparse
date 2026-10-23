@@ -29928,6 +29928,30 @@
 			"find": "return items != null && items.foreach(item -> item is String) ? cast items : null;",
 			"replace": "return items != null ? cast items : null;",
 			"note": "a record's string lists are read whatever they hold, so a define that is no string reaches the builds"
+		},
+		{
+			"name": "M-HOIST-UNKNOWN-BUILDS-GUESSED",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "reachesEveryReceiver",
+			"find": "if (ctx.holdsWithoutBuilds()) return false;",
+			"replace": "if (false) return false;",
+			"note": "a project that declared its build list complete and whose builds the run does not know falls back on classpath evidence, so `--fix --no-oracle` writes an ambient statement into a directory a build of that list compiles without the statement's module"
+		},
+		{
+			"name": "M-HOIST-HELD-UNSAID",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "holdForUnknownBuilds",
+			"find": "if (note != null) note(consumer);",
+			"replace": "",
+			"note": "a proof that held for want of the declared builds holds silently, so a run that hoists nothing reads as a tree with nothing to hoist"
+		},
+		{
+			"name": "M-REACH-COMPLETE-FOLLOWS-LIST",
+			"type": "anyparse.check.LintDocuments",
+			"method": "mergeDocuments",
+			"find": "near.compilerOracles == null ? far.reachConfigurationsComplete : null",
+			"replace": "far.reachConfigurationsComplete",
+			"note": "a nested document naming a compilerOracle list of its own inherits the completeness its ancestor declared for another list, so the reach analysis reads a partial list as every build the project ships"
 		}
 	]
 }

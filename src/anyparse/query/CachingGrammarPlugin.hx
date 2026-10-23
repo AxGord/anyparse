@@ -409,6 +409,15 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return read == null ? null : read();
 	}
 
+	/** `SymbolIndexHost`: whether the run's scope reads builds at all (`ResolutionScope.builds`), noting the hold when it does. */
+	public function holdForUnknownBuilds(consumer: String): Bool {
+		final scope: Null<ResolutionScope> = _resolutionScope;
+		if (scope == null || scope.builds == null) return false;
+		final note: Null<(String) -> Void> = scope.buildsHeld;
+		if (note != null) note(consumer);
+		return true;
+	}
+
 	/** `SymbolIndexHost`: start the builds' compiles in the background (`ResolutionScope.buildsAhead`), when the run has any. */
 	public function reachBuildsAhead(): Void {
 		final start: Null<() -> Void> = _resolutionScope?.buildsAhead;
@@ -1025,6 +1034,12 @@ typedef ResolutionScope = {
 	 * ask the builds overlaps the two (`MemberReach.forRun`). Absent with `builds`.
 	 */
 	@:optional final buildsAhead: () -> Void;
+
+	/**
+	 * Say once per consumer that a proof needing `builds` held because the run knows none (`SymbolIndexHost.holdForUnknownBuilds`).
+	 * Absent with `builds`, or when nobody is told.
+	 */
+	@:optional final buildsHeld: (String) -> Void;
 
 	/**
 	 * What the run's compiler oracles typed, read on first demand and once per run (`TypedFactsProbe`); absent when the

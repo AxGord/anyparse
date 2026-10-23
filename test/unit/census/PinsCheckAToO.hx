@@ -376,7 +376,11 @@ final class PinsCheckAToO {
 		'unit.check.HaxeSpawnTest#testAWedgedDriverIsKilledAtItsBound :: control :: M-DRIVER-UNBOUNDED',
 		'unit.check.HaxeSpawnTest#testTheDriverBoundScalesWithTheJobs :: control :: M-DRIVER-BOUND-IGNORES-ROUNDS',
 		'unit.check.HaxeSpawnTest#testTheDriverReadsItsJobsFromNoPipe :: control :: M-DRIVER-READS-STDIN',
+		'unit.check.HoistCommonImportBuildsE2ETest#testANoOracleRunHoistsWhatTheStoredBuildsVouchForAndHoldsWithoutThem :: control :: '
+			+ 'M-HOIST-UNKNOWN-BUILDS-GUESSED,M-REACH-STORED-UNREAD,M-HOIST-HELD-UNSAID',
 		'unit.check.HoistCommonImportTest#testABuildParsingAReceiverButNotTheStatementWithholdsIt :: control :: M-HOIST-BUILD-WITHOUT-MODULE-IGNORED',
+		'unit.check.HoistCommonImportTest#testADeclaredBuildListWhoseBuildsAreUnknownHoldsTheHoist :: control :: '
+			+ 'M-HOIST-UNKNOWN-BUILDS-GUESSED',
 		'unit.check.HoistCommonImportTest#testAFieldOrUnseenSubTypeImportIsNoSecondBinder :: control :: M-IMPORT-MODULE-TAIL-UNKNOWN',
 		'unit.check.HoistCommonImportTest#testAFixedTreeIsAFixedPointOfBothDirections :: control :: M-SINK-HYSTERESIS-OFF',
 		'unit.check.HoistCommonImportTest#testANamesakePushesTheStatementToADeeperSite :: guard :: ',
@@ -526,6 +530,7 @@ final class PinsCheckAToO {
 		'unit.check.JoinSingleUseLocalCheckTest#testWrittenParamSourceNotFlagged :: guard :: M-JSUL-SOURCE-NEVER-WRITTEN',
 		'unit.check.LintConfigInheritanceTest#testAnUnnamedKeyFallsThroughToTheAncestor :: control :: '
 			+ 'M-REFLECTIVE-MERGE,M-HOLDERS-MERGE,M-OWNED-MERGE',
+		'unit.check.LintConfigInheritanceTest#testCompletenessStaysWithTheListItWasDeclaredFor :: control :: M-REACH-COMPLETE-FOLLOWS-LIST',
 		'unit.check.LintConfigTest#testReachSkipsBranchesOnlyUnderADeclaredCompleteOracleList :: control :: M-REACH-CONFIGS-COMPLETE',
 		'unit.check.LintConfigTest#testReachTakesTheBuildsAsCompleteOnlyWhenEveryPathAgrees :: control :: M-REACH-CONFIGS-AGREE',
 		'unit.check.LintConfigTest#testTheCompileDirProbeReadsTheHxmlAsTheCompilerDoes :: control :: '
