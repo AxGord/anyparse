@@ -4532,3 +4532,11 @@ anyparse `F3-lambda-parameter` 12 510 / 12 510 → 4 417 / 5 610 (the alike chec
 the first round's answers), UNKNOWN 13.0 / 13.2 → 11.6 / 11.9 %, DIFFERENT 1 / 1 unchanged; per case 1 072 326 cases, no
 MATCH lost, +14 151, no DIFFERENT added. Pony 26 / 26 → 21 / 21, no MATCH lost, +12, none added. The all-rules lint of the
 four trees and the three thread-safety scores move exactly as before the review.
+
+**After review round 2** (merged with main `82c29e677`): a receiver or an argument typed through a member read carried its
+declaring file's text into the inference, so a caller's namesake bound the call's type parameter (six shapes, probe
+`thirdfile`); receivers and arguments now bind only with a type the lambda's file writes, the self reference included.
+Main's engine against the slice's on the slice's tree, source / nominal: anyparse `F3-lambda-parameter` 12 516 / 12 516 →
+6 277 / 7 389, UNKNOWN 13.0 / 13.2 → 12.0 / 12.2 %, DIFFERENT 1 / 1 unchanged; per case 1 073 380 cases, no MATCH lost,
++10 629, no DIFFERENT added. Pony 26 / 26 → 21 / 21, no MATCH lost, +12, none added. All-rules lint and thread-safety
+scores move as after round 1.
