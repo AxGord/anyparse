@@ -1,6 +1,5 @@
 package unit.check;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.StdResolver;

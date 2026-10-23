@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.DuplicateTernaryBranches;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `duplicate-ternary-branches` check: a ternary whose branches are identical

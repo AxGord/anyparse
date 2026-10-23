@@ -1,9 +1,6 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CrossRename;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

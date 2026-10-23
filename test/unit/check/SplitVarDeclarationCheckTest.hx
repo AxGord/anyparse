@@ -3,18 +3,13 @@ package unit.check;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.PreferFinal;
 import anyparse.check.Severity;
 import anyparse.check.SplitVarDeclaration;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `split-var-declaration` check: a local declaration binding several variables in one

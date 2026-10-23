@@ -1,16 +1,12 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.PreferApiIdiom;
 import anyparse.check.RuleDeclaration;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-api-idiom` check: adjacent writes of every field a declared idiom names, on one receiver of EXACTLY the

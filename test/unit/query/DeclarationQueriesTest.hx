@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The by-declaration type questions the call graph's former consumers ask the index instead (task B3): a typedef alias

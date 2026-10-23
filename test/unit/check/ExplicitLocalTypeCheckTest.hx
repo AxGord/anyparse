@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitLocalType;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import utest.Assert;
 
 /**
  * The `explicit-local-type` check: a local `var` / `final` with no `:Type`

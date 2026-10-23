@@ -7,8 +7,6 @@ import sys.io.File;
 import anyparse.query.Cli;
 import anyparse.query.cli.CliIo;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

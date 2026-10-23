@@ -3,7 +3,6 @@ package anyparse.query.cli.command;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.ExitCode.*;
-import haxe.Exception;
 
 /**
  * `apq callees` — transitive call tree FROM a function (approximate call graph).

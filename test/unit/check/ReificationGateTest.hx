@@ -2,18 +2,14 @@ package unit.check;
 
 import anyparse.check.AvoidDynamic;
 import anyparse.check.Check;
-import anyparse.check.Linter;
 import anyparse.check.ReificationScan;
 import anyparse.check.Severity;
 import anyparse.check.StringLiteralDup;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The CENTRAL reification gate: a finding whose span sits inside a `macro …` quotation is dropped

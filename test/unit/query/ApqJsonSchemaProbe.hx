@@ -1,8 +1,6 @@
 package unit.query;
 
 import anyparse.grammar.json.JsonFormat;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Pilot for the recursive-typedef JSON schema path that `apq ast`

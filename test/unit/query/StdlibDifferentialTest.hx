@@ -1,10 +1,7 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.StdlibDifferential;
 import anyparse.query.StdlibDupScan;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `StdlibDifferential` -- the mapping enumeration and probe generation behind `apq stdlib-dup`.

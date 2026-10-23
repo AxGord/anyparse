@@ -2,9 +2,7 @@ package unit.check;
 
 import anyparse.check.Check;
 import anyparse.check.CommentWidth;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
@@ -12,8 +10,6 @@ import haxe.Exception;
 import haxe.io.Path;
 import sys.io.File;
 import unit.ConfigTrees;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

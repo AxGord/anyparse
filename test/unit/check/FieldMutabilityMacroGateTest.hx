@@ -5,8 +5,6 @@ import anyparse.check.InlineConstant;
 import anyparse.check.PreferFinal;
 import anyparse.check.PreferFinalField;
 import anyparse.check.TrivialGetter;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Rules that act on a declaration the compiler does NOT see, and the two ways it differs from the

@@ -1,6 +1,5 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.query.ValueNameBinding.FieldAlias;
 import anyparse.query.ValueNameBinding.ImportedStatic;
@@ -8,8 +7,6 @@ import anyparse.query.ValueNameBinding.ImportedStatics;
 import anyparse.query.ValueNameBinding.ModuleValues;
 import haxe.Exception;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The ONE reading of a bare value name at module level (`ValueNameBinding`, the index's `values` layer): a module-level

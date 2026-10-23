@@ -8,8 +8,6 @@ import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.query.Selector;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

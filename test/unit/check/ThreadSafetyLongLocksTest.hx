@@ -1,16 +1,11 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.LongLockExplain.LongLock;
 import anyparse.check.LongLockExplain.LongLockKind;
 import anyparse.check.LongLockExplain.LongLockReason;
 import anyparse.check.LongLockExplain.LongLockReport;
 import anyparse.check.ThreadSafety;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

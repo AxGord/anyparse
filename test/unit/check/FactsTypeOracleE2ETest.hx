@@ -9,8 +9,6 @@ import anyparse.check.FactsTypeOracle;
 import anyparse.check.HaxeSpawn;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

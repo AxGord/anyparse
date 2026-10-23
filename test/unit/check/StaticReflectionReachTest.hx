@@ -1,16 +1,12 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan;
 import anyparse.check.StaticReflectionReach;
 import anyparse.check.UnusedPrivate;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.runtime.Span;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

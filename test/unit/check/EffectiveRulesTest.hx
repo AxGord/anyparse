@@ -8,12 +8,8 @@ import anyparse.check.AvoidDynamic;
 import anyparse.check.Check;
 import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

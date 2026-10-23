@@ -1,13 +1,10 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxStringEscape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.runtime.Span;
-import utest.Assert;
 
 using StringTools;
 

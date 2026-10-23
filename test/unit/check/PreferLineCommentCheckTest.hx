@@ -1,12 +1,8 @@
 package unit.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.PreferLineComment;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-line-comment` check: a `/* … *\/` block comment sitting in a STATEMENT

@@ -11,8 +11,6 @@ import anyparse.query.Cli;
 import anyparse.query.FormatFixedPoint;
 import haxe.Exception;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end probe for `apq fmt` — the whole-file canonicaliser. Each test

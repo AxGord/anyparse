@@ -4,7 +4,6 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * `apq inline-method` — inline a single-return function into its call sites + delete it.

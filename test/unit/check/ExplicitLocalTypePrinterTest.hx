@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitLocalType;
 import anyparse.check.PositionTypeOracle;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `explicit-local-type` oracle autofix riding on the shared `TypeRefPrinter`: a compiler

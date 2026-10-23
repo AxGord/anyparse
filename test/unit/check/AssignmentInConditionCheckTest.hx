@@ -1,12 +1,8 @@
 package unit.check;
 
 import anyparse.check.AssignmentInCondition;
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `assignment-in-condition` check: an assignment used as a condition

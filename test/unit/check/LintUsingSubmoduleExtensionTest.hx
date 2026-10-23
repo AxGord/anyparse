@@ -1,10 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `using pkg.Mod;` brings the static extensions of EVERY top-level type the module

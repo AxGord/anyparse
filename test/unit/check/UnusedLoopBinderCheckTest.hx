@@ -1,13 +1,9 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedLoopBinder;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `unused-loop-binder` check: a `for` binder the body never reads becomes `_`, and an unread key

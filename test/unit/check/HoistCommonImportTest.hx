@@ -7,7 +7,6 @@ import anyparse.check.LintConfig;
 import anyparse.check.Naming;
 import anyparse.check.OracleCoverage;
 import anyparse.check.UnusedImport;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.StdResolver;
@@ -15,8 +14,6 @@ import anyparse.query.cli.command.LintFixDriver;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

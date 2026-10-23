@@ -2,8 +2,6 @@ package unit.query;
 
 import anyparse.query.MutationVerdict;
 import anyparse.query.cli.TestTranscript;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

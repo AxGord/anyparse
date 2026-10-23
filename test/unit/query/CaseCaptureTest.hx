@@ -1,14 +1,11 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CasePatterns;
 import anyparse.query.Inline;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.Rename;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A bare lowercase identifier in a `case` pattern CAPTURES: it declares a new binding for the arm

@@ -9,7 +9,6 @@ import anyparse.query.cli.command.ReconCommand.ReconRecord;
 import anyparse.query.cli.command.ReconCommand.ReconWalkResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 

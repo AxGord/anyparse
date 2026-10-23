@@ -1,15 +1,11 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.RedundantParens;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.QueryNode;
 import anyparse.query.format.Text;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Fixture scaffolding shared by the `redundant-parens` OPERAND-arm test parts: the

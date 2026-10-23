@@ -1,15 +1,10 @@
 package unit.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.ThreadSafety;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A hold judged across its callees: the lock it holds, on the object it holds it on, is carried into each call made on

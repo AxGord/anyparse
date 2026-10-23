@@ -9,12 +9,9 @@ import anyparse.check.CompilerServer;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCoverage;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.cli.command.LintFixVerify;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `compilerOracle` as a LIST of configurations, end to end against the real compiler — the

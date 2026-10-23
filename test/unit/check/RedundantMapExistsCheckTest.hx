@@ -3,11 +3,8 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.RedundantMapExists;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `redundant-map-exists` check: `m.exists(k) ? m[k] : d` is flagged `Info` and — where

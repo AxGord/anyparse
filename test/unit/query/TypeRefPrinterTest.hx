@@ -1,14 +1,11 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefPrinter;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The shared import-aware type-reference printer: how a fixer that MATERIALISES a type path

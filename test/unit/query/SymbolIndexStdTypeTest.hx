@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import haxe.io.Path;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `SymbolIndex.stdDeclarationOf` answers null for what it cannot see — the clauses a rule-level

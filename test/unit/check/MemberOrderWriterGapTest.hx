@@ -1,16 +1,12 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.MemberOrder;
 import anyparse.check.MemberSpacing;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 import unit.ConfigTrees;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

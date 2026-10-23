@@ -1,15 +1,10 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.OracleDeclaration;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The project-level `apqlint.json` config: the pure `LintConfig.parse`

@@ -3,11 +3,7 @@ package unit.check;
 import anyparse.check.AsymmetricBranchBraces;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `asymmetric-branch-braces` check: an `if` / `else` pair with EXACTLY ONE braced branch,

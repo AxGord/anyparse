@@ -1,21 +1,17 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
 import anyparse.check.Naming;
 import anyparse.check.UnusedPrivate;
 import anyparse.check.UnusedPublicMember;
 import anyparse.grammar.haxe.HaxeNamingSupport;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The FRAMEWORK CONTRACT seam: a project declares in `apqlint.json` (`frameworks`) which root types

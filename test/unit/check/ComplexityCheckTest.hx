@@ -1,15 +1,11 @@
 package unit.check;
 
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.Check.Violation;
 import anyparse.check.Complexity;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.CheckstyleConfigLoader;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

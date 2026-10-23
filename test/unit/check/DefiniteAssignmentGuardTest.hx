@@ -1,10 +1,7 @@
 package unit.check;
 
 import anyparse.check.DefiniteAssignmentGuard;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `DefiniteAssignmentGuard` — the compiler-free half of `lint --fix`'s revert net.

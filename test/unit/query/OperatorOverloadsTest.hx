@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AbstractCasts.TypeEnd;
 import anyparse.query.OperatorOverloads.OperatorResult;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `@:op` overload a binary operator over an abstract selects (`OperatorOverloads`, step T4b of the typer by

@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.ModuleScan;
 import anyparse.query.SymbolIndex;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

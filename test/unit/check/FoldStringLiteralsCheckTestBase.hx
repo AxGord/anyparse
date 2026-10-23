@@ -1,9 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.runtime.Span;
-import utest.Test;
 
 /**
  * Fixture scaffolding shared by the `fold-adjacent-string-literals` test parts: the

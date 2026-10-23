@@ -1,14 +1,10 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.PreferArrowCallback;
 import anyparse.check.PreferLambdaExpressionBody;
 import anyparse.check.Severity;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-lambda-expression-body` check: an ARROW lambda whose `{ … }` body holds one

@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.RemoveElement;
 import anyparse.query.ReplaceNode;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A `@:meta` is an element in its OWN right — `--select 'MetaCall:@:access'`

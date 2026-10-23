@@ -1,14 +1,11 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddImport;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.Cli;
 import haxe.Exception;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `AddImport.addImport` — add an `import` / `using`, WRITER-FORMATTED.

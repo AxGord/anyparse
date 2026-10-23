@@ -3,8 +3,6 @@ package unit.check;
 import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig.OracleConfig;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

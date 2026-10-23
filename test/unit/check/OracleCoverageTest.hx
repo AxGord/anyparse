@@ -5,12 +5,9 @@ import sys.io.File;
 #end
 import anyparse.check.CompilerOracle;
 import anyparse.check.OracleCoverage;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `OracleCoverage` — the answer to "does the configured oracle actually compile this

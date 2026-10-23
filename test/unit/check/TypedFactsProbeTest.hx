@@ -9,8 +9,6 @@ import anyparse.runtime.Span;
 import haxe.io.Path;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

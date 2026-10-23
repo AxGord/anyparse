@@ -1,10 +1,7 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ShapeVocab;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `ShapeVocab` — the derived vocabulary every check reads instead of respelling a union of `RefShape` seams: a

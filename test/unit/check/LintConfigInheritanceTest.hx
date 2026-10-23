@@ -8,8 +8,6 @@ import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import haxe.io.Path;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A nested `apqlint.json` EXTENDS the documents above it instead of replacing the

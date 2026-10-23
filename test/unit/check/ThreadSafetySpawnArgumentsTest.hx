@@ -1,9 +1,5 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import utest.Assert;
-import utest.Test;
-
 /**
  * A `spawns` entry written as an object (`{"call": "FileIO.readAndProcess", "main": [2]}`) runs the function values
  * handed to the call on another thread, as a plain entry does, but those at the argument positions `main` lists, which

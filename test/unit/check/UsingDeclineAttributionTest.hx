@@ -1,19 +1,15 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.DeadBinderCounterLoop;
 import anyparse.check.PreferExists;
 import anyparse.check.PreferFind;
 import anyparse.check.PreferLpad;
 import anyparse.check.Severity;
 import anyparse.check.UsingScan;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Who a `using`-insert refusal is allowed to NAME, and the one question the seam used to answer

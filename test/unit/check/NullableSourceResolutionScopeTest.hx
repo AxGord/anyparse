@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.PossibleNullDereference;
 import anyparse.check.UnguardedNullableDeref;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Which INDEX the nullable-source cross-file return arc asks, and what the exclusion list still
