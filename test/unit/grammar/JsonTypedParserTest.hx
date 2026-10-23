@@ -1,5 +1,6 @@
 package unit.grammar;
 
+import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.runtime.ParseError;
 import unit.grammar.JsonTypedFixtures.TestConfig;
@@ -122,6 +123,28 @@ class JsonTypedParserTest extends Test {
 		Assert.stringContains('"content-type":', written);
 		final read: TestKeyed = TestKeyedParser.parse(written);
 		Assert.same(['A.b', 'x'], [read.member, read.contentType]);
+	}
+
+	/**
+	 * The format's null literal as a value reads as the key being absent: an optional field stays
+	 * `null` whatever its type, and a required one fails as missing, naming its key.
+	 */
+	@:pin('control') @:killer('M-BYNAME-NULL-ABSENT')
+	public function testNullValueReadsAsAnAbsentKey(): Void {
+		final src: String =
+			'{"name":"a","count":1,"policy":"first","nested":{"kind":"k","count":null},"tag":null,"ratio":null,"enabled":null}';
+		final cfg: TestConfig = TestConfigParser.parse(src);
+		Assert.isNull(cfg.tag);
+		Assert.isNull(cfg.ratio);
+		Assert.isNull(cfg.enabled);
+		Assert.isNull(cfg.nested.count);
+		final any: TestConfig = TestConfigParser.parse('{"name":"a","count":1,"policy":"first","nested":{"kind":"k"},"extra":null}');
+		Assert.isTrue(any.extra?.match(JNull) == true, 'a field typed as the format\'s universal value keeps `null` as a value');
+		final error: Null<ParseError> = try {
+			TestConfigParser.parse('{"name":null,"count":1,"policy":"first","nested":{"kind":"k"}}');
+			null;
+		} catch (exception: ParseError) exception;
+		Assert.stringContains('missing required field "name"', error?.message ?? '');
 	}
 
 }

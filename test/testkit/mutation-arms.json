@@ -30304,6 +30304,70 @@
 			"method": "typeParamBinds",
 			"force": "false",
 			"note": "no type parameter shadows a short name, so a printed type silently re-binds to a method's, a class's or a local function's type parameter of the same name"
+		},
+		{
+			"name": "M-RETURN-SAME-WIDTH-BREAK",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodySameLayout",
+			"find": ": _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _gluedW);",
+			"replace": ": _difle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _gluedW);",
+			"note": "`same` asks whether the value's FLAT width fits instead of whether its natural glued first line does, so a value that can wrap after the `return` head is moved to the next line whole"
+		},
+		{
+			"name": "M-RETURN-SAME-MULTILINE-PROBED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodySameLayout",
+			"find": "$isBlockValue ? _gluedW : _dinfler(",
+			"replace": "_dinfler(",
+			"note": "`same` probes the first line of a control-flow value too, so `if (…) return switch x {` is moved under the `return` instead of keeping the switch head on the return line"
+		},
+		{
+			"name": "M-RETURN-SAME-EXEMPTS-BY-DOC",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodySameLayout",
+			"find": "$isBlockValue ? _gluedW :",
+			"replace": "anyparse.format.wrap.WrapList.flatLength(_bodyW) == -1 ? _gluedW :",
+			"note": "`same` exempts any value whose Doc spans lines instead of a control-flow ctor, so an object literal's kept source break decides whether the call moves under `return`"
+		},
+		{
+			"name": "M-BYNAME-NULL-ABSENT",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "lowerStructByName",
+			"find": "final nullAware: Bool = nullLiteral != null && refName != sc.formatInfo.anyType;",
+			"replace": "final nullAware: Bool = false;",
+			"note": "a ByName field stops reading the format's null literal as an absent key, so a config the fork itself writes fails to parse on every file"
+		},
+		{
+			"name": "M-CHAIN-OVERRIDE-DROPS-RULES",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "overrideChainModeField",
+			"find": "if (!_wantsFit) _rules.push(",
+			"replace": "if (false) _rules.push(",
+			"note": "the condition-wrap override throws the chain's rules away, so the operator side is the section default instead of the matched rule's location"
+		},
+		{
+			"name": "M-CHAIN-OVERRIDE-DROPS-CONDITIONS",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "overrideChainModeField",
+			"find": "_rules.push({ conditions: _conds,",
+			"replace": "_rules.push({ conditions: [],",
+			"note": "the condition-wrap override keeps the rules but not their conditions, so the first rule answers the operator side whether it matches or not"
+		},
+		{
+			"name": "M-CHAIN-OVERRIDE-REJUDGES-EXCEEDS",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "overrideChainModeField",
+			"find": "if (_c.cond == anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength)",
+			"replace": "if (false)",
+			"note": "the condition-wrap override leaves `exceedsMaxLineLength` to the chain's own width inside the wrapped condition, so a chain the overflow put on its own line can still match a rule that wants the line to fit and take its location"
+		},
+		{
+			"name": "M-RULE-LOCATION-FALLS-TO-DEFAULT",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "decideRuleWithLineLengthState",
+			"find": "location: rule.location ?? WrappingLocation.AfterLast",
+			"replace": "location: rule.location ?? fallback",
+			"note": "a matched rule that names no location takes the section's `defaultLocation` instead of `afterLast`, so the default overrides a rule that matched"
 		}
 	]
 }

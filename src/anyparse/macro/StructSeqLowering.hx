@@ -389,6 +389,7 @@ final class StructSeqLowering {
 		final declareLocals: Array<Expr> = [];
 		final switchCases: Array<Case> = [];
 		final missingChecks: Array<Expr> = [];
+		final nullLiteral: Null<String> = sc.formatInfo.nullLiteral;
 		for (child in node.children) {
 			final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			if (fieldName == null) Context.fatalError('Lowering: ByName struct field missing base.fieldName', Context.currentPos());
@@ -411,9 +412,18 @@ final class StructSeqLowering {
 			});
 			final parseCall: Expr = byNameFieldParseExpr(sc, child, fieldName);
 			final key: String = MetaInspect.wireKey(child, fieldName);
+			final assign: Expr = macro $i{localName} = $parseCall;
+			// The format's null literal is the key being absent, so a config writer that spells an
+			// unset key as `null` reads the same as one that omits it. A field typed as the format's
+			// universal value keeps the literal as a value: there `null` IS one.
+			final refName: Null<String> = child.kind == Ref ? child.annotations.get(AnnotationKeys.BASE_REF) : null;
+			final nullAware: Bool = nullLiteral != null && refName != sc.formatInfo.anyType;
+			final nullMatch: Expr = nullLiteral != null && ParseDispatchLowering.endsWithWordChar(nullLiteral)
+				? macro matchKw(ctx, $v{nullLiteral})
+				: macro matchLit(ctx, $v{nullLiteral});
 			switchCases.push({
 				values: [{ expr: EConst(CString(key)), pos: Context.currentPos() }],
-				expr: macro $i{localName} = $parseCall
+				expr: nullAware ? macro if (!$nullMatch) $assign : assign
 			});
 			if (isOptional) {
 				structFields.push({ field: fieldName, expr: macro $i{localName} });
