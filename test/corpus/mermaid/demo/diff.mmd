@@ -1,0 +1,8 @@
+flowchart TD
+oldParse[parseFile] -.->|removed| legacy([LegacyWalker])
+newParse[parseFile] -->|added| walker([MermaidQueryWalker])
+walker --> projection[MermaidProjection]
+projection -. renamed from Tree .-> document{{Document}}
+legacy ~~~ walker
+style legacy fill:#fdd,stroke:#c00,stroke-dasharray: 5 5
+style walker fill:#dfd,stroke:#0a0

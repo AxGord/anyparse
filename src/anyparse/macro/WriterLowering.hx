@@ -1290,6 +1290,25 @@ class WriterLowering {
 		final unescapeMode: Null<String> = node.readMetaString(':unescape');
 		final raw: Bool = node.hasMeta(':rawString');
 
+		// `@:encode("pkg.Class.method")` is the writer twin of the parser's
+		// `@:decode`: the value is written through the named static
+		// `T -> String`, so a codec whose spelling differs from the value
+		// (an entity escape, a quoting decision) is declared once beside it.
+		final encodePath: Null<String> = node.readMetaString(':encode');
+		if ((encodePath == null) != (node.readMetaString(':decode') == null))
+			Context.fatalError(
+				'WriterLowering: terminal ${node.annotations[AnnotationKeys.BASE_TYPE_PATH]} must declare @:decode and @:encode together',
+				Context.currentPos()
+			);
+		if (encodePath != null) {
+			if (unescape || raw)
+				Context.fatalError(
+					'WriterLowering: a terminal with @:encode takes neither @:unescape nor @:rawString', Context.currentPos()
+				);
+			final encodeCall: Expr = { expr: ECall(macro $p{encodePath.split('.')}, [macro value]), pos: Context.currentPos() };
+			return macro return _dt($encodeCall);
+		}
+
 		if (unescape) {
 			if (unescapeMode == 'raw' || unescapeMode == 'singleQuoteRaw') {
 				// @:unescape("raw"):           escape without quote wrap,

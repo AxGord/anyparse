@@ -1,0 +1,21 @@
+%% Package map of a parser platform, grouped by layer
+flowchart LR
+subgraph core[Core]
+    direction TB
+    runtime --> format
+    macro --> runtime
+end
+subgraph grammars[Grammar plugins]
+    haxe & json & mermaid
+end
+subgraph tools[Query tools]
+    query --> check
+end
+haxe & json & mermaid --> macro
+query --> haxe
+classDef plugin fill:#e8f4ff,stroke:#3a7bd5
+classDef engine fill:#fff4e0,stroke:#d58a3a,stroke-width:2px
+class haxe,json,mermaid plugin
+class runtime,macro,format engine
+linkStyle 0 stroke:#d58a3a
+linkStyle default interpolate basis stroke:#999
