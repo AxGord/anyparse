@@ -5050,7 +5050,7 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   that names a file of that tree and none of this one. "Any file under the root" → no: it counts the checkout's build
   output (an oracle hxml, generated `dist/` sources, cache records — anyparse's own vocabulary), so a git checkout counts
   only what it tracks; "any path of two segments" → no: `src/Main.hx` is every project's entry module, so a path counts
-  only when a directory survives dropping its leading source-root names → `<SCRUB-3 merge SHA>`
+  only when a directory survives dropping its leading source-root names → `eb9a35688`
 - **A private corpus is named by the environment, never by the repository.** `tools/battery.sh` lints a second tree only
   when `--client <tree>` or `ANYPARSE_CLIENT_TREE` names it (it used to default to a path on one machine);
   `tools/bench-corpus.txt` includes its calibrated other half through `@${ANYPARSE_BENCH_EXTRA}`, a manifest kept outside
