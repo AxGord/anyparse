@@ -402,10 +402,10 @@ std gap. Readings: `docs/journal/testing-log.md`.
   of the name (`AncestorTable.boundType`). On the way
   the T3 walk proves `using Lambda` on a std container (`satisfiesIterable` over the first copy, an `iterator()` return
   followed by its written path). Measured (`F3-lambda-parameter`; UNKNOWN share; DIFFERENT; source / nominal):
-  anyparse 12 437 / 12 437 → 2 550 / 4 165, 13.0 / 13.2 → 11.3 / 11.6 %, 1 / 1 unchanged; Pony 26 / 26 → 21 / 21,
+  anyparse 12 510 / 12 510 → 4 417 / 5 610, 13.0 / 13.2 → 11.6 / 11.9 %, 1 / 1 unchanged; Pony 26 / 26 → 21 / 21,
   19.3 / 18.4 → 19.2 / 18.4 %, 2 / 3 unchanged; upstream unchanged (57.9 / 57.3 %, 0 / 0); the probe corpus DIFFERENT
-  0. Per case on one tree, the base engine against the slice's: no MATCH lost, no DIFFERENT added (anyparse +17 081 MATCH,
-  Pony +10). The all-rules lint of four trees moves only where a lambda's parameter is now typed (a
+  0. Per case on one tree, the base engine against the slice's: no MATCH lost, no DIFFERENT added (anyparse +14 151 MATCH,
+  Pony +12). The all-rules lint of four trees moves only where a lambda's parameter is now typed (a
   `prefer-static-extension` message naming a resolved receiver, two `simplify-negated-compound` findings over an
   element's `Int` fields); the three thread-safety scores are byte-identical.
 Each step lands as a table in `QueryCache` with its consumers moved onto it, and is measured on the harness: a step

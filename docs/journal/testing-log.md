@@ -4522,3 +4522,13 @@ form (a lambda's parameter a sibling member's `(Int) -> …` parameter types); t
 `simplify-negated-compound` infos (`Lambda.foreach` over a `Map<Int, Anchor>` and an `Array<Span>`, whose element's
 `Int` fields the rule now reads) and resolves one `prefer-static-extension` receiver (a lambda written for a local of
 type `String -> Bool`). The three thread-safety scores are byte-identical.
+
+**After review round 1** (merged with main `5c229f1e1`; main's engine against the slice's on the slice's tree): four
+classes the reviewer compiled were wrong answers the census could not see — a callee's parameter type read again in a
+caller declaring a namesake (the harness scores the parameter's own `IdentExpr` by its name, so only a member read off it
+showed the `DIFFERENT`), a lambda parameter written `?x` or with a default, a cell bound to `Dynamic` below the top
+level, a method's type parameter shadowing its type's. Each is a probe project now, `DIFFERENT 0`. Source / nominal:
+anyparse `F3-lambda-parameter` 12 510 / 12 510 → 4 417 / 5 610 (the alike check and the own-file rule give back part of
+the first round's answers), UNKNOWN 13.0 / 13.2 → 11.6 / 11.9 %, DIFFERENT 1 / 1 unchanged; per case 1 072 326 cases, no
+MATCH lost, +14 151, no DIFFERENT added. Pony 26 / 26 → 21 / 21, no MATCH lost, +12, none added. The all-rules lint of the
+four trees and the three thread-safety scores move exactly as before the review.
