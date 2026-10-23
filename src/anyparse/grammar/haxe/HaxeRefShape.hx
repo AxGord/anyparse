@@ -984,6 +984,44 @@ final class HaxeRefShape {
 		];
 		table.rawDynamicTypeName = 'Dynamic';
 		table.bareConstructorTypeKinds = ['EnumDecl', 'EnumAbstractDecl'];
+		// `trace` and the modules of the std root, `StdTypes` among them
+		table.implicitValueNames = [
+			'trace',
+			'Any',
+			'Array',
+			'Class',
+			'Date',
+			'DateTools',
+			'Enum',
+			'EnumValue',
+			'EReg',
+			'IntIterator',
+			'Lambda',
+			'List',
+			'Map',
+			'Math',
+			'Reflect',
+			'Std',
+			'String',
+			'StringBuf',
+			'StringTools',
+			'Sys',
+			'Type',
+			'UInt',
+			'UnicodeString',
+			'Xml',
+			'Void',
+			'Float',
+			'Int',
+			'Null',
+			'Bool',
+			'Dynamic',
+			'Iterator',
+			'Iterable',
+			'KeyValueIterator',
+			'KeyValueIterable',
+			'ArrayAccess'
+		];
 		table.runtimeTaggedTypeKinds = ['EnumDecl'];
 		table.overrideModifierKind = 'Override';
 		table.dynamicModifierKind = 'Dynamic';

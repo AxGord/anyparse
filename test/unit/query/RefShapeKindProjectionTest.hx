@@ -108,6 +108,7 @@ final class RefShapeKindProjectionTest extends Test {
 	 */
 	private static final KIND_LOOKALIKE_FIELDS: Array<String> = [
 		'catchAllTypeNames',
+		'implicitValueNames',
 		'nullableWrapperTypeNames',
 		'rawDynamicTypeName',
 		'staticMethodReturns'

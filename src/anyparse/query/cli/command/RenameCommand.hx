@@ -387,7 +387,10 @@ final class RenameCommand implements CliCommand {
 		CliIo.sysPrint('annotation is not proven and is left for the compiler to reject.\n');
 		CliIo.sysPrint('An enum CONSTRUCTOR renames with E.A, its own import (import p.E.A;)\n');
 		CliIo.sysPrint('and every bare call or pattern the enum module or an import of its\n');
-		CliIo.sysPrint('values proves; a bare spelling nothing proves refuses the whole rename.\n');
+		CliIo.sysPrint('values proves; a bare spelling nothing proves refuses the whole rename,\n');
+		CliIo.sysPrint('as does a file importing a module the scope does not hold, or a new\n');
+		CliIo.sysPrint('name already spelled bare anywhere in scope. References through strings\n');
+		CliIo.sysPrint('(Type.createEnum(E, "A"), Reflect) are not rewritten.\n');
 		CliIo.sysPrint('A member a #if region\n');
 		CliIo.sysPrint('declares once per branch is one logical member: every branch declaration\n');
 		CliIo.sysPrint('moves in the same edit set. Refuses an override member,\n');

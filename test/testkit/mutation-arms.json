@@ -30453,6 +30453,29 @@
 			"method": "aliasReceiverOffsets",
 			"force": "[]",
 			"note": "a constructor reached through an import alias or a typedef of its enum keeps the old name, so the rename reports success on code that no longer compiles"
+		},
+		{
+			"name": "M-CTOR-NEW-NAME-ONLY-WHERE-VISIBLE",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "offsets",
+			"find": "final taken: Array<{ offset: Int, host: Null<String> }> = bareSpellings(entry, target.newName, refShape);",
+			"replace": "final taken: Array<{ offset: Int, host: Null<String> }> = visible ? bareSpellings(entry, target.newName, refShape) : [];",
+			"note": "a bare spelling of the new name is checked only in files importing the enum, so a pattern variable or an imported static at a position expecting the enum is silently taken over by the renamed constructor"
+		},
+		{
+			"name": "M-CTOR-UNLISTED-IMPORT-IGNORED",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "unlistedValueImportOf",
+			"force": "null",
+			"note": "an import of a module the scope does not hold no longer refuses, so a bare spelling an out-of-scope enum's constructor may own is renamed, and its meaning moves between the two enums"
+		},
+		{
+			"name": "M-CTOR-IMPLICIT-NAME-TAKEN",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "refusal",
+			"find": "if ((refShape.implicitValueNames ?? []).contains(newName))",
+			"replace": "if (false)",
+			"note": "a constructor renamed onto a name every module reads without an import (`trace`) is no longer refused, so it takes that name over wherever the enum is in scope"
 		}
 	]
 }

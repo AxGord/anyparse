@@ -58,6 +58,8 @@ final class EnumCtorRefs {
 		final rival: Null<String> = index.values.hostsOfValue(ctor).find(host -> host != typeName);
 		if (rival != null)
 			return 'cannot rename constructor "$ctor": "$rival" also hosts a value of that name, and a bare "$ctor" may mean either';
+		if ((refShape.implicitValueNames ?? []).contains(newName))
+			return 'cannot rename constructor "$ctor" to "$newName": "$newName" is a name every module reads without an import';
 		final taken: Array<String> = index.values.hostsOfValue(newName);
 		if (taken.length > 0) return 'cannot rename constructor "$ctor" to "$newName": "${taken[0]}" already hosts a value of that name';
 		final capturing: Null<ParsedFile> = parsed.find(entry -> BinderScan.casePatternCaptures(entry.tree, refShape).contains(ctor));
@@ -71,7 +73,8 @@ final class EnumCtorRefs {
 	 * import naming the constructor, and every bare spelling an import of the enum's values brings in — in the enum's own
 	 * module, or through `ValueNameBinding.importBringsValue` — that no local, member, module-level value or imported
 	 * static outranks. A bare spelling neither of those proves is the refusal, and so is one the NEW name would bind elsewhere,
-	 * or a bare spelling of the new name the renamed constructor would take over.
+	 * a bare spelling of the new name anywhere (the renamed constructor may take it over), and a bare old-name spelling
+	 * in a file importing a module the scope does not hold (`ValueNameBinding.unlistedValueImportOf`).
 	 */
 	public static function offsets(
 		entry: ParsedFile, target: CtorTarget, proven: Array<Int>, index: SymbolIndex, refShape: RefShape, regions: Array<LexRegion>
@@ -84,13 +87,26 @@ final class EnumCtorRefs {
 			]);
 		final visible: Bool = entry.file == target.cursorFile || fi != null
 			&& index.values.importBringsValue(fi, typePathOf(target), target.module.path, ctor);
-		// What the new name already means here, a constructor of a visible enum outranks (an imported static, in either order).
-		final taken: Array<{ offset: Int, host: Null<String> }> = visible ? bareSpellings(entry, target.newName, refShape) : [];
+		// What the new name already means here the renamed constructor may take over — through an import of the enum, or
+		// through an expected type, which reaches a pattern variable or an imported static in a file importing nothing.
+		final taken: Array<{ offset: Int, host: Null<String> }> = bareSpellings(entry, target.newName, refShape);
 		if (taken.length > 0)
 			return refused(
 				'"${target.newName}" at ${where(entry, taken[0].offset)} already names something the renamed constructor would take over'
 			);
-		for (spelling in bareSpellings(entry, ctor, refShape)) {
+		final spellings: Array<{ offset: Int, host: Null<String> }> = bareSpellings(entry, ctor, refShape);
+		final unlisted: Null<String> = if (spellings.length == 0)
+			null
+		else if (fi == null)
+			entry.file
+		else
+			index.values.unlistedValueImportOf(fi);
+		if (unlisted != null)
+			return refused(
+				'"$ctor" is spelled bare here and the file imports $unlisted, which the scope does not hold — it may bring a '
+				+ 'constructor of the old or the new name'
+			);
+		for (spelling in spellings) {
 			final isProven: Bool = proven.contains(spelling.offset);
 			if (!isProven && (!visible || outranked(entry, fi, spelling.host, ctor, index, refShape)))
 				return refused(

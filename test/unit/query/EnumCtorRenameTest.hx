@@ -113,6 +113,66 @@ class EnumCtorRenameTest extends Test {
 		);
 	}
 
+	/**
+	 * A pattern variable spelling the new name in a file that does NOT import the enum: Haxe reads a pattern identifier
+	 * against the subject's enum first, so the capture would turn into the renamed constructor (`2,2` became `3,2`).
+	 */
+	@:pin('control') @:killer('M-CTOR-NEW-NAME-ONLY-WHERE-VISIBLE')
+	public function testANewNameAPatternCapturesWithoutTheImportRefuses(): Void {
+		final enumSource: String = 'package p;\n\nenum E {\n\tA(x: Int);\n\tB;\n\tC;\n}\n';
+		final user: String = 'package q;\n\nclass U {\n\tpublic static function f(e: p.E): Int {\n\t\treturn switch e {\n'
+			+ '\t\t\tcase A(1): 1;\n\t\t\tcase rest: 2;\n\t\t\tcase _: 3;\n\t\t}\n\t}\n}\n';
+		refused(
+			runAt([{ file: 'p/E.hx', source: enumSource }, { file: 'q/U.hx', source: user }], 6, 2, 'rest'),
+			'q/U.hx: "rest" at 7:9 already names something'
+		);
+	}
+
+	/**
+	 * An imported static spelling the new name at a position expecting the enum, in a file that does not import it: the
+	 * expected enum's constructor wins over the import, so `B` became `Alpha` silently.
+	 */
+	@:pin('control') @:killer('M-CTOR-NEW-NAME-ONLY-WHERE-VISIBLE')
+	public function testANewNameAnImportedStaticAtAnExpectedEnumRefuses(): Void {
+		final enumSource: String = 'package p;\n\nenum E {\n\tA;\n\tB;\n}\n';
+		final util: String = 'package q;\n\nclass Util {\n\tpublic static var Alpha: p.E = p.E.B;\n}\n';
+		final v: String =
+			'package q;\n\nimport q.Util.Alpha;\n\nclass V {\n\tpublic static function g(): p.E {\n\t\treturn Alpha;\n\t}\n}\n';
+		refused(runAt([
+			{ file: 'p/E.hx', source: enumSource },
+			{ file: 'q/Util.hx', source: util },
+			{ file: 'q/V.hx', source: v }
+		], 4, 2, 'Alpha'), 'q/V.hx: "Alpha" at 7:10 already names something');
+	}
+
+	/**
+	 * An import of a module the scope does not hold (`haxe.ds.Option`) may bring a constructor of the old name, and the later
+	 * import wins: the bare `None` was Option's, and renaming it made it the enum's.
+	 */
+	@:pin('control') @:killer('M-CTOR-UNLISTED-IMPORT-IGNORED')
+	public function testAnOldNameAnUnlistedImportMayBringRefuses(): Void {
+		final enumSource: String = 'package p;\n\nenum E {\n\tNone;\n\tB;\n}\n';
+		final user: String = 'package p;\n\nimport p.E;\nimport haxe.ds.Option;\n\nclass U {\n\tpublic static function f(): String {\n'
+			+ '\t\tvar x = None;\n\t\treturn Std.string(x);\n\t}\n}\n';
+		refused(runAt([{ file: 'p/E.hx', source: enumSource }, { file: 'p/U.hx', source: user }], 4, 2, 'Empty'), 'haxe.ds.Option');
+	}
+
+	/** The reverse: the renamed spelling takes the name of an unlisted import's constructor, which the later import makes win. */
+	@:pin('control') @:killer('M-CTOR-UNLISTED-IMPORT-IGNORED')
+	public function testANewNameAnUnlistedImportMayBringRefuses(): Void {
+		final enumSource: String = 'package p;\n\nenum E {\n\tA;\n\tB;\n}\n';
+		final user: String = 'package p;\n\nimport p.E;\nimport haxe.ds.Option;\n\nclass U {\n\tpublic static function f(): String {\n'
+			+ '\t\tvar x = A;\n\t\treturn Std.string(x);\n\t}\n}\n';
+		refused(runAt([{ file: 'p/E.hx', source: enumSource }, { file: 'p/U.hx', source: user }], 4, 2, 'None'), 'haxe.ds.Option');
+	}
+
+	/** A name every module reads without an import (`trace`) is refused as a new name: the constructor would take it over. */
+	@:pin('control') @:killer('M-CTOR-IMPLICIT-NAME-TAKEN')
+	public function testAnImplicitNameRefuses(): Void {
+		final enumSource: String = 'package p;\n\nenum E {\n\tA;\n\tB;\n}\n';
+		refused(runAt([{ file: 'p/E.hx', source: enumSource }], 4, 2, 'trace'), '"trace" is a name every module');
+	}
+
 	private static function scope(extra: Array<{ file: String, source: String }>): Array<{ file: String, source: String }> {
 		return [
 			{ file: 'pkg/E.hx', source: ENUM },
@@ -125,6 +185,11 @@ class EnumCtorRenameTest extends Test {
 	private static function run(files: Array<{ file: String, source: String }>): CrossRenameResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return CrossRenameMember.crossRenameMember('pkg/E.hx', ENUM, 4, 2, 'Alpha', files, plugin, plugin.refShape());
+	}
+
+	private static function runAt(files: Array<{ file: String, source: String }>, line: Int, col: Int, newName: String): CrossRenameResult {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return CrossRenameMember.crossRenameMember(files[0].file, files[0].source, line, col, newName, files, plugin, plugin.refShape());
 	}
 
 	private static function ok(result: CrossRenameResult): Array<FileChange> {
