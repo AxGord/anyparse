@@ -19,7 +19,7 @@ package anyparse.grammar.haxe;
  * layering). Every `HxFnDecl` consumer would then have to handle an
  * absent name: `HxFnDecl` is Ref'd from six grammar sites (`HxClassMember`,
  * `HxDecl`, `HxStatement` x2, `HxExpr`, `HxAnonField`,
- * `HxFinalModifierMember`) and read in ~40 unit tests, and the query
+ * `HxFinalModifierMember`) and read across the unit suite, and the query
  * plugin's `FnMember:<name>` selector is keyed off that slot. Paying that
  * across the whole engine for one third-party module is the wrong trade;
  * a scope-narrow ctor confines the widening to the shape that needs it,

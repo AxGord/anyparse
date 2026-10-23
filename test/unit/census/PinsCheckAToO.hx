@@ -180,12 +180,21 @@ final class PinsCheckAToO {
 		'unit.check.DefaultRepeatedArgumentCheckTest#testUnresolvedNullSiteBlocks :: control :: M-DEFAULT-ARG-UNRESOLVED-NULL-IGNORED',
 		'unit.check.DocLengthCheckTest#testOnlyADocBlockIsMeasured :: control :: M-DOC-LENGTH-ANY-COMMENT',
 		'unit.check.DocLengthCheckTest#testTheDeclaredMaximumIsRead :: control :: M-DOC-LENGTH-CONFIG-BLIND',
+		'unit.check.DocMeasurementClaimCheckTest#testABoundAStandardOrAGluedNumberIsAContract :: control :: '
+			+ 'M-DOC-CLAIM-CENSUS-BOUND-BLIND',
+		'unit.check.DocMeasurementClaimCheckTest#testACensusCountIsAReadingAndADimensionIsNot :: control :: M-DOC-CLAIM-CENSUS-NOUN-ANY',
+		'unit.check.DocMeasurementClaimCheckTest#testACountQuotedAsCodeIsData :: control :: M-DOC-CLAIM-CENSUS-CODESPAN',
 		'unit.check.DocMeasurementClaimCheckTest#testANumericContractIsNotAReading :: control :: M-DOC-CLAIM-BARE-NUMBER',
 		'unit.check.DocMeasurementClaimCheckTest#testAPercentageShareIsAReadingAndTheRemainderOperatorIsNot :: control :: '
 			+ 'M-DOC-CLAIM-PERCENT-REMAINDER-BLIND',
 		'unit.check.DocMeasurementClaimCheckTest#testAPointerAtTheRecordIsNotTheRecord :: control :: M-DOC-CLAIM-REFERENCE-BLIND',
 		'unit.check.DocMeasurementClaimCheckTest#testAReadingInsideAStringLiteralIsData :: guard :: ',
+		'unit.check.DocMeasurementClaimCheckTest#testAShortWorkIdIsFlaggedAndATypeParameterIsNot :: control :: '
+			+ 'M-DOC-CLAIM-SHORT-ID-TYPE-BLIND',
+		'unit.check.DocMeasurementClaimCheckTest#testASmallCountIsTheSizeOfAFixture :: control :: M-DOC-CLAIM-CENSUS-FLOOR',
 		'unit.check.DocMeasurementClaimCheckTest#testAnArrowNeedsNumbersOnBothSides :: control :: M-DOC-CLAIM-ARROW-ANY',
+		'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbBesideQuotedCodeIsNotARecord :: control :: '
+			+ 'M-DOC-CLAIM-VERB-ANY-DIGIT',
 		'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbMidClauseNeedsANumberOnItsLine :: control :: '
 			+ 'M-DOC-CLAIM-VERB-UNGATED',
 		'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbOpeningAClauseIsAReading :: control :: M-DOC-CLAIM-CLAUSE-BLIND',
@@ -376,7 +385,15 @@ final class PinsCheckAToO {
 		'unit.check.HaxeSpawnTest#testAWedgedDriverIsKilledAtItsBound :: control :: M-DRIVER-UNBOUNDED',
 		'unit.check.HaxeSpawnTest#testTheDriverBoundScalesWithTheJobs :: control :: M-DRIVER-BOUND-IGNORES-ROUNDS',
 		'unit.check.HaxeSpawnTest#testTheDriverReadsItsJobsFromNoPipe :: control :: M-DRIVER-READS-STDIN',
+		'unit.check.HoistCommonImportBuildsE2ETest#testALiveBuildThatDoesNotAnswerHoldsAndSaysSo :: control :: '
+			+ 'M-HELD-NOTE-LOST-WITH-FACTS,M-HOIST-HELD-UNSAID',
+		'unit.check.HoistCommonImportBuildsE2ETest#testANoOracleRunHoistsWhatTheStoredBuildsVouchForAndHoldsWithoutThem :: control :: '
+			+ 'M-HOIST-UNKNOWN-BUILDS-GUESSED,M-REACH-STORED-UNREAD,M-HOIST-HELD-UNSAID',
+		'unit.check.HoistCommonImportBuildsE2ETest#testARunOverPathsWithDifferentOracleListsHolds :: control :: '
+			+ 'M-HOIST-MIXED-LISTS-GUESSED',
 		'unit.check.HoistCommonImportTest#testABuildParsingAReceiverButNotTheStatementWithholdsIt :: control :: M-HOIST-BUILD-WITHOUT-MODULE-IGNORED',
+		'unit.check.HoistCommonImportTest#testADeclaredBuildListWhoseBuildsAreUnknownHoldsTheHoist :: control :: '
+			+ 'M-HOIST-UNKNOWN-BUILDS-GUESSED',
 		'unit.check.HoistCommonImportTest#testAFieldOrUnseenSubTypeImportIsNoSecondBinder :: control :: M-IMPORT-MODULE-TAIL-UNKNOWN',
 		'unit.check.HoistCommonImportTest#testAFixedTreeIsAFixedPointOfBothDirections :: control :: M-SINK-HYSTERESIS-OFF',
 		'unit.check.HoistCommonImportTest#testANamesakePushesTheStatementToADeeperSite :: guard :: ',
@@ -526,6 +543,7 @@ final class PinsCheckAToO {
 		'unit.check.JoinSingleUseLocalCheckTest#testWrittenParamSourceNotFlagged :: guard :: M-JSUL-SOURCE-NEVER-WRITTEN',
 		'unit.check.LintConfigInheritanceTest#testAnUnnamedKeyFallsThroughToTheAncestor :: control :: '
 			+ 'M-REFLECTIVE-MERGE,M-HOLDERS-MERGE,M-OWNED-MERGE',
+		'unit.check.LintConfigInheritanceTest#testCompletenessStaysWithTheListItWasDeclaredFor :: control :: M-REACH-COMPLETE-FOLLOWS-LIST',
 		'unit.check.LintConfigTest#testReachSkipsBranchesOnlyUnderADeclaredCompleteOracleList :: control :: M-REACH-CONFIGS-COMPLETE',
 		'unit.check.LintConfigTest#testReachTakesTheBuildsAsCompleteOnlyWhenEveryPathAgrees :: control :: M-REACH-CONFIGS-AGREE',
 		'unit.check.LintConfigTest#testTheCompileDirProbeReadsTheHxmlAsTheCompilerDoes :: control :: '

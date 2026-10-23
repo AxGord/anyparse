@@ -684,8 +684,8 @@ final class AddressIndex {
 	 * Record `node` and its subtree, returning the next free pre-order rank. An
 	 * already-recorded node is skipped whole, so a tree reaching the same node twice
 	 * keeps the FIRST occurrence throughout — its parent, and also its interval, so a
-	 * selector rooted at the SECOND parent would not see it as a descendant. Real
-	 * trees are trees: zero shared node identities over 1355 parsed files.
+	 * selector rooted at the SECOND parent would not see it as a descendant.
+	 * Real trees are trees: no node identity is shared in practice.
 	 * Runs after `_equiv` is assigned, and must: it buckets by the CANONICAL kind, so
 	 * an earlier call would group by the raw kind with no error and no failing test.
 	 * `enclosing` is the nearest SPANNED ancestor's span rather than the parent's, so a

@@ -45,8 +45,7 @@ final class CliArgs {
 
 	/**
 	 * The nearest ancestor `hxformat.json` content for `filePath`, or null. Thin alias
-	 * for `FormatConfigDiscovery.discover` — the CLI keeps the short local name its
-	 * ~20 call sites use.
+	 * for `FormatConfigDiscovery.discover` — the CLI keeps the short local name its call sites use.
 	 */
 	public static inline function discoverFormatConfig(filePath: String): Null<String> {
 		return FormatConfigDiscovery.discover(filePath);

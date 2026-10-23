@@ -116,8 +116,8 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 		// A multi-pair call is all-or-nothing, so a success line that names the count is
 		// the one thing that settles "did all of them land?" without re-reading the file.
 		return CliEdit.finishEdit(
-			'patch', filePath, o.write, Patch.patchNodeMany(source, target, pairs, o.reformat, plugin, optsJson, o.all), fix,
-			pairs.length > 1 ? '${pairs.length} fragment pairs applied' : null
+			'patch', filePath, o.write, Patch.patchNodeMany(source, target, pairs, o.reformat, plugin, optsJson, o.all),
+			fix ? plugin : null, pairs.length > 1 ? '${pairs.length} fragment pairs applied' : null
 		);
 	}
 

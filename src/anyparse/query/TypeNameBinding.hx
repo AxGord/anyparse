@@ -118,7 +118,7 @@ final class TypeNameBinding {
 
 	/**
 	 * `splitPath` per import path, null included: `statementAnswer` reads every import of a file once per NAME the
-	 * file asks about, and split the same path anew each time (~0.25 s of a client `lint --all`). Read only here.
+	 * file asks about, and split the same path anew each time. Read only here.
 	 */
 	private final _importPaths: Map<String, Null<ImportPath>> = [];
 

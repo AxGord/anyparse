@@ -409,6 +409,14 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return read == null ? null : read();
 	}
 
+	/** `SymbolIndexHost`: whether a linted path declared a complete build list (`ResolutionScope.buildsHeld`), noting the hold then. */
+	public function holdForUnknownBuilds(consumer: String): Bool {
+		final note: Null<(String) -> Void> = _resolutionScope?.buildsHeld;
+		if (note == null) return false;
+		note(consumer);
+		return true;
+	}
+
 	/** `SymbolIndexHost`: start the builds' compiles in the background (`ResolutionScope.buildsAhead`), when the run has any. */
 	public function reachBuildsAhead(): Void {
 		final start: Null<() -> Void> = _resolutionScope?.buildsAhead;
@@ -546,7 +554,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * `GrammarPlugin`: the inner shape with this wrapper's run-scoped `RefsCache` attached, so
 	 * `Refs.find` resolves through the memoized index instead of walking the tree per query. Built
 	 * ONCE per wrapper (`_refShape`): `_inner.refShape()` builds a fresh shape per call and
-	 * the checks ask per file, which cost ~0.8 s of construction and garbage on the client tree. The
+	 * the checks ask per file, which cost a construction and its garbage on every ask. The
 	 * attach is a write to the inner plugin's fresh copy, so it leaks nowhere.
 	 */
 	public function refShape(): RefShape {
@@ -632,10 +640,10 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function controlFlowSupport(): Null<ControlFlowSupport> return _inner.controlFlowSupport();
 
 	/**
-	 * Memoised per source, now that a profile names it (N1, 2026-10-17): on the client tree a `lint --all`
-	 * asked about every file from dozens of checks and paid ~0.9 s of whole-file rescans for it. The
+	 * Memoised per source, now that a profile names it: a `lint --all` asks about
+	 * every file from dozens of checks, and paid a whole-file rescan for each ask. The
 	 * cache holds one array per distinct file for the run, which is the price the old note here weighed
-	 * against a scan it judged small; the measurement settled it. Instance state like the rest, never
+	 * against a scan it judged small; the profile settled it. Instance state like the rest, never
 	 * process-scoped, and every answer is a copy (see `_lexicalRegionsCache`).
 	 */
 	public function lexicalRegions(source: String): Array<LexRegion> {
@@ -1025,6 +1033,13 @@ typedef ResolutionScope = {
 	 * ask the builds overlaps the two (`MemberReach.forRun`). Absent with `builds`.
 	 */
 	@:optional final buildsAhead: () -> Void;
+
+	/**
+	 * Say once per consumer that a proof needing `builds` held because the run knows none (`SymbolIndexHost.holdForUnknownBuilds`).
+	 * Present exactly when a linted path declared its oracle list complete — also when the paths disagree on the list and
+	 * the run reads no `builds` at all.
+	 */
+	@:optional final buildsHeld: (String) -> Void;
 
 	/**
 	 * What the run's compiler oracles typed, read on first demand and once per run (`TypedFactsProbe`); absent when the

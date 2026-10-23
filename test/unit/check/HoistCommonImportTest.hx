@@ -490,15 +490,38 @@ class HoistCommonImportTest extends Test {
 			return;
 		}
 		final head: String = 'package aqq;\n\nusing StringTools;\n';
+		// a declared build list whose builds this run does not know holds every other hoist, never this one
+		for (buildsUnknown in [false, true])
+			Assert.equals(
+				'src/aqq/OneQq.hx:StringTools@src/import.hx,src/aqq/ThreeQq.hx:StringTools@src/import.hx,'
+				+ 'src/aqq/TwoQq.hx:StringTools@src/import.hx',
+				planned([
+					{ name: 'src/aqq/OneQq.hx', source: '$head\nclass OneQq {}\n' },
+					{ name: 'src/aqq/TwoQq.hx', source: '$head\nclass TwoQq {}\n' },
+					{ name: 'src/aqq/ThreeQq.hx', source: '$head\nclass ThreeQq {}\n' },
+					{ name: 'src/aqq/FourQq.hx', source: 'package aqq;\n\nclass FourQq {}\n' }
+				], [{ file: Path.join([std, 'StdTypes.hx']), source: 'abstract Voidqq {}\n' }], null, buildsUnknown)
+			);
+	}
+
+	/**
+	 * A project that declared its build list complete and whose builds this run does not know — none compiled, none stored for
+	 * this input — holds a statement the implicit tier does not vouch for: the classpath evidence a project with no declared
+	 * list falls back on vouches for nothing a build of that list reads, and the fix would write it.
+	 */
+	@:pin('control')
+	@:killer('M-HOIST-UNKNOWN-BUILDS-GUESSED')
+	public function testADeclaredBuildListWhoseBuildsAreUnknownHoldsTheHoist(): Void {
+		if (StdResolver.stdDir() == null) {
+			Assert.pass();
+			return;
+		}
+		Assert.equals('', planned(COMMON_TREE, [], null, true));
+		// the same tree with no build list declared keeps the classpath evidence
 		Assert.equals(
-			'src/aqq/OneQq.hx:StringTools@src/import.hx,src/aqq/ThreeQq.hx:StringTools@src/import.hx,'
-			+ 'src/aqq/TwoQq.hx:StringTools@src/import.hx',
-			planned([
-				{ name: 'src/aqq/OneQq.hx', source: '$head\nclass OneQq {}\n' },
-				{ name: 'src/aqq/TwoQq.hx', source: '$head\nclass TwoQq {}\n' },
-				{ name: 'src/aqq/ThreeQq.hx', source: '$head\nclass ThreeQq {}\n' },
-				{ name: 'src/aqq/FourQq.hx', source: 'package aqq;\n\nclass FourQq {}\n' }
-			], [{ file: Path.join([std, 'StdTypes.hx']), source: 'abstract Voidqq {}\n' }])
+			'src/aqq/OneQq.hx:qqz.Zqqwwee@src/import.hx,src/aqq/ThreeQq.hx:qqz.Zqqwwee@src/import.hx,'
+			+ 'src/aqq/TwoQq.hx:qqz.Zqqwwee@src/import.hx',
+			planned(COMMON_TREE, [])
 		);
 	}
 
@@ -787,7 +810,8 @@ class HoistCommonImportTest extends Test {
 	 * order is a directory listing's, which is the filesystem's to decide.
 	 */
 	private function planned(
-		tree: Array<TreeFile>, ?libraries: Array<{ file: String, source: String }>, ?parsing: Array<Array<String>>
+		tree: Array<TreeFile>, ?libraries: Array<{ file: String, source: String }>, ?parsing: Array<Array<String>>,
+		buildsUnknown: Bool = false
 	): String {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeTree('apq_hoist_plan', tree);
@@ -795,7 +819,7 @@ class HoistCommonImportTest extends Test {
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final rendered: Array<String> = [
 				for (v in reportOf(
-					tree, root, libraries, parsing
+					tree, root, libraries, parsing, buildsUnknown
 				)) '${relative(v.file, root)}:${quoted(v.message, 0)}@${relative(quoted(v.message, 1), root)}'
 			];
 			rendered.sort((a, b) -> if (a < b)
@@ -897,12 +921,16 @@ class HoistCommonImportTest extends Test {
 	 * parses, tree-relative or absolute.
 	 */
 	private function reportOf(
-		tree: Array<TreeFile>, root: String, ?libraries: Array<{ file: String, source: String }>, ?parsing: Array<Array<String>>
+		tree: Array<TreeFile>, root: String, ?libraries: Array<{ file: String, source: String }>, ?parsing: Array<Array<String>>,
+		buildsUnknown: Bool = false
 	): Array<Violation> {
 		final files: Array<{ file: String, source: String }> = analysed(tree, root);
 		return libraries == null
 			? CheckFixture.violationsIn(new HoistCommonImport(), files)
-			: CheckFixture.violationsIn(new HoistCommonImport(), files, StdScope.plugin(files, libraries, true, buildsOf(root, parsing)));
+			: CheckFixture.violationsIn(
+				new HoistCommonImport(), files,
+				StdScope.plugin(files, libraries, true, buildsUnknown ? () -> null : buildsOf(root, parsing))
+			);
 	}
 
 	/** The rule's cross-file fix over the whole tree written under `root`, justified by its own report. */
@@ -919,10 +947,10 @@ class HoistCommonImportTest extends Test {
 	}
 
 	/** One build per entry of `parsing`, parsing exactly the files it names (resolved under `root`); null without `parsing`. */
-	private static function buildsOf(root: String, parsing: Null<Array<Array<String>>>): Null<ReachBuilds> {
+	private static function buildsOf(root: String, parsing: Null<Array<Array<String>>>): Null<() -> Null<ReachBuilds>> {
 		if (parsing == null) return null;
 		final cwd: String = Sys.getCwd();
-		return {
+		final builds: ReachBuilds = {
 			configurations: [
 				for (i => names in parsing)
 					{
@@ -939,6 +967,7 @@ class HoistCommonImportTest extends Test {
 			],
 			library: []
 		};
+		return () -> builds;
 	}
 
 	/** The head slice's resulting ambient source text — its `create`, or its edit applied to the existing source. */

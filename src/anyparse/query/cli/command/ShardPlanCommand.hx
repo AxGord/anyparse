@@ -43,8 +43,8 @@ final class ShardPlanCommand implements CliCommand {
 
 	#if (sys || nodejs)
 	/**
-	 * `apq shard-plan` — the arithmetic `tools/suite-shard.sh` used to carry as
-	 * fifteen awk blocks. This layer only reads and parses the runner and prints
+	 * `apq shard-plan` — the arithmetic `tools/suite-shard.sh` used to carry
+	 * as awk blocks. This layer only reads and parses the runner and prints
 	 * the result; every gate and the split itself are `ShardPlan`, under test.
 	 */
 	private static function runShardPlan(args: Array<String>): Int {

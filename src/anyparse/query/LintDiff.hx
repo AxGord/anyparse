@@ -157,12 +157,9 @@ final class LintDiff {
 	 * Both surpluses are occurrence counts over the same two multisets, so
 	 * `addedTotal - removedTotal` is ALWAYS `newTotal - oldTotal`. The identity is
 	 * worth stating because reading that pair backwards is what produced a backlog
-	 * item: a verdict of `66 added / 9 removed` was read as "57 findings FEWER", the
-	 * apparent contradiction was blamed on a normalization this module was said to be
-	 * missing, and a fix for it entered the queue. 66 - 9 = 57 findings MORE, which is
-	 * what the same reader's own per-rule tally (`+50 comment-width`, `+3
-	 * duplicate-code`, `+5 unused-return-value`, `+1` twice, `-2`, `-1` — net +57) had
-	 * already said. `render` now publishes the net, and `ruleDeltas` the per-rule
+	 * item: a verdict with more findings added than removed was read as a net DROP, the apparent contradiction was blamed
+	 * on a normalization this module was said to be missing, and a fix for it entered the queue — while the same reader's
+	 * own per-rule tally had already said the net was a rise. `render` now publishes the net, and `ruleDeltas` the per-rule
 	 * breakdown, so neither question needs a reader's arithmetic.
 	 */
 	public static function compare(before: LintDiffTally, after: LintDiffTally): LintDiffResult {

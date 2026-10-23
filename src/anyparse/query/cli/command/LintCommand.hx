@@ -52,10 +52,11 @@ typedef CheckPartition = {
 };
 
 /**
- * The `--range` window: a 1-based, inclusive LINE span, and the only scope the lint
- * layer narrows to below file granularity.
+ * The `--range` windows: one or more 1-based, inclusive LINE spans, and the only scope the
+ * lint layer narrows to below file granularity. Several spans serve a write that changed
+ * several regions: their hull would also hold the untouched code between them.
  *
- * A finding is kept when the line its span STARTS on falls inside; a finding carrying
+ * A finding is kept when the line its span STARTS on falls inside one; a finding carrying
  * no span at all is dropped, because no coordinate means no proof of membership. The
  * line is measured against the file as the run reads it AT THAT MOMENT, which matters
  * only under `--fix`: the fixed-point loop re-reads a rewritten file on the next pass,
@@ -69,7 +70,10 @@ typedef CheckPartition = {
  * writes wherever its own fix says, off a finding inside the window. Clipping that
  * would leave the file broken, which is the opposite of a safety net.
  */
-typedef LintRange = {
+typedef LintRange = Array<LineWindow>;
+
+/** One `--range` span: a 1-based, inclusive pair of line numbers. */
+typedef LineWindow = {
 	final from: Int;
 	final to: Int;
 };
@@ -232,7 +236,7 @@ final class LintCommand implements CliCommand {
 		// `Linter.run` drops its findings on the files that disable it.
 		final applyEnablement: Bool = o.ruleFilters.length == 0;
 		// Enablement is asked per DISTINCT config, not per file: every file of a directory gets the same memoised config,
-		// and the per-file form asked each of ~190 checks once per file (~0.17 s on the client tree). `paths` is the run's
+		// and the per-file form asked every check once per file. `paths` is the run's
 		// file order, the order every later per-file question discovers configs in, so each once-per-document config
 		// warning prints where it did.
 		final fileConfigs: Array<LintConfig> = LintDocuments.distinctConfigs(paths, resolveConfig);
@@ -277,7 +281,10 @@ final class LintCommand implements CliCommand {
 			'a computed member name may obtain any method'
 		);
 		final resolution: Null<ResolutionScope> = withCompilerFacts(
-			withReachConfigurations(unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig), ahead, reflective, holders),
+			withReachConfigurations(
+				unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig), ahead, reflective, holders,
+				paths.exists(path -> resolveConfig(path).reachConfigurationsComplete())
+			),
 			oracles, o.noOracle, early, reflective, holders
 		);
 
@@ -395,13 +402,21 @@ final class LintCommand implements CliCommand {
 	 * a `MemberReach` answer may then hold under their conditional compilation and read exactly the code they compile.
 	 * An oracle list not declared complete vouches for nothing, since a build it leaves out may compile code no listed
 	 * one does. The builds probed are stored under the fingerprint of the input they read (`ReachBuildsCache`), which
-	 * a run under `--no-oracle` — compiling nothing — reads instead (`withStoredBuilds`). Unchanged with no oracle.
+	 * a run under `--no-oracle` — compiling nothing — reads instead (`withStoredBuilds`). A run whose paths name different
+	 * lists reads no builds, and when one of them `declared` its list complete still carries the hold (`buildsHeld`).
+	 * Unchanged with no oracle.
 	 */
 	private static function withReachConfigurations(
 		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool, ahead: AheadBuilds,
-		?reflective: Array<String>, ?holders: Array<String>
+		?reflective: Array<String>, ?holders: Array<String>, declared: Bool = false
 	): Null<ResolutionScope> {
-		if (resolution == null || oracles.length == 0 || !complete) return resolution;
+		if (resolution == null || oracles.length == 0) return resolution;
+		// a path declared its list complete, so no proof may fall back on what a run with no declared list would read
+		if (!complete) return declared ? {
+			declared: resolution.declared,
+			sources: resolution.sources,
+			buildsHeld: heldNote('the linted paths name different compilerOracle lists, so the run reads none as complete')
+		} : resolution;
 		if (noOracle) return withStoredBuilds(resolution, oracles, reflective, holders);
 		var probed: Bool = false;
 		var builds: Null<ReachBuilds> = null;
@@ -435,7 +450,8 @@ final class LintCommand implements CliCommand {
 			sources: resolution.sources,
 			builds: probe,
 			buildsAhead: start,
-			buildsSettled: settled
+			buildsSettled: settled,
+			buildsHeld: heldNote('no build this run compiled said which files it parses')
 		};
 	}
 
@@ -456,7 +472,27 @@ final class LintCommand implements CliCommand {
 			}
 			return builds;
 		}
-		return { declared: resolution.declared, sources: resolution.sources, builds: load };
+		return {
+			declared: resolution.declared,
+			sources: resolution.sources,
+			builds: load,
+			buildsHeld: heldNote('this --no-oracle run found no builds stored for its exact input — a run with the oracle stores them')
+		};
+	}
+
+	/**
+	 * The run's `ResolutionScope.buildsHeld`: says once per consumer that it held for want of the builds, and `why` the run
+	 * knows none.
+	 */
+	private static function heldNote(why: String): (String) -> Void {
+		final told: Array<String> = [];
+		return consumer -> {
+			if (told.contains(consumer)) return;
+			told.push(consumer);
+			CliIo.stderr(
+				'apq lint: $consumer held what only the builds can vouch for — reachConfigurationsComplete is declared, but $why\n'
+			);
+		};
 	}
 
 	/** `builds` carrying the bounds the project declares on what a computed name may make or obtain, where it declares them. */
@@ -472,7 +508,7 @@ final class LintCommand implements CliCommand {
 	 * Start the builds' probe compiles (`ResolutionScope.buildsAhead`) when a check first waits on the facts, in a run that
 	 * started the facts compiles early (`factsEarly`, `startsFactsEarly`). Such a run nearly always asks a reach question, and
 	 * its first one escalates to the builds (`MemberReach.escalation`): started only when that question came, mid-way through
-	 * the first pass, the probes were waited on alone (client: 11 s). Started with the facts at the run's start instead, they took
+	 * the first pass, the probes were waited on alone. Started with the facts at the run's start instead, they took
 	 * the cores the first pass and the facts needed and bought nothing; started here they compile while the run waits anyway.
 	 * A write before the question still drops them unread (`buildsSettled`).
 	 */
@@ -570,6 +606,7 @@ final class LintCommand implements CliCommand {
 			facts: read.bind(false),
 			factsEdited: touched,
 			factsSettled: () -> if (early != null) read(true),
+			buildsHeld: resolution.buildsHeld,
 			buildsAhead: resolution.buildsAhead,
 			buildsSettled: resolution.buildsSettled
 		};
@@ -1068,7 +1105,8 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('                   rule gets its top 10 files one per line. --rule follows the\n');
 		CliIo.sysPrint('                   same threshold; json and checkstyle always list everything\n');
 		CliIo.sysPrint('  --range <a>:<b>  Only findings whose span STARTS on a line in [a, b], 1-based\n');
-		CliIo.sysPrint('                   and inclusive; the scope must be exactly one file. Narrows\n');
+		CliIo.sysPrint('                   and inclusive; several windows join with commas (1:4,9:9).\n');
+		CliIo.sysPrint('                   The scope must be exactly one file. Narrows\n');
 		CliIo.sysPrint('                   the report AND --fix. It narrows FINDINGS, not EDITS: an\n');
 		CliIo.sysPrint('                   atomic fix off a finding inside the window still writes\n');
 		CliIo.sysPrint('                   wherever its own fix says\n');
@@ -1147,7 +1185,8 @@ final class LintCommand implements CliCommand {
 					range = parseLintRange(spec);
 					if (range == null) {
 						CliIo.stderr(
-							'apq lint: --range expects <from>:<to>, 1-based inclusive line numbers with from <= to — got "$spec"\n'
+							'apq lint: --range expects <from>:<to>[,<from>:<to>…], 1-based inclusive line numbers with from <= to — got "'
+							+ '$spec"\n'
 						);
 						return lintParseExit(EXIT_USAGE);
 					}
@@ -1209,8 +1248,9 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * `<from>:<to>` — both ends required, 1-based, `from <= to`. Null on anything else,
-	 * and the caller turns that into a usage error naming the spec it was given.
+	 * `<from>:<to>`, or several of them joined by commas — both ends required, 1-based,
+	 * `from <= to`. Null on anything else, and the caller turns that into a usage error
+	 * naming the spec it was given.
 	 *
 	 * Deliberately stricter than `apq source --range`, which clamps to the file and lets
 	 * either end be omitted: this one is a FILTER, and a silently clamped window would
@@ -1222,15 +1262,20 @@ final class LintCommand implements CliCommand {
 	 * is the shared whole-token digit check `apq source --range` already uses.
 	 */
 	private static function parseLintRange(spec: String): Null<LintRange> {
-		final colon: Int = spec.indexOf(':');
-		if (colon <= 0 || colon == spec.length - 1) return null;
-		final lo: Null<Int> = SourceText.parseStrictInt(spec.substring(0, colon));
-		if (lo == null) return null;
-		final hi: Null<Int> = SourceText.parseStrictInt(spec.substring(colon + 1));
-		if (hi == null) return null;
-		final from: Int = lo;
-		final to: Int = hi;
-		return from < 1 || to < from ? null : { from: from, to: to };
+		final windows: LintRange = [];
+		for (part in spec.split(',')) {
+			final colon: Int = part.indexOf(':');
+			if (colon <= 0 || colon == part.length - 1) return null;
+			final lo: Null<Int> = SourceText.parseStrictInt(part.substring(0, colon));
+			if (lo == null) return null;
+			final hi: Null<Int> = SourceText.parseStrictInt(part.substring(colon + 1));
+			if (hi == null) return null;
+			final from: Int = lo;
+			final to: Int = hi;
+			if (from < 1 || to < from) return null;
+			windows.push({ from: from, to: to });
+		}
+		return windows;
 	}
 
 	/**
@@ -1332,13 +1377,13 @@ final class LintCommand implements CliCommand {
 		all: Array<Violation>, sourceOf: (String) -> Null<String>, range: Null<LintRange>
 	): Array<Violation> {
 		if (range == null) return all;
-		final window: LintRange = range;
+		final windows: LintRange = range;
 		return all.filter(v -> {
 			final span: Null<Span> = v.span;
 			final source: Null<String> = sourceOf(v.file);
 			if (span == null || source == null) return false;
 			final line: Int = span.lineCol(source).line;
-			return line >= window.from && line <= window.to;
+			return windows.exists(window -> line >= window.from && line <= window.to);
 		});
 	}
 

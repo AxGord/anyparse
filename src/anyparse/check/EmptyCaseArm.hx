@@ -22,7 +22,7 @@ using StringTools;
  *
  * Registered ON by default. The severity is advisory, the subject whitelist makes the
  * deletion PROVABLE rather than heuristic, and every finding the rule produced while it was
- * being written — over this project's own ~665 sources — was a genuine dead arm. A
+ * being written — over this project's own sources — was a genuine dead arm. A
  * `DefaultOff` marker would hide a rule with no observed false positive; the day one turns
  * up, the gate that let it through is the thing to fix.
  *

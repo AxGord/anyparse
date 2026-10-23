@@ -14,9 +14,9 @@ typedef ShardToken = {
  * The `APQ_TEST` token grammar `ShardPlan` writes and `RunTests` reads: a bare class substring runs every test of each
  * class it selects, and `<class>#<i>/<k>` runs the `i`-th of `k` slices of them.
  *
- * A slice exists because one class can outweigh a whole shard. `unit.query.MemberReachFactsTest` measured 271 s of a
- * 470 s suite — its fixtures each compile twice — so with whole classes as the unit no plan finishes before that one
- * process does, and seven of eight shards idled for four minutes. Slice `i` of `k` is every test name whose index in the
+ * A slice exists because one class can outweigh a whole shard. `unit.query.MemberReachFactsTest` costs a large share of
+ * the whole suite — its fixtures each compile twice — so with whole classes as the unit no plan finishes before that
+ * one process does, and the other shards idle while it runs. Slice `i` of `k` is every test name whose index in the
  * SORTED name list is `i` modulo `k`: a pure function of the name list, so the `k` slices are disjoint and cover the
  * class whatever order the runner lists the names in.
  *

@@ -321,9 +321,8 @@ final class WriterStarEmitLowering {
 		// flat `open+close`; non-empty → `_dc([_dt(open), _dn(cols,
 		// _dc([_dhl, item, [sep?]]*)), _dhl, _dt(close)])`. This replaces
 		// the prior flat `_dc([open, item, _dt(' '), item, …, close])`
-		// that had no multiline primitive — Session 7's HxFnBlock.stmts
-		// smoke test regressed 35 unit tests because function bodies
-		// collapsed to one line; the blockBody-shape layout restores
+		// that had no multiline primitive — function bodies collapsed to
+		// one line under it; the blockBody-shape layout restores
 		// parity with the non-`@:sep` path at L3981.
 		final blockEnded: Bool = starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED] == true;
 		if (closeText != null && sepText != null && blockEnded) {

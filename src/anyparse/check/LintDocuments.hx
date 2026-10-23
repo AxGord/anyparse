@@ -56,7 +56,8 @@ final class LintDocuments {
 	 * key it did not name falls through. A `compilerOracle` list replaces wholesale like
 	 * every other array: each element carries its own compile directory and defines, so a
 	 * document that names its own oracles can no longer inherit a directory belonging to
-	 * somebody else's hxml.
+	 * somebody else's hxml. `reachConfigurationsComplete` is a claim about one such list, so a document naming its own
+	 * list claims nothing about it until it says so.
 	 */
 	public static function mergeDocuments(near: LintDocument, far: LintDocument): LintDocument {
 		final rules: Map<String, RuleConfig> = [];
@@ -66,7 +67,9 @@ final class LintDocuments {
 			rules: rules,
 			compilerOracles: near.compilerOracles ?? far.compilerOracles,
 			compilerOracleServer: near.compilerOracleServer ?? far.compilerOracleServer,
-			reachConfigurationsComplete: near.reachConfigurationsComplete ?? far.reachConfigurationsComplete,
+			reachConfigurationsComplete: near.reachConfigurationsComplete ?? (
+				near.compilerOracles == null ? far.reachConfigurationsComplete : null
+			),
 			reflectiveClasses: near.reflectiveClasses ?? far.reflectiveClasses,
 			reflectiveMethodHolders: near.reflectiveMethodHolders ?? far.reflectiveMethodHolders,
 			resolutionRoots: near.resolutionRoots ?? far.resolutionRoots,

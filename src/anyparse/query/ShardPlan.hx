@@ -15,7 +15,7 @@ typedef ShardPlacement = {
 	parts: Int
 };
 
-/** A class's measured in-suite cost: its wall time in milliseconds and how many tests it ran (0 when unknown). */
+/** A class's in-suite cost: its wall time in milliseconds and how many tests it ran (0 when unknown). */
 typedef ClassWeight = {
 	ms: Int,
 	tests: Int
@@ -151,9 +151,9 @@ final class ShardPlan {
 	private static inline final RANK_OTHER: Int = 1000;
 
 	/**
-	 * In-suite self-times from a suite profile, in milliseconds, with the number of tests each class ran — the 24 heaviest
-	 * classes of `tools/suite-shard.sh -n 8 --timings` on 2026-10-05 (901 classes, 470 s in all; the other 877 average
-	 * 37 ms). In-suite rather than isolated: an isolated run re-pays the resolution warm-up that the monolith pays once,
+	 * In-suite self-times from a suite profile, in milliseconds, with the number of tests each class ran — the
+	 * heaviest classes of a `tools/suite-shard.sh --timings` profile; every other class is light. In-suite
+	 * rather than isolated: an isolated run re-pays the resolution warm-up that the monolith pays once,
 	 * which overstates every class touching the resolution library and produces a worse split. A run's own measurement
 	 * (`--weights`, which `dev shard` refreshes after every green run) overrides a row here.
 	 *

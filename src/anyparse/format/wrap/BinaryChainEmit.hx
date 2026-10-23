@@ -967,7 +967,7 @@ final class BinaryChainEmit {
 			// `glueProbe`, which keeps the head glued and lets the paren open
 			// (`a + (` … `)` — fork `unwrapAddOps`).
 			//
-			// OPERAND CLASS IS NOT A GATE (T37). The arm shipped restricted to a
+			// OPERAND CLASS IS NOT A GATE. The arm shipped restricted to a
 			// paren wrapping a same-class opAddSub subexpression (`(b - c)`), with a
 			// ternary / other-class paren (`(cond ? a : b)`) kept on the glue probe
 			// as fork parity. That restriction is retired: the user-facing rule is
@@ -1021,8 +1021,8 @@ final class BinaryChainEmit {
 			//    same as `IfLineExceeds`; the BG-descending `Full` form serves the
 			//    `n == lineWidth` chain probes) — probed nil on this arm's shapes
 			//    at the time of the ctor swap. Both edges are
-			//    pinned (`HxOpAddParenInnerBreakTest` at the statement, T20's
-			//    continuation pins at the call argument).
+			//    pinned (`HxOpAddParenInnerBreakTest` at the statement, the
+			//    outer-first-wrap continuation pins at the call argument).
 			//  - `IfArrowContinuationFits`'s own `n` is `lineWidth + 1` for the family
 			//    reason: it fits on strict `<`, so the budget must exclude the column
 			//    `n` itself for a continuation landing ON the limit to count as

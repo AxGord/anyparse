@@ -755,8 +755,8 @@ class Lowering {
 	 * Star carries a `@:lead` the newline was never that element's gap.
 	 *
 	 * SCOPE, since it is wider than the reported bug: the two emitters serve
-	 * every `@:lead` + `@:trivia` Star in the grammar (~20 sites), and three
-	 * families move — a comprehension or array bracket (the report), an object
+	 * every `@:lead` + `@:trivia` Star in the grammar, and three families move
+	 * — a comprehension or array bracket (the report), an object
 	 * literal or anon type written flat on the line after a break
 	 * (`var c =\n\t{k: 1, m: 2}` stayed broken before), and Keep mode, where
 	 * `triviaSepPredicateScanExpr` deliberately exempts element 0 from its own

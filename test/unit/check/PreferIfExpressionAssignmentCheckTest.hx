@@ -470,7 +470,7 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 
 	/**
 	 * Without a written `:Type` the declaration would be typed from the if-expression's unified
-	 * type instead of from its first write — measured, `var x = 1; if (c) x = (1:UInt);` is `Int`
+	 * type instead of from its first write — `var x = 1; if (c) x = (1:UInt);` is `Int`
 	 * but `var x = c ? (1:UInt) : 1;` is `UInt`, and a subclass in the first branch makes the
 	 * collapsed form fail to compile at all.
 	 */

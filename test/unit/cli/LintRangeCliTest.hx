@@ -4,7 +4,10 @@ package unit.cli;
 import sys.FileSystem;
 import sys.io.File;
 #end
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
+import anyparse.query.cli.CliEdit;
+import anyparse.query.cli.command.LintCommand.LintRange;
 
 /**
  * End-to-end probe for `apq lint --range` and for the `--fix` it exists to serve on the
@@ -28,6 +31,12 @@ class LintRangeCliTest extends Test {
 	private static inline final FOLDABLE_A: String = "'aaa' + 'bbb'";
 
 	private static inline final FOLDABLE_B: String = "'ccc' + 'ddd'";
+
+	/** Three members whose `if` / `else` returns every safe return fix would fold, between a line comment and a block comment. */
+	private static inline final ODD_FIXTURE: String = 'package pkg;\n\nclass C {\n\n\t// top comment\n'
+		+ '\tpublic static function f(x: Bool): Int {\n\t\tif (x) return 1; else return 2;\n\t}\n\n'
+		+ '\t/* block\n\t inner line */\n\tpublic static function g(x: Bool): Int {\n\t\tif (x) return 3; else return 4;\n\t}\n\n'
+		+ '\tpublic static function h(x: Bool): Int {\n\t\tif (x) return 5; else return 6;\n\t}\n\n}\n';
 
 	/** A window around a finding gates the run; a window beside it does not. */
 	public function testRangeNarrowsTheReport(): Void {
@@ -164,6 +173,151 @@ class LintRangeCliTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	/** Several windows join with commas, and a finding inside any one of them is kept. */
+	public function testRangeTakesSeveralWindows(): Void {
+		#if (sys || nodejs)
+		final file: String = fixture();
+		Assert.equals(1, lint(file, ['--range', '7:7,8:8']), 'the finding on line 8 is inside the second window');
+		Assert.equals(0, lint(file, ['--range', '5:5,7:7']), 'neither window holds a finding');
+		Assert.equals(2, Cli.run(['lint', file, '--no-oracle', '--range', '6:6,']), 'an empty window is refused');
+		Assert.equals(2, Cli.run(['lint', file, '--no-oracle', '--range', '6:6,9:8']), 'so is a reversed one among good ones');
+		FileSystem.deleteFile(file);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A write that changed two regions lints the lines of each, never the untouched code between them:
+	 * the hull of the two would have folded the standing concatenation that sits there.
+	 * Killed by arm `M-POST-WRITE-FIX-HULL`.
+	 */
+	@:pin('control')
+	@:killer('M-POST-WRITE-FIX-HULL')
+	public function testWriteFixLintsEachChangedRegionAndNotTheCodeBetween(): Void {
+		#if (sys || nodejs)
+		final file: String = fixture();
+		final payload: String = CliFixture.writeAs(
+			'lintrangepayload', 'txt',
+			"trace(a);\n====\ntrace(a);\nfinal c: String = 'eee' + 'fff';\ntrace(c);\n====\n"
+			+ "trace(b);\n====\ntrace(b);\nfinal e: String = 'ggg' + 'hhh';\ntrace(e);\n"
+		);
+		Assert.equals(0, Cli.run([
+			'patch',
+			file,
+			'--select',
+			'FnMember:main',
+			'--from-file',
+			payload,
+			'--write',
+			'--fix'
+		]));
+		FileSystem.deleteFile(payload);
+		final after: String = File.getContent(file);
+		Assert.isFalse(after.indexOf("'eee' + 'fff'") >= 0, 'the first region was fixed');
+		Assert.isFalse(after.indexOf("'ggg' + 'hhh'") >= 0, 'and so was the second');
+		Assert.isTrue(after.indexOf(FOLDABLE_B) >= 0, 'the standing finding between them was not');
+		Assert.isTrue(after.indexOf(FOLDABLE_A) >= 0, 'nor the one above both');
+		FileSystem.deleteFile(file);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A write that changed only a comment applies no fix at all, even one anchored on the very line it
+	 * changed: every safe fix is a code rewrite, and code is what the edit did not touch.
+	 * Killed by arm `M-POST-WRITE-FIX-TRIVIA-BLIND`.
+	 */
+	@:pin('control')
+	@:killer('M-POST-WRITE-FIX-TRIVIA-BLIND')
+	public function testACommentOnlyWriteAppliesNoFix(): Void {
+		#if (sys || nodejs)
+		// `prefer-doc-comment` is opted in so a safe fix is anchored ON the comment line the write changes.
+		final dir: String = CliFixture.writeDir('lintrange', [
+			{ name: 'apqlint.json', source: '{"rules": {"prefer-doc-comment": {"enabled": true}}}\n' },
+			{
+				name: 'C.hx',
+				source: 'package pkg;\n\nclass C {\n\n\t// note one\n\tpublic static function main(): Void {\n\t\ttrace(1);\n\t}\n\n}\n'
+			}
+		]);
+		final file: String = '$dir/C.hx';
+		Assert.equals(0, Cli.run(['fmt', file, '--write']), 'the fixture canonicalises');
+		final payload: String = CliFixture.writeAs('lintrangepayload', 'txt', '// note one\n====\n// note two\n');
+		Assert.equals(0, Cli.run([
+			'patch',
+			file,
+			'--select',
+			'ClassDecl:C',
+			'--from-file',
+			payload,
+			'--write',
+			'--fix'
+		]));
+		FileSystem.deleteFile(payload);
+		final after: String = File.getContent(file);
+		Assert.isTrue(after.indexOf('// note two') >= 0, 'the comment edit landed and was not rewritten');
+		Assert.isFalse(after.indexOf('/**') >= 0, 'no fix converted the line comment it changed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A comment-only write that adds a line in one place and edits a line in another — an odd net
+	 * insertion across two regions — applies no fix: the line diff must FIND that script, and the
+	 * code between the two comments, which the safe fixes would all rewrite, stays as written.
+	 * Killed by arm `M-POST-WRITE-FIX-HULL`.
+	 */
+	@:pin('control')
+	@:killer('M-POST-WRITE-FIX-HULL')
+	public function testAnOddCommentOnlyWriteAcrossTwoRegionsAppliesNoFix(): Void {
+		#if (sys || nodejs)
+		final file: String = CliFixture.write('lintrange', ODD_FIXTURE);
+		Assert.equals(0, Cli.run(['fmt', file, '--write']), 'the fixture canonicalises');
+		final before: String = File.getContent(file);
+		final payload: String = CliFixture.writeAs(
+			'lintrangepayload', 'txt',
+			'// top comment\n====\n// top comment\n// one more comment line\n====\ninner line */\n====\ninner line changed */\n'
+		);
+		Assert.equals(0, Cli.run([
+			'patch',
+			file,
+			'--select',
+			'ClassDecl:C',
+			'--from-file',
+			payload,
+			'--write',
+			'--fix'
+		]));
+		FileSystem.deleteFile(payload);
+		final after: String = File.getContent(file);
+		Assert.isTrue(after.indexOf('// one more comment line') >= 0, 'the first comment edit landed');
+		Assert.isTrue(after.indexOf('inner line changed */') >= 0, 'and so did the second');
+		Assert.equals(before.split('else').length, after.split('else').length, 'no `else` was rewritten away');
+		Assert.isFalse(after.indexOf(' ? ') >= 0, 'no return pair was folded into a ternary');
+		FileSystem.deleteFile(file);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Past the line diff's budget there are no windows to narrow to, and the answer is NONE rather than
+	 * the hull: the hull of a large edit is most of the file, and a fix over it rewrites untouched code.
+	 * Killed by arm `M-POST-WRITE-FIX-FAIL-OPEN`.
+	 */
+	@:pin('control')
+	@:killer('M-POST-WRITE-FIX-FAIL-OPEN')
+	public function testADiffPastItsBudgetGivesNoWindowsAtAll(): Void {
+		final before: String = 'class C {\n\tvar a = 1;\n\tvar b = 2;\n\tvar c = 3;\n}\n';
+		final after: String = 'class C {\n\tvar a = 10;\n\tvar b = 2;\n\tvar c = 30;\n}\n';
+		Assert.isNull(CliEdit.changedCodeWindows(before, after, new HaxeQueryPlugin(), 1));
+		final found: Null<LintRange> = CliEdit.changedCodeWindows(before, after, new HaxeQueryPlugin(), 100);
+		Assert.equals('2:2,4:4', found == null ? null : [for (w in found) '${w.from}:${w.to}'].join(','));
 	}
 
 	#if (sys || nodejs)

@@ -22,6 +22,7 @@ private typedef Reading = {
 /**
  * Flags a comment carrying a READING of a tree rather than a contract — a number with a unit of
  * time, a share written with the percent sign, an abbreviated commit hash, a slice or backlog id, a
+ * census count (a number, in digits or words, before a noun only a run over a tree counts), a
  * before-and-after pair of numbers, the verb a reading is recorded with, or a sentence pinning its
  * claim to the state of this repository. `Severity.Info`.
  *
@@ -34,8 +35,8 @@ private typedef Reading = {
  * A bare number is never a marker. A doc naming the code's own constant — a minimum statement
  * count, a configured maximum, a language floor — states a contract, and a rule that flagged digits
  * would report every one of them. Each shape therefore asks for something a contract does not have:
- * a unit beside the number, an identifier only a repository issues, a delta between two values, or
- * the recording verb where it introduces a claim.
+ * a unit or a census noun beside the number, an identifier only a repository issues, a delta between
+ * two values, or the recording verb where it introduces a claim.
  *
  * ## What stays silent
  *
@@ -70,8 +71,11 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	/** The abbreviated length a commit hash is written at. */
 	private static inline final HASH_LENGTH: Int = 8;
 
-	/** The digits a slice id carries, and the fewest a backlog id does. */
+	/** The most digits a slice id carries; an id with fewer is short, and is read only outside code. */
 	private static inline final SLICE_DIGITS: Int = 3;
+
+	/** The fewest digits a slice or backlog id is read with; a single digit is a type parameter's name. */
+	private static inline final SHORT_ID_DIGITS: Int = 2;
 
 	/** The most digits a backlog id carries. */
 	private static inline final BACKLOG_DIGITS: Int = 4;
@@ -87,6 +91,9 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 
 	/** The word standing between a count and the total it was counted out of. */
 	private static inline final RATIO_WORD: String = ' of ';
+
+	/** The code unit inline code is fenced with in prose. */
+	private static inline final BACKTICK: Int = '`'.code;
 
 	/** Bytes of the opener no comment word starts before — a scan reaching past it reads code. */
 	private static inline final OPENER_LENGTH: Int = 2;
@@ -114,7 +121,7 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	}
 
 	public function description(): String {
-		return 'a comment carrying a reading of a tree — a duration, a commit hash, a slice id, a before-and-after pair';
+		return 'a comment carrying a reading of a tree — a duration, a commit hash, a slice id, a census count, a before-and-after pair';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -148,21 +155,6 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 
 	public function noAutofixReason(): String {
 		return 'lifting the numbers out leaves a sentence only their author can finish — what the reading concluded is not in them';
-	}
-
-	/** `code` as its lower-case self, for the ASCII letters every marker is written in. */
-	private static inline function lowered(code: Int): Int {
-		return code >= 'A'.code && code <= 'Z'.code ? code + ('a'.code - 'A'.code) : code;
-	}
-
-	/** Whether `code` is an ASCII decimal digit. */
-	private static inline function isDigit(code: Int): Bool {
-		return code >= '0'.code && code <= '9'.code;
-	}
-
-	/** Whether `code` separates a number from its decimal group, in either convention. */
-	private static inline function isDecimalSeparator(code: Int): Bool {
-		return code == '.'.code || code == ','.code;
 	}
 
 	/** Whether `code` is drawn from a comment's own opener or gutter rather than from its prose. */
@@ -201,9 +193,12 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 			if (ratio != null) return ratio;
 			final share: Null<Reading> = percentAt(source, from, to, at);
 			if (share != null) return share;
-			final token: Int = tokenEnd(source, to, at);
+			final census: Null<Reading> = censusAt(source, from, to, at);
+			if (census != null) return census;
+			final token: Int = ProseNumbers.tokenEnd(source, to, at);
 			if (isCommitHash(source, at, token)) return { at: at, to: token, shape: 'a commit hash' };
-			if (isWorkId(source, at, token)) return { at: at, to: token, shape: 'a slice or backlog id' };
+			final id: Int = workIdEnd(source, from, to, at, token);
+			if (id > at) return { at: at, to: id, shape: 'a slice or backlog id' };
 			if (isRecordingVerb(source, at, token)) {
 				if (lineHasDigit(source, from, to, at)) return { at: at, to: token, shape: 'a recording verb beside a number' };
 				if (opensClause(source, from, at)) return { at: at, to: token, shape: 'a recording verb opening a claim' };
@@ -219,7 +214,7 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	 * standing alone is a quantity the code itself declares, and this rule never reads one.
 	 */
 	private static function durationAt(source: String, to: Int, at: Int): Null<Reading> {
-		final digits: Int = numberEnd(source, to, at);
+		final digits: Int = ProseNumbers.numberEnd(source, to, at);
 		if (digits == at) return null;
 		final unit: Int = timeUnitEnd(source, to, digits);
 		return unit < 0 ? null : { at: at, to: unit, shape: 'a duration' };
@@ -230,8 +225,8 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	 * one tree is written that way, while a contract counts nothing out of anything.
 	 */
 	private static function ratioAt(source: String, to: Int, at: Int): Null<Reading> {
-		final digits: Int = numberEnd(source, to, at);
-		if (digits == at || !matchesIgnoringCase(source, to, digits, RATIO_WORD)) return null;
+		final digits: Int = ProseNumbers.numberEnd(source, to, at);
+		if (digits == at || !ProseNumbers.matchesIgnoringCase(source, to, digits, RATIO_WORD)) return null;
 		final total: Int = numberAfter(source, to, digits + RATIO_WORD.length);
 		return total < 0 ? null : { at: at, to: total, shape: 'a count against a total' };
 	}
@@ -245,7 +240,7 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	 * share it looks like was never claimed.
 	 */
 	private static function percentAt(source: String, from: Int, to: Int, at: Int): Null<Reading> {
-		final digits: Int = numberEnd(source, to, at);
+		final digits: Int = ProseNumbers.numberEnd(source, to, at);
 		if (digits == at) return null;
 		var sign: Int = digits;
 		if (sign < to && source.fastCodeAt(sign) == ' '.code) sign++;
@@ -323,31 +318,12 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	private static function onReferenceTagLine(source: String, from: Int, to: Int, at: Int): Bool {
 		var i: Int = lineStart(source, from, at);
 		while (i < to && isGutter(source.fastCodeAt(i))) i++;
-		return REFERENCE_TAGS.exists(tag -> matchesIgnoringCase(source, to, i, tag));
+		return REFERENCE_TAGS.exists(tag -> ProseNumbers.matchesIgnoringCase(source, to, i, tag));
 	}
 
 	/** Whether a token starts at `at` — nothing an identifier may carry stands before it. */
 	private static function isTokenStart(source: String, from: Int, at: Int): Bool {
 		return at == from || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
-	}
-
-	/** Where the identifier token at `at` ends; `at` itself when none starts there. */
-	private static function tokenEnd(source: String, to: Int, at: Int): Int {
-		var i: Int = at;
-		while (i < to && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
-		return i;
-	}
-
-	/** Where the number at `at` ends, one decimal group included; `at` itself when none starts there. */
-	private static function numberEnd(source: String, to: Int, at: Int): Int {
-		var i: Int = at;
-		while (i < to && isDigit(source.fastCodeAt(i))) i++;
-		if (i == at) return at;
-		if (i + 1 < to && isDecimalSeparator(source.fastCodeAt(i)) && isDigit(source.fastCodeAt(i + 1))) {
-			i++;
-			while (i < to && isDigit(source.fastCodeAt(i))) i++;
-		}
-		return i;
 	}
 
 	/**
@@ -357,7 +333,7 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	private static function timeUnitEnd(source: String, to: Int, from: Int): Int {
 		var i: Int = from;
 		if (i < to && source.fastCodeAt(i) == ' '.code) i++;
-		final end: Int = tokenEnd(source, to, i);
+		final end: Int = ProseNumbers.tokenEnd(source, to, i);
 		if (end == i) return -1;
 		for (unit in TIME_UNITS) if (unit == source.substring(i, end)) return end;
 		return -1;
@@ -367,7 +343,7 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	private static function arrowEnd(source: String, to: Int, at: Int): Int {
 		return if (source.fastCodeAt(at) == ARROW)
 			at + 1
-		else if (matchesIgnoringCase(source, to, at, TYPED_ARROW))
+		else if (ProseNumbers.matchesIgnoringCase(source, to, at, TYPED_ARROW))
 			at + TYPED_ARROW.length
 		else
 			-1;
@@ -377,16 +353,17 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	private static function numberBefore(source: String, from: Int, at: Int): Int {
 		var i: Int = at;
 		while (i > from && source.fastCodeAt(i - 1) == ' '.code) i--;
-		if (i == from || !isDigit(source.fastCodeAt(i - 1))) return -1;
-		while (i > from && (isDigit(source.fastCodeAt(i - 1)) || isDecimalSeparator(source.fastCodeAt(i - 1)))) i--;
-		return isDigit(source.fastCodeAt(i)) ? i : i + 1;
+		if (i == from || !ProseNumbers.isDigit(source.fastCodeAt(i - 1))) return -1;
+		while (i > from && (ProseNumbers.isDigit(source.fastCodeAt(i - 1)) || ProseNumbers.isDecimalSeparator(source.fastCodeAt(i - 1))))
+			i--;
+		return ProseNumbers.isDigit(source.fastCodeAt(i)) ? i : i + 1;
 	}
 
 	/** Where the number standing just after `at` ends, or -1 when a non-number does. */
 	private static function numberAfter(source: String, to: Int, at: Int): Int {
 		var i: Int = at;
 		while (i < to && source.fastCodeAt(i) == ' '.code) i++;
-		final end: Int = numberEnd(source, to, i);
+		final end: Int = ProseNumbers.numberEnd(source, to, i);
 		return end == i ? -1 : end;
 	}
 
@@ -402,7 +379,7 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 		var letters: Int = 0;
 		for (i in at ... end) {
 			final c: Int = source.fastCodeAt(i);
-			if (isDigit(c))
+			if (ProseNumbers.isDigit(c))
 				digits++;
 			else if (c >= 'a'.code && c <= 'f'.code)
 				letters++;
@@ -412,33 +389,90 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 		return digits > 0 && letters > 0;
 	}
 
-	/** Whether the token `[at, end)` is a slice id or a backlog id — the ids this project issues. */
-	private static function isWorkId(source: String, at: Int, end: Int): Bool {
+	/**
+	 * Where the slice or backlog id at `[at, end)` ends, a sub-slice suffix (`S10.4`) included, or -1
+	 * when the token is not one of the ids this project issues.
+	 *
+	 * A short id is also how a type parameter is named, so one written as code — fenced in backticks,
+	 * or straight after the `:`, `<` or `.` that a type position opens with — is left to the code.
+	 */
+	private static function workIdEnd(source: String, from: Int, to: Int, at: Int, end: Int): Int {
 		final head: Int = source.fastCodeAt(at);
+		if (head != 'S'.code && head != 'T'.code) return -1;
 		final digits: Int = end - at - 1;
-		if (head != 'S'.code && head != 'T'.code) return false;
-		if (digits < SLICE_DIGITS || digits > BACKLOG_DIGITS) return false;
-		if (head == 'S'.code && digits != SLICE_DIGITS) return false;
-		for (i in at + 1...end) if (!isDigit(source.fastCodeAt(i))) return false;
-		return true;
+		if (digits < SHORT_ID_DIGITS || digits > (head == 'S'.code ? SLICE_DIGITS : BACKLOG_DIGITS)) return -1;
+		for (i in at + 1...end) if (!ProseNumbers.isDigit(source.fastCodeAt(i))) return -1;
+		if (digits < SLICE_DIGITS && namesAType(source, from, at)) return -1;
+		final sub: Int = end + 1;
+		if (sub >= to || source.fastCodeAt(end) != '.'.code || !ProseNumbers.isDigit(source.fastCodeAt(sub))) return end;
+		final subEnd: Int = ProseNumbers.tokenEnd(source, to, sub);
+		for (i in sub ... subEnd) if (!ProseNumbers.isDigit(source.fastCodeAt(i))) return end;
+		return subEnd;
+	}
+
+	/** Whether the token at `at` stands where code names a type: in inline code, or after `:`, `<`, `.`. */
+	private static function namesAType(source: String, from: Int, at: Int): Bool {
+		if (at > from) switch source.fastCodeAt(at - 1) {
+			case ':'.code, '<'.code, '.'.code:
+				return true;
+			case _:
+		}
+		return insideCodeSpan(source, from, at);
+	}
+
+	/** Whether `at` sits inside an inline code span — an odd number of backticks opens its line before it. */
+	private static function insideCodeSpan(source: String, from: Int, at: Int): Bool {
+		var fences: Int = 0;
+		for (i in lineStart(source, from, at) ... at) if (source.fastCodeAt(i) == BACKTICK) fences++;
+		return fences % 2 == 1;
+	}
+
+	/**
+	 * The census count starting at `at`, or null: a count — in digits, or spelled from eleven up —
+	 * followed by a noun only a run over a tree counts, or a number typeset with grouped thousands.
+	 *
+	 * The NOUN is the discrimination, as the unit is a duration's: a contract bounds a dimension of the
+	 * code, and no dimension is on the list. A small count is the size of a fixture and is not read; a
+	 * count fenced as inline code is quoted data; a bound, a standard's number or one glued to the token
+	 * before it is a contract (`ProseNumbers.readsAsContract`).
+	 */
+	private static function censusAt(source: String, from: Int, to: Int, at: Int): Null<Reading> {
+		if (insideCodeSpan(source, from, at)) return null;
+		final digits: Int = ProseNumbers.numberEnd(source, to, at);
+		if (digits > at) {
+			final grouped: Int = ProseNumbers.groupedEnd(source, to, digits);
+			if (grouped > digits)
+				return ProseNumbers.readsAsContract(source, from, to, at, grouped)
+					? null
+					: { at: at, to: grouped, shape: 'a census count' };
+			if (!ProseNumbers.isCensusSized(source, to, at)) return null;
+		}
+		final count: Int = digits > at ? digits : ProseNumbers.spelledNumberEnd(source, to, at);
+		if (count == at) return null;
+		final noun: Int = ProseNumbers.censusNounEnd(source, to, count);
+		return noun < 0 || ProseNumbers.readsAsContract(source, from, to, at, noun) ? null : { at: at, to: noun, shape: 'a census count' };
 	}
 
 	/** Whether the token `[at, end)` is the verb a reading is recorded with. */
 	private static function isRecordingVerb(source: String, at: Int, end: Int): Bool {
-		return RECORDING_VERBS.exists(verb -> tokenEqualsIgnoringCase(source, at, end, verb));
+		return RECORDING_VERBS.exists(verb -> ProseNumbers.tokenEqualsIgnoringCase(source, at, end, verb));
 	}
 
 	/** Where the phrase pinning a claim to one repository ends, or `at` when none starts there. */
 	private static function scopePhraseEnd(source: String, to: Int, at: Int): Int {
-		for (phrase in SCOPE_PHRASES) if (matchesIgnoringCase(source, to, at, phrase)) return at + phrase.length;
+		for (phrase in SCOPE_PHRASES) if (ProseNumbers.matchesIgnoringCase(source, to, at, phrase)) return at + phrase.length;
 		return at;
 	}
 
-	/** Whether a digit stands anywhere on the comment line holding `at`. */
+	/**
+	 * Whether a digit stands on the comment line holding `at`, outside inline code: digits in
+	 * backticks are code a sentence quotes.
+	 */
 	private static function lineHasDigit(source: String, from: Int, to: Int, at: Int): Bool {
 		var end: Int = at;
 		while (end < to && source.fastCodeAt(end) != '\n'.code) end++;
-		for (i in lineStart(source, from, at) ... end) if (isDigit(source.fastCodeAt(i))) return true;
+		for (i in lineStart(source, from, at) ... end) if (ProseNumbers.isDigit(source.fastCodeAt(i)) && !insideCodeSpan(source, from, i))
+			return true;
 		return false;
 	}
 
@@ -447,18 +481,6 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 		var i: Int = at;
 		while (i > from && source.fastCodeAt(i - 1) != '\n'.code) i--;
 		return i;
-	}
-
-	/** Whether the token `[at, end)` reads as `word`, case ignored. */
-	private static function tokenEqualsIgnoringCase(source: String, at: Int, end: Int, word: String): Bool {
-		return end - at == word.length && matchesIgnoringCase(source, end, at, word);
-	}
-
-	/** Whether `word` stands at `at`, case ignored and never reading past `to`. */
-	private static function matchesIgnoringCase(source: String, to: Int, at: Int, word: String): Bool {
-		if (at + word.length > to) return false;
-		for (i in 0...word.length) if (lowered(source.fastCodeAt(at + i)) != lowered(word.fastCodeAt(i))) return false;
-		return true;
 	}
 
 }

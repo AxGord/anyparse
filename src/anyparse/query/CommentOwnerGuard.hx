@@ -231,7 +231,7 @@ final class CommentOwnerGuard {
 	 * the code the producer meant, and that cannot change a verdict: a placement inside a comment
 	 * ends after that comment starts, so the fragment reads as "not before it" — which is what it
 	 * would have read anyway had the comment moved above it. An earlier revision blanked every
-	 * comment out of `code` first; arm F5 (that blanking made a no-op) left all 13 980 tests green
+	 * comment out of `code` first; an arm making that blanking a no-op left the whole suite green
 	 * AND every refusal message byte-identical, so it was work with no verdict attached and went.
 	 */
 	private static function placedCarry(source: String, spans: Array<Span>, code: String): Null<Array<Span>> {

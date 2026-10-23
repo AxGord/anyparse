@@ -1286,7 +1286,7 @@ class MemberOrderCheckTest extends Test {
 	 *
 	 * RED at base on the first assertion: the check emitted the spacing-only fallback and left
 	 * `declineReason` null, which is what `apq lint --fix` printed as "withheld it, without saying
-	 * why" for 12 of this project's own 13 residual findings.
+	 * why" for nearly all of this project's own residual findings.
 	 */
 	public function testTheOverBudgetDeclineNamesTheBudget(): Void {
 		final over: FixOutcome = fixOutcome(interleavedRanks(80, 1));

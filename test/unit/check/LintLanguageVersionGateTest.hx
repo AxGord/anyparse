@@ -12,9 +12,9 @@ import unit.cli.CliFixture;
  * `languageVersion`.
  *
  * `??` and `?.` are Haxe 4.3, `haxe.Exception` is 4.1, and the rules that rewrite into them
- * applied unconditionally. On one library that moved `??` from a single module into 27 —
- * core types among them — and raised 15 more modules from 4.0 to 4.1, in a tree that
- * already carried 54 `#if (haxe_ver >= 4.2)` guards. All of it had to be undone by hand.
+ * applied unconditionally. On one library that spread `??` from a single module into
+ * dozens — core types among them — and raised the floor of many more, in a tree that
+ * already carried its own `#if (haxe_ver >= 4.2)` guards. All of it had to be undone by hand.
  *
  * A project states its floor once and the rules follow. No declared floor means no
  * constraint — what every existing config already means.

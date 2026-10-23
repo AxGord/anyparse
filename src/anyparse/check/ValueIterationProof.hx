@@ -12,8 +12,8 @@ import anyparse.runtime.Span;
  *
  * Two kinds of container qualify. An `Array` or a `List` (`NominalTypes.valueIterationProvable`) walks one index or
  * node chain in both iterators, so the two agree whatever the body does: `Provable`. A map
- * (`NominalTypes.keyedIterationContainer`) re-reads each value BY KEY in its key-value iterator, so the two agree —
- * measured on `--interp`, js and hxcpp, docs/decisions.md — only while nothing changes the map: an entry the body
+ * (`NominalTypes.keyedIterationContainer`) re-reads each value BY KEY in its key-value iterator, so the two agree
+ * — on `--interp`, js and hxcpp alike, docs/decisions.md — only while nothing changes the map: an entry the body
  * removes reads `null` through the key, its stale value through `iterator()`, and a value the body replaces reads new
  * through one and old through the other. Such a loop is `Keyed`, and its fix asks `MemberReach` whether the body can
  * change the map (`keyedDecline`); the report never does, since that question builds a call graph.
