@@ -196,6 +196,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.GuardReturnCheckTest',
 		'unit.check.HaxeSpawnTest',
 		'unit.check.HoistBranchStringAffixCheckTest',
+		'unit.check.HoistCommonImportBuildsE2ETest',
 		'unit.check.HoistCommonImportTest',
 		'unit.check.HoistEmbeddedAssignmentCheckTest',
 		'unit.check.IdenticalOperandsCheckTest',

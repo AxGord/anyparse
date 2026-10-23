@@ -111,6 +111,14 @@ interface SymbolIndexHost {
 	function reachBuilds(): Null<ReachBuilds>;
 
 	/**
+	 * Called by `consumer`, a proof that needs the builds and found them unusable: true when the run declared its oracle
+	 * list complete, so the caller holds rather than guess from evidence that build list never vouched for, and the run
+	 * says once on stderr that `consumer` held; false when the run declared no complete list, and the caller's own
+	 * fallback stands.
+	 */
+	function holdForUnknownBuilds(consumer: String): Bool;
+
+	/**
 	 * Start `reachBuilds`' compiles in the background, so a run about to wait on its compiler facts waits on both at once;
 	 * `reachBuilds` then answers from them, unless the run wrote first. Nothing for a run that has no builds.
 	 */

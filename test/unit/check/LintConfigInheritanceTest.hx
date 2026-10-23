@@ -70,6 +70,30 @@ class LintConfigInheritanceTest extends Test {
 		#end
 	}
 
+	/**
+	 * `reachConfigurationsComplete` is a claim about ONE `compilerOracle` list: a nested document naming a list of its own
+	 * claims nothing about it until it says so, while one that names no list keeps the claim along with the list it inherits.
+	 */
+	@:pin('control') @:killer('M-REACH-COMPLETE-FOLLOWS-LIST')
+	public function testCompletenessStaysWithTheListItWasDeclaredFor(): Void {
+		#if (sys || nodejs)
+		final complete: String = '{"compilerOracle": "a.hxml", "reachConfigurationsComplete": true}';
+		final cases: Array<{ nested: String, expected: Bool }> = [
+			{ nested: '{"compilerOracle": "b.hxml"}', expected: false },
+			{ nested: '{"compilerOracle": "b.hxml", "reachConfigurationsComplete": true}', expected: true },
+			{ nested: '{"rules": {"magic-number": {"enabled": false}}}', expected: true },
+			{ nested: '{"reachConfigurationsComplete": false}', expected: false }
+		];
+		for (c in cases) {
+			final root: String = tree(complete, c.nested);
+			Assert.equals(c.expected, LintConfig.discover('$root/nested/Probe.hx').reachConfigurationsComplete(), c.nested);
+			CliFixture.removeDir(root);
+		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	public function testRulesMergePerRuleNotAsABlock(): Void {
 		#if (sys || nodejs)
 		// The whole point of per-RULE merging: a nested document that switches ONE rule off

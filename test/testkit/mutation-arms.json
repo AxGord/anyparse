@@ -6972,8 +6972,8 @@
 			"name": "M-REACH-CONFIGS-COMPLETE",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "withReachConfigurations",
-			"find": "|| oracles.length == 0 || !complete)",
-			"replace": "|| oracles.length == 0)",
+			"find": "if (!complete) return declared ?",
+			"replace": "if (false) return declared ?",
 			"note": "the oracle list is read as every build the project ships, so a platform branch no configuration compiles is skipped"
 		},
 		{
@@ -30016,6 +30016,46 @@
 			"method": "privatePaths",
 			"force": "[]",
 			"note": "scrub-guard stops reading paths against the private roots, so a client file path named in the tree or in a pushed range passes the guard silently"
+		},
+		{
+			"name": "M-HOIST-UNKNOWN-BUILDS-GUESSED",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "reachesEveryReceiver",
+			"find": "if (ctx.holdsWithoutBuilds()) return false;",
+			"replace": "if (false) return false;",
+			"note": "a project that declared its build list complete and whose builds the run does not know falls back on classpath evidence, so `--fix --no-oracle` writes an ambient statement into a directory a build of that list compiles without the statement's module"
+		},
+		{
+			"name": "M-HOIST-HELD-UNSAID",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "holdForUnknownBuilds",
+			"find": "note(consumer);",
+			"replace": "",
+			"note": "a proof that held for want of the declared builds holds silently, so a run that hoists nothing reads as a tree with nothing to hoist"
+		},
+		{
+			"name": "M-REACH-COMPLETE-FOLLOWS-LIST",
+			"type": "anyparse.check.LintDocuments",
+			"method": "mergeDocuments",
+			"find": "near.compilerOracles == null ? far.reachConfigurationsComplete : null",
+			"replace": "far.reachConfigurationsComplete",
+			"note": "a nested document naming a compilerOracle list of its own inherits the completeness its ancestor declared for another list, so the reach analysis reads a partial list as every build the project ships"
+		},
+		{
+			"name": "M-HOIST-MIXED-LISTS-GUESSED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "return declared ?",
+			"replace": "return false ?",
+			"note": "a run over paths whose configs name different oracle lists, one of them declared complete, carries no hold, so hoist-common-import falls back on classpath evidence and `--fix` writes an ambient statement a build of the declared list cannot resolve"
+		},
+		{
+			"name": "M-HELD-NOTE-LOST-WITH-FACTS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withCompilerFacts",
+			"find": "buildsHeld: resolution.buildsHeld,",
+			"replace": "",
+			"note": "the scope an oracle run hands its checks drops the hold, so a run whose declared builds did not answer falls back on classpath evidence and says nothing"
 		}
 	]
 }
