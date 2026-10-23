@@ -84,7 +84,9 @@ final class AddMetaCommand implements CliCommand implements PostWriteFix {
 		);
 		if (target == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
-		return CliEdit.finishEdit('add-meta', filePath, o.write, AddMeta.addMeta(source, target, meta, o.reformat, plugin, optsJson), fix);
+		return CliEdit.finishEdit(
+			'add-meta', filePath, o.write, AddMeta.addMeta(source, target, meta, o.reformat, plugin, optsJson), fix ? plugin : null
+		);
 	}
 
 	/** The all-default `AddMetaOpts` carrying a terminal exit code, for the `-h` / bad-flag arms. */

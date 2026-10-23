@@ -103,7 +103,7 @@ final class AddMemberCommand implements CliCommand implements PostWriteFix {
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = AddMember.addMember(source, typeStr, memberStr, o.reformat, plugin, optsJson);
-		return CliEdit.finishEdit('add-member', filePath, o.write, result, fix);
+		return CliEdit.finishEdit('add-member', filePath, o.write, result, fix ? plugin : null);
 	}
 
 	private static function printAddMemberUsage(): Void {

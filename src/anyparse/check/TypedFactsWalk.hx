@@ -1146,7 +1146,7 @@ final class TypedFactsWalk {
 	 * `if` with an `else` (a ternary is one), a `switch`, a `try`. Those are exactly the constructs `visit`
 	 * walks every value position of with the use it was handed, the condition, subject and patterns with their own, so a
 	 * `Held` reaches a read in a branch and nothing else: `final l = if (c) items else null;` holds `items` as
-	 * `l = items;` in a branch of a statement `if` does. Measured: without the block step the typed `if (c) items else null` is
+	 * `l = items;` in a branch of a statement `if` does. Without the block step the typed `if (c) items else null` is
 	 * `TIf(c, TBlock([items]), TBlock([null]))` and the read stays a value. A positive list: a cast, a call, an operator or anything
 	 * else hands on some other value, or one the facts cannot follow, and the read stays a value.
 	 */
@@ -1213,7 +1213,7 @@ final class TypedFactsWalk {
 	private static function wrapped(t: Type): Null<Type> {
 		return switch TypeTools.follow(t) {
 			case TAbstract(a, params):
-				// read once per abstract: each `a.get()` decodes the whole abstract, and a client build asks ~47k times (11% of the macro)
+				// read once per abstract: each `a.get()` decodes the whole abstract, and a large build asks for the same one over and over
 				final key: String = a.toString();
 				if (!abstractBodies.exists(key)) {
 					final read: AbstractType = a.get();

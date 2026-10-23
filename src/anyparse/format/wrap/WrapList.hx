@@ -2529,7 +2529,7 @@ class WrapList {
 			return flatLength(items[0]) < 0
 				? hugGlue
 				: IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, hugGlue, broken);
-		// ω-outer-first-wrap (T20) SCOPE: a `[`-leading sole arg — array literal
+		// ω-outer-first-wrap SCOPE: a `[`-leading sole arg — array literal
 		// or `for`/`while`/map comprehension — is excluded. A bracket-delimited
 		// collection owns its own multi-line layout: its `[` IS its wrap point,
 		// so the call hugs it and only the bracket opens
@@ -2546,7 +2546,7 @@ class WrapList {
 		// `wrapping.comprehensionCuddledOpen` cuddles to the `[`, so the first line
 		// ends at the generator's `)` rather than at an open delimiter.
 		if (DocMeasure.firstVisibleTextStartsWith(items[0], '['.code)) return IfNaturalFirstLineExceeds(lineWidth, broken, hugGlue);
-		// ω-outer-first-wrap (T20): OUTER boundaries win over inner ones. When
+		// ω-outer-first-wrap: OUTER boundaries win over inner ones. When
 		// breaking at THIS list's own delimiters already yields an argument that
 		// renders as one flat line at its continuation indent, take that shape —
 		// no inner group needs to break at all. Only when the argument still

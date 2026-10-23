@@ -24,8 +24,8 @@ using anyparse.macro.MetaInspect;
  * of a pattern set, and they live here because nothing else consumes those
  * two collectors.
  *
- * This is a LAYER, not a family, and the measurement that says so is the
- * inbound side: sixteen callers spread over EVERY writer shape family --
+ * This is a LAYER, not a family, and the evidence that says
+ * so is the inbound side: callers spread over EVERY writer shape family --
  * the Star emitters, both Ref-field halves, the separator builders, the Seq
  * walker and `WriterLowering`'s own constructor. Five sibling modules were
  * already reaching these members through bound closures in their ctx

@@ -445,6 +445,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.JsonQueryPluginTest#testAPatternStringCanBeAMetavariable :: control :: M-JSON-PATTERN-NO-METAVAR',
 		'unit.query.JsonQueryPluginTest#testTheLexicalRegionsAreTheStrings :: control :: M-JSON-REGIONS-NONE',
 		'unit.query.JsonQueryPluginTest#testTheRootSpanIsTight :: control :: M-JSON-ROOT-UNTIGHTENED',
+		'unit.query.LineDiffTest#testAnOddNetInsertionIsFoundWithinTheBudget :: control :: M-LINE-DIFF-PARITY',
+		'unit.query.LineDiffTest#testTheRunBetweenTwoEditsIsUnchanged :: control :: M-LINE-DIFF-HULL',
 		'unit.query.LintBaselineTest#testAFindingThatONLYMOVEDIsNotNew :: control :: M-LINT-BASELINE-NO-SUBTRACTION',
 		'unit.query.LintBaselineTest#testAFindingWithDataKeysByItsIdentity :: control :: '
 			+ 'M-BASELINE-DATA-IGNORED,M-LINTDIFF-DATA-IGNORED,M-LINTFORMAT-NO-DATA',

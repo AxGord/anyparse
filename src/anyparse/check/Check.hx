@@ -294,10 +294,9 @@ interface DefaultOff {}
  *
  * `??` and `?.` are Haxe 4.3; `haxe.Exception` is 4.1. A rule that rewrites into one of
  * them is correct on a project targeting that version and a silent portability break on a
- * project that does not — and nothing in the tree says which. On one library the three
- * rules in this family moved `??` from a single module into 27 (core types among them) and
- * raised the floor of 15 more modules from 4.0 to 4.1, all of which had to be undone by
- * hand alongside 54 existing `#if (haxe_ver >= 4.2)` guards.
+ * project that does not — and nothing in the tree says which. On one library the rules in this family
+ * spread `??` from a single module into dozens, core types among them, and raised the floor of many
+ * more, all of which had to be undone by hand beside the library's own `#if (haxe_ver >= 4.2)` guards.
  *
  * A project states its floor once (`apqlint.json` `languageVersion`), and a rule declaring
  * a higher minimum is dropped for that file. No declared version means no constraint —

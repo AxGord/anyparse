@@ -608,7 +608,7 @@ final class TypeResolver {
 		tree: QueryNode, span: Span, metaName: String, disableArg: Null<String>, ?memo: RefsCache
 	): Bool {
 		// memoised per tree in the run's `memo` when the caller has one: a proof asks twice per operand, and each ask
-		// walked the whole file (~0.37 s of a client `lint --all`)
+		// walked the whole file
 		final scopes: Array<NullSafetyScope> = memo == null
 			? collectNullSafetyScopes(tree, metaName, disableArg)
 			: memo.nullSafetyScopes(tree, '$metaName\t$disableArg', () -> collectNullSafetyScopes(tree, metaName, disableArg));

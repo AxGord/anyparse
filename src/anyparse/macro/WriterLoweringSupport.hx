@@ -42,7 +42,7 @@ final class WriterLoweringSupport {
 	 * generated writer reads a `WriteOptions` knob (cascade rules, body
 	 * policy flags, leftCurly placement, etc.). Replaces 4-line inline
 	 * `optFieldAccess(name)`
-	 * boilerplate at ~46 sites.
+	 * boilerplate at every such site.
 	 *
 	 * The sites that build the access with a non-`Context.currentPos()`
 	 * position (the `interMemberInfo` / `staticVarSubdivInfo` per-info

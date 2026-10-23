@@ -700,8 +700,8 @@ final class ElementSpan {
 	 * the enum's declared fallthrough for spellings the structural branches cannot
 	 * claim, and every spelling `HxMetaRaw`'s own doc names as its reason to exist
 	 * — a string embedding parens, four levels of nesting, a dotted name, a
-	 * colon-less `@name` — parses as `MetaCall` or `Meta` today. Dropping it from
-	 * the set flips nothing in 13266 tests; dropping `MetaCall` flips four. It stays
+	 * colon-less `@name` — parses as `MetaCall` or `Meta` today. Dropping it
+	 * from the set flips no test; dropping `MetaCall` flips several. It stays
 	 * for grammar-completeness, not for coverage.
 	 */
 	private static function isAnnotationElement(node: QueryNode): Bool {

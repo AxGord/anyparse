@@ -8,8 +8,7 @@ import testkit.TestRegistry;
 using Lambda;
 
 /**
- * Unit cover for `apq shard-plan` — the split `tools/suite-shard.sh` used to
- * carry as fifteen awk blocks.
+ * Unit cover for `apq shard-plan` — the split `tools/suite-shard.sh` used to carry as awk blocks.
  *
  * The gates are the point. Every one of them exists because its absence is
  * SILENT: a registration the old text extractor could not name became a
@@ -390,8 +389,8 @@ class ShardPlanTest extends Test {
 	}
 
 	/**
-	 * A class heavier than a shard's share is dealt as slices, one per shard it needs, each placed once — the shape that
-	 * took `MemberReachFactsTest` (271 s of a 470 s suite) off a single shard. Every lighter class stays whole.
+	 * A class heavier than a shard's share is dealt as slices, one per shard it needs, each placed once — the shape
+	 * that took `MemberReachFactsTest`, the heaviest class, off a single shard. Every lighter class stays whole.
 	 */
 	@:pin('control') @:killer('M-SHARD-SPLIT-NEVER') @:killer('M-SHARD-SPLIT-SLICE-WEIGHT')
 	public function testAClassHeavierThanAShardIsDealtAsSlices(): Void {

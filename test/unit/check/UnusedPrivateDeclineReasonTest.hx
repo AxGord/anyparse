@@ -18,7 +18,7 @@ import anyparse.runtime.Span;
  * else: no reported byte moves when a check adopts the field, so a report-text assertion would
  * be green either way.
  *
- * Eleven sites, TEN sentences: a member of a macro-built type and a private empty constructor
+ * One sentence fewer than sites: a member of a macro-built type and a private empty constructor
  * of one decline for the same cause and share one named sentence, which is what keeps the
  * ledger from splitting one cause into two rows. The two remaining `continue`s in `fix` get no
  * sentence by intent — see `testAFindingThisCallCannotPlaceGetsNoSentence`.
@@ -148,7 +148,7 @@ class UnusedPrivateDeclineReasonTest extends Test {
 	 *
 	 * That is why the sentence is a named constant rather than a second literal: its one LIVE writer
 	 * is the member gate, and the defensive one has to keep saying the same thing if it ever starts
-	 * firing. Ten sentences, eleven sites, one of them a guard.
+	 * firing. One sentence fewer than sites, and one of the sites a guard.
 	 */
 	public function testTheMacroBuiltCtorIsNeverReportedSoItsGateIsDefensive(): Void {
 		final files: Array<SourceFile> = [

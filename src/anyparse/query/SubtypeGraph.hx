@@ -67,8 +67,7 @@ final class SubtypeGraph {
 	/**
 	 * Every declared type in `_files` / `types` order (`types`) and, per member NAME, the ordinals of the
 	 * types that declare a member of that name (`byName`), built on first use. `subtypeOverridesProperty`
-	 * asks about three names per property and used to rescan every member of every type in the project for
-	 * each ask (~0.3 s of a client `lint --all`).
+	 * asks about three names per property and used to rescan every member of every type in the project for each ask.
 	 */
 	private var _memberOwners: Null<{ types: Array<ResolvedType>, byName: Map<String, Array<Int>> }> = null;
 

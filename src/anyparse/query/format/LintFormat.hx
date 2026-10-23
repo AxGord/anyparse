@@ -329,7 +329,7 @@ final class LintFormat {
 	/**
 	 * The line index of `file`, built at most once per render. `Span.lineCol` counts newlines
 	 * from offset zero on every call, so resolving one position per finding costs
-	 * O(findings x file size) — the shape that made a 413 KB file with ~9750 findings dominate a
+	 * O(findings x file size) — the shape that made one large file with many findings dominate a
 	 * whole-corpus run. `LineIndex` pays one linear pass per source instead, and its own doc
 	 * states it resolves identically, clamps included.
 	 */

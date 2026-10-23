@@ -1488,6 +1488,43 @@
 			"note": "the --range window stops filtering, so a write op's --fix rewrites every finding in the file instead of only those on the lines it changed"
 		},
 		{
+			"name": "M-LINE-DIFF-HULL",
+			"type": "anyparse.query.LineDiff",
+			"method": "shortestScript",
+			"force": "null",
+			"note": "the diff never finds a script, so it answers none for every edit and the run between two edits is never reported unchanged"
+		},
+		{
+			"name": "M-POST-WRITE-FIX-HULL",
+			"type": "anyparse.query.cli.CliEdit",
+			"method": "changedCodeWindows",
+			"force": "[{ from: 1, to: after.split('\\n').length }]",
+			"note": "a write op's --fix lints the whole file instead of the lines the write changed, so a standing finding between or around two edited regions is rewritten too"
+		},
+		{
+			"name": "M-POST-WRITE-FIX-TRIVIA-BLIND",
+			"type": "anyparse.query.cli.CliEdit",
+			"method": "triviaLines",
+			"force": "[for (_ in lines) false]",
+			"note": "no line reads as trivia, so a write that changed only a comment still applies code fixes anchored on that comment line"
+		},
+		{
+			"name": "M-LINE-DIFF-PARITY",
+			"type": "anyparse.query.LineDiff",
+			"method": "shortestScript",
+			"find": "if (x >= n && y >= m) reached = true;",
+			"replace": "if (x >= n && y >= m && (n - m) % 2 == d % 2) reached = true;",
+			"note": "the end is recognised only when the length difference and the edit distance share a remainder, which a negative odd difference never does, so a script whose new text is an odd number of lines longer is never found"
+		},
+		{
+			"name": "M-POST-WRITE-FIX-FAIL-OPEN",
+			"type": "anyparse.query.cli.CliEdit",
+			"method": "changedCodeWindows",
+			"find": "if (edits == null) return null;",
+			"replace": "if (edits == null) return [{ from: 1, to: now.length }];",
+			"note": "a diff past its budget falls back to one window over the whole file, so a write op's --fix rewrites code the write never touched"
+		},
+		{
 			"name": "M-CLI-REQUIREMATCH-STATIC",
 			"type": "anyparse.query.cli.CliContext",
 			"method": "CliContext",
@@ -3398,6 +3435,14 @@
 			"note": "the recording verb no longer needs a number beside it mid-clause, so prose saying what the code itself measures is reported as a reading of a tree"
 		},
 		{
+			"name": "M-DOC-CLAIM-VERB-ANY-DIGIT",
+			"type": "anyparse.check.DocMeasurementClaim",
+			"method": "lineHasDigit",
+			"find": "&& !insideCodeSpan(source, from, i)",
+			"replace": "&& i >= from",
+			"note": "a digit inside inline code beside the recording verb mid-clause makes it a record again, so a code sample the sentence quotes is reported as a reading"
+		},
+		{
 			"name": "M-DOC-CLAIM-PERCENT-REMAINDER-BLIND",
 			"type": "anyparse.check.DocMeasurementClaim",
 			"method": "percentAt",
@@ -3418,6 +3463,42 @@
 			"method": "insideReference",
 			"force": "false",
 			"note": "a marker inside a path or a URL, and one on a doc-tag line, stop being references, so a pointer at where the numbers live is reported as if it carried them"
+		},
+		{
+			"name": "M-DOC-CLAIM-CENSUS-NOUN-ANY",
+			"type": "anyparse.check.ProseNumbers",
+			"method": "isCensusNoun",
+			"force": "true",
+			"note": "every word after a count reads as a census noun, so a contract's own bound on a dimension (lines, members) is reported as a census of a tree"
+		},
+		{
+			"name": "M-DOC-CLAIM-CENSUS-FLOOR",
+			"type": "anyparse.check.ProseNumbers",
+			"method": "isCensusSized",
+			"force": "true",
+			"note": "a single-digit count and a version number read as census-sized, so a fixture's own size and a language version before a noun are reported as readings"
+		},
+		{
+			"name": "M-DOC-CLAIM-CENSUS-CODESPAN",
+			"type": "anyparse.check.DocMeasurementClaim",
+			"method": "censusAt",
+			"find": "if (insideCodeSpan(source, from, at)) return null;",
+			"replace": "if (insideCodeSpan(source, from, at) && at < from) return null;",
+			"note": "a count fenced as inline code stops being quoted data, so a tool's output quoted in prose is reported as a census"
+		},
+		{
+			"name": "M-DOC-CLAIM-SHORT-ID-TYPE-BLIND",
+			"type": "anyparse.check.DocMeasurementClaim",
+			"method": "namesAType",
+			"force": "false",
+			"note": "a short id written as code stops naming a type, so a type parameter in backticks or after a colon is reported as a slice or backlog id"
+		},
+		{
+			"name": "M-DOC-CLAIM-CENSUS-BOUND-BLIND",
+			"type": "anyparse.check.ProseNumbers",
+			"method": "readsAsContract",
+			"force": "false",
+			"note": "a bound, a standard's or a year's number and a count glued to the token before it all read as a census, so a doc stating the code's own limit or a version is reported as a reading"
 		},
 		{
 			"name": "M-DOC-LENGTH-CONFIG-BLIND",

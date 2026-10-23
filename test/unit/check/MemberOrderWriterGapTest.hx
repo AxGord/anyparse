@@ -19,7 +19,10 @@ using StringTools;
 @:nullSafety(Strict)
 class MemberOrderWriterGapTest extends Test {
 
-	/** the client's width and its `aroundMultilineFields: 1` - the config under which the 44 client findings could never be fixed. */
+	/**
+	 * the client's width and its `aroundMultilineFields: 1` - the config
+	 * under which the client findings of this shape could never be fixed.
+	 */
 	private static inline final AROUND_MULTILINE: String =
 		'{"wrapping": {"maxLineLength": 140}, "emptyLines": {"aroundMultilineFields": 1}}';
 
@@ -42,8 +45,8 @@ class MemberOrderWriterGapTest extends Test {
 
 	/**
 	 * A client file (without its package, imports and `@:nullSafety`): two same-rank
-	 * fields, the second written over two lines, set off by the blank `aroundMultilineFields: 1` writes there - one
-	 * of the 44 client findings whose fix the canonical round-trip dropped every time.
+	 * fields, the second written over two lines, set off by the blank `aroundMultilineFields: 1`
+	 * writes there - one of the client findings whose fix the canonical round-trip dropped every time.
 	 */
 	private static final HELP: String = 'class Help {\n\tpublic final faqs:GetDocs = new GetDocs();\n\n'
 		+ '\tpublic final sendSupportEmail:NetEntity2<ResponseRoot2, ErrorResponse> =\n'
