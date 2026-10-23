@@ -30710,8 +30710,8 @@
 		{
 			"name": "M-ACCESS-GRANT-LAST-SEGMENT",
 			"type": "anyparse.query.RawSourceScan",
-			"method": "grantsAccessTo",
-			"find": " || typePaths.exists(t -> t.startsWith('$path.') || path.startsWith('$t.'))",
+			"method": "grantReaches",
+			"find": "if (target.paths.exists(t -> t.startsWith('$path.') || path == t || path.startsWith('$t.'))) return true;",
 			"replace": "",
 			"note": "an access grant counts only when its LAST segment is the type, so `@:access(pkg)` and `@:access(pkg.Type.member)` grant nothing and every confinement gate calls a reached private member confined"
 		},
@@ -30734,9 +30734,31 @@
 			"name": "M-WAIVER-WHOLE-FILE",
 			"type": "anyparse.query.RawSourceScan",
 			"method": "waivedNamesOf",
-			"find": "collectWaivedNames(tree, tag, false, names);",
-			"replace": "collectWaivedNames(tree, tag, true, names);",
+			"find": "false, names);",
+			"replace": "true, names);",
 			"note": "every name a waiver file spells counts as waived, so a same-named local one statement past the waiver keeps a dead private member alive"
+		},
+		{
+			"name": "M-ANCESTOR-GRANT-UNSEEN",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "grantTargetsOf",
+			"force": "[{ name: typeName, paths: _typePathsByName[typeName] ?? [], unresolved: false }]",
+			"note": "a grant is held against the owner's own path alone, so `@:access(base.Base)` or `@:access(base)` stops reaching a subclass's private members"
+		},
+		{
+			"name": "M-TRIVIAL-GETTER-ACCESSOR-UNSEEN",
+			"type": "anyparse.check.TrivialGetter",
+			"method": "accessorReachedOutside",
+			"force": "false",
+			"note": "trivial-getter deletes an accessor a subtype or a grantee calls by name, guarding the backing field alone"
+		},
+		{
+			"name": "M-WAIVER-CONSTRUCTION-UNSPELLED",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "collectWaivedNames",
+			"find": "ctor != null && node.kind == ctor.newKind ? ctor.name : node.name",
+			"replace": "node.name",
+			"note": "a waived `new T()` spells the constructed type alone, so a private constructor reached only through it reads as unreached"
 		}
 	]
 }

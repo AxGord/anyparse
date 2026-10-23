@@ -33,6 +33,9 @@ class PrivateAccessFormParityTest extends Test {
 	/** The declaring file. */
 	private static inline final DECL_FILE: String = 'pkg/A.hx';
 
+	/** The file declaring the superclass every cell's `A` extends — in a third package, so its grants reach `A` only through it. */
+	private static inline final BASE_FILE: String = 'base/Base.hx';
+
 	/** The reaching file, in ANOTHER package so no package-level privilege could stand in for the grant. */
 	private static inline final REACH_FILE: String = 'other/B.hx';
 
@@ -70,6 +73,17 @@ class PrivateAccessFormParityTest extends Test {
 		+ '\tprivate var _lonely: Int = 0;\n\n\tpublic function new() {}\n\n\tpublic function run(): Int {\n'
 		+ '\t\t_reached = 3;\n\t\t_lonely = 4;\n\t\treturn _reached + _lonely;\n\t}\n\n}\n';
 
+	/** Two read-write properties over private backing fields, both accessors trivial — `trivial-getter`'s `(get, set)` collapse. */
+	private static final A_GET_SET: String = 'package pkg;\n\nclass A {\n\n\tpublic var reached(get, set): Int;\n'
+		+ '\tpublic var lonely(get, set): Int;\n\n\tprivate var _reached: Int = 0;\n\tprivate var _lonely: Int = 0;\n\n'
+		+ '\tpublic function new() {}\n\n\tprivate function get_reached(): Int {\n\t\treturn _reached;\n\t}\n\n'
+		+ '\tprivate function set_reached(v: Int): Int {\n\t\treturn _reached = v;\n\t}\n\n'
+		+ '\tprivate function get_lonely(): Int {\n\t\treturn _lonely;\n\t}\n\n'
+		+ '\tprivate function set_lonely(v: Int): Int {\n\t\treturn _lonely = v;\n\t}\n\n}\n';
+
+	/** The superclass, declaring nothing private of its own. */
+	private static final BASE: String = 'package base;\n\nclass Base {\n\n\tpublic function new() {}\n\n}\n';
+
 	/** Two private fields named against the convention — `naming`'s rename shape. */
 	private static final A_MISNAMED: String = 'package pkg;\n\nclass A {\n\n\tprivate var _reached_x: Int = 0;\n'
 		+ '\tprivate var _lonely_x: Int = 0;\n\n\tpublic function new() {}\n\n\tpublic function read(): Int {\n'
@@ -79,46 +93,75 @@ class PrivateAccessFormParityTest extends Test {
 	private static final CELLS: Array<Cell> = [
 		{
 			name: 'trivial-getter',
-			decl: A_PROPERTY,
+			rule: 'trivial-getter',
+			decl: extended(A_PROPERTY),
 			member: REACHED,
 			body: 'return a._reached;'
 		},
 		{
+			name: 'trivial-getter-getter-call',
+			rule: 'trivial-getter',
+			decl: extended(A_PROPERTY),
+			member: 'get_reached',
+			body: 'return a.get_reached();'
+		},
+		{
+			name: 'trivial-getter-setter-call',
+			rule: 'trivial-getter',
+			decl: extended(A_GET_SET),
+			member: 'set_reached',
+			body: 'a.set_reached(5);\n\t\treturn 0;'
+		},
+		{
 			name: 'unused-private',
-			decl: A_UNUSED,
+			rule: 'unused-private',
+			decl: extended(A_UNUSED),
 			member: REACHED,
 			body: 'return a._reached;'
 		},
 		{
 			name: 'static-constant',
-			decl: A_INSTANCE_CONSTANT,
+			rule: 'static-constant',
+			decl: extended(A_INSTANCE_CONSTANT),
 			member: REACHED,
 			body: 'return a._reached;'
 		},
 		{
 			name: 'prefer-final-field',
-			decl: A_NEVER_REASSIGNED,
+			rule: 'prefer-final-field',
+			decl: extended(A_NEVER_REASSIGNED),
 			member: REACHED,
 			body: 'a._reached = 5;\n\t\treturn 0;'
 		},
 		{
 			name: 'scratch-field',
-			decl: A_SCRATCH,
+			rule: 'scratch-field',
+			decl: extended(A_SCRATCH),
 			member: REACHED,
 			body: 'return a._reached;'
 		},
 		{
 			name: 'naming',
-			decl: A_MISNAMED,
+			rule: 'naming',
+			decl: extended(A_MISNAMED),
 			member: '_reached_x',
 			body: 'return a._reached_x;'
 		}
 	];
 
 	/**
-	 * The five spellings of the privilege; the type grant is the baseline.
+	 * The seven spellings of the privilege — five naming `A` or nothing, two naming only its superclass or that
+	 * superclass's package; the type grant is the baseline.
 	 */
-	private static final FORMS: Array<String> = [TYPE_GRANT, 'package', 'member', 'method', 'expression'];
+	private static final FORMS: Array<String> = [
+		TYPE_GRANT,
+		'package',
+		'member',
+		'method',
+		'expression',
+		'ancestor',
+		'ancestor-package'
+	];
 
 	/**
 	 * No form licenses a finding or an edit on the declaring file that the type grant does not.
@@ -126,6 +169,7 @@ class PrivateAccessFormParityTest extends Test {
 	@:pin('control')
 	@:killer('M-ACCESS-GRANT-LAST-SEGMENT')
 	@:killer('M-PRIVATE-ACCESS-UNSEEN')
+	@:killer('M-ANCESTOR-GRANT-UNSEEN')
 	public function testEveryFormOfThePrivilegeStopsWhatTheTypeGrantStops(): Void {
 		final out: Array<String> = [];
 		for (cell in CELLS) {
@@ -149,7 +193,7 @@ class PrivateAccessFormParityTest extends Test {
 			final run: CellRun = runCell(cell, form);
 			final reached: Span = declarationLine(cell.decl, cell.member);
 			final lonely: Span = declarationLine(cell.decl, cell.member.replace('reached', 'lonely'));
-			final rule: String = cell.name;
+			final rule: String = cell.rule;
 			final declEdits: Array<Span> = run.declEdits[rule] ?? [];
 			final reachEdits: Int = run.reachEdits[rule] ?? 0;
 			if (declEdits.exists(s -> overlaps(s, reached)) && reachEdits == 0) out.push('$form@$rule rewrites $REACHED alone');
@@ -168,10 +212,76 @@ class PrivateAccessFormParityTest extends Test {
 		final reacher: String = 'package other;\n\nimport pkg.A;\n\nclass B {\n\n\tpublic function new() {}\n\n'
 			+ '\tpublic function reach(a: A): Int {\n\t\t@:privateAccess a.toString();\n\t\tfinal _reached: Int = 1;\n'
 			+ '\t\treturn _reached;\n\t}\n\n}\n';
-		final files: Array<SourceFile> = [{ file: DECL_FILE, source: A_UNUSED }, { file: REACH_FILE, source: reacher }];
+		final files: Array<SourceFile> = [
+			{ file: BASE_FILE, source: BASE },
+			{ file: DECL_FILE, source: extended(A_UNUSED) },
+			{ file: REACH_FILE, source: reacher }
+		];
 		final plugin: CachingGrammarPlugin = scoped(files);
 		final found: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files, plugin).filter(v -> v.file == DECL_FILE);
 		Assert.equals(2, found.length, 'both private fields are unreached: ${[for (v in found) v.message]}');
+	}
+
+	/**
+	 * A subclass calling an accessor by its own name keeps it: the collapse deletes the accessors with the backing field, so
+	 * `trivial-getter` refuses the property whose getter a subtype calls and still collapses the control.
+	 */
+	@:pin('control')
+	@:killer('M-TRIVIAL-GETTER-ACCESSOR-UNSEEN')
+	public function testASubclassCallingAnAccessorKeepsTheProperty(): Void {
+		final subclass: String = 'package other;\n\nimport pkg.A;\n\nclass B extends A {\n\n\tpublic function new() {\n\t\tsuper();\n'
+			+ '\t}\n\n\tpublic function reach(): Int {\n\t\treturn get_reached();\n\t}\n\n}\n';
+		final decl: String = extended(A_PROPERTY);
+		final run: CellRun = runFiles([
+			{ file: BASE_FILE, source: BASE },
+			{ file: DECL_FILE, source: decl },
+			{ file: REACH_FILE, source: subclass }
+		], decl);
+		final edits: Array<Span> = run.declEdits['trivial-getter'] ?? [];
+		Assert.isFalse(edits.exists(s -> overlaps(s, declarationLine(decl, 'get_reached'))), 'the called getter is deleted');
+		Assert.isTrue(edits.exists(s -> overlaps(s, declarationLine(decl, 'get_lonely'))), 'the control is not collapsed — vacuous');
+	}
+
+	/**
+	 * A private constructor another file reaches — by a waiver around `new A()` or under a grant — is never called unused:
+	 * the construction spells the type, not the member name `new`.
+	 */
+	@:pin('guard')
+	public function testAConstructorReachedFromAnotherFileStays(): Void {
+		final decl: String =
+			'package pkg;\n\nclass A {\n\n\tprivate function new() {}\n\n\tpublic function v(): Int {\n\t\treturn 6;\n\t}\n\n}\n';
+		for (form in ['expression', TYPE_GRANT, 'package']) {
+			final meta: String = if (form == TYPE_GRANT)
+				'@:access(pkg.A)\n'
+			else if (form == 'package')
+				'@:access(pkg)\n'
+			else
+				'';
+			final make: String = form == 'expression' ? '@:privateAccess new A()' : 'new A()';
+			final reacher: String = 'package other;\n\nimport pkg.A;\n\n${meta}class B {\n\n\tpublic static function reach(): Int {\n'
+				+ '\t\tfinal a: A = $make;\n\t\treturn a.v();\n\t}\n\n}\n';
+			final files: Array<SourceFile> = [{ file: DECL_FILE, source: decl }, { file: REACH_FILE, source: reacher }];
+			final found: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files, scoped(files))
+				.filter(v -> v.file == DECL_FILE);
+			Assert.equals(0, found.length, '$form: ${[for (v in found) v.message]}');
+		}
+	}
+
+	/**
+	 * A waiver around `new A()` reaches `A`'s private constructor though it never writes the member name: the index answers
+	 * the constructor's name as waived there, and only there.
+	 */
+	@:pin('control')
+	@:killer('M-WAIVER-CONSTRUCTION-UNSPELLED')
+	public function testAWaivedConstructionSpellsTheConstructor(): Void {
+		final decl: String = 'package pkg;\n\nclass A {\n\n\tprivate function new() {}\n\n}\n';
+		for (waived in [true, false]) {
+			final make: String = waived ? '@:privateAccess new A()' : 'new A()';
+			final reacher: String = 'package other;\n\nimport pkg.A;\n\nclass B {\n\n\tpublic static function reach(): Void {\n'
+				+ '\t\tfinal a: A = $make;\n\t\t@:privateAccess trace(a);\n\t}\n\n}\n';
+			final files: Array<SourceFile> = [{ file: DECL_FILE, source: decl }, { file: REACH_FILE, source: reacher }];
+			Assert.equals(waived, CheckFixture.index(files, scoped(files)).text.waiverMayReference('new'), 'waived=$waived');
+		}
 	}
 
 	/**
@@ -203,7 +313,11 @@ class PrivateAccessFormParityTest extends Test {
 
 	/** The edits each rule writes into the declaring file (`fix` and `crossFileFix` alike) and how many it writes into the reacher. */
 	private function runCell(cell: Cell, form: String): CellRun {
-		final files: Array<SourceFile> = filesOf(cell, form);
+		return runFiles(filesOf(cell, form), cell.decl);
+	}
+
+	/** `runCell` over an explicit file set whose declaring file holds `decl`. */
+	private function runFiles(files: Array<SourceFile>, decl: String): CellRun {
 		final plugin: CachingGrammarPlugin = scoped(files);
 		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		final declEdits: Map<String, Array<Span>> = [];
@@ -212,7 +326,7 @@ class PrivateAccessFormParityTest extends Test {
 			final id: String = check.id();
 			final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 			final mine: Array<Violation> = vs.filter(v -> v.file == DECL_FILE);
-			final spans: Array<Span> = mine.length > 0 ? [for (e in check.fix(cell.decl, mine, plugin, index)) e.span] : [];
+			final spans: Array<Span> = mine.length > 0 ? [for (e in check.fix(decl, mine, plugin, index)) e.span] : [];
 			final cross: Null<CrossFileFix> = check is CrossFileFix ? cast check : null;
 			var reach: Int = 0;
 			if (cross != null) for (rename in cross.crossFileFix(files, vs, plugin, index)) for (slice in rename) {
@@ -232,6 +346,7 @@ class PrivateAccessFormParityTest extends Test {
 	/** The two files of `cell` with its reacher spelled in `form`. */
 	private static function filesOf(cell: Cell, form: String): Array<SourceFile> {
 		return [
+			{ file: BASE_FILE, source: BASE },
 			{ file: DECL_FILE, source: cell.decl },
 			{ file: REACH_FILE, source: reacher(cell, form) }
 		];
@@ -243,6 +358,8 @@ class PrivateAccessFormParityTest extends Test {
 			case TYPE_GRANT: '@:access(pkg.A)\n';
 			case 'package': '@:access(pkg)\n';
 			case 'member': '@:access(pkg.A.${cell.member})\n';
+			case 'ancestor': '@:access(base.Base)\n';
+			case 'ancestor-package': '@:access(base)\n';
 			case _: '';
 		}
 		final fnMeta: String = form == 'method' ? '\t@:access(pkg.A)\n' : '';
@@ -263,11 +380,18 @@ class PrivateAccessFormParityTest extends Test {
 		return plugin;
 	}
 
-	/** The span of the line declaring `member` in `source`. */
+	/** The span of the line declaring `member` — a field (`name:`) or a method (`name(`) — in `source`. */
 	private static function declarationLine(source: String, member: String): Span {
-		final at: Int = source.indexOf('$member: ');
+		final field: Int = source.indexOf(' $member:');
+		final at: Int = field >= 0 ? field : source.indexOf(' $member(');
 		final from: Int = source.lastIndexOf('\n', at) + 1;
 		return new Span(from, source.indexOf('\n', at));
+	}
+
+	/** `decl` with its `A` extending `base.Base` — the shape an ancestor's grant reaches it through. */
+	private static function extended(decl: String): String {
+		return decl.replace('class A {', 'class A extends base.Base {')
+			.replace('\tpublic function new() {}', '\tpublic function new() {\n\t\tsuper();\n\t}');
 	}
 
 }
@@ -275,6 +399,7 @@ class PrivateAccessFormParityTest extends Test {
 /** One declaring source, the member its reacher names, and the reacher's statement. */
 private typedef Cell = {
 	final name: String;
+	final rule: String;
 	final decl: String;
 	final member: String;
 	final body: String;

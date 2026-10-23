@@ -1,7 +1,9 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -13,9 +15,9 @@ using Lambda;
  * `@:access` grant a rename must clear is read out of the granting file's own text through the
  * grammar's lexical regions, so a mention inside a comment or a string cannot count as one.
  *
- * Split out of `SymbolIndex`, and the one layer that consults no other: it holds the sources, the
- * skipped-file list and the grammar, and asks nothing of the type model. The one-entry memo it
- * keeps is instance state on the run-scoped index, never process-scoped.
+ * Split out of `SymbolIndex`: it holds the sources, the skipped-file list and the grammar, and asks the
+ * type model one thing — the supertypes a grant may name to reach a type (`grantTargetsOf`). Its memos
+ * are instance state on the run-scoped index, never process-scoped.
  */
 @:nullSafety(Strict)
 final class RawSourceScan {
@@ -31,6 +33,12 @@ final class RawSourceScan {
 
 	/** The access path (`pkg.Type`, a sub-type included) of every indexed declaration, by the type's simple name. */
 	private final _typePathsByName: Map<String, Array<String>> = [];
+
+	/** `grantTargetsOf`'s answer per type name once asked. */
+	private final _grantTargets: Map<String, Array<GrantTarget>> = [];
+
+	/** Every indexed declaration's access path, as a set — what tells a grant naming a known type from one naming anything else. */
+	private final _declaredPaths: Map<String, Bool> = [];
 
 	/** `waivedNamesOf`'s answer per waiver file once asked — null for a file that does not parse. */
 	private final _waivedNamesByFile: Map<String, Null<Array<String>>> = [];
@@ -54,6 +62,9 @@ final class RawSourceScan {
 	/** The grammar the index was built for, asked for a file's lexical regions. */
 	private final _plugin: GrammarPlugin;
 
+	/** The owning index's declaration layer, walked for the supertypes a grant may name (`grantTargetsOf`). */
+	private final _refs: TypeRefIndex;
+
 	/** Every retained source writing the grammar's privacy waiver in code (`waiverFilesOf`), sorted. */
 	private final _waiverFiles: Array<String>;
 
@@ -65,8 +76,10 @@ final class RawSourceScan {
 
 	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
 	public function new(
-		files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>
+		files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>,
+		refs: TypeRefIndex
 	) {
+		_refs = refs;
 		_files = files;
 		_skipped = skipped;
 		_sources = sources;
@@ -78,6 +91,7 @@ final class RawSourceScan {
 			final path: String = fi.pkg == '' ? t.name : '${fi.pkg}.${t.name}';
 			if (!paths.contains(path)) paths.push(path);
 			_typePathsByName[t.name] = paths;
+			_declaredPaths[path] = true;
 		}
 	}
 
@@ -121,19 +135,17 @@ final class RawSourceScan {
 	}
 
 	/**
-	 * Whether `fi` grants itself private access to `typeName`. Haxe holds a grant path against the type's access path
-	 * (`pkg.Type`, a sub-type's too) and the member after it: the path reaches the type when it names it (`pkg.Type`), one of
-	 * its members (`pkg.Type.member`) or an enclosing package (`pkg`), and never through the module a sub-type sits in. A
-	 * path whose last segment is the simple name counts whatever its package — the conservative direction for every caller,
-	 * each of which refuses on a grant.
+	 * Whether `fi` grants itself private access to `typeName`. Haxe holds a grant path against the access path (`pkg.Type`,
+	 * a sub-type's too) of the declaring class and then of each of its superclasses, with the member after it: a path reaches
+	 * the type when it names it or a superclass (`pkg.Type`), a member of one (`pkg.Type.member`) or an enclosing package
+	 * (`pkg`), and never through the module a sub-type sits in. A path whose last segment is one of those simple names counts
+	 * whatever its package, and a superclass no declaration resolves is reached by any path not naming a known type — the
+	 * conservative direction for every caller, each of which refuses on a grant.
 	 */
 	public function grantsAccessTo(fi: FileInfo, typeName: String): Bool {
 		if (fi.accessGrants.length == 0) return false;
-		final typePaths: Array<String> = _typePathsByName[typeName] ?? [];
-		return fi.accessGrants.exists(
-			path ->
-				path == typeName || path.endsWith('.$typeName') || typePaths.exists(t -> t.startsWith('$path.') || path.startsWith('$t.'))
-		);
+		final targets: Array<GrantTarget> = grantTargetsOf(typeName);
+		return fi.accessGrants.exists(path -> targets.exists(t -> grantReaches(path, t)));
 	}
 
 	/**
@@ -279,13 +291,16 @@ final class RawSourceScan {
 	 */
 	private function waivedNamesOf(file: String, source: String): Null<Array<String>> {
 		if (_waivedNamesByFile.exists(file)) return _waivedNamesByFile[file];
-		final tag: Null<String> = _plugin.refShape().waivesPrivacyMetaName;
+		final shape: RefShape = _plugin.refShape();
+		final tag: Null<String> = shape.waivesPrivacyMetaName;
 		final tree: Null<QueryNode> = tag == null || _skipped.contains(file) ? null : ParseGate.parseOrNull(_plugin, source);
 		final out: Null<Array<String>> = if (tree == null || tag == null)
 			null
 		else {
 			final names: Array<String> = [];
-			collectWaivedNames(tree, tag, false, names);
+			final newKind: Null<String> = shape.newExprKind;
+			final ctorName: Null<String> = shape.constructorName;
+			collectWaivedNames(tree, tag, newKind == null || ctorName == null ? null : { newKind: newKind, name: ctorName }, false, names);
 			names;
 		};
 		_waivedNamesByFile[file] = out;
@@ -309,6 +324,52 @@ final class RawSourceScan {
 		final built: Array<Span> = _skipped.contains(file) ? [] : OccurrenceScan.inertMask(source, _plugin);
 		_matchMaskByFile[file] = built;
 		return built;
+	}
+
+	/**
+	 * `typeName` and every superclass above it (`SupertypeWalk.hops` over each of its declarations), each with the access
+	 * paths a grant may name it by; a link no declaration resolves is kept by its written name and marked `unresolved`.
+	 * Memoised per name on this run-scoped index.
+	 */
+	private function grantTargetsOf(typeName: String): Array<GrantTarget> {
+		final known: Null<Array<GrantTarget>> = _grantTargets[typeName];
+		if (known != null) return known;
+		final out: Array<GrantTarget> = [{ name: typeName, paths: _typePathsByName[typeName] ?? [], unresolved: false }];
+		final queue: Array<ResolvedType> = SupertypeWalk.declarationsOf(_refs, typeName, null);
+		final seen: Array<String> = [];
+		var i: Int = 0;
+		while (i < queue.length) {
+			final cur: ResolvedType = queue[i++];
+			if (!_refs.markSeen(cur, seen)) continue;
+			final ups: Array<ResolvedType> = SupertypeWalk.hops(_refs, cur);
+			for (up in ups) {
+				final name: String = up.type.name;
+				out.push({ name: name, paths: [up.file.pkg == '' ? name : '${up.file.pkg}.$name'], unresolved: false });
+				queue.push(up);
+			}
+			final raws: Array<String> = cur.type.supertypesRaw;
+			for (k in 0...cur.type.supertypes.length) {
+				final simple: String = cur.type.supertypes[k];
+				if (ups.exists(u -> u.type.name == simple)) continue;
+				final raw: String = k < raws.length ? raws[k] : simple;
+				out.push({ name: simple, paths: raw.indexOf('.') >= 0 ? [raw] : [], unresolved: true });
+			}
+		}
+		_grantTargets[typeName] = out;
+		return out;
+	}
+
+	/**
+	 * Whether the grant path `path` reaches `target`: it names the target (last segment the simple name, or one of its access
+	 * paths), a member of it, or a package enclosing it — and, for a target no declaration resolves, any path that does not
+	 * name a known type or a member of one, since its package is unknown.
+	 */
+	private function grantReaches(path: String, target: GrantTarget): Bool {
+		if (path == target.name || path.endsWith('.${target.name}')) return true;
+		if (target.paths.exists(t -> t.startsWith('$path.') || path == t || path.startsWith('$t.'))) return true;
+		if (!target.unresolved) return false;
+		final dot: Int = path.lastIndexOf('.');
+		return !_declaredPaths.exists(path) && (dot < 0 || !_declaredPaths.exists(path.substring(0, dot)));
 	}
 
 	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */
@@ -378,12 +439,31 @@ final class RawSourceScan {
 		return false;
 	}
 
-	/** Appends to `out` the name of every node under an annotation by `tag` — a node holding the tag as a child waives all its children. */
-	private static function collectWaivedNames(node: QueryNode, tag: String, waived: Bool, out: Array<String>): Void {
-		final name: Null<String> = node.name;
+	/**
+	 * Appends to `out` the name of every node under an annotation by `tag` — a node holding the tag as a child waives all its
+	 * children. A construction (`ctor.newKind`) spells the constructor's member name rather than the type it builds: `new T()`
+	 * under a waiver reaches a private constructor without writing its name.
+	 */
+	private static function collectWaivedNames(
+		node: QueryNode, tag: String, ctor: Null<WaivedConstruction>, waived: Bool, out: Array<String>
+	): Void {
+		final name: Null<String> = ctor != null && node.kind == ctor.newKind ? ctor.name : node.name;
 		if (waived && name != null && !out.contains(name)) out.push(name);
 		final opens: Bool = waived || node.children.exists(c -> c.name == tag);
-		for (child in node.children) collectWaivedNames(child, tag, opens, out);
+		for (child in node.children) collectWaivedNames(child, tag, ctor, opens, out);
 	}
 
 }
+
+/** A type a grant may name to reach a private member: the owner itself or one of its superclasses. */
+private typedef GrantTarget = {
+	final name: String;
+	final paths: Array<String>;
+	final unresolved: Bool;
+};
+
+/** The construction kind and the constructor member name a waiver's `new T()` spells. */
+private typedef WaivedConstruction = {
+	final newKind: String;
+	final name: String;
+};

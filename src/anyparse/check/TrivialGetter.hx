@@ -336,6 +336,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				final c = classifyProperty(cls, source, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 				// The self-backed arm deletes nothing outside the owner, so no other file can need an edit.
 				if (c == null || c.inlineGetter != null || c.selfBacked) return null;
+				if (accessorReachedOutside(subtypeIndex, owner, c.deletedAccessors, plugin)) return null;
 				if (!backingFieldReachedOutside(subtypeIndex, owner, c.field, false, null, plugin)) return null;
 				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(
 					cls, source, prop.span, prop.name, prop.isStatic, c, shape
@@ -436,6 +437,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			// arm deletes the backing field and the accessors and rewrites the property head.
 			final touched: Array<QueryNode> = c.inlineGetter != null ? [c.inlineGetter] : [prop.node].concat(deletions);
 			if (!collapseConfinedToBranch(branch, cls, source, touched, c.field)) continue;
+			if (c.inlineGetter == null && accessorReachedOutside(subtypeIndex, className, c.deletedAccessors, plugin)) continue;
 			// Emptying a `#if` region of members leaves a shape the grammar does not model, and the
 			// re-parse gate would then drop EVERY edit the pass had for this file. The collapse arm
 			// removes the field and the accessors together, so it is judged as one set.
@@ -515,6 +517,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 			if (c == null) continue;
 			if (backingFieldReachedOutside(index, className, c.field, c.selfBacked, c.inlineGetter, plugin)) continue;
+			if (c.inlineGetter == null && accessorReachedOutside(index, className, c.deletedAccessors, plugin)) continue;
 			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, prop.isStatic, c, shape);
 			if (e != null) for (edit in e) out.push(edit);
 		}
@@ -1268,6 +1271,24 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set the region guard counts. */
 	private static function isDeclKind(node: QueryNode): Bool {
 		return MemberKinds.isMemberDeclKind(node.kind);
+	}
+
+	/**
+	 * Whether a file other than the owner's names one of the accessors the collapse deletes — a subtype calling it by its own
+	 * name, or a file a privilege opens it to (`MemberWriteScan.accessGrantMayReference`). The collapse rewrites no such call,
+	 * so it is refused outright; a null index (a direct fix caller) never blocks, the report pass having gated.
+	 */
+	private static function accessorReachedOutside(
+		index: Null<SymbolIndex>, className: Null<String>, accessors: Array<QueryNode>, plugin: GrammarPlugin
+	): Bool {
+		if (index == null || className == null) return false;
+		final idx: SymbolIndex = index;
+		final owner: String = className;
+		return accessors.exists(accessor -> {
+			final name: Null<String> = accessor.name;
+			name != null
+				&& (idx.subtypes.subtypeReferencesField(owner, name) || MemberWriteScan.accessGrantMayReference(owner, name, idx, plugin));
+		});
 	}
 
 }

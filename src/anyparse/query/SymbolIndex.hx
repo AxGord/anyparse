@@ -792,7 +792,7 @@ final class SymbolIndex {
 			files, refs, subtypes, plugin.typeSyntax, plugin.refShape(), new BuildBranches(plugin, file -> sources[file])
 		);
 		paths = new MemberPathWalk(files, refs, typing.members, plugin.typeSyntax);
-		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty);
+		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty, refs);
 		traits = new TypeTraits(files, sources, refs);
 		final shape: RefShape = plugin.refShape();
 		values = new ValueNameBinding(
