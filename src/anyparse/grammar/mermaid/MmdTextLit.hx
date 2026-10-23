@@ -1,11 +1,12 @@
 package anyparse.grammar.mermaid;
 
 /**
- * A node, pipe or subgraph-title label: a quoted string (a markdown string included), or bare text
- * up to the closing bracket. A `/` or `\` ends bare text only before a `]`, which is what closes the
- * slanted shapes (`[/x/]`, `[\x\]`). The value is the decoded text (`MermaidText`).
+ * A plain node, pipe or subgraph-title label — the text a reader sees: quoted, or bare text up to
+ * a closing bracket (a `/` or `\` ends it only before a `]`, which closes the slanted shapes). It
+ * holds no raw `<` / `>`, no HTML reference and no entity code `MermaidText` cannot resolve; a label
+ * that does is markup (`MmdMarkupLit`).
  */
-@:re('\"[^\"]*\"|(?:[^\\[\\](){}|\"\\n\\r/\\\\]|[/\\\\](?!\\]))*')
-@:decode('anyparse.grammar.mermaid.MermaidText.decode')
-@:encode('anyparse.grammar.mermaid.MermaidText.encode')
+@:re('\"(?!`)(?:[^\"<>&#]|&(?![#A-Za-z0-9]+;)|#(?![A-Za-z0-9]+;)|#(?=(?:quot|amp|lt|gt|apos|nbsp|(?!0+;|5529[6-9];|55[3-9][0-9]{2};|56[0-9]{3};|57[0-2][0-9]{2};|573[0-3][0-9];|5734[0-3];)[0-9]{1,6});))*\"|(?:[^\\[\\](){}|\"\\n\\r/\\\\<>&#]|[/\\\\](?!\\])|&(?![#A-Za-z0-9]+;)|#(?![A-Za-z0-9]+;)|#(?=(?:quot|amp|lt|gt|apos|nbsp|(?!0+;|5529[6-9];|55[3-9][0-9]{2};|56[0-9]{3};|57[0-2][0-9]{2};|573[0-3][0-9];|5734[0-3];)[0-9]{1,6});))*(?=[\\])}|/\\\\])')
+@:decode('anyparse.grammar.mermaid.MermaidText.decodePlain')
+@:encode('anyparse.grammar.mermaid.MermaidText.encodePlain')
 abstract MmdTextLit(String) from String to String {}

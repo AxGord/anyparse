@@ -4,5 +4,5 @@ package anyparse.grammar.mermaid;
 @:peg
 typedef MmdArrow = {
 	var link: MmdLinkLit;
-	@:optional @:lead('|') @:trail('|') var label: Null<MmdTextLit>;
+	@:optional @:lead('|') @:trail('|') var label: Null<MmdLabel>;
 }

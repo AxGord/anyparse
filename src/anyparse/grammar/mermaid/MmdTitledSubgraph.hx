@@ -4,5 +4,5 @@ package anyparse.grammar.mermaid;
 @:peg
 typedef MmdTitledSubgraph = {
 	var name: MmdSubgraphIdLit;
-	@:lead('[') @:trail(']') var title: MmdTextLit;
+	@:lead('[') @:trail(']') var title: MmdLabel;
 }

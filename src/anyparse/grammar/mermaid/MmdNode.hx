@@ -8,22 +8,22 @@ package anyparse.grammar.mermaid;
 @:peg
 enum MmdNode {
 	@:postfix('(((', ')))')
-	DoubleCircle(vertex: MmdNode, text: MmdTextLit);
+	DoubleCircle(vertex: MmdNode, text: MmdLabel);
 
 	@:postfix('((', '))')
-	Circle(vertex: MmdNode, text: MmdTextLit);
+	Circle(vertex: MmdNode, text: MmdLabel);
 
 	@:postfix('([', '])')
-	Stadium(vertex: MmdNode, text: MmdTextLit);
+	Stadium(vertex: MmdNode, text: MmdLabel);
 
 	@:postfix('(', ')')
-	Round(vertex: MmdNode, text: MmdTextLit);
+	Round(vertex: MmdNode, text: MmdLabel);
 
 	@:postfix('[[', ']]')
-	Subroutine(vertex: MmdNode, text: MmdTextLit);
+	Subroutine(vertex: MmdNode, text: MmdLabel);
 
 	@:postfix('[(', ')]')
-	Cylinder(vertex: MmdNode, text: MmdTextLit);
+	Cylinder(vertex: MmdNode, text: MmdLabel);
 
 	@:postfix('[/')
 	Slash(vertex: MmdNode, body: MmdSlashBody);
@@ -32,16 +32,16 @@ enum MmdNode {
 	Backslash(vertex: MmdNode, body: MmdBackslashBody);
 
 	@:postfix('[', ']')
-	Rect(vertex: MmdNode, text: MmdTextLit);
+	Rect(vertex: MmdNode, text: MmdLabel);
 
 	@:postfix('{{', '}}')
-	Hexagon(vertex: MmdNode, text: MmdTextLit);
+	Hexagon(vertex: MmdNode, text: MmdLabel);
 
 	@:postfix('{', '}')
-	Diamond(vertex: MmdNode, text: MmdTextLit);
+	Diamond(vertex: MmdNode, text: MmdLabel);
 
 	@:postfix('>', ']')
-	Asymmetric(vertex: MmdNode, text: MmdTextLit);
+	Asymmetric(vertex: MmdNode, text: MmdLabel);
 
 	/** `A@{ shape: … }`, the data block of the newer shape syntax. */
 	@:postfix('@{', '}')

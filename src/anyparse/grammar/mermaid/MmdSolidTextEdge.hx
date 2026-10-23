@@ -4,6 +4,6 @@ package anyparse.grammar.mermaid;
 @:peg
 typedef MmdSolidTextEdge = {
 	var open: MmdSolidOpenLit;
-	var text: MmdSolidTextLit;
+	var text: MmdSolidLabel;
 	var close: MmdLinkLit;
 }

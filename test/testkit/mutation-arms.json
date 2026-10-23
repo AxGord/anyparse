@@ -29872,6 +29872,38 @@
 			"find": "return macro return _dt($encodeCall);",
 			"replace": "return macro return _dt(value);",
 			"note": "an `@:encode` terminal is written as its decoded value, so a Mermaid label holding a quote or a pipe comes out bare and the writer's output no longer parses back to the AST it was given"
+		},
+		{
+			"name": "M-MERMAID-PLAIN-LT-RAW",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "plainEscape",
+			"find": "case '<'.code: '#lt;';",
+			"replace": "",
+			"note": "a plain label's `<` is written raw, so Mermaid reads it as markup: `Array<String>` loses its tag-shaped half and `<b>` renders bold"
+		},
+		{
+			"name": "M-MERMAID-PLAIN-AMP-RAW",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "plainEscape",
+			"find": "case '&'.code if (startsReference(text, at)): '#amp;';",
+			"replace": "",
+			"note": "a plain label's `&` before a reference shape is written raw, so the text `&quot;` renders as a quote"
+		},
+		{
+			"name": "M-MERMAID-TICK-UNESCAPED",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "escape",
+			"find": "case '`'.code if (markdown || i == 0): '#96;';",
+			"replace": "",
+			"note": "a quoted label opening with a backtick is written as a markdown string opener, and a backtick inside a markdown string closes it early"
+		},
+		{
+			"name": "M-MERMAID-CODEPOINT-UNBOUNDED",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "codePoint",
+			"find": "return code == null || code < 1 || code > MAX_CODE_POINT || (code >= SURROGATE_FIRST && code <= SURROGATE_LAST) ? null : code;",
+			"replace": "return code;",
+			"note": "a numeric code outside Unicode reaches String.fromCharCode and throws a RangeError, and a surrogate decodes to half a character"
 		}
 	]
 }

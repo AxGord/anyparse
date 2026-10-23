@@ -4,8 +4,8 @@ package anyparse.grammar.mermaid;
 @:peg
 enum MmdSlashBody {
 	@:trail('/]')
-	LeanRight(text: MmdTextLit);
+	LeanRight(text: MmdLabel);
 
 	@:trail('\\]')
-	Trapezoid(text: MmdTextLit);
+	Trapezoid(text: MmdLabel);
 }

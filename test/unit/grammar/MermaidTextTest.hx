@@ -6,15 +6,16 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * `MermaidText` — the label codec every Mermaid label terminal names: entity codes resolve on the
- * way in, a label is written bare when it can be and quoted with entity escapes when it cannot,
- * and every string survives encode-then-decode in every label position.
+ * `MermaidText` — the label codec every Mermaid label terminal names. A plain label is the text a
+ * reader sees, so markup characters are re-escaped on write; a markup label is the HTML Mermaid
+ * renders, kept raw; a markdown label is the body of a backtick string. Every value of each kind
+ * survives encode-then-decode, and an entity code naming no character stays as written.
  */
 @:nullSafety(Strict)
 class MermaidTextTest extends Test {
 
-	/** Labels that exercise every escape and quoting decision. */
-	private static final AWKWARD: Array<String> = [
+	/** Plain labels that exercise every escape and quoting decision. */
+	private static final PLAIN: Array<String> = [
 		'plain',
 		'two words',
 		'',
@@ -27,74 +28,109 @@ class MermaidTextTest extends Test {
 		'#35;',
 		'x #hearts; y',
 		'issue #12',
-		'`markdown **bold**`',
+		'`ticks` inside',
 		'`lead tick',
-		'tail tick`',
 		'`',
 		'``',
 		'multi\nline',
 		'v1.2-rc=3 -> ok',
 		'a;b&c<d>',
+		'Map<String, Int>',
+		'<b>not bold</b>',
+		'a &quot; b',
+		'&#60;',
+		'50%% done',
 		'tab\there',
-		'ünïcödé 字'
+		'ünïcödé 字 😀'
 	];
 
-	/** A quoted label loses its quotes, a bare one its surrounding whitespace, and both resolve entity codes. */
-	public function testDecodeStripsQuotesAndResolvesEntities(): Void {
-		Assert.equals('say "hi"', MermaidText.decode('"say #quot;hi#quot;"'));
-		Assert.equals('a|b', MermaidText.decode('a#124;b'));
-		Assert.equals('trimmed', MermaidText.decode('  trimmed \t'));
-		Assert.equals(' kept ', MermaidText.decode('" kept "'));
-		Assert.equals('<&>\'', MermaidText.decode('#lt;#amp;#gt;#apos;'));
+	/** Markup values: HTML as Mermaid renders it. */
+	private static final MARKUP: Array<String> = [
+		'a<br>b',
+		'&lt;x&gt;',
+		'I &hearts; u',
+		'&#99999999;',
+		'say "hi"<br>',
+		'#lt; literal<i>',
+		'`tick`<br>',
+		'<b>😀</b>'
+	];
+
+	/** A plain label's codes resolve to the characters a reader sees, markup ones included. */
+	public function testPlainDecodeResolvesEveryKnownCode(): Void {
+		Assert.equals('say "hi"', MermaidText.decodePlain('"say #quot;hi#quot;"'));
+		Assert.equals('a|b', MermaidText.decodePlain('a#124;b'));
+		Assert.equals('trimmed', MermaidText.decodePlain('  trimmed \t'));
+		Assert.equals(' kept ', MermaidText.decodePlain('" kept "'));
+		Assert.equals('<&>\'', MermaidText.decodePlain('#lt;#amp;#gt;#apos;'));
 	}
 
-	/** An entity name the codec does not know stays in the text, as Mermaid renders it as an entity too. */
-	public function testAnUnknownEntityStaysInTheText(): Void {
-		Assert.equals('I #hearts; it', MermaidText.decode('I #hearts; it'));
-		Assert.equals('"I #hearts; it"', MermaidText.encode('I #hearts; it'));
+	/** A markup label keeps its markup, and a code for `<` `>` `&` or an unknown name becomes the HTML reference. */
+	public function testMarkupDecodeKeepsTheHtml(): Void {
+		Assert.equals('a<br>b', MermaidText.decodeMarkup('a<br>b'));
+		Assert.equals('&lt;b&gt;', MermaidText.decodeMarkup('"#lt;b#gt;"'));
+		Assert.equals('I &hearts; "u"', MermaidText.decodeMarkup('"I #hearts; #quot;u#quot;"'));
+		Assert.equals('&#60;', MermaidText.decodeMarkup('"&#60;"'));
 	}
 
-	/** A label made of safe characters is written bare. */
-	public function testASafeLabelIsWrittenBare(): Void {
-		Assert.equals('Start', MermaidText.encode('Start'));
-		Assert.equals('Is it ok?', MermaidText.encode('Is it ok?'));
-		Assert.equals('v1.2-rc', MermaidText.encode('v1.2-rc'));
+	/** A numeric code outside Unicode, or a surrogate, names no character: it stays as written, and nothing throws. */
+	@:killer('M-MERMAID-CODEPOINT-UNBOUNDED')
+	@:pin('control')
+	public function testAnInvalidNumericCodeStaysAsWritten(): Void {
+		for (code in ['#99999999;', '#1114112;', '#55357;', '#0;']) Assert.equals(code, MermaidText.decodePlain(code), code);
+		Assert.equals('&#1114112;', MermaidText.decodeMarkup('#1114112;'));
 	}
 
-	/** A label the bare form cannot hold is quoted, with `"` and an entity-shaped `#` escaped. */
-	public function testAnUnsafeLabelIsQuotedAndEscaped(): Void {
-		Assert.equals('"a #quot;b#quot;"', MermaidText.encode('a "b"'));
-		Assert.equals('"a|b"', MermaidText.encode('a|b'));
-		Assert.equals('"#35;quot;"', MermaidText.encode('#quot;'));
-		Assert.equals('"issue #12"', MermaidText.encode('issue #12'));
-		Assert.equals('""', MermaidText.encode(''));
-		Assert.equals('" padded "', MermaidText.encode(' padded '));
+	/** Plain text with markup characters is written with codes, so it renders literally. */
+	@:killer('M-MERMAID-PLAIN-LT-RAW', 'M-MERMAID-PLAIN-AMP-RAW')
+	@:pin('control')
+	public function testPlainMarkupCharactersAreEscaped(): Void {
+		Assert.equals('"Array#lt;String#gt;"', MermaidText.encodePlain('Array<String>'));
+		Assert.equals('"#lt;b#gt;bold#lt;/b#gt;"', MermaidText.encodePlain('<b>bold</b>'));
+		Assert.equals('"a #amp;quot; b"', MermaidText.encodePlain('a &quot; b'));
+		Assert.equals('"a & b"', MermaidText.encodePlain('a & b'));
 	}
 
-	/** A label wrapped in backticks is a markdown string; a stray backtick that would open one is escaped. */
-	public function testBackticksFollowTheMarkdownRule(): Void {
-		Assert.equals('"`**bold**`"', MermaidText.encode('`**bold**`'));
-		Assert.equals('"`a#96;b`"', MermaidText.encode('`a`b`'));
-		Assert.equals('"#96;lead"', MermaidText.encode('`lead'));
+	/** A safe plain label is written bare; one with a delimiter, a quote, an entity-shaped `#` or `%` is quoted. */
+	public function testPlainBareOrQuoted(): Void {
+		Assert.equals('Is it ok?', MermaidText.encodePlain('Is it ok?'));
+		Assert.equals('v1.2-rc', MermaidText.encodePlain('v1.2-rc'));
+		Assert.equals('"a #quot;b#quot;"', MermaidText.encodePlain('a "b"'));
+		Assert.equals('"#35;quot;"', MermaidText.encodePlain('#quot;'));
+		Assert.equals('"50%% done"', MermaidText.encodePlain('50%% done'));
+		Assert.equals('""', MermaidText.encodePlain(''));
+	}
+
+	/** Backticks in plain text stay literal: bare when they can, and a quoted label never opens a markdown string. */
+	@:killer('M-MERMAID-TICK-UNESCAPED')
+	@:pin('control')
+	public function testPlainBackticksNeverOpenMarkdown(): Void {
+		Assert.equals('`x`', MermaidText.encodePlain('`x`'));
+		Assert.equals('"#96;x` y|z"', MermaidText.encodePlain('`x` y|z'));
+		Assert.equals('"`a#96;b`"', MermaidText.encodeMarkdown('a`b'));
 	}
 
 	/** An inline edge label is quoted when it holds its own link's stroke character, and only then. */
 	public function testAnInlineEdgeLabelAvoidsItsStroke(): Void {
-		Assert.equals('"pre-check"', MermaidText.encodeSolid('pre-check'));
-		Assert.equals('pre-check', MermaidText.encodeThick('pre-check'));
-		Assert.equals('"a=b"', MermaidText.encodeThick('a=b'));
-		Assert.equals('"v1.2"', MermaidText.encodeDotted('v1.2'));
-		Assert.equals('v1.2', MermaidText.encodeSolid('v1.2'));
+		Assert.equals('"pre-check"', MermaidText.encodePlainSolid('pre-check'));
+		Assert.equals('pre-check', MermaidText.encodePlainThick('pre-check'));
+		Assert.equals('"a=b"', MermaidText.encodePlainThick('a=b'));
+		Assert.equals('"v1.2"', MermaidText.encodePlainDotted('v1.2'));
+		Assert.equals('v1.2', MermaidText.encodePlainSolid('v1.2'));
 	}
 
-	/** Every awkward label decodes back to itself through each of the four encoders. */
+	/** Every value of each kind decodes back to itself through every encoder of that kind. */
 	public function testEveryLabelRoundTrips(): Void {
-		for (label in AWKWARD) {
-			Assert.equals(label, MermaidText.decode(MermaidText.encode(label)), 'node: ${Json.stringify(label)}');
-			Assert.equals(label, MermaidText.decode(MermaidText.encodeSolid(label)), 'solid: ${Json.stringify(label)}');
-			Assert.equals(label, MermaidText.decode(MermaidText.encodeThick(label)), 'thick: ${Json.stringify(label)}');
-			Assert.equals(label, MermaidText.decode(MermaidText.encodeDotted(label)), 'dotted: ${Json.stringify(label)}');
+		for (text in PLAIN) {
+			final shown: String = Json.stringify(text);
+			Assert.equals(text, MermaidText.decodePlain(MermaidText.encodePlain(text)), 'plain: $shown');
+			Assert.equals(text, MermaidText.decodePlain(MermaidText.encodePlainSolid(text)), 'solid: $shown');
+			Assert.equals(text, MermaidText.decodePlain(MermaidText.encodePlainThick(text)), 'thick: $shown');
+			Assert.equals(text, MermaidText.decodePlain(MermaidText.encodePlainDotted(text)), 'dotted: $shown');
+			Assert.equals(text, MermaidText.decodeMarkdown(MermaidText.encodeMarkdown(text)), 'markdown: $shown');
 		}
+		for (html in MARKUP)
+			Assert.equals(html, MermaidText.decodeMarkup(MermaidText.encodeMarkup(html)), 'markup: ${Json.stringify(html)}');
 	}
 
 }

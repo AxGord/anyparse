@@ -4,6 +4,6 @@ package anyparse.grammar.mermaid;
 @:peg
 typedef MmdDottedTextEdge = {
 	var open: MmdDottedOpenLit;
-	var text: MmdDottedTextLit;
+	var text: MmdDottedLabel;
 	var close: MmdLinkLit;
 }

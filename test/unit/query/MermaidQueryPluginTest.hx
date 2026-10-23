@@ -8,8 +8,6 @@ import anyparse.query.QueryNode;
 import anyparse.query.Selector;
 import anyparse.query.cli.CliArgs;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `MermaidQueryPlugin` — the Mermaid flowchart grammar's query projection: statements under a

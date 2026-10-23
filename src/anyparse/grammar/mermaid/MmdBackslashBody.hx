@@ -4,8 +4,8 @@ package anyparse.grammar.mermaid;
 @:peg
 enum MmdBackslashBody {
 	@:trail('\\]')
-	LeanLeft(text: MmdTextLit);
+	LeanLeft(text: MmdLabel);
 
 	@:trail('/]')
-	InvTrapezoid(text: MmdTextLit);
+	InvTrapezoid(text: MmdLabel);
 }
