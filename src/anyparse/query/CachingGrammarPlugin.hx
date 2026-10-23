@@ -409,12 +409,11 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return read == null ? null : read();
 	}
 
-	/** `SymbolIndexHost`: whether the run's scope reads builds at all (`ResolutionScope.builds`), noting the hold when it does. */
+	/** `SymbolIndexHost`: whether a linted path declared a complete build list (`ResolutionScope.buildsHeld`), noting the hold then. */
 	public function holdForUnknownBuilds(consumer: String): Bool {
-		final scope: Null<ResolutionScope> = _resolutionScope;
-		if (scope == null || scope.builds == null) return false;
-		final note: Null<(String) -> Void> = scope.buildsHeld;
-		if (note != null) note(consumer);
+		final note: Null<(String) -> Void> = _resolutionScope?.buildsHeld;
+		if (note == null) return false;
+		note(consumer);
 		return true;
 	}
 
@@ -1037,7 +1036,8 @@ typedef ResolutionScope = {
 
 	/**
 	 * Say once per consumer that a proof needing `builds` held because the run knows none (`SymbolIndexHost.holdForUnknownBuilds`).
-	 * Absent with `builds`, or when nobody is told.
+	 * Present exactly when a linted path declared its oracle list complete — also when the paths disagree on the list and
+	 * the run reads no `builds` at all.
 	 */
 	@:optional final buildsHeld: (String) -> Void;
 

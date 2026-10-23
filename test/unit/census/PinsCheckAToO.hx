@@ -385,8 +385,12 @@ final class PinsCheckAToO {
 		'unit.check.HaxeSpawnTest#testAWedgedDriverIsKilledAtItsBound :: control :: M-DRIVER-UNBOUNDED',
 		'unit.check.HaxeSpawnTest#testTheDriverBoundScalesWithTheJobs :: control :: M-DRIVER-BOUND-IGNORES-ROUNDS',
 		'unit.check.HaxeSpawnTest#testTheDriverReadsItsJobsFromNoPipe :: control :: M-DRIVER-READS-STDIN',
+		'unit.check.HoistCommonImportBuildsE2ETest#testALiveBuildThatDoesNotAnswerHoldsAndSaysSo :: control :: '
+			+ 'M-HELD-NOTE-LOST-WITH-FACTS,M-HOIST-HELD-UNSAID',
 		'unit.check.HoistCommonImportBuildsE2ETest#testANoOracleRunHoistsWhatTheStoredBuildsVouchForAndHoldsWithoutThem :: control :: '
 			+ 'M-HOIST-UNKNOWN-BUILDS-GUESSED,M-REACH-STORED-UNREAD,M-HOIST-HELD-UNSAID',
+		'unit.check.HoistCommonImportBuildsE2ETest#testARunOverPathsWithDifferentOracleListsHolds :: control :: '
+			+ 'M-HOIST-MIXED-LISTS-GUESSED',
 		'unit.check.HoistCommonImportTest#testABuildParsingAReceiverButNotTheStatementWithholdsIt :: control :: M-HOIST-BUILD-WITHOUT-MODULE-IGNORED',
 		'unit.check.HoistCommonImportTest#testADeclaredBuildListWhoseBuildsAreUnknownHoldsTheHoist :: control :: '
 			+ 'M-HOIST-UNKNOWN-BUILDS-GUESSED',

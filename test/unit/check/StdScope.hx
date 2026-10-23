@@ -61,9 +61,12 @@ final class StdScope {
 			rootsMatched: complete,
 			rootsAllMatched: complete
 		};
-		scoped.setResolutionScope(
-			builds == null ? { declared: true, sources: sources } : { declared: true, sources: sources, builds: builds }
-		);
+		scoped.setResolutionScope(builds == null ? { declared: true, sources: sources } : {
+			declared: true,
+			sources: sources,
+			builds: builds,
+			buildsHeld: _ -> {}
+		});
 		return scoped;
 	}
 

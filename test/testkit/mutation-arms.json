@@ -6972,8 +6972,8 @@
 			"name": "M-REACH-CONFIGS-COMPLETE",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "withReachConfigurations",
-			"find": "|| oracles.length == 0 || !complete)",
-			"replace": "|| oracles.length == 0)",
+			"find": "if (!complete) return declared ?",
+			"replace": "if (false) return declared ?",
 			"note": "the oracle list is read as every build the project ships, so a platform branch no configuration compiles is skipped"
 		},
 		{
@@ -30029,7 +30029,7 @@
 			"name": "M-HOIST-HELD-UNSAID",
 			"type": "anyparse.query.CachingGrammarPlugin",
 			"method": "holdForUnknownBuilds",
-			"find": "if (note != null) note(consumer);",
+			"find": "note(consumer);",
 			"replace": "",
 			"note": "a proof that held for want of the declared builds holds silently, so a run that hoists nothing reads as a tree with nothing to hoist"
 		},
@@ -30040,6 +30040,22 @@
 			"find": "near.compilerOracles == null ? far.reachConfigurationsComplete : null",
 			"replace": "far.reachConfigurationsComplete",
 			"note": "a nested document naming a compilerOracle list of its own inherits the completeness its ancestor declared for another list, so the reach analysis reads a partial list as every build the project ships"
+		},
+		{
+			"name": "M-HOIST-MIXED-LISTS-GUESSED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "return declared ?",
+			"replace": "return false ?",
+			"note": "a run over paths whose configs name different oracle lists, one of them declared complete, carries no hold, so hoist-common-import falls back on classpath evidence and `--fix` writes an ambient statement a build of the declared list cannot resolve"
+		},
+		{
+			"name": "M-HELD-NOTE-LOST-WITH-FACTS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withCompilerFacts",
+			"find": "buildsHeld: resolution.buildsHeld,",
+			"replace": "",
+			"note": "the scope an oracle run hands its checks drops the hold, so a run whose declared builds did not answer falls back on classpath evidence and says nothing"
 		}
 	]
 }

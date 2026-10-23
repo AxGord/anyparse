@@ -45,9 +45,51 @@ class HoistCommonImportBuildsE2ETest extends Test {
 		#end
 	}
 
+	/**
+	 * A run over paths whose configs name different oracle lists reads no list as complete; one of them declared its list
+	 * complete, so the evidence a project with no declared list falls back on vouches for nothing a build of it reads.
+	 */
+	@:pin('control') @:killer('M-HOIST-MIXED-LISTS-GUESSED')
+	public function testARunOverPathsWithDifferentOracleListsHolds(): Void {
+		#if nodejs
+		final dir: Null<String> = tree('{"hxml":"check.hxml"}', [
+			{ name: 'other/apqlint.json', source: '{"compilerOracle":[{"hxml":"other.hxml"}]}' },
+			{ name: 'other/other.hxml', source: '-cp ..\n-main Main\n--interp\n' },
+			{ name: 'other/Oqqther.hx', source: 'package other;\n\nclass Oqqther {}\n' }
+		]);
+		if (dir == null) return;
+		final mixed: LintOutcome = lint(dir, true);
+		Assert.equals('', mixed.hoisted);
+		Assert.isTrue(mixed.err.indexOf(HELD_NOTE) >= 0, mixed.err);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('stdout capture needs the node target');
+		#end
+	}
+
+	/** A declared build the reach probe cannot read (a `--next` hxml) leaves the run with no builds: it holds and says so. */
+	@:pin('control') @:killer('M-HELD-NOTE-LOST-WITH-FACTS') @:killer('M-HOIST-HELD-UNSAID')
+	public function testALiveBuildThatDoesNotAnswerHoldsAndSaysSo(): Void {
+		#if nodejs
+		final dir: Null<String> = tree('{"hxml":"check.hxml"},{"hxml":"next.hxml"}', [
+			{ name: 'next.hxml', source: '-cp .\n-main Main\n--interp\n--next\n-cp .\n-main Main\n--interp\n' }
+		]);
+		if (dir == null) return;
+		final live: LintOutcome = lint(dir, false);
+		Assert.equals('', live.hoisted);
+		Assert.isTrue(live.err.indexOf(HELD_NOTE) >= 0, live.err);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('stdout capture needs the node target');
+		#end
+	}
+
 	#if (sys || nodejs)
-	/** Four modules of `aqq`, three importing `qqz.Zqqwwee`, all compiled by one build; null (after passing) without haxe. */
-	private static function tree(): Null<String> {
+	/**
+	 * Four modules of `aqq`, three importing `qqz.Zqqwwee`, all compiled by `check.hxml`, under a config declaring `oracles`
+	 * complete, plus `extra`; null (after passing) without haxe.
+	 */
+	private static function tree(oracles: String = '{"hxml":"check.hxml"}', ?extra: Array<{ name: String, source: String }>): Null<String> {
 		final dir: String = CliFixture.writeTree('hoistbuilds', [
 			{ name: 'qqz/Zqqwwee.hx', source: 'package qqz;\n\nclass Zqqwwee {\n\tpublic function new() {}\n}\n' },
 			{
@@ -71,10 +113,10 @@ class HoistCommonImportBuildsE2ETest extends Test {
 			{ name: 'check.hxml', source: '-cp .\n-main Main\n--interp\n' },
 			{
 				name: 'apqlint.json',
-				source: '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true,'
+				source: '{"compilerOracle":[$oracles],"resolutionRoots":["."],"reachConfigurationsComplete":true,'
 				+ '"rules":{"hoist-common-import":{"enabled":true}}}'
 			}
-		]);
+		].concat(extra ?? []));
 		if (CompilerOracle.typecheck('check.hxml', dir).match(Confirmed)) return dir;
 		CliFixture.removeDir(dir);
 		Assert.pass('haxe unavailable — skipped');
