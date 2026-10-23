@@ -650,6 +650,12 @@ final class PinsCheckAToO {
 		'unit.check.ModuleNameFromPathTest#testExplicitLocalTypeOraclePrintsTheSubTypeShortBehindAHelperTypedef :: control :: M-PRINTER-MODULE-FROM-FIRST-DECL',
 		'unit.check.ModuleNameFromPathTest#testExplicitTypeOraclePrintsTheSubTypeShortBehindAHelperTypedef :: control :: M-PRINTER-MODULE-FROM-FIRST-DECL',
 		'unit.check.ModuleNameFromPathTest#testShortenTypeRefShortensTheSubTypeBehindAHelperTypedef :: control :: M-PRINTER-MODULE-FROM-FIRST-DECL',
+		'unit.check.NamesakeOwnerTwinTest#testMetadataInsideAConditionalRefusesTheConversion :: control :: M-PLAN-GUARDED-META-ALLOWED',
+		'unit.check.NamesakeOwnerTwinTest#testNamesakesRttiDoesNotRefuseTheConversion :: control :: M-RTTI-HOMONYM-REFUSES',
+		'unit.check.NamesakeOwnerTwinTest#testNamesakesSubtypeDoesNotUnconfineAPrivateMember :: control :: M-CONFINED-NO-OWNER-FILE',
+		'unit.check.NamesakeOwnerTwinTest#testNamesakesSupertypeDoesNotVetoAnInlineCandidate :: control :: M-SUPERTYPE-DECLARES-UNION',
+		'unit.check.NamesakeOwnerTwinTest#testNamesakesSupertypeDoesNotVetoAnUnusedPrivate :: control :: M-SUPERTYPE-DECLARES-UNION',
+		'unit.check.NamesakeOwnerTwinTest#testSubtypeSharingTheOwnersNameKeepsItsOverride :: control :: M-SUBTYPE-MEMBERS-SKIP-NAMESAKE',
 		'unit.check.NamingCheckCrossFileFixTest#testAGrantedMemberRenamesIntoItsGranteesAndTheirSubtypes :: control :: '
 			+ 'M-ALLOW-GRANTEE-SUBTYPES,M-NAMING-ALLOWGRANT-AS-ANNOTATION,M-NAMING-CROSS-GRANTEES-DROPPED',
 		'unit.check.NamingCheckCrossFileFixTest#testAMemberGrantDoesNotTaintItsNeighbours :: control :: '

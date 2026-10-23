@@ -245,6 +245,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.MissingVisibilityCheckTest',
 		'unit.check.ModifierOrderCheckTest',
 		'unit.check.ModuleNameFromPathTest',
+		'unit.check.NamesakeOwnerTwinTest',
 		'unit.check.NamingCheckAltSpellingFixTest',
 		'unit.check.NamingCheckBranchTwinFixTest',
 		'unit.check.NamingCheckCrossFileFixTest',

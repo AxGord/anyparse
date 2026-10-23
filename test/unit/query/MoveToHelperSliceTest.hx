@@ -392,4 +392,35 @@ class MoveToHelperSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * A bare name a type that only MAY be a supertype declares is not rewritten into an inherited member: `Mid extends
+	 * haxe.io.Output` names the std's `Output`, not the project's `io.Output` that declares `helperFn`, and `helperFn` is the
+	 * statically imported `Util.helperFn`. Refused with and without a namesake `Mid` in another package; rewriting it as
+	 * `src.helperFn()` does not compile (`a.Src has no field helperFn`).
+	 */
+	@:pin('control') @:killer('M-HELPER-MAYBE-ANCESTOR-REWRITES')
+	public function testANameOnlyAMaybeSupertypeDeclaresIsRefused(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nimport a.Util.helperFn;\n\nclass Src extends Mid {\n\tpublic function new() {}\n\n'
+					+ '\tpublic function work(): Int {\n\t\treturn helperFn() + 1;\n\t}\n}\n'
+			},
+			{ file: 'a/Mid.hx', source: 'package a;\n\nclass Mid extends haxe.io.Output {}\n' },
+			{
+				file: 'io/Output.hx',
+				source: 'package io;\n\nclass Output {\n\tpublic function new() {}\n\n\tpublic function helperFn(): Int {\n\t\treturn 1;\n\t}\n}\n'
+			},
+			{
+				file: 'a/Util.hx',
+				source: 'package a;\n\nclass Util {\n\tpublic static function helperFn(): Int {\n\t\treturn 2;\n\t}\n}\n'
+			}
+		];
+		refused(move('work', 'SrcTools', files), 'may be a supertype of "Src"');
+		refused(
+			move('work', 'SrcTools', files.concat([{ file: 'other/Mid.hx', source: 'package other;\n\nclass Mid {}\n' }])),
+			'may be a supertype of "Src"'
+		);
+	}
+
 }
