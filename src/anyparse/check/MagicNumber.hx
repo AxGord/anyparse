@@ -334,7 +334,7 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 	/**
 	 * Whether `suffix` is the tail of `path`, segment for segment. So a bare `t` matches every call whose
 	 * last name is `t` (`t(…)`, `Lang.t(…)`, `this.t(…)`), `Lang.t` matches `Lang.t(…)` and
-	 * `macros.Lang.t(…)` but not a bare `t(…)` — a call imported by name no longer spells its type — and a
+	 * `pkg.Lang.t(…)` but not a bare `t(…)` — a call imported by name no longer spells its type — and a
 	 * receiver that is no path (`make().t(…)`) contributes nothing, so only a bare entry reaches it.
 	 */
 	private static function pathEndsWith(path: Array<String>, suffix: Array<String>): Bool {

@@ -86,8 +86,8 @@ final class ScrubGuardTest extends Test {
 
 	/**
 	 * A path that names a file of a private tree is a match, numbered by the tree and never printed: a `./` or `../`
-	 * lead is dropped and an extension other than `.hx` counts, while a bare name, a module at the top of a source root,
-	 * a path the scanned tree also holds, a longer path ending in a private one and a near miss do not.
+	 * lead, or any longer lead, is dropped and an extension other than `.hx` counts, while a bare name, a module named
+	 * by one word at the top of a source root, a path the scanned tree also holds and a near miss do not.
 	 */
 	@:pin('control')
 	@:killer('M-SCRUB-PRIVATE-PATH-BLIND')
@@ -120,6 +120,7 @@ final class ScrubGuardTest extends Test {
 				'a.md:1: private root 1',
 				'a.md:3: private root 1',
 				'a.md:3: private root 1',
+				'a.md:4: private root 1',
 				'a.md:5: private root 2'
 			], ScrubGuard.scanTree([], root, privates));
 		});
@@ -157,8 +158,84 @@ final class ScrubGuardTest extends Test {
 		TempDir.with(dir -> Assert.equals(2, ScrubGuard.main(['--private-root', dir.file('absent')])));
 	}
 
+	/** A longer path ending in a private one is a match by its trailing segments, whatever leads them. */
+	@:pin('control')
+	@:killer('M-SCRUB-PRIVATE-TAIL-BLIND')
+	public function testALongerPathEndingInAPrivateOneIsAMatch(): Void {
+		final text: String = 'client/src/app/view/Secret.hx\nproj/app/view/Secret.hx proj/src/Main.hx';
+		Assert.same(['f:1: private root 1', 'f:2: private root 1'], privateRows(text, []));
+	}
+
+	/** A private path inside an absolute, a home-relative or a URL path is a match: a `/` before a segment hides nothing. */
+	@:pin('control')
+	@:killer('M-SCRUB-PRIVATE-ABSOLUTE-BLIND')
+	public function testAPrivatePathInsideAnAbsolutePathIsAMatch(): Void {
+		final text: String =
+			'/home/me/work/src/app/view/Secret.hx\n~/app/view/Secret.hx\nhttps://example.com/me/repo/blob/main/src/app/view/Secret.hx#L3';
+		Assert.same(['f:1: private root 1', 'f:2: private root 1', 'f:3: private root 1'], privateRows(text, []));
+	}
+
+	/**
+	 * A dotted module path names the file its segments spell, of any extension, with a member after it or a package
+	 * before it too; one the scanned tree holds is its own.
+	 */
+	@:pin('control')
+	@:killer('M-SCRUB-PRIVATE-DOTTED-BLIND')
+	public function testADottedModulePathIsAMatch(): Void {
+		final text: String = 'import app.view.Secret;\nview.Secret.reveal();\ncom.example.app.view.Secret.\nhaxe.io.Path app.view.Shown';
+		Assert.same(['f:1: private root 1', 'f:2: private root 1', 'f:3: private root 1'], privateRows(text, []));
+		Assert.same([], privateRows('app.view.Secret', ['lib/app/view/Secret.hx']));
+	}
+
+	/**
+	 * A module at the top of a source root is a match when its name joins two or more words; a one-word name there
+	 * (`src/Main.hx`) is as common as a bare file name and is not.
+	 */
+	@:pin('control')
+	@:killer('M-SCRUB-PRIVATE-ROOT-MODULE-BLIND')
+	public function testACompoundModuleAtTheTopOfASourceRootIsAMatch(): Void {
+		Assert.same(['f:1: private root 1'], privateRows('see src/TopLevelPanel.hx, not src/Main.hx', []));
+	}
+
+	/**
+	 * A path with no extension names a private directory when it has three or more segments, two of them no source
+	 * root's; one the scanned tree holds is its own.
+	 */
+	@:pin('control')
+	@:killer('M-SCRUB-PRIVATE-DIRECTORY-BLIND')
+	public function testAnExtensionlessPathNamingAPrivateDirectoryIsAMatch(): Void {
+		Assert.same(['f:1: private root 1', 'f:2: private root 1'], privateRows('assets/app/icons\nsrc/app/view/\napp/view src/app', []));
+		Assert.same([], privateRows('src/app/view', ['src/app/view/Other.hx']));
+	}
+
+	/** A backslash separates segments as a slash does, single or doubled. */
+	@:pin('control')
+	@:killer('M-SCRUB-PRIVATE-BACKSLASH-BLIND')
+	public function testABackslashPathIsAMatch(): Void {
+		final text: String = 'C:\\work\\app\\view\\Secret.hx\n\'app\\\\view\\\\Secret.hx\'';
+		Assert.same(['f:1: private root 1', 'f:2: private root 1'], privateRows(text, []));
+	}
+
+	/** A backslash also opens a string escape: a dotted path glued to the `\t` before it in a quoted fixture is still read. */
+	@:pin('control')
+	@:killer('M-SCRUB-PRIVATE-ESCAPE-BLIND')
+	public function testADottedPathAfterAStringEscapeIsAMatch(): Void {
+		Assert.same(['f:1: private root 1'], privateRows('\'class C {\\n\\t\\tapp.view.Secret.reveal();\'', []));
+	}
+
 	private static function commit(root: String, message: String): Void {
 		cmd('git -C $root -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q -m $message').check();
+	}
+
+	/** The rows `privatePaths` gives `text` against one private tree held in memory, the scanned tree holding `own`. */
+	private static function privateRows(text: String, own: Array<String>): Array<String> {
+		final tree: Array<String> = [
+			'src/app/view/Secret.hx',
+			'src/TopLevelPanel.hx',
+			'src/Main.hx',
+			'assets/app/icons/logo.png'
+		];
+		return ScrubGuard.privatePaths('f', text, new PathIndex(own), [new PathIndex(tree)]);
 	}
 
 }

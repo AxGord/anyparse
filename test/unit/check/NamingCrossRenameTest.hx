@@ -513,8 +513,8 @@ final class NamingCrossRenameTest extends Test {
 
 	/**
 	 * A private member of a type whose SIMPLE name another package reuses: the namesake's subtypes are not
-	 * this type's, so the member stays confined and the single-file rename takes it (client `Zoom.IconButton.icon`
-	 * beside `common.ui.components.IconButton`).
+	 * this type's, so the member stays confined and the single-file rename takes it (a
+	 * client sub-type beside a top-level type of the same simple name in another package).
 	 */
 	@:pin('control')
 	@:killer('M-CONFINED-NO-OWNER-FILE')

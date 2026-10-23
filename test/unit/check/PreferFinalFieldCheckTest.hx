@@ -425,7 +425,7 @@ class PreferFinalFieldCheckTest extends Test {
 	}
 
 	/**
-	 * The project's own `macros.Lang` shape: two unmodified `static var`s inside `#if collectLang`,
+	 * A translation module's shape (`pkg.Lang`): two unmodified `static var`s inside `#if collectLang`,
 	 * assigned from a method rather than a constructor. Now that the region is scanned they must
 	 * still be left alone — the write is not the declaration's and not a sole constructor statement.
 	 */

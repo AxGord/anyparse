@@ -6965,8 +6965,8 @@
 			"name": "M-REACH-CONFIGS-COMPLETE",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "withReachConfigurations",
-			"find": "|| oracles.length == 0 || !complete)",
-			"replace": "|| oracles.length == 0)",
+			"find": "if (!complete) return declared ?",
+			"replace": "if (false) return declared ?",
 			"note": "the oracle list is read as every build the project ships, so a platform branch no configuration compiles is skipped"
 		},
 		{
@@ -7418,7 +7418,7 @@
 			"method": "answerReach",
 			"find": "final pinned: Null<String> = shared && site != null ? _scope.facts?.pinnedOwner(g, entryFile, site, declaring, member.name) : null;",
 			"replace": "final pinned: Null<String> = null;",
-			"note": "(precision) the owner of a member a loop reads is never told by the compiler's fact at the read, so a name two types share stays Ambiguous (the client's `editor.stage.grid.Grid` beside `common.ui.Grid`)"
+			"note": "(precision) the owner of a member a loop reads is never told by the compiler's fact at the read, so a name two types share stays Ambiguous (two `Grid` types of the client in different packages)"
 		},
 		{
 			"name": "M-REACH-PINNED-REWRITTEN-SIMPLE",
@@ -30009,6 +30009,175 @@
 			"method": "privatePaths",
 			"force": "[]",
 			"note": "scrub-guard stops reading paths against the private roots, so a client file path named in the tree or in a pushed range passes the guard silently"
+		},
+		{
+			"name": "M-HOIST-UNKNOWN-BUILDS-GUESSED",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "reachesEveryReceiver",
+			"find": "if (ctx.holdsWithoutBuilds()) return false;",
+			"replace": "if (false) return false;",
+			"note": "a project that declared its build list complete and whose builds the run does not know falls back on classpath evidence, so `--fix --no-oracle` writes an ambient statement into a directory a build of that list compiles without the statement's module"
+		},
+		{
+			"name": "M-HOIST-HELD-UNSAID",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "holdForUnknownBuilds",
+			"find": "note(consumer);",
+			"replace": "",
+			"note": "a proof that held for want of the declared builds holds silently, so a run that hoists nothing reads as a tree with nothing to hoist"
+		},
+		{
+			"name": "M-REACH-COMPLETE-FOLLOWS-LIST",
+			"type": "anyparse.check.LintDocuments",
+			"method": "mergeDocuments",
+			"find": "near.compilerOracles == null ? far.reachConfigurationsComplete : null",
+			"replace": "far.reachConfigurationsComplete",
+			"note": "a nested document naming a compilerOracle list of its own inherits the completeness its ancestor declared for another list, so the reach analysis reads a partial list as every build the project ships"
+		},
+		{
+			"name": "M-HOIST-MIXED-LISTS-GUESSED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "return declared ?",
+			"replace": "return false ?",
+			"note": "a run over paths whose configs name different oracle lists, one of them declared complete, carries no hold, so hoist-common-import falls back on classpath evidence and `--fix` writes an ambient statement a build of the declared list cannot resolve"
+		},
+		{
+			"name": "M-HELD-NOTE-LOST-WITH-FACTS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withCompilerFacts",
+			"find": "buildsHeld: resolution.buildsHeld,",
+			"replace": "",
+			"note": "the scope an oracle run hands its checks drops the hold, so a run whose declared builds did not answer falls back on classpath evidence and says nothing"
+		},
+		{
+			"name": "M-MERMAID-ENCODE-DROPPED",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "lowerTerminal",
+			"find": "return macro return _dt($encodeCall);",
+			"replace": "return macro return _dt(value);",
+			"note": "an `@:encode` terminal is written as its decoded value, so a Mermaid label holding a quote or a pipe comes out bare and the writer's output no longer parses back to the AST it was given"
+		},
+		{
+			"name": "M-MERMAID-PLAIN-LT-RAW",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "plainEscape",
+			"find": "case '<'.code: '#lt;';",
+			"replace": "",
+			"note": "a plain label's `<` is written raw, so Mermaid reads it as markup: `Array<String>` loses its tag-shaped half and `<b>` renders bold"
+		},
+		{
+			"name": "M-MERMAID-PLAIN-AMP-RAW",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "plainEscape",
+			"find": "case '&'.code: '#amp;';",
+			"replace": "",
+			"note": "a plain label's `&` is written raw, so the text `&quot;` renders as a quote and an escape written after a raw `&` completes a reference that re-reads as markup"
+		},
+		{
+			"name": "M-MERMAID-TICK-UNESCAPED",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "escape",
+			"find": "case '`'.code if (markdown || i == 0): plain ? '#96;' : '#grave;';",
+			"replace": "",
+			"note": "a quoted label opening with a backtick is written as a markdown string opener, and a backtick inside a markdown string closes it early"
+		},
+		{
+			"name": "M-MERMAID-CODEPOINT-UNBOUNDED",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "codePoint",
+			"find": "return code == null || code < 1 || code > MAX_CODE_POINT || (code >= SURROGATE_FIRST && code <= SURROGATE_LAST) ? null : code;",
+			"replace": "return code;",
+			"note": "a numeric code outside Unicode reaches String.fromCharCode and throws a RangeError, and a surrogate decodes to half a character"
+		},
+		{
+			"name": "M-MERMAID-INLINE-TAKES-PREFIX",
+			"type": "anyparse.grammar.mermaid.MmdSolidTextLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": ")+(?=--)",
+			"replace": ")+(?![<>]|&[#A-Za-z0-9_]+;|#[A-Za-z0-9_]+;)",
+			"note": "a bare solid-edge label stops at markup without asking for its closing link, so plain takes the prefix before the space and `A -- a < b --> E` no longer parses"
+		},
+		{
+			"name": "M-MERMAID-NUMERIC-REF-RAW",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "escape",
+			"find": "case '&'.code if (!plain && startsNumericReference(text, i)): '';",
+			"replace": "",
+			"note": "markup writes a numeric HTML reference raw, and Mermaid, which turns every `#\\w+;` into a reference whatever precedes it, renders `&#60;` as `&<`"
+		},
+		{
+			"name": "M-MERMAID-CODE-ALPHABET-NARROW",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "isWordChar",
+			"find": " || c == '_'.code",
+			"replace": "",
+			"note": "a code name may not hold `_`, so plain text `#a_b;` is written unescaped and Mermaid renders it as the reference `&a_b;`"
+		},
+		{
+			"name": "M-MERMAID-DOTTED-TEXT-TAKES-DOTS",
+			"type": "anyparse.grammar.mermaid.MmdDottedTextLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "\\\\.(?!\\\\.*-)",
+			"replace": "\\\\.(?!-)",
+			"note": "a bare dotted-edge label takes every dot but the one before the `-`, so `-. text ..->` reads the label `text .` where Mermaid's lexer closes the link at `..->`"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-TAIL-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "namings",
+			"find": "for (first in 0...segments.length - 1) {",
+			"replace": "for (first in 0...1) {",
+			"note": "a path is read only as a whole, so a private path behind a longer lead (another checkout, a project directory) passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-ABSOLUTE-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "privatePaths",
+			"find": "final token: EReg = ~/[A-Za-z0-9_.\\/\\\\-]+/g;",
+			"replace": "final token: EReg = ~/(?<![A-Za-z0-9_.\\/\\\\-])[A-Za-z0-9_.-][A-Za-z0-9_.\\/\\\\-]*/g;",
+			"note": "a token may not start after a `/` again, so a private path inside an absolute, home-relative or URL path passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-DOTTED-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "namings",
+			"find": "if (segments.length < 2 || !segments.foreach(isIdentifier)) return out;",
+			"replace": "if (segments.length >= 0) return out;",
+			"note": "a dotted name names nothing, so a private module spelled as a package path passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-ROOT-MODULE-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "compound",
+			"force": "false",
+			"note": "no name counts as compound, so a private module directly under a source root passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-DIRECTORY-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "namings",
+			"find": "if (distinctive(run, !file)) out.push(file ? FilePath(run.join('/')) : DirectoryPath(run.join('/')));",
+			"replace": "if (file && distinctive(run, false)) out.push(FilePath(run.join('/')));",
+			"note": "a path with no extension names nothing, so a private directory passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-BACKSLASH-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "privatePaths",
+			"find": "final readings: Array<String> = [~/[\\/\\\\]+/g.replace(text, '/')];",
+			"replace": "final readings: Array<String> = [text];",
+			"note": "a backslash is no separator, so a private path written with backslashes passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-ESCAPE-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "privatePaths",
+			"find": "if (text.indexOf('\\\\') >= 0) for (piece in ~/\\\\./g.split(text)) readings.push(piece);",
+			"replace": "",
+			"note": "a backslash never opens a string escape, so a private dotted path glued to a `\\t` in a quoted fixture passes the guard"
 		},
 		{
 			"name": "M-SUBTYPE-TARGET-SIMPLE-NAME",

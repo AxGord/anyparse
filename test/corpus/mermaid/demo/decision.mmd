@@ -1,0 +1,13 @@
+---
+title: Round trip
+---
+flowchart TD
+start([Start]) --> read[/Read the source/]
+read --> parses{Does it parse?}
+parses -->|yes| write[["Write #quot;canonical#quot; text"]]
+parses -- no --> report>Report the error]
+write --> same{"Same AST | again?"}
+same ==>|yes| done([Done])
+same -->|no| bug((Bug))
+report --> done
+click bug "https://example.com/issues" "File an issue" _blank

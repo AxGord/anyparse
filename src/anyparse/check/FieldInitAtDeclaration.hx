@@ -581,7 +581,7 @@ final class FieldInitAtDeclaration implements Check {
 	 * single-file resolver cannot tell an imported static from an inherited member.
 	 *
 	 * Answered from POSITIVE evidence only: the file EXPLICITLY imports the name as a static
-	 * (`import macros.Lang.t;`), so a bare occurrence binds globally. The tempting alternative —
+	 * (`import pkg.Lang.t;`), so a bare occurrence binds globally. The tempting alternative —
 	 * `typeProvablyLacksMember`, "no ancestor declares this name" — is an ABSENCE proof, and absence is
 	 * exactly what a build macro undoes by adding members that exist in no source text. That is not a
 	 * corner case: openfl carries `@:autoBuild(AssetsMacro.initBinding())` on `Sprite`, so every display

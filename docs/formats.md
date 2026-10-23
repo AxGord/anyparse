@@ -157,6 +157,6 @@ A by-name (`FieldLookup.ByName`) field is spelled in the document by its Haxe na
 
 ## Not shipping everything
 
-Shipped: `JsonFormat` (the reference `TextFormat`), `SExprFormat` (the `apq ast` output format), `HaxeFormat` (the Haxe grammar's, with its write options), and `ArFormat` (`BinaryFormat`, with the `ar` archive grammar under `anyparse.grammar.ar`). The other families are interface-only stubs. Real format implementations for XML, YAML, TOML, MessagePack, CBOR, etc. come later, driven by the phase roadmap and real needs.
+Shipped: `JsonFormat` (the reference `TextFormat`), `SExprFormat` (the `apq ast` output format), `HaxeFormat` (the Haxe grammar's, with its write options), `ArFormat` (`BinaryFormat`, with the `ar` archive grammar under `anyparse.grammar.ar`), and `MermaidFormat` (the Mermaid flowchart grammar under `anyparse.grammar.mermaid`, a line-oriented DSL whose labels decode through a codec rather than an escape table). The other families are interface-only stubs. Real format implementations for XML, YAML, TOML, MessagePack, CBOR, etc. come later, driven by the phase roadmap and real needs.
 
 The philosophy is to ship interfaces and one validated reference implementation per family, then let grammars drive what other formats get written. We do not pre-build formats that nobody is asking for.

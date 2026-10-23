@@ -281,7 +281,10 @@ final class LintCommand implements CliCommand {
 			'a computed member name may obtain any method'
 		);
 		final resolution: Null<ResolutionScope> = withCompilerFacts(
-			withReachConfigurations(unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig), ahead, reflective, holders),
+			withReachConfigurations(
+				unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig), ahead, reflective, holders,
+				paths.exists(path -> resolveConfig(path).reachConfigurationsComplete())
+			),
 			oracles, o.noOracle, early, reflective, holders
 		);
 
@@ -399,13 +402,21 @@ final class LintCommand implements CliCommand {
 	 * a `MemberReach` answer may then hold under their conditional compilation and read exactly the code they compile.
 	 * An oracle list not declared complete vouches for nothing, since a build it leaves out may compile code no listed
 	 * one does. The builds probed are stored under the fingerprint of the input they read (`ReachBuildsCache`), which
-	 * a run under `--no-oracle` — compiling nothing — reads instead (`withStoredBuilds`). Unchanged with no oracle.
+	 * a run under `--no-oracle` — compiling nothing — reads instead (`withStoredBuilds`). A run whose paths name different
+	 * lists reads no builds, and when one of them `declared` its list complete still carries the hold (`buildsHeld`).
+	 * Unchanged with no oracle.
 	 */
 	private static function withReachConfigurations(
 		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool, ahead: AheadBuilds,
-		?reflective: Array<String>, ?holders: Array<String>
+		?reflective: Array<String>, ?holders: Array<String>, declared: Bool = false
 	): Null<ResolutionScope> {
-		if (resolution == null || oracles.length == 0 || !complete) return resolution;
+		if (resolution == null || oracles.length == 0) return resolution;
+		// a path declared its list complete, so no proof may fall back on what a run with no declared list would read
+		if (!complete) return declared ? {
+			declared: resolution.declared,
+			sources: resolution.sources,
+			buildsHeld: heldNote('the linted paths name different compilerOracle lists, so the run reads none as complete')
+		} : resolution;
 		if (noOracle) return withStoredBuilds(resolution, oracles, reflective, holders);
 		var probed: Bool = false;
 		var builds: Null<ReachBuilds> = null;
@@ -439,7 +450,8 @@ final class LintCommand implements CliCommand {
 			sources: resolution.sources,
 			builds: probe,
 			buildsAhead: start,
-			buildsSettled: settled
+			buildsSettled: settled,
+			buildsHeld: heldNote('no build this run compiled said which files it parses')
 		};
 	}
 
@@ -460,7 +472,27 @@ final class LintCommand implements CliCommand {
 			}
 			return builds;
 		}
-		return { declared: resolution.declared, sources: resolution.sources, builds: load };
+		return {
+			declared: resolution.declared,
+			sources: resolution.sources,
+			builds: load,
+			buildsHeld: heldNote('this --no-oracle run found no builds stored for its exact input — a run with the oracle stores them')
+		};
+	}
+
+	/**
+	 * The run's `ResolutionScope.buildsHeld`: says once per consumer that it held for want of the builds, and `why` the run
+	 * knows none.
+	 */
+	private static function heldNote(why: String): (String) -> Void {
+		final told: Array<String> = [];
+		return consumer -> {
+			if (told.contains(consumer)) return;
+			told.push(consumer);
+			CliIo.stderr(
+				'apq lint: $consumer held what only the builds can vouch for — reachConfigurationsComplete is declared, but $why\n'
+			);
+		};
 	}
 
 	/** `builds` carrying the bounds the project declares on what a computed name may make or obtain, where it declares them. */
@@ -574,6 +606,7 @@ final class LintCommand implements CliCommand {
 			facts: read.bind(false),
 			factsEdited: touched,
 			factsSettled: () -> if (early != null) read(true),
+			buildsHeld: resolution.buildsHeld,
 			buildsAhead: resolution.buildsAhead,
 			buildsSettled: resolution.buildsSettled
 		};

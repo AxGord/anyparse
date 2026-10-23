@@ -191,8 +191,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 
 	/**
 	 * A PARAMETER annotated with a function type of the lambda's own arity, never written, is the
-	 * shape the binder gate exists to accept — `fs.FileIO.run`'s `runInIOThread(() -> work())` is
-	 * the site that motivated it.
+	 * shape the binder gate exists to accept — a `run` method's `runInIOThread(() -> work())` is the site that motivated it.
 	 */
 	public function testAnnotatedParamCalleeFlagged(): Void {
 		Assert.equals(1, violations('class C {\n\tfunction f(work:()->Void):Void {\n\t\trun(() -> work());\n\t}\n}').length);
@@ -240,8 +239,8 @@ class RedundantLambdaWrapperCheckTest extends Test {
 
 	/**
 	 * Resolution is by name over the file, so two binders of one name must AGREE. Twins of the same
-	 * arity answer the same question and are accepted — `fs.FileIO`, the tree that motivated this
-	 * gate, declares `work:()->T` in two neighbouring methods.
+	 * arity answer the same question and are accepted — the type that
+	 * motivated this gate declares `work:()->T` in two neighbouring methods.
 	 */
 	public function testAgreeingBinderTwinsFlagged(): Void {
 		final one: String = '\tfunction f(w:()->Void):Void {\n\t\trun(() -> w());\n\t}\n';

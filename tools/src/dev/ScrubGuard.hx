@@ -26,7 +26,8 @@ using StringTools;
  * prints `<where>:<line>: rule <n>`, never the matched text.
  *
  * A `--private-root` (repeatable; or `ANYPARSE_SCRUB_PRIVATE_ROOTS`, `:`-separated) is a downstream checkout: a
- * path-shaped token that names one of its files and none of the scanned tree's is a match too, printed as
+ * path-shaped token (a `/` or `\` path, a dotted module path) that names one of its
+ * files or directories and none of the scanned tree's is a match too, printed as
  * `<where>:<line>: private root <k>` — the structural half, for the path no list entry spells (`privatePaths`).
  *
  * Exit 0 = clean, or nothing configured (said on stderr, so a clone without the private list is not blocked); 1 = a
@@ -39,6 +40,9 @@ final class ScrubGuard {
 
 	/** How many leading bytes of a file are looked at for a NUL before it counts as binary. */
 	private static inline final BINARY_PROBE: Int = 8192;
+
+	/** How many segments a path must have to name a directory: fewer are too common a phrase to be one project's. */
+	private static inline final DIRECTORY_SEGMENTS: Int = 3;
 
 	/** Directory names a project keeps its modules under, which say nothing about the project. */
 	private static final SOURCE_ROOT_NAMES: Array<String> = ['src', 'source', 'lib', 'test', 'tests'];
@@ -172,22 +176,24 @@ final class ScrubGuard {
 	}
 
 	/**
-	 * One `<where>:<line>: private root <k>` row per path-shaped token of `data` — two or more segments, the last with an
-	 * extension — that names a file of `privates[k - 1]` and no file of the scanned tree `own`; a token that is not
-	 * `distinctive` does not count. A leading `./` or `../` is dropped, and the first tree that names the path takes the row.
+	 * One `<where>:<line>: private root <k>` row per path-shaped token of `data` that names a file or directory of
+	 * `privates[k - 1]` and none of the scanned tree `own` — `namings` says what a token can name, `treeNaming` which
+	 * tree names it first. A backslash in a token is read both as a separator and as the start of a string escape.
 	 */
 	public static function privatePaths(where: String, data: String, own: PathIndex, privates: Array<PathIndex>): Array<String> {
 		final rows: Array<String> = [];
 		if (privates.length == 0) return rows;
-		final token: EReg = ~/(?<![A-Za-z0-9_.\/-])(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_-][A-Za-z0-9_.-]*\.[A-Za-z0-9]+/g;
+		final token: EReg = ~/[A-Za-z0-9_.\/\\-]+/g;
 		var line: Int = 1;
 		var counted: Int = 0;
 		var from: Int = 0;
 		while (from <= data.length && token.matchSub(data, from)) {
 			final pos: { pos: Int, len: Int } = token.matchedPos();
 			from = pos.pos + pos.len;
-			final path: String = relativePart(token.matched(0));
-			final tree: Int = !distinctive(path) || own.names(path) ? -1 : firstNaming(privates, path);
+			final text: String = token.matched(0);
+			final readings: Array<String> = [~/[\/\\]+/g.replace(text, '/')];
+			if (text.indexOf('\\') >= 0) for (piece in ~/\\./g.split(text)) readings.push(piece);
+			final tree: Int = treeNaming(readings, own, privates);
 			if (tree < 0) continue;
 			line += countBreaks(data, counted, pos.pos);
 			counted = pos.pos;
@@ -205,6 +211,39 @@ final class ScrubGuard {
 		final files: Array<String> = [];
 		walk(root, '', files);
 		return files;
+	}
+
+	/**
+	 * What the token `text` can name, longest first. A path (`/`-separated) names a file by each of its trailing segment
+	 * runs, or — its last segment carrying no extension — a directory by each such run. A dotted name (`a.b.X`, no `/`)
+	 * names a module, a file of any extension, by each run of its segments, and a directory by each such run; only runs
+	 * `distinctive` admits are named. Trailing dots close a sentence, not a name.
+	 */
+	public static function namings(text: String): Array<Naming> {
+		var name: String = text;
+		while (name.endsWith('.')) name = name.substr(0, name.length - 1);
+		final out: Array<Naming> = [];
+		if (name.indexOf('/') >= 0) {
+			final segments: Array<String> = name.split('/').filter(segment -> segment != '');
+			final file: Bool = segments.length > 0 && hasExtension(segments[segments.length - 1]);
+			for (first in 0...segments.length - 1) {
+				final run: Array<String> = segments.slice(first);
+				if (distinctive(run, !file)) out.push(file ? FilePath(run.join('/')) : DirectoryPath(run.join('/')));
+			}
+			return out;
+		}
+		final segments: Array<String> = name.split('.');
+		if (segments.length < 2 || !segments.foreach(isIdentifier)) return out;
+		var size: Int = segments.length;
+		while (size >= 2) {
+			for (first in 0...segments.length - size + 1) {
+				final run: Array<String> = segments.slice(first, first + size);
+				if (distinctive(run, false)) out.push(ModulePath(run.join('/')));
+				if (distinctive(run, true)) out.push(DirectoryPath(run.join('/')));
+			}
+			size--;
+		}
+		return out;
 	}
 
 	/** The offset of every match of `rule` in `data`, non-overlapping, left to right. */
@@ -270,16 +309,15 @@ final class ScrubGuard {
 		}
 	}
 
-	/** `path` without its leading `./` and `../` segments. */
-	private static function relativePart(path: String): String {
-		var rest: String = path;
-		while (rest.startsWith('./') || rest.startsWith('../')) rest = rest.substr(rest.indexOf('/') + 1);
-		return rest;
-	}
-
-	/** The index of the first of `trees` that names `path`, or -1. */
-	private static function firstNaming(trees: Array<PathIndex>, path: String): Int {
-		for (n => tree in trees) if (tree.names(path)) return n;
+	/**
+	 * The index of the first of `trees` that names what one of `readings` names, or -1: each reading's `namings` are
+	 * tried longest first, and one the scanned tree `own` names ends that reading, as the token is the tree's own path.
+	 */
+	private static function treeNaming(readings: Array<String>, own: PathIndex, trees: Array<PathIndex>): Int {
+		for (reading in readings) for (naming in namings(reading)) {
+			if (own.knows(naming)) break;
+			for (n => tree in trees) if (tree.knows(naming)) return n;
+		}
 		return -1;
 	}
 
@@ -289,14 +327,33 @@ final class ScrubGuard {
 	}
 
 	/**
-	 * Whether `path` still holds a directory once its leading `SOURCE_ROOT_NAMES` segments are dropped: a module at the
-	 * top of a source root (`src/Main.hx`) carries no package, so it is as common a word as a bare file name.
+	 * Whether the trailing segment run `run` says something about the project it names: two or more segments once its
+	 * leading `SOURCE_ROOT_NAMES` are dropped, or one whose name is `compound` — a module at the top of a source root
+	 * (`src/Main.hx`) is otherwise as common a word as a bare file name. A directory needs `DIRECTORY_SEGMENTS` segments
+	 * and two that are no source root's, since a name of one or two directories is rarely a project's own.
 	 */
-	private static function distinctive(path: String): Bool {
-		final segments: Array<String> = path.split('/');
+	private static function distinctive(run: Array<String>, directory: Bool): Bool {
 		var first: Int = 0;
-		while (first < segments.length - 1 && SOURCE_ROOT_NAMES.contains(segments[first])) first++;
-		return segments.length - first >= 2;
+		while (first < run.length - 1 && SOURCE_ROOT_NAMES.contains(run[first])) first++;
+		final kept: Int = run.length - first;
+		return directory ? run.length >= DIRECTORY_SEGMENTS && kept >= 2 : kept >= 2 || compound(run[run.length - 1]);
+	}
+
+	/** Whether the file or module name `name` (its extension aside) joins two or more words: `TextField`, `XMLParser`, `utf8Decode`. */
+	private static function compound(name: String): Bool {
+		final dot: Int = name.indexOf('.');
+		final stem: String = dot > 0 ? name.substr(0, dot) : name;
+		return ~/[a-z0-9][A-Z]|[A-Z][A-Z][a-z]|[A-Za-z][_0-9]|[_0-9][A-Za-z]/.match(stem);
+	}
+
+	/** Whether the path segment `segment` ends in an extension: a dot after its first character, then letters and digits. */
+	private static function hasExtension(segment: String): Bool {
+		return ~/^[A-Za-z0-9_-][A-Za-z0-9_.-]*\.[A-Za-z0-9]+$/.match(segment);
+	}
+
+	/** Whether `segment` is an identifier, as each segment of a dotted module path is. */
+	private static function isIdentifier(segment: String): Bool {
+		return ~/^[A-Za-z_][A-Za-z0-9_]*$/.match(segment);
 	}
 
 }
@@ -307,31 +364,73 @@ enum Rule {
 	Pattern(re: EReg);
 }
 
-/** The files of one tree by base name: answers whether a relative path names one of them. */
+/**
+ * What a token of the scanned text can name in a tree, by trailing path: a
+ * `FilePath`, a `ModulePath` (a file of any extension) or a `DirectoryPath`.
+ */
+enum Naming {
+	FilePath(path: String);
+	ModulePath(path: String);
+	DirectoryPath(path: String);
+}
+
+/** The files of one tree, with their module paths and directories, by base name: answers whether a `Naming` names one. */
 @:nullSafety(Strict)
 final class PathIndex {
 
-	private final _byName: Map<String, Array<String>> = [];
+	private final _files: Map<String, Array<String>> = [];
+
+	/** Each file's path without its extension. */
+	private final _modules: Map<String, Array<String>> = [];
+
+	private final _directories: Map<String, Array<String>> = [];
 
 	public function new(files: Array<String>) {
 		for (file in files) {
-			final name: String = baseName(file);
-			final same: Null<Array<String>> = _byName[name];
-			if (same == null)
-				_byName[name] = [file]
-			else
-				same.push(file);
+			add(_files, file);
+			final cut: Int = file.lastIndexOf('/');
+			final dot: Int = file.lastIndexOf('.');
+			if (dot > cut + 1) add(_modules, file.substr(0, dot));
+			var directory: String = file;
+			var at: Int = cut;
+			// a directory already held came with every directory above it
+			while (at > 0) {
+				directory = directory.substr(0, at);
+				if (!add(_directories, directory)) break;
+				at = directory.lastIndexOf('/');
+			}
 		}
 	}
 
-	/** Whether `path` is one of the files, or the trailing whole segments of one. */
-	public function names(path: String): Bool {
-		final same: Null<Array<String>> = _byName[baseName(path)];
-		return same != null && same.exists(file -> file == path || file.endsWith('/$path'));
+	/** Whether `naming` is one of the tree's files, module paths or directories, or the trailing whole segments of one. */
+	public function knows(naming: Naming): Bool {
+		return switch naming {
+			case FilePath(path): holds(_files, path);
+			case ModulePath(path): holds(_modules, path);
+			case DirectoryPath(path): holds(_directories, path);
+		}
 	}
 
 	private static inline function baseName(path: String): String {
 		return path.substr(path.lastIndexOf('/') + 1);
+	}
+
+	/** Add `path` under its base name unless it is there already; answers whether it was added. */
+	private static function add(byName: Map<String, Array<String>>, path: String): Bool {
+		final name: String = baseName(path);
+		final same: Null<Array<String>> = byName[name];
+		if (same == null) {
+			byName[name] = [path];
+			return true;
+		}
+		if (same.contains(path)) return false;
+		same.push(path);
+		return true;
+	}
+
+	private static function holds(byName: Map<String, Array<String>>, path: String): Bool {
+		final same: Null<Array<String>> = byName[baseName(path)];
+		return same != null && same.exists(held -> held == path || held.endsWith('/$path'));
 	}
 
 }

@@ -246,10 +246,15 @@ pass and say so.
 
 A list only catches the names someone wrote into it. The structural half takes the downstream checkout itself:
 `--private-root <dir>` (repeatable; or `ANYPARSE_SCRUB_PRIVATE_ROOTS`, `:`-separated — never a default, never a path
-stored here) makes a match of every path-shaped token (two or more segments, the last with an extension, a leading
-`./` / `../` dropped) that names a file of that tree — what its git tracks when the root is a checkout, every file under
-it otherwise — and no file of the scanned tree, printed as `<where>:<line>: private root <k>`. A bare file name, or a
-module directly under a source-root directory (`src/Main.hx`), carries no package and is too common a word to count.
+stored here) makes a match of every path-shaped token that names a file or directory of that tree — what its git
+tracks when the root is a checkout, every file under it otherwise — and none of the scanned tree, printed as
+`<where>:<line>: private root <k>`. A `/` or `\` path is tried by every trailing run of two or more whole segments, so
+whatever leads it (another checkout, an absolute, `~/` or URL path) is dropped; with no extension it names a directory,
+and only with three or more segments. A dotted name (`a.b.X`, a member after it allowed) names a module of any extension
+by the same runs, and a package directory with three. A backslash is also read as opening a string escape, so a name
+glued to a `\t` in a quoted fixture is seen. A bare file name, or a one-word module directly under a source-root
+directory (`src/Main.hx`), carries no package and is too common a word to count; a module there whose name joins two or
+more words (`src/TopLevelPanel.hx`) does.
 The row names the root by its position on the command line, never the path. A `regex:` rule is a JavaScript regular expression; a leading Python inline-flag group (`(?i)`) becomes
 its flags, and a rule JavaScript cannot compile is a usage error naming its number. Usage errors exit 2.
 
@@ -930,7 +935,7 @@ The cold typecheck is PROJECT-WIDE regardless of how narrow the lint scope is, a
 hxq lint <file> --all --no-oracle    # the typecheck is most of a single-file run's wall time
 ```
 
-An `OracleCache` hit only survives while NOTHING on the classpath changed, so in an edit loop every run after an edit pays the cold typecheck. Findings are byte-identical with and without the flag; it changes what the run can PROVE, not what it finds, and says so on stderr. One exception reads the other way: a project that declares `reachConfigurationsComplete` gets, under the flag, the builds the last oracle run stored for the SAME compile input (`ReachBuildsCache`), so a second run over an unedited tree finds what the oracle run found for the rules that read the builds; in the edit loop, where every run follows an edit, that record misses — on the stats of the edited file, with nothing hashed — and the run knows no build. **Never in a gate** — the battery, a pre-commit lint, anything whose output is a verdict runs the oracle, because declining a gate can only weaken one.
+An `OracleCache` hit only survives while NOTHING on the classpath changed, so in an edit loop every run after an edit pays the cold typecheck. Findings are byte-identical with and without the flag; it changes what the run can PROVE, not what it finds, and says so on stderr. One exception reads the other way: a project that declares `reachConfigurationsComplete` gets, under the flag, the builds the last oracle run stored for the SAME compile input (`ReachBuildsCache`), so a second run over an unedited tree finds what the oracle run found for the rules that read the builds; in the edit loop, where every run follows an edit, that record misses — on the stats of the edited file, with nothing hashed — and the run knows no build. `hoist-common-import` then holds every hoist the implicit tier does not vouch for and says so on stderr, so a `--fix --no-oracle` over an edited tree writes no ambient statement a build of the list could not resolve. **Never in a gate** — the battery, a pre-commit lint, anything whose output is a verdict runs the oracle, because declining a gate can only weaken one.
 
 **With `--fix` the flag means MORE than in report mode.** The compiler is not asked anything, so the safe-pass revert net is OFF (a fix that breaks the build STAYS on disk — the only way an iteration loop can see the fixer raw), `RiskyFix` rules stay report-only and `OracleAssisted` rules are inert. The run says so on a dedicated stderr line (`compiler oracle SKIPPED (--no-oracle)`), which is why the report-only tails read "no compiler oracle for this run" rather than "no compilerOracle configured". Never in a gate, with more force. Temporarily deleting `compilerOracle` from `apqlint.json` is the worse spelling of the same thing: it edits a TRACKED file.
 

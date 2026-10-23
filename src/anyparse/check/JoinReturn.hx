@@ -36,7 +36,7 @@ using Lambda;
  * `@:from` conversion the plain value would not:
  *
  * ```haxe
- * final color:types.Color = str; // str : String, Color has @:from String
+ * final color:pkg.Color = str; // str : String, Color has @:from String
  * return color;
  * ```
  *
