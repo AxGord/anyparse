@@ -28851,7 +28851,7 @@
 		{
 			"name": "M-CALLS-NULLABLE-UNBOUND",
 			"type": "anyparse.query.CallReturns",
-			"method": "callArguments",
+			"method": "argumentOf",
 			"find": "Nullable(end)",
 			"replace": "Typed(end)",
 			"note": "an argument of a `Null<…>` type binds a type parameter to the type inside, so `id(n)` over `?n:Int` is an `Int`"
@@ -30424,6 +30424,158 @@
 			"find": "process.execPath,",
 			"replace": "",
 			"note": "the tag no longer names the node binary, so two node builds of one version string but different V8 configuration share a cache whose payload verifies and can still abort the other"
+		},
+		{
+			"name": "M-MONO-LAST-BINDING-WINS",
+			"type": "anyparse.query.Monomorphs",
+			"method": "bind",
+			"find": "\t\t\telse if (!same(held, term))\n\t\t\t\t_poisoned[root] = true;",
+			"replace": "\t\t\telse\n\t\t\t\t_bound[root] = term;",
+			"note": "a second binding of a cell to another type replaces the first instead of poisoning the cell, so a call's type parameter answers the last argument's type where the compiler keeps the first"
+		},
+		{
+			"name": "M-MONO-UNIFY-ARGUMENTS-SKIPPED",
+			"type": "anyparse.query.Monomorphs",
+			"method": "unify",
+			"find": "for (i => arg in args) unify(arg, givenArgs[i], reread);",
+			"replace": "for (m in cellsOf(wanted)) poison(m);",
+			"note": "a wanted type of the given's head poisons its cells instead of meeting the given argument by argument, so `Box<A>` given a `Box<Int>` binds nothing"
+		},
+		{
+			"name": "M-LAMBDA-PARAMETER-NULL",
+			"type": "anyparse.query.LambdaParameters",
+			"method": "indexParameter",
+			"force": "null",
+			"note": "the index host types no lambda parameter written with no type, though 4.3.7 gives `take(x -> …)` of `take(f: Item -> Bool)` an `Item`"
+		},
+		{
+			"name": "M-RECEIVER-ARGUMENTS-DROPPED",
+			"type": "anyparse.query.ComposedValues",
+			"method": "receiverParameter",
+			"find": "method, false, at, args, c)",
+			"replace": "method, false, at, [], c)",
+			"note": "a receiver's written type arguments no longer bind its type's parameters, so `Box<Item>.each(f: T -> Void)` expects no type of its lambda"
+		},
+		{
+			"name": "M-INFERRED-CELLS-UNBOUND",
+			"type": "anyparse.query.CallReturns",
+			"method": "inferredCells",
+			"find": "monos.unify(wanted, policy.termOf(given, fi, site, []), policy.reread.bind(_, _, fi));",
+			"replace": "for (cell in Monomorphs.cellsOf(wanted)) monos.poison(cell);",
+			"note": "no argument binds a call's type parameter, so `gen(box, x -> …)` of `gen<A>(b: Box<A>, f: A -> Void)` leaves `x` untyped"
+		},
+		{
+			"name": "M-INFERENCE-REREAD-NULL",
+			"type": "anyparse.query.HaxeInferencePolicy",
+			"method": "reread",
+			"force": "null",
+			"note": "a given type of another head reads as none, so neither a `Null<Int>` given for `Null<A>` nor a subclass of `Box<Item>` given for `Box<A>` binds `A`"
+		},
+		{
+			"name": "M-UNBOUND-PART-TAKEN",
+			"type": "anyparse.query.LambdaParameters",
+			"method": "parameterType",
+			"find": "return isDynamic || CallGraphNames.mentionsTypeName(expected.text, expected.unbound, syntax) ? null : expected.text.trim();",
+			"replace": "return isDynamic ? null : expected.text.trim();",
+			"note": "a part naming a type parameter no argument before the lambda binds is answered as written, so the lambda's parameter is typed `A`"
+		},
+		{
+			"name": "M-LAMBDA-DYNAMIC-TAKEN",
+			"type": "anyparse.query.LambdaParameters",
+			"method": "parameterType",
+			"find": "return isDynamic ||",
+			"replace": "return",
+			"note": "a parameter expected to be `Dynamic` is typed `Dynamic`, though 4.3.7 leaves a monomorph its body's uses shape (`{lock: String}`)"
+		},
+		{
+			"name": "M-EXTENSION-PARAMETER-NULL",
+			"type": "anyparse.query.CallReturns",
+			"method": "extensionParameter",
+			"force": "null",
+			"note": "a static extension's parameter is never read, so `xs.exists(x -> …)` through `using Lambda` leaves `x` untyped"
+		},
+		{
+			"name": "M-ONE-DECLARATION-NONE",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "oneDeclaration",
+			"force": "found.length == 1 ? found[0] : null",
+			"note": "a std type the index holds a copy of per target names no declaration, so an array receiver binds no static extension"
+		},
+		{
+			"name": "M-PARAMETER-MERGE-BY-TEXT",
+			"type": "anyparse.query.CallReturns",
+			"method": "mergedParameter",
+			"find": "!x.spellsAs(y)",
+			"replace": "a.text != b.text",
+			"note": "two declarations of a callee writing one parameter type two ways (`T -> Bool`, `(item: T) -> Bool`) disagree, so the lambda handed to it is untyped"
+		},
+		{
+			"name": "M-ITERATOR-ELEMENT-NULL",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "iteratorElement",
+			"force": "null",
+			"note": "a class iterates nothing through its own `iterator()`, so a `Bag<Item>` given for `Iterable<A>` binds no `A`"
+		},
+		{
+			"name": "M-NAMESAKE-READS-ALIKE",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "readsAlike",
+			"force": "true",
+			"note": "every written type reads in another file as where it is written, so a callee's `Item -> Void` types a lambda's parameter as the caller's own namesake `Item`"
+		},
+		{
+			"name": "M-LAMBDA-FOREIGN-FILE-TAKEN",
+			"type": "anyparse.query.LambdaParameters",
+			"method": "parameterType",
+			"find": "if (file == null || file.file != c.file) return null;",
+			"replace": "if (file == null) return null;",
+			"note": "a parameter type read in the callee's file is answered in the caller's, where a namesake of a type it names takes that type's place"
+		},
+		{
+			"name": "M-LAMBDA-OPTIONAL-TAKEN",
+			"type": "anyparse.query.LambdaParameters",
+			"method": "indexParameter",
+			"find": " || param.kind == c.shape.optionalParamKind || param.children.length > 0",
+			"replace": "",
+			"note": "a lambda parameter written `?x` or `x = null` is typed `Item`, though 4.3.7 types it `Null<Item>`"
+		},
+		{
+			"name": "M-MONO-DYNAMIC-BINDS",
+			"type": "anyparse.query.Monomorphs",
+			"method": "bind",
+			"find": "case Of(Dyn, [], _):\n",
+			"replace": "",
+			"note": "a cell binds to the dynamic type, so `arr(d, x -> …)` of `arr<A>(x: A, f: Array<A> -> Void)` types `x` as `Array<Dynamic>` where 4.3.7 leaves a monomorph the lambda binds"
+		},
+		{
+			"name": "M-BOUND-SHADOWED-SUBSTITUTED",
+			"type": "anyparse.query.AncestorTable",
+			"method": "boundType",
+			"find": "if (!own.contains(params[i])) i]",
+			"replace": "i]",
+			"note": "a method's type parameter named like its type's is bound to the receiver's argument, so `shadow<T>(x: T, f: T -> Void)` on a `Box<Item>` given `1` types the lambda's parameter `Item`"
+		},
+		{
+			"name": "M-ARGUMENT-WRITTEN-ELSEWHERE",
+			"type": "anyparse.query.CallReturns",
+			"method": "writtenType",
+			"force": "TypingService.typeWalk(node, c.shape, NominalTypes.INDEX_HOST, c)",
+			"note": "a receiver or an argument is typed by every arc, a member read's type as its declaring file writes it, so a caller's namesake of a type it names binds the call's type parameter"
+		},
+		{
+			"name": "M-SELF-UNWRITTEN",
+			"type": "anyparse.query.CallReturns",
+			"method": "argumentHost",
+			"find": "self: writtenHere ? NominalTypes.indexSelf : (_, _) -> null,",
+			"replace": "self: (_, _) -> null,",
+			"note": "the self reference is no type this file writes, so `Lambda.exists(this, x -> …)` inside an abstract over `Bag<Item>` binds no `A`"
+		},
+		{
+			"name": "M-CHAIN-HOPS-UNCHECKED",
+			"type": "anyparse.query.AncestorTable",
+			"method": "chainReadsAlike",
+			"force": "true",
+			"note": "what a supertype chain passes is taken for the caller's own whatever file each link writes it in, so a subclass of `SubBox extends Box<Item>` declaring its own `Item` types an inherited `each`'s lambda parameter as that namesake"
 		}
 	]
 }

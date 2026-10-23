@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using Lambda;
 
@@ -192,6 +193,43 @@ final class TypeRefIndex {
 	}
 
 	/**
+	 * `resolveStartType`, or — the name reaching several declarations that are one std module each target's `_std`
+	 * re-declares — the first of those copies (`oneDeclaration`), where a question the copies all answer alike may read one.
+	 */
+	public function resolveStartCopy(typeName: String, fromFile: Null<String>, ?at: Int): Null<ResolvedType> {
+		final found: Null<ResolvedType> = resolveStartType(typeName, fromFile, at);
+		if (found != null) return found;
+		final host: Null<FileInfo> = fromFile == null ? null : _files.find(f -> f.file == fromFile);
+		return oneDeclaration(
+			if (host != null)
+				resolveTypeRefAll(typeName, host, at)
+			else if (typeName.indexOf('.') >= 0)
+				resolveQualifiedRefAll(typeName)
+			else
+				resolvedDeclsNamed(typeName)
+		);
+	}
+
+	/**
+	 * Whether every type name the written type `text` spells resolves, read in the file `to`, to the declarations it resolves
+	 * to read in `from` (`skip` the names that are no type there: type parameters) — whether a type written in one file may be
+	 * carried into another as that one's own. A name neither file resolves is taken alike.
+	 */
+	public function readsAlike(text: String, from: FileInfo, to: FileInfo, skip: Array<String>, syntax: TypeSyntaxReader): Bool {
+		if (from.file == to.file) return true;
+		final written: Null<TypeSyntax> = syntax(text);
+		if (written == null) return false;
+		for (d in written.descendants()) switch d.shape {
+			case Nominal(path, _) if (!skip.contains(path)):
+				final there: Array<ResolvedType> = resolveTypeRefAll(path, from);
+				final here: Array<ResolvedType> = resolveTypeRefAll(path, to);
+				if (there.length != here.length || !there.foreach(r -> here.exists(h -> AncestorTable.same(r, h)))) return false;
+			case _:
+		}
+		return true;
+	}
+
+	/**
 	 * Every decl the MODULE-RELATIVE form `Mod.Sub` names FROM `fromFile` — a sub-module type
 	 * qualified by its own module's name, which Haxe accepts wherever the MODULE itself can be
 	 * named. That is `moduleRefInScope`, a strictly narrower rule than the one a bare type name
@@ -253,6 +291,19 @@ final class TypeRefIndex {
 	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
 	public static inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
 		return t.isMain ? fi.module : '${fi.module}.${t.name}';
+	}
+
+	/**
+	 * The one declaration `found` holds: its only one, or — every one a copy of one std module a target's `_std` re-declares
+	 * (`std/Array.hx` beside `js/_std/Array.hx`) — the first by file. Null otherwise.
+	 */
+	public static function oneDeclaration(found: Array<ResolvedType>): Null<ResolvedType> {
+		if (found.length < 2) return found.length == 1 ? found[0] : null;
+		final module: String = ModuleScan.pathOfTypeIn(found[0].file, found[0].type.name);
+		if (!found.foreach(r -> StdResolver.isStdFile(r.file.file) && ModuleScan.pathOfTypeIn(r.file, r.type.name) == module)) return null;
+		final ordered: Array<ResolvedType> = found.copy();
+		ordered.sort((a, b) -> Reflect.compare(a.file.file, b.file.file));
+		return ordered[0];
 	}
 
 	/**

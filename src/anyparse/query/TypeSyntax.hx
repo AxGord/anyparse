@@ -103,6 +103,21 @@ final class TypeSyntax {
 		};
 	}
 
+	/**
+	 * Whether `other` spells the type this one does: one path applied to such arguments, a function type of such parameters
+	 * and result however its parameters are named or its arrow spelled; any other form only as the same text, spaces apart.
+	 */
+	public function spellsAs(other: TypeSyntax): Bool {
+		return switch [shape, other.shape] {
+			case [Nominal(p, xs), Nominal(q, ys)]:
+				p == q && xs.length == ys.length && [for (i in 0...xs.length) i].foreach(i -> xs[i].spellsAs(ys[i]));
+			case [Function(ps, r, _), Function(qs, s, _)]:
+				ps.length == qs.length && r.spellsAs(s)
+					&& [for (i in 0...ps.length) i].foreach(i -> ps[i].optional == qs[i].optional && ps[i].type.spellsAs(qs[i].type));
+			case _: ~/\s+/g.replace(text, '') == ~/\s+/g.replace(other.text, '');
+		};
+	}
+
 }
 
 /** `GrammarPlugin.typeSyntax` as a value — how code that holds no plugin reads a written type. */

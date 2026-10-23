@@ -1,11 +1,11 @@
 package unit.query;
 
-import anyparse.query.AbstractCasts.TypeEnd;
 import anyparse.query.ArgumentSlots;
 import anyparse.query.CallSelection;
 import anyparse.query.CallSignature;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeTerm.TypeEnd;
 import unit.CheckFixture;
 
 using Lambda;

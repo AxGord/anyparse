@@ -4489,3 +4489,54 @@ under the declared list. With the receiver gate cut (`M-HOIST-RECEIVER-UNVOUCHED
 --fix` writes `test/unit/grammar/import.hx` (2462 edits in 918 files, exit 0, `recon.hxml` red) under the old
 configuration, and under the declared list reverts the 382 files the compiler blamed (1830 edits in 536 files kept, exit 1,
 `recon.hxml` green).
+
+## T7a (2026-10-23) — monomorphs of a call's type parameters, lambda parameters in the index host
+
+On `0a2ac8160`. Census (`typer-conformance facts --census`), the base engine on the base tree against the slice's engine
+on the slice's tree, source / nominal:
+
+| tree | `F3-lambda-parameter` | UNKNOWN share | DIFFERENT |
+|---|---|---|---|
+| anyparse | 12 437 / 12 437 → 2 550 / 4 165 | 13.0 / 13.2 → 11.3 / 11.6 % | 1 / 1 → 1 / 1 |
+| Pony (a copy) | 26 / 26 → 21 / 21 | 19.3 / 18.4 → 19.2 / 18.4 % | 2 / 3 → 2 / 3 |
+| upstream | 1 / 1 → 1 / 1 | 57.9 / 57.3 → 57.9 / 57.3 % | 0 / 0 → 0 / 0 |
+
+The base's lambda-parameter root on anyparse, by what the callee declares at the lambda's position: not declared on the
+receiver type (a static extension, mostly `using Lambda`) 4 609, a class type parameter 1 827, a method type parameter
+1 820, a bare call of a member 1 384, a concrete type 1 334, the receiver untyped 872, an object field 285, an annotated
+local 156, a `return` 86. Left on the slice (source): the receiver untyped 784, an extension 520, a method type parameter
+469, a class type parameter 315, an object field 265, a `return` 86. The nominal currency keeps more (a lambda's
+parameter typed as a structure has no nominal).
+
+Per case, both engines over the slice's tree (`--list`): anyparse 1 068 610 cases, no MATCH lost, +17 081 MATCH, no
+DIFFERENT added; Pony 21 962 cases, no MATCH lost, +10, none added. The three anyparse DIFFERENTs the first build showed
+were `(a: Array<Dynamic>).filter(x -> x.lock == …)`: 4.3.7 types `x` as `{lock: String}`, a monomorph not binding to
+`Dynamic`; the slice answers none there.
+
+Pony's five answered are `Lambda.exists` over a class whose own `iterator()` yields; twenty of the 21 left are `using
+Lambda` extensions: its resolution libraries hold a second `Lambda` module, and the T3 walk refuses the ambiguous path.
+
+All-rules lint (`--no-oracle --all --format json`), the base engine against the slice's: two recall trees
+byte-identical; the third moves three `prefer-static-extension` messages from "receiver type unresolved" to the resolved
+form (a lambda's parameter a sibling member's `(Int) -> …` parameter types); the anyparse base tree adds two
+`simplify-negated-compound` infos (`Lambda.foreach` over a `Map<Int, Anchor>` and an `Array<Span>`, whose element's
+`Int` fields the rule now reads) and resolves one `prefer-static-extension` receiver (a lambda written for a local of
+type `String -> Bool`). The three thread-safety scores are byte-identical.
+
+**After review round 1** (merged with main `5c229f1e1`; main's engine against the slice's on the slice's tree): four
+classes the reviewer compiled were wrong answers the census could not see — a callee's parameter type read again in a
+caller declaring a namesake (the harness scores the parameter's own `IdentExpr` by its name, so only a member read off it
+showed the `DIFFERENT`), a lambda parameter written `?x` or with a default, a cell bound to `Dynamic` below the top
+level, a method's type parameter shadowing its type's. Each is a probe project now, `DIFFERENT 0`. Source / nominal:
+anyparse `F3-lambda-parameter` 12 510 / 12 510 → 4 417 / 5 610 (the alike check and the own-file rule give back part of
+the first round's answers), UNKNOWN 13.0 / 13.2 → 11.6 / 11.9 %, DIFFERENT 1 / 1 unchanged; per case 1 072 326 cases, no
+MATCH lost, +14 151, no DIFFERENT added. Pony 26 / 26 → 21 / 21, no MATCH lost, +12, none added. The all-rules lint of the
+four trees and the three thread-safety scores move exactly as before the review.
+
+**After review round 2** (merged with main `82c29e677`): a receiver or an argument typed through a member read carried its
+declaring file's text into the inference, so a caller's namesake bound the call's type parameter (six shapes, probe
+`thirdfile`); receivers and arguments now bind only with a type the lambda's file writes, the self reference included.
+Main's engine against the slice's on the slice's tree, source / nominal: anyparse `F3-lambda-parameter` 12 516 / 12 516 →
+6 277 / 7 389, UNKNOWN 13.0 / 13.2 → 12.0 / 12.2 %, DIFFERENT 1 / 1 unchanged; per case 1 073 380 cases, no MATCH lost,
++10 629, no DIFFERENT added. Pony 26 / 26 → 21 / 21, no MATCH lost, +12, none added. All-rules lint and thread-safety
+scores move as after round 1.

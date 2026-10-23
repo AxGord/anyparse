@@ -61,7 +61,8 @@ final class NominalTypes {
 	 * deep walk's arcs, each answering what it always did. An identifier's annotation (`declaredTypeSources`, then the
 	 * `declaredTypes` nominal, so the deep walk never resolves less than the shallow one), a `for` binder's element
 	 * (`forBindingElementTypeSource`), a field PATH walked from its root as one (`indexAccess`), a tabled static call, the self reference
-	 * (`indexSelf`), a local written with no type by its initializer (`localInitializer`), an element read by index
+	 * (`indexSelf`), a local written with no type by its initializer (`localInitializer`), a lambda's parameter written
+	 * with none by the function type the lambda is expected to be (`LambdaParameters`), an element read by index
 	 * (`indexElement`), a construction (`indexConstruction`) and an operator over typed operands (`indexArithmetic`).
 	 */
 	private static final INDEX_HOST: TypingHost<String, IndexTyping> = {
@@ -78,10 +79,7 @@ final class NominalTypes {
 		},
 		initializer: (_, use, c) -> localInitializer(use, c.root, c.shape, c.chain.declaredTypeSources),
 		loopElement: forBindingElementTypeSource,
-		// the index resolves no call to a declaration (its call arc is the tabled statics), so it reads no callee's parameter
-		// a lambda could take its type from, and its currency spells a type parameter as a bare name its own later lookups
-		// would resolve package-blind: an untyped lambda parameter stays unknown here (`ExpectedTypes`)
-		parameter: null,
+		parameter: LambdaParameters.indexParameter,
 		unbound: (_, _) -> null,
 		access: indexAccess,
 		element: ComposedValues.indexElement,

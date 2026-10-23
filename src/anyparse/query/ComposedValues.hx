@@ -1,6 +1,5 @@
 package anyparse.query;
 
-import anyparse.query.AbstractCasts.TypeEnd;
 import anyparse.query.CallReturns.WrittenParameter;
 import anyparse.query.ExpectedTypes.ExpectationHost;
 import anyparse.query.GrammarPlugin.CoreValueTypes;
@@ -13,6 +12,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.query.TypeTerm.TypeEnd;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -146,17 +146,23 @@ final class ComposedValues {
 	 * The type the value `node` whose type depends on what its position expects makes, for the index host (`typer.ml`
 	 * `type_array_decl`, `type_object_decl`, `EIf`): where nothing is expected of it (`expectsNothing`, or an expectation of
 	 * none), the type its parts give it (`partsType`, `branchesType`); where a type is expected of a literal (`ExpectedTypes`
-	 * over `EXPECTATIONS`), the type that expectation picks (`expectedType`). Null where what is expected is not read, and
-	 * for a conditional something is expected of (its type is the expected one, cast to).
+	 * over `EXPECTATIONS`), the type that expectation picks (`expectedType`). Null where what is expected is not read, for a
+	 * conditional something is expected of (its type is the expected one, cast to), and where the expected type names a
+	 * type parameter of a call no argument before the literal binds (a monomorph the literal itself may bind).
 	 */
 	public static function indexContextual(node: QueryNode, c: IndexTyping): Null<String> {
 		final conditional: Bool = node.kind == c.shape.ternaryKind || (c.shape.ifExpressionKinds ?? []).contains(node.kind);
-		final expected: Null<Expectation> = expectsNothing(node, c) ? { text: '', file: null, free: true } : expectationOf(node, c);
+		final expected: Null<Expectation> = expectsNothing(node, c) ? {
+			text: '',
+			file: null,
+			free: true,
+			unbound: []
+		} : expectationOf(node, c);
 		return if (expected == null)
 			null
 		else if (expected.free)
 			conditional ? branchesType(node, c) : partsType(node, c)
-		else if (conditional)
+		else if (conditional || CallGraphNames.mentionsTypeName(expected.text, expected.unbound, c.chain.typeSyntax))
 			null
 		else
 			expectedType(node, expected, c);
@@ -189,7 +195,12 @@ final class ComposedValues {
 			element: elementExpectation,
 			field: fieldExpectation,
 			read: (written, c) -> written.free ? null : c.chain.typeSyntax(written.text),
-			part: (of, text, _) -> {text: text, file: of.file, free: false }
+			part: (of, text, _) -> {
+				text: text,
+				file: of.file,
+				free: false,
+				unbound: of.unbound
+			}
 		};
 	}
 
@@ -380,9 +391,19 @@ final class ComposedValues {
 		final written: Null<String> = c.chain.declaredTypeSources[from];
 		final local: Bool = (c.shape.localDeclKinds ?? []).contains(holder.kind);
 		return if (written != null)
-			{ text: written, file: c.index?.fileInfo(c.file), free: false }
+			{
+				text: written,
+				file: c.index?.fileInfo(c.file),
+				free: false,
+				unbound: []
+			}
 		else if (local && !c.declaredTypes.exists(from))
-			{ text: '', file: null, free: true }
+			{
+				text: '',
+				file: null,
+				free: true,
+				unbound: []
+			}
 		else
 			null;
 	}
@@ -401,17 +422,24 @@ final class ComposedValues {
 		final receiver: Null<QueryNode> = callee.kind == shape.fieldAccessKind && callee.children.length == 1 ? callee.children[0] : null;
 		final owner: Null<TypeDeclMatch> = callee.kind == shape.identKind ? NominalTypes.bareCallOwner(callee, c.root, shape) : null;
 		final param: Null<WrittenParameter> = if (owner != null)
-			CallReturns.selectedParameter(node, CallReturns.ownDeclaration(owner, index, c.file), method, null, at, c)
+			CallReturns.selectedParameter(node, CallReturns.ownDeclaration(owner, index, c.file), method, null, at, [], c)
 		else if (receiver != null)
 			receiverParameter(node, receiver, method, at, index, c)
 		else
 			null;
-		return param == null ? null : { text: param.text, file: param.file, free: false };
+		return param == null ? null : {
+			text: param.text,
+			file: param.file,
+			free: false,
+			unbound: param.unbound
+		};
 	}
 
 	/**
-	 * `argumentExpectation` of a call `<receiver>.method(…)`: on a value, every declaration of its type's name agreeing; on a
-	 * type name, a static of the declaration the file writes.
+	 * `argumentExpectation` of a call `<receiver>.method(…)`: on a value, every declaration of its type's name agreeing, the
+	 * type arguments the receiver is written with binding its type's parameters — else, its type declaring no `method`, the
+	 * static extension the call binds (`CallReturns.extensionParameter`); on a type name, a static of the declaration the file
+	 * writes.
 	 */
 	private static function receiverParameter(
 		node: QueryNode, receiver: QueryNode, method: String, at: Int, index: SymbolIndex, c: IndexTyping
@@ -419,11 +447,37 @@ final class ComposedValues {
 		final typed: Null<String> = NominalTypes.expressionNominalWalk(
 			receiver, c.root, c.shape, c.declaredTypes, index, c.file, c.chain, [], true
 		);
-		if (typed != null) return CallReturns.selectedParameter(node, index.refs.resolvedDeclsNamed(typed), method, false, at, c);
+		if (typed != null) {
+			final source: Null<String> = receiverSource(receiver, typed, c);
+			final args: Array<String> = source == null ? [] : NominalTypes.typeArgumentSourcesOf(source, c.chain.typeSyntax) ?? [];
+			final start: Null<ResolvedType> = source == null ? null : index.refs.resolveStartCopy(typed, c.file, receiver.span?.from);
+			return CallReturns.selectedParameter(node, index.refs.resolvedDeclsNamed(typed), method, false, at, args, c) ?? (
+				source == null || start == null ? null : CallReturns.extensionParameter(node, start, source, method, at, c)
+			);
+		}
 		final typeName: Null<String> = NominalTypes.staticReceiverName(receiver, c.root, c.shape, index);
 		return typeName == null
 			? null
-			: CallReturns.selectedParameter(node, CallReturns.writtenDeclaration(typeName, receiver, index, c.file), method, true, at, c);
+			: CallReturns.selectedParameter(
+				node, CallReturns.writtenDeclaration(typeName, receiver, index, c.file), method, true, at, [], c
+			);
+	}
+
+	/**
+	 * The type the receiver `receiver` of a call is written with in this file (`CallReturns.writtenType`: a type a member
+	 * read carries is written in its declaring file, where a name it spells may mean another type), its arguments kept and
+	 * its member-transparent wrappers peeled (`NominalTypes.memberLookupReceiverSource`: a `Null<Array<Item>>` value is an
+	 * `Array<Item>` receiver), where it names the type `typed` the nominal walk reads; null otherwise.
+	 */
+	private static function receiverSource(receiver: QueryNode, typed: String, c: IndexTyping): Null<String> {
+		final syntax: TypeSyntaxReader = c.chain.typeSyntax;
+		final written: Null<String> = CallReturns.writtenType(receiver, c);
+		final peeled: Null<String> = written == null
+			? null
+			: NominalTypes.memberLookupReceiverSource(written, c.shape.memberTransparentWrapperTypeNames ?? [], syntax);
+		return peeled == null || NominalTypes.outerNominalOf(peeled, syntax) != typed || !NominalTypes.answerableType(peeled, syntax)
+			? null
+			: peeled;
 	}
 
 	/**
@@ -436,7 +490,12 @@ final class ComposedValues {
 			container.text, c.shape.memberTransparentWrapperTypeNames ?? [], c.chain.typeSyntax
 		);
 		final element: Null<String> = peeled.trim() == c.shape.rawDynamicTypeName ? peeled.trim() : arrayElementOf(peeled, c);
-		return element == null ? null : { text: element, file: container.file, free: false };
+		return element == null ? null : {
+			text: element,
+			file: container.file,
+			free: false,
+			unbound: container.unbound
+		};
 	}
 
 	/**
@@ -449,10 +508,20 @@ final class ComposedValues {
 		final peeled: String = NominalTypes.memberLookupReceiverSource(
 			outer.text, c.shape.memberTransparentWrapperTypeNames ?? [], c.chain.typeSyntax
 		);
-		if (peeled.trim() == c.shape.rawDynamicTypeName) return { text: '', file: null, free: true };
+		if (peeled.trim() == c.shape.rawDynamicTypeName) return {
+			text: '',
+			file: null,
+			free: true,
+			unbound: []
+		};
 		final field: Null<MemberInfo> = structureFields(peeled, outer.file, c)?.find(f -> f.name == name);
 		final written: Null<String> = field?.typeSource;
-		return written == null ? null : { text: written, file: outer.file, free: false };
+		return written == null ? null : {
+			text: written,
+			file: outer.file,
+			free: false,
+			unbound: outer.unbound
+		};
 	}
 
 	/**
@@ -663,11 +732,14 @@ final class ComposedValues {
 }
 
 /**
- * What the index host reads as expected of a literal (`ComposedValues.EXPECTATIONS`): the type `text` written in `file`, or
- * none (`free`: the literal is typed as a value of its own, `text` and `file` unread).
+ * What the index host reads as expected of a literal or a lambda (`ComposedValues.EXPECTATIONS`): the type `text` written
+ * in `file`, or none (`free`: the literal is typed as a value of its own, `text` and `file` unread). `unbound` names the
+ * type parameters of a call `text` still spells, which no argument before the value binds (`CallReturns.parameterType`):
+ * a part of the type naming one is no answer.
  */
 typedef Expectation = {
 	final text: String;
 	final file: Null<FileInfo>;
 	final free: Bool;
+	final unbound: Array<String>;
 }
