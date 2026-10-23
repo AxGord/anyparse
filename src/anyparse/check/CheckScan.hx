@@ -67,7 +67,7 @@ final class CheckScan {
 	private static inline final SOLE_REFERENCE_COUNT: Int = 1;
 
 	/**
-	 * The last dot-segment of a module path — the name a call site spells (`utils.TextUtil` -> `TextUtil`);
+	 * The last dot-segment of a module path — the name a call site spells (`pkg.TextUtil` -> `TextUtil`);
 	 * `RefactorSupport.lastSegment` under a name that says which question the check layer is asking.
 	 */
 	public static inline function simpleModuleName(path: String): String {

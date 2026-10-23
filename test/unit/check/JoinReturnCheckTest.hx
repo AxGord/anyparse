@@ -62,11 +62,11 @@ class JoinReturnCheckTest extends Test {
 		Assert.equals('return (g() : Int);', es[0].text);
 	}
 
-	/** The load-bearing case (mirrors `types.Color`): a qualified annotation driving an implicit `@:from` is preserved. */
+	/** The load-bearing case (mirrors `pkg.Color`): a qualified annotation driving an implicit `@:from` is preserved. */
 	public function testQualifiedAnnotationAscribed(): Void {
-		final es: Array<{ span: Span, text: String }> = edits(wrap('final color:types.Color = str;\n\t\treturn color;'));
+		final es: Array<{ span: Span, text: String }> = edits(wrap('final color:pkg.Color = str;\n\t\treturn color;'));
 		Assert.equals(1, es.length);
-		Assert.equals('return (str : types.Color);', es[0].text);
+		Assert.equals('return (str : pkg.Color);', es[0].text);
 	}
 
 	// --- `new T(...)`-matches-annotation ascription skip ---

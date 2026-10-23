@@ -52,7 +52,7 @@ class MagicNumberCheckTest extends Test {
 
 	/**
 	 * A dotted entry matches the TAIL of the callee as written, segment for segment: `Lang.t` exempts
-	 * `Lang.t(…)` and `macros.Lang.t(…)`, but not a bare `t(…)` imported by name, nor `Blang.t(…)`.
+	 * `Lang.t(…)` and `helper.Lang.t(…)`, but not a bare `t(…)` imported by name, nor `Blang.t(…)`.
 	 *
 	 * RED under M-MAGIC-CALLARG-SUFFIX-LOOSE (only the last segment compared, the length guard gone):
 	 * the bare `t(…)` is exempted too. The two dotted calls are exempt with and without the arm.
@@ -60,7 +60,7 @@ class MagicNumberCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-MAGIC-CALLARG-SUFFIX-LOOSE')
 	public function testADottedEntryMatchesTheCalleeTail(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n\t\tLang.t("a", 11);\n\t\tmacros.Lang.t("b", 22);\n\t\tt("c", 33);\n'
+		final src: String = 'class C {\n\tfunction f() {\n\t\tLang.t("a", 11);\n\t\thelper.Lang.t("b", 22);\n\t\tt("c", 33);\n'
 			+ '\t\tBlang.t("d", 44);\n\t}\n}';
 		final flagged: Array<String> = [for (v in withCalls(src, ['Lang.t'])) v.message.split(' ')[2]];
 		Assert.same(['33', '44'], flagged, 'a bare t() and a different receiver are not Lang.t');

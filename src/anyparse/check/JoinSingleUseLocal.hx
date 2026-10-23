@@ -112,7 +112,7 @@ using Lambda;
  *   resolved declared type (`TypeResolver.identDeclaredTypeSource`, whitespace-insensitive),
  *   which makes the substitution provably type-neutral. Otherwise the annotation may be
  *   carrying real work the substitution would drop: an abstract `@:from` implicit conversion
- *   (`final c:types.Color = str;`) or an upcast that changes the static type at the use site
+ *   (`final c:pkg.Color = str;`) or an upcast that changes the static type at the use site
  *   (`final b:Base = _derived;`). A field-access initializer has no ident binding to resolve,
  *   so an annotated one is always refused -- fail-closed.
  * - NO COMMENT INTERSECTS THE DELETED REGION (the declaration's line). A comment BETWEEN the
@@ -439,7 +439,7 @@ final class JoinSingleUseLocal implements Check {
 	 * (whitespace-insensitive).
 	 *
 	 * Otherwise the annotation may be carrying real work: an abstract `@:from` implicit
-	 * conversion (`final c:types.Color = str;`), an upcast that changes the static type at the
+	 * conversion (`final c:pkg.Color = str;`), an upcast that changes the static type at the
 	 * use (`final b:Base = _derived;`), a downcast off a `Dynamic` source
 	 * (`final t:Stage = event.currentTarget;`), or -- the sharpest one -- a strict-null-safety
 	 * NARROWING capture (`if (f == null) throw ...; final x:T = f;` over a field declared

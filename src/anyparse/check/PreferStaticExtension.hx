@@ -26,12 +26,12 @@ using Lambda;
  * autofix. Configured per project in `apqlint.json`:
  *
  *     "prefer-static-extension": {
- *         "types":    ["Lambda", "StringTools", "utils.TextUtil"],
+ *         "types":    ["Lambda", "StringTools", "pkg.TextUtil"],
  *         "addUsing": true
  *     }
  *
  * `types` defaults to `["Lambda", "StringTools"]`. An entry may be QUALIFIED
- * (`utils.TextUtil`): the call site is matched by the SIMPLE name (`TextUtil.pad(…)`), while
+ * (`pkg.TextUtil`): the call site is matched by the SIMPLE name (`TextUtil.pad(…)`), while
  * the full entry drives the `using`-presence test, the inserted `using` text and the
  * `GrammarPlugin.knownExtensionMethods` lookup. `addUsing: false` keeps the finding but never
  * fixes it — a rewrite without the `using` in scope does not compile, so such a site is
