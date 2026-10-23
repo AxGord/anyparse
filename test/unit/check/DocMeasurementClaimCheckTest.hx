@@ -251,7 +251,7 @@ class DocMeasurementClaimCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-DOC-CLAIM-CENSUS-CODESPAN')
 	public function testACountQuotedAsCodeIsData(): Void {
-		Assert.equals(0, violations('class C {\n\t/** The runner prints `999 tests` at exit. */\n\tvar x = 1;\n}').length);
+		Assert.equals(0, violations('class C {\n\t/** The runner prints `ran 999 tests` at exit. */\n\tvar x = 1;\n}').length);
 		Assert.equals(1, violations('class C {\n\t/** The runner printed 999 tests at exit. */\n\tvar x = 1;\n}').length);
 		Assert.equals(0, violations('class C {\n\t/** The post-Slice-34 sources parse. */\n\tvar x = 1;\n}').length);
 		Assert.equals(0, violations('class C {\n\t/** The runner prints 999 Assertions at exit. */\n\tvar x = 1;\n}').length);
