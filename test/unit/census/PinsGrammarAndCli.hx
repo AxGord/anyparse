@@ -65,6 +65,8 @@ final class PinsGrammarAndCli {
 		'unit.cli.LintQuotationAwareCliTest#testAQuotedRedundantParensFindingIsFixed :: control :: M-PARENS-QUOTED-DROPPED',
 		'unit.cli.LintQuotationAwareCliTest#testAQuotedRedundantParensFindingReports :: control :: M-PARENS-QUOTED-DROPPED',
 		'unit.cli.LintRangeCliTest#testACommentOnlyWriteAppliesNoFix :: control :: M-POST-WRITE-FIX-TRIVIA-BLIND',
+		'unit.cli.LintRangeCliTest#testADiffPastItsBudgetGivesNoWindowsAtAll :: control :: M-POST-WRITE-FIX-FAIL-OPEN',
+		'unit.cli.LintRangeCliTest#testAnOddCommentOnlyWriteAcrossTwoRegionsAppliesNoFix :: control :: M-POST-WRITE-FIX-HULL',
 		'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
 		'unit.cli.LintRangeCliTest#testWriteFixLintsEachChangedRegionAndNotTheCodeBetween :: control :: M-POST-WRITE-FIX-HULL',
 		'unit.cli.MoveElementsCliTest#testTheDryRunPrintsTheDigestAndWritesNothing :: control :: M-MOVE-ELEMENTS-DRY-RUN-UNROUTED',

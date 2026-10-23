@@ -1492,7 +1492,7 @@
 			"type": "anyparse.query.LineDiff",
 			"method": "shortestScript",
 			"force": "null",
-			"note": "the diff never finds a script, so every change is reported as the whole region between the common head and tail, unchanged lines between two edits included"
+			"note": "the diff never finds a script, so it answers none for every edit and the run between two edits is never reported unchanged"
 		},
 		{
 			"name": "M-POST-WRITE-FIX-HULL",
@@ -1507,6 +1507,22 @@
 			"method": "triviaLines",
 			"force": "[for (_ in lines) false]",
 			"note": "no line reads as trivia, so a write that changed only a comment still applies code fixes anchored on that comment line"
+		},
+		{
+			"name": "M-LINE-DIFF-PARITY",
+			"type": "anyparse.query.LineDiff",
+			"method": "shortestScript",
+			"find": "if (x >= n && y >= m) reached = true;",
+			"replace": "if (x >= n && y >= m && (n - m) % 2 == d % 2) reached = true;",
+			"note": "the end is recognised only when the length difference and the edit distance share a remainder, which a negative odd difference never does, so a script whose new text is an odd number of lines longer is never found"
+		},
+		{
+			"name": "M-POST-WRITE-FIX-FAIL-OPEN",
+			"type": "anyparse.query.cli.CliEdit",
+			"method": "changedCodeWindows",
+			"find": "if (edits == null) return null;",
+			"replace": "if (edits == null) return [{ from: 1, to: now.length }];",
+			"note": "a diff past its budget falls back to one window over the whole file, so a write op's --fix rewrites code the write never touched"
 		},
 		{
 			"name": "M-CLI-REQUIREMATCH-STATIC",
@@ -3476,6 +3492,13 @@
 			"method": "namesAType",
 			"force": "false",
 			"note": "a short id written as code stops naming a type, so a type parameter in backticks or after a colon is reported as a slice or backlog id"
+		},
+		{
+			"name": "M-DOC-CLAIM-CENSUS-BOUND-BLIND",
+			"type": "anyparse.check.ProseNumbers",
+			"method": "readsAsContract",
+			"force": "false",
+			"note": "a bound, a standard's or a year's number and a count glued to the token before it all read as a census, so a doc stating the code's own limit or a version is reported as a reading"
 		},
 		{
 			"name": "M-DOC-LENGTH-CONFIG-BLIND",

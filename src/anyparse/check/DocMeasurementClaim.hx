@@ -433,21 +433,24 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	 *
 	 * The NOUN is the discrimination, as the unit is a duration's: a contract bounds a dimension of the
 	 * code, and no dimension is on the list. A small count is the size of a fixture and is not read; a
-	 * count fenced as inline code is quoted data, and one hyphen-joined to a word is part of a name.
+	 * count fenced as inline code is quoted data; a bound, a standard's number or one glued to the token
+	 * before it is a contract (`ProseNumbers.readsAsContract`).
 	 */
 	private static function censusAt(source: String, from: Int, to: Int, at: Int): Null<Reading> {
 		if (insideCodeSpan(source, from, at)) return null;
-		if (at - 2 >= from && source.fastCodeAt(at - 1) == '-'.code && SourceText.isIdentChar(source.fastCodeAt(at - 2))) return null;
 		final digits: Int = ProseNumbers.numberEnd(source, to, at);
 		if (digits > at) {
 			final grouped: Int = ProseNumbers.groupedEnd(source, to, digits);
-			if (grouped > digits) return { at: at, to: grouped, shape: 'a census count' };
+			if (grouped > digits)
+				return ProseNumbers.readsAsContract(source, from, to, at, grouped)
+					? null
+					: { at: at, to: grouped, shape: 'a census count' };
 			if (!ProseNumbers.isCensusSized(source, to, at)) return null;
 		}
 		final count: Int = digits > at ? digits : ProseNumbers.spelledNumberEnd(source, to, at);
 		if (count == at) return null;
 		final noun: Int = ProseNumbers.censusNounEnd(source, to, count);
-		return noun < 0 ? null : { at: at, to: noun, shape: 'a census count' };
+		return noun < 0 || ProseNumbers.readsAsContract(source, from, to, at, noun) ? null : { at: at, to: noun, shape: 'a census count' };
 	}
 
 	/** Whether the token `[at, end)` is the verb a reading is recorded with. */
@@ -461,7 +464,10 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 		return at;
 	}
 
-	/** Whether a digit stands on the comment line holding `at`, outside inline code: digits in backticks are code a sentence quotes. */
+	/**
+	 * Whether a digit stands on the comment line holding `at`, outside inline code: digits in
+	 * backticks are code a sentence quotes.
+	 */
 	private static function lineHasDigit(source: String, from: Int, to: Int, at: Int): Bool {
 		var end: Int = at;
 		while (end < to && source.fastCodeAt(end) != '\n'.code) end++;

@@ -294,6 +294,32 @@ class DocMeasurementClaimCheckTest extends Test {
 		Assert.equals(1, violations('class C {\n\t/** The walk measured 271 runs. */\n\tvar x = 1;\n}').length);
 	}
 
+	/**
+	 * A count is a CONTRACT, not a census, when it is a bound the code declares (after, at most, up to,
+	 * top, into, per before it, or per / at a time after its noun), a standard's or a year's number, or
+	 * glued to the token before it — a fraction's digits, an issue number, a language edition.
+	 * Killed by arm `M-DOC-CLAIM-CENSUS-BOUND-BLIND`.
+	 */
+	@:pin('control')
+	@:killer('M-DOC-CLAIM-CENSUS-BOUND-BLIND')
+	public function testABoundAStandardOrAGluedNumberIsAContract(): Void {
+		for (doc in [
+			'Version 1.12 rules apply.',
+			'Weighs 3.14 files on average.',
+			'See #12 tests.',
+			'Follows IEEE 754 rules.',
+			'Parses RFC 4180 rules.',
+			'Targets C++20 modules.',
+			'Since the 2024 rules revision.',
+			'Gives up after 50 edits.',
+			'Holds at most 16 files at a time.',
+			'Splits the input into 64 blocks.',
+			'Returns the top twenty findings per rule.',
+			'Runs twelve checks per file.'
+		]) Assert.equals(0, violations('class C {\n\t/** $doc */\n\tvar x = 1;\n}').length, doc);
+		Assert.equals(1, violations('class C {\n\t/** The sweep took it over 1029 external files. */\n\tvar x = 1;\n}').length);
+	}
+
 	/** The check's findings on `src`, asked of the check directly so enablement does not apply. */
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new DocMeasurementClaim(), src);

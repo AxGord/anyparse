@@ -25,9 +25,6 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class CliEdit {
 
-	/** The grammar the post-write lint parses with, and so the one that tells a comment line from code. */
-	private static inline final FIX_LANG: String = 'haxe';
-
 	/** Past this many changed lines the diff stops looking for unchanged code between the edits. */
 	private static inline final MAX_DIFF_EDITS: Int = 2000;
 
@@ -73,14 +70,15 @@ final class CliEdit {
 	/**
 	 * Shared Ok/Err + write/preview tail for the single-result writer-emit ops.
 	 *
-	 * `fix` is the op's `--fix`: after a successful WRITE, lint what was written and apply
-	 * the safe fixes, scoped to the lines this write actually changed. It is spelled as an
-	 * ordinary parameter BEFORE the optional `detail` on purpose — Haxe skips an optional by
-	 * TYPE, so a trailing `?fix: Bool` would let a `detail`-less call site's next argument
+	 * `fix` is the op's `--fix`, as the op's own grammar plugin (null: no `--fix`): after a
+	 * successful WRITE, lint what was written and apply the safe fixes, scoped to the code lines
+	 * this write actually changed, which that plugin's lexical regions tell from comments. It is
+	 * spelled as an ordinary parameter BEFORE the optional `detail` on purpose — Haxe skips an
+	 * optional by TYPE, so a trailing optional would let a `detail`-less call site's next argument
 	 * land on the wrong parameter with no error.
 	 */
 	public static function finishEdit(
-		opName: String, filePath: String, write: Bool, result: EditResult, fix: Bool = false, ?detail: String
+		opName: String, filePath: String, write: Bool, result: EditResult, ?fix: GrammarPlugin, ?detail: String
 	): Int {
 		switch result {
 			case Ok(text, rewrites):
@@ -91,10 +89,10 @@ final class CliEdit {
 				if (write) {
 					// Read BEFORE the write, because the window `--fix` narrows to is the difference
 					// between these two texts and there is no second chance to see the old one.
-					final before: Null<String> = fix ? (try CliIo.readFile(filePath) catch (exception: Exception) null) : null;
+					final before: Null<String> = fix != null ? (try CliIo.readFile(filePath) catch (exception: Exception) null) : null;
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq $opName: wrote $filePath$tail\n');
-					if (fix) postWriteFix(filePath, before, text);
+					if (fix != null) postWriteFix(filePath, before, text, fix);
 				} else {
 					previewEdit(opName, filePath, text, tail);
 				}
@@ -287,6 +285,38 @@ final class CliEdit {
 	}
 
 	/**
+	 * The 1-based line windows of `after` holding CODE this write changed: every changed line that is
+	 * not trivia — blank, or comment from end to end — gathered into runs, plus, for code the write
+	 * deleted, the line now standing where it was.
+	 *
+	 * Trimmed by LINE, not by byte: the minimal byte EDIT of an insertion is not line-aligned, and its
+	 * window spilled onto the line after the insertion. Several changed regions stay several windows,
+	 * because their hull also holds the untouched code between them, which a multi-pair `patch` touching
+	 * two ends of a file would then have rewritten. Null when the diff passes `maxEdits`: the caller
+	 * then has no lines to narrow to, and must not fall back to the hull.
+	 */
+	public static function changedCodeWindows(before: String, after: String, plugin: GrammarPlugin, maxEdits: Int): Null<LintRange> {
+		final old: Array<String> = before.split('\n');
+		final now: Array<String> = after.split('\n');
+		final edits: Null<LineEdits> = LineDiff.edits(old, now, maxEdits);
+		if (edits == null) return null;
+		final oldTrivia: Array<Bool> = triviaLines(before, old, plugin.lexicalRegions(before));
+		final nowTrivia: Array<Bool> = triviaLines(after, now, plugin.lexicalRegions(after));
+		final lines: Array<Int> = [for (i in edits.inserted) if (!nowTrivia[i]) i];
+		for (gone in edits.deleted) if (!oldTrivia[gone.line]) lines.push(gone.before < now.length ? gone.before : now.length - 1);
+		lines.sort((a, b) -> a - b);
+		final windows: LintRange = [];
+		for (line in lines) {
+			final last: Null<LineWindow> = windows.length == 0 ? null : windows[windows.length - 1];
+			if (last != null && line <= last.to)
+				windows[windows.length - 1] = { from: last.from, to: line + 1 > last.to ? line + 1 : last.to };
+			else
+				windows.push({ from: line + 1, to: line + 1 });
+		}
+		return windows;
+	}
+
+	/**
 	 * The op-level `--fix`: lint the file just written and apply the safe fixes, over the CODE
 	 * lines this write changed and no others.
 	 *
@@ -303,13 +333,23 @@ final class CliEdit {
 	 * reported, so a lint that finds nothing to do, or refuses, must not turn the op into a
 	 * failure. What the fix pass did, it says itself.
 	 */
-	private static function postWriteFix(filePath: String, before: Null<String>, after: String): Void {
+	private static function postWriteFix(filePath: String, before: Null<String>, after: String, plugin: GrammarPlugin): Void {
 		if (before == null) {
 			CliIo.stderr('apq: --fix skipped — could not read $filePath as it was before this write\n');
 			return;
 		}
 		if (before == after) return; // byte-identical write: nothing changed, nothing to lint
-		final windows: LintRange = changedCodeWindows(before, after, CliArgs.pickPlugin(FIX_LANG));
+		final found: Null<LintRange> = changedCodeWindows(before, after, plugin, MAX_DIFF_EDITS);
+		if (found == null) {
+			// Fail closed: the hull of an edit this large is most of the file, and a fix over it is
+			// exactly the rewrite of untouched code this scoping exists to prevent.
+			CliIo.stderr(
+				'apq: --fix skipped — this write changed more lines of $filePath than the line diff follows'
+				+ ', and a fix over their hull would rewrite code it never touched; run lint on the file instead\n'
+			);
+			return;
+		}
+		final windows: LintRange = found;
 		if (windows.length == 0) {
 			CliIo.stderr(
 				'apq: --fix skipped — this write changed only comments and blank lines of $filePath'
@@ -325,41 +365,9 @@ final class CliEdit {
 			filePath,
 			'--fix',
 			'--no-oracle',
-			'--lang',
-			FIX_LANG,
 			'--range',
 			[for (w in windows) '${w.from}:${w.to}'].join(',')
 		]);
-	}
-
-	/**
-	 * The 1-based line windows of `after` holding CODE this write changed: every changed line that is
-	 * not trivia — blank, or comment from end to end — gathered into runs, plus, for code the write
-	 * deleted, the line now standing where it was.
-	 *
-	 * Trimmed by LINE, not by byte: the minimal byte EDIT of an insertion is not line-aligned, and its
-	 * window spilled onto the line after the insertion. Several changed regions stay several windows,
-	 * because their hull also holds the untouched code between them, which a multi-pair `patch` touching
-	 * two ends of a file would then have rewritten.
-	 */
-	private static function changedCodeWindows(before: String, after: String, plugin: GrammarPlugin): LintRange {
-		final old: Array<String> = before.split('\n');
-		final now: Array<String> = after.split('\n');
-		final edits: LineEdits = LineDiff.edits(old, now, MAX_DIFF_EDITS);
-		final oldTrivia: Array<Bool> = triviaLines(before, old, plugin.lexicalRegions(before));
-		final nowTrivia: Array<Bool> = triviaLines(after, now, plugin.lexicalRegions(after));
-		final lines: Array<Int> = [for (i in edits.inserted) if (!nowTrivia[i]) i];
-		for (gone in edits.deleted) if (!oldTrivia[gone.line]) lines.push(gone.before < now.length ? gone.before : now.length - 1);
-		lines.sort((a, b) -> a - b);
-		final windows: LintRange = [];
-		for (line in lines) {
-			final last: Null<LineWindow> = windows.length == 0 ? null : windows[windows.length - 1];
-			if (last != null && line <= last.to)
-				windows[windows.length - 1] = { from: last.from, to: line + 1 > last.to ? line + 1 : last.to };
-			else
-				windows.push({ from: line + 1, to: line + 1 });
-		}
-		return windows;
 	}
 
 	/**

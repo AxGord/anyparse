@@ -19,14 +19,14 @@ typedef LineEdits = {
  * A line-granular diff — Myers' shortest edit script over the lines between the common head and
  * tail. Pure and stateless; indices are 0-based.
  *
- * Bounded by `maxEdits`: past it the region between the head and the tail is reported changed
- * whole, which is the hull a caller would otherwise have had — wider than the truth, never narrower.
+ * Bounded by `maxEdits`: past it there is no answer at all, never a wider one — a caller that
+ * narrows by the changed lines must refuse rather than act on the region around them.
  */
 @:nullSafety(Strict)
 final class LineDiff {
 
-	/** The lines `now` changed against `old`. */
-	public static function edits(old: Array<String>, now: Array<String>, maxEdits: Int): LineEdits {
+	/** The lines `now` changed against `old`, or null when they differ by more than `maxEdits` lines. */
+	public static function edits(old: Array<String>, now: Array<String>, maxEdits: Int): Null<LineEdits> {
 		final limit: Int = old.length < now.length ? old.length : now.length;
 		var head: Int = 0;
 		while (head < limit && old[head] == now[head]) head++;
@@ -34,12 +34,8 @@ final class LineDiff {
 		while (tail < limit - head && old[old.length - 1 - tail] == now[now.length - 1 - tail]) tail++;
 		final a: Array<String> = old.slice(head, old.length - tail);
 		final b: Array<String> = now.slice(head, now.length - tail);
-		final found: Null<LineEdits> = shortestScript(a, b, maxEdits);
-		final middle: LineEdits = found ?? {
-			inserted: [for (i in 0...b.length) i],
-			deleted: [for (i in 0...a.length) { line: i, before: 0 }]
-		};
-		return {
+		final middle: Null<LineEdits> = shortestScript(a, b, maxEdits);
+		return middle == null ? null : {
 			inserted: [for (i in middle.inserted) i + head],
 			deleted: [for (d in middle.deleted) { line: d.line + head, before: d.before + head }]
 		};
@@ -57,6 +53,7 @@ final class LineDiff {
 		final trace: Array<Array<Int>> = [];
 		for (d in 0...n + m + 1) {
 			if (d > maxEdits) return null;
+			var reached: Bool = false;
 			var k: Int = -d;
 			while (k <= d) {
 				final down: Bool = k == -d || k != d && v[offset + k - 1] < v[offset + k + 1];
@@ -67,10 +64,11 @@ final class LineDiff {
 					y++;
 				}
 				v[offset + k] = x;
+				if (x >= n && y >= m) reached = true;
 				k += 2;
 			}
 			trace.push([for (j in -d ... d + 1) v[offset + j]]);
-			if (v[offset + n - m] >= n && (n - m) % 2 == d % 2 && n - m >= -d && n - m <= d) return backtrack(trace, n, m);
+			if (reached) return backtrack(trace, n, m);
 		}
 		return null;
 	}

@@ -180,6 +180,8 @@ final class PinsCheckAToO {
 		'unit.check.DefaultRepeatedArgumentCheckTest#testUnresolvedNullSiteBlocks :: control :: M-DEFAULT-ARG-UNRESOLVED-NULL-IGNORED',
 		'unit.check.DocLengthCheckTest#testOnlyADocBlockIsMeasured :: control :: M-DOC-LENGTH-ANY-COMMENT',
 		'unit.check.DocLengthCheckTest#testTheDeclaredMaximumIsRead :: control :: M-DOC-LENGTH-CONFIG-BLIND',
+		'unit.check.DocMeasurementClaimCheckTest#testABoundAStandardOrAGluedNumberIsAContract :: control :: '
+			+ 'M-DOC-CLAIM-CENSUS-BOUND-BLIND',
 		'unit.check.DocMeasurementClaimCheckTest#testACensusCountIsAReadingAndADimensionIsNot :: control :: M-DOC-CLAIM-CENSUS-NOUN-ANY',
 		'unit.check.DocMeasurementClaimCheckTest#testACountQuotedAsCodeIsData :: control :: M-DOC-CLAIM-CENSUS-CODESPAN',
 		'unit.check.DocMeasurementClaimCheckTest#testANumericContractIsNotAReading :: control :: M-DOC-CLAIM-BARE-NUMBER',

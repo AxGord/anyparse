@@ -181,7 +181,10 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 		#end
 	}
 
-	/** Two bound loops, one inside the other, run the PRODUCT of their bounds, which passes the threshold neither bound passes alone. */
+	/**
+	 * Two bound loops, one inside the other, run the PRODUCT of their bounds,
+	 * which passes the threshold neither bound passes alone.
+	 */
 	@:pin('control') @:killer('M-TS-BOUND-PRODUCT')
 	public function testNestedBoundsMultiply(): Void {
 		#if (sys || nodejs)
