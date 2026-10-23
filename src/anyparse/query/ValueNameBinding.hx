@@ -82,25 +82,6 @@ final class ValueNameBinding {
 		return statics.unknown || statics.statics.length > 0 || importsOf(fi).exists(imp -> importMayBring(imp, name, true));
 	}
 
-	/**
-	 * Whether an unguarded import of `fi` (its own, then its ambient chain's) PROVABLY brings the bare value `name` of the
-	 * type at `typePath`, declared in the module `modulePath`, into unqualified scope — the positive twin of
-	 * `mayImportValue`. On 4.3.7 these do: an import or `using` of the module or of the type, an alias of the type, a
-	 * wildcard over the type, an import of the value itself; an alias of a sub-type's module, a wildcard over that module
-	 * and an aliased import of the value do not.
-	 */
-	public function importBringsValue(fi: FileInfo, typePath: String, modulePath: String, name: String): Bool {
-		return importsOf(fi).exists(imp -> !imp.guarded && switch imp.kind {
-			case ImportKind.Import:
-				imp.raw == modulePath || imp.raw == typePath || imp.raw == '$typePath.$name';
-			case ImportKind.Using:
-				imp.raw == modulePath || imp.raw == typePath;
-			case ImportKind.Alias: imp.aliasTarget == typePath;
-			case ImportKind.Wild: imp.raw == '$typePath.*';
-			case _: false;
-		});
-	}
-
 	/** The names an alias statement of `fi` (its own, then its ambient chain's) binds to the type at `typePath`. */
 	public function typeAliasesOf(fi: FileInfo, typePath: String): Array<String> {
 		final out: Array<String> = [];

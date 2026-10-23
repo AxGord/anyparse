@@ -35,8 +35,9 @@ typedef CtorOffsets = {
 /**
  * The references of an enum CONSTRUCTOR a member rename (`CrossRenameMember`) does not reach through a receiver: the
  * import of the constructor itself, and every BARE spelling, which Haxe resolves through the reading file's imports or
- * through an expected type. A bare spelling is renamed only on a proof — an expected type the member rename already
- * proved, or an import bringing the enum's values in with nothing outranking it — and any other refuses the whole rename:
+ * through an expected type. A bare spelling is renamed only where a DECLARATION proves its expected type to be the enum
+ * (`CrossRenameMember.ctorExpectedOffsets` and its return-position scan) — an import of the enum proves nothing, since
+ * another enum's expected type outranks it — and any other refuses the whole rename:
  * a spelling left on the old name is a program that no longer compiles, or one that now means something else.
  */
 @:nullSafety(Strict)
@@ -70,11 +71,11 @@ final class EnumCtorRefs {
 
 	/**
 	 * The constructor-token offsets of `entry` the rename adds to those the member rename already collected (`proven`): the
-	 * import naming the constructor, and every bare spelling an import of the enum's values brings in — in the enum's own
-	 * module, or through `ValueNameBinding.importBringsValue` — that no local, member, module-level value or imported
-	 * static outranks. A bare spelling neither of those proves is the refusal, and so is one the NEW name would bind elsewhere,
-	 * a bare spelling of the new name anywhere (the renamed constructor may take it over), and a bare old-name spelling
-	 * in a file importing a module the scope does not hold (`ValueNameBinding.unlistedValueImportOf`).
+	 * import naming the constructor and the receivers naming the enum under another name. Every bare spelling must be among
+	 * `proven` with no local, member, module-level value or imported static outranking it, or the rename is refused; so is
+	 * one the NEW name would bind elsewhere, a bare spelling of the new name anywhere (the renamed constructor may take it
+	 * over), and a bare old-name spelling in a file importing a module the scope does not hold
+	 * (`ValueNameBinding.unlistedValueImportOf`).
 	 */
 	public static function offsets(
 		entry: ParsedFile, target: CtorTarget, proven: Array<Int>, index: SymbolIndex, refShape: RefShape, regions: Array<LexRegion>
@@ -85,8 +86,6 @@ final class EnumCtorRefs {
 			.concat([
 				for (off in aliasReceiverOffsets(entry, target, fi, index, refShape, regions)) if (!proven.contains(off)) off
 			]);
-		final visible: Bool = entry.file == target.cursorFile || fi != null
-			&& index.values.importBringsValue(fi, typePathOf(target), target.module.path, ctor);
 		// What the new name already means here the renamed constructor may take over — through an import of the enum, or
 		// through an expected type, which reaches a pattern variable or an imported static in a file importing nothing.
 		final taken: Array<{ offset: Int, host: Null<String> }> = bareSpellings(entry, target.newName, refShape);
@@ -107,18 +106,18 @@ final class EnumCtorRefs {
 				+ 'constructor of the old or the new name'
 			);
 		for (spelling in spellings) {
-			final isProven: Bool = proven.contains(spelling.offset);
-			if (!isProven && (!visible || outranked(entry, fi, spelling.host, ctor, index, refShape)))
+			// An import of the enum is no proof: an EXPECTED type of another enum outranks it, the scope's or not.
+			if (!proven.contains(spelling.offset) || outranked(entry, fi, spelling.host, ctor, index, refShape))
 				return refused(
-					'"$ctor" at ${where(entry, spelling.offset)} may be the constructor — Haxe resolves it through an import or an '
-					+ 'expected type this rename cannot prove — refusing rather than renaming part of the scope'
+					'"$ctor" at ${where(entry, spelling.offset)} is not proven to be the constructor — only a pattern head under a '
+					+ 'subject declared the enum, the right operand of a comparison with one, or a value returned from a function declared '
+					+ 'the enum proves it — refusing rather than renaming part of the scope'
 				);
 			if (outranked(entry, fi, spelling.host, target.newName, index, refShape))
 				return refused(
 					'"${target.newName}" at ${where(entry, spelling.offset)} would bind a member, a module-level value or an imported '
 					+ 'static of that name instead of the constructor'
 				);
-			if (!isProven && !out.contains(spelling.offset)) out.push(spelling.offset);
 		}
 		return { offsets: out, error: null };
 	}

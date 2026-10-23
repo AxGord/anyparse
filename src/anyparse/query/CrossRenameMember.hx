@@ -111,8 +111,8 @@ private typedef ReceiverProof = {
  *    source type the miss surfaces as a compile error, never a wrong rewrite. A
  *    `new T()` receiver names its type itself and needs no binding at all; that
  *    name is the whole written path, so it resolves the same way.
- *  - An ENUM CONSTRUCTOR's import and its BARE spellings, each proven by the enum's
- *    module or an import bringing its values in, or the whole rename refuses (`EnumCtorRefs`).
+ *  - An ENUM CONSTRUCTOR's import and its BARE spellings, each proven by a declaration of
+ *    its expected type (`ctorExpectedOffsets`, the return scan), or the whole rename refuses (`EnumCtorRefs`).
  *  - EVERY branch of a `#if` region that declares the member. The region is a
  *    member HOST, not a member — it holds each branch's members with their own
  *    modifier siblings — so the cursor scan asks `RefactorSupport.eachMemberHost`,
@@ -449,9 +449,11 @@ final class CrossRenameMember {
 			entry.source, entry.file, entry.tree, target, plugin, refShape, index, module, cursorFile
 		);
 		if (qualified.error != null) return qualified;
-		final out: Array<Int> = qualified.offsets.concat(
-			patternConstantOffsets(entry.source, entry.file, entry.tree, target, plugin, refShape, index, cursorFile)
-		)
+		// A constructor's pattern spelling is proven only at a pattern's head, never as an argument nested in one.
+		final patterns: Array<Int> = target.isEnumCtor
+			? ctorExpectedOffsets(entry.source, entry.file, entry.tree, target, plugin, refShape, index, cursorFile)
+			: patternConstantOffsets(entry.source, entry.file, entry.tree, target, plugin, refShape, index, cursorFile);
+		final out: Array<Int> = qualified.offsets.concat(patterns)
 			.concat(expectedReturnOffsets(entry.source, entry.file, entry.tree, target, refShape, index, cursorFile));
 		if (!target.isEnumCtor) return { offsets: out, error: null };
 		final ctor: CtorOffsets = EnumCtorRefs.offsets(entry, {
@@ -774,7 +776,34 @@ final class CrossRenameMember {
 		source: String, file: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex,
 		cursorFile: String
 	): Array<Int> {
-		final candidates: Array<{ subject: QueryNode, offsets: Array<Int> }> = switchPatternCandidates(tree, target.memberName, refShape);
+		return provenCandidateOffsets(
+			switchPatternCandidates(tree, target.memberName, refShape), source, file, tree, target, plugin, refShape, index, cursorFile
+		);
+	}
+
+	/**
+	 * The bare spellings of an enum constructor whose EXPECTED type a declaration proves to be the enum: the head of a
+	 * `case` pattern — a bare name, a call's callee, either side of an or-pattern, never an argument nested in one — under a
+	 * switch whose subject is declared the enum, and the right operand of `==` / `!=` whose left one is. Any other spelling
+	 * `EnumCtorRefs` refuses, since Haxe may resolve it through another enum's expected type.
+	 */
+	private static function ctorExpectedOffsets(
+		source: String, file: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex,
+		cursorFile: String
+	): Array<Int> {
+		return provenCandidateOffsets(
+			ctorExpectedCandidates(tree, target.memberName, refShape), source, file, tree, target, plugin, refShape, index, cursorFile
+		);
+	}
+
+	/**
+	 * The offsets of every candidate whose subject is PROVEN to hold a value of the source type — the subject resolves exactly
+	 * as an instance receiver does (`receiverIsSourceType`).
+	 */
+	private static function provenCandidateOffsets(
+		candidates: Array<{ subject: QueryNode, offsets: Array<Int> }>, source: String, file: String, tree: QueryNode,
+		target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex, cursorFile: String
+	): Array<Int> {
 		if (candidates.length == 0) return [];
 		final subjectNames: Array<String> = [];
 		for (candidate in candidates) {
@@ -788,6 +817,50 @@ final class CrossRenameMember {
 				for (off in candidate.offsets)
 					if (!out.contains(off)) out.push(off);
 		return out;
+	}
+
+	/** Every switch spelling `name` at a pattern head, and every equality spelling it as an operand, with the node to prove. */
+	private static function ctorExpectedCandidates(
+		tree: QueryNode, name: String, refShape: RefShape
+	): Array<{ subject: QueryNode, offsets: Array<Int> }> {
+		final out: Array<{ subject: QueryNode, offsets: Array<Int> }> = [];
+		final switchKinds: Array<String> = refShape.switchKinds ?? [];
+		final equality: Array<String> = refShape.equalityKinds ?? [];
+		function walk(node: QueryNode): Void {
+			final children: Array<QueryNode> = node.children;
+			if (switchKinds.contains(node.kind) && children.length > 0) {
+				final offsets: Array<Int> = [];
+				for (branch in children)
+					if (branch.kind == refShape.caseBranchKind)
+						for (pattern in CasePatterns.patternRun(branch, refShape))
+							if (pattern.children.length == 1) patternHeads(pattern.children[0], name, refShape, offsets);
+				if (offsets.length > 0) out.push({ subject: children[0], offsets: offsets });
+			}
+			// Only the RIGHT operand: 4.3.7 types the left first and passes it on as the expected type, so `A == e` is
+			// `Unknown identifier : A` where `e == A` reads the enum's constructor.
+			final right: Null<QueryNode> = children.length == 2 ? children[1] : null;
+			final rightSpan: Null<Span> = right?.span;
+			if (
+				equality.contains(node.kind) && right != null && rightSpan != null && right.kind == refShape.identKind && right.name == name
+			)
+				out.push({ subject: children[0], offsets: [rightSpan.from] });
+			for (c in children) walk(c);
+		}
+		walk(tree);
+		return out;
+	}
+
+	/** The offsets of `name` at the HEAD of one pattern: the pattern itself, a call's callee, or either side of an or-pattern. */
+	private static function patternHeads(node: QueryNode, name: String, refShape: RefShape, out: Array<Int>): Void {
+		final span: Null<Span> = node.span;
+		if (node.kind == refShape.identKind) {
+			if (node.name == name && span != null) out.push(span.from);
+		} else if (node.kind == refShape.callKind) {
+			if (node.children.length > 0 && node.children[0].kind == refShape.identKind)
+				patternHeads(node.children[0], name, refShape, out);
+		} else if (node.kind == refShape.orPatternKind) {
+			for (c in node.children) patternHeads(c, name, refShape, out);
+		}
 	}
 
 	/**
@@ -834,7 +907,7 @@ final class CrossRenameMember {
 		// the same file. `Refs` binds neither (the read comes back with no binding span), and a
 		// hosting TYPE is the wrong question for the second one, so the whole file is refused instead.
 		if (declaresModuleBinding(tree, target.memberName, refShape)) return [];
-		final seams: Null<ReturnSeams> = returnSeamsOf(target.memberName, refShape);
+		final seams: Null<ReturnSeams> = returnSeamsOf(target.memberName, refShape, target.isEnumCtor);
 		if (seams == null) return [];
 		// Strict null-safety takes a struct literal's field type from the DECLARED type, not the
 		// narrowed one, so the proven-non-null seams need their own binding.
@@ -950,7 +1023,7 @@ final class CrossRenameMember {
 	 * load-bearing ones — identifiers, function bodies, value returns and type annotations. Every
 	 * other seam defaults to empty, which NARROWS what the scan proves instead of widening it.
 	 */
-	private static function returnSeamsOf(memberName: String, refShape: RefShape): Null<ReturnSeams> {
+	private static function returnSeamsOf(memberName: String, refShape: RefShape, isCtor: Bool): Null<ReturnSeams> {
 		final bodyKinds: Null<Array<String>> = refShape.functionBodyKinds;
 		final returnKinds: Null<Array<String>> = refShape.valueReturnKinds;
 		final typeKinds: Null<Array<String>> = refShape.typeAnnotationKinds;
@@ -976,7 +1049,8 @@ final class CrossRenameMember {
 			branchKinds: branchKinds,
 			exprStatementKind: refShape.exprStatementKind,
 			nullableWrappers: refShape.nullableReturnMarkerTypes ?? [],
-			opaqueKinds: refShape.opaqueKinds ?? []
+			opaqueKinds: refShape.opaqueKinds ?? [],
+			ctorCallKind: isCtor ? refShape.callKind : null
 		};
 	}
 
@@ -1058,6 +1132,12 @@ final class CrossRenameMember {
 			if (children.length > 0) collectValueSlots(children[0], s, out);
 			return;
 		}
+		// A constructor CALL in a value slot is the constructor its callee names; only a constructor's scan asks.
+		final ctorCallKind: Null<String> = s.ctorCallKind;
+		if (ctorCallKind != null && node.kind == ctorCallKind) {
+			if (children.length > 0 && children[0].kind == s.identKind) collectValueSlots(children[0], s, out);
+			return;
+		}
 		// Both arms of a ternary / `if` expression ARE the expression's value; child 0 is the
 		// condition, a Bool, and never one.
 		if (s.armHostKinds.contains(node.kind)) {
@@ -1124,6 +1204,9 @@ private typedef ReturnSeams = {
 	final exprStatementKind: Null<String>;
 	final nullableWrappers: Array<String>;
 	final opaqueKinds: Array<String>;
+
+	/** The call kind whose callee is a value slot — an enum constructor's scan only, null otherwise. */
+	final ctorCallKind: Null<String>;
 };
 
 /**

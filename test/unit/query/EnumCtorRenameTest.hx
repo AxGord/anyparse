@@ -30,7 +30,7 @@ class EnumCtorRenameTest extends Test {
 	 * importing the enum, the constructor's own import and the bare call it licenses, and a dotted pattern beside a bare
 	 * one under a subject typed as the enum — every spelling renames, nothing else moves.
 	 */
-	@:pin('control') @:killer('M-CTOR-NOT-A-MEMBER') @:killer('M-CTOR-BARE-KEPT') @:killer('M-CTOR-IMPORT-KEPT')
+	@:pin('control') @:killer('M-CTOR-NOT-A-MEMBER') @:killer('M-CTOR-BARE-KEPT') @:killer('M-CTOR-IMPORT-KEPT') @:killer('M-CTOR-RETURN-CALL-UNPROVEN')
 	public function testEveryReferenceOfAConstructorRenames(): Void {
 		final changes: Array<FileChange> = ok(run(scope([])));
 		Assert.equals(ENUM.replace('A(', 'Alpha('), source(changes, 'pkg/E.hx'));
@@ -68,7 +68,7 @@ class EnumCtorRenameTest extends Test {
 	public function testAnUnprovableBareSpellingRefusesTheRename(): Void {
 		final blind: String = 'package other;\n\nclass Blind {\n\tpublic static function value(): Int {\n'
 			+ '\t\treturn switch pkg.E.Use.make() {\n\t\t\tcase A(x): x;\n\t\t\tcase _: 0;\n\t\t}\n\t}\n}\n';
-		refused(run(scope([{ file: 'other/Blind.hx', source: blind }])), 'other/Blind.hx: "A" at 6:9 may be the constructor');
+		refused(run(scope([{ file: 'other/Blind.hx', source: blind }])), 'other/Blind.hx: "A" at 6:9 is not proven to be the constructor');
 	}
 
 	/** Another enum hosting either name makes a bare spelling mean either, so the rename is refused. */
@@ -171,6 +171,55 @@ class EnumCtorRenameTest extends Test {
 	public function testAnImplicitNameRefuses(): Void {
 		final enumSource: String = 'package p;\n\nenum E {\n\tA;\n\tB;\n}\n';
 		refused(runAt([{ file: 'p/E.hx', source: enumSource }], 4, 2, 'trace'), '"trace" is a name every module');
+	}
+
+	/**
+	 * A bare spelling in a file importing the enum, under a switch on a subject of ANOTHER enum type the scope cannot see:
+	 * the pattern is that enum's constructor (`Type.typeof(v)`'s `TNull`), and renaming it turned `nulltrueotherfalse`
+	 * into `othertruenullfalse`.
+	 */
+	@:pin('control') @:killer('M-CTOR-SUBJECT-UNPROVEN') @:killer('M-CTOR-UNPROVEN-RENAMED')
+	public function testABareSpellingUnderAnUnprovenSubjectRefuses(): Void {
+		final enumSource: String = 'package p;\n\nenum E {\n\tTNull;\n\tB;\n}\n';
+		final user: String = 'package p;\n\nimport p.E;\n\nclass U {\n\tpublic static function f(v: Dynamic, e: E): String {\n\t\treturn ('
+			+ 'switch Type.typeof(v) {\n\t\t\tcase TNull: "null";\n\t\t\tcase _: "other";\n\t\t}) + Std.string(e == TNull);\n\t}\n}\n';
+		refused(runAt([{ file: 'p/E.hx', source: enumSource }, { file: 'p/U.hx', source: user }], 4, 2, 'TInt'), 'p/U.hx: "TNull" at 8:9');
+	}
+
+	/** The subject's declared type names another enum fully qualified (`haxe.ds.Option<Int>`), so its `None` is not this one. */
+	@:pin('control') @:killer('M-CTOR-SUBJECT-UNPROVEN') @:killer('M-CTOR-UNPROVEN-RENAMED')
+	public function testABareSpellingUnderASubjectOfAnotherDeclaredEnumRefuses(): Void {
+		final enumSource: String = 'package p;\n\nenum E {\n\tNone;\n\tB;\n}\n';
+		final user: String = 'package p;\n\nimport p.E;\n\nclass U {\n\tpublic static function f(o: haxe.ds.Option<Int>, e: E): String {\n'
+			+ '\t\treturn (switch o {\n\t\t\tcase None: "none";\n\t\t\tcase _: "some";\n\t\t}) + Std.string(e);\n\t}\n}\n';
+		refused(runAt([{ file: 'p/E.hx', source: enumSource }, { file: 'p/U.hx', source: user }], 4, 2, 'Empty'), 'p/U.hx: "None" at 8:9');
+	}
+
+	/** The subject is a call whose declared return type is another enum (`Lib.get(): Option<Int>`), never proven this one. */
+	@:pin('control') @:killer('M-CTOR-SUBJECT-UNPROVEN') @:killer('M-CTOR-UNPROVEN-RENAMED')
+	public function testABareSpellingUnderACallSubjectRefuses(): Void {
+		final enumSource: String = 'package p;\n\nenum E {\n\tNone;\n\tB;\n}\n';
+		final lib: String =
+			'package p;\n\nclass Lib {\n\tpublic static function get(): haxe.ds.Option<Int> {\n\t\treturn haxe.ds.Option.None;\n\t}\n}\n';
+		final user: String = 'package p;\n\nimport p.E;\n\nclass U {\n\tpublic static function f(e: E): String {\n'
+			+ '\t\treturn (switch Lib.get() {\n\t\t\tcase None: "none";\n\t\t\tcase _: "some";\n\t\t}) + Std.string(e);\n\t}\n}\n';
+		refused(runAt([
+			{ file: 'p/E.hx', source: enumSource },
+			{ file: 'p/Lib.hx', source: lib },
+			{ file: 'p/U.hx', source: user }
+		], 4, 2, 'Empty'), 'p/U.hx: "None" at 8:9');
+	}
+
+	/** The right operand of `==` / `!=` whose left operand is declared the enum reads its constructor, import or not. */
+	@:pin('control') @:killer('M-CTOR-EQUALITY-UNPROVEN')
+	public function testTheRightOperandOfAComparisonWithTheEnumRenames(): Void {
+		final enumSource: String = 'package p;\n\nenum E {\n\tA;\n\tB;\n}\n';
+		final user: String =
+			'package q;\n\nclass U {\n\tpublic static function isA(e: p.E): Bool {\n\t\treturn e == A && !(e != A);\n\t}\n}\n';
+		final changes: Array<FileChange> = ok(
+			runAt([{ file: 'p/E.hx', source: enumSource }, { file: 'q/U.hx', source: user }], 4, 2, 'Alpha')
+		);
+		Assert.equals(user.replace('== A', '== Alpha').replace('!= A', '!= Alpha'), source(changes, 'q/U.hx'));
 	}
 
 	private static function scope(extra: Array<{ file: String, source: String }>): Array<{ file: String, source: String }> {

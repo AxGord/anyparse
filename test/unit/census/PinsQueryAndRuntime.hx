@@ -397,6 +397,9 @@ final class PinsQueryAndRuntime {
 			+ 'M-KEEP-CANON-FALLBACK-UNGUARDED,M-GUARDED-SPLICE-NO-REFUSAL',
 		'unit.query.EditKeepingCanonicalGateTest#testTheFallbackRefusesAnEmptiedSlot :: control :: M-KEEP-CANON-FALLBACK-UNGUARDED',
 		'unit.query.EditKeepingCanonicalGateTest#testTheFallbackStillSplicesAHarmlessEdit :: control :: M-GUARDED-SPLICE-ALWAYS-REFUSES',
+		'unit.query.EnumCtorRenameTest#testABareSpellingUnderACallSubjectRefuses :: control :: M-CTOR-SUBJECT-UNPROVEN,M-CTOR-UNPROVEN-RENAMED',
+		'unit.query.EnumCtorRenameTest#testABareSpellingUnderASubjectOfAnotherDeclaredEnumRefuses :: control :: M-CTOR-SUBJECT-UNPROVEN,M-CTOR-UNPROVEN-RENAMED',
+		'unit.query.EnumCtorRenameTest#testABareSpellingUnderAnUnprovenSubjectRefuses :: control :: M-CTOR-SUBJECT-UNPROVEN,M-CTOR-UNPROVEN-RENAMED',
 		'unit.query.EnumCtorRenameTest#testALocalOfTheOldNameKeepsIt :: guard :: ',
 		'unit.query.EnumCtorRenameTest#testANewNameALocalHoldsRefuses :: control :: M-CTOR-CAPTURE-UNCHECKED',
 		'unit.query.EnumCtorRenameTest#testANewNameAPatternCapturesWithoutTheImportRefuses :: control :: M-CTOR-NEW-NAME-ONLY-WHERE-VISIBLE',
@@ -409,7 +412,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.EnumCtorRenameTest#testAnImplicitNameRefuses :: control :: M-CTOR-IMPLICIT-NAME-TAKEN',
 		'unit.query.EnumCtorRenameTest#testAnOldNameAnUnlistedImportMayBringRefuses :: control :: M-CTOR-UNLISTED-IMPORT-IGNORED',
 		'unit.query.EnumCtorRenameTest#testAnUnprovableBareSpellingRefusesTheRename :: control :: M-CTOR-UNPROVEN-RENAMED',
-		'unit.query.EnumCtorRenameTest#testEveryReferenceOfAConstructorRenames :: control :: M-CTOR-NOT-A-MEMBER,M-CTOR-BARE-KEPT,M-CTOR-IMPORT-KEPT',
+		'unit.query.EnumCtorRenameTest#testEveryReferenceOfAConstructorRenames :: control :: M-CTOR-NOT-A-MEMBER,M-CTOR-BARE-KEPT,M-CTOR-IMPORT-KEPT,M-CTOR-RETURN-CALL-UNPROVEN',
+		'unit.query.EnumCtorRenameTest#testTheRightOperandOfAComparisonWithTheEnumRenames :: control :: M-CTOR-EQUALITY-UNPROVEN',
 		'unit.query.EnumValueTypeTest#testAValueWrittenWithNoTypeIsOfItsEnumAbstract :: control :: '
 			+ 'M-ENUM-VALUE-UNTYPED,M-ENUM-VALUE-STATIC',
 		'unit.query.EnumValueTypeTest#testEveryBranchMustDeclareTheValue :: control :: '

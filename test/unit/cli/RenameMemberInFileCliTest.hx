@@ -223,7 +223,7 @@ class RenameMemberInFileCliTest extends Test {
 		final path: String = CliFixture.write(
 			'rn_member_ctor',
 			'enum E {\n\tA(x: Int);\n\tB;\n}\n\nclass Main {\n\tstatic function make(): E {\n\t\treturn A(1);\n\t}\n\n\tstatic function '
-			+ 'main() {\n\t\tswitch make() {\n\t\t\tcase A(x):\n\t\t\t\ttrace(x);\n\t\t\tcase B:\n\t\t}\n\t\ttrace(E.A(2));\n\t}\n}\n'
+			+ 'main() {\n\t\tfinal e: E = make();\n\t\tswitch e {\n\t\t\tcase A(x):\n\t\t\t\ttrace(x);\n\t\t\tcase B:\n\t\t}\n\t\ttrace(E.A(2));\n\t}\n}\n'
 		);
 		final rc: Int = Cli.run(['rename', path, '2:2', 'Alpha', '--write']);
 		Assert.equals(0, rc);
