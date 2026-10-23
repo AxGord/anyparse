@@ -1,14 +1,10 @@
 package unit.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.PreferBind;
 import anyparse.check.RedundantLambdaWrapper;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `redundant-lambda-wrapper` check: a lambda whose body is ONE call forwarding the lambda's

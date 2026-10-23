@@ -2,15 +2,11 @@ package unit.check;
 
 import anyparse.check.AnonTypeDup;
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.StringLiteralDup;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

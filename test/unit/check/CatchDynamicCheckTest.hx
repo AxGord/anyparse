@@ -1,12 +1,8 @@
 package unit.check;
 
 import anyparse.check.CatchDynamic;
-import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `catch-dynamic` check: a `catch` clause whose declared exception type is

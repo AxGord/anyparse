@@ -1,14 +1,9 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.RedundantReplaceLoop;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `redundant-replace-loop` check: `while (x.indexOf(S) != -1) x = x.replace(S, B);`

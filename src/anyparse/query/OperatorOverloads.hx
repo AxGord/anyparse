@@ -6,6 +6,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 
+using Lambda;
+
 /**
  * The operator overload an abstract's `@:op` members select for a binary operator, and the type it yields
  * (`docs/typing-service.md`, step T4b; Haxe 4.3.7 `operators.ml`, `try_abstract_binop_overloads` and
@@ -37,12 +39,20 @@ final class OperatorOverloads {
 	/** The annotation of an overload taking its operands in either order (`RefShape.commutativeOperatorMetaName`), or null. */
 	private final _commutativeMeta: Null<String>;
 
+	/** The annotation of an index access (`ExecutionShape.indexAccessMetaName`), or null. */
+	private final _indexMeta: Null<String>;
+
+	/** The operator kind an overload of the index operator records (`ExecutionShape.indexOperatorOverloadKind`), or null. */
+	private final _indexOperator: Null<String>;
+
 	/** Built once by the owning `TypingService`. */
 	public function new(casts: AbstractCasts, unification: Unification, shape: RefShape) {
 		_casts = casts;
 		_unification = unification;
 		_abstractKinds = shape.underlyingThisTypeKinds ?? [];
 		_commutativeMeta = shape.commutativeOperatorMetaName;
+		_indexMeta = shape.execution?.indexAccessMetaName;
+		_indexOperator = shape.execution?.indexOperatorOverloadKind;
 	}
 
 	/**
@@ -62,9 +72,57 @@ final class OperatorOverloads {
 		};
 	}
 
+	/**
+	 * The read access an index access with a key of type `key` (null: untyped) takes on a value of the abstract `decl`
+	 * (`abstractCast.ml`, `find_array_read_access`, reached when the abstract declares any index access): of its members
+	 * carrying the index-access annotation or overloading the index operator, in declaration order, the first instance one
+	 * taking the key alone that the key casts to — the only one when it declares one, the code compiling — every `#if` branch
+	 * some build compiles taking one returning the same written type. Null for a declaration that is no abstract the index
+	 * reads in each such branch, one a build macro may add members to, a candidate the walk does not model (static, under
+	 * `#if`, with type parameters, a signature overload) and a choice not decided.
+	 */
+	public function indexRead(decl: ResolvedType, key: Null<TypeEnd>): Null<MemberInfo> {
+		if (!_abstractKinds.contains(decl.type.kind) || decl.type.hasBuild || decl.type.hasAutoBuild) return null;
+		final branches: Null<Array<Array<MemberInfo>>> = _casts.liveMembers(decl);
+		if (branches == null) return null;
+		var agreed: Null<MemberInfo> = null;
+		for (members in branches) {
+			final one: Null<MemberInfo> = branchIndexRead(decl, members, key);
+			if (one == null || agreed != null && agreed.returnSource != one.returnSource) return null;
+			agreed = one;
+		}
+		return agreed;
+	}
+
+	/** Whether `m` is an index access of its abstract: annotated as one, or an overload of the index operator. */
+	private inline function isIndexAccess(m: MemberInfo): Bool {
+		final meta: String = _indexMeta ?? '';
+		final indexOperator: String = _indexOperator ?? '';
+		return meta != '' && m.metaNames.contains(meta) || indexOperator != '' && m.operatorOverloads.contains(indexOperator);
+	}
+
 	/** Whether the overload `m` takes its operands in either order. */
 	private inline function isCommutative(m: MemberInfo): Bool {
 		return _commutativeMeta != null && m.metaNames.contains(_commutativeMeta);
+	}
+
+	/** The read access one branch of `decl`, declaring `members`, takes for a key of type `key` (`indexRead`). */
+	private function branchIndexRead(decl: ResolvedType, members: Array<MemberInfo>, key: Null<TypeEnd>): Null<MemberInfo> {
+		final reads: Array<MemberInfo> = [];
+		for (m in members) if (isIndexAccess(m)) {
+			if (m.isStatic || m.guarded || m.typeParamNames.length > 0 || m.isOverload || m.hasOverloadMeta) return null;
+			if (m.paramTypeSources.length == 1) reads.push(m);
+		}
+		if (reads.length < 2) return reads.length == 1 ? reads[0] : null;
+		for (m in reads) {
+			final param: Null<String> = m.paramTypeSources[0];
+			final fit: ArgumentFit = key == null || param == null
+				? MayFit
+				: _unification.casts(key, _casts.writtenEnd(param, decl, m.declFrom, []));
+			if (fit == Fits) return m;
+			if (fit == MayFit) return null;
+		}
+		return null;
 	}
 
 	/**
@@ -94,6 +152,8 @@ final class OperatorOverloads {
 	private function branchSelection(
 		decl: ResolvedType, members: Array<MemberInfo>, kind: String, left: TypeEnd, right: TypeEnd, onLeft: Bool
 	): OverloadPick {
+		// the index lists a member under `#if` after the branch's other members, the compiler tries them in source order
+		if (members.exists(m -> m.guarded && m.operatorOverloads.contains(kind))) return Undecided;
 		for (m in members) if (m.operatorOverloads.contains(kind)) {
 			final params: Null<Array<TypeEnd>> = candidateParams(decl, m);
 			final written: Null<String> = m.returnSource;
@@ -106,7 +166,14 @@ final class OperatorOverloads {
 			if (taken == MayFit || taken == Misfits && _commutativeMeta == null) return Undecided;
 			if (taken == Fits) {
 				final end: TypeEnd = _casts.writtenEnd(returned, decl, m.declFrom, []);
-				return end.match(Open) ? Undecided : Chosen({ end: end, text: returned, host: decl });
+				return end.match(Open)
+					? Undecided
+					: Chosen({
+						end: end,
+						text: returned,
+						host: decl,
+						member: m
+					});
 			}
 		}
 		return NoneTaken;
@@ -161,6 +228,9 @@ typedef OperatorResult = {
 
 	/** The abstract declaring the overload, in whose file `text` is written. */
 	final host: ResolvedType;
+
+	/** The overload itself. */
+	final member: MemberInfo;
 
 }
 

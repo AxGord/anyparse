@@ -8,7 +8,6 @@ import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliWalk;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
-import haxe.Exception;
 
 /**
  * Parsed options for `apq refs` — `lang`, `json`, the read / write / decl selection

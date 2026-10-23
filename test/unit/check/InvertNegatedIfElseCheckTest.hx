@@ -2,7 +2,6 @@ package unit.check;
 
 import anyparse.check.Check;
 import anyparse.check.InvertNegatedIfElse;
-import anyparse.check.Linter;
 import anyparse.check.PreferTernaryAssignment;
 import anyparse.check.PreferTernaryExpression;
 import anyparse.check.PreferTernaryReturn;
@@ -10,8 +9,6 @@ import anyparse.check.ReturnReassignTernary;
 import anyparse.check.Severity;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `invert-negated-if-else` check: an `if` STATEMENT with an `else` whose condition's

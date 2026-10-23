@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddElement;
 import anyparse.query.CanonicalEdit.EditResult;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `AddElement.addElement` — insert a sibling element (statement / `case` /

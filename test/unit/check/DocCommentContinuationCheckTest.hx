@@ -1,10 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.DocCommentContinuation;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `doc-comment-continuation` check: an interior line of a block comment that breaks the

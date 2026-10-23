@@ -2,11 +2,8 @@ package unit.check;
 
 import anyparse.check.Check;
 import anyparse.check.InlineConstant;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.StaticConstant;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `static-constant` check: an instance `final` initialized to a compile-time literal is one

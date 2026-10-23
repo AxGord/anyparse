@@ -1,13 +1,10 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `DeclaredNullity` — a declared type proves non-null only once it RESOLVES to a declaration that

@@ -3,7 +3,6 @@ package unit.check;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.Check.Violation;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FactsTypeOracle;
 import anyparse.check.HaxeSpawn;
@@ -11,7 +10,6 @@ import anyparse.check.LintConfig;
 import anyparse.check.PreferStaticExtension;
 import anyparse.check.StaticExtensionFacts;
 import anyparse.check.TypedFactsProbe;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.CompilerFacts;
@@ -20,8 +18,6 @@ import anyparse.query.StdResolver;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

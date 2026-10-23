@@ -5,7 +5,6 @@ import anyparse.query.cli.command.SweepCorpus.SweepCorpusResult;
 import anyparse.query.format.json.SweepFixture;
 import anyparse.query.format.json.SweepSnapshot;
 import anyparse.query.format.json.SweepSnapshotParser;
-import haxe.Exception;
 
 using Lambda;
 

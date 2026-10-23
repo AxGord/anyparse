@@ -4,12 +4,9 @@ import anyparse.check.ArgumentValues;
 import anyparse.check.EdgeConditions;
 import anyparse.check.FunctionTrees;
 import anyparse.check.ThreadSafety;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import unit.QueryTestHelpers;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `thread-safety` check's path conditions: a call cut by what the code around it says — a value stored into a

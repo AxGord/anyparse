@@ -3,11 +3,8 @@ package unit.check;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.FixVerifier;
 import anyparse.check.OracleCoverage;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

@@ -1,7 +1,5 @@
 package anyparse.query.cli;
 
-import haxe.Exception;
-
 /**
  * A write that did not happen, carrying the file it was for.
  *

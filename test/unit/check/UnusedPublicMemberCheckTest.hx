@@ -2,12 +2,8 @@ package unit.check;
 
 import anyparse.check.Check;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedPublicMember;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `unused-public-member` check: a PUBLIC METHOD of a class whose name occurs nowhere in scope

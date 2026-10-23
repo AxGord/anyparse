@@ -1,14 +1,11 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.StaticExtensions;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Which static extension `recv.name` binds (`StaticExtensions.binding`, step T3 of the typer by specification), each

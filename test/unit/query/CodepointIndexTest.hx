@@ -1,8 +1,6 @@
 package unit.query;
 
 import anyparse.query.CodepointIndex;
-import utest.Assert;
-import utest.Test;
 
 /** `CodepointIndex`: codepoint offsets, as the compiler reports them, against the target's own string offsets. */
 @:nullSafety(Strict)

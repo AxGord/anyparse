@@ -305,6 +305,7 @@ final class HaxeFormat implements TextFormat {
 		opAddSubChainWrap: HaxeFormat.defaultOpAddSubChainWrap(),
 		conditionWrap: HaxeFormat.defaultConditionWrap(),
 		ternaryWrap: HaxeFormat.defaultTernaryWrap(),
+		ternaryMultilineBranchInline: false,
 		functionSignatureWrap: HaxeFormat.defaultFunctionSignatureWrap(),
 		anonFunctionSignatureWrap: HaxeFormat.defaultAnonFunctionSignatureWrap(),
 		metadataCallParameterWrap: HaxeFormat.defaultMetadataCallParameterWrap(),

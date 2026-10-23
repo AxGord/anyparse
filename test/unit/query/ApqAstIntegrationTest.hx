@@ -4,7 +4,6 @@ package unit.query;
 import sys.FileSystem;
 import sys.io.File;
 #end
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Engine;
 import anyparse.query.QueryNode;
 import anyparse.query.Selector;
@@ -13,8 +12,6 @@ import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Phase 1 integration test for the `apq ast` engine.

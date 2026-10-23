@@ -1,14 +1,11 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AbstractCasts;
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Which `#if` branches of a declaration the typer reads (`BuildBranches`, `docs/typing-service.md` step T6): with the run's

@@ -3,13 +3,10 @@ package unit.query;
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.DefiniteAssignmentGuard;
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.LintFixSafePass;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `lint --fix`'s safe-pass revert net, as a pure decision over two oracle measurements.

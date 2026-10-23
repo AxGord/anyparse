@@ -460,6 +460,13 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxStaticLocalStmtSliceTest#testStaticFinalWriterEquals :: control :: M-KWLEAD-NEVER-WORD',
 		'unit.grammar.haxe.HxStaticLocalStmtSliceTest#testStaticLocalsRoundTrip :: control :: M-KWLEAD-NEVER-WORD',
 		'unit.grammar.haxe.HxStaticLocalStmtSliceTest#testStaticVarWriterEquals :: control :: M-KWLEAD-NEVER-WORD',
+		'unit.grammar.haxe.HxTernaryMultilineBranchTest#testABlockBelowTheBranchTopCounts :: control :: M-TERNARY-MLB-NO-DESCENT',
+		'unit.grammar.haxe.HxTernaryMultilineBranchTest#testBreakAndAnAbsentKeyBreakTheTernary :: control :: M-TERNARY-MLB-OPTION-IGNORED',
+		'unit.grammar.haxe.HxTernaryMultilineBranchTest#testCollectionsAndOpeningGroupsAreNotActedOn :: guard :: ',
+		'unit.grammar.haxe.HxTernaryMultilineBranchTest#testInlineBreaksAFirstLinePastTheLimit :: control :: M-TERNARY-MLB-NO-WIDTH-GUARD',
+		'unit.grammar.haxe.HxTernaryMultilineBranchTest#testInlineKeepsTheBlockOnTheConditionLine :: control :: M-TERNARY-MLB-INLINE-NONE',
+		'unit.grammar.haxe.HxTernaryMultilineBranchTest#testWhatFollowsTheOpeningGroupIsSearched :: control :: '
+			+ 'M-TERNARY-MLB-PATH-UNSEARCHED',
 		'unit.grammar.haxe.HxTrailingCommentOverflowSliceTest#testCodeAtTheWidthStillCounts :: control :: M-TCO-OVERWIDE-CODE-MOVED',
 		'unit.grammar.haxe.HxTrailingCommentOverflowSliceTest#testEverythingOutsideThePositiveListStays :: control :: '
 			+ 'M-TCO-DIRECTIVE-MOVED,M-TCO-LEADING-IGNORED,M-TCO-OVERWIDE-CODE-MOVED',

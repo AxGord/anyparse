@@ -1,9 +1,6 @@
 package unit.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.Check.Violation;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A `catch` that throws its own variable again lets what its `try` raised go on (`ThrowReach`): the function raises,

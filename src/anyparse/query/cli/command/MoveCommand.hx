@@ -6,7 +6,6 @@ import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.MoveSymbol;
 import anyparse.runtime.Span;
-import haxe.Exception;
 import anyparse.query.ExitCode.*;
 
 /**

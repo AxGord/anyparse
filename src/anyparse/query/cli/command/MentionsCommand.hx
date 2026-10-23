@@ -9,7 +9,6 @@ import anyparse.query.Refs.RefHit;
 import anyparse.query.Uses.UsesHit;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.format.Text;
-import haxe.Exception;
 
 using Lambda;
 

@@ -1,18 +1,13 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan;
-import anyparse.check.Linter;
 import anyparse.check.PreferIfExpressionReturn;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

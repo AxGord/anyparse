@@ -7,10 +7,7 @@ import anyparse.check.AvoidDynamic;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.OracleCoverage;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `RiskyFix` verifier's COVERAGE gate, end to end against the real compiler, in the

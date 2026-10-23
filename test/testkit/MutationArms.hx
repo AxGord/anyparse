@@ -1,6 +1,5 @@
 package testkit;
 
-import haxe.Exception;
 import haxe.Json;
 
 using Lambda;

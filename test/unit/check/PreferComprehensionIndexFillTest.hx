@@ -1,8 +1,6 @@
 package unit.check;
 
 import anyparse.check.PreferComprehension;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

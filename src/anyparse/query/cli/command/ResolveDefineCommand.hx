@@ -4,7 +4,6 @@ import anyparse.query.CondResolve;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.runtime.Span.Position;
-import haxe.Exception;
 
 /**
  * Parsed options for `apq resolve-define` — `lang`, `write` / `list` / `reformat`, the `undefined`

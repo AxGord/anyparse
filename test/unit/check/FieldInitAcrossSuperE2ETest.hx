@@ -7,8 +7,6 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.HaxeSpawn;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `field-init-at-declaration` check's PROVEN crossing, end to end over a real compile whose facts are the truth: an

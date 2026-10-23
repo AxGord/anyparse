@@ -1,10 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.RedundantThis;
 import anyparse.query.CanonicalEdit;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `redundant-this` check must not strip `this.` from a `using` static-extension

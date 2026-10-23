@@ -110,8 +110,8 @@ final class ReachDefinesProbe {
 	/**
 	 * The configuration a probe transcript reports: exactly one compile arm, the define set the first initialization
 	 * macro saw, the last one printed once typing ended, the value of each define of the first set both gave alike, and
-	 * every type the runtime context typed with the file that declares it, as the compiler spells the path. Null for
-	 * anything else, a value line that is no pair of strings included. Pure.
+	 * every type the runtime context typed with the file that declares it, and every file the compile parsed, as the
+	 * compiler spells the paths. Null for anything else, a value line that is no pair of strings included. Pure.
 	 */
 	public static function parse(name: String, transcript: String): Null<ReachConfiguration> {
 		var arms: Int = 0;
@@ -161,7 +161,8 @@ final class ReachDefinesProbe {
 			everDefined: all,
 			values: values,
 			compiled: compiled,
-			types: types
+			types: types,
+			parsed: OracleCoverage.parsedPaths(transcript)
 		};
 	}
 
@@ -284,7 +285,7 @@ final class ReachDefinesProbe {
 		#end
 	}
 
-	/** The configuration the compile `run` of `oracle` reports (`parse`) and the files it parsed, paths canonical, or null. */
+	/** The configuration the compile `run` of `oracle` reports (`parse`), its paths made canonical, or null. */
 	private static function answer(oracle: OracleConfig, run: HaxeRun): Null<ReachConfiguration> {
 		if (run.failure != '' || run.status != 0) return null;
 		final read: Null<ReachConfiguration> = parse(OracleDeclaration.describeOracle(oracle), run.out);
@@ -299,7 +300,7 @@ final class ReachDefinesProbe {
 			for (t in read.types) if (!t.file.endsWith(own)) { name: t.name, file: OracleCoverage.canonical(root, t.file) }
 		];
 		read.parsed = [
-			for (path in OracleCoverage.parsedPaths(run.out)) if (!path.endsWith(own)) OracleCoverage.canonical(root, path)
+			for (path in read.parsed ?? []) if (!path.endsWith(own)) OracleCoverage.canonical(root, path)
 		];
 		return read;
 	}

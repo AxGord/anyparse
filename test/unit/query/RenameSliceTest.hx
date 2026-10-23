@@ -1,10 +1,7 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Rename;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `Rename.rename` — scope-correct, format-preserving symbol rename.

@@ -1,12 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.ShadowingCaseBinder;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

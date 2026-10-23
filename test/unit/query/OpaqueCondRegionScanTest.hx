@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SourceText;
 import anyparse.query.cli.command.FmtCommand;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

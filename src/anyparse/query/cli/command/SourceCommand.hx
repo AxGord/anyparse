@@ -6,7 +6,6 @@ import anyparse.query.SourceText;
 import anyparse.query.cli.CliEdit;
 import anyparse.runtime.CommonPrefix;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 

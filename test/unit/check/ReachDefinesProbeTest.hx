@@ -8,8 +8,6 @@ import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 
@@ -65,6 +63,24 @@ class ReachDefinesProbeTest extends Test {
 			Assert.equals('4.5', read.values['APQ_V']);
 			Assert.notNull(read.values['haxe_ver']);
 			Assert.isFalse(read.values.exists('APQ_W'), 'a value an initialization macro changed was read as every file\'s');
+		}
+		remove(dir);
+	}
+
+	@:pin('control') @:killer('M-DEFINES-PARSED-DROPPED')
+	public function testTheProbeNamesEveryFileTheBuildParses(): Void {
+		// `Shape.hx` declares only a typedef: the build reads it, and no type it typed is declared there
+		final dir: String = scratchDir();
+		write(dir, 'src/Shape.hx', 'typedef Shape = { var side: Int; }');
+		write(dir, 'src/Main.hx', 'class Main { static function main() { final s: Shape = { side: 1 }; } }');
+		write(dir, 'build.hxml', '-cp src\n-main Main\n--interp\n');
+		final read: Null<ReachConfiguration> =
+			ReachDefinesProbe.probeAll([{ hxml: 'build.hxml', dir: dir, defines: [] }])?.configurations[0];
+		final shape: String = FileSystem.fullPath(Path.join([dir, 'src/Shape.hx']));
+		Assert.notNull(read);
+		if (read != null) {
+			Assert.isFalse(read.compiled.contains(shape), 'a module declaring only a typedef was read as running code');
+			Assert.isTrue((read.parsed ?? []).contains(shape), 'a file the build parsed is missing from the files it parses');
 		}
 		remove(dir);
 	}

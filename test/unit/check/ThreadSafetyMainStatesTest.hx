@@ -1,9 +1,6 @@
 package unit.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.Check.Violation;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Repetition on the main thread read over its STATES (`MainRepeats`): a call a condition rules out under the value a

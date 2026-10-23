@@ -2,8 +2,6 @@ package unit.query;
 
 import anyparse.query.CompilerFacts;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /** `CompilerFacts` over hand-written facts files: what a dump must hold to count, and positions in another file. */
 @:nullSafety(Strict)

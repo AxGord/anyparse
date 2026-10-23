@@ -13,12 +13,9 @@ import anyparse.check.PreferTernaryExpression;
 import anyparse.check.PreferTernaryReturn;
 import anyparse.check.ReturnReassignTernary;
 import anyparse.check.SimplifyNegatedCompound;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

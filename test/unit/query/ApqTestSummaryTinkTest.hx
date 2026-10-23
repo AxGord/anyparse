@@ -7,8 +7,6 @@ import sys.io.File;
 import anyparse.query.Cli;
 import anyparse.query.cli.TestTranscript;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq test-summary` — tink_testrunner (tink_unittest) transcript support.

@@ -1,14 +1,10 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.Linter;
 import anyparse.check.PreferCaseGuard;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-case-guard` check: a switch-case branch whose body is exactly one

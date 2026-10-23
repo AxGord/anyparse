@@ -1,10 +1,7 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `CommentOwnerGuard.detachedComment` — the comment-attachment half of the writer-emit gate,

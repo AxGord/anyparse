@@ -9,8 +9,6 @@ using StringTools;
 import anyparse.check.CompilerOracle;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The FOLLOW-UP convergence round of `apq lint --fix`, and why it needs a compiler oracle to

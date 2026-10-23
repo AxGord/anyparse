@@ -1,8 +1,6 @@
 package unit.query;
 
 import anyparse.query.HaxelibResolver;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Coverage of the PURE `HaxelibResolver` assembly (`sourceDirFrom` / `rootFrom`)

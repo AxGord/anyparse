@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnnecessarySafeNav;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `unnecessary-safe-nav` check: a null-safe access (`a?.b`) whose receiver is

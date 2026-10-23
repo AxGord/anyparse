@@ -3,8 +3,6 @@ package unit.query;
 import anyparse.check.Linter;
 import anyparse.query.LintDiff;
 import anyparse.query.format.json.LintFindingJson;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Unit cover for `apq lint-diff` — the blast-radius gate `tools/battery.sh`

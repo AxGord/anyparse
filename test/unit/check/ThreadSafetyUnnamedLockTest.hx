@@ -1,9 +1,6 @@
 package unit.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.Check.Violation;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A lock no sealed member names may be any object of its class: a hold of one stalls the main thread only when the main thread

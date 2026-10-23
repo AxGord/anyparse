@@ -26,9 +26,6 @@ using Lambda;
 @:allow(anyparse.query.StaticExtensions)
 final class MemberLookup {
 
-	/** The grammar kind an `interface` declaration projects as: its supertypes are interfaces all. */
-	private static final INTERFACE_DECL_KIND: String = 'InterfaceDecl';
-
 	/**
 	 * The name -> declaration layer this one resolves every written member and supertype reference through, and the
 	 * table every lookup by simple name reads (`TypeRefIndex.named`) — each of them a scan of every type of every file
@@ -48,18 +45,23 @@ final class MemberLookup {
 	/** The type a read of an optional structure field is wrapped in (`RefShape.optionalValueTypeName`), null for none. */
 	private final _optionalWrapper: Null<String>;
 
+	/** Which `#if` branches of a declaration the run's builds compile (`BuildBranches`): the members a read may bind. */
+	private final _builds: BuildBranches;
+
 	/** Member name -> the member kinds any indexed type declares a member of that name as (`declaresMemberAs`), built on first need. */
 	private var _memberKinds: Null<Map<String, Array<String>>> = null;
 
 	/** Built once by the owning `TypingService`, which hands over the shared, immutable index data and its tables. */
 	public function new(
-		refs: TypeRefIndex, cache: QueryCache, ancestors: AncestorTable, typeSyntax: TypeSyntaxReader, optionalWrapper: Null<String>
+		refs: TypeRefIndex, cache: QueryCache, ancestors: AncestorTable, typeSyntax: TypeSyntaxReader, optionalWrapper: Null<String>,
+		builds: BuildBranches
 	) {
 		_refs = refs;
 		_cache = cache;
 		_ancestors = ancestors;
 		_typeSyntax = typeSyntax;
 		_optionalWrapper = optionalWrapper;
+		_builds = builds;
 	}
 
 	/**
@@ -268,7 +270,37 @@ final class MemberLookup {
 	 * calling it with the OVERRIDING type itself resolves through the defer rule.
 	 */
 	public function memberVisibilityOf(typeName: String, memberName: String): Null<String> {
-		return memberVisibilityWalk(typeName, memberName, []);
+		final seen: Array<String> = [];
+		function walk(at: String): Null<String> {
+			if (seen.contains(at)) return null;
+			seen.push(at);
+			var direct: Null<String> = null;
+			var directCount: Int = 0;
+			var deferring: Bool = false;
+			for (decl in _refs.named(at)) for (m in decl.type.members) if (m.name == memberName) {
+				final v: Null<String> = m.visibility;
+				if (v == null) {
+					if (!m.isOverride) return null;
+					deferring = true;
+				} else {
+					if (directCount > 0 && v != direct) return null;
+					direct = v;
+					directCount++;
+				}
+			}
+			if (directCount > 0) return deferring ? null : direct;
+			var inherited: Null<String> = null;
+			var supers: Int = 0;
+			for (decl in _refs.named(at)) for (sup in decl.type.supertypes) {
+				final v: Null<String> = walk(sup);
+				if (v == null) continue;
+				if (supers > 0 && v != inherited) return null;
+				inherited = v;
+				supers++;
+			}
+			return inherited;
+		}
+		return walk(typeName);
 	}
 
 	/**
@@ -550,25 +582,29 @@ final class MemberLookup {
 	 * chain passes up (`AncestorTable.argumentsTo`) read through `args` — `Base<T>.item` read off a `Sub extends Base<Int>` is
 	 * `Int`, never `T`. An optional field of a structure (`?a: T`, `@:optional var b: T`) reads as the language's
 	 * optional-value type (`Null<T>`, 4.3.7; a class or interface field keeps `T`). Null when the member has no written type,
-	 * or its type names a parameter of the declaring type or of the member itself that nothing written here binds: the
-	 * compiler's answer or none.
+	 * or its type names a parameter of the declaring type or of the member itself that nothing written here binds, or the
+	 * declarations of it the run's builds may compile (`BuildBranches.declarations`) write it differently: the compiler's
+	 * answer or none.
 	 */
 	public function memberRead(start: ResolvedType, member: String, args: Array<String>): Null<MemberReading> {
 		final found: Null<DeclaredMember> = declaredMember(start, member);
-		final written: Null<String> = found?.member.typeSource;
-		if (found == null || written == null) return null;
+		final live: Array<MemberInfo> = found == null ? [] : _builds.declarations(found.host, member);
+		final first: Null<MemberInfo> = live[0];
+		final written: Null<String> = first?.typeSource;
+		if (found == null || first == null || written == null) return null;
+		if (live.exists(m -> m.typeSource != written || m.optional != first.optional)) return null;
 		// a written type the grammar does not read as one type (`#if lime Image #else Dynamic #end`) is no answer
 		if (
 			!NominalTypes.answerableType(written, _typeSyntax)
-			|| CallGraphNames.mentionsTypeName(written, found.member.typeParamNames, _typeSyntax)
+			|| CallGraphNames.mentionsTypeName(written, first.typeParamNames, _typeSyntax)
 		)
 			return null;
 		final host: ResolvedType = found.host;
-		final bound: Null<String> = _ancestors.boundType(start, host, args, written, found.member.declFrom, found.member.typeParamNames);
+		final bound: Null<String> = _ancestors.boundType(start, host, args, written, first.declFrom, first.typeParamNames);
 		return bound == null ? null : {
-			text: found.member.optional ? NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax) : bound,
+			text: first.optional ? NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax) : bound,
 			host: host,
-			member: found.member
+			member: first
 		};
 	}
 
@@ -692,7 +728,7 @@ final class MemberLookup {
 	/** `supertypesDeclareNone` from the declaration `cur`, cycle-guarded by `seen`. */
 	private function supertypesDeclareNoneWalk(cur: ResolvedType, member: String, seen: Array<String>): Bool {
 		if (!_refs.markSeen(cur, seen)) return true;
-		final isInterface: Bool = cur.type.kind == INTERFACE_DECL_KIND;
+		final isInterface: Bool = cur.type.kind == SymbolIndex.INTERFACE_DECL_KIND;
 		for (link in _ancestors.links(cur)) {
 			final ups: Array<ResolvedType> = link.matches;
 			// two declarations the link may name: which one is not known, so neither is cleared
@@ -910,43 +946,6 @@ final class MemberLookup {
 				inherited = rn;
 			else if (rn != inherited)
 				return null;
-			supers++;
-		}
-		return inherited;
-	}
-
-	/**
-	 * `memberVisibilityOf`'s recursion: a direct member's explicit keyword
-	 * (unanimous across same-named types, else null), an unmarked-override direct
-	 * member defers to the (unanimous) supertype closure, an unmarked non-override
-	 * bails. Mixing an explicit keyword with a deferring override across a
-	 * simple-name collision is a disagreement → null. `seen` cycle-guards the walk.
-	 */
-	private function memberVisibilityWalk(typeName: String, memberName: String, seen: Array<String>): Null<String> {
-		if (seen.contains(typeName)) return null;
-		seen.push(typeName);
-		var direct: Null<String> = null;
-		var directCount: Int = 0;
-		var deferring: Bool = false;
-		for (decl in _refs.named(typeName)) for (m in decl.type.members) if (m.name == memberName) {
-			final v: Null<String> = m.visibility;
-			if (v == null) {
-				if (!m.isOverride) return null;
-				deferring = true;
-			} else {
-				if (directCount > 0 && v != direct) return null;
-				direct = v;
-				directCount++;
-			}
-		}
-		if (directCount > 0) return deferring ? null : direct;
-		var inherited: Null<String> = null;
-		var supers: Int = 0;
-		for (decl in _refs.named(typeName)) for (sup in decl.type.supertypes) {
-			final v: Null<String> = memberVisibilityWalk(sup, memberName, seen);
-			if (v == null) continue;
-			if (supers > 0 && v != inherited) return null;
-			inherited = v;
 			supers++;
 		}
 		return inherited;

@@ -100,16 +100,21 @@ final class BinaryChainEmit {
 	 * plain operand does not (`BreakCommits.offerItemBreaks`): the next rewrite reads that break from its source, and an
 	 * operand with a hardline commits the chain to its break shape (`anyHardline`), so the first rewrite lays the chain out
 	 * the same way exactly when the break happens.
+	 *
+	 * `inlineMultilineBranch` is the caller's verdict that a ternary's hardline comes from a block inside a branch and that its
+	 * config keeps such a block on the condition's line: the hardline then no longer commits the chain to its break shape, and
+	 * the cascade answers for the first line alone (`hardlineChainShape`).
 	 */
 	public static function emit(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
 		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
-		?afterComments: Array<Null<Doc>>, restAware: Bool = false, ?forceKeepLocation: Null<WrappingLocation>
+		?afterComments: Array<Null<Doc>>, restAware: Bool = false, ?forceKeepLocation: Null<WrappingLocation>,
+		inlineMultilineBranch: Bool = false
 	): Doc {
 		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return layout(
 				with, ops, opt, rules, nestSuppress, condWrapForced, sourceBreakBefore, headBreak, forceKeep, afterComments, restAware,
-				forceKeepLocation
+				forceKeepLocation, inlineMultilineBranch
 			);
 		}
 		return BreakCommits.offerItemBreaks(
@@ -208,7 +213,8 @@ final class BinaryChainEmit {
 		// a no-op on exactly the file the capture existed to fix. Null (every
 		// other caller, including the infix chain whose forced comments may be
 		// inline blocks) keeps the cascade's location — byte-inert.
-		?forceKeepLocation: Null<WrappingLocation>
+		?forceKeepLocation: Null<WrappingLocation>,
+		inlineMultilineBranch: Bool = false
 	): Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -343,7 +349,7 @@ final class BinaryChainEmit {
 		return if (forceKeep)
 			WrapBoundary(shapeAt({ mode: WrapMode.Keep, location: forceKeepLocation ?? evalAt(true, []).location }))
 		else if (anyHardline)
-			WrapBoundary(hardlineChainShape(items, ops, opt, extraThresholds, evalAt, shapeAt, shapeNoWrapAt))
+			WrapBoundary(hardlineChainShape(items, ops, opt, extraThresholds, evalAt, shapeAt, shapeNoWrapAt, inlineMultilineBranch))
 		else if (pivotHugIdx >= 0)
 			WrapBoundary(IfLineExceeds(
 				opt.lineWidth + 1, ternaryHugShape(pivotHugIdx, items, ops, opt, evalAt, shapeAt),
@@ -548,11 +554,16 @@ final class BinaryChainEmit {
 	 *
 	 * `extraThresholds` non-empty keeps the column-aware tree — a `LineLengthLargerThan` rule at
 	 * a non-`lineWidth` threshold cannot be answered here.
+	 *
+	 * A third shape, `inlineMultilineBranch`: a ternary whose branch holds a multi-line block keeps
+	 * `cond ? macro {` glued while its first line fits, the hug's pivot applied to a branch the hug
+	 * does not recognise, and breaks into the cascade's shape when it does not.
 	 */
 	private static function hardlineChainShape(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, extraThresholds: Array<Int>,
 		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
-		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, shapeNoWrapAt: (WrappingLocation) -> Doc
+		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, shapeNoWrapAt: (WrappingLocation) -> Doc,
+		inlineMultilineBranch: Bool
 	): Doc {
 		if (extraThresholds.length == 0) {
 			final hugIdx: Int = ternaryHugCollectionBranchIndex(items, ops);
@@ -560,7 +571,8 @@ final class BinaryChainEmit {
 			if (isAddSubOps(ops) && hasBareParenTail(items))
 				return IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrapAt(evalAt(false, []).location));
 		}
-		return buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt);
+		final broken: Doc = buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt);
+		return inlineMultilineBranch ? IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(items, ops)) : broken;
 	}
 
 	private static function shape(

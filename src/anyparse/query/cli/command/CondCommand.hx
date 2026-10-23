@@ -6,7 +6,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliWalk.SkipEntry;
-import haxe.Exception;
 
 /**
  * `apq cond` — the branch BODIES of every `#if` region that mentions a define.

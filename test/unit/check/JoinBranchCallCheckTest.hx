@@ -1,15 +1,10 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.JoinBranchCall;
-import anyparse.check.Linter;
 import anyparse.check.PreferTernaryExpression;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `join-branch-call` check: an `if / else if / … / else` chain whose every branch is the SAME

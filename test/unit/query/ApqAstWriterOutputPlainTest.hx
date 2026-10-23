@@ -5,8 +5,6 @@ import sys.FileSystem;
 #end
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Probe for `apq ast --writer-output-plain`.

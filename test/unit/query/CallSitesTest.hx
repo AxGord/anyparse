@@ -1,13 +1,10 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CallSites;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `CallSites` — the completeness PROOF the signature-rewriting operations rest on, pinned

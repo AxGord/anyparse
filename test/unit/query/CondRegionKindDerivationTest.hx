@@ -1,6 +1,5 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Meta;
@@ -9,8 +8,6 @@ import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

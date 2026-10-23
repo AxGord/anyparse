@@ -1,17 +1,12 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.PositiveSinks;
 import anyparse.check.Severity;
 import anyparse.check.ThreadSafety;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import unit.QueryTestHelpers;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

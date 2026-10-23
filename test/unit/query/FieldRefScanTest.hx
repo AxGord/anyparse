@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.BinderScan;
 import anyparse.query.FieldRefScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `FieldRefScan` — the by-name recognizers the backing-field rewrites share, pinned against the

@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.ComparisonToBoolean;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `comparison-to-boolean` check: a comparison against a boolean literal

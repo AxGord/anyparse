@@ -1,12 +1,8 @@
 package unit.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.RedundantUncheckedCast;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `redundant-unchecked-cast` check: a single-argument `cast e` whose POSITION is written

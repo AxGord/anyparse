@@ -1,9 +1,6 @@
 package unit.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.Check.Violation;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A hold taken inside a hold of the same lock that every caller keeps is the enclosing hold's (`LockDominance.enclosed`):

@@ -4,15 +4,12 @@ import anyparse.check.Check;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 #if (sys || nodejs)
 import sys.io.File;
 #end

@@ -1,18 +1,14 @@
 package unit.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.Check.Violation;
 import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig;
 import anyparse.check.OracleCoverage;
 import anyparse.check.ThreadSafety;
 import anyparse.check.TypedFactsProbe;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `thread-safety` reads its graph through the run's compiler facts when the project asks (`compilerFacts`) and it has them (`SymbolIndexHost.compilerFacts`):

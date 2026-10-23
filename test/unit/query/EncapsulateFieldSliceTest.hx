@@ -1,10 +1,7 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.EncapsulateField;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

@@ -2,15 +2,10 @@ package unit.check;
 
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.PreferEnumAbstract;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

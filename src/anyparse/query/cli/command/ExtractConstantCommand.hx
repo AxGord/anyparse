@@ -1,7 +1,6 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
-import haxe.Exception;
 
 using Lambda;
 

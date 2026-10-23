@@ -1,16 +1,11 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitType;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `explicit-type` check: a member field with no `:Type`, a function parameter

@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `CachingGrammarPlugin.resolutionProjectFiles` — the PROJECT view of a resolution scope:

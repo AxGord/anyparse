@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `MemberKinds.precedingModifiers` and `MemberKinds.invocationKinds` — the modifier run before a

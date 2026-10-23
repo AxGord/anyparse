@@ -1,0 +1,4 @@
+-cp src
+-main Probe
+--interp
+--no-output

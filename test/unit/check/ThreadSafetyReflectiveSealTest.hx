@@ -1,8 +1,5 @@
 package unit.check;
 
-import utest.Assert;
-import utest.Test;
-
 /**
  * Reflective writes against the lock names (`FieldWrites.reflectivelyWritten`, review N2 / F3): a write of a computed name
  * on a value the run places on no class may store any lock in any lock member, so it unseals every one — the sound
@@ -25,8 +22,8 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	#end
 
 	/**
-	 * A computed name on a value the typer cannot place — a library container's element, an array element, an
-	 * un-annotated local of a library call, `Dynamic` — unseals `_l`, so the main thread's take of it stays reported, and
+	 * A computed name on a value the typer cannot place — a library container's element, an un-annotated local of a library call,
+	 * `Dynamic` — unseals (as an element of an array of its class does) `_l`, so the main thread's take of it stays reported, and
 	 * the run names the writer; a `case` capture is typed by its enum constructor's parameter (`D`, which declares `_l`),
 	 * a capture of a `Map` parameter is an element write, not a reflective one, and a constructor
 	 * name two enums declare types the capture by the enum its subject is declared of.
@@ -46,7 +43,10 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		// what it stores bounds it only in a run that sees every class: here an `Other` may be some lock's subclass's
 		Assert.equals(1, quickTakes('Reflect.setField(arr[0], k, new Other());'), 'an Other, in a run that may not see every class');
 		Assert.equals(
-			1, found('Reflect.setField(arr[0], k, _m);').filter(f -> f.indexOf('so no lock is named by its member: D.alias') != -1).length,
+			1,
+			found('final o:Dynamic = arr[0]; Reflect.setField(o, k, _m);')
+				.filter(f -> f.indexOf('so no lock is named by its member: D.alias') != -1)
+				.length,
 			'the run names the writer'
 		);
 		#else
@@ -143,7 +143,7 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	public function testALockAReflectiveWriteUnsealsSaysWhoUnsealedIt(): Void {
 		#if (sys || nodejs)
 		final note: String = 'its lock member _l names no lock: a reflective write may store any lock in it (D.alias)';
-		final all: Array<String> = unsealedFindings('Reflect.setField(arr[0], k, m);');
+		final all: Array<String> = unsealedFindings('final o:Dynamic = arr[0]; Reflect.setField(o, k, m);');
 		Assert.equals(1, all.filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1 && f.indexOf(note) != -1).length, 'the take');
 		Assert.equals(1, all.filter(f -> f.indexOf('"D.work" holds') != -1 && f.indexOf(note) != -1).length, 'the hold');
 		Assert.equals(1, all.filter(f -> f.indexOf('"D.risky" leaves') != -1 && f.indexOf(note) != -1).length, 'the hold left on a throw');

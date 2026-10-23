@@ -54,7 +54,7 @@
 #   build ──┬─ suite ── corpus          build = apq.js + test.js + dev.js + a recon typecheck
 #           │                           corpus reads what the suite wrote
 #           ├─ fmt
-#           ├─ jvm probe                only when src/ or the probe moved
+#           ├─ typer probes ── jvm probe   the jvm probe only when src/ or the probe moved
 #           └─ oracle ── lint ── blast  lint reuses the oracle's verdict;
 #                                       blast diffs lint's own output
 #
@@ -797,6 +797,19 @@ XCFG
 # apply" and "the probe never ran" stay different words in the table.
 branch_jvm() {
     branch_init jvm
+    # The typer probe corpus (`tools/typer-facts/`): shapes no census tree holds,
+    # each compiled by the compiler and asked of the typer; one answer that is
+    # not the compiler's fails it. It needs `bin/dev.js`, which the build step
+    # does not make, and nothing else in the battery reads that file.
+    step_begin "typer probes"
+    if ! haxe tools/dev.hxml > "$work/dev-build.log" 2>&1; then
+        cat "$work/dev-build.log" >&2
+        fail "tools/dev.hxml did not build"
+    elif ! node bin/dev.js typer-conformance probes > "$work/typer-probes.log" 2>&1; then
+        grep '^DIFFERENT' "$work/typer-probes.log" || tail -20 "$work/typer-probes.log"
+        fail "the typer answered a probe otherwise than the compiler (DIFFERENT above)"
+    fi
+    step_end "typer probes"
     if [ "$run_jvm" -ne 1 ]; then
         step_skip "jvm probe" "$jvm_skip_note"
         return 0
@@ -956,7 +969,7 @@ echo "battery.sh: running suite→corpus ∥ fmt ∥ jvm ∥ oracle→lint concu
 parallel_start=$(now_ms)
 launch suite "suite" "corpus"
 launch fmt   "fmt" "fmt xconfig"
-launch jvm   "jvm probe"
+launch jvm   "typer probes" "jvm probe"
 launch lint  "oracle" "lint" "blast"
 
 for branch in $branches; do

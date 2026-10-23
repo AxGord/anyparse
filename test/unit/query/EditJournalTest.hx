@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.EditJournal;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /** `EditJournal`: a span of a rewritten text placed in the text before, only through the edits recorded applying. */
 @:nullSafety(Strict)

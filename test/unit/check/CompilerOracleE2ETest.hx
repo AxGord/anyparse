@@ -9,11 +9,8 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.CompilerServer;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end coverage of the compiler-oracle (`apqlint.json` `compilerOracle`):

@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.Meta;
 import anyparse.query.QueryNode;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

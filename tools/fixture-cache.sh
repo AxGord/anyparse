@@ -57,7 +57,7 @@ fc_shim() {
     js="$entries/fixture-cache-$sum.js"
     if [ ! -f "$js" ]; then
         tmp="$js.$$.tmp"
-        if ! ( cd "$repo" && haxe -cp test -main testkit.FixtureCompileCache -lib hxnodejs -D js-es=6 -js "$tmp" ) \
+        if ! ( cd "$repo" && haxe tools/fixture-cache-common.hxml -js "$tmp" ) \
                 > "$entries/build-$sum.log" 2>&1; then
             rm -f "$tmp"
             echo "fixture-cache: the replay program could not be built ($entries/build-$sum.log)" >&2

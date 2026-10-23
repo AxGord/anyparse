@@ -1,15 +1,10 @@
 package unit.check;
 
 import anyparse.check.Check.CrossFileFix;
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.ReflectionScan;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

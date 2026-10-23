@@ -7,7 +7,6 @@ import anyparse.query.cli.CliArgs.ExpandedInputs;
 import anyparse.query.cli.CliArgs.PositionalScan;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * The argument door of the `apq` CLI: everything that turns argv and the path

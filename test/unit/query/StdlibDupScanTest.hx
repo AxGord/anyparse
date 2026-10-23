@@ -1,9 +1,6 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.StdlibDupScan;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `StdlibDupScan` -- the candidate filter behind `apq stdlib-dup`. Each test drives an in-memory

@@ -2,15 +2,11 @@ package unit.check;
 
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.ReflectionScan;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.cli.command.LintCommand;
 import haxe.io.Path;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

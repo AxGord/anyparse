@@ -1,16 +1,12 @@
 package unit.check;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan;
 import anyparse.check.RunScan;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 /** One report entry, as `Check.run` receives it. */
 private typedef Entry = { file: String, source: String };

@@ -1,9 +1,6 @@
 package unit.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.Check.Violation;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Receiver flow from `new` (`AllocationSets`): a dispatch on a field every value of which is a `new` the project writes,

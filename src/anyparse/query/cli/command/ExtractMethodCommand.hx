@@ -5,7 +5,6 @@ import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Parsed options for `apq extract-method` — `lang`, `write` / `reformat`, the target `file`, the

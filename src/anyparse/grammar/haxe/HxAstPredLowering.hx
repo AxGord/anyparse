@@ -1,8 +1,11 @@
 package anyparse.grammar.haxe;
 
 #if macro
+import anyparse.core.ShapeTree.ShapeNode;
+import anyparse.macro.AnnotationKeys;
 import anyparse.macro.AstPredLowering;
 import anyparse.macro.MacroNames.*;
+import anyparse.macro.MetaInspect;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
@@ -265,7 +268,8 @@ final class HxAstPredLowering extends AstPredLowering {
 			importLeafClassifierField('_classifyImportLeafTail', 'betweenImportsTailLeafClassify'),
 			importLeafClassifierField('_classifyImportLeafHead', 'betweenImportsHeadLeafClassify'),
 			keepsBlankLeafClassifierField(),
-			complexItemKindsField()
+			complexItemKindsField(),
+			ternaryBranchHoldsMultilineBlockField()
 		].concat(new HxCasePredLowering(_shape, _mode).generate());
 	}
 
@@ -988,6 +992,30 @@ final class HxAstPredLowering extends AstPredLowering {
 			'complexItemKinds', [{ name: 'elements', type: macro :Array<Any> }],
 			macro :Array<Int>, macro anyparse.grammar.haxe.HxComplexItems.kinds(elements),
 			'One complexity code per element of a delimited list, for `WrapList`\'s `complexItemKinds` axis.'
+		);
+	}
+
+	/**
+	 * `ternaryBranchHoldsMultilineBlock(e) → Bool` — the `@:fmt(multilineBranchInline)` predicate on
+	 * `HxExpr.Ternary`, forwarding to `HxTernaryBranchBlocks.holdsMultilineBlock`. The constructors
+	 * that print their first operand first are read off the grammar's own operator annotations
+	 * (`@:infix` / `@:postfix` / `@:ternary`), so no operator table can drift from it.
+	 */
+	private function ternaryBranchHoldsMultilineBlockField(): Field {
+		final exprRule: ShapeNode = _shape.rules[HX_EXPR] ?? Context.fatalError(
+			'HxAstPredLowering: $HX_EXPR is not a rule', Context.currentPos()
+		);
+		final leftOperandCtors: Array<String> = [
+			for (branch in exprRule.children) if (
+				MetaInspect.hasMeta(branch, ':infix') || MetaInspect.hasMeta(branch, ':postfix') || MetaInspect.hasMeta(branch, ':ternary')
+			)
+				(branch.annotations.get(AnnotationKeys.BASE_CTOR): String)
+		];
+		return predField(
+			'ternaryBranchHoldsMultilineBlock',
+			[valueArg('e', HX_EXPR)],
+			macro :Bool, macro anyparse.grammar.haxe.HxTernaryBranchBlocks.holdsMultilineBlock(e, $v{leftOperandCtors}),
+			'True iff a ternary operand holds a multi-line block outside the brace or bracket group it opens with.'
 		);
 	}
 

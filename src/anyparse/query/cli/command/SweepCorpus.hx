@@ -3,7 +3,6 @@ package anyparse.query.cli.command;
 import anyparse.format.comment.CommentLossException;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.ParseError;
-import haxe.Exception;
 #if (sys || nodejs)
 import sys.io.File;
 #end

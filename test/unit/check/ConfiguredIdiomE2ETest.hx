@@ -7,8 +7,6 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.HaxeSpawn;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The two config-driven rules end to end through `apq lint --fix` against the real compiler.

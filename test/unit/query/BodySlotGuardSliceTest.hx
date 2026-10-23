@@ -3,14 +3,11 @@ package unit.query;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.Cli;
 import anyparse.query.RemoveElement;
 import haxe.Exception;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `BodySlotGuard` — the structural half of the writer-emit gate.

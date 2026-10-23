@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.CrossRename.FileChange;
 import anyparse.query.CrossRenameMember;
 import anyparse.query.GrammarPlugin.RefShape;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 using Lambda;

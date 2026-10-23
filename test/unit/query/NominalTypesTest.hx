@@ -1,13 +1,10 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import haxe.Exception;
 import unit.QueryTestHelpers;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The structural typer's arcs (`NominalTypes`), each read as the compiler types it (Haxe 4.3.7) and answering null where

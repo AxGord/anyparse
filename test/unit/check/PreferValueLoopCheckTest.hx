@@ -2,15 +2,11 @@ package unit.check;
 
 import anyparse.check.Check;
 import anyparse.check.ElementLoopRewrite;
-import anyparse.check.Linter;
 import anyparse.check.PreferValueLoop;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import unit.QueryTestHelpers;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-value-loop` check: `for (i in 0...X.length)` whose index is read ONLY as `X[i]` is

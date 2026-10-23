@@ -282,6 +282,7 @@ final class PinsCheckPToZ {
 		'unit.check.ReachDefinesProbeTest#testOnlyAOneArmTranscriptWithBothSetsAnswers :: control :: M-DEFINES-ONE-ARM',
 		'unit.check.ReachDefinesProbeTest#testOverlappingProbesAnswerInTheOraclesOrder :: control :: M-SPAWN-ORDER',
 		'unit.check.ReachDefinesProbeTest#testTheBuildsStartBesideFactsStartedEarly :: control :: M-BUILDS-WITH-FACTS',
+		'unit.check.ReachDefinesProbeTest#testTheProbeNamesEveryFileTheBuildParses :: control :: M-DEFINES-PARSED-DROPPED',
 		'unit.check.ReachDefinesProbeTest#testTheProbeReadsTheValueEachDefineCarries :: control :: M-DEFINES-VALUES-MACRO',
 		'unit.check.RedundantImportCheckTest#testAThirdLineBindingOneOfItsConstructorsKeepsIt :: control :: M-REDUNDANT-VALUES-BLIND',
 		'unit.check.RedundantImportCheckTest#testSubTypeImportBesideItsModuleImportIsRedundant :: control :: M-DECLARINGFILES-EMPTY',

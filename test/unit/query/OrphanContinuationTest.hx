@@ -3,7 +3,6 @@ package unit.query;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddElement;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin;
@@ -13,8 +12,6 @@ import anyparse.query.QueryNode;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.query.cli.command.FmtCommand;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

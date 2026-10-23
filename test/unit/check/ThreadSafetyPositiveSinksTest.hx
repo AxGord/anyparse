@@ -1,14 +1,10 @@
 package unit.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.Check.Violation;
 import anyparse.check.PositiveSinks;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.StdResolver;
 import anyparse.query.StdTypes;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

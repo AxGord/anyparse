@@ -1,6 +1,5 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.InlineConstant;
 import anyparse.check.PreferFinalField;
 import anyparse.check.PreferFinalPublicField;
@@ -8,11 +7,8 @@ import anyparse.check.PreferInline;
 import anyparse.check.PreferReadOnlyField;
 import anyparse.check.StaticConstant;
 import anyparse.check.TrivialGetter;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.MakeFinal;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `@:coreApi` — the one member pin no scope here can ever hold. A `@:coreApi` class replaces a

@@ -1,11 +1,8 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.Linter;
 import anyparse.check.PreferForIn;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-for-in` check: a hand-rolled iterator protocol
