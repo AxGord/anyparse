@@ -88,7 +88,7 @@ using Lambda;
  * `var` becomes `final` only when the run holds EVERY write of the local. A write that survives
  * AFTER the run is normal for this shape -- it is what makes the single-construct rules refuse it in
  * the first place -- and the declaration then stays `var`, which is what the motivating site
- * (`macros/Lang.hx` in a client project) needs: its `tKey` is overwritten once more, further down,
+ * (a client macro module) needs: its `tKey` is overwritten once more, further down,
  * behind a null test.
  */
 @:nullSafety(Strict)

@@ -17,8 +17,7 @@ import utest.Test;
  * over every legal whitespace spelling of one expression, the pre-slice writer produced almost as many
  * distinct outputs, including a line far past the limit from a source written flat — the width limit
  * was not enforced inside the region at all, because there was no decision to
- * enforce it with. The two client sites that carry this shape
- * (`crashreport/HostReport.hx`, `crashreport/CrashReport.hx`) disagreed with
+ * enforce it with. The two client sites that carry this shape disagreed with
  * each other for exactly this reason.
  *
  * THE POLICY. The rule assembles its fields as one run — condition, operand
@@ -48,7 +47,7 @@ final class HxCondSpliceOpFillSliceTest extends Test {
 		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
 		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]}}}';
 
-	/** client `src/crashreport/HostReport.hx:135-140`, canonical. */
+	/** A client file, canonical. */
 	private static final SYSTEM_DATA: String = 'class C {\n\tpublic function toString():String {\n\t\treturn \'HostReport\\n{$${endl()}  '
 		+ 'os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: $$osVersion\\n\'\n\t\t\t+ #if flash \'  playerType: \' + '
 		+ 'playerType + \'\\n\' + \'  playerVersion: \' + playerVersion + \'\\n\' + #end\n\t\t\t\'  totalMemory: '

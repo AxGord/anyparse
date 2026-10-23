@@ -49,7 +49,7 @@ enum SafePassNarrowing {
  * "already broken" from "we broke it".
  *
  * A SECOND defect lived one step further on: the rollback was ALL-OR-NOTHING and named
- * nothing, so one bad edit hid 227 good files and each bad edit MASKED the next, which is
+ * nothing, so one bad edit hid every good file beside it and each bad edit MASKED the next, which is
  * how a queue of fixer defects came to be found one round-trip at a time. `narrow`
  * attributes the failure to the files the compiler blames BEFORE reverting anything, and
  * `revertNotice` says which files went back.

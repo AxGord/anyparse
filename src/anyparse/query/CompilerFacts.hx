@@ -537,7 +537,7 @@ final class CompilerFacts {
 	 * Table key -> the `_nodeCache` ids (`node:` prefix) and `_builtCache` keys (`built:` prefix) whose making read that
 	 * file's text (`indexOf`): what `invalidate` drops. A made node is a function of the texts it placed its facts in and
 	 * of nothing else `invalidate` changes, so dropping every made node for one rewritten file — each `--fix` pass drops a
-	 * few — re-made the whole table every pass (client: 15.8 s of a 200 s `--fix`).
+	 * few — re-made the whole table every pass.
 	 */
 	private final _madeFrom: Map<String, Array<String>> = [];
 

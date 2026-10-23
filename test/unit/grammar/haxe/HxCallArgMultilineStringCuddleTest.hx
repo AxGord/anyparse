@@ -88,7 +88,7 @@ final class HxCallArgMultilineStringCuddleTest extends Test {
 	 * enclosing chain's continuation indent — the writer must not commit the
 	 * flat shape and emit the chain's breaks with no indent at all.
 	 *
-	 * The fixture is client `crashreport/CrashReport.hx` verbatim, and it moved
+	 * The fixture is a client file verbatim, and it moved
 	 * with `@:fmt(fillParts)`: the region no longer replays the source's
 	 * internal line breaks, so `+ #if !flash "package:\t"` no longer trails
 	 * the first line and the whole operand run packs onto one line up to

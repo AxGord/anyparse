@@ -136,7 +136,8 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 		final target: NamedMember = named;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		return CliEdit.finishEdit(
-			op, filePath, write, RemoveMember.removeMember(source, target.type, target.member, reformat, plugin, withDoc, optsJson), fix
+			op, filePath, write, RemoveMember.removeMember(source, target.type, target.member, reformat, plugin, withDoc, optsJson),
+			fix ? plugin : null
 		);
 	}
 

@@ -51,9 +51,8 @@ using StringTools;
  * So "the initializer is a compile-time literal" does NOT mean "every instance holds that value" —
  * it means every instance STARTS there. `MemberWriteScan.writtenInRange` supplies the missing half,
  * the same conservative complete write scan `prefer-final-field` proves `var -> final` with: any
- * assignment to the name anywhere in the file, outside the declaration, refuses. Found by
- * typechecking a `--fix` over a real 805-file tree; the unit suite was green, and six of the
- * fifteen sites did not compile.
+ * assignment to the name anywhere in the file, outside the declaration, refuses. Found by typechecking
+ * a `--fix` over a real tree: the unit suite was green, and sites it had rewritten did not compile.
  *
  * The interpolation half of that is load-bearing and invisible to a type-based reading: a CALL
  * inside a `'…'` literal makes the value differ per instance just as much as a call in value

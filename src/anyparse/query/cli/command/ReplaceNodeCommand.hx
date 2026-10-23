@@ -121,7 +121,7 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		return CliEdit.finishEdit(
 			'replace-node', filePath, o.write, ReplaceNode.replaceNode(source, target, newSrc, o.reformat, plugin, o.withDoc, optsJson),
-			fix
+			fix ? plugin : null
 		);
 	}
 

@@ -84,6 +84,79 @@ final class ScrubGuardTest extends Test {
 		});
 	}
 
+	/**
+	 * A path that names a file of a private tree is a match, numbered by the tree and never printed: a `./` or `../`
+	 * lead is dropped and an extension other than `.hx` counts, while a bare name, a module at the top of a source root,
+	 * a path the scanned tree also holds, a longer path ending in a private one and a near miss do not.
+	 */
+	@:pin('control')
+	@:killer('M-SCRUB-PRIVATE-PATH-BLIND')
+	public function testAPathOfAPrivateTreeIsAMatch(): Void {
+		TempDir.with(dir -> {
+			final one: String = dir.file('one');
+			final two: String = dir.file('two');
+			for (sub in ['$one/src/app', '$one/src/shared', '$two/tools']) FileSystem.createDirectory(sub);
+			for (file in [
+				'$one/src/app/Secret.hx',
+				'$one/src/shared/Common.hx',
+				'$one/src/Main.hx',
+				'$two/tools/Gen.cfg'
+			]) File.saveContent(file, '');
+			final root: String = dir.file('repo');
+			FileSystem.createDirectory('$root/shared');
+			cmd('git init -q $root').check();
+			File.saveContent('$root/shared/Common.hx', '');
+			File.saveContent('$root/a.md', [
+				'see src/app/Secret.hx:12 and `app/Secret.hx`',
+				'Secret.hx alone, src/Main.hx, shared/Common.hx',
+				'./src/app/Secret.hx then ../app/Secret.hx',
+				'x/src/app/Secret.hx, app/Secret.hxml, app/Other.hx',
+				'tools/Gen.cfg'
+			].join('\n'));
+			cmd('git -C $root add a.md shared/Common.hx').check();
+			final privates: Array<PathIndex> = [for (tree in [one, two]) new PathIndex(ScrubGuard.privateFiles(tree))];
+			Assert.same([
+				'a.md:1: private root 1',
+				'a.md:1: private root 1',
+				'a.md:3: private root 1',
+				'a.md:3: private root 1',
+				'a.md:5: private root 2'
+			], ScrubGuard.scanTree([], root, privates));
+		});
+	}
+
+	/**
+	 * A private checkout counts only what git tracks there — a build's output is not the project's text — and the range
+	 * mode reads the private paths of the lines it adds and of its commit messages.
+	 */
+	public function testAPrivateCheckoutCountsItsTrackedFilesAndTheRangeModeReadsPaths(): Void {
+		TempDir.with(dir -> {
+			final priv: String = dir.file('private');
+			for (sub in ['$priv/app', '$priv/out']) FileSystem.createDirectory(sub);
+			cmd('git init -q $priv').check();
+			File.saveContent('$priv/app/Kept.hx', '');
+			File.saveContent('$priv/out/Built.hx', '');
+			cmd('git -C $priv add app/Kept.hx').check();
+			Assert.same(['app/Kept.hx'], ScrubGuard.privateFiles(priv));
+			final privates: Array<PathIndex> = [new PathIndex(ScrubGuard.privateFiles(priv))];
+			final root: String = dir.file('repo');
+			cmd('git init -q $root').check();
+			File.saveContent('$root/a.txt', 'one\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'base');
+			File.saveContent('$root/a.txt', 'one\nout/Built.hx app/Kept.hx\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'names app/Kept.hx');
+			final rows: Array<String> = ScrubGuard.scanRange('HEAD~1..HEAD', [], root, privates);
+			Assert.same(['diff HEAD~1..HEAD:1: private root 1', 'messages HEAD~1..HEAD:2: private root 1'], rows, rows.join(' / '));
+		});
+	}
+
+	/** A private root that is not a directory is a usage error, refused before anything is scanned. */
+	public function testAPrivateRootThatIsNoDirectoryIsRefused(): Void {
+		TempDir.with(dir -> Assert.equals(2, ScrubGuard.main(['--private-root', dir.file('absent')])));
+	}
+
 	private static function commit(root: String, message: String): Void {
 		cmd('git -C $root -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q -m $message').check();
 	}

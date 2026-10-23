@@ -30,7 +30,7 @@ final class HxCondExprValueFixpointSliceTest extends Test {
 
 	private static final CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140}}';
 
-	/** client `src/api/NetDevice.hx` `get_deviceTypeId()` merged by `cond-assign-merge --fix`, verbatim. */
+	/** A client getter merged by `cond-assign-merge --fix`, verbatim. */
 	private static final FLAT_RETURN: String = 'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n'
 		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ThinClientUtils.isThinClient() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET '
 		+ '#elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';

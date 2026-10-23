@@ -754,8 +754,7 @@ final class SourceComments {
 	/**
 	 * The index of `line`'s GUTTER star, or -1 when it has none. A gutter star is followed by
 	 * whitespace or nothing: `**BETA**` and `*emphasis*` open a gutter-less block's prose with a star
-	 * that is not one, and reading only the first character reported every line of 109 such blocks in
-	 * one library.
+	 * that is not one, and reading only the first character reported every line of every such block across a whole library.
 	 *
 	 * Shared with `doc-comment-continuation`, which reports the lines this answer decides the prefix
 	 * for. Written twice it is the one predicate in this pair that must not drift: the ops splice by

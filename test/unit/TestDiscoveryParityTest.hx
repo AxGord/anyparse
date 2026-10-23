@@ -1041,6 +1041,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.JsonSpanCoordinatesTest',
 		'unit.query.LexicalRegionsSeamTest',
 		'unit.query.LexicalRegionsTest',
+		'unit.query.LineDiffTest',
 		'unit.query.LintBaselineTest',
 		'unit.query.LintDiffTest',
 		'unit.query.LintFixSafePassRevertTest',

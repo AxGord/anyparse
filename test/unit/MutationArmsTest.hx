@@ -168,21 +168,25 @@ final class MutationArmsTest extends Test {
 	}
 
 	/**
-	 * A dotted type becomes the two files the runner tries, in classpath order.
+	 * A dotted type becomes the files the runner tries, one per classpath root, in classpath order.
 	 *
-	 * `tools/mutation-arm.sh` resolves an arm's `type` to a file by hand — `for root in
-	 * src test`, first hit wins — and `unit.MutationArmAddressTest` parses whichever one
+	 * `tools/mutation-arm.sh` resolves an arm's `type` to a file by hand — `for root in src test tools/src`,
+	 * first hit wins — and `unit.MutationArmAddressTest` parses whichever one
 	 * exists. This is the pure half of that, asked of a type name written here rather
 	 * than of the real registry, so `M-ARM-PATH-FLAT` has a second instance to break.
 	 */
 	@:pin('control')
 	@:killer('M-ARM-PATH-FLAT')
-	public function testAModulePathBecomesTheTwoCandidateFiles(): Void {
-		Assert.same(['src/Bare.hx', 'test/Bare.hx'], MutationArms.candidateFiles('Bare'), 'a package-less type is one segment, not none');
+	public function testAModulePathBecomesOneCandidateFilePerRoot(): Void {
 		Assert.same(
-			['src/pack/deep/Layer.hx', 'test/pack/deep/Layer.hx'],
-			MutationArms.candidateFiles('pack.deep.Layer'), 'and every dot becomes a directory'
+			['src/Bare.hx', 'test/Bare.hx', 'tools/src/Bare.hx'],
+			MutationArms.candidateFiles('Bare'), 'a package-less type is one segment, not none'
 		);
+		Assert.same([
+			'src/pack/deep/Layer.hx',
+			'test/pack/deep/Layer.hx',
+			'tools/src/pack/deep/Layer.hx'
+		], MutationArms.candidateFiles('pack.deep.Layer'), 'and every dot becomes a directory');
 	}
 
 	/** The `--list-arms` line: name, member, cut and reason, in the order a reader needs them. */

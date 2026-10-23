@@ -39,6 +39,11 @@ final class Args {
 		return take(name, count);
 	}
 
+	/** The value of every occurrence of the repeatable option `name`, in command-line order; empty when it is not given. */
+	public function options(name: String): Array<String> {
+		return [for (values in every(name, 1)) values[0]];
+	}
+
 	/**
 	 * The positionals, once every flag and option is taken: the `names.length` required ones, named by `names` in a
 	 * refusal, then at most `optional.length` more. An unknown option or a missing or extra positional throws `UsageError`.
@@ -74,16 +79,22 @@ final class Args {
 
 	/** Take every occurrence of the option `name` with its `count` values; answers the last one's. */
 	private function take(name: String, count: Int): Null<Array<String>> {
-		var found: Null<Array<String>> = null;
+		final all: Array<Array<String>> = every(name, count);
+		return all.length == 0 ? null : all[all.length - 1];
+	}
+
+	/** Take every occurrence of the option `name` with its `count` values; answers each one's, in command-line order. */
+	private function every(name: String, count: Int): Array<Array<String>> {
+		final found: Array<Array<String>> = [];
 		var i: Int = 0;
 		while (i < _rest.length) {
 			final arg: String = _rest[i];
 			if (arg.startsWith('$name=') && count == 1) {
-				found = [arg.substr(name.length + 1)];
+				found.push([arg.substr(name.length + 1)]);
 				_rest.splice(i, 1);
 			} else if (arg == name) {
 				if (_rest.length - i - 1 < count) throw new UsageError('$name needs $count value(s)');
-				found = _rest.slice(i + 1, i + 1 + count);
+				found.push(_rest.slice(i + 1, i + 1 + count));
 				_rest.splice(i, count + 1);
 			} else {
 				i++;

@@ -106,7 +106,7 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 		final result: EditResult = ExtractMethod.extractMethod(
 			source, startPos.line, startPos.col, endPos.line, endPos.col, nameStr, o.reformat, plugin, shape, optsJson, o.member
 		);
-		return CliEdit.finishEdit('extract-method', filePath, o.write, result, fix);
+		return CliEdit.finishEdit('extract-method', filePath, o.write, result, fix ? plugin : null);
 	}
 
 	private static function printExtractMethodUsage(): Void {

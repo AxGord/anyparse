@@ -13,7 +13,7 @@ import utest.Assert;
  * Expression-position `#if`: which regions carry NODES and which stay a
  * raw byte span.
  *
- * A census over real modules (client `src/`, `lime/src`, `openfl/src`) found a
+ * A census over real modules (a client project's sources, `lime/src`, `openfl/src`) found a
  * handful of `HxExpr.CondSpliceExpr` regions — the production whose `raw` is a
  * verbatim byte capture with no nodes inside — in three shapes, pinned here:
  *
@@ -21,12 +21,12 @@ import utest.Assert;
  *    — `var supportsCursor(default, null):Bool = #if !mobile true; #else
  *    false; #end`. MODELLED (`HxVarSemiCondInitDecl` binds the
  *    property-accessor clause that was pushing the member out).
- *  - **Dangling infix operator** (`+` in the client corpus `HostReport.hx` / `CrashReport.hx`,
+ *  - **Dangling infix operator** (`+` in two client files,
  *    `||` in `openfl/geom/PerspectiveProjection.hx` / `openfl/display/BitmapData.hx`
  *    / `openfl/display3D/textures/TextureBase.hx`, `&&` in
  *    `lime/utils/Preloader.hx` / `lime/system/System.hx`) — MODELLED,
  *    `HxCondSpliceOpExpr`, see `testDanglingInfixOperatorRegionIsModelled`.
- *  - **Half ternary** (client `popups/fileDialog/FileDialog.hx`) — RAW, and the
+ *  - **Half ternary** (a client file) — RAW, and the
  *    reason is fidelity rather than parsing; see `testHalfTernaryRegionStaysRaw`.
  *
  * The dangling-operator shape was refused once, on a reading that is still
@@ -121,7 +121,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 	}
 
 	/**
-	 * client `src/crashreport/HostReport.hx:137`, reduced and canonicalised.
+	 * A client file, reduced and canonicalised.
 	 * The fragment ends on a DANGLING `+` whose right operand lives after
 	 * `#end`.
 	 *
@@ -155,7 +155,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 	}
 
 	/**
-	 * client `src/popups/fileDialog/FileDialog.hx:91`, reduced: `#if c cond ?
+	 * A client file, reduced: `#if c cond ?
 	 * a : #end b` — the region carries the head of a ternary whose
 	 * else-operand is the tail. STAYS RAW, and the refusal is a fidelity
 	 * decision rather than a parsing one: adding `?` and `:` to
@@ -209,7 +209,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 
 	/**
 	 * A prefix-operator operand (`openfl/display/BitmapData.hx:2239`) and a
-	 * postfix chain one (client `CrashReport.hx:307`) both bind INSIDE a term,
+	 * postfix chain one (a client file) both bind INSIDE a term,
 	 * which is the whole reason no Pratt rewind is needed: prefix and
 	 * postfix live in `parseHxExprAtom`, the function a term's operand
 	 * references.

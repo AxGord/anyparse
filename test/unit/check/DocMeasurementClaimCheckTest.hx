@@ -209,6 +209,117 @@ class DocMeasurementClaimCheckTest extends Test {
 		Assert.isTrue(pair[0].message.contains('(2 readings)'), pair[0].message);
 	}
 
+	/**
+	 * A count before a noun only a run over a tree counts is a census, whether the count is in digits,
+	 * in words, or behind one modifier; the same count before a DIMENSION a contract bounds is the
+	 * contract itself, and the noun is what tells the two apart.
+	 * Killed by arm `M-DOC-CLAIM-CENSUS-NOUN-ANY`.
+	 */
+	@:pin('control')
+	@:killer('M-DOC-CLAIM-CENSUS-NOUN-ANY')
+	public function testACensusCountIsAReadingAndADimensionIsNot(): Void {
+		final vs: Array<Violation> = violations('class C {\n\t// the walk reported 2624 files\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.startsWith('a census count in a comment'), vs[0].message);
+		Assert.equals(1, violations('class C {\n\t// 142 correct blocks remain\n}').length);
+		Assert.equals(1, violations('class C {\n\t// the rule left 1041 would-be findings\n}').length);
+		Assert.equals(1, violations('class C {\n\t// eleven rules fired, and Seventy-odd rules did not\n}').length);
+		Assert.equals(1, violations('class C {\n\t/** Fifty-eight fires across all four members. */\n\tvar x = 1;\n}').length);
+		Assert.equals(0, violations('class C {\n\t/** Past 40 lines a doc block is too long. */\n\tvar x = 1;\n}').length);
+		Assert.equals(0, violations('class C {\n\t/** A type with more than 50 members is reported. */\n\tvar x = 1;\n}').length);
+	}
+
+	/**
+	 * A count below two digits is the size of a fixture or a contract's own small quantity, and is
+	 * never read as a census; a comma before a group of thousands keeps a large one large.
+	 * Killed by arm `M-DOC-CLAIM-CENSUS-FLOOR`.
+	 */
+	@:pin('control')
+	@:killer('M-DOC-CLAIM-CENSUS-FLOOR')
+	public function testASmallCountIsTheSizeOfAFixture(): Void {
+		Assert.equals(0, violations('class C {\n\t/** Writes 3 files into a scratch directory. */\n\tvar x = 1;\n}').length);
+		Assert.equals(0, violations('class C {\n\t/** Since Haxe 4.2 abstract modules are allowed. */\n\tvar x = 1;\n}').length);
+		Assert.equals(1, violations('class C {\n\t/** Writes 30 files into a scratch directory. */\n\tvar x = 1;\n}').length);
+		Assert.equals(1, violations('class C {\n\t// 1,754 sources were read\n}').length);
+	}
+
+	/**
+	 * A count fenced as inline code is quoted data — a tool's output, a fixture's line — and a count
+	 * hyphen-joined to a word is part of a name; neither is prose recording a census.
+	 * Killed by arm `M-DOC-CLAIM-CENSUS-CODESPAN`.
+	 */
+	@:pin('control')
+	@:killer('M-DOC-CLAIM-CENSUS-CODESPAN')
+	public function testACountQuotedAsCodeIsData(): Void {
+		Assert.equals(0, violations('class C {\n\t/** The runner prints `ran 999 tests` at exit. */\n\tvar x = 1;\n}').length);
+		Assert.equals(1, violations('class C {\n\t/** The runner printed 999 tests at exit. */\n\tvar x = 1;\n}').length);
+		Assert.equals(0, violations('class C {\n\t/** The post-Slice-34 sources parse. */\n\tvar x = 1;\n}').length);
+		Assert.equals(0, violations('class C {\n\t/** The runner prints 999 Assertions at exit. */\n\tvar x = 1;\n}').length);
+	}
+
+	/** A number typeset with grouped thousands is a census on its own: a contract writes its constant as code does. */
+	public function testATypesetNumberIsACensus(): Void {
+		Assert.equals(1, violations('class C {\n\t// the suite ran 13 251 of its fixtures\n}').length);
+		Assert.equals(1, violations('class C {\n\t// a census of 1 754 sources\n}').length);
+	}
+
+	/**
+	 * A short slice or backlog id is an id in prose; written as code — in backticks, or straight after
+	 * the `:`, `<` or `.` a type position opens with — it is a type parameter's name. A single digit is
+	 * never read: it names a type parameter far more often than a slice.
+	 * Killed by arm `M-DOC-CLAIM-SHORT-ID-TYPE-BLIND`.
+	 */
+	@:pin('control')
+	@:killer('M-DOC-CLAIM-SHORT-ID-TYPE-BLIND')
+	public function testAShortWorkIdIsFlaggedAndATypeParameterIsNot(): Void {
+		Assert.equals(1, violations('class C {\n\t// the shape S56 asked for\n}').length);
+		Assert.equals(1, violations('class C {\n\t// retired by T37\n}').length);
+		final sub: Array<Violation> = violations('class C {\n\t// the shape S10.4 asked for\n}');
+		Assert.equals(1, sub.length);
+		Assert.isTrue(sub[0].message.contains('S10.4'), sub[0].message);
+		Assert.equals(0, violations('class C {\n\t/** Takes a `T12` and returns it. */\n\tvar x = 1;\n}').length);
+		Assert.equals(0, violations('class C {\n\t/** Matches `OrState.A(v:T12)` only. */\n\tvar x = 1;\n}').length);
+		Assert.equals(0, violations('class C {\n\t/** Returns Array<T12> unchanged. */\n\tvar x = 1;\n}').length);
+	}
+
+	/**
+	 * Mid-clause, the recording verb needs a number in the PROSE beside it: digits inside backticks are
+	 * code the sentence quotes, and quoting a sample is not recording a run.
+	 * Killed by arm `M-DOC-CLAIM-VERB-ANY-DIGIT`.
+	 */
+	@:pin('control')
+	@:killer('M-DOC-CLAIM-VERB-ANY-DIGIT')
+	public function testTheRecordingVerbBesideQuotedCodeIsNotARecord(): Void {
+		Assert.equals(0, violations('class C {\n\t/** As measured, `var x = 1;` is typed `Int`. */\n\tvar x = 1;\n}').length);
+		Assert.equals(1, violations('class C {\n\t/** The walk measured 271 runs. */\n\tvar x = 1;\n}').length);
+	}
+
+	/**
+	 * A count is a CONTRACT, not a census, when it is a bound the code declares (after, at most, up to,
+	 * top, into, per before it, or per / at a time after its noun), a standard's or a year's number, or
+	 * glued to the token before it — a fraction's digits, an issue number, a language edition.
+	 * Killed by arm `M-DOC-CLAIM-CENSUS-BOUND-BLIND`.
+	 */
+	@:pin('control')
+	@:killer('M-DOC-CLAIM-CENSUS-BOUND-BLIND')
+	public function testABoundAStandardOrAGluedNumberIsAContract(): Void {
+		for (doc in [
+			'Version 1.12 rules apply.',
+			'Weighs 3.14 files on average.',
+			'See #12 tests.',
+			'Follows IEEE 754 rules.',
+			'Parses RFC 4180 rules.',
+			'Targets C++20 modules.',
+			'Since the 2024 rules revision.',
+			'Gives up after 50 edits.',
+			'Holds at most 16 files at a time.',
+			'Splits the input into 64 blocks.',
+			'Returns the top twenty findings per rule.',
+			'Runs twelve checks per file.'
+		]) Assert.equals(0, violations('class C {\n\t/** $doc */\n\tvar x = 1;\n}').length, doc);
+		Assert.equals(1, violations('class C {\n\t/** The sweep took it over 1029 external files. */\n\tvar x = 1;\n}').length);
+	}
+
 	/** The check's findings on `src`, asked of the check directly so enablement does not apply. */
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new DocMeasurementClaim(), src);

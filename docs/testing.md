@@ -234,6 +234,7 @@ live in a private git-filter-repo `--replace-text` file outside the repository, 
 
 ```sh
 export ANYPARSE_SCRUB_LIST=<private map>        # never a path inside this repository
+export ANYPARSE_SCRUB_PRIVATE_ROOTS=<checkout>   # optional: the downstream tree(s), `:`-separated
 haxe tools/dev.hxml                              # once: bin/dev.js
 node bin/dev.js scrub-guard                      # the tracked tree
 node bin/dev.js scrub-guard --range origin/main..HEAD   # what a push would add: diff lines + commit messages
@@ -241,7 +242,15 @@ ln -s ../../tools/hooks/pre-push-scrub.sh .git/hooks/pre-push   # once per clone
 ```
 
 A match prints `<where>:<line>: rule <n>` and exits 1; the matched text is never printed. Unset, the guard and the hook
-pass and say so. A `regex:` rule is a JavaScript regular expression; a leading Python inline-flag group (`(?i)`) becomes
+pass and say so.
+
+A list only catches the names someone wrote into it. The structural half takes the downstream checkout itself:
+`--private-root <dir>` (repeatable; or `ANYPARSE_SCRUB_PRIVATE_ROOTS`, `:`-separated — never a default, never a path
+stored here) makes a match of every path-shaped token (two or more segments, the last with an extension, a leading
+`./` / `../` dropped) that names a file of that tree — what its git tracks when the root is a checkout, every file under
+it otherwise — and no file of the scanned tree, printed as `<where>:<line>: private root <k>`. A bare file name, or a
+module directly under a source-root directory (`src/Main.hx`), carries no package and is too common a word to count.
+The row names the root by its position on the command line, never the path. A `regex:` rule is a JavaScript regular expression; a leading Python inline-flag group (`(?i)`) becomes
 its flags, and a rule JavaScript cannot compile is a usage error naming its number. Usage errors exit 2.
 
 ## Mutation checks: testing the tests

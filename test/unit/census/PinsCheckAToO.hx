@@ -26,7 +26,7 @@ final class PinsCheckAToO {
 		'unit.MutationArmsTest#testAKindedArmSpellsItsKindInTheAddress :: control :: M-ARM-KIND-UNSPELLED',
 		'unit.MutationArmsTest#testAMalformedFragmentListIsNamedByItsKeyAlone :: control :: M-ARM-ROW-OK',
 		'unit.MutationArmsTest#testAMismatchedPairCountIsRefused :: control :: M-ARM-ROW-OK',
-		'unit.MutationArmsTest#testAModulePathBecomesTheTwoCandidateFiles :: control :: M-ARM-PATH-FLAT',
+		'unit.MutationArmsTest#testAModulePathBecomesOneCandidateFilePerRoot :: control :: M-ARM-PATH-FLAT',
 		'unit.MutationArmsTest#testAMultiPairCutCarriesEveryFragment :: guard :: ',
 		'unit.MutationArmsTest#testANonJsonTableIsOneComplaint :: guard :: ',
 		'unit.MutationArmsTest#testAPairThatChangesNothingIsRefused :: control :: M-ARM-ROW-OK',
@@ -180,12 +180,21 @@ final class PinsCheckAToO {
 		'unit.check.DefaultRepeatedArgumentCheckTest#testUnresolvedNullSiteBlocks :: control :: M-DEFAULT-ARG-UNRESOLVED-NULL-IGNORED',
 		'unit.check.DocLengthCheckTest#testOnlyADocBlockIsMeasured :: control :: M-DOC-LENGTH-ANY-COMMENT',
 		'unit.check.DocLengthCheckTest#testTheDeclaredMaximumIsRead :: control :: M-DOC-LENGTH-CONFIG-BLIND',
+		'unit.check.DocMeasurementClaimCheckTest#testABoundAStandardOrAGluedNumberIsAContract :: control :: '
+			+ 'M-DOC-CLAIM-CENSUS-BOUND-BLIND',
+		'unit.check.DocMeasurementClaimCheckTest#testACensusCountIsAReadingAndADimensionIsNot :: control :: M-DOC-CLAIM-CENSUS-NOUN-ANY',
+		'unit.check.DocMeasurementClaimCheckTest#testACountQuotedAsCodeIsData :: control :: M-DOC-CLAIM-CENSUS-CODESPAN',
 		'unit.check.DocMeasurementClaimCheckTest#testANumericContractIsNotAReading :: control :: M-DOC-CLAIM-BARE-NUMBER',
 		'unit.check.DocMeasurementClaimCheckTest#testAPercentageShareIsAReadingAndTheRemainderOperatorIsNot :: control :: '
 			+ 'M-DOC-CLAIM-PERCENT-REMAINDER-BLIND',
 		'unit.check.DocMeasurementClaimCheckTest#testAPointerAtTheRecordIsNotTheRecord :: control :: M-DOC-CLAIM-REFERENCE-BLIND',
 		'unit.check.DocMeasurementClaimCheckTest#testAReadingInsideAStringLiteralIsData :: guard :: ',
+		'unit.check.DocMeasurementClaimCheckTest#testAShortWorkIdIsFlaggedAndATypeParameterIsNot :: control :: '
+			+ 'M-DOC-CLAIM-SHORT-ID-TYPE-BLIND',
+		'unit.check.DocMeasurementClaimCheckTest#testASmallCountIsTheSizeOfAFixture :: control :: M-DOC-CLAIM-CENSUS-FLOOR',
 		'unit.check.DocMeasurementClaimCheckTest#testAnArrowNeedsNumbersOnBothSides :: control :: M-DOC-CLAIM-ARROW-ANY',
+		'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbBesideQuotedCodeIsNotARecord :: control :: '
+			+ 'M-DOC-CLAIM-VERB-ANY-DIGIT',
 		'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbMidClauseNeedsANumberOnItsLine :: control :: '
 			+ 'M-DOC-CLAIM-VERB-UNGATED',
 		'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbOpeningAClauseIsAReading :: control :: M-DOC-CLAIM-CLAUSE-BLIND',

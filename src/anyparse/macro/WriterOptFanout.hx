@@ -21,8 +21,7 @@ import haxe.macro.Expr;
  * shares: `_copyOpt` is the record clone, and `_b` is the chain-root
  * argument that lets a composed chain of shims mutate the clone the
  * previous step already made instead of minting one per step. Both are
- * called from nowhere else — `chainBaseArg`'s 39 callers are exactly
- * the shims below.
+ * called from nowhere else — `chainBaseArg`'s callers are exactly the shims below.
  *
  * Split out of `WriterCodegen`, which kept the entry points, the
  * per-rule fields and the Doc / layout / comment helpers. Nothing here

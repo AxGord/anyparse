@@ -93,7 +93,7 @@ final class UncheckedConversions {
 
 	/**
 	 * Whether some build converts what lands at a typed place (see the type doc): one of the converting target, or one whose
-	 * facts do not say its target. Measured: putting an object at a `String` place — a `var`, an assignment, an
+	 * facts do not say its target. Putting an object at a `String` place — a `var`, an assignment, an
 	 * argument, a returned value, an unchecked cast, an element of an array literal or of an array copied into one of
 	 * strings, a field set by its name or through a catch-all — runs the object's `toString` on hxcpp and on no other
 	 * target (js and eval keep the object there).
