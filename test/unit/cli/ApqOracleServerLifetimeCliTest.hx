@@ -13,25 +13,39 @@ import unit.check.ProcessProbe;
  * a group kill left the pool's servers (their own process groups survive it, and so did they) and a SIGTERM or SIGKILL
  * of `apq` left the display server, a direct child no handler was left to reap.
  *
- * Every compile of the fixture sleeps, so a run lives long enough for its servers to be seen and killed mid-run.
+ * A compile a server runs holds until the fixture releases it, so a run cannot end before its servers were seen, however
+ * long the probe takes to look.
  */
 @:nullSafety(Strict)
 class ApqOracleServerLifetimeCliTest extends Test {
 
-	/** Seconds a run is given to start its first server. */
+	/** Seconds a run is given to reach its first server compile: bounds a hang, the held compile announces itself. */
 	private static inline final START_S: Float = 90;
 
-	/** Milliseconds the servers are given to end once the run was killed. */
-	private static inline final GONE_MS: Int = 5000;
+	/** Milliseconds the servers are given to end once the run was killed: bounds a hang, the wait ends when they do. */
+	private static inline final GONE_MS: Int = 30000;
+
+	/** The file a held server compile writes once it holds, in the fixture's directory. */
+	private static inline final HELD: String = 'held';
+
+	/** The file whose appearance lets a held server compile go on. */
+	private static inline final RELEASED: String = 'released';
 
 	#if nodejs
-	private static final MAIN: String =
-		'class Main {\n\tstatic function main() {\n\t\tvar a = [1, 2].map(x -> x + 1);\n\t\ttrace(a);\n\t}\n}\n';
+	/** `spare` draws a risky fix, whose verifying typecheck a pool run sends through its server. */
+	private static final MAIN: String = 'class Main {\n\tstatic function main() {\n\t\tvar a = [1, 2].map(x -> x + 1);\n\t\ttrace(a);\n'
+		+ '\t}\n\n\tpublic static function spare():Int {\n\t\treturn 1;\n\t}\n}\n';
 
-	/** Every compile sleeps a second; the facts compile (it alone defines `keep-inline-positions`) fails on `NO_FACTS`. */
-	private static final SLOW: String = 'class Slow {\n\tpublic static function run():Void {\n'
+	/**
+	 * The facts compile (it alone defines `keep-inline-positions`) fails on `NO_FACTS`. A compile a server runs — its
+	 * client forwards `--cwd` ahead of every other argument — writes `HELD` and waits for `RELEASED`, at most a bounded
+	 * while, so the server it runs in lives until the fixture has looked.
+	 */
+	private static final HOLD: String = 'class Hold {\n\tpublic static function run():Void {\n'
 		+ '\t\tif (haxe.macro.Context.defined("keep-inline-positions") && Sys.getEnv("NO_FACTS") == "1")\n'
-		+ '\t\t\thaxe.macro.Context.fatalError("no facts here", haxe.macro.Context.currentPos());\n' + '\t\tSys.sleep(1);\n\t}\n}\n';
+		+ '\t\t\thaxe.macro.Context.fatalError("no facts here", haxe.macro.Context.currentPos());\n\t\tif (Sys.args()[0] '
+		+ '!= "--cwd") return;\n\t\tsys.io.File.saveContent("$HELD", "");\n\t\tfinal until = Sys.time() + 300;\n'
+		+ '\t\twhile (!sys.FileSystem.exists("$RELEASED") && Sys.time() < until) Sys.sleep(0.05);\n\t}\n}\n';
 	#end
 
 	public function testThePoolDiesWithASigtermedRun(): Void {
@@ -57,8 +71,8 @@ class ApqOracleServerLifetimeCliTest extends Test {
 	}
 
 	/**
-	 * Start `apq lint --fix` on a fresh fixture for `server`, wait for its first `haxe --wait`, send `signal` to `apq` —
-	 * or to its whole process group when `group` — and assert every server the run had started ends.
+	 * Start `apq lint --fix` on a fresh fixture for `server`, wait until a server holds the fixture's compile, send
+	 * `signal` to `apq` — or to its whole process group when `group` — and assert every server the run had started ends.
 	 */
 	private static function assertNoSurvivor(server: ServerKind, signal: String, group: Bool): Void {
 		#if nodejs
@@ -66,8 +80,8 @@ class ApqOracleServerLifetimeCliTest extends Test {
 		if (engine == null) return;
 		final dir: String = CliFixture.writeDir('serverlifetime', [
 			{ name: 'Main.hx', source: MAIN },
-			{ name: 'Slow.hx', source: SLOW },
-			{ name: 'build.hxml', source: '-cp .\n-main Main\n--js out.js\n--macro Slow.run()\n' },
+			{ name: 'Hold.hx', source: HOLD },
+			{ name: 'build.hxml', source: '-cp .\n-main Main\n--js out.js\n--macro Hold.run()\n' },
 			{ name: 'apqlint.json', source: '{"compilerOracle": "build.hxml", "rules": {"explicit-local-type": {"enabled": true}}}' }
 		]);
 		final rules: Array<String> = server == Display ? ['--rule', 'explicit-local-type'] : [];
@@ -83,11 +97,8 @@ class ApqOracleServerLifetimeCliTest extends Test {
 		});
 		final pid: Int = run.pid;
 		final until: Float = Sys.time() + START_S;
-		var servers: Array<Int> = [];
-		while (servers.length == 0 && Sys.time() < until && ProcessProbe.alive(pid)) {
-			Sys.sleep(0.1);
-			servers = ProcessProbe.descendantsRunning(pid, 'haxe --wait');
-		}
+		while (!sys.FileSystem.exists('$dir/$HELD') && Sys.time() < until && ProcessProbe.alive(pid)) Sys.sleep(0.05);
+		final servers: Array<Int> = ProcessProbe.descendantsRunning(pid, 'haxe --wait');
 		Assert.isTrue(servers.length > 0, 'the run started a server before it ended');
 		try js.Node.process.kill(group ? -pid : pid, signal) catch (exception: haxe.Exception) { // noqa: swallowed-exception
 			// the run already ended: the servers are asked about all the same
@@ -96,6 +107,7 @@ class ApqOracleServerLifetimeCliTest extends Test {
 		Assert.equals(0, left.length, 'a server outlived its run (${group ? 'group ' : ''}$signal): $left');
 		ProcessProbe.killAll(left);
 		ProcessProbe.killAll([pid]);
+		sys.io.File.saveContent('$dir/$RELEASED', '');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('not a node target');
