@@ -30185,6 +30185,22 @@
 			"find": "if (text.indexOf('\\\\') >= 0) for (piece in ~/\\\\./g.split(text)) readings.push(piece);",
 			"replace": "",
 			"note": "a backslash never opens a string escape, so a private dotted path glued to a `\\t` in a quoted fixture passes the guard"
+		},
+		{
+			"name": "M-RETURN-SAME-WIDTH-BREAK",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodySameLayout",
+			"find": ": _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _gluedW);",
+			"replace": ": _difle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _gluedW);",
+			"note": "`same` asks whether the value's FLAT width fits instead of whether its natural glued first line does, so a value that can wrap after the `return` head is moved to the next line whole"
+		},
+		{
+			"name": "M-RETURN-SAME-MULTILINE-PROBED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodySameLayout",
+			"find": "anyparse.format.wrap.WrapList.flatLength(_bodyW) == -1",
+			"replace": "false",
+			"note": "`same` probes the first line of a value that already spans lines too, so a call whose lambda argument breaks is moved under the `return` and re-wrapped one level deeper"
 		}
 	]
 }

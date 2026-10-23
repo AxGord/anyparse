@@ -349,10 +349,17 @@ final class WriterBodyPolicyLowering {
 		final ifExprIndentArgs: Null<Array<String>> = opts.ifExprIndentArgs;
 		final bodyValueExpr: Expr = opts.bodyValueExpr;
 		if (opts.widthAware == true) {
+			// `same` keeps the value on the keyword line. Only a single-line value whose NATURAL glued
+			// first line still overflows, wrapped as it would render there, moves to the next line; a
+			// value that already spans lines wraps inside itself. A flat-width probe here would move
+			// every value that wraps after its head.
 			final flatBody: Expr = wrapIfExprNest(macro _bodyW, ifExprIndentArgs, bodyValueExpr);
 			return macro {
 				final _bodyW: anyparse.core.Doc = $writeCall;
-				_difle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _dc([$sameSepNb, $flatBody]));
+				final _gluedW: anyparse.core.Doc = _dc([$sameSepNb, $flatBody]);
+				anyparse.format.wrap.WrapList.flatLength(_bodyW) == -1
+					? _gluedW
+					: _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _gluedW);
 			};
 		}
 		final flatBody: Expr = wrapIfExprNest(writeCall, ifExprIndentArgs, bodyValueExpr);

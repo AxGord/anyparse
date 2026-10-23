@@ -9,6 +9,8 @@ import anyparse.grammar.haxe.HxModuleWriter;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * ω-return-body — `opt.returnBody:BodyPolicy` driving the separator
  * between `return` and its value expression at `HxStatement.ReturnStmt`.
@@ -37,6 +39,12 @@ import utest.Test;
  */
 @:nullSafety(Strict)
 class HxReturnBodySliceTest extends Test {
+
+	private static final SAME_CONFIG: String =
+		'{"wrapping": {"maxLineLength": 120}, "sameLine": {"returnBody": "same", "returnBodySingleLine": "same"}}';
+	private static final RETURN_CALL_SRC: String = 'class C {\n\tfunction f() {\n'
+		+ '\t\treturn LintDiff.compare(LintDiff.tally(LintDiff.parseReport(before), root, identities), '
+		+ 'LintDiff.tally(LintDiff.parseReport(after), root, identities));\n\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -136,6 +144,55 @@ class HxReturnBodySliceTest extends Test {
 	public function testConfigLoaderReturnBodySingleLineDefault(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(BodyPolicy.FitLine, opts.returnBodySingleLine);
+	}
+
+	/**
+	 * `same` keeps the value on the `return` line, so a value that can wrap does its wrapping
+	 * after the glued head rather than moving to the next line whole — the reading of
+	 * `sameLine.returnBody` / `returnBodySingleLine` the option documents.
+	 */
+	@:pin('control')
+	@:killer('M-RETURN-SAME-WIDTH-BREAK')
+	public function testSameKeepsAWrappableValueOnTheReturnLine(): Void {
+		final expected: String = 'class C {\n\tfunction f() {\n\t\treturn LintDiff.compare(LintDiff.tally(LintDiff.parseReport(before), '
+			+ 'root, identities),\n\t\t\tLintDiff.tally(LintDiff.parseReport(after), root, identities));\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(RETURN_CALL_SRC, SAME_CONFIG);
+		Assert.equals(expected, out);
+		Assert.equals(out, HxWriteFixture.triviaWrite(out, SAME_CONFIG));
+	}
+
+	/**
+	 * The other half of `same`: a value with no break opportunity of its own that overflows
+	 * glued still moves to the next line, which is what the fork does under the same key.
+	 */
+	@:pin('guard')
+	public function testSameStillBreaksAnOverWideValueThatCannotWrap(): Void {
+		final dashes: String = ''.lpad('-', 200);
+		final src: String = 'class C {\n\tfunction f():String {\n\t\treturn "$dashes";\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, SAME_CONFIG);
+		Assert.equals('class C {\n\tfunction f():String {\n\t\treturn\n\t\t\t"$dashes";\n\t}\n}', out);
+	}
+
+	/**
+	 * A value that already spans lines stays glued under `same` whatever its first line measures:
+	 * it wraps inside itself, and moving it down would only re-wrap it one level deeper.
+	 */
+	@:pin('control')
+	@:killer('M-RETURN-SAME-MULTILINE-PROBED')
+	public function testSameGluesAValueThatAlreadySpansLines(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n'
+			+ '\t\treturn fileSet(\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\', '
+			+ 'WIDGET, [\n\t\t\t{\n\t\t\t\tfile: \'B.hx\',\n'
+			+ '\t\t\t\tsource: \'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\'\n'
+			+ '\t\t\t\t+ \'cccccccccccccccccccccccccccccccccccccccccccccc\'\n\t\t\t}\n\t\t]);\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f() {\n'
+			+ '\t\treturn fileSet(\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\',\n'
+			+ '\t\t\tWIDGET,\n\t\t\t[\n\t\t\t\t{\n\t\t\t\t\tfile: \'B.hx\',\n'
+			+ '\t\t\t\t\tsource: \'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\'\n'
+			+ '\t\t\t\t\t\t+ \'cccccccccccccccccccccccccccccccccccccccccccccc\'\n\t\t\t\t}\n\t\t\t]);\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, SAME_CONFIG);
+		Assert.equals(expected, out);
+		Assert.equals(out, HxWriteFixture.triviaWrite(out, SAME_CONFIG));
 	}
 
 	private inline function writeWith(src: String, policy: BodyPolicy): String {

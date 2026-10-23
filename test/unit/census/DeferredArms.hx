@@ -274,7 +274,9 @@ final class DeferredArms {
 		'M-INDEX-HOST-PARENS-KEPT :: anyparse.query.NominalTypes#FinalMember:INDEX_HOST',
 		'M-MERMAID-ENCODE-DROPPED :: anyparse.macro.WriterLowering#lowerTerminal',
 		'M-MERMAID-INLINE-TAKES-PREFIX :: anyparse.grammar.mermaid.MmdSolidTextLit#MetaCall:@:re',
-		'M-MERMAID-DOTTED-TEXT-TAKES-DOTS :: anyparse.grammar.mermaid.MmdDottedTextLit#MetaCall:@:re'
+		'M-MERMAID-DOTTED-TEXT-TAKES-DOTS :: anyparse.grammar.mermaid.MmdDottedTextLit#MetaCall:@:re',
+		'M-RETURN-SAME-WIDTH-BREAK :: anyparse.macro.WriterBodyPolicyLowering#buildBodySameLayout',
+		'M-RETURN-SAME-MULTILINE-PROBED :: anyparse.macro.WriterBodyPolicyLowering#buildBodySameLayout'
 	];
 
 }
