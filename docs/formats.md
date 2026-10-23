@@ -155,6 +155,8 @@ Changing the format means changing one annotation and recompiling. `@:schema(Jso
 
 A by-name (`FieldLookup.ByName`) field is spelled in the document by its Haxe name unless it declares another with `@:key('<key>')` (`MetaInspect.wireKey`), which the generated parser and writer both honour — how a schema reads a key that is a Haxe keyword (`@:key('function') var member: String`) or no identifier at all (`@:key('full-name')`). The macro refuses a `@:key` that is not exactly one string, a key holding a quote, a backslash or a control character (the writer emits a key as written), and two fields spelled with one key.
 
+A by-name entry whose value is the format's `nullLiteral` reads as the key being absent (`StructSeqLowering.lowerStructByName`): an optional field stays `null`, a required one fails as missing under its key, and a field typed as the format's `anyType` keeps the literal as a value. A config writer that spells an unset key as `null` — haxe-formatter's `--default-config` does — therefore reads like one that omits it.
+
 ## Not shipping everything
 
 Shipped: `JsonFormat` (the reference `TextFormat`), `SExprFormat` (the `apq ast` output format), `HaxeFormat` (the Haxe grammar's, with its write options), `ArFormat` (`BinaryFormat`, with the `ar` archive grammar under `anyparse.grammar.ar`), and `MermaidFormat` (the Mermaid flowchart grammar under `anyparse.grammar.mermaid`, a line-oriented DSL whose labels decode through a codec rather than an escape table). The other families are interface-only stubs. Real format implementations for XML, YAML, TOML, MessagePack, CBOR, etc. come later, driven by the phase roadmap and real needs.

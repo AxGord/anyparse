@@ -790,6 +790,26 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.equals(defaults.indentSize, opts.indentSize);
 	}
 
+	/**
+	 * The fork's own `--default-config` writes `null` for the keys it leaves to a fallback; such a
+	 * config loads exactly as one that omits them, the sibling keys still applied.
+	 */
+	@:pin('control') @:killer('M-BYNAME-NULL-ABSENT')
+	public function testANullKeyLoadsAsAnAbsentOne(): Void {
+		final withNulls: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"lineEnds": {"leftCurly": "both", "blockCurly": null}, "whitespace": {"parenConfig": {"catchParens": null, "callParens": {'
+			+ '"openingPolicy": "before"}}}}'
+		);
+		final without: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"lineEnds": {"leftCurly": "both"}, "whitespace": {"parenConfig": {"callParens": {"openingPolicy": "before"}}}}'
+		);
+		Assert.equals(without.leftCurly, withNulls.leftCurly);
+		Assert.equals(without.blockLeftCurly, withNulls.blockLeftCurly);
+		Assert.equals(without.catchParensGap, withNulls.catchParensGap);
+		Assert.equals(without.callParens, withNulls.callParens);
+		Assert.notEquals(HaxeFormat.instance.defaultWriteOptions.callParens, withNulls.callParens);
+	}
+
 	private function assertWriteContains(src: String, opts: HxModuleWriteOptions, needle: String, message: String): Void {
 		opts.finalNewline = false;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);

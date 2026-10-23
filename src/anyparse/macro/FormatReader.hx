@@ -86,6 +86,12 @@ typedef FormatInfo = {
 	anyType: Null<String>,
 
 	/**
+	 * The format's null literal (`null` in JSON), or null when it has none. A ByName mapping
+	 * entry whose value is this literal reads as the key being absent.
+	 */
+	nullLiteral: Null<String>,
+
+	/**
 	 * Star struct field open-delimiters that take a leading space from
 	 * the preceding token. Everything not listed stays tight against
 	 * the previous field — so `main()` / `a[0]` / `new Foo(x)` work by
@@ -386,6 +392,7 @@ class FormatReader {
 			boolType: null,
 			stringType: null,
 			anyType: null,
+			nullLiteral: null,
 			spacedLeads: [],
 			tightLeads: [],
 			commentPatterns: []
@@ -413,6 +420,7 @@ class FormatReader {
 			boolType: readStringFieldOpt(cl, 'boolType'),
 			stringType: readStringFieldOpt(cl, 'stringType'),
 			anyType: readStringFieldOpt(cl, 'anyType'),
+			nullLiteral: readStringFieldOpt(cl, 'nullLiteral'),
 			spacedLeads: readStringArrayField(cl, 'spacedLeads'),
 			tightLeads: readStringArrayField(cl, 'tightLeads'),
 			commentPatterns: readCommentPatterns(cl)

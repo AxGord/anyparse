@@ -30209,6 +30209,14 @@
 			"find": "var _i: Int = r.rules.length;",
 			"replace": "final _dl: Null<anyparse.format.wrap.WrappingLocation> = r.defaultLocation; if (_dl != null) return _dl; var _i: Int = r.rules.length;",
 			"note": "the condition-wrap override reads the section's `defaultLocation` before any rule's own `location`, so an explicit default flips the operator side the matching rule asks for"
+		},
+		{
+			"name": "M-BYNAME-NULL-ABSENT",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "lowerStructByName",
+			"find": "final nullAware: Bool = nullLiteral != null && refName != sc.formatInfo.anyType;",
+			"replace": "final nullAware: Bool = false;",
+			"note": "a ByName field stops reading the format's null literal as an absent key, so a config the fork itself writes fails to parse on every file"
 		}
 	]
 }
