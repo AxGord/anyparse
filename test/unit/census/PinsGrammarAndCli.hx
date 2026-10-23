@@ -452,8 +452,11 @@ final class PinsGrammarAndCli {
 			+ 'M-REST-GROUP-FRAME-INEXACT,M-REST-GROUP-NODE-INEXACT',
 		'unit.grammar.haxe.HxRestProbeSelfBreakSliceTest#testParameterHintBeforeABodyIsUnchanged :: guard :: ',
 		'unit.grammar.haxe.HxRestProbeSelfBreakSliceTest#testTheFlatHintIsAFixedPoint :: control :: M-RESTPROBE-COLUMN-GUESS',
-		'unit.grammar.haxe.HxReturnBodySliceTest#testSameGluesAValueThatAlreadySpansLines :: control :: M-RETURN-SAME-MULTILINE-PROBED',
+		'unit.grammar.haxe.HxReturnBodySliceTest#testSameKeepsAControlFlowValueOnTheReturnLine :: control :: '
+			+ 'M-RETURN-SAME-MULTILINE-PROBED',
 		'unit.grammar.haxe.HxReturnBodySliceTest#testSameKeepsAWrappableValueOnTheReturnLine :: control :: M-RETURN-SAME-WIDTH-BREAK',
+		'unit.grammar.haxe.HxReturnBodySliceTest#testSamePlacesTheValueAlikeForEitherObjectSpelling :: control :: '
+			+ 'M-RETURN-SAME-EXEMPTS-BY-DOC',
 		'unit.grammar.haxe.HxReturnBodySliceTest#testSameStillBreaksAnOverWideValueThatCannotWrap :: guard :: ',
 		'unit.grammar.haxe.HxSameLineOptionsTest#testStatementBareTryBreaksByDefault :: control :: M-BLOCK-SHAPE-EQUIV-NONE',
 		'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenIfGetsBracesAdded :: control :: M-SSB-WRAP-DIRECTION',

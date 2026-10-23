@@ -30247,9 +30247,17 @@
 			"name": "M-RETURN-SAME-MULTILINE-PROBED",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "buildBodySameLayout",
-			"find": "anyparse.format.wrap.WrapList.flatLength(_bodyW) == -1",
-			"replace": "false",
-			"note": "`same` probes the first line of a value that already spans lines too, so a call whose lambda argument breaks is moved under the `return` and re-wrapped one level deeper"
+			"find": "$isBlockValue ? _gluedW : _dinfler(",
+			"replace": "_dinfler(",
+			"note": "`same` probes the first line of a control-flow value too, so `if (…) return switch x {` is moved under the `return` instead of keeping the switch head on the return line"
+		},
+		{
+			"name": "M-RETURN-SAME-EXEMPTS-BY-DOC",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodySameLayout",
+			"find": "$isBlockValue ? _gluedW :",
+			"replace": "anyparse.format.wrap.WrapList.flatLength(_bodyW) == -1 ? _gluedW :",
+			"note": "`same` exempts any value whose Doc spans lines instead of a control-flow ctor, so an object literal's kept source break decides whether the call moves under `return`"
 		},
 		{
 			"name": "M-BYNAME-NULL-ABSENT",

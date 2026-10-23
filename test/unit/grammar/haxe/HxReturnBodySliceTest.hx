@@ -174,25 +174,51 @@ class HxReturnBodySliceTest extends Test {
 	}
 
 	/**
-	 * A value that already spans lines stays glued under `same` whatever its first line measures:
-	 * it wraps inside itself, and moving it down would only re-wrap it one level deeper.
+	 * A control-flow value (`switch`, `if`, a block…) stays on the `return` line under `same` whatever
+	 * its head measures: it is told apart by its ctor, so no kept source break can move it.
 	 */
 	@:pin('control')
 	@:killer('M-RETURN-SAME-MULTILINE-PROBED')
-	public function testSameGluesAValueThatAlreadySpansLines(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\treturn fileSet(\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\', '
-			+ 'WIDGET, [\n\t\t\t{\n\t\t\t\tfile: \'B.hx\',\n'
-			+ '\t\t\t\tsource: \'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\'\n'
-			+ '\t\t\t\t+ \'cccccccccccccccccccccccccccccccccccccccccccccc\'\n\t\t\t}\n\t\t]);\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\treturn fileSet(\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\',\n'
-			+ '\t\t\tWIDGET,\n\t\t\t[\n\t\t\t\t{\n\t\t\t\t\tfile: \'B.hx\',\n'
-			+ '\t\t\t\t\tsource: \'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\'\n'
-			+ '\t\t\t\t\t\t+ \'cccccccccccccccccccccccccccccccccccccccccccccc\'\n\t\t\t\t}\n\t\t\t]);\n\t}\n}';
-		final out: String = HxWriteFixture.triviaWrite(src, SAME_CONFIG);
-		Assert.equals(expected, out);
-		Assert.equals(out, HxWriteFixture.triviaWrite(out, SAME_CONFIG));
+	public function testSameKeepsAControlFlowValueOnTheReturnLine(): Void {
+		final config: String = '{"wrapping": {"maxLineLength": 140, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", '
+			+ '"rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": '
+			+ '{"returnBody": "same", "returnBodySingleLine": "same", "ifBody": "fitLine"}}';
+		final out: String = HxWriteFixture.triviaWrite(
+			'class C {\n\tfunction f() {\n\t\tif (inner != declared && ~/\\s+/g.replace(typed, \'\') == ~/\\s+/g.replace(inner, \'\') '
+			+ '&& !cores.contains(given)) return switch nullableValue(inner, file, c) {\n\t\t\tcase true: typed;\n'
+			+ '\t\t\tcase false: declared;\n\t\t\tcase null: null;\n\t\t};\n\t}\n}',
+			config
+		);
+		Assert.equals(
+			'class C {\n\tfunction f() {\n\t\tif (\n\t\t\tinner != declared && ~/\\s+/g.replace(typed, \'\') '
+			+ '== ~/\\s+/g.replace(inner, \'\') && !cores.contains(given)\n\t\t) return switch nullableValue(inner, file, c) {\n'
+			+ '\t\t\tcase true: typed;\n\t\t\tcase false: declared;\n\t\t\tcase null: null;\n\t\t};\n\t}\n}',
+			out
+		);
+		Assert.equals(out, HxWriteFixture.triviaWrite(out, config));
+	}
+
+	/**
+	 * Whether the value moves under `return` is decided by the AST, not by a source break the writer
+	 * keeps: an object literal written on one line or across three gives the same placement.
+	 */
+	@:pin('control')
+	@:killer('M-RETURN-SAME-EXEMPTS-BY-DOC')
+	public function testSamePlacesTheValueAlikeForEitherObjectSpelling(): Void {
+		final oneLine: String = HxWriteFixture.triviaWrite(
+			'class C {\n\tfunction f() {\n\t\treturn '
+			+ 'someFunctionCall(\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\', {'
+			+ 'a: 1, b: 2});\n\t}\n}',
+			SAME_CONFIG
+		);
+		final threeLines: String = HxWriteFixture.triviaWrite(
+			'class C {\n\tfunction f() {\n\t\treturn '
+			+ 'someFunctionCall(\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\', {'
+			+ '\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t});\n\t}\n}',
+			SAME_CONFIG
+		);
+		Assert.stringContains('\t\treturn\n\t\t\tsomeFunctionCall(', oneLine);
+		Assert.stringContains('\t\treturn\n\t\t\tsomeFunctionCall(', threeLines);
 	}
 
 	private inline function writeWith(src: String, policy: BodyPolicy): String {
