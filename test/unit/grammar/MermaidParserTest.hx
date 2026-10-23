@@ -173,7 +173,7 @@ class MermaidParserTest extends Test {
 	}
 
 	/** A label that renders as literal text, markup, a backtick or an unnamed code is written back so it renders the same. */
-	@:killer('M-MERMAID-PLAIN-LT-RAW', 'M-MERMAID-PLAIN-AMP-RAW', 'M-MERMAID-TICK-UNESCAPED', 'M-MERMAID-CODEPOINT-UNBOUNDED')
+	@:killer('M-MERMAID-PLAIN-LT-RAW', 'M-MERMAID-PLAIN-AMP-RAW', 'M-MERMAID-TICK-UNESCAPED')
 	@:pin('control')
 	public function testWritingKeepsWhatALabelRenders(): Void {
 		for (line in [

@@ -113,7 +113,7 @@ final class PinsGrammarAndCli {
 		'unit.grammar.MermaidParserTest#testAnUndirectedHeaderEndsItsLine :: guard :: ',
 		'unit.grammar.MermaidParserTest#testAnyLabelRoundTripsThroughTheWriter :: control :: M-MERMAID-ENCODE-DROPPED',
 		'unit.grammar.MermaidParserTest#testWritingKeepsWhatALabelRenders :: control :: '
-			+ 'M-MERMAID-PLAIN-LT-RAW,M-MERMAID-PLAIN-AMP-RAW,M-MERMAID-TICK-UNESCAPED,M-MERMAID-CODEPOINT-UNBOUNDED',
+			+ 'M-MERMAID-PLAIN-LT-RAW,M-MERMAID-PLAIN-AMP-RAW,M-MERMAID-TICK-UNESCAPED',
 		'unit.grammar.MermaidTextTest#testAnInvalidNumericCodeStaysAsWritten :: control :: M-MERMAID-CODEPOINT-UNBOUNDED',
 		'unit.grammar.MermaidTextTest#testPlainBackticksNeverOpenMarkdown :: control :: M-MERMAID-TICK-UNESCAPED',
 		'unit.grammar.MermaidTextTest#testPlainMarkupCharactersAreEscaped :: control :: M-MERMAID-PLAIN-LT-RAW,M-MERMAID-PLAIN-AMP-RAW',
