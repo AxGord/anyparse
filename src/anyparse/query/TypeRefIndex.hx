@@ -266,7 +266,7 @@ final class TypeRefIndex {
 	 * subtype relation, so it is the caller's to give. Going DOWN (`subtypesOf`) the answer is a veto —
 	 * offering both branch targets makes MORE types answer "something subtypes me", which is the
 	 * withholding direction, and dropping either is what compile-proved a deleted private constructor.
-	 * Going UP (`closureContains`) the answer is read AFFIRMATIVELY by two autofixes that DELETE —
+	 * Going UP (`SupertypeWalk`, for a link nothing resolves) the answer is read AFFIRMATIVELY by two autofixes that DELETE —
 	 * `unreachable-catch` removes a clause, `redundant-upcast` removes a cast — and offering both makes one
 	 * type a subtype of two modules no single build agrees on: `#if cpp import pkg.A as U; #else import
 	 * pkg.Bee as U; #end class Both extends U` reports the `catch (e:Both)` after `catch (e:A)` AND the one

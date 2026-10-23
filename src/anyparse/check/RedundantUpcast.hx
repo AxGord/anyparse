@@ -4,6 +4,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Flags a runtime-checked cast `cast(x, T)` that is a redundant UPCAST — `x`'s declared
  * type `S` is a (transitive) subtype of `T`, so the runtime type test always passes and
@@ -23,8 +25,8 @@ import anyparse.runtime.Span;
  * Conservative: flags only when the operand is a plain identifier whose declared type is a
  * proven strict subtype of the target. Only the runtime `cast(x, T)` form
  * (`RefShape.checkedCastKind`) is inspected — the compile-time `(x : T)` ascription is a
- * different node. A non-identifier operand, a generic / `Null<…>` / `Dynamic` type, an
- * unindexed supertype link, or a same / unrelated type is a safe miss (the same-type and
+ * different node. A non-identifier operand, a generic / `Null<…>` / `Dynamic` type, an unindexed supertype link, a
+ * target or a link another package's namesake shares, or a same / unrelated type is a safe miss (the same-type and
  * unrelated cases belong to `redundant-cast` / `impossible-cast`). Macro-reification
  * subtrees (`RefShape.opaqueKinds`) are not descended into.
  *
@@ -54,16 +56,23 @@ final class RedundantUpcast implements Check {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final castTargets: Map<Int, String> = typed.castTargetSources(entry.source);
+			final declaredSources: Map<Int, String> = typed.declaredTypeSources(entry.source);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
 				if (node.kind == kind && node.children.length == 1) {
 					final span: Null<Span> = node.span;
 					if (span != null) {
-						final sName: Null<String> = TypeResolver.simpleNominalName(
-							TypeResolver.identTypeName(node.children[0], root, shape, declaredTypes)
-						);
-						final tName: Null<String> = TypeResolver.simpleNominalName(TypeResolver.castTargetWithin(span, castTargets));
-						if (sName != null && tName != null && index.subtypes.isSubtype(sName, tName)) violations.push({
+						final binding: Null<Int> = TypeResolver.identBindingFrom(node.children[0], root, shape);
+						final sName: Null<String> = binding == null ? null : TypeResolver.simpleNominalName(declaredTypes[binding]);
+						final sSource: Null<String> = binding == null ? null : declaredSources[binding];
+						final tSource: Null<String> = TypeResolver.castTargetWithin(span, castTargets);
+						final tName: Null<String> = TypeResolver.simpleNominalName(tSource);
+						// Both types resolve in this file: a namesake in the operand's chain proves nothing, and neither does an operand
+						// type sharing a project subtype's name.
+						if (
+							sName != null && tName != null && sSource != null && tSource != null
+							&& index.subtypes.isSubtype(sSource.trim(), tSource.trim(), entry.file, span.from, entry.file, binding)
+						) violations.push({
 							file: entry.file,
 							span: span,
 							rule: 'redundant-upcast',

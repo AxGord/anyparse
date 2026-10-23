@@ -87,10 +87,11 @@ class LintFixFixedPointCliTest extends Test {
 		// A non-confined private field `shape` (missing its `_`), read by a subclass, renames in
 		// BOTH files in one `lint --fix` invocation via naming's cross-file fix. C is unconfined
 		// (subtype D reads `shape`), so the single-file rename would refuse it; the cross-file
-		// rename rewrites C's declaration AND D's inherited read atomically.
-		final c: String =
-			'package p;\n\nclass C {\n\tprivate var shape:Int = 0;\n\n\tpublic function f():Int {\n\t\treturn this.shape;\n\t}\n}\n';
-		final d: String = 'package p;\n\nclass D extends C {\n\tpublic function g():Int {\n\t\treturn shape;\n\t}\n}\n';
+		// rename rewrites C's declaration AND D's inherited read atomically. Both sit in the root package their flat
+		// directory is a class path of: a `package p;` there leaves the source root, and with it the ambient import chain,
+		// unbounded, so `D extends C` would resolve to nothing and the subtype stay unproven.
+		final c: String = 'class C {\n\tprivate var shape:Int = 0;\n\n\tpublic function f():Int {\n\t\treturn this.shape;\n\t}\n}\n';
+		final d: String = 'class D extends C {\n\tpublic function g():Int {\n\t\treturn shape;\n\t}\n}\n';
 		final dir: String = CliFixture.writeDir('fixcrossnaming', [{ name: 'C.hx', source: c }, { name: 'D.hx', source: d }]);
 		Assert.equals(0, Cli.run(['lint', '--fix', dir]), 'lint --fix exits ok');
 		final outC: String = File.getContent('$dir/C.hx');

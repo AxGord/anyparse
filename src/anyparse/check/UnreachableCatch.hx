@@ -26,9 +26,10 @@ using StringTools;
  *
  * Conservative: the exception type is recovered from the clause header source between the
  * first `:` and the closing `)` (bounded by the handler block's span); a non-nominal type
- * (generic / function / anon) yields no simple name and is a safe miss. The subtype check
- * is simple-name based — an unindexed supertype link ends the chain (safe miss), and a
- * same-named unrelated type is the residual soundness boundary (as in `impossible-is-check`).
+ * (generic / function / anon) yields no simple name and is a safe miss. The subtype check resolves
+ * the earlier type where it is written and every supertype link where IT is written — an
+ * unresolvable link or an ambiguous name is a safe miss, and a namesake on either
+ * side — another package's, or a std type sharing a project type's name — is no cover.
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
  *
  * `fix` deletes the dead clause (unreachable => dead code); an alternative repair (fixing
@@ -113,7 +114,12 @@ final class UnreachableCatch implements Check {
 				if (earlierRaw == null || laterRaw == null) continue;
 				final earlierSimple: Null<String> = simples[j];
 				final duplicate: Bool = TypeResolver.sameTypeSource(laterRaw, earlierRaw, importMap);
-				final subtype: Bool = laterSimple != null && earlierSimple != null && index.subtypes.isSubtype(laterSimple, earlierSimple);
+				// Both types are resolved where the clauses write them, so neither a namesake in the later type's chain nor a later type
+				// sharing a project subtype's name (the std `haxe.io.Eof` beside a project `Eof`) is covered.
+				final subtype: Bool = laterSimple != null && earlierSimple != null
+					&& index.subtypes.isSubtype(
+						laterRaw.trim(), earlierRaw.trim(), entry.file, clauses[j].span?.from, entry.file, clauses[i].span?.from
+					);
 				if (!duplicate && !subtype) continue;
 				covered = earlierRaw;
 				break;
