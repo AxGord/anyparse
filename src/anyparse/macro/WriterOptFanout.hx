@@ -1241,7 +1241,7 @@ final class WriterOptFanout {
 	 * ω-chain-fillline-in-condwrap — opt-fanout shim for the
 	 * `@:fmt(condWrap('<knob>'))` site. Forces `BinaryChainEmit.emit`'s
 	 * cascade to a single mode by swapping `opBoolChainWrap` and
-	 * `opAddSubChainWrap` to `{rules: [], defaultMode: mode}` — the
+	 * `opAddSubChainWrap` for `_overrideChainMode`'s copy, every rule's mode forced to `mode` — the
 	 * chain dispatch reads those fields by name and sees the override
 	 * transparently, no `BinaryChainEmit` signature change. Idempotent:
 	 * returns `o` unchanged when `mode == null` (no allocation on the
@@ -1272,22 +1272,15 @@ final class WriterOptFanout {
 					// Read every `o` field BEFORE the clone line: on the fusion
 					// path `_c` and `o` are the SAME record, so a read after a
 					// write would see the new value.
-					final _boolLoc: anyparse.format.wrap.WrappingLocation = _resolveChainLoc(o.opBoolChainWrap);
-					final _addSubLoc: anyparse.format.wrap.WrappingLocation = _resolveChainLoc(o.opAddSubChainWrap);
+					final _bool: anyparse.format.wrap.WrapRules = _overrideChainMode(o.opBoolChainWrap, _mode);
+					final _addSub: anyparse.format.wrap.WrapRules = _overrideChainMode(o.opAddSubChainWrap, _mode);
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._chainModeOverride = _mode;
-					// Mode override forces chain layout to the cond-wrap
-					// mode (mirrors fork's `collapseChainWraps` post-pass),
-					// but operator-placement preference must follow the
-					// user-configured opBoolChain location — fork preserves
-					// the original `location` even after collapse. Resolve
-					// per source: last rule's `location` (cascade fallback
-					// rule) → `defaultLocation` → `BeforeLast`. The default
-					// `BeforeLast` mirrors haxe-formatter's idiomatic default
-					// (`\n&& X`) for unconfigured opBoolChain; was hardcoded
-					// before priority_over_opbool exposed the gap.
-					_c.opBoolChainWrap = { rules: [], defaultMode: _mode, defaultLocation: _boolLoc };
-					_c.opAddSubChainWrap = { rules: [], defaultMode: _mode, defaultLocation: _addSubLoc };
+					// Mode override forces chain layout to the cond-wrap mode (the fork's
+					// `collapseChainWraps` post-pass); the operator side stays the one the
+					// chain's own matched rule gives it (`_overrideChainMode`).
+					_c.opBoolChainWrap = _bool;
+					_c.opAddSubChainWrap = _addSub;
 					return _c;
 				}
 			}),
@@ -1296,30 +1289,37 @@ final class WriterOptFanout {
 	}
 
 	/**
-	 * Picks the effective `defaultLocation` to install on the override
-	 * cascade. Resolution: last rule's `location` (catch-all fallback
-	 * rule) → `r.defaultLocation` → `WrappingLocation.BeforeLast` — a rule's
-	 * own location wins over the section default, as it does in
-	 * `WrapList.decideRuleWithLineLengthState` outside a condition.
+	 * The cascade a condition wrap installs on a chain: the rules kept with their conditions and
+	 * `location`, only the MODE forced to `mode`, so the rule that matches still places the
+	 * operator and `defaultLocation` still answers only when none does — haxe-formatter's
+	 * `collapseChainWraps` collapses the breaks, never the rule it chose. The wrap fires only on an
+	 * overflowing line, so `exceedsMaxLineLength` is settled here as true: a rule that wants the
+	 * line to fit drops out, the condition that wants it to overflow is met.
 	 *
-	 * Sister to `setChainModeOverrideField` — emitted whenever that helper
-	 * is emitted so the override path can preserve user-configured
-	 * operator placement instead of the prior hardcoded `BeforeLast`.
+	 * Sister to `setChainModeOverrideField`, emitted whenever that helper is.
 	 */
-	private static function resolveChainLocField(): Field {
+	private static function overrideChainModeField(): Field {
 		return {
-			name: '_resolveChainLoc',
+			name: '_overrideChainMode',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{ name: 'r', type: macro :anyparse.format.wrap.WrapRules }],
-				ret: macro :anyparse.format.wrap.WrappingLocation,
+				args: [
+					{ name: 'r', type: macro :anyparse.format.wrap.WrapRules },
+					{ name: 'mode', type: macro :anyparse.format.wrap.WrapMode }
+				],
+				ret: macro :anyparse.format.wrap.WrapRules,
 				expr: macro {
-					var _i: Int = r.rules.length;
-					while (--_i >= 0) {
-						final _loc: Null<anyparse.format.wrap.WrappingLocation> = r.rules[_i].location;
-						if (_loc != null) return _loc;
+					final _rules: Array<anyparse.format.wrap.WrapRule> = [];
+					for (_r in r.rules) {
+						var _wantsFit: Bool = false;
+						final _conds: Array<anyparse.format.wrap.WrapCondition> = [];
+						for (_c in _r.conditions) if (_c.cond == anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength)
+							_wantsFit = _wantsFit || _c.value == 0;
+						else
+							_conds.push(_c);
+						if (!_wantsFit) _rules.push({ conditions: _conds, mode: mode, location: _r.location });
 					}
-					return r.defaultLocation ?? anyparse.format.wrap.WrappingLocation.BeforeLast;
+					return { rules: _rules, defaultMode: mode, defaultLocation: r.defaultLocation };
 				}
 			}),
 			pos: Context.currentPos()
@@ -1427,8 +1427,8 @@ final class WriterOptFanout {
 		// ω-chain-fillline-in-condwrap: opt-fanout helper for
 		// `@:fmt(condWrap)` site. Forces `BinaryChainEmit.emit`'s
 		// cascade to a single mode by swapping `opBoolChainWrap` /
-		// `opAddSubChainWrap` to a degenerate `{rules: [],
-		// defaultMode: mode}` cascade. Sister to `_setAnonFnBody` —
+		// `opAddSubChainWrap` for a copy whose every rule takes that
+		// mode (`_overrideChainMode`). Sister to `_setAnonFnBody` —
 		// idempotent, null-mode short-circuit avoids allocation on
 		// the default path. Emitted only when the opt typedef
 		// declares `_chainModeOverride:Null<WrapMode>` AND carries
@@ -1438,7 +1438,7 @@ final class WriterOptFanout {
 			&& optionsHasField(optionsTypePath, 'opAddSubChainWrap')
 		) {
 			fields.push(setChainModeOverrideField(optionsCT));
-			fields.push(resolveChainLocField());
+			fields.push(overrideChainModeField());
 		}
 		// ω-callarg-chain-nest: opt-fanout helper pair for the
 		// `@:fmt(callArgChainNest)` opt-in on a call-arg Star (currently

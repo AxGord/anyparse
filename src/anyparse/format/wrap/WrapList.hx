@@ -699,9 +699,9 @@ class WrapList {
 	 * predicate so the threshold answer can route through the renderer's
 	 * column-aware `IfWidthExceeds` probe at layout time.
 	 *
-	 * Location resolution: `rule.location ?? rules.defaultLocation ??
-	 * WrappingLocation.AfterLast` — mirrors haxe-formatter's `WrapRules.defaultLocation`
-	 * typedef default.
+	 * Location resolution: the MATCHED rule's `location`, `AfterLast` when it names
+	 * none; `rules.defaultLocation ?? AfterLast` only when no rule matches — haxe-formatter's
+	 * `@:default(AfterLast)` on both `WrapRule.location` and `WrapRules.defaultLocation`.
 	 *
 	 * Used by `BinaryChainEmit.emit` to enumerate cascade outcomes
 	 * across (exceeds, lineLength-firing) state combinations.
@@ -717,7 +717,7 @@ class WrapList {
 				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount,
 				minItemLen, equalItemLengths, hasContainerItems, hasMultilineLambdaItems
 			))
-				return { mode: rule.mode, location: rule.location ?? fallback };
+				return { mode: rule.mode, location: rule.location ?? WrappingLocation.AfterLast };
 		}
 		return { mode: rules.defaultMode, location: fallback };
 	}

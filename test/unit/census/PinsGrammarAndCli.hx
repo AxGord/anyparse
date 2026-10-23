@@ -287,8 +287,15 @@ final class PinsGrammarAndCli {
 		'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testOpenerCloserPairKeepsOpenerACondSpliceStmt :: control :: '
 			+ 'M-COND-BLOCK-TAIL-NEVER',
 		'unit.grammar.haxe.HxCondWrapChainLocationTest#testADefaultLocationStillPlacesARulelessCascade :: guard :: ',
-		'unit.grammar.haxe.HxCondWrapChainLocationTest#testARuleLocationWinsOverTheDefaultLocation :: control :: M-CHAIN-LOC-DEFAULT-FIRST',
-		'unit.grammar.haxe.HxCondWrapChainLocationTest#testWithoutADefaultLocationTheRuleLocationHolds :: guard :: ',
+		'unit.grammar.haxe.HxCondWrapChainLocationTest#testAMatchedRuleWithoutALocationIgnoresTheDefaultLocation :: control :: '
+			+ 'M-RULE-LOCATION-FALLS-TO-DEFAULT',
+		'unit.grammar.haxe.HxCondWrapChainLocationTest#testAMatchedRuleWithoutALocationIsAfterLast :: control :: '
+			+ 'M-CHAIN-OVERRIDE-DROPS-CONDITIONS',
+		'unit.grammar.haxe.HxCondWrapChainLocationTest#testAWrappedConditionJudgesItsChainsAsOverflowing :: control :: '
+			+ 'M-CHAIN-OVERRIDE-REJUDGES-EXCEEDS',
+		'unit.grammar.haxe.HxCondWrapChainLocationTest#testAnUnmatchedLocatedRuleLeavesTheDefaultLocation :: control :: '
+			+ 'M-CHAIN-OVERRIDE-DROPS-CONDITIONS',
+		'unit.grammar.haxe.HxCondWrapChainLocationTest#testTheMatchedRuleLocationWins :: control :: M-CHAIN-OVERRIDE-DROPS-RULES',
 		'unit.grammar.haxe.HxConditionalExprFitSliceTest#testOverwideGluedBreaksAtDirectiveSeams :: control :: M-NEWLINE-SIGNALS-NONE',
 		'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testMandatoryLeadKeepsTheComment :: control :: '
 			+ 'M-BEFORE-LEAD-MANDATORY-NONE,M-BEFORE-LEAD-WRITER-MANDATORY-NONE',
