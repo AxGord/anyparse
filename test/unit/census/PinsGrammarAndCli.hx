@@ -284,6 +284,9 @@ final class PinsGrammarAndCli {
 			+ 'M-COND-BLOCK-TAIL-NEVER',
 		'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testOpenerCloserPairKeepsOpenerACondSpliceStmt :: control :: '
 			+ 'M-COND-BLOCK-TAIL-NEVER',
+		'unit.grammar.haxe.HxCondWrapChainLocationTest#testADefaultLocationStillPlacesARulelessCascade :: guard :: ',
+		'unit.grammar.haxe.HxCondWrapChainLocationTest#testARuleLocationWinsOverTheDefaultLocation :: control :: M-CHAIN-LOC-DEFAULT-FIRST',
+		'unit.grammar.haxe.HxCondWrapChainLocationTest#testWithoutADefaultLocationTheRuleLocationHolds :: guard :: ',
 		'unit.grammar.haxe.HxConditionalExprFitSliceTest#testOverwideGluedBreaksAtDirectiveSeams :: control :: M-NEWLINE-SIGNALS-NONE',
 		'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testMandatoryLeadKeepsTheComment :: control :: '
 			+ 'M-BEFORE-LEAD-MANDATORY-NONE,M-BEFORE-LEAD-WRITER-MANDATORY-NONE',

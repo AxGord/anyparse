@@ -1281,8 +1281,8 @@ final class WriterOptFanout {
 					// but operator-placement preference must follow the
 					// user-configured opBoolChain location — fork preserves
 					// the original `location` even after collapse. Resolve
-					// per source: `defaultLocation` → last rule's `location`
-					// (cascade fallback rule) → `BeforeLast`. The default
+					// per source: last rule's `location` (cascade fallback
+					// rule) → `defaultLocation` → `BeforeLast`. The default
 					// `BeforeLast` mirrors haxe-formatter's idiomatic default
 					// (`\n&& X`) for unconfigured opBoolChain; was hardcoded
 					// before priority_over_opbool exposed the gap.
@@ -1297,8 +1297,10 @@ final class WriterOptFanout {
 
 	/**
 	 * Picks the effective `defaultLocation` to install on the override
-	 * cascade. Resolution: `r.defaultLocation` → last rule's `location`
-	 * (catch-all fallback rule) → `WrappingLocation.BeforeLast`.
+	 * cascade. Resolution: last rule's `location` (catch-all fallback
+	 * rule) → `r.defaultLocation` → `WrappingLocation.BeforeLast` — a rule's
+	 * own location wins over the section default, as it does in
+	 * `WrapList.decideRuleWithLineLengthState` outside a condition.
 	 *
 	 * Sister to `setChainModeOverrideField` — emitted whenever that helper
 	 * is emitted so the override path can preserve user-configured
@@ -1312,14 +1314,12 @@ final class WriterOptFanout {
 				args: [{ name: 'r', type: macro :anyparse.format.wrap.WrapRules }],
 				ret: macro :anyparse.format.wrap.WrappingLocation,
 				expr: macro {
-					final _dl: Null<anyparse.format.wrap.WrappingLocation> = r.defaultLocation;
-					if (_dl != null) return _dl;
 					var _i: Int = r.rules.length;
 					while (--_i >= 0) {
 						final _loc: Null<anyparse.format.wrap.WrappingLocation> = r.rules[_i].location;
 						if (_loc != null) return _loc;
 					}
-					return anyparse.format.wrap.WrappingLocation.BeforeLast;
+					return r.defaultLocation ?? anyparse.format.wrap.WrappingLocation.BeforeLast;
 				}
 			}),
 			pos: Context.currentPos()

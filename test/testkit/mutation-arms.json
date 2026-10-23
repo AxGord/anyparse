@@ -30201,6 +30201,14 @@
 			"find": "anyparse.format.wrap.WrapList.flatLength(_bodyW) == -1",
 			"replace": "false",
 			"note": "`same` probes the first line of a value that already spans lines too, so a call whose lambda argument breaks is moved under the `return` and re-wrapped one level deeper"
+		},
+		{
+			"name": "M-CHAIN-LOC-DEFAULT-FIRST",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "resolveChainLocField",
+			"find": "var _i: Int = r.rules.length;",
+			"replace": "final _dl: Null<anyparse.format.wrap.WrappingLocation> = r.defaultLocation; if (_dl != null) return _dl; var _i: Int = r.rules.length;",
+			"note": "the condition-wrap override reads the section's `defaultLocation` before any rule's own `location`, so an explicit default flips the operator side the matching rule asks for"
 		}
 	]
 }

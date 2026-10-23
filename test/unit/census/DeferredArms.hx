@@ -276,7 +276,8 @@ final class DeferredArms {
 		'M-MERMAID-INLINE-TAKES-PREFIX :: anyparse.grammar.mermaid.MmdSolidTextLit#MetaCall:@:re',
 		'M-MERMAID-DOTTED-TEXT-TAKES-DOTS :: anyparse.grammar.mermaid.MmdDottedTextLit#MetaCall:@:re',
 		'M-RETURN-SAME-WIDTH-BREAK :: anyparse.macro.WriterBodyPolicyLowering#buildBodySameLayout',
-		'M-RETURN-SAME-MULTILINE-PROBED :: anyparse.macro.WriterBodyPolicyLowering#buildBodySameLayout'
+		'M-RETURN-SAME-MULTILINE-PROBED :: anyparse.macro.WriterBodyPolicyLowering#buildBodySameLayout',
+		'M-CHAIN-LOC-DEFAULT-FIRST :: anyparse.macro.WriterOptFanout#resolveChainLocField'
 	];
 
 }
