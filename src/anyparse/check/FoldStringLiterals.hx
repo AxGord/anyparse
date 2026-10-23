@@ -199,7 +199,7 @@ using StringTools;
  * plugin declares no layout metrics, makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class FoldStringLiterals implements Check implements ConfigAware {
+final class FoldStringLiterals extends RuleBase implements ConfigAware {
 
 	/** The rule id, spelled once — `run`, `fix` and the registry all quote it. */
 	private static inline final RULE_ID: String = 'fold-adjacent-string-literals';
@@ -228,18 +228,12 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(RULE_ID, 'a string concatenation whose segmentation does not match the line width', RuleCategory.Literals);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a string concatenation whose segmentation does not match the line width';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

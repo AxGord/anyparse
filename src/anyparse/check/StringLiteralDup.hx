@@ -132,7 +132,7 @@ import anyparse.runtime.Span;
  * silent capture. Only a lower-case name would capture.
  */
 @:nullSafety(Strict)
-final class StringLiteralDup implements Check implements ConfigAware implements NoAutofix implements VolatileMessage {
+final class StringLiteralDup extends RuleBase implements ConfigAware implements NoAutofix implements VolatileMessage {
 
 	/** Least repetitions of a literal before its occurrences are flagged. */
 	private static inline final DEFAULT_MIN_OCCURRENCES: Int = 3;
@@ -157,18 +157,12 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(RULE_ID, 'a plain string literal repeated many times in one file that should be a named constant', RuleCategory.Literals);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a plain string literal repeated many times in one file that should be a named constant';
 	}
 
 	public function messageIdentity(message: String): String {

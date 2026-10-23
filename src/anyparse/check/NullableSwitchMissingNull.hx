@@ -77,16 +77,14 @@ using StringTools;
  * sources 2 / 3. Needs `plugin is TypeInfoProvider` for declared-type / return resolution.
  */
 @:nullSafety(Strict)
-final class NullableSwitchMissingNull implements Check implements NoAutofix {
+final class NullableSwitchMissingNull extends RuleBase implements NoAutofix {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'nullable-switch-missing-null';
-	}
-
-	public function description(): String {
-		return 'a wildcard-less switch over a nullable enum subject with no case null — the constructor-tag read dereferences null';
+	public function new() {
+		super(
+			'nullable-switch-missing-null',
+			'a wildcard-less switch over a nullable enum subject with no case null — the constructor-tag read dereferences null',
+			RuleCategory.NullSafety
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -123,7 +123,7 @@ typedef Denoted = {
  * Grammar-agnostic: driven by `identKind`, `fieldAccessKind`, `newExprKind` and `TypeRefShape.typeRefKinds`.
  */
 @:nullSafety(Strict)
-final class OwnedTypes implements Check implements ConfigAware implements FileGated implements NoAutofix {
+final class OwnedTypes extends RuleBase implements ConfigAware implements FileGated implements NoAutofix {
 
 	/** The rule id. */
 	private static inline final RULE_ID: String = 'owned-types';
@@ -140,18 +140,16 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 	/** The linter's memoised per-file config resolver; null when run outside it. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID,
+			'a mention of a type, or a read or call of a member, that the project\'s `ownedTypes` declaration gives to another layer',
+			RuleCategory.Design
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a mention of a type, or a read or call of a member, that the project\'s `ownedTypes` declaration gives to another layer';
 	}
 
 	public function noAutofixReason(): String {

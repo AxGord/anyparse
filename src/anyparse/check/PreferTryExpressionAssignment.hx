@@ -114,7 +114,7 @@ using Lambda;
  * it the l-value arm handles only plain-identifier targets.
  */
 @:nullSafety(Strict)
-final class PreferTryExpressionAssignment implements Check {
+final class PreferTryExpressionAssignment extends RuleBase {
 
 	/** A binary assignment node has exactly [l-value, r-value] children. */
 	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
@@ -127,15 +127,13 @@ final class PreferTryExpressionAssignment implements Check {
 	private static inline final LVALUE_MESSAGE: String =
 		'this try/catch that assigns the same target in every path can be a single try-expression assignment';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-try-expression-assignment';
-	}
-
-	public function description(): String {
-		return 'a try/catch that assigns the same target in the body and every catch clause ('
-			+ 'optionally paired with its preceding local declaration), collapsible to a single try-expression assignment';
+	public function new() {
+		super(
+			'prefer-try-expression-assignment',
+			'a try/catch that assigns the same target in the body and every catch clause ('
+			+ 'optionally paired with its preceding local declaration), collapsible to a single try-expression assignment',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

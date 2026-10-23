@@ -82,21 +82,19 @@ using Lambda;
  * caller is the only one that will ever exist, which the scope cannot say.
  */
 @:nullSafety(Strict)
-final class DefaultRepeatedArgument implements Check implements DefaultOff implements CrossFileFix {
+final class DefaultRepeatedArgument extends RuleBase implements DefaultOff implements CrossFileFix {
 
 	private static inline final RULE_ID: String = 'default-repeated-argument';
 
 	/** What each flagged parameter's fix must do, keyed by `<file>:<span.from>` of the violation. */
 	private final _plans: Map<String, Plan> = [];
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a parameter with no default that several call sites hand the same constant — the default the signature never declared';
+	public function new() {
+		super(
+			RULE_ID,
+			'a parameter with no default that several call sites hand the same constant — the default the signature never declared',
+			RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

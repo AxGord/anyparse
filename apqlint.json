@@ -115,47 +115,20 @@
 		}
 	],
 	"rules": {
-		"explicit-local-type": {
-			"enabled": true
-		},
-		"anon-type-dup": {
-			"enabled": true
-		},
-		"asymmetric-branch-braces": {
-			"enabled": true
-		},
-		"case-pattern-separator": {
-			"enabled": true
-		},
-		"collapse-nested-switch": {
-			"enabled": true
-		},
-		"comment-width": {
-			"enabled": true
-		},
-		"cond-assign-merge": {
-			"enabled": true
-		},
-		"dead-binder-counter-loop": {
-			"enabled": true
-		},
-		"default-repeated-argument": {
-			"enabled": true
-		},
-		"doc-length": {
-			"enabled": true
-		},
-		"doc-measurement-claim": {
-			"enabled": true
-		},
-		"field-init-in-constructor": {
-			"enabled": true
-		},
-		"hoist-branch-string-affix": {
-			"enabled": true
-		},
+		"explicit-local-type": true,
+		"anon-type-dup": true,
+		"asymmetric-branch-braces": true,
+		"case-pattern-separator": true,
+		"collapse-nested-switch": true,
+		"comment-width": true,
+		"cond-assign-merge": true,
+		"dead-binder-counter-loop": true,
+		"default-repeated-argument": true,
+		"doc-length": true,
+		"doc-measurement-claim": true,
+		"field-init-in-constructor": true,
+		"hoist-branch-string-affix": true,
 		"hoist-common-import": {
-			"enabled": true,
 			"threshold": 50,
 			"sinkThreshold": 25,
 			"usingAllowList": [
@@ -163,27 +136,13 @@
 				"Lambda"
 			]
 		},
-		"hoist-embedded-assignment": {
-			"enabled": true
-		},
-		"import-order": {
-			"enabled": true
-		},
-		"join-override-chain": {
-			"enabled": true
-		},
-		"join-string-append": {
-			"enabled": true
-		},
-		"misplaced-type-doc": {
-			"enabled": true
-		},
-		"no-underscore-prefix": {
-			"enabled": true
-		},
-		"orphan-accessor": {
-			"enabled": true
-		},
+		"hoist-embedded-assignment": true,
+		"import-order": true,
+		"join-override-chain": true,
+		"join-string-append": true,
+		"misplaced-type-doc": true,
+		"no-underscore-prefix": true,
+		"orphan-accessor": true,
 		"oversized-type": {
 			"grants": [
 				"Renderer <= 70 members / 4100 lines: the Doc layout engine is ONE algorithm — 47 of its 48 non-hub members land in a single `hxq clusters` component (98%), because every fit probe, push and flush reads the same render state. S11 measured the only real seam, a 22-member width layer, and cutting it leaves 2383 lines behind.",
@@ -201,86 +160,32 @@
 				"RefShape <= 320 members / 3600 lines: the grammar vocabulary a plugin hands every check, one slot per seam a check reads, so it grows a slot at a time. A class only because, as a structure typedef (which this rule does not size), it outgrew the JVM constructor-argument limit (J0, docs/testing.md); nesting its slots in groups is the decomposition, and it moves the read of every consumer."
 			]
 		},
-		"prefer-count": {
-			"enabled": true
-		},
-		"prefer-doc-comment": {
-			"enabled": true
-		},
-		"prefer-exists": {
-			"enabled": true
-		},
-		"prefer-for-in": {
-			"enabled": true
-		},
-		"prefer-foreach": {
-			"enabled": true
-		},
-		"prefer-keyvalue-loop": {
-			"enabled": true
-		},
-		"prefer-line-comment": {
-			"enabled": true
-		},
-		"prefer-lpad": {
-			"enabled": true
-		},
-		"prefer-typed-throw": {
-			"enabled": true
-		},
-		"prefer-value-loop": {
-			"enabled": true
-		},
-		"redundant-ascription": {
-			"enabled": true
-		},
-		"redundant-cast-type": {
-			"enabled": true
-		},
-		"redundant-isvar": {
-			"enabled": true
-		},
-		"redundant-lambda-wrapper": {
-			"enabled": true
-		},
-		"redundant-map-exists": {
-			"enabled": true
-		},
-		"redundant-property-access": {
-			"enabled": true
-		},
-		"redundant-replace-loop": {
-			"enabled": true
-		},
-		"redundant-tostring": {
-			"enabled": true
-		},
-		"redundant-trailing-comma": {
-			"enabled": true
-		},
-		"return-reassign-ternary": {
-			"enabled": true
-		},
-		"shadowing-parameter": {
-			"enabled": true
-		},
-		"shorten-type-ref": {
-			"enabled": true
-		},
-		"static-constant": {
-			"enabled": true
-		},
-		"try-catch-null-guard": {
-			"enabled": true
-		},
-		"unused-loop-binder": {
-			"enabled": true
-		},
-		"unused-public-member": {
-			"enabled": true
-		},
-		"while-true-condition": {
-			"enabled": true
-		}
+		"prefer-count": true,
+		"prefer-doc-comment": true,
+		"prefer-exists": true,
+		"prefer-for-in": true,
+		"prefer-foreach": true,
+		"prefer-keyvalue-loop": true,
+		"prefer-line-comment": true,
+		"prefer-lpad": true,
+		"prefer-typed-throw": true,
+		"prefer-value-loop": true,
+		"redundant-ascription": true,
+		"redundant-cast-type": true,
+		"redundant-isvar": true,
+		"redundant-lambda-wrapper": true,
+		"redundant-map-exists": true,
+		"redundant-property-access": true,
+		"redundant-replace-loop": true,
+		"redundant-tostring": true,
+		"redundant-trailing-comma": true,
+		"return-reassign-ternary": true,
+		"shadowing-parameter": true,
+		"shorten-type-ref": true,
+		"static-constant": true,
+		"try-catch-null-guard": true,
+		"unused-loop-binder": true,
+		"unused-public-member": true,
+		"while-true-condition": true
 	}
 }

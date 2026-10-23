@@ -32,6 +32,8 @@ import haxe.io.Path;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.check.ReachBuildsCache;
+import anyparse.check.RuleCategory;
+import anyparse.check.RuleIndex;
 
 using Lambda;
 
@@ -92,6 +94,12 @@ typedef LintOpts = {
 	var failOn: Null<Severity>;
 	var format: String;
 	var ruleFilters: Array<String>;
+
+	/**
+	 * The `--category` ids, each a known `RuleCategory`: a run keeps only the rules of these categories the config
+	 * enables, where `--rule` force-runs what it names, so the two never combine.
+	 */
+	var categoryFilters: Array<String>;
 	var inputSpecs: Array<String>;
 	// The `--range` line window, or null for the whole scope. See `LintRange`.
 	var range: Null<LintRange>;
@@ -137,6 +145,9 @@ final class LintCommand implements CliCommand {
 	private static inline final FORMAT_JSON: String = 'json';
 	private static inline final FORMAT_CHECKSTYLE: String = 'checkstyle';
 	private static inline final FORMAT_TEXT: String = 'text';
+
+	/** The `--list-rules` rendering as the markdown rule index (`RuleIndex`); no lint run has this format. */
+	private static inline final FORMAT_MARKDOWN: String = 'markdown';
 
 	/** The config key declaring the classes a class value made from an unreadable name may be of. */
 	private static inline final REFLECTIVE_CLASSES: String = 'reflectiveClasses';
@@ -193,7 +204,7 @@ final class LintCommand implements CliCommand {
 			return EXIT_USAGE;
 		}
 
-		final checks: Null<Array<Check>> = resolveLintChecks(o.ruleFilters);
+		final checks: Null<Array<Check>> = resolveLintChecks(o.ruleFilters, o.categoryFilters);
 		if (checks == null) return EXIT_USAGE;
 
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
@@ -241,7 +252,7 @@ final class LintCommand implements CliCommand {
 		// warning prints where it did.
 		final fileConfigs: Array<LintConfig> = LintDocuments.distinctConfigs(paths, resolveConfig);
 		final activeChecks: Array<Check> = applyEnablement ? [
-			for (c in checks) if (fileConfigs.exists(config -> config.enabledFor(c.id(), !(c is DefaultOff)))) c
+			for (c in checks) if (fileConfigs.exists(config -> Linter.enabledBy(config, c))) c
 		] : checks;
 
 		// Resolution scope: the UNION of `resolutionRoots` (explicit dirs) and `resolutionLibs`
@@ -362,6 +373,7 @@ final class LintCommand implements CliCommand {
 			failOn: null,
 			format: FORMAT_TEXT,
 			ruleFilters: [],
+			categoryFilters: [],
 			inputSpecs: [],
 			range: null,
 			baseline: null,
@@ -1064,7 +1076,10 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('Project config: an "apqlint.json" discovered by walking up from a linted file\n');
 		CliIo.sysPrint('enables/disables rules and overrides their severity or options, e.g.\n');
 		CliIo.sysPrint('{ "rules": { "naming": { "severity": "error" }, "complexity": { "max": 15 },\n');
-		CliIo.sysPrint('"fold-adjacent-string-literals": { "enabled": false } } }.\n');
+		CliIo.sysPrint('"fold-adjacent-string-literals": false } }. A rule entry is true / false or an\n');
+		CliIo.sysPrint('object of options, which enables the rule unless it says "enabled". A\n');
+		CliIo.sysPrint('"categories": { "docs": true } entry switches a whole category, default-off\n');
+		CliIo.sysPrint('rules included; a rule entry outranks its category entry.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('A top-level "compilerOracle" key (path to an .hxml, relative to the config)\n');
 		CliIo.sysPrint('runs "haxe <hxml> --no-output" as a ground-truth typecheck: a compile error\n');
@@ -1076,6 +1091,9 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --rule <id>       Run only this check (repeatable; default: all)\n');
+		CliIo.sysPrint('  --category <id>   Run only the rules of this category the config enables\n');
+		CliIo.sysPrint('                    (repeatable; not with --rule, which force-runs what it\n');
+		CliIo.sysPrint('                    names). With --list-rules, list only that category\n');
 		CliIo.sysPrint('  --list-rules      List every registered check and exit. Given a scope, list\n');
 		CliIo.sysPrint('                    each rule as on/off for those files instead, one block per\n');
 		CliIo.sysPrint('                    distinct apqlint.json chain (config, default-off and\n');
@@ -1092,7 +1110,10 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('                    is NOT reverted, RiskyFix rules stay report-only and\n');
 		CliIo.sysPrint('                    OracleAssisted rules are inert. Use it in an iteration loop\n');
 		CliIo.sysPrint('                    (the only way to see the fixer raw), NEVER in a gate\n');
-		CliIo.sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle\n');
+		CliIo.sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle; with an\n');
+		CliIo.sysPrint('                    unscoped --list-rules, markdown prints the rule index by\n');
+		CliIo.sysPrint('                    category and json one {id, category, description,\n');
+		CliIo.sysPrint('                    defaultOn} record per rule\n');
 		CliIo.sysPrint('  --all, -a        Include Info-severity advisories in the report (text format only —\n');
 		CliIo.sysPrint('                   json and checkstyle are never capped)\n');
 		CliIo.sysPrint('  --flat           One <file>:<line>:<col> per line (text format only)\n');
@@ -1143,6 +1164,7 @@ final class LintCommand implements CliCommand {
 		var failOn: Null<Severity> = null;
 		var format: String = FORMAT_TEXT;
 		final ruleFilters: Array<String> = [];
+		final categoryFilters: Array<String> = [];
 		final inputSpecs: Array<String> = [];
 		var range: Null<LintRange> = null;
 		var baseline: Null<String> = null;
@@ -1159,6 +1181,8 @@ final class LintCommand implements CliCommand {
 					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--rule':
 					ruleFilters.push(CliArgs.expectValue(args, ++i, '--rule'));
+				case '--category':
+					categoryFilters.push(CliArgs.expectValue(args, ++i, a));
 				case '--all', '-a':
 					includeInfo = true;
 				case '--flat':
@@ -1199,8 +1223,11 @@ final class LintCommand implements CliCommand {
 					}
 				case '--format':
 					format = CliArgs.expectValue(args, ++i, '--format');
-					if (format != FORMAT_TEXT && format != FORMAT_JSON && format != FORMAT_CHECKSTYLE) {
-						CliIo.stderr('apq lint: unknown --format value "$format" (expected text|json|checkstyle)\n');
+					if (![FORMAT_TEXT, FORMAT_JSON, FORMAT_CHECKSTYLE, FORMAT_MARKDOWN].contains(format)) {
+						CliIo.stderr(
+							'apq lint: unknown --format value "$format'
+							+ '" (expected text|json|checkstyle, or markdown with an unscoped --list-rules)\n'
+						);
 						return lintParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':
@@ -1228,6 +1255,7 @@ final class LintCommand implements CliCommand {
 			failOn: failOn,
 			format: format,
 			ruleFilters: ruleFilters,
+			categoryFilters: categoryFilters,
 			inputSpecs: inputSpecs,
 			range: range,
 			baseline: baseline,
@@ -1236,6 +1264,11 @@ final class LintCommand implements CliCommand {
 			summary: summary,
 			errExit: null
 		};
+		final selection: Null<String> = selectionError(opts, listRules);
+		if (selection != null) {
+			CliIo.stderr('apq lint: $selection\n');
+			return lintParseExit(EXIT_USAGE);
+		}
 		// A machine format is never summarised, so asking for a summary of one is a mistake the run
 		// could only honour by ignoring it. `--full` is what such a format does anyway and passes.
 		if (explainLong && format == FORMAT_CHECKSTYLE) {
@@ -1245,6 +1278,23 @@ final class LintCommand implements CliCommand {
 		if (summary != true || format == FORMAT_TEXT) return listRules ? lintParseExit(runListRules(opts)) : opts;
 		CliIo.stderr('apq lint: --summary applies to the text report — --format $format always lists every finding\n');
 		return lintParseExit(EXIT_USAGE);
+	}
+
+	/**
+	 * Why the argv's rule selection cannot be honoured, or null when it can: a `--category` naming no `RuleCategory`,
+	 * `--category` beside `--rule` (one narrows to what the config enables, the other force-runs what it names), or the
+	 * markdown rule index asked of a lint run.
+	 */
+	private static function selectionError(o: LintOpts, listRules: Bool): Null<String> {
+		final unknown: Null<String> = o.categoryFilters.find(id -> RuleCategory.fromId(id) == null);
+		return if (unknown != null)
+			'unknown category "$unknown" (expected ${RuleCategory.ALL.join('|')})'
+		else if (o.ruleFilters.length > 0 && o.categoryFilters.length > 0)
+			'--rule runs the rules it names whatever the config says, --category the enabled rules of a category — pass one'
+		else if (o.format == FORMAT_MARKDOWN && !listRules)
+			'--format markdown renders the rule index — pass it with --list-rules'
+		else
+			null;
 	}
 
 	/**
@@ -1311,10 +1361,11 @@ final class LintCommand implements CliCommand {
 		return EXIT_USAGE;
 	}
 
-	private static function resolveLintChecks(ruleFilters: Array<String>): Null<Array<Check>> {
+	private static function resolveLintChecks(ruleFilters: Array<String>, categoryFilters: Array<String>): Null<Array<Check>> {
 		final checks: Array<Check> = [];
 		if (ruleFilters.length == 0) {
-			for (check in Linter.builtins()) checks.push(check);
+			for (check in Linter.builtins()) if (categoryFilters.length == 0 || categoryFilters.contains(check.category()))
+				checks.push(check);
 		} else {
 			for (id in ruleFilters) {
 				final check: Null<Check> = Linter.byId(id);
@@ -1525,13 +1576,18 @@ final class LintCommand implements CliCommand {
 	private static function runListRules(o: LintOpts): Int {
 		final ignored: Null<String> = lintOnlyFlag(o);
 		if (ignored != null) {
-			CliIo.stderr('apq lint: --list-rules takes only a scope and --lang — $ignored applies to a lint run\n');
+			CliIo.stderr('apq lint: --list-rules takes only a scope, --category and --lang — $ignored applies to a lint run\n');
 			return EXIT_USAGE;
 		}
-		if (o.inputSpecs.length > 0) return printEffectiveRules(o.lang, o.inputSpecs);
-		final checks: Array<Check> = Linter.builtins();
+		final checks: Array<Check> = resolveLintChecks([], o.categoryFilters) ?? [];
+		if (o.inputSpecs.length > 0) return printEffectiveRules(o.lang, o.inputSpecs, checks);
+		if (o.format != FORMAT_TEXT) {
+			CliIo.sysPrint(o.format == FORMAT_MARKDOWN ? RuleIndex.markdown(checks) : RuleIndex.json(checks));
+			return EXIT_OK;
+		}
 		var width: Int = 0;
 		for (c in checks) if (c.id().length > width) width = c.id().length;
+
 		// The minimum language version a rule's FIX needs is printed with the rule, not
 		// discovered after a run that silently dropped it: a project whose `languageVersion`
 		// is below it never sees the finding, and this is where that becomes visible.
@@ -1547,13 +1603,13 @@ final class LintCommand implements CliCommand {
 	 * it in, as `EffectiveRules.render` lays it out. The registry alone is an upper bound; configs are
 	 * resolved exactly as a lint run resolves them, and nothing is parsed or linted.
 	 */
-	private static function printEffectiveRules(lang: String, inputSpecs: Array<String>): Int {
+	private static function printEffectiveRules(lang: String, inputSpecs: Array<String>, checks: Array<Check>): Int {
 		final paths: Array<String> = CliArgs.resolveInputPaths(lang, inputSpecs).paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq lint: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
-		CliIo.sysPrint(EffectiveRules.render(EffectiveRules.resolve(paths, Linter.builtins())));
+		CliIo.sysPrint(EffectiveRules.render(EffectiveRules.resolve(paths, checks)));
 		return EXIT_OK;
 	}
 
@@ -1566,7 +1622,10 @@ final class LintCommand implements CliCommand {
 			{ flag: '--flat', set: o.flat },
 			{ flag: '--no-oracle', set: o.noOracle },
 			{ flag: '--fail-on', set: o.failOn != null },
-			{ flag: '--format', set: o.format != FORMAT_TEXT },
+			{
+				flag: '--format',
+				set: o.format != FORMAT_TEXT && (![FORMAT_MARKDOWN, FORMAT_JSON].contains(o.format) || o.inputSpecs.length != 0)
+			},
 			{ flag: '--range', set: o.range != null },
 			{ flag: '--baseline', set: o.baseline != null },
 			{ flag: '--verbose', set: o.verbose },

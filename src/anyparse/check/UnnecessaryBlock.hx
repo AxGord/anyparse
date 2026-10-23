@@ -47,16 +47,10 @@ using StringTools;
  * no-op.
  */
 @:nullSafety(Strict)
-final class UnnecessaryBlock implements Check {
+final class UnnecessaryBlock extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'unnecessary-block';
-	}
-
-	public function description(): String {
-		return 'a bare { } statement block that adds a scope its statements do not need';
+	public function new() {
+		super('unnecessary-block', 'a bare { } statement block that adds a scope its statements do not need', RuleCategory.Expressions);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

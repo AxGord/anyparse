@@ -46,18 +46,14 @@ using Lambda;
  * meaningful only where write accessors are reported.
  */
 @:nullSafety(Strict)
-final class RedundantBypassAccessor implements Check {
+final class RedundantBypassAccessor extends RuleBase {
 
 	private static final BYPASS_META: String = '@:bypassAccessor';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'redundant-bypass-accessor';
-	}
-
-	public function description(): String {
-		return 'a @:bypassAccessor on an assignment to a member that has no set-accessor';
+	public function new() {
+		super(
+			'redundant-bypass-accessor', 'a @:bypassAccessor on an assignment to a member that has no set-accessor', RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

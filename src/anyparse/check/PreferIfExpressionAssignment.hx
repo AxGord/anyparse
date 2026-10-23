@@ -127,7 +127,7 @@ import anyparse.runtime.Span;
  * that nesting).
  */
 @:nullSafety(Strict)
-final class PreferIfExpressionAssignment implements Check {
+final class PreferIfExpressionAssignment extends RuleBase {
 
 	/** A real chain is a head plus at least one `else if` -- a 2-branch `if`/`else` (one branch) is `prefer-ternary-assignment`'s. */
 	private static inline final MIN_CHAIN_BRANCHES: Int = 2;
@@ -136,14 +136,12 @@ final class PreferIfExpressionAssignment implements Check {
 	private static inline final DECL_MESSAGE: String =
 		'this declaration and the else-less if/else-if assignment chain after it can be a single if-expression initializer';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-if-expression-assignment';
-	}
-
-	public function description(): String {
-		return 'an if/else-if chain assigning the same l-value in every branch, collapsible to a single if-expression assignment';
+	public function new() {
+		super(
+			'prefer-if-expression-assignment',
+			'an if/else-if chain assigning the same l-value in every branch, collapsible to a single if-expression assignment',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

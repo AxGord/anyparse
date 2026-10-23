@@ -121,7 +121,7 @@ using Lambda;
  * `inlineFunctionKinds`; and the return-type gate reads `functionKinds` / `lambdaKinds`.
  */
 @:nullSafety(Strict)
-final class ReturnReassignTernary implements Check implements DefaultOff implements ConfigAware {
+final class ReturnReassignTernary extends RuleBase implements DefaultOff implements ConfigAware {
 
 	/** The rule's stable identifier -- the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'return-reassign-ternary';
@@ -139,18 +139,15 @@ final class ReturnReassignTernary implements Check implements DefaultOff impleme
 	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID, 'a single-branch if-reassignment of a local immediately followed by a return of it, collapsible to a ternary return',
+			RuleCategory.Control
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a single-branch if-reassignment of a local immediately followed by a return of it, collapsible to a ternary return';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

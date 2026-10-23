@@ -167,7 +167,7 @@ using Lambda;
  * equality-guard caveat. Arms A / B are untouched by every seam in this paragraph.
  */
 @:nullSafety(Strict)
-final class RedundantReplaceLoop implements Check implements DefaultOff {
+final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'redundant-replace-loop';
@@ -198,17 +198,15 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	/** Longest literal excerpt echoed verbatim in a finding message before it is elided. */
 	private static inline final EXCERPT_MAX: Int = 40;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a while (x.indexOf(S) != -1) x = x.replace(S, B); loop — replace() '
+	public function new() {
+		super(
+			RULE_ID,
+			'a while (x.indexOf(S) != -1) x = x.replace(S, B); loop — replace() '
 			+ 'already replaces every occurrence in one call; an undecidable PARAMETER pair is reported as a potential infinite loop, '
 			+ 'while a PARAMETER S with a LITERAL B is decided by that literal: an empty one makes the loop merely redundant, a non-empty '
-			+ 'one loops forever for exactly those S occurring in it';
+			+ 'one loops forever for exactly those S occurring in it',
+			RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

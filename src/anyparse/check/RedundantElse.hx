@@ -71,7 +71,7 @@ using Lambda;
  * makes the check report-only.
  */
 @:nullSafety(Strict)
-final class RedundantElse implements Check {
+final class RedundantElse extends RuleBase {
 
 	/** An if node with an else branch has children [cond, then, else]. */
 	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
@@ -81,14 +81,11 @@ final class RedundantElse implements Check {
 	/** ASCII-only note appended when a comment the de-nest would delete withholds the autofix. */
 	private static inline final COMMENT_NOTE: String = ' (comment in the else body - de-nest by hand)';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'redundant-else-after-return';
-	}
-
-	public function description(): String {
-		return 'an else after an if branch that always exits (return / throw / break / continue)';
+	public function new() {
+		super(
+			'redundant-else-after-return', 'an else after an if branch that always exits (return / throw / break / continue)',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

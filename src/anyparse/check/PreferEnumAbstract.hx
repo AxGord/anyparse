@@ -134,7 +134,7 @@ using StringTools;
  * that slot unset keeps the rule exactly as report-only as it was before the fix existed.
  */
 @:nullSafety(Strict)
-final class PreferEnumAbstract implements Check implements RiskyFix implements GroupedFix {
+final class PreferEnumAbstract extends RuleBase implements RiskyFix implements GroupedFix {
 
 	/** This check's rule id, as it appears on every violation it reports. */
 	private static inline final RULE_ID: String = 'prefer-enum-abstract';
@@ -169,14 +169,10 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	 */
 	private var _plans: Map<String, ConversionPlan> = [];
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a constant-only type, or related static-final int constants, reading as a closed enumeration';
+	public function new() {
+		super(
+			RULE_ID, 'a constant-only type, or related static-final int constants, reading as a closed enumeration', RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

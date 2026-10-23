@@ -26,16 +26,10 @@ import anyparse.runtime.Span;
  * body-less declaration never yields a trailing void return). Any unset → no-op.
  */
 @:nullSafety(Strict)
-final class RedundantVoidReturn implements Check {
+final class RedundantVoidReturn extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'redundant-void-return';
-	}
-
-	public function description(): String {
-		return 'a value-less return; as the last statement of a function body';
+	public function new() {
+		super('redundant-void-return', 'a value-less return; as the last statement of a function body', RuleCategory.Expressions);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -66,19 +66,16 @@ using StringTools;
  * syntax needs that seam widened before this check can follow it.
  */
 @:nullSafety(Strict)
-final class RedundantPropertyAccess implements Check implements DefaultOff {
+final class RedundantPropertyAccess extends RuleBase implements DefaultOff {
 
 	/** The one accessor spelling that means "the plain stored slot" on both the read and the write side. */
 	private static inline final PLAIN_ACCESSOR: String = 'default';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'redundant-property-access';
-	}
-
-	public function description(): String {
-		return 'a property declared (default, default) — the plain stored accessors, identical to a bare var';
+	public function new() {
+		super(
+			'redundant-property-access', 'a property declared (default, default) — the plain stored accessors, identical to a bare var',
+			RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

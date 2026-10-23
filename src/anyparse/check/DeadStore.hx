@@ -170,7 +170,7 @@ private typedef FixCtx = {
  * `(name : String) -> Void should be () -> Unknown<0>` out of a compiling file.
  */
 @:nullSafety(Strict)
-final class DeadStore implements Check {
+final class DeadStore extends RuleBase {
 
 	/** Short-circuit binary kinds — the right operand evaluates conditionally, so its kills must not leak left. */
 	private static final SHORT_CIRCUIT_KINDS: Array<String> = ['And', 'Or', 'NullCoal'];
@@ -184,14 +184,8 @@ final class DeadStore implements Check {
 	 */
 	private static final DELETABLE_BLOCK_KINDS: Array<String> = ['BlockBody', 'BlockStmt'];
 
-	public function new() {}
-
-	public function id(): String {
-		return 'dead-store';
-	}
-
-	public function description(): String {
-		return 'an assignment to a local whose value is never read on any path (dead store)';
+	public function new() {
+		super('dead-store', 'an assignment to a local whose value is never read on any path (dead store)', RuleCategory.Unused);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

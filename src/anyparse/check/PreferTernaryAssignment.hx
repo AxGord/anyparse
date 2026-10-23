@@ -84,7 +84,7 @@ import anyparse.runtime.Span;
  * check a no-op).
  */
 @:nullSafety(Strict)
-final class PreferTernaryAssignment implements Check implements ConfigAware {
+final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
 
 	/** An `if` with an `else` has exactly [condition, then-branch, else-branch] children. */
 	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
@@ -99,18 +99,15 @@ final class PreferTernaryAssignment implements Check implements ConfigAware {
 	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			'prefer-ternary-assignment',
+			'an if/else assigning the same l-value in both branches, collapsible to a single ternary assignment', RuleCategory.Control
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'prefer-ternary-assignment';
-	}
-
-	public function description(): String {
-		return 'an if/else assigning the same l-value in both branches, collapsible to a single ternary assignment';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

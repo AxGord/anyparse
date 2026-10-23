@@ -152,7 +152,7 @@ private typedef UsingWedge = {
  *    separately.
  */
 @:nullSafety(Strict)
-final class ImportBlockOrder implements Check implements DefaultOff implements ConfigAware {
+final class ImportBlockOrder extends RuleBase implements DefaultOff implements ConfigAware {
 
 	private static inline final RULE_ID: String = 'import-order';
 
@@ -165,18 +165,12 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(RULE_ID, 'a block of plain imports carrying no recognisable order, or split by a `using`', RuleCategory.Imports);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a block of plain imports carrying no recognisable order, or split by a `using`';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -95,7 +95,7 @@ using Lambda;
  * `lpad` name and the `StringTools` module are the language-specific tokens, spelled as constants.
  */
 @:nullSafety(Strict)
-final class PreferLpad implements Check implements DefaultOff {
+final class PreferLpad extends RuleBase implements DefaultOff {
 
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'prefer-lpad';
@@ -139,14 +139,8 @@ final class PreferLpad implements Check implements DefaultOff {
 	/** A `<` comparison has exactly [left, right] children. */
 	private static inline final CONDITION_CHILD_COUNT: Int = 2;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a hand-written zero-pad if-ladder over a range-bound Int, replaceable with one lpad call';
+	public function new() {
+		super(RULE_ID, 'a hand-written zero-pad if-ladder over a range-bound Int, replaceable with one lpad call', RuleCategory.Literals);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

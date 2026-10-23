@@ -51,19 +51,16 @@ using Lambda;
  * iterates to a fixed point).
  */
 @:nullSafety(Strict)
-final class PreferNullCoalescing implements Check implements RiskyFix implements VersionGated {
+final class PreferNullCoalescing extends RuleBase implements RiskyFix implements VersionGated {
 
 	/** A complete ternary node has children [cond, then, else]. */
 	private static inline final TERNARY_CHILD_COUNT: Int = 3;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-null-coalescing';
-	}
-
-	public function description(): String {
-		return 'a null-guard ternary (x != null ? x : y) replaceable with the null-coalescing operator (x ?? y)';
+	public function new() {
+		super(
+			'prefer-null-coalescing', 'a null-guard ternary (x != null ? x : y) replaceable with the null-coalescing operator (x ?? y)',
+			RuleCategory.NullSafety
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

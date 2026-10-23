@@ -98,7 +98,7 @@ using StringTools;
  * second pass finds nothing.
  */
 @:nullSafety(Strict)
-final class UnnecessarySwitch implements Check {
+final class UnnecessarySwitch extends RuleBase {
 
 	/** A degenerate switch holds exactly its subject and ONE arm. */
 	private static inline final SUBJECT_AND_ONE_ARM: Int = 2;
@@ -107,14 +107,11 @@ final class UnnecessarySwitch implements Check {
 		'this switch has a single unconditional catch-all arm — it decides nothing; use the arm\'s body directly';
 	private static final RULE_ID: String = 'unnecessary-switch';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a switch whose only arm is an unconditional catch-all — it decides nothing and unwraps to the arm body';
+	public function new() {
+		super(
+			RULE_ID, 'a switch whose only arm is an unconditional catch-all — it decides nothing and unwraps to the arm body',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

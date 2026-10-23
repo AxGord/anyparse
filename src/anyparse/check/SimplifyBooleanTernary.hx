@@ -39,16 +39,13 @@ import anyparse.runtime.Span;
  * left alone.
  */
 @:nullSafety(Strict)
-final class SimplifyBooleanTernary implements Check {
+final class SimplifyBooleanTernary extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'simplify-boolean-ternary';
-	}
-
-	public function description(): String {
-		return 'a ternary with a boolean-literal branch that reduces to a boolean expression';
+	public function new() {
+		super(
+			'simplify-boolean-ternary', 'a ternary with a boolean-literal branch that reduces to a boolean expression',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

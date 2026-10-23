@@ -110,7 +110,7 @@ import anyparse.runtime.Span;
  * direction.
  */
 @:nullSafety(Strict)
-final class PreferTernaryExpression implements Check implements ConfigAware {
+final class PreferTernaryExpression extends RuleBase implements ConfigAware {
 
 	/** An `if`-expression has exactly [condition, then-branch, else-branch] children -- its `else` is mandatory. */
 	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
@@ -118,18 +118,12 @@ final class PreferTernaryExpression implements Check implements ConfigAware {
 	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super('prefer-ternary-expression', 'a two-branch if-expression in value position, rewritable as a ternary', RuleCategory.Control);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'prefer-ternary-expression';
-	}
-
-	public function description(): String {
-		return 'a two-branch if-expression in value position, rewritable as a ternary';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.AvoidDynamic;
 import anyparse.check.Check;
 import anyparse.check.ReificationScan;
+import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
 import anyparse.check.StringLiteralDup;
 import anyparse.query.GrammarPlugin;
@@ -158,6 +159,10 @@ private class PlainMarkerCheck implements Check {
 		return 'a test double flagging every MARK identifier';
 	}
 
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return MarkerScan.findings(id(), files, plugin);
 	}
@@ -181,6 +186,10 @@ private class AwareMarkerCheck implements Check implements QuotationAware {
 
 	public function description(): String {
 		return 'a test double flagging every MARK identifier, quotations included';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

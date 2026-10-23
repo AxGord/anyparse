@@ -68,16 +68,10 @@ private typedef CommentToken = {
  * `RefactorSupport.canonicalize` per file.
  */
 @:nullSafety(Strict)
-final class EmptyComment implements Check {
+final class EmptyComment extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'empty-comment';
-	}
-
-	public function description(): String {
-		return 'an empty comment (a content-free // or /* */)';
+	public function new() {
+		super('empty-comment', 'an empty comment (a content-free // or /* */)', RuleCategory.Docs);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

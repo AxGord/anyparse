@@ -26,6 +26,22 @@ typedef RuleConfig = {
 }
 
 /**
+ * What ONE `apqlint.json` document says about enablement: its `rules` entries' switches by rule id and its
+ * `categories` switches by category id. A config keeps one per document of its chain, nearest first, because the
+ * nearest document that names a rule or its category decides it (`LintConfig.switchFor`).
+ */
+typedef RuleSwitches = {
+	var rules: Map<String, Bool>;
+	var categories: Map<String, Bool>;
+}
+
+/** A config's word on one rule: whether it runs, and whether a `categories` entry rather than the rule's own entry said so. */
+typedef RuleSwitch = {
+	var on: Bool;
+	var byCategory: Bool;
+}
+
+/**
  * ONE compiler-oracle configuration: the hxml to typecheck, the directory that compile runs
  * from, and the extra defines it carries.
  *
@@ -97,6 +113,10 @@ typedef DiscoveredConfig = {
  *  - `severity` — override the severity a rule reports at.
  *  - rule-specific options (e.g. `max`) — read by the owning check.
  *
+ * A rule entry may be `true` / `false` for `{"enabled": …}`, and an object enables the rule unless it says `enabled`.
+ * The `categories` section switches every rule of a `RuleCategory` at once, its default-off members included; the nearest
+ * document naming the rule or its category decides it, its rule entry first (`switchFor`).
+ *
  * `enabled`/`severity` are applied by the framework (`Cli.runLint` /
  * `Linter.run`); options are pulled by the check itself (`Complexity`). A
  * missing or malformed file yields an empty config, so absence is a no-op.
@@ -116,6 +136,9 @@ final class LintConfig {
 	private static final warnedConfigs: Array<String> = [];
 
 	private final _rules: Map<String, RuleConfig>;
+
+	/** The enablement each document of the chain states, nearest first — see `switchFor`. */
+	private final _switches: Array<RuleSwitches>;
 
 	/**
 	 * The `compilerOracle` configurations, each hxml resolved against the declaring config's
@@ -176,8 +199,11 @@ final class LintConfig {
 		?resolutionLibs: Array<String>, resolutionStd: Bool = true, compilerOracleServer: Bool = false, ?languageVersion: String,
 		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, reachConfigurationsComplete: Bool = false,
 		reportSummaryThreshold: Int = LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD, ?reflectiveClasses: Array<String>,
-		?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>
+		?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>, ?switches: Array<RuleSwitches>
 	) {
+		_switches = switches ?? [
+			{ rules: [for (id => rc in rules) if (rc.enabled != null) id => rc.enabled == true], categories: [] }
+		];
 		_ownedTypes = ownedTypes ?? [];
 		_reportSummaryThreshold = reportSummaryThreshold;
 		_reachConfigurationsComplete = reachConfigurationsComplete;
@@ -192,14 +218,6 @@ final class LintConfig {
 		_languageVersion = languageVersion;
 		_frameworks = frameworks ?? [];
 		_drops = drops ?? [];
-	}
-
-	/**
-	 * A rule-specific option as the raw JSON the document wrote, or null when unset — for an option whose shape no typed
-	 * accessor reads (`prefer-api-idiom`'s list of objects), so the owning check validates it entry by entry itself.
-	 */
-	public inline function jsonOption(id: String, key: String): Null<JValue> {
-		return propOf(id, key);
 	}
 
 	/**
@@ -325,17 +343,27 @@ final class LintConfig {
 	}
 
 	/**
-	 * Whether `id` runs in the default set. `defaultOn` is the rule's default when its
-	 * `enabled` key is absent — true for an ordinary rule, false for a `DefaultOff` rule
-	 * the caller opts into. A present `enabled` value always wins.
+	 * Whether `id` runs in the default set. `defaultOn` is the rule's default when the config says nothing — true for an
+	 * ordinary rule, false for a `DefaultOff` rule the caller opts into; a stated value always wins (`switchFor`).
+	 * `Linter.enabledBy` asks it for a `Check`.
 	 */
-	public function enabledFor(id: String, defaultOn: Bool = true): Bool {
-		return enabledSetting(id) ?? defaultOn;
+	public function enabledFor(id: String, defaultOn: Bool = true, ?category: RuleCategory): Bool {
+		return switchFor(id, category)?.on ?? defaultOn;
 	}
 
-	/** The `enabled` value the config states for rule `id`, or null when it states none and the rule's own default applies. */
-	public function enabledSetting(id: String): Null<Bool> {
-		return _rules[id]?.enabled;
+	/**
+	 * What the config says about rule `id`, or null when it says nothing and the rule's own default applies. The chain is
+	 * walked nearest document first, and the first document with an entry for the rule or — given the rule's `category` —
+	 * for its category decides; inside one document the rule entry outranks the category entry.
+	 */
+	public function switchFor(id: String, ?category: RuleCategory): Null<RuleSwitch> {
+		for (level in _switches) {
+			final byRule: Null<Bool> = level.rules[id];
+			if (byRule != null) return { on: byRule, byCategory: false };
+			final byCategory: Null<Bool> = category == null ? null : level.categories[category];
+			if (byCategory != null) return { on: byCategory, byCategory: true };
+		}
+		return null;
 	}
 
 	/** The configured severity override for `id`, or null when unset. */
@@ -349,7 +377,7 @@ final class LintConfig {
 	 * unset or non-numeric. A fractional value truncates, as it always has.
 	 */
 	public function intOption(id: String, key: String): Null<Int> {
-		return switch propOf(id, key) {
+		return switch jsonOption(id, key) {
 			case JNumber(v): Std.int(v);
 			case null, _: null;
 		};
@@ -357,7 +385,7 @@ final class LintConfig {
 
 	/** A rule-specific boolean option (e.g. `doc-coverage` `requireTypeDoc`), or null when unset or non-boolean. */
 	public function boolOption(id: String, key: String): Null<Bool> {
-		return switch propOf(id, key) {
+		return switch jsonOption(id, key) {
 			case JBool(v): v;
 			case null, _: null;
 		};
@@ -365,7 +393,7 @@ final class LintConfig {
 
 	/** A rule-specific string option (e.g. `import-order` `order`), or null when unset or non-string. */
 	public function stringOption(id: String, key: String): Null<String> {
-		return switch propOf(id, key) {
+		return switch jsonOption(id, key) {
 			case JString(v): v;
 			case null, _: null;
 		};
@@ -469,17 +497,17 @@ final class LintConfig {
 	}
 
 	/**
-	 * The raw prop `key` of rule `id`, or null when the rule is unconfigured
-	 * or lacks the key — the base for the typed option accessors.
+	 * A rule-specific option as the raw JSON the document wrote, or null when unset — for an option whose shape no typed
+	 * accessor reads (`prefer-api-idiom`'s list of objects), so the owning check validates it entry by entry itself.
 	 */
-	private function propOf(id: String, key: String): Null<JValue> {
+	public function jsonOption(id: String, key: String): Null<JValue> {
 		final rc: Null<RuleConfig> = _rules[id];
 		return rc?.props[key];
 	}
 
 	/** The raw array prop `key` of rule `id`, or null when it is unset or not an array — the array base for the list accessors. */
 	private function arrayOption(id: String, key: String): Null<Array<JValue>> {
-		return switch propOf(id, key) {
+		return switch jsonOption(id, key) {
 			case JArray(items): items;
 			case null, _: null;
 		};

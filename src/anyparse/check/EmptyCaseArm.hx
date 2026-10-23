@@ -98,7 +98,7 @@ using StringTools;
  * caps its passes at 10, so a long enough run stops short and the CLI says so.
  */
 @:nullSafety(Strict)
-final class EmptyCaseArm implements Check {
+final class EmptyCaseArm extends RuleBase {
 
 	/** A deletable switch holds its subject plus at least TWO arms (gate 2). */
 	private static inline final MIN_SWITCH_CHILDREN: Int = 3;
@@ -107,15 +107,13 @@ final class EmptyCaseArm implements Check {
 		'this trailing empty case arm matches values and does nothing — the switch has no catch-all, so deleting it changes nothing';
 	private static final RULE_ID: String = 'empty-case-arm';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a trailing empty case arm of a statement switch with no catch-all, over a subject type free of exhaustiveness checking — '
-			+ 'dead syntax, deletable';
+	public function new() {
+		super(
+			RULE_ID,
+			'a trailing empty case arm of a statement switch with no catch-all, over a subject type free of exhaustiveness checking — '
+			+ 'dead syntax, deletable',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

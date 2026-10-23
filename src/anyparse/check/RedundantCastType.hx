@@ -54,19 +54,13 @@ import anyparse.runtime.Span;
  * siblings delete the cast entirely — a strictly better fix that converges on the next pass.
  */
 @:nullSafety(Strict)
-final class RedundantCastType implements Check implements DefaultOff {
+final class RedundantCastType extends RuleBase implements DefaultOff {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'redundant-cast-type';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a checked cast whose target type restates the declared type of its position';
+	public function new() {
+		super(RULE_ID, 'a checked cast whose target type restates the declared type of its position', RuleCategory.Types);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

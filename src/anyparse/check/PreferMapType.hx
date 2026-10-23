@@ -197,7 +197,7 @@ private typedef Site = {
  * `import haxe.ds.IntMap;` — each on its own evidence, at its own fixed-point pass.
  */
 @:nullSafety(Strict)
-final class PreferMapType implements Check implements RiskyFix implements GroupedFix {
+final class PreferMapType extends RuleBase implements RiskyFix implements GroupedFix {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'prefer-map-type';
@@ -252,14 +252,11 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	 */
 	private static final KEY_TYPES_ROUTED_ELSEWHERE: Array<String> = ['String', 'Int', 'UInt', 'EnumValue', 'Dynamic', 'Any'];
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a concrete map type (IntMap / StringMap / ObjectMap / EnumValueMap) replaceable with the unified Map<K, V> syntax';
+	public function new() {
+		super(
+			RULE_ID, 'a concrete map type (IntMap / StringMap / ObjectMap / EnumValueMap) replaceable with the unified Map<K, V> syntax',
+			RuleCategory.Types
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -24,16 +24,10 @@ import anyparse.runtime.Span;
  * `haxe.io.Eof`) are conservatively treated as different (a safe miss); resolving those needs a typer anyparse does not have.
  */
 @:nullSafety(Strict)
-final class RedundantCast implements Check {
+final class RedundantCast extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'redundant-cast';
-	}
-
-	public function description(): String {
-		return 'a typed cast whose target type equals its operand type';
+	public function new() {
+		super('redundant-cast', 'a typed cast whose target type equals its operand type', RuleCategory.Types);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

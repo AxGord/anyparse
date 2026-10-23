@@ -217,7 +217,7 @@ using StringTools;
  * first.
  */
 @:nullSafety(Strict)
-final class PreferComprehension implements Check {
+final class PreferComprehension extends RuleBase {
 
 	/** A `for` node has exactly [iterable, body] OPERAND children — a key-value VALUE binder is not one. */
 	private static inline final FOR_CHILD_COUNT: Int = 2;
@@ -234,15 +234,13 @@ final class PreferComprehension implements Check {
 	/** The declaration keyword the fix always emits, and its length for the `var`→`final` swap. */
 	private static inline final VAR_KEYWORD: String = 'var';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-comprehension';
-	}
-
-	public function description(): String {
-		return 'an empty-array local plus a loop that only fills it (push, sequential index write, nested build) '
-			+ 'replaceable with an array comprehension';
+	public function new() {
+		super(
+			'prefer-comprehension',
+			'an empty-array local plus a loop that only fills it (push, sequential index write, nested build) '
+			+ 'replaceable with an array comprehension',
+			RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

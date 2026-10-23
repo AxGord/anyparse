@@ -39,16 +39,10 @@ import anyparse.runtime.Span;
  * with an opt-in `--fix` rather than being gated off.
  */
 @:nullSafety(Strict)
-final class PreferSingleQuotes implements Check {
+final class PreferSingleQuotes extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-single-quotes';
-	}
-
-	public function description(): String {
-		return 'a double-quoted string with no interpolation that can use single quotes';
+	public function new() {
+		super('prefer-single-quotes', 'a double-quoted string with no interpolation that can use single quotes', RuleCategory.Literals);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

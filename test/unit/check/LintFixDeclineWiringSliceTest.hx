@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
+import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
@@ -1263,6 +1264,10 @@ private class ArmCheck implements Check implements RiskyArm {
 
 	public function description(): String {
 		return 'a rule whose risky arm owns some of its findings';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -64,7 +64,7 @@ using Lambda;
  * drops the finding too.
  */
 @:nullSafety(Strict)
-final class Naming implements Check implements CrossFileFix implements RiskyArm implements ConfigAware implements FrameworkAware {
+final class Naming extends RuleBase implements CrossFileFix implements RiskyArm implements ConfigAware implements FrameworkAware {
 
 	/**
 	 * A lowercase head over an all-uppercase / digit tail of four or more characters - see `normalizerArtifactName`.
@@ -94,18 +94,12 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 	 */
 	private var _crossRenamed: Array<String> = [];
 
-	public function new() {}
+	public function new() {
+		super('naming', 'declaration name violates the naming convention (default, or a discovered checkstyle.json)', RuleCategory.Naming);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'naming';
-	}
-
-	public function description(): String {
-		return 'declaration name violates the naming convention (default, or a discovered checkstyle.json)';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

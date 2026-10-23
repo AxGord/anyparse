@@ -77,7 +77,7 @@ using Lambda;
  * resolution requires `plugin is TypeInfoProvider`.
  */
 @:nullSafety(Strict)
-final class PreferIndexAccess implements Check {
+final class PreferIndexAccess extends RuleBase {
 
 	private static inline final GET_METHOD: String = 'get';
 	private static inline final SET_METHOD: String = 'set';
@@ -86,14 +86,11 @@ final class PreferIndexAccess implements Check {
 	private static inline final GET_MESSAGE: String = 'read a map value with map[key] instead of map.get(key)';
 	private static inline final SET_MESSAGE: String = 'set a map value with map[key] = value instead of map.set(key, value)';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-index-access';
-	}
-
-	public function description(): String {
-		return 'a Map get/set call (m.get(k) / m.set(k, v)) replaceable with index access (m[k] / m[k] = v)';
+	public function new() {
+		super(
+			'prefer-index-access', 'a Map get/set call (m.get(k) / m.set(k, v)) replaceable with index access (m[k] / m[k] = v)',
+			RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

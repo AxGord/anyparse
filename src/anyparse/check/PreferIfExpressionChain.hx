@@ -221,7 +221,7 @@ using Lambda;
  * (nothing to convert) or no host kind → the check is a no-op.
  */
 @:nullSafety(Strict)
-final class PreferIfExpressionChain implements Check {
+final class PreferIfExpressionChain extends RuleBase {
 
 	/** A chain node carrying an else-slot has children `[cond, then, else]`. */
 	private static inline final CHAIN_WITH_ELSE_CHILD_COUNT: Int = 3;
@@ -232,14 +232,11 @@ final class PreferIfExpressionChain implements Check {
 	/** Two conditions (three leaf values) — below this, the ternary IS the canon. */
 	private static inline final MIN_RUNGS: Int = 2;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-if-expression-chain';
-	}
-
-	public function description(): String {
-		return 'a nested ternary chain of three or more values in value position, rewritable as an if-expression chain';
+	public function new() {
+		super(
+			'prefer-if-expression-chain',
+			'a nested ternary chain of three or more values in value position, rewritable as an if-expression chain', RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

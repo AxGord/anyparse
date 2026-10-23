@@ -178,7 +178,7 @@ using Lambda;
  * staying live regardless.
  */
 @:nullSafety(Strict)
-final class GuardReturn implements Check {
+final class GuardReturn extends RuleBase {
 
 	/**
 	 * The fewest statements a de-nestable then-branch may hold. A ONE-statement branch is
@@ -194,14 +194,12 @@ final class GuardReturn implements Check {
 	 */
 	private static inline final MIN_BLOCK_STATEMENTS: Int = 2;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'guard-return';
-	}
-
-	public function description(): String {
-		return 'a trailing if whose braced branch precedes a lone return, or ends a Void body, invertible to an early-return guard';
+	public function new() {
+		super(
+			'guard-return',
+			'a trailing if whose braced branch precedes a lone return, or ends a Void body, invertible to an early-return guard',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

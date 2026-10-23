@@ -32,16 +32,10 @@ import anyparse.runtime.Span;
  * A default-null `s:T = null` is exempted (`null is T` is false), so `s is T` is never flagged.
  */
 @:nullSafety(Strict)
-final class RedundantIsCheck implements Check {
+final class RedundantIsCheck extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'redundant-is-check';
-	}
-
-	public function description(): String {
-		return 'an is-check whose operand already has the checked type';
+	public function new() {
+		super('redundant-is-check', 'an is-check whose operand already has the checked type', RuleCategory.Types);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

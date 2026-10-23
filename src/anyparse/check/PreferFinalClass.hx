@@ -34,18 +34,12 @@ using StringTools;
  * - A `final class` with no `@:final` meta — already idiomatic.
  */
 @:nullSafety(Strict)
-final class PreferFinalClass implements Check {
+final class PreferFinalClass extends RuleBase {
 
 	private static final MODIFIER: String = 'final ';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-final-class';
-	}
-
-	public function description(): String {
-		return 'a class carrying the @:final meta — prefer the final class modifier';
+	public function new() {
+		super('prefer-final-class', 'a class carrying the @:final meta — prefer the final class modifier', RuleCategory.Members);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

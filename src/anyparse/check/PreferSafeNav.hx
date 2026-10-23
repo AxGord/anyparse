@@ -152,7 +152,7 @@ using Lambda;
  * subjects are flagged.
  */
 @:nullSafety(Strict)
-final class PreferSafeNav implements Check implements VersionGated {
+final class PreferSafeNav extends RuleBase implements VersionGated {
 
 	/** An `if` with no `else` has exactly [condition, then-branch] children. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
@@ -169,14 +169,11 @@ final class PreferSafeNav implements Check implements VersionGated {
 	/** An assignment node has exactly [l-value, r-value] children. */
 	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-safe-nav';
-	}
-
-	public function description(): String {
-		return 'a null guard (if (x != null) x.m(), x == null ? null : x.m()) replaceable with safe navigation (x?.m())';
+	public function new() {
+		super(
+			'prefer-safe-nav', 'a null guard (if (x != null) x.m(), x == null ? null : x.m()) replaceable with safe navigation (x?.m())',
+			RuleCategory.NullSafety
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

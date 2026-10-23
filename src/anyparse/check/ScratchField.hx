@@ -60,7 +60,7 @@ using Lambda;
  *   failure; a builder that silently generates less for one field fewer is the residual it keeps.
  */
 @:nullSafety(Strict)
-final class ScratchField implements Check implements RiskyFix implements OracleRelaxable {
+final class ScratchField extends RuleBase implements RiskyFix implements OracleRelaxable {
 
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'scratch-field';
@@ -79,7 +79,12 @@ final class ScratchField implements Check implements RiskyFix implements OracleR
 	/** Whether a compiler oracle verifies the fix, which is what admits a macro-built owner's edit. */
 	private var _oracleRelaxed: Bool = false;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID, 'a private field written and read in one method only, every read after a write of the same call, that can be a local',
+			RuleCategory.Members
+		);
+	}
 
 	/**
 	 * Admit the edits of MACRO-BUILT owners. Set by the lint driver only when this check runs as a
@@ -87,14 +92,6 @@ final class ScratchField implements Check implements RiskyFix implements OracleR
 	 */
 	public function setOracleRelaxed(relaxed: Bool): Void {
 		_oracleRelaxed = relaxed;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a private field written and read in one method only, every read after a write of the same call, that can be a local';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

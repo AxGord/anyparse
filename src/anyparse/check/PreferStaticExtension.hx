@@ -171,7 +171,7 @@ using Lambda;
  * site would be an unactionable report-only finding.
  */
 @:nullSafety(Strict)
-final class PreferStaticExtension implements Check implements ConfigAware {
+final class PreferStaticExtension extends RuleBase implements ConfigAware {
 
 	/** The rule id, also the `apqlint.json` option key. */
 	private static inline final RULE_ID: String = 'prefer-static-extension';
@@ -188,18 +188,15 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID, 'a static utility call (Lambda.map(xs, f)) rewritable to extension style (xs.map(f)) with a using import',
+			RuleCategory.Expressions
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a static utility call (Lambda.map(xs, f)) rewritable to extension style (xs.map(f)) with a using import';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -28,7 +28,7 @@ import anyparse.runtime.Span;
  * proof it does not follow keeps its finding with a `declineReason` and no edit (`NullFacts.nonNullVisible`).
  */
 @:nullSafety(Strict)
-final class DeadSafeNav implements Check implements ConfigAware {
+final class DeadSafeNav extends RuleBase implements ConfigAware {
 
 	/** What a `.` rewrite of a proof the compiler's null-safety does not share would do (`NullSafetyGate.unseenProofReason`). */
 	private static inline final UNSEEN_CONSEQUENCE: String = ', so a plain `.` would not compile';
@@ -36,18 +36,15 @@ final class DeadSafeNav implements Check implements ConfigAware {
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			'dead-safe-nav', 'a null-safe access (?.) whose receiver is already non-null on every path reaching it',
+			RuleCategory.NullSafety
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'dead-safe-nav';
-	}
-
-	public function description(): String {
-		return 'a null-safe access (?.) whose receiver is already non-null on every path reaching it';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

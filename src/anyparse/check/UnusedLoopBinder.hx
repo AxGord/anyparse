@@ -61,7 +61,7 @@ using Lambda;
  * `unused-local` skips loop binders.
  */
 @:nullSafety(Strict)
-final class UnusedLoopBinder implements Check implements DefaultOff {
+final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 
 	/** This check's stable id. */
 	private static inline final RULE_ID: String = 'unused-loop-binder';
@@ -69,14 +69,8 @@ final class UnusedLoopBinder implements Check implements DefaultOff {
 	/** The wildcard binder name. */
 	private static inline final WILDCARD: String = '_';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a for-loop binder the body never reads — replaceable with _ (or a dropped key)';
+	public function new() {
+		super(RULE_ID, 'a for-loop binder the body never reads — replaceable with _ (or a dropped key)', RuleCategory.Loops);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

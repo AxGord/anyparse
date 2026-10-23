@@ -10,18 +10,12 @@ import anyparse.runtime.Span;
  * (see `NewLiteral`). Grammar-agnostic over `RefShape.newExprKind`.
  */
 @:nullSafety(Strict)
-final class PreferMapLiteral implements Check {
+final class PreferMapLiteral extends RuleBase {
 
 	private static final TYPE_NAME: String = 'Map';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-map-literal';
-	}
-
-	public function description(): String {
-		return 'a new Map() construction replaceable with the map literal []';
+	public function new() {
+		super('prefer-map-literal', 'a new Map() construction replaceable with the map literal []', RuleCategory.Loops);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

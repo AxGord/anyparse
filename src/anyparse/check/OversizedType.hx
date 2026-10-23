@@ -55,7 +55,7 @@ using StringTools;
  * (`readGrant`: silent within it, reported again past it).
  */
 @:nullSafety(Strict)
-final class OversizedType implements Check implements ConfigAware implements VolatileMessage implements NoAutofix {
+final class OversizedType extends RuleBase implements ConfigAware implements VolatileMessage implements NoAutofix {
 
 	/**
 	 * The member count above which a type is flagged — generous enough that only
@@ -128,18 +128,15 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID, 'a type with too many behaviour members or lines (constants are not counted) — a decomposition candidate',
+			RuleCategory.Design
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a type with too many behaviour members or lines (constants are not counted) — a decomposition candidate';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

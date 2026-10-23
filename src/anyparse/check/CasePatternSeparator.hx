@@ -85,7 +85,7 @@ private typedef SeparatorSeams = {
  * everywhere.
  */
 @:nullSafety(Strict)
-final class CasePatternSeparator implements Check implements DefaultOff implements ConfigAware {
+final class CasePatternSeparator extends RuleBase implements DefaultOff implements ConfigAware {
 
 	private static inline final RULE_ID: String = 'case-pattern-separator';
 
@@ -107,18 +107,12 @@ final class CasePatternSeparator implements Check implements DefaultOff implemen
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(RULE_ID, 'a switch case whose pattern separator does not match the configured style (comma or pipe)', RuleCategory.Control);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a switch case whose pattern separator does not match the configured style (comma or pipe)';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

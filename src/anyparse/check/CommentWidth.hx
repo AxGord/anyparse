@@ -79,7 +79,7 @@ private typedef WideLine = {
  *    which is the only honest evidence that nothing can be done with it.
  */
 @:nullSafety(Strict)
-final class CommentWidth implements Check implements DefaultOff implements VolatileMessage {
+final class CommentWidth extends RuleBase implements DefaultOff implements VolatileMessage {
 
 	/** This check's `id()`, and the `rule` every finding carries. */
 	private static inline final RULE_ID: String = 'comment-width';
@@ -111,14 +111,8 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 	/** Report-only: the reflow handed the line back byte-identical — one word wider than the width. */
 	private static inline final NO_BREAK: String = 'it holds no break point inside the width';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a comment line wider than the configured maximum line length';
+	public function new() {
+		super(RULE_ID, 'a comment line wider than the configured maximum line length', RuleCategory.Docs);
 	}
 
 	/** Mask the measured width; the configured maximum after it is a threshold and stays. */

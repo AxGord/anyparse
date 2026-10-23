@@ -67,7 +67,7 @@ import anyparse.runtime.Span;
  * `plugin is TypeInfoProvider`.
  */
 @:nullSafety(Strict)
-final class RedundantMapExists implements Check implements DefaultOff {
+final class RedundantMapExists extends RuleBase implements DefaultOff {
 
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'redundant-map-exists';
@@ -92,14 +92,11 @@ final class RedundantMapExists implements Check implements DefaultOff {
 	private static inline final DECLINE_REASON: String =
 		'the value census could not rule out a stored null, so map[key] ?? default would change the result for that key';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a map exists-then-index ternary (m.exists(k) ? m[k] : d) replaceable with the null-coalescing lookup (m[k] ?? d)';
+	public function new() {
+		super(
+			RULE_ID, 'a map exists-then-index ternary (m.exists(k) ? m[k] : d) replaceable with the null-coalescing lookup (m[k] ?? d)',
+			RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

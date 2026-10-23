@@ -77,7 +77,7 @@ using StringTools;
  * shape of the iterator protocol in the grammars that have one, not a `RefShape` axis.
  */
 @:nullSafety(Strict)
-final class PreferForIn implements Check implements DefaultOff {
+final class PreferForIn extends RuleBase implements DefaultOff {
 
 	/** The protocol method a qualifying `while` condition must call, on a bare identifier, with no arguments. */
 	private static inline final HAS_NEXT_METHOD: String = 'hasNext';
@@ -116,14 +116,12 @@ final class PreferForIn implements Check implements DefaultOff {
 	 */
 	private static final ELEMENT_TYPE_HEADS: Array<String> = ['Array', 'Iterator', 'Iterable'];
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-for-in';
-	}
-
-	public function description(): String {
-		return 'a hand-rolled iterator loop (while (it.hasNext()) { final x = it.next(); … }) replaceable with for (x in it)';
+	public function new() {
+		super(
+			'prefer-for-in',
+			'a hand-rolled iterator loop (while (it.hasNext()) { final x = it.next(); … }) replaceable with for (x in it)',
+			RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

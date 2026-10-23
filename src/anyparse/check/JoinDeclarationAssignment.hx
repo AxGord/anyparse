@@ -57,16 +57,14 @@ using StringTools;
  * makes the check a no-op).
  */
 @:nullSafety(Strict)
-final class JoinDeclarationAssignment implements Check {
+final class JoinDeclarationAssignment extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'join-declaration-assignment';
-	}
-
-	public function description(): String {
-		return 'a bare local declaration immediately followed by its first assignment, joinable to an initialized declaration';
+	public function new() {
+		super(
+			'join-declaration-assignment',
+			'a bare local declaration immediately followed by its first assignment, joinable to an initialized declaration',
+			RuleCategory.Expressions
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

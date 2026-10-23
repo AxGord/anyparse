@@ -85,7 +85,7 @@ using StringTools;
  * converges on a later `--fix` pass.
  */
 @:nullSafety(Strict)
-final class CollapsibleElseIf implements Check {
+final class CollapsibleElseIf extends RuleBase {
 
 	/** An if node with an else branch has children [cond, then, else]. */
 	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
@@ -93,14 +93,8 @@ final class CollapsibleElseIf implements Check {
 	/** The else branch is the third child of an if node — `[cond, then, else]`. */
 	private static inline final ELSE_BRANCH_INDEX: Int = 2;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'collapsible-else-if';
-	}
-
-	public function description(): String {
-		return 'an else whose sole statement is an if — collapses to else if';
+	public function new() {
+		super('collapsible-else-if', 'an else whose sole statement is an if — collapses to else if', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

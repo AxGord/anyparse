@@ -60,7 +60,7 @@ using Lambda;
  * A `Dynamic`-typed WRITE `(o:Dynamic).x = v` lands in the field with the metadata and fails without it on eval.
  */
 @:nullSafety(Strict)
-final class RedundantIsVar implements Check implements DefaultOff implements RiskyFix implements OracleRelaxable {
+final class RedundantIsVar extends RuleBase implements DefaultOff implements RiskyFix implements OracleRelaxable {
 
 	/** This check's stable id. */
 	private static inline final RULE_ID: String = 'redundant-isvar';
@@ -78,7 +78,14 @@ final class RedundantIsVar implements Check implements DefaultOff implements Ris
 	/** Whether a compiler oracle verifies the fix, which is what admits a macro-built owner's edit. */
 	private var _oracleRelaxed: Bool = false;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID,
+			'an @:isVar on a property whose physical field nothing can reach — no accessor body, @:bypassAccessor, initializer or '
+			+ 'reflective name mentions it',
+			RuleCategory.Members
+		);
+	}
 
 	/**
 	 * Admit the edits of MACRO-BUILT owners. Set by `Cli.applyLintFixes` only when this check runs
@@ -86,15 +93,6 @@ final class RedundantIsVar implements Check implements DefaultOff implements Ris
 	 */
 	public function setOracleRelaxed(relaxed: Bool): Void {
 		_oracleRelaxed = relaxed;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an @:isVar on a property whose physical field nothing can reach — no accessor body, @:bypassAccessor, initializer or '
-			+ 'reflective name mentions it';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

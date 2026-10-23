@@ -24,7 +24,7 @@ using StringTools;
  * block's text.
  */
 @:nullSafety(Strict)
-final class FragmentedDocComment implements Check {
+final class FragmentedDocComment extends RuleBase {
 
 	/**
 	 * The fragment that precedes the BLOCK TALLY in a message. Spelled once, but NOT used as a
@@ -38,14 +38,8 @@ final class FragmentedDocComment implements Check {
 	 */
 	private static inline final BLOCK_COUNT_LEAD: String = 'documented by ';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'fragmented-doc-comment';
-	}
-
-	public function description(): String {
-		return 'a declaration documented by several adjacent comment blocks instead of one';
+	public function new() {
+		super('fragmented-doc-comment', 'a declaration documented by several adjacent comment blocks instead of one', RuleCategory.Docs);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -52,19 +52,13 @@ import anyparse.runtime.Span;
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are never descended into.
  */
 @:nullSafety(Strict)
-final class RedundantUncheckedCast implements Check {
+final class RedundantUncheckedCast extends RuleBase {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'redundant-unchecked-cast';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an unchecked cast whose position is already typed exactly what the operand is';
+	public function new() {
+		super(RULE_ID, 'an unchecked cast whose position is already typed exactly what the operand is', RuleCategory.Types);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -145,7 +145,7 @@ using StringTools;
  * type by rules the index does not model, and an `enum` / `typedef` declares no methods.
  */
 @:nullSafety(Strict)
-final class UnusedPublicMember implements Check implements DefaultOff implements RiskyFix implements ConfigAware implements FrameworkAware {
+final class UnusedPublicMember extends RuleBase implements DefaultOff implements RiskyFix implements ConfigAware implements FrameworkAware {
 
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'unused-public-member';
@@ -210,18 +210,15 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID, 'a public method whose name occurs nowhere in scope outside its own declaration — dead weight nothing can reach',
+			RuleCategory.Unused
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a public method whose name occurs nowhere in scope outside its own declaration — dead weight nothing can reach';
 	}
 
 	/**

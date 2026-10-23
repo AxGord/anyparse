@@ -23,16 +23,10 @@ import anyparse.runtime.Span;
  * assignment (`if (c) x = y else z`). Any optional kind unset → no-op.
  */
 @:nullSafety(Strict)
-final class AssignmentInCondition implements Check implements NoAutofix {
+final class AssignmentInCondition extends RuleBase implements NoAutofix {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'assignment-in-condition';
-	}
-
-	public function description(): String {
-		return 'an assignment (=) used as a condition — likely a == typo';
+	public function new() {
+		super('assignment-in-condition', 'an assignment (=) used as a condition — likely a == typo', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

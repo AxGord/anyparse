@@ -19,16 +19,10 @@ import anyparse.runtime.Span;
  * side-effect-free identical operands are flagged.
  */
 @:nullSafety(Strict)
-final class IdenticalOperands implements Check implements NoAutofix {
+final class IdenticalOperands extends RuleBase implements NoAutofix {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'identical-operands';
-	}
-
-	public function description(): String {
-		return 'a binary operator (==, !=, <, &&, …) whose two operands are identical';
+	public function new() {
+		super('identical-operands', 'a binary operator (==, !=, <, &&, …) whose two operands are identical', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

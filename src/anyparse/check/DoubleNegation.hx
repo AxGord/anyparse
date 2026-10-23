@@ -34,16 +34,10 @@ using Lambda;
  * outright, so the two shapes stay disjoint and neither ever claims the other's node.
  */
 @:nullSafety(Strict)
-final class DoubleNegation implements Check {
+final class DoubleNegation extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'double-negation';
-	}
-
-	public function description(): String {
-		return 'a redundant double logical negation (!!x)';
+	public function new() {
+		super('double-negation', 'a redundant double logical negation (!!x)', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

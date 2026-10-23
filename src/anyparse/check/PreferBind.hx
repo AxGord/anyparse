@@ -60,18 +60,12 @@ using Lambda;
  * fix per `--fix` iteration.
  */
 @:nullSafety(Strict)
-final class PreferBind implements Check {
+final class PreferBind extends RuleBase {
 
 	private static inline final RULE_ID: String = 'prefer-bind';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a () -> f(a, b) wrapper lambda replaceable with f.bind(a, b)';
+	public function new() {
+		super(RULE_ID, 'a () -> f(a, b) wrapper lambda replaceable with f.bind(a, b)', RuleCategory.Expressions);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -47,7 +47,7 @@ using StringTools;
  * `else switch` exemption, so a grammar without it reports those pairs.
  */
 @:nullSafety(Strict)
-final class AsymmetricBranchBraces implements Check implements DefaultOff {
+final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'asymmetric-branch-braces';
@@ -61,16 +61,9 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff {
 	/** The else branch is the third child of an if node - `[cond, then, else]`. */
 	private static inline final ELSE_BRANCH_INDEX: Int = 2;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
+	public function new() {
+		super(RULE_ID, 'an if/else with exactly one braced branch - the other reads as an accident', RuleCategory.Control);
 	}
-
-	public function description(): String {
-		return 'an if/else with exactly one braced branch - the other reads as an accident';
-	}
-
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {

@@ -135,12 +135,19 @@ import anyparse.runtime.Span;
  * it answers the same in both scopes instead of by accident in one.
  */
 @:nullSafety(Strict)
-final class PreferFinalPublicField implements Check implements RiskyFix implements OracleRelaxable {
+final class PreferFinalPublicField extends RuleBase implements RiskyFix implements OracleRelaxable {
 
 	/** Whether a compiler oracle verifies the fix, which is what admits a macro-built owner's edit. */
 	private var _oracleRelaxed: Bool = false;
 
-	public function new() {}
+	public function new() {
+		super(
+			'prefer-final-public-field',
+			'a public var field never reassigned — assigned only at its declaration or by a sole constructor assignment — that can be '
+			+ 'final',
+			RuleCategory.Members
+		);
+	}
 
 	/**
 	 * Admit the edits of MACRO-BUILT owners. Set by `Cli.applyLintFixes` only when this check runs
@@ -148,15 +155,6 @@ final class PreferFinalPublicField implements Check implements RiskyFix implemen
 	 */
 	public function setOracleRelaxed(relaxed: Bool): Void {
 		_oracleRelaxed = relaxed;
-	}
-
-	public function id(): String {
-		return 'prefer-final-public-field';
-	}
-
-	public function description(): String {
-		return 'a public var field never reassigned — assigned only at its declaration or by a sole constructor assignment — that can be '
-			+ 'final';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

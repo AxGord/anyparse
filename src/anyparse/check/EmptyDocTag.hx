@@ -64,7 +64,7 @@ typedef TagSection = {
  * since `doc-coverage` has no fix.
  */
 @:nullSafety(Strict)
-final class EmptyDocTag implements Check {
+final class EmptyDocTag extends RuleBase {
 
 	/** The doc-comment opener - a plain block comment carries no tags. */
 	private static final DOC_OPEN: String = '/**';
@@ -72,14 +72,8 @@ final class EmptyDocTag implements Check {
 	/** The block-comment closer. */
 	private static final DOC_CLOSE: String = '*/';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'empty-doc-tag';
-	}
-
-	public function description(): String {
-		return 'a doc-comment tag with no description (name-only @param, bare @return)';
+	public function new() {
+		super('empty-doc-tag', 'a doc-comment tag with no description (name-only @param, bare @return)', RuleCategory.Docs);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
