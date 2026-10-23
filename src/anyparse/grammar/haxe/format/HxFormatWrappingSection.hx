@@ -29,7 +29,8 @@ package anyparse.grammar.haxe.format;
  * The keys that are not cascades: `arrayMatrixWrap` (string → `ArrayMatrixWrap.resolve`, default
  * `matrixWrapWithAlign`, whether a source-detected matrix grid is preserved and its columns right-aligned);
  * `trailingComma` (anyparse-only, `"remove"` → `TrailingCommaPolicy.Remove`, else `Keep` — see
- * `HxFormatWrappingTrailingCommaPolicy`); and the `Bool` layout policies defaulting to `false` (absent =
+ * `HxFormatWrappingTrailingCommaPolicy`); `ternaryMultilineBranch` (the fork's key and spellings, `"inline"` / `"break"` →
+ * `ternaryMultilineBranchInline`, hxq default `break`); and the `Bool` layout policies defaulting to `false` (absent =
  * byte-inert), documented on their `WriteOptions` fields — `ternaryCuddledBraces`, `comprehensionCuddledOpen`
  * (a sole expression-bodied `for` comprehension keeps its head on the `[` line when it fits),
  * `methodChainCuddledLinks` (a link after a multi-line predecessor that ends in a dedented `})` starts on that
@@ -51,6 +52,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var soleItemCuddledBrackets: Bool;
 
 	@:optional var ternaryCuddledBraces: Bool;
+
+	@:optional var ternaryMultilineBranch: HxFormatTernaryMultilineBranchPolicy;
 
 	@:optional var arrayWrap: HxFormatWrapRules;
 

@@ -875,6 +875,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxTernaryCuddleProbeShapeTest',
 		'unit.grammar.haxe.HxTernaryCuddledBracesTest',
 		'unit.grammar.haxe.HxTernaryDeclInitRestAwareTest',
+		'unit.grammar.haxe.HxTernaryMultilineBranchTest',
 		'unit.grammar.haxe.HxTernarySliceTest',
 		'unit.grammar.haxe.HxThinArrowIfElseBreakSliceTest',
 		'unit.grammar.haxe.HxThinArrowSliceTest',

@@ -62,6 +62,19 @@ width off the render stack through `Doc.IfArrowContinuationFitsWithRest`),
 the `]` on its own line), `methodChainCuddledLinks` and `soleItemCuddledBrackets`
 (`HxFormatWrappingSection`'s doc says what each recognises). All default `false`.
 
+`ternaryMultilineBranch` is the FORK's key (FX-1b), with its spellings: `"break"` puts a
+ternary's `?` and `:` on lines of their own when a branch holds a multi-line block
+(`cond ? macro {…} : …`, `cond ? run(function() {…}) : …`); `"inline"` keeps
+`cond ? macro {` on the condition's line while that line fits and lets `ternaryExpression`
+break it otherwise. A block is a statement block, a function body, a `switch` or `macro class`
+body, anywhere in either branch; an object or array literal is not one (a block inside it is),
+and the brace or bracket group a branch OPENS with is skipped (`cond ? a : {…}`). That set is
+the fork's `hasMultilineBlockBranch`, so the two tools agree under either value. The defaults
+differ by decision: hxq's is `break` (the layout it always wrote), the fork's `inline`. A
+ternary whose only multi-line content is a literal is not acted on, and hxq still breaks one
+whose then-branch is a call wrapping a multi-line literal (`cond ? f({…}) : x`), where the fork
+keeps it glued under either value.
+
 A rules object holds `defaultWrap`, `defaultLocation`, `defaultAdditionalIndent` (Int),
 `rules` (an array of `{type, location, conditions}`) and `itemsAfterCloseParenOnly` (Bool,
 `methodChain` only — see its doc for why it is opt-in). **`defaultWrap` alone is a no-op**

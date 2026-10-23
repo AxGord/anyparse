@@ -581,6 +581,14 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	opAddSubChainWrap: WrapRules,
 	conditionWrap: WrapRules,
 	ternaryWrap: WrapRules,
+	// The layout of a ternary whose branch holds a multi-line block (`cond ? macro {…} : …`): `false`
+	// (the default) lets that hardline commit the ternary to its break shape, `?` and `:` on lines of their
+	// own; `true` keeps `cond ? macro {` on the condition's line while it fits and leaves the wrap to
+	// `ternaryWrap`. Object and array literals are not blocks, and the brace or bracket group a branch
+	// opens with is skipped (`HxTernaryBranchBlocks`). Fed by
+	// `wrapping.ternaryMultilineBranch` (`"inline"` → true, `"break"` → false); read through the Ternary
+	// ctor's `@:fmt(multilineBranchInline)`.
+	ternaryMultilineBranchInline: Bool,
 	functionSignatureWrap: WrapRules,
 	anonFunctionSignatureWrap: WrapRules,
 	metadataCallParameterWrap: WrapRules,

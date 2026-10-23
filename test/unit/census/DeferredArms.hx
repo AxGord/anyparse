@@ -269,7 +269,8 @@ final class DeferredArms {
 		'M-CLOSE-LOOP-LEAD-UNGLUED :: anyparse.macro.StarLoopLowering#buildTriviaCloseLoopBody',
 		'M-NOWRAP-LEAD-IN-CASCADE :: anyparse.macro.TriviaSepLowering#triviaSepPredicateScanExpr',
 		'M-CALL-SOURCE-TRAIL-OFF :: anyparse.macro.WriterPrattLowering#lowerPostfixStar',
-		'M-CALL-FLAT-SOURCE-TRAIL-OFF :: anyparse.macro.WriterPrattLowering#lowerPostfixCascadeCall'
+		'M-CALL-FLAT-SOURCE-TRAIL-OFF :: anyparse.macro.WriterPrattLowering#lowerPostfixCascadeCall',
+		'M-TERNARY-MLB-OPTION-IGNORED :: anyparse.macro.WriterPrattLowering#multilineBranchInlineExpr'
 	];
 
 }

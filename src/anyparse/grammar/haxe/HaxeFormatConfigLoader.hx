@@ -38,6 +38,7 @@ import anyparse.grammar.haxe.format.HxFormatParenPolicySection;
 import anyparse.grammar.haxe.format.HxFormatSameLineSection;
 import anyparse.grammar.haxe.format.HxFormatSingleStatementBracesPolicy;
 import anyparse.grammar.haxe.format.HxFormatSwitchSubjectParensPolicy;
+import anyparse.grammar.haxe.format.HxFormatTernaryMultilineBranchPolicy;
 import anyparse.grammar.haxe.format.HxFormatTrailingCommasSection;
 import anyparse.grammar.haxe.format.HxFormatTypedefEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatWhitespacePolicy;
@@ -253,6 +254,7 @@ final class HaxeFormatConfigLoader {
 			opAddSubChainWrap: base.opAddSubChainWrap,
 			conditionWrap: base.conditionWrap,
 			ternaryWrap: base.ternaryWrap,
+			ternaryMultilineBranchInline: base.ternaryMultilineBranchInline,
 			functionSignatureWrap: base.functionSignatureWrap,
 			anonFunctionSignatureWrap: base.anonFunctionSignatureWrap,
 			metadataCallParameterWrap: base.metadataCallParameterWrap,
@@ -809,6 +811,8 @@ final class HaxeFormatConfigLoader {
 		if (section.methodChainCuddledLinks != null) opt.methodChainCuddledLinks = section.methodChainCuddledLinks;
 		if (section.soleItemCuddledBrackets != null) opt.soleItemCuddledBrackets = section.soleItemCuddledBrackets;
 		if (section.ternaryCuddledBraces != null) opt.ternaryCuddledBraces = section.ternaryCuddledBraces;
+		if (section.ternaryMultilineBranch != null)
+			opt.ternaryMultilineBranchInline = section.ternaryMultilineBranch == HxFormatTernaryMultilineBranchPolicy.Inline;
 	}
 
 	private static function applyWrappingRulesA(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {

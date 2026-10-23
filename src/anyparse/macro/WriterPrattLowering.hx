@@ -1260,6 +1260,7 @@ final class WriterPrattLowering {
 		// Collapsing nested ternaries into a single chain is a future
 		// slice (no current fixture demands it).
 		final rulesExpr: Expr = optFieldAccess('ternaryWrap');
+		final inlineBranchExpr: Expr = multilineBranchInlineExpr(pc, branch, argNames);
 		// ω-keep-ternary-operand-comment: the two operand-trailing slots grown by
 		// `@:fmt(captureTernaryTrail)`. Each attaches to its operand's Doc so the
 		// comment travels with the operand under EVERY shape the cascade can pick.
@@ -1331,13 +1332,34 @@ final class WriterPrattLowering {
 				: null;
 			final _inner: anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
 				_items, _ops, opt, $rulesExpr, false, false, _ternaryBreaks, false, _forceKeep, null,
-				opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap && !opt._keepChainInParen, _ternaryKeepLoc
+				opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap && !opt._keepChainInParen, _ternaryKeepLoc,
+				$inlineBranchExpr
 			);
 			if ($v{tPrec} < ctxPrec)
 				_dc([_dt('('), _inner, _dt(')')])
 			else
 				_inner;
 		};
+	}
+
+	/**
+	 * The ternary's `inlineMultilineBranch` verdict for `BinaryChainEmit.emit`, read off
+	 * `@:fmt(multilineBranchInline('<optBoolField>', '<predicate>'))`: the option is on AND the
+	 * grammar's predicate finds a multi-line block in the then or the else operand. The predicate is
+	 * the grammar's, so this lowering never spells a block constructor; with no such flag the verdict
+	 * is a constant `false` and the emit is byte-identical.
+	 */
+	private static function multilineBranchInlineExpr(pc: PrattLoweringCtx, branch: ShapeNode, argNames: Array<String>): Expr {
+		final args: Null<Array<String>> = branch.fmtReadStringArgs('multilineBranchInline');
+		if (args == null) return macro false;
+		if (args.length != 2)
+			Context.fatalError(
+				'WriterLowering: @:fmt(multilineBranchInline) expects 2 string args (optBoolField, predicate), got ${args.length}',
+				Context.currentPos()
+			);
+		final pred: Expr = AstPredLowering.predFnExpr(pc.shape.root, pc.ctx.trivia, false, args[1]);
+		final optAccess: Expr = optFieldAccess(args[0]);
+		return macro $optAccess && ($pred($i{argNames[1]}) || $pred($i{argNames[2]}));
 	}
 
 	/**
