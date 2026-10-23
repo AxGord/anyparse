@@ -61,19 +61,13 @@ import anyparse.runtime.Span;
  * `--rule redundant-ascription`.
  */
 @:nullSafety(Strict)
-final class RedundantAscription implements Check implements DefaultOff {
+final class RedundantAscription extends RuleBase implements DefaultOff {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'redundant-ascription';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a `(new T(...) : T)` ascription restating the constructed type';
+	public function new() {
+		super(RULE_ID, 'a `(new T(...) : T)` ascription restating the constructed type', RuleCategory.Types);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

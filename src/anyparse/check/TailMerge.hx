@@ -113,7 +113,7 @@ using StringTools;
  * through `CanonicalEdit.dropContainedEdits` so no two deletions overlap.
  */
 @:nullSafety(Strict)
-final class TailMerge implements Check {
+final class TailMerge extends RuleBase {
 
 	private static inline final RULE_ID: String = 'tail-merge';
 
@@ -138,14 +138,11 @@ final class TailMerge implements Check {
 		opaqueDecl: false
 	};
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a conditional branch ending with the same statements that follow the if — removable, control falls through to them';
+	public function new() {
+		super(
+			RULE_ID, 'a conditional branch ending with the same statements that follow the if — removable, control falls through to them',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

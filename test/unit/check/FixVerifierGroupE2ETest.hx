@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
+import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
@@ -253,6 +254,10 @@ private class TableFake implements Check implements RiskyFix implements GroupedF
 
 	public function description(): String {
 		return 'test double: rewrites a fixed literal table in declared groups';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

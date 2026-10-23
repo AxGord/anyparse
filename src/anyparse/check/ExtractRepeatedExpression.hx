@@ -107,7 +107,7 @@ using Lambda;
  * kind makes the check a no-op. The finding is spanned at the earliest occurrence.
  */
 @:nullSafety(Strict)
-final class ExtractRepeatedExpression implements Check implements VolatileMessage implements NoAutofix {
+final class ExtractRepeatedExpression extends RuleBase implements VolatileMessage implements NoAutofix {
 
 	/** The least number of identical occurrences within one body to report. */
 	private static inline final MIN_OCCURRENCES: Int = 3;
@@ -128,14 +128,11 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 	 */
 	private static inline final REPEAT_TAIL: String = ' times in one function body';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a non-trivial pure expression repeated three or more times in one function body — a candidate for a final local';
+	public function new() {
+		super(
+			RULE_ID, 'a non-trivial pure expression repeated three or more times in one function body — a candidate for a final local',
+			RuleCategory.Design
+		);
 	}
 
 	public function messageIdentity(message: String): String {

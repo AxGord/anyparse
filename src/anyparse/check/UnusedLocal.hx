@@ -145,7 +145,7 @@ private typedef ScanCtx = {
  * initializer is reported but left for the author to resolve.
  */
 @:nullSafety(Strict)
-final class UnusedLocal implements Check implements VolatileMessage {
+final class UnusedLocal extends RuleBase implements VolatileMessage {
 
 	/**
 	 * The fragment that precedes the RE-DECLARATION's position in the message — shared by
@@ -154,14 +154,8 @@ final class UnusedLocal implements Check implements VolatileMessage {
 	 */
 	private static inline final REDECLARED_AT: String = ' — re-declared at ';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'unused-local';
-	}
-
-	public function description(): String {
-		return 'local var/final declared but never referenced in its scope';
+	public function new() {
+		super('unused-local', 'local var/final declared but never referenced in its scope', RuleCategory.Unused);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

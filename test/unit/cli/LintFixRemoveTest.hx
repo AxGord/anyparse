@@ -8,6 +8,7 @@ import anyparse.check.Check;
 import anyparse.check.CompilerOracle;
 import anyparse.check.EmptyAmbientSource;
 import anyparse.check.LintConfig;
+import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -153,6 +154,10 @@ private class LoadBearingRemove implements Check implements CrossFileFix {
 		return 'deletes every ambient source';
 	}
 
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return [
 			for (entry in files) if (plugin.ambientImportGovernance(entry.file) != null) {
@@ -197,6 +202,10 @@ private class DiskWitness implements Check {
 		return 'records one file as it stands on disk';
 	}
 
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		#if (sys || nodejs)
 		final text: String = File.getContent(_path);
@@ -222,6 +231,10 @@ private class OverlappingPair implements Check implements CrossFileFix {
 
 	public function description(): String {
 		return 'two overlapping fixes of one module';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

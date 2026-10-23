@@ -33,16 +33,10 @@ import anyparse.runtime.Span;
  * type) is context-dependent, exactly as for `redundant-is-check`.
  */
 @:nullSafety(Strict)
-final class ImpossibleIsCheck implements Check {
+final class ImpossibleIsCheck extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'impossible-is-check';
-	}
-
-	public function description(): String {
-		return 'an is-check between two unrelated classes that is always false';
+	public function new() {
+		super('impossible-is-check', 'an is-check between two unrelated classes that is always false', RuleCategory.Types);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

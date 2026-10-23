@@ -29,7 +29,7 @@ import anyparse.runtime.Span;
  * finding keeps a `declineReason` and gets no edit (`NullFacts.nonNullVisible`).
  */
 @:nullSafety(Strict)
-final class DeadNullCoalescing implements Check implements ConfigAware {
+final class DeadNullCoalescing extends RuleBase implements ConfigAware {
 
 	/** What dropping a fallback whose proof the compiler's null-safety does not share would do (`NullSafetyGate`). */
 	private static inline final UNSEEN_CONSEQUENCE: String = ', so dropping the fallback would not compile';
@@ -37,18 +37,15 @@ final class DeadNullCoalescing implements Check implements ConfigAware {
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			'dead-null-coalescing', 'a null-coalescing whose left operand is already non-null on every path reaching it',
+			RuleCategory.NullSafety
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'dead-null-coalescing';
-	}
-
-	public function description(): String {
-		return 'a null-coalescing whose left operand is already non-null on every path reaching it';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

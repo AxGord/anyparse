@@ -10,18 +10,12 @@ import anyparse.runtime.Span;
  * annotation (see `NewLiteral`). Grammar-agnostic over `RefShape.newExprKind`.
  */
 @:nullSafety(Strict)
-final class PreferArrayLiteral implements Check {
+final class PreferArrayLiteral extends RuleBase {
 
 	private static final TYPE_NAME: String = 'Array';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-array-literal';
-	}
-
-	public function description(): String {
-		return 'a new Array() construction replaceable with the array literal []';
+	public function new() {
+		super('prefer-array-literal', 'a new Array() construction replaceable with the array literal []', RuleCategory.Loops);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

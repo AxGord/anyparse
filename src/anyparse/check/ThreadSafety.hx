@@ -80,7 +80,7 @@ using StringTools;
  * are reported at `info`, the reason in the message: brief, never dropped.
  */
 @:nullSafety(Strict)
-final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements GraphScoped {
+final class ThreadSafety extends RuleBase implements ConfigAware implements NoAutofix implements GraphScoped {
 
 	public static inline final CTX_MAIN: Int = 1;
 	public static inline final CTX_BG: Int = 2;
@@ -108,7 +108,14 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/** Whether a run explains its long locks into `longLocks` (`explainLongLocks`). */
 	private var _explainLong: Bool = false;
 
-	public function new() {}
+	public function new() {
+		super(
+			'thread-safety',
+			'main-thread-reachable blocking calls, locks held across blocking calls or left held by a throw, and lock-order'
+			+ ' inversions between threads (config-driven)',
+			RuleCategory.Design
+		);
+	}
 
 	/** Makes each later run explain its long locks into `longLocks` (`LongLockExplain`); its findings stay the same. */
 	public inline function explainLongLocks(on: Bool): Void {
@@ -117,15 +124,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'thread-safety';
-	}
-
-	public function description(): String {
-		return 'main-thread-reachable blocking calls, locks held across blocking calls or left held by a throw, and lock-order'
-			+ ' inversions between threads (config-driven)';
 	}
 
 	/**

@@ -181,7 +181,7 @@ using StringTools;
  * `null` argument yields the default in BOTH forms.
  */
 @:nullSafety(Strict)
-final class OptionalParamShorthand implements Check {
+final class OptionalParamShorthand extends RuleBase {
 
 	/** The rule id — repeated across `id()` and every arm's violation push. */
 	private static inline final RULE_ID: String = 'optional-param-shorthand';
@@ -189,16 +189,14 @@ final class OptionalParamShorthand implements Check {
 	/** The one nullable wrapper this rule unwraps. */
 	private static inline final NULL_WRAPPER: String = 'Null';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a nullable-defaulted parameter (name:Null<T> = null or name:T = null) the ? shorthand (?name:T) '
+	public function new() {
+		super(
+			RULE_ID,
+			'a nullable-defaulted parameter (name:Null<T> = null or name:T = null) the ? shorthand (?name:T) '
 			+ 'replaces, a redundant = null default on an already-optional ?name:T, a redundant ? on ?name:T = <non-null default>, '
-			+ 'or an optional ?name:T whose every read is name ?? CONST (declare name:T = CONST instead)';
+			+ 'or an optional ?name:T whose every read is name ?? CONST (declare name:T = CONST instead)',
+			RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

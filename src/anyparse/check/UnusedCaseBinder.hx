@@ -105,18 +105,12 @@ using Lambda;
  * `_`, which is never a binder, so a second pass finds nothing.
  */
 @:nullSafety(Strict)
-final class UnusedCaseBinder implements Check {
+final class UnusedCaseBinder extends RuleBase {
 
 	private static final RULE_ID: String = 'unused-case-binder';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a switch case-pattern binder never read in the arm\'s guard or body — replaceable with _';
+	public function new() {
+		super(RULE_ID, 'a switch case-pattern binder never read in the arm\'s guard or body — replaceable with _', RuleCategory.Unused);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

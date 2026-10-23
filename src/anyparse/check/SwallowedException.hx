@@ -42,16 +42,13 @@ using StringTools;
  * unset and the check no-ops.
  */
 @:nullSafety(Strict)
-final class SwallowedException implements Check implements NoAutofix {
+final class SwallowedException extends RuleBase implements NoAutofix {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'swallowed-exception';
-	}
-
-	public function description(): String {
-		return 'a catch whose statement block ignores the caught exception — neither used, rethrown, nor returned';
+	public function new() {
+		super(
+			'swallowed-exception', 'a catch whose statement block ignores the caught exception — neither used, rethrown, nor returned',
+			RuleCategory.Types
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

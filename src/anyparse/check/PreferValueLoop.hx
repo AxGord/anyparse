@@ -55,7 +55,7 @@ import anyparse.runtime.Span;
  * a loop named `i` uses, and a macro body is active code no mask may hide.
  */
 @:nullSafety(Strict)
-final class PreferValueLoop implements Check implements DefaultOff {
+final class PreferValueLoop extends RuleBase implements DefaultOff {
 
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'prefer-value-loop';
@@ -72,14 +72,8 @@ final class PreferValueLoop implements Check implements DefaultOff {
 	/** The one `X[i]` the sibling's rewrite consumes; a second one is outside its claim. */
 	private static inline final CONSUMED_INDEX_READS: Int = 1;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an indexed for whose index only reads X[i], replaceable with for (v in X)';
+	public function new() {
+		super(RULE_ID, 'an indexed for whose index only reads X[i], replaceable with for (v in X)', RuleCategory.Loops);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

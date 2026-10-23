@@ -21,18 +21,12 @@ using StringTools;
  * pattern and the body, introduced by `if` in the intervening source.
  */
 @:nullSafety(Strict)
-final class DuplicateCase implements Check {
+final class DuplicateCase extends RuleBase {
 
 	private static final GUARD: EReg = ~/\bif\b/;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'duplicate-case';
-	}
-
-	public function description(): String {
-		return 'a switch case whose pattern repeats an earlier case in the same switch';
+	public function new() {
+		super('duplicate-case', 'a switch case whose pattern repeats an earlier case in the same switch', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

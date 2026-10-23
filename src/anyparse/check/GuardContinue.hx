@@ -109,7 +109,7 @@ using Lambda;
  * pair also gates the collision rename).
  */
 @:nullSafety(Strict)
-final class GuardContinue implements Check {
+final class GuardContinue extends RuleBase {
 
 	/** The first suffix a collision rename tries (`path` → `path2`). */
 	private static inline final FRESH_NAME_FIRST: Int = 2;
@@ -117,14 +117,8 @@ final class GuardContinue implements Check {
 	/** One past the last suffix a collision rename tries (`path99` is the last candidate). */
 	private static inline final FRESH_NAME_LIMIT: Int = 100;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'guard-continue';
-	}
-
-	public function description(): String {
-		return 'a trailing if in a loop body, de-nestable to an if (!cond) continue; guard';
+	public function new() {
+		super('guard-continue', 'a trailing if in a loop body, de-nestable to an if (!cond) continue; guard', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -56,7 +56,7 @@ using StringTools;
  * too.
  */
 @:nullSafety(Strict)
-final class IfFalseDeadCode implements Check {
+final class IfFalseDeadCode extends RuleBase {
 
 	/** ASCII-only note appended when a non-trivial dead body withholds the autofix. */
 	private static inline final DEAD_BRANCH_NOTE: String = ' (dead branch - verify intent before deleting)';
@@ -67,14 +67,11 @@ final class IfFalseDeadCode implements Check {
 	/** Base message for a flagged `#if true` region — the guard is always redundant. */
 	private static inline final TRUE_MESSAGE: String = 'redundant `#if true` region — every compilation target already includes it';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'if-false';
-	}
-
-	public function description(): String {
-		return 'an `#if false … #end` region — dead code — or an `#if true … #end` region — a redundant directive';
+	public function new() {
+		super(
+			'if-false', 'an `#if false … #end` region — dead code — or an `#if true … #end` region — a redundant directive',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

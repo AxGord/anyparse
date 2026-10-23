@@ -87,7 +87,7 @@ using Lambda;
  * stays). Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
  */
 @:nullSafety(Strict)
-final class RedundantToString implements Check implements DefaultOff {
+final class RedundantToString extends RuleBase implements DefaultOff {
 
 	/** The stringification method every arm looks for. */
 	private static inline final TO_STRING: String = 'toString';
@@ -101,14 +101,8 @@ final class RedundantToString implements Check implements DefaultOff {
 	/** The kind the compiler's facts give a class (`CompilerFacts.TypeFact`). */
 	private static inline final CLASS_KIND: String = 'class';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'redundant-tostring';
-	}
-
-	public function description(): String {
-		return 'a .toString() call in a position that already stringifies';
+	public function new() {
+		super('redundant-tostring', 'a .toString() call in a position that already stringifies', RuleCategory.Literals);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -68,18 +68,16 @@ import anyparse.runtime.Span;
  * null, which is the same thing one finding at a time.
  */
 @:nullSafety(Strict)
-final class ShadowingCaseBinder implements Check implements NoAutofix {
+final class ShadowingCaseBinder extends RuleBase implements NoAutofix {
 
 	private static final RULE_ID: String = 'shadowing-case-binder';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a case-pattern binder whose name shadows a declaration in scope — a bare lowercase pattern captures, it never compares';
+	public function new() {
+		super(
+			RULE_ID,
+			'a case-pattern binder whose name shadows a declaration in scope — a bare lowercase pattern captures, it never compares',
+			RuleCategory.Naming
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

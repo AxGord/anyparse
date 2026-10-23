@@ -154,7 +154,7 @@ import anyparse.runtime.Span;
  * operator); any unset makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class HoistBranchStringAffix implements Check implements DefaultOff {
+final class HoistBranchStringAffix extends RuleBase implements DefaultOff {
 
 	/** The rule id, also the `rule` field of every violation it reports. */
 	private static inline final RULE_ID: String = 'hoist-branch-string-affix';
@@ -169,15 +169,13 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 	private static inline final MESSAGE: String = 'every branch of this conditional-compilation region returns a string with the same '
 		+ 'edges - write the shared text once outside the region';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a conditional-compilation region whose every branch returns a string with the same edges, the shared text hoistable out '
-			+ 'of the region';
+	public function new() {
+		super(
+			RULE_ID,
+			'a conditional-compilation region whose every branch returns a string with the same edges, the shared text hoistable out '
+			+ 'of the region',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

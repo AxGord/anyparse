@@ -78,16 +78,10 @@ typedef LineCommentKinds = { blocks: Array<String>, localFns: Array<String> };
  * spared.
  */
 @:nullSafety(Strict)
-final class PreferLineComment implements Check implements DefaultOff {
+final class PreferLineComment extends RuleBase implements DefaultOff {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-line-comment';
-	}
-
-	public function description(): String {
-		return 'a block comment in a statement position, replaceable with a line comment';
+	public function new() {
+		super('prefer-line-comment', 'a block comment in a statement position, replaceable with a line comment', RuleCategory.Docs);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -97,6 +97,10 @@ typedef DiscoveredConfig = {
  *  - `severity` — override the severity a rule reports at.
  *  - rule-specific options (e.g. `max`) — read by the owning check.
  *
+ * A rule entry may be `true` / `false` for `{"enabled": …}`, and an object enables the rule unless it says `enabled`.
+ * The `categories` section switches every rule of a `RuleCategory` at once, its default-off members included; a rule
+ * entry outranks its category's (`enabledSetting`).
+ *
  * `enabled`/`severity` are applied by the framework (`Cli.runLint` /
  * `Linter.run`); options are pulled by the check itself (`Complexity`). A
  * missing or malformed file yields an empty config, so absence is a no-op.
@@ -116,6 +120,9 @@ final class LintConfig {
 	private static final warnedConfigs: Array<String> = [];
 
 	private final _rules: Map<String, RuleConfig>;
+
+	/** The `categories` switches by category id; empty when the key is absent. */
+	private final _categories: Map<String, Bool>;
 
 	/**
 	 * The `compilerOracle` configurations, each hxml resolved against the declaring config's
@@ -176,8 +183,9 @@ final class LintConfig {
 		?resolutionLibs: Array<String>, resolutionStd: Bool = true, compilerOracleServer: Bool = false, ?languageVersion: String,
 		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, reachConfigurationsComplete: Bool = false,
 		reportSummaryThreshold: Int = LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD, ?reflectiveClasses: Array<String>,
-		?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>
+		?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>, ?categories: Map<String, Bool>
 	) {
+		_categories = categories ?? [];
 		_ownedTypes = ownedTypes ?? [];
 		_reportSummaryThreshold = reportSummaryThreshold;
 		_reachConfigurationsComplete = reachConfigurationsComplete;
@@ -192,14 +200,6 @@ final class LintConfig {
 		_languageVersion = languageVersion;
 		_frameworks = frameworks ?? [];
 		_drops = drops ?? [];
-	}
-
-	/**
-	 * A rule-specific option as the raw JSON the document wrote, or null when unset — for an option whose shape no typed
-	 * accessor reads (`prefer-api-idiom`'s list of objects), so the owning check validates it entry by entry itself.
-	 */
-	public inline function jsonOption(id: String, key: String): Null<JValue> {
-		return propOf(id, key);
 	}
 
 	/**
@@ -325,17 +325,21 @@ final class LintConfig {
 	}
 
 	/**
-	 * Whether `id` runs in the default set. `defaultOn` is the rule's default when its
-	 * `enabled` key is absent — true for an ordinary rule, false for a `DefaultOff` rule
-	 * the caller opts into. A present `enabled` value always wins.
+	 * Whether `id` runs in the default set. `defaultOn` is the rule's default when the config says nothing — true for an
+	 * ordinary rule, false for a `DefaultOff` rule the caller opts into; a stated value always wins (`enabledSetting`).
+	 * `Linter.enabledBy` asks it for a `Check`.
 	 */
-	public function enabledFor(id: String, defaultOn: Bool = true): Bool {
-		return enabledSetting(id) ?? defaultOn;
+	public function enabledFor(id: String, defaultOn: Bool = true, ?category: RuleCategory): Bool {
+		return enabledSetting(id, category) ?? defaultOn;
 	}
 
-	/** The `enabled` value the config states for rule `id`, or null when it states none and the rule's own default applies. */
-	public function enabledSetting(id: String): Null<Bool> {
-		return _rules[id]?.enabled;
+	/**
+	 * The value the config states for rule `id`, or null when it states none and the rule's own default applies: its
+	 * `rules` entry, else — given the rule's `category` — that category's `categories` entry. The two sections fold over
+	 * the chain separately, so a rule entry anywhere in it outranks a category entry anywhere in it.
+	 */
+	public function enabledSetting(id: String, ?category: RuleCategory): Null<Bool> {
+		return _rules[id]?.enabled ?? (category == null ? null : _categories[category]);
 	}
 
 	/** The configured severity override for `id`, or null when unset. */
@@ -349,7 +353,7 @@ final class LintConfig {
 	 * unset or non-numeric. A fractional value truncates, as it always has.
 	 */
 	public function intOption(id: String, key: String): Null<Int> {
-		return switch propOf(id, key) {
+		return switch jsonOption(id, key) {
 			case JNumber(v): Std.int(v);
 			case null, _: null;
 		};
@@ -357,7 +361,7 @@ final class LintConfig {
 
 	/** A rule-specific boolean option (e.g. `doc-coverage` `requireTypeDoc`), or null when unset or non-boolean. */
 	public function boolOption(id: String, key: String): Null<Bool> {
-		return switch propOf(id, key) {
+		return switch jsonOption(id, key) {
 			case JBool(v): v;
 			case null, _: null;
 		};
@@ -365,7 +369,7 @@ final class LintConfig {
 
 	/** A rule-specific string option (e.g. `import-order` `order`), or null when unset or non-string. */
 	public function stringOption(id: String, key: String): Null<String> {
-		return switch propOf(id, key) {
+		return switch jsonOption(id, key) {
 			case JString(v): v;
 			case null, _: null;
 		};
@@ -469,17 +473,17 @@ final class LintConfig {
 	}
 
 	/**
-	 * The raw prop `key` of rule `id`, or null when the rule is unconfigured
-	 * or lacks the key — the base for the typed option accessors.
+	 * A rule-specific option as the raw JSON the document wrote, or null when unset — for an option whose shape no typed
+	 * accessor reads (`prefer-api-idiom`'s list of objects), so the owning check validates it entry by entry itself.
 	 */
-	private function propOf(id: String, key: String): Null<JValue> {
+	public function jsonOption(id: String, key: String): Null<JValue> {
 		final rc: Null<RuleConfig> = _rules[id];
 		return rc?.props[key];
 	}
 
 	/** The raw array prop `key` of rule `id`, or null when it is unset or not an array — the array base for the list accessors. */
 	private function arrayOption(id: String, key: String): Null<Array<JValue>> {
-		return switch propOf(id, key) {
+		return switch jsonOption(id, key) {
 			case JArray(items): items;
 			case null, _: null;
 		};

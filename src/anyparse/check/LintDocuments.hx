@@ -63,8 +63,11 @@ final class LintDocuments {
 		final rules: Map<String, RuleConfig> = [];
 		for (id => rc in far.rules) rules[id] = rc;
 		for (id => rc in near.rules) rules[id] = mergeRule(rc, far.rules[id]);
+		final categories: Map<String, Bool> = far.categories.copy();
+		for (id => on in near.categories) categories[id] = on;
 		return {
 			rules: rules,
+			categories: categories,
 			compilerOracles: near.compilerOracles ?? far.compilerOracles,
 			compilerOracleServer: near.compilerOracleServer ?? far.compilerOracleServer,
 			reachConfigurationsComplete: near.reachConfigurationsComplete ?? (
@@ -88,7 +91,7 @@ final class LintDocuments {
 		return new LintConfig(
 			doc.rules, doc.compilerOracles, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer,
 			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete, doc.reportSummaryThreshold,
-			doc.reflectiveClasses, doc.reflectiveMethodHolders, doc.ownedTypes
+			doc.reflectiveClasses, doc.reflectiveMethodHolders, doc.ownedTypes, doc.categories
 		);
 	}
 
@@ -105,13 +108,18 @@ final class LintDocuments {
 	public static function parseDocument(content: String, ?baseDir: String): Null<LintDocument> {
 		final config: Null<ApqLintConfig> = try ApqLintConfigParser.parse(content) catch (exception: Exception) null;
 		if (config == null) return null;
+		final drops: Array<String> = [];
 		final rules: Map<String, RuleConfig> = [];
 		final declared: Null<Map<String, JValue>> = config.rules;
 		if (declared != null) for (id => raw in declared) {
 			final rule: Null<RuleConfig> = parseRule(raw);
-			if (rule != null) rules[id] = rule;
+			if (rule != null)
+				rules[id] = rule;
+			else
+				drops.push('rules "$id" is neither true, false nor an object of options — ignored');
 		}
-		final drops: Array<String> = [];
+		final declaredCategories: Null<Map<String, JValue>> = config.categories;
+		final categories: Map<String, Bool> = declaredCategories == null ? [] : parseCategories(declaredCategories, drops);
 		final declaredOracle: Null<JValue> = config.compilerOracle;
 		final oracles: Null<Array<OracleConfig>> = declaredOracle == null ? null : OracleDeclaration.read(declaredOracle, baseDir, drops);
 		final declaredRoots: Null<Array<String>> = config.resolutionRoots;
@@ -127,6 +135,7 @@ final class LintDocuments {
 			: OwnedTypesDeclaration.read(declaredOwnership, drops);
 		return {
 			rules: rules,
+			categories: categories,
 			compilerOracles: oracles,
 			compilerOracleServer: config.compilerOracleServer,
 			reachConfigurationsComplete: config.reachConfigurationsComplete,
@@ -179,15 +188,15 @@ final class LintDocuments {
 	}
 
 	/**
-	 * One `rules` entry → its `RuleConfig`. `enabled` (a JSON boolean) and
-	 * `severity` (a JSON string resolved through `Severity.fromName`, an
-	 * unknown label yielding no override) are lifted out; every other key stays
-	 * in `props` verbatim for the owning check to read. A value that is not a
-	 * JSON object is not a rule config at all — null, and the caller drops the
-	 * entry, exactly as the untyped reader skipped a non-object.
+	 * One `rules` entry → its `RuleConfig`, or null when the value is not an entry at all. `true` / `false` is the
+	 * shorthand for `{"enabled": …}`; an object enables the rule unless it says `enabled` itself, lifts `severity` (resolved
+	 * through `Severity.fromName`, an unknown label yielding no override) and keeps every other key in `props` verbatim for the
+	 * owning check to read. A string is reserved for a severity shorthand and is no entry yet.
 	 */
 	private static function parseRule(raw: JValue): Null<RuleConfig> {
 		return switch raw {
+			case JBool(v):
+				{ enabled: v, props: [] };
 			case JObject(entries):
 				var enabled: Null<Bool> = null;
 				var severity: Null<Severity> = null;
@@ -204,7 +213,7 @@ final class LintDocuments {
 							props[key] = value;
 					}
 				}
-				{ enabled: enabled, severity: severity, props: props };
+				{ enabled: enabled ?? true, severity: severity, props: props };
 			case _: null;
 		};
 	}
@@ -279,6 +288,24 @@ final class LintDocuments {
 		return out;
 	}
 
+	/**
+	 * The `categories` entries → the switch each names. Only a known `RuleCategory` id with a boolean is kept: an unknown
+	 * id or any other value is dropped with a diagnostic naming it, since a misspelt category would otherwise switch
+	 * nothing and say nothing.
+	 */
+	private static function parseCategories(declared: Map<String, JValue>, drops: Array<String>): Map<String, Bool> {
+		final categories: Map<String, Bool> = [];
+		for (id => raw in declared) switch [RuleCategory.fromId(id), raw] {
+			case [null, _]:
+				drops.push('categories declares unknown category "$id" (known: ${RuleCategory.ALL.join(', ')}) — ignored');
+			case [_, JBool(on)]:
+				categories[id] = on;
+			case _:
+				drops.push('categories "$id" is neither true nor false — ignored');
+		}
+		return categories;
+	}
+
 }
 
 /**
@@ -302,6 +329,9 @@ typedef DocumentMemo = Map<String, Null<LintDocument>>;
  */
 typedef LintDocument = {
 	var rules: Map<String, RuleConfig>;
+
+	/** The `categories` switches by category id; a known id with a boolean only, see `LintDocuments.parseDocument`. */
+	var categories: Map<String, Bool>;
 	var ?compilerOracles: Array<OracleConfig>;
 	var ?compilerOracleServer: Bool;
 	var ?reachConfigurationsComplete: Bool;

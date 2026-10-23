@@ -61,19 +61,15 @@ import anyparse.runtime.Span;
  * module here — see `UsingScan.qualifiedCallReaches`.
  */
 @:nullSafety(Strict)
-final class PreferExists implements Check implements DefaultOff implements RiskyFix implements GroupedFix {
+final class PreferExists extends RuleBase implements DefaultOff implements RiskyFix implements GroupedFix {
 
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'prefer-exists';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a manual any-match for loop (returning, or setting a bool flag) replaceable with Lambda.exists';
+	public function new() {
+		super(
+			RULE_ID, 'a manual any-match for loop (returning, or setting a bool flag) replaceable with Lambda.exists', RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

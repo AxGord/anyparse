@@ -25,16 +25,14 @@ import anyparse.runtime.Span;
  * keep the live one) is context-dependent, mirroring `dead-null-guard`.
  */
 @:nullSafety(Strict)
-final class AlwaysNullComparison implements Check {
+final class AlwaysNullComparison extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'always-null-comparison';
-	}
-
-	public function description(): String {
-		return 'a null comparison whose operand is provably null on every path reaching it — the comparison is constant';
+	public function new() {
+		super(
+			'always-null-comparison',
+			'a null comparison whose operand is provably null on every path reaching it — the comparison is constant',
+			RuleCategory.NullSafety
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

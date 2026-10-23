@@ -39,20 +39,14 @@ import anyparse.runtime.Span;
  * `Violation.declineReason`) a chain whose span holds a comment; the finding stays reported.
  */
 @:nullSafety(Strict)
-final class SimplifyBooleanReturnChain implements Check {
+final class SimplifyBooleanReturnChain extends RuleBase {
 
 	/** Why `fix` leaves a chain whose span holds a comment: the rewrite is built from the conditions alone. */
 	private static inline final COMMENT_DECLINE: String =
 		'a comment stands inside the guard chain, and the single return is rebuilt from the conditions alone, which would drop it';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'simplify-boolean-return-chain';
-	}
-
-	public function description(): String {
-		return 'a boolean guard chain reducible to a single boolean return';
+	public function new() {
+		super('simplify-boolean-return-chain', 'a boolean guard chain reducible to a single boolean return', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

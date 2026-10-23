@@ -21,19 +21,13 @@ import anyparse.runtime.Span;
  * carried through verbatim.
  */
 @:nullSafety(Strict)
-final class PreferCaseWildcard implements Check {
+final class PreferCaseWildcard extends RuleBase {
 
 	private static final KEYWORD: String = 'default';
 	private static final REPLACEMENT: String = 'case _';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-case-wildcard';
-	}
-
-	public function description(): String {
-		return 'a switch default: replaceable with the idiomatic case _:';
+	public function new() {
+		super('prefer-case-wildcard', 'a switch default: replaceable with the idiomatic case _:', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

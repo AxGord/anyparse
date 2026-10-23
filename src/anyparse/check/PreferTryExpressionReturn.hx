@@ -70,16 +70,14 @@ import anyparse.runtime.Span;
  * expression-position `try`.
  */
 @:nullSafety(Strict)
-final class PreferTryExpressionReturn implements Check {
+final class PreferTryExpressionReturn extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-try-expression-return';
-	}
-
-	public function description(): String {
-		return 'a try/catch returning a value in the body and every catch clause, collapsible to a single try-expression return';
+	public function new() {
+		super(
+			'prefer-try-expression-return',
+			'a try/catch returning a value in the body and every catch clause, collapsible to a single try-expression return',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

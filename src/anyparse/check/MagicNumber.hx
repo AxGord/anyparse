@@ -63,7 +63,7 @@ using StringTools;
  * `numericLiteralKinds` (or no `functionKinds`) makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class MagicNumber implements Check implements ConfigAware implements NoAutofix {
+final class MagicNumber extends RuleBase implements ConfigAware implements NoAutofix {
 
 	/** This check's stable id, also the key of its `apqlint.json` options. */
 	private static inline final RULE_ID: String = 'magic-number';
@@ -74,18 +74,12 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(RULE_ID, 'a magic numeric literal in logic that should be a named constant', RuleCategory.Literals);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a magic numeric literal in logic that should be a named constant';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

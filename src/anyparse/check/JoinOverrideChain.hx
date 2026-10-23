@@ -92,7 +92,7 @@ using Lambda;
  * behind a null test.
  */
 @:nullSafety(Strict)
-final class JoinOverrideChain implements Check implements DefaultOff {
+final class JoinOverrideChain extends RuleBase implements DefaultOff {
 
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'join-override-chain';
@@ -104,15 +104,13 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 	/** One construct is the single-construct rules' shape; a CHAIN starts at two. */
 	private static inline final MIN_CONSTRUCTS: Int = 2;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a local declaration followed by a chain of conditional overwrites of it, collapsible to one nested switch-expression '
-			+ 'assignment';
+	public function new() {
+		super(
+			RULE_ID,
+			'a local declaration followed by a chain of conditional overwrites of it, collapsible to one nested switch-expression '
+			+ 'assignment',
+			RuleCategory.Expressions
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

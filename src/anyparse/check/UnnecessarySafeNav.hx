@@ -28,16 +28,10 @@ import anyparse.runtime.Span;
  * `Severity.Info`.
  */
 @:nullSafety(Strict)
-final class UnnecessarySafeNav implements Check {
+final class UnnecessarySafeNav extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'unnecessary-safe-nav';
-	}
-
-	public function description(): String {
-		return 'a null-safe access (?.) whose receiver is provably non-null';
+	public function new() {
+		super('unnecessary-safe-nav', 'a null-safe access (?.) whose receiver is provably non-null', RuleCategory.NullSafety);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

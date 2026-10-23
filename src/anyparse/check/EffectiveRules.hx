@@ -1,6 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.LintConfig.DiscoveredConfig;
@@ -15,8 +14,9 @@ typedef RuleState = {
 	var on: Bool;
 
 	/**
-	 * `default` / `default-off` when the config says nothing about the rule, `config` when it
-	 * sets `enabled`, `needs-language-<v>` when the declared `languageVersion` is below what the
+	 * `default` / `default-off` when the config says nothing about the rule, `config` when its
+	 * `rules` entry decides, `category` when its category's `categories` entry does,
+	 * `needs-language-<v>` when the declared `languageVersion` is below what the
 	 * rule's fix emits — the gate `Linter.run` drops such a rule's findings by.
 	 */
 	var reason: String;
@@ -66,7 +66,8 @@ final class EffectiveRules {
 	public static function stateOf(check: Check, file: String, config: LintConfig): RuleState {
 		final id: String = check.id();
 		final stated: Null<Bool> = config.enabledSetting(id);
-		final enabled: Bool = stated ?? !(check is DefaultOff);
+		final byCategory: Bool = stated == null && config.enabledSetting(id, check.category()) != null;
+		final enabled: Bool = Linter.enabledBy(config, check);
 		final minimum: Null<String> = check is VersionGated ? (cast check: VersionGated).minLanguageVersion() : null;
 		final gated: Bool = enabled && minimum != null && !config.allowsLanguageVersion(minimum);
 		final skipped: Null<String> = enabled && !gated && check is FileGated ? (cast check: FileGated).skipReason(file, config) : null;
@@ -76,6 +77,8 @@ final class EffectiveRules {
 			skipped
 		else if (stated != null)
 			'config'
+		else if (byCategory)
+			'category'
 		else if (enabled)
 			'default'
 		else

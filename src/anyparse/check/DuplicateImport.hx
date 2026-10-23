@@ -28,16 +28,10 @@ import anyparse.runtime.Span;
  * the deletions into one whole-file canonicalize.
  */
 @:nullSafety(Strict)
-final class DuplicateImport implements Check {
+final class DuplicateImport extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'duplicate-import';
-	}
-
-	public function description(): String {
-		return 'an import declared more than once in the same file';
+	public function new() {
+		super('duplicate-import', 'an import declared more than once in the same file', RuleCategory.Imports);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

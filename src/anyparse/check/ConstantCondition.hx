@@ -42,7 +42,7 @@ import anyparse.runtime.Span;
  * const-propagation shape is a separate, not-yet-built detector.)
  */
 @:nullSafety(Strict)
-final class ConstantCondition implements Check {
+final class ConstantCondition extends RuleBase {
 
 	/** An if node with an else branch has children [cond, then, else]. */
 	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
@@ -50,14 +50,8 @@ final class ConstantCondition implements Check {
 	/** ASCII-only note appended when a non-trivial dead branch withholds the autofix. */
 	private static inline final DEAD_BRANCH_NOTE: String = ' (dead branch - verify intent before deleting)';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'constant-condition';
-	}
-
-	public function description(): String {
-		return 'a boolean literal as an if condition (if (true) / if (false))';
+	public function new() {
+		super('constant-condition', 'a boolean literal as an if condition (if (true) / if (false))', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

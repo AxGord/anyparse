@@ -206,7 +206,7 @@ using StringTools;
  * is consumed only under `constructorCallsUp`.
  */
 @:nullSafety(Strict)
-final class JoinArrayPushes implements Check {
+final class JoinArrayPushes extends RuleBase {
 
 	/** The rule id, also the `rule` field of every violation it reports. */
 	private static inline final RULE_ID: String = 'join-array-pushes';
@@ -220,14 +220,8 @@ final class JoinArrayPushes implements Check {
 	/** A field whose array is filled only by the folded run carries no assignment at all. */
 	private static inline final NO_WRITES: Int = 0;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an empty-array binding followed by push statements that fold into the array literal';
+	public function new() {
+		super(RULE_ID, 'an empty-array binding followed by push statements that fold into the array literal', RuleCategory.Loops);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

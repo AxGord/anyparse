@@ -111,7 +111,7 @@ using Lambda;
  * Needs `ifStatementKinds`, `returnStatementKind`, `blockStmtKind` (any unset makes it a no-op).
  */
 @:nullSafety(Strict)
-final class PreferIfExpressionReturn implements Check {
+final class PreferIfExpressionReturn extends RuleBase {
 
 	/** This check's rule id, written into every finding it raises. */
 	private static inline final RULE_ID: String = 'prefer-if-expression-return';
@@ -140,15 +140,13 @@ final class PreferIfExpressionReturn implements Check {
 	 */
 	private static inline final MERGED_VALUE_COUNT: Int = 3;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an if/else-if chain returning in every branch, collapsible to a single if-expression return, or a return run '
-			+ 'repeating one of its three values, collapsible to a single ternary return';
+	public function new() {
+		super(
+			RULE_ID,
+			'an if/else-if chain returning in every branch, collapsible to a single if-expression return, or a return run '
+			+ 'repeating one of its three values, collapsible to a single ternary return',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

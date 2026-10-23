@@ -10118,10 +10118,10 @@
 		},
 		{
 			"name": "M-EFFECTIVE-IGNORES-DEFAULT-OFF",
-			"type": "anyparse.check.EffectiveRules",
-			"method": "stateOf",
-			"find": "stated ?? !(check is DefaultOff)",
-			"replace": "stated ?? true",
+			"type": "anyparse.check.Linter",
+			"method": "enabledBy",
+			"find": "!(check is DefaultOff)",
+			"replace": "true",
 			"note": "an opt-in rule no config enables is listed as on"
 		},
 		{
@@ -30706,6 +30706,70 @@
 			"find": "equality.contains(node.kind) && right != null",
 			"replace": "false && right != null",
 			"note": "the right operand of a comparison with a value declared the enum is no longer proven, so `e == A` refuses the rename"
+		},
+		{
+			"name": "M-CATEGORY-OUTRANKS-RULE",
+			"type": "anyparse.check.LintConfig",
+			"method": "enabledSetting",
+			"find": "return _rules[id]?.enabled ?? (category == null ? null : _categories[category]);",
+			"replace": "return (category == null ? null : _categories[category]) ?? _rules[id]?.enabled;",
+			"note": "a category entry is asked before the rule's own entry, so a rule switched on by name inside a disabled category stays off"
+		},
+		{
+			"name": "M-CATEGORY-IGNORED",
+			"type": "anyparse.check.LintConfig",
+			"method": "enabledSetting",
+			"find": "return _rules[id]?.enabled ?? (category == null ? null : _categories[category]);",
+			"replace": "return _rules[id]?.enabled;",
+			"note": "the categories section is never asked, so enabling a category switches none of its default-off members on and disabling it switches nothing off"
+		},
+		{
+			"name": "M-RULE-SHORTHAND-DROPPED",
+			"type": "anyparse.check.LintDocuments",
+			"method": "parseRule",
+			"find": "{ enabled: v, props: [] };",
+			"replace": "null;",
+			"note": "a true / false rule entry is no entry, so the boolean shorthand switches nothing"
+		},
+		{
+			"name": "M-OPTIONS-OBJECT-INERT",
+			"type": "anyparse.check.LintDocuments",
+			"method": "parseRule",
+			"find": "{ enabled: enabled ?? true, severity: severity, props: props };",
+			"replace": "{ enabled: enabled, severity: severity, props: props };",
+			"note": "an object of options states no enablement, so it no longer enables a default-off rule"
+		},
+		{
+			"name": "M-UNKNOWN-CATEGORY-SILENT",
+			"type": "anyparse.check.LintDocuments",
+			"method": "parseCategories",
+			"find": "drops.push('categories declares unknown category",
+			"replace": "drops.remove('categories declares unknown category",
+			"note": "a misspelt category id is dropped without the diagnostic that names it"
+		},
+		{
+			"name": "M-CATEGORIES-NOT-INHERITED",
+			"type": "anyparse.check.LintDocuments",
+			"method": "mergeDocuments",
+			"find": "final categories: Map<String, Bool> = far.categories.copy();",
+			"replace": "final categories: Map<String, Bool> = [];",
+			"note": "a nested document drops every category switch of the documents above it instead of overriding them key by key"
+		},
+		{
+			"name": "M-CATEGORY-FILTER-IGNORED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "resolveLintChecks",
+			"find": "if (categoryFilters.length == 0 || categoryFilters.contains(check.category()))",
+			"replace": "if (categoryFilters.length == 0 || categoryFilters.length > 0)",
+			"note": "--category is parsed and validated but narrows nothing, so a run reports every category"
+		},
+		{
+			"name": "M-CATEGORY-FORCES-RULES",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "runLint",
+			"find": "final applyEnablement: Bool = o.ruleFilters.length == 0;",
+			"replace": "final applyEnablement: Bool = o.ruleFilters.length == 0 && o.categoryFilters.length == 0;",
+			"note": "--category bypasses the config the way --rule does, so a rule the config disables runs under its category"
 		}
 	]
 }

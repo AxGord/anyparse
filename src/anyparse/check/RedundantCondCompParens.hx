@@ -63,19 +63,13 @@ using StringTools;
  * `apqlint.json`.
  */
 @:nullSafety(Strict)
-final class RedundantCondCompParens implements Check {
+final class RedundantCondCompParens extends RuleBase {
 
 	/** The rule id. */
 	private static final ID: String = 'redundant-condcomp-parens';
 
-	public function new() {}
-
-	public function id(): String {
-		return ID;
-	}
-
-	public function description(): String {
-		return 'parentheses around a single conditional-compilation flag - #if (sys) parses as #if sys';
+	public function new() {
+		super(ID, 'parentheses around a single conditional-compilation flag - #if (sys) parses as #if sys', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

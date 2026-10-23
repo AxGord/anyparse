@@ -95,7 +95,7 @@ using Lambda;
  * off by default, and it runs `collect` below with the same walk and the same gates.
  */
 @:nullSafety(Strict)
-final class ShadowingLocal implements Check {
+final class ShadowingLocal extends RuleBase {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shadowing-local';
@@ -106,14 +106,8 @@ final class ShadowingLocal implements Check {
 	/** A finding `fix` cannot place back on its declaration. */
 	private static inline final DECLINE_UNPLACED: String = 'the declaration cannot be placed in the source again';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a local declaration whose name is already bound by an enclosing local, binder or parameter';
+	public function new() {
+		super(RULE_ID, 'a local declaration whose name is already bound by an enclosing local, binder or parameter', RuleCategory.Naming);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

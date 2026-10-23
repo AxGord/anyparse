@@ -133,7 +133,7 @@ using Lambda;
  * rather than read as "no kind is provably immutable" -- the check goes inert instead of guessing.
  */
 @:nullSafety(Strict)
-final class JoinSingleUseLocal implements Check {
+final class JoinSingleUseLocal extends RuleBase {
 
 	/** A single-variable declaration with an initializer projects as exactly one child: the initializer. */
 	private static inline final INIT_CHILD_COUNT: Int = 1;
@@ -144,14 +144,10 @@ final class JoinSingleUseLocal implements Check {
 	/** A valued `return` node has exactly one child: the returned expression. */
 	private static inline final RETURN_VALUE_CHILD_COUNT: Int = 1;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'join-single-use-local';
-	}
-
-	public function description(): String {
-		return 'a single-use local capturing a trivial read, inlinable into its one read';
+	public function new() {
+		super(
+			'join-single-use-local', 'a single-use local capturing a trivial read, inlinable into its one read', RuleCategory.Expressions
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

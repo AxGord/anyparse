@@ -20,7 +20,7 @@ using StringTools;
  * file IS an ambient source is the grammar's to say (`GrammarPlugin.ambientImportGovernance`).
  */
 @:nullSafety(Strict)
-final class EmptyAmbientSource implements Check implements CrossFileFix {
+final class EmptyAmbientSource extends RuleBase implements CrossFileFix {
 
 	private static inline final RULE_ID: String = 'empty-ambient-source';
 
@@ -34,14 +34,8 @@ final class EmptyAmbientSource implements Check implements CrossFileFix {
 	private static inline final DECLINE_COMMENTS: String = 'the comments would go with the file, and whether they still say something '
 		+ 'is a reader\'s call';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an ambient import source with no statement in it';
+	public function new() {
+		super(RULE_ID, 'an ambient import source with no statement in it', RuleCategory.Imports);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

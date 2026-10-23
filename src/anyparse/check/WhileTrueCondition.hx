@@ -80,7 +80,7 @@ using StringTools;
  * `prefer-range-loop` and `prefer-for-in`.
  */
 @:nullSafety(Strict)
-final class WhileTrueCondition implements Check implements DefaultOff {
+final class WhileTrueCondition extends RuleBase implements DefaultOff {
 
 	/** A `while` node has exactly [condition, body] children. */
 	private static inline final WHILE_CHILD_COUNT: Int = 2;
@@ -99,14 +99,11 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 	/** ASCII-only note appended when a comment the rewrite would delete keeps the finding report-only. */
 	private static inline final COMMENT_NOTE: String = ' (comment in the dropped glue - lift by hand)';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'while-true-condition';
-	}
-
-	public function description(): String {
-		return 'a while (true) whose only exit is a break at the top of the body, liftable into the header';
+	public function new() {
+		super(
+			'while-true-condition', 'a while (true) whose only exit is a break at the top of the body, liftable into the header',
+			RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

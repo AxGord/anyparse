@@ -23,19 +23,16 @@ import anyparse.runtime.Span;
  * → no-op.
  */
 @:nullSafety(Strict)
-final class ModifierOrder implements Check {
+final class ModifierOrder extends RuleBase {
 
 	/** The `final` keyword the grammar folds into a `finalModifierMemberKind` wrapper — a fixed 5-char token at the wrapper's start. */
 	private static inline final FINAL_KEYWORD: String = 'final';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'modifier-order';
-	}
-
-	public function description(): String {
-		return 'member modifiers not in canonical order (override -> public/private -> static -> inline -> final)';
+	public function new() {
+		super(
+			'modifier-order', 'member modifiers not in canonical order (override -> public/private -> static -> inline -> final)',
+			RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

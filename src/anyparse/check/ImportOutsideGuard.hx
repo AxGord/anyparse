@@ -66,7 +66,7 @@ private typedef HeaderHalves = {
  * moved import may land in a run whose order it does not fit.
  */
 @:nullSafety(Strict)
-final class ImportOutsideGuard implements Check {
+final class ImportOutsideGuard extends RuleBase {
 
 	private static inline final RULE_ID: String = 'import-outside-guard';
 
@@ -79,14 +79,8 @@ final class ImportOutsideGuard implements Check {
 	/** The aliased import kinds — the lines whose bound names this rule cannot read, so a move that flips one refuses. */
 	private static final ALIAS_KINDS: Array<String> = ['ImportAliasDecl', 'ImportAliasInDecl'];
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an import or using declared above the #if region that guards the module\'s whole body';
+	public function new() {
+		super(RULE_ID, 'an import or using declared above the #if region that guards the module\'s whole body', RuleCategory.Imports);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

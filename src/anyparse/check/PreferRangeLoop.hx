@@ -75,7 +75,7 @@ using StringTools;
  * to skip reification subtrees.
  */
 @:nullSafety(Strict)
-final class PreferRangeLoop implements Check {
+final class PreferRangeLoop extends RuleBase {
 
 	/** A `while` node has exactly [condition, body] children. */
 	private static inline final WHILE_CHILD_COUNT: Int = 2;
@@ -92,14 +92,11 @@ final class PreferRangeLoop implements Check {
 	/** The `Int` nominal every range operand must not provably differ from. */
 	private static inline final INT_TYPE: String = 'Int';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-range-loop';
-	}
-
-	public function description(): String {
-		return 'a var-counter while loop (var i = A; while (i < B) { … i++; }) replaceable with for (i in A...B)';
+	public function new() {
+		super(
+			'prefer-range-loop', 'a var-counter while loop (var i = A; while (i < B) { … i++; }) replaceable with for (i in A...B)',
+			RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

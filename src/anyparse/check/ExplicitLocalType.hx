@@ -161,7 +161,7 @@ using StringTools;
  * `parenKind` simply means no unwrapping.
  */
 @:nullSafety(Strict)
-final class ExplicitLocalType implements Check implements DefaultOff implements OracleAssisted implements ConfigAware {
+final class ExplicitLocalType extends RuleBase implements DefaultOff implements OracleAssisted implements ConfigAware {
 
 	private static inline final RULE_ID: String = 'explicit-local-type';
 
@@ -255,14 +255,8 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	/** The per-file config resolver injected by the linter (`ConfigAware`), or null to fall back to `LintConfig.discover`. */
 	private var _configResolver: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a local var/final declared without an explicit type annotation';
+	public function new() {
+		super(RULE_ID, 'a local var/final declared without an explicit type annotation', RuleCategory.Types);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

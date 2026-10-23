@@ -114,12 +114,19 @@ import anyparse.runtime.Span;
  * same confinement and abstract-mutability checks.
  */
 @:nullSafety(Strict)
-final class PreferFinalField implements Check implements RiskyFix implements OracleRelaxable {
+final class PreferFinalField extends RuleBase implements RiskyFix implements OracleRelaxable {
 
 	/** Whether a compiler oracle verifies the fix, which is what admits a macro-built owner's edit. */
 	private var _oracleRelaxed: Bool = false;
 
-	public function new() {}
+	public function new() {
+		super(
+			'prefer-final-field',
+			'a private var field never reassigned — assigned only at its declaration or by a sole constructor assignment — that can be '
+			+ 'final',
+			RuleCategory.Members
+		);
+	}
 
 	/**
 	 * Admit the edits of MACRO-BUILT owners. Set by `Cli.applyLintFixes` only when this check runs
@@ -127,15 +134,6 @@ final class PreferFinalField implements Check implements RiskyFix implements Ora
 	 */
 	public function setOracleRelaxed(relaxed: Bool): Void {
 		_oracleRelaxed = relaxed;
-	}
-
-	public function id(): String {
-		return 'prefer-final-field';
-	}
-
-	public function description(): String {
-		return 'a private var field never reassigned — assigned only at its declaration or by a sole constructor assignment — that can be '
-			+ 'final';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

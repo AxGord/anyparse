@@ -71,7 +71,7 @@ import anyparse.runtime.Span;
  * named here.
  */
 @:nullSafety(Strict)
-final class PreferSwitchExpression implements Check {
+final class PreferSwitchExpression extends RuleBase {
 
 	/**
 	 * A branch value of an expression chain is a bare expression, so each rendered `case`
@@ -79,15 +79,13 @@ final class PreferSwitchExpression implements Check {
 	 */
 	private static inline final BODY_TERMINATOR: String = ';';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-switch-expression';
-	}
-
-	public function description(): String {
-		return 'a value-position ternary / if-expression chain testing one or more expressions against constants — clearer as a switch '
-			+ 'expression';
+	public function new() {
+		super(
+			'prefer-switch-expression',
+			'a value-position ternary / if-expression chain testing one or more expressions against constants — clearer as a switch '
+			+ 'expression',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

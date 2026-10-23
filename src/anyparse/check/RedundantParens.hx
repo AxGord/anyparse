@@ -318,7 +318,7 @@ using StringTools;
  * for an argument handed to a macro function in ordinary code (`M.f((x))`). Verified against Haxe 4.3.7 (B8b, `docs/decisions.md`).
  */
 @:nullSafety(Strict)
-final class RedundantParens implements Check implements ConfigAware implements QuotationAware {
+final class RedundantParens extends RuleBase implements ConfigAware implements QuotationAware {
 
 	/** A ternary's else-arm child index — `[condition, then, else]`. */
 	private static inline final TERNARY_ELSE_CHILD_INDEX: Int = 2;
@@ -332,19 +332,16 @@ final class RedundantParens implements Check implements ConfigAware implements Q
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			ID,
+			'parentheses that cannot affect the parse — ((e)), a lone (e) in a delimited position, or (opt-in) one around an inert operand',
+			RuleCategory.Expressions
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return ID;
-	}
-
-	public function description(): String {
-		return
-			'parentheses that cannot affect the parse — ((e)), a lone (e) in a delimited position, or (opt-in) one around an inert operand';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

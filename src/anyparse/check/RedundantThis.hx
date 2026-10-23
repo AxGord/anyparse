@@ -42,16 +42,10 @@ import anyparse.runtime.Span;
  * never matched.
  */
 @:nullSafety(Strict)
-final class RedundantThis implements Check {
+final class RedundantThis extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'redundant-this';
-	}
-
-	public function description(): String {
-		return 'a this.field access whose this. qualifier is redundant';
+	public function new() {
+		super('redundant-this', 'a this.field access whose this. qualifier is redundant', RuleCategory.Expressions);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

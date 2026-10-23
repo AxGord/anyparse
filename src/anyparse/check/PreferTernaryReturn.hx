@@ -74,23 +74,17 @@ using StringTools;
  * positions are enumerable, so it can carry them instead of bailing.
  */
 @:nullSafety(Strict)
-final class PreferTernaryReturn implements Check implements CarryingFix implements ConfigAware {
+final class PreferTernaryReturn extends RuleBase implements CarryingFix implements ConfigAware {
 
 	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super('prefer-ternary-return', 'an if/return followed by a return that collapses to a single ternary return', RuleCategory.Control);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'prefer-ternary-return';
-	}
-
-	public function description(): String {
-		return 'an if/return followed by a return that collapses to a single ternary return';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

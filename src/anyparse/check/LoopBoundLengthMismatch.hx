@@ -59,7 +59,7 @@ using Lambda;
  * sources and the line the length comes from.
  */
 @:nullSafety(Strict)
-final class LoopBoundLengthMismatch implements Check implements NoAutofix implements VolatileMessage {
+final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implements VolatileMessage {
 
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'loop-bound-length-mismatch';
@@ -76,14 +76,11 @@ final class LoopBoundLengthMismatch implements Check implements NoAutofix implem
 	/** How deep a constant may refer to another constant before folding gives up — a cycle stops here. */
 	private static inline final MAX_FOLD_DEPTH: Int = 16;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an indexed loop reading xs[i] whose bound is not the expression the length of xs provably comes from';
+	public function new() {
+		super(
+			RULE_ID, 'an indexed loop reading xs[i] whose bound is not the expression the length of xs provably comes from',
+			RuleCategory.Loops
+		);
 	}
 
 	public function noAutofixReason(): String {

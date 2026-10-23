@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
+import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
@@ -107,6 +108,10 @@ private class LiteralRewriteCheck implements Check implements RiskyFix {
 
 	public function description(): String {
 		return 'a test double rewriting every AAA literal to BBB';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Literals;
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

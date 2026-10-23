@@ -95,19 +95,17 @@ private typedef InteriorLine = {
  * `RefactorSupport.canonicalize` per file.
  */
 @:nullSafety(Strict)
-final class DocCommentContinuation implements Check {
+final class DocCommentContinuation extends RuleBase {
 
 	/** The shortest closed block comment, `/**\/` — below that length there is no separate closer to read. */
 	private static inline final SHORTEST_CLOSED_BLOCK: Int = 4;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'doc-comment-continuation';
-	}
-
-	public function description(): String {
-		return 'an interior line of a block comment that breaks the continuation prefix — gutter or indentation — its own block uses';
+	public function new() {
+		super(
+			'doc-comment-continuation',
+			'an interior line of a block comment that breaks the continuation prefix — gutter or indentation — its own block uses',
+			RuleCategory.Docs
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

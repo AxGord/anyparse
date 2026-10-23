@@ -150,7 +150,7 @@ using StringTools;
  * (`RefactorSupport.canonicalize`), which re-indents the merged line.
  */
 @:nullSafety(Strict)
-final class CondAssignMerge implements Check implements DefaultOff {
+final class CondAssignMerge extends RuleBase implements DefaultOff {
 
 	/** ASCII-only note appended when a comment inside the merged span withholds the autofix. */
 	private static inline final COMMENT_NOTE: String = ' (comment in the merged span - merge by hand)';
@@ -172,15 +172,13 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	private static inline final ELSEIF_KEYWORD: String = '#elseif';
 	private static inline final ELSE_KEYWORD: String = '#else';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'cond-assign-merge';
-	}
-
-	public function description(): String {
-		return 'a `#if … #else … #end` region whose every branch assigns the same target, or returns / throws — mergeable into one '
-			+ 'conditional value; an `#else`-less region of exits also absorbs the exit that follows it';
+	public function new() {
+		super(
+			'cond-assign-merge',
+			'a `#if … #else … #end` region whose every branch assigns the same target, or returns / throws — mergeable into one '
+			+ 'conditional value; an `#else`-less region of exits also absorbs the exit that follows it',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -24,16 +24,10 @@ using StringTools;
  * a no-op.
  */
 @:nullSafety(Strict)
-final class EmptyStatement implements Check {
+final class EmptyStatement extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'empty-statement';
-	}
-
-	public function description(): String {
-		return 'a stray empty statement (a lone ;)';
+	public function new() {
+		super('empty-statement', 'a stray empty statement (a lone ;)', RuleCategory.Expressions);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

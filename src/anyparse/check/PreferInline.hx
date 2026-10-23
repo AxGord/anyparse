@@ -99,7 +99,7 @@ using Lambda;
  * methods are skipped (nothing to do). The gates mirror `trivial-getter`'s soundness model.
  */
 @:nullSafety(Strict)
-final class PreferInline implements Check implements RiskyFix implements OracleRelaxable implements ConfigAware implements FrameworkAware {
+final class PreferInline extends RuleBase implements RiskyFix implements OracleRelaxable implements ConfigAware implements FrameworkAware {
 
 	/**
 	 * The inline-candidate body budget in AST nodes. Calibrated on a large real tree: trivial getters
@@ -153,7 +153,18 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			'prefer-inline',
+			'a method whose inlining buys something — empty body, accessor / thin forward / trivial mutator, or a foldable '
+			+ 'constant/arithmetic expression (<=32 AST nodes); Info, --fix inserts inline. Allocations, builders, loops, switches, '
+			+ 'lambda/computed args are never candidates. Skips methods referenced as a value, override / subtype-overridden, '
+			+ 'interface-declared, dynamic / macro / constructor / @:keep / Reflect-accessed methods, and every method of a '
+			+ 'class whose own type metadata is not provably inline-neutral (e.g. @:hlNative / @:nativeGen / @:cppFileCode) '
+			+ 'or that is under a build macro, its own or inherited',
+			RuleCategory.Members
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
@@ -169,19 +180,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 */
 	public function setOracleRelaxed(relaxed: Bool): Void {
 		_oracleRelaxed = relaxed;
-	}
-
-	public function id(): String {
-		return 'prefer-inline';
-	}
-
-	public function description(): String {
-		return 'a method whose inlining buys something — empty body, accessor / thin forward / trivial mutator, or a foldable '
-			+ 'constant/arithmetic expression (<=32 AST nodes); Info, --fix inserts inline. Allocations, builders, loops, switches, '
-			+ 'lambda/computed args are never candidates. Skips methods referenced as a value, override / subtype-overridden, '
-			+ 'interface-declared, dynamic / macro / constructor / @:keep / Reflect-accessed methods, and every method of a '
-			+ 'class whose own type metadata is not provably inline-neutral (e.g. @:hlNative / @:nativeGen / @:cppFileCode) '
-			+ 'or that is under a build macro, its own or inherited';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -74,7 +74,7 @@ using StringTools;
  * verdict depend on which occurrence happened to come first.
  */
 @:nullSafety(Strict)
-final class AnonTypeDup implements Check implements NoAutofix implements ConfigAware implements DefaultOff implements VolatileMessage
+final class AnonTypeDup extends RuleBase implements NoAutofix implements ConfigAware implements DefaultOff implements VolatileMessage
 		implements CrossFileAnchored {
 
 	/** Least occurrences of one shape before the group is flagged. */
@@ -104,7 +104,12 @@ final class AnonTypeDup implements Check implements NoAutofix implements ConfigA
 	/** The linter's per-file "does a finding here survive" answer; null when every file's does. */
 	private var _reportable: Null<(String) -> Bool> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID, 'an anonymous structure type written out many times across the scope that should be a named typedef',
+			RuleCategory.Design
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
@@ -112,14 +117,6 @@ final class AnonTypeDup implements Check implements NoAutofix implements ConfigA
 
 	public function setReportable(reportable: Null<(String) -> Bool>): Void {
 		_reportable = reportable;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an anonymous structure type written out many times across the scope that should be a named typedef';
 	}
 
 	public function messageIdentity(message: String): String {

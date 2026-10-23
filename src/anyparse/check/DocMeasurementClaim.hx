@@ -60,7 +60,7 @@ private typedef Reading = {
  * `fix` seam yields nothing, because the sentence that survives the deletion is a judgement.
  */
 @:nullSafety(Strict)
-final class DocMeasurementClaim implements Check implements DefaultOff implements NoAutofix {
+final class DocMeasurementClaim extends RuleBase implements DefaultOff implements NoAutofix {
 
 	/** This check's `id()`, and the `rule` every finding carries. */
 	private static inline final RULE_ID: String = 'doc-measurement-claim';
@@ -114,14 +114,12 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	/** Doc tags whose line points AT a record instead of carrying one. */
 	private static final REFERENCE_TAGS: Array<String> = ['@see', '@link'];
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a comment carrying a reading of a tree — a duration, a commit hash, a slice id, a census count, a before-and-after pair';
+	public function new() {
+		super(
+			RULE_ID,
+			'a comment carrying a reading of a tree — a duration, a commit hash, a slice id, a census count, a before-and-after pair',
+			RuleCategory.Docs
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

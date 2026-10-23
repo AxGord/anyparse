@@ -34,16 +34,10 @@ using StringTools;
  * identifier, so no reparenthesisation is needed; the finding stays `Info` and the unwrap runs under `--fix`.
  */
 @:nullSafety(Strict)
-final class RedundantUpcast implements Check {
+final class RedundantUpcast extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'redundant-upcast';
-	}
-
-	public function description(): String {
-		return 'a checked cast whose operand type is already a subtype of the target';
+	public function new() {
+		super('redundant-upcast', 'a checked cast whose operand type is already a subtype of the target', RuleCategory.Types);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

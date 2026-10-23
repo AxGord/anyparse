@@ -61,6 +61,8 @@ final class PinsGrammarAndCli {
 		'unit.cli.JsonEditCliTest#testAfterTheSoleEntryOfAnArray :: control :: M-COMMA-CONTAINER-KINDS-UNREAD',
 		'unit.cli.JsonEditCliTest#testAppendIntoAnArray :: control :: M-LAYOUT-SPLICE-BYPASSED,M-PICK-PLUGIN-FOR-IGNORES-PATH',
 		'unit.cli.JsonEditCliTest#testSortedInsert :: control :: M-JSON-LITERAL-NONE',
+		'unit.cli.LintCategoryCliTest#testACategoryNarrowsTheRunToItsRules :: control :: M-CATEGORY-FILTER-IGNORED',
+		'unit.cli.LintCategoryCliTest#testACategoryNeverEnablesWhatTheConfigDisables :: control :: M-CATEGORY-FORCES-RULES',
 		'unit.cli.LintConfigCliTest#testTheScopeGapNoticesReachTheRun :: control :: M-SCOPE-GAP-UNWIRED,M-SCOPE-GAP-ROOT-UNWIRED',
 		'unit.cli.LintExplainLongCliTest#testAFindingNamingNoFileIsPrinted :: control :: M-LINT-NOFILE-DROPPED',
 		'unit.cli.LintExplainLongCliTest#testAnErrorPathReasonNamesItsCatch :: control :: M-LINT-FORMAT-ERRORPATH',

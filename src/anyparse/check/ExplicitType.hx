@@ -50,7 +50,7 @@ using Lambda;
  * no-op.
  */
 @:nullSafety(Strict)
-final class ExplicitType implements Check implements OracleAssisted {
+final class ExplicitType extends RuleBase implements OracleAssisted {
 
 	/**
 	 * An anonymous-structure return type longer than this stays report-only — the same
@@ -81,7 +81,9 @@ final class ExplicitType implements Check implements OracleAssisted {
 		+ 'or cast initializer, or a supertype declaring the parameter — and the oracle-assisted pass types it when the project '
 		+ 'configures a compilerOracle';
 
-	public function new() {}
+	public function new() {
+		super('explicit-type', 'a member field, parameter, or return type without an explicit type annotation', RuleCategory.Types);
+	}
 
 	/**
 	 * The oracle-assisted pass: annotate every flagged return type, parameter and field the
@@ -139,14 +141,6 @@ final class ExplicitType implements Check implements OracleAssisted {
 		walk(tree);
 		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
 		return edits;
-	}
-
-	public function id(): String {
-		return 'explicit-type';
-	}
-
-	public function description(): String {
-		return 'a member field, parameter, or return type without an explicit type annotation';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

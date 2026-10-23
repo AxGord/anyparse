@@ -113,19 +113,16 @@ using StringTools;
  * `assignKind` and `controlFlowSupport` (any unset makes the check a no-op).
  */
 @:nullSafety(Strict)
-final class NarrowLocalScope implements Check {
+final class NarrowLocalScope extends RuleBase {
 
 	/** The rule id, reported on every finding and accepted by `--rule`. */
 	private static inline final RULE_ID: String = 'narrow-local-scope';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a bare local declaration whose every occurrence sits inside one nested block, sinkable into that block';
+	public function new() {
+		super(
+			RULE_ID, 'a bare local declaration whose every occurrence sits inside one nested block, sinkable into that block',
+			RuleCategory.Expressions
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

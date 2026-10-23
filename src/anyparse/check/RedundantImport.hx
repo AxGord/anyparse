@@ -63,18 +63,12 @@ using Lambda;
  * canonicalize, which drops the blank line.
  */
 @:nullSafety(Strict)
-final class RedundantImport implements Check implements RiskyFix {
+final class RedundantImport extends RuleBase implements RiskyFix {
 
 	private static final RULE_ID: String = 'redundant-import';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a sub-type import already bound by a plain import of its module';
+	public function new() {
+		super(RULE_ID, 'a sub-type import already bound by a plain import of its module', RuleCategory.Imports);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

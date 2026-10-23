@@ -36,16 +36,10 @@ using StringTools;
  * its type or reordering) is left to the human when the deletion is not what they meant.
  */
 @:nullSafety(Strict)
-final class UnreachableCatch implements Check {
+final class UnreachableCatch extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'unreachable-catch';
-	}
-
-	public function description(): String {
-		return 'a catch clause already covered by an earlier clause in the same try';
+	public function new() {
+		super('unreachable-catch', 'a catch clause already covered by an earlier clause in the same try', RuleCategory.Types);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -21,19 +21,13 @@ import anyparse.runtime.Span;
  * ternary is subsumed by the single fix).
  */
 @:nullSafety(Strict)
-final class DuplicateTernaryBranches implements Check {
+final class DuplicateTernaryBranches extends RuleBase {
 
 	/** A complete ternary node has children [cond, then, else]. */
 	private static inline final TERNARY_CHILD_COUNT: Int = 3;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'duplicate-ternary-branches';
-	}
-
-	public function description(): String {
-		return 'a ternary whose then- and else-branches are identical (cond ? x : x)';
+	public function new() {
+		super('duplicate-ternary-branches', 'a ternary whose then- and else-branches are identical (cond ? x : x)', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

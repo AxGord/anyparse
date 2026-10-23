@@ -129,7 +129,7 @@ import haxe.Exception;
  * reports nothing rather than guessing.
  */
 @:nullSafety(Strict)
-final class JoinBranchCall implements Check {
+final class JoinBranchCall extends RuleBase {
 
 	/** The rule id, also the `rule` field of every violation it reports. */
 	private static inline final RULE_ID: String = 'join-branch-call';
@@ -143,15 +143,13 @@ final class JoinBranchCall implements Check {
 	/** No argument index varies across the branches -- the branches are identical calls. */
 	private static inline final NO_VARYING: Int = -1;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an if/else-if chain whose branches call the same function differing in one argument, collapsible to a single call with an '
-			+ 'if-expression argument';
+	public function new() {
+		super(
+			RULE_ID,
+			'an if/else-if chain whose branches call the same function differing in one argument, collapsible to a single call with an '
+			+ 'if-expression argument',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -78,7 +78,7 @@ using Lambda;
  * of those unset disables both break forms while the return form still runs.
  */
 @:nullSafety(Strict)
-final class PreferFind implements Check {
+final class PreferFind extends RuleBase {
 
 	/**
 	 * A `for` node has exactly [iterable, body] children; the loop variable is its name. A
@@ -104,14 +104,10 @@ final class PreferFind implements Check {
 	/** The extension method the rewrite emits — the name a second `using` must be proven not to supply. */
 	private static inline final FIND_METHOD: String = 'find';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-find';
-	}
-
-	public function description(): String {
-		return 'a manual first-match for loop (return or capture-and-break) replaceable with Lambda.find';
+	public function new() {
+		super(
+			'prefer-find', 'a manual first-match for loop (return or capture-and-break) replaceable with Lambda.find', RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

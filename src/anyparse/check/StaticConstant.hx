@@ -128,19 +128,13 @@ using StringTools;
  * and `stringFoldSupport()`. Any required seam unset makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class StaticConstant implements Check implements DefaultOff {
+final class StaticConstant extends RuleBase implements DefaultOff {
 
 	/** The `final` keyword the member host span starts at — `static ` is inserted immediately before it. */
 	private static inline final FINAL_KEYWORD: String = 'final';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'static-constant';
-	}
-
-	public function description(): String {
-		return 'an instance final field initialized to a compile-time literal that can be static';
+	public function new() {
+		super('static-constant', 'an instance final field initialized to a compile-time literal that can be static', RuleCategory.Members);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -90,16 +90,12 @@ using StringTools;
  * the project-scoped `SymbolIndex`: see that check's note for the measurement.
  */
 @:nullSafety(Strict)
-final class PreferReadOnlyField implements Check {
+final class PreferReadOnlyField extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-read-only-field';
-	}
-
-	public function description(): String {
-		return 'a public var field written only inside its class that can be (default, null)';
+	public function new() {
+		super(
+			'prefer-read-only-field', 'a public var field written only inside its class that can be (default, null)', RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

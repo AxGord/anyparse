@@ -168,8 +168,9 @@ class EffectiveRulesTest extends Test {
 		File.saveContent('$root/Top.hx', 'class Top {}\n');
 		final groups: Array<RuleStateGroup> = EffectiveRules.resolve(['$root/Top.hx', '$root/nested/Probe.hx'], Linter.builtins());
 		Assert.equals(2, groups.length, 'one chain, two rule states: two groups');
-		assertState(groups[0], 'thread-safety', true, 'default');
-		assertState(groups[0], 'avoid-dynamic', true, 'default');
+		// An object of options enables its rule, so the config — not the default — decides it here.
+		assertState(groups[0], 'thread-safety', true, 'config');
+		assertState(groups[0], 'avoid-dynamic', true, 'config');
 		assertState(groups[1], 'thread-safety', false, 'config-excluded');
 		assertState(groups[1], 'avoid-dynamic', false, 'config-excluded');
 		CliFixture.removeDir(root);

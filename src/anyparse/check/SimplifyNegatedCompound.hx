@@ -89,16 +89,13 @@ using Lambda;
  * `double-negation`, which reads through parentheses for exactly that reason.
  */
 @:nullSafety(Strict)
-final class SimplifyNegatedCompound implements Check {
+final class SimplifyNegatedCompound extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'simplify-negated-compound';
-	}
-
-	public function description(): String {
-		return 'a negated boolean compound or comparison that simplifies to fewer negations';
+	public function new() {
+		super(
+			'simplify-negated-compound', 'a negated boolean compound or comparison that simplifies to fewer negations',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

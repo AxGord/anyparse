@@ -145,7 +145,7 @@ using StringTools;
  * next pass collapses one more level, converging.
  */
 @:nullSafety(Strict)
-final class CollapseNestedSwitch implements Check implements DefaultOff {
+final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 
 	/** All that may separate the outer pattern from the nested switch: the label's own terminator. */
 	private static inline final LABEL_TERMINATOR: String = ':';
@@ -162,14 +162,8 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 	private static final RULE_ID: String = 'collapse-nested-switch';
 	private static final MESSAGE: String = 'this case body is a switch on its own binder; collapse it into a deep pattern';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a case whose only statement is a switch on its own binder, collapsible into a deep pattern';
+	public function new() {
+		super(RULE_ID, 'a case whose only statement is a switch on its own binder, collapsible into a deep pattern', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -80,22 +80,20 @@ import anyparse.runtime.Span;
  * fix the surviving arm has no duplicate neighbour left, so the pass converges.
  */
 @:nullSafety(Strict)
-final class RedundantCaseBody implements Check {
+final class RedundantCaseBody extends RuleBase {
 
 	/** What separates two alternatives of one label — the writer re-canonicalises the spacing. */
 	private static inline final ALTERNATIVE_SEPARATOR: String = ', ';
 
 	private static final RULE_ID: String = 'redundant-case-body';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a switch arm whose body its immediate neighbour repeats — deletable under a catch-all, mergeable into one or-pattern '
-			+ 'otherwise';
+	public function new() {
+		super(
+			RULE_ID,
+			'a switch arm whose body its immediate neighbour repeats — deletable under a catch-all, mergeable into one or-pattern '
+			+ 'otherwise',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

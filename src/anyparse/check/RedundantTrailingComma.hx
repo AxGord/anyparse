@@ -58,16 +58,10 @@ import anyparse.runtime.Span;
  * trains readers to ignore the report.
  */
 @:nullSafety(Strict)
-final class RedundantTrailingComma implements Check implements DefaultOff {
+final class RedundantTrailingComma extends RuleBase implements DefaultOff {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'redundant-trailing-comma';
-	}
-
-	public function description(): String {
-		return 'a redundant trailing comma before a list\'s closing delimiter';
+	public function new() {
+		super('redundant-trailing-comma', 'a redundant trailing comma before a list\'s closing delimiter', RuleCategory.Expressions);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

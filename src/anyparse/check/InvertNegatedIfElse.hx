@@ -51,7 +51,7 @@ import anyparse.runtime.Span;
  * the four ternary builders and the swap agree and `--fix` settles.
  */
 @:nullSafety(Strict)
-final class InvertNegatedIfElse implements Check implements ConfigAware {
+final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 
 	public static inline final RULE_ID: String = 'invert-negated-if-else';
 
@@ -74,18 +74,16 @@ final class InvertNegatedIfElse implements Check implements ConfigAware {
 	/** The linter's per-file config resolver (`keepDefaultElse`), or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID,
+			'an if-else, if-expression or ternary with a top-level negated condition — invert the condition and swap the branches',
+			RuleCategory.Control
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an if-else, if-expression or ternary with a top-level negated condition — invert the condition and swap the branches';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
