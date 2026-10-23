@@ -652,7 +652,7 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 
 	/**
 	 * A wrapped chain whose every line holds an adjacent-literal PAIR and ends in a `//`
-	 * comment — the shape `Editor.hx`'s test-animation XML has, minified to fit the width.
+	 * comment — the shape a client file's test-animation XML has, minified to fit the width.
 	 */
 	private function perLineCommentSource(): String {
 		return [

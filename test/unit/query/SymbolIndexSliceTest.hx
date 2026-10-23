@@ -892,9 +892,8 @@ class SymbolIndexSliceTest extends Test {
 	 * A supertype reference resolves through the REFERRING file's package / imports, not by a
 	 * globally-unique simple name: two interfaces sharing one simple name in different
 	 * packages no longer make the closure unprovable. This is the client's real shape —
-	 * `common.ISizeAware` beside `sidepanel.ISizeAware`, with `common.Resizable` implementing
-	 * the same-package one — and it used to block the `_`-prefix rename of every private
-	 * field under `Resizable`.
+	 * `common.ISizeAware` beside `sidepanel.ISizeAware`, with `common.Sized` implementing the
+	 * same-package one — and it used to block the `_`-prefix rename of every private field under `Sized`.
 	 */
 	public function testProvablyLacksMemberResolvesAmbiguousSimpleSupertypeName(): Void {
 		final index: SymbolIndex = SymbolIndex.build(ambiguousInterfaceFiles(), plugin());
@@ -1648,10 +1647,10 @@ class SymbolIndexSliceTest extends Test {
 				source: 'package sidepanel;\ninterface ISizeAware { function inRightmenu():Void; }'
 			},
 			{
-				file: 'src/common/Resizable.hx',
-				source: 'package common;\nclass Resizable implements ISizeAware { public function inCommon():Void {} }'
+				file: 'src/common/Sized.hx',
+				source: 'package common;\nclass Sized implements ISizeAware { public function inCommon():Void {} }'
 			},
-			{ file: 'src/Sub.hx', source: 'import common.Resizable;\nclass Sub extends Resizable { private var _own:Int; }' }
+			{ file: 'src/Sub.hx', source: 'import common.Sized;\nclass Sub extends Sized { private var _own:Int; }' }
 		];
 	}
 

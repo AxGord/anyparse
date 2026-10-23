@@ -99,12 +99,12 @@ final class MutationArms {
 	private static final FRAGMENT_KEYS: Array<String> = ['find', 'replace'];
 
 	/** The classpath roots `test-js.hxml` declares, in its order — where an arm's `type` is looked for. */
-	private static final SOURCE_ROOTS: Array<String> = ['src', 'test'];
+	private static final SOURCE_ROOTS: Array<String> = ['src', 'test', 'tools/src'];
 
 	/**
 	 * The files `tools/mutation-arm.sh` would try for an arm's `type`, in classpath order.
 	 *
-	 * The script resolves a type to a file by hand (`for root in src test`) and every
+	 * The script resolves a type to a file by hand (`for root in src test tools/src`) and every
 	 * arm's cut is applied to whichever candidate exists. Nothing checked that the
 	 * mapping still lands on a file, let alone on a live member — and for a type behind
 	 * `#if macro` the build macro cannot check either, because the typer sees no such

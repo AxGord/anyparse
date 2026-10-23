@@ -257,11 +257,11 @@ render_arm() {
     method=$(printf '%s' "$meta" | cut -f3)
     node_kind=$(printf '%s' "$meta" | cut -f4)
     force=$(printf '%s' "$meta" | cut -f5)
-    # The two classpath roots `test-js.hxml` declares, in its order. An arm may
-    # cut the suite's own infrastructure as readily as the engine's, and both
-    # are addressed by type path rather than by a stored file name.
+    # The classpath roots `test-js.hxml` declares, in its order. An arm may cut
+    # the suite's own infrastructure or a developer tool as readily as the
+    # engine, all addressed by type path rather than by a stored file name.
     file=""
-    for root in src test; do
+    for root in src test tools/src; do
         candidate="$root/$(printf '%s' "$type" | tr '.' '/').hx"
         if [ -f "$gen/$candidate" ]; then
             file="$candidate"
@@ -269,7 +269,7 @@ render_arm() {
         fi
     done
     if [ -z "$file" ]; then
-        render_fail "$name" "$name names $type, which is under neither src/ nor test/ at $base_ref" && return 0
+        render_fail "$name" "$name names $type, which is under none of src/, test/, tools/src/ at $base_ref" && return 0
     fi
 
     if [ "$cut_kind" = "FORCE" ]; then

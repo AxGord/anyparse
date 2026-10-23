@@ -29928,6 +29928,13 @@
 			"find": "return items != null && items.foreach(item -> item is String) ? cast items : null;",
 			"replace": "return items != null ? cast items : null;",
 			"note": "a record's string lists are read whatever they hold, so a define that is no string reaches the builds"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-PATH-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "privatePaths",
+			"force": "[]",
+			"note": "scrub-guard stops reading paths against the private roots, so a client file path named in the tree or in a pushed range passes the guard silently"
 		}
 	]
 }

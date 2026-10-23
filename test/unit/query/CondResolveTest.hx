@@ -103,7 +103,7 @@ class CondResolveTest extends Test {
 	 * The shape that motivated the op: a region whose live branch is the FIRST TWO THIRDS of a
 	 * ternary, `#end` sitting between the `:` and the else-value on the next line.
 	 *
-	 * Copied from the real site (`popups/fileDialog/FileDialog.hx` in the reporting project), and
+	 * Copied from the real site (a client file), and
 	 * it is the case where nothing but a byte splice plus a writer pass can produce the answer: the
 	 * replacement is a syntactically incomplete fragment, and the expression only becomes whole
 	 * once the region's own bytes are gone.

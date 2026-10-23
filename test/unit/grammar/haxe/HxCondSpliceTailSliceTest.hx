@@ -57,8 +57,7 @@ final class HxCondSpliceTailSliceTest extends Test {
 
 	/**
 	 * The same shape in a member initializer, and with a postfix operand after the operator —
-	 * client `popups/help/HintStyle.hx:15` and `popups/help/HintMessageForm.hx:155`, the two live
-	 * sites of this sub-shape.
+	 * two client files, the only live sites of this sub-shape.
 	 */
 	public function testTheOperatorFragmentInAMemberInitializer(): Void {
 		final src: String = 'class C {\n\tpublic static inline final H:UInt = 488 + 1 + F #if mobile - 120 #end;\n\n'
@@ -75,8 +74,7 @@ final class HxCondSpliceTailSliceTest extends Test {
 	 * whole reason this sub-shape has a production of its own rather than sharing the operator
 	 * one's `@:fmt(fillParts)` assembly: a fill seam would spend a space on that gap.
 	 *
-	 * client `popups/projectPlanner/SavedProjects.hx:45` and
-	 * `popups/settings/account/Account.hx:73`; Pony `pony/net/rpc/IRPC.hx:160` is the array form.
+	 * two client files; Pony `pony/net/rpc/IRPC.hx:160` is the array form.
 	 */
 	public function testALeadingCommaFragmentKeepsTheCommaTight(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tg(new A(), true #if FEATURE_SHARE_EXTRA, true #end);\n'
@@ -99,8 +97,7 @@ final class HxCondSpliceTailSliceTest extends Test {
 
 	/**
 	 * A fragment neither structured branch can represent stays raw and keeps its note. Three
-	 * shapes, one per reason: a switch arm split across branches (client
-	 * `crashreport/CrashReport.hx:376`), a fragment carrying its own `#else`, and a
+	 * shapes, one per reason: a switch arm split across branches (a client file), a fragment carrying its own `#else`, and a
 	 * MULTI-element comma run — the last is `HxCondSpliceListTail`'s declared limit, since
 	 * every inter-element separator this writer offers would put a space before the comma.
 	 */
