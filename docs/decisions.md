@@ -5055,7 +5055,7 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
   a private path behind any other lead (another checkout, an absolute, `~/` or URL path), written with backslashes, or
   spelled as a dotted module path passed the guard, so each run of two or more trailing whole segments is tried, a dotted
   `a.b.X` names a module of any extension, and an extensionless path of three segments a directory; "a module directly
-  under a source root never counts" → no: it counts when its name joins two or more words → `<SCRUB-4 merge SHA>`
+  under a source root never counts" → no: it counts when its name joins two or more words → `73401be47`
 - **A private corpus is named by the environment, never by the repository.** `tools/battery.sh` lints a second tree only
   when `--client <tree>` or `ANYPARSE_CLIENT_TREE` names it (it used to default to a path on one machine);
   `tools/bench-corpus.txt` includes its calibrated other half through `@${ANYPARSE_BENCH_EXTRA}`, a manifest kept outside
