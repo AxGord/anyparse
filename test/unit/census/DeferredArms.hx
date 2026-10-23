@@ -273,7 +273,8 @@ final class DeferredArms {
 		'M-TERNARY-MLB-OPTION-IGNORED :: anyparse.macro.WriterPrattLowering#multilineBranchInlineExpr',
 		'M-INDEX-HOST-PARENS-KEPT :: anyparse.query.NominalTypes#FinalMember:INDEX_HOST',
 		'M-MERMAID-ENCODE-DROPPED :: anyparse.macro.WriterLowering#lowerTerminal',
-		'M-MERMAID-INLINE-TAKES-PREFIX :: anyparse.grammar.mermaid.MmdSolidTextLit#MetaCall:@:re'
+		'M-MERMAID-INLINE-TAKES-PREFIX :: anyparse.grammar.mermaid.MmdSolidTextLit#MetaCall:@:re',
+		'M-MERMAID-DOTTED-TEXT-TAKES-DOTS :: anyparse.grammar.mermaid.MmdDottedTextLit#MetaCall:@:re'
 	];
 
 }

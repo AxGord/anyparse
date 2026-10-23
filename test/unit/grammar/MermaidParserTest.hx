@@ -207,6 +207,26 @@ class MermaidParserTest extends Test {
 		}
 	}
 
+	/** A plain label holding `&` reads back as the same plain label, and its second write is its first. */
+	@:killer('M-MERMAID-PLAIN-AMP-RAW')
+	@:pin('control')
+	public function testAPlainAmpersandStaysPlain(): Void {
+		for (text in ['a&>b', 'm_&b"o', 'a &lt b']) {
+			final doc: MmdFlowchart = { first: Header(Flowchart(TD)), rest: [node(Rect(Id('A'), Plain(text)))] };
+			final written: String = MermaidWriter.write(doc);
+			same(doc, MermaidParser.parse(written), Json.stringify(text));
+			Assert.equals(written, MermaidWriter.write(MermaidParser.parse(written)), Json.stringify(text));
+		}
+	}
+
+	/** A dotted link closes on its first run of dots before a `-`, as Mermaid's lexer reads it, so the dots are not label. */
+	@:killer('M-MERMAID-DOTTED-TEXT-TAKES-DOTS')
+	@:pin('control')
+	public function testADottedLabelStopsBeforeItsClosingDots(): Void {
+		same(edge(DottedText({ open: '-.', text: MmdDottedLabel.Plain('text'), close: '..->' })), statement('A -. text ..-> B'));
+		same(edge(DottedText({ open: '-.', text: MmdDottedLabel.Plain('a.b'), close: '...->' })), statement('A -. a.b ...-> B'));
+	}
+
 	/** An AST built by hand with labels the bare form cannot hold writes to text that parses back to it. */
 	@:killer('M-MERMAID-ENCODE-DROPPED')
 	@:pin('control')

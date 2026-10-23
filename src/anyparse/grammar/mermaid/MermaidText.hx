@@ -9,9 +9,9 @@ using StringTools;
  * reference (`#name;` to `&name;`, all digits to `&#123;`) before it parses, whatever precedes it.
  * A label is one of three kinds, each its own grammar ctor:
  *
- *  - PLAIN — the text a reader sees. Codes decode to their characters; `<`, `>`, a `&` that would
- *    start a reference, `"`, a `#` that would start a code and a backtick that would open a
- *    markdown string are re-escaped on write, so `Map<String, Int>` renders literally.
+ *  - PLAIN — the text a reader sees. Codes decode to their characters; `<`, `>`, every `&`, `"`,
+ *    a `#` that would start a code and a backtick that would open a markdown string are
+ *    re-escaped on write, so `Map<String, Int>` renders literally.
  *  - MARKUP — a label holding raw HTML (`a<br>b`), an HTML reference, or a code the codec does not
  *    resolve: the HTML Mermaid renders. A numeric code decodes to a numeric reference, a named one
  *    for `<` `>` `&` or an unknown name to a named reference. Markup is written back raw, except a
@@ -196,13 +196,6 @@ final class MermaidText {
 		return j > at + 1 && j < text.length && text.fastCodeAt(j) == ';'.code ? j + 1 : -1;
 	}
 
-	/** Whether a `&` at `at` starts an HTML reference (`&name;`, `&#123;`). */
-	private static function startsReference(text: String, at: Int): Bool {
-		var j: Int = at + 1;
-		while (j < text.length && (isWordChar(text.fastCodeAt(j)) || text.fastCodeAt(j) == '#'.code)) j++;
-		return j > at + 1 && j < text.length && text.fastCodeAt(j) == ';'.code;
-	}
-
 	/**
 	 * `text` as the body of a quoted label: the quote, an entity-shaped `#` and a backtick that would
 	 * open a markdown string (every backtick inside one) escaped, and for `plain` the markup characters
@@ -235,7 +228,7 @@ final class MermaidText {
 		return switch text.fastCodeAt(at) {
 			case '<'.code: '#lt;';
 			case '>'.code: '#gt;';
-			case '&'.code if (startsReference(text, at)): '#amp;';
+			case '&'.code: '#amp;';
 			case _: null;
 		};
 	}

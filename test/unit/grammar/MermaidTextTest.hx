@@ -93,7 +93,16 @@ class MermaidTextTest extends Test {
 		Assert.equals('"Array#lt;String#gt;"', MermaidText.encodePlain('Array<String>'));
 		Assert.equals('"#lt;b#gt;bold#lt;/b#gt;"', MermaidText.encodePlain('<b>bold</b>'));
 		Assert.equals('"a #amp;quot; b"', MermaidText.encodePlain('a &quot; b'));
-		Assert.equals('"a & b"', MermaidText.encodePlain('a & b'));
+		Assert.equals('"a #amp; b"', MermaidText.encodePlain('a & b'));
+	}
+
+	/** Every `&` of a plain label is a code, so an escape written after it can never complete a reference. */
+	@:killer('M-MERMAID-PLAIN-AMP-RAW')
+	@:pin('control')
+	public function testEveryPlainAmpersandIsACode(): Void {
+		Assert.equals('"a#amp;#gt;b"', MermaidText.encodePlain('a&>b'));
+		Assert.equals('"m_#amp;b#quot;o"', MermaidText.encodePlain('m_&b"o'));
+		Assert.equals('"a #amp;lt b"', MermaidText.encodePlain('a &lt b'));
 	}
 
 	/** A numeric HTML reference in markup is written as Mermaid's code, never raw: Mermaid would turn a raw `&#60;` into `&<`. */

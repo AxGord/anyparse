@@ -30077,9 +30077,9 @@
 			"name": "M-MERMAID-PLAIN-AMP-RAW",
 			"type": "anyparse.grammar.mermaid.MermaidText",
 			"method": "plainEscape",
-			"find": "case '&'.code if (startsReference(text, at)): '#amp;';",
+			"find": "case '&'.code: '#amp;';",
 			"replace": "",
-			"note": "a plain label's `&` before a reference shape is written raw, so the text `&quot;` renders as a quote"
+			"note": "a plain label's `&` is written raw, so the text `&quot;` renders as a quote and an escape written after a raw `&` completes a reference that re-reads as markup"
 		},
 		{
 			"name": "M-MERMAID-TICK-UNESCAPED",
@@ -30121,6 +30121,15 @@
 			"find": " || c == '_'.code",
 			"replace": "",
 			"note": "a code name may not hold `_`, so plain text `#a_b;` is written unescaped and Mermaid renders it as the reference `&a_b;`"
+		},
+		{
+			"name": "M-MERMAID-DOTTED-TEXT-TAKES-DOTS",
+			"type": "anyparse.grammar.mermaid.MmdDottedTextLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "\\\\.(?!\\\\.*-)",
+			"replace": "\\\\.(?!-)",
+			"note": "a bare dotted-edge label takes every dot but the one before the `-`, so `-. text ..->` reads the label `text .` where Mermaid's lexer closes the link at `..->`"
 		}
 	]
 }
