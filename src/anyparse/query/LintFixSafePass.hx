@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.check.CompilerOracle.OracleExclusion;
 import anyparse.check.CompilerOracle.OracleOutcome;
+import anyparse.check.FailerBisect;
 import anyparse.check.LintConfig.OracleConfig;
 
 using Lambda;
@@ -17,9 +18,10 @@ enum SafePassDecision {
 }
 
 /**
- * How far a failing safe pass could be narrowed: either the named files were reverted and
- * the rest of the wave verified green again, or the wave could not be attributed and the
- * caller must roll all of it back.
+ * How far a failing safe pass could be narrowed: the named files were reverted and the rest
+ * of the wave verified green again (`Narrowed`), the wave was bisected down to the files and
+ * rules the compiler rejects (`Bisected`, settled by the caller), or nothing could be isolated
+ * and the caller must roll all of it back.
  *
  * `WholeWave` carries BOTH halves of the surrender: `why` it gave up, and the compiler
  * text AT THAT MOMENT — which is not the text the caller started with once a round has
@@ -28,7 +30,50 @@ enum SafePassDecision {
  */
 enum SafePassNarrowing {
 	Narrowed(reverted: Array<String>, probes: Int);
+	Bisected(culprits: Array<SafeCulprit>, probes: Int);
 	WholeWave(why: String, errors: String);
+}
+
+/**
+ * One file a failing safe pass was cut down to: the rules whose edits there went back, and the
+ * text the net KEPT — null when the whole file returned to its pre-fix bytes, the first-pass
+ * edits of the rules the compiler accepted when only some of them did.
+ */
+typedef SafeCulprit = {
+	final file: String;
+	final rules: Array<String>;
+	final kept: Null<String>;
+};
+
+/**
+ * The caller's half of a safe-pass bisection — the disk and the compiler, and the record of
+ * which rule wrote what. `LintFixSafePass.isolate` decides; this answers its questions.
+ */
+typedef SafeBisectSeat = {
+
+	/**
+	 * Typecheck the tree with `keep` at the bytes the round left, `partial` at the given texts
+	 * and every other written file at its pre-round bytes.
+	 */
+	final probe: (keep:Array<String>, partial:Map<String, String>) -> OracleOutcome;
+
+	/** The rules whose first-pass edits in `file` can be replayed one subset at a time, or none. */
+	final splitRules: (file:String) -> Array<String>;
+
+	/** `file`'s first pass replayed with the edits of `rules` alone, or null when the writer refuses them or they change nothing. */
+	final replay: (file:String, rules:Array<String>) -> Null<String>;
+
+	/** Every rule that edited `file` this round — what a whole-file revert takes back. */
+	final rulesOf: (file:String) -> Array<String>;
+
+	/** `file`'s text as the round left it, or null when the round deleted it. */
+	final fixed: (file:String) -> Null<String>;
+};
+
+/** The written files a failing wave came down to, or why a bisection could not tell. */
+private enum FileIsolation {
+	Culprits(files: Array<String>);
+	Unisolated(why: String);
 }
 
 /**
@@ -50,9 +95,9 @@ enum SafePassNarrowing {
  *
  * A SECOND defect lived one step further on: the rollback was ALL-OR-NOTHING and named
  * nothing, so one bad edit hid every good file beside it and each bad edit MASKED the next, which is
- * how a queue of fixer defects came to be found one round-trip at a time. `narrow`
- * attributes the failure to the files the compiler blames BEFORE reverting anything, and
- * `revertNotice` says which files went back.
+ * how a queue of fixer defects came to be found one round-trip at a time. `narrow` attributes the failure to the
+ * files the compiler blames BEFORE reverting anything, `isolate` bisects the wave down to the files and rules
+ * the compiler rejects when attribution names nothing the run wrote, and `revertNotice` says what went back.
  */
 @:nullSafety(Strict)
 final class LintFixSafePass {
@@ -156,17 +201,7 @@ final class LintFixSafePass {
 	public static function implicated(errors: String, changed: Array<String>, coupled: Array<Array<String>>): Array<String> {
 		final hit: Array<String> = [];
 		for (path in errorFiles(errors)) for (file in changed) if (!hit.contains(file) && samePath(path, file)) hit.push(file);
-		var grew: Bool = hit.length > 0;
-		while (grew) {
-			grew = false;
-			for (group in coupled) if (group.exists(f -> hit.contains(f))) for (file in group) if (
-				!hit.contains(file) && changed.contains(file)
-			) {
-				hit.push(file);
-				grew = true;
-			}
-		}
-		return hit;
+		return coupledClosure(hit, changed, coupled);
 	}
 
 	/**
@@ -176,7 +211,8 @@ final class LintFixSafePass {
 	 * ends it (`Narrowed`), a red one is re-attributed and the loop widens by whatever NEW
 	 * files the fresh errors blame. An error can name a file this run never wrote — the broken
 	 * thing is the CALLER of an edited declaration — and then there is nothing to narrow to, so
-	 * the round returns `WholeWave` with the reason rather than reverting something arbitrary.
+	 * the round returns `WholeWave` with the reason rather than reverting
+	 * something arbitrary, and `isolate` bisects what attribution could not name.
 	 *
 	 * COST is the point of attributing rather than bisecting: one oracle spawn per round, and
 	 * a round only happens when the previous one blamed new files — one spawn for the common
@@ -227,9 +263,8 @@ final class LintFixSafePass {
 	 * Naming the culprit is the whole point. The old message said only `REVERTED N file(s),
 	 * nothing was written` — on a wave of 228 files, one bad edit hid 227 good ones AND left no
 	 * hint which of them it was, so the only way to find out was to bisect the wave one
-	 * compile at a time. The granular arm names exactly the files it rolled back; the
-	 * whole-wave arm names the files the COMPILER blamed and why they could not be narrowed to
-	 * anything this run wrote.
+	 * compile at a time. The granular arms name exactly the files they rolled back — and, bisected, the rules cut out of a file that
+	 * kept the rest; the whole-wave arm says why nothing could be isolated; every arm names the files the COMPILER blamed and quotes it.
 	 */
 	public static function revertNotice(narrowing: SafePassNarrowing, changed: Int, errors: String): String {
 		return switch narrowing {
@@ -237,11 +272,17 @@ final class LintFixSafePass {
 				final rolled: String = [for (file in reverted) 'apq lint --fix: safe-fix REVERTED $file\n'].join('');
 				'apq lint --fix: the safe fixes broke a build that was green — REVERTED ${reverted.length} of $changed'
 					+ ' file(s), KEPT the other ${changed - reverted.length} on disk ($probes extra typecheck(s) to attribute)\n'
-					+ '${rolled}apq lint --fix: $errors\n';
+					+ '$rolled${compilerLines(errors)}';
+			case Bisected(culprits, probes):
+				final whole: Int = culprits.filter(culprit -> culprit.kept == null).length;
+				final split: Int = culprits.length - whole;
+				final rolled: String = culprits.map(culpritLine).join('');
+				'apq lint --fix: the safe fixes broke a build that was green — REVERTED $whole of $changed file(s)'
+					+ (split > 0 ? ' and part of $split more' : '')
+					+ ', KEPT everything else on disk ($probes extra typecheck(s) to isolate)\n$rolled${compilerLines(errors)}';
 			case WholeWave(why, last):
-				final blamed: String = errorFiles(last).join(', ');
 				'apq lint --fix: the safe fixes broke a build that was green — REVERTED all $changed file(s), nothing was'
-					+ ' written ($why)\napq lint --fix: the compiler blames: $blamed\napq lint --fix: $last\n';
+					+ ' written ($why)\n${compilerLines(last)}';
 		};
 	}
 
@@ -277,6 +318,44 @@ final class LintFixSafePass {
 				+ ' oracle-assisted fixes are inert\n'
 		else
 			null;
+	}
+
+	/**
+	 * Cut a failing safe pass down to the edits the compiler rejects, keeping every other one.
+	 *
+	 * An attributed narrowing already names its files. A surrendered one — the errors blame a file the run never wrote,
+	 * the CALLER of an edited declaration — is bisected over the written files instead, a cross-file fix's files as one
+	 * unit, with the risky phase's own search (`FailerBisect`), and the files it keeps are confirmed green together
+	 * before anything is kept. Each culprit is then split by RULE where its first pass can be replayed (`splitByRule`),
+	 * so an innocent import fix beside the poisoning edit stays. Every search is capped at
+	 * `FailerBisect.searchBudget` probes; a bisection that cannot isolate within it, or an oracle that stops answering,
+	 * leaves the surrender standing with both reasons — fail closed.
+	 */
+	public static function isolate(
+		narrowing: SafePassNarrowing, changed: Array<String>, coupled: Array<Array<String>>, seat: SafeBisectSeat
+	): SafePassNarrowing {
+		final probes: Array<Int> = [0];
+		final files: Array<String> = switch narrowing {
+			case Narrowed(reverted, spent):
+				probes[0] = spent;
+				reverted;
+			case WholeWave(why, errors):
+				switch bisectFiles(changed, coupled, seat, probes) {
+					case Culprits(found): found;
+					case Unisolated(failure): return WholeWave('$why; $failure', errors);
+				}
+			case Bisected(_):
+				return narrowing;
+		};
+		final culprits: Array<SafeCulprit> = splitByRule(files, changed, seat, probes);
+		if (culprits.exists(culprit -> culprit.kept != null)) return Bisected(culprits, probes[0]);
+		return switch narrowing {
+			case Narrowed(_): Narrowed(files, probes[0]);
+			case WholeWave(why, errors) if (files.length >= changed.length): WholeWave(
+				'$why; every file this run wrote is implicated', errors
+			);
+			case _: Bisected(culprits, probes[0]);
+		};
 	}
 
 	/** Whether the character code is an ASCII digit. */
@@ -328,6 +407,124 @@ final class LintFixSafePass {
 		return cut > 0 && part.length > 0 && whole.substr(cut) == part && whole.charAt(cut - 1) == '/';
 	}
 
+	/**
+	 * `seed` grown by every written file a cross-file fix committed together with one of it — transitively, since two
+	 * passes can couple overlapping sets. Answers `seed` itself, grown in place.
+	 */
+	private static function coupledClosure(seed: Array<String>, changed: Array<String>, coupled: Array<Array<String>>): Array<String> {
+		var grew: Bool = seed.length > 0;
+		while (grew) {
+			grew = false;
+			for (group in coupled) if (group.exists(f -> seed.contains(f))) for (file in group) if (
+				!seed.contains(file) && changed.contains(file)
+			) {
+				seed.push(file);
+				grew = true;
+			}
+		}
+		return seed;
+	}
+
+	/**
+	 * The written files a failing wave comes down to, by binary-split group testing over UNITS — one per file, one per
+	 * set of files a cross-file fix committed together. A probe keeps a subset of units at the bytes the round left and
+	 * every other written file at its pre-round bytes; the complement of the failers is confirmed before it is trusted.
+	 * One unit needs no probe: the wave failed and the tree without it is the green one the pre-write verdict judged.
+	 */
+	private static function bisectFiles(
+		changed: Array<String>, coupled: Array<Array<String>>, seat: SafeBisectSeat, probes: Array<Int>
+	): FileIsolation {
+		final units: Array<Array<String>> = [];
+		for (file in changed) if (!units.exists(unit -> unit.contains(file))) units.push(coupledClosure([file], changed, coupled));
+		if (units.length < 2) return Culprits(changed.copy());
+		var unavailable: Null<String> = null;
+		function probe(indices: Array<Int>): Bool {
+			if (unavailable != null) return false;
+			probes[0]++;
+			return switch seat.probe([for (i in indices) for (file in units[i]) file], []) {
+				case Confirmed: true;
+				case Rejected(_): false;
+				case Unavailable(reason):
+					unavailable = reason;
+					false;
+			};
+		}
+		final budget: Int = FailerBisect.searchBudget(units.length);
+		final failers: Null<Array<Int>> = FailerBisect.isolateFailers(units.length, budget, probe, [0]);
+		final kept: Array<Int> = failers == null ? [] : [for (i in 0...units.length) if (!failers.contains(i)) i];
+		final confirmed: Bool = kept.length > 0 && probe(kept);
+		final lost: Null<String> = unavailable;
+		if (lost != null) return Unisolated('the oracle could not re-run ($lost)');
+		if (failers == null)
+			return Unisolated('bisecting the ${units.length} written unit(s) isolated no culprit within $budget typecheck(s)');
+		if (kept.length == 0) return Culprits(changed.copy());
+		if (!confirmed) return Unisolated('the files the bisection kept still do not typecheck together');
+		return Culprits([for (i in failers) for (file in units[i]) file]);
+	}
+
+	/**
+	 * Each culprit file split by RULE where its first per-file pass can be replayed one subset at a time. The first pass
+	 * alone goes first when a later pass changed the file again — the poisoning edit may be one of those; then the
+	 * pass's rules are bisected and the accepted ones confirmed. A file that cannot be split, or whose split finds no
+	 * accepted rule, goes back whole. A probe holds every file the bisection kept at the round's bytes and every split
+	 * already settled at its kept text.
+	 */
+	private static function splitByRule(
+		files: Array<String>, changed: Array<String>, seat: SafeBisectSeat, probes: Array<Int>
+	): Array<SafeCulprit> {
+		final keep: Array<String> = [for (file in changed) if (!files.contains(file)) file];
+		final partial: Map<String, String> = [];
+		final culprits: Array<SafeCulprit> = [];
+		for (file in files) {
+			final every: Array<String> = seat.rulesOf(file);
+			final rules: Array<String> = seat.splitRules(file);
+			function green(text: Null<String>): Bool {
+				if (text == null) return false;
+				partial[file] = text;
+				probes[0]++;
+				final verdict: Bool = seat.probe(keep, partial).match(Confirmed);
+				partial.remove(file);
+				return verdict;
+			}
+			final first: Null<String> = rules.length == 0 ? null : seat.replay(file, rules);
+			var keptRules: Array<String> = rules;
+			var accepted: Bool = first != null && first != seat.fixed(file) && green(first);
+			if (!accepted && rules.length > 1) {
+				final failers: Null<Array<Int>> = FailerBisect.isolateFailers(
+					rules.length, FailerBisect.searchBudget(rules.length),
+					indices -> green(seat.replay(file, [for (i in indices) rules[i]])), [0]
+				);
+				keptRules = failers == null ? [] : [for (i in 0...rules.length) if (!failers.contains(i)) rules[i]];
+				accepted = keptRules.length > 0 && green(seat.replay(file, keptRules));
+			}
+			final text: Null<String> = accepted ? seat.replay(file, keptRules) : null;
+			if (text == null) {
+				culprits.push({ file: file, rules: every, kept: null });
+				continue;
+			}
+			partial[file] = text;
+			final dropped: Array<String> = [for (rule in every) if (!keptRules.contains(rule)) rule];
+			culprits.push({ file: file, rules: dropped.length > 0 ? dropped : every, kept: text });
+		}
+		return culprits;
+	}
+
+	/**
+	 * The compiler's half of every revert notice, printed at any verbosity: the files its errors blame and the errors
+	 * themselves. Without them a revert cannot be diagnosed — the blamed file is often one the run never wrote.
+	 */
+	private static function compilerLines(errors: String): String {
+		return 'apq lint --fix: the compiler blames: ${errorFiles(errors).join(', ')}\napq lint --fix: $errors\n';
+	}
+
+	/** One culprit's line of a bisected revert notice: the whole file, or the rules cut out of a file that kept the rest. */
+	private static function culpritLine(culprit: SafeCulprit): String {
+		final rules: String = culprit.rules.join(', ');
+		return culprit.kept == null
+			? 'apq lint --fix: safe-fix REVERTED ${culprit.file} ($rules)\n'
+			: 'apq lint --fix: safe-fix REVERTED the $rules edit(s) of ${culprit.file}, KEPT its other edits\n';
+	}
+
 }
 
 /**
@@ -341,6 +538,12 @@ typedef SafePassOutcome = {
 
 	/** The files the net rolled back (empty when it rolled back nothing), for the caller to take off its edit count. */
 	final revertedFiles: Array<String>;
+
+	/**
+	 * The files of `revertedFiles` the net only SPLIT, each with how many of the round's edits it KEPT there — the edits
+	 * of the rules the compiler accepted. Absent when the net split nothing.
+	 */
+	@:optional final partialKept: Map<String, Int>;
 	final tail: String;
 	final notice: String;
 

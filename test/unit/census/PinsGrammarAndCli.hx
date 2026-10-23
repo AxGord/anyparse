@@ -75,6 +75,8 @@ final class PinsGrammarAndCli {
 		'unit.cli.LintFixRemoveTest#testARemoveDeletesTheFile :: control :: M-FIX-REMOVE-IGNORED',
 		'unit.cli.LintFixRemoveTest#testARevertRestoresADeletedFileByteForByte :: control :: M-FIX-REMOVE-NO-RESTORE',
 		'unit.cli.LintFixRemoveTest#testOverlappingCrossFileEditsAreSkipped :: control :: M-FIX-OVERLAP-BLIND',
+		'unit.cli.LintFixSafeBisectTest#testARevertedEditIsNotReappliedByTheFollowUpRound :: control :: M-SAFE-BAN-OFF',
+		'unit.cli.LintFixSafeBisectTest#testTheImportFixesLandAndOnlyThePoisoningEditGoesBack :: control :: M-SAFE-BISECT-OFF,M-SAFE-SPLIT-OFF,M-SAFE-BLAME-UNSAID',
 		'unit.cli.LintQuotationAwareCliTest#testAQuotedRedundantParensFindingIsFixed :: control :: M-PARENS-QUOTED-DROPPED',
 		'unit.cli.LintQuotationAwareCliTest#testAQuotedRedundantParensFindingReports :: control :: M-PARENS-QUOTED-DROPPED',
 		'unit.cli.LintRangeCliTest#testACommentOnlyWriteAppliesNoFix :: control :: M-POST-WRITE-FIX-TRIVIA-BLIND',

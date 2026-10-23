@@ -30790,6 +30790,43 @@
 			"find": "final byCategory: Null<Bool> = category == null ? null : level.categories[category];",
 			"replace": "final byCategory: Null<Bool> = category == null || Lambda.exists(_switches, l -> l.rules[id] != null) ? null : level.categories[category];",
 			"note": "a rule entry anywhere in the chain outranks a category entry anywhere in it, so a nested category no longer overrides an outer config's entry for one of its rules"
+		},
+		{
+			"name": "M-SAFE-BISECT-OFF",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "bisectFiles",
+			"force": "Unisolated('bisection off')",
+			"note": "a safe pass the compiler fails through a file the run never wrote is reverted whole again, every innocent edit with it"
+		},
+		{
+			"name": "M-SAFE-SPLIT-OFF",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "splitByRule",
+			"find": "final rules: Array<String> = seat.splitRules(file);",
+			"replace": "final rules: Array<String> = [];",
+			"note": "a culprit file goes back whole, so the import fix beside the poisoning edit in the same file is lost"
+		},
+		{
+			"name": "M-SAFE-BISECT-NO-FALLBACK",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "bisectFiles",
+			"find": "return Unisolated('bisecting the ${units.length} written unit(s) isolated no culprit within $budget typecheck(s)');",
+			"replace": "return Culprits([]);",
+			"note": "a bisection that exhausts its budget names no culprit and reverts nothing, leaving the tree the compiler rejected"
+		},
+		{
+			"name": "M-SAFE-BLAME-UNSAID",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "compilerLines",
+			"force": "'apq lint --fix: $errors\\n'",
+			"note": "a revert notice no longer names the files the compiler blamed, so a revert caused through a file the run never wrote cannot be diagnosed"
+		},
+		{
+			"name": "M-SAFE-BAN-OFF",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "isBanned",
+			"force": "false",
+			"note": "an edit the safe-pass net took back is offered again by the follow-up round, which re-applies it and reverts it a second time"
 		}
 	]
 }
