@@ -622,9 +622,9 @@ typedef FileInfo = {
 	var ambientImportsBounded: Bool;
 
 	/**
-	 * Simple names of every type referenced in an `@:access(...)` metadata in
-	 * this file — types this file grants itself private access to. Drives
-	 * `hasAccessGrant`, the second gate of a cross-file-safe private-member rename.
+	 * Every argument of an `@:access(...)` metadata in this file, as the dotted path it is written — a
+	 * type, an enclosing package or a single member this file grants itself private access to.
+	 * `RawSourceScan.grantsAccessTo` is the one reading of them.
 	 */
 	var accessGrants: Array<String>;
 

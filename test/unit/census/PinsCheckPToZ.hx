@@ -269,6 +269,11 @@ final class PinsCheckPToZ {
 		'unit.check.PreferValueLoopCheckTest#testStaticAndConstructorCallsThatGrowTheCollectionAreReportOnly :: control :: '
 			+ 'M-ELEMENT-LOOP-TYPE-CALLEE,M-ELEMENT-LOOP-NEW-EXPR',
 		'unit.check.PreferValueLoopCheckTest#testThisQualifiedCollectionNotFlagged :: control :: M-ELEMENT-LOOP-REBIND',
+		'unit.check.PrivateAccessFormParityTest#testARewriteOfTheReachedMemberCarriesTheReachingFile :: control :: '
+			+ 'M-TRIVIAL-GETTER-GRANTEE-UNSEEN',
+		'unit.check.PrivateAccessFormParityTest#testAWaiverReachesOnlyTheExpressionItAnnotates :: control :: M-WAIVER-WHOLE-FILE',
+		'unit.check.PrivateAccessFormParityTest#testEveryFormOfThePrivilegeStopsWhatTheTypeGrantStops :: control :: '
+			+ 'M-ACCESS-GRANT-LAST-SEGMENT,M-PRIVATE-ACCESS-UNSEEN',
 		'unit.check.ReachBuildsCacheTest#testABuildThatReadAnUnhashedFileIsNotStored :: control :: M-REACH-HASHED-UNCHECKED',
 		'unit.check.ReachBuildsCacheTest#testAGenerationNoLongerCurrentIsNotReadFromTheStore :: control :: M-REACH-GENERATION-UNCHECKED',
 		'unit.check.ReachBuildsCacheTest#testAMisshapenRecordIsAMiss :: control :: M-REACH-RECORD-SHAPE-UNCHECKED',

@@ -486,8 +486,9 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * Simple names of every type this file TAKES private access to — the arguments of every
-	 * `RefShape.takesPrivateAccessMetaName` annotation in `tree` (Haxe `@:access(pkg.Type)`). Empty
+	 * Every path this file TAKES private access through, as written — the arguments of every
+	 * `RefShape.takesPrivateAccessMetaName` annotation in `tree` (Haxe `@:access(pkg.Type)`, `@:access(pkg)`,
+	 * `@:access(pkg.Type.member)`), whole: the last segment alone names a package or a member as often as a type. Empty
 	 * when the grammar names no such tag. The opposite direction (`grantsPrivateAccessMetaName`) is
 	 * NOT collected: its arguments are unenumerable by construction, so its consumers read only
 	 * whether it is present at all.
@@ -498,8 +499,8 @@ final class SymbolIndexBuilder {
 		if (tag == null) return out;
 		collectInto(tree, n -> {
 			if (n.kind == 'MetaCall' && n.name == tag) for (c in n.children) {
-				final nm: Null<String> = c.name;
-				if (nm != null) out.push(simpleName(nm));
+				final path: Null<String> = dottedPathOf(c, shape) ?? c.name;
+				if (path != null) out.push(path);
 			}
 		});
 		return out;
@@ -1140,6 +1141,16 @@ final class SymbolIndexBuilder {
 			typeParamDefaults: [],
 			returnTypeSources: []
 		};
+	}
+
+	/** The dotted path an identifier / field-access chain `node` spells, or null for any other shape. */
+	private static function dottedPathOf(node: QueryNode, shape: RefShape): Null<String> {
+		if (node.kind == shape.identKind) return node.name;
+		final head: Null<QueryNode> = node.children[0];
+		final name: Null<String> = node.name;
+		if (node.kind != shape.fieldAccessKind || head == null || name == null) return null;
+		final prefix: Null<String> = dottedPathOf(head, shape);
+		return prefix == null ? null : '$prefix.$name';
 	}
 
 }

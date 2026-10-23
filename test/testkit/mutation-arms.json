@@ -24034,7 +24034,7 @@
 			"name": "M-PRIVATIZE-ACCESS-GRANT",
 			"type": "anyparse.check.NamingPrivatize",
 			"method": "publicKeywordIfConfined",
-			"find": "if (ctx.wide.allFiles().exists(fi -> fi.accessGrants.contains(owner))) return null;",
+			"find": "if (ctx.wide.text.hasAccessGrant(owner)) return null;",
 			"replace": "",
 			"note": "an @:access grant naming the type does not refuse"
 		},
@@ -30706,6 +30706,37 @@
 			"find": "equality.contains(node.kind) && right != null",
 			"replace": "false && right != null",
 			"note": "the right operand of a comparison with a value declared the enum is no longer proven, so `e == A` refuses the rename"
+		},
+		{
+			"name": "M-ACCESS-GRANT-LAST-SEGMENT",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "grantsAccessTo",
+			"find": " || typePaths.exists(t -> t.startsWith('$path.') || path.startsWith('$t.'))",
+			"replace": "",
+			"note": "an access grant counts only when its LAST segment is the type, so `@:access(pkg)` and `@:access(pkg.Type.member)` grant nothing and every confinement gate calls a reached private member confined"
+		},
+		{
+			"name": "M-PRIVATE-ACCESS-UNSEEN",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "waiverFilesOf",
+			"force": "[]",
+			"note": "no file carries a `@:privateAccess` waiver, so a member read only through one reads as unreached"
+		},
+		{
+			"name": "M-TRIVIAL-GETTER-GRANTEE-UNSEEN",
+			"type": "anyparse.check.TrivialGetter",
+			"method": "backingFieldReachedOutside",
+			"find": "|| MemberWriteScan.accessGrantMayReference(className, field, index, plugin)",
+			"replace": "",
+			"note": "trivial-getter asks the subtype graph alone again, so a backing field a grantee reads is deleted by a collapse that rewrites only the owner"
+		},
+		{
+			"name": "M-WAIVER-WHOLE-FILE",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "waivedNamesOf",
+			"find": "collectWaivedNames(tree, tag, false, names);",
+			"replace": "collectWaivedNames(tree, tag, true, names);",
+			"note": "every name a waiver file spells counts as waived, so a same-named local one statement past the waiver keeps a dead private member alive"
 		}
 	]
 }

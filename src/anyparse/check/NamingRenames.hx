@@ -442,7 +442,7 @@ final class NamingRenames {
 		if (candidate == null) return null;
 		final c: CrossFileCandidate = candidate;
 		final slices: Array<CrossFileEdits> = [];
-		final hierarchy: Array<String> = affectedFiles(c.ownerName, c.declFile, index, c.grantees);
+		final hierarchy: Array<String> = affectedFiles(c.ownerName, c.declFile, index, c.oldName, c.grantees);
 		final scanned: Array<String> = c.isPublic ? publicAffectedFiles(hierarchy, c.oldName, index, sourceByFile) : hierarchy;
 		// An override the edit set cannot reach makes the base unrenameable: the family is resolved
 		// against the RESOLUTION index, which sees files the lint scope does not, and half a family
@@ -518,7 +518,9 @@ final class NamingRenames {
 		final project: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionProjectSourcesOf(plugin);
 		if (project == null) return null;
 		final projectFiles: Array<String> = [for (entry in project) entry.file];
-		for (file in affectedFiles(c.ownerName, c.declFile, resolutionIndex)) if (!sourceByFile.exists(file) && projectFiles.contains(file))
+		for (file in affectedFiles(c.ownerName, c.declFile, resolutionIndex, c.oldName)) if (
+			!sourceByFile.exists(file) && projectFiles.contains(file)
+		)
 			return file;
 		if (!c.isPublic) return null;
 		for (entry in project) if (!sourceByFile.exists(entry.file) && entry.source.indexOf(c.oldName) >= 0) {
@@ -932,11 +934,14 @@ final class NamingRenames {
 
 	/**
 	 * Every report file affected by renaming `owner`'s private member: the declaring file, every
-	 * file declaring a TRANSITIVE subtype of `owner`, every file with an `@:access(owner)` grant, and every file in `grantees` (those
+	 * file declaring a TRANSITIVE subtype of `owner`, every file granting itself access to `owner` or waiving
+	 * privacy where it spells `member` (`RawSourceScan.privilegedFiles`), and every file in `grantees` (those
 	 * an `@:allow` on the member opens it to). Deduped, in discovery order (declaring file first). All are report files (the index
 	 * is report-scoped), hence editable.
 	 */
-	private static function affectedFiles(owner: String, declFile: String, index: SymbolIndex, ?grantees: Array<String>): Array<String> {
+	private static function affectedFiles(
+		owner: String, declFile: String, index: SymbolIndex, member: String, ?grantees: Array<String>
+	): Array<String> {
 		final out: Array<String> = [declFile];
 		final closure: Array<String> = [owner];
 		var i: Int = 0;
@@ -947,7 +952,7 @@ final class NamingRenames {
 				if (!out.contains(fi.file)) out.push(fi.file);
 			}
 		}
-		for (fi in index.allFiles()) if (fi.accessGrants.contains(owner) && !out.contains(fi.file)) out.push(fi.file);
+		for (file in index.text.privilegedFiles(owner, member)) if (!out.contains(file)) out.push(file);
 		for (file in grantees ?? []) if (!out.contains(file)) out.push(file);
 		return out;
 	}

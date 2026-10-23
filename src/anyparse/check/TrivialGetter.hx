@@ -274,7 +274,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				final shape: RefShape = plugin.refShape();
 				final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source));
 				for (cls in CheckScan.classBodies(tree))
-					collectClassFixEdits(cls, source, file, wanted, index, edits, maxBypass, branch, shape);
+					collectClassFixEdits(cls, source, file, wanted, index, edits, maxBypass, branch, shape, plugin);
 				return CanonicalEdit.dropContainedEdits(edits);
 			});
 	}
@@ -336,7 +336,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				final c = classifyProperty(cls, source, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 				// The self-backed arm deletes nothing outside the owner, so no other file can need an edit.
 				if (c == null || c.inlineGetter != null || c.selfBacked) return null;
-				if (!subtypeIndex.subtypes.subtypeReferencesField(owner, c.field)) return null;
+				if (!backingFieldReachedOutside(subtypeIndex, owner, c.field, false, null, plugin)) return null;
 				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(
 					cls, source, prop.span, prop.name, prop.isStatic, c, shape
 				);
@@ -366,19 +366,18 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	/**
-	 * Whether a subtype references the backing field `field` the collapse would DELETE
-	 * (`SubtypeGraph.subtypeReferencesField`) — a subclass reading `owner`'s private `_x` directly
-	 * breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references
-	 * inside the owner. The inline arm keeps the backing field, so it is exempt; the SELF-BACKED arm
-	 * deletes no field at all (the surviving property carries the name a subtype already uses), so it
-	 * is exempt too; a null index (a direct fix caller) cannot resolve the hierarchy and never blocks
-	 * (the report pass already gated).
+	 * Whether a file other than the owner's names the backing field the collapse deletes — a subtype, or a file a
+	 * privilege opens it to (`MemberWriteScan.accessGrantMayReference`: an `@:access` grant naming the type, its package or
+	 * the member, or a `@:privateAccess` waiver). Either one sends the collapse down the cross-file path, whose
+	 * `BackingFieldRefs.crossFileReadRewrite` rewrites what it can attribute and refuses the rest.
 	 */
-	private static inline function subtypeFieldBlocks(
-		index: Null<SymbolIndex>, className: Null<String>, field: String, selfBacked: Bool, inlineGetter: Null<QueryNode>
+	private static inline function backingFieldReachedOutside(
+		index: Null<SymbolIndex>, className: Null<String>, field: String, selfBacked: Bool, inlineGetter: Null<QueryNode>,
+		plugin: GrammarPlugin
 	): Bool {
 		return !selfBacked && inlineGetter == null && index != null && className != null
-			&& index.subtypes.subtypeReferencesField(className, field);
+			&& (index.subtypes.subtypeReferencesField(className, field)
+				|| MemberWriteScan.accessGrantMayReference(className, field, index, plugin));
 	}
 
 	/** The last `.`-separated segment of `path` (its simple name). */
@@ -447,7 +446,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			// A subtype references the backing field the collapse deletes; still emit when every such
 			// occurrence is a provable READ (the cross-file collapse rewrites them), else stay blocked.
 			if (
-				subtypeFieldBlocks(subtypeIndex, className, c.field, c.selfBacked, c.inlineGetter)
+				backingFieldReachedOutside(subtypeIndex, className, c.field, c.selfBacked, c.inlineGetter, plugin)
 				&& BackingFieldRefs.crossFileReadRewrite(owner, c.field, prop.name, file, subtypeIndex, sourceByFile, plugin) == null
 			)
 				continue;
@@ -505,7 +504,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function collectClassFixEdits(
 		cls: QueryNode, source: String, file: String, wanted: Array<String>, index: Null<SymbolIndex>,
-		out: Array<{ span: Span, text: String }>, maxBypass: Int, branch: MemberBranchSeams, shape: RefShape
+		out: Array<{ span: Span, text: String }>, maxBypass: Int, branch: MemberBranchSeams, shape: RefShape, plugin: GrammarPlugin
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
@@ -515,7 +514,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		) {
 			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 			if (c == null) continue;
-			if (subtypeFieldBlocks(index, className, c.field, c.selfBacked, c.inlineGetter)) continue;
+			if (backingFieldReachedOutside(index, className, c.field, c.selfBacked, c.inlineGetter, plugin)) continue;
 			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, prop.isStatic, c, shape);
 			if (e != null) for (edit in e) out.push(edit);
 		}

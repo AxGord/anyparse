@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.Span;
 
@@ -28,6 +29,12 @@ final class RawSourceScan {
 	 */
 	private final _matchMaskByFile: Map<String, Array<Span>> = [];
 
+	/** The access path (`pkg.Type`, a sub-type included) of every indexed declaration, by the type's simple name. */
+	private final _typePathsByName: Map<String, Array<String>> = [];
+
+	/** `waivedNamesOf`'s answer per waiver file once asked — null for a file that does not parse. */
+	private final _waivedNamesByFile: Map<String, Null<Array<String>>> = [];
+
 	/** Every indexed file's `FileInfo`, handed over by the owning index. */
 	private final _files: Array<FileInfo>;
 
@@ -47,6 +54,9 @@ final class RawSourceScan {
 	/** The grammar the index was built for, asked for a file's lexical regions. */
 	private final _plugin: GrammarPlugin;
 
+	/** Every retained source writing the grammar's privacy waiver in code (`waiverFilesOf`), sorted. */
+	private final _waiverFiles: Array<String>;
+
 	/** The answer `sourceCarriesAllowGrant` gave for `_grantScanSource`. */
 	private var _grantScanAnswer: Bool = false;
 
@@ -62,30 +72,76 @@ final class RawSourceScan {
 		_sources = sources;
 		_plugin = plugin;
 		_thirdParty = thirdParty;
+		_waiverFiles = waiverFilesOf(sources, plugin, thirdParty);
+		for (fi in files) for (t in fi.types) {
+			final paths: Array<String> = _typePathsByName[t.name] ?? [];
+			final path: String = fi.pkg == '' ? t.name : '${fi.pkg}.${t.name}';
+			if (!paths.contains(path)) paths.push(path);
+			_typePathsByName[t.name] = paths;
+		}
 	}
 
 	/**
-	 * Does any indexed file grant itself `@:access(typeName)` (matched by simple
-	 * name)? The second gate — such a file can read the type's private members.
+	 * Does any indexed file grant itself private access to `typeName` (`grantsAccessTo`)? The second gate — such a file can
+	 * read the type's private members. An expression-level waiver names no type, so it answers per NAME instead
+	 * (`waiverMayReference`).
 	 */
 	public function hasAccessGrant(typeName: String): Bool {
-		return _files.exists(f -> f.accessGrants.contains(typeName));
+		return _files.exists(f -> grantsAccessTo(f, typeName));
 	}
 
 	/**
 	 * Whether `matches` holds for the WHOLE source of any indexed file granting itself
-	 * `@:access(typeName)`. The grant is file-scoped — every member of such a file reaches
+	 * private access to `typeName` (`grantsAccessTo`), or of any file carrying an expression-level
+	 * waiver (`waiverFilesOf`) that spells `member` — a waiver names no type, so nothing but the
+	 * member's name ties such a file to it. The grant is file-scoped — every member of such a file reaches
 	 * the type's privates — so the scan must be too, unlike the declaration-span scan a
 	 * subtype gets. True without consulting `matches` when such a file's source was not
 	 * retained. The precise counterpart of `hasAccessGrant`, for a caller that can say what
 	 * it actually fears from a grantee rather than vetoing on the grant's existence.
 	 */
-	public function accessGrantMatches(typeName: String, matches: (source:String) -> Bool): Bool {
-		for (fi in _files) if (fi.accessGrants.contains(typeName)) {
-			final src: Null<String> = _sources[fi.file];
+	public function accessGrantMatches(typeName: String, member: String, matches: (source:String) -> Bool): Bool {
+		for (file in privilegedFiles(typeName, member)) {
+			final src: Null<String> = _sources[file];
 			if (src == null || matches(src)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Every file that may reach `typeName`'s private members by a privilege rather than by inheritance — each granting
+	 * itself access (`grantsAccessTo`), then each carrying an expression-level waiver (`waiverFilesOf`), narrowed to those
+	 * spelling `member` when one is given (a waiver names no type, so the member's name is all that ties it to this one).
+	 * Deduped, in index order.
+	 */
+	public function privilegedFiles(typeName: String, ?member: String): Array<String> {
+		final out: Array<String> = [for (fi in _files) if (grantsAccessTo(fi, typeName)) fi.file];
+		for (file in _waiverFiles) if (!out.contains(file) && (member == null || waiverFileMayReference(file, member))) out.push(file);
+		return out;
+	}
+
+	/**
+	 * Whether `fi` grants itself private access to `typeName`. Haxe holds a grant path against the type's access path
+	 * (`pkg.Type`, a sub-type's too) and the member after it: the path reaches the type when it names it (`pkg.Type`), one of
+	 * its members (`pkg.Type.member`) or an enclosing package (`pkg`), and never through the module a sub-type sits in. A
+	 * path whose last segment is the simple name counts whatever its package — the conservative direction for every caller,
+	 * each of which refuses on a grant.
+	 */
+	public function grantsAccessTo(fi: FileInfo, typeName: String): Bool {
+		if (fi.accessGrants.length == 0) return false;
+		final typePaths: Array<String> = _typePathsByName[typeName] ?? [];
+		return fi.accessGrants.exists(
+			path ->
+				path == typeName || path.endsWith('.$typeName') || typePaths.exists(t -> t.startsWith('$path.') || path.startsWith('$t.'))
+		);
+	}
+
+	/**
+	 * Whether a file carrying an expression-level privacy waiver (`waiverFilesOf`) spells `name` in code — the per-NAME
+	 * question a waiver allows, since it names no type. A waiver file whose source was not retained answers true.
+	 */
+	public function waiverMayReference(name: String): Bool {
+		return _waiverFiles.exists(file -> waiverFileMayReference(file, name));
 	}
 
 	/**
@@ -204,6 +260,39 @@ final class RawSourceScan {
 	}
 
 	/**
+	 * Whether the waiver file `file` spells `name` inside an expression its waiver annotates (`waivedNamesOf`) — anywhere in
+	 * its code when it does not parse, and true when its source was not retained.
+	 */
+	private function waiverFileMayReference(file: String, name: String): Bool {
+		final src: Null<String> = _sources[file];
+		if (src == null) return true;
+		final waived: Null<Array<String>> = waivedNamesOf(file, src);
+		return waived == null
+			? OccurrenceScan.referencedInRange(src, name, 0, src.length, [], matchMaskFor(file, src))
+			: waived.contains(name);
+	}
+
+	/**
+	 * Every name spelled inside an expression the grammar's privacy waiver annotates in `file` — the only place the waiver
+	 * reaches, so a same-named call one statement further on is not a reach. Null when the file does not parse. Memoised per
+	 * file on this run-scoped index.
+	 */
+	private function waivedNamesOf(file: String, source: String): Null<Array<String>> {
+		if (_waivedNamesByFile.exists(file)) return _waivedNamesByFile[file];
+		final tag: Null<String> = _plugin.refShape().waivesPrivacyMetaName;
+		final tree: Null<QueryNode> = tag == null || _skipped.contains(file) ? null : ParseGate.parseOrNull(_plugin, source);
+		final out: Null<Array<String>> = if (tree == null || tag == null)
+			null
+		else {
+			final names: Array<String> = [];
+			collectWaivedNames(tree, tag, false, names);
+			names;
+		};
+		_waivedNamesByFile[file] = out;
+		return out;
+	}
+
+	/**
 	 * `OccurrenceScan.inertMask(source, _plugin)` for `file`, computed once and reused by every
 	 * later candidate `nameOccursOutside` walks the index for — see `_matchMaskByFile`.
 	 */
@@ -256,6 +345,45 @@ final class RawSourceScan {
 	 */
 	private static inline function skippedSourceMentions(source: Null<String>, name: String): Bool {
 		return source == null || mentionsWord(source, name);
+	}
+
+	/**
+	 * Every retained PROJECT source — parsed or skipped — that writes the grammar's privacy waiver
+	 * (`RefShape.waivesPrivacyMetaName`) in CODE, comment, string and regex regions masked. Read from the text rather than the
+	 * tree, so a declarations-only parse (which drops function bodies, where the waiver lives) and an unparsed file answer it
+	 * alike. A third-party source is left out: it cannot name a project type, so it cannot hold one of its values typed for a
+	 * waiver to matter. Read once, when the run-scoped index is built.
+	 */
+	private static function waiverFilesOf(
+		sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>
+	): Array<String> {
+		final tag: Null<String> = plugin.refShape().waivesPrivacyMetaName;
+		final out: Array<String> = tag == null ? [] : [
+			for (file => src in sources) if (!thirdParty.exists(file) && writesTagInCode(src, tag, plugin)) file
+		];
+		out.sort(Reflect.compare);
+		return out;
+	}
+
+	/** Whether `source` writes the metadata `tag` outside comment, string and regex regions, not as a prefix of a longer tag. */
+	private static function writesTagInCode(source: String, tag: String, plugin: GrammarPlugin): Bool {
+		var at: Int = source.indexOf(tag);
+		if (at < 0) return false;
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		while (at >= 0) {
+			final next: Null<Int> = source.charCodeAt(at + tag.length);
+			if ((next == null || !isWordChar(next)) && LexicalRegions.regionAt(at, regions) == null) return true;
+			at = source.indexOf(tag, at + 1);
+		}
+		return false;
+	}
+
+	/** Appends to `out` the name of every node under an annotation by `tag` — a node holding the tag as a child waives all its children. */
+	private static function collectWaivedNames(node: QueryNode, tag: String, waived: Bool, out: Array<String>): Void {
+		final name: Null<String> = node.name;
+		if (waived && name != null && !out.contains(name)) out.push(name);
+		final opens: Bool = waived || node.children.exists(c -> c.name == tag);
+		for (child in node.children) collectWaivedNames(child, tag, opens, out);
 	}
 
 }
