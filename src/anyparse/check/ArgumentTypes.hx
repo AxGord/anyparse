@@ -77,6 +77,7 @@ final class ArgumentTypes {
 		element: null,
 		call: (_, _) -> null,
 		construction: null,
+		contextual: null,
 		arithmetic: (node, operands, s) -> s.types.arithmeticType(node, operands, s),
 		reading: s -> s.seen
 	};
@@ -262,20 +263,22 @@ final class ArgumentTypes {
 	}
 
 	/**
-	 * The type the arithmetic `node` over `operands` yields (`RefShape.arithmeticKinds`): over core numbers the integer type
-	 * when every operand is one and `node`'s operator keeps it, else the real type; over two operands an abstract takes part
-	 * in, the type its operator overload yields (`overloadType`); null otherwise.
+	 * The type the operator `node` over `operands` yields: over core value types the type the language's own operator
+	 * yields (`TypingService.coreOperatorType`), a compound assignment the type of its target
+	 * (`TypingService.compoundKeepsTarget`); over two operands an abstract takes part in, the type its overload of a binary
+	 * operator yields (`overloadType`); null otherwise.
 	 */
 	private function arithmeticType(node: QueryNode, operands: Array<WrittenType>, scope: ArgumentScope): Null<WrittenType> {
-		final core: Null<CoreValueTypes> = _shape.coreValueTypes;
-		if (core == null) return null;
-		var integral: Bool = !(_shape.realArithmeticKinds ?? []).contains(node.kind);
-		for (o in operands) {
-			final name: Null<String> = coreName(o.text);
-			if (name != core.integer && name != core.real) return operands.length == 2 ? overloadType(node.kind, operands, scope) : null;
-			if (name != core.integer) integral = false;
-		}
-		return { text: integral ? core.integer : core.real, file: null };
+		final cores: Array<Null<String>> = [for (o in operands) coreName(o.text)];
+		if (_shape.execution?.compoundAssignOperators?.exists(node.kind) == true)
+			return TypingService.compoundKeepsTarget(node.kind, cores, _shape) ? operands[0] : null;
+		final core: Null<String> = TypingService.coreOperatorType(node.kind, cores, _shape);
+		return if (core != null)
+			{ text: core, file: null }
+		else if (operands.length == 2)
+			overloadType(node.kind, operands, scope)
+		else
+			null;
 	}
 
 	/**

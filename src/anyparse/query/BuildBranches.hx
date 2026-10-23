@@ -2,7 +2,10 @@ package anyparse.query;
 
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SymbolIndex.DeclBranch;
+import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
+
+using Lambda;
 
 /**
  * Which `#if` branches of a declaration the run's builds compile (`docs/typing-service.md`, step T6): the branches of
@@ -56,6 +59,17 @@ final class BuildBranches {
 		if (liveness == null || source == null) return all;
 		final kept: Array<DeclBranch> = all.filter(b -> liveness.live(file, source, b.span));
 		return kept.length == 0 ? all : kept;
+	}
+
+	/**
+	 * The declarations of the member `name` of `r` some declared build may compile: those inside a branch `of` answers, a
+	 * member-level `#if` alternative each — every one of them for a declaration written once.
+	 */
+	public function declarations(r: ResolvedType, name: String): Array<MemberInfo> {
+		final all: Array<MemberInfo> = r.type.members.filter(m -> m.name == name);
+		if (r.type.branches.length < 2) return all;
+		final live: Array<DeclBranch> = of(r);
+		return all.filter(m -> live.exists(b -> b.span.from <= m.declFrom && m.declFrom < b.span.to));
 	}
 
 }

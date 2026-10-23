@@ -1,0 +1,5 @@
+{
+	"compilerOracle": "typer.hxml",
+	"compilerOracleServer": false,
+	"resolutionRoots": ["src"]
+}

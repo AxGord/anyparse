@@ -61,10 +61,11 @@ final class NominalTypes {
 	 * deep walk's arcs, each answering what it always did. An identifier's annotation (`declaredTypeSources`, then the
 	 * `declaredTypes` nominal, so the deep walk never resolves less than the shallow one), a `for` binder's element
 	 * (`forBindingElementTypeSource`), a field PATH walked from its root as one (`indexAccess`), a tabled static call, the self reference
-	 * (`indexSelf`), and a local written with no type by its initializer (`localInitializer`). It types no element or construction.
+	 * (`indexSelf`), a local written with no type by its initializer (`localInitializer`), an element read by index
+	 * (`indexElement`), a construction (`indexConstruction`) and an operator over typed operands (`indexArithmetic`).
 	 */
 	private static final INDEX_HOST: TypingHost<String, IndexTyping> = {
-		peel: (node, _) -> node,
+		peel: (node, c) -> BoolExprShape.unwrapParens(node, c.shape.parenKind),
 		isAccess: (kind, c) -> kind == c.shape.fieldAccessKind,
 		literal: (typeName, _) -> typeName,
 		ascribed: indexAscribed,
@@ -83,10 +84,11 @@ final class NominalTypes {
 		parameter: null,
 		unbound: (_, _) -> null,
 		access: indexAccess,
-		element: null,
+		element: ComposedValues.indexElement,
 		call: (node, c) -> tabledStaticCallTypeSource(node, c.root, c.shape, c.index),
-		construction: null,
-		arithmetic: null,
+		construction: ComposedValues.indexConstruction,
+		contextual: ComposedValues.indexContextual,
+		arithmetic: ComposedValues.indexArithmetic,
 		reading: c -> c.seen
 	};
 
@@ -992,6 +994,7 @@ final class NominalTypes {
 		if (!hit.isValueBinder && hasIterationValueBinder(loop, valueBinderKinds)) return null;
 		final iterable: Null<QueryNode> = iterationIterable(loop, valueBinderKinds);
 		if (iterable == null) return null;
+		if (iterable.kind == shape.intervalKind) return ComposedValues.intervalElement(iterable, c);
 		final iterableSource: Null<String> = TypingService.typeWalk(iterable, shape, INDEX_HOST, c);
 		return iterableSource == null ? null : elementTypeSourceOf(iterableSource, elementParams, [], c.chain.typeSyntax);
 	}
@@ -1140,7 +1143,10 @@ final class NominalTypes {
 		var root: QueryNode = node;
 		while (root.kind != identKind && root.children.length == 1) root = root.children[0];
 		final rootSource: Null<String> = TypingService.typeWalk(root, shape, INDEX_HOST, c);
-		return pathReceiverMemberTypeSource(path, rootSource, index, c.file, true, shape.memberTransparentWrapperTypeNames ?? []);
+		final read: Null<String> = pathReceiverMemberTypeSource(
+			path, rootSource, index, c.file, true, shape.memberTransparentWrapperTypeNames ?? []
+		);
+		return read != null || rootSource != null ? read : ComposedValues.enumAbstractValue(path, root, c);
 	}
 
 	/** The nominal `selectedReturn` answers for the call `node`, or null; null with no `typing` (no chain context to type it in). */

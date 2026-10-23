@@ -206,8 +206,16 @@ final class AbstractCasts {
 	 * read as an abstract (`clausesOf`), and for one with a type parameter.
 	 */
 	public function branchMembers(r: ResolvedType): Null<Array<Array<MemberInfo>>> {
-		final live: Array<DeclBranch> = _builds.of(r);
-		return clausesOf(r) == null || r.type.typeParamArity > 0 ? null : [for (b in live) membersOf(r, b)];
+		return r.type.typeParamArity > 0 ? null : liveMembers(r);
+	}
+
+	/**
+	 * The members of each `#if` branch declaring the abstract `r` that some build of the run compiles, in source order
+	 * (`DeclBranch.span`), whatever type parameters it declares: what one build of it declares. Null for a declaration one
+	 * such branch of which the index does not read as an abstract (`clausesOf`).
+	 */
+	public function liveMembers(r: ResolvedType): Null<Array<Array<MemberInfo>>> {
+		return clausesOf(r) == null ? null : [for (b in _builds.of(r)) membersOf(r, b)];
 	}
 
 	/**

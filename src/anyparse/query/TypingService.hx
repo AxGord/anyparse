@@ -82,7 +82,7 @@ final class TypingService {
 		casts = new AbstractCasts(refs, ancestors, cache, typeSyntax, shape, builds);
 		unification = new Unification(ancestors, cache, refs, casts, shape);
 		operators = new OperatorOverloads(casts, unification, shape);
-		members = new MemberLookup(refs, cache, ancestors, typeSyntax, shape.optionalValueTypeName);
+		members = new MemberLookup(refs, cache, ancestors, typeSyntax, shape.optionalValueTypeName, builds);
 		calls = new CallSelection(casts, unification, ancestors, typeSyntax);
 		structural = new StructuralTypes(files, refs, subtypes, members, typeSyntax, unification);
 		extensions = new StaticExtensions(refs, cache, ancestors, members, structural);
@@ -104,16 +104,76 @@ final class TypingService {
 		if ((kind == shape.identKind || kind == shape.stringInterpIdentKind) && name != null)
 			return name == shape.selfReferenceText ? host.self(node, ctx) : identifierType(node, shape, host, ctx);
 		if (host.isAccess(kind, ctx) && name != null && node.children.length > 0) return host.access(node, ctx);
-		final element: Null<(container:T, ctx:C) -> Null<T>> = host.element;
-		if (kind == shape.indexAccessKind && element != null && node.children.length > 0) {
-			final container: Null<T> = typeWalk(node.children[0], shape, host, ctx);
-			return container == null ? null : element(container, ctx);
-		}
-		if (kind == shape.callKind && node.children.length > 0) return host.call(node, ctx);
+		final element: Null<(node:QueryNode, container:T, ctx:C) -> Null<T>> = host.element;
+		if (kind != shape.indexAccessKind || element == null || node.children.length <= 0)
+			return kind == shape.callKind && node.children.length > 0 ? host.call(node, ctx) : composedType(node, shape, host, ctx);
+		final container: Null<T> = typeWalk(node.children[0], shape, host, ctx);
+		return container == null ? null : element(node, container, ctx);
+	}
+
+	/**
+	 * The core type the operator of node kind `kind` yields over operands of the core value types `operands`
+	 * (`RefShape.coreValueTypes`; null for an operand of any other type), or null: a comparison or a logical operator
+	 * (`booleanOperatorKinds`, `notKind`) the `boolean` type; arithmetic over core numbers the integer type when every
+	 * operand is one and the operator keeps it (`arithmeticKinds` but `realArithmeticKinds`, the negation), else the real
+	 * type; an arithmetic operator that concatenates (`ExecutionShape.concatenationKinds`) over the string type and another
+	 * core value the string type (4.3.7 `$type`: `s + 1`, `1 + s`, `s + true` are `String`). No core value type overloads
+	 * an operator, so the language's own operator is the one taken.
+	 */
+	public static function coreOperatorType(kind: String, operands: Array<Null<String>>, shape: RefShape): Null<String> {
+		final core: Null<CoreValueTypes> = shape.coreValueTypes;
+		if (core == null || operands.contains(null)) return null;
+		if ((shape.booleanOperatorKinds ?? []).contains(kind) || kind == shape.notKind) return core.boolean;
+		return (shape.arithmeticKinds ?? []).contains(kind) || kind == shape.negationKind
+			? coreArithmeticType(kind, operands, core, shape)
+			: null;
+	}
+
+	/**
+	 * Whether the compound assignment of node kind `kind` (`ExecutionShape.compoundAssignOperators`: `a += b`) over operands
+	 * of the core value types `operands` is of the type of what it assigns to: the operator it applies yields the target's
+	 * core type (`coreOperatorType`; 4.3.7 `$type`: `i += 1` is `Int`, `n += 1` of a `Null<Int>` is `Null<Int>`). False for
+	 * any other kind and operand.
+	 */
+	public static function compoundKeepsTarget(kind: String, operands: Array<Null<String>>, shape: RefShape): Bool {
+		final applied: Null<String> = shape.execution?.compoundAssignOperators?.get(kind);
+		return applied != null && operands.length == 2 && operands[0] != null && coreOperatorType(applied, operands, shape) == operands[0];
+	}
+
+	/**
+	 * The type every string literal kind of the grammar is
+	 * (`RefShape.stringLiteralKinds`, `literalTypeNames`); null when they disagree.
+	 */
+	public static function stringType(shape: RefShape): Null<String> {
+		final names: Array<String> = [for (k in shape.stringLiteralKinds ?? []) shape.literalTypeNames?.get(k) ?? ''];
+		return names.length == 0 || names.contains('') || names.filter(n -> n != names[0]).length > 0 ? null : names[0];
+	}
+
+	/**
+	 * Whether `node` is an operator the walk types by its operands: a binary `RefShape.arithmeticKinds` or
+	 * `booleanOperatorKinds` one, a compound assignment (`ExecutionShape.compoundAssignOperators`), the negation or the
+	 * logical not.
+	 */
+	public static function isArithmetic(node: QueryNode, shape: RefShape): Bool {
+		final kind: String = node.kind;
+		final binary: Bool = (shape.arithmeticKinds ?? []).contains(kind) || (shape.booleanOperatorKinds ?? []).contains(kind)
+			|| shape.execution?.compoundAssignOperators?.exists(kind) == true;
+		return binary && node.children.length == 2 || (kind == shape.negationKind || kind == shape.notKind) && node.children.length == 1;
+	}
+
+	/**
+	 * `typeWalk` of a value composed of others: a construction (`TypingHost.construction`), a value whose type depends on
+	 * what its position expects (`TypingHost.contextual`), an operator over its operands (`arithmeticType`). Null for every
+	 * other shape.
+	 */
+	private static function composedType<T, C>(node: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
+		final kind: String = node.kind;
 		final construction: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.construction;
-		return kind == shape.newExprKind && name != null && construction != null
-			? construction(node, ctx)
-			: arithmeticType(node, shape, host, ctx);
+		if (kind == shape.newExprKind && node.name != null && construction != null) return construction(node, ctx);
+		final contextual: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.contextual;
+		final dependent: Bool = kind == shape.arrayLiteralKind || kind == shape.objectLiteralKind || kind == shape.ternaryKind
+			|| (shape.ifExpressionKinds ?? []).contains(kind);
+		return dependent && contextual != null ? contextual(node, ctx) : arithmeticType(node, shape, host, ctx);
 	}
 
 	/**
@@ -187,10 +247,22 @@ final class TypingService {
 		return names.length == 0 || names.contains('') || names.filter(n -> n != names[0]).length > 0 ? null : names[0];
 	}
 
-	/** Whether `node` is arithmetic the walk types by its operands: a binary `RefShape.arithmeticKinds` operator, or the negation. */
-	private static function isArithmetic(node: QueryNode, shape: RefShape): Bool {
-		final kinds: Array<String> = shape.arithmeticKinds ?? [];
-		return kinds.contains(node.kind) && node.children.length == 2 || node.kind == shape.negationKind && node.children.length == 1;
+	/**
+	 * `coreOperatorType` of the arithmetic operator `kind` over the core value types `operands`: the string type for a
+	 * concatenation with a string operand, the integer or real type over core numbers, null otherwise.
+	 */
+	private static function coreArithmeticType(
+		kind: String, operands: Array<Null<String>>, core: CoreValueTypes, shape: RefShape
+	): Null<String> {
+		final text: Null<String> = stringType(shape);
+		final concatenates: Bool = (shape.execution?.concatenationKinds ?? []).contains(kind) && operands.length == 2;
+		if (text != null && concatenates && operands.contains(text)) return text;
+		var integral: Bool = !(shape.realArithmeticKinds ?? []).contains(kind);
+		for (o in operands) {
+			if (o != core.integer && o != core.real) return null;
+			if (o != core.integer) integral = false;
+		}
+		return integral ? core.integer : core.real;
 	}
 
 	/**
@@ -263,8 +335,8 @@ typedef TypingHost<T, C> = {
 	/** What the field access `node` (an `isAccess` kind with a receiver) reads. */
 	final access: (node:QueryNode, ctx:C) -> Null<T>;
 
-	/** The element an index access into a value of type `container` reads; null for a host typing none. */
-	final element: Null<(container:T, ctx:C) -> Null<T>>;
+	/** The element the index access `node` into a value of type `container` reads; null for a host typing none. */
+	final element: Null<(node:QueryNode, container:T, ctx:C) -> Null<T>>;
 
 	/** What the call `node` returns. */
 	final call: (node:QueryNode, ctx:C) -> Null<T>;
@@ -273,8 +345,15 @@ typedef TypingHost<T, C> = {
 	final construction: Null<(node:QueryNode, ctx:C) -> Null<T>>;
 
 	/**
-	 * What the arithmetic `node` — an operator of `RefShape.arithmeticKinds`, or the negation — yields over
-	 * operands of the types `operands`, each typed by the walk; null for a host typing none.
+	 * What the value `node` whose type depends on what its position expects makes — an array or object literal
+	 * (`RefShape.arrayLiteralKind`, `objectLiteralKind`), a conditional (`ternaryKind`, `ifExpressionKinds`); null for a host
+	 * typing none.
+	 */
+	final contextual: Null<(node:QueryNode, ctx:C) -> Null<T>>;
+
+	/**
+	 * What the operator `node` — of `RefShape.arithmeticKinds` or `booleanOperatorKinds`, a compound assignment, the negation
+	 * or the logical not — yields over operands of the types `operands`, each typed by the walk; null for a host typing none.
 	 */
 	final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>>;
 

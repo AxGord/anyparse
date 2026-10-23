@@ -11,12 +11,14 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.TypeFact;
+import anyparse.query.ComposedValues;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.HaxelibResolver;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.NominalTypes;
+import anyparse.query.OperatorOverloads.OperatorResult;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
@@ -26,6 +28,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypingService;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
@@ -59,7 +62,10 @@ using StringTools;
 final class TyperConformance {
 
 	public static inline final USAGE: String =
-		'usage: dev typer-conformance upstream <haxe-4.3.7-clone> | facts [<configuration>]  [--list] [--census]';
+		'usage: dev typer-conformance upstream <haxe-4.3.7-clone> | facts [<configuration>] | probes [<dir>]  [--list] [--census]';
+
+	/** The probe corpus `probes` runs when it is given no directory: the tree's own, one project per directory. */
+	private static inline final PROBES_DIR: String = 'tools/typer-facts';
 
 	/** The group of the test function's name in `displayTests`' header pattern. */
 	private static inline final TEST_NAME_GROUP: Int = 3;
@@ -129,6 +135,8 @@ final class TyperConformance {
 		final args: Array<String> = argv.copy();
 		final list: Bool = args.remove('--list');
 		final report: Report = new Report(list, args.remove('--census'));
+		var gated: Bool = false;
+		var refused: Array<String> = [];
 		switch args {
 			case ['upstream', clone]:
 				upstream(clone, report);
@@ -136,14 +144,61 @@ final class TyperConformance {
 				facts(null, report);
 			case ['facts', configuration]:
 				facts(configuration, report);
+			case ['probes']:
+				gated = true;
+				refused = probes(Path.join([Repo.resolve(null), PROBES_DIR]), report);
+			case ['probes', dir]:
+				gated = true;
+				refused = probes(dir, report);
 			case _:
-				Sys.println(
-					'usage: typer-conformance upstream <haxe-4.3.7-clone> [--list] [--census] | facts [<configuration>] [--list] [--census]'
-				);
+				Sys.println(USAGE);
 				return 2;
 		}
 		report.print();
-		return 0;
+		for (r in refused) Sys.println('REFUSED  $r');
+		// the probe corpus is a gate: one answer that is not the compiler's fails it, and so does a project it could not read
+		return gated && (report.differences() > 0 || refused.length > 0) ? 1 : 0;
+	}
+
+	/**
+	 * Why a probe project's run is no reading of the typer, or null when it is one: a configuration the compiler dropped (a
+	 * type error, a compiler that did not start), none compiled, no project file compiled, or no case scored. A run that
+	 * read nothing has no DIFFERENT to show, so a gate counting DIFFERENT alone would pass it.
+	 */
+	public static function probeRefusal(run: FactsRun): Null<String> {
+		return if (run.dropped.length > 0)
+			'a configuration did not compile (${run.dropped.join('; ')})'
+		else if (run.configurations == 0)
+			'no configuration compiled'
+		else if (run.compiled == 0)
+			'0 of ${run.files} project files compiled'
+		else if (run.cases == 0)
+			'no case was scored'
+		else
+			null;
+	}
+
+	/**
+	 * Every probe project under `dir` — each directory holding an `apqlint.json` that names a compiler oracle — run as
+	 * `facts` in it, into one report: shapes no census tree holds, each compiled by the compiler and asked of the typer.
+	 * Returns one line per project whose run is no reading (`probeRefusal`), each printed as it is found.
+	 */
+	private static function probes(dir: String, report: Report): Array<String> {
+		final start: String = Sys.getCwd();
+		final root: String = FileSystem.fullPath(dir);
+		final names: Array<String> = FileSystem.readDirectory(root).filter(n -> FileSystem.exists(Path.join([root, n, 'apqlint.json'])));
+		names.sort(Reflect.compare);
+		final refused: Array<String> = [];
+		for (name in names) {
+			Sys.setCwd(Path.join([root, name]));
+			final why: Null<String> = try probeRefusal(facts(null, report)) catch (e: Exception) 'the run threw: ${e.message}';
+			if (why == null) continue;
+			refused.push('$name: $why');
+			Sys.println('probes: $name is no reading — $why');
+		}
+		Sys.setCwd(start);
+		if (names.length == 0) refused.push('no probe project under $root');
+		return refused;
 	}
 
 	/** The display and misc suites of the clone at `clone`. */
@@ -310,9 +365,25 @@ final class TyperConformance {
 				report.unscored('misc/other', label);
 				continue;
 			}
-			// an error at an ascription's range names the type of the value failing the type written there
-			typeAt(report, area, label, expected, typer, warning ? node : typer.failingValue(node));
+			if (warning)
+				typeAt(report, area, label, expected, typer, node)
+			else
+				shouldBe(report, area, label, expected, typer, node);
 		}
+	}
+
+	/**
+	 * The `should be` error `label` at the range of `node`, its value of type `expected`, asked of `typer`: the value failing
+	 * the type written there for an ascription's range; not asked at an operator's range, where the compiler reports an
+	 * operand failing what the operator wants (`operators.ml`), not the operator's own value.
+	 */
+	private static function shouldBe(
+		report: Report, area: String, label: String, expected: String, typer: FileTyper, node: QueryNode
+	): Void {
+		if (typer.isOperator(node))
+			report.unscored(area, '$label (an operand\'s error, reported at the operator\'s range)')
+		else
+			typeAt(report, area, label, expected, typer, typer.failingValue(node));
 	}
 
 	/**
@@ -328,8 +399,12 @@ final class TyperConformance {
 		return false;
 	}
 
-	/** Every range the compiler typed in the project in the working directory, asked of the typer. */
-	private static function facts(configuration: Null<String>, report: Report): Void {
+	/**
+	 * Compiles the project in the working directory with the facts hook and scores every case of it into `report`; what the
+	 * run read — the configurations that compiled and those dropped, the files, the cases — is returned, so a caller that
+	 * gates on the reading can refuse one that read nothing (`probeRefusal`).
+	 */
+	private static function facts(configuration: Null<String>, report: Report): FactsRun {
 		final config: LintConfig = LintConfig.discover(Path.join([Sys.getCwd(), 'TyperConformance.hx']));
 		final project: Array<{ file: String, source: String }> = [];
 		for (root in config.resolutionRoots()) collect(root, project);
@@ -345,11 +420,18 @@ final class TyperConformance {
 		};
 		if (oracle == null) {
 			Sys.println('facts: no configuration compiled');
-			return;
+			return {
+				configurations: 0,
+				dropped: [for (o in asked) '${o.hxml}: no facts'],
+				files: project.length,
+				compiled: 0,
+				cases: 0
+			};
 		}
 		Sys.println('facts: configurations ${oracle.facts.configurations}, dropped ${oracle.facts.dropped}');
 		final index: SymbolIndex = IndexScope.over(project.concat(library), plugin, [for (f in library) f.file]);
 		final aliases: Map<String, Array<Array<String>>> = typedefTargets(oracle);
+		final before: Int = report.scored();
 		var compiledFiles: Int = 0;
 		for (f in project) {
 			final key: String = FileSystem.fullPath(f.file);
@@ -359,6 +441,13 @@ final class TyperConformance {
 			typer.visit(factsCase.bind(report, oracle, aliases, key, f.file, typer));
 		}
 		Sys.println('facts: ${project.length} project files under ${config.resolutionRoots()}, $compiledFiles of them compiled');
+		return {
+			configurations: oracle.facts.configurations.length,
+			dropped: [for (d in oracle.facts.dropped) '${d.name}: ${d.reason}'],
+			files: project.length,
+			compiled: compiledFiles,
+			cases: report.scored() - before
+		};
 	}
 
 	/** The libraries and the standard library the project in `config` resolves against, its own files left out. */
@@ -396,11 +485,13 @@ final class TyperConformance {
 			};
 		if (at == null || compiled == null) return;
 		final label: String = '$file:${at.from}: $compiled';
-		final spliced: Bool = oracle.facts.nodesAround(key, at).exists(
-			n ->
-				n.inlinedFrom != null
-				|| n.calls.exists(c -> c.access == INLINED_ACCESS && c.site?.span.from == at.from && c.site?.span.to == at.to)
-		);
+		// an operator an inlined overload takes holds the overload's body at its range, its operands bound there
+		final spliced: Bool = typer.inlinedOverload(node)
+			|| oracle.facts.nodesAround(key, at).exists(
+				n ->
+					n.inlinedFrom != null
+					|| n.calls.exists(c -> c.access == INLINED_ACCESS && c.site?.span.from == at.from && c.site?.span.to == at.to)
+			);
 		if (spliced)
 			report.unscored('facts/${node.kind}', '$label (inlined code)')
 		else if (typer.namesNoValueOf(node, compiled, CLASS_VALUE))
@@ -705,9 +796,45 @@ private final class FileTyper {
 		return node.kind == _shape.identKind;
 	}
 
+	/** Whether `node` is an operator the walk types by its operands (`TypingService.isArithmetic`). */
+	public inline function isOperator(node: QueryNode): Bool {
+		return TypingService.isArithmetic(node, _shape);
+	}
+
 	/** Whether `node` is a call of the grammar. */
 	public inline function isCall(node: QueryNode): Bool {
 		return node.kind == _shape.callKind;
+	}
+
+	/**
+	 * Whether `node` is an operator (`isOperator`) an `inline` overload of its kind may take — the one the typer picks
+	 * (`ComposedValues.operatorOverload`), else any an operand's type declares: the compiler splices the overload's body in at
+	 * the operator's range, its operands bound there, so the facts at that range type the spliced code, not the operator's value.
+	 */
+	public function inlinedOverload(node: QueryNode): Bool {
+		if (!isOperator(node)) return false;
+		final operands: Array<String> = [for (operand in node.children) source(operand) ?? ''];
+		final typing: IndexTyping = {
+			root: _tree,
+			shape: _shape,
+			declaredTypes: _declared,
+			chain: _chain,
+			index: _index,
+			file: _file,
+			seen: []
+		};
+		// the overload the typer takes decides; where it takes none, any inline one of the kind may have been spliced
+		final chosen: Null<OperatorResult> = operands.contains('') ? null : ComposedValues.operatorOverload(node, operands, typing);
+		if (chosen != null) return chosen.member.isInline;
+		for (written in operands) {
+			final peeled: Null<String> = written == ''
+				? null
+				: NominalTypes.memberLookupReceiverSource(written, _shape.memberTransparentWrapperTypeNames ?? [], _chain.typeSyntax);
+			final name: Null<String> = peeled == null ? null : NominalTypes.outerNominalOf(peeled, _chain.typeSyntax);
+			final declares: ResolvedType -> Bool = d -> d.type.members.exists(m -> m.isInline && m.operatorOverloads.contains(node.kind));
+			if (name != null && _index.refs.resolvedDeclsNamed(name).exists(declares)) return true;
+		}
+		return false;
 	}
 
 	/** The written type source the deep walk gives `node` (`NominalTypes.expressionTypeSource`), or null. */
@@ -781,7 +908,6 @@ private final class FileTyper {
 		final named: EReg = new EReg('^$wrapper<([\\w.]+)>$$', '');
 		return at != null && named.match(compiled) && !_source.substring(at.from, at.to).contains(SourceText.lastSegment(named.matched(1)));
 	}
-
 
 	/**
 	 * Whether `node` is a bare identifier and `compiled` the simple name of the type declaration holding it: a bare read of
@@ -966,6 +1092,24 @@ private enum abstract UnknownRoot(String) to String {
 private typedef UnknownCause = {
 	final root: UnknownRoot;
 	final detail: String;
+}
+
+/** What one `facts` run read (`TyperConformance.probeRefusal`). */
+typedef FactsRun = {
+	/** The configurations the compiler compiled with the facts hook. */
+	final configurations: Int;
+
+	/** Each configuration it dropped, with the reason. */
+	final dropped: Array<String>;
+
+	/** The project's files. */
+	final files: Int;
+
+	/** The project files some configuration compiled. */
+	final compiled: Int;
+
+	/** The cases scored, every verdict counted. */
+	final cases: Int;
 }
 
 /**
@@ -1515,6 +1659,11 @@ private final class Report {
 		_census = census;
 	}
 
+	/** How many answers were DIFFERENT. */
+	public inline function differences(): Int {
+		return _different.length;
+	}
+
 	/** One answer of `area` for the assertion `label`. */
 	public function score(area: String, label: String, verdict: Verdict): Void {
 		final c: Array<Int> = counts(area);
@@ -1565,6 +1714,13 @@ private final class Report {
 		}
 		for (d in _different) Sys.println('DIFFERENT  $d');
 		if (_census) printCensus();
+	}
+
+	/** How many cases were scored, every area summed: a match, an unknown or a different answer. */
+	public function scored(): Int {
+		var total: Int = 0;
+		for (area in _areas) total += counts(area)[0];
+		return total;
 	}
 
 	/**

@@ -278,6 +278,27 @@ final class PinsQueryAndRuntime {
 		'unit.query.CompilerFactsTest#testARangeMeetingANodeWithAMarkerNoReaderKnowsIsUnknown :: control :: M-FACTS-WITHIN-MARKER-UNKNOWN',
 		'unit.query.CompilerFactsTest#testASplicedFactRunsAtTheSitesOfTheCallThatSplicedItIn :: control :: M-FACTS-SPLICE-SITES-MET,'
 			+ 'M-FACTS-SPLICE-UNATTRIBUTED,M-FACTS-SPLICE-HARMLESS,M-FACTS-SPLICE-INNERMOST,M-FACTS-SPLICE-SECOND-SITE',
+		'unit.query.ComposedValuesTest#testACompoundAssignmentIsOfItsTargetsType :: control :: M-COMPOUND-KEEPS-TARGET-FALSE',
+		'unit.query.ComposedValuesTest#testAConditionalExpectedOfNothingUnifiesItsBranches :: control :: M-COMPOSED-BRANCHES-NULL',
+		'unit.query.ComposedValuesTest#testAConstructionIsTheTypeItWrites :: control :: '
+			+ 'M-COMPOSED-CONSTRUCTION-NULL,M-COMPOSED-CONSTRUCTION-AS-WRITTEN',
+		'unit.query.ComposedValuesTest#testAConstructionLeavingArgumentsToInferenceIsUnknown :: control :: M-COMPOSED-DEFAULTS-UNWRITTEN',
+		'unit.query.ComposedValuesTest#testALiteralExpectedOfATypeIsTheTypeItPicks :: control :: M-COMPOSED-EXPECTED-NULL',
+		'unit.query.ComposedValuesTest#testALiteralExpectedOfNothingIsOfItsParts :: control :: M-COMPOSED-PARTS-NULL',
+		'unit.query.ComposedValuesTest#testALiteralForADynamicFieldIsDynamic :: control :: '
+			+ 'M-COMPOSED-DYNAMIC-FIELD-LITERAL,M-COMPOSED-MAP-UNDER-DYNAMIC',
+		'unit.query.ComposedValuesTest#testALoopOverAnIntervalBindsTheIntegerType :: control :: M-COMPOSED-INTERVAL-NULL',
+		'unit.query.ComposedValuesTest#testANullablePartMakesTheUnifiedTypeNullable :: control :: M-COMPOSED-UNIFIED-NULLABLE-DROPPED',
+		'unit.query.ComposedValuesTest#testAParenthesizedValueIsTheValues :: control :: M-INDEX-HOST-PARENS-KEPT',
+		'unit.query.ComposedValuesTest#testAWrittenOptionalFieldHoldsANullableValue :: control :: '
+			+ 'M-COMPOSED-OPTIONAL-FIELD-BARE,M-COMPOSED-NULLABLE-KEEPS-OWN,M-COMPOSED-NULLABLE-ABSTRACT-DECIDED',
+		'unit.query.ComposedValuesTest#testAnAbstractsReadAccessIsTheOneTheKeyCastsTo :: control :: M-INDEX-READ-FIRST',
+		'unit.query.ComposedValuesTest#testAnEnumAbstractValueIsOfTheAbstract :: control :: M-COMPOSED-ENUM-VALUE-NULL',
+		'unit.query.ComposedValuesTest#testAnIndexAccessReadsTheElement :: control :: M-COMPOSED-ELEMENT-NULL',
+		'unit.query.ComposedValuesTest#testAnOperatorAnAbstractTakesIsItsOverloads :: control :: M-COMPOSED-OVERLOAD-NULL',
+		'unit.query.ComposedValuesTest#testAnOperatorOverCoreValuesIsTheLanguagesOwn :: control :: M-COMPOSED-OPERATOR-NULL',
+		'unit.query.ComposedValuesTest#testAnOverloadUnderAConditionLeavesTheOperatorUndecided :: control :: '
+			+ 'M-OVERLOAD-GUARDED-SOURCE-ORDER',
 		'unit.query.CondBranchSplitTest#testARebuiltNodeKeepsItsTypeArgumentCount :: control :: M-CONDBRANCH-TYPE-ARGS-DROPPED',
 		'unit.query.CondQueryTest#testABranchBodyNeverCarriesADirective :: control :: M-COND-BODY-SWALLOWS-DIRECTIVES',
 		'unit.query.CondQueryTest#testAMetadataNameIsASymbolRowAndKeepsItsSigil :: control :: M-COND-NAMES-DROP-META-NAME',
@@ -1400,6 +1421,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.TypeNameBindingTest#testThePackageTierReadsTheStdCoresModulesPackageByPackage :: control :: M-TS-PACKAGE-PROJECT-FIRST',
 		'unit.query.TypeNameBindingTest#testTheStdTypesNamesAreTheStdsOwn :: guard :: ',
 		'unit.query.TypeNameBindingTest#testWildcardsAreAskedLastFirst :: control :: M-BINDING-FIRST-STATEMENT-WINS',
+		'unit.query.TypingServiceTest#testAReadOfAMemberItsBranchesWriteDifferentlyIsUnknown :: control :: M-MEMBER-READ-BRANCHES-FIRST',
 		'unit.query.TypingServiceTest#testARememberedNullIsNotAskedAgain :: control :: M-TYPING-ANSWER-FORGOTTEN',
 		'unit.query.TypingServiceTest#testATypeQuestionIsKeptPerDeclaration :: control :: M-TYPING-TYPE-KEY-FILE',
 		'unit.query.TypingServiceTest#testNamesakesInTwoFilesKeepTheirOwnAnswers :: control :: M-TYPING-KEY-FILE',
