@@ -551,7 +551,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		});
 		if (locals.length == 0) return;
 		// Hop ZERO of the build-macro closure below is a TEXT scan of the owner's OWN file:
-		// `TypeTraits.buildMacroRoots` starts the walk at the declaration in `file`, and its first act is
+		// `SupertypeWalk.declarationsOf` starts the walk at the declaration in `file`, and its first act is
 		// `carriesBuildMacro` over THAT file's source — which this run already holds. Asking it here is
 		// the same predicate, not a second one (a yes here is a yes there), and it answers the commonest
 		// refusal without building the widest index at all. Only the INHERITED grant — a supertype or
@@ -575,7 +575,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			// supertype declaring the member means this method fills a base slot and
 			// must stay physical. An unresolvable supertype stays optimistic, like
 			// the extends chain always was for this rule.
-			if (index.typing.members.supertypeDeclaresMember(owner, name)) continue;
+			if (index.typing.members.supertypeDeclaresMember(owner, name, file)) continue;
 			if (interfaceRequires(index, ifaces, name, file)) continue;
 			// A method a FRAMEWORK reaches by name has ONE call site, the one that framework's own
 			// macro writes or its runtime dispatches, and it runs once — so the fold buys nothing

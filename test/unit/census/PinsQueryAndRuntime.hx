@@ -1215,6 +1215,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.MoveToHelperSliceTest#testAMemberASubtypeOverridesIsRefused :: control :: M-MOVE-OVERRIDDEN-MEMBER',
 		'unit.query.MoveToHelperSliceTest#testAMemberPassedAsAFunctionValueIsRefused :: control :: M-HELPER-VALUE-USE-ALLOWED',
 		'unit.query.MoveToHelperSliceTest#testAModuleLevelValueIsRefused :: control :: M-HELPER-MODULE-VALUE-ALLOWED',
+		'unit.query.MoveToHelperSliceTest#testANameOnlyAMaybeSupertypeDeclaresIsRefused :: control :: M-HELPER-MAYBE-ANCESTOR-REWRITES',
 		'unit.query.MoveToHelperSliceTest#testANonClassSourceIsRefused :: control :: M-HELPER-NON-CLASS-ALLOWED',
 		'unit.query.MoveToHelperSliceTest#testAParameterNameTheMovedCodeSpellsIsRefused :: control :: M-HELPER-PARAM-CLASH-UNCHECKED',
 		'unit.query.MoveToHelperSliceTest#testAPrivateTypeTheStayingCodeNamesIsRefused :: control :: M-HELPER-SHARED-TYPE-ALLOWED',

@@ -244,6 +244,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.MisplacedTypeDocGuardedMetaTest',
 		'unit.check.MissingVisibilityCheckTest',
 		'unit.check.ModifierOrderCheckTest',
+		'unit.check.NamesakeOwnerTwinTest',
 		'unit.check.NamingCheckAltSpellingFixTest',
 		'unit.check.NamingCheckBranchTwinFixTest',
 		'unit.check.NamingCheckCrossFileFixTest',

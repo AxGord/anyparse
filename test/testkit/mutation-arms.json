@@ -369,13 +369,6 @@
 			"note": "the declared resolutionRoots are tagged third-party along with the library, so a write from a project module outside the lint scope stops vetoing"
 		},
 		{
-			"name": "M-RTTI-FALSE",
-			"type": "anyparse.query.TypeTraits",
-			"method": "transitivelyCarriesRtti",
-			"force": "false",
-			"note": "no type carries @:rtti, so prefer-enum-abstract's rtti refusal never fires"
-		},
-		{
 			"name": "M-SEAM-BLIND",
 			"type": "anyparse.check.RedundantReplaceLoop",
 			"method": "replacementCanReformSearch",
@@ -30185,6 +30178,62 @@
 			"find": "if (text.indexOf('\\\\') >= 0) for (piece in ~/\\\\./g.split(text)) readings.push(piece);",
 			"replace": "",
 			"note": "a backslash never opens a string escape, so a private dotted path glued to a `\\t` in a quoted fixture passes the guard"
+		},
+		{
+			"name": "M-SUBTYPE-TARGET-SIMPLE-NAME",
+			"type": "anyparse.query.SupertypeWalk",
+			"method": "hopsReach",
+			"find": "refs.seenKey(up) == refs.seenKey(target)",
+			"replace": "up.type.name == target.type.name",
+			"note": "the upward subtype proof matches the target by simple name again, so another package's namesake in a chain proves the subtype - redundant-upcast unwraps a cast that can fail and unreachable-catch deletes a clause that runs"
+		},
+		{
+			"name": "M-SUPERTYPE-DECLARES-UNION",
+			"type": "anyparse.query.MemberLookup",
+			"method": "supertypeDeclaresMember",
+			"find": "if (fromFile == null) return supertypeDeclares(typeName, field, []);",
+			"replace": "return supertypeDeclares(typeName, field, []);",
+			"note": "the supertype-declares veto walks every declaration of the owner's simple name again, so another package's namesake extending a base that declares the member hides an unused private and an inline candidate"
+		},
+		{
+			"name": "M-RTTI-HOMONYM-REFUSES",
+			"type": "anyparse.check.PreferEnumAbstract",
+			"method": "fixGrouped",
+			"find": "ownerCarriesRtti(index, plan.name, v.file)",
+			"replace": "index.traits.transitivelyCarriesRtti(plan.name)",
+			"note": "the @:rtti gate reads every declaration of the owner's simple name again, so another package's @:rtti namesake refuses the enum-abstract conversion"
+		},
+		{
+			"name": "M-SUBTYPE-MEMBERS-SKIP-NAMESAKE",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "subtypeMemberNames",
+			"find": "own == null ? sub.type.name == owner : _refs.seenKey(sub) == _refs.seenKey(own)",
+			"replace": "sub.type.name == owner",
+			"note": "a subtype sharing its supertype's simple name is skipped as if it were the owner, so its overrides leave the veto list and prefer-inline inlines a method it overrides"
+		},
+		{
+			"name": "M-PLAN-GUARDED-META-ALLOWED",
+			"type": "anyparse.check.PreferEnumAbstract",
+			"method": "conversionPlan",
+			"find": "if (cfg.conditionalKinds.contains(prev.kind) && prev.children.exists(c -> cfg.declarationLeadKinds.contains(c.kind)))",
+			"replace": "if (false)",
+			"note": "a conditional region of metadata above the type no longer refuses the enum-abstract conversion, so `#if !x @:keep #end class C` converts and the build that keeps the region loses the kept class"
+		},
+		{
+			"name": "M-SUBTYPE-START-SIMPLE-NAME",
+			"type": "anyparse.query.SupertypeWalk",
+			"method": "verdict",
+			"find": "refs.resolveStartType(sub, subFile, subAt)",
+			"replace": "refs.resolveStartType(SourceText.lastSegment(sub), null)",
+			"note": "the subtype proof starts from the project type the simple name names again, so a std haxe.io.Eof beside a project Eof extending Base is proven a Base - unreachable-catch deletes the clause that catches it and redundant-upcast unwraps a cast that throws"
+		},
+		{
+			"name": "M-HELPER-MAYBE-ANCESTOR-REWRITES",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "rewriteMovedRef",
+			"find": "if (prep.index.subtypes.subtypeVerdict(prep.srcTypeName, ancestor, null, null, prep.srcFile) != true)",
+			"replace": "if (false)",
+			"note": "move-to-helper rewrites a bare name into an inherited member on a type that only may be a supertype, so a statically imported function becomes `src.name()` and the helper does not compile"
 		},
 		{
 			"name": "M-GRAPH-ID-UNDERSCORE-BARE",

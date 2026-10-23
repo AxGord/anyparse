@@ -143,6 +143,28 @@ class UnreachableCatchTest extends Test {
 		);
 	}
 
+	/**
+	 * An earlier clause covers a later one only when the later type really extends the DECLARATION the earlier clause
+	 * names: another package's namesake in the later type's chain leaves the clause reachable, and deleting it would drop
+	 * the handler that runs. The second assertion keeps the namesake in the index beside a real subtype.
+	 */
+	@:pin('control') @:killer('M-SUBTYPE-TARGET-SIMPLE-NAME')
+	public function testNamesakeSupertypeDoesNotCoverTheLaterClause(): Void {
+		Assert.equals(0, namesakeCovered('Base'), 'a subtype of another package\'s Base still reaches its own clause');
+		Assert.equals(1, namesakeCovered('pkg.Base'), 'a subtype of this Base is caught by the earlier clause');
+	}
+
+	/**
+	 * The later clause's type is resolved where the clause writes it too: `haxe.io.Eof` is the std's, not the project's
+	 * `my.Eof` that extends `Base`, so the earlier `Base` clause never catches it. The twin naming the project's `Eof` is
+	 * covered.
+	 */
+	@:pin('control') @:killer('M-SUBTYPE-START-SIMPLE-NAME')
+	public function testALaterTypeNamedLikeAProjectSubtypeIsNotCovered(): Void {
+		Assert.equals(0, laterEofCovered('haxe.io.Eof'), 'the std Eof is no Base');
+		Assert.equals(1, laterEofCovered('Eof'), 'the project Eof is');
+	}
+
 	private function assertFix(src: String, present: String, absent: String): Void {
 		final check: UnreachableCatch = new UnreachableCatch();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
@@ -157,6 +179,33 @@ class UnreachableCatchTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new UnreachableCatch(), src);
+	}
+
+	/** `unreachable-catch` findings over two `Base` classes in two packages, `other.Sub` extending `subExtends`. */
+	private function namesakeCovered(subExtends: String): Int {
+		return CheckFixture.violationsIn(new UnreachableCatch(), [
+			{ file: 'pkg/Base.hx', source: 'package pkg;\n\nclass Base {}\n' },
+			{ file: 'other/Base.hx', source: 'package other;\n\nclass Base {}\n' },
+			{ file: 'other/Sub.hx', source: 'package other;\n\nclass Sub extends $subExtends {}\n' },
+			{
+				file: 'pkg/Main.hx',
+				source: 'package pkg;\n\nimport other.Sub;\n\nclass Main {\n\n\tfunction f():Void {\n\t\ttry {\n\t\t\tg();\n'
+				+ '\t\t} catch (e:Base) {\n\t\t\tone();\n\t\t} catch (e:Sub) {\n\t\t\ttwo();\n\t\t}\n\t}\n\n}\n'
+			}
+		]).length;
+	}
+
+	/** `unreachable-catch` findings over a `catch (e:Base)` followed by a `catch (e:<later>)`, beside `my.Eof extends Base`. */
+	private function laterEofCovered(later: String): Int {
+		return CheckFixture.violationsIn(new UnreachableCatch(), [
+			{ file: 'my/Base.hx', source: 'package my;\n\nclass Base {}\n' },
+			{ file: 'my/Eof.hx', source: 'package my;\n\nclass Eof extends Base {}\n' },
+			{
+				file: 'my/Main.hx',
+				source: 'package my;\n\nclass Main {\n\n\tfunction f():Void {\n\t\ttry {\n\t\t\tg();\n\t\t} catch (e:Base) {\n'
+				+ '\t\t\tone();\n\t\t} catch (e:$later) {\n\t\t\ttwo();\n\t\t}\n\t}\n\n}\n'
+			}
+		]).length;
 	}
 
 }
