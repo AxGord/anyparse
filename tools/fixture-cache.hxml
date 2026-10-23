@@ -1,0 +1,4 @@
+# The fixture-cache replay program as a build of its own — the leaf `apqlint.json` declares to
+# the compiler oracle. All flags live in tools/fixture-cache-common.hxml; build from the repo root.
+tools/fixture-cache-common.hxml
+-js bin/fixture-cache.js

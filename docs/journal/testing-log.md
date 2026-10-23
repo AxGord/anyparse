@@ -4456,3 +4456,36 @@ expected enum nothing imports, each shadowing a type of its name; and a decimal 
 the client corpus's twelve IntLit DIFFERENTs per currency were the out-of-range literals. All-rules lint and the three
 thread-safety scores byte-identical between main's engine and the slice's.
 
+
+##### Every build declared to the oracle: what it costs (B1, base `06a73f681`)
+
+Seven configurations (`test-js`, `bin/apq-js`, `tools/dev`, `recon`, `tools/fixture-cache`, `tools/jvm-portability`,
+`tools/bench-hxcpp`) against the old one (`test-js.hxml`), same machine, same load (16 cores, load average 7–10, other
+agents building), each pair back to back:
+
+| reading | one configuration | seven |
+|---|---|---|
+| `apq oracle src`, cold, default parallelism | 39 s, 40 s | 40 s, 40 s |
+| same, `APQ_ORACLE_PARALLEL=1` | — | 77 s, 77 s |
+| `lint <one src file> --all`, fresh `TMPDIR` (cold verdicts) | 43 s, 43 s | 46 s, 45 s |
+| same, second run (verdicts reused) | 5 s, 5 s | 6 s, 6 s |
+| `lint src test tools/src --all --format json` | 263 s | 249 s (config only), 295 s (config + gate) |
+
+Standalone `haxe <hxml> --no-output`: `test-js` 43 s, `apq-js` 12 s, `dev` 12 s, `jvm-portability` 10 s, `bench-hxcpp`
+11 s, `recon` 2 s, `fixture-cache` under 1 s — the test runner is the critical path, so the parallel list costs what it
+cost alone. Findings, base engine and config → slice engine and config, over `src test tools/src`: 2964 → 4885. Three
+`prefer-static-extension` findings changed message only ("may be … receiver type unresolved" → "can be"): `Glob.hx:139`
+and `CliIo.hx:370` because the JVM and hxcpp builds type a `readDirectory` loop variable the js builds leave unplaced,
+`_ReconSkipParse.hx:239` because only `recon.hxml` compiles it. `hoist-common-import` 60 → 1980: +1929 newly vouched
+(`utest.Assert`/`utest.Test`, `HaxeQueryPlugin`, `Linter`, `Check.Violation` into `test/unit/check` and `test/unit/query`;
+`haxe.Exception` into `query/cli`, `testkit`, `tools/src`; `haxe.io.Path` into `tools/src/dev`; `devkit.TempDir` into
+`test/unit/dev`), −9 withdrawn (`devkit.Args` into `tools/src/dev`: the JVM probe compiles `JvmPortability.hx` there without
+reading `devkit/Args.hx`), and one `fold-adjacent-string-literals` info on a pin-census entry the slice added, as long as
+its neighbours.
+
+The regression class, on scratch copies of the slice: a hand-written `test/unit/import.hx` holding `import utest.Assert;`
+lints green (exit 0) under the old configuration and is `REJECTED … recon.hxml … Type not found : utest.Assert` (exit 1)
+under the declared list. With the receiver gate cut (`M-HOIST-RECEIVER-UNVOUCHED`), `lint test --rule hoist-common-import
+--fix` writes `test/unit/grammar/import.hx` (2462 edits in 918 files, exit 0, `recon.hxml` red) under the old
+configuration, and under the declared list reverts the 382 files the compiler blamed (1830 edits in 536 files kept, exit 1,
+`recon.hxml` green).

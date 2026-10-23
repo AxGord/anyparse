@@ -2,6 +2,7 @@ package unit.check;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.StdResolver;
 import haxe.Exception;
 import haxe.io.Path;
@@ -34,10 +35,11 @@ final class StdScope {
 
 	/**
 	 * `report` in a resolution scope beside the std stubs and any non-std `libraries` (a `resolutionLibs`
-	 * half); throws when this machine has no discoverable std.
+	 * half), and the run's `builds` when given; throws when this machine has no discoverable std.
 	 */
 	public static function plugin(
-		report: Array<{ file: String, source: String }>, ?libraries: Array<{ file: String, source: String }>, complete: Bool = true
+		report: Array<{ file: String, source: String }>, ?libraries: Array<{ file: String, source: String }>, complete: Bool = true,
+		?builds: ReachBuilds
 	): CachingGrammarPlugin {
 		final std: Null<String> = StdResolver.stdDir();
 		if (std == null) throw new Exception('no installed Haxe std on this machine: the std-container proof cannot be exercised');
@@ -52,16 +54,16 @@ final class StdScope {
 		].concat(libraries ?? []);
 		// `complete` declares the report the WHOLE project (`rootsMatched` / `rootsAllMatched`); false
 		// is a run whose roots did not all match, so a project file may be missing from the index.
-		scoped.setResolutionScope({
-			declared: true,
-			sources: () -> {
-				report: report,
-				projectRoots: [],
-				library: new LibrarySources(library),
-				rootsMatched: complete,
-				rootsAllMatched: complete
-			}
-		});
+		function sources(): ResolutionSources return {
+			report: report,
+			projectRoots: [],
+			library: new LibrarySources(library),
+			rootsMatched: complete,
+			rootsAllMatched: complete
+		};
+		scoped.setResolutionScope(
+			builds == null ? { declared: true, sources: sources } : { declared: true, sources: sources, builds: () -> builds }
+		);
 		return scoped;
 	}
 

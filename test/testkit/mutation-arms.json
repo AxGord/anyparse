@@ -29753,6 +29753,37 @@
 			"find": "return decl != null && (decl.type.isAnonStruct || objects.exists(decl.type.kind)) ? true : null;",
 			"replace": "return true;",
 			"note": "every declared type is taken as nullable, so an abstract over `Int` written for an optional field keeps its type, though 4.3.7 types it `Null<A>`"
+		},
+		{
+			"name": "M-HOIST-BUILDS-UNASKED",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "buildsByParsedFile",
+			"force": "null",
+			"note": "the run's declared builds are never asked which files each parses, so a receiver no statement of its own vouches for withholds a statement every build reading it already reads"
+		},
+		{
+			"name": "M-HOIST-BUILD-WITHOUT-MODULE-IGNORED",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "parsedWithEveryReceiver",
+			"find": "if (!readers.foreach(build -> carrying.contains(build))) return false;",
+			"replace": "if (false) return false;",
+			"note": "a build that parses a receiver but not the statement's module no longer withholds the statement, so the ambient source stops that build on an import it cannot resolve"
+		},
+		{
+			"name": "M-HOIST-UNPARSED-RECEIVER-WITHHELD",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "parsedWithEveryReceiver",
+			"find": "parsing[OracleCoverage.canonical(cwd, file)] ?? [];",
+			"replace": "parsing[OracleCoverage.canonical(cwd, file)] ?? [-1];",
+			"note": "a receiver no declared build parses is read as parsed by a build that lacks the statement's module, so a statement is withheld from a directory holding code no build compiles"
+		},
+		{
+			"name": "M-DEFINES-PARSED-DROPPED",
+			"type": "anyparse.check.ReachDefinesProbe",
+			"method": "parse",
+			"find": "parsed: OracleCoverage.parsedPaths(transcript)",
+			"replace": "parsed: []",
+			"note": "a probed build names no file it parses, so every module it reads looks compiled by none of the builds"
 		}
 	]
 }
