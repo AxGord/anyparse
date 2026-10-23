@@ -31,6 +31,12 @@ typedef ReachConfiguration = {
 
 	/** Every type the build's runtime context typed, by its simple name and the `compiled` file that declares it. */
 	var types: Array<{ name: String, file: String }>;
+
+	/**
+	 * The absolute, link-resolved path of every file the compile parsed, the macro context's included — what a stored
+	 * answer must see unchanged (`ReachBuildsCache`); absent where the build was not read off a compile.
+	 */
+	var ?parsed: Array<String>;
 }
 
 /**

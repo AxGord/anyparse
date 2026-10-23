@@ -6891,8 +6891,8 @@
 			"name": "M-REACH-CONFIGS-COMPLETE",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "withReachConfigurations",
-			"find": "|| noOracle || !complete)",
-			"replace": "|| noOracle)",
+			"find": "|| oracles.length == 0 || !complete)",
+			"replace": "|| oracles.length == 0)",
 			"note": "the oracle list is read as every build the project ships, so a platform branch no configuration compiles is skipped"
 		},
 		{
@@ -13452,8 +13452,8 @@
 		{
 			"name": "M-REFLECTIVE-BUILDS",
 			"type": "anyparse.query.cli.command.LintCommand",
-			"method": "withReachConfigurations",
-			"find": "if (found != null && reflective != null) found.reflectiveClasses = reflective;",
+			"method": "bounded",
+			"find": "if (builds != null && reflective != null) builds.reflectiveClasses = reflective;",
 			"replace": "",
 			"note": "the declared `reflectiveClasses` never reach the builds the reach analysis reads"
 		},
@@ -14082,8 +14082,8 @@
 		{
 			"name": "M-HOLDERS-BUILDS",
 			"type": "anyparse.query.cli.command.LintCommand",
-			"method": "withReachConfigurations",
-			"find": "if (found != null && holders != null) found.reflectiveMethodHolders = holders;",
+			"method": "bounded",
+			"find": "if (builds != null && holders != null) builds.reflectiveMethodHolders = holders;",
 			"replace": "",
 			"note": "the declared `reflectiveMethodHolders` never reach the builds the reach analysis reads"
 		},
@@ -29546,6 +29546,54 @@
 			"find": "if (span != null)",
 			"replace": "if (span != null && false)",
 			"note": "the fix finds the overridden method's inline modifier and deletes nothing, so --fix leaves the override failing in every build that compiles it"
+		},
+		{
+			"name": "M-REACH-STORED-UNREAD",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "if (noOracle) return withStoredBuilds(resolution, oracles, reflective, holders);",
+			"replace": "if (noOracle) return resolution;",
+			"note": "a run that compiles nothing never reads the builds an oracle run stored, so it knows no build and the alias branch no build takes is read again"
+		},
+		{
+			"name": "M-REACH-STORE-OFF",
+			"type": "anyparse.check.ReachBuildsCache",
+			"method": "store",
+			"find": "if (before == null || builds == null) return;",
+			"replace": "if (before == null || builds == null || oracles.length > 0) return;",
+			"note": "the builds an oracle run probed are never stored, so the next run that compiles nothing knows no build"
+		},
+		{
+			"name": "M-REACH-KEY-UNCHECKED",
+			"type": "anyparse.check.ReachBuildsCache",
+			"method": "load",
+			"find": "return now == null || now.key != record.key ? null : buildsOf(record);",
+			"replace": "return now == null ? null : buildsOf(record);",
+			"note": "a stored record is read under whatever fingerprint the input hashes to now, so builds probed of a source since edited answer for it"
+		},
+		{
+			"name": "M-REACH-GENERATION-UNCHECKED",
+			"type": "anyparse.check.ReachBuildsCache",
+			"method": "keyOf",
+			"find": "if (OracleGeneration.staleness(group, hashes) != null) return null;",
+			"replace": "if (OracleGeneration.staleness(group, hashes) == '') return null;",
+			"note": "a generated hxml whose declared input changed still keys the stored builds, though the oracle run would generate it again"
+		},
+		{
+			"name": "M-REACH-ROOTS-UNCHECKED",
+			"type": "anyparse.check.ReachBuildsCache",
+			"method": "store",
+			"find": "if (!readsInside(configurations[i].parsed, key.roots[i])) return;",
+			"replace": "if (false && !readsInside(configurations[i].parsed, key.roots[i])) return;",
+			"note": "a build that parsed a file outside the directories the fingerprint walked is stored, though that file can change with no fingerprint changing"
+		},
+		{
+			"name": "M-REACH-LIBRARY-UNCHECKED",
+			"type": "anyparse.check.ReachBuildsCache",
+			"method": "buildsOf",
+			"find": "if (OracleCache.md5(read) != entry.hash) return null;",
+			"replace": "if (false) return null;",
+			"note": "a stored library source is read back whatever it holds now, so an edited file outside the fingerprint answers as the one the build compiled"
 		}
 	]
 }

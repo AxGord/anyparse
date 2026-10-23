@@ -284,7 +284,7 @@ final class ReachDefinesProbe {
 		#end
 	}
 
-	/** The configuration the compile `run` of `oracle` reports (`parse`), its paths made canonical, or null. */
+	/** The configuration the compile `run` of `oracle` reports (`parse`) and the files it parsed, paths canonical, or null. */
 	private static function answer(oracle: OracleConfig, run: HaxeRun): Null<ReachConfiguration> {
 		if (run.failure != '' || run.status != 0) return null;
 		final read: Null<ReachConfiguration> = parse(OracleDeclaration.describeOracle(oracle), run.out);
@@ -297,6 +297,9 @@ final class ReachDefinesProbe {
 		];
 		read.types = [
 			for (t in read.types) if (!t.file.endsWith(own)) { name: t.name, file: OracleCoverage.canonical(root, t.file) }
+		];
+		read.parsed = [
+			for (path in OracleCoverage.parsedPaths(run.out)) if (!path.endsWith(own)) OracleCoverage.canonical(root, path)
 		];
 		return read;
 	}

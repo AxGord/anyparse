@@ -32,6 +32,7 @@ import haxe.Exception;
 import haxe.io.Path;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
+import anyparse.check.ReachBuildsCache;
 
 using Lambda;
 
@@ -394,15 +395,19 @@ final class LintCommand implements CliCommand {
 	 * on-demand probe would have read — only when the project declares the oracle list complete (`reachConfigurationsComplete`):
 	 * a `MemberReach` answer may then hold under their conditional compilation and read exactly the code they compile.
 	 * An oracle list not declared complete vouches for nothing, since a build it leaves out may compile code no listed
-	 * one does. Unchanged with no oracle, or under `--no-oracle`, which runs no compile at all.
+	 * one does. The builds probed are stored under the fingerprint of the input they read (`ReachBuildsCache`), which
+	 * a run under `--no-oracle` — compiling nothing — reads instead (`withStoredBuilds`). Unchanged with no oracle.
 	 */
 	private static function withReachConfigurations(
 		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool, ahead: AheadBuilds,
 		?reflective: Array<String>, ?holders: Array<String>
 	): Null<ResolutionScope> {
-		if (resolution == null || oracles.length == 0 || noOracle || !complete) return resolution;
+		if (resolution == null || oracles.length == 0 || !complete) return resolution;
+		if (noOracle) return withStoredBuilds(resolution, oracles, reflective, holders);
 		var probed: Bool = false;
 		var builds: Null<ReachBuilds> = null;
+		// the fingerprint of the input the compiles started ahead read, taken before they started
+		var aheadKey: Null<ReachBuildsKey> = null;
 		// once the run writes, the builds are compiled on demand, as they read the tree then: none starts ahead of a write
 		var writing: Bool = false;
 		function probe(): Null<ReachBuilds> {
@@ -410,15 +415,17 @@ final class LintCommand implements CliCommand {
 				probed = true;
 				final pending: Null<DefinesProbe> = ahead.probe;
 				ahead.probe = null;
+				final key: Null<ReachBuildsKey> = pending == null ? ReachBuildsCache.fingerprint(oracles) : aheadKey;
 				final found: Null<ReachBuilds> = pending == null ? ReachDefinesProbe.probeAll(oracles) : ReachDefinesProbe.finish(pending);
-				if (found != null && reflective != null) found.reflectiveClasses = reflective;
-				if (found != null && holders != null) found.reflectiveMethodHolders = holders;
-				builds = found;
+				ReachBuildsCache.store(oracles, key, found);
+				builds = bounded(found, reflective, holders);
 			}
 			return builds;
 		}
 		function start(): Void {
-			if (!probed && !writing && ahead.probe == null) ahead.probe = ReachDefinesProbe.start(oracles);
+			if (probed || writing || ahead.probe != null) return;
+			aheadKey = ReachBuildsCache.fingerprint(oracles);
+			ahead.probe = ReachDefinesProbe.start(oracles);
 		}
 		function settled(): Void {
 			writing = true;
@@ -431,6 +438,35 @@ final class LintCommand implements CliCommand {
 			buildsAhead: start,
 			buildsSettled: settled
 		};
+	}
+
+	/**
+	 * `resolution` carrying the builds an oracle run stored for exactly the compile input the run reads now
+	 * (`ReachBuildsCache`), read on first demand: a run that compiles nothing knows the compilers' builds only from there,
+	 * and otherwise knows none.
+	 */
+	private static function withStoredBuilds(
+		resolution: ResolutionScope, oracles: Array<OracleConfig>, reflective: Null<Array<String>>, holders: Null<Array<String>>
+	): ResolutionScope {
+		var read: Bool = false;
+		var builds: Null<ReachBuilds> = null;
+		function load(): Null<ReachBuilds> {
+			if (!read) {
+				read = true;
+				builds = bounded(ReachBuildsCache.load(oracles), reflective, holders);
+			}
+			return builds;
+		}
+		return { declared: resolution.declared, sources: resolution.sources, builds: load };
+	}
+
+	/** `builds` carrying the bounds the project declares on what a computed name may make or obtain, where it declares them. */
+	private static function bounded(
+		builds: Null<ReachBuilds>, reflective: Null<Array<String>>, holders: Null<Array<String>>
+	): Null<ReachBuilds> {
+		if (builds != null && reflective != null) builds.reflectiveClasses = reflective;
+		if (builds != null && holders != null) builds.reflectiveMethodHolders = holders;
+		return builds;
 	}
 
 	/**

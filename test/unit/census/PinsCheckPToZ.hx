@@ -270,6 +270,10 @@ final class PinsCheckPToZ {
 		'unit.check.PreferValueLoopCheckTest#testStaticAndConstructorCallsThatGrowTheCollectionAreReportOnly :: control :: '
 			+ 'M-ELEMENT-LOOP-TYPE-CALLEE,M-ELEMENT-LOOP-NEW-EXPR',
 		'unit.check.PreferValueLoopCheckTest#testThisQualifiedCollectionNotFlagged :: control :: M-ELEMENT-LOOP-REBIND',
+		'unit.check.ReachBuildsCacheTest#testAGenerationNoLongerCurrentIsNotReadFromTheStore :: control :: M-REACH-GENERATION-UNCHECKED',
+		'unit.check.ReachBuildsCacheTest#testANoOracleRunReadsTheBuildsAnOracleRunStored :: control :: M-REACH-STORED-UNREAD,M-REACH-STORE-OFF',
+		'unit.check.ReachBuildsCacheTest#testAReadTheFingerprintCannotSeeIsNeitherStoredNorRead :: control :: M-REACH-ROOTS-UNCHECKED,M-REACH-LIBRARY-UNCHECKED',
+		'unit.check.ReachBuildsCacheTest#testAnEditedInputIsNotReadFromTheStore :: control :: M-REACH-KEY-UNCHECKED',
 		'unit.check.ReachDefinesProbeTest#testADefineAnInitializationMacroSetsIsNotDefinedForEveryFile :: control :: M-DEFINES-EARLY',
 		'unit.check.ReachDefinesProbeTest#testAValueIsTheDefinesWhereTheFirstAndLastSetsAgree :: control :: M-DEFINES-VALUES-STABLE',
 		'unit.check.ReachDefinesProbeTest#testBuildsStartedAheadAnswerOnlyAQuestionBeforeTheFirstWrite :: control :: '
