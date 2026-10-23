@@ -5,6 +5,7 @@ import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeTerm.TypeEnd;
 import unit.CheckFixture;
 
 /**

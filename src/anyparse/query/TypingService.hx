@@ -70,6 +70,12 @@ final class TypingService {
 	public final expectations: ExpectedTypes;
 
 	/**
+	 * The language's reading of an inference (`InferencePolicy`): a call's type parameters as the cells `Monomorphs` binds,
+	 * a written type as a term, the arcs a unification reads a given type through.
+	 */
+	public final inference: InferencePolicy;
+
+	/**
 	 * Built by the owning `SymbolIndex` over its immutable declaration tables, its grammar's `shape` and which branches the
 	 * run's builds compile (`builds`).
 	 */
@@ -87,6 +93,7 @@ final class TypingService {
 		structural = new StructuralTypes(files, refs, subtypes, members, typeSyntax, unification);
 		extensions = new StaticExtensions(refs, cache, ancestors, members, structural);
 		expectations = new ExpectedTypes(shape);
+		inference = new HaxeInferencePolicy(casts, refs, ancestors, structural, typeSyntax, shape);
 	}
 
 	/**

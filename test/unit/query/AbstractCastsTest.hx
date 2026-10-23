@@ -1,8 +1,8 @@
 package unit.query;
 
-import anyparse.query.AbstractCasts.TypeEnd;
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeTerm.TypeEnd;
 import unit.CheckFixture;
 
 /**

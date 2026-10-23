@@ -1,10 +1,10 @@
 package anyparse.query;
 
-import anyparse.query.AbstractCasts.TypeEnd;
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
+import anyparse.query.TypeTerm.TypeEnd;
 
 using Lambda;
 

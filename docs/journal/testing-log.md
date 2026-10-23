@@ -4489,3 +4489,36 @@ under the declared list. With the receiver gate cut (`M-HOIST-RECEIVER-UNVOUCHED
 --fix` writes `test/unit/grammar/import.hx` (2462 edits in 918 files, exit 0, `recon.hxml` red) under the old
 configuration, and under the declared list reverts the 382 files the compiler blamed (1830 edits in 536 files kept, exit 1,
 `recon.hxml` green).
+
+## T7a (2026-10-23) — monomorphs of a call's type parameters, lambda parameters in the index host
+
+On `0a2ac8160`. Census (`typer-conformance facts --census`), the base engine on the base tree against the slice's engine
+on the slice's tree, source / nominal:
+
+| tree | `F3-lambda-parameter` | UNKNOWN share | DIFFERENT |
+|---|---|---|---|
+| anyparse | 12 437 / 12 437 → 2 550 / 4 165 | 13.0 / 13.2 → 11.3 / 11.6 % | 1 / 1 → 1 / 1 |
+| Pony (a copy) | 26 / 26 → 21 / 21 | 19.3 / 18.4 → 19.2 / 18.4 % | 2 / 3 → 2 / 3 |
+| upstream | 1 / 1 → 1 / 1 | 57.9 / 57.3 → 57.9 / 57.3 % | 0 / 0 → 0 / 0 |
+
+The base's lambda-parameter root on anyparse, by what the callee declares at the lambda's position: not declared on the
+receiver type (a static extension, mostly `using Lambda`) 4 609, a class type parameter 1 827, a method type parameter
+1 820, a bare call of a member 1 384, a concrete type 1 334, the receiver untyped 872, an object field 285, an annotated
+local 156, a `return` 86. Left on the slice (source): the receiver untyped 784, an extension 520, a method type parameter
+469, a class type parameter 315, an object field 265, a `return` 86. The nominal currency keeps more (a lambda's
+parameter typed as a structure has no nominal).
+
+Per case, both engines over the slice's tree (`--list`): anyparse 1 068 610 cases, no MATCH lost, +17 081 MATCH, no
+DIFFERENT added; Pony 21 962 cases, no MATCH lost, +10, none added. The three anyparse DIFFERENTs the first build showed
+were `(a: Array<Dynamic>).filter(x -> x.lock == …)`: 4.3.7 types `x` as `{lock: String}`, a monomorph not binding to
+`Dynamic`; the slice answers none there.
+
+Pony's five answered are `Lambda.exists` over a class whose own `iterator()` yields; twenty of the 21 left are `using
+Lambda` extensions: its resolution libraries hold a second `Lambda` module, and the T3 walk refuses the ambiguous path.
+
+All-rules lint (`--no-oracle --all --format json`), the base engine against the slice's: two recall trees
+byte-identical; the third moves three `prefer-static-extension` messages from "receiver type unresolved" to the resolved
+form (a lambda's parameter a sibling member's `(Int) -> …` parameter types); the anyparse base tree adds two
+`simplify-negated-compound` infos (`Lambda.foreach` over a `Map<Int, Anchor>` and an `Array<Span>`, whose element's
+`Int` fields the rule now reads) and resolves one `prefer-static-extension` receiver (a lambda written for a local of
+type `String -> Bool`). The three thread-safety scores are byte-identical.

@@ -28,6 +28,7 @@ its hosts are functions of their arguments, and every remembered answer is insta
 | `structural` (`StructuralTypes`) | signature | unification with an anonymous structure, membership of a builtin structural type (`Iterable`, `Iterator`) |
 | `extensions` (`StaticExtensions`) | body | which static extension `recv.name` binds in a file on a receiver of a declaration (`fields.ml`), what a file's `using` statements bring, what one `using` offers a receiver (`offers`) and whether an access may bind through it (`mayBindThrough`) |
 | `expectations` (`ExpectedTypes`) | body | the type a value is expected to have where it is written, and through it an untyped lambda parameter's |
+| `inference` (`InferencePolicy`; `Monomorphs`, `TypeTerm`) | body | the language's reading of an inference: a call's type parameters as the cells `Monomorphs` binds, a written type as a `TypeTerm`, the arcs a unification reads a given type through (Haxe's: `HaxeInferencePolicy`) |
 | `typeWalk` + `TypingHost` | body | the type an expression carries: the walk owns the shapes, a host answers each in its own currency |
 | `cache` (`QueryCache`) | — | the remembered answers, one `DeclarationQuery` table per question |
 
@@ -372,5 +373,35 @@ std gap. Readings: `docs/journal/testing-log.md`.
   4510 / 4756 / 2564 / 4791 → 40 / 390 / 122 / 2593; upstream 60.2 / 59.0 → 57.9 / 57.3 %; Pony 21.4 / 19.8 → 19.3 /
   18.4 %; a client corpus 21.3 / 16.5 → 16.8 / 15.5 %, 4556 / 2334 / 1384 / 2100 → 95 / 0 / 159 / 1886; DIFFERENT 0 / 0,
   0 / 0, 2 / 3, 2 / 1 unchanged, no MATCH lost on any of the four.
+- **T7a — monomorphs of a call's type parameters; a lambda's parameter (done).** The inference core, apart from the
+  language. `TypeTerm` (the cast graph's `TypeEnd` moved beside it) reads a written type as its head's end applied to its
+  arguments' terms, a variable (`Mono`) or a type it does not take apart (`Opaque`). `Monomorphs` holds the cells of ONE
+  inference — an instance per call, nothing static: the first unification meeting a cell free binds it (`link`), a second
+  binding to a type not known to be that one poisons it, a free or poisoned cell answers nothing, two cells merge
+  (union-find, paths compressed) and a binding naming its own cell poisons it; `unify` meets a wanted type argument by
+  argument where the heads agree and asks the language to read a given type of another head as one of the wanted head.
+  `InferencePolicy` is that seam (`TypingService.inference`). Haxe's (`HaxeInferencePolicy`): a call's cells are its
+  signature's type parameters (`attempt_call`); a head resolves where it is written, a std type each target's `_std`
+  re-declares as its first copy (`TypeRefIndex.oneDeclaration`); the arcs are the nullable wrapper (transparent, a cell
+  taking it whole), the builtin `Iterable` (a std container's element, `iterationElementTypeParams`, or what a class's own
+  `iterator()` yields, `StructuralTypes.iteratorElement`) and a supertype of a type with no type parameter
+  (`AncestorTable.argumentsTo`). The first consumer is the index host's `parameter` arc (`LambdaParameters`): a lambda's
+  parameter written with no type is the parameter of the function type the lambda is expected to be
+  (`ExpectedTypes.lambdaParamTypes` over `ComposedValues`' expectations) — a declaration's type, a structure field's, an
+  array's element, the parameter a call binds the lambda to (`CallReturns.selectedParameter`: the receiver's written
+  arguments binding its type's parameters, the arguments before the lambda its signature's own, left to right,
+  `unify_call_args`) and a static extension's, the receiver bound first (`CallReturns.extensionParameter` over
+  `StaticExtensions.binding`). Declarations of a callee agree when they spell one type (`TypeSyntax.spellsAs`: `T -> Bool`
+  and `(item: T) -> Bool`). Unknown: a part naming a cell no argument before the lambda binds (`Expectation.unbound` — the
+  lambda's body may bind it), a cell two arguments bind to types not known to be one, a parameter expected to be `Dynamic`
+  (a monomorph does not bind to it; its uses shape it), an argument before the lambda the walk does not type. On the way
+  the T3 walk proves `using Lambda` on a std container (`satisfiesIterable` over the first copy, an `iterator()` return
+  followed by its written path). Measured (`F3-lambda-parameter`; UNKNOWN share; DIFFERENT; source / nominal):
+  anyparse 12 437 / 12 437 → 2 550 / 4 165, 13.0 / 13.2 → 11.3 / 11.6 %, 1 / 1 unchanged; Pony 26 / 26 → 21 / 21,
+  19.3 / 18.4 → 19.2 / 18.4 %, 2 / 3 unchanged; upstream unchanged (57.9 / 57.3 %, 0 / 0); the probe corpus DIFFERENT
+  0. Per case on one tree, the base engine against the slice's: no MATCH lost, no DIFFERENT added (anyparse +17 081 MATCH,
+  Pony +10). The all-rules lint of four trees moves only where a lambda's parameter is now typed (a
+  `prefer-static-extension` message naming a resolved receiver, two `simplify-negated-compound` findings over an
+  element's `Int` fields); the three thread-safety scores are byte-identical.
 Each step lands as a table in `QueryCache` with its consumers moved onto it, and is measured on the harness: a step
 may lower an area's UNKNOWN share and may turn a DIFFERENT into a MATCH or an UNKNOWN, and must add no DIFFERENT.

@@ -1,6 +1,5 @@
 package anyparse.query;
 
-import anyparse.query.AbstractCasts.TypeEnd;
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.ArgumentSlots.SlotParam;
 import anyparse.query.CallSignature.ParamForm;
@@ -9,6 +8,7 @@ import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.query.TypeTerm.TypeEnd;
 
 using Lambda;
 

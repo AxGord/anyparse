@@ -1,6 +1,5 @@
 package anyparse.check;
 
-import anyparse.query.AbstractCasts.TypeEnd;
 import anyparse.query.AncestorTable;
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.CallGraph;
@@ -13,6 +12,7 @@ import anyparse.query.Refs;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeTerm.TypeEnd;
 import anyparse.query.TypingService;
 import anyparse.runtime.SortedOffsets;
 import anyparse.runtime.Span;

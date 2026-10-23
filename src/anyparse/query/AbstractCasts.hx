@@ -9,6 +9,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.query.TypeTerm.TypeEnd;
 
 using Lambda;
 
@@ -372,35 +373,6 @@ final class AbstractCasts {
 			for (m in r.type.members) if (b.span.from <= m.declFrom && m.declFrom < b.span.to) m
 		];
 	}
-
-}
-
-/** One end of a unification question or of a cast edge, as the cast graph reads a type (`AbstractCasts`). */
-enum TypeEnd {
-
-	/** A declaration the index resolves — a class, an interface, an enum, an abstract — its plain aliases followed. */
-	Declared(r: ResolvedType);
-
-	/** A core value type (`RefShape.coreValueTypes`) by name, whether or not the index holds its declaration. */
-	Core(name: String);
-
-	/** The dynamic type written with no argument: every value unifies with it. */
-	Dyn;
-
-	/** A type the graph does not model: a type parameter, a type with arguments, a structure, a function, an unresolved name. */
-	Open;
-
-	/**
-	 * A type parameter of the signature a call is matched against — `T` of `function f<T:Int>(x:T)` — which the call binds
-	 * by unifying its arguments (`CallSelection`); every other reader takes it for `Open`.
-	 */
-	Param(name: String);
-
-	/**
-	 * A generic abstract applied to type arguments — `EitherType<String, Buffer>` — each an end the graph models: its
-	 * clauses read with the arguments for its type parameters (`AbstractCasts.appliedGraph`, `apply_params`).
-	 */
-	Applied(r: ResolvedType, args: Array<TypeEnd>);
 
 }
 

@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.ArgumentSlots.ArgumentFit;
+import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
@@ -192,12 +193,7 @@ final class StructuralTypes {
 	 * this is a positive PROOF, and it fails closed exactly like `typeProvablyLacksMember`.
 	 */
 	public function satisfiesIterable(typeName: String, ?fromFile: String): Bool {
-		if (typeName == ITERABLE_TYPE_NAME) return true;
-		final found: Null<{ member: MemberInfo, file: String }> = structuralMemberOf(typeName, fromFile, ITERATOR_MEMBER_NAME, []);
-		if (found == null) return false;
-		final ret: Null<String> = found.member.returnNominal;
-		return ret != null && found.member.firstParamTypeSource == null
-			&& (ret == ITERATOR_TYPE_NAME || satisfiesIterator(ret, found.file));
+		return typeName == ITERABLE_TYPE_NAME || iterates(structuralMemberOf(typeName, fromFile, ITERATOR_MEMBER_NAME, []));
 	}
 
 	/**
@@ -242,6 +238,63 @@ final class StructuralTypes {
 		return written == null ? MayFit : writtenFits(receiver, written, m, host);
 	}
 
+	/** Whether the written type `text` is the builtin `Iterable` applied to one argument, no project type shadowing its name. */
+	public function isBuiltinIterable(text: String): Bool {
+		return switch _typeSyntax(text)?.shape {
+			case Nominal(path, [_]):
+				SourceText.lastSegment(path) == ITERABLE_TYPE_NAME && !shadowed(ITERABLE_TYPE_NAME);
+			case _: false;
+		};
+	}
+
+	/**
+	 * Which type argument of the written type `given` a unification of a value of it with the builtin `Iterable` binds that
+	 * structure's element to (4.3.7 `tUnification.ml`: the container's `iterator().next()` against the structure's): the
+	 * argument `elementParams` (`RefShape.iterationElementTypeParams`) names for a container no project type shadows that
+	 * satisfies `Iterable` — the declaration `givenDecl` its head resolves to, or its name — (`Array<Item>` 0, `Map<K, V>`
+	 * 1), where `wanted` is the builtin `Iterable` applied to one argument. Null otherwise: a type that is not iterable so
+	 * (`Iterator`, a vector), one the table does not name.
+	 */
+	public function iterableElementIndex(
+		wanted: String, given: String, givenDecl: Null<ResolvedType>, elementParams: Map<String, Int>
+	): Null<Int> {
+		final name: Null<String> = switch [_typeSyntax(wanted)?.shape, _typeSyntax(given)?.shape] {
+			case [Nominal(w, [_]), Nominal(g, _)] if (SourceText.lastSegment(w) == ITERABLE_TYPE_NAME): SourceText.lastSegment(g);
+			case _: null;
+		};
+		final at: Null<Int> = name == null ? null : elementParams[name];
+		final arity: Int = (_typeSyntax(given)?.argumentTexts() ?? []).length;
+		if (name == null || at == null || at >= arity || shadowed(ITERABLE_TYPE_NAME) || shadowed(name)) return null;
+
+		final iterable: Bool = name == ITERABLE_TYPE_NAME
+			|| (givenDecl == null ? satisfiesIterable(name) : iterates(declaredMemberOf(givenDecl, ITERATOR_MEMBER_NAME, [])));
+		return iterable ? at : null;
+	}
+
+	/**
+	 * The element type a value of the class or interface `r` binds the builtin `Iterable`'s to (4.3.7 `tUnification.ml`: its
+	 * `iterator()` against the structure's `iterator():Iterator<A>`): the argument of the structural `Iterator` its one
+	 * `iterator` method — declared or inherited, taking no parameter, under no `#if` — is written to return, the name
+	 * resolving to the std's where it is written, as the declaring type writes it. Null otherwise: an abstract or a
+	 * `typedef` (an abstract meets a structure through its casts), a method returning any other type.
+	 */
+	public function iteratorElement(r: ResolvedType, abstractKinds: Array<String>): Null<IteratorElement> {
+		if (abstractKinds.contains(r.type.kind) || r.type.kind == SymbolIndex.TYPEDEF_DECL_KIND) return null;
+		final declared: Null<HostedMembers> = _members.declaringMember(r, ITERATOR_MEMBER_NAME);
+		final members: Array<MemberInfo> = declared?.members ?? [];
+		final m: Null<MemberInfo> = members.length == 1 ? members[0] : null;
+		final written: Null<String> = m?.returnSource;
+		if (declared == null || m == null || written == null) return null;
+		if (m.guarded || m.signatures.length != 1 || m.paramTypeSources.length > 0) return null;
+		return switch _typeSyntax(written)?.shape {
+			case Nominal(path, [element]) if (
+				SourceText.lastSegment(path) == ITERATOR_TYPE_NAME && standard(path, declared.host.file, m.declFrom)
+			):
+				{ text: element.text, host: declared.host, member: m };
+			case _: null;
+		};
+	}
+
 	/**
 	 * The `member` declaration `typeName`'s own body or its supertype closure carries, together
 	 * with the file that declared it — null when the closure declares none, or when any link in it
@@ -260,8 +313,18 @@ final class StructuralTypes {
 		// `Array.iterator()` answers `haxe.iterators.ArrayIterator`, written QUALIFIED and imported
 		// by nobody, so the scope-aware step finds nothing and the package-blind one (a simple name
 		// unique among indexed decls) is the only way the link is followed at all.
-		final start: Null<ResolvedType> = _refs.resolveStartType(typeName, fromFile) ?? _refs.resolveStartType(typeName, null);
-		if (start == null || !_refs.markSeen(start, seen)) return null;
+		final start: Null<ResolvedType> = _refs.resolveStartCopy(typeName, fromFile) ?? _refs.resolveStartCopy(typeName, null);
+		return start == null ? null : declaredMemberOf(start, member, seen);
+	}
+
+	/**
+	 * `structuralMemberOf` from the declaration `start` itself: its own member `member`, else its alias target's, else a
+	 * supertype's — each further link followed by its written path from the file writing it.
+	 */
+	private function declaredMemberOf(
+		start: ResolvedType, member: String, seen: Array<String>
+	): Null<{ member: MemberInfo, file: String }> {
+		if (!_refs.markSeen(start, seen)) return null;
 		final host: String = start.file.file;
 		final own: Null<MemberInfo> = start.type.members.find(m -> m.name == member);
 		if (own != null) return { member: own, file: host };
@@ -280,6 +343,19 @@ final class StructuralTypes {
 			if (up != null) return up;
 		}
 		return null;
+	}
+
+	/**
+	 * Whether `found`, an `iterator` member, makes its type `Iterable`: a method written with a return and no first
+	 * parameter, returning the structural `Iterator` by name or a type that satisfies it, read by the path it is written
+	 * with (`haxe.iterators.ArrayIterator`, whose simple name another std package declares too).
+	 */
+	private function iterates(found: Null<{ member: MemberInfo, file: String }>): Bool {
+		final ret: Null<String> = found?.member.returnNominal;
+		final written: Null<String> = found?.member.returnSource;
+		final path: Null<String> = written == null ? ret : NominalTypes.outerPathOf(written, [], _typeSyntax) ?? ret;
+		return found != null && ret != null && path != null && found.member.firstParamTypeSource == null
+			&& (ret == ITERATOR_TYPE_NAME || satisfiesIterator(path, found.file));
 	}
 
 	/**
@@ -446,6 +522,17 @@ final class StructuralTypes {
 		return decl == null ? MayFit : _unification.unifies(receiver, decl);
 	}
 
+	/** Whether a project file outside the standard library declares a type named `name`, which a written `name` may then mean. */
+	private function shadowed(name: String): Bool {
+		return _refs.declaringFiles(name).exists(fi -> !StdResolver.isStdFile(fi.file));
+	}
+
+	/** Whether the type name `path`, written in `file` at `at`, resolves there to declarations of the standard library only. */
+	private function standard(path: String, file: FileInfo, at: Int): Bool {
+		final found: Array<ResolvedType> = _refs.resolveTypeRefAll(path, file, at);
+		return found.length > 0 && found.foreach(r -> StdResolver.isStdFile(r.file.file));
+	}
+
 	/** A member of a builtin structural type: a method by its name, no written type (`BUILTIN_STRUCTURAL_MEMBER_SETS`). */
 	private static function builtinMember(name: String): StructureMember {
 		return {
@@ -466,6 +553,13 @@ final class StructuralTypes {
 		};
 	}
 
+}
+
+/** The element an `iterator()` method yields (`StructuralTypes.iteratorElement`): as `host` writes it on `member`. */
+typedef IteratorElement = {
+	final text: String;
+	final host: ResolvedType;
+	final member: MemberInfo;
 }
 
 /**

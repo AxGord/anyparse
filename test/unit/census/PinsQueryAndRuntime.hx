@@ -445,6 +445,16 @@ final class PinsQueryAndRuntime {
 		'unit.query.JsonQueryPluginTest#testAPatternStringCanBeAMetavariable :: control :: M-JSON-PATTERN-NO-METAVAR',
 		'unit.query.JsonQueryPluginTest#testTheLexicalRegionsAreTheStrings :: control :: M-JSON-REGIONS-NONE',
 		'unit.query.JsonQueryPluginTest#testTheRootSpanIsTight :: control :: M-JSON-ROOT-UNTIGHTENED',
+		'unit.query.LambdaParametersTest#testAClassIteratesWhatItsIteratorYields :: control :: M-ITERATOR-ELEMENT-NULL',
+		'unit.query.LambdaParametersTest#testAGivenTypeIsReadThroughTheLanguagesArcs :: control :: M-INFERENCE-REREAD-NULL',
+		'unit.query.LambdaParametersTest#testAMonomorphTheLambdaMayBindIsNoAnswer :: control :: '
+			+ 'M-UNBOUND-PART-TAKEN,M-LAMBDA-DYNAMIC-TAKEN',
+		'unit.query.LambdaParametersTest#testAParameterTakesTheTypeItsPositionExpects :: control :: M-LAMBDA-PARAMETER-NULL',
+		'unit.query.LambdaParametersTest#testAStaticExtensionBindsItsReceiverFirst :: control :: M-EXTENSION-PARAMETER-NULL',
+		'unit.query.LambdaParametersTest#testTheArgumentsBeforeTheLambdaBindTheCallsTypeParameters :: control :: M-INFERRED-CELLS-UNBOUND',
+		'unit.query.LambdaParametersTest#testTheReceiversArgumentsBindItsTypesParameters :: control :: M-RECEIVER-ARGUMENTS-DROPPED',
+		'unit.query.LambdaParametersTest#testTheStdsCopiesOfOneTypeAnswerAsOne :: control :: '
+			+ 'M-ONE-DECLARATION-NONE,M-PARAMETER-MERGE-BY-TEXT',
 		'unit.query.LineDiffTest#testAnOddNetInsertionIsFoundWithinTheBudget :: control :: M-LINE-DIFF-PARITY',
 		'unit.query.LineDiffTest#testTheRunBetweenTwoEditsIsUnchanged :: control :: M-LINE-DIFF-HULL',
 		'unit.query.LintBaselineTest#testAFindingThatONLYMOVEDIsNotNew :: control :: M-LINT-BASELINE-NO-SUBTRACTION',
@@ -1145,6 +1155,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.MetaElementSpanSliceTest#testRemoveConditionalModifierRegionStillTakesTheMember :: control :: '
 			+ 'M-META-ELEMENT-ANY-COND-REGION',
 		'unit.query.MetaElementSpanSliceTest#testRemoveModifierStillTakesTheMemberDoc :: control :: M-CUT-DOC-KEPT-BY-ANY-PREFIX',
+		'unit.query.MonomorphsTest#testAUnificationBindsTheCellsTheWantedTypeNames :: control :: M-MONO-UNIFY-ARGUMENTS-SKIPPED',
+		'unit.query.MonomorphsTest#testTheFirstBindingWinsAndAnotherTypePoisons :: control :: M-MONO-LAST-BINDING-WINS',
 		'unit.query.MoveCanonicalOutputSliceTest#testMoveLeavesANonCanonicalSourceUnformatted :: control :: M-MOVE-CANONICALISE-ALWAYS',
 		'unit.query.MoveElementsSliceTest#testALeadingDocTravelsWithTheSlice :: control :: M-MOVE-ELEMENTS-DOC-STAYS',
 		'unit.query.MoveElementsSliceTest#testAOnePerLineSliceTakesItsLines :: control :: M-REMOVE-COMMA-LINE-KEPT',
