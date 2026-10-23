@@ -39,6 +39,7 @@ class MermaidTextTest extends Test {
 		'<b>not bold</b>',
 		'a &quot; b',
 		'&#60;',
+		'#a_b;',
 		'50%% done',
 		'tab\there',
 		'ünïcödé 字 😀'
@@ -53,7 +54,10 @@ class MermaidTextTest extends Test {
 		'say "hi"<br>',
 		'#lt; literal<i>',
 		'`tick`<br>',
-		'<b>😀</b>'
+		'<b>😀</b>',
+		'a<br>&#60;b',
+		'x&&#60;y',
+		'&a_b;'
 	];
 
 	/** A plain label's codes resolve to the characters a reader sees, markup ones included. */
@@ -70,7 +74,8 @@ class MermaidTextTest extends Test {
 		Assert.equals('a<br>b', MermaidText.decodeMarkup('a<br>b'));
 		Assert.equals('&lt;b&gt;', MermaidText.decodeMarkup('"#lt;b#gt;"'));
 		Assert.equals('I &hearts; "u"', MermaidText.decodeMarkup('"I #hearts; #quot;u#quot;"'));
-		Assert.equals('&#60;', MermaidText.decodeMarkup('"&#60;"'));
+		Assert.equals('a<br>&#60;b', MermaidText.decodeMarkup('"a<br>#60;b"'));
+		Assert.equals('&&#60;', MermaidText.decodeMarkup('"&#60;"'));
 	}
 
 	/** A numeric code outside Unicode, or a surrogate, names no character: it stays as written, and nothing throws. */
@@ -91,6 +96,24 @@ class MermaidTextTest extends Test {
 		Assert.equals('"a & b"', MermaidText.encodePlain('a & b'));
 	}
 
+	/** A numeric HTML reference in markup is written as Mermaid's code, never raw: Mermaid would turn a raw `&#60;` into `&<`. */
+	@:killer('M-MERMAID-NUMERIC-REF-RAW')
+	@:pin('control')
+	public function testMarkupWritesANumericReferenceAsACode(): Void {
+		Assert.equals('"a<br>#60;b"', MermaidText.encodeMarkup('a<br>&#60;b'));
+		Assert.equals('"#1114112;"', MermaidText.encodeMarkup('&#1114112;'));
+		Assert.equals('"#0;"', MermaidText.encodeMarkup('&#0;'));
+		Assert.equals('"x&#60;y"', MermaidText.encodeMarkup('x&&#60;y'));
+	}
+
+	/** A code's name is Mermaid's `\w`, so a `_` in it makes a code a plain label must escape. */
+	@:killer('M-MERMAID-CODE-ALPHABET-NARROW')
+	@:pin('control')
+	public function testTheCodeAlphabetIsWordCharacters(): Void {
+		Assert.equals('"#35;a_b;"', MermaidText.encodePlain('#a_b;'));
+		Assert.equals('&a_b;', MermaidText.decodeMarkup('#a_b;'));
+	}
+
 	/** A safe plain label is written bare; one with a delimiter, a quote, an entity-shaped `#` or `%` is quoted. */
 	public function testPlainBareOrQuoted(): Void {
 		Assert.equals('Is it ok?', MermaidText.encodePlain('Is it ok?'));
@@ -107,7 +130,7 @@ class MermaidTextTest extends Test {
 	public function testPlainBackticksNeverOpenMarkdown(): Void {
 		Assert.equals('`x`', MermaidText.encodePlain('`x`'));
 		Assert.equals('"#96;x` y|z"', MermaidText.encodePlain('`x` y|z'));
-		Assert.equals('"`a#96;b`"', MermaidText.encodeMarkdown('a`b'));
+		Assert.equals('"`a#grave;b`"', MermaidText.encodeMarkdown('a`b'));
 	}
 
 	/** An inline edge label is quoted when it holds its own link's stroke character, and only then. */

@@ -15,6 +15,8 @@ same AST, and write idempotently.
   with subgraphs, classes and link styles; a diff with dotted and invisible links; a decision flow
   with stadiums, diamonds and escaped labels). They are in canonical form: writing one gives back
   its own bytes.
+- `review/` — sources found in review that an earlier grammar refused or misread (an inline edge
+  label with markup after a space).
 
 `docs/` and `spec/` are taken from [mermaid-js/mermaid](https://github.com/mermaid-js/mermaid) at
 commit `6d8921f94f9a12b76586eddcf45a566080d4767e`, under its MIT license:

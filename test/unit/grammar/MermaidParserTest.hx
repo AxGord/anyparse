@@ -1,6 +1,7 @@
 package unit.grammar;
 
 import anyparse.grammar.mermaid.MermaidParser;
+import anyparse.grammar.mermaid.MermaidSpanParser;
 import anyparse.grammar.mermaid.MermaidWriter;
 import anyparse.grammar.mermaid.MmdBackslashBody;
 import anyparse.grammar.mermaid.MmdClickAction;
@@ -173,7 +174,7 @@ class MermaidParserTest extends Test {
 	}
 
 	/** A label that renders as literal text, markup, a backtick or an unnamed code is written back so it renders the same. */
-	@:killer('M-MERMAID-PLAIN-LT-RAW', 'M-MERMAID-PLAIN-AMP-RAW', 'M-MERMAID-TICK-UNESCAPED')
+	@:killer('M-MERMAID-PLAIN-LT-RAW', 'M-MERMAID-PLAIN-AMP-RAW', 'M-MERMAID-TICK-UNESCAPED', 'M-MERMAID-NUMERIC-REF-RAW')
 	@:pin('control')
 	public function testWritingKeepsWhatALabelRenders(): Void {
 		for (line in [
@@ -182,10 +183,28 @@ class MermaidParserTest extends Test {
 			'C["a #amp;quot; b"]',
 			'D[`x`]',
 			'E["#96;x` y|z"]',
-			'F["&#99999999;"] --> G["&#1114112;"] --> H["&#55357;"]',
+			'F["#99999999;"] --> G["#1114112;"] --> H["#55357;"] --> Z["#0;"]',
+			'P["a<br>#60;b"]',
 			'I["a<br>b"] -- "x<i>y" --> J["`**md**`"]',
 			'K["50%% done"]'
 		]) Assert.equals('flowchart TD\n$line\n', MermaidWriter.write(MermaidParser.parse('flowchart TD\n$line\n')), line);
+	}
+
+	/** An inline label with markup after a space parses as markup and is written quoted, in every stroke family. */
+	@:killer('M-MERMAID-INLINE-TAKES-PREFIX')
+	@:pin('control')
+	public function testAnInlineLabelWithMarkupParses(): Void {
+		for (c in [
+			{ source: 'A -- a < b --> E', written: 'A -- "a < b" --> E' },
+			{ source: 'A == a < b ==> F', written: 'A == "a < b" ==> F' },
+			{ source: 'A -. a < b .-> E', written: 'A -. "a < b" .-> E' },
+			{ source: 'A -- x #hearts; y --> B', written: 'A -- "x &hearts; y" --> B' },
+			{ source: 'A -- a &amp; b --> B', written: 'A -- "a &amp; b" --> B' }
+		]) {
+			final source: String = 'flowchart TD\n${c.source}\n';
+			MermaidSpanParser.parse(source);
+			Assert.equals('flowchart TD\n${c.written}\n', MermaidWriter.write(MermaidParser.parse(source)), c.source);
+		}
 	}
 
 	/** An AST built by hand with labels the bare form cannot hold writes to text that parses back to it. */

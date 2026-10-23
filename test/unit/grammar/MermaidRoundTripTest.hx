@@ -26,7 +26,7 @@ class MermaidRoundTripTest extends Test {
 	private static inline final CORPUS: String = 'test/corpus/mermaid';
 
 	/** The corpus sets, each a directory of `.mmd` files. */
-	private static final SETS: Array<String> = ['docs', 'spec', 'demo'];
+	private static final SETS: Array<String> = ['docs', 'spec', 'demo', 'review'];
 
 	/** Parse, write, re-parse and re-write every corpus file. */
 	public function testEveryCorpusFileRoundTrips(): Void {

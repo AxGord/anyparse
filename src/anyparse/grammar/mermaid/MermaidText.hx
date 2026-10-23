@@ -5,19 +5,22 @@ using StringTools;
 /**
  * The label codec of the Mermaid grammar, declared once and named by every label terminal's
  * `@:decode` / `@:encode` pair. Mermaid has no backslash escape: a character the syntax would read
- * is written as an entity code `#name;` / `#123;`, which Mermaid hands to its HTML renderer as
- * `&name;` / `&#123;`. A label is one of three kinds, each its own grammar ctor:
+ * is written as an entity code, and Mermaid rewrites every `#\w+;` in the source into an HTML
+ * reference (`#name;` to `&name;`, all digits to `&#123;`) before it parses, whatever precedes it.
+ * A label is one of three kinds, each its own grammar ctor:
  *
  *  - PLAIN — the text a reader sees. Codes decode to their characters; `<`, `>`, a `&` that would
- *    start a reference, `"`, an entity-shaped `#` and a backtick that would open a markdown string
- *    are re-escaped on write, so `Map<String, Int>` renders literally.
+ *    start a reference, `"`, a `#` that would start a code and a backtick that would open a
+ *    markdown string are re-escaped on write, so `Map<String, Int>` renders literally.
  *  - MARKUP — a label holding raw HTML (`a<br>b`), an HTML reference, or a code the codec does not
- *    resolve: the HTML Mermaid renders, so a code for `<` `>` `&` or an unknown name decodes to the
- *    HTML reference, and markup is written back raw.
+ *    resolve: the HTML Mermaid renders. A numeric code decodes to a numeric reference, a named one
+ *    for `<` `>` `&` or an unknown name to a named reference. Markup is written back raw, except a
+ *    numeric reference, which is written as the code: raw, Mermaid would read `&#60;` as `&<`.
  *  - MARKDOWN — the body of a ``"`…`"`` string, decoded like markup.
  *
- * A numeric code outside Unicode, or a surrogate, resolves to nothing and stays as written. The
- * codec scans with no regular expression, so it keeps no state between calls.
+ * A numeric code outside Unicode, or a surrogate, resolves to no character: plain keeps it as
+ * written, markup as the reference Mermaid makes of it. The codec scans with no regular
+ * expression, so it keeps no state between calls.
  */
 @:nullSafety(Strict)
 final class MermaidText {
@@ -43,7 +46,9 @@ final class MermaidText {
 		'lt' => '<'.code,
 		'gt' => '>'.code,
 		'apos' => "'".code,
-		'nbsp' => 0xA0
+		'nbsp' => 0xA0,
+		'num' => '#'.code,
+		'grave' => '`'.code
 	];
 
 	/** A plain node, pipe or subgraph-title label: bare when every character is safe, quoted otherwise. */
@@ -96,13 +101,20 @@ final class MermaidText {
 		return code == '"'.code ? '#quot;' : String.fromCharCode(code);
 	}
 
-	/** Whether the character before `at` is a `&` — the `#` of a numeric HTML reference, which markup keeps. */
-	private static inline function followsAmpersand(text: String, at: Int): Bool {
-		return at > 0 && text.fastCodeAt(at - 1) == '&'.code;
+	/** Whether `c` is in Mermaid's code alphabet, the regex `\w`: a letter, a digit or `_`. */
+	private static inline function isWordChar(c: Int): Bool {
+		return (c >= '0'.code && c <= '9'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= 'a'.code && c <= 'z'.code) || c == '_'.code;
 	}
 
-	private static inline function isAlphaNumeric(c: Int): Bool {
-		return (c >= '0'.code && c <= '9'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= 'a'.code && c <= 'z'.code);
+	/**
+	 * Whether a numeric HTML reference `&#123;` starts at `at`. Markup writes it as the code `#123;`:
+	 * Mermaid turns every `#\w+;` into a reference with no regard for a `&` before it, so a raw `&#123;`
+	 * would render as `&` followed by the character.
+	 */
+	private static function startsNumericReference(text: String, at: Int): Bool {
+		if (at < 0 || text.fastCodeAt(at) != '&'.code) return false;
+		final end: Int = codeEnd(text, at + 1);
+		return end >= 0 && isNumeric(text.substring(at + 2, end - 1));
 	}
 
 	private static function encodePlainAvoiding(text: String, delimiter: String): String {
@@ -133,7 +145,7 @@ final class MermaidText {
 		var copied: Int = 0;
 		var i: Int = 0;
 		while (i < body.length) {
-			final end: Int = followsAmpersand(body, i) ? -1 : codeEnd(body, i);
+			final end: Int = codeEnd(body, i);
 			if (end < 0) {
 				i++;
 				continue;
@@ -147,12 +159,16 @@ final class MermaidText {
 		return buf.toString();
 	}
 
+	/**
+	 * One code as text (plain: the character, or the code as written when it names none) or as HTML
+	 * (markup: a numeric code stays a numeric reference, a named one becomes its character unless the
+	 * character is markup or the name is unknown).
+	 */
 	private static function resolveCode(name: String, markup: Bool): String {
 		final code: Null<Int> = codePoint(name);
-		final reference: String = isNumeric(name) ? '&#$name;' : '&$name;';
-		if (code == null) return markup ? reference : '#$name;';
-		if (markup && (code == '<'.code || code == '>'.code || code == '&'.code)) return reference;
-		return String.fromCharCode(code);
+		if (!markup) return code == null ? '#$name;' : String.fromCharCode(code);
+		if (isNumeric(name)) return '&#$name;';
+		return code == null || code == '<'.code || code == '>'.code || code == '&'.code ? '&$name;' : String.fromCharCode(code);
 	}
 
 	/** The code point `name` (the text between `#` and `;`) names, or null for an unknown name or an invalid number. */
@@ -176,14 +192,14 @@ final class MermaidText {
 	private static function codeEnd(text: String, at: Int): Int {
 		if (text.fastCodeAt(at) != '#'.code) return -1;
 		var j: Int = at + 1;
-		while (j < text.length && isAlphaNumeric(text.fastCodeAt(j))) j++;
+		while (j < text.length && isWordChar(text.fastCodeAt(j))) j++;
 		return j > at + 1 && j < text.length && text.fastCodeAt(j) == ';'.code ? j + 1 : -1;
 	}
 
 	/** Whether a `&` at `at` starts an HTML reference (`&name;`, `&#123;`). */
 	private static function startsReference(text: String, at: Int): Bool {
 		var j: Int = at + 1;
-		while (j < text.length && (isAlphaNumeric(text.fastCodeAt(j)) || text.fastCodeAt(j) == '#'.code)) j++;
+		while (j < text.length && (isWordChar(text.fastCodeAt(j)) || text.fastCodeAt(j) == '#'.code)) j++;
 		return j > at + 1 && j < text.length && text.fastCodeAt(j) == ';'.code;
 	}
 
@@ -199,8 +215,9 @@ final class MermaidText {
 			final c: Int = text.fastCodeAt(i);
 			final replacement: Null<String> = switch c {
 				case '"'.code: '#quot;';
-				case '#'.code if (codeEnd(text, i) >= 0 && (plain || !followsAmpersand(text, i))): '#35;';
-				case '`'.code if (markdown || i == 0): '#96;';
+				case '&'.code if (!plain && startsNumericReference(text, i)): '';
+				case '#'.code if (codeEnd(text, i) >= 0 && (plain || !startsNumericReference(text, i - 1))): plain ? '#35;' : '#num;';
+				case '`'.code if (markdown || i == 0): plain ? '#96;' : '#grave;';
 				case _ if (plain): plainEscape(text, i);
 				case _: null;
 			};

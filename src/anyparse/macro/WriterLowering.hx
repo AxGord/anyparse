@@ -1296,7 +1296,10 @@ class WriterLowering {
 		// (an entity escape, a quoting decision) is declared once beside it.
 		final encodePath: Null<String> = node.readMetaString(':encode');
 		if ((encodePath == null) != (node.readMetaString(':decode') == null))
-			Context.fatalError('WriterLowering: a terminal declares @:decode and @:encode together or neither', Context.currentPos());
+			Context.fatalError(
+				'WriterLowering: terminal ${node.annotations[AnnotationKeys.BASE_TYPE_PATH]} must declare @:decode and @:encode together',
+				Context.currentPos()
+			);
 		if (encodePath != null) {
 			if (unescape || raw)
 				Context.fatalError(

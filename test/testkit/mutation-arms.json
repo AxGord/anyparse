@@ -29964,7 +29964,7 @@
 			"name": "M-MERMAID-TICK-UNESCAPED",
 			"type": "anyparse.grammar.mermaid.MermaidText",
 			"method": "escape",
-			"find": "case '`'.code if (markdown || i == 0): '#96;';",
+			"find": "case '`'.code if (markdown || i == 0): plain ? '#96;' : '#grave;';",
 			"replace": "",
 			"note": "a quoted label opening with a backtick is written as a markdown string opener, and a backtick inside a markdown string closes it early"
 		},
@@ -29975,6 +29975,31 @@
 			"find": "return code == null || code < 1 || code > MAX_CODE_POINT || (code >= SURROGATE_FIRST && code <= SURROGATE_LAST) ? null : code;",
 			"replace": "return code;",
 			"note": "a numeric code outside Unicode reaches String.fromCharCode and throws a RangeError, and a surrogate decodes to half a character"
+		},
+		{
+			"name": "M-MERMAID-INLINE-TAKES-PREFIX",
+			"type": "anyparse.grammar.mermaid.MmdSolidTextLit",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": ")+(?=--)",
+			"replace": ")+(?![<>]|&[#A-Za-z0-9_]+;|#[A-Za-z0-9_]+;)",
+			"note": "a bare solid-edge label stops at markup without asking for its closing link, so plain takes the prefix before the space and `A -- a < b --> E` no longer parses"
+		},
+		{
+			"name": "M-MERMAID-NUMERIC-REF-RAW",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "escape",
+			"find": "case '&'.code if (!plain && startsNumericReference(text, i)): '';",
+			"replace": "",
+			"note": "markup writes a numeric HTML reference raw, and Mermaid, which turns every `#\\w+;` into a reference whatever precedes it, renders `&#60;` as `&<`"
+		},
+		{
+			"name": "M-MERMAID-CODE-ALPHABET-NARROW",
+			"type": "anyparse.grammar.mermaid.MermaidText",
+			"method": "isWordChar",
+			"find": " || c == '_'.code",
+			"replace": "",
+			"note": "a code name may not hold `_`, so plain text `#a_b;` is written unescaped and Mermaid renders it as the reference `&a_b;`"
 		}
 	]
 }
