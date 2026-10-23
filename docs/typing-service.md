@@ -300,8 +300,9 @@ std gap. Readings: `docs/journal/testing-log.md`.
   — keeps its abstract branches' clauses. `BuildBranches` (`index.typing.builds`) answers which branches some build the
   run declares may compile (`of`): `ReachLiveness.live` over the builds the host probes (`SymbolIndexHost.reachBuilds`,
   the compiler oracle's configurations declared complete), read once per index and only for a declaration with more
-  than one branch; every branch when no build is known — under `--no-oracle` always, since a configuration's define
-  lists cannot show that no build sets a define (`docs/decisions.md`, FU31) — and when no build compiles any. Consumers:
+  than one branch; every branch when no build is known — under `--no-oracle` unless an oracle run stored the builds of the
+  very same compile input (`ReachBuildsCache`, `docs/cli-query-tool.md`), since a configuration's define lists cannot
+  show that no build sets a define (`docs/decisions.md`, FU31) — and when no build compiles any. Consumers:
   `AbstractCasts.clausesOf` (the clauses of those branches, null when one is no abstract; also `TypedEventConstant`'s),
   `branchMembers` (so `holdsUntypedValue` and `OperatorOverloads`) and the cast graph (clauses and conversion members
   of those branches only). The split header `#if … enum #else @:enum #end abstract` needed nothing: it projects as a

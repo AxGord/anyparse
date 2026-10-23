@@ -6,18 +6,19 @@
 #
 #   ln -s ../../tools/hooks/pre-push-scrub.sh .git/hooks/pre-push
 #   export ANYPARSE_SCRUB_LIST=<path outside the repository>
+#   export ANYPARSE_SCRUB_PRIVATE_ROOTS=<downstream checkout>   # optional, `:`-separated
 #
 # The list lives OUTSIDE the repository (see tools/src/dev/ScrubGuard.hx for its format): a list
-# of names to keep out would publish them. With ANYPARSE_SCRUB_LIST unset the hook passes and says
-# so. The guard is `node bin/dev.js scrub-guard`; build it once with `haxe tools/dev.hxml`. For every ref being pushed, the lines the pushed commits add and their messages are
+# of names to keep out would publish them. A private root adds a match for every path the push
+# names that is a file of that tree. With both unset the hook passes and says so. The guard is `node bin/dev.js scrub-guard`; build it once with `haxe tools/dev.hxml`. For every ref being pushed, the lines the pushed commits add and their messages are
 # scanned; a match aborts the push and prints where it is, never the matched text.
 set -euo pipefail
 
 repo=$(git rev-parse --show-toplevel)
 guard="$repo/bin/dev.js"
 if [ ! -f "$guard" ]; then
-    if [ -z "${ANYPARSE_SCRUB_LIST:-}" ]; then
-        echo "pre-push-scrub: no token list (ANYPARSE_SCRUB_LIST), nothing checked" >&2
+    if [ -z "${ANYPARSE_SCRUB_LIST:-}" ] && [ -z "${ANYPARSE_SCRUB_PRIVATE_ROOTS:-}" ]; then
+        echo "pre-push-scrub: no token list (ANYPARSE_SCRUB_LIST) and no private root (ANYPARSE_SCRUB_PRIVATE_ROOTS), nothing checked" >&2
         exit 0
     fi
     echo "pre-push-scrub: $guard is missing; build it with \`haxe tools/dev.hxml\` from $repo" >&2

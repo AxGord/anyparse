@@ -49,6 +49,15 @@ typedef OracleBaseline = {
 }
 
 /**
+ * One configuration's verdict and every file its compile parsed, as the compiler printed the path — null when the
+ * verdict came off a compile that did not print them, or none was asked.
+ */
+typedef OracleReading = {
+	var outcome: Null<OracleOutcome>;
+	var parsed: Null<Array<String>>;
+}
+
+/**
  * One configuration that judged nothing, and why: the configuration, the CLASS of the reason, and
  * the sentence a report prints. A report names a configuration once per (configuration, cause) —
  * never once per sentence, since a red build's sentence quotes an error line whose number moves
@@ -125,7 +134,7 @@ final class CompilerOracle {
 		oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool = false
 	): Array<Null<OracleOutcome>> {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
-		if (memo != null) return remembered(memo, oracles, stopAfterFailure, verbose);
+		if (memo != null) return [for (r in remembered(memo, oracles, stopAfterFailure, verbose)) r.outcome];
 		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
 		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
 			for (oracle in asked) { args: oracleArgs(oracle.hxml, oracle.defines), cwd: oracle.dir }
@@ -141,6 +150,42 @@ final class CompilerOracle {
 			}
 			final run: HaxeRun = runs[next++];
 			out.push(run.cancelled == true ? null : outcomeOf(run));
+		}
+		return out;
+	}
+
+	/**
+	 * `typecheckEach` with `-v`, each verdict with every file its compile parsed, for a caller that may keep a verdict only
+	 * while each of them is a file it hashed (`OracleCache.storeIfUnchanged`). A failing `-v` compile is asked again plainly,
+	 * whose streams are what a rejection quotes; the files are the `-v` compile's.
+	 */
+	public static function typecheckEachReading(oracles: Array<OracleConfig>, stopAfterFailure: Bool): Array<OracleReading> {
+		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
+		if (memo != null) return remembered(memo, oracles, stopAfterFailure, true);
+		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
+		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+			for (oracle in asked) { args: argsOf(oracle, true), cwd: oracle.dir }
+		], ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure);
+		final plain: Map<Int, HaxeRun> = plainRetries(asked, runs);
+		for (run in runs) if (run.unstarted != true) invocations++;
+		final out: Array<OracleReading> = [];
+		var next: Int = 0;
+		for (oracle in oracles) {
+			final unavailable: Null<String> = oracle.unavailable;
+			if (unavailable != null) {
+				out.push({ outcome: Unavailable(unavailable), parsed: null });
+				continue;
+			}
+			final k: Int = next++;
+			final run: HaxeRun = runs[k];
+			final again: Null<HaxeRun> = plain[k];
+			final outcome: Null<OracleOutcome> = if (run.cancelled == true)
+				null
+			else if (again != null)
+				retriedOutcome(again)
+			else
+				outcomeOf(run);
+			out.push({ outcome: outcome, parsed: answered(run) ? OracleCoverage.parsedPaths(run.out) : null });
 		}
 		return out;
 	}
@@ -261,39 +306,55 @@ final class CompilerOracle {
 	 */
 	private static function remembered(
 		memo: OracleRunMemo, oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
-	): Array<Null<OracleOutcome>> {
+	): Array<OracleReading> {
 		return PhaseTimings.measure('oracle typecheck', rememberedTimed.bind(memo, oracles, stopAfterFailure, verbose));
 	}
 
 	/** `remembered`, untimed. */
 	private static function rememberedTimed(
 		memo: OracleRunMemo, oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
-	): Array<Null<OracleOutcome>> {
+	): Array<OracleReading> {
 		final before: Array<Null<String>> = memo.fingerprints(oracles);
 		final out: Array<Null<OracleOutcome>> = heldOutcomes(memo, oracles, before);
+		final parsed: Array<Null<Array<String>>> = [
+			for (i in 0...oracles.length) {
+				final held: Null<HaxeRun> = out[i] == null ? null : memo.run(oracles[i], true, before[i]);
+				held == null ? null : OracleCoverage.parsedPaths(held.out);
+			}
+		];
 		final decided: Int = stopAfterFailure ? firstHeldFailure(oracles, out) : oracles.length;
 		final compiled: Array<Int> = [for (i in 0...oracles.length) if (out[i] == null && i < decided) i];
-		final runs: Array<HaxeRun> = compileAsked(memo, [for (i in compiled) oracles[i]], stopAfterFailure, verbose);
+		final asked: Array<OracleConfig> = [for (i in compiled) oracles[i]];
+		final runs: Array<HaxeRun> = compileAsked(memo, asked, stopAfterFailure, verbose);
+		final plain: Map<Int, HaxeRun> = verbose ? plainRetries(asked, runs) : [];
 		for (run in runs) if (run.unstarted != true) invocations++;
-		// a failing `-v` compile is asked again plainly: its streams are what a rejection quotes
-		final retried: Array<Int> = verbose ? [for (k in 0...compiled.length) if (answered(runs[k]) && runs[k].status != 0) k] : [];
-		final plain: Array<HaxeRun> = HaxeSpawn.runAll([
-			for (k in retried) { args: argsOf(oracles[compiled[k]], false), cwd: oracles[compiled[k]].dir }
-		], ORACLE_BUFFER, HaxeSpawn.parallelism(), false);
-		invocations += plain.length;
-		final after: Array<Null<String>> = memo.fingerprints([for (i in compiled) oracles[i]]);
+		final after: Array<Null<String>> = memo.fingerprints(asked);
 		for (k in 0...compiled.length) {
 			final i: Int = compiled[k];
 			memo.file(oracles[i], verbose, before[i], after[k], runs[k]);
-			final again: Int = retried.indexOf(k);
-			if (again >= 0) {
-				memo.file(oracles[i], false, before[i], after[k], plain[again]);
-				out[i] = retriedOutcome(plain[again]);
+			final again: Null<HaxeRun> = plain[k];
+			if (again != null) {
+				memo.file(oracles[i], false, before[i], after[k], again);
+				out[i] = retriedOutcome(again);
 			} else {
 				out[i] = runs[k].cancelled == true ? null : outcomeOf(runs[k]);
 			}
+			if (verbose && answered(runs[k])) parsed[i] = OracleCoverage.parsedPaths(runs[k].out);
 		}
-		return out;
+		return [for (i in 0...oracles.length) { outcome: out[i], parsed: parsed[i] }];
+	}
+
+	/**
+	 * The plain compile of each `asked[k]` whose `-v` compile `runs[k]` answered and failed, by `k`: its streams are what a
+	 * rejection quotes, and they carry no `-v` lines.
+	 */
+	private static function plainRetries(asked: Array<OracleConfig>, runs: Array<HaxeRun>): Map<Int, HaxeRun> {
+		final retried: Array<Int> = [for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0) k];
+		final plain: Array<HaxeRun> = HaxeSpawn.runAll([
+			for (k in retried) { args: argsOf(asked[k], false), cwd: asked[k].dir }
+		], ORACLE_BUFFER, HaxeSpawn.parallelism(), false);
+		invocations += plain.length;
+		return [for (j in 0...retried.length) retried[j] => plain[j]];
 	}
 
 	/**

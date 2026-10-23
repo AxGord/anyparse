@@ -41,7 +41,7 @@ class MemberOrderWriterGapTest extends Test {
 		'{"emptyLines": {"beforeDocCommentEmptyLines": "none", "aroundMultilineFields": 1}}';
 
 	/**
-	 * client `src/api/namespace/Help.hx` (without its package, imports and `@:nullSafety`): two same-rank
+	 * A client file (without its package, imports and `@:nullSafety`): two same-rank
 	 * fields, the second written over two lines, set off by the blank `aroundMultilineFields: 1` writes there - one
 	 * of the 44 client findings whose fix the canonical round-trip dropped every time.
 	 */

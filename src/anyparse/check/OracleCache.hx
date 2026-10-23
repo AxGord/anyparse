@@ -36,6 +36,16 @@ typedef OracleVerdictRecord = {
 }
 
 /**
+ * What one fingerprint (`OracleCache.scanned`) read: the fingerprint, the directories it walked, and every source it
+ * hashed, by its absolute path, with the hash.
+ */
+typedef OracleScan = {
+	var fingerprint: String;
+	var roots: Array<String>;
+	var hashed: Map<String, String>;
+}
+
+/**
  * What one `haxe -v … --interp` probe reported about the toolchain: the classpath
  * directories the compiler itself named and its `Defines:` line. `ok` is false for
  * every probe that could not be believed (no `haxe`, a non-zero status, a missing
@@ -95,8 +105,8 @@ private typedef HxmlChain = {
  *  - NON-`.hx` inputs a macro reads at compile time: an `-resource` payload, a
  *    compile-time `File.getContent`, a JSON/table file a `@:build` macro parses. Their
  *    content is invisible to the key, so editing one leaves a hit stale.
- *  - a classpath added at compile time by a `--macro` call: the probe sees the command
- *    line's classpath, not one the macro appends while typing.
+ *  - a classpath added at compile time by a `--macro` call, a dot directory, a tree past the walk's
+ *    depth: none is hashed, so a verdict whose compile PARSED a file there is never stored (`readsHashed`).
  *  - environment-supplied defines (a `-D` computed by the caller's shell, a define a
  *    macro sets from `Sys.getEnv`): the `Defines:` line is captured from the PROBE's
  *    environment, which need not be the lint run's.
@@ -149,7 +159,7 @@ final class OracleCache {
 	private static inline final MAX_DIR_DEPTH: Int = 32;
 
 	/** The scheme tag in every manifest: bump it and every stored record misses, which is the point. */
-	private static final FORMAT_TAG: String = 'apq-oracle-cache v1';
+	private static final FORMAT_TAG: String = 'apq-oracle-cache v2';
 
 	/**
 	 * Per-process memo of the compiler probe, keyed by compile root + library
@@ -191,15 +201,17 @@ final class OracleCache {
 	 */
 	public static function scanned(
 		hxml: String, cwd: Null<String>, ?defines: Array<String>, ?memo: Map<String, String>, ?walks: Map<String, Map<String, String>>
-	): Null<{ fingerprint: String, roots: Array<String> }> {
+	): Null<OracleScan> {
 		#if (sys || nodejs)
 		final root: String = cwd ?? Sys.getCwd();
 		final chain: Null<HxmlChain> = scanHxmlChain(root, hxml);
 		if (chain == null) return null;
 		final probe: CompilerProbe = compilerProbe(root, chain.libs);
+		final hashed: Map<String, String> = [];
 		return probe.ok ? {
-			fingerprint: md5(buildManifest(root, chain, probe, defines ?? [], memo, walks).join('\n')),
-			roots: [root].concat(chain.classPaths).concat([for (dir in probe.dirs) absolute(root, dir)])
+			fingerprint: md5(buildManifest(root, chain, probe, defines ?? [], memo, walks, hashed).join('\n')),
+			roots: [root].concat(chain.classPaths).concat([for (dir in probe.dirs) absolute(root, dir)]),
+			hashed: hashed
 		} : null;
 		#else
 		return null;
@@ -338,15 +350,35 @@ final class OracleCache {
 	/**
 	 * `store`, but only when the compile input still hashes to `fingerprint` — the fingerprint taken BEFORE the compile.
 	 * A tree that moved while the compiler ran (an editor saving, another run regenerating an hxml) produced a verdict
-	 * about neither state, and filing it under the old fingerprint would hand it to the next run of the old tree. Answers
-	 * whether it stored.
+	 * about neither state, and filing it under the old fingerprint would hand it to the next run of
+	 * the old tree. Only, too, when every file the compile parsed (`parsed`, its `-v` lines) is one
+	 * the fingerprint hashed (`readsHashed`); null `parsed` stores nothing. Answers whether it stored.
 	 */
 	public static function storeIfUnchanged(
-		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, ?defines: Array<String>, ?memo: Map<String, String>
+		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, defines: Null<Array<String>>,
+		memo: Null<Map<String, String>>, parsed: Null<Array<String>>
 	): Bool {
-		if (OracleCache.fingerprint(hxml, cwd, defines, memo) != fingerprint) return false;
+		final after: Null<OracleScan> = scanned(hxml, cwd, defines, memo);
+		if (after == null || after.fingerprint != fingerprint || !readsHashed(cwd ?? Sys.getCwd(), parsed, after.hashed)) return false;
 		store(hxml, cwd, fingerprint, outcome, defines);
 		return true;
+	}
+
+	/**
+	 * Whether the compile run from `root` that printed `parsed` read only files a fingerprint hashed (`scanned`'s `hashed`),
+	 * compared link-resolved: one it did not hash — in a dot directory, past the walk's depth, on a classpath a macro added —
+	 * can change with no fingerprint changing, so nothing that compile answered may be kept under it. False for no list.
+	 */
+	public static function readsHashed(root: String, parsed: Null<Array<String>>, hashed: Map<String, String>): Bool {
+		#if (sys || nodejs)
+		if (parsed == null || parsed.length == 0) return false;
+		final read: Array<String> = [for (path in parsed) OracleCoverage.canonical(root, path)];
+		if ([for (path in read) if (!hashed.exists(path)) path].length == 0) return true;
+		final resolved: Map<String, String> = [for (path => hash in hashed) OracleCoverage.canonical(root, path) => hash];
+		return [for (path in read) if (!resolved.exists(path)) path].length == 0;
+		#else
+		return false;
+		#end
 	}
 
 	/** The library name of a `-lib` token, with any `:version` suffix stripped. */
@@ -466,9 +498,8 @@ final class OracleCache {
 	 */
 	private static function buildManifest(
 		root: String, chain: HxmlChain, probe: CompilerProbe, defines: Array<String>, memo: Null<Map<String, String>>,
-		walks: Null<Map<String, Map<String, String>>>
+		walks: Null<Map<String, Map<String, String>>>, files: Map<String, String>
 	): Array<String> {
-		final files: Map<String, String> = [];
 		// The compile directory is on the compiler's classpath IMPLICITLY — it is the empty
 		// entry in the `Classpath:` line, which `probeDirs` drops. A module dropped next to the
 		// hxml is compiled like any other, so it has to enter the key; walking the root first

@@ -325,7 +325,7 @@ class CollapseNestedSwitchCheckTest extends Test {
 		return nestWith(label, '\n\t\t\t\t', binder, arms);
 	}
 
-	/** The `macros/Lang.hx` shape this check was written for: two constant arms under an empty inner wildcard. */
+	/** The client macro-module shape this check was written for: two constant arms under an empty inner wildcard. */
 	private function canary(): String {
 		final arms: String = 'case CString(s, kind): tKey = s;${INNER_LABEL}case CInt(i): tKey = i;${INNER_LABEL}case _:';
 		return sw(nest('EConst(c)', 'c', arms) + EMPTY_TAIL);

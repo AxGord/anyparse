@@ -25,6 +25,14 @@ final class ArgsTest extends Test {
 		Assert.same(['p'], args.positionals(['<p>']));
 	}
 
+	public function testARepeatableOptionAnswersEveryOccurrenceInOrder(): Void {
+		final args: Args = new Args(['--root', 'a', 'p', '--root=b', '--root', 'c']);
+		Assert.same(['a', 'b', 'c'], args.options('--root'));
+		Assert.same([], args.options('--root'), 'every occurrence is taken');
+		Assert.same(['p'], args.positionals(['<p>']));
+		Assert.raises(() -> new Args(['--root']).options('--root'), UsageError, 'an occurrence without its value');
+	}
+
 	public function testRefusals(): Void {
 		Assert.raises(() -> new Args(['--list']).option('--list'), UsageError, 'an option without its value');
 		Assert.raises(() -> new Args(['--after', 'x']).values('--after', 2), UsageError);

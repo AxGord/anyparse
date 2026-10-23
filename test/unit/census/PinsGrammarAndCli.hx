@@ -81,6 +81,7 @@ final class PinsGrammarAndCli {
 		'unit.core.RendererParenSiblingRestTest#testConsecutiveHeldBackSpacesAllStayOutOfTheColumn :: control :: '
 			+ 'M-PAREN-PENDING-LAST-ONLY',
 		'unit.core.RendererSharedDocTest#testProbeSearchVisitsASharedNodeOnce :: control :: M-PROBE-SEARCH-REVISITS',
+		'unit.dev.ScrubGuardTest#testAPathOfAPrivateTreeIsAMatch :: control :: M-SCRUB-PRIVATE-PATH-BLIND',
 		'unit.format.BraceSymmetrySliceTest#testAWrappedValueThenBranchDropsItsSourceSemicolon :: control :: M-SSB-VALUE-WRAP-OFF',
 		'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced :: control :: M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
 		'unit.format.BraceSymmetrySliceTest#testTheSemicolonDropAlsoHoldsUnderExpressionIfNext :: control :: M-SSB-VALUE-WRAP-OFF',
