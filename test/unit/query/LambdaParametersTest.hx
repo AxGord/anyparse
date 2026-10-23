@@ -96,7 +96,8 @@ class LambdaParametersTest extends Test {
 	/** The iteration cases: a std container, its member under two spellings, a class whose own `iterator()` yields. */
 	private static final ITERATING: String = 'package p;\n\nusing Lambda;\n\nclass Item {\n\tpublic var n: Int = 0;\n}\n\nclass Bag<T> {\n'
 		+ '\tpublic function iterator(): Iterator<T> {\n\t\treturn null;\n\t}\n}\n\nclass C {\n\tfunction f(xs: Array<Item>, bag: '
-		+ 'Bag<Item>) {\n\t\txs.exists(b1 -> b1.n > 0);\n\t\txs.filter(b2 -> b2.n > 0);\n\t\tLambda.exists(bag, b3 -> b3.n > 0);\n\t}\n}\n';
+		+ 'Bag<Item>) {\n\t\txs.exists(b1 -> b1.n > 0);\n\t\txs.filter(b2 -> b2.n > 0);\n\t\tLambda.exists(bag, b3 -> b3.n > 0);\n\t}\n'
+		+ '}\n\nabstract Pack(Bag<Item>) {\n\tfunction any(): Bool {\n\t\treturn Lambda.exists(this, b4 -> b4.n > 0);\n\t}\n}\n';
 
 	@:pin('control') @:killer('M-LAMBDA-PARAMETER-NULL')
 	public function testAParameterTakesTheTypeItsPositionExpects(): Void {
@@ -181,6 +182,11 @@ class LambdaParametersTest extends Test {
 		Assert.equals(
 			'Item', ValueDoorsTest.typedIn(THIRD_FILE, 'app/Main.hx', HOLDER, 'IdentExpr', 't2)').source, 'a `Box<Item>` the caller writes'
 		);
+	}
+
+	@:pin('control') @:killer('M-SELF-UNWRITTEN')
+	public function testTheSelfReferenceOfAnAbstractIsItsWrittenUnderlyingType(): Void {
+		Assert.equals('Item', iterating('b4.n'), '`this` of `abstract Pack(Bag<Item>)` handed to `Iterable<A>`');
 	}
 
 	/** The written-source answer for the identifier starting at the first `at` of `SOURCE`. */

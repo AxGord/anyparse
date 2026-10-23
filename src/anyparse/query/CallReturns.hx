@@ -111,9 +111,9 @@ final class CallReturns {
 	}
 
 	/**
-	 * The type `node` carries where this file writes it (`argumentHost`: a literal, an annotation, a construction, a local's
-	 * initializer read so), with no expected type; null for one a member read, a call or another arc types — a type written
-	 * in another file,
+	 * The type `node` carries where this file writes it (`argumentHost`: a literal, an annotation, a construction, the self
+	 * reference, a local's initializer read so), with no expected type; null for one a member read, a call or another arc
+	 * types — a type written in another file,
 	 * which a namesake here would take the place of.
 	 */
 	public static function writtenType(node: QueryNode, c: IndexTyping): Null<String> {
@@ -139,18 +139,18 @@ final class CallReturns {
 
 	/**
 	 * `INDEX_HOST` narrowed to the arcs whose type is WRITTEN in the file being read, which is where `callArguments` resolves
-	 * it: a literal, a binding's annotation, a local's initializer, with `constructions` a construction (the type it writes). A
-	 * member read, a call, the self reference or a loop element
+	 * it: a literal, a binding's annotation, a local's initializer, with `writtenHere` a construction (the type it writes) and the
+	 * self reference (its type, or an abstract's underlying one, written in this file). A member read, a call or a loop element
 	 * answer a type written in another file (or a name only), so they type no argument. Built per question: the index host
 	 * reaches this class through its composed values, so no static of it may read the index host's back.
 	 */
-	private static function argumentHost(constructions: Bool = false): TypingHost<String, IndexTyping> {
+	private static function argumentHost(writtenHere: Bool = false): TypingHost<String, IndexTyping> {
 		return {
 			peel: (node, _) -> node,
 			isAccess: (kind, c) -> kind == c.shape.fieldAccessKind,
 			literal: (typeName, _) -> typeName,
 			ascribed: NominalTypes.indexAscribed,
-			self: (_, _) -> null,
+			self: writtenHere ? NominalTypes.indexSelf : (_, _) -> null,
 			binding: (ident, c) -> TypeResolver.identBindingFrom(ident, c.root, c.shape),
 			bound: argumentBound,
 			initializer: (_, use, c) -> NominalTypes.localInitializer(use, c.root, c.shape, c.chain.declaredTypeSources),
@@ -160,7 +160,7 @@ final class CallReturns {
 			access: (_, _) -> null,
 			element: null,
 			call: (_, _) -> null,
-			construction: constructions ? ComposedValues.indexConstruction : null,
+			construction: writtenHere ? ComposedValues.indexConstruction : null,
 			contextual: null,
 			arithmetic: null,
 			reading: c -> c.seen

@@ -30505,6 +30505,14 @@
 			"method": "writtenType",
 			"force": "TypingService.typeWalk(node, c.shape, NominalTypes.INDEX_HOST, c)",
 			"note": "a receiver or an argument is typed by every arc, a member read's type as its declaring file writes it, so a caller's namesake of a type it names binds the call's type parameter"
+		},
+		{
+			"name": "M-SELF-UNWRITTEN",
+			"type": "anyparse.query.CallReturns",
+			"method": "argumentHost",
+			"find": "self: writtenHere ? NominalTypes.indexSelf : (_, _) -> null,",
+			"replace": "self: (_, _) -> null,",
+			"note": "the self reference is no type this file writes, so `Lambda.exists(this, x -> …)` inside an abstract over `Bag<Item>` binds no `A`"
 		}
 	]
 }

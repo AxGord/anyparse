@@ -460,6 +460,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.LambdaParametersTest#testTheArgumentsBeforeTheLambdaBindTheCallsTypeParameters :: control :: M-INFERRED-CELLS-UNBOUND',
 		'unit.query.LambdaParametersTest#testTheDynamicTypeBindsNoCell :: control :: M-MONO-DYNAMIC-BINDS',
 		'unit.query.LambdaParametersTest#testTheReceiversArgumentsBindItsTypesParameters :: control :: M-RECEIVER-ARGUMENTS-DROPPED',
+		'unit.query.LambdaParametersTest#testTheSelfReferenceOfAnAbstractIsItsWrittenUnderlyingType :: control :: M-SELF-UNWRITTEN',
 		'unit.query.LambdaParametersTest#testTheStdsCopiesOfOneTypeAnswerAsOne :: control :: '
 			+ 'M-ONE-DECLARATION-NONE,M-PARAMETER-MERGE-BY-TEXT',
 		'unit.query.LineDiffTest#testAnOddNetInsertionIsFoundWithinTheBudget :: control :: M-LINE-DIFF-PARITY',
