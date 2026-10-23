@@ -31,7 +31,7 @@ class ReturnReassignTernaryCheckTest extends Test {
 		Assert.equals('return a ? 2 : x;', es[0].text);
 	}
 
-	/** The client reference shape (`src/api/API.hx`): the tail guard on an accumulator string. */
+	/** The client reference shape: the tail guard on an accumulator string. */
 	public function testReferenceShapeFixed(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(fn(
 			'var errorMessages = g();\n\t\tif (errorMessages.length == 0) errorMessages = unknownErrorMessage(localize);\n'
@@ -168,7 +168,7 @@ class ReturnReassignTernaryCheckTest extends Test {
 		Assert.equals('return b ? 3 : y;', es[1].text);
 	}
 
-	/** A MULTI-LINE r-value (the client `CrashReport` object literal) strands the `: x` tail after its closing brace -- not flagged. */
+	/** A MULTI-LINE r-value (a client object literal) strands the `: x` tail after its closing brace -- not flagged. */
 	public function testMultiLineRhsNotFlagged(): Void {
 		Assert.equals(
 			0,
@@ -251,7 +251,7 @@ class ReturnReassignTernaryCheckTest extends Test {
 	}
 
 	/**
-	 * COUNTER-CASE (the client `API.hx` accumulator): a `+=` in a loop keeps `x` a `var`, so
+	 * COUNTER-CASE (the client reference accumulator): a `+=` in a loop keeps `x` a `var`, so
 	 * only the tail merges -- `prefer-final` must NOT follow.
 	 */
 	public function testAccumulatorStaysVar(): Void {

@@ -111,7 +111,7 @@ class PreferComprehensionCheckTest extends Test {
 	}
 
 	public function testGapDeclaringLoopSubjectFlaggedAndFixed(): Void {
-		// The motivating shape (client `src/crashreport/hooks/Util.hx:104`): the intervening statement
+		// The motivating shape (a client file): the intervening statement
 		// DECLARES the loop's own subject, so the declaration moves DOWN to the loop rather than the
 		// statement moving up.
 		final input: String = 'final out:Array<Int> = [];\n\t\tvar it = mk(xs);\n\t\twhile (it.hasNext()) out.push(it.next());';

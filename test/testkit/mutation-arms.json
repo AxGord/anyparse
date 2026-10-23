@@ -29864,6 +29864,13 @@
 			"find": "if (inner != null) return inner;",
 			"replace": "return inner ?? next;",
 			"note": "a region that declares nothing is read as the doc's owner, so emptying the documented region hands the doc to the next declaration as if renamed"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-PATH-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "privatePaths",
+			"force": "[]",
+			"note": "scrub-guard stops reading paths against the private roots, so a client file path named in the tree or in a pushed range passes the guard silently"
 		}
 	]
 }

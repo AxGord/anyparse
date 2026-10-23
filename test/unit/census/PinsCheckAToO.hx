@@ -26,7 +26,7 @@ final class PinsCheckAToO {
 		'unit.MutationArmsTest#testAKindedArmSpellsItsKindInTheAddress :: control :: M-ARM-KIND-UNSPELLED',
 		'unit.MutationArmsTest#testAMalformedFragmentListIsNamedByItsKeyAlone :: control :: M-ARM-ROW-OK',
 		'unit.MutationArmsTest#testAMismatchedPairCountIsRefused :: control :: M-ARM-ROW-OK',
-		'unit.MutationArmsTest#testAModulePathBecomesTheTwoCandidateFiles :: control :: M-ARM-PATH-FLAT',
+		'unit.MutationArmsTest#testAModulePathBecomesOneCandidateFilePerRoot :: control :: M-ARM-PATH-FLAT',
 		'unit.MutationArmsTest#testAMultiPairCutCarriesEveryFragment :: guard :: ',
 		'unit.MutationArmsTest#testANonJsonTableIsOneComplaint :: guard :: ',
 		'unit.MutationArmsTest#testAPairThatChangesNothingIsRefused :: control :: M-ARM-ROW-OK',
