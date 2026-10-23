@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.ImportOrder.ImportAnchor;
+import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.Span;
 
@@ -79,8 +80,11 @@ final class TypeRefPrinter {
 	/** The file's `package` declaration payload (`''` for the root package), or null when the printer has no tree. */
 	private final _pkg: Null<String>;
 
-	/** The file's main (first) top-level type name, for same-module sub-type resolution; null with no tree. */
-	private final _module: Null<String>;
+	/**
+	 * The module the file declares, named by its FILE as the compiler and the index name it — never by
+	 * its first declaration, which may be an unrelated helper type; null with no tree or no file.
+	 */
+	private final _module: Null<ModulePath>;
 
 	/** Alias -> aliased path for every `import … as …` in the file; the keys double as bound-name collisions. */
 	private final _aliasTargets: Map<String, String>;
@@ -118,6 +122,9 @@ final class TypeRefPrinter {
 	/** Value names this file's imports bring in with an enum-like type, computed on FIRST use — see `importedMemberNames`. */
 	private var _importedMemberNames: Null<Array<String>> = null;
 
+	/** Type-parameter name -> the spans that parameter is in scope over, computed on FIRST use — see `typeParamScopes`. */
+	private var _typeParamScopes: Null<Map<String, Array<Span>>> = null;
+
 	/**
 	 * The byte offset the reference being printed will be WRITTEN at, or -1 when the caller states
 	 * none — set for the length of one `printTypeExpr` call and read by `importReachesSite`.
@@ -129,7 +136,8 @@ final class TypeRefPrinter {
 	private var _site: Int = -1;
 
 	private function new(
-		source: Null<String>, root: Null<QueryNode>, importMap: Map<String, String>, index: Null<SymbolIndex>, plugin: Null<GrammarPlugin>
+		source: Null<String>, root: Null<QueryNode>, importMap: Map<String, String>, index: Null<SymbolIndex>, plugin: Null<GrammarPlugin>,
+		file: Null<String>
 	) {
 		_source = source;
 		_root = root;
@@ -137,7 +145,7 @@ final class TypeRefPrinter {
 		_importMap = importMap;
 		_index = index;
 		_pkg = root == null ? null : ModuleScan.packageOf(root);
-		_module = root == null ? null : ModuleScan.mainTypeNameOf(root);
+		_module = root == null || file == null ? null : ModuleScan.moduleOf(root, file);
 		_aliasTargets = source == null || root == null ? [] : ModuleScan.aliasTargetsOf(source, root);
 		// Ctor-hoisted like every sibling scan: both `shadowedByGuardedImport` and
 		// `shadowedByBulkImport` ask for these, once per printed reference.
@@ -216,11 +224,11 @@ final class TypeRefPrinter {
 		final simple: String = SourceText.lastSegment(canonical);
 		final visible: Null<String> = visibleNameFor(canonical, simple);
 		// Re-bind: a null-check does not narrow into an anonymous-structure literal.
-		if (visible != null) {
+		if (visible != null && !typeParamBinds(visible, owned)) {
 			final inScope: String = visible;
 			return { text: inScope, importPath: null };
 		}
-		if (!canAddImport(canonical, simple, owned)) return { text: canonical, importPath: null };
+		if (typeParamBinds(simple, owned) || !canAddImport(canonical, simple, owned)) return { text: canonical, importPath: null };
 		if (!_pendingImports.contains(canonical)) _pendingImports.push(canonical);
 		return { text: simple, importPath: canonical };
 	}
@@ -412,6 +420,57 @@ final class TypeRefPrinter {
 			}
 		}
 		_importedMemberNames = out;
+		return out;
+	}
+
+	/**
+	 * Whether a type parameter named `name` is in scope where this reference is written — at any
+	 * `owned` occurrence, else at the print site, else (no site stated) anywhere in the file. A type
+	 * parameter outranks every type of its name, so a short `name` there would compile while naming
+	 * the parameter instead.
+	 */
+	private function typeParamBinds(name: String, owned: Null<Array<Span>>): Bool {
+		final scopes: Null<Array<Span>> = typeParamScopes()[name];
+		if (scopes == null) return false;
+		final sites: Array<Int> = if (owned != null && owned.length > 0)
+			[for (span in owned) span.from]
+		else if (_site >= 0)
+			[_site]
+		else
+			[];
+		return sites.length == 0 || sites.exists(at -> scopes.exists(s -> s.from <= at && at < s.to));
+	}
+
+	/**
+	 * Every type parameter the file declares, by name, mapped to the spans it is in scope over: the
+	 * widest node starting where `TypeInfoProvider.typeParamNames` keys its declaration. A declaration
+	 * the tree carries no node for scopes the whole file. Empty without a tree, a source, or a grammar
+	 * exposing type parameters.
+	 */
+	private function typeParamScopes(): Map<String, Array<Span>> {
+		final cached: Null<Map<String, Array<Span>>> = _typeParamScopes;
+		if (cached != null) return cached;
+		final out: Map<String, Array<Span>> = [];
+		final source: Null<String> = _source;
+		final root: Null<QueryNode> = _root;
+		final plugin: Null<GrammarPlugin> = _plugin;
+		if (source != null && root != null && plugin is TypeInfoProvider) {
+			final names: Map<Int, Array<String>> = (cast plugin: TypeInfoProvider).typeParamNames(source);
+			final ends: Map<Int, Int> = [];
+			function walk(node: QueryNode): Void {
+				final span: Null<Span> = node.span;
+				if (span != null && names.exists(span.from) && span.to > (ends[span.from] ?? -1)) ends[span.from] = span.to;
+				for (c in node.children) walk(c);
+			}
+			walk(root);
+			for (from => params in names) for (name in params) {
+				final end: Null<Int> = ends[from];
+				final scopes: Array<Span> = out[name] ?? [];
+				scopes.push(end == null ? new Span(0, source.length) : new Span(from, end));
+				out[name] = scopes;
+			}
+		}
+		_typeParamScopes = out;
 		return out;
 	}
 
@@ -804,23 +863,22 @@ final class TypeRefPrinter {
 	 * `pkg.Module.simple`, reduced to `pkg.Module` when it IS the main type.
 	 */
 	private function moduleLocalPathOf(simple: String): Null<String> {
-		final module: Null<String> = _module;
+		final module: Null<ModulePath> = _module;
 		if (module == null) return null;
-		final pkg: Null<String> = _pkg;
-		final modulePath: String = pkg == null || pkg == '' ? module : '$pkg.$module';
-		return module == simple ? modulePath : '$modulePath.$simple';
+		return module.base == simple ? module.path : '${module.path}.$simple';
 	}
 
 	/**
-	 * A printer over a file's FULL scope: its parsed `root` (top-level decls and import
-	 * statements), raw `source` (the alias-target recovery and the short-name freeness scan),
-	 * the plain-import map, and optionally the cross-file `index` for same-package /
-	 * root-package / canonical-path resolution. This is the form that can ADD imports.
+	 * A printer over a file's FULL scope: its path `file` (which names the module its own types
+	 * resolve through), its parsed `root` (top-level decls and import statements), raw `source`
+	 * (the alias-target recovery and the short-name freeness scan), the plain-import map, and
+	 * optionally the cross-file `index` for same-package / root-package / canonical-path
+	 * resolution. This is the form that can ADD imports.
 	 */
 	public static function forFile(
-		source: String, root: QueryNode, importMap: Map<String, String>, plugin: GrammarPlugin, ?index: SymbolIndex
+		file: String, source: String, root: QueryNode, importMap: Map<String, String>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): TypeRefPrinter {
-		return new TypeRefPrinter(source, root, importMap, index, plugin);
+		return new TypeRefPrinter(source, root, importMap, index, plugin, file);
 	}
 
 	/**
@@ -831,7 +889,7 @@ final class TypeRefPrinter {
 	 * the one `LiteralInfer.normalizeInferredType`'s public pure signature keeps.
 	 */
 	public static function importsOnly(importMap: Map<String, String>): TypeRefPrinter {
-		return new TypeRefPrinter(null, null, importMap, null, null);
+		return new TypeRefPrinter(null, null, importMap, null, null, null);
 	}
 
 }

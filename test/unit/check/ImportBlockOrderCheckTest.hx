@@ -800,7 +800,7 @@ class ImportBlockOrderCheckTest extends Test {
 		// `ImportOrder` seat places must not be a finding for the rule built on that same seat.
 		final src: String = 'package app;\n\nimport app.base.Host;\nimport pkg.mid.events.Alpha;\nimport pkg.mid.SetBeta;\n\nclass C {}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final printer: TypeRefPrinter = TypeRefPrinter.forFile(src, plugin.parseFile(src), plugin.importMap(src), plugin);
+		final printer: TypeRefPrinter = TypeRefPrinter.forFile('app/C.hx', src, plugin.parseFile(src), plugin.importMap(src), plugin);
 		printer.print('app.deep.Mod.Widget');
 		final inserted: String = CanonicalEdit.applyEdits(src, printer.pendingImportEdits());
 		Assert.equals(0, violations(inserted).length, 'the insert seat and the rule agree:\n$inserted');
@@ -818,7 +818,7 @@ class ImportBlockOrderCheckTest extends Test {
 			+ '\nusing ext.One;\n\nimport b.Bee;\nimport c.Cee;\n\nclass C {}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		Assert.equals(0, violations(src, KEEP_USING).length, 'the shape starts clean');
-		final printer: TypeRefPrinter = TypeRefPrinter.forFile(src, plugin.parseFile(src), plugin.importMap(src), plugin);
+		final printer: TypeRefPrinter = TypeRefPrinter.forFile('app/C.hx', src, plugin.parseFile(src), plugin.importMap(src), plugin);
 		printer.print('a.Aaa');
 		final inserted: String = CanonicalEdit.applyEdits(src, printer.pendingImportEdits());
 		Assert.equals(0, violations(inserted, KEEP_USING).length, 'the insert seat and the rule agree:\n$inserted');
@@ -830,7 +830,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final src: String = 'package app;\n\nimport a.Alpha;\nimport m.Mid;\nimport z.Zeta;\n'
 			+ '\nusing ext.One;\n\nimport b.Bee;\nimport c.Cee;\n\nclass C {}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final printer: TypeRefPrinter = TypeRefPrinter.forFile(src, plugin.parseFile(src), plugin.importMap(src), plugin);
+		final printer: TypeRefPrinter = TypeRefPrinter.forFile('app/C.hx', src, plugin.parseFile(src), plugin.importMap(src), plugin);
 		printer.print('a.Aaa');
 		final inserted: String = CanonicalEdit.applyEdits(src, printer.pendingImportEdits());
 		final after: Array<Violation> = violations(inserted);

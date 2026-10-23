@@ -9,6 +9,8 @@ import anyparse.grammar.haxe.HxModuleWriter;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * ω-return-body — `opt.returnBody:BodyPolicy` driving the separator
  * between `return` and its value expression at `HxStatement.ReturnStmt`.
@@ -37,6 +39,12 @@ import utest.Test;
  */
 @:nullSafety(Strict)
 class HxReturnBodySliceTest extends Test {
+
+	private static final SAME_CONFIG: String =
+		'{"wrapping": {"maxLineLength": 120}, "sameLine": {"returnBody": "same", "returnBodySingleLine": "same"}}';
+	private static final RETURN_CALL_SRC: String = 'class C {\n\tfunction f() {\n'
+		+ '\t\treturn LintDiff.compare(LintDiff.tally(LintDiff.parseReport(before), root, identities), '
+		+ 'LintDiff.tally(LintDiff.parseReport(after), root, identities));\n\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -136,6 +144,81 @@ class HxReturnBodySliceTest extends Test {
 	public function testConfigLoaderReturnBodySingleLineDefault(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(BodyPolicy.FitLine, opts.returnBodySingleLine);
+	}
+
+	/**
+	 * `same` keeps the value on the `return` line, so a value that can wrap does its wrapping
+	 * after the glued head rather than moving to the next line whole — the reading of
+	 * `sameLine.returnBody` / `returnBodySingleLine` the option documents.
+	 */
+	@:pin('control')
+	@:killer('M-RETURN-SAME-WIDTH-BREAK')
+	public function testSameKeepsAWrappableValueOnTheReturnLine(): Void {
+		final expected: String = 'class C {\n\tfunction f() {\n\t\treturn LintDiff.compare(LintDiff.tally(LintDiff.parseReport(before), '
+			+ 'root, identities),\n\t\t\tLintDiff.tally(LintDiff.parseReport(after), root, identities));\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(RETURN_CALL_SRC, SAME_CONFIG);
+		Assert.equals(expected, out);
+		Assert.equals(out, HxWriteFixture.triviaWrite(out, SAME_CONFIG));
+	}
+
+	/**
+	 * The other half of `same`: a value with no break opportunity of its own that overflows
+	 * glued still moves to the next line, which is what the fork does under the same key.
+	 */
+	@:pin('guard')
+	public function testSameStillBreaksAnOverWideValueThatCannotWrap(): Void {
+		final dashes: String = ''.lpad('-', 200);
+		final src: String = 'class C {\n\tfunction f():String {\n\t\treturn "$dashes";\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, SAME_CONFIG);
+		Assert.equals('class C {\n\tfunction f():String {\n\t\treturn\n\t\t\t"$dashes";\n\t}\n}', out);
+	}
+
+	/**
+	 * A control-flow value (`switch`, `if`, a block…) stays on the `return` line under `same` whatever
+	 * its head measures: it is told apart by its ctor, so no kept source break can move it.
+	 */
+	@:pin('control')
+	@:killer('M-RETURN-SAME-MULTILINE-PROBED')
+	public function testSameKeepsAControlFlowValueOnTheReturnLine(): Void {
+		final config: String = '{"wrapping": {"maxLineLength": 140, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", '
+			+ '"rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": '
+			+ '{"returnBody": "same", "returnBodySingleLine": "same", "ifBody": "fitLine"}}';
+		final out: String = HxWriteFixture.triviaWrite(
+			'class C {\n\tfunction f() {\n\t\tif (inner != declared && ~/\\s+/g.replace(typed, \'\') == ~/\\s+/g.replace(inner, \'\') '
+			+ '&& !cores.contains(given)) return switch nullableValue(inner, file, c) {\n\t\t\tcase true: typed;\n'
+			+ '\t\t\tcase false: declared;\n\t\t\tcase null: null;\n\t\t};\n\t}\n}',
+			config
+		);
+		Assert.equals(
+			'class C {\n\tfunction f() {\n\t\tif (\n\t\t\tinner != declared && ~/\\s+/g.replace(typed, \'\') '
+			+ '== ~/\\s+/g.replace(inner, \'\') && !cores.contains(given)\n\t\t) return switch nullableValue(inner, file, c) {\n'
+			+ '\t\t\tcase true: typed;\n\t\t\tcase false: declared;\n\t\t\tcase null: null;\n\t\t};\n\t}\n}',
+			out
+		);
+		Assert.equals(out, HxWriteFixture.triviaWrite(out, config));
+	}
+
+	/**
+	 * Whether the value moves under `return` is decided by the AST, not by a source break the writer
+	 * keeps: an object literal written on one line or across three gives the same placement.
+	 */
+	@:pin('control')
+	@:killer('M-RETURN-SAME-EXEMPTS-BY-DOC')
+	public function testSamePlacesTheValueAlikeForEitherObjectSpelling(): Void {
+		final oneLine: String = HxWriteFixture.triviaWrite(
+			'class C {\n\tfunction f() {\n\t\treturn '
+			+ 'someFunctionCall(\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\', {'
+			+ 'a: 1, b: 2});\n\t}\n}',
+			SAME_CONFIG
+		);
+		final threeLines: String = HxWriteFixture.triviaWrite(
+			'class C {\n\tfunction f() {\n\t\treturn '
+			+ 'someFunctionCall(\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\', {'
+			+ '\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t});\n\t}\n}',
+			SAME_CONFIG
+		);
+		Assert.stringContains('\t\treturn\n\t\t\tsomeFunctionCall(', oneLine);
+		Assert.stringContains('\t\treturn\n\t\t\tsomeFunctionCall(', threeLines);
 	}
 
 	private inline function writeWith(src: String, policy: BodyPolicy): String {

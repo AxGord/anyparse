@@ -942,6 +942,9 @@ final class PinsCheckPToZ {
 		'unit.check.TrivialGetterShapeCollapseTest#testShapeACtorInitNegativeNumberMoveFix :: control :: M-TRIVGET-NO-NEGATION-DESCENT',
 		'unit.check.TrivialGetterShapeCollapseTest#testShapeACtorInitSingleQuotedStringMoveFix :: control :: '
 			+ 'M-TRIVGET-MOVABLE-LITERAL-FALSE',
+		'unit.check.TypeParamShadowTest#testExplicitTypeOracleKeepsAPathAMethodTypeParameterShadows :: control :: M-PRINTER-TYPE-PARAM-BLIND',
+		'unit.check.TypeParamShadowTest#testShortenTypeRefKeepsAPathAClassTypeParameterShadows :: control :: M-PRINTER-TYPE-PARAM-BLIND',
+		'unit.check.TypeParamShadowTest#testShortenTypeRefKeepsAPathAMethodTypeParameterShadows :: control :: M-PRINTER-TYPE-PARAM-BLIND',
 		'unit.check.TypedEventConstantCheckTest#testAConstantNeverUsedAsAnEventTypeIsNotReported :: control :: M-EVENT-NO-USE-GATE',
 		'unit.check.TypedEventConstantCheckTest#testAConstantOfAClassThatIsNoEventIsNotReported :: control :: M-EVENT-NO-BASE-GATE',
 		'unit.check.TypedEventConstantCheckTest#testAConstructorOfANonEventClassIsNoUse :: control :: '

@@ -40,6 +40,7 @@ typedef TestConfig = {
 	@:optional var tag: String;
 	@:optional var ratio: Float;
 	@:optional var enabled: Bool;
+	@:optional var extra: anyparse.grammar.json.JValue;
 };
 
 @:build(anyparse.macro.Build.buildParser(unit.grammar.JsonTypedFixtures.TestConfig))
