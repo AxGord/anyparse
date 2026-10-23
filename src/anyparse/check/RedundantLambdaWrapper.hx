@@ -75,8 +75,7 @@ using Lambda;
  *   the file, proven with the same scope-resolved write walker `prefer-final` trusts. Miss any one
  *   and re-reading the name at call time, which is what the wrapper does, stops being the same
  *   program as binding it once. Twins that AGREE are accepted rather than refused — two same-named
- *   parameters of one arity answer the same question, and `fs.FileIO` in the tree that motivated
- *   this rule has exactly that shape;
+ *   parameters of one arity answer the same question, and the type that motivated this rule has exactly that shape;
  * - a local function is accepted, an `inline` local function refused — a method value of one
  *   is `Cannot create closure on inline closure`, a hard compile error;
  * - a member of the ENCLOSING type is accepted; an inherited member is not visible here and

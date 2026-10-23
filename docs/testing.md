@@ -246,10 +246,15 @@ pass and say so.
 
 A list only catches the names someone wrote into it. The structural half takes the downstream checkout itself:
 `--private-root <dir>` (repeatable; or `ANYPARSE_SCRUB_PRIVATE_ROOTS`, `:`-separated — never a default, never a path
-stored here) makes a match of every path-shaped token (two or more segments, the last with an extension, a leading
-`./` / `../` dropped) that names a file of that tree — what its git tracks when the root is a checkout, every file under
-it otherwise — and no file of the scanned tree, printed as `<where>:<line>: private root <k>`. A bare file name, or a
-module directly under a source-root directory (`src/Main.hx`), carries no package and is too common a word to count.
+stored here) makes a match of every path-shaped token that names a file or directory of that tree — what its git
+tracks when the root is a checkout, every file under it otherwise — and none of the scanned tree, printed as
+`<where>:<line>: private root <k>`. A `/` or `\` path is tried by every trailing run of two or more whole segments, so
+whatever leads it (another checkout, an absolute, `~/` or URL path) is dropped; with no extension it names a directory,
+and only with three or more segments. A dotted name (`a.b.X`, a member after it allowed) names a module of any extension
+by the same runs, and a package directory with three. A backslash is also read as opening a string escape, so a name
+glued to a `\t` in a quoted fixture is seen. A bare file name, or a one-word module directly under a source-root
+directory (`src/Main.hx`), carries no package and is too common a word to count; a module there whose name joins two or
+more words (`src/TopLevelPanel.hx`) does.
 The row names the root by its position on the command line, never the path. A `regex:` rule is a JavaScript regular expression; a leading Python inline-flag group (`(?i)`) becomes
 its flags, and a rule JavaScript cannot compile is a usage error naming its number. Usage errors exit 2.
 

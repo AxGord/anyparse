@@ -7344,7 +7344,7 @@
 			"method": "answerReach",
 			"find": "final pinned: Null<String> = shared && site != null ? _scope.facts?.pinnedOwner(g, entryFile, site, declaring, member.name) : null;",
 			"replace": "final pinned: Null<String> = null;",
-			"note": "(precision) the owner of a member a loop reads is never told by the compiler's fact at the read, so a name two types share stays Ambiguous (the client's `editor.stage.grid.Grid` beside `common.ui.Grid`)"
+			"note": "(precision) the owner of a member a loop reads is never told by the compiler's fact at the read, so a name two types share stays Ambiguous (two `Grid` types of the client in different packages)"
 		},
 		{
 			"name": "M-REACH-PINNED-REWRITTEN-SIMPLE",
@@ -29935,6 +29935,61 @@
 			"method": "privatePaths",
 			"force": "[]",
 			"note": "scrub-guard stops reading paths against the private roots, so a client file path named in the tree or in a pushed range passes the guard silently"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-TAIL-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "namings",
+			"find": "for (first in 0...segments.length - 1) {",
+			"replace": "for (first in 0...1) {",
+			"note": "a path is read only as a whole, so a private path behind a longer lead (another checkout, a project directory) passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-ABSOLUTE-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "privatePaths",
+			"find": "final token: EReg = ~/[A-Za-z0-9_.\\/\\\\-]+/g;",
+			"replace": "final token: EReg = ~/(?<![A-Za-z0-9_.\\/\\\\-])[A-Za-z0-9_.-][A-Za-z0-9_.\\/\\\\-]*/g;",
+			"note": "a token may not start after a `/` again, so a private path inside an absolute, home-relative or URL path passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-DOTTED-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "namings",
+			"find": "if (segments.length < 2 || !segments.foreach(isIdentifier)) return out;",
+			"replace": "if (segments.length >= 0) return out;",
+			"note": "a dotted name names nothing, so a private module spelled as a package path passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-ROOT-MODULE-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "compound",
+			"force": "false",
+			"note": "no name counts as compound, so a private module directly under a source root passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-DIRECTORY-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "namings",
+			"find": "if (distinctive(run, !file)) out.push(file ? FilePath(run.join('/')) : DirectoryPath(run.join('/')));",
+			"replace": "if (file && distinctive(run, false)) out.push(FilePath(run.join('/')));",
+			"note": "a path with no extension names nothing, so a private directory passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-BACKSLASH-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "privatePaths",
+			"find": "final readings: Array<String> = [~/[\\/\\\\]+/g.replace(text, '/')];",
+			"replace": "final readings: Array<String> = [text];",
+			"note": "a backslash is no separator, so a private path written with backslashes passes the guard"
+		},
+		{
+			"name": "M-SCRUB-PRIVATE-ESCAPE-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "privatePaths",
+			"find": "if (text.indexOf('\\\\') >= 0) for (piece in ~/\\\\./g.split(text)) readings.push(piece);",
+			"replace": "",
+			"note": "a backslash never opens a string escape, so a private dotted path glued to a `\\t` in a quoted fixture passes the guard"
 		}
 	]
 }

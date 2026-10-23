@@ -335,9 +335,9 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 
 	/** Same for a package segment some import traverses, and for an imported TYPE's own name. */
 	public function testFixRenamesFieldNamedAfterAnImportedPathSegment(): Void {
-		final src: String = 'package pkg;\n\nimport editor.bottom.Bottom;\n\nclass C {\n\t'
-			+ 'private var bottom:Int = 0;\n\n\tpublic function f():Int {\n\t\treturn bottom + Bottom.K;\n\t}\n}';
-		assertRenamedIn('pkg/C.hx', src, 'var _bottom:Int', 'var bottom:Int');
+		final src: String = 'package pkg;\n\nimport view.footer.Footer;\n\nclass C {\n\t'
+			+ 'private var footer:Int = 0;\n\n\tpublic function f():Int {\n\t\treturn footer + Footer.K;\n\t}\n}';
+		assertRenamedIn('pkg/C.hx', src, 'var _footer:Int', 'var footer:Int');
 	}
 
 	/** An occurrence in ACTIVE code still blocks — the relaxation is scoped to module paths. */
