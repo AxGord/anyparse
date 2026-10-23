@@ -96,12 +96,13 @@ final class RawSourceScan {
 	}
 
 	/**
-	 * Does any indexed file grant itself private access to `typeName` (`grantsAccessTo`)? The second gate — such a file can
-	 * read the type's private members. An expression-level waiver names no type, so it answers per NAME instead
-	 * (`waiverMayReference`).
+	 * Does any indexed file grant itself private access to `typeName` by naming it — the type, one of its members or a package
+	 * enclosing it? The existence veto, kept to what names the type itself. A grant to a superclass and an expression-level
+	 * waiver reach it only where they spell the member, so they answer per NAME instead (`privilegeMayReference`).
 	 */
 	public function hasAccessGrant(typeName: String): Bool {
-		return _files.exists(f -> grantsAccessTo(f, typeName));
+		final own: GrantTarget = grantTargetsOf(typeName)[0];
+		return _files.exists(f -> f.accessGrants.exists(path -> grantReaches(path, own)));
 	}
 
 	/**
@@ -139,13 +140,15 @@ final class RawSourceScan {
 	 * a sub-type's too) of the declaring class and then of each of its superclasses, with the member after it: a path reaches
 	 * the type when it names it or a superclass (`pkg.Type`), a member of one (`pkg.Type.member`) or an enclosing package
 	 * (`pkg`), and never through the module a sub-type sits in. A path whose last segment is one of those simple names counts
-	 * whatever its package, and a superclass no declaration resolves is reached by any path not naming a known type — the
-	 * conservative direction for every caller, each of which refuses on a grant.
+	 * whatever its package — the conservative direction for every caller, each of which refuses on a grant. A third-party
+	 * file is held against the type itself only: it cannot name a subclass, so a grant to its superclass reaches none of that
+	 * subclass's members from there.
 	 */
 	public function grantsAccessTo(fi: FileInfo, typeName: String): Bool {
 		if (fi.accessGrants.length == 0) return false;
 		final targets: Array<GrantTarget> = grantTargetsOf(typeName);
-		return fi.accessGrants.exists(path -> targets.exists(t -> grantReaches(path, t)));
+		final reachable: Array<GrantTarget> = _thirdParty.exists(fi.file) ? [targets[0]] : targets;
+		return fi.accessGrants.exists(path -> reachable.exists(t -> grantReaches(path, t)));
 	}
 
 	/**
@@ -260,6 +263,14 @@ final class RawSourceScan {
 	}
 
 	/**
+	 * Whether any file a privilege opens `typeName` to (`privilegedFiles`) spells `member` in code — a grant file anywhere in
+	 * it, a waiver file inside what the waiver annotates. True for a file whose source was not retained.
+	 */
+	public function privilegeMayReference(typeName: String, member: String): Bool {
+		return accessGrantMatches(typeName, member, src -> OccurrenceScan.referencedInRange(src, member, 0, src.length, []));
+	}
+
+	/**
 	 * Whether a skipped `file` counts for a candidate declared in `ownerFile` — the per-owner
 	 * narrowing both scans above share. A null owner asks the unnarrowed question; otherwise a
 	 * third-party skipped source counts only for a third-party owner. The raw-text twin of
@@ -352,7 +363,7 @@ final class RawSourceScan {
 				final simple: String = cur.type.supertypes[k];
 				if (ups.exists(u -> u.type.name == simple)) continue;
 				final raw: String = k < raws.length ? raws[k] : simple;
-				out.push({ name: simple, paths: raw.indexOf('.') >= 0 ? [raw] : [], unresolved: true });
+				out.push({ name: simple, paths: unresolvedPathsOf(simple, raw, cur.file), unresolved: true });
 			}
 		}
 		_grantTargets[typeName] = out;
@@ -361,15 +372,12 @@ final class RawSourceScan {
 
 	/**
 	 * Whether the grant path `path` reaches `target`: it names the target (last segment the simple name, or one of its access
-	 * paths), a member of it, or a package enclosing it — and, for a target no declaration resolves, any path that does not
-	 * name a known type or a member of one, since its package is unknown.
+	 * paths), a member of it — any segment the simple name, for a target no declaration resolves — or a package enclosing one
+	 * of those paths.
 	 */
 	private function grantReaches(path: String, target: GrantTarget): Bool {
-		if (path == target.name || path.endsWith('.${target.name}')) return true;
-		if (target.paths.exists(t -> t.startsWith('$path.') || path == t || path.startsWith('$t.'))) return true;
-		if (!target.unresolved) return false;
-		final dot: Int = path.lastIndexOf('.');
-		return !_declaredPaths.exists(path) && (dot < 0 || !_declaredPaths.exists(path.substring(0, dot)));
+		return path == target.name || path.endsWith('.${target.name}') || (target.unresolved && path.split('.').contains(target.name))
+			|| target.paths.exists(t -> t.startsWith('$path.') || path == t || path.startsWith('$t.'));
 	}
 
 	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */
@@ -451,6 +459,16 @@ final class RawSourceScan {
 		if (waived && name != null && !out.contains(name)) out.push(name);
 		final opens: Bool = waived || node.children.exists(c -> c.name == tag);
 		for (child in node.children) collectWaivedNames(child, tag, ctor, opens, out);
+	}
+
+	/**
+	 * The access paths a superclass no declaration resolves may be named by: the written path when it is qualified, and the
+	 * declaring file's own package. An import of it is not read here — a package grant over an imported, unindexed superclass
+	 * is the residual, and a scope declaring the library resolves it by declaration instead.
+	 */
+	private static function unresolvedPathsOf(simple: String, raw: String, file: FileInfo): Array<String> {
+		final own: String = file.pkg == '' ? simple : '${file.pkg}.$simple';
+		return raw.indexOf('.') >= 0 && raw != own ? [raw, own] : [own];
 	}
 
 }

@@ -30795,8 +30795,8 @@
 			"name": "M-ACCESS-GRANT-LAST-SEGMENT",
 			"type": "anyparse.query.RawSourceScan",
 			"method": "grantReaches",
-			"find": "if (target.paths.exists(t -> t.startsWith('$path.') || path == t || path.startsWith('$t.'))) return true;",
-			"replace": "",
+			"find": "|| target.paths.exists(t -> t.startsWith('$path.') || path == t || path.startsWith('$t.'));",
+			"replace": ";",
 			"note": "an access grant counts only when its LAST segment is the type, so `@:access(pkg)` and `@:access(pkg.Type.member)` grant nothing and every confinement gate calls a reached private member confined"
 		},
 		{
