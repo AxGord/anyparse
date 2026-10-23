@@ -453,34 +453,6 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(0, alignFixEdits('class Sub extends Align {}', true));
 	}
 
-	/**
-	 * The SECOND operand of the same refusal, which nothing reached before: no subtype exists,
-	 * so `hasSubtype` answers false and only `TypeTraits.transitivelyCarriesRtti` can stop the
-	 * conversion.
-	 *
-	 * Reaching it at all took a measurement. `@:rtti` ON the container is refused earlier —
-	 * `conversionPlan` returns null when the preceding sibling is a metadata node — and a
-	 * SUPERTYPE carrying it is refused earlier still, because `headEdit` demands the body opener
-	 * immediately after the type name and so accepts no `extends` clause. Both would have made a
-	 * fixture that silently proves nothing. What IS reachable is the index's simple-name
-	 * resolution: a HOMONYM in another module carries the meta, `transitivelyCarriesRtti` finds it
-	 * by name, and the conversion is declined for a type that never carried it. The refusal is
-	 * the conservative answer and the only live route into this operand.
-	 *
-	 * This guards behaviour that already held; what it adds is reach. This rule and
-	 * `trivial-getter` are the two whose rewritten call sites no fixture exercised
-	 * (docs/testing.md § "Rules the deciding arm cannot reach are pinned one fixture per rule"), and
-	 * both are the right-hand operand of a short-circuiting `||` whose left operand every
-	 * existing fixture already satisfied.
-	 */
-	@:pin('control') @:killer('M-RTTI-FALSE')
-	public function testFixRefusesAnRttiHomonym(): Void {
-		// Leading: with no index the gate cannot run at all, so the whole-type conversion IS planned
-		// — which is what proves the fixture reaches the code the refusal below then declines.
-		Assert.equals(7, alignFixEdits('@:rtti class Align {}', false));
-		Assert.equals(0, alignFixEdits('@:rtti class Align {}', true));
-	}
-
 	public function testFixIsRiskyAndSoLeftReportOnlyWithoutAnOracle(): Void {
 		// The marker is the contract: two residual breakage shapes (an inferred local used as the
 		// underlying type, an inferred collection) need real inference, so every conversion is

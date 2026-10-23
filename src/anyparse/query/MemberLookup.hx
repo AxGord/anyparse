@@ -310,9 +310,15 @@ final class MemberLookup {
 	 * implementation whose access differs — and an interface-typed write to it
 	 * attributes to the supertype, not `typeName`. The supertype-ward companion of
 	 * `hasSubtype`, used by the public-field immutability checks as a soundness gate.
+	 *
+	 * `fromFile`, the file declaring `typeName`, starts the walk at that declaration and resolves each
+	 * link where it is written (`SupertypeWalk.closureAny`), so another package's namesake lends it no
+	 * supertype; without it every declaration of the name and every link's simple name are walked.
 	 */
-	public function supertypeDeclaresMember(typeName: String, field: String): Bool {
-		return supertypeDeclares(typeName, field, []);
+	public function supertypeDeclaresMember(typeName: String, field: String, ?fromFile: String): Bool {
+		if (fromFile == null) return supertypeDeclares(typeName, field, []);
+		final roots: Array<ResolvedType> = SupertypeWalk.declarationsOf(_refs, typeName, fromFile);
+		return SupertypeWalk.closureAny(_refs, roots, false, cur -> cur.type.members.exists(m -> m.name == field));
 	}
 
 	/**

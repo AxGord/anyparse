@@ -540,14 +540,14 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		// while the base invokes it polymorphically through its own declaration. Asked of the
 		// WIDEST index, because the declaring base may live in a resolution library rather than
 		// the report scope. An unresolvable supertype leaves the member flaggable, as before.
-		if (scopeIndex.typing.members.supertypeDeclaresMember(owner, decl.name)) return null;
+		if (scopeIndex.typing.members.supertypeDeclaresMember(owner, decl.name, file)) return null;
 		// The confinement question goes to the WIDEST index too: a `@:access` grant or a subtype
 		// declared OUTSIDE the report scope (but inside the project's `resolutionRoots`) is
 		// invisible to the narrow `index`, which would wrongly call the member confined to this
 		// one file and run a same-file-only scan that can never see the grantee. Widening can only
 		// ADD subtypes/grants `index` did not have, never remove one it did, so this can only turn
 		// an existing finding OFF — never invent one on a member that is genuinely referenced.
-		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, scopeIndex)
+		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, scopeIndex, null, file)
 			? !OccurrenceScan.referencedInRange(source, decl.name, 0, source.length, [span], matchMask)
 			: provablyDeadProjectWide(decl.name, file, source, span, index, scopeIndex, matchMask);
 		return unused ? {

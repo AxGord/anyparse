@@ -106,7 +106,7 @@ final class TypeTraits {
 	 * whole-index answer it always got.
 	 *
 	 * Every hop ABOVE zero IS a written reference, and a Haxe supertype is a simple name most of the time,
-	 * so those resolve through the referring file's own import scope (`buildMacroSupertypes`) and widen
+	 * so those resolve through the referring file's own import scope (`SupertypeWalk.hops`) and widen
 	 * back to the union whenever that settles nothing. The widening is what is left of the conservatism,
 	 * and it is cheap: of the genuine removals most reach their grant through a fully resolved chain, and
 	 * only a minority through a widened hop — a qualified path naming a type outside the scope,
@@ -148,22 +148,13 @@ final class TypeTraits {
 
 	/**
 	 * Whether `hit` answers true for the source of some declaration on `typeName`'s build-macro closure —
-	 * the declaration itself, then its supertypes and interfaces (`buildMacroSupertypes`) — handed null for
+	 * the declaration itself, then its supertypes and interfaces (`SupertypeWalk.hops`) — handed null for
 	 * one the index retains no source of. The walk `transitivelyCarriesBuildMacro` and
 	 * `builderReadsFinality` share.
 	 */
 	private function buildClosureAny(typeName: String, fromFile: Null<String>, hit: (Null<String>) -> Bool): Bool {
-		final queue: Array<ResolvedType> = buildMacroRoots(typeName, fromFile);
-		final seen: Array<String> = [];
-		var i: Int = 0;
-		while (i < queue.length) {
-			final cur: ResolvedType = queue[i];
-			i++;
-			if (!_refs.markSeen(cur, seen)) continue;
-			if (hit(_sources[cur.file.file])) return true;
-			for (hop in buildMacroSupertypes(cur)) queue.push(hop);
-		}
-		return false;
+		final roots: Array<ResolvedType> = SupertypeWalk.declarationsOf(_refs, typeName, fromFile);
+		return SupertypeWalk.closureAny(_refs, roots, true, cur -> hit(_sources[cur.file.file]));
 	}
 
 	/** Whether some indexed declaration named `module` lives in a source that spells a `FINALITY_READS` token. */
@@ -172,52 +163,6 @@ final class TypeTraits {
 			final source: Null<String> = _sources[decl.file.file];
 			return source != null && FINALITY_READS.match(source);
 		});
-	}
-
-	/**
-	 * The declarations `transitivelyCarriesBuildMacro` starts its closure walk from: the ONE
-	 * `typeName` declares in `fromFile` when the caller named the file it is linting, else every
-	 * same-simple-name declaration in the index.
-	 *
-	 * The starting type is not a written type REFERENCE — it is the container the consumer is
-	 * looking at, whose declaring file it already holds — so `fromFile` makes hop zero exact
-	 * rather than a guess. Falling back to the whole-index union keeps the answer a caller with no
-	 * file (or a name the named file does not declare) used to get.
-	 */
-	private function buildMacroRoots(typeName: String, fromFile: Null<String>): Array<ResolvedType> {
-		if (fromFile != null) {
-			final own: Null<ResolvedType> = _refs.findDeclaredType(fromFile, typeName);
-			if (own != null) return [own];
-		}
-		return _refs.resolvedDeclsNamed(typeName);
-	}
-
-	/**
-	 * `cur`'s direct supertypes and interfaces as RESOLVED declarations — the hop
-	 * `transitivelyCarriesBuildMacro` takes upward.
-	 *
-	 * Unlike hop zero these ARE written type references, and a Haxe one is a simple name most of
-	 * the time, so they are resolved against the REFERRING file's import scope (`supertypesRaw`
-	 * keeps the verbatim path a simple-name reduction throws away). When that settles nothing — an
-	 * alias import, a qualified path naming a type outside the scope (`haxe.io.Output`), a scope
-	 * form the index does not model — the hop widens back to the same-simple-name union the walk
-	 * always used, so a failure to resolve can only ever keep the conservative answer.
-	 * `interfaces` is a subset of `supertypes` (`collectImplementsRaw` reads the `ImplementsClause`
-	 * that `collectSupertypesRaw` also reads), so walking `supertypes` alone reaches every
-	 * `@:autoBuild` grant the old two-list walk did.
-	 */
-	private function buildMacroSupertypes(cur: ResolvedType): Array<ResolvedType> {
-		final out: Array<ResolvedType> = [];
-		final raws: Array<String> = cur.type.supertypesRaw;
-		final simples: Array<String> = cur.type.supertypes;
-		for (i in 0...simples.length) {
-			final resolved: Array<ResolvedType> = _refs.resolveTypeRefAll(
-				i < raws.length ? raws[i] : simples[i], cur.file, cur.type.span.from
-			);
-			final hops: Array<ResolvedType> = resolved.length > 0 ? resolved : _refs.resolvedDeclsNamed(simples[i]);
-			for (r in hops) out.push(r);
-		}
-		return out;
 	}
 
 	/**

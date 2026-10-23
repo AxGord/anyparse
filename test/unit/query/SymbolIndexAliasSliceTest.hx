@@ -191,17 +191,17 @@ class SymbolIndexAliasSliceTest extends Test {
 		Assert.isTrue(index.subtypes.isSubtype('ByTypedef', 'Root'), 'a typedef hop, upward');
 		Assert.isTrue(index.subtypes.isSubtype('ByTypedefOfImport', 'Leaf'), 'a typedef of an import alias');
 		Assert.isTrue(index.subtypes.isSubtype('Deep', 'Named'), 'the alias hop composes with a further class hop above it');
-		Assert.isTrue(index.subtypes.isSubtype('ByImport', 'Alias'), 'the written name still answers, so nothing that worked stops');
+		Assert.isNull(index.subtypes.subtypeVerdict('ByImport', 'Alias'), 'a name no declaration carries is a maybe, never a proof');
+		Assert.isTrue(index.subtypes.isSubtype('ByImport', 'Alias', 'pkg/ByImport.hx'), 'read where it is written, the alias is Named');
 		Assert.isFalse(index.subtypes.isSubtype('Lonely', 'Named'), 'a class extending nothing is no subtype');
 		Assert.isFalse(index.subtypes.isSubtype('ByIn', 'Named'), 'the binding is per FILE — `Alias` in ByIn.hx is InForm');
-		// The ambiguity gate holds THROUGH the alias path, which is the property a later hoist of the
-		// per-file map to a project-wide one would silently lose: a second declaration named `Mid`
-		// makes the hop unresolvable, and the walk goes back to answering false.
-		final ambiguous: SymbolIndex = SymbolIndex.build(
+		// A second declaration named `Mid` in another package does not block the hop: `ByTypedef` writes `Mid` in package
+		// `pkg`, which binds `pkg.Mid` and nothing else, so the walk follows the typedef the compiler follows.
+		final namesake: SymbolIndex = SymbolIndex.build(
 			files.concat([{ file: 'far/Mid.hx', source: 'package far;\nclass Mid {}' }]), new HaxeQueryPlugin()
 		);
-		Assert.isFalse(ambiguous.subtypes.isSubtype('ByTypedef', 'Root'), 'a hop whose name two declarations share is not followed');
-		Assert.isTrue(ambiguous.subtypes.isSubtype('ByImport', 'Named'), 'and the unrelated hops still answer');
+		Assert.isTrue(namesake.subtypes.isSubtype('ByTypedef', 'Root'), 'the hop resolves where it is written, past the namesake');
+		Assert.isTrue(namesake.subtypes.isSubtype('ByImport', 'Named'), 'and the unrelated hops still answer');
 	}
 
 	/**
