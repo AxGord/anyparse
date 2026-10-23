@@ -225,7 +225,7 @@ final class DocCommentContinuation implements Check {
 	 * delimiter indent instead, because that is what the splicer answered with.
 	 *
 	 * Judging such a block against its FIRST interior line's indentation the way the gutter arm
-	 * judges a gutter reported 8 correct blocks across the 2624 Haxe-stdlib files, every one of them
+	 * judges a gutter reported correct blocks all over the Haxe standard library, every one of them
 	 * a first line whose leading spaces are PROSE padding (`\t  This function searches…` over a
 	 * `\t`-indented sibling) or a tab-against-spaces mix. A gutter star anchors a prefix; bare
 	 * indentation does not, so the anchor here is the block's own delimiter column.

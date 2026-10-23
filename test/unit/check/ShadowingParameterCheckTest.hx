@@ -69,7 +69,7 @@ class ShadowingParameterCheckTest extends Test {
 	 * `{ node: Int, width: Int }` is `Anon(Required node …, Required width …)` — so without the
 	 * parent-is-a-function gate a return type's field name reads as a binding. This project types
 	 * its edit lists as `Array<{ span: Span, text: String }>` and its inputs as
-	 * `{ file: String, source: String }`, so that class was ALL 44 of its 44 raw findings.
+	 * `{ file: String, source: String }`, so that class was ALL of its raw findings.
 	 */
 	public function testAnonymousStructureFieldIsNotAParameter(): Void {
 		Assert.equals(

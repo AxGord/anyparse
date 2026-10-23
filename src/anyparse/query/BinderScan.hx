@@ -299,8 +299,8 @@ final class BinderScan {
 	 * `out`. A lambda that binds a bare parameter always carries a BODY after it, so the
 	 * `children.length > 1` guard is what separates a parameter at `children[0]` from a
 	 * zero-parameter lambda whose only child IS its body: `() -> foo` projects as
-	 * `ThinParenLambdaExpr(IdentExpr foo)` and without the guard vetoed `foo` - 15 sites in
-	 * this project alone, each one a name `implicit-this` resolution then refused to answer.
+	 * `ThinParenLambdaExpr(IdentExpr foo)` and without the guard vetoed `foo` —
+	 * each such site a name `implicit-this` resolution then refused to answer.
 	 */
 	private static function collectBareLambdaParamNames(
 		node: QueryNode, identKind: String, lambdaKinds: Array<String>, out: Array<String>

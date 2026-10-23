@@ -202,7 +202,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * The writer-emit gate round-trips the WHOLE spliced file, so its verdict is per FILE: at base
 	 * `modifier-order`'s reorder across a `/*inline*\/` comment took `prefer-single-quotes`'s edit
 	 * down with it, on every pass, and the file was written not at all. Over the external corpora
-	 * a couple of files threw away hundreds of landable edits from twenty-odd rules between them.
+	 * a couple of files threw away hundreds of landable edits from many rules between them.
 	 *
 	 * RED at base on every assertion — `salvageFileLintEdits` does not exist there, so the file does not compile. The blame line
 	 * of a WHOLE group stays the bare rule id (only a split part names its site), which arm `M-LINTFIX-BLAME-SITE-ALWAYS` breaks.

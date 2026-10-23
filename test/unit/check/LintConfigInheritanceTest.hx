@@ -230,7 +230,7 @@ class LintConfigInheritanceTest extends Test {
 		Assert.isFalse(src.compilerOracleServer(), 'and the root is where that answer is declared');
 		Assert.same(src.resolutionRoots(), test.resolutionRoots(), 'so is the resolution scope');
 		Assert.same(src.resolutionLibs(), test.resolutionLibs(), 'so are the resolution libs');
-		// The 38 opt-in rules the root declares reach `test/` now; a nested document that
+		// The opt-in rules the root declares reach `test/` now; a nested document that
 		// replaced its parent left every one of them off, silently finding nothing.
 		for (id in [
 			'explicit-local-type',

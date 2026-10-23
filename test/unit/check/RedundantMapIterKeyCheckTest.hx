@@ -97,7 +97,7 @@ class RedundantMapIterKeyCheckTest extends Test {
 
 	/**
 	 * A LOCAL map built in place and never handed on, which the loop body neither names nor can reach through another
-	 * name, iterates the same values in the same order through `iterator()` (measured on `--interp`, js and hxcpp,
+	 * name, iterates the same values in the same order through `iterator()` (checked on `--interp`, js and hxcpp,
 	 * docs/decisions.md): `MemberReach` proves it unchanged and the key goes, a map literal and `new Map()` alike.
 	 */
 	@:pin('control') @:killer('M-MAPITER-KEYED-NEVER') @:killer('M-TOUCH-NEW-MAP-NOT-FRESH')

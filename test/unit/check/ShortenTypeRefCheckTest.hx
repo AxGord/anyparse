@@ -638,7 +638,7 @@ class ShortenTypeRefCheckTest extends Test {
 		// And SAYS so, on the caller's own violation object. This is a `RiskyFix` rule, so the only
 		// caller of its `fix` is `FixVerifier` — until that carried the reason out, a note written
 		// here reached nothing and the run answered "the check declared no reason for these" for
-		// every one of Pony's 53 unproven findings.
+		// every one of Pony's unproven findings.
 		Assert.equals(
 			'report-only by design: the resolution index does not prove the shorter spelling names the same declaration',
 			vs[0].declineReason

@@ -196,7 +196,7 @@ class ShadowingLocalCheckTest extends Test {
 
 	public function testRebindGateAcceptsShadowedLoopIterator(): Void {
 		// `for (q in xs) { var q = h(q); }` — the read binds to the ITERATOR, which the declaration
-		// also hides. When T95 wrote this the enclosing-frame walk NAMED the outer `q` instead, so
+		// also hides. When this was written the enclosing-frame walk NAMED the outer `q` instead, so
 		// gating on that identity would have reported a declaration that consumes what it hides;
 		// `bindsItself` has since closed that gap and the walk names the iterator. What the gate
 		// asks is unchanged, and so is the answer: a containment test, not an identity one. Unlike

@@ -5,6 +5,8 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ElementSpan;
 import anyparse.query.ExitCode.*;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LexicalRegions.LexRegionKind;
+import anyparse.query.LineDiff;
 import anyparse.query.ReplaceNode;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.runtime.Span;
@@ -23,6 +25,12 @@ import haxe.Exception;
  */
 @:nullSafety(Strict)
 final class CliEdit {
+
+	/** The grammar the post-write lint parses with, and so the one that tells a comment line from code. */
+	private static inline final FIX_LANG: String = 'haxe';
+
+	/** Past this many changed lines the diff stops looking for unchanged code between the edits. */
+	private static inline final MAX_DIFF_EDITS: Int = 2000;
 
 	/**
 	 * The print-only tail every writer-emit op shares: the rewritten source goes to
@@ -280,14 +288,17 @@ final class CliEdit {
 	}
 
 	/**
-	 * The op-level `--fix`: lint the file just written and apply the safe fixes, over the
-	 * LINES this write changed and no others.
+	 * The op-level `--fix`: lint the file just written and apply the safe fixes, over the CODE
+	 * lines this write changed and no others.
 	 *
 	 * `--no-oracle` is not a default to be talked out of. The oracle is a project-wide build
 	 * — an order of magnitude over the lint itself — which no per-edit step can
 	 * pay; and without it every RiskyFix and OracleAssisted rule stays report-only, so what
 	 * lands automatically behind someone's edit is the SAFE half only. `runLint` prints that
 	 * it had no net, so the run says so rather than implying a verification it did not do.
+	 *
+	 * A write that changed only comments and blank lines is not linted at all: the safe fixes
+	 * are code rewrites, and every one of them would land on code the edit never touched.
 	 *
 	 * The lint's exit status is deliberately dropped: the write already happened and already
 	 * reported, so a lint that finds nothing to do, or refuses, must not turn the op into a
@@ -298,43 +309,82 @@ final class CliEdit {
 			CliIo.stderr('apq: --fix skipped — could not read $filePath as it was before this write\n');
 			return;
 		}
-		final window: Null<{ from: Int, to: Int }> = changedLineHull(before, after);
-		if (window == null) return; // byte-identical write: nothing changed, nothing to lint
-		// The window is PRINTED, not just used. A fix that rewrites code the author did not
+		if (before == after) return; // byte-identical write: nothing changed, nothing to lint
+		final windows: LintRange = changedCodeWindows(before, after, CliArgs.pickPlugin(FIX_LANG));
+		if (windows.length == 0) {
+			CliIo.stderr(
+				'apq: --fix skipped — this write changed only comments and blank lines of $filePath'
+				+ ', and a safe fix behind them rewrites code it never touched\n'
+			);
+			return;
+		}
+		// The windows are PRINTED, not just used. A fix that rewrites code the author did not
 		// think they touched is the one failure mode this whole scoping exists to prevent, and
 		// the reader cannot check that against a number nobody showed them.
-		CliIo.stderr('apq: --fix over lines ${window.from}-${window.to} of $filePath\n');
-		LintCommand.runLint([filePath, '--fix', '--no-oracle', '--range', '${window.from}:${window.to}']);
+		CliIo.stderr('apq: --fix over lines ${[for (w in windows) '${w.from}-${w.to}'].join(', ')} of $filePath\n');
+		LintCommand.runLint([
+			filePath,
+			'--fix',
+			'--no-oracle',
+			'--lang',
+			FIX_LANG,
+			'--range',
+			[for (w in windows) '${w.from}:${w.to}'].join(',')
+		]);
 	}
 
 	/**
-	 * The 1-based inclusive line window of `after` that differs from `before`, or null when
-	 * the two are identical.
+	 * The 1-based line windows of `after` holding CODE this write changed: every changed line that is
+	 * not trivia — blank, or comment from end to end — gathered into runs, plus, for code the write
+	 * deleted, the line now standing where it was.
 	 *
-	 * Trimmed by LINE, not by byte, and that is not a style choice. A byte-level common
-	 * prefix/suffix trim returns the minimal EDIT, which for an insertion is not line-aligned:
-	 * inserting two lines after `trace(a);` made the byte window start eight characters into
-	 * its first line and end eight characters into the line AFTER the insertion, so the hull
-	 * covered three lines instead of two — and `--fix` duly rewrote a standing finding on that
-	 * third line. Comparing whole lines gives exactly the lines the write produced.
-	 *
-	 * Several changed regions give their HULL — from the first differing line to the last —
-	 * which is WIDER than the truth and is the one imprecision left: a multi-pair `patch`
-	 * touching the top and the bottom of a file narrows to almost nothing. Widening errs toward
-	 * linting code the op did write; a set of ranges would buy precision this flag does not need.
+	 * Trimmed by LINE, not by byte: the minimal byte EDIT of an insertion is not line-aligned, and its
+	 * window spilled onto the line after the insertion. Several changed regions stay several windows,
+	 * because their hull also holds the untouched code between them, which a multi-pair `patch` touching
+	 * two ends of a file would then have rewritten.
 	 */
-	private static function changedLineHull(before: String, after: String): Null<{ from: Int, to: Int }> {
-		if (before == after) return null;
+	private static function changedCodeWindows(before: String, after: String, plugin: GrammarPlugin): LintRange {
 		final old: Array<String> = before.split('\n');
 		final now: Array<String> = after.split('\n');
-		final limit: Int = old.length < now.length ? old.length : now.length;
-		var head: Int = 0;
-		while (head < limit && old[head] == now[head]) head++;
-		var tail: Int = 0;
-		while (tail < limit - head && old[old.length - 1 - tail] == now[now.length - 1 - tail]) tail++;
-		final from: Int = head + 1;
-		final to: Int = now.length - tail;
-		return { from: from, to: to < from ? from : to };
+		final edits: LineEdits = LineDiff.edits(old, now, MAX_DIFF_EDITS);
+		final oldTrivia: Array<Bool> = triviaLines(before, old, plugin.lexicalRegions(before));
+		final nowTrivia: Array<Bool> = triviaLines(after, now, plugin.lexicalRegions(after));
+		final lines: Array<Int> = [for (i in edits.inserted) if (!nowTrivia[i]) i];
+		for (gone in edits.deleted) if (!oldTrivia[gone.line]) lines.push(gone.before < now.length ? gone.before : now.length - 1);
+		lines.sort((a, b) -> a - b);
+		final windows: LintRange = [];
+		for (line in lines) {
+			final last: Null<LineWindow> = windows.length == 0 ? null : windows[windows.length - 1];
+			if (last != null && line <= last.to)
+				windows[windows.length - 1] = { from: last.from, to: line + 1 > last.to ? line + 1 : last.to };
+			else
+				windows.push({ from: line + 1, to: line + 1 });
+		}
+		return windows;
+	}
+
+	/**
+	 * Per line of `source` (already split as `lines`), whether it is trivia: nothing on it but
+	 * whitespace and the inside of comments.
+	 */
+	private static function triviaLines(source: String, lines: Array<String>, regions: Array<LexRegion>): Array<Bool> {
+		final comments: Array<LexRegion> = regions.filter(r -> r.kind == LexRegionKind.LineComment || r.kind == LexRegionKind.BlockComment);
+		final trivia: Array<Bool> = [];
+		var start: Int = 0;
+		var next: Int = 0;
+		for (line in lines) {
+			var onlyTrivia: Bool = true;
+			for (i in start ... start + line.length) if (!SourceText.isSpace(source.fastCodeAt(i))) {
+				while (next < comments.length && comments[next].to <= i) next++;
+				if (next >= comments.length || comments[next].from > i) {
+					onlyTrivia = false;
+					break;
+				}
+			}
+			trivia.push(onlyTrivia);
+			start += line.length + 1;
+		}
+		return trivia;
 	}
 
 }

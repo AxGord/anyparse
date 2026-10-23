@@ -29,7 +29,7 @@ final class MemberLookup {
 	/**
 	 * The name -> declaration layer this one resolves every written member and supertype reference through, and the
 	 * table every lookup by simple name reads (`TypeRefIndex.named`) — each of them a scan of every type of every file
-	 * before, `supertypeDeclares` and `typeDeclaresMember` alone 12 s of a client `--fix`.
+	 * before, `supertypeDeclares` and `typeDeclaresMember` alone a visible share of a `--fix`.
 	 */
 	private final _refs: TypeRefIndex;
 

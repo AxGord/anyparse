@@ -166,6 +166,97 @@ class LintRangeCliTest extends Test {
 		#end
 	}
 
+	/** Several windows join with commas, and a finding inside any one of them is kept. */
+	public function testRangeTakesSeveralWindows(): Void {
+		#if (sys || nodejs)
+		final file: String = fixture();
+		Assert.equals(1, lint(file, ['--range', '7:7,8:8']), 'the finding on line 8 is inside the second window');
+		Assert.equals(0, lint(file, ['--range', '5:5,7:7']), 'neither window holds a finding');
+		Assert.equals(2, Cli.run(['lint', file, '--no-oracle', '--range', '6:6,']), 'an empty window is refused');
+		Assert.equals(2, Cli.run(['lint', file, '--no-oracle', '--range', '6:6,9:8']), 'so is a reversed one among good ones');
+		FileSystem.deleteFile(file);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A write that changed two regions lints the lines of each, never the untouched code between them:
+	 * the hull of the two would have folded the standing concatenation that sits there.
+	 * Killed by arm `M-POST-WRITE-FIX-HULL`.
+	 */
+	@:pin('control')
+	@:killer('M-POST-WRITE-FIX-HULL')
+	public function testWriteFixLintsEachChangedRegionAndNotTheCodeBetween(): Void {
+		#if (sys || nodejs)
+		final file: String = fixture();
+		final payload: String = CliFixture.writeAs(
+			'lintrangepayload', 'txt',
+			"trace(a);\n====\ntrace(a);\nfinal c: String = 'eee' + 'fff';\ntrace(c);\n====\n"
+			+ "trace(b);\n====\ntrace(b);\nfinal e: String = 'ggg' + 'hhh';\ntrace(e);\n"
+		);
+		Assert.equals(0, Cli.run([
+			'patch',
+			file,
+			'--select',
+			'FnMember:main',
+			'--from-file',
+			payload,
+			'--write',
+			'--fix'
+		]));
+		FileSystem.deleteFile(payload);
+		final after: String = File.getContent(file);
+		Assert.isFalse(after.indexOf("'eee' + 'fff'") >= 0, 'the first region was fixed');
+		Assert.isFalse(after.indexOf("'ggg' + 'hhh'") >= 0, 'and so was the second');
+		Assert.isTrue(after.indexOf(FOLDABLE_B) >= 0, 'the standing finding between them was not');
+		Assert.isTrue(after.indexOf(FOLDABLE_A) >= 0, 'nor the one above both');
+		FileSystem.deleteFile(file);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A write that changed only a comment applies no fix at all, even one anchored on the very line it
+	 * changed: every safe fix is a code rewrite, and code is what the edit did not touch.
+	 * Killed by arm `M-POST-WRITE-FIX-TRIVIA-BLIND`.
+	 */
+	@:pin('control')
+	@:killer('M-POST-WRITE-FIX-TRIVIA-BLIND')
+	public function testACommentOnlyWriteAppliesNoFix(): Void {
+		#if (sys || nodejs)
+		// `prefer-doc-comment` is opted in so a safe fix is anchored ON the comment line the write changes.
+		final dir: String = CliFixture.writeDir('lintrange', [
+			{ name: 'apqlint.json', source: '{"rules": {"prefer-doc-comment": {"enabled": true}}}\n' },
+			{
+				name: 'C.hx',
+				source: 'package pkg;\n\nclass C {\n\n\t// note one\n\tpublic static function main(): Void {\n\t\ttrace(1);\n\t}\n\n}\n'
+			}
+		]);
+		final file: String = '$dir/C.hx';
+		Assert.equals(0, Cli.run(['fmt', file, '--write']), 'the fixture canonicalises');
+		final payload: String = CliFixture.writeAs('lintrangepayload', 'txt', '// note one\n====\n// note two\n');
+		Assert.equals(0, Cli.run([
+			'patch',
+			file,
+			'--select',
+			'ClassDecl:C',
+			'--from-file',
+			payload,
+			'--write',
+			'--fix'
+		]));
+		FileSystem.deleteFile(payload);
+		final after: String = File.getContent(file);
+		Assert.isTrue(after.indexOf('// note two') >= 0, 'the comment edit landed and was not rewritten');
+		Assert.isFalse(after.indexOf('/**') >= 0, 'no fix converted the line comment it changed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * A canonical fixture with a foldable concatenation on line 6 and another on line 8.

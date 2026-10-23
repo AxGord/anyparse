@@ -449,7 +449,7 @@ final class FieldWriteIndex {
 
 	/** Every indexed type declaration named `name`, across all files. */
 	private static inline function declsNamedIn(index: SymbolIndex, name: String): Array<TypeDeclInfo> {
-		// the index's by-name table, in index order: a scan of every type of every file per write was 4 s of a client `--fix`
+		// the index's by-name table, in index order: a scan of every type of every file per write was a visible share of a `--fix`
 		return index.refs.declsNamed(name);
 	}
 

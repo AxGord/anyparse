@@ -1981,7 +1981,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-FACETED')
 	public function testAFunctionValueReadByItsSyntaxMayRunAnyOperatorOverloadUnderTheTruth(): Void {
-		// the lambda `f` holds is an expression macro's expansion, read through its facts like any code since `cad40413`.
+		// the lambda `f` holds is an expression macro's expansion, read through its facts like any code.
 		// `Twin.k` folds the declarations of two types sharing a simple name, which no one type's facts read: a function value
 		// read by its syntax, which the call of a value may run
 		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n'
@@ -4482,7 +4482,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-DECLARATION-RUN')
 	public function testAnAbstractsInlineConstructorIsItsTextUnderTheTruth(): Void {
-		// haxe's `Rest` (the client's `MeshScale.hx:61`, S10's blocker): `inline function new(a) this = a;` is lowered into the
+		// haxe's `Rest` and a client abstract alike: `inline function new(a) this = a;` is lowered into the
 		// implementation class's `_new`, which the compiler places at the declaration's first modifier, before the function
 		final wrap: String = 'abstract Wrap(Array<Int>) {\n\tinline function new(a:Array<Int>) this = a;\n\n'
 			+ '\tpublic static function make(i:Int):Wrap return new Wrap([i]);\n}\n';
