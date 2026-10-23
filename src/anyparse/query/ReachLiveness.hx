@@ -13,7 +13,7 @@ using Lambda;
  * conditional compilation: `defined` holds for every file the build parses (set on the command line or by an
  * initialization macro), and `everDefined` is every define it set at any point, a build macro's included. A name
  * outside `everDefined` is never defined while the build parses anything, since the compiler never removes one.
- * `values` decides a comparison (`haxe_ver >= 4.2`) the way the compiler does. `compiled` is every file it parses.
+ * `values` decides a comparison (`haxe_ver >= 4.2`) the way the compiler does. `compiled` is every file whose code it runs.
  */
 typedef ReachConfiguration = {
 	var name: String;
@@ -26,11 +26,18 @@ typedef ReachConfiguration = {
 	 */
 	var values: Map<String, String>;
 
-	/** The absolute, link-resolved path of every source file the build parses: no other file's code runs in it. */
+	/** The absolute, link-resolved path of every file declaring a type of `types`: no other file's code runs in it. */
 	var compiled: Array<String>;
 
 	/** Every type the build's runtime context typed, by its simple name and the `compiled` file that declares it. */
 	var types: Array<{ name: String, file: String }>;
+
+	/**
+	 * The absolute, link-resolved path of every file the build reads, in either compilation context: a module declaring
+	 * no class, interface or abstract, which `compiled` leaves out, included. Absent when the configuration was not read
+	 * from a compile's transcript.
+	 */
+	var ?parsed: Array<String>;
 }
 
 /**

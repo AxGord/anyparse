@@ -5,9 +5,11 @@ import anyparse.check.EmptyAmbientSource;
 import anyparse.check.HoistCommonImport;
 import anyparse.check.LintConfig;
 import anyparse.check.Naming;
+import anyparse.check.OracleCoverage;
 import anyparse.check.UnusedImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.StdResolver;
 import anyparse.query.cli.command.LintFixDriver;
 import anyparse.runtime.Span;
@@ -129,6 +131,14 @@ class HoistCommonImportTest extends Test {
 	private static final LIBRARY_FILES: Array<{ file: String, source: String }> = [
 		{ file: '/nonexistent-hoistqq-lib/qqz/Zqqwwee.hx', source: 'package qqz;\n\nclass Zqqwwee {}\n' },
 		{ file: '/nonexistent-hoistqq-lib/qqz/Yqqwwee.hx', source: 'package qqz;\n\nclass Yqqwwee {}\n' }
+	];
+
+	/** The modules of `aqqTree`, tree-relative — what a build compiling that package parses. */
+	private static final AQQ_MODULES: Array<String> = [
+		'src/aqq/OneQq.hx',
+		'src/aqq/TwoQq.hx',
+		'src/aqq/ThreeQq.hx',
+		'src/aqq/FourQq.hx'
 	];
 
 	/** An ambient source carrying a statement ONE of the five modules it governs reads. */
@@ -427,6 +437,48 @@ class HoistCommonImportTest extends Test {
 					source: 'package aqq;\n\nimport qqz.Yqqwwee;\n\nclass FourQq {\n\n\tvar b: Yqqwwee;\n\n}\n'
 				} : entry),
 				LIBRARY_FILES
+			)
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-HOIST-BUILDS-UNASKED')
+	public function testEveryBuildParsingTheStatementVouchesForEveryReceiver(): Void {
+		// FourQq spells nothing of the library, but the one build that reads it reads the statement's module as well
+		Assert.equals(
+			'src/aqq/OneQq.hx:qqz.Zqqwwee@src/import.hx,src/aqq/ThreeQq.hx:qqz.Zqqwwee@src/import.hx,'
+			+ 'src/aqq/TwoQq.hx:qqz.Zqqwwee@src/import.hx',
+			planned(aqqTree(), LIBRARY_FILES, [AQQ_MODULES.concat([LIBRARY_FILES[0].file])])
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-HOIST-BUILD-WITHOUT-MODULE-IGNORED')
+	public function testABuildParsingAReceiverButNotTheStatementWithholdsIt(): Void {
+		// FourQq's own statement resolves under the statement's classpath entry, which vouches for nothing the statement's
+		// module imports in turn: the second build reads FourQq and that entry, never the statement's module
+		final tree: Array<TreeFile> = aqqTree().map(entry -> entry.name == 'src/aqq/FourQq.hx' ? {
+			name: entry.name,
+			source: 'package aqq;\n\nimport qqz.Yqqwwee;\n\nclass FourQq {\n\n\tvar b: Yqqwwee;\n\n}\n'
+		} : entry);
+		Assert.equals('', planned(tree, LIBRARY_FILES, [
+			AQQ_MODULES.concat([LIBRARY_FILES[0].file]),
+			['src/aqq/FourQq.hx', LIBRARY_FILES[1].file]
+		]));
+	}
+
+	@:pin('control')
+	@:killer('M-HOIST-UNPARSED-RECEIVER-WITHHELD')
+	public function testAReceiverNoBuildParsesLosesNothing(): Void {
+		// the builds are declared to be all of the project's, and none of them reads FourQq
+		Assert.equals(
+			'src/aqq/OneQq.hx:qqz.Zqqwwee@src/import.hx,src/aqq/ThreeQq.hx:qqz.Zqqwwee@src/import.hx,'
+			+ 'src/aqq/TwoQq.hx:qqz.Zqqwwee@src/import.hx',
+			planned(
+				aqqTree(), LIBRARY_FILES,
+				[
+					AQQ_MODULES.filter(name -> name != 'src/aqq/FourQq.hx').concat([LIBRARY_FILES[0].file])
+				]
 			)
 		);
 	}
@@ -737,14 +789,16 @@ class HoistCommonImportTest extends Test {
 	 * Every finding over `tree` as `<module>:<path>@<site>`, tree-relative and SORTED — the governed
 	 * order is a directory listing's, which is the filesystem's to decide.
 	 */
-	private function planned(tree: Array<TreeFile>, ?libraries: Array<{ file: String, source: String }>): String {
+	private function planned(
+		tree: Array<TreeFile>, ?libraries: Array<{ file: String, source: String }>, ?parsing: Array<Array<String>>
+	): String {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeTree('apq_hoist_plan', tree);
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final rendered: Array<String> = [
 				for (v in reportOf(
-					tree, root, libraries
+					tree, root, libraries, parsing
 				)) '${relative(v.file, root)}:${quoted(v.message, 0)}@${relative(quoted(v.message, 1), root)}'
 			];
 			rendered.sort((a, b) -> if (a < b)
@@ -841,12 +895,17 @@ class HoistCommonImportTest extends Test {
 		#end
 	}
 
-	/** The rule's report over the whole tree written under `root`. */
-	private function reportOf(tree: Array<TreeFile>, root: String, ?libraries: Array<{ file: String, source: String }>): Array<Violation> {
+	/**
+	 * The rule's report over the whole tree written under `root` — under the run's `parsing` builds when given, each the files it
+	 * parses, tree-relative or absolute.
+	 */
+	private function reportOf(
+		tree: Array<TreeFile>, root: String, ?libraries: Array<{ file: String, source: String }>, ?parsing: Array<Array<String>>
+	): Array<Violation> {
 		final files: Array<{ file: String, source: String }> = analysed(tree, root);
 		return libraries == null
 			? CheckFixture.violationsIn(new HoistCommonImport(), files)
-			: CheckFixture.violationsIn(new HoistCommonImport(), files, StdScope.plugin(files, libraries));
+			: CheckFixture.violationsIn(new HoistCommonImport(), files, StdScope.plugin(files, libraries, true, buildsOf(root, parsing)));
 	}
 
 	/** The rule's cross-file fix over the whole tree written under `root`, justified by its own report. */
@@ -860,6 +919,29 @@ class HoistCommonImportTest extends Test {
 	/** `path` without the fixture root prefix. */
 	private static inline function relative(path: String, root: String): String {
 		return path.startsWith('$root/') ? path.substr(root.length + 1) : path;
+	}
+
+	/** One build per entry of `parsing`, parsing exactly the files it names (resolved under `root`); null without `parsing`. */
+	private static function buildsOf(root: String, parsing: Null<Array<Array<String>>>): Null<ReachBuilds> {
+		if (parsing == null) return null;
+		final cwd: String = Sys.getCwd();
+		return {
+			configurations: [
+				for (i => names in parsing)
+					{
+						name: 'build$i',
+						defined: [],
+						everDefined: [],
+						values: [],
+						compiled: [],
+						types: [],
+						parsed: [
+							for (name in names) OracleCoverage.canonical(cwd, name.startsWith('/') ? name : '$root/$name')
+						]
+					}
+			],
+			library: []
+		};
 	}
 
 	/** The head slice's resulting ambient source text — its `create`, or its edit applied to the existing source. */
@@ -966,6 +1048,11 @@ class HoistCommonImportTest extends Test {
 				}
 		]);
 		return parent == '' ? tree : tree.concat([{ name: 'src/import.hx', source: parent }]);
+	}
+
+	/** `COMMON_TREE`'s `aqq` package alone: three modules spelling a library import, a fourth spelling none. */
+	private static function aqqTree(): Array<TreeFile> {
+		return COMMON_TREE.filter(entry -> entry.name.startsWith('src/aqq/'));
 	}
 
 	#if (sys || nodejs)

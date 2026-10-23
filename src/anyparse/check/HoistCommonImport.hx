@@ -11,8 +11,10 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ConfigFinder;
 import anyparse.query.ImportBindings;
 import anyparse.query.IndexScope;
+import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeNameBinding;
 import anyparse.query.cli.CliArgs;
 import anyparse.runtime.Span;
@@ -86,6 +88,13 @@ private typedef HoistContext = {
 	 * — the only place moving one of them past the other can change what binds; true for a module the run holds no source of.
 	 */
 	final contested: (file:String, path:String, other:String) -> Bool;
+
+	/**
+	 * The builds parsing each file, as indices into the run's builds, by the file's canonical path — or null when the run
+	 * knows no complete list of builds that each name every file they read (`SymbolIndexHost.reachBuilds`). Read on first
+	 * demand: it costs one probe compile per build.
+	 */
+	final parsingBuilds: () -> Null<Map<String, Array<Int>>>;
 }
 
 /**
@@ -644,7 +653,8 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 			decided: [],
 			publicTypes: SymbolIndex.publicTypesByModule(widest),
 			bindings: new ImportBindings(() -> widest, plugin),
-			contested: contestOf(files, plugin, report, widest)
+			contested: contestOf(files, plugin, report, widest),
+			parsingBuilds: parsingBuildsOf(plugin)
 		};
 	}
 
@@ -827,10 +837,11 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	 * Whether every module `site` governs can resolve `statement` in every build that compiles it.
 	 *
 	 * A module that already holds the statement does. One that does not RECEIVES it, and a build compiling a receiver without
-	 * the classpath entry the statement's module comes from stops on the ambient source, not on any code — a second `-main`
-	 * beside the oracle's build is exactly such a build, and no compile this run makes would see it. So a receiver is vouched for
-	 * only by positive evidence: it lives under the same classpath entry, or it already holds an unguarded statement resolving under
-	 * that entry AND top-level package — one entry can carry packages a target refuses, as a language library carries per-target ones.
+	 * the classpath entry the statement's module comes from stops on the ambient source, not on any code. A run that knows
+	 * every build the project has asks them (`parsedWithEveryReceiver`). Otherwise a second `-main` beside the oracle's build
+	 * is exactly such a build, which no compile this run makes would see, so a receiver is vouched for only by positive
+	 * evidence: it lives under the same classpath entry, or it already holds an unguarded statement resolving under that entry
+	 * AND top-level package — one entry can carry packages a target refuses, as a language library carries per-target ones.
 	 */
 	private static function reachesEveryReceiver(statement: Hoistable, site: String, ctx: HoistContext, resolve: SymbolIndex): Bool {
 		final targets: Array<ResolvedType> = resolve.refs.resolveQualifiedRefAll(statement.path);
@@ -838,6 +849,8 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 		final origin: String = originOf(targets[0].file);
 		// Every module holds the implicit tier without a statement, so the entry and package it comes from vouch for any receiver.
 		if (resolve.refs.names.implicitImportFiles().exists(found -> originOf(found) == origin)) return true;
+		final parsing: Null<Map<String, Array<Int>>> = ctx.parsingBuilds();
+		if (parsing != null) return parsedWithEveryReceiver(targets[0].file.file, site, ctx, parsing);
 		final key: String = keyOf(statement);
 		for (file in ctx.governedAt[site] ?? []) {
 			final info: Null<FileInfo> = ctx.infoOf[file];
@@ -847,6 +860,62 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 			if (!held.exists(imp -> !imp.guarded && (statementKeyOf(imp) == key || resolvesInto(imp, origin, resolve)))) return false;
 		}
 		return true;
+	}
+
+	/**
+	 * Whether every build that parses a module `site` governs parses `module`, the file declaring the statement's module, as
+	 * well: that build already resolves the module and everything the module imports. A module no build parses is compiled by
+	 * none of the builds the project declared to be all of its builds, so it loses nothing.
+	 */
+	private static function parsedWithEveryReceiver(
+		module: String, site: String, ctx: HoistContext, parsing: Map<String, Array<Int>>
+	): Bool {
+		final cwd: String = Sys.getCwd();
+		final carrying: Array<Int> = parsing[OracleCoverage.canonical(cwd, module)] ?? [];
+		for (file in ctx.governedAt[site] ?? []) {
+			final readers: Array<Int> = parsing[OracleCoverage.canonical(cwd, file)] ?? [];
+			if (!readers.foreach(build -> carrying.contains(build))) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * `HoistContext.parsingBuilds` for the run `plugin` hosts, asked of its builds once and on first demand; a plugin that hosts
+	 * no run knows no builds.
+	 */
+	private static function parsingBuildsOf(plugin: GrammarPlugin): () -> Null<Map<String, Array<Int>>> {
+		if (!(plugin is SymbolIndexHost)) return () -> null;
+		final host: SymbolIndexHost = cast plugin;
+		var held: Null<Map<String, Array<Int>>> = null;
+		var asked: Bool = false;
+		return () -> {
+			if (!asked) {
+				asked = true;
+				held = buildsByParsedFile(host.reachBuilds());
+			}
+			held;
+		};
+	}
+
+	/**
+	 * The indices of the configurations of `builds` that parse each file, by its path; null without builds, or when a
+	 * configuration names no parsed files.
+	 */
+	private static function buildsByParsedFile(builds: Null<ReachBuilds>): Null<Map<String, Array<Int>>> {
+		if (builds == null) return null;
+		final out: Map<String, Array<Int>> = [];
+		for (i => configuration in builds.configurations) {
+			final parsed: Null<Array<String>> = configuration.parsed;
+			if (parsed == null) return null;
+			for (path in parsed) {
+				final held: Null<Array<Int>> = out[path];
+				if (held == null)
+					out[path] = [i]
+				else if (!held.contains(i))
+					held.push(i);
+			}
+		}
+		return out;
 	}
 
 	/**
