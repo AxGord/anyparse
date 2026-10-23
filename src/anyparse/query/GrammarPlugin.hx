@@ -2502,6 +2502,12 @@ final class RefShape {
 	public var bareConstructorTypeKinds: Null<Array<String>>;
 
 	/**
+	 * The names every module reads without an import statement (Haxe `trace` and the std root types): a declaration renamed
+	 * onto one takes it over wherever the declaration is in scope. Optional; unset means none is known.
+	 */
+	public var implicitValueNames: Null<Array<String>>;
+
+	/**
 	 * Type-declaration kinds whose values carry a RUNTIME CONSTRUCTOR TAG that a
 	 * `switch` reads off the value itself (Haxe `EnumDecl`) — so a `switch` over a
 	 * null subject of such a type dereferences null before any pattern is tried,

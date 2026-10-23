@@ -1024,6 +1024,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.EditKeepingCanonicalGateTest',
 		'unit.query.ElementSpanOwnedLinesTest',
 		'unit.query.EncapsulateFieldSliceTest',
+		'unit.query.EnumCtorRenameTest',
 		'unit.query.EnumValueTypeTest',
 		'unit.query.ExtractConstantSliceTest',
 		'unit.query.ExtractConstantToSliceTest',

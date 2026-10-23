@@ -82,6 +82,34 @@ final class ValueNameBinding {
 		return statics.unknown || statics.statics.length > 0 || importsOf(fi).exists(imp -> importMayBring(imp, name, true));
 	}
 
+	/** The names an alias statement of `fi` (its own, then its ambient chain's) binds to the type at `typePath`. */
+	public function typeAliasesOf(fi: FileInfo, typePath: String): Array<String> {
+		final out: Array<String> = [];
+		for (imp in importsOf(fi)) {
+			final alias: Null<String> = imp.alias;
+			if (alias != null && imp.kind == ImportKind.Alias && imp.aliasTarget == typePath) out.push(alias);
+		}
+		return out;
+	}
+
+	/**
+	 * The path of the first import of `fi` (its own, then its ambient chain's) that may bring constructors or values into
+	 * unqualified scope the index cannot list — a module, a type, an alias or a type wildcard the scope does not hold — or
+	 * null. A package wildcard brings types only, and a static-field import is `importedStatics`' question.
+	 */
+	public function unlistedValueImportOf(fi: FileInfo): Null<String> {
+		for (imp in importsOf(fi)) {
+			final path: String = switch imp.kind {
+				case ImportKind.Wild: SourceText.parentPath(imp.raw);
+				case ImportKind.Alias: imp.aliasTarget ?? imp.raw;
+				case _: imp.raw;
+			};
+			final namesType: Bool = TypeNameBinding.splitPath(path) != null && SourceText.isUpperInitial(SourceText.lastSegment(path));
+			if (namesType && _refs.names.importedTypes(path) == null) return path;
+		}
+		return null;
+	}
+
 	/**
 	 * The types of the index hosting a value spelled `name` by its bare name — a constructor of an enum, a member of a
 	 * value-host type (`_valueHostKinds`): 4.3.7 reads a bare name as a constructor or value of the EXPECTED type before a

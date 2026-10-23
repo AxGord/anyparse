@@ -30576,6 +30576,136 @@
 			"method": "chainReadsAlike",
 			"force": "true",
 			"note": "what a supertype chain passes is taken for the caller's own whatever file each link writes it in, so a subclass of `SubBox extends Box<Item>` declaring its own `Item` types an inherited `each`'s lambda parameter as that namesake"
+		},
+		{
+			"name": "M-CTOR-NOT-A-MEMBER",
+			"type": "anyparse.query.CrossRenameMember",
+			"method": "resolveMemberAtCursor",
+			"find": "final isCtor: Bool = ctorKinds.contains(kind);",
+			"replace": "final isCtor: Bool = false;",
+			"note": "an enum constructor is no member the rename resolves, so the cursor on one falls back to the value namespace, which renames the declaration alone"
+		},
+		{
+			"name": "M-CTOR-BARE-KEPT",
+			"type": "anyparse.query.CrossRenameMember",
+			"method": "ctorExpectedOffsets",
+			"force": "[]",
+			"note": "no pattern head proves a bare constructor spelling, so a pattern under a subject declared the enum is left unproven and the rename of a plainly used constructor is refused"
+		},
+		{
+			"name": "M-CTOR-IMPORT-KEPT",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "importOffsets",
+			"force": "[]",
+			"note": "an import of the constructor itself keeps the old name, so it names a constructor the enum no longer declares"
+		},
+		{
+			"name": "M-CTOR-UNPROVEN-RENAMED",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "offsets",
+			"find": "if (!proven.contains(spelling.offset) || outranked(entry, fi, spelling.host, ctor, index, refShape))",
+			"replace": "if (outranked(entry, fi, spelling.host, ctor, index, refShape))",
+			"note": "a bare spelling nothing proves to be the constructor no longer refuses, so the rename reports success while that spelling keeps the old name or means another enum's constructor"
+		},
+		{
+			"name": "M-CTOR-RIVAL-IGNORED",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "refusal",
+			"find": "final rival: Null<String> = index.values.hostsOfValue(ctor).find(host -> host != typeName);",
+			"replace": "final rival: Null<String> = null;",
+			"note": "another enum hosting a value of the old name no longer refuses, so a bare spelling meaning that enum's value is renamed with this one"
+		},
+		{
+			"name": "M-CTOR-TAKEN-IGNORED",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "refusal",
+			"find": "if (taken.length > 0)",
+			"replace": "if (false)",
+			"note": "another enum hosting a value of the new name no longer refuses, so a renamed bare spelling may bind that enum's value"
+		},
+		{
+			"name": "M-CTOR-CAPTURE-UNCHECKED",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "capturedAfter",
+			"force": "null",
+			"note": "a local holding the new name captures the renamed constructor call unchecked, so the rewrite calls the local"
+		},
+		{
+			"name": "M-CTOR-NEW-NAME-OUTRANKED",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "offsets",
+			"find": "if (outranked(entry, fi, spelling.host, target.newName, index, refShape))",
+			"replace": "if (false)",
+			"note": "an inherited member holding the new name outranks the renamed constructor unchecked, so the rewrite reads the member"
+		},
+		{
+			"name": "M-HELPER-ANCESTOR-STATIC-INHERITED",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "rewriteMovedRef",
+			"find": "declaringAncestorOf(prep.srcTypeName, name, true)",
+			"replace": "declaringAncestorOf(prep.srcTypeName, name)",
+			"note": "a static of a proven supertype counts as inherited, so a bare name the source binds through a field import becomes `src.name()`, which names nothing"
+		},
+		{
+			"name": "M-CTOR-NEW-NAME-TAKEN-OVER",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "offsets",
+			"find": "if (taken.length > 0)",
+			"replace": "if (false)",
+			"note": "a bare spelling of the new name in a file the enum's values reach no longer refuses, so the renamed constructor silently takes over what it meant"
+		},
+		{
+			"name": "M-CTOR-ALIAS-RECEIVER-KEPT",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "aliasReceiverOffsets",
+			"force": "[]",
+			"note": "a constructor reached through an import alias or a typedef of its enum keeps the old name, so the rename reports success on code that no longer compiles"
+		},
+		{
+			"name": "M-CTOR-NEW-NAME-ONLY-WHERE-VISIBLE",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "offsets",
+			"find": "final taken: Array<{ offset: Int, host: Null<String> }> = bareSpellings(entry, target.newName, refShape);",
+			"replace": "final taken: Array<{ offset: Int, host: Null<String> }> = entry.file == target.cursorFile ? bareSpellings(entry, target.newName, refShape) : [];",
+			"note": "a bare spelling of the new name is checked only in the enum's own module, so a pattern variable or an imported static at a position expecting the enum elsewhere is silently taken over by the renamed constructor"
+		},
+		{
+			"name": "M-CTOR-UNLISTED-IMPORT-IGNORED",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "unlistedValueImportOf",
+			"force": "null",
+			"note": "an import of a module the scope does not hold no longer refuses, so a bare spelling an out-of-scope enum's constructor may own is renamed, and its meaning moves between the two enums"
+		},
+		{
+			"name": "M-CTOR-IMPLICIT-NAME-TAKEN",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "refusal",
+			"find": "if ((refShape.implicitValueNames ?? []).contains(newName))",
+			"replace": "if (false)",
+			"note": "a constructor renamed onto a name every module reads without an import (`trace`) is no longer refused, so it takes that name over wherever the enum is in scope"
+		},
+		{
+			"name": "M-CTOR-SUBJECT-UNPROVEN",
+			"type": "anyparse.query.CrossRenameMember",
+			"method": "ctorExpectedOffsets",
+			"force": "[for (c in ctorExpectedCandidates(tree, target.memberName, refShape)) for (off in c.offsets) off]",
+			"note": "a pattern head counts as the constructor whatever the switch subject is, so a pattern of another enum (`Type.typeof(v)`'s `TNull`, an `Option`'s `None`) is renamed with it"
+		},
+		{
+			"name": "M-CTOR-RETURN-CALL-UNPROVEN",
+			"type": "anyparse.query.CrossRenameMember",
+			"method": "returnSeamsOf",
+			"find": "ctorCallKind: isCtor ? refShape.callKind : null",
+			"replace": "ctorCallKind: null",
+			"note": "a constructor call returned from a function declared the enum is no longer proven, so `return A(1)` refuses the rename"
+		},
+		{
+			"name": "M-CTOR-EQUALITY-UNPROVEN",
+			"type": "anyparse.query.CrossRenameMember",
+			"method": "ctorExpectedCandidates",
+			"find": "equality.contains(node.kind) && right != null",
+			"replace": "false && right != null",
+			"note": "the right operand of a comparison with a value declared the enum is no longer proven, so `e == A` refuses the rename"
 		}
 	]
 }

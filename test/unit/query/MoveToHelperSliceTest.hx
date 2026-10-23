@@ -423,4 +423,28 @@ class MoveToHelperSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * A STATIC a proven supertype declares is not inherited: Haxe never resolves it as a bare name in the subtype, so the
+	 * bare `helperFn()` binds to the statically imported `Util.helperFn` and must not become `src.helperFn()`.
+	 */
+	@:pin('control') @:killer('M-HELPER-ANCESTOR-STATIC-INHERITED')
+	public function testAStaticOfAProvenSupertypeIsNotInherited(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nimport a.Util.helperFn;\n\nclass Src extends Mid {\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n'
+					+ '\tpublic function work(): Int {\n\t\treturn helperFn();\n\t}\n}\n'
+			},
+			{
+				file: 'a/Mid.hx',
+				source: 'package a;\n\nclass Mid {\n\tpublic function new() {}\n\n\tpublic static function helperFn(): Int {\n\t\treturn 7;\n\t}\n}\n'
+			},
+			{
+				file: 'a/Util.hx',
+				source: 'package a;\n\nclass Util {\n\tpublic static function helperFn(): Int {\n\t\treturn 43;\n\t}\n}\n'
+			}
+		];
+		refused(move('work', 'SrcTools', files), 'reached through an import of the field itself');
+	}
+
 }
