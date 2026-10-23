@@ -5280,3 +5280,8 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 
 - whether a ternary branch holds a block (not a literal) can be read off the branch's Doc → no: a statement block and a broken object literal lower to the same `WrapBoundary(BodyGroup(Concat([Text('{'), Nest(…, hardline …), hardline, Text('}')])))`; the question is asked of the AST through a grammar predicate (`HxTernaryBranchBlocks`) → ``6b119580f``
 - with the key set the same way, hxq and the fork agree on every ternary with a multi-line branch → no: the key's own set agrees, but a then-branch call wrapping a multi-line literal (`cond ? f({…}) : x`) and a condition holding a block break in hxq and stay glued in the fork under EITHER value — hxq's hardline commit, untouched here because `break` must stay byte-identical → ``6b119580f``
+
+## S233 (2026-10-23) — ops that wrote wrong code at rc 0, the remainder
+
+- `move-member`'s interpolation corruption (`'$PKG.'` → `'Src.$PKG.'`) comes from a text-level requalification shared across the move family → no: the bare-caller, wildcard-caller and parameter-object paths already brace or refuse a `$name` read; the one prefix splice without that branch was the sibling-static qualification in `scanSibling` → `<S233 merge SHA>`
+- `inline-method`'s shadow gap shares a partial binder copy with `CallSites` → no: `CallSites.nameClashKinds` already reads `BinderScan.binderKinds` (`a850f985c`); the partial copy left was `InlineMethod.shadowBindKinds` alone, now `BinderScan.boundNames` plus the resolver-invisible names → `<S233 merge SHA>`

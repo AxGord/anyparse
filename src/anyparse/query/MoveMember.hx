@@ -629,8 +629,13 @@ final class MoveMember {
 			final source: Null<String> = prep.sourceOf[file];
 			if (source == null) continue;
 			for (hit in qualifiedReceiverEdits(source, tree, prep, m.name)) {
-				final edit: { span: Span, text: String } = { span: hit.span, text: hit.text };
-				if (file == prep.srcFile && insideAnyCut(prep, hit.span.from)) {
+				final at: Span = hit.span;
+				final inCut: Bool = file == prep.srcFile && insideAnyCut(prep, at.from);
+				final inDest: Bool = file == prep.destFile && at.from >= prep.destDecl.fullSpan.from && at.to <= prep.destDecl.fullSpan.to;
+				final edit: { span: Span, text: String } = (inCut || inDest) && landsBare(prep, source, at, m.name)
+					? { span: new Span(at.from, at.to + 1), text: '' }
+					: { span: at, text: hit.text };
+				if (inCut) {
 					movedTextEdits.push(edit);
 				} else {
 					ScopeFiles.editsFor(editsByFile, file).push(edit);
@@ -643,6 +648,23 @@ final class MoveMember {
 			}
 		}
 		return outsideCallers;
+	}
+
+	/**
+	 * Whether a qualified reference to the moved static `name` that lands INSIDE the destination type
+	 * drops its qualifier: there the member is the type's own, and `B.util()` inside `B` is noise. Kept
+	 * when the receiver is not followed by the `.` it ends with, and whenever a binder anywhere in the
+	 * destination type or in a moved member spells `name` — bare, the name would read that binder.
+	 */
+	private static function landsBare(prep: MovePrep, source: String, receiver: Span, name: String): Bool {
+		if (receiver.to >= source.length || source.fastCodeAt(receiver.to) != '.'.code) return false;
+		final roots: Array<QueryNode> = [prep.destDecl.declNode].concat([for (m in prep.moved) m.group.member]);
+		for (root in roots) {
+			if (BinderScan.boundNames(root, prep.shape).contains(name)) return false;
+			final invisible: Null<Array<String>> = BinderScan.resolverInvisibleBinderNames(root, prep.shape);
+			if (invisible == null || invisible.contains(name)) return false;
+		}
+		return true;
 	}
 
 	/**
@@ -999,7 +1021,9 @@ final class MoveMember {
 			final host: Null<MovedMember> = prep.moved.find(m -> hit.span.from >= m.cut.from && hit.span.from < m.cut.to);
 			if (host == null) continue;
 			if (siblingStatic) {
-				movedTextEdits.push({ span: new Span(hit.span.from, hit.span.from), text: '${prep.srcTypeName}.' });
+				movedTextEdits.push(
+					nameQualifyEdit(hit.span.from, hit.interpolated ? hit.span : null, siblingName, '${prep.srcTypeName}.')
+				);
 				if (!siblingPublic && !state.accessMembers.contains(host.name)) state.accessMembers.push(host.name);
 			} else if (MemberKinds.isDataFieldKind(sibling.member.kind)) {
 				// Sibling-fields contract: a moved body may keep reading a
