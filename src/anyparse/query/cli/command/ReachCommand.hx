@@ -3,6 +3,8 @@ package anyparse.query.cli.command;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.ExitCode.*;
+import anyparse.query.cli.CliCallGraph.GraphOutput;
+import anyparse.query.graph.MemberGraphBuilder;
 
 /**
  * `apq reach` — shortest call path(s) --from A --to B over the call graph.
@@ -37,6 +39,7 @@ final class ReachCommand implements CliCommand {
 		var maxPaths: Int = DEFAULT_REACH_PATHS;
 		var kinds: Null<Array<EdgeKind>> = null;
 		var from: Null<String> = null;
+		var output: GraphOutput = Text;
 		final toPatterns: Array<String> = [];
 		final inputSpecs: Array<String> = [];
 
@@ -61,6 +64,8 @@ final class ReachCommand implements CliCommand {
 				case '--kinds':
 					kinds = CliCallGraph.parseEdgeKinds('reach', CliArgs.expectValue(args, ++i, '--kinds'));
 					if (kinds == null) return EXIT_USAGE;
+				case '--format':
+					output = CliCallGraph.parseGraphOutput(CliArgs.expectValue(args, ++i, '--format'));
 				case '-h', '--help':
 					printReachUsage();
 					return EXIT_OK;
@@ -102,11 +107,21 @@ final class ReachCommand implements CliCommand {
 		}
 		final effectiveKinds: Array<EdgeKind> = kinds ?? [Call, Ref, New, Virtual, Accessor];
 		final found: Array<Array<CallEdge>> = Reach.paths(graph, fromIds, toIds, maxPaths, effectiveKinds);
-		for (path in found) CliIo.sysPrint('${Reach.render(graph, path, f -> sources[f])}\n');
+		printPaths(output, graph, found, sources, 'reach --from $fromStr --to ${toPatterns.join(' --to ')}');
 		if (found.length == 0) CliIo.stderr('apq reach: no path found (${fromIds.length} from-node(s), ${toIds.length} to-node(s))\n');
 		if (graph.unresolved.length > 0)
 			CliIo.stderr('apq reach: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
 		return ctx.emptyExit(found.length == 0);
+	}
+
+	/** Print the paths `found` as `output` asks: each path rendered on its own, or the member graph they cross. */
+	private static function printPaths(
+		output: GraphOutput, graph: CallGraph, found: Array<Array<CallEdge>>, sources: Map<String, String>, caption: String
+	): Void {
+		if (output == Text)
+			for (path in found) CliIo.sysPrint('${Reach.render(graph, path, f -> sources[f])}\n')
+		else
+			CliCallGraph.printGraph(output, MemberGraphBuilder.paths(graph, found), caption);
 	}
 
 	private static function printReachUsage(): Void {
@@ -116,6 +131,7 @@ final class ReachCommand implements CliCommand {
 		CliIo.sysPrint('  --to <target>     Repeatable; accepts Type.method, bare method, Type.*\n');
 		CliIo.sysPrint('  --max-paths <n>   Cap on reported paths (default $DEFAULT_REACH_PATHS)\n');
 		CliIo.sysPrint('  --kinds <k,..>    Edge kinds to traverse (default call,ref,new,virtual,accessor)\n');
+		CliIo.sysPrint('  --format <f>      text (the paths, default), mermaid or json (the member graph of the paths)\n');
 		CliIo.sysPrint('  --lang <name>     Grammar plugin (default haxe)\n');
 	}
 

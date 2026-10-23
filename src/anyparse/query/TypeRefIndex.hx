@@ -318,6 +318,23 @@ final class TypeRefIndex {
 		return [for (imp in fi.imports) if (imp.kind == ImportKind.Using) imp.raw];
 	}
 
+	/** The packages the file's package wildcards (`import p.*;`) name, the `.*` dropped. */
+	public static function wildcardPackages(fi: FileInfo): Array<String> {
+		return [
+			for (imp in fi.imports) if (imp.kind == ImportKind.Wild) imp.raw.substr(0, imp.raw.lastIndexOf('.'))
+		];
+	}
+
+	/** The dotted paths the file's alias imports (`import p.T as U;`) bind their aliases to, an undecodable one left out. */
+	public static function aliasTargets(fi: FileInfo): Array<String> {
+		final out: Array<String> = [];
+		for (imp in fi.imports) if (imp.kind == ImportKind.Alias) {
+			final target: Null<String> = imp.aliasTarget;
+			if (target != null) out.push(target);
+		}
+		return out;
+	}
+
 	/**
 	 * The paths of the plain `import` statements `fi` itself writes (no alias, no wildcard), a guarded one included — a
 	 * static field import among them (`import pkg.Type.member;`).
