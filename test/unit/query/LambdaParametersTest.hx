@@ -12,20 +12,20 @@ import unit.QueryTestHelpers;
 class LambdaParametersTest extends Test {
 
 	/** The fixture module: each case reads its lambda's parameter, named apart, in the lambda's body. */
-	private static final SOURCE: String = 'package p;\n\nusing p.Ext;\n\nclass Item {\n\tpublic var n: Int = 0;\n\n'
-		+ '\tpublic function new() {}\n}\n\nclass Box<T> {\n\tpublic function new() {}\n\n'
-		+ '\tpublic function each(f: T -> Void): Void {}\n\n\tpublic function shadow<T>(x: T, f: T -> Void): Void {}\n}\n\n'
-		+ 'class Sub extends Box<Item> {}\n\nclass Shelf {}\n\nclass C {\n\tstatic function arr<A>(x: A, f: Array<A> -> Void): Void {}\n\n'
-		+ '\tstatic function gen<A>(b: Box<A>, f: A -> Void): Void {}\n\n'
-		+ '\tstatic function pair<A, B>(b: Box<A>, f: A -> B): Void {}\n\n\tstatic function late<A>(f: A -> '
-		+ 'Void, a: A): Void {}\n\n\tstatic function nul<A>(x: Null<A>, f: A -> Void): Void {}\n\n\tstatic '
-		+ 'function dyn(f: Dynamic -> Bool): Void {}\n\n\tstatic function take(f: Item -> Bool): Void {}\n\n'
-		+ '\tfunction f(b: Box<Item>, n: Null<Int>, it: Item, s: Shelf, d: Dynamic) {\n\t\ttake(a1 -> a1.n > 0);\n\t\tb.each(a2 -> '
-		+ 'trace(a2));\n\t\tgen(b, a3 -> trace(a3));\n\t\tlate(a4 -> trace(a4), it);\n\t\tnul(n, a5 -> '
-		+ 'trace(a5));\n\t\tgen(new Sub(), a6 -> trace(a6));\n\t\tdyn(a7 -> a7.lock);\n\t\ts.pick(it, a8 -> '
-		+ 'trace(a8));\n\t\tfinal g: Item -> Bool = a9 -> a9.n > 0;\n\t\tpair(b, a10 -> a10.n);\n\t\ttake((?a11) -> a11 != null);\n'
-		+ '\t\ttake(function(a12 = null) return a12 != null);\n\t\tarr(d, a13 -> trace(a13));\n\t\tb.shadow(1, a14 -> trace(a14));\n'
-		+ '\t}\n}\n';
+	private static final SOURCE: String = 'package p;\n\nusing p.Ext;\n\nclass Item {\n\tpublic var n: Int = 0;\n\n\tpublic function new() '
+		+ '{}\n}\n\nclass Box<T> {\n\tpublic function new() {}\n\n\tpublic function each(f: T -> Void): Void '
+		+ '{}\n\n\tpublic function shadow<T>(x: T, f: T -> Void): Void {}\n}\n\nclass Sub extends Box<Item> {'
+		+ '\n\tfunction g() {\n\t\teach(h2 -> trace(h2));\n\t}\n}\n\nclass Shelf {}\n\nclass C {\n\tstatic '
+		+ 'function arr<A>(x: A, f: Array<A> -> Void): Void {}\n\n\tstatic function gen<A>(b: Box<A>, f: A -> '
+		+ 'Void): Void {}\n\n\tstatic function pair<A, B>(b: Box<A>, f: A -> B): Void {}\n\n\tstatic function '
+		+ 'late<A>(f: A -> Void, a: A): Void {}\n\n\tstatic function nul<A>(x: Null<A>, f: A -> Void): Void '
+		+ '{}\n\n\tstatic function dyn(f: Dynamic -> Bool): Void {}\n\n\tstatic function take(f: Item -> '
+		+ 'Bool): Void {}\n\n\tfunction f(b: Box<Item>, n: Null<Int>, it: Item, s: Shelf, d: Dynamic) {\n'
+		+ '\t\ttake(a1 -> a1.n > 0);\n\t\tb.each(a2 -> trace(a2));\n\t\tgen(b, a3 -> trace(a3));\n\t\tlate(a4 '
+		+ '-> trace(a4), it);\n\t\tnul(n, a5 -> trace(a5));\n\t\tgen(new Sub(), a6 -> trace(a6));\n'
+		+ '\t\tdyn(a7 -> a7.lock);\n\t\ts.pick(it, a8 -> trace(a8));\n\t\tfinal g: Item -> Bool = a9 -> a9.n '
+		+ '> 0;\n\t\tpair(b, a10 -> a10.n);\n\t\ttake((?a11) -> a11 != null);\n\t\ttake(function(a12 = null) '
+		+ 'return a12 != null);\n\t\tarr(d, a13 -> trace(a13));\n\t\tb.shadow(1, a14 -> trace(a14));\n\t}\n}\n';
 
 	/** The static extension the fixture's `using` brings. */
 	private static final EXT: String =
@@ -63,6 +63,17 @@ class LambdaParametersTest extends Test {
 			source: 'package lib;\n\nimport lib.Box;\nimport lib.Item;\n\nclass Holder {\n\tpublic final box: Box<Item> = null;\n}\n'
 		}
 	];
+
+	/** A subclass two links below `Box<T>`, the middle link written in another package naming its `Item`. */
+	private static final TWO_HOPS: Array<{ file: String, source: String }> = [
+		{ file: 'lib/Item.hx', source: 'package lib;\n\nclass Item {}\n' },
+		{ file: 'lib/Box.hx', source: 'package lib;\n\nclass Box<T> {\n\tpublic function each(f: T -> Void): Void {}\n}\n' },
+		{ file: 'lib/SubBox.hx', source: 'package lib;\n\nimport lib.Item;\n\nclass SubBox extends Box<Item> {}\n' }
+	];
+
+	/** The caller: its own `Item`, a subclass of `SubBox` calling the inherited member bare and off `this`. */
+	private static final SUBCLASS: String = 'package app2;\n\nimport lib.SubBox;\n\nclass Item {}\n\nclass Sub2 extends SubBox {\n'
+		+ '\tfunction f() {\n\t\teach(h1 -> trace(h1));\n\t\tthis.each(h3 -> trace(h3));\n\t}\n}\n';
 
 	/** The std the iteration cases read: `Iterable`, an array the index holds two copies of, `Lambda`. */
 	private static final STD: Array<{ file: String, source: String }> = [
@@ -187,6 +198,13 @@ class LambdaParametersTest extends Test {
 	@:pin('control') @:killer('M-SELF-UNWRITTEN')
 	public function testTheSelfReferenceOfAnAbstractIsItsWrittenUnderlyingType(): Void {
 		Assert.equals('Item', iterating('b4.n'), '`this` of `abstract Pack(Bag<Item>)` handed to `Iterable<A>`');
+	}
+
+	@:pin('control') @:killer('M-CHAIN-HOPS-UNCHECKED')
+	public function testAnInheritedMembersParameterIsNoAnswerWhereALinkOfTheChainNamesAnotherFilesType(): Void {
+		Assert.isNull(ValueDoorsTest.typedIn(SUBCLASS, 'app2/Third.hx', TWO_HOPS, 'IdentExpr', 'h1)').source, 'a bare call');
+		Assert.isNull(ValueDoorsTest.typedIn(SUBCLASS, 'app2/Third.hx', TWO_HOPS, 'IdentExpr', 'h3)').source, 'off `this`');
+		Assert.equals('Item', typed('h2)'), 'one link the caller writes');
 	}
 
 	/** The written-source answer for the identifier starting at the first `at` of `SOURCE`. */

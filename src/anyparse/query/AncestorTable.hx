@@ -79,6 +79,15 @@ final class AncestorTable {
 	}
 
 	/**
+	 * Whether every type argument the chain from `start` to `host` passes reads in the file `reading` as it does where it is
+	 * written — at EVERY link, the one `argumentsTo` follows, as the file declaring that link writes it, the linking type's
+	 * own parameters apart (`TypeRefIndex.readsAlike`). True for `host` itself; false where no link reaches it.
+	 */
+	public function chainReadsAlike(start: ResolvedType, host: ResolvedType, reading: FileInfo): Bool {
+		return chainAlikeFrom(start, host, reading, []);
+	}
+
+	/**
 	 * The type `written`, written in the declaration `host` at `at` by a member declaring the type parameters `own`, as a value
 	 * read off a receiver of the declaration `start` written with the type arguments `args` carries it: completed where it is
 	 * written (a reference leaving arguments out names their defaults, `completed`), `host`'s type parameters bound to what
@@ -252,6 +261,21 @@ final class AncestorTable {
 			];
 		}
 		return null;
+	}
+
+	/** `chainReadsAlike` from `cur`, along the link `chainTo` takes, `seen` against a cycle. */
+	private function chainAlikeFrom(cur: ResolvedType, host: ResolvedType, reading: FileInfo, seen: Array<String>): Bool {
+		if (same(cur, host)) return true;
+		if (!_refs.markSeen(cur, seen)) return false;
+		for (link in links(cur)) {
+			final up: Null<ResolvedType> = link.decl;
+			if (up == null || !same(up, host) && chainTo(up, host, []) == null) continue;
+			final ancestor: ResolvedType = up;
+			final args: Array<String> = link.args ?? [];
+			return link.args != null && args.foreach(a -> _refs.readsAlike(a, cur.file, reading, cur.type.typeParamNames, _typeSyntax))
+				&& chainAlikeFrom(ancestor, host, reading, seen);
+		}
+		return false;
 	}
 
 	/** The link `r` writes as `raw`: its resolution from `r`'s file, and the arguments every branch writing it passes. */

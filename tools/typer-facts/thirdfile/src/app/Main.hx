@@ -1,5 +1,6 @@
 package app;
 
+import app2.Third.Sub2;
 import lib.Holder;
 
 using Lambda;
@@ -24,6 +25,7 @@ class Main {
 		h.items.visit(x -> trace(x.tag));
 		h.box.each(x -> trace(x.tag));
 		arr(h.items, x -> trace(x.tag));
+		new Sub2().f();
 		final it = h.items;
 		trace(it.map(x -> x.tag));
 	}

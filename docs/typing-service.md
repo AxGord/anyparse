@@ -396,7 +396,7 @@ std gap. Readings: `docs/journal/testing-log.md`.
   lambda's body may bind it), a cell two arguments bind to types not known to be one, a parameter expected to be `Dynamic`
   (a monomorph does not bind to it; its uses shape it), an argument before the lambda the walk does not type, a parameter
   written `?x` or with a default value (a `Null<T>`), and a type read in another file where a name it spells resolves
-  otherwise in the lambda's (`TypeRefIndex.readsAlike`, checked on the callee's written parameter, on what a chain passes
+  otherwise in the lambda's (`TypeRefIndex.readsAlike`, checked on the callee's written parameter, on what a chain passes at every link (`AncestorTable.chainReadsAlike`)
   and on what an arc reads from a third file; a caller's namesake would take the type's place). A cell does not bind to
   the dynamic type, at any depth (`link` binds nothing there), and a method's type parameter shadows its declaring type's
   of the name (`AncestorTable.boundType`). A receiver or an argument binds a type parameter only with a type the lambda's file

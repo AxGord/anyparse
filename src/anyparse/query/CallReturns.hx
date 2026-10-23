@@ -335,9 +335,8 @@ final class CallReturns {
 		start: ResolvedType, k: CallCandidate, written: String, caller: FileInfo, index: SymbolIndex
 	): Bool {
 		final scope: Array<String> = k.signature.typeParamNames.concat(k.member.typeParamNames).concat(k.host.type.typeParamNames);
-		final passed: Array<String> = AncestorTable.same(start, k.host) ? [] : index.typing.ancestors.argumentsTo(start, k.host) ?? [];
 		return index.refs.readsAlike(written, k.host.file, caller, scope, index.typeSyntax)
-			&& passed.foreach(p -> index.refs.readsAlike(p, start.file, caller, start.type.typeParamNames, index.typeSyntax));
+			&& index.typing.ancestors.chainReadsAlike(start, k.host, caller);
 	}
 
 	/**

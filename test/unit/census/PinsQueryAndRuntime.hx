@@ -457,6 +457,8 @@ final class PinsQueryAndRuntime {
 			+ 'M-ARGUMENT-WRITTEN-ELSEWHERE',
 		'unit.query.LambdaParametersTest#testATypeWrittenInTheCalleesFileIsNoAnswerWhereTheCallerHasANamesake :: control :: '
 			+ 'M-NAMESAKE-READS-ALIKE,M-LAMBDA-FOREIGN-FILE-TAKEN',
+		'unit.query.LambdaParametersTest#testAnInheritedMembersParameterIsNoAnswerWhereALinkOfTheChainNamesAnotherFilesType :: control :: '
+			+ 'M-CHAIN-HOPS-UNCHECKED',
 		'unit.query.LambdaParametersTest#testTheArgumentsBeforeTheLambdaBindTheCallsTypeParameters :: control :: M-INFERRED-CELLS-UNBOUND',
 		'unit.query.LambdaParametersTest#testTheDynamicTypeBindsNoCell :: control :: M-MONO-DYNAMIC-BINDS',
 		'unit.query.LambdaParametersTest#testTheReceiversArgumentsBindItsTypesParameters :: control :: M-RECEIVER-ARGUMENTS-DROPPED',

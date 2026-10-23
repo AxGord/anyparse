@@ -9,8 +9,6 @@ import anyparse.query.TypeSyntax.TypeShape;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypeTerm.TypeEnd;
 
-using Lambda;
-
 /**
  * Haxe 4.3.7's reading of an inference (`InferencePolicy`; `tUnification.ml`, `callUnification.ml`). A call's cells are
  * the type parameters its signature declares (`attempt_call`, `spawn_constrained_monos`); a written type reads as the
@@ -162,9 +160,8 @@ final class HaxeInferencePolicy implements InferencePolicy {
 		if (found == null) return null;
 		final host: ResolvedType = found.host;
 		final scope: Array<String> = host.type.typeParamNames.concat(found.member.typeParamNames);
-		final passed: Array<String> = AncestorTable.same(r, host) ? [] : _ancestors.argumentsTo(r, host) ?? [];
 		final alike: Bool = _refs.readsAlike(found.text, host.file, reading, scope, _typeSyntax)
-			&& passed.foreach(p -> _refs.readsAlike(p, r.file, reading, r.type.typeParamNames, _typeSyntax));
+			&& _ancestors.chainReadsAlike(r, host, reading);
 		final bound: Null<String> = alike
 			? _ancestors.boundType(r, host, texts, found.text, found.member.declFrom, found.member.typeParamNames)
 			: null;
@@ -180,7 +177,7 @@ final class HaxeInferencePolicy implements InferencePolicy {
 		return switch [head, given] {
 			case [Declared(ancestor), Of(Declared(start), [], _)] if (start.type.typeParamArity == 0):
 				final passed: Null<Array<String>> = _ancestors.argumentsTo(start, ancestor);
-				passed == null || passed.length != arity || !passed.foreach(p -> _refs.readsAlike(p, start.file, reading, [], _typeSyntax))
+				passed == null || passed.length != arity || !_ancestors.chainReadsAlike(start, ancestor, reading)
 					? null
 					: Of(head, [for (p in passed) termOf(p, start.file, start.type.span.from, [])], text);
 			case _: null;

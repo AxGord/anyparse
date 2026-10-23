@@ -30513,6 +30513,13 @@
 			"find": "self: writtenHere ? NominalTypes.indexSelf : (_, _) -> null,",
 			"replace": "self: (_, _) -> null,",
 			"note": "the self reference is no type this file writes, so `Lambda.exists(this, x -> …)` inside an abstract over `Bag<Item>` binds no `A`"
+		},
+		{
+			"name": "M-CHAIN-HOPS-UNCHECKED",
+			"type": "anyparse.query.AncestorTable",
+			"method": "chainReadsAlike",
+			"force": "true",
+			"note": "what a supertype chain passes is taken for the caller's own whatever file each link writes it in, so a subclass of `SubBox extends Box<Item>` declaring its own `Item` types an inherited `each`'s lambda parameter as that namesake"
 		}
 	]
 }
