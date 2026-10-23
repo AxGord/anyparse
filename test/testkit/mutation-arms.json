@@ -1709,9 +1709,9 @@
 		{
 			"name": "M-JSUL-COMMENT-ANY-IN-FILE",
 			"type": "anyparse.check.JoinSingleUseLocal",
-			"method": "commentInDroppedRegion",
-			"find": "return comments.exists(tok -> tok.to > dropSpan.from && tok.from < dropSpan.to);",
-			"replace": "return comments.length > 0;",
+			"method": "commentBlocksDrop",
+			"find": "comments.exists(tok -> tok.to > dropSpan.from && tok.from < dropSpan.to)",
+			"replace": "comments.length > 0",
 			"note": "any comment in the file counts as one inside the deleted line, so a comment merely standing BETWEEN the two statements blocks the join"
 		},
 		{
@@ -3245,7 +3245,7 @@
 			"name": "M-PATCH-NEW-OWNER-PREDECLARED-UNCHECKED",
 			"type": "anyparse.query.Patch",
 			"method": "docOrphanRefusal",
-			"find": "final took: Bool = siblingDeclares(tree, w.node, now);",
+			"find": "final took: Bool = siblingDeclares(tree, w.node, now, shape) || siblingDeclares(tree, top, now, shape);",
 			"replace": "final took: Bool = false;",
 			"note": "a doc whose new owner was already declared in the container reads as a rename, so deleting the documented declaration leaves its doc on the next one at rc 0"
 		},
@@ -29784,6 +29784,86 @@
 			"find": "parsed: OracleCoverage.parsedPaths(transcript)",
 			"replace": "parsed: []",
 			"note": "a probed build names no file it parses, so every module it reads looks compiled by none of the builds"
+		},
+		{
+			"name": "M-MOVE-MEMBER-INTERP-SIBLING-PREFIXED",
+			"type": "anyparse.query.MoveMember",
+			"method": "scanSibling",
+			"find": "hit.interpolated ? hit.span : null",
+			"replace": "null",
+			"note": "a sibling read through a braceless `$name` interpolation gets the prefix as text before the `$`, changing the string"
+		},
+		{
+			"name": "M-MOVE-MEMBER-DEST-SHADOW-UNCHECKED",
+			"type": "anyparse.query.MoveMember",
+			"method": "landsBare",
+			"find": "if (BinderScan.boundNames(root, prep.shape).contains(name)) return false;",
+			"replace": "",
+			"note": "a qualified reference landing inside the destination drops its qualifier even where a binder of the member's name would capture it"
+		},
+		{
+			"name": "M-INLINE-METHOD-SHADOW-PARTIAL",
+			"type": "anyparse.query.InlineMethod",
+			"method": "shadowedParam",
+			"find": "bound.contains(p) || invisible.contains(p)",
+			"replace": "invisible.contains(p)",
+			"note": "the shadow check reads only parameters, local declarations and local functions, so a loop, catch or case binder of a parameter's name is substituted through"
+		},
+		{
+			"name": "M-PATCH-DOC-REGION-OWNER-UNREAD",
+			"type": "anyparse.query.Patch",
+			"method": "regionOwner",
+			"find": "return CondRegionScan.isConditionalKind(node.kind, shape) ? firstOwnerFrom(node, 0, shape) : node;",
+			"replace": "return node;",
+			"note": "a doc above a conditional-compilation region resolves to the region, which has no name, so the guard watches nothing"
+		},
+		{
+			"name": "M-PATCH-DOC-ORPHAN-UNCHECKED",
+			"type": "anyparse.query.Patch",
+			"method": "docOrphanRefusal",
+			"find": "if (ownerNode == null) return orphanRefusal(w.owner);",
+			"replace": "if (ownerNode == null) continue;",
+			"note": "deleting the last documented member leaves its doc above the closing brace, documenting nothing"
+		},
+		{
+			"name": "M-JSUL-LATER-LEADING-COMMENT-IGNORED",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "commentBlocksDrop",
+			"find": "&& SourceComments.ownLineCommentAbove(source, comments, dropSpan.from, false) >= 0",
+			"replace": "&& false",
+			"note": "the later-read fix deletes a capture under an own-line comment, which then documents whatever statement followed it"
+		},
+		{
+			"name": "M-MOVE-MEMBER-REIFICATION-BARED",
+			"type": "anyparse.query.MoveMember",
+			"method": "landsBare",
+			"find": "if (insideReification(tree, receiver.from, prep.shape.opaqueKinds ?? [])) return false;",
+			"replace": "",
+			"note": "a qualified reference inside a macro reification lands bare, and binds wherever the macro is called"
+		},
+		{
+			"name": "M-PATCH-DOC-NESTED-REGION-UNREAD",
+			"type": "anyparse.query.Patch",
+			"method": "declGroupStart",
+			"find": "if (parent.children[0].span?.from != start) return start;",
+			"replace": "return start;",
+			"note": "the descent stops at a region's first child when that child is itself a region, so a doc above nested regions is watched against the inner region, which has no name"
+		},
+		{
+			"name": "M-PATCH-DOC-REGION-SIBLINGS-INNER",
+			"type": "anyparse.query.Patch",
+			"method": "docOrphanRefusal",
+			"find": "|| siblingDeclares(tree, top, now, shape)",
+			"replace": "",
+			"note": "a doc's owner inside a region is compared against its siblings in the region, so deleting the whole region hands the doc to the next declaration as if renamed"
+		},
+		{
+			"name": "M-PATCH-DOC-EMPTY-REGION-OWNS",
+			"type": "anyparse.query.Patch",
+			"method": "firstOwnerFrom",
+			"find": "if (inner != null) return inner;",
+			"replace": "return inner ?? next;",
+			"note": "a region that declares nothing is read as the doc's owner, so emptying the documented region hands the doc to the next declaration as if renamed"
 		}
 	]
 }

@@ -4,6 +4,8 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Inline a method / function into its call sites — the method analog of
  * `Inline` (inline-variable), and the third refactoring built on the
@@ -79,27 +81,6 @@ final class InlineMethod {
 			case POk(target): buildInlineMethodEdits(source, target, plugin, shape);
 		};
 	}
-
-	/**
-	 * Binding kinds that, occurring INSIDE the body expression `E` with a parameter's name,
-	 * shadow that parameter — read off the grammar: a parameter slot, a local declaration (its
-	 * continuation spelling included, which binds a name of its own), or a local function. A
-	 * shadowed parameter name inside `E` would make the naive identifier substitution rewrite
-	 * the WRONG binding, so the inline refuses on any such collision.
-	 *
-	 * Missing a shadowing kind is the dangerous direction (a silent wrong rewrite) and listing
-	 * one that cannot occur costs a refusal, so the union is taken whole rather than narrowed.
-	 */
-	private static function shadowBindKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = [];
-		inline function add(kinds: Null<Array<String>>): Void if (kinds != null) for (kind in kinds) if (!out.contains(kind))
-			out.push(kind);
-		add(shape.paramKinds);
-		add(shape.localDeclKinds);
-		add(shape.localFunctionKinds);
-		return out;
-	}
-
 
 	/**
 	 * The single return expression `E` of `decl`'s body, or null when the
@@ -256,24 +237,17 @@ final class InlineMethod {
 	}
 
 	/**
-	 * The first parameter name shadowed by a nested binding inside `expr`, or null. A parameter
-	 * slot, a local declaration or a local function whose name matches a parameter rebinds it
-	 * within `E` — the vocabulary is `shadowBindKinds`, read off the grammar.
+	 * The first parameter name a binding inside `expr` re-binds, or null — a shadowed name would make the
+	 * identifier substitution rewrite the WRONG binding. Read off the grammar whole (`BinderScan.boundNames`:
+	 * every named binder and every `case` capture) plus the names the scope resolver cannot see; a grammar
+	 * with no seam for the latter answers its first parameter, because a missed shadow is a silent wrong
+	 * rewrite and an extra one only a refusal.
 	 */
 	private static function shadowedParam(expr: QueryNode, paramNames: Array<String>, shape: RefShape): Null<String> {
-		final shadowKinds: Array<String> = shadowBindKinds(shape);
-		var hit: Null<String> = null;
-		function walk(n: QueryNode): Void {
-			if (hit != null) return;
-			final nm: Null<String> = n.name;
-			if (nm != null && shadowKinds.contains(n.kind) && paramNames.contains(nm)) {
-				hit = nm;
-				return;
-			}
-			for (c in n.children) walk(c);
-		}
-		walk(expr);
-		return hit;
+		final bound: Array<String> = BinderScan.boundNames(expr, shape);
+		// No seam for the resolver-invisible binders: every parameter counts as shadowed.
+		final invisible: Array<String> = BinderScan.resolverInvisibleBinderNames(expr, shape) ?? paramNames;
+		return paramNames.find(p -> bound.contains(p) || invisible.contains(p));
 	}
 
 	/**
