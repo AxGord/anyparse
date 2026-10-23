@@ -5298,6 +5298,12 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - with every build declared, `hoist-common-import` may put `utest.*` into `test/unit/check`, `test/unit/query` "and above" → only the first two: the corpus drill (`recon.hxml`, no `utest`) compiles `test/unit/grammar/haxe/HxFormatterCorpusHelpers.hx`, so `test/unit/grammar` and `test/unit` stay withheld, now by what the builds parse; with the gate cut, the declared list's safe pass reverts the 382 files that break `recon.hxml` → ``6b0b430e4``
 - the classpath-entry evidence can stay the receiver test once every build is declared → no: it vouches by entry, not by what a build compiles, and offered `devkit.Args` for `tools/src/dev`, whose `JvmPortability.hx` the JVM probe compiles without reading `devkit/Args.hx` or anything it imports; a declared list answers from the files each build PARSES (`ReachConfiguration.parsed` — `compiled` names only files declaring a typed class, interface or abstract) → ``6b0b430e4``
 
+## S233 (2026-10-23) — ops that wrote wrong code at rc 0, the remainder
+
+- `move-member`'s interpolation corruption (`'$PKG.'` → `'Src.$PKG.'`) comes from a text-level requalification shared across the move family → no: the bare-caller, wildcard-caller and parameter-object paths already brace or refuse a `$name` read; the one prefix splice without that branch was the sibling-static qualification in `scanSibling` → `c3c5d2bf6`
+- `inline-method`'s shadow gap shares a partial binder copy with `CallSites` → no: `CallSites.nameClashKinds` already reads `BinderScan.binderKinds` (`a850f985c`); the partial copy left was `InlineMethod.shadowBindKinds` alone, now `BinderScan.boundNames` plus the resolver-invisible names → `c3c5d2bf6`
+- `patch`'s guard missed an insert inside nested `#if` regions because the owner descent stops at the inner region → no: `declAfterPrefixRun` returns the inner region and the descent recurses into it; the doc was never WATCHED, because the lookup for the doc above the edit stopped at the run inside the region, where no doc sits — it now climbs out of every region the run opens, which closes the one-level shape too → `c3c5d2bf6`
+
 ## GR-MERMAID-1 (2026-10-23) — a Mermaid flowchart grammar as a plugin
 
 - a new text grammar needs no core change → no: `@:decode` had no writer twin, so a terminal whose spelling differs from its value (a Mermaid label's `#quot;` codes, its quote-or-bare choice) parsed but was written verbatim; `@:encode` is that twin, and the two are required together → `<GR-MERMAID-1 merge SHA>`

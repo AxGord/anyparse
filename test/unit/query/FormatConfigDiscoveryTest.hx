@@ -6,8 +6,6 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import unit.ConfigTrees;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `FormatConfigDiscovery.discover` walks UP from a file's own directory to the

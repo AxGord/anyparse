@@ -1,8 +1,6 @@
 package unit.check;
 
 import anyparse.check.LintConfig;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import utest.Assert;
 
 /**
  * The two SHAPE-proved OPERAND arms of `redundant-parens`, each opt-in per project

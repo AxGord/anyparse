@@ -7,8 +7,6 @@ import anyparse.check.Severity;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-count` check: `var n = 0;` immediately followed by a `for` loop that steps `n` once

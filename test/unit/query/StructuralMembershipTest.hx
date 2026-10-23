@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * STRUCTURAL membership in the symbol index: whether a container satisfies `Iterable` /

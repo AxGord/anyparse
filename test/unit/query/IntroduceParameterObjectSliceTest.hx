@@ -3,14 +3,11 @@ package unit.query;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.Cli;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.IntroduceParameterObject;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

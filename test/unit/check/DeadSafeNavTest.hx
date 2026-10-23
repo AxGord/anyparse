@@ -1,13 +1,9 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.DeadSafeNav;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

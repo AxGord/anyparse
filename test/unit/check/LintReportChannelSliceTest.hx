@@ -1,14 +1,11 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.query.Cli;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.query.format.LintFormat;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

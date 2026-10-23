@@ -1,18 +1,13 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.DeadStore;
-import anyparse.check.Linter;
 import anyparse.check.NullFlow;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

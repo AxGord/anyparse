@@ -1,8 +1,6 @@
 package unit.query;
 
 import anyparse.query.Cli;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq ast --depth <n>` is counted from the displayed root, not from

@@ -1,12 +1,8 @@
 package unit.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.RedundantCastType;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `redundant-cast-type` check: a runtime-checked `cast(e, T)` whose POSITION is already

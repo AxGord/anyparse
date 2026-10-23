@@ -2,8 +2,6 @@ package unit.check;
 
 import anyparse.check.HaxeSpawn;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

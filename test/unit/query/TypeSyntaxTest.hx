@@ -1,9 +1,6 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.TypeSyntax;
-import utest.Assert;
-import utest.Test;
 
 /** `GrammarPlugin.typeSyntax` over the Haxe grammar: how each spelling of a written type reads. */
 @:nullSafety(Strict)

@@ -1,9 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.StaticConstant;
 import anyparse.check.UnusedPrivate;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
@@ -12,8 +10,6 @@ import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

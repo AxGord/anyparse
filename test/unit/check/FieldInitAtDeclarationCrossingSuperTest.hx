@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.FieldInitAtDeclaration;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `field-init-at-declaration` check's CROSSING path: an init after an explicit `super(...)` is

@@ -5,7 +5,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RemoveParam;
 import anyparse.query.SourceText;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * `apq remove-param` — remove a function parameter + call-site args.

@@ -2,16 +2,12 @@ package unit.check;
 
 import anyparse.check.Check;
 import anyparse.check.ElementLoopRewrite;
-import anyparse.check.Linter;
 import anyparse.check.PreferKeyValueLoop;
 import anyparse.check.PreferValueLoop;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import unit.QueryTestHelpers;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-keyvalue-loop` check: `for (i in 0...X.length)` whose body opens with

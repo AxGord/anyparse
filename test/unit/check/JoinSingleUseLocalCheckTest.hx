@@ -1,16 +1,11 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.JoinReturn;
 import anyparse.check.JoinSingleUseLocal;
-import anyparse.check.Linter;
 import anyparse.check.PreferSafeNav;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `join-single-use-local` check: a single-use `final` local whose initializer is a
@@ -520,6 +515,22 @@ class JoinSingleUseLocalCheckTest extends Test {
 		final out: String = applyFixOnce(wrapValue('final c = value;\n\t\tuse(value);\n\t\tg();\n\t\treturn len(c);'));
 		Assert.isTrue(out.indexOf('return len(value);') != -1, 'expected the parameter inlined in: $out');
 		Assert.equals(-1, out.indexOf('final c'));
+	}
+
+	/**
+	 * An own-line comment directly above the capture documents the capture. The later-read fix deletes
+	 * the declaration and leaves the comment above whatever statement followed it, so the note lands
+	 * on code it was never written for — the read is reported nowhere rather than fixed that way.
+	 */
+	@:pin('control')
+	@:killer('M-JSUL-LATER-LEADING-COMMENT-IGNORED')
+	public function testLeadingCommentOnLaterCaptureNotFlagged(): Void {
+		Assert.equals(0, violations(wrapValue('// keeps the caller value\n\t\tfinal c = value;\n\t\tg();\n\t\tuse(c);')).length);
+	}
+
+	/** A comment above an EARLIER statement documents that statement, not the capture. */
+	public function testCommentAboveAnEarlierStatementStillFlagged(): Void {
+		Assert.equals(1, violations(wrapValue('// about g\n\t\tg();\n\t\tfinal c = value;\n\t\th();\n\t\tuse(c);')).length);
 	}
 
 	/** Wrap a statement body in a class carrying one typed field, so a field capture resolves a declared type. */

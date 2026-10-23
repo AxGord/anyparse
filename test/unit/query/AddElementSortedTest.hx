@@ -1,10 +1,7 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddElement;
 import anyparse.query.CanonicalEdit.EditResult;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `AddElement.insertSorted` — `add-element --sorted`: string entries land at their sorted positions in

@@ -2,8 +2,6 @@ package unit.query;
 
 import anyparse.query.CallGraph;
 import anyparse.query.Clusters;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Partition analytics behind `apq clusters`: connected components over

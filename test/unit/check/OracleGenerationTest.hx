@@ -14,8 +14,6 @@ import anyparse.query.Cli;
 import anyparse.query.cli.command.LintFixVerify;
 import haxe.io.Path;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

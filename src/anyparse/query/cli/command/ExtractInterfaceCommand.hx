@@ -2,7 +2,6 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.MoveSymbol;
-import haxe.Exception;
 
 using Lambda;
 

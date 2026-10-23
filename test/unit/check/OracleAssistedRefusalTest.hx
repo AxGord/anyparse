@@ -6,15 +6,12 @@ import sys.io.File;
 import anyparse.check.Check;
 import anyparse.check.CompilerOracle;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.query.cli.command.LintFixVerify;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The oracle-assisted phase of `lint --fix` reports what the writer-emit gate refused, and a refused

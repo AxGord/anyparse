@@ -6,8 +6,6 @@ import sys.FileSystem;
 import anyparse.query.Glob;
 import anyparse.query.StdResolver;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 using Lambda;

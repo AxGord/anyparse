@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AbstractCasts.TypeEnd;
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The implicit cast an argument takes (`Unification.casts`, step T4 of the typer by specification): a unification, else

@@ -3,12 +3,9 @@ package unit.query;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Verifies item 3(b): the derivable `staticMethodReturns` values are ANSWERED by the

@@ -4,7 +4,6 @@ package unit.check;
 import sys.io.File;
 #end
 import anyparse.check.Check.RiskyCrossFileEdit;
-import anyparse.check.Check.Violation;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifierCrossFile;
 import anyparse.check.Naming;
@@ -12,15 +11,12 @@ import anyparse.check.NamingCrossRename;
 import anyparse.check.NamingRenames.RenameRefusal;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeIdentifierCase;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 using Lambda;

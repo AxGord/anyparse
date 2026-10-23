@@ -2,13 +2,9 @@ package unit.check;
 
 import anyparse.check.Check;
 import anyparse.check.HoistEmbeddedAssignment;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `hoist-embedded-assignment` check: an assignment written inside an array / object literal

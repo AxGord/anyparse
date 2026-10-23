@@ -9,10 +9,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCache;
 import anyparse.check.OracleCoverage;
 import anyparse.check.ReachDefinesProbe;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A `compilerOracle` entry's `dir` is the working directory of EVERY spawn of that configuration,

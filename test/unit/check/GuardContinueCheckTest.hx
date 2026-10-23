@@ -1,15 +1,10 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.GuardContinue;
-import anyparse.check.Linter;
 import anyparse.check.LoopGuard;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `guard-continue` check: a loop (`for` / `while` / `do … while`) whose braced

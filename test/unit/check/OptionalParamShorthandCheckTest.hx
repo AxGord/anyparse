@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.OptionalParamShorthand;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `optional-param-shorthand` check, three arms. (1) `name:Null<T> = null` / `name:T = null`

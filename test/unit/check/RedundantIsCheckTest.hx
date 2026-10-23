@@ -1,13 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.RedundantIsCheck;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `redundant-is-check` check: an `is` type-check `x is T` that is provably ALWAYS

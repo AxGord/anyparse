@@ -10,7 +10,6 @@ import anyparse.query.cli.CliArgs.PositionalScan;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliWalk;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 

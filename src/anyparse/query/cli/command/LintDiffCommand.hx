@@ -5,7 +5,6 @@ import anyparse.query.ExitCode.*;
 import anyparse.query.LintDiff.LintDiffResult;
 import anyparse.query.LintDiff.LintMessageIdentities;
 import anyparse.query.format.json.LintFindingJson;
-import haxe.Exception;
 
 /**
  * `apq lint-diff` — multiset diff of two lint --format json snapshots (blast radius).

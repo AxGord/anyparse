@@ -1,15 +1,10 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.SimplifyBooleanTernary;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `simplify-boolean-ternary` check: a ternary with a boolean-literal branch

@@ -1,10 +1,7 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Address.AddressSpec;
 import anyparse.query.ExtractConstantTo;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

@@ -3,7 +3,6 @@ package anyparse.query.cli.command;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.format.Text;
-import haxe.Exception;
 
 /**
  * Parsed options for `apq comment-rewrite` — `lang`, `write` / `list` / `reformat`, `regex` mode,

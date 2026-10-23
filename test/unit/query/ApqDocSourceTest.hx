@@ -1,14 +1,11 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceSlice;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `--doc` / `--source` opt-ins: `SourceSlice` slice + leading-doc

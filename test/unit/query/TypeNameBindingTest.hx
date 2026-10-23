@@ -1,6 +1,5 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.ImportBindings;
 import anyparse.query.IndexScope;
@@ -11,8 +10,6 @@ import anyparse.query.TypeNameBinding;
 import haxe.Exception;
 import unit.CheckFixture;
 import unit.QueryTestHelpers;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The ONE reading of a simple type name (`TypeNameBinding`, which `TypeRefIndex.resolveTypeRefAll` answers a simple

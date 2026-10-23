@@ -1,9 +1,6 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `SymbolIndex.resolvesToConversionFreeType` — the gate a signature rewrite consults before

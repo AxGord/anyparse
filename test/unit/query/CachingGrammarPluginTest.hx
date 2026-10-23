@@ -1,6 +1,5 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.QueryNode;
@@ -9,8 +8,6 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `CachingGrammarPlugin` memoizes `parseFile` / `parseFileTypeRefs` by source

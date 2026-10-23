@@ -1,6 +1,5 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.MemberLookup;
 import anyparse.query.MemberPathWalk;
 import anyparse.query.RawSourceScan;
@@ -10,8 +9,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeTraits;
 import anyparse.query.TypingService;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The layer seam of `SymbolIndex`: each cross-file question is owned by one query layer reached

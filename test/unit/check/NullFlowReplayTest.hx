@@ -1,15 +1,12 @@
 package unit.check;
 
 import anyparse.check.NullFlow;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefsCache;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

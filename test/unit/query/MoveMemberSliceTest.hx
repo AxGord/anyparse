@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.MoveMember;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 
@@ -740,7 +737,7 @@ class MoveMemberSliceTest extends Test {
 			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
-		Assert.isTrue(newB.contains('B.util(5)'), 'dest-file caller should repoint');
+		Assert.isTrue(newB.contains('return util(5);'), 'dest-file caller should land bare on its own member');
 		Assert.isTrue(newB.contains('private static function util'), 'no promotion for a dest-file caller');
 	}
 

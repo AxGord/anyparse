@@ -1,17 +1,13 @@
 package unit.check;
 
 import anyparse.check.Check.OracleType;
-import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitType;
 import anyparse.check.FactsTypeOracle;
 import anyparse.check.FactsTypeSpelling;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
 import anyparse.query.FactText;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

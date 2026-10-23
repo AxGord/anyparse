@@ -1,9 +1,6 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.UnusedLocal;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

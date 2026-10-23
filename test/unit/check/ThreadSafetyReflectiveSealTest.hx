@@ -1,8 +1,5 @@
 package unit.check;
 
-import utest.Assert;
-import utest.Test;
-
 /**
  * Reflective writes against the lock names (`FieldWrites.reflectivelyWritten`, review N2 / F3): a write of a computed name
  * on a value the run places on no class may store any lock in any lock member, so it unseals every one — the sound

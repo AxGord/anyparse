@@ -1,15 +1,10 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.OwnedTypes;
 import anyparse.check.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.StdResolver;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

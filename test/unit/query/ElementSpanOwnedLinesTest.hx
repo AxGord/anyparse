@@ -2,8 +2,6 @@ package unit.query;
 
 import anyparse.query.ElementSpan;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `ElementSpan.ownedLinesSpan` — the whole lines a span owns, indentation and trailing line break

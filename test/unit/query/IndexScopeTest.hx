@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `IndexScope` is the one door onto index construction, and on a run host (`CachingGrammarPlugin`)

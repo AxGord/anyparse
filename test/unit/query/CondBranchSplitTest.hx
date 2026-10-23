@@ -1,6 +1,5 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
@@ -9,8 +8,6 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

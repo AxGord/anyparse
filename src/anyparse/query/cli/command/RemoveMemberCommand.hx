@@ -3,7 +3,6 @@ package anyparse.query.cli.command;
 import anyparse.query.ExitCode.*;
 import anyparse.query.MemberKinds;
 import anyparse.query.cli.PostWriteFix;
-import haxe.Exception;
 
 /**
  * A member named the way `RemoveMember` addresses one: the enclosing type's name and the

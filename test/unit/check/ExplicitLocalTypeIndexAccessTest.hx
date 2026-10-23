@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitLocalType;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `explicit-local-type` autofix's INDEX-ACCESS arm: `container[key]` annotates the local with

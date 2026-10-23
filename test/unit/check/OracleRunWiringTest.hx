@@ -7,8 +7,6 @@ import anyparse.query.Cli;
 import anyparse.query.cli.command.LintCommand;
 import haxe.Exception;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * How a lint run wires its compiles: the configurations it prepares remember what the compiler answered

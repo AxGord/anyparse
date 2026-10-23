@@ -1,8 +1,6 @@
 package unit.query;
 
 import anyparse.query.ArgumentSlots;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `ArgumentSlots.runs` — how a call binds its arguments, each case a shape Haxe 4.3.7 was asked (`$type` / the bound

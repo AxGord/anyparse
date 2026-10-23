@@ -4,7 +4,6 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCoverage;
 import anyparse.check.ReachDefinesProbe;
 import anyparse.check.TypedFactsProbe;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
@@ -19,8 +18,6 @@ import anyparse.runtime.Span;
 import haxe.io.Path;
 import unit.CheckFixture;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

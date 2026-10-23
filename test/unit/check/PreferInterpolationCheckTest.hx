@@ -1,14 +1,10 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
-import anyparse.check.Linter;
 import anyparse.check.MacroGate;
 import anyparse.check.PreferInterpolation;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

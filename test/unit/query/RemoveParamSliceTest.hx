@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RemoveParam;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

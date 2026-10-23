@@ -1,12 +1,8 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `orphan-accessor` check: a `get_X` / `set_X` method whose property `X` declares no matching

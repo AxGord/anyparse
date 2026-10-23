@@ -1,10 +1,7 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.Linter;
 import anyparse.query.cli.command.LintCommand;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

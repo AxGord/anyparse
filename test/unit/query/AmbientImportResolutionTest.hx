@@ -1,15 +1,12 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeAmbientImports;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import unit.CheckFixture;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Resolution through an AMBIENT import source — a per-directory `import.hx`.

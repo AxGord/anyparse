@@ -1,6 +1,5 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AbstractCasts.TypeEnd;
 import anyparse.query.ArgumentSlots;
 import anyparse.query.CallSelection;
@@ -8,8 +7,6 @@ import anyparse.query.CallSignature;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

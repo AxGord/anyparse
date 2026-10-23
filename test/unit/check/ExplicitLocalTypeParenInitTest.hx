@@ -1,7 +1,5 @@
 package unit.check;
 
-import utest.Assert;
-
 /**
  * The `explicit-local-type` autofix on an initializer wrapped in parentheses or in
  * an `(expr : T)` check-type: the wrapper is unwrapped before the initializer's own

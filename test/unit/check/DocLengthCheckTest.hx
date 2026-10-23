@@ -3,11 +3,8 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.DocLength;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

@@ -3,8 +3,6 @@ package unit.check;
 import anyparse.check.HaxeSpawn;
 import anyparse.check.PendingRuns;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `PendingRuns`: a batch started with `HaxeSpawn.startAll` runs while the caller goes on, and `cancel` ends it.

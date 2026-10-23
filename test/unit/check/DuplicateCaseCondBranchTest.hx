@@ -1,9 +1,6 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.DuplicateCase;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `duplicate-case` and conditional compilation.

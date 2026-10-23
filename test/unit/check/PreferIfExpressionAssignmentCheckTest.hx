@@ -1,15 +1,10 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.PreferIfExpressionAssignment;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-if-expression-assignment` check: an `if / else if / … / else` CHAIN whose

@@ -4,7 +4,6 @@ import anyparse.query.Cli.ReconCluster;
 import anyparse.query.ExitCode.*;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 

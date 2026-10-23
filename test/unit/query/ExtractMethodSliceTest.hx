@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExtractMethod;
 import anyparse.query.GrammarPlugin.RefShape;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `ExtractMethod.extractMethod` — extract a run of statements into a local

@@ -4,7 +4,6 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliUsage;
 import anyparse.query.cli.PostWriteFix;
-import haxe.Exception;
 
 /**
  * Parsed options for `apq add-member` — `lang`, `write` / `reformat`, the target `typeName` and `file`, and the member body
