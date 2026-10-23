@@ -29784,6 +29784,14 @@
 			"find": "parsed: OracleCoverage.parsedPaths(transcript)",
 			"replace": "parsed: []",
 			"note": "a probed build names no file it parses, so every module it reads looks compiled by none of the builds"
+		},
+		{
+			"name": "M-MERMAID-ENCODE-DROPPED",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "lowerTerminal",
+			"find": "return macro return _dt($encodeCall);",
+			"replace": "return macro return _dt(value);",
+			"note": "an `@:encode` terminal is written as its decoded value, so a Mermaid label holding a quote or a pipe comes out bare and the writer's output no longer parses back to the AST it was given"
 		}
 	]
 }

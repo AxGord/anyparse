@@ -213,8 +213,12 @@ final class TerminalParseLowering {
 		// `@:decode("pkg.Class.method")` on a Terminal abstract names a
 		// static function that decodes the matched string into the
 		// terminal's underlying type. The path is split on `.` and
-		// emitted as `pkg.Class.method(_matched)`.
+		// emitted as `pkg.Class.method(_matched)`. It is one half of a
+		// codec: the writer twin `@:encode` must be declared beside it,
+		// or the writer would emit the decoded value verbatim.
 		final decodePath: Null<String> = node.readMetaString(':decode');
+		if ((decodePath == null) != (node.readMetaString(':encode') == null))
+			Context.fatalError('Lowering: terminal $typePath must declare @:decode and @:encode together', Context.currentPos());
 
 		if (unescape && decodePath != null)
 			Context.fatalError('Lowering: terminal $typePath has both @:unescape and @:decode', Context.currentPos());

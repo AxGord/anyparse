@@ -289,6 +289,8 @@ Owns: `@:re`, `@:captureGroup`.
 
 For an `abstract X(String) @:re("pattern")`, emits a `Re("pattern")` terminal. Used for regex-matched primitives: strings, numbers, identifiers, ASCII tokens. `@:captureGroup(n)` selects which group of the pattern becomes the value.
 
+A `String` terminal states how its match becomes a value: `@:rawString` (the match itself), `@:unescape` (the format's backslash table), or a `@:decode('pkg.Class.fn')` / `@:encode('pkg.Class.fn')` pair naming the static codec the parser and the writer call — declared together or refused at compile time, so a value whose spelling differs (Mermaid's entity-coded, quote-or-bare labels, `MermaidText`) is written back the way it was read.
+
 ### Lexical
 
 Owns: `@:lexical(<Kind>)`, `@:balanced(<open>, <close>)`. Reads `@:re`, `@:lead`, `@:trail`, `@:lit` and the format's `lineComment` / `blockComment`.

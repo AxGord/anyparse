@@ -271,7 +271,8 @@ final class DeferredArms {
 		'M-CALL-SOURCE-TRAIL-OFF :: anyparse.macro.WriterPrattLowering#lowerPostfixStar',
 		'M-CALL-FLAT-SOURCE-TRAIL-OFF :: anyparse.macro.WriterPrattLowering#lowerPostfixCascadeCall',
 		'M-TERNARY-MLB-OPTION-IGNORED :: anyparse.macro.WriterPrattLowering#multilineBranchInlineExpr',
-		'M-INDEX-HOST-PARENS-KEPT :: anyparse.query.NominalTypes#FinalMember:INDEX_HOST'
+		'M-INDEX-HOST-PARENS-KEPT :: anyparse.query.NominalTypes#FinalMember:INDEX_HOST',
+		'M-MERMAID-ENCODE-DROPPED :: anyparse.macro.WriterLowering#lowerTerminal'
 	];
 
 }

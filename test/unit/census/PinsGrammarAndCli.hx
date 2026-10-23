@@ -110,6 +110,7 @@ final class PinsGrammarAndCli {
 		'unit.grammar.JsonLayoutWriterTest#testWritingWithNoEditKeepsEveryByte :: control :: M-JSON-ROOT-UNTIGHTENED',
 		'unit.grammar.JsonTypedParserTest#testDeclaredKeyIsTheParsedKey :: control :: M-JSON-KEY-PARSE',
 		'unit.grammar.JsonTypedParserTest#testDeclaredKeyIsTheWrittenKey :: control :: M-JSON-KEY-WRITE',
+		'unit.grammar.MermaidParserTest#testAnyLabelRoundTripsThroughTheWriter :: control :: M-MERMAID-ENCODE-DROPPED',
 		'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
 		'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
 		'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testACommentBeforeTheThenSwitchDeclinesBothSeams :: control :: '
