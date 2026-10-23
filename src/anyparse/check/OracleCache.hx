@@ -159,7 +159,7 @@ final class OracleCache {
 	private static inline final MAX_DIR_DEPTH: Int = 32;
 
 	/** The scheme tag in every manifest: bump it and every stored record misses, which is the point. */
-	private static final FORMAT_TAG: String = 'apq-oracle-cache v1';
+	private static final FORMAT_TAG: String = 'apq-oracle-cache v2';
 
 	/**
 	 * Per-process memo of the compiler probe, keyed by compile root + library
