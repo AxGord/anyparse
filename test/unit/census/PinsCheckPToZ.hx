@@ -71,7 +71,6 @@ final class PinsCheckPToZ {
 		'unit.check.PreferCountCheckTest#testFilteredFixFoldsDeclarationAndLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
 		'unit.check.PreferEnumAbstractCheckTest#testFixRefusalFollowsTheDeclarationNotTheSimpleName :: control :: '
 			+ 'M-SUBTYPE-KEY-SIMPLE-NAME',
-		'unit.check.PreferEnumAbstractCheckTest#testFixRefusesAnRttiHomonym :: control :: M-RTTI-FALSE',
 		'unit.check.PreferEnumAbstractCheckTest#testFixRefusesSubtypedContainer :: control :: M-HASSUBTYPE-FALSE',
 		'unit.check.PreferFinalAbstractMethodCheckTest#testAbstractFieldNoCallStillFlagged :: control :: M-PFF-CALLSCAN-ALWAYS',
 		'unit.check.PreferFinalAbstractMethodCheckTest#testClassTypedFieldMethodCallStillFlagged :: control :: M-PFF-REBIND-UNRESOLVED',
@@ -339,6 +338,7 @@ final class PinsCheckPToZ {
 		'unit.check.RedundantReplaceLoopCheckTest#testSearchEndingWithTheReplacementHeadNotFlagged :: control :: M-SEAM-BLIND',
 		'unit.check.RedundantThisCheckTest#testInheritedFromOtherFileBaseFlagged :: control :: M-INHERITS-FALSE',
 		'unit.check.RedundantToStringCheckTest#testMethodReturningTypedefOfNullNotFixed :: control :: M-TOSTRING-RETURN-TRUSTED',
+		'unit.check.RedundantUpcastTest#testNamesakeSupertypeIsNotTheCastTarget :: control :: M-SUBTYPE-TARGET-SIMPLE-NAME',
 		'unit.check.RedundantUpcastTest#testUpcastFlagged :: control :: M-ISSUBTYPE-FALSE',
 		'unit.check.ReflectionMemoTest#testARewrittenScopeFileIsReRead :: control :: M-REFLECTION-MEMO-STALE',
 		'unit.check.ReflectionMemoTest#testASecondScopeIsNotAnsweredFromTheFirst :: control :: M-REFLECTION-MEMO-STALE',
@@ -1021,6 +1021,7 @@ final class PinsCheckPToZ {
 		'unit.check.UnguardedNullableDerefTest#testUnprovenPredicateStillFlagged :: control :: M-NULLFLOW-PREDICATE-UNCHECKED',
 		'unit.check.UnnecessaryNullCheckCheckTest#testTypedefOfNullOperandNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
 		'unit.check.UnnecessarySafeNavCheckTest#testTypedefOfNullReceiverNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
+		'unit.check.UnreachableCatchTest#testNamesakeSupertypeDoesNotCoverTheLaterClause :: control :: M-SUBTYPE-TARGET-SIMPLE-NAME',
 		'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 		'unit.check.UnusedCaseBinderCheckTest#testBinderAnAmbientImportMayBindRefused :: control :: M-SCOPE-AMBIENT-BLIND',
 		'unit.check.UnusedCaseBinderCheckTest#testBinderAnImportedModuleFieldMayBindRefused :: control :: M-SCOPE-MODULE-IMPORT-BLIND',

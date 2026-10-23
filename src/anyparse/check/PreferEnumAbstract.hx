@@ -118,7 +118,7 @@ using StringTools;
  *   after. A runtime lookup takes the FULLY-QUALIFIED path, so the refusal is a dot-path test on
  *   `ReflectionScan`'s surface (`runtimeTypePath` / `runtimeTypePathFragment`) and not the bare-name
  *   test the MEMBER gates take;
- * - the index reports a subtype or a transitive `@:rtti` hierarchy for the name.
+ * - the index reports a subtype of the declaration.
  *
  * Two more refusals are about what the head TEMPLATE would silently drop, since neither
  * projects as a tree child: a declaration keyword that is more than one word (`abstract
@@ -200,11 +200,9 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	 * finding, a finding whose container the plan phase refused, and every finding at all when
 	 * `run` has not been called on this instance all yield nothing.
 	 *
-	 * `index` adds the two whole-project refusals that need resolution rather than text: a
-	 * SUBTYPE of the converted type (`class Sub extends Name`, which an abstract cannot host)
-	 * and a transitive `@:rtti` hierarchy. Both are cheap and precise here, and both are
-	 * belt-and-braces for the `RiskyFix` oracle, which would reject the first as a compile
-	 * error anyway.
+	 * `index` adds the whole-project refusal that needs resolution rather than text: a
+	 * SUBTYPE of the converted type (`class Sub extends Name`, which an abstract cannot host). It is cheap and
+	 * precise here, and belt-and-braces for the `RiskyFix` oracle, which would reject it as a compile error anyway.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -235,8 +233,9 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 			if (span == null) continue;
 			final plan: Null<ConversionPlan> = _plans[planKey(v.file, span.from)];
 			if (plan == null || source.substring(span.from, span.to) != plan.declSource) continue;
-			if (index != null && (index.subtypes.hasSubtype(plan.name, v.file) || index.traits.transitivelyCarriesRtti(plan.name)))
-				continue;
+			// No `@:rtti` gate: the container's own metadata is refused by the plan and its header admits no supertype, so the one
+			// hierarchy left to carry `@:rtti` was another declaration sharing the name.
+			if (index != null && index.subtypes.hasSubtype(plan.name, v.file)) continue;
 			for (e in plan.edits) out.push({ span: e.span, text: e.text, group: group });
 			group++;
 		}

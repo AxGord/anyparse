@@ -99,12 +99,37 @@ class RedundantUpcastTest extends Test {
 		Assert.isTrue(ids.contains('redundant-upcast'));
 	}
 
+	/**
+	 * A cast target and the supertype a declared type really extends can share a simple name across packages: only the
+	 * declaration the cast names, resolved where it is written, makes the cast an upcast. The second assertion keeps the
+	 * namesake in the index, so the first cannot pass by the check going silent on every ambiguous name.
+	 */
+	@:pin('control') @:killer('M-SUBTYPE-TARGET-SIMPLE-NAME')
+	public function testNamesakeSupertypeIsNotTheCastTarget(): Void {
+		Assert.equals(0, namesakeUpcasts('Base'), 'a subtype of another package\'s Base is not upcast to this one');
+		Assert.equals(1, namesakeUpcasts('pkg.Base'), 'a subtype of this Base still is');
+	}
+
 	private function applyFix(src: String): String {
 		return CheckFixture.fixedSource(new RedundantUpcast(), src);
 	}
 
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new RedundantUpcast(), src);
+	}
+
+	/** `redundant-upcast` findings over two `Base` classes in two packages, `other.Sub` extending `subExtends`. */
+	private function namesakeUpcasts(subExtends: String): Int {
+		return CheckFixture.violationsIn(new RedundantUpcast(), [
+			{ file: 'pkg/Base.hx', source: 'package pkg;\n\nclass Base {}\n' },
+			{ file: 'other/Base.hx', source: 'package other;\n\nclass Base {}\n' },
+			{ file: 'other/Sub.hx', source: 'package other;\n\nclass Sub extends $subExtends {}\n' },
+			{
+				file: 'pkg/Main.hx',
+				source: 'package pkg;\n\nimport other.Sub;\n\nclass Main {\n\n\tfunction f(s:Sub):Base {\n'
+				+ '\t\tfinal b:Base = cast(s, Base);\n\t\treturn b;\n\t}\n\n}\n'
+			}
+		]).length;
 	}
 
 }

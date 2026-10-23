@@ -369,13 +369,6 @@
 			"note": "the declared resolutionRoots are tagged third-party along with the library, so a write from a project module outside the lint scope stops vetoing"
 		},
 		{
-			"name": "M-RTTI-FALSE",
-			"type": "anyparse.query.TypeTraits",
-			"method": "transitivelyCarriesRtti",
-			"force": "false",
-			"note": "no type carries @:rtti, so prefer-enum-abstract's rtti refusal never fires"
-		},
-		{
 			"name": "M-SEAM-BLIND",
 			"type": "anyparse.check.RedundantReplaceLoop",
 			"method": "replacementCanReformSearch",
@@ -30016,6 +30009,38 @@
 			"method": "privatePaths",
 			"force": "[]",
 			"note": "scrub-guard stops reading paths against the private roots, so a client file path named in the tree or in a pushed range passes the guard silently"
+		},
+		{
+			"name": "M-SUBTYPE-TARGET-SIMPLE-NAME",
+			"type": "anyparse.query.SupertypeWalk",
+			"method": "hopsReach",
+			"find": "refs.seenKey(up) == refs.seenKey(target)",
+			"replace": "up.type.name == target.type.name",
+			"note": "the upward subtype proof matches the target by simple name again, so another package's namesake in a chain proves the subtype - redundant-upcast unwraps a cast that can fail and unreachable-catch deletes a clause that runs"
+		},
+		{
+			"name": "M-SUPERTYPE-DECLARES-UNION",
+			"type": "anyparse.query.MemberLookup",
+			"method": "supertypeDeclaresMember",
+			"find": "if (fromFile == null) return supertypeDeclares(typeName, field, []);",
+			"replace": "return supertypeDeclares(typeName, field, []);",
+			"note": "the supertype-declares veto walks every declaration of the owner's simple name again, so another package's namesake extending a base that declares the member hides an unused private and an inline candidate"
+		},
+		{
+			"name": "M-RTTI-HOMONYM-REFUSES",
+			"type": "anyparse.check.PreferEnumAbstract",
+			"method": "fixGrouped",
+			"find": "if (index != null && index.subtypes.hasSubtype(plan.name, v.file)) continue;",
+			"replace": "if (index != null && (index.subtypes.hasSubtype(plan.name, v.file) || index.traits.transitivelyCarriesRtti(plan.name))) continue;",
+			"note": "the enum-abstract conversion is refused again on an @:rtti hierarchy read by simple name, whose only reachable source is another package's declaration of the same name"
+		},
+		{
+			"name": "M-SUBTYPE-MEMBERS-SKIP-NAMESAKE",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "subtypeMemberNames",
+			"find": "own == null ? sub.type.name == owner : _refs.seenKey(sub) == _refs.seenKey(own)",
+			"replace": "sub.type.name == owner",
+			"note": "a subtype sharing its supertype's simple name is skipped as if it were the owner, so its overrides leave the veto list and prefer-inline inlines a method it overrides"
 		}
 	]
 }

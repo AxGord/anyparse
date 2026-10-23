@@ -263,13 +263,16 @@ final class BackingFieldRefs {
 			excludeSpans.push(new Span(off, off + field.length));
 			return true;
 		}
-		if (index.subtypes.isSubtype(c, owner) && !index.typing.members.typeDeclaresMember(c, field)) {
+		final redeclares: Bool = index.typing.members.typeDeclaresMember(c, field);
+		final verdict: Null<Bool> = redeclares ? false : index.subtypes.subtypeVerdict(c, owner);
+		// A class that MAY extend the owner without proof is left uncovered, so the completeness gate blocks.
+		if (verdict == null) return true;
+		if (verdict) {
 			if (writePos) return false;
 			renameEdits.push({ span: new Span(off, off + field.length), text: bareIdent && shadowsProp ? 'this.$propName' : propName });
 			return true;
 		}
-		if (index.typing.members.typeDeclaresMember(c, field) || index.typing.members.supertypeDeclaresMember(c, field))
-			excludeSpans.push(new Span(off, off + field.length));
+		if (redeclares || index.typing.members.supertypeDeclaresMember(c, field)) excludeSpans.push(new Span(off, off + field.length));
 		return true;
 	}
 

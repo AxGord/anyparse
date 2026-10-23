@@ -143,6 +143,17 @@ class UnreachableCatchTest extends Test {
 		);
 	}
 
+	/**
+	 * An earlier clause covers a later one only when the later type really extends the DECLARATION the earlier clause
+	 * names: another package's namesake in the later type's chain leaves the clause reachable, and deleting it would drop
+	 * the handler that runs. The second assertion keeps the namesake in the index beside a real subtype.
+	 */
+	@:pin('control') @:killer('M-SUBTYPE-TARGET-SIMPLE-NAME')
+	public function testNamesakeSupertypeDoesNotCoverTheLaterClause(): Void {
+		Assert.equals(0, namesakeCovered('Base'), 'a subtype of another package\'s Base still reaches its own clause');
+		Assert.equals(1, namesakeCovered('pkg.Base'), 'a subtype of this Base is caught by the earlier clause');
+	}
+
 	private function assertFix(src: String, present: String, absent: String): Void {
 		final check: UnreachableCatch = new UnreachableCatch();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
@@ -157,6 +168,20 @@ class UnreachableCatchTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new UnreachableCatch(), src);
+	}
+
+	/** `unreachable-catch` findings over two `Base` classes in two packages, `other.Sub` extending `subExtends`. */
+	private function namesakeCovered(subExtends: String): Int {
+		return CheckFixture.violationsIn(new UnreachableCatch(), [
+			{ file: 'pkg/Base.hx', source: 'package pkg;\n\nclass Base {}\n' },
+			{ file: 'other/Base.hx', source: 'package other;\n\nclass Base {}\n' },
+			{ file: 'other/Sub.hx', source: 'package other;\n\nclass Sub extends $subExtends {}\n' },
+			{
+				file: 'pkg/Main.hx',
+				source: 'package pkg;\n\nimport other.Sub;\n\nclass Main {\n\n\tfunction f():Void {\n\t\ttry {\n\t\t\tg();\n'
+				+ '\t\t} catch (e:Base) {\n\t\t\tone();\n\t\t} catch (e:Sub) {\n\t\t\ttwo();\n\t\t}\n\t}\n\n}\n'
+			}
+		]).length;
 	}
 
 }

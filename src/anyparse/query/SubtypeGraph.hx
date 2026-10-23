@@ -14,7 +14,7 @@ using Lambda;
  * The project-wide INHERITANCE graph: who extends or implements whom, and what that closure
  * proves. Two directions over the same `supertypes` edges — DOWNWARD from a type to its subtypes
  * (`subtypesOf` and the `eachSubtype` walks over the lazily-built adjacency), and UPWARD from a
- * type through its supertype chain (`closureContains` / `closureExcludes`, the `isSubtype` and
+ * type through its supertype chain (`SupertypeWalk.verdict` / `closureExcludes`, the `isSubtype` and
  * `provablyNotSubtype` proofs, the override family a cross-file member rename must rewrite whole).
  *
  * Split out of `SymbolIndex`, which keeps the layer BELOW: which files declare a name, and which
@@ -49,9 +49,8 @@ final class SubtypeGraph {
 	 * as "excludes everything", so it refuses them. A positive list: the negative one it replaced named
 	 * the typedef and the plain abstract and let a `@:forward enum abstract E(Owner)` through as
 	 * unrelated to `Owner`. As a supertype LINK an abstract is a different matter: Haxe rejects one in
-	 * either inheritance clause, so a link resolving to it is no edge at all and is stepped over. A
-	 * POSITIVE proof (`closureContains`) needs no guard either way: an unseen edge only makes it miss,
-	 * which is its safe direction.
+	 * either inheritance clause, so a link resolving to it is no edge at all and is stepped over. A POSITIVE proof
+	 * (`SupertypeWalk.verdict`) needs no guard either way: an unseen edge only makes it miss or doubt, never prove.
 	 */
 	private static final COMPLETE_SUPERTYPE_KINDS: Array<String> = ['ClassDecl', 'AbstractClassDecl', 'InterfaceDecl', 'EnumDecl'];
 
@@ -123,6 +122,15 @@ final class SubtypeGraph {
 	}
 
 	/**
+	 * `isSubtype`'s question in three values (`SupertypeWalk.verdict`): `true` proven, `false` refuted, `null` when a link
+	 * may reach `sup` and nothing proves it. A consumer that must COVER every subtype — a veto, a rewrite of every inherited
+	 * use — reads `null` as "maybe", where `isSubtype` reads it as "no".
+	 */
+	public inline function subtypeVerdict(sub: String, sup: String, ?supFile: String, ?supAt: Int): Null<Bool> {
+		return SupertypeWalk.verdict(_refs, sub, sup, supFile, supAt);
+	}
+
+	/**
 	 * Does any indexed type extend / implement `typeName`? The first gate of a cross-file-safe
 	 * private-member rename — a subtype could reference the member.
 	 *
@@ -157,25 +165,15 @@ final class SubtypeGraph {
 	}
 
 	/**
-	 * Whether `sub` is a transitive (proper) SUBTYPE of `sup` — `sup`'s simple name
-	 * appears in `sub`'s transitive supertype closure (extends + implements). Positive
-	 * direction: an unindexed or ambiguous supertype link simply ends that branch (a safe
-	 * MISS, never a false claim of subtyping); not reflexive (`sub == sup` → false — the
-	 * caller decides same-type separately). Names are SIMPLE; a same-named unrelated type
-	 * in the chain is the residual soundness boundary, as in `unrelatedClasses`.
+	 * Whether `sub` is PROVABLY a transitive proper subtype of what `sup` denotes — `subtypeVerdict` answering `true`. Not
+	 * reflexive; the caller decides same-type separately. Read affirmatively by autofixes that DELETE, so a namesake of `sup`
+	 * in another package, a link nothing resolves and an alias bound inside a `#if` region all answer no here.
 	 *
-	 * A supertype written through an ALIAS is followed — both kinds, composing in either order. The
-	 * `import pkg.Base as U;` hop is read off the DECLARING file's own imports (that binding exists in
-	 * no other module); the `typedef U = Base;` hop off the declaration `U` itself resolves to.
-	 *
-	 * The UPWARD counterpart of `subtypesOf`, and deliberately NOT its equal. This walk never claims
-	 * more than the downward one does and refuses two shapes it accepts: a name the index resolves to
-	 * several declarations, and an alias bound inside a `#if` region. Both refusals are the same
-	 * reason — `subtypesOf` is read as a veto, where over-breadth withholds, while this is read
-	 * affirmatively by autofixes that DELETE.
+	 * `supFile` is the file `sup` is written in (at `supAt`): naming it resolves `sup` there, an alias or a namesake
+	 * included; without it `sup` must name exactly one declaration.
 	 */
-	public function isSubtype(sub: String, sup: String): Bool {
-		return closureContains(sub, sup, [sub]);
+	public function isSubtype(sub: String, sup: String, ?supFile: String, ?supAt: Int): Bool {
+		return subtypeVerdict(sub, sup, supFile, supAt) == true;
 	}
 
 	/**
@@ -207,7 +205,8 @@ final class SubtypeGraph {
 		final declarers: Array<String> = [
 			for (fi in _files) for (t in fi.types) if (t.members.exists(m -> m.name == member)) t.name
 		];
-		return declarers.find(n -> n != typeName && isSubtype(typeName, n));
+		// A veto for every consumer — each refuses or grants on a non-null answer — so a MAYBE-ancestor counts.
+		return declarers.find(n -> n != typeName && subtypeVerdict(typeName, n) != false);
 	}
 
 	/**
@@ -217,7 +216,7 @@ final class SubtypeGraph {
 	 * `supertypeDeclaresMember`: it scans every indexed type, and for each that
 	 * declares `member` tests `isSubtype` against `typeName` (transitive extends +
 	 * implements). Names are SIMPLE (the index models no packages), so a same-named
-	 * unrelated type is the residual soundness boundary, as in `isSubtype`. Used by
+	 * unrelated type can only add a subtype, the conservative side for a veto. Used by
 	 * `unused-parameter`'s rename fix to leave a base method's parameter alone when
 	 * a subclass override may use it.
 	 */
@@ -241,8 +240,8 @@ final class SubtypeGraph {
 	 * it. Only when no declaration resolves does the walk fall back to `provablyNotSubtype`, which
 	 * keeps an unresolvable hierarchy blocked conservatively. A FRESH (non-override) same-named
 	 * member never blocks: an unrelated class merely sharing the property name leaves the collapse
-	 * alone. False when no subtype touches the property (or `owner` has none). Names are SIMPLE, so
-	 * a same-named unrelated type is the residual soundness boundary, as in `isSubtype`.
+	 * alone. False when no subtype touches the property (or `owner` has none). Names are SIMPLE,
+	 * so a same-named unrelated type can only add a subtype, the conservative side for a veto.
 	 */
 	public function subtypeOverridesProperty(owner: String, prop: String): Bool {
 		final names: Array<String> = ['get_$prop', 'set_$prop', prop];
@@ -271,7 +270,7 @@ final class SubtypeGraph {
 			final resolved: ResolvedType = owners.types[ordinal];
 			if (resolved.type.name == owner) continue;
 			final matches: Array<MemberInfo> = resolved.type.members.filter(m -> names.contains(m.name));
-			if (isSubtype(resolved.type.name, owner)) return true;
+			if (subtypeVerdict(resolved.type.name, owner) != false) return true;
 			if (!matches.exists(m -> m.isOverride)) continue;
 			final declarer: Null<String> = overriddenDeclarer({ file: resolved.file, type: resolved.type }, names, owner);
 			if (declarer != null) {
@@ -312,10 +311,13 @@ final class SubtypeGraph {
 			final decl: Null<MemberInfo> = t.members.find(m -> m.name == member);
 			if (decl == null) continue;
 			final entry: OverrideFamilyMember = { file: fi.file, typeName: t.name, declFrom: decl.declFrom };
-			if (isSubtype(t.name, owner)) {
+			final verdict: Null<Bool> = subtypeVerdict(t.name, owner);
+			if (verdict == true) {
 				family.push(entry);
 				continue;
 			}
+			// A type that MAY extend the owner without proof is neither family nor provably outside it.
+			if (verdict == null) return null;
 			// The declaration this one overrides, resolved through the written supertype paths: a type
 			// overriding some OTHER hierarchy's same-named member is not family, however unresolvable
 			// its own ancestry is above that declaration.
@@ -389,9 +391,12 @@ final class SubtypeGraph {
 	 */
 	public function subtypeMemberNames(owner: String, ?fromFile: String): Array<String> {
 		final out: Array<String> = [];
-		eachSubtype(
-			owner, sub -> if (sub.type.name != owner) for (m in sub.type.members) if (!out.contains(m.name)) out.push(m.name), fromFile
-		);
+		// Only the owner's own declaration is skipped: a subtype that merely shares its simple name overrides like any other.
+		final own: Null<ResolvedType> = fromFile == null ? null : _refs.findDeclaredType(fromFile, owner);
+		eachSubtype(owner, sub -> {
+			final isOwner: Bool = own == null ? sub.type.name == owner : _refs.seenKey(sub) == _refs.seenKey(own);
+			if (!isOwner) for (m in sub.type.members) if (!out.contains(m.name)) out.push(m.name);
+		}, fromFile);
 		return out;
 	}
 
@@ -495,7 +500,7 @@ final class SubtypeGraph {
 	 * Name-keyed like every other index query, so the result over-approximates. That is the safe
 	 * direction even for a caller that EDITS the files it gets back, not merely reads them:
 	 * every occurrence in them is re-gated per site by `isSubtype`, which a homonym cannot pass
-	 * (`closureContains` refuses an ambiguous simple name outright), so a spurious file can only
+	 * (`SupertypeWalk.verdict` proves only a link that resolves to the owner's own declaration), so a spurious file can only
 	 * ever add a refusal — never an edit.
 	 */
 	public function subtypeFiles(owner: String): Array<String> {
@@ -631,15 +636,13 @@ final class SubtypeGraph {
 	}
 
 	/**
-	 * Whether `t` MAY be a transitive subtype of `target`. Deliberately NOT `isSubtype`: that one
-	 * re-resolves a link by SIMPLE NAME and answers `false` when several types share it, which is
-	 * the safe default only for a caller that acts on `true` (`redundant-upcast` rewrites a cast,
+	 * Whether `t` MAY be a transitive subtype of `target`. Deliberately NOT `isSubtype`: that one answers `false` on every link it
+	 * cannot pin to one declaration, which is the safe default only for a caller that acts on `true` (`redundant-upcast` rewrites a cast,
 	 * `naming` rebinds an occurrence). Every caller of `subtypeDeclaresMember` reads `true` as
 	 * "bail out" instead, so it needs the opposite default: an AMBIGUOUS link is a MAY. Two other
 	 * differences follow from starting at the declaration rather than its name — the root type is
 	 * never ambiguous (we hold it), and only a genuinely ambiguous ANCESTOR link goes conservative.
-	 * A link naming no indexed type is skipped, as in `isSubtype`: it cannot be `target`, which is
-	 * indexed by construction.
+	 * A link naming no indexed type is skipped: it cannot be `target`, which is indexed by construction.
 	 */
 	private function declMayBeSubtype(t: TypeDeclInfo, target: String, seen: Array<String>): Bool {
 		for (sup in t.supertypes) {
@@ -913,37 +916,6 @@ final class SubtypeGraph {
 			if (!closureExcludesFrom(ancestor, target, seen)) return false;
 		}
 		return true;
-	}
-
-	/** Whether `target` appears in `name`'s transitive supertype closure. `seen` guards cycles. */
-	private function closureContains(name: String, target: String, seen: Array<String>): Bool {
-		final ds: Array<ResolvedType> = _refs.resolvedDeclsNamed(name);
-		if (ds.length != 1) return false;
-		final decl: ResolvedType = ds[0];
-		// `denoted` is every name this declaration's supertype list can be spelling, and doubles as
-		// the hop worklist AND its cycle guard, exactly as `subtypesOf`s `named` does. `supertypes`
-		// belongs to the shared index, so the copy is load-bearing.
-		final denoted: Array<String> = decl.type.supertypes.copy();
-		// A `typedef U = Base;` names its target where the typedef is WRITTEN, so the hop for THIS
-		// declaration is its own `aliasTargetNominal`, read one recursion deeper than the name that
-		// denoted it — no project-wide map is needed for it. Null for a guarded typedef, which is
-		// where the two alias kinds agree to fail closed (see `importAliasEdges`).
-		final hop: Null<String> = decl.type.aliasTargetNominal;
-		if (hop != null && hop != name) denoted.push(hop);
-		if (denoted.length == 0) return false;
-		// `false`: going UP, this answer is read affirmatively by autofixes that delete, so a `#if`
-		// region binding one alias name to two modules must not make this type a subtype of both.
-		final aliases: Map<String, Array<String>> = TypeRefIndex.importAliasEdges(decl.file, false);
-		var i: Int = 0;
-		while (i < denoted.length) {
-			final written: String = denoted[i++];
-			if (written == target) return true;
-			for (aliased in aliases[written] ?? []) if (!denoted.contains(aliased)) denoted.push(aliased);
-			if (seen.contains(written)) continue;
-			seen.push(written);
-			if (closureContains(written, target, seen)) return true;
-		}
-		return false;
 	}
 
 	/**

@@ -54,7 +54,6 @@ final class DeclaredArms1 {
 		'M-NO-WIRE',
 		'M-PATHWALK-NULL',
 		'M-ROOTS-THIRDPARTY',
-		'M-RTTI-FALSE',
 		'M-SEAM-BLIND',
 		'M-SHADOWEXT-TRUE',
 		'M-SUBOVERRIDE-TRUE',

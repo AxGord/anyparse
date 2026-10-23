@@ -156,6 +156,11 @@ final class MoveToHelperRefs {
 		return '$file:${at.line}:${at.col}';
 	}
 
+	/** Whether `hit` starts inside one of `spans`. */
+	private static inline function within(hit: RefHit, spans: Array<Span>): Bool {
+		return spans.exists(s -> hit.span.from >= s.from && hit.span.from < s.to);
+	}
+
 	/**
 	 * Rewrites what the moved bodies reference, each identifier bound by `Refs`: a staying instance member (own or
 	 * inherited) is reached through the parameter, a staying static through the source type, `this` IS the parameter, a
@@ -322,22 +327,23 @@ final class MoveToHelperRefs {
 		for (file => tree in prep.trees) {
 			final info: Null<FileInfo> = prep.index.fileInfo(file);
 			if (info == null) continue;
-			final subtypes: Array<Span> = [
-				for (t in info.types) if (t.name != prep.srcTypeName && prep.index.subtypes.isSubtype(t.name, prep.srcTypeName)) t.span
-			];
-			if (subtypes.length == 0) continue;
+			final subtypes: Array<Span> = [];
+			final maybe: Array<Span> = [];
+			sortSubtypeSpans(prep, info, subtypes, maybe);
+			if (subtypes.length == 0 && maybe.length == 0) continue;
 			final hits: Map<String, Array<RefHit>> = Refs.findMulti([for (m in instance) m.name], tree, prep.shape);
-			for (m in instance)
-				for (hit in hits[m.name] ?? []) if (hit.kind != RefKind.Decl && hit.bindingSpan == null && subtypes.exists(s ->
-					hit.span.from >= s.from && hit.span.from < s.to
-				)) {
-					edits.outsideCallersOf[m.name] = (edits.outsideCallersOf[m.name] ?? 0) + 1;
-					if (file != prep.destFile && !edits.callerFiles.contains(file)) edits.callerFiles.push(file);
-					final error: Null<String> = callRewrite(
-						edits, indexes, file, hit.span.from, m, hit.interpolated, '${edits.helperName}.', 'this', false, calls
-					);
-					if (error != null) return error;
-				}
+			for (m in instance) for (hit in hits[m.name] ?? []) if (hit.kind != RefKind.Decl && hit.bindingSpan == null) {
+				// A type that MAY extend the source without proof could inherit the member: its bare call is refused, not left.
+				if (within(hit, maybe))
+					return 'a type in $file may extend "${prep.srcTypeName}" and calls "${m.name}" bare, and nothing proves it inherits it';
+				if (!within(hit, subtypes)) continue;
+				edits.outsideCallersOf[m.name] = (edits.outsideCallersOf[m.name] ?? 0) + 1;
+				if (file != prep.destFile && !edits.callerFiles.contains(file)) edits.callerFiles.push(file);
+				final error: Null<String> = callRewrite(
+					edits, indexes, file, hit.span.from, m, hit.interpolated, '${edits.helperName}.', 'this', false, calls
+				);
+				if (error != null) return error;
+			}
 		}
 		return null;
 	}
@@ -435,6 +441,14 @@ final class MoveToHelperRefs {
 		if (tree != null) walk(tree, null);
 		indexes[file] = built;
 		return built;
+	}
+
+	/** The spans of `info`'s types that are proven subtypes of the source into `proven`, and of those that only may be into `maybe`. */
+	private static function sortSubtypeSpans(prep: MovePrep, info: FileInfo, proven: Array<Span>, maybe: Array<Span>): Void {
+		for (t in info.types) if (t.name != prep.srcTypeName) {
+			final verdict: Null<Bool> = prep.index.subtypes.subtypeVerdict(t.name, prep.srcTypeName, prep.srcFile);
+			if (verdict != false) (verdict == true ? proven : maybe).push(t.span);
+		}
 	}
 
 }

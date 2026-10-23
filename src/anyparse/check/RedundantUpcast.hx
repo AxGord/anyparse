@@ -4,6 +4,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Flags a runtime-checked cast `cast(x, T)` that is a redundant UPCAST — `x`'s declared
  * type `S` is a (transitive) subtype of `T`, so the runtime type test always passes and
@@ -23,8 +25,8 @@ import anyparse.runtime.Span;
  * Conservative: flags only when the operand is a plain identifier whose declared type is a
  * proven strict subtype of the target. Only the runtime `cast(x, T)` form
  * (`RefShape.checkedCastKind`) is inspected — the compile-time `(x : T)` ascription is a
- * different node. A non-identifier operand, a generic / `Null<…>` / `Dynamic` type, an
- * unindexed supertype link, or a same / unrelated type is a safe miss (the same-type and
+ * different node. A non-identifier operand, a generic / `Null<…>` / `Dynamic` type, an unindexed supertype link, a
+ * target or a link another package's namesake shares, or a same / unrelated type is a safe miss (the same-type and
  * unrelated cases belong to `redundant-cast` / `impossible-cast`). Macro-reification
  * subtrees (`RefShape.opaqueKinds`) are not descended into.
  *
@@ -62,8 +64,13 @@ final class RedundantUpcast implements Check {
 						final sName: Null<String> = TypeResolver.simpleNominalName(
 							TypeResolver.identTypeName(node.children[0], root, shape, declaredTypes)
 						);
-						final tName: Null<String> = TypeResolver.simpleNominalName(TypeResolver.castTargetWithin(span, castTargets));
-						if (sName != null && tName != null && index.subtypes.isSubtype(sName, tName)) violations.push({
+						final tSource: Null<String> = TypeResolver.castTargetWithin(span, castTargets);
+						final tName: Null<String> = TypeResolver.simpleNominalName(tSource);
+						// The target resolves where the cast writes it: a namesake in the operand's chain proves nothing.
+						if (
+							sName != null && tName != null && tSource != null
+							&& index.subtypes.isSubtype(sName, tSource.trim(), entry.file, span.from)
+						) violations.push({
 							file: entry.file,
 							span: span,
 							rule: 'redundant-upcast',
