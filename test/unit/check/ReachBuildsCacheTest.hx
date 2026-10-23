@@ -57,7 +57,8 @@ class ReachBuildsCacheTest extends Test {
 
 	/**
 	 * A source edited after the oracle run, or an hxml, or the configuration's defines, is another compile input: the
-	 * stored builds are not read and the run knows no build. The source restored hashes as stored again.
+	 * stored builds are not read and the run knows no build. The source restored still misses on its
+	 * modification time; once an oracle run stores it again, only the fingerprint tells an edited hxml apart.
 	 */
 	@:pin('control') @:killer('M-REACH-KEY-UNCHECKED')
 	public function testAnEditedInputIsNotReadFromTheStore(): Void {
@@ -69,6 +70,9 @@ class ReachBuildsCacheTest extends Test {
 		Assert.isTrue(sleeps(dir, true), 'an edited source');
 		File.saveContent('$dir/W.hx', MAKER);
 		Assert.isTrue(sleeps(dir, true), 'the source restored still misses: its modification time moved, so nothing is hashed');
+		Assert.isFalse(sleeps(dir, false), 'the oracle run stores the restored tree');
+		Assert.isFalse(sleeps(dir, true), 'which the next run reads');
+		// no source moves now, so only the fingerprint can tell the hxml changed
 		File.saveContent('$dir/check.hxml', '$HXML-D apq_reach_edited\n');
 		Assert.isTrue(sleeps(dir, true), 'an edited hxml');
 		File.saveContent('$dir/check.hxml', HXML);
