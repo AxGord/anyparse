@@ -17,9 +17,10 @@ interface InferencePolicy {
 	function termOf(text: String, file: FileInfo, at: Int, cells: Map<String, Int>): TypeTerm;
 
 	/**
-	 * `given` read as a type of the head `wanted` applies, its type arguments in `wanted`'s order (`Monomorphs.unify`);
-	 * null where the language reads it as none.
+	 * `given` read as a type of the head `wanted` applies, its type arguments in `wanted`'s order (`Monomorphs.unify`), each
+	 * a type the file `reading` may carry as its own — one written in another file only where every name it spells resolves
+	 * alike there (`TypeRefIndex.readsAlike`); null where the language reads it as none.
 	 */
-	function reread(wanted: TypeTerm, given: TypeTerm): Null<TypeTerm>;
+	function reread(wanted: TypeTerm, given: TypeTerm, reading: FileInfo): Null<TypeTerm>;
 
 }

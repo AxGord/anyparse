@@ -61,14 +61,15 @@ final class Monomorphs {
 
 	/**
 	 * Bind the cell `id` to `term`: a free cell takes it, a bound one keeps its type and is poisoned when `term` is not
-	 * known to be that type (`same`), another cell is merged with it, and a term mentioning the cell itself poisons it
-	 * (`link`'s occurs check).
+	 * known to be that type (`same`), another cell is merged with it, a term mentioning the cell itself poisons it
+	 * (`link`'s occurs check), and the dynamic type leaves it as it is — `link` unifies a monomorph with it binding nothing.
 	 */
 	public function bind(id: Int, term: TypeTerm): Void {
 		final root: Int = find(id);
 		switch term {
 			case Mono(other):
 				merge(root, find(other));
+			case Of(Dyn, [], _):
 			case _ if (mentions(term, root)):
 				_poisoned[root] = true;
 			case _:

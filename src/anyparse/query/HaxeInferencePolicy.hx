@@ -9,6 +9,8 @@ import anyparse.query.TypeSyntax.TypeShape;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypeTerm.TypeEnd;
 
+using Lambda;
+
 /**
  * Haxe 4.3.7's reading of an inference (`InferencePolicy`; `tUnification.ml`, `callUnification.ml`). A call's cells are
  * the type parameters its signature declares (`attempt_call`, `spawn_constrained_monos`); a written type reads as the
@@ -87,14 +89,15 @@ final class HaxeInferencePolicy implements InferencePolicy {
 
 	/**
 	 * `given` read as a type of `wanted`'s head: through the nullable wrapper on either side, as the element of the builtin
-	 * `Iterable` it iterates, or as the ancestor `wanted` names.
+	 * `Iterable` it iterates, or as the ancestor `wanted` names — a type written elsewhere only where it reads alike in
+	 * `reading`.
 	 */
-	public function reread(wanted: TypeTerm, given: TypeTerm): Null<TypeTerm> {
+	public function reread(wanted: TypeTerm, given: TypeTerm, reading: FileInfo): Null<TypeTerm> {
 		final inner: Null<TypeTerm> = nullableInner(given);
 		return switch wanted {
 			case Of(head, _, text) if (nullableInner(wanted) != null): Of(head, [inner ?? given], text);
-			case Of(head, args, _) if (inner != null): sameHead(head, args.length, inner) ? inner : reread(wanted, inner);
-			case Of(head, args, text): iterableElement(wanted, given) ?? ancestorArguments(head, args.length, text, given);
+			case Of(head, args, _) if (inner != null): sameHead(head, args.length, inner) ? inner : reread(wanted, inner, reading);
+			case Of(head, args, text): iterableElement(wanted, given, reading) ?? ancestorArguments(head, args.length, text, given, reading);
 			case _: null;
 		};
 	}
@@ -123,7 +126,7 @@ final class HaxeInferencePolicy implements InferencePolicy {
 	 * (`StructuralTypes.iterableElementIndex`), else the one its declaration's own `iterator()` yields (`iteratedElement`);
 	 * null for any other pair.
 	 */
-	private function iterableElement(wanted: TypeTerm, given: TypeTerm): Null<TypeTerm> {
+	private function iterableElement(wanted: TypeTerm, given: TypeTerm, reading: FileInfo): Null<TypeTerm> {
 		return switch [wanted, given] {
 			case [Of(head, [_], text), Of(givenHead, args, givenText)] if (_structural.isBuiltinIterable(text)):
 				final decl: Null<ResolvedType> = switch givenHead {
@@ -136,7 +139,7 @@ final class HaxeInferencePolicy implements InferencePolicy {
 				else if (decl == null)
 					null
 				else
-					iteratedElement(decl, args);
+					iteratedElement(decl, args, reading);
 				element == null ? null : Of(head, [element], text);
 			case _: null;
 		};
@@ -144,9 +147,10 @@ final class HaxeInferencePolicy implements InferencePolicy {
 
 	/**
 	 * The element a value of the declaration `r`, applied to the arguments `args`, iterates through its own `iterator()`
-	 * (`StructuralTypes.iteratorElement`), the declaring type's parameters bound through `r`'s chain and `args`; null for none.
+	 * (`StructuralTypes.iteratorElement`), the declaring type's parameters bound through `r`'s chain and `args`; null for none,
+	 * and where the element, or what `r`'s chain passes to the declaring type, does not read alike in `reading`.
 	 */
-	private function iteratedElement(r: ResolvedType, args: Array<TypeTerm>): Null<TypeTerm> {
+	private function iteratedElement(r: ResolvedType, args: Array<TypeTerm>, reading: FileInfo): Null<TypeTerm> {
 		final found: Null<IteratorElement> = _structural.iteratorElement(r, _abstractKinds);
 		final texts: Array<String> = [];
 		for (a in args) switch a {
@@ -155,21 +159,28 @@ final class HaxeInferencePolicy implements InferencePolicy {
 			case _:
 				return null;
 		}
-		final bound: Null<String> = found == null
-			? null
-			: _ancestors.boundType(r, found.host, texts, found.text, found.member.declFrom, found.member.typeParamNames);
-		return found == null || bound == null ? null : termOf(bound, found.host.file, found.member.declFrom, []);
+		if (found == null) return null;
+		final host: ResolvedType = found.host;
+		final scope: Array<String> = host.type.typeParamNames.concat(found.member.typeParamNames);
+		final passed: Array<String> = AncestorTable.same(r, host) ? [] : _ancestors.argumentsTo(r, host) ?? [];
+		final alike: Bool = _refs.readsAlike(found.text, host.file, reading, scope, _typeSyntax)
+			&& passed.foreach(p -> _refs.readsAlike(p, r.file, reading, r.type.typeParamNames, _typeSyntax));
+		final bound: Null<String> = alike
+			? _ancestors.boundType(r, host, texts, found.text, found.member.declFrom, found.member.typeParamNames)
+			: null;
+		return bound == null ? null : termOf(bound, host.file, found.member.declFrom, []);
 	}
 
 	/**
 	 * `given`, a declaration with no type parameter, read as its ancestor `head` (`arity` arguments, written `text`): what
-	 * its chain passes to the ancestor's type parameters, read where the chain writes them; null for any other pair.
+	 * its chain passes to the ancestor's type parameters, read where the chain writes them; null for any other pair, and
+	 * where one of them does not read alike in `reading`.
 	 */
-	private function ancestorArguments(head: TypeEnd, arity: Int, text: String, given: TypeTerm): Null<TypeTerm> {
+	private function ancestorArguments(head: TypeEnd, arity: Int, text: String, given: TypeTerm, reading: FileInfo): Null<TypeTerm> {
 		return switch [head, given] {
 			case [Declared(ancestor), Of(Declared(start), [], _)] if (start.type.typeParamArity == 0):
 				final passed: Null<Array<String>> = _ancestors.argumentsTo(start, ancestor);
-				passed == null || passed.length != arity
+				passed == null || passed.length != arity || !passed.foreach(p -> _refs.readsAlike(p, start.file, reading, [], _typeSyntax))
 					? null
 					: Of(head, [for (p in passed) termOf(p, start.file, start.type.span.from, [])], text);
 			case _: null;

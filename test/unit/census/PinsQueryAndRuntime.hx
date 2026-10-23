@@ -447,11 +447,16 @@ final class PinsQueryAndRuntime {
 		'unit.query.JsonQueryPluginTest#testTheRootSpanIsTight :: control :: M-JSON-ROOT-UNTIGHTENED',
 		'unit.query.LambdaParametersTest#testAClassIteratesWhatItsIteratorYields :: control :: M-ITERATOR-ELEMENT-NULL',
 		'unit.query.LambdaParametersTest#testAGivenTypeIsReadThroughTheLanguagesArcs :: control :: M-INFERENCE-REREAD-NULL',
+		'unit.query.LambdaParametersTest#testAMethodsTypeParameterShadowsItsTypesOfTheName :: control :: M-BOUND-SHADOWED-SUBSTITUTED',
 		'unit.query.LambdaParametersTest#testAMonomorphTheLambdaMayBindIsNoAnswer :: control :: '
 			+ 'M-UNBOUND-PART-TAKEN,M-LAMBDA-DYNAMIC-TAKEN',
 		'unit.query.LambdaParametersTest#testAParameterTakesTheTypeItsPositionExpects :: control :: M-LAMBDA-PARAMETER-NULL',
+		'unit.query.LambdaParametersTest#testAParameterWrittenOptionalOrWithADefaultIsNoAnswer :: control :: M-LAMBDA-OPTIONAL-TAKEN',
 		'unit.query.LambdaParametersTest#testAStaticExtensionBindsItsReceiverFirst :: control :: M-EXTENSION-PARAMETER-NULL',
+		'unit.query.LambdaParametersTest#testATypeWrittenInTheCalleesFileIsNoAnswerWhereTheCallerHasANamesake :: control :: '
+			+ 'M-NAMESAKE-READS-ALIKE,M-LAMBDA-FOREIGN-FILE-TAKEN',
 		'unit.query.LambdaParametersTest#testTheArgumentsBeforeTheLambdaBindTheCallsTypeParameters :: control :: M-INFERRED-CELLS-UNBOUND',
+		'unit.query.LambdaParametersTest#testTheDynamicTypeBindsNoCell :: control :: M-MONO-DYNAMIC-BINDS',
 		'unit.query.LambdaParametersTest#testTheReceiversArgumentsBindItsTypesParameters :: control :: M-RECEIVER-ARGUMENTS-DROPPED',
 		'unit.query.LambdaParametersTest#testTheStdsCopiesOfOneTypeAnswerAsOne :: control :: '
 			+ 'M-ONE-DECLARATION-NONE,M-PARAMETER-MERGE-BY-TEXT',
@@ -1156,6 +1161,7 @@ final class PinsQueryAndRuntime {
 			+ 'M-META-ELEMENT-ANY-COND-REGION',
 		'unit.query.MetaElementSpanSliceTest#testRemoveModifierStillTakesTheMemberDoc :: control :: M-CUT-DOC-KEPT-BY-ANY-PREFIX',
 		'unit.query.MonomorphsTest#testAUnificationBindsTheCellsTheWantedTypeNames :: control :: M-MONO-UNIFY-ARGUMENTS-SKIPPED',
+		'unit.query.MonomorphsTest#testTheDynamicTypeLeavesACellFree :: control :: M-MONO-DYNAMIC-BINDS',
 		'unit.query.MonomorphsTest#testTheFirstBindingWinsAndAnotherTypePoisons :: control :: M-MONO-LAST-BINDING-WINS',
 		'unit.query.MoveCanonicalOutputSliceTest#testMoveLeavesANonCanonicalSourceUnformatted :: control :: M-MOVE-CANONICALISE-ALWAYS',
 		'unit.query.MoveElementsSliceTest#testALeadingDocTravelsWithTheSlice :: control :: M-MOVE-ELEMENTS-DOC-STAYS',

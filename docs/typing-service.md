@@ -394,7 +394,12 @@ std gap. Readings: `docs/journal/testing-log.md`.
   `StaticExtensions.binding`). Declarations of a callee agree when they spell one type (`TypeSyntax.spellsAs`: `T -> Bool`
   and `(item: T) -> Bool`). Unknown: a part naming a cell no argument before the lambda binds (`Expectation.unbound` — the
   lambda's body may bind it), a cell two arguments bind to types not known to be one, a parameter expected to be `Dynamic`
-  (a monomorph does not bind to it; its uses shape it), an argument before the lambda the walk does not type. On the way
+  (a monomorph does not bind to it; its uses shape it), an argument before the lambda the walk does not type, a parameter
+  written `?x` or with a default value (a `Null<T>`), and a type read in another file where a name it spells resolves
+  otherwise in the lambda's (`TypeRefIndex.readsAlike`, checked on the callee's written parameter, on what a chain passes
+  and on what an arc reads from a third file; a caller's namesake would take the type's place). A cell does not bind to
+  the dynamic type, at any depth (`link` binds nothing there), and a method's type parameter shadows its declaring type's
+  of the name (`AncestorTable.boundType`). On the way
   the T3 walk proves `using Lambda` on a std container (`satisfiesIterable` over the first copy, an `iterator()` return
   followed by its written path). Measured (`F3-lambda-parameter`; UNKNOWN share; DIFFERENT; source / nominal):
   anyparse 12 437 / 12 437 → 2 550 / 4 165, 13.0 / 13.2 → 11.3 / 11.6 %, 1 / 1 unchanged; Pony 26 / 26 → 21 / 21,

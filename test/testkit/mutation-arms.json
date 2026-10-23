@@ -30325,7 +30325,7 @@
 			"name": "M-INFERRED-CELLS-UNBOUND",
 			"type": "anyparse.query.CallReturns",
 			"method": "inferredCells",
-			"find": "monos.unify(wanted, policy.termOf(given, fi, site, []), policy.reread);",
+			"find": "monos.unify(wanted, policy.termOf(given, fi, site, []), policy.reread.bind(_, _, fi));",
 			"replace": "for (cell in Monomorphs.cellsOf(wanted)) monos.poison(cell);",
 			"note": "no argument binds a call's type parameter, so `gen(box, x -> …)` of `gen<A>(b: Box<A>, f: A -> Void)` leaves `x` untyped"
 		},
@@ -30380,6 +30380,45 @@
 			"method": "iteratorElement",
 			"force": "null",
 			"note": "a class iterates nothing through its own `iterator()`, so a `Bag<Item>` given for `Iterable<A>` binds no `A`"
+		},
+		{
+			"name": "M-NAMESAKE-READS-ALIKE",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "readsAlike",
+			"force": "true",
+			"note": "every written type reads in another file as where it is written, so a callee's `Item -> Void` types a lambda's parameter as the caller's own namesake `Item`"
+		},
+		{
+			"name": "M-LAMBDA-FOREIGN-FILE-TAKEN",
+			"type": "anyparse.query.LambdaParameters",
+			"method": "parameterType",
+			"find": "if (file == null || file.file != c.file) return null;",
+			"replace": "if (file == null) return null;",
+			"note": "a parameter type read in the callee's file is answered in the caller's, where a namesake of a type it names takes that type's place"
+		},
+		{
+			"name": "M-LAMBDA-OPTIONAL-TAKEN",
+			"type": "anyparse.query.LambdaParameters",
+			"method": "indexParameter",
+			"find": " || param.kind == c.shape.optionalParamKind || param.children.length > 0",
+			"replace": "",
+			"note": "a lambda parameter written `?x` or `x = null` is typed `Item`, though 4.3.7 types it `Null<Item>`"
+		},
+		{
+			"name": "M-MONO-DYNAMIC-BINDS",
+			"type": "anyparse.query.Monomorphs",
+			"method": "bind",
+			"find": "case Of(Dyn, [], _):\n",
+			"replace": "",
+			"note": "a cell binds to the dynamic type, so `arr(d, x -> …)` of `arr<A>(x: A, f: Array<A> -> Void)` types `x` as `Array<Dynamic>` where 4.3.7 leaves a monomorph the lambda binds"
+		},
+		{
+			"name": "M-BOUND-SHADOWED-SUBSTITUTED",
+			"type": "anyparse.query.AncestorTable",
+			"method": "boundType",
+			"find": "if (!own.contains(params[i])) i]",
+			"replace": "i]",
+			"note": "a method's type parameter named like its type's is bound to the receiver's argument, so `shadow<T>(x: T, f: T -> Void)` on a `Box<Item>` given `1` types the lambda's parameter `Item`"
 		}
 	]
 }

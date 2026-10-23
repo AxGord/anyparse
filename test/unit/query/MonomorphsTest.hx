@@ -29,6 +29,16 @@ class MonomorphsTest extends Test {
 		Assert.isNull(monos.resolved(monos.fresh()));
 	}
 
+	@:pin('control') @:killer('M-MONO-DYNAMIC-BINDS')
+	public function testTheDynamicTypeLeavesACellFree(): Void {
+		final monos: Monomorphs = new Monomorphs();
+		final cell: Int = monos.fresh();
+		monos.bind(cell, Of(Dyn, [], 'Dynamic'));
+		Assert.isNull(monos.resolved(cell), '`link` unifies a monomorph with the dynamic type binding nothing');
+		monos.bind(cell, named('Int'));
+		Assert.equals('Int', textOf(monos.resolved(cell)), 'a later type binds it');
+	}
+
 	public function testMergedCellsShareOneBinding(): Void {
 		final monos: Monomorphs = new Monomorphs();
 		final a: Int = monos.fresh();

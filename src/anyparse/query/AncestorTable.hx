@@ -93,9 +93,11 @@ final class AncestorTable {
 		final complete: Null<String> = completed(written, host.file, at, params.concat(own));
 		if (complete == null) return null;
 		final passed: Null<Array<String>> = params.length == 0 ? [] : boundArguments(start, host, args);
+		// a type parameter of the member shadows the declaring type's of its name
+		final visible: Array<Int> = [for (i in 0...params.length) if (!own.contains(params[i])) i];
 		return if (passed != null && passed.length >= params.length)
-			CallGraphNames.substituteTypeParams(complete, params, passed, _typeSyntax)
-		else if (CallGraphNames.mentionsTypeName(complete, params, _typeSyntax))
+			CallGraphNames.substituteTypeParams(complete, [for (i in visible) params[i]], [for (i in visible) passed[i]], _typeSyntax)
+		else if (CallGraphNames.mentionsTypeName(complete, [for (i in visible) params[i]], _typeSyntax))
 			null
 		else
 			complete;

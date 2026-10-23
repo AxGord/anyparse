@@ -255,14 +255,14 @@ final class CallReturns {
 
 	/**
 	 * Two declarations' answers for one parameter as one: null unless they spell one type as far bound (`TypeSyntax.spellsAs`,
-	 * read by `syntax`); written in two files, or spelled two ways, the first's spelling written in no one file.
+	 * read by `syntax`); read in two files, the first's spelling read in no one file.
 	 */
 	private static function mergedParameter(a: WrittenParameter, b: WrittenParameter, syntax: TypeSyntaxReader): Null<WrittenParameter> {
 		final x: Null<TypeSyntax> = syntax(a.text);
 		final y: Null<TypeSyntax> = syntax(b.text);
 		return if (x == null || y == null || !x.spellsAs(y) || a.unbound.join(',') != b.unbound.join(','))
 			null
-		else if (a.file == b.file && a.text == b.text)
+		else if (a.file == b.file)
 			a
 		else
 			{ text: a.text, file: null, unbound: a.unbound };
@@ -270,12 +270,13 @@ final class CallReturns {
 
 	/**
 	 * The type the parameter of the candidate `k` that the argument `bound.at` binds is written with, on a receiver of
-	 * `start`, and the file writing it — none where a type the receiver or an argument is written with is spelled into it:
-	 * its declaring type's parameters bound through `start`'s chain and the receiver's written arguments
-	 * (`AncestorTable.boundType`), each type parameter of the signature written as the type the arguments before it bind it
-	 * to (`inferredCells`) — one they bind to none listed `unbound`, left as written. Null for one written
-	 * with no type, the rest parameter, one naming a type parameter of the member the signature does not declare, and one
-	 * whose declaring type's parameters are not bound.
+	 * `start`, and the file it reads in: its declaring type's parameters bound through `start`'s chain and the receiver's
+	 * written arguments (`AncestorTable.boundType`), each type parameter of the signature written as the type the arguments
+	 * before it bind it to (`inferredCells`) — one they bind to none listed `unbound`, left as written. The calling file when
+	 * every name the parameter and the chain write reads alike there (`TypeRefIndex.readsAlike`); else the declaring file,
+	 * and none where a type the receiver or an argument is written with is spelled into it. Null for one written with no
+	 * type, the rest parameter, one naming a type parameter of the member the signature does not declare, and one whose
+	 * declaring type's parameters are not bound.
 	 */
 	private static function parameterType(
 		start: ResolvedType, k: CallCandidate, bound: ArgumentRun, node: QueryNode, c: IndexTyping, index: SymbolIndex
@@ -288,14 +289,11 @@ final class CallReturns {
 		final foreign: Array<String> = k.member.typeParamNames.filter(n -> !k.signature.typeParamNames.contains(n));
 		if (text == null || CallGraphNames.mentionsTypeName(text, foreign, index.typeSyntax)) return null;
 		final named: Array<String> = k.signature.typeParamNames.filter(n -> CallGraphNames.mentionsTypeName(text, [n], index.typeSyntax));
-		// a type argument the receiver or an argument hands in is written in the calling file: the whole is written in no one file
-		final file: Null<FileInfo> = bound.receiverArgs.length == 0 ? k.host.file : null;
-		if (named.length == 0) return { text: text, file: file, unbound: [] };
-		final monos: Monomorphs = new Monomorphs();
-		final cells: Map<String, Int> = inferredCells(start, k, bound, monos, node, c, index);
 		final names: Array<String> = [];
 		final types: Array<String> = [];
 		final unbound: Array<String> = [];
+		final monos: Monomorphs = new Monomorphs();
+		final cells: Map<String, Int> = named.length == 0 ? [] : inferredCells(start, k, bound, monos, node, c, index);
 		for (name in named) {
 			final cell: Null<Int> = cells[name];
 			final type: Null<String> = cell == null ? null : termText(monos.resolved(cell));
@@ -306,8 +304,29 @@ final class CallReturns {
 			names.push(name);
 			types.push(type);
 		}
-		final substituted: String = CallGraphNames.substituteTypeParams(text, names, types, index.typeSyntax);
-		return { text: substituted, file: names.length == 0 ? file : null, unbound: unbound };
+		final caller: Null<FileInfo> = index.fileInfo(c.file);
+		final substituted: Bool = bound.receiverArgs.length > 0 || names.length > 0;
+		final file: Null<FileInfo> = if (caller != null && readsInCaller(start, k, written, caller, index))
+			caller
+		else if (substituted)
+			null
+		else
+			k.host.file;
+		return { text: CallGraphNames.substituteTypeParams(text, names, types, index.typeSyntax), file: file, unbound: unbound };
+	}
+
+	/**
+	 * Whether the parameter type `written` of the candidate `k`, and what `start`'s chain passes to the declaring type's
+	 * parameters, read in the calling file `caller` as where they are written (`TypeRefIndex.readsAlike`): a namesake the
+	 * caller declares or imports would otherwise take the type's place.
+	 */
+	private static function readsInCaller(
+		start: ResolvedType, k: CallCandidate, written: String, caller: FileInfo, index: SymbolIndex
+	): Bool {
+		final scope: Array<String> = k.signature.typeParamNames.concat(k.member.typeParamNames).concat(k.host.type.typeParamNames);
+		final passed: Array<String> = AncestorTable.same(start, k.host) ? [] : index.typing.ancestors.argumentsTo(start, k.host) ?? [];
+		return index.refs.readsAlike(written, k.host.file, caller, scope, index.typeSyntax)
+			&& passed.foreach(p -> index.refs.readsAlike(p, start.file, caller, start.type.typeParamNames, index.typeSyntax));
 	}
 
 	/**
@@ -333,7 +352,7 @@ final class CallReturns {
 			if (given == null || fi == null)
 				for (cell in Monomorphs.cellsOf(wanted)) monos.poison(cell);
 			else
-				monos.unify(wanted, policy.termOf(given, fi, site, []), policy.reread);
+				monos.unify(wanted, policy.termOf(given, fi, site, []), policy.reread.bind(_, _, fi));
 		}
 		return cells;
 	}

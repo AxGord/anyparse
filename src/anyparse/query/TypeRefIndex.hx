@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using Lambda;
 
@@ -207,6 +208,25 @@ final class TypeRefIndex {
 			else
 				resolvedDeclsNamed(typeName)
 		);
+	}
+
+	/**
+	 * Whether every type name the written type `text` spells resolves, read in the file `to`, to the declarations it resolves
+	 * to read in `from` (`skip` the names that are no type there: type parameters) — whether a type written in one file may be
+	 * carried into another as that one's own. A name neither file resolves is taken alike.
+	 */
+	public function readsAlike(text: String, from: FileInfo, to: FileInfo, skip: Array<String>, syntax: TypeSyntaxReader): Bool {
+		if (from.file == to.file) return true;
+		final written: Null<TypeSyntax> = syntax(text);
+		if (written == null) return false;
+		for (d in written.descendants()) switch d.shape {
+			case Nominal(path, _) if (!skip.contains(path)):
+				final there: Array<ResolvedType> = resolveTypeRefAll(path, from);
+				final here: Array<ResolvedType> = resolveTypeRefAll(path, to);
+				if (there.length != here.length || !there.foreach(r -> here.exists(h -> AncestorTable.same(r, h)))) return false;
+			case _:
+		}
+		return true;
 	}
 
 	/**
