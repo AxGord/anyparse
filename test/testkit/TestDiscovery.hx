@@ -1,6 +1,5 @@
 package testkit;
 
-import haxe.Exception;
 import haxe.io.Path;
 import haxe.macro.Context;
 import haxe.macro.Expr;

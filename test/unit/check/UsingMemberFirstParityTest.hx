@@ -1,15 +1,11 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.MoveMember;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.StdResolver;
 import anyparse.query.StdTypes;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

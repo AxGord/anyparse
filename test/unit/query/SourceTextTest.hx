@@ -3,8 +3,6 @@ package unit.query;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `SourceText.nodeText` and `SourceText.trimNewlineEdges` — the text under a node's span or null for a

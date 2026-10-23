@@ -1,6 +1,5 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ElementSpan;
 import anyparse.query.Engine;
 import anyparse.query.Patch;
@@ -9,8 +8,6 @@ import anyparse.query.ReplaceNode;
 import anyparse.query.Selector;
 import anyparse.query.SourceSlice;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A MODULE-level declaration's raw span reaches to the start of the next declaration, so it

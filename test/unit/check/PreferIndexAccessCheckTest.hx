@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.PreferIndexAccess;
 import anyparse.check.Severity;
 import unit.QueryTestHelpers;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-index-access` check: a `Map`-abstract `m.get(k)` / `m.set(k, v)` call is

@@ -3,15 +3,11 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.DuplicateCode;
 import anyparse.check.DuplicateCodeRenamed;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `duplicate-code-renamed` check: three or more consecutive statements repeated with their

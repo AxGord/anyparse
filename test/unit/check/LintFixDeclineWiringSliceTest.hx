@@ -3,9 +3,7 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
@@ -15,8 +13,6 @@ import anyparse.query.cli.command.LintFixDriver;
 import anyparse.query.cli.command.LintFixLedger;
 import anyparse.query.cli.command.LintFixVerify;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * What `lint --fix` SAYS about an edit set the writer-emit gate refused, and about a refusal

@@ -1,6 +1,5 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CondDirectives;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -12,8 +11,6 @@ import anyparse.runtime.StringInput;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

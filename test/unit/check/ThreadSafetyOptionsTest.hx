@@ -1,9 +1,5 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import utest.Assert;
-import utest.Test;
-
 /**
  * The `thread-safety` options are read and checked in ONE place (`ThreadSafetyOptions`): a key no option has, a value
  * of the wrong shape, a list item or a `boundedRepeats` entry dropped, a `site` matching no function — each is said, as

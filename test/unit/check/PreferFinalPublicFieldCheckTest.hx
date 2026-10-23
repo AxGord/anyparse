@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.PreferFinalField;
 import anyparse.check.PreferFinalPublicField;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

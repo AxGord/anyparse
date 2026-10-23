@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.DeclarationKey;
 import anyparse.query.DeclarationQuery;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The typing service's query cache (`TypingService`, `QueryCache`): an answer is remembered by the DECLARATION it is

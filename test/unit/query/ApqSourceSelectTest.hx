@@ -1,6 +1,5 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ElementSpan;
 import anyparse.query.Engine;
@@ -13,8 +12,6 @@ import anyparse.query.cli.CliEdit;
 import anyparse.query.cli.command.SourceCommand;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The READ window for one addressed declaration, on both commands that print it: `apq source

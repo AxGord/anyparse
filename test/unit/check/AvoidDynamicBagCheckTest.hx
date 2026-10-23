@@ -1,9 +1,6 @@
 package unit.check;
 
 import anyparse.check.AvoidDynamic;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `avoid-dynamic` DynamicAccess bag DETECTION / report (D4). A `Dynamic` used

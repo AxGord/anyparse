@@ -2,10 +2,7 @@ package unit.check;
 
 import anyparse.check.PreferFinalPublicField;
 import anyparse.check.PreferReadOnlyField;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Which HALF of a resolution scope the two field-immutability rules read, and with what owner

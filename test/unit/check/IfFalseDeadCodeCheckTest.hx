@@ -1,12 +1,9 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.IfFalseDeadCode;
 import anyparse.check.Severity;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `if-false` check: every `#if false … #end` conditional region — dead

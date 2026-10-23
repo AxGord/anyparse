@@ -3,13 +3,9 @@ package unit.check;
 import anyparse.check.AvoidDynamic;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.GroupedEdit;
-import anyparse.check.Check.Violation;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture.FixRun;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `avoid-dynamic` PARAMETER arm: a `Dynamic` parameter of a type-member function whose

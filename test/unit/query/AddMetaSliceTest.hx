@@ -4,13 +4,10 @@ package unit.query;
 import sys.FileSystem;
 import sys.io.File;
 #end
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddMeta;
 import anyparse.query.Cli;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

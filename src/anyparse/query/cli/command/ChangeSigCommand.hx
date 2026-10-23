@@ -4,7 +4,6 @@ import anyparse.query.ChangeSig;
 import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * `apq change-sig` — reorder a function's parameters + call-site args.

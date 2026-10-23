@@ -2,8 +2,6 @@ package unit.check;
 
 import anyparse.check.HaxeSpawn;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `HaxeSpawn` — the one `haxe` child process the compiler-oracle package starts, and the

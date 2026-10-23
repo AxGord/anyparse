@@ -6,8 +6,6 @@ import sys.io.File;
 import anyparse.check.CompilerOracle;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end coverage of the `avoid-dynamic` DynamicAccess bag arm (D4) through the whole

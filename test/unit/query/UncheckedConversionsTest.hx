@@ -3,8 +3,6 @@ package unit.query;
 import anyparse.check.FactsTypeTree;
 import anyparse.query.CompilerFacts;
 import anyparse.query.UncheckedConversions;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `UncheckedConversions` over hand-written facts files: which places hold only values of their own type because every build's

@@ -1,14 +1,11 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ElementSpan;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.RemoveElement;
 import anyparse.query.RemoveMember;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

@@ -2,13 +2,9 @@ package unit.check;
 
 import anyparse.check.Check;
 import anyparse.check.DeadBinderCounterLoop;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `dead-binder-counter-loop` check: `var i = 0;` followed by `for (x in coll) { … i++; }`

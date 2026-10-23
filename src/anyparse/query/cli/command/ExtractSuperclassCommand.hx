@@ -2,7 +2,6 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.MoveSymbol;
-import haxe.Exception;
 
 /**
  * `apq extract-superclass` — generate a superclass, pull members up into it + extend it.

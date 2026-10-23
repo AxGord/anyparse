@@ -8,8 +8,6 @@ import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import haxe.io.Path;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A nested `apqlint.json` EXTENDS the documents above it instead of replacing the
@@ -219,7 +217,8 @@ class LintConfigInheritanceTest extends Test {
 		final test: LintConfig = LintConfig.discover('$repo/test/unit/LintConfigInheritanceTest.hx');
 		Assert.same(src.compilerOracles(), test.compilerOracles(), 'the oracle configurations are inherited, not copied');
 		Assert.equals(
-			1, test.compilerOracles().length, 'and there is one of them to inherit — an empty list would compare equal to nothing'
+			7, test.compilerOracles().length,
+			'and every build the root declares is inherited — an empty list would compare equal to nothing'
 		);
 		// NOT `Assert.equals(src…, test…)`: the ctor defaults an undeclared
 		// `compilerOracleServer` to false, so comparing the two answers false == false and

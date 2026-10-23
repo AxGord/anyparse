@@ -3,7 +3,6 @@ package anyparse.query.cli.command;
 import anyparse.query.AddParam;
 import anyparse.query.ExitCode.*;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * `apq add-param` — add a backward-compatible parameter to a function.

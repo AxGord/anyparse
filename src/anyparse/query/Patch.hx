@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.ReplaceNode.ReplaceTarget;
@@ -200,6 +201,7 @@ final class Patch {
 		// ONE lexical pass for the whole call. `docExtendedSpan` re-lexes the file on every call,
 		// and asking it per edit costs a large share of the op on a big file patched with `--all`.
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+		final shape: RefShape = plugin.refShape();
 		final watched: Array<{
 			doc: Span,
 			node: QueryNode,
@@ -213,11 +215,11 @@ final class Patch {
 		final seen: Array<Int> = [];
 		for (edit in sorted) {
 			final doc: Null<Span> = enclosingDoc(source, comments, edit.span.from) ?? docBlockAbove(
-				source, comments, declGroupStart(source, tree, edit.span.from)
+				source, comments, declGroupStart(source, tree, edit.span.from, shape)
 			);
 			if (doc == null || seen.contains(doc.to)) continue;
 			seen.push(doc.to);
-			final node: Null<QueryNode> = docOwnerNode(source, tree, comments, doc.to);
+			final node: Null<QueryNode> = docOwnerNode(source, tree, comments, doc.to, shape);
 			final owner: Null<String> = node == null ? null : declName(node);
 			final ownerSpan: Null<Span> = node?.span;
 			if (node == null || owner == null || ownerSpan == null) continue;
@@ -237,8 +239,8 @@ final class Patch {
 			SourceComments.collectCommentTokens(plugin.lexicalRegions(spliced));
 		for (w in watched) {
 			final docEnd: Int = splicedDocEnd(spliced, splicedComments, sorted, w.doc);
-			final ownerNode: Null<QueryNode> = docOwnerNode(spliced, after, splicedComments, docEnd);
-			if (ownerNode == null) continue;
+			final ownerNode: Null<QueryNode> = docOwnerNode(spliced, after, splicedComments, docEnd, shape);
+			if (ownerNode == null) return orphanRefusal(w.owner);
 			final owner: QueryNode = ownerNode;
 			final now: Null<String> = declName(owner);
 			if (now == null || now == w.owner) continue;
@@ -255,8 +257,10 @@ final class Patch {
 			//   payload that inserts a declaration AND renames the one it stole the doc from. It is
 			//   read off that REGION, not the container, because a container grows for reasons that
 			//   have nothing to do with this doc.
-			final stands: Bool = siblingDeclares(after, owner, w.owner);
-			final took: Bool = siblingDeclares(tree, w.node, now);
+			final stands: Bool = siblingDeclares(after, owner, w.owner, shape);
+			// A documented declaration inside a region also hands the doc on past the region itself.
+			final top: QueryNode = regionTop(tree, w.node, shape);
+			final took: Bool = siblingDeclares(tree, w.node, now, shape) || siblingDeclares(tree, top, now, shape);
 			final grew: Bool = w.declared >= 0 && declsInRegion(after, owner, new Span(docEnd, w.ownerEnd)) > w.declared;
 			if (stands || took || grew) return transferRefusal(w.owner, now, stands, took);
 		}
@@ -351,17 +355,29 @@ final class Patch {
 	 * separated from its declaration by `@:noCompletion` was invisible — the guard passed an
 	 * insert-ahead that orphaned the doc AND the metadata onto the insertion.
 	 */
-	private static function declGroupStart(source: String, tree: QueryNode, at: Int): Int {
+	private static function declGroupStart(source: String, tree: QueryNode, at: Int, shape: RefShape): Int {
 		var from: Int = at;
 		while (from < source.length && SourceText.isSpace(source.fastCodeAt(from))) from++;
 		final node: Null<QueryNode> = outermostAt(tree, from);
 		if (node == null) return from;
 		final span: Null<Span> = node.span;
+		if (span == null) return from;
 		// The RUN start, not `declGroupSpan`'s: that function no longer walks forward
 		// off an annotation, so it answers an annotation's own offset — and this guard
 		// then looked for a `/**` directly above the SECOND annotation of a run, found
 		// the first one, and let a doc-stealing insert through at rc 0.
-		return span == null ? from : ElementSpan.declRunStart(node, TreePath.parentOf(tree, node), span);
+		var current: QueryNode = node;
+		var start: Int = ElementSpan.declRunStart(node, TreePath.parentOf(tree, node), span);
+		// A run that opens a conditional region is documented by the doc above the REGION, so
+		// the lookup climbs out of every region whose first element it is.
+		while (true) {
+			final parent: Null<QueryNode> = TreePath.parentOf(tree, current);
+			final parentSpan: Null<Span> = parent?.span;
+			if (parent == null || parentSpan == null || !CondRegionScan.isConditionalKind(parent.kind, shape)) return start;
+			if (parent.children[0].span?.from != start) return start;
+			current = parent;
+			start = ElementSpan.declRunStart(parent, TreePath.parentOf(tree, parent), parentSpan);
+		}
 	}
 
 	/**
@@ -411,7 +427,8 @@ final class Patch {
 
 	/**
 	 * The declaration a doc block ending at `docEnd` documents — the node itself, so a caller can
-	 * ask about its NEIGHBOURS and not only its name.
+	 * ask about its NEIGHBOURS and not only its name. Null when no declaration STARTS after the
+	 * block — a closing brace, the end of the file — i.e. the block documents nothing.
 	 *
 	 * The forward skip over the modifier / annotation run is the INNER walk `declGroupSpan` does;
 	 * the ENTRY condition is not shared. `declGroupSpan` stops on an annotation element and
@@ -419,15 +436,52 @@ final class Patch {
 	 * under it — so this walk goes past the annotations on purpose.
 	 */
 	private static function docOwnerNode(
-		source: String, tree: QueryNode, comments: Array<{ from: Int, to: Int, isLine: Bool }>, docEnd: Int
+		source: String, tree: QueryNode, comments: Array<{ from: Int, to: Int, isLine: Bool }>, docEnd: Int, shape: RefShape
 	): Null<QueryNode> {
 		final at: Int = skipTrivia(source, comments, docEnd);
 		if (at >= source.length) return null;
 		final resolved: Null<QueryNode> = outermostAt(tree, at);
-		if (resolved == null) return null;
+		if (resolved == null || resolved.span?.from != at) return null;
 		final node: QueryNode = resolved;
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
-		return parent == null ? node : ElementSpan.declAfterPrefixRun(node, parent);
+		return parent == null ? regionOwner(node, shape) : firstOwnerFrom(parent, parent.children.indexOf(node), shape);
+	}
+
+	/**
+	 * The declaration a doc block above a conditional-compilation region documents: the first one in
+	 * the region, past the region's own modifier run, through any nested region; null when the region
+	 * declares nothing. The region itself has no name, and reading it as the owner left the doc
+	 * unwatched on both sides of the splice.
+	 */
+	private static function regionOwner(node: QueryNode, shape: RefShape): Null<QueryNode> {
+		return CondRegionScan.isConditionalKind(node.kind, shape) ? firstOwnerFrom(node, 0, shape) : node;
+	}
+
+	/**
+	 * The first declaration among `parent`'s children from index `from` on, through the regions it
+	 * meets, or null. A region that declares nothing documents nothing itself: Haxe attaches a doc above
+	 * `#if js #end` to the declaration after it, so the walk goes past such a region.
+	 */
+	private static function firstOwnerFrom(parent: QueryNode, from: Int, shape: RefShape): Null<QueryNode> {
+		var i: Int = from;
+		while (i >= 0 && i < parent.children.length) {
+			final next: Null<QueryNode> = ElementSpan.declAfterPrefixRun(parent.children[i], parent);
+			if (next == null) return null;
+			final inner: Null<QueryNode> = regionOwner(next, shape);
+			if (inner != null) return inner;
+			i = parent.children.indexOf(next) + 1;
+		}
+		return null;
+	}
+
+	/** `node`, or the outermost conditional region holding it — the element a doc above that region sits before. */
+	private static function regionTop(tree: QueryNode, node: QueryNode, shape: RefShape): QueryNode {
+		var top: QueryNode = node;
+		while (true) {
+			final parent: Null<QueryNode> = TreePath.parentOf(tree, top);
+			if (parent == null || !CondRegionScan.isConditionalKind(parent.kind, shape)) return top;
+			top = parent;
+		}
 	}
 
 	/**
@@ -447,9 +501,15 @@ final class Patch {
 	 * leaves a sibling still called `f`; refusing there is the conservative answer for an
 	 * edit whose target is ambiguous by name anyway.
 	 */
-	private static function siblingDeclares(tree: QueryNode, node: QueryNode, name: String): Bool {
+	private static function siblingDeclares(tree: QueryNode, node: QueryNode, name: String, shape: RefShape): Bool {
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
-		return parent != null && parent.children.exists(c -> c != node && declName(c) == name);
+		return parent != null && parent.children.exists(c -> c != node && declaresName(c, name, shape));
+	}
+
+	/** Whether `node` declares `name` — itself, or, for a conditional-compilation region, any declaration in any of its branches. */
+	private static function declaresName(node: QueryNode, name: String, shape: RefShape): Bool {
+		return declName(node) == name || CondRegionScan.isConditionalKind(node.kind, shape)
+			&& node.children.exists(c -> declaresName(c, name, shape));
 	}
 
 	/**
@@ -498,6 +558,17 @@ final class Patch {
 			+ 'and repeat it in the replacement above the declaration it documents, or leave it out when that declaration is deleted; a '
 			+ 'fragment that is not in the addressed declaration is also looked for in that declaration\'s own doc, so the same address '
 			+ 'reaches it';
+	}
+
+	/**
+	 * The refusal for a watched block the payload left documenting NOTHING — the documented declaration
+	 * gone with no declaration after the block to take it, so the block now sits above a closing brace
+	 * or the end of the file. No transfer signal fires there: there is no new owner to compare.
+	 */
+	private static function orphanRefusal(was: String): String {
+		return 'the edit leaves the `/**` block above `$was` documenting nothing — no declaration follows it any more. Widen the old '
+			+ 'fragment upward to include the doc block so it goes with the declaration; a fragment that is not in the addressed '
+			+ 'declaration is also looked for in that declaration\'s own doc, so the same address reaches it';
 	}
 
 	/**

@@ -1,9 +1,6 @@
 package unit.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.Check.Violation;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Takes that never wait, whatever their lock is (`QuietLocks`): a lock only ever taken through a `sharedLocks` member,

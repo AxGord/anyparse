@@ -1,16 +1,13 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.Naming;
 import anyparse.check.UnusedPrivate;
 import anyparse.grammar.haxe.HaxeNamingSupport;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
-import utest.Assert;
 
 using StringTools;
 

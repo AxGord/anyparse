@@ -440,6 +440,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.IndexScopeTest#testTheReportIndexIsBuiltOncePerFileSet :: control :: M-INDEX-MEMO-OFF,M-INDEXSCOPE-HOST-IGNORED',
 		'unit.query.IndexScopeTest#testTheReportWriteIndexIsBuiltOncePerFileSet :: control :: M-WRITE-INDEX-MEMO-OFF',
 		'unit.query.IndexScopeTest#testWithoutAScopeEveryQuestionSharesTheReportBuild :: control :: M-INDEXSCOPE-RESOLUTION-OWN-BUILD',
+		'unit.query.InlineMethodSliceTest#testRefuseShadowByComprehensionLoop :: control :: M-INLINE-METHOD-SHADOW-PARTIAL',
 		'unit.query.JsonQueryPluginTest#testAMemberIsNamedByItsKey :: control :: M-QUERY-NAME-IGNORED',
 		'unit.query.JsonQueryPluginTest#testAPatternStringCanBeAMetavariable :: control :: M-JSON-PATTERN-NO-METAVAR',
 		'unit.query.JsonQueryPluginTest#testTheLexicalRegionsAreTheStrings :: control :: M-JSON-REGIONS-NONE',
@@ -1157,6 +1158,11 @@ final class PinsQueryAndRuntime {
 		'unit.query.MoveFamilyCaptureTest#testALocalShadowKeepsItsBareReadByteIdentically :: control :: M-WILDCARD-BINDING-BLIND',
 		'unit.query.MoveFamilyCaptureTest#testARivalWildcardKeepsItsBareCallerByteIdentically :: control :: M-WILDCARD-RIVAL-ORDER-BLIND',
 		'unit.query.MoveFamilyCaptureTest#testASubModuleMoveRepointsNoWildcardCallerByteIdentically :: control :: M-WILDCARD-BINDS-BLIND',
+		'unit.query.MoveMemberQualifySliceTest#testInterpolatedSiblingReadIsBraced :: control :: M-MOVE-MEMBER-INTERP-SIBLING-PREFIXED',
+		'unit.query.MoveMemberQualifySliceTest#testQualifiedCallerInsideAReificationStaysQualified :: control :: '
+			+ 'M-MOVE-MEMBER-REIFICATION-BARED',
+		'unit.query.MoveMemberQualifySliceTest#testQualifiedCallerUnderAShadowStaysQualified :: control :: '
+			+ 'M-MOVE-MEMBER-DEST-SHADOW-UNCHECKED',
 		'unit.query.MoveMemberSplitSliceTest#testAFieldSomethingElseReachesStaysAndRefuses :: control :: '
 			+ 'M-OWNED-FIELD-ANY-READER,M-OWNED-FIELD-ACCESS-BLIND,M-OWNED-FIELD-PROPERTY,M-OWNED-READERS-UNNAMED',
 		'unit.query.MoveMemberSplitSliceTest#testAMemberOfAnInheritanceFamilyRefusesTheMove :: control :: '
@@ -1292,6 +1298,15 @@ final class PinsQueryAndRuntime {
 		'unit.query.OrphanContinuationTest#testRefusalNamesTheClauseTheEditMade :: control :: M-ORPHAN-NEW-CLAUSE-FIRST',
 		'unit.query.OrphanContinuationTest#testSeamShapesAreJustified :: control :: M-ORPHAN-BRANCH-OPEN-NEVER,'
 			+ 'M-ORPHAN-SEAM-END-NEVER,M-ORPHAN-SEAM-END-SELF-ONLY,M-ORPHAN-SEAM-END-UNTRIMMED,M-ORPHAN-NO-CASE-ARMS',
+		'unit.query.PatchDocRegionSliceTest#testDeletingADocumentedRegionRefused :: control :: M-PATCH-DOC-REGION-SIBLINGS-INNER',
+		'unit.query.PatchDocRegionSliceTest#testDeletingTheDocumentedOneAboveARegionRefused :: control :: M-PATCH-DOC-REGION-OWNER-UNREAD',
+		'unit.query.PatchDocRegionSliceTest#testDeletingTheLastDocumentedMemberAloneRefused :: control :: M-PATCH-DOC-ORPHAN-UNCHECKED',
+		'unit.query.PatchDocRegionSliceTest#testEmptyingADocumentedRegionRefused :: control :: M-PATCH-DOC-EMPTY-REGION-OWNS',
+		'unit.query.PatchDocRegionSliceTest#testInsertingAboveADocumentedRegionRefused :: control :: M-PATCH-DOC-REGION-OWNER-UNREAD',
+		'unit.query.PatchDocRegionSliceTest#testInsertingAtTheHeadOfADocumentedRegionRefused :: control :: '
+			+ 'M-PATCH-DOC-NESTED-REGION-UNREAD',
+		'unit.query.PatchDocRegionSliceTest#testInsertingInsideANestedDocumentedRegionRefused :: control :: '
+			+ 'M-PATCH-DOC-NESTED-REGION-UNREAD',
 		'unit.query.PatchSliceTest#testATransferUnderADocRewrittenByTheSamePayloadRefused :: control :: M-PATCH-STRADDLED-DOC-UNWATCHED',
 		'unit.query.PatchSliceTest#testATypeDocIsReachableThroughItsOwnAddress :: control :: M-PATCH-OWN-DOC-UNSEARCHED',
 		'unit.query.PatchSliceTest#testAnInsertFromAFragmentOpeningInsideTheDocRefused :: control :: M-PATCH-ENCLOSING-DOC-UNWATCHED,'

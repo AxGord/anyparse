@@ -1,13 +1,10 @@
 package unit.query;
 
 import anyparse.check.BindingScope;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Rename;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The project declares the same walk TWICE — `BindingScope.innermostSpanOfKinds` and

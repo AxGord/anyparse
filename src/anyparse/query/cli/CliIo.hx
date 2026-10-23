@@ -2,7 +2,6 @@ package anyparse.query.cli;
 
 using Lambda;
 
-import haxe.Exception;
 import haxe.io.Path;
 #if (sys || nodejs)
 import sys.io.File;

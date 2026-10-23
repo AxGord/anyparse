@@ -1,10 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.MisplacedTypeDoc;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A `#if … #end` region holding nothing but declaration PREFIX material — metadata, modifiers,

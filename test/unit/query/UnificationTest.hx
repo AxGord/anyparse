@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AncestorTable;
 import anyparse.query.ArgumentSlots.ArgumentFit;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The typing service's signature tables of step T2 (`docs/typing-service.md`): the ancestor table — what a declaration's

@@ -6,8 +6,6 @@ import sys.io.File;
 import anyparse.query.Cli;
 import anyparse.query.StdResolver;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end proof of the IMPLICIT std resolution channel: the auto-discovered Haxe std joins

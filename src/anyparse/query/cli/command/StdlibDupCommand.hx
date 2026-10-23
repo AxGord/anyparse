@@ -4,7 +4,6 @@ import anyparse.core.TempScratch;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 

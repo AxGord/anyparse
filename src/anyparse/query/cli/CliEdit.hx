@@ -10,7 +10,6 @@ import anyparse.query.LineDiff;
 import anyparse.query.ReplaceNode;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * The edit pipeline every mutating `apq` command ends in: resolve the address

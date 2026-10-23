@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.SwallowedException;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `swallowed-exception` check: a `catch` whose non-empty body ignores the

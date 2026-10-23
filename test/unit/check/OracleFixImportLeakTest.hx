@@ -4,11 +4,8 @@ import anyparse.check.Check;
 import anyparse.check.ExplicitLocalType;
 import anyparse.check.ExplicitType;
 import anyparse.check.PositionTypeOracle;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SourceText;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

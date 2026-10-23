@@ -1,13 +1,10 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.TrivialGetter;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import utest.Assert;
 
 /**
  * The accessor-shape collapses of `trivial-getter`, and the subtype/cross-file and

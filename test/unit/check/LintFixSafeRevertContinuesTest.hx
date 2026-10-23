@@ -9,8 +9,6 @@ using StringTools;
 import anyparse.check.CompilerOracle;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A safe fix the compiler rejects costs ITS file, not the rest of the run.

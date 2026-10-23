@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.WriteSites;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `WriteSites`: every write a tree performs, with the storage it writes as a path the binder names, the paths an

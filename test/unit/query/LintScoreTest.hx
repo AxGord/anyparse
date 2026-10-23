@@ -6,8 +6,6 @@ import anyparse.query.LintScore;
 import anyparse.query.format.json.LintTruthJson;
 import haxe.Exception;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

@@ -1,13 +1,9 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.ModifierOrder;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriter;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `modifier-order` check: a member whose modifier keywords are not in the

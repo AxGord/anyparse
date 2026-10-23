@@ -5,8 +5,6 @@ import sys.io.File;
 #end
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `move` is a VERBATIM span splice — `MoveSymbol` cuts the declaration out and pastes it in,

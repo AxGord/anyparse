@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `TypeInfoMemo` — each table is computed on the first call and the same map is answered after it,

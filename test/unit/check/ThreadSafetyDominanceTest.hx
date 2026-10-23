@@ -1,13 +1,8 @@
 package unit.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.ThreadSafety;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Outer-lock dominance (`LockDominance`): when every long hold of `_inner` holds `_outer` on the same object, a thread

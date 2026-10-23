@@ -5,8 +5,6 @@ import sys.FileSystem;
 #end
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq ast --select <Kind>` on a kind this grammar's parser projects no node for: the

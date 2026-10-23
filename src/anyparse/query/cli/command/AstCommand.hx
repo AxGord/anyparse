@@ -7,7 +7,6 @@ import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 import haxe.io.Path;
 
 using Lambda;

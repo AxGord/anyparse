@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.CondResolve;
 import anyparse.runtime.Span.Position;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `CondResolve` — folding a conditional-compilation region a define DECIDES, at the API.

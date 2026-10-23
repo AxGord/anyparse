@@ -1,14 +1,10 @@
 package unit.check;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.check.Check.Violation;
 import anyparse.check.OverriddenInline;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

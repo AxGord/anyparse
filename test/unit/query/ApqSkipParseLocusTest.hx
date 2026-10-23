@@ -5,8 +5,6 @@ import sys.FileSystem;
 #end
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq lit / refs / uses / meta` skip-parse warning surfaces the failure

@@ -8,11 +8,8 @@ import anyparse.check.JoinStringAppend;
 import anyparse.check.LintConfig;
 import anyparse.check.PreferTernaryReturn;
 import anyparse.check.SimplifyNegatedCompound;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

@@ -2,11 +2,8 @@ package unit.check;
 
 import anyparse.check.MemberSlots;
 import anyparse.check.MemberSpacing;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

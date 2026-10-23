@@ -4,9 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.HaxeSpawn;
 import anyparse.check.ImportBlockOrder;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ImportOrder;
@@ -18,8 +16,6 @@ import haxe.io.Path;
 import sys.io.File;
 import unit.QueryTestHelpers;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.InlineMethod;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `InlineMethod.inlineMethod` — inline a single-return function into its
@@ -129,6 +126,31 @@ class InlineMethodSliceTest extends Test {
 		assertRefused(source, 3, 12);
 	}
 
+	/**
+	 * A comprehension loop re-binding the parameter shadows it: substituting through it rewrote the
+	 * LOOP variable's read too, so `[for (x in [1]) x]` became `[for (x in [1]) 5]` — a different
+	 * value, in a file that still compiles.
+	 */
+	@:pin('control')
+	@:killer('M-INLINE-METHOD-SHADOW-PARTIAL')
+	public function testRefuseShadowByComprehensionLoop(): Void {
+		assertShadowRefused(
+			'class C {\n\tfunction f(x:Int):Int return [for (x in [1]) x][0] + x;\n\tfunction u():Int return f(5);\n}', 2, 11
+		);
+	}
+
+	/** A `case` capture of the parameter's name shadows it: substituted, the capture became a constant pattern. */
+	public function testRefuseShadowByCaseCapture(): Void {
+		assertShadowRefused(
+			'class C {\n\tfunction f(x:Int):Int return switch 3 { case x: x; } + x;\n\tfunction u():Int return f(6);\n}', 2, 11
+		);
+	}
+
+	/** A `catch` binder of the parameter's name shadows it inside the handler. */
+	public function testRefuseShadowByCatchBinder(): Void {
+		assertShadowRefused('class C {\n\tfunction f(x:Int):Int return try x catch (x:Int) x;\n\tfunction u():Int return f(7);\n}', 2, 11);
+	}
+
 	/** A cursor not on a function declaration / call is refused. */
 	public function testRefuseCursorNotOnFn(): Void {
 		final source: String = 'class C {\n\tvar n:Int = 0;\n}';
@@ -153,6 +175,15 @@ class InlineMethodSliceTest extends Test {
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
 			case Err(_):
 				Assert.pass();
+		}
+	}
+
+	private function assertShadowRefused(source: String, line: Int, col: Int): Void {
+		switch methodOf(source, line, col) {
+			case Ok(text):
+				Assert.fail('expected the shadow refusal, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('is shadowed') >= 0, 'refused for another reason: $message');
 		}
 	}
 
