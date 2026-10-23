@@ -47,7 +47,8 @@ final class WorkerBuild {
 		final server: Null<String> = Sys.getEnv('APQ_HAXE_SERVER');
 		final connect: Array<String> = server == null || server == '' ? [] : ['--connect', server];
 		final jobs: Array<{ name: String, hxml: String, artifact: String }> = JOBS.filter(j -> target == 'both' || target == j.name);
-		final results: Array<Result> = Pool.of(jobs.length).map(jobs, j -> cmd('haxe $connect ${j.hxml} -js $out/${j.artifact}').at(repo));
+		final results: Array<Result> = Pool.of(jobs.length)
+			.map(jobs, j -> cmd('haxe $connect ${j.hxml} -js $out/${j.artifact} ${launcherBuild(j.name, out)}').at(repo));
 		var failed: Bool = false;
 		for (i => job in jobs) {
 			final result: Result = results[i];
@@ -60,6 +61,10 @@ final class WorkerBuild {
 			Sys.stderr().writeString('dev worker-build: ${job.name} build FAILED — $log\n${lines.slice(-LOG_TAIL).join('\n')}\n');
 		}
 		if (failed) return 1;
+		if (target != 'test') {
+			final warm: Result = cmd('sh $repo/bin/hxq --warm-code-cache').env('HXQ_BIN', '$out/apq.js').at(repo).run();
+			File.saveContent('$out/build-apq.log', File.getContent('$out/build-apq.log') + warm.out + warm.err);
+		}
 		for (job in jobs) Sys.println('${job.name}: $out/${job.artifact}');
 		return 0;
 	}
@@ -73,6 +78,14 @@ final class WorkerBuild {
 		final dir: Result = cmd('git rev-parse --git-dir').at(repo).run();
 		final common: Result = cmd('git rev-parse --git-common-dir').at(repo).run();
 		return dir.ok && common.ok && dir.out.trim() != common.out.trim();
+	}
+
+	/**
+	 * The `--next` half of the `apq` job: the code-cache launcher beside the private engine, whose cache `main` then warms
+	 * through the shim as `bin/apq-js.hxml` does (`anyparse.query.cli.CodeCacheLauncher`).
+	 */
+	private static function launcherBuild(job: String, out: String): Array<String> {
+		return job == 'apq' ? ['--next', 'bin/apq-launch-common.hxml', '-js', '$out/apq-launch.js'] : [];
 	}
 
 }

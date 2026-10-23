@@ -1,0 +1,12 @@
+# Shared flags for every build of the code-cache launcher `apq-launch.js`
+# (anyparse.query.cli.CodeCacheLauncher), which runs `apq.js` from a V8 code
+# cache beside it. As in bin/apq-js-common.hxml the output line lives in each
+# leaf: `bin/apq-js.hxml` writes `bin/apq-launch.js`, the worker builds write
+# `<workdir>/apq-launch.js` next to their private `apq.js`.
+-cp src
+-main anyparse.query.cli.CodeCacheLauncher
+-lib hxnodejs
+-D js-es=6
+-D analyzer-optimize
+# The Haxe source a warm run (`hxq --warm-code-cache`) drives the engine over.
+-resource src/anyparse/query/cli/CodeCacheLauncher.hx@warm-fixture

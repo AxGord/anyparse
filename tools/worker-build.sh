@@ -106,7 +106,9 @@ apq_pid=""
 test_pid=""
 
 if [ "$target" = "both" ] || [ "$target" = "apq" ]; then
-    ( cd "$repo" && haxe $connect bin/apq-js-common.hxml -js "$out/apq.js" ) > "$out/build-apq.log" 2>&1 &
+    # `--next`: the code-cache launcher beside the engine (bin/apq-launch-common.hxml).
+    ( cd "$repo" && haxe $connect bin/apq-js-common.hxml -js "$out/apq.js" \
+        --next bin/apq-launch-common.hxml -js "$out/apq-launch.js" ) > "$out/build-apq.log" 2>&1 &
     apq_pid=$!
 fi
 
@@ -136,6 +138,9 @@ if [ "$rc" -ne 0 ]; then
 fi
 
 if [ -n "$apq_pid" ]; then
+    # The cache the private engine's calls read, warmed as bin/apq-js.hxml's last
+    # step warms the shared one; it exits 0 whatever happens.
+    HXQ_BIN="$out/apq.js" sh "$repo/bin/hxq" --warm-code-cache >> "$out/build-apq.log" 2>&1 || true
     echo "apq: $out/apq.js"
 fi
 if [ -n "$test_pid" ]; then

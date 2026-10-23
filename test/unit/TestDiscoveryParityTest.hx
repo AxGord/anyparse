@@ -501,6 +501,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.CliHelpListingPinTest',
 		'unit.cli.CliUnknownSubcommandTest',
 		'unit.cli.CliUsageFailureCliTest',
+		'unit.cli.CodeCacheLauncherTest',
 		'unit.cli.ExtractConstantToCliTest',
 		'unit.cli.ExtractDestinationCollisionCliTest',
 		'unit.cli.JsonEditCliTest',

@@ -30368,6 +30368,46 @@
 			"find": "location: rule.location ?? WrappingLocation.AfterLast",
 			"replace": "location: rule.location ?? fallback",
 			"note": "a matched rule that names no location takes the section's `defaultLocation` instead of `afterLast`, so the default overrides a rule that matched"
+		},
+		{
+			"name": "M-CODE-CACHE-KEY-IGNORES-SOURCE",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "cacheKey",
+			"find": ".update(source).update(runtime)",
+			"replace": ".update(runtime)",
+			"note": "the key no longer hashes the engine's content, so a same-length rebuild is offered the old cache and V8, which checks only the length, runs the old engine's top level"
+		},
+		{
+			"name": "M-CODE-CACHE-KEY-IGNORES-RUNTIME",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "cacheKey",
+			"find": ".update(source).update(runtime)",
+			"replace": ".update(source)",
+			"note": "the key no longer carries node, V8 and flags, so a cache filed under another runtime is read as this one's"
+		},
+		{
+			"name": "M-CODE-CACHE-NO-CHECKSUM",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "readCache",
+			"find": "return sha256(payload).equals(data.slice(MAGIC.length + DIGEST_LENGTH, head)) ? payload : null;",
+			"replace": "return payload;",
+			"note": "the payload checksum is not verified, so a cache damaged after its header is handed to V8, which does not verify it either and can abort on it"
+		},
+		{
+			"name": "M-CODE-CACHE-WRITE-IN-PLACE",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "writeCache",
+			"find": "Fs.writeFileSync(temp, Buffer.concat([Buffer.from(MAGIC, 'latin1'), key, sha256(payload), payload]));\n\t\t\tFs.renameSync(temp, path);",
+			"replace": "Fs.writeFileSync(path, Buffer.concat([Buffer.from(MAGIC, 'latin1'), key, sha256(payload), payload]));",
+			"note": "the cache is rewritten in place instead of renamed over, so a reader at the same time can see half a file"
+		},
+		{
+			"name": "M-CODE-CACHE-PERSIST-IGNORES-STAMP",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "persist",
+			"find": "if (stampOf(binary) != engine.stamp) return false;",
+			"replace": "",
+			"note": "a run of an engine rewritten on disk since it was read still saves its cache, replacing the one a fresh build just warmed"
 		}
 	]
 }

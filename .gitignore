@@ -3,6 +3,8 @@ bin/*.js
 bin/*.jar
 bin/*.n.map
 bin/*.js.map
+bin/*.v8cache
+bin/*.v8cache.*.tmp
 bin/.last-sweep.json
 bin/.prev-sweep.json
 dump/
