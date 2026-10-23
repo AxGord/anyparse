@@ -397,6 +397,14 @@ final class PinsQueryAndRuntime {
 			+ 'M-KEEP-CANON-FALLBACK-UNGUARDED,M-GUARDED-SPLICE-NO-REFUSAL',
 		'unit.query.EditKeepingCanonicalGateTest#testTheFallbackRefusesAnEmptiedSlot :: control :: M-KEEP-CANON-FALLBACK-UNGUARDED',
 		'unit.query.EditKeepingCanonicalGateTest#testTheFallbackStillSplicesAHarmlessEdit :: control :: M-GUARDED-SPLICE-ALWAYS-REFUSES',
+		'unit.query.EnumCtorRenameTest#testALocalOfTheOldNameKeepsIt :: guard :: ',
+		'unit.query.EnumCtorRenameTest#testANewNameALocalHoldsRefuses :: control :: M-CTOR-CAPTURE-UNCHECKED',
+		'unit.query.EnumCtorRenameTest#testANewNameAnImportedStaticSpellsRefuses :: control :: M-CTOR-NEW-NAME-TAKEN-OVER',
+		'unit.query.EnumCtorRenameTest#testANewNameAnInheritedMemberHoldsRefuses :: control :: M-CTOR-NEW-NAME-OUTRANKED',
+		'unit.query.EnumCtorRenameTest#testAValueOfEitherNameOnAnotherEnumRefuses :: control :: M-CTOR-RIVAL-IGNORED,M-CTOR-TAKEN-IGNORED',
+		'unit.query.EnumCtorRenameTest#testAnAliasOrATypedefOfTheEnumReachesItsConstructor :: control :: M-CTOR-ALIAS-RECEIVER-KEPT',
+		'unit.query.EnumCtorRenameTest#testAnUnprovableBareSpellingRefusesTheRename :: control :: M-CTOR-UNPROVEN-RENAMED',
+		'unit.query.EnumCtorRenameTest#testEveryReferenceOfAConstructorRenames :: control :: M-CTOR-NOT-A-MEMBER,M-CTOR-BARE-KEPT,M-CTOR-IMPORT-KEPT',
 		'unit.query.EnumValueTypeTest#testAValueWrittenWithNoTypeIsOfItsEnumAbstract :: control :: '
 			+ 'M-ENUM-VALUE-UNTYPED,M-ENUM-VALUE-STATIC',
 		'unit.query.EnumValueTypeTest#testEveryBranchMustDeclareTheValue :: control :: '
@@ -1220,6 +1228,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.MoveToHelperSliceTest#testAParameterNameTheMovedCodeSpellsIsRefused :: control :: M-HELPER-PARAM-CLASH-UNCHECKED',
 		'unit.query.MoveToHelperSliceTest#testAPrivateTypeTheStayingCodeNamesIsRefused :: control :: M-HELPER-SHARED-TYPE-ALLOWED',
 		'unit.query.MoveToHelperSliceTest#testAPropertyAccessorIsRefused :: control :: M-HELPER-ACCESSOR-ALLOWED',
+		'unit.query.MoveToHelperSliceTest#testAStaticOfAProvenSupertypeIsNotInherited :: control :: M-HELPER-ANCESTOR-STATIC-INHERITED',
 		'unit.query.MoveToHelperSliceTest#testASubtypesBareCallIsRewritten :: control :: M-HELPER-SUBTYPE-CALLERS-SKIPPED',
 		'unit.query.MoveToHelperSliceTest#testASuperAccessIsRefused :: control :: M-HELPER-SUPER-ALLOWED',
 		'unit.query.MoveToHelperSliceTest#testAnInstanceFieldIsRefused :: control :: M-HELPER-FIELD-ALLOWED',

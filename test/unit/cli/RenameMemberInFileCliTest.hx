@@ -214,4 +214,29 @@ class RenameMemberInFileCliTest extends Test {
 		#end
 	}
 
+	/**
+	 * An enum CONSTRUCTOR is a member whose name every scope importing the enum can spell bare: the call, the pattern
+	 * and the qualified `E.A` rename with the declaration, where the value namespace used to rewrite the declaration alone.
+	 */
+	public function testAnEnumConstructorRenamesWithItsCallsAndPatterns(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write(
+			'rn_member_ctor',
+			'enum E {\n\tA(x: Int);\n\tB;\n}\n\nclass Main {\n\tstatic function make(): E {\n\t\treturn A(1);\n\t}\n\n\tstatic function '
+			+ 'main() {\n\t\tswitch make() {\n\t\t\tcase A(x):\n\t\t\t\ttrace(x);\n\t\t\tcase B:\n\t\t}\n\t\ttrace(E.A(2));\n\t}\n}\n'
+		);
+		final rc: Int = Cli.run(['rename', path, '2:2', 'Alpha', '--write']);
+		Assert.equals(0, rc);
+		final out: String = File.getContent(path);
+		Assert.isTrue(
+			out.indexOf('\tAlpha(x: Int);') >= 0 && out.indexOf('return Alpha(1);') >= 0 && out.indexOf('case Alpha(x):') >= 0
+			&& out.indexOf('trace(E.Alpha(2));') >= 0,
+			out
+		);
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

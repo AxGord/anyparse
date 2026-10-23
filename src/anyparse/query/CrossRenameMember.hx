@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.CrossRename.FileChange;
+import anyparse.query.EnumCtorRefs.CtorOffsets;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.ModulePath;
@@ -20,10 +21,10 @@ using Lambda;
 
 /**
  * One resolved member the cursor sits on: its declaring type name, the
- * member name, whether it is `static` / `override`, whether it is a value
- * of an `enum abstract` (the one member class Haxe resolves from the
- * EXPECTED type), and the enclosing type declaration (for the same-type
- * name-collision check).
+ * member name, whether it is `static` / `override`, whether Haxe resolves
+ * it from the EXPECTED type (a value of an `enum abstract`, or an enum
+ * constructor), whether it is an enum constructor, and the enclosing type
+ * declaration (for the same-type name-collision check).
  */
 private typedef MemberTarget = {
 	var typeName: String;
@@ -31,6 +32,7 @@ private typedef MemberTarget = {
 	var isStatic: Bool;
 	var isOverride: Bool;
 	var isEnumValue: Bool;
+	var isEnumCtor: Bool;
 	var srcDecl: TypeDeclMatch;
 }
 
@@ -42,6 +44,12 @@ private typedef MemberTarget = {
 private typedef LocatedOffsets = {
 	final offsets: Array<Int>;
 	final error: Null<String>;
+};
+
+/** The modifiers of one member's declaration group that `resolveMemberAtCursor` reads (`groupModifiers`). */
+private typedef GroupModifiers = {
+	final saysStatic: Bool;
+	final isOverride: Bool;
 };
 
 /**
@@ -103,6 +111,8 @@ private typedef ReceiverProof = {
  *    source type the miss surfaces as a compile error, never a wrong rewrite. A
  *    `new T()` receiver names its type itself and needs no binding at all; that
  *    name is the whole written path, so it resolves the same way.
+ *  - An ENUM CONSTRUCTOR's import and its BARE spellings, each proven by the enum's
+ *    module or an import bringing its values in, or the whole rename refuses (`EnumCtorRefs`).
  *  - EVERY branch of a `#if` region that declares the member. The region is a
  *    member HOST, not a member — it holds each branch's members with their own
  *    modifier siblings — so the cursor scan asks `RefactorSupport.eachMemberHost`,
@@ -232,6 +242,10 @@ final class CrossRenameMember {
 		// passed. `null` means one same-named declaration's relation to the owner is unprovable: half a
 		// family leaves a declaration overriding nothing, so the whole rename is refused.
 		final index: SymbolIndex = IndexScope.over(scopeFiles, plugin);
+		final ctorRefusal: Null<String> = t.isEnumCtor
+			? EnumCtorRefs.refusal(t.typeName, t.memberName, newName, parse.parsed, index, refShape)
+			: null;
+		if (ctorRefusal != null) return Err(ctorRefusal);
 		// The `isOverride` refusal above reads the OVERRIDE modifier, which an implementation of an
 		// `abstract` method or an interface method never carries - and `overrideFamilyOf` models the
 		// family from the BASE down, so neither sees a cursor sitting on such an implementation. Ask
@@ -291,6 +305,7 @@ final class CrossRenameMember {
 	 */
 	private static function resolveMemberAtCursor(tree: QueryNode, cursor: Int, source: String, refShape: RefShape): Null<MemberTarget> {
 		var best: Null<MemberTarget> = null;
+		final ctorKinds: Array<String> = refShape.execution?.enumConstructorKinds ?? [];
 		function walk(node: QueryNode): Void {
 			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
 			if (m != null) {
@@ -305,30 +320,22 @@ final class CrossRenameMember {
 						final span: Null<Span> = child.span;
 						if (span == null) continue;
 						final kind: String = child.kind;
-						if (!MemberKinds.isFieldMemberKind(kind) && !MemberKinds.FN_DECL_KINDS.contains(kind)) continue;
+						final isCtor: Bool = ctorKinds.contains(kind);
+						if (!isCtor && !MemberKinds.isFieldMemberKind(kind) && !MemberKinds.FN_DECL_KINDS.contains(kind)) continue;
 						final name: Null<String> = child.name;
 						if (name == null) continue;
 						final childNN: QueryNode = child;
 						final spanNN: Span = span;
 						if (!RefactorSupport.identTokenContains(childNN, cursor, source) && spanNN.from != cursor) continue;
 						final groupSpan: Span = ElementSpan.declGroupSpan(childNN, host, spanNN);
-						var isStatic: Bool = MemberKinds.implicitlyStaticMember(decl.kind, kind, refShape);
-						var isOverride: Bool = false;
-						var saysStatic: Bool = false;
-						for (j in 0...i) {
-							final s: Null<Span> = siblings[j].span;
-							if (s == null || s.from < groupSpan.from || s.to > spanNN.from) continue;
-							if (siblings[j].kind == 'Static') {
-								isStatic = true;
-								saysStatic = true;
-							}
-							if (siblings[j].kind == 'Override') isOverride = true;
-						}
+						// A constructor is reached through its enum as a namespace (`E.A`), the static form.
+						final mods: GroupModifiers = groupModifiers(siblings, i, groupSpan, spanNN.from);
+						final saysStatic: Bool = mods.saysStatic;
 						best = {
 							typeName: decl.name,
 							memberName: name,
-							isStatic: isStatic,
-							isOverride: isOverride,
+							isStatic: saysStatic || isCtor || MemberKinds.implicitlyStaticMember(decl.kind, kind, refShape),
+							isOverride: mods.isOverride,
 							// A VALUE of an `enum abstract` — the exact member class Haxe resolves
 							// from the expected type. A plain abstract's static is NOT one
 							// (`abstract Plain(Int) { public static final PX: Plain; }` with `function f():
@@ -337,8 +344,9 @@ final class CrossRenameMember {
 							// is an EXPLICIT `static` inside an `enum abstract` — the same probe, one host
 							// kind over: `public static final PX: Colour = RED;` is `Identifier 'PX' is not
 							// part of Colour`. A value is the member that says no modifier at all.
-							isEnumValue: decl.kind == refShape.enumAbstractDeclKind && !saysStatic
+							isEnumValue: isCtor || decl.kind == refShape.enumAbstractDeclKind && !saysStatic
 								&& MemberKinds.implicitlyStaticMember(decl.kind, kind, refShape),
+							isEnumCtor: isCtor,
 							srcDecl: decl
 						};
 					}
@@ -348,6 +356,22 @@ final class CrossRenameMember {
 		}
 		walk(tree);
 		return best;
+	}
+
+	/**
+	 * The `static` and `override` modifiers among the siblings BEFORE the member at `i` that belong to its own declaration
+	 * group (`groupSpan`, ending where the member starts at `memberFrom`).
+	 */
+	private static function groupModifiers(siblings: Array<QueryNode>, i: Int, groupSpan: Span, memberFrom: Int): GroupModifiers {
+		var saysStatic: Bool = false;
+		var isOverride: Bool = false;
+		for (j in 0...i) {
+			final s: Null<Span> = siblings[j].span;
+			if (s == null || s.from < groupSpan.from || s.to > memberFrom) continue;
+			if (siblings[j].kind == 'Static') saysStatic = true;
+			if (siblings[j].kind == 'Override') isOverride = true;
+		}
+		return { saysStatic: saysStatic, isOverride: isOverride };
 	}
 
 	/**
@@ -378,14 +402,9 @@ final class CrossRenameMember {
 			for (fm in family)
 				if (fm.file == entry.file)
 					for (occ in Rename.renameOccurrences(entry.source, entry.tree, fm.declFrom, refShape)) addOff(occ.from);
-			final qualified: LocatedOffsets = qualifiedMemberOffsets(
-				entry.source, entry.file, entry.tree, target, plugin, refShape, index, module, cursorFile
-			);
-			if (qualified.error != null) return Err('${entry.file}: ${qualified.error}');
-			for (off in qualified.offsets) addOff(off);
-			for (off in patternConstantOffsets(entry.source, entry.file, entry.tree, target, plugin, refShape, index, cursorFile))
-				addOff(off);
-			for (off in expectedReturnOffsets(entry.source, entry.file, entry.tree, target, refShape, index, cursorFile)) addOff(off);
+			final proven: LocatedOffsets = provenOffsets(entry, target, newName, plugin, refShape, index, module, cursorFile);
+			if (proven.error != null) return Err('${entry.file}: ${proven.error}');
+			for (off in proven.offsets) addOff(off);
 			if (offsets.length == 0) continue;
 
 			final edits: Array<{ span: Span, text: String }> = [
@@ -402,6 +421,10 @@ final class CrossRenameMember {
 				newSource, newTree, [for (edit in edits) edit.span], resolved, newName, cursor, refShape
 			);
 			if (capture != null) return Err('${entry.file}: $capture');
+			final ctorCapture: Null<String> = target.isEnumCtor
+				? EnumCtorRefs.capturedAfter(newSource, newTree, edits, newName, refShape)
+				: null;
+			if (ctorCapture != null) return Err('${entry.file}: $ctorCapture');
 
 			changes.push({
 				file: entry.file,
@@ -411,6 +434,34 @@ final class CrossRenameMember {
 			});
 		}
 		return changes.length == 0 ? Err('rename "${target.memberName}" -> "$newName" changed nothing') : Ok(changes, ADVISORY);
+	}
+
+	/**
+	 * The member-token offsets of one file beyond the declaring-file occurrences: the qualified accesses, the patterns and
+	 * returns an expected type proves, and for an enum constructor its own spellings (`EnumCtorRefs`), which are proven
+	 * against all of those; or the refusal that stops the whole rename.
+	 */
+	private static function provenOffsets(
+		entry: ParsedFile, target: MemberTarget, newName: String, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex,
+		module: ModulePath, cursorFile: String
+	): LocatedOffsets {
+		final qualified: LocatedOffsets = qualifiedMemberOffsets(
+			entry.source, entry.file, entry.tree, target, plugin, refShape, index, module, cursorFile
+		);
+		if (qualified.error != null) return qualified;
+		final out: Array<Int> = qualified.offsets.concat(
+			patternConstantOffsets(entry.source, entry.file, entry.tree, target, plugin, refShape, index, cursorFile)
+		)
+			.concat(expectedReturnOffsets(entry.source, entry.file, entry.tree, target, refShape, index, cursorFile));
+		if (!target.isEnumCtor) return { offsets: out, error: null };
+		final ctor: CtorOffsets = EnumCtorRefs.offsets(entry, {
+			typeName: target.typeName,
+			ctor: target.memberName,
+			newName: newName,
+			module: module,
+			cursorFile: cursorFile
+		}, out, index, refShape, plugin.lexicalRegions(entry.source));
+		return ctor.error != null ? { offsets: [], error: ctor.error } : { offsets: out.concat(ctor.offsets), error: null };
 	}
 
 	/**

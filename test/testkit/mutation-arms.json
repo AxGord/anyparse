@@ -30304,6 +30304,91 @@
 			"method": "typeParamBinds",
 			"force": "false",
 			"note": "no type parameter shadows a short name, so a printed type silently re-binds to a method's, a class's or a local function's type parameter of the same name"
+		},
+		{
+			"name": "M-CTOR-NOT-A-MEMBER",
+			"type": "anyparse.query.CrossRenameMember",
+			"method": "resolveMemberAtCursor",
+			"find": "final isCtor: Bool = ctorKinds.contains(kind);",
+			"replace": "final isCtor: Bool = false;",
+			"note": "an enum constructor is no member the rename resolves, so the cursor on one falls back to the value namespace, which renames the declaration alone"
+		},
+		{
+			"name": "M-CTOR-BARE-KEPT",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "offsets",
+			"find": "if (!isProven && !out.contains(spelling.offset)) out.push(spelling.offset);",
+			"replace": "",
+			"note": "a bare constructor spelling an import of the enum brings in keeps the old name, so the renamed enum leaves calls that do not compile"
+		},
+		{
+			"name": "M-CTOR-IMPORT-KEPT",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "importOffsets",
+			"force": "[]",
+			"note": "an import of the constructor itself keeps the old name, so it names a constructor the enum no longer declares"
+		},
+		{
+			"name": "M-CTOR-UNPROVEN-RENAMED",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "offsets",
+			"find": "if (!isProven && (!visible || outranked(entry, fi, spelling.host, ctor, index, refShape)))",
+			"replace": "if (false)",
+			"note": "a bare spelling nothing proves to be the constructor is renamed as if it were, so a pattern the op could not attribute is rewritten on a guess"
+		},
+		{
+			"name": "M-CTOR-RIVAL-IGNORED",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "refusal",
+			"find": "final rival: Null<String> = index.values.hostsOfValue(ctor).find(host -> host != typeName);",
+			"replace": "final rival: Null<String> = null;",
+			"note": "another enum hosting a value of the old name no longer refuses, so a bare spelling meaning that enum's value is renamed with this one"
+		},
+		{
+			"name": "M-CTOR-TAKEN-IGNORED",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "refusal",
+			"find": "if (taken.length > 0)",
+			"replace": "if (false)",
+			"note": "another enum hosting a value of the new name no longer refuses, so a renamed bare spelling may bind that enum's value"
+		},
+		{
+			"name": "M-CTOR-CAPTURE-UNCHECKED",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "capturedAfter",
+			"force": "null",
+			"note": "a local holding the new name captures the renamed constructor call unchecked, so the rewrite calls the local"
+		},
+		{
+			"name": "M-CTOR-NEW-NAME-OUTRANKED",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "offsets",
+			"find": "if (outranked(entry, fi, spelling.host, target.newName, index, refShape))",
+			"replace": "if (false)",
+			"note": "an inherited member holding the new name outranks the renamed constructor unchecked, so the rewrite reads the member"
+		},
+		{
+			"name": "M-HELPER-ANCESTOR-STATIC-INHERITED",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "rewriteMovedRef",
+			"find": "declaringAncestorOf(prep.srcTypeName, name, true)",
+			"replace": "declaringAncestorOf(prep.srcTypeName, name)",
+			"note": "a static of a proven supertype counts as inherited, so a bare name the source binds through a field import becomes `src.name()`, which names nothing"
+		},
+		{
+			"name": "M-CTOR-NEW-NAME-TAKEN-OVER",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "offsets",
+			"find": "if (taken.length > 0)",
+			"replace": "if (false)",
+			"note": "a bare spelling of the new name in a file the enum's values reach no longer refuses, so the renamed constructor silently takes over what it meant"
+		},
+		{
+			"name": "M-CTOR-ALIAS-RECEIVER-KEPT",
+			"type": "anyparse.query.EnumCtorRefs",
+			"method": "aliasReceiverOffsets",
+			"force": "[]",
+			"note": "a constructor reached through an import alias or a typedef of its enum keeps the old name, so the rename reports success on code that no longer compiles"
 		}
 	]
 }

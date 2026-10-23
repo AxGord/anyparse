@@ -262,7 +262,9 @@ final class MoveToHelperRefs {
 			return 'the moved code reaches `super` at ${where(prep.srcFile, prep.srcSource, hit.span.from)} — a static helper has '
 				+ 'no superclass to call';
 		if (SourceText.isUpperInitial(name) || scan.pathRoots.contains(hit.span.from) || AMBIENT_VALUES.contains(name)) return null;
-		final ancestor: Null<String> = prep.index.subtypes.declaringAncestorOf(prep.srcTypeName, name);
+		// An ancestor's STATIC is no inherited member: the bare name binds elsewhere (an import of the field), and
+		// `param.name` would name nothing.
+		final ancestor: Null<String> = prep.index.subtypes.declaringAncestorOf(prep.srcTypeName, name, true);
 		if (ancestor != null) {
 			// Rewritten into an inherited member only on a PROVEN supertype: a maybe may be a namesake whose member the bare
 			// name never meant (a static import, a module field), and `param.name` would then name nothing.

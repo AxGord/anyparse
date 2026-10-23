@@ -202,10 +202,13 @@ final class SubtypeGraph {
 	 * from the BASE down, so a cursor sitting on an implementation finds nothing. In Haxe an
 	 * implementation of an `abstract` method or an interface method carries NO `override`
 	 * modifier, so a keyword check does not see it either.
+	 *
+	 * `instanceOnly` asks what a bare name in the subtype can INHERIT: Haxe never resolves an ancestor's static as a bare
+	 * name in a subtype, so a consumer rewriting the name into a member access must not count one.
 	 */
-	public function declaringAncestorOf(typeName: String, member: String): Null<String> {
+	public function declaringAncestorOf(typeName: String, member: String, instanceOnly: Bool = false): Null<String> {
 		final declarers: Array<String> = [
-			for (fi in _files) for (t in fi.types) if (t.members.exists(m -> m.name == member)) t.name
+			for (fi in _files) for (t in fi.types) if (t.members.exists(m -> m.name == member && !(instanceOnly && m.isStatic))) t.name
 		];
 		// A MAYBE-ancestor counts: refusing or granting on it is safe, while a consumer that REWRITES a reference into an inherited
 		// member must prove the relation itself (`subtypeVerdict`).

@@ -88,7 +88,7 @@ Scope-correct edits driven by the `refs` / `Scope` binding resolver: everything 
 
 | command | synopsis |
 |---|---|
-| `rename` | `apq rename <file> (<line>:<col> \| --select '<sel>' \| --match '<pattern>') <newName> [--write] [--scope <dir>]` — refuses a rename that re-binds an occurrence (a de-prefixing rename whose new name a parameter holds; `--qualify-shadowed` writes `this.x = x` for the parameter idiom), a `$name` interpolation read, and a same-block redeclaration; a bare `$name` macro reification splice is neither renamed nor refused |
+| `rename` | `apq rename <file> (<line>:<col> \| --select '<sel>' \| --match '<pattern>') <newName> [--write] [--scope <dir>]` — refuses a rename that re-binds an occurrence (a de-prefixing rename whose new name a parameter holds; `--qualify-shadowed` writes `this.x = x` for the parameter idiom), a `$name` interpolation read, and a same-block redeclaration; a bare `$name` macro reification splice is neither renamed nor refused. An enum CONSTRUCTOR renames as a member: its declaration, `E.A`, its own import and every bare call or pattern the enum's module or an import of its values proves — one nothing proves, or a value of either name on another enum, refuses the whole rename |
 | `inline` | `apq inline <file> (<line>:<col> \| --select '<sel>' \| --match '<pattern>') [--write]` |
 | `inline-method` | `apq inline-method <file> (<line>[:<col>] \| --select 'FnMember:<name>' \| --match '<pattern>') [options]` |
 | `extract-var` | `apq extract-var <file> (<line>:<col> \| --match '<expr-pattern>') <name> [--write]` |

@@ -385,6 +385,9 @@ final class RenameCommand implements CliCommand {
 		CliIo.sysPrint('An expected-type value OUTSIDE return position (x == VALUE, an annotated\n');
 		CliIo.sysPrint('assignment, a typed argument) or one in a function with no return\n');
 		CliIo.sysPrint('annotation is not proven and is left for the compiler to reject.\n');
+		CliIo.sysPrint('An enum CONSTRUCTOR renames with E.A, its own import (import p.E.A;)\n');
+		CliIo.sysPrint('and every bare call or pattern the enum module or an import of its\n');
+		CliIo.sysPrint('values proves; a bare spelling nothing proves refuses the whole rename.\n');
 		CliIo.sysPrint('A member a #if region\n');
 		CliIo.sysPrint('declares once per branch is one logical member: every branch declaration\n');
 		CliIo.sysPrint('moves in the same edit set. Refuses an override member,\n');
