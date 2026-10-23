@@ -2,12 +2,14 @@ package unit.check;
 
 import anyparse.check.CommentWidth;
 import anyparse.check.DocLength;
+import anyparse.check.DocMeasurementClaim;
 import anyparse.check.EffectiveRules;
 import anyparse.check.EmptyComment;
 import anyparse.check.EnglishComments;
 import anyparse.check.LintConfig;
 import anyparse.check.LintDocuments;
 import anyparse.check.MagicNumber;
+import anyparse.check.PreferDocComment;
 import anyparse.check.PreferFind;
 import unit.cli.CliFixture;
 
@@ -93,6 +95,52 @@ class LintCategoryConfigTest extends Test {
 		#end
 	}
 
+	/**
+	 * The NEAREST document that names a rule or its category decides the rule: a category in a nested config overrides
+	 * an outer config's entry for one of its rules, either way, and an outer exception is not carried into a nested
+	 * document that restates the category.
+	 */
+	@:pin('control') @:killer('M-CHAIN-WIDE-RULE-ENTRY')
+	public function testTheNearestDocumentNamingTheRuleOrItsCategoryDecides(): Void {
+		#if (sys || nodejs)
+		final cases: Array<{
+			root: String,
+			nested: String,
+			expected: Bool,
+			why: String
+		}> = [
+			{
+				root: '{"rules": {"prefer-doc-comment": true}}',
+				nested: '{"categories": {"docs": false}}',
+				expected: false,
+				why: 'a nested category off overrides an outer rule entry on'
+			},
+			{
+				root: '{"rules": {"prefer-doc-comment": false}}',
+				nested: '{"categories": {"docs": true}}',
+				expected: true,
+				why: 'a nested category on overrides an outer rule entry off'
+			}
+		];
+		for (c in cases) {
+			final root: String = nestedTree(c.root, c.nested);
+			Assert.equals(c.expected, Linter.enabledBy(LintConfig.discover('$root/nested/Probe.hx'), new PreferDocComment()), c.why);
+			CliFixture.removeDir(root);
+		}
+		final restated: String = nestedTree(
+			'{"categories": {"docs": true}, "rules": {"doc-measurement-claim": false}}', '{"categories": {"docs": true}}'
+		);
+		final config: LintConfig = LintConfig.discover('$restated/nested/Probe.hx');
+		Assert.isTrue(Linter.enabledBy(config, new DocMeasurementClaim()), 'an outer exception does not survive a restated category');
+		Assert.isFalse(
+			Linter.enabledBy(LintConfig.discover('$restated/Top.hx'), new DocMeasurementClaim()), 'it still holds where it was written'
+		);
+		CliFixture.removeDir(restated);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	public function testTheListingNamesTheCategoryThatDecided(): Void {
 		final config: LintConfig = LintConfig.parse('{"categories": {"docs": true}, "rules": {"comment-width": false}}');
 		final byCategory: RuleState = EffectiveRules.stateOf(new DocLength(), 'P.hx', config);
@@ -100,5 +148,17 @@ class LintCategoryConfigTest extends Test {
 		Assert.equals('category', byCategory.reason);
 		Assert.equals('config', EffectiveRules.stateOf(new CommentWidth(), 'P.hx', config).reason, 'a rule entry is the config\'s word');
 	}
+
+	#if (sys || nodejs)
+	/** A root `apqlint.json` with `nested/apqlint.json` below it and one probe file in each directory. */
+	private function nestedTree(rootConfig: String, nestedConfig: String): String {
+		return CliFixture.writeTree('lintcategory', [
+			{ name: 'apqlint.json', source: rootConfig },
+			{ name: 'Top.hx', source: 'class Top {}\n' },
+			{ name: 'nested/apqlint.json', source: nestedConfig },
+			{ name: 'nested/Probe.hx', source: 'class Probe {}\n' }
+		]);
+	}
+	#end
 
 }

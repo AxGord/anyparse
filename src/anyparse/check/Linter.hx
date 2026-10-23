@@ -398,7 +398,7 @@ final class Linter {
 	}
 
 	/**
-	 * Whether `check` runs under `config`: the config's word for its id or its category (`LintConfig.enabledSetting`),
+	 * Whether `check` runs under `config`: the config's word for its id or its category (`LintConfig.switchFor`),
 	 * else its own default — off for a `DefaultOff` rule.
 	 */
 	public static function enabledBy(config: LintConfig, check: Check): Bool {

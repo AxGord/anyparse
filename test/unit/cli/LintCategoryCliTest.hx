@@ -62,13 +62,15 @@ class LintCategoryCliTest extends Test {
 		#end
 	}
 
-	public function testListRulesNarrowsToTheCategoryAndPrintsIt(): Void {
+	public function testListRulesNarrowsToTheCategoryAndItsJsonNamesIt(): Void {
 		#if (sys || nodejs)
-		final listed: String = CliFixture.captureStdout(() -> Cli.run(['lint', '--list-rules', '--category', 'imports']));
+		final listed: String = CliFixture.captureStdout(() ->
+			Cli.run(['lint', '--list-rules', '--category', 'imports', '--format', 'json'])
+		);
 		#if nodejs
-		final lines: Array<String> = listed.split('\n').filter(l -> l != '');
-		Assert.isTrue(lines.length > 0, 'the category holds rules');
-		for (line in lines) Assert.isTrue(~/^[a-z0-9-]+ +imports +\S/.match(line), 'id, category, description: $line');
+		final records: Array<{ id: String, category: String }> = haxe.Json.parse(listed);
+		Assert.isTrue(records.length > 0, 'the category holds rules');
+		for (r in records) Assert.equals('imports', r.category, '${r.id} is listed under its own category');
 		#end
 		#else
 		Assert.pass('non-sys target');

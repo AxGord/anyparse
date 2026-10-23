@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.LintConfig.RuleConfig;
+import anyparse.check.LintConfig.RuleSwitches;
 import anyparse.check.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.check.config.ApqLintConfig;
 import anyparse.check.config.ApqLintConfigParser;
@@ -57,17 +58,16 @@ final class LintDocuments {
 	 * every other array: each element carries its own compile directory and defines, so a
 	 * document that names its own oracles can no longer inherit a directory belonging to
 	 * somebody else's hxml. `reachConfigurationsComplete` is a claim about one such list, so a document naming its own
-	 * list claims nothing about it until it says so.
+	 * list claims nothing about it until it says so. Enablement is the one key not
+	 * folded: each document's switches are kept, nearest first (`LintDocument.switches`).
 	 */
 	public static function mergeDocuments(near: LintDocument, far: LintDocument): LintDocument {
 		final rules: Map<String, RuleConfig> = [];
 		for (id => rc in far.rules) rules[id] = rc;
 		for (id => rc in near.rules) rules[id] = mergeRule(rc, far.rules[id]);
-		final categories: Map<String, Bool> = far.categories.copy();
-		for (id => on in near.categories) categories[id] = on;
 		return {
 			rules: rules,
-			categories: categories,
+			switches: near.switches.concat(far.switches),
 			compilerOracles: near.compilerOracles ?? far.compilerOracles,
 			compilerOracleServer: near.compilerOracleServer ?? far.compilerOracleServer,
 			reachConfigurationsComplete: near.reachConfigurationsComplete ?? (
@@ -91,7 +91,7 @@ final class LintDocuments {
 		return new LintConfig(
 			doc.rules, doc.compilerOracles, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer,
 			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete, doc.reportSummaryThreshold,
-			doc.reflectiveClasses, doc.reflectiveMethodHolders, doc.ownedTypes, doc.categories
+			doc.reflectiveClasses, doc.reflectiveMethodHolders, doc.ownedTypes, doc.switches
 		);
 	}
 
@@ -119,7 +119,10 @@ final class LintDocuments {
 				drops.push('rules "$id" is neither true, false nor an object of options — ignored');
 		}
 		final declaredCategories: Null<Map<String, JValue>> = config.categories;
-		final categories: Map<String, Bool> = declaredCategories == null ? [] : parseCategories(declaredCategories, drops);
+		final switches: RuleSwitches = {
+			rules: [for (id => rule in rules) id => rule.enabled == true],
+			categories: declaredCategories == null ? [] : parseCategories(declaredCategories, drops)
+		};
 		final declaredOracle: Null<JValue> = config.compilerOracle;
 		final oracles: Null<Array<OracleConfig>> = declaredOracle == null ? null : OracleDeclaration.read(declaredOracle, baseDir, drops);
 		final declaredRoots: Null<Array<String>> = config.resolutionRoots;
@@ -135,7 +138,7 @@ final class LintDocuments {
 			: OwnedTypesDeclaration.read(declaredOwnership, drops);
 		return {
 			rules: rules,
-			categories: categories,
+			switches: [switches],
 			compilerOracles: oracles,
 			compilerOracleServer: config.compilerOracleServer,
 			reachConfigurationsComplete: config.reachConfigurationsComplete,
@@ -330,8 +333,11 @@ typedef DocumentMemo = Map<String, Null<LintDocument>>;
 typedef LintDocument = {
 	var rules: Map<String, RuleConfig>;
 
-	/** The `categories` switches by category id; a known id with a boolean only, see `LintDocuments.parseDocument`. */
-	var categories: Map<String, Bool>;
+	/**
+	 * What each folded document states about enablement, nearest first: one entry per document, never flattened, since
+	 * the nearest document naming a rule OR its category decides it (`LintConfig.switchFor`).
+	 */
+	var switches: Array<RuleSwitches>;
 	var ?compilerOracles: Array<OracleConfig>;
 	var ?compilerOracleServer: Bool;
 	var ?reachConfigurationsComplete: Bool;

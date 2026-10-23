@@ -1068,7 +1068,7 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('checkstyle always carry every finding, since their stdout is the answer a\n');
 		CliIo.sysPrint('machine consumer gets. The exit code is success unless\n');
 		CliIo.sysPrint('--fail-on selects a severity present in the findings. Run --list-rules for\n');
-		CliIo.sysPrint('the full check list (id, category, description, one per line).\n');
+		CliIo.sysPrint('the full check list (id + description, one per line).\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Inline suppression: a trailing "// noqa" (or "// noqa: <rule>,<rule>") clears\n');
 		CliIo.sysPrint('findings on its line; "// CHECKSTYLE:OFF" ... "// CHECKSTYLE:ON" clears a region.\n');
@@ -1111,7 +1111,9 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('                    OracleAssisted rules are inert. Use it in an iteration loop\n');
 		CliIo.sysPrint('                    (the only way to see the fixer raw), NEVER in a gate\n');
 		CliIo.sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle; with an\n');
-		CliIo.sysPrint('                    unscoped --list-rules, markdown prints the rule index\n');
+		CliIo.sysPrint('                    unscoped --list-rules, markdown prints the rule index by\n');
+		CliIo.sysPrint('                    category and json one {id, category, description,\n');
+		CliIo.sysPrint('                    defaultOn} record per rule\n');
 		CliIo.sysPrint('  --all, -a        Include Info-severity advisories in the report (text format only —\n');
 		CliIo.sysPrint('                   json and checkstyle are never capped)\n');
 		CliIo.sysPrint('  --flat           One <file>:<line>:<col> per line (text format only)\n');
@@ -1223,7 +1225,8 @@ final class LintCommand implements CliCommand {
 					format = CliArgs.expectValue(args, ++i, '--format');
 					if (![FORMAT_TEXT, FORMAT_JSON, FORMAT_CHECKSTYLE, FORMAT_MARKDOWN].contains(format)) {
 						CliIo.stderr(
-							'apq lint: unknown --format value "$format" (expected text|json|checkstyle, or markdown with --list-rules)\n'
+							'apq lint: unknown --format value "$format'
+							+ '" (expected text|json|checkstyle, or markdown with an unscoped --list-rules)\n'
 						);
 						return lintParseExit(EXIT_USAGE);
 					}
@@ -1578,20 +1581,19 @@ final class LintCommand implements CliCommand {
 		}
 		final checks: Array<Check> = resolveLintChecks([], o.categoryFilters) ?? [];
 		if (o.inputSpecs.length > 0) return printEffectiveRules(o.lang, o.inputSpecs, checks);
-		if (o.format == FORMAT_MARKDOWN) {
-			CliIo.sysPrint(RuleIndex.markdown(checks));
+		if (o.format != FORMAT_TEXT) {
+			CliIo.sysPrint(o.format == FORMAT_MARKDOWN ? RuleIndex.markdown(checks) : RuleIndex.json(checks));
 			return EXIT_OK;
 		}
 		var width: Int = 0;
 		for (c in checks) if (c.id().length > width) width = c.id().length;
-		var categoryWidth: Int = 0;
-		for (c in RuleCategory.ALL) if ((c: String).length > categoryWidth) categoryWidth = (c: String).length;
+
 		// The minimum language version a rule's FIX needs is printed with the rule, not
 		// discovered after a run that silently dropped it: a project whose `languageVersion`
 		// is below it never sees the finding, and this is where that becomes visible.
 		for (c in checks) {
 			final requires: String = c is VersionGated ? ' [needs ${(cast c: VersionGated).minLanguageVersion()}]' : '';
-			CliIo.sysPrint('${c.id().rpad(' ', width)}  ${(c.category(): String).rpad(' ', categoryWidth)}  ${c.description()}$requires\n');
+			CliIo.sysPrint('${c.id().rpad(' ', width)}  ${c.description()}$requires\n');
 		}
 		return EXIT_OK;
 	}
@@ -1620,7 +1622,10 @@ final class LintCommand implements CliCommand {
 			{ flag: '--flat', set: o.flat },
 			{ flag: '--no-oracle', set: o.noOracle },
 			{ flag: '--fail-on', set: o.failOn != null },
-			{ flag: '--format', set: o.format != FORMAT_TEXT && (o.format != FORMAT_MARKDOWN || o.inputSpecs.length != 0) },
+			{
+				flag: '--format',
+				set: o.format != FORMAT_TEXT && (![FORMAT_MARKDOWN, FORMAT_JSON].contains(o.format) || o.inputSpecs.length != 0)
+			},
 			{ flag: '--range', set: o.range != null },
 			{ flag: '--baseline', set: o.baseline != null },
 			{ flag: '--verbose', set: o.verbose },

@@ -367,7 +367,7 @@ files per rule, most findings first; one rule gets its top files one per line â€
 stderr line naming the ways to the full list: `--full` (always list), `--rule <id>` or a
 smaller scope, `--format json` (json and checkstyle always list). `--summary` forces the
 summary.
-`--list-rules` prints every registered check as `id  category  description` (the rules by
+`--list-rules` prints every registered check as `id  description` (the rules by
 category: [`docs/lint-rules.md`](docs/lint-rules.md)), one per line, in
 registration order and exits â€” the machine-consumable listing (review tooling
 subtracts linter-owned rules from manual checklists by it; the check table below is

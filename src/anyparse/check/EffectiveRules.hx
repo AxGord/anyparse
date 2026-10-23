@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.LintConfig.DiscoveredConfig;
+import anyparse.check.LintConfig.RuleSwitch;
 import haxe.io.Path;
 
 using StringTools;
@@ -65,8 +66,7 @@ final class EffectiveRules {
 	/** The state of `check` for `file` under `config`. */
 	public static function stateOf(check: Check, file: String, config: LintConfig): RuleState {
 		final id: String = check.id();
-		final stated: Null<Bool> = config.enabledSetting(id);
-		final byCategory: Bool = stated == null && config.enabledSetting(id, check.category()) != null;
+		final stated: Null<RuleSwitch> = config.switchFor(id, check.category());
 		final enabled: Bool = Linter.enabledBy(config, check);
 		final minimum: Null<String> = check is VersionGated ? (cast check: VersionGated).minLanguageVersion() : null;
 		final gated: Bool = enabled && minimum != null && !config.allowsLanguageVersion(minimum);
@@ -76,9 +76,7 @@ final class EffectiveRules {
 		else if (skipped != null)
 			skipped
 		else if (stated != null)
-			'config'
-		else if (byCategory)
-			'category'
+			stated.byCategory ? 'category' : 'config'
 		else if (enabled)
 			'default'
 		else

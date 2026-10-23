@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.VersionGated;
+import haxe.format.JsonPrinter;
 
 using StringTools;
 
@@ -46,6 +47,28 @@ final class RuleIndex {
 			}
 		}
 		return out.toString();
+	}
+
+	/**
+	 * The registry as data, one `{id, category, description, defaultOn}` record per rule in registry order — what
+	 * `apq lint --list-rules --format json` prints for a tool that keys rules by category.
+	 */
+	public static function json(checks: Array<Check>): String {
+		final records: Array<{
+			id: String,
+			category: String,
+			description: String,
+			defaultOn: Bool
+		}> = [
+			for (c in checks)
+				{
+					id: c.id(),
+					category: c.category(),
+					description: c.description(),
+					defaultOn: !(c is DefaultOff)
+				}
+		];
+		return JsonPrinter.print(records, null, '  ') + '\n';
 	}
 
 	/** `text` safe inside a markdown table cell: a pipe would end the cell. */

@@ -548,6 +548,7 @@ final class PinsCheckAToO {
 		'unit.check.LintCategoryConfigTest#testAnObjectOfOptionsEnablesItsRule :: control :: M-OPTIONS-OBJECT-INERT',
 		'unit.check.LintCategoryConfigTest#testAnUnknownCategoryOrAValueOfTheWrongShapeIsNamedAndIgnored :: control :: '
 			+ 'M-UNKNOWN-CATEGORY-SILENT',
+		'unit.check.LintCategoryConfigTest#testTheNearestDocumentNamingTheRuleOrItsCategoryDecides :: control :: M-CHAIN-WIDE-RULE-ENTRY',
 		'unit.check.LintConfigInheritanceTest#testAnUnnamedKeyFallsThroughToTheAncestor :: control :: '
 			+ 'M-REFLECTIVE-MERGE,M-HOLDERS-MERGE,M-OWNED-MERGE',
 		'unit.check.LintConfigInheritanceTest#testCompletenessStaysWithTheListItWasDeclaredFor :: control :: M-REACH-COMPLETE-FOLLOWS-LIST',

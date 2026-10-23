@@ -26,6 +26,22 @@ typedef RuleConfig = {
 }
 
 /**
+ * What ONE `apqlint.json` document says about enablement: its `rules` entries' switches by rule id and its
+ * `categories` switches by category id. A config keeps one per document of its chain, nearest first, because the
+ * nearest document that names a rule or its category decides it (`LintConfig.switchFor`).
+ */
+typedef RuleSwitches = {
+	var rules: Map<String, Bool>;
+	var categories: Map<String, Bool>;
+}
+
+/** A config's word on one rule: whether it runs, and whether a `categories` entry rather than the rule's own entry said so. */
+typedef RuleSwitch = {
+	var on: Bool;
+	var byCategory: Bool;
+}
+
+/**
  * ONE compiler-oracle configuration: the hxml to typecheck, the directory that compile runs
  * from, and the extra defines it carries.
  *
@@ -98,8 +114,8 @@ typedef DiscoveredConfig = {
  *  - rule-specific options (e.g. `max`) — read by the owning check.
  *
  * A rule entry may be `true` / `false` for `{"enabled": …}`, and an object enables the rule unless it says `enabled`.
- * The `categories` section switches every rule of a `RuleCategory` at once, its default-off members included; a rule
- * entry outranks its category's (`enabledSetting`).
+ * The `categories` section switches every rule of a `RuleCategory` at once, its default-off members included; the nearest
+ * document naming the rule or its category decides it, its rule entry first (`switchFor`).
  *
  * `enabled`/`severity` are applied by the framework (`Cli.runLint` /
  * `Linter.run`); options are pulled by the check itself (`Complexity`). A
@@ -121,8 +137,8 @@ final class LintConfig {
 
 	private final _rules: Map<String, RuleConfig>;
 
-	/** The `categories` switches by category id; empty when the key is absent. */
-	private final _categories: Map<String, Bool>;
+	/** The enablement each document of the chain states, nearest first — see `switchFor`. */
+	private final _switches: Array<RuleSwitches>;
 
 	/**
 	 * The `compilerOracle` configurations, each hxml resolved against the declaring config's
@@ -183,9 +199,11 @@ final class LintConfig {
 		?resolutionLibs: Array<String>, resolutionStd: Bool = true, compilerOracleServer: Bool = false, ?languageVersion: String,
 		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, reachConfigurationsComplete: Bool = false,
 		reportSummaryThreshold: Int = LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD, ?reflectiveClasses: Array<String>,
-		?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>, ?categories: Map<String, Bool>
+		?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>, ?switches: Array<RuleSwitches>
 	) {
-		_categories = categories ?? [];
+		_switches = switches ?? [
+			{ rules: [for (id => rc in rules) if (rc.enabled != null) id => rc.enabled == true], categories: [] }
+		];
 		_ownedTypes = ownedTypes ?? [];
 		_reportSummaryThreshold = reportSummaryThreshold;
 		_reachConfigurationsComplete = reachConfigurationsComplete;
@@ -326,20 +344,26 @@ final class LintConfig {
 
 	/**
 	 * Whether `id` runs in the default set. `defaultOn` is the rule's default when the config says nothing — true for an
-	 * ordinary rule, false for a `DefaultOff` rule the caller opts into; a stated value always wins (`enabledSetting`).
+	 * ordinary rule, false for a `DefaultOff` rule the caller opts into; a stated value always wins (`switchFor`).
 	 * `Linter.enabledBy` asks it for a `Check`.
 	 */
 	public function enabledFor(id: String, defaultOn: Bool = true, ?category: RuleCategory): Bool {
-		return enabledSetting(id, category) ?? defaultOn;
+		return switchFor(id, category)?.on ?? defaultOn;
 	}
 
 	/**
-	 * The value the config states for rule `id`, or null when it states none and the rule's own default applies: its
-	 * `rules` entry, else — given the rule's `category` — that category's `categories` entry. The two sections fold over
-	 * the chain separately, so a rule entry anywhere in it outranks a category entry anywhere in it.
+	 * What the config says about rule `id`, or null when it says nothing and the rule's own default applies. The chain is
+	 * walked nearest document first, and the first document with an entry for the rule or — given the rule's `category` —
+	 * for its category decides; inside one document the rule entry outranks the category entry.
 	 */
-	public function enabledSetting(id: String, ?category: RuleCategory): Null<Bool> {
-		return _rules[id]?.enabled ?? (category == null ? null : _categories[category]);
+	public function switchFor(id: String, ?category: RuleCategory): Null<RuleSwitch> {
+		for (level in _switches) {
+			final byRule: Null<Bool> = level.rules[id];
+			if (byRule != null) return { on: byRule, byCategory: false };
+			final byCategory: Null<Bool> = category == null ? null : level.categories[category];
+			if (byCategory != null) return { on: byCategory, byCategory: true };
+		}
+		return null;
 	}
 
 	/** The configured severity override for `id`, or null when unset. */

@@ -10112,8 +10112,14 @@
 			"name": "M-EFFECTIVE-IGNORES-CONFIG",
 			"type": "anyparse.check.EffectiveRules",
 			"method": "stateOf",
-			"find": "final stated: Null<Bool> = config.enabledSetting(id);",
-			"replace": "final stated: Null<Bool> = null;",
+			"find": [
+				"final stated: Null<RuleSwitch> = config.switchFor(id, check.category());",
+				"final enabled: Bool = Linter.enabledBy(config, check);"
+			],
+			"replace": [
+				"final stated: Null<RuleSwitch> = null;",
+				"final enabled: Bool = !(check is anyparse.check.Check.DefaultOff);"
+			],
 			"note": "the listing reads the registry defaults and never the config, so a disabled rule is reported as run"
 		},
 		{
@@ -30710,17 +30716,23 @@
 		{
 			"name": "M-CATEGORY-OUTRANKS-RULE",
 			"type": "anyparse.check.LintConfig",
-			"method": "enabledSetting",
-			"find": "return _rules[id]?.enabled ?? (category == null ? null : _categories[category]);",
-			"replace": "return (category == null ? null : _categories[category]) ?? _rules[id]?.enabled;",
-			"note": "a category entry is asked before the rule's own entry, so a rule switched on by name inside a disabled category stays off"
+			"method": "switchFor",
+			"find": [
+				"if (byRule != null) return { on: byRule, byCategory: false };",
+				"if (byCategory != null) return { on: byCategory, byCategory: true };"
+			],
+			"replace": [
+				"",
+				"if (byCategory != null) return { on: byCategory, byCategory: true };\n\t\tif (byRule != null) return { on: byRule, byCategory: false };"
+			],
+			"note": "inside one document the category entry is asked before the rule's own entry, so a rule switched on by name inside a disabled category stays off"
 		},
 		{
 			"name": "M-CATEGORY-IGNORED",
 			"type": "anyparse.check.LintConfig",
-			"method": "enabledSetting",
-			"find": "return _rules[id]?.enabled ?? (category == null ? null : _categories[category]);",
-			"replace": "return _rules[id]?.enabled;",
+			"method": "switchFor",
+			"find": "final byCategory: Null<Bool> = category == null ? null : level.categories[category];",
+			"replace": "final byCategory: Null<Bool> = null;",
 			"note": "the categories section is never asked, so enabling a category switches none of its default-off members on and disabling it switches nothing off"
 		},
 		{
@@ -30751,9 +30763,9 @@
 			"name": "M-CATEGORIES-NOT-INHERITED",
 			"type": "anyparse.check.LintDocuments",
 			"method": "mergeDocuments",
-			"find": "final categories: Map<String, Bool> = far.categories.copy();",
-			"replace": "final categories: Map<String, Bool> = [];",
-			"note": "a nested document drops every category switch of the documents above it instead of overriding them key by key"
+			"find": "switches: near.switches.concat(far.switches),",
+			"replace": "switches: near.switches,",
+			"note": "a nested document drops every rule and category switch of the documents above it instead of deferring to them for what it does not name"
 		},
 		{
 			"name": "M-CATEGORY-FILTER-IGNORED",
@@ -30770,6 +30782,14 @@
 			"find": "final applyEnablement: Bool = o.ruleFilters.length == 0;",
 			"replace": "final applyEnablement: Bool = o.ruleFilters.length == 0 && o.categoryFilters.length == 0;",
 			"note": "--category bypasses the config the way --rule does, so a rule the config disables runs under its category"
+		},
+		{
+			"name": "M-CHAIN-WIDE-RULE-ENTRY",
+			"type": "anyparse.check.LintConfig",
+			"method": "switchFor",
+			"find": "final byCategory: Null<Bool> = category == null ? null : level.categories[category];",
+			"replace": "final byCategory: Null<Bool> = category == null || Lambda.exists(_switches, l -> l.rules[id] != null) ? null : level.categories[category];",
+			"note": "a rule entry anywhere in the chain outranks a category entry anywhere in it, so a nested category no longer overrides an outer config's entry for one of its rules"
 		}
 	]
 }
