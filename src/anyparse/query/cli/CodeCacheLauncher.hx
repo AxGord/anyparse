@@ -90,11 +90,13 @@ final class CodeCacheLauncher {
 			return;
 		}
 		if (given == WARM_RUN) {
-			warmRun(Path.resolve(args[1]), args[2]);
+			warmRun(Fs.realpathSync(Path.resolve(args[1])), args[2]);
 			return;
 		}
-		final binary: String = Path.resolve(given);
-		process.argv = [process.argv[0], binary].concat(args.slice(1));
+		final resolved: String = Path.resolve(given);
+		process.argv = [process.argv[0], resolved].concat(args.slice(1));
+		// the real path, as node's own loader names a main module: V8 keeps it in the cache and in every stack
+		final binary: String = Fs.realpathSync(resolved);
 		final engine: CompiledEngine = compile(binary, true);
 		if (Sys.getEnv(TRACE_ENV) == '1') process.stderr.write('apq-launch: code cache ${engine.cache} (${cachePath(binary)})\n');
 		if (engine.cache != Hit) process.once(ProcessEvent.Exit, (_: Int) -> persistQuietly(engine, binary));
@@ -110,6 +112,7 @@ final class CodeCacheLauncher {
 		final process: Process = Node.process;
 		return [
 			process.version,
+			process.execPath,
 			process.arch,
 			process.platform,
 			process.versions['v8'],
@@ -157,11 +160,14 @@ final class CodeCacheLauncher {
 		}
 	}
 
-	/** The engine at `binary` compiled, offered its cache when `useCache` and the cache is valid for it. */
+	/**
+	 * The engine at `binary` (a real path) compiled, offered its cache when `useCache` and the cache is valid for it. The key
+	 * carries the path because V8 keeps the script name in a cache: a hit would name the path the cache was written from.
+	 */
 	public static function compile(binary: String, useCache: Bool): CompiledEngine {
 		final stamp: String = stampOf(binary);
 		final source: Buffer = Fs.readFileSync(binary);
-		final key: Buffer = cacheKey(source, runtimeTag());
+		final key: Buffer = cacheKey(source, '${runtimeTag()}\n$binary');
 		final cached: Null<Buffer> = useCache ? readCache(cachePath(binary), key) : null;
 		final options: CachedScriptOptions = { filename: binary };
 		if (cached != null) options.cachedData = cached;
@@ -248,7 +254,9 @@ final class CodeCacheLauncher {
 		final process: Process = Node.process;
 		final args: Null<Array<String>> = runs.shift();
 		if (args == null) {
-			process.exit(persist(engine, binary) ? 0 : 1);
+			// `warmRun` drops uncaught errors, so a cache that cannot be saved must be caught here to fail the run
+			final saved: Bool = try persist(engine, binary) catch (exception: Exception) false;
+			process.exit(saved ? 0 : 1);
 			return;
 		}
 		process.argv = [process.argv[0], binary].concat(args);

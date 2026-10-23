@@ -53,6 +53,7 @@ final class CodeCacheLauncherTest extends Test {
 	/** A cache filed under another node, V8 or flag set is not read, and the tag names the running node and its flags. */
 	@:pin('control')
 	@:killer('M-CODE-CACHE-KEY-IGNORES-RUNTIME')
+	@:killer('M-CODE-CACHE-KEY-IGNORES-EXECPATH')
 	public function testACacheFiledUnderAnotherRuntimeIsNotRead(): Void {
 		TempDir.with(dir -> {
 			final path: String = dir.file('apq.js.v8cache');
@@ -64,6 +65,7 @@ final class CodeCacheLauncherTest extends Test {
 			final tag: String = CodeCacheLauncher.runtimeTag();
 			Assert.isTrue(tag.contains(Node.process.version), tag);
 			Assert.isTrue(tag.contains(Node.process.execArgv.join(' ')), tag);
+			Assert.isTrue(tag.contains(Node.process.execPath), 'two node builds of one version string are told apart: $tag');
 		});
 	}
 
@@ -157,16 +159,27 @@ final class CodeCacheLauncherTest extends Test {
 		});
 	}
 
-	/** An error the engine throws reports the engine's own file and line, and the exit status node gives it. */
+	/**
+	 * An error the engine throws reports the engine's own file and line, and the exit status node gives it — on a cache
+	 * hit too: V8 keeps the script name in a cache, so a cache written beside another copy of the engine must not be read.
+	 */
 	@:pin('guard')
 	public function testAnEngineErrorKeepsItsOwnFileAndLine(): Void {
 		withLauncher((launcher, dir) -> {
-			final binary: String = dir.file('apq.js');
-			File.saveContent(binary, '// header\nthrow new Error("boom");\n');
-			final plain: Run = node([binary]);
-			final launched: Run = node([launcher, binary]);
-			Assert.equals(plain.status, launched.status);
-			Assert.isTrue(launched.stderr.contains('$binary:2'), launched.stderr);
+			final first: String = dir.file('a/apq.js');
+			final second: String = dir.file('b/apq.js');
+			FileSystem.createDirectory(dir.file('a'));
+			FileSystem.createDirectory(dir.file('b'));
+			File.saveContent(first, '// header\nthrow new Error("boom");\n');
+			final plain: Run = node([first]);
+			Assert.equals(plain.status, node([launcher, first]).status);
+			File.copy(first, second);
+			File.copy(CodeCacheLauncher.cachePath(first), CodeCacheLauncher.cachePath(second));
+			Assert.equals(plain.status, node([launcher, second]).status, 'the copy runs, and writes a cache of its own');
+			final hit: Run = node([launcher, second]);
+			Assert.isTrue(hit.stderr.contains('apq-launch: code cache hit'), hit.stderr);
+			Assert.isTrue(hit.stderr.contains('${FileSystem.fullPath(second)}:2'), hit.stderr);
+			Assert.isFalse(hit.stderr.contains(FileSystem.fullPath(first)), hit.stderr);
 		});
 	}
 
@@ -183,13 +196,44 @@ final class CodeCacheLauncherTest extends Test {
 		});
 	}
 
-	/** A warm run that cannot run still exits 0: a build never fails on its cache. */
+	/**
+	 * A warm run that cannot run, or cannot save its cache, still exits 0 — a build never fails on its cache — and says it
+	 * did not warm rather than that it did.
+	 */
 	@:pin('guard')
 	public function testAWarmRunThatCannotRunStillExitsZero(): Void {
 		withLauncher((launcher, dir) -> {
-			final run: Run = node([launcher, CodeCacheLauncher.WARM, dir.file('missing.js')]);
-			Assert.equals(0, run.status);
-			Assert.isTrue(run.stdout.contains('not warmed'), run.stdout);
+			final missing: Run = node([launcher, CodeCacheLauncher.WARM, dir.file('missing.js')]);
+			Assert.equals(0, missing.status);
+			Assert.isTrue(missing.stdout.contains('not warmed'), missing.stdout);
+			final locked: String = dir.file('locked');
+			FileSystem.createDirectory(locked);
+			File.saveContent('$locked/apq.js', '// engine\n');
+			Fs.chmodSync(locked, '555');
+			final unsaved: Run = node([launcher, CodeCacheLauncher.WARM, '$locked/apq.js']);
+			Fs.chmodSync(locked, '755');
+			Assert.equals(0, unsaved.status);
+			Assert.isTrue(unsaved.stdout.contains('not warmed'), unsaved.stdout);
+		});
+	}
+
+	/**
+	 * A cache copied beside another copy of the engine is not read there, though the bytes match: V8 keeps the path it
+	 * compiled in the cache, and a hit would report the other copy's file in every stack.
+	 */
+	@:pin('control')
+	@:killer('M-CODE-CACHE-KEY-IGNORES-PATH')
+	public function testACacheCopiedBesideAnotherEngineIsNotRead(): Void {
+		TempDir.with(dir -> {
+			final first: String = dir.file('apq.js');
+			final second: String = dir.file('copy.js');
+			File.saveContent(first, probeSource(dir.path, 'P'));
+			final engine: CompiledEngine = CodeCacheLauncher.compile(first, true);
+			CodeCacheLauncher.run(engine.script, first);
+			Assert.isTrue(CodeCacheLauncher.persist(engine, first));
+			File.copy(first, second);
+			File.copy(CodeCacheLauncher.cachePath(first), CodeCacheLauncher.cachePath(second));
+			Assert.equals(CacheUse.Miss, CodeCacheLauncher.compile(second, true).cache);
 		});
 	}
 

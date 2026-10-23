@@ -45,7 +45,9 @@ final class PinsGrammarAndCli {
 		'unit.cli.CliCommandSeamTest#testTheRegistryHandsOutAFreshCommandPerCall :: control :: M-CLI-COMMANDS-MEMOISED',
 		'unit.cli.CliCommandSeamTest#testTheRequireMatchFlagDoesNotSurviveItsRun :: control :: M-CLI-REQUIREMATCH-STATIC',
 		'unit.cli.CliUnknownSubcommandTest#testAPluralMissNamesTheSingularCommands :: control :: M-CLI-UNKNOWN-NO-PLURAL-PROBE',
-		'unit.cli.CodeCacheLauncherTest#testACacheFiledUnderAnotherRuntimeIsNotRead :: control :: M-CODE-CACHE-KEY-IGNORES-RUNTIME',
+		'unit.cli.CodeCacheLauncherTest#testACacheCopiedBesideAnotherEngineIsNotRead :: control :: M-CODE-CACHE-KEY-IGNORES-PATH',
+		'unit.cli.CodeCacheLauncherTest#testACacheFiledUnderAnotherRuntimeIsNotRead :: control :: '
+			+ 'M-CODE-CACHE-KEY-IGNORES-RUNTIME,M-CODE-CACHE-KEY-IGNORES-EXECPATH',
 		'unit.cli.CodeCacheLauncherTest#testACacheIsReplacedByRenameNeverRewrittenInPlace :: control :: M-CODE-CACHE-WRITE-IN-PLACE',
 		'unit.cli.CodeCacheLauncherTest#testADamagedCacheIsNeverHandedToV8 :: control :: M-CODE-CACHE-NO-CHECKSUM',
 		'unit.cli.CodeCacheLauncherTest#testARunOfAnEngineRebuiltUnderItSavesNoCache :: control :: M-CODE-CACHE-PERSIST-IGNORES-STAMP',

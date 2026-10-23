@@ -30408,6 +30408,22 @@
 			"find": "if (stampOf(binary) != engine.stamp) return false;",
 			"replace": "",
 			"note": "a run of an engine rewritten on disk since it was read still saves its cache, replacing the one a fresh build just warmed"
+		},
+		{
+			"name": "M-CODE-CACHE-KEY-IGNORES-PATH",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "compile",
+			"find": "cacheKey(source, '${runtimeTag()}\\n$binary')",
+			"replace": "cacheKey(source, runtimeTag())",
+			"note": "the key no longer carries the engine's real path, so a cache copied beside another copy of the engine is read there and every stack names the copy it was written from"
+		},
+		{
+			"name": "M-CODE-CACHE-KEY-IGNORES-EXECPATH",
+			"type": "anyparse.query.cli.CodeCacheLauncher",
+			"method": "runtimeTag",
+			"find": "process.execPath,",
+			"replace": "",
+			"note": "the tag no longer names the node binary, so two node builds of one version string but different V8 configuration share a cache whose payload verifies and can still abort the other"
 		}
 	]
 }
