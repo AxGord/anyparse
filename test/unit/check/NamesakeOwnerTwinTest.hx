@@ -83,6 +83,17 @@ class NamesakeOwnerTwinTest extends Test {
 	}
 
 	/**
+	 * Metadata inside a `#if` region above the type is metadata on it in every build that keeps the region: `@:rtti` there
+	 * still makes the type reflected, and `@:keep` still keeps it, so neither converts. The twin without the region does.
+	 */
+	@:pin('control') @:killer('M-PLAN-GUARDED-META-ALLOWED')
+	public function testMetadataInsideAConditionalRefusesTheConversion(): Void {
+		Assert.equals(0, alignFixEdits([], '#if !nothing @:rtti #end\n'), 'a guarded @:rtti refuses the conversion');
+		Assert.equals(0, alignFixEdits([], '#if !nothing @:keep #end\n'), 'a guarded @:keep refuses it too');
+		Assert.equals(7, alignFixEdits([]), 'the twin without the region converts');
+	}
+
+	/**
 	 * Findings of `check` on `pkg.Foo`, whose private `helper` nothing calls, beside `other.<other>` extending
 	 * `extendsName` (nothing when empty) and, with `withSub`, an `other.Sub` subtyping it that declares its own `helper`.
 	 * An `other.Base` declaring a public `helper` is always present.
@@ -110,10 +121,11 @@ class NamesakeOwnerTwinTest extends Test {
 	}
 
 	/**
-	 * The edits `prefer-enum-abstract`'s grouped fix makes to a three-constant `pkg.Align`, beside `others`.
+	 * The edits `prefer-enum-abstract`'s grouped fix makes to a three-constant `pkg.Align` written after `lead`, beside
+	 * `others`.
 	 */
-	private function alignFixEdits(others: Array<{ file: String, source: String }>): Int {
-		final decl: String = 'package pkg;\n\nclass Align { public static inline final A:String = \'a\'; public static inline final '
+	private function alignFixEdits(others: Array<{ file: String, source: String }>, lead: String = ''): Int {
+		final decl: String = 'package pkg;\n\n${lead}class Align { public static inline final A:String = \'a\'; public static inline final '
 			+ 'B:String = \'b\'; public static inline final C:String = \'c\'; }';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/Align.hx', source: decl }].concat(others);

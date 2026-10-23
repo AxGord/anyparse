@@ -30199,9 +30199,9 @@
 			"name": "M-RTTI-HOMONYM-REFUSES",
 			"type": "anyparse.check.PreferEnumAbstract",
 			"method": "fixGrouped",
-			"find": "if (index != null && index.subtypes.hasSubtype(plan.name, v.file)) continue;",
-			"replace": "if (index != null && (index.subtypes.hasSubtype(plan.name, v.file) || index.traits.transitivelyCarriesRtti(plan.name))) continue;",
-			"note": "the enum-abstract conversion is refused again on an @:rtti hierarchy read by simple name, whose only reachable source is another package's declaration of the same name"
+			"find": "ownerCarriesRtti(index, plan.name, v.file)",
+			"replace": "index.traits.transitivelyCarriesRtti(plan.name)",
+			"note": "the @:rtti gate reads every declaration of the owner's simple name again, so another package's @:rtti namesake refuses the enum-abstract conversion"
 		},
 		{
 			"name": "M-SUBTYPE-MEMBERS-SKIP-NAMESAKE",
@@ -30210,6 +30210,30 @@
 			"find": "own == null ? sub.type.name == owner : _refs.seenKey(sub) == _refs.seenKey(own)",
 			"replace": "sub.type.name == owner",
 			"note": "a subtype sharing its supertype's simple name is skipped as if it were the owner, so its overrides leave the veto list and prefer-inline inlines a method it overrides"
+		},
+		{
+			"name": "M-PLAN-GUARDED-META-ALLOWED",
+			"type": "anyparse.check.PreferEnumAbstract",
+			"method": "conversionPlan",
+			"find": "if (cfg.conditionalKinds.contains(prev.kind) && prev.children.exists(c -> cfg.declarationLeadKinds.contains(c.kind)))",
+			"replace": "if (false)",
+			"note": "a conditional region of metadata above the type no longer refuses the enum-abstract conversion, so `#if !x @:keep #end class C` converts and the build that keeps the region loses the kept class"
+		},
+		{
+			"name": "M-SUBTYPE-START-SIMPLE-NAME",
+			"type": "anyparse.query.SupertypeWalk",
+			"method": "verdict",
+			"find": "refs.resolveStartType(sub, subFile, subAt)",
+			"replace": "refs.resolveStartType(SourceText.lastSegment(sub), null)",
+			"note": "the subtype proof starts from the project type the simple name names again, so a std haxe.io.Eof beside a project Eof extending Base is proven a Base - unreachable-catch deletes the clause that catches it and redundant-upcast unwraps a cast that throws"
+		},
+		{
+			"name": "M-HELPER-MAYBE-ANCESTOR-REWRITES",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "rewriteMovedRef",
+			"find": "if (prep.index.subtypes.subtypeVerdict(prep.srcTypeName, ancestor, null, null, prep.srcFile) != true)",
+			"replace": "if (false)",
+			"note": "move-to-helper rewrites a bare name into an inherited member on a type that only may be a supertype, so a statically imported function becomes `src.name()` and the helper does not compile"
 		}
 	]
 }

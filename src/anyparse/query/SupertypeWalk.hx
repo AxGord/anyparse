@@ -13,18 +13,22 @@ import anyparse.query.SymbolIndex.ResolvedType;
 final class SupertypeWalk {
 
 	/**
-	 * Whether the one declaration named `sub` is a transitive proper subtype of what `sup` denotes: `true` when a chain of
-	 * links, each resolved to exactly one declaration, reaches it; `null` when a link MAY reach it and nothing proves it —
-	 * `sup` pins no single declaration, or a link that could name it resolves to nothing or to several; `false` otherwise,
-	 * a `sub` no single declaration carries included. `sup` is resolved as written in `supFile` (at `supAt`) when given —
-	 * an alias, or a namesake another package declares, then means what that file says — else it must be the name of
-	 * exactly one declaration.
+	 * Whether what `sub` denotes is a transitive proper subtype of what `sup` denotes: `true` when a chain of links, each
+	 * resolved to exactly one declaration, reaches it; `null` when a link MAY reach it and nothing proves it — `sup` or `sub`
+	 * pins no single declaration, or a link that could name it resolves to nothing or to several; `false` otherwise, a `sub`
+	 * whose name no declaration carries included. Each side is resolved as written in its file (`supFile` at `supAt`, `subFile`
+	 * at `subAt`) when given — an alias, a std type or another package's namesake then means what that file says — else it
+	 * must be the name of exactly one declaration.
 	 */
-	public static function verdict(refs: TypeRefIndex, sub: String, sup: String, ?supFile: String, ?supAt: Int): Null<Bool> {
-		final starts: Array<ResolvedType> = refs.resolvedDeclsNamed(sub);
-		if (starts.length != 1) return false;
+	public static function verdict(
+		refs: TypeRefIndex, sub: String, sup: String, ?supFile: String, ?supAt: Int, ?subFile: String, ?subAt: Int
+	): Null<Bool> {
+		// A start whose name no declaration carries is outside the index, `false`; one that names an indexed type the file or the
+		// name cannot pin to one declaration may be any of them, or the unindexed type the file means.
+		final start: Null<ResolvedType> = refs.resolveStartType(sub, subFile, subAt);
+		if (start == null) return refs.resolvedDeclsNamed(SourceText.lastSegment(sub)).length == 0 ? false : null;
 		final target: Null<ResolvedType> = refs.resolveStartType(sup, supFile, supAt);
-		return closureReaches(refs, starts[0], target, target == null ? SourceText.lastSegment(sup) : target.type.name, true, []);
+		return closureReaches(refs, start, target, target == null ? SourceText.lastSegment(sup) : target.type.name, true, []);
 	}
 
 	/** `typeName`'s declaration in `fromFile` when that file declares it, else every declaration of the name. */

@@ -126,8 +126,10 @@ final class SubtypeGraph {
 	 * may reach `sup` and nothing proves it. A consumer that must COVER every subtype — a veto, a rewrite of every inherited
 	 * use — reads `null` as "maybe", where `isSubtype` reads it as "no".
 	 */
-	public inline function subtypeVerdict(sub: String, sup: String, ?supFile: String, ?supAt: Int): Null<Bool> {
-		return SupertypeWalk.verdict(_refs, sub, sup, supFile, supAt);
+	public inline function subtypeVerdict(
+		sub: String, sup: String, ?supFile: String, ?supAt: Int, ?subFile: String, ?subAt: Int
+	): Null<Bool> {
+		return SupertypeWalk.verdict(_refs, sub, sup, supFile, supAt, subFile, subAt);
 	}
 
 	/**
@@ -169,11 +171,11 @@ final class SubtypeGraph {
 	 * reflexive; the caller decides same-type separately. Read affirmatively by autofixes that DELETE, so a namesake of `sup`
 	 * in another package, a link nothing resolves and an alias bound inside a `#if` region all answer no here.
 	 *
-	 * `supFile` is the file `sup` is written in (at `supAt`): naming it resolves `sup` there, an alias or a namesake
-	 * included; without it `sup` must name exactly one declaration.
+	 * Each side is resolved where its file writes it when `supFile` / `subFile` is given (at `supAt` / `subAt`),
+	 * an alias, a std type or a namesake included; without a file the name must be that of exactly one declaration.
 	 */
-	public function isSubtype(sub: String, sup: String, ?supFile: String, ?supAt: Int): Bool {
-		return subtypeVerdict(sub, sup, supFile, supAt) == true;
+	public function isSubtype(sub: String, sup: String, ?supFile: String, ?supAt: Int, ?subFile: String, ?subAt: Int): Bool {
+		return subtypeVerdict(sub, sup, supFile, supAt, subFile, subAt) == true;
 	}
 
 	/**
@@ -205,7 +207,8 @@ final class SubtypeGraph {
 		final declarers: Array<String> = [
 			for (fi in _files) for (t in fi.types) if (t.members.exists(m -> m.name == member)) t.name
 		];
-		// A veto for every consumer — each refuses or grants on a non-null answer — so a MAYBE-ancestor counts.
+		// A MAYBE-ancestor counts: refusing or granting on it is safe, while a consumer that REWRITES a reference into an inherited
+		// member must prove the relation itself (`subtypeVerdict`).
 		return declarers.find(n -> n != typeName && subtypeVerdict(typeName, n) != false);
 	}
 
@@ -270,7 +273,7 @@ final class SubtypeGraph {
 			final resolved: ResolvedType = owners.types[ordinal];
 			if (resolved.type.name == owner) continue;
 			final matches: Array<MemberInfo> = resolved.type.members.filter(m -> names.contains(m.name));
-			if (subtypeVerdict(resolved.type.name, owner) != false) return true;
+			if (subtypeVerdict(resolved.type.name, owner, null, null, resolved.file.file) != false) return true;
 			if (!matches.exists(m -> m.isOverride)) continue;
 			final declarer: Null<String> = overriddenDeclarer({ file: resolved.file, type: resolved.type }, names, owner);
 			if (declarer != null) {
@@ -311,7 +314,7 @@ final class SubtypeGraph {
 			final decl: Null<MemberInfo> = t.members.find(m -> m.name == member);
 			if (decl == null) continue;
 			final entry: OverrideFamilyMember = { file: fi.file, typeName: t.name, declFrom: decl.declFrom };
-			final verdict: Null<Bool> = subtypeVerdict(t.name, owner);
+			final verdict: Null<Bool> = subtypeVerdict(t.name, owner, null, null, fi.file);
 			if (verdict == true) {
 				family.push(entry);
 				continue;

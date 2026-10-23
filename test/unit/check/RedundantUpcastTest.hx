@@ -110,6 +110,16 @@ class RedundantUpcastTest extends Test {
 		Assert.equals(1, namesakeUpcasts('pkg.Base'), 'a subtype of this Base still is');
 	}
 
+	/**
+	 * The operand's type is resolved where it is declared too: a `haxe.io.Eof` local is the std's, not the project's
+	 * `my.Eof` that extends `Base`, so `cast(s, Base)` can fail. The twin declaring the project's `Eof` is an upcast.
+	 */
+	@:pin('control') @:killer('M-SUBTYPE-START-SIMPLE-NAME')
+	public function testAnOperandNamedLikeAProjectSubtypeIsNotUpcast(): Void {
+		Assert.equals(0, eofUpcasts('haxe.io.Eof'), 'the std Eof is no Base');
+		Assert.equals(1, eofUpcasts('Eof'), 'the project Eof is');
+	}
+
 	private function applyFix(src: String): String {
 		return CheckFixture.fixedSource(new RedundantUpcast(), src);
 	}
@@ -128,6 +138,19 @@ class RedundantUpcastTest extends Test {
 				file: 'pkg/Main.hx',
 				source: 'package pkg;\n\nimport other.Sub;\n\nclass Main {\n\n\tfunction f(s:Sub):Base {\n'
 				+ '\t\tfinal b:Base = cast(s, Base);\n\t\treturn b;\n\t}\n\n}\n'
+			}
+		]).length;
+	}
+
+	/** `redundant-upcast` findings over `cast(s, Base)` with `s` declared `operand`, beside `my.Eof extends Base`. */
+	private function eofUpcasts(operand: String): Int {
+		return CheckFixture.violationsIn(new RedundantUpcast(), [
+			{ file: 'my/Base.hx', source: 'package my;\n\nclass Base {}\n' },
+			{ file: 'my/Eof.hx', source: 'package my;\n\nclass Eof extends Base {}\n' },
+			{
+				file: 'my/Main.hx',
+				source: 'package my;\n\nclass Main {\n\n\tfunction f(s:$operand):Base {\n\t\tfinal b:Base = cast(s, Base);\n\t\treturn b;\n'
+				+ '\t}\n\n}\n'
 			}
 		]).length;
 	}

@@ -118,7 +118,7 @@ using StringTools;
  *   after. A runtime lookup takes the FULLY-QUALIFIED path, so the refusal is a dot-path test on
  *   `ReflectionScan`'s surface (`runtimeTypePath` / `runtimeTypePathFragment`) and not the bare-name
  *   test the MEMBER gates take;
- * - the index reports a subtype of the declaration.
+ * - the index reports a subtype of the declaration, or `@:rtti` on it (a guarded one included).
  *
  * Two more refusals are about what the head TEMPLATE would silently drop, since neither
  * projects as a tree child: a declaration keyword that is more than one word (`abstract
@@ -200,9 +200,9 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	 * finding, a finding whose container the plan phase refused, and every finding at all when
 	 * `run` has not been called on this instance all yield nothing.
 	 *
-	 * `index` adds the whole-project refusal that needs resolution rather than text: a
-	 * SUBTYPE of the converted type (`class Sub extends Name`, which an abstract cannot host). It is cheap and
-	 * precise here, and belt-and-braces for the `RiskyFix` oracle, which would reject it as a compile error anyway.
+	 * `index` adds the refusals that need the index rather than text: a
+	 * SUBTYPE of the converted type (`class Sub extends Name`, which an abstract cannot host), and
+	 * `@:rtti` on its own declaration. Both read the declaration in this file, never a namesake's.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -233,9 +233,7 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 			if (span == null) continue;
 			final plan: Null<ConversionPlan> = _plans[planKey(v.file, span.from)];
 			if (plan == null || source.substring(span.from, span.to) != plan.declSource) continue;
-			// No `@:rtti` gate: the container's own metadata is refused by the plan and its header admits no supertype, so the one
-			// hierarchy left to carry `@:rtti` was another declaration sharing the name.
-			if (index != null && index.subtypes.hasSubtype(plan.name, v.file)) continue;
+			if (index != null && (index.subtypes.hasSubtype(plan.name, v.file) || ownerCarriesRtti(index, plan.name, v.file))) continue;
 			for (e in plan.edits) out.push({ span: e.span, text: e.text, group: group });
 			group++;
 		}
@@ -273,6 +271,8 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 			ternaryKind: shape.ternaryKind ?? '',
 			resultContainerKinds: resultContainers(shape),
 			classKinds: shape.classDeclKinds ?? [],
+			conditionalKinds: shape.conditionalRegionKinds ?? [],
+			declarationLeadKinds: declarationLeadKinds(shape, plugin.metaShape().metaKinds),
 			syntax: shape.enumAbstractSyntax
 		};
 	}
@@ -529,8 +529,12 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 		// Metadata / a declaration modifier projects as a PRECEDING SIBLING, not a child, so the
 		// body whitelist never sees it: `@:keep class C` and `class C` have identical subtrees.
 		if (selfIndex > 0) {
-			final prev: String = siblings[selfIndex - 1].kind;
-			if (cfg.metaKinds.contains(prev) || cfg.modifierKinds.contains(prev)) return null;
+			final prev: QueryNode = siblings[selfIndex - 1];
+			if (cfg.metaKinds.contains(prev.kind) || cfg.modifierKinds.contains(prev.kind)) return null;
+			// A conditional region right above the type carries its metadata or modifiers in every build that keeps the region:
+			// `#if !x @:rtti #end class C` is as reflected as `@:rtti class C`.
+			if (cfg.conditionalKinds.contains(prev.kind) && prev.children.exists(c -> cfg.declarationLeadKinds.contains(c.kind)))
+				return null;
 		}
 		final head: Null<{ span: Span, text: String }> = headEdit(container, source, name, span, typeName, syntax);
 		if (head == null) return null;
@@ -737,6 +741,21 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 		return false;
 	}
 
+	/** What may lead a declaration from a conditional region above it: metadata, a modifier, a declaration keyword. */
+	private static function declarationLeadKinds(shape: RefShape, metaKinds: Array<String>): Array<String> {
+		return metaKinds.concat(shape.modifierOrderKinds ?? []).concat(shape.condDeclPrefixKeywordKinds ?? []);
+	}
+
+	/**
+	 * Whether the declaration of `name` in `file` carries `@:rtti` as the index read it, a guarded one included — the owner's
+	 * own, never another package's namesake. A backstop behind the plan, which already refuses metadata above the type; a
+	 * declaration the index does not hold in `file` falls back to every declaration of the name.
+	 */
+	private static function ownerCarriesRtti(index: SymbolIndex, name: String, file: String): Bool {
+		final own: Null<ResolvedType> = index.refs.findDeclaredType(file, name);
+		return own == null ? index.traits.transitivelyCarriesRtti(name) : own.type.hasRtti;
+	}
+
 }
 
 private typedef ConstDecl = {
@@ -761,6 +780,12 @@ private typedef EnumAbstractCfg = {
 	final ternaryKind: String;
 	final resultContainerKinds: Array<String>;
 	final classKinds: Array<String>;
+
+	/** The conditional-compilation region kinds, read for one directly above the container. */
+	final conditionalKinds: Array<String>;
+
+	/** What a region above the container may lead its declaration with: metadata, a modifier, a declaration keyword. */
+	final declarationLeadKinds: Array<String>;
 	final syntax: Null<EnumAbstractSyntax>;
 };
 

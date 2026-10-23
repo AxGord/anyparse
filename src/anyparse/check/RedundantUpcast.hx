@@ -56,20 +56,22 @@ final class RedundantUpcast implements Check {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final castTargets: Map<Int, String> = typed.castTargetSources(entry.source);
+			final declaredSources: Map<Int, String> = typed.declaredTypeSources(entry.source);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
 				if (node.kind == kind && node.children.length == 1) {
 					final span: Null<Span> = node.span;
 					if (span != null) {
-						final sName: Null<String> = TypeResolver.simpleNominalName(
-							TypeResolver.identTypeName(node.children[0], root, shape, declaredTypes)
-						);
+						final binding: Null<Int> = TypeResolver.identBindingFrom(node.children[0], root, shape);
+						final sName: Null<String> = binding == null ? null : TypeResolver.simpleNominalName(declaredTypes[binding]);
+						final sSource: Null<String> = binding == null ? null : declaredSources[binding];
 						final tSource: Null<String> = TypeResolver.castTargetWithin(span, castTargets);
 						final tName: Null<String> = TypeResolver.simpleNominalName(tSource);
-						// The target resolves where the cast writes it: a namesake in the operand's chain proves nothing.
+						// Both types resolve in this file: a namesake in the operand's chain proves nothing, and neither does an operand
+						// type sharing a project subtype's name.
 						if (
-							sName != null && tName != null && tSource != null
-							&& index.subtypes.isSubtype(sName, tSource.trim(), entry.file, span.from)
+							sName != null && tName != null && sSource != null && tSource != null
+							&& index.subtypes.isSubtype(sSource.trim(), tSource.trim(), entry.file, span.from, entry.file, binding)
 						) violations.push({
 							file: entry.file,
 							span: span,

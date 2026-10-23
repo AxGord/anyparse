@@ -262,7 +262,14 @@ final class MoveToHelperRefs {
 			return 'the moved code reaches `super` at ${where(prep.srcFile, prep.srcSource, hit.span.from)} — a static helper has '
 				+ 'no superclass to call';
 		if (SourceText.isUpperInitial(name) || scan.pathRoots.contains(hit.span.from) || AMBIENT_VALUES.contains(name)) return null;
-		if (prep.index.subtypes.declaringAncestorOf(prep.srcTypeName, name) != null) {
+		final ancestor: Null<String> = prep.index.subtypes.declaringAncestorOf(prep.srcTypeName, name);
+		if (ancestor != null) {
+			// Rewritten into an inherited member only on a PROVEN supertype: a maybe may be a namesake whose member the bare
+			// name never meant (a static import, a module field), and `param.name` would then name nothing.
+			if (prep.index.subtypes.subtypeVerdict(prep.srcTypeName, ancestor, null, null, prep.srcFile) != true)
+				return
+					'the moved code reads "$name" at ${where(prep.srcFile, prep.srcSource, hit.span.from)}, which "$ancestor" declares, '
+						+ 'and "$ancestor" may be a supertype of "${prep.srcTypeName}" but nothing proves it';
 			edits.movedTextEdits.push(qualifiedRef(hit, '${edits.param}.'));
 			grantFor(edits, hit.span.from);
 			return null;
@@ -446,7 +453,7 @@ final class MoveToHelperRefs {
 	/** The spans of `info`'s types that are proven subtypes of the source into `proven`, and of those that only may be into `maybe`. */
 	private static function sortSubtypeSpans(prep: MovePrep, info: FileInfo, proven: Array<Span>, maybe: Array<Span>): Void {
 		for (t in info.types) if (t.name != prep.srcTypeName) {
-			final verdict: Null<Bool> = prep.index.subtypes.subtypeVerdict(t.name, prep.srcTypeName, prep.srcFile);
+			final verdict: Null<Bool> = prep.index.subtypes.subtypeVerdict(t.name, prep.srcTypeName, prep.srcFile, null, info.file);
 			if (verdict != false) (verdict == true ? proven : maybe).push(t.span);
 		}
 	}

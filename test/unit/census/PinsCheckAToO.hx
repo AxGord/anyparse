@@ -647,6 +647,7 @@ final class PinsCheckAToO {
 		'unit.check.MemberOrderWriterGapTest#testTheWritersDocBlankIsAMinimum :: control :: M-MO-WRITER-MINIMUM-AS-EXACT',
 		'unit.check.MemberSpacingPolicyTest#testAnUnmeasurableSlotLeavesThePairToTheSource :: control :: M-MO-WRITER-UNMEASURABLE-GUESS',
 		'unit.check.MemberSpacingPolicyTest#testTheWriterPolicyIsReadOnlyOnTheKindsItCovers :: control :: M-MO-WRITER-CONTAINER-KIND',
+		'unit.check.NamesakeOwnerTwinTest#testMetadataInsideAConditionalRefusesTheConversion :: control :: M-PLAN-GUARDED-META-ALLOWED',
 		'unit.check.NamesakeOwnerTwinTest#testNamesakesRttiDoesNotRefuseTheConversion :: control :: M-RTTI-HOMONYM-REFUSES',
 		'unit.check.NamesakeOwnerTwinTest#testNamesakesSubtypeDoesNotUnconfineAPrivateMember :: control :: M-CONFINED-NO-OWNER-FILE',
 		'unit.check.NamesakeOwnerTwinTest#testNamesakesSupertypeDoesNotVetoAnInlineCandidate :: control :: M-SUPERTYPE-DECLARES-UNION',
