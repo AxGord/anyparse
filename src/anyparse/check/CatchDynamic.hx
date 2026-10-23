@@ -137,7 +137,9 @@ final class CatchDynamic implements Check implements ConfigAware implements Vers
 			// The shared printer owns the short-name / add-import / fully-qualified decision (imports,
 			// aliases, module-local and same-package bindings, sorted insert) — this rule used to
 			// hand-roll a weaker version of it.
-			final printer: TypeRefPrinter = TypeRefPrinter.forFile(source, root, importMap, plugin, IndexScope.resolutionIndexOf(plugin));
+			final printer: TypeRefPrinter = TypeRefPrinter.forFile(
+				file, source, root, importMap, plugin, IndexScope.resolutionIndexOf(plugin)
+			);
 			final exceptionPath: String = seams.exceptionPath;
 			final edits: Array<{ span: Span, text: String }> = [];
 			var rewroteNonConditional: Bool = false;

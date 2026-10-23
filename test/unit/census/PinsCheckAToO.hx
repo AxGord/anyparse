@@ -647,6 +647,9 @@ final class PinsCheckAToO {
 		'unit.check.MemberOrderWriterGapTest#testTheWritersDocBlankIsAMinimum :: control :: M-MO-WRITER-MINIMUM-AS-EXACT',
 		'unit.check.MemberSpacingPolicyTest#testAnUnmeasurableSlotLeavesThePairToTheSource :: control :: M-MO-WRITER-UNMEASURABLE-GUESS',
 		'unit.check.MemberSpacingPolicyTest#testTheWriterPolicyIsReadOnlyOnTheKindsItCovers :: control :: M-MO-WRITER-CONTAINER-KIND',
+		'unit.check.ModuleNameFromPathTest#testExplicitLocalTypeOraclePrintsTheSubTypeShortBehindAHelperTypedef :: control :: M-PRINTER-MODULE-FROM-FIRST-DECL',
+		'unit.check.ModuleNameFromPathTest#testExplicitTypeOraclePrintsTheSubTypeShortBehindAHelperTypedef :: control :: M-PRINTER-MODULE-FROM-FIRST-DECL',
+		'unit.check.ModuleNameFromPathTest#testShortenTypeRefShortensTheSubTypeBehindAHelperTypedef :: control :: M-PRINTER-MODULE-FROM-FIRST-DECL',
 		'unit.check.NamingCheckCrossFileFixTest#testAGrantedMemberRenamesIntoItsGranteesAndTheirSubtypes :: control :: '
 			+ 'M-ALLOW-GRANTEE-SUBTYPES,M-NAMING-ALLOWGRANT-AS-ANNOTATION,M-NAMING-CROSS-GRANTEES-DROPPED',
 		'unit.check.NamingCheckCrossFileFixTest#testAMemberGrantDoesNotTaintItsNeighbours :: control :: '

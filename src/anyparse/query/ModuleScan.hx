@@ -470,15 +470,6 @@ final class ModuleScan {
 		return buf.toString();
 	}
 
-	/** The module's main type name — the FIRST named top-level type declaration (the module basename is not available to the printer). */
-	private static function mainTypeNameOf(root: QueryNode): Null<String> {
-		for (c in root.children) {
-			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(c);
-			if (decl != null) return decl.name;
-		}
-		return null;
-	}
-
 }
 
 /**

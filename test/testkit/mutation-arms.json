@@ -30185,6 +30185,14 @@
 			"find": "if (text.indexOf('\\\\') >= 0) for (piece in ~/\\\\./g.split(text)) readings.push(piece);",
 			"replace": "",
 			"note": "a backslash never opens a string escape, so a private dotted path glued to a `\\t` in a quoted fixture passes the guard"
+		},
+		{
+			"name": "M-PRINTER-MODULE-FROM-FIRST-DECL",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "new",
+			"find": "_module = root == null || file == null ? null : ModuleScan.moduleOf(root, file);",
+			"replace": "_module = root == null || file == null ? null : ModuleScan.moduleOf(root, [for (c in root.children) RefactorSupport.typeDeclOf(c)?.name].filter(n -> n != null)[0] ?? '');",
+			"note": "the module is named by its first top-level declaration, so a sub-type declared behind an unrelated helper looks shadowed by its own declaration and prints fully qualified"
 		}
 	]
 }

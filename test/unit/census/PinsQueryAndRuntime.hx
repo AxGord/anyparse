@@ -1438,6 +1438,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.TypeNameBindingTest#testThePackageTierReadsTheStdCoresModulesPackageByPackage :: control :: M-TS-PACKAGE-PROJECT-FIRST',
 		'unit.query.TypeNameBindingTest#testTheStdTypesNamesAreTheStdsOwn :: guard :: ',
 		'unit.query.TypeNameBindingTest#testWildcardsAreAskedLastFirst :: control :: M-BINDING-FIRST-STATEMENT-WINS',
+		'unit.query.TypeRefPrinterTest#testSameModuleSecondaryTypeBehindAHelperPrintsShort :: control :: M-PRINTER-MODULE-FROM-FIRST-DECL',
+		'unit.query.TypeRefPrinterTest#testTypeOfAModuleWithNoMainTypePrintsShort :: control :: M-PRINTER-MODULE-FROM-FIRST-DECL',
 		'unit.query.TypingServiceTest#testAReadOfAMemberItsBranchesWriteDifferentlyIsUnknown :: control :: M-MEMBER-READ-BRANCHES-FIRST',
 		'unit.query.TypingServiceTest#testARememberedNullIsNotAskedAgain :: control :: M-TYPING-ANSWER-FORGOTTEN',
 		'unit.query.TypingServiceTest#testATypeQuestionIsKeptPerDeclaration :: control :: M-TYPING-TYPE-KEY-FILE',

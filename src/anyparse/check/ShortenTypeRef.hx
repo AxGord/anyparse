@@ -404,7 +404,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	 * promised to the printer here can no longer be taken back at the emit site.
 	 */
 	private static function planFor(
-		source: String, plugin: GrammarPlugin, index: Null<SymbolIndex>, wanted: Null<Array<String>>, ?path: String
+		source: String, plugin: GrammarPlugin, index: Null<SymbolIndex>, wanted: Null<Array<String>>, path: String
 	): Null<FilePlan> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		// The type-refs projection is the same tree PLUS one `TypeRef` node per nominal in a
@@ -474,10 +474,10 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 
 	/** A printer over `source` with the file's plain-import map and the run's resolution index. */
 	private static function printerFor(
-		source: String, tree: QueryNode, plugin: GrammarPlugin, index: Null<SymbolIndex>, ?path: String
+		source: String, tree: QueryNode, plugin: GrammarPlugin, index: Null<SymbolIndex>, path: String
 	): TypeRefPrinter {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		return TypeRefPrinter.forFile(source, tree, provider != null ? provider.importMap(source, path) : [], plugin, index);
+		return TypeRefPrinter.forFile(path, source, tree, provider != null ? provider.importMap(source, path) : [], plugin, index);
 	}
 
 	/** The written paths of `occurrences`, deduplicated, in first-seen order — the plan's iteration order. */

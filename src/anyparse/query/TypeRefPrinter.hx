@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.ImportOrder.ImportAnchor;
+import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.Span;
 
@@ -79,8 +80,11 @@ final class TypeRefPrinter {
 	/** The file's `package` declaration payload (`''` for the root package), or null when the printer has no tree. */
 	private final _pkg: Null<String>;
 
-	/** The file's main (first) top-level type name, for same-module sub-type resolution; null with no tree. */
-	private final _module: Null<String>;
+	/**
+	 * The module the file declares, named by its FILE as the compiler and the index name it — never by
+	 * its first declaration, which may be an unrelated helper type; null with no tree or no file.
+	 */
+	private final _module: Null<ModulePath>;
 
 	/** Alias -> aliased path for every `import … as …` in the file; the keys double as bound-name collisions. */
 	private final _aliasTargets: Map<String, String>;
@@ -129,7 +133,8 @@ final class TypeRefPrinter {
 	private var _site: Int = -1;
 
 	private function new(
-		source: Null<String>, root: Null<QueryNode>, importMap: Map<String, String>, index: Null<SymbolIndex>, plugin: Null<GrammarPlugin>
+		source: Null<String>, root: Null<QueryNode>, importMap: Map<String, String>, index: Null<SymbolIndex>, plugin: Null<GrammarPlugin>,
+		file: Null<String>
 	) {
 		_source = source;
 		_root = root;
@@ -137,7 +142,7 @@ final class TypeRefPrinter {
 		_importMap = importMap;
 		_index = index;
 		_pkg = root == null ? null : ModuleScan.packageOf(root);
-		_module = root == null ? null : ModuleScan.mainTypeNameOf(root);
+		_module = root == null || file == null ? null : ModuleScan.moduleOf(root, file);
 		_aliasTargets = source == null || root == null ? [] : ModuleScan.aliasTargetsOf(source, root);
 		// Ctor-hoisted like every sibling scan: both `shadowedByGuardedImport` and
 		// `shadowedByBulkImport` ask for these, once per printed reference.
@@ -804,23 +809,22 @@ final class TypeRefPrinter {
 	 * `pkg.Module.simple`, reduced to `pkg.Module` when it IS the main type.
 	 */
 	private function moduleLocalPathOf(simple: String): Null<String> {
-		final module: Null<String> = _module;
+		final module: Null<ModulePath> = _module;
 		if (module == null) return null;
-		final pkg: Null<String> = _pkg;
-		final modulePath: String = pkg == null || pkg == '' ? module : '$pkg.$module';
-		return module == simple ? modulePath : '$modulePath.$simple';
+		return module.base == simple ? module.path : '${module.path}.$simple';
 	}
 
 	/**
-	 * A printer over a file's FULL scope: its parsed `root` (top-level decls and import
-	 * statements), raw `source` (the alias-target recovery and the short-name freeness scan),
-	 * the plain-import map, and optionally the cross-file `index` for same-package /
-	 * root-package / canonical-path resolution. This is the form that can ADD imports.
+	 * A printer over a file's FULL scope: its path `file` (which names the module its own types
+	 * resolve through), its parsed `root` (top-level decls and import statements), raw `source`
+	 * (the alias-target recovery and the short-name freeness scan), the plain-import map, and
+	 * optionally the cross-file `index` for same-package / root-package / canonical-path
+	 * resolution. This is the form that can ADD imports.
 	 */
 	public static function forFile(
-		source: String, root: QueryNode, importMap: Map<String, String>, plugin: GrammarPlugin, ?index: SymbolIndex
+		file: String, source: String, root: QueryNode, importMap: Map<String, String>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): TypeRefPrinter {
-		return new TypeRefPrinter(source, root, importMap, index, plugin);
+		return new TypeRefPrinter(source, root, importMap, index, plugin, file);
 	}
 
 	/**
@@ -831,7 +835,7 @@ final class TypeRefPrinter {
 	 * the one `LiteralInfer.normalizeInferredType`'s public pure signature keeps.
 	 */
 	public static function importsOnly(importMap: Map<String, String>): TypeRefPrinter {
-		return new TypeRefPrinter(null, null, importMap, null, null);
+		return new TypeRefPrinter(null, null, importMap, null, null, null);
 	}
 
 }
