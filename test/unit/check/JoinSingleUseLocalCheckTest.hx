@@ -517,6 +517,22 @@ class JoinSingleUseLocalCheckTest extends Test {
 		Assert.equals(-1, out.indexOf('final c'));
 	}
 
+	/**
+	 * An own-line comment directly above the capture documents the capture. The later-read fix deletes
+	 * the declaration and leaves the comment above whatever statement followed it, so the note lands
+	 * on code it was never written for — the read is reported nowhere rather than fixed that way.
+	 */
+	@:pin('control')
+	@:killer('M-JSUL-LATER-LEADING-COMMENT-IGNORED')
+	public function testLeadingCommentOnLaterCaptureNotFlagged(): Void {
+		Assert.equals(0, violations(wrapValue('// keeps the caller value\n\t\tfinal c = value;\n\t\tg();\n\t\tuse(c);')).length);
+	}
+
+	/** A comment above an EARLIER statement documents that statement, not the capture. */
+	public function testCommentAboveAnEarlierStatementStillFlagged(): Void {
+		Assert.equals(1, violations(wrapValue('// about g\n\t\tg();\n\t\tfinal c = value;\n\t\th();\n\t\tuse(c);')).length);
+	}
+
 	/** Wrap a statement body in a class carrying one typed field, so a field capture resolves a declared type. */
 	private inline function wrapField(body: String): String {
 		return wrapTyped('private final _f:Null<T>;', body);

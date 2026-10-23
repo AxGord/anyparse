@@ -514,6 +514,8 @@ final class PinsCheckAToO {
 		'unit.check.JoinSingleUseLocalCheckTest#testInitIdentNotReboundStillFlagged :: control :: M-JSUL-INIT-IDENT-ALWAYS-REBOUND',
 		'unit.check.JoinSingleUseLocalCheckTest#testLaterReadInLambdaNotFlagged :: guard :: M-JSUL-LATER-DEFERRED-ALLOWED',
 		'unit.check.JoinSingleUseLocalCheckTest#testLaterReadInLoopStillFlagged :: control :: M-JSUL-LATER-LOOP-BARRIER',
+		'unit.check.JoinSingleUseLocalCheckTest#testLeadingCommentOnLaterCaptureNotFlagged :: control :: '
+			+ 'M-JSUL-LATER-LEADING-COMMENT-IGNORED',
 		'unit.check.JoinSingleUseLocalCheckTest#testOuterFunctionParamSourceNotFlagged :: guard :: M-JSUL-LATER-SOURCE-ANY-SCOPE',
 		'unit.check.JoinSingleUseLocalCheckTest#testParamCaptureReadLaterCollapses :: control :: '
 			+ 'M-JSUL-SOURCE-ALWAYS-WRITTEN,M-JSUL-LATER-HOLDER-ADJACENT-ONLY',
