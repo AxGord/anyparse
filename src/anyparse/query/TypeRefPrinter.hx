@@ -122,6 +122,9 @@ final class TypeRefPrinter {
 	/** Value names this file's imports bring in with an enum-like type, computed on FIRST use — see `importedMemberNames`. */
 	private var _importedMemberNames: Null<Array<String>> = null;
 
+	/** Type-parameter name -> the spans that parameter is in scope over, computed on FIRST use — see `typeParamScopes`. */
+	private var _typeParamScopes: Null<Map<String, Array<Span>>> = null;
+
 	/**
 	 * The byte offset the reference being printed will be WRITTEN at, or -1 when the caller states
 	 * none — set for the length of one `printTypeExpr` call and read by `importReachesSite`.
@@ -221,11 +224,11 @@ final class TypeRefPrinter {
 		final simple: String = SourceText.lastSegment(canonical);
 		final visible: Null<String> = visibleNameFor(canonical, simple);
 		// Re-bind: a null-check does not narrow into an anonymous-structure literal.
-		if (visible != null) {
+		if (visible != null && !typeParamBinds(visible, owned)) {
 			final inScope: String = visible;
 			return { text: inScope, importPath: null };
 		}
-		if (!canAddImport(canonical, simple, owned)) return { text: canonical, importPath: null };
+		if (typeParamBinds(simple, owned) || !canAddImport(canonical, simple, owned)) return { text: canonical, importPath: null };
 		if (!_pendingImports.contains(canonical)) _pendingImports.push(canonical);
 		return { text: simple, importPath: canonical };
 	}
@@ -417,6 +420,57 @@ final class TypeRefPrinter {
 			}
 		}
 		_importedMemberNames = out;
+		return out;
+	}
+
+	/**
+	 * Whether a type parameter named `name` is in scope where this reference is written — at any
+	 * `owned` occurrence, else at the print site, else (no site stated) anywhere in the file. A type
+	 * parameter outranks every type of its name, so a short `name` there would compile while naming
+	 * the parameter instead.
+	 */
+	private function typeParamBinds(name: String, owned: Null<Array<Span>>): Bool {
+		final scopes: Null<Array<Span>> = typeParamScopes()[name];
+		if (scopes == null) return false;
+		final sites: Array<Int> = if (owned != null && owned.length > 0)
+			[for (span in owned) span.from]
+		else if (_site >= 0)
+			[_site]
+		else
+			[];
+		return sites.length == 0 || sites.exists(at -> scopes.exists(s -> s.from <= at && at < s.to));
+	}
+
+	/**
+	 * Every type parameter the file declares, by name, mapped to the spans it is in scope over: the
+	 * widest node starting where `TypeInfoProvider.typeParamNames` keys its declaration. A declaration
+	 * the tree carries no node for scopes the whole file. Empty without a tree, a source, or a grammar
+	 * exposing type parameters.
+	 */
+	private function typeParamScopes(): Map<String, Array<Span>> {
+		final cached: Null<Map<String, Array<Span>>> = _typeParamScopes;
+		if (cached != null) return cached;
+		final out: Map<String, Array<Span>> = [];
+		final source: Null<String> = _source;
+		final root: Null<QueryNode> = _root;
+		final plugin: Null<GrammarPlugin> = _plugin;
+		if (source != null && root != null && plugin is TypeInfoProvider) {
+			final names: Map<Int, Array<String>> = (cast plugin: TypeInfoProvider).typeParamNames(source);
+			final ends: Map<Int, Int> = [];
+			function walk(node: QueryNode): Void {
+				final span: Null<Span> = node.span;
+				if (span != null && names.exists(span.from) && span.to > (ends[span.from] ?? -1)) ends[span.from] = span.to;
+				for (c in node.children) walk(c);
+			}
+			walk(root);
+			for (from => params in names) for (name in params) {
+				final end: Null<Int> = ends[from];
+				final scopes: Array<Span> = out[name] ?? [];
+				scopes.push(end == null ? new Span(0, source.length) : new Span(from, end));
+				out[name] = scopes;
+			}
+		}
+		_typeParamScopes = out;
 		return out;
 	}
 

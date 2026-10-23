@@ -30242,6 +30242,13 @@
 			"find": "_module = root == null || file == null ? null : ModuleScan.moduleOf(root, file);",
 			"replace": "_module = root == null || file == null ? null : ModuleScan.moduleOf(root, [for (c in root.children) RefactorSupport.typeDeclOf(c)?.name].filter(n -> n != null)[0] ?? '');",
 			"note": "the module is named by its first top-level declaration, so a sub-type declared behind an unrelated helper looks shadowed by its own declaration and prints fully qualified"
+		},
+		{
+			"name": "M-PRINTER-TYPE-PARAM-BLIND",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "typeParamBinds",
+			"force": "false",
+			"note": "no type parameter shadows a short name, so a printed type silently re-binds to a method's, a class's or a local function's type parameter of the same name"
 		}
 	]
 }

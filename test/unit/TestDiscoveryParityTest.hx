@@ -432,6 +432,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.TrivialGetterShapeCollapseTest',
 		'unit.check.TrivialGetterStaticShadowTest',
 		'unit.check.TryCatchNullGuardCheckTest',
+		'unit.check.TypeParamShadowTest',
 		'unit.check.TypedEventConstantCheckTest',
 		'unit.check.TypedFactsProbeTest',
 		'unit.check.UncheckedNullableTest',

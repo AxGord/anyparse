@@ -195,6 +195,50 @@ class TypeRefPrinterTest extends Test {
 		Assert.equals('B', printerWith(src, null, 'pkg/Types.hx').print('pkg.Types.B').text);
 	}
 
+	/**
+	 * A method's own type parameter takes the simple name inside the method,
+	 * so a same-package type printed there stays qualified; outside it, short.
+	 */
+	@:pin('control')
+	@:killer('M-PRINTER-TYPE-PARAM-BLIND')
+	public function testAMethodTypeParameterShadowsTheShortName(): Void {
+		final src: String =
+			'package p;\n\nclass C {\n\n\tfunction f<Holder>(h:Holder):Void {\n\t\tfinal x = 0;\n\t}\n\n\tfunction g():Void {}\n\n}\n';
+		final p: TypeRefPrinter = printerWith(src, null, 'p/C.hx');
+		Assert.equals('p.Holder', p.printTypeExpr('p.Holder', src.indexOf('final x')));
+		Assert.equals('Holder', p.printTypeExpr('p.Holder', src.indexOf('function g')));
+	}
+
+	/** A class's type parameter shadows the simple name over the whole class body, and nowhere past it. */
+	@:pin('control')
+	@:killer('M-PRINTER-TYPE-PARAM-BLIND')
+	public function testAClassTypeParameterShadowsTheShortName(): Void {
+		final src: String = 'package p;\n\nclass C<Holder> {\n\n\tfunction f():Void {\n\t\tfinal x = 0;\n\t}\n\n}\n\nclass D {\n\n'
+			+ '\tfunction g():Void {}\n\n}\n';
+		final p: TypeRefPrinter = printerWith(src, null, 'p/C.hx');
+		Assert.equals('p.Holder', p.printTypeExpr('p.Holder', src.indexOf('final x')));
+		Assert.equals('Holder', p.printTypeExpr('p.Holder', src.indexOf('function g')));
+	}
+
+	/** A local function's type parameter shadows the simple name inside that function only. */
+	@:pin('control')
+	@:killer('M-PRINTER-TYPE-PARAM-BLIND')
+	public function testALocalFunctionTypeParameterShadowsTheShortName(): Void {
+		final src: String = 'package p;\n\nclass C {\n\n\tfunction f():Void {\n\t\tfunction inner<Holder>(h:Holder):Void {\n'
+			+ '\t\t\tfinal x = 0;\n\t\t}\n\t\tfinal y = 0;\n\t}\n\n}\n';
+		final p: TypeRefPrinter = printerWith(src, null, 'p/C.hx');
+		Assert.equals('p.Holder', p.printTypeExpr('p.Holder', src.indexOf('final x')));
+		Assert.equals('Holder', p.printTypeExpr('p.Holder', src.indexOf('final y')));
+	}
+
+	/** With no print site the whole file is the scope: a type parameter of that name anywhere keeps the path qualified. */
+	@:pin('control')
+	@:killer('M-PRINTER-TYPE-PARAM-BLIND')
+	public function testATypeParameterAnywhereShadowsASitelessPrint(): Void {
+		final src: String = 'package p;\n\nclass C {\n\n\tfunction f<Holder>(h:Holder):Void {}\n\n}\n';
+		Assert.equals('p.Holder', printerWith(src, null, 'p/C.hx').print('p.Holder').text);
+	}
+
 	public function testSamePackageMainTypePrintsShort(): Void {
 		final src: String = 'package pkg;\n\nclass C {}\n';
 		Assert.equals('Sibling', printer(src).print('pkg.Sibling').text);
