@@ -2,13 +2,20 @@ package unit.check;
 
 /**
  * What a lifetime fixture asks of the machine's process table: which processes run a command line, whether a pid still
- * runs, and a bounded wait for a set of pids to be gone. Off node, and off a machine with `ps`, every answer is empty.
+ * runs, and a bounded wait for a set of pids to be gone. Off node every answer is empty; a `ps` that could not answer
+ * throws, since a table read as empty would prove a server gone, or never started, that nobody looked for.
  */
 @:nullSafety(Strict)
 final class ProcessProbe {
 
-	/** Milliseconds a tethered process is given to end once its driver is gone: the tether notices at once. */
-	private static inline final GONE_MS: Int = 3000;
+	/**
+	 * Milliseconds a tethered process is given to end once its driver is gone. The tether notices at once and the wait
+	 * ends as soon as the process does: this bounds a hang, sized for a machine loaded enough to starve the tether.
+	 */
+	private static inline final GONE_MS: Int = 30000;
+
+	/** Bytes `ps` may print: a table of long command lines must never be cut short. */
+	private static inline final PS_BUFFER: Int = 64 * 1024 * 1024;
 
 	/** Milliseconds between two looks while `awaitGone` waits. */
 	private static inline final POLL_MS: Int = 100;
@@ -16,8 +23,7 @@ final class ProcessProbe {
 	/** The pids of every process whose command line contains `fragment`. */
 	public static function pidsRunning(fragment: String): Array<Int> {
 		#if nodejs
-		final res: Dynamic = js.node.ChildProcess.spawnSync('ps', ['-A', '-o', 'pid=,command='], { encoding: 'utf8' });
-		final out: String = res.stdout == null ? '' : '${res.stdout}';
+		final out: String = table(['-A', '-o', 'pid=,command=']);
 		final pids: Array<Int> = [];
 		for (line in out.split('\n')) {
 			final row: String = StringTools.trim(line);
@@ -35,8 +41,7 @@ final class ProcessProbe {
 	/** The pids of every process descending from `root` whose command line contains `fragment`. */
 	public static function descendantsRunning(root: Int, fragment: String): Array<Int> {
 		#if nodejs
-		final res: Dynamic = js.node.ChildProcess.spawnSync('ps', ['-A', '-o', 'pid=,ppid=,command='], { encoding: 'utf8' });
-		final out: String = res.stdout == null ? '' : '${res.stdout}';
+		final out: String = table(['-A', '-o', 'pid=,ppid=,command=']);
 		final rows: Array<{ pid: Int, ppid: Int, command: String }> = [];
 		final row: EReg = ~/^\s*(\d+)\s+(\d+)\s+(.*)$/;
 		for (line in out.split('\n')) if (row.match(line)) rows.push({
@@ -61,6 +66,8 @@ final class ProcessProbe {
 	public static function alive(pid: Int): Bool {
 		#if nodejs
 		final res: Dynamic = js.node.ChildProcess.spawnSync('ps', ['-o', 'stat=', '-p', '$pid'], { encoding: 'utf8' });
+		// `ps -p` of a pid that is gone exits non-zero with nothing printed: only a `ps` that could not run is no answer
+		if (res.error != null) throw new haxe.Exception('ps could not run: ${res.error}');
 		final state: String = StringTools.trim(res.stdout == null ? '' : '${res.stdout}');
 		return state != '' && !StringTools.startsWith(state, 'Z');
 		#else
@@ -98,6 +105,18 @@ final class ProcessProbe {
 		for (pid in pids) try js.Node.process.kill(pid, 'SIGKILL') catch (exception: haxe.Exception) { // noqa: swallowed-exception
 			// already gone
 		}
+		#end
+	}
+
+	/** The whole process table `ps` prints with `args`, or a throw when it could not run or print all of it. */
+	private static function table(args: Array<String>): String {
+		#if nodejs
+		final res: Dynamic = js.node.ChildProcess.spawnSync('ps', args, { encoding: 'utf8', maxBuffer: PS_BUFFER });
+		if (res.error != null || res.status != 0 || res.stdout == null)
+			throw new haxe.Exception('ps ${args.join(' ')} gave no table: status ${res.status}, ${res.error}');
+		return '${res.stdout}';
+		#else
+		return '';
 		#end
 	}
 
