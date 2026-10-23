@@ -3,6 +3,9 @@ package anyparse.query.cli.command;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.ExitCode.*;
+import anyparse.query.cli.CliCallGraph.GraphOutput;
+import anyparse.query.graph.CodeGraph;
+import anyparse.query.graph.MemberGraphBuilder;
 
 /**
  * `apq callees` — transitive call tree FROM a function (approximate call graph).
@@ -38,6 +41,7 @@ final class CalleesCommand implements CliCommand {
 		var limit: Int = -1;
 		var kinds: Null<Array<EdgeKind>> = null;
 		var target: Null<String> = null;
+		var output: GraphOutput = Text;
 		final inputSpecs: Array<String> = [];
 
 		var i: Int = 0;
@@ -62,6 +66,8 @@ final class CalleesCommand implements CliCommand {
 				case '--kinds':
 					kinds = CliCallGraph.parseEdgeKinds(cmd, CliArgs.expectValue(args, ++i, '--kinds'));
 					if (kinds == null) return EXIT_USAGE;
+				case '--format':
+					output = CliCallGraph.parseGraphOutput(CliArgs.expectValue(args, ++i, '--format'));
 				case '-h', '--help':
 					printCallChainsUsage(cmd, outward);
 					return EXIT_OK;
@@ -99,7 +105,13 @@ final class CalleesCommand implements CliCommand {
 			return ctx.emptyExit(true);
 		}
 		// --limit 0 = uncapped; unset = DEFAULT_CHAIN_LINES; the budget is
-		final provenEmpty: Bool = renderChains(graph, matches, depth, outward, kinds, sources, limit);
+		final provenEmpty: Bool = if (output == Text)
+			renderChains(graph, matches, depth, outward, kinds, sources, limit)
+		else {
+			final drawn: CodeGraph = MemberGraphBuilder.chains(graph, [for (m in matches) m.id], depth, outward, kinds);
+			CliCallGraph.printGraph(output, drawn, '$cmd $targetStr --depth $depth');
+			drawn.edges().length == 0;
+		};
 		final blind: Int = graph.unresolved.length + graph.unresolvedAccessesRunning(matches).length;
 		if (blind > 0) CliIo.stderr('${chainUnresolvedNote(cmd, targetStr, blind, provenEmpty)}\n');
 		return ctx.emptyExit(provenEmpty);
@@ -112,7 +124,8 @@ final class CalleesCommand implements CliCommand {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --depth <n>    Levels to expand (default 1)\n');
 		CliIo.sysPrint('  --kinds <k,..> Edge kinds: call,ref,new,virtual,contains,accessor (default all)\n');
-		CliIo.sysPrint('  --limit <n>    Max total tree lines across matches (default $DEFAULT_CHAIN_LINES; 0 = uncapped)\n');
+		CliIo.sysPrint('  --limit <n>    Max total tree lines across matches (default $DEFAULT_CHAIN_LINES; 0 = uncapped; text only)\n');
+		CliIo.sysPrint('  --format <f>   text (the call tree, default), mermaid or json (the member graph walked)\n');
 		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 

@@ -3,6 +3,8 @@ package anyparse.query.cli.command;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.Clusters.ClusterReport;
 import anyparse.query.ExitCode.*;
+import anyparse.query.cli.CliCallGraph.GraphOutput;
+import anyparse.query.graph.MemberGraphBuilder;
 
 /**
  * `apq clusters` — partition a type's members by call-edge connectivity (hub bucket + components).
@@ -35,6 +37,7 @@ final class ClustersCommand implements CliCommand {
 		var hubCount: Null<Int> = null;
 		var kinds: Null<Array<EdgeKind>> = null;
 		var target: Null<String> = null;
+		var output: GraphOutput = Text;
 		final inputSpecs: Array<String> = [];
 
 		var i: Int = 0;
@@ -54,6 +57,8 @@ final class ClustersCommand implements CliCommand {
 				case '--kinds':
 					kinds = CliCallGraph.parseEdgeKinds('clusters', CliArgs.expectValue(args, ++i, '--kinds'));
 					if (kinds == null) return EXIT_USAGE;
+				case '--format':
+					output = CliCallGraph.parseGraphOutput(CliArgs.expectValue(args, ++i, '--format'));
 				case '-h', '--help':
 					printClustersUsage();
 					return EXIT_OK;
@@ -92,7 +97,10 @@ final class ClustersCommand implements CliCommand {
 			CliIo.stderr('apq clusters: no type in scope has members named "$typeName"\n');
 			return ctx.emptyExit(true);
 		}
-		CliIo.sysPrint(Clusters.render(graph, report, f -> sources[f]));
+		if (output == Text)
+			CliIo.sysPrint(Clusters.render(graph, report, f -> sources[f]))
+		else
+			CliCallGraph.printGraph(output, MemberGraphBuilder.clusters(graph, report), 'clusters $typeName');
 		if (graph.unresolved.length > 0)
 			CliIo.stderr('apq clusters: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
 		return ctx.emptyExit(false);
@@ -108,6 +116,7 @@ final class ClustersCommand implements CliCommand {
 		CliIo.sysPrint(
 			'  --kinds <k,..> Edge kinds for connectivity: call,ref,new,virtual,contains,accessor (default call,ref,new,accessor)\n'
 		);
+		CliIo.sysPrint('  --format <f>   text (the report, default), mermaid or json (the members grouped by component)\n');
 		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 

@@ -1503,6 +1503,13 @@ final class PinsQueryAndRuntime {
 		'unit.query.ValueNameBindingTest#testAnotherRegionOfTheSameConditionIsAnAlternative :: control :: '
 			+ 'M-COND-ALTERNATIVE-REGIONS,M-COND-ALTERNATIVE-SPLIT',
 		'unit.query.ValueNameBindingTest#testBesideATypeAUsingBringsTheValuesOfItsModulesTypes :: control :: M-DOOR-USING-TYPES-BLIND',
+		'unit.query.format.GraphMermaidTest#testLabelsComeBackAsPlainText :: control :: M-GRAPH-LABEL-MARKUP',
+		'unit.query.graph.CodeGraphTest#testAnExternalNodeKeepsItsOwnId :: control :: M-GRAPH-EXTERNAL-ID-MERGED',
+		'unit.query.graph.CodeGraphTest#testIdsAreMermaidIdsAndInjective :: control :: M-GRAPH-ID-UNDERSCORE-BARE',
+		'unit.query.graph.MemberGraphBuilderTest#testAHopInwardCrossesTheCallersLocals :: control :: M-GRAPH-CALLER-HOP-ON-LOCALS',
+		'unit.query.graph.MemberGraphBuilderTest#testAHopOutwardCrossesTheMembersLocals :: control :: M-GRAPH-DEPTH-SPENT-ON-LOCALS',
+		'unit.query.graph.MemberGraphBuilderTest#testALocalFunctionsRecursionDrawsNoLoop :: control :: M-GRAPH-LOCAL-RECURSION-DRAWN',
+		'unit.query.graph.MemberGraphBuilderTest#testChainsFoldLambdasIntoTheirMember :: control :: M-GRAPH-LAMBDA-UNFOLDED',
 		'unit.runtime.SameItemsTest#testDifferentLengthsDiffer :: guard :: ',
 		'unit.runtime.SameItemsTest#testEqualItemsInOrderAreTheSame :: guard :: ',
 		'unit.runtime.SameItemsTest#testSameLengthDifferentItemsDiffer :: control :: M-SAMEITEMS-LENGTH-ONLY',

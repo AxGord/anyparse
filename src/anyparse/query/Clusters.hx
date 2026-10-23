@@ -18,12 +18,13 @@ typedef ClusterHub = {
 }
 
 /**
- * Aggregated member-level edge: all call sites from `from` to `to`
- * collapsed into one record with their count as `weight`.
+ * Aggregated member-level edge: all call sites of one `kind` from `from`
+ * to `to` collapsed into one record with their count as `weight`.
  */
 typedef MemberEdge = {
 	var from: String;
 	var to: String;
+	var kind: EdgeKind;
 	var weight: Int;
 }
 
@@ -55,6 +56,9 @@ typedef ClusterReport = {
 	var hubs: Array<ClusterHub>;
 	var components: Array<Array<FnNode>>;
 	var hubUses: Array<HubUse>;
+
+	/** The aggregated intra-type edges the components were found over. */
+	var edges: Array<MemberEdge>;
 	var resolvedSites: Int;
 	var unresolvedSites: Int;
 }
@@ -151,6 +155,7 @@ final class Clusters {
 			hubs: hubs,
 			components: componentNodes,
 			hubUses: collectHubUses(intraEdges, componentNodes, hubIds),
+			edges: intraEdges,
 			resolvedSites: countResolvedSites(graph, memberIds),
 			unresolvedSites: countUnresolvedSites(graph, members)
 		};
@@ -222,8 +227,8 @@ final class Clusters {
 	}
 
 	/**
-	 * Collapse every kind-filtered edge between two DIFFERENT members of the
-	 * type into one weighted member-level edge, in first-seen order.
+	 * Collapse every kind-filtered edge of one kind between two DIFFERENT
+	 * members of the type into one weighted member-level edge, in first-seen order.
 	 */
 	private static function aggregateIntraEdges(graph: CallGraph, memberIds: Array<String>, kinds: Array<EdgeKind>): Array<MemberEdge> {
 		final byPair: Map<String, MemberEdge> = [];
@@ -233,12 +238,17 @@ final class Clusters {
 			final to: String = memberRoot(e.to);
 			if (from == to) continue;
 			if (!memberIds.contains(from) || !memberIds.contains(to)) continue;
-			final key: String = '$from|$to';
+			final key: String = '$from|$to|${e.kind}';
 			final existing: Null<MemberEdge> = byPair[key];
 			if (existing != null) {
 				existing.weight++;
 			} else {
-				final edge: MemberEdge = { from: from, to: to, weight: 1 };
+				final edge: MemberEdge = {
+					from: from,
+					to: to,
+					kind: e.kind,
+					weight: 1
+				};
 				byPair[key] = edge;
 				order.push(edge);
 			}

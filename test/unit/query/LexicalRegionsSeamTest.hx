@@ -115,8 +115,8 @@ class LexicalRegionsSeamTest extends Test {
 	 *  - `query/FormatConfigDiscovery.hx` — `HaxeFormatConfigDiagnostics` names the `hxformat.json`
 	 *    keys this engine does not implement, which is a fact about the HAXE formatter's config
 	 *    schema and cannot be derived from a grammar-agnostic seam.
-	 *  - `query/format/Json.hx` and `query/format/Text.hx` — the CLI's own OUTPUT renderers, which
-	 *    hand `JsonFormat.instance` and `anyparse.grammar.sexpr.SValue` / `SValueWriter` to the
+	 *  - `query/format/Json.hx`, `Text.hx`, `GraphJson.hx` and `GraphMermaid.hx` — the CLI's own OUTPUT renderers, which
+	 *    hand `JsonFormat.instance`, `anyparse.grammar.sexpr.SValue` / `SValueWriter` and a Mermaid AST to the
 	 *    generated writers. Same relation as the two config readers, in the other direction.
 	 *
 	 * Everything else must reach a grammar through `GrammarPlugin`. The last exception was
@@ -151,6 +151,8 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/check/config/ApqLintConfig.hx',
 			'src/anyparse/query/FormatConfigDiscovery.hx',
 			'src/anyparse/query/cli/CliArgs.hx',
+			'src/anyparse/query/format/GraphJson.hx',
+			'src/anyparse/query/format/GraphMermaid.hx',
 			'src/anyparse/query/format/Json.hx',
 			'src/anyparse/query/format/Text.hx'
 		];

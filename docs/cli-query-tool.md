@@ -46,9 +46,9 @@ Multi-file by construction: every scope argument is a file, a directory (walked 
 | `symbols` | `apq symbols <scope...> [options]` | top-level type declarations across a scope; `--kind` is vocabulary-checked |
 | `importers` | `apq importers <module> <scope...> [options]` | files importing a module |
 | `declares` | `apq declares <type> <scope...> [options]` | declaration site(s) of ONE type by simple name or qualified path; more than one row = ambiguous, none = not declared |
-| `callees` / `callers` | `apq callees <Type.method\|method> <file-or-dir-or-glob>... [options]` / `apq callers <Type.method\|method> <file-or-dir-or-glob>... [options]` | approximate call graph (name + declared-type resolution, virtual edges, `Ref` edges for every function used as a value, `accessor` edges for property getters / setters, `new` / `super()` reaching the `<init>` of every type whose constructor runs); a `callers` result with no edge and unresolved sites in scope SAYS it is not proof of absence |
-| `reach` | `apq reach --from <Type.method> --to <Type.method\|Type.*> <file-or-dir-or-glob>... [options]` | shortest call path per pair; `--to` repeatable |
-| `clusters` | `apq clusters <TypeName> <file-or-dir-or-glob>... [options]` | connected components over intra-type call edges after top-fan-in hubs go to a utils bucket (`--hubs N`, `0` = off); scope the type's OWN package, never the whole tree |
+| `callees` / `callers` | `apq callees <Type.method\|method> <file-or-dir-or-glob>... [options]` / `apq callers <Type.method\|method> <file-or-dir-or-glob>... [options]` | approximate call graph (name + declared-type resolution, virtual edges, `Ref` edges for every function used as a value, `accessor` edges for property getters / setters, `new` / `super()` reaching the `<init>` of every type whose constructor runs); a `callers` result with no edge and unresolved sites in scope SAYS it is not proof of absence; `--format mermaid\|json` prints the member graph the walk crossed instead of the tree (§ "Graph output") |
+| `reach` | `apq reach --from <Type.method> --to <Type.method\|Type.*> <file-or-dir-or-glob>... [options]` | shortest call path per pair; `--to` repeatable; `--format mermaid\|json` prints the member graph of the paths |
+| `clusters` | `apq clusters <TypeName> <file-or-dir-or-glob>... [options]` | connected components over intra-type call edges after top-fan-in hubs go to a utils bucket (`--hubs N`, `0` = off); scope the type's OWN package, never the whole tree; `--format mermaid\|json` prints the members grouped by component |
 | `gates` | `apq gates [<file-or-dir-or-glob>...] [--flat] [--limit N] [--mechanism <name>]` | `@:fmt(trailOptParseGate/trailOptShapeGate)` annotations + predicate names (parser-dev) |
 | `self-status` | `apq self-status [<file/dir/glob>...] [--strict] [--source]` | every `.hx` the plugin cannot parse, `SKIP <path> :: LINE:COL expected="<X>"`; `--strict` is the CI guard |
 
@@ -530,6 +530,24 @@ Node = {
 ```
 { "hits": [ { "file": "path/to/input", "annotation": "@:foo", "args": ["arg1", "arg2"],
               "decl": { "kind": "class" | ..., "name": "thingItIsAttachedTo", "span": Span } }, ... ] }
+```
+
+#### Graph output — `callees` / `callers` / `reach` / `clusters` `--format mermaid|json`
+
+The four call-graph commands print, with `--format mermaid` or `--format json`, the graph they walked instead of their text report (`--format text`, the default). The graph is one model (`anyparse.query.graph.CodeGraph`): package, type and member nodes nested by `parent`, plus `group` nodes for what an analysis partitions (a `clusters` component, the hubs); one edge per `(from, to, kind)` whose `weight` counts the sites behind it. The call graph is lifted to MEMBERS — a lambda or local function folds into the member declaring it, a further `#if` body into the first, and an edge inside one member is dropped unless it is the member calling itself (a local function's own recursion stays inside). A node's package is its file's; a call target outside the scope is `external`, with a type and no package. The nodes the query asked about (the `callees` / `callers` target, both ends of each `reach` path) are `focus`. In graph form `--depth` counts MEMBER hops: `callees` / `callers` expand each member once, at the first hop that reaches it, through every function folding into it, so a lambda or local function costs no hop (`callees M --depth 1` draws what M's lambdas call too; the text tree still counts function hops); `--limit` bounds the text tree only. A graph with no edge is the empty answer `--exit-on-empty` reports. `ImportGraph` builds the same model from the index's imports at the package or type level (the edges `kind: "import"`; an alias import counts for the type it aliases; an ambient import file counts for each package of the files it reaches, and for nothing when it reaches none), for the package map a later command prints.
+
+A node `id` is derived from its level, its qualified name and whether it is external alone — stable across runs and revisions — and is a valid Mermaid node id as it stands: `e` for an external node (so a std `String` never merges with a root-package `String` of the scope), `p_` / `t_` / `m_` / `g_`, then the name with `_` written `__`, `.` written `_d`, and any other non-alphanumeric character `_x<hex>_` (`anyparse.query.CallGraph.<init>` → `m_anyparse_dquery_dCallGraph_d_x3C_init_x3E_`).
+
+Mermaid is built as the Mermaid grammar's AST and written by `MermaidWriter` (one `flowchart LR`, a `%%` line naming the query): a node holding others is a `subgraph`, a member a rounded vertex, a type `[[…]]`, a package or group a rectangle, an external node a stadium; edges follow at the top level — `-->` call / accessor / import, `==>` new, `-.->` ref / virtual, `--o` contains — labelled by kind (not for a call or an import) and by weight above one; `classDef focus` / `classDef external` mark the nodes. Every label is `MmdLabel.Plain`, so the label codec escapes what Mermaid would read as syntax or markup (`Map<String, Int>` renders as written).
+
+JSON (`CodeGraphJson`, written by the JSON grammar's writer; nodes ordered by id, edges by source, target and kind):
+
+```
+{ "nodes": [ { "id": "m_pkg_dT_drun", "level": "package" | "type" | "member" | "group",
+               "name": "pkg.T.run", "label": "run", "parent": "t_pkg_dT" /* omitted at the top level */,
+               "external": false, "focus": true }, ... ],
+  "edges": [ { "from": "<id>", "to": "<id>",
+               "kind": "call" | "ref" | "new" | "virtual" | "accessor" | "contains" | "import", "weight": 2 }, ... ] }
 ```
 
 #### `lint --format json`
