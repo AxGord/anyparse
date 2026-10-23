@@ -188,7 +188,7 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 			final importMap: Map<String, String> = provider != null ? provider.importMap(source, violations[0].file) : [];
 			final printer: TypeRefPrinter = TypeRefPrinter.forFile(
-				source, tree, importMap, plugin, index ?? IndexScope.resolutionIndexOf(plugin)
+				violations[0].file, source, tree, importMap, plugin, index ?? IndexScope.resolutionIndexOf(plugin)
 			);
 			final edits: Array<{ span: Span, text: String }> = [];
 			walkThrows(tree, seams, false, (literal, insideConditional) -> {

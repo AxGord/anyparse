@@ -361,10 +361,11 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final shape: RefShape = plugin.refShape();
 		final locals: Array<String> = shape.localDeclKinds ?? [];
 		final tree: Null<QueryNode> = locals.length == 0 ? null : ParseGate.parseOrNull(plugin, source);
-		if (tree == null) return [];
+		final first: Null<Violation> = violations[0];
+		if (tree == null || first == null) return [];
 		final byKey: Map<String, QueryNode> = [];
 		MemberKinds.indexNodesByKind(tree, locals, byKey);
-		final printer: TypeRefPrinter = LiteralInfer.printerFor(source, tree, plugin, violations[0]?.file);
+		final printer: TypeRefPrinter = LiteralInfer.printerFor(source, tree, plugin, first.file);
 		final maxAnon: Int = maxAnonLen(violations);
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		final functions: Array<String> = [

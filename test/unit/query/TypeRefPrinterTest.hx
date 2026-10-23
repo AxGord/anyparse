@@ -117,7 +117,9 @@ class TypeRefPrinterTest extends Test {
 			{ file: 'pkg/Mod.hx', source: 'package pkg;\n\nclass Mod {}\n\ntypedef Sub = Float;\n' },
 			{ file: 'app/Host.hx', source: 'package app;\n\nimport pkg.Mod;\n\nclass Host {}\n\ntypedef Sub = Int;\n' }
 		]);
-		final p: TypeRefPrinter = printerWith('package app;\n\nimport pkg.Mod;\n\nclass Host {}\n\ntypedef Sub = Int;\n', index);
+		final p: TypeRefPrinter = printerWith(
+			'package app;\n\nimport pkg.Mod;\n\nclass Host {}\n\ntypedef Sub = Int;\n', index, 'app/Host.hx'
+		);
 		Assert.equals('Sub', p.print('app.Host.Sub').text);
 		Assert.isFalse(p.hasPendingImports());
 	}
@@ -174,7 +176,67 @@ class TypeRefPrinterTest extends Test {
 
 	public function testSameModuleSecondaryTypePrintsShort(): Void {
 		final src: String = 'package pkg;\n\nclass Host {}\n\ntypedef Sub = Int;\n';
-		Assert.equals('Sub', printer(src).print('pkg.Host.Sub').text);
+		Assert.equals('Sub', printerWith(src, null, 'pkg/Host.hx').print('pkg.Host.Sub').text);
+	}
+
+	/** The module is named by its FILE: an unrelated helper declared first does not make `Sub` look shadowed by itself. */
+	@:pin('control')
+	@:killer('M-PRINTER-MODULE-FROM-FIRST-DECL')
+	public function testSameModuleSecondaryTypeBehindAHelperPrintsShort(): Void {
+		final src: String = 'package pkg;\n\ntypedef Helper = {a:Int};\n\nclass Host {}\n\ntypedef Sub = Int;\n';
+		Assert.equals('Sub', printerWith(src, null, 'pkg/Host.hx').print('pkg.Host.Sub').text);
+	}
+
+	/** A module with no type named after its file still resolves its own types through the file's name. */
+	@:pin('control')
+	@:killer('M-PRINTER-MODULE-FROM-FIRST-DECL')
+	public function testTypeOfAModuleWithNoMainTypePrintsShort(): Void {
+		final src: String = 'package pkg;\n\ntypedef A = Int;\n\ntypedef B = Float;\n';
+		Assert.equals('B', printerWith(src, null, 'pkg/Types.hx').print('pkg.Types.B').text);
+	}
+
+	/**
+	 * A method's own type parameter takes the simple name inside the method,
+	 * so a same-package type printed there stays qualified; outside it, short.
+	 */
+	@:pin('control')
+	@:killer('M-PRINTER-TYPE-PARAM-BLIND')
+	public function testAMethodTypeParameterShadowsTheShortName(): Void {
+		final src: String =
+			'package p;\n\nclass C {\n\n\tfunction f<Holder>(h:Holder):Void {\n\t\tfinal x = 0;\n\t}\n\n\tfunction g():Void {}\n\n}\n';
+		final p: TypeRefPrinter = printerWith(src, null, 'p/C.hx');
+		Assert.equals('p.Holder', p.printTypeExpr('p.Holder', src.indexOf('final x')));
+		Assert.equals('Holder', p.printTypeExpr('p.Holder', src.indexOf('function g')));
+	}
+
+	/** A class's type parameter shadows the simple name over the whole class body, and nowhere past it. */
+	@:pin('control')
+	@:killer('M-PRINTER-TYPE-PARAM-BLIND')
+	public function testAClassTypeParameterShadowsTheShortName(): Void {
+		final src: String = 'package p;\n\nclass C<Holder> {\n\n\tfunction f():Void {\n\t\tfinal x = 0;\n\t}\n\n}\n\nclass D {\n\n'
+			+ '\tfunction g():Void {}\n\n}\n';
+		final p: TypeRefPrinter = printerWith(src, null, 'p/C.hx');
+		Assert.equals('p.Holder', p.printTypeExpr('p.Holder', src.indexOf('final x')));
+		Assert.equals('Holder', p.printTypeExpr('p.Holder', src.indexOf('function g')));
+	}
+
+	/** A local function's type parameter shadows the simple name inside that function only. */
+	@:pin('control')
+	@:killer('M-PRINTER-TYPE-PARAM-BLIND')
+	public function testALocalFunctionTypeParameterShadowsTheShortName(): Void {
+		final src: String = 'package p;\n\nclass C {\n\n\tfunction f():Void {\n\t\tfunction inner<Holder>(h:Holder):Void {\n'
+			+ '\t\t\tfinal x = 0;\n\t\t}\n\t\tfinal y = 0;\n\t}\n\n}\n';
+		final p: TypeRefPrinter = printerWith(src, null, 'p/C.hx');
+		Assert.equals('p.Holder', p.printTypeExpr('p.Holder', src.indexOf('final x')));
+		Assert.equals('Holder', p.printTypeExpr('p.Holder', src.indexOf('final y')));
+	}
+
+	/** With no print site the whole file is the scope: a type parameter of that name anywhere keeps the path qualified. */
+	@:pin('control')
+	@:killer('M-PRINTER-TYPE-PARAM-BLIND')
+	public function testATypeParameterAnywhereShadowsASitelessPrint(): Void {
+		final src: String = 'package p;\n\nclass C {\n\n\tfunction f<Holder>(h:Holder):Void {}\n\n}\n';
+		Assert.equals('p.Holder', printerWith(src, null, 'p/C.hx').print('p.Holder').text);
 	}
 
 	public function testSamePackageMainTypePrintsShort(): Void {
@@ -796,7 +858,7 @@ class TypeRefPrinterTest extends Test {
 			{ file: 'app/Main.hx', source: 'package app;\n\nclass Main {}\n\ntypedef Foo = Int;\n' }
 		]);
 		final src: String = 'package app;\n\nimport q.*;\n\nclass Main {}\n\ntypedef Foo = Int;\n';
-		Assert.equals('Foo', printerWith(src, index).print('app.Main.Foo').text, 'the module-local type wins');
+		Assert.equals('Foo', printerWith(src, index, 'app/Main.hx').print('app.Main.Foo').text, 'the module-local type wins');
 	}
 
 	// --- resolvePath: which DECLARATION a written reference names ---
@@ -849,10 +911,11 @@ class TypeRefPrinterTest extends Test {
 		Assert.isFalse(p.hasPendingImports());
 	}
 
-	private function printerWith(source: String, index: Null<SymbolIndex>): TypeRefPrinter {
+	/** A printer over `source` read as the file `file` — the path that names the module the source's own types resolve through. */
+	private function printerWith(source: String, index: Null<SymbolIndex>, file: String = 'app/C.hx'): TypeRefPrinter {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final root: QueryNode = plugin.parseFile(source);
-		return TypeRefPrinter.forFile(source, root, plugin.importMap(source), plugin, index);
+		return TypeRefPrinter.forFile(file, source, root, plugin.importMap(source), plugin, index);
 	}
 
 	private function indexOf(files: Array<{ file: String, source: String }>): SymbolIndex {
