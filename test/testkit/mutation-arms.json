@@ -30185,6 +30185,29 @@
 			"find": "if (text.indexOf('\\\\') >= 0) for (piece in ~/\\\\./g.split(text)) readings.push(piece);",
 			"replace": "",
 			"note": "a backslash never opens a string escape, so a private dotted path glued to a `\\t` in a quoted fixture passes the guard"
+		},
+		{
+			"name": "M-GRAPH-ID-UNDERSCORE-BARE",
+			"type": "anyparse.query.graph.CodeGraph",
+			"method": "idOf",
+			"find": "out.add('__')",
+			"replace": "out.add('_')",
+			"note": "a `_` is written bare, so it reads as the escape a `.` or another character opens and two names share one id (`a_d` and `a.`)"
+		},
+		{
+			"name": "M-GRAPH-LABEL-MARKUP",
+			"type": "anyparse.query.format.GraphMermaid",
+			"method": "vertex",
+			"find": "Plain(n.label)",
+			"replace": "Markup(n.label)",
+			"note": "a vertex label goes out as markup, written raw, so `Map<String, Int>` renders as HTML and reads back as no plain text"
+		},
+		{
+			"name": "M-GRAPH-LAMBDA-UNFOLDED",
+			"type": "anyparse.query.graph.MemberGraphBuilder",
+			"method": "memberRoot",
+			"force": "fnId",
+			"note": "a lambda or local function stays a node of its own instead of folding into the member that declares it"
 		}
 	]
 }

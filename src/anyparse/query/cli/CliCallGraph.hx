@@ -2,7 +2,23 @@ package anyparse.query.cli;
 
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.cli.CliArgs;
+import anyparse.query.cli.UsageFailure;
+import anyparse.query.format.GraphJson;
+import anyparse.query.format.GraphMermaid;
+import anyparse.query.graph.CodeGraph;
 import anyparse.runtime.ParseError;
+
+/**
+ * What a call-graph command prints: its text report, or the graph it walked as a Mermaid flowchart or
+ * a JSON document (`anyparse.query.graph`).
+ */
+enum abstract GraphOutput(String) {
+
+	final Text = 'text';
+	final Mermaid = 'mermaid';
+	final Json = 'json';
+
+}
 
 /**
  * The call graph `callees` / `callers` / `reach` / `clusters` all build.
@@ -73,6 +89,28 @@ final class CliCallGraph {
 			result.push(kind);
 		}
 		return result;
+	}
+
+	/** Parse a `--format text|mermaid|json` value of a call-graph command; an unknown one is a `UsageFailure`. */
+	public static function parseGraphOutput(value: String): GraphOutput {
+		return switch value {
+			case 'text': Text;
+			case 'mermaid': Mermaid;
+			case 'json': Json;
+			case _: throw new UsageFailure('unknown --format "$value" (text, mermaid, json)');
+		};
+	}
+
+	/** Print `graph` as `output` asks — Mermaid with `caption` as its comment line, or JSON. */
+	public static function printGraph(output: GraphOutput, graph: CodeGraph, caption: String): Void {
+		switch output {
+			case Mermaid:
+				CliIo.sysPrint(GraphMermaid.write(graph, caption));
+			case Json:
+				CliIo.sysPrint(GraphJson.write(graph));
+			case Text:
+				throw new Exception('the text report of a call-graph command is its own');
+		}
 	}
 
 }
