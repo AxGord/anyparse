@@ -215,7 +215,7 @@ final class Patch {
 		final seen: Array<Int> = [];
 		for (edit in sorted) {
 			final doc: Null<Span> = enclosingDoc(source, comments, edit.span.from) ?? docBlockAbove(
-				source, comments, declGroupStart(source, tree, edit.span.from)
+				source, comments, declGroupStart(source, tree, edit.span.from, shape)
 			);
 			if (doc == null || seen.contains(doc.to)) continue;
 			seen.push(doc.to);
@@ -258,7 +258,9 @@ final class Patch {
 			//   read off that REGION, not the container, because a container grows for reasons that
 			//   have nothing to do with this doc.
 			final stands: Bool = siblingDeclares(after, owner, w.owner, shape);
-			final took: Bool = siblingDeclares(tree, w.node, now, shape);
+			// A documented declaration inside a region also hands the doc on past the region itself.
+			final top: QueryNode = regionTop(tree, w.node, shape);
+			final took: Bool = siblingDeclares(tree, w.node, now, shape) || siblingDeclares(tree, top, now, shape);
 			final grew: Bool = w.declared >= 0 && declsInRegion(after, owner, new Span(docEnd, w.ownerEnd)) > w.declared;
 			if (stands || took || grew) return transferRefusal(w.owner, now, stands, took);
 		}
@@ -353,17 +355,29 @@ final class Patch {
 	 * separated from its declaration by `@:noCompletion` was invisible — the guard passed an
 	 * insert-ahead that orphaned the doc AND the metadata onto the insertion.
 	 */
-	private static function declGroupStart(source: String, tree: QueryNode, at: Int): Int {
+	private static function declGroupStart(source: String, tree: QueryNode, at: Int, shape: RefShape): Int {
 		var from: Int = at;
 		while (from < source.length && SourceText.isSpace(source.fastCodeAt(from))) from++;
 		final node: Null<QueryNode> = outermostAt(tree, from);
 		if (node == null) return from;
 		final span: Null<Span> = node.span;
+		if (span == null) return from;
 		// The RUN start, not `declGroupSpan`'s: that function no longer walks forward
 		// off an annotation, so it answers an annotation's own offset — and this guard
 		// then looked for a `/**` directly above the SECOND annotation of a run, found
 		// the first one, and let a doc-stealing insert through at rc 0.
-		return span == null ? from : ElementSpan.declRunStart(node, TreePath.parentOf(tree, node), span);
+		var current: QueryNode = node;
+		var start: Int = ElementSpan.declRunStart(node, TreePath.parentOf(tree, node), span);
+		// A run that opens a conditional region is documented by the doc above the REGION, so
+		// the lookup climbs out of every region whose first element it is.
+		while (true) {
+			final parent: Null<QueryNode> = TreePath.parentOf(tree, current);
+			final parentSpan: Null<Span> = parent?.span;
+			if (parent == null || parentSpan == null || !CondRegionScan.isConditionalKind(parent.kind, shape)) return start;
+			if (parent.children[0].span?.from != start) return start;
+			current = parent;
+			start = ElementSpan.declRunStart(parent, TreePath.parentOf(tree, parent), parentSpan);
+		}
 	}
 
 	/**
@@ -430,19 +444,44 @@ final class Patch {
 		if (resolved == null || resolved.span?.from != at) return null;
 		final node: QueryNode = resolved;
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
-		final owner: Null<QueryNode> = parent == null ? node : ElementSpan.declAfterPrefixRun(node, parent);
-		return owner == null ? null : regionOwner(owner, shape);
+		return parent == null ? regionOwner(node, shape) : firstOwnerFrom(parent, parent.children.indexOf(node), shape);
 	}
 
 	/**
 	 * The declaration a doc block above a conditional-compilation region documents: the first one in
-	 * the region, past the region's own modifier run, through any nested region. The region itself has
-	 * no name, and reading it as the owner left the doc unwatched on both sides of the splice.
+	 * the region, past the region's own modifier run, through any nested region; null when the region
+	 * declares nothing. The region itself has no name, and reading it as the owner left the doc
+	 * unwatched on both sides of the splice.
 	 */
-	private static function regionOwner(node: QueryNode, shape: RefShape): QueryNode {
-		if (!CondRegionScan.isConditionalKind(node.kind, shape) || node.children.length == 0) return node;
-		final first: Null<QueryNode> = ElementSpan.declAfterPrefixRun(node.children[0], node);
-		return first == null ? node : regionOwner(first, shape);
+	private static function regionOwner(node: QueryNode, shape: RefShape): Null<QueryNode> {
+		return CondRegionScan.isConditionalKind(node.kind, shape) ? firstOwnerFrom(node, 0, shape) : node;
+	}
+
+	/**
+	 * The first declaration among `parent`'s children from index `from` on, through the regions it
+	 * meets, or null. A region that declares nothing documents nothing itself: Haxe attaches a doc above
+	 * `#if js #end` to the declaration after it, so the walk goes past such a region.
+	 */
+	private static function firstOwnerFrom(parent: QueryNode, from: Int, shape: RefShape): Null<QueryNode> {
+		var i: Int = from;
+		while (i >= 0 && i < parent.children.length) {
+			final next: Null<QueryNode> = ElementSpan.declAfterPrefixRun(parent.children[i], parent);
+			if (next == null) return null;
+			final inner: Null<QueryNode> = regionOwner(next, shape);
+			if (inner != null) return inner;
+			i = parent.children.indexOf(next) + 1;
+		}
+		return null;
+	}
+
+	/** `node`, or the outermost conditional region holding it — the element a doc above that region sits before. */
+	private static function regionTop(tree: QueryNode, node: QueryNode, shape: RefShape): QueryNode {
+		var top: QueryNode = node;
+		while (true) {
+			final parent: Null<QueryNode> = TreePath.parentOf(tree, top);
+			if (parent == null || !CondRegionScan.isConditionalKind(parent.kind, shape)) return top;
+			top = parent;
+		}
 	}
 
 	/**

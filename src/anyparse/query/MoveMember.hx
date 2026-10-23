@@ -632,7 +632,7 @@ final class MoveMember {
 				final at: Span = hit.span;
 				final inCut: Bool = file == prep.srcFile && insideAnyCut(prep, at.from);
 				final inDest: Bool = file == prep.destFile && at.from >= prep.destDecl.fullSpan.from && at.to <= prep.destDecl.fullSpan.to;
-				final edit: { span: Span, text: String } = (inCut || inDest) && landsBare(prep, source, at, m.name)
+				final edit: { span: Span, text: String } = (inCut || inDest) && landsBare(prep, source, tree, at, m.name)
 					? { span: new Span(at.from, at.to + 1), text: '' }
 					: { span: at, text: hit.text };
 				if (inCut) {
@@ -652,12 +652,14 @@ final class MoveMember {
 
 	/**
 	 * Whether a qualified reference to the moved static `name` that lands INSIDE the destination type
-	 * drops its qualifier: there the member is the type's own, and `B.util()` inside `B` is noise. Kept
-	 * when the receiver is not followed by the `.` it ends with, and whenever a binder anywhere in the
-	 * destination type or in a moved member spells `name` — bare, the name would read that binder.
+	 * drops its qualifier: there the member is the type's own, and `B.util()` inside `B` is noise. Kept when
+	 * the receiver is not followed by the `.` it ends with, when it sits in a reification — which binds
+	 * where the macro is CALLED, not where it is written — and whenever a binder anywhere in the
+	 * destination type or in a moved member spells `name`, since bare the name would read that binder.
 	 */
-	private static function landsBare(prep: MovePrep, source: String, receiver: Span, name: String): Bool {
+	private static function landsBare(prep: MovePrep, source: String, tree: QueryNode, receiver: Span, name: String): Bool {
 		if (receiver.to >= source.length || source.fastCodeAt(receiver.to) != '.'.code) return false;
+		if (insideReification(tree, receiver.from, prep.shape.opaqueKinds ?? [])) return false;
 		final roots: Array<QueryNode> = [prep.destDecl.declNode].concat([for (m in prep.moved) m.group.member]);
 		for (root in roots) {
 			if (BinderScan.boundNames(root, prep.shape).contains(name)) return false;
@@ -665,6 +667,13 @@ final class MoveMember {
 			if (invisible == null || invisible.contains(name)) return false;
 		}
 		return true;
+	}
+
+	/** Whether `offset` lies inside a reification (`RefShape.opaqueKinds`) anywhere in `tree`. */
+	private static function insideReification(tree: QueryNode, offset: Int, opaqueKinds: Array<String>): Bool {
+		final span: Null<Span> = tree.span;
+		if (span != null && (offset < span.from || offset >= span.to)) return false;
+		return span != null && opaqueKinds.contains(tree.kind) || tree.children.exists(c -> insideReification(c, offset, opaqueKinds));
 	}
 
 	/**

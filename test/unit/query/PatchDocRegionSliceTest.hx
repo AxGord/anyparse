@@ -1,10 +1,7 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Patch;
 import anyparse.query.ReplaceNode;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `Patch.patchNode`'s doc guard where the documented declaration is not a plain sibling: the
@@ -16,6 +13,8 @@ class PatchDocRegionSliceTest extends Test {
 	private static final ABOVE_REGION: String = 'class D {\n\t/**\n\t * About b.\n\t */\n\t#if foo\n\tpublic var b:Int;\n\t#end\n}\n';
 	private static final LAST_DOCUMENTED: String =
 		'class F {\n\tpublic var a:Int;\n\n\t/**\n\t * About b.\n\t */\n\tpublic var b:Int;\n}\n';
+	private static final TWIN_REGION: String = 'class C {\n\t/** Doc of f. */\n\t#if js\n\tpublic function f() {}\n\t#else\n'
+		+ '\tpublic function f() {}\n\t#end\n\n\tpublic function g() {}\n}\n';
 
 	/**
 	 * Deleting the documented declaration above a conditional region hands its doc to the region's
@@ -51,6 +50,66 @@ class PatchDocRegionSliceTest extends Test {
 		assertApplied(
 			ABOVE_REGION, 'D', 'public var b:Int;', 'public var bb:Int;',
 			'class D {\n\t/**\n\t * About b.\n\t */\n\t#if foo\n\tpublic var bb:Int;\n\t#end\n}\n'
+		);
+	}
+
+	/**
+	 * A doc above nested regions documents the first declaration of the innermost first branch, and
+	 * an insertion ahead of it there takes the doc.
+	 *
+	 * CONTROL for the nested-region descent. KILLED by arm `M-PATCH-DOC-NESTED-REGION-UNREAD`.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-DOC-NESTED-REGION-UNREAD')
+	public function testInsertingInsideANestedDocumentedRegionRefused(): Void {
+		final source: String = 'class C {\n\t/** Doc of f. */\n\t#if sys\n\t#if neko\n\tpublic function f() {}\n\t#end\n'
+			+ '\tpublic function g() {}\n\t#end\n}\n';
+		assertRefused(
+			source, 'C', '#if neko\n\tpublic function f() {}', '#if neko\n\tpublic function h() {}\n\n\tpublic function f() {}',
+			'moves the `/**` block above `f` onto `h`'
+		);
+	}
+
+	/**
+	 * The same one level up: an insertion at the head of the documented region's first branch takes
+	 * the doc, though no doc sits directly above the run the fragment starts at.
+	 *
+	 * CONTROL for the climb out of the region. KILLED by arm `M-PATCH-DOC-NESTED-REGION-UNREAD`.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-DOC-NESTED-REGION-UNREAD')
+	public function testInsertingAtTheHeadOfADocumentedRegionRefused(): Void {
+		assertRefused(
+			ABOVE_REGION, 'D', 'public var b:Int;', 'public var y:Int;\n\n\tpublic var b:Int;', 'moves the `/**` block above `b` onto `y`'
+		);
+	}
+
+	/**
+	 * Deleting a whole documented region hands its doc to the declaration after it — the same
+	 * transfer as deleting a documented member, with the documented declaration inside the region.
+	 *
+	 * CONTROL for the region-level transfer. KILLED by arm `M-PATCH-DOC-REGION-SIBLINGS-INNER`.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-DOC-REGION-SIBLINGS-INNER')
+	public function testDeletingADocumentedRegionRefused(): Void {
+		assertRefused(
+			TWIN_REGION, 'C', '#if js\n\tpublic function f() {}\n\t#else\n\tpublic function f() {}\n\t#end\n\n\t', '',
+			'moves the `/**` block above `f` onto `g`'
+		);
+	}
+
+	/**
+	 * Emptying the documented region leaves the doc above nothing but `#if js #else #end`, which Haxe
+	 * attaches to `g`.
+	 *
+	 * CONTROL for the empty region. KILLED by arm `M-PATCH-DOC-EMPTY-REGION-OWNS`.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-DOC-EMPTY-REGION-OWNS')
+	public function testEmptyingADocumentedRegionRefused(): Void {
+		assertRefused(
+			TWIN_REGION, 'C', 'public function f() {}\n\t#else\n\tpublic function f() {}', '', 'moves the `/**` block above `f` onto `g`'
 		);
 	}
 

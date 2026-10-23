@@ -3245,7 +3245,7 @@
 			"name": "M-PATCH-NEW-OWNER-PREDECLARED-UNCHECKED",
 			"type": "anyparse.query.Patch",
 			"method": "docOrphanRefusal",
-			"find": "final took: Bool = siblingDeclares(tree, w.node, now, shape);",
+			"find": "final took: Bool = siblingDeclares(tree, w.node, now, shape) || siblingDeclares(tree, top, now, shape);",
 			"replace": "final took: Bool = false;",
 			"note": "a doc whose new owner was already declared in the container reads as a rename, so deleting the documented declaration leaves its doc on the next one at rc 0"
 		},
@@ -29812,9 +29812,9 @@
 		{
 			"name": "M-PATCH-DOC-REGION-OWNER-UNREAD",
 			"type": "anyparse.query.Patch",
-			"method": "docOwnerNode",
-			"find": "return owner == null ? null : regionOwner(owner, shape);",
-			"replace": "return owner;",
+			"method": "regionOwner",
+			"find": "return CondRegionScan.isConditionalKind(node.kind, shape) ? firstOwnerFrom(node, 0, shape) : node;",
+			"replace": "return node;",
 			"note": "a doc above a conditional-compilation region resolves to the region, which has no name, so the guard watches nothing"
 		},
 		{
@@ -29832,6 +29832,38 @@
 			"find": "&& SourceComments.ownLineCommentAbove(source, comments, dropSpan.from, false) >= 0",
 			"replace": "&& false",
 			"note": "the later-read fix deletes a capture under an own-line comment, which then documents whatever statement followed it"
+		},
+		{
+			"name": "M-MOVE-MEMBER-REIFICATION-BARED",
+			"type": "anyparse.query.MoveMember",
+			"method": "landsBare",
+			"find": "if (insideReification(tree, receiver.from, prep.shape.opaqueKinds ?? [])) return false;",
+			"replace": "",
+			"note": "a qualified reference inside a macro reification lands bare, and binds wherever the macro is called"
+		},
+		{
+			"name": "M-PATCH-DOC-NESTED-REGION-UNREAD",
+			"type": "anyparse.query.Patch",
+			"method": "declGroupStart",
+			"find": "if (parent.children[0].span?.from != start) return start;",
+			"replace": "return start;",
+			"note": "the descent stops at a region's first child when that child is itself a region, so a doc above nested regions is watched against the inner region, which has no name"
+		},
+		{
+			"name": "M-PATCH-DOC-REGION-SIBLINGS-INNER",
+			"type": "anyparse.query.Patch",
+			"method": "docOrphanRefusal",
+			"find": "|| siblingDeclares(tree, top, now, shape)",
+			"replace": "",
+			"note": "a doc's owner inside a region is compared against its siblings in the region, so deleting the whole region hands the doc to the next declaration as if renamed"
+		},
+		{
+			"name": "M-PATCH-DOC-EMPTY-REGION-OWNS",
+			"type": "anyparse.query.Patch",
+			"method": "firstOwnerFrom",
+			"find": "if (inner != null) return inner;",
+			"replace": "return inner ?? next;",
+			"note": "a region that declares nothing is read as the doc's owner, so emptying the documented region hands the doc to the next declaration as if renamed"
 		}
 	]
 }

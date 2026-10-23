@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.MoveMember;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;
@@ -61,6 +58,30 @@ class MoveMemberQualifySliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic static function go(util:Int):Int return A.util(util);\n}';
 		final newB: String = movedSource('A', 'util', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }], 'pkg/B.hx');
 		Assert.isTrue(newB.contains('return B.util(util);'), 'the shadowed caller must stay qualified:\n$newB');
+	}
+
+	/**
+	 * A reference inside a macro reification is resolved where the macro is CALLED, not where it is
+	 * written, so the destination's own member is no evidence there: spelled bare it rebinds to
+	 * whatever the call site calls `util`. The qualifier stays.
+	 */
+	@:pin('control')
+	@:killer('M-MOVE-MEMBER-REIFICATION-BARED')
+	public function testQualifiedCallerInsideAReificationStaysQualified(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x + 1;\n}';
+		final b: String = 'package pkg;\n\nimport haxe.macro.Expr;\n\nclass B {\n'
+			+ '\tpublic static macro function m():Expr return macro pkg.A.util(1) + A.util(10);\n}';
+		final newB: String = movedSource('A', 'util', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }], 'pkg/B.hx');
+		Assert.isTrue(newB.contains('macro pkg.B.util(1) + B.util(10)'), 'the reified references must stay qualified:\n$newB');
+	}
+
+	/** The same inside a moved member's own reification: the moved macro's body is spliced at its call site. */
+	public function testMovedReificationKeepsItsQualifier(): Void {
+		final a: String = 'package pkg;\n\nimport haxe.macro.Expr;\n\nclass A {\n\tpublic static function util(x:Int):Int return x + 1;\n\n'
+			+ '\tpublic static macro function m():Expr return macro A.util(1);\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final newB: String = movedSource('A', 'util,m', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }], 'pkg/B.hx');
+		Assert.isTrue(newB.contains('macro B.util(1)'), 'the moved reification must stay qualified:\n$newB');
 	}
 
 	private static function movedSource(
