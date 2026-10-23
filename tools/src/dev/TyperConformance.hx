@@ -136,6 +136,7 @@ final class TyperConformance {
 		final list: Bool = args.remove('--list');
 		final report: Report = new Report(list, args.remove('--census'));
 		var gated: Bool = false;
+		var refused: Array<String> = [];
 		switch args {
 			case ['upstream', clone]:
 				upstream(clone, report);
@@ -145,32 +146,59 @@ final class TyperConformance {
 				facts(configuration, report);
 			case ['probes']:
 				gated = true;
-				probes(Path.join([Repo.resolve(null), PROBES_DIR]), report);
+				refused = probes(Path.join([Repo.resolve(null), PROBES_DIR]), report);
 			case ['probes', dir]:
 				gated = true;
-				probes(dir, report);
+				refused = probes(dir, report);
 			case _:
 				Sys.println(USAGE);
 				return 2;
 		}
 		report.print();
-		// the probe corpus is a gate: one answer that is not the compiler's fails it
-		return gated && report.differences() > 0 ? 1 : 0;
+		for (r in refused) Sys.println('REFUSED  $r');
+		// the probe corpus is a gate: one answer that is not the compiler's fails it, and so does a project it could not read
+		return gated && (report.differences() > 0 || refused.length > 0) ? 1 : 0;
+	}
+
+	/**
+	 * Why a probe project's run is no reading of the typer, or null when it is one: a configuration the compiler dropped (a
+	 * type error, a compiler that did not start), none compiled, no project file compiled, or no case scored. A run that
+	 * read nothing has no DIFFERENT to show, so a gate counting DIFFERENT alone would pass it.
+	 */
+	public static function probeRefusal(run: FactsRun): Null<String> {
+		return if (run.dropped.length > 0)
+			'a configuration did not compile (${run.dropped.join('; ')})'
+		else if (run.configurations == 0)
+			'no configuration compiled'
+		else if (run.compiled == 0)
+			'0 of ${run.files} project files compiled'
+		else if (run.cases == 0)
+			'no case was scored'
+		else
+			null;
 	}
 
 	/**
 	 * Every probe project under `dir` — each directory holding an `apqlint.json` that names a compiler oracle — run as
 	 * `facts` in it, into one report: shapes no census tree holds, each compiled by the compiler and asked of the typer.
+	 * Returns one line per project whose run is no reading (`probeRefusal`), each printed as it is found.
 	 */
-	private static function probes(dir: String, report: Report): Void {
+	private static function probes(dir: String, report: Report): Array<String> {
 		final start: String = Sys.getCwd();
-		final names: Array<String> = FileSystem.readDirectory(dir).filter(n -> FileSystem.exists(Path.join([dir, n, 'apqlint.json'])));
+		final root: String = FileSystem.fullPath(dir);
+		final names: Array<String> = FileSystem.readDirectory(root).filter(n -> FileSystem.exists(Path.join([root, n, 'apqlint.json'])));
 		names.sort(Reflect.compare);
+		final refused: Array<String> = [];
 		for (name in names) {
-			Sys.setCwd(Path.join([dir, name]));
-			facts(null, report);
+			Sys.setCwd(Path.join([root, name]));
+			final why: Null<String> = try probeRefusal(facts(null, report)) catch (e: Exception) 'the run threw: ${e.message}';
+			if (why == null) continue;
+			refused.push('$name: $why');
+			Sys.println('probes: $name is no reading — $why');
 		}
 		Sys.setCwd(start);
+		if (names.length == 0) refused.push('no probe project under $root');
+		return refused;
 	}
 
 	/** The display and misc suites of the clone at `clone`. */
@@ -371,8 +399,12 @@ final class TyperConformance {
 		return false;
 	}
 
-	/** Every range the compiler typed in the project in the working directory, asked of the typer. */
-	private static function facts(configuration: Null<String>, report: Report): Void {
+	/**
+	 * Compiles the project in the working directory with the facts hook and scores every case of it into `report`; what the
+	 * run read — the configurations that compiled and those dropped, the files, the cases — is returned, so a caller that
+	 * gates on the reading can refuse one that read nothing (`probeRefusal`).
+	 */
+	private static function facts(configuration: Null<String>, report: Report): FactsRun {
 		final config: LintConfig = LintConfig.discover(Path.join([Sys.getCwd(), 'TyperConformance.hx']));
 		final project: Array<{ file: String, source: String }> = [];
 		for (root in config.resolutionRoots()) collect(root, project);
@@ -388,11 +420,18 @@ final class TyperConformance {
 		};
 		if (oracle == null) {
 			Sys.println('facts: no configuration compiled');
-			return;
+			return {
+				configurations: 0,
+				dropped: [for (o in asked) '${o.hxml}: no facts'],
+				files: project.length,
+				compiled: 0,
+				cases: 0
+			};
 		}
 		Sys.println('facts: configurations ${oracle.facts.configurations}, dropped ${oracle.facts.dropped}');
 		final index: SymbolIndex = IndexScope.over(project.concat(library), plugin, [for (f in library) f.file]);
 		final aliases: Map<String, Array<Array<String>>> = typedefTargets(oracle);
+		final before: Int = report.scored();
 		var compiledFiles: Int = 0;
 		for (f in project) {
 			final key: String = FileSystem.fullPath(f.file);
@@ -402,6 +441,13 @@ final class TyperConformance {
 			typer.visit(factsCase.bind(report, oracle, aliases, key, f.file, typer));
 		}
 		Sys.println('facts: ${project.length} project files under ${config.resolutionRoots()}, $compiledFiles of them compiled');
+		return {
+			configurations: oracle.facts.configurations.length,
+			dropped: [for (d in oracle.facts.dropped) '${d.name}: ${d.reason}'],
+			files: project.length,
+			compiled: compiledFiles,
+			cases: report.scored() - before
+		};
 	}
 
 	/** The libraries and the standard library the project in `config` resolves against, its own files left out. */
@@ -1048,6 +1094,24 @@ private typedef UnknownCause = {
 	final detail: String;
 }
 
+/** What one `facts` run read (`TyperConformance.probeRefusal`). */
+typedef FactsRun = {
+	/** The configurations the compiler compiled with the facts hook. */
+	final configurations: Int;
+
+	/** Each configuration it dropped, with the reason. */
+	final dropped: Array<String>;
+
+	/** The project's files. */
+	final files: Int;
+
+	/** The project files some configuration compiled. */
+	final compiled: Int;
+
+	/** The cases scored, every verdict counted. */
+	final cases: Int;
+}
+
 /**
  * The roots of the UNKNOWN answers of one `FileTyper` (`--census`): from the expression asked through what it is made
  * of — an identifier to its binding, a call to its callee, a member access to its receiver, a declaration to its
@@ -1650,6 +1714,13 @@ private final class Report {
 		}
 		for (d in _different) Sys.println('DIFFERENT  $d');
 		if (_census) printCensus();
+	}
+
+	/** How many cases were scored, every area summed: a match, an unknown or a different answer. */
+	public function scored(): Int {
+		var total: Int = 0;
+		for (area in _areas) total += counts(area)[0];
+		return total;
 	}
 
 	/**

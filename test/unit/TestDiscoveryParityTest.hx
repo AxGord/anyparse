@@ -530,6 +530,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.dev.JvmProbeTest',
 		'unit.dev.LintWarnTest',
 		'unit.dev.ScrubGuardTest',
+		'unit.dev.TyperConformanceTest',
 		'unit.dev.WorkerBuildTest',
 		'unit.devkit.ArgsTest',
 		'unit.devkit.CmdTest',
