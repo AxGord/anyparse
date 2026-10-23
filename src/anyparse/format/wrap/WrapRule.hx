@@ -11,8 +11,9 @@ package anyparse.format.wrap;
  *
  * `location` (optional) selects operator placement on continuation
  * lines for chain emission shapes that break across lines
- * (`OnePerLineAfterFirst`, `OnePerLine`, `FillLine`). When unset, the parent
- * `WrapRules.defaultLocation` applies. Has no effect on `NoWrap` rules
+ * (`OnePerLineAfterFirst`, `OnePerLine`, `FillLine`). When unset, a matched rule
+ * places the operator `AfterLast` — the parent `WrapRules.defaultLocation`
+ * answers only when no rule matches. Has no effect on `NoWrap` rules
  * or on delimited-list shapes (`WrapList.emit`) — only the chain emit
  * (`BinaryChainEmit`) currently consumes it. Mirrors haxe-formatter's
  * per-rule `location` field in `WrapConfig.hx`.

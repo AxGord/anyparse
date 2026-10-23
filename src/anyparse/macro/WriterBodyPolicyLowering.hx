@@ -349,10 +349,19 @@ final class WriterBodyPolicyLowering {
 		final ifExprIndentArgs: Null<Array<String>> = opts.ifExprIndentArgs;
 		final bodyValueExpr: Expr = opts.bodyValueExpr;
 		if (opts.widthAware == true) {
+			// `same` keeps the value on the keyword line. Only a value whose NATURAL glued first line
+			// still overflows, wrapped as it would render there, moves to the next line — a flat-width
+			// probe would move every value that wraps after its head. A control-flow or block value
+			// (the ctors `bodyPolicySingleLine` names) always stays: it is told apart by its ctor, not
+			// by a Doc shape a kept source break can change.
 			final flatBody: Expr = wrapIfExprNest(macro _bodyW, ifExprIndentArgs, bodyValueExpr);
+			final ctorExpr: Expr = macro Type.enumConstructor($bodyValueExpr);
+			var isBlockValue: Expr = macro false;
+			for (ctorName in opts.singleLineMultiCtors ?? []) isBlockValue = macro $isBlockValue || $ctorExpr == $v{ctorName};
 			return macro {
 				final _bodyW: anyparse.core.Doc = $writeCall;
-				_difle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _dc([$sameSepNb, $flatBody]));
+				final _gluedW: anyparse.core.Doc = _dc([$sameSepNb, $flatBody]);
+				$isBlockValue ? _gluedW : _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _gluedW);
 			};
 		}
 		final flatBody: Expr = wrapIfExprNest(writeCall, ifExprIndentArgs, bodyValueExpr);
