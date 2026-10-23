@@ -442,17 +442,23 @@ final class LintFixVerify {
 			if (unavailable == null && cached == null) compile.push(i);
 		}
 		final pending: Array<OracleConfig> = [for (i in compile) oracles[i]];
-		final compiled: Array<OracleOutcome> = !warmServer || EnvFlag.isSet('APQ_NO_ORACLE_SERVER') ? [
-			for (outcome in CompilerOracle.typecheckEach(pending, false)) outcome ?? Unavailable('the typecheck was cancelled')
-		] : [for (oracle in pending) compiledOracleVerdict(oracle, paths)];
+		// the cold compiles print what they parse, so a verdict is kept only when each file it read is one the fingerprint hashed
+		final compiled: Array<OracleReading> = !warmServer || EnvFlag.isSet('APQ_NO_ORACLE_SERVER')
+			? CompilerOracle.typecheckEachReading(pending, false)
+			: [
+				for (oracle in pending) { outcome: compiledOracleVerdict(oracle, paths), parsed: null }
+			];
 		for (k in 0...compile.length) {
 			final i: Int = compile[k];
-			outcomes[i] = compiled[k];
+			final outcome: OracleOutcome = compiled[k].outcome ?? Unavailable('the typecheck was cancelled');
+			outcomes[i] = outcome;
 			final fingerprint: Null<String> = fingerprints[i];
 			// stored only while the input still hashes as it did before the compile: a tree that moved meanwhile
 			// produced a verdict about neither state
 			if (fingerprint != null)
-				OracleCache.storeIfUnchanged(oracles[i].hxml, oracles[i].dir, fingerprint, compiled[k], oracles[i].defines, after);
+				OracleCache.storeIfUnchanged(
+					oracles[i].hxml, oracles[i].dir, fingerprint, outcome, oracles[i].defines, after, compiled[k].parsed
+				);
 		}
 		return [for (outcome in outcomes) outcome ?? Unavailable('no verdict was taken')];
 	}

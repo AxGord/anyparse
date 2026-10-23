@@ -346,11 +346,13 @@ final class OracleCacheTest extends Test {
 			skipNoFingerprint(dir);
 			return;
 		}
+		final read: Array<String> = ['$dir/Good.hx'];
 		File.saveContent('$dir/Good.hx', BROKEN);
-		Assert.isFalse(OracleCache.storeIfUnchanged(hxml, dir, before, Confirmed), 'the tree moved: nothing is stored');
+		Assert.isFalse(OracleCache.storeIfUnchanged(hxml, dir, before, Confirmed, null, null, read), 'the tree moved: nothing is stored');
 		Assert.isNull(OracleCache.lookup(hxml, dir, before), 'so the old tree has no verdict to hand out');
 		Assert.isTrue(
-			OracleCache.storeIfUnchanged(hxml, dir, OracleCache.fingerprint(hxml, dir) ?? '', Rejected('x')), 'an unmoved one is'
+			OracleCache.storeIfUnchanged(hxml, dir, OracleCache.fingerprint(hxml, dir) ?? '', Rejected('x'), null, null, read),
+			'an unmoved one is'
 		);
 		CliFixture.removeDir(dir);
 		#else

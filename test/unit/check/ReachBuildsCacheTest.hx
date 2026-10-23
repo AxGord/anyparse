@@ -10,8 +10,6 @@ import anyparse.check.ReachBuildsCache;
 import anyparse.query.Cli;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The builds an oracle run probed, read back by a run that compiles nothing (`--no-oracle`) only while the compile input
@@ -29,6 +27,14 @@ class ReachBuildsCacheTest extends Test {
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static final RULES: String =
 		'"resolutionRoots":["."],"reachConfigurationsComplete":true,"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}';
+	private static final GEN_HXML: String = '-cp .\n--macro addClassPath(\'.gen\')\n--macro Extra.init()\n-main Main\n--interp\n';
+	private static final GEN: { name: String, source: String } = {
+		name: '.gen/Extra.hx',
+		source: 'class Extra {\n\tpublic static function init():Void {}\n}\n'
+	};
+	private static final GEN_DEFINING: String =
+		'class Extra {\n\tpublic static function init():Void\n\t\thaxe.macro.Compiler.define(\'flash\', \'1\');\n}\n';
+	private static final DEEP_PACKAGE: String = [for (_ in 0...33) 'a'].join('.');
 	#end
 
 	/**
@@ -62,7 +68,7 @@ class ReachBuildsCacheTest extends Test {
 		File.saveContent('$dir/W.hx', '$MAKER// edited\n');
 		Assert.isTrue(sleeps(dir, true), 'an edited source');
 		File.saveContent('$dir/W.hx', MAKER);
-		Assert.isFalse(sleeps(dir, true), 'the source restored');
+		Assert.isTrue(sleeps(dir, true), 'the source restored still misses: its modification time moved, so nothing is hashed');
 		File.saveContent('$dir/check.hxml', '$HXML-D apq_reach_edited\n');
 		Assert.isTrue(sleeps(dir, true), 'an edited hxml');
 		File.saveContent('$dir/check.hxml', HXML);
@@ -100,7 +106,7 @@ class ReachBuildsCacheTest extends Test {
 	 * A build that parsed a file outside the directories the fingerprint walked is not stored, since that file can change
 	 * with no fingerprint changing; and a stored library source that no longer hashes as it did is not read.
 	 */
-	@:pin('control') @:killer('M-REACH-ROOTS-UNCHECKED') @:killer('M-REACH-LIBRARY-UNCHECKED')
+	@:pin('control') @:killer('M-REACH-HASHED-UNCHECKED') @:killer('M-REACH-LIBRARY-UNCHECKED')
 	public function testAReadTheFingerprintCannotSeeIsNeitherStoredNorRead(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('roots', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}');
@@ -128,16 +134,96 @@ class ReachBuildsCacheTest extends Test {
 		#end
 	}
 
+	/**
+	 * A file the compile reads that the fingerprint does not hash — in a dot directory under the root, which a
+	 * `--macro addClassPath` reaches, or nested past the walk's depth — can change with no fingerprint changing: the builds
+	 * of a compile that read one are not stored, so an edit to it is never answered by the builds of the old one.
+	 */
+	@:pin('control') @:killer('M-REACH-HASHED-UNCHECKED')
+	public function testABuildThatReadAnUnhashedFileIsNotStored(): Void {
+		#if nodejs
+		final dir: Null<String> = tree('dotdir', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}', GEN_HXML, [GEN]);
+		if (dir == null) return;
+		Assert.isFalse(sleeps(dir, false), 'the oracle run knows the build');
+		File.saveContent('$dir/.gen/Extra.hx', GEN_DEFINING);
+		Assert.isTrue(sleeps(dir, true), 'a macro file in a dot directory now defines the alias branch\'s flag');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('stdout capture needs the node target');
+		#end
+	}
+
+	/**
+	 * The oracle verdict cache is keyed on the same fingerprint: a verdict whose compile read a file it does not hash is not
+	 * stored, so the next oracle run compiles again; a tree whose every read is hashed reuses it.
+	 */
+	@:pin('control') @:killer('M-ORACLE-VERDICT-READS-UNCHECKED')
+	public function testAVerdictWhoseCompileReadAnUnhashedFileIsNotStored(): Void {
+		#if nodejs
+		final complete: String = '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}';
+		final plain: Null<String> = tree('verdictplain', complete);
+		if (plain == null) return;
+		Assert.isTrue(reused(plain), 'every read hashed');
+		final dot: Null<String> = tree('verdictdot', complete, GEN_HXML, [GEN]);
+		if (dot == null) return;
+		Assert.isFalse(reused(dot), 'a dot directory');
+		final deep: Null<String> = tree('verdictdeep', complete, '$HXML${DEEP_PACKAGE}.Deep\n', [
+			{ name: '${DEEP_PACKAGE.split('.').join('/')}/Deep.hx', source: 'package $DEEP_PACKAGE;\n\nclass Deep {}\n' }
+		]);
+		if (deep == null) return;
+		Assert.isFalse(reused(deep), 'past the walk depth');
+		for (d in [plain, dot, deep]) CliFixture.removeDir(d);
+		#else
+		Assert.pass('stderr capture needs the node target');
+		#end
+	}
+
+	/** A record under the right key whose shape is not the one written — a value pair that is no pair — is a miss, not a crash. */
+	@:pin('control') @:killer('M-REACH-RECORD-SHAPE-UNCHECKED')
+	public function testAMisshapenRecordIsAMiss(): Void {
+		#if (sys || nodejs)
+		final dir: Null<String> = tree('shape', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}');
+		if (dir == null) return;
+		final oracles: Array<OracleConfig> = [{ hxml: '$dir/check.hxml', dir: dir, defines: [] }];
+		final main: String = OracleCoverage.canonical(dir, 'Main.hx');
+		ReachBuildsCache.store(oracles, ReachBuildsCache.fingerprint(oracles), builds(main, main));
+		Assert.notNull(ReachBuildsCache.load(oracles), 'the record as written');
+		final path: String = ReachBuildsCache.cacheFile(oracles);
+		final record: Dynamic = haxe.Json.parse(File.getContent(path)); // noqa: avoid-dynamic
+		record.configurations[0].values = [null];
+		File.saveContent(path, haxe.Json.stringify(record));
+		Assert.isNull(ReachBuildsCache.load(oracles), 'a value pair that is null');
+		record.configurations[0].values = [];
+		record.configurations[0].defined = [1];
+		File.saveContent(path, haxe.Json.stringify(record));
+		Assert.isNull(ReachBuildsCache.load(oracles), 'a define that is no string');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Whether a second oracle lint of `dir` reuses the verdict the first one stored, compiling nothing. */
+	private static function reused(dir: String): Bool {
+		final args: Array<String> = ['lint', '--rule', 'thread-safety', dir];
+		CliFixture.captureStdout(() -> CliFixture.captureStderr(Cli.run.bind(args)));
+		var err: String = '';
+		CliFixture.captureStdout(() -> err = CliFixture.captureStderr(Cli.run.bind(args)));
+		return err.indexOf('verdict reused') >= 0;
+	}
+
 	#if (sys || nodejs)
-	/** The fixture tree with `apqlint`, or null (after passing) where no compiler typechecks it. */
-	private static function tree(name: String, apqlint: String): Null<String> {
+	/** The fixture tree with `apqlint`, `hxml` and `extra` files, or null (after passing) where no compiler typechecks it. */
+	private static function tree(
+		name: String, apqlint: String, ?hxml: String, ?extra: Array<{ name: String, source: String }>
+	): Null<String> {
 		final dir: String = CliFixture.writeTree('reachcache$name', [
 			{ name: 'lib/E.hx', source: ENUM },
 			{ name: 'W.hx', source: MAKER },
 			{ name: 'Main.hx', source: MAIN },
-			{ name: 'check.hxml', source: HXML },
+			{ name: 'check.hxml', source: hxml ?? HXML },
 			{ name: 'apqlint.json', source: apqlint }
-		]);
+		].concat(extra ?? []));
 		if (CompilerOracle.typecheck('check.hxml', dir).match(Confirmed)) return dir;
 		CliFixture.removeDir(dir);
 		Assert.pass('haxe unavailable — skipped');

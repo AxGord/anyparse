@@ -3862,8 +3862,8 @@
 			"name": "M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT",
 			"type": "anyparse.check.OracleCache",
 			"method": "storeIfUnchanged",
-			"find": "if (OracleCache.fingerprint(hxml, cwd, defines, memo) != fingerprint) return false;",
-			"replace": "",
+			"find": "if (after == null || after.fingerprint != fingerprint || !readsHashed(",
+			"replace": "if (after == null || !readsHashed(",
 			"note": "a verdict is filed under the pre-compile fingerprint even when the tree moved during the compile, so a verdict about a half-regenerated tree is handed to the next run of the complete one"
 		},
 		{
@@ -9399,8 +9399,8 @@
 		{
 			"name": "M-RUNMEMO-QUOTES-THE-VERBOSE-STREAMS",
 			"type": "anyparse.check.CompilerOracle",
-			"method": "rememberedTimed",
-			"find": "final retried: Array<Int> = verbose ? [for (k in 0...compiled.length) if (answered(runs[k]) && runs[k].status != 0) k] : [];",
+			"method": "plainRetries",
+			"find": "final retried: Array<Int> = [for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0) k];",
 			"replace": "final retried: Array<Int> = [];",
 			"note": "a failing -v baseline is quoted with its -v lines, so a rejection's text names every parsed file"
 		},
@@ -29804,8 +29804,8 @@
 		{
 			"name": "M-REACH-KEY-UNCHECKED",
 			"type": "anyparse.check.ReachBuildsCache",
-			"method": "load",
-			"find": "return now == null || now.key != record.key ? null : buildsOf(record);",
+			"method": "loadFrom",
+			"find": "return now == null || now.key != text(record['key']) ? null : buildsOf(record);",
 			"replace": "return now == null ? null : buildsOf(record);",
 			"note": "a stored record is read under whatever fingerprint the input hashes to now, so builds probed of a source since edited answer for it"
 		},
@@ -29818,20 +29818,36 @@
 			"note": "a generated hxml whose declared input changed still keys the stored builds, though the oracle run would generate it again"
 		},
 		{
-			"name": "M-REACH-ROOTS-UNCHECKED",
-			"type": "anyparse.check.ReachBuildsCache",
-			"method": "store",
-			"find": "if (!readsInside(configurations[i].parsed, key.roots[i])) return;",
-			"replace": "if (false && !readsInside(configurations[i].parsed, key.roots[i])) return;",
-			"note": "a build that parsed a file outside the directories the fingerprint walked is stored, though that file can change with no fingerprint changing"
-		},
-		{
 			"name": "M-REACH-LIBRARY-UNCHECKED",
 			"type": "anyparse.check.ReachBuildsCache",
 			"method": "buildsOf",
-			"find": "if (OracleCache.md5(read) != entry.hash) return null;",
+			"find": "if (OracleCache.md5(read) != text(entry['hash'])) return null;",
 			"replace": "if (false) return null;",
 			"note": "a stored library source is read back whatever it holds now, so an edited file outside the fingerprint answers as the one the build compiled"
+		},
+		{
+			"name": "M-REACH-HASHED-UNCHECKED",
+			"type": "anyparse.check.ReachBuildsCache",
+			"method": "store",
+			"find": "for (i in 0...oracles.length) if (!OracleCache.readsHashed(key.bases[i], configurations[i].parsed, key.hashed[i])) return;",
+			"replace": "for (i in 0...oracles.length) if (false && !OracleCache.readsHashed(key.bases[i], configurations[i].parsed, key.hashed[i])) return;",
+			"note": "a build that parsed a file the fingerprint did not hash — in a dot directory, past the walk's depth, outside every root — is stored, and an edit to that file is answered by the old build"
+		},
+		{
+			"name": "M-ORACLE-VERDICT-READS-UNCHECKED",
+			"type": "anyparse.check.OracleCache",
+			"method": "storeIfUnchanged",
+			"find": "|| !readsHashed(cwd ?? Sys.getCwd(), parsed, after.hashed)) return false;",
+			"replace": ") return false;",
+			"note": "a verdict whose compile read a file the fingerprint did not hash is stored, so an edit to that file is answered by the old verdict with no compile"
+		},
+		{
+			"name": "M-REACH-RECORD-SHAPE-UNCHECKED",
+			"type": "anyparse.check.ReachBuildsCache",
+			"method": "texts",
+			"find": "return items != null && items.foreach(item -> item is String) ? cast items : null;",
+			"replace": "return items != null ? cast items : null;",
+			"note": "a record's string lists are read whatever they hold, so a define that is no string reaches the builds"
 		}
 	]
 }

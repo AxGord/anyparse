@@ -118,16 +118,17 @@ final class OracleCommand implements CliCommand {
 				? OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, before)
 				: null
 		];
-		final outcomes: Array<Null<OracleOutcome>> = CompilerOracle.typecheckEach(ready, false);
+		// the compiles print what they parse, so a verdict is kept only when each file it read is one the fingerprint hashed
+		final readings: Array<OracleReading> = CompilerOracle.typecheckEachReading(ready, false);
 		var exit: Int = EXIT_OK;
 		final answered: Array<OracleOutcome> = [];
 		for (i in 0...ready.length) {
 			final oracle: OracleConfig = ready[i];
-			final outcome: OracleOutcome = outcomes[i] ?? Unavailable('the typecheck was cancelled');
+			final outcome: OracleOutcome = readings[i].outcome ?? Unavailable('the typecheck was cancelled');
 			answered.push(outcome);
 			final fingerprint: Null<String> = fingerprints[i];
 			final stored: Bool = fingerprint != null
-				&& OracleCache.storeIfUnchanged(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines, after);
+				&& OracleCache.storeIfUnchanged(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines, after, readings[i].parsed);
 			if (reportOracleRun(oracle, outcome) != EXIT_OK) exit = EXIT_RUNTIME;
 			if (fingerprint == null && oracle.unavailable == null)
 				CliIo.stderr('apq oracle: no fingerprint for ${OracleDeclaration.describeOracle(oracle)} — the verdict was not recorded\n');
