@@ -16,8 +16,11 @@ final class PendingRunsTest extends Test {
 	/** Megabytes a job may print — far more than an `echo` needs. */
 	private static inline final BUFFER: Int = 1024 * 1024;
 
-	/** Seconds a job is given to start and write its pid. */
-	private static inline final START_S: Float = 10;
+	/** Seconds a job is given to start and write its pid: bounds a hang, the wait ends once the pid is there. */
+	private static inline final START_S: Float = 90;
+
+	/** Seconds the tethered job sleeps: past any stall of the fixture, so only the tether or the cleanup ends it. */
+	private static inline final TETHERED_S: Int = 600;
 
 	/** The batch ran while the caller slept, so the answer is waiting when asked for, with the job's output. */
 	@:pin('control')
@@ -98,7 +101,7 @@ final class PendingRunsTest extends Test {
 			{
 				args: [],
 				cwd: dir,
-				shell: 'echo $$$$ > job.pid && exec sleep 30',
+				shell: 'echo $$$$ > job.pid && exec sleep $TETHERED_S',
 				tethered: true
 			}
 		], BUFFER, 1);
@@ -147,13 +150,13 @@ final class PendingRunsTest extends Test {
 	/** The pid written to `path`, waiting for the file to appear and fill; null when it never does. */
 	private static function awaitPid(path: String): Null<Int> {
 		final until: Float = Sys.time() + START_S;
-		while (Sys.time() < until) {
+		while (true) {
 			final text: String = sys.FileSystem.exists(path) ? StringTools.trim(sys.io.File.getContent(path)) : '';
 			final pid: Null<Int> = Std.parseInt(text);
-			if (pid != null) return pid;
+			// the look after the last sleep is taken even past the bound: a stalled fixture must not miss a pid already there
+			if (pid != null || Sys.time() >= until) return pid;
 			Sys.sleep(0.05);
 		}
-		return null;
 	}
 
 	/** The batch directories under the scratch root now. */
