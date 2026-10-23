@@ -54,16 +54,14 @@ using Lambda;
  * type ARGUMENT, so nothing available can tell `Null<Int>` from `Null<String>`.
  */
 @:nullSafety(Strict)
-final class UncheckedNullable implements Check implements NoAutofix {
+final class UncheckedNullable extends RuleBase implements NoAutofix {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'unchecked-nullable';
-	}
-
-	public function description(): String {
-		return 'a Null<T>-returning call (Std.parseInt / Std.parseFloat) whose result is used directly as a number, with no null check';
+	public function new() {
+		super(
+			'unchecked-nullable',
+			'a Null<T>-returning call (Std.parseInt / Std.parseFloat) whose result is used directly as a number, with no null check',
+			RuleCategory.NullSafety
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

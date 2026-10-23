@@ -79,7 +79,7 @@ using StringTools;
  * makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class PreferArrowCallback implements Check {
+final class PreferArrowCallback extends RuleBase {
 
 	/** Supertype-chain hop cap for the callee-signature walk. */
 	private static inline final MAX_CHAIN_DEPTH: Int = 8;
@@ -100,14 +100,8 @@ final class PreferArrowCallback implements Check {
 	private static inline final MSG_REPORT_ONLY: String =
 		'this function-literal callback may be an arrow lambda (callee signature unresolved — verify the expected return type before converting)';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-arrow-callback';
-	}
-
-	public function description(): String {
-		return 'a function-literal callback argument replaceable with an arrow lambda';
+	public function new() {
+		super('prefer-arrow-callback', 'a function-literal callback argument replaceable with an arrow lambda', RuleCategory.Expressions);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

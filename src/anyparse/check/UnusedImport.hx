@@ -124,7 +124,7 @@ private typedef ImportEvidence = {
  * and a deletion inside a conditional region would be unsafe).
  */
 @:nullSafety(Strict)
-final class UnusedImport implements Check {
+final class UnusedImport extends RuleBase {
 
 	/**
 	 * The half of a `not in lint scope` message that is the GUARD's sentence rather than the
@@ -179,14 +179,8 @@ final class UnusedImport implements Check {
 		+ 'build macro, a typedef whose target does not resolve, or a source that does not parse, so a bare constructor or module-level '
 		+ 'field of it could be the reference that keeps the import alive';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'unused-import';
-	}
-
-	public function description(): String {
-		return 'import whose bound name is never referenced in the file';
+	public function new() {
+		super('unused-import', 'import whose bound name is never referenced in the file', RuleCategory.Imports);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

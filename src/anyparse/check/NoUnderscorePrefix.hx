@@ -128,12 +128,9 @@ using StringTools;
  */
 @:nullSafety(Strict)
 @:access(anyparse.check.Naming)
-final class NoUnderscorePrefix implements Check implements DefaultOff implements ConfigAware implements FileGated implements Supersedes {
+final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements ConfigAware implements FileGated implements Supersedes {
 
 	private static inline final RULE_ID: String = 'no-underscore-prefix';
-
-	/** The rule whose silencing `_<name>` rename this one must not fight — see the class doc. */
-	private static inline final UNUSED_PARAMETER_ID: String = 'unused-parameter';
 
 	/** Whether parameters are in scope, unless an `apqlint.json` sets `params`. */
 	private static inline final DEFAULT_PARAMS: Bool = true;
@@ -161,18 +158,12 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(RULE_ID, 'a parameter, local binding or local function whose name carries a leading underscore', RuleCategory.Naming);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a parameter, local binding or local function whose name carries a leading underscore';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -469,9 +460,9 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		return {
 			params: config.boolOption(RULE_ID, 'params') ?? DEFAULT_PARAMS,
 			locals: config.boolOption(RULE_ID, 'locals') ?? DEFAULT_LOCALS,
-			// `enabledFor` too: a disabled `unused-parameter` emits no finding to silence,
+			// `enabledBy` too: a disabled `unused-parameter` emits no finding to silence,
 			// so its rename cannot run whatever the option says.
-			silenceGuard: config.enabledFor(UNUSED_PARAMETER_ID) && UnusedParameter.renameSilenceLive(config)
+			silenceGuard: Linter.enabledBy(config, new UnusedParameter()) && UnusedParameter.renameSilenceLive(config)
 		};
 	}
 

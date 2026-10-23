@@ -1,14 +1,14 @@
 {
     "rules": {
-        "magic-number": { "enabled": false },
-        "string-literal-dup": { "enabled": false },
-        "doc-coverage": { "enabled": false },
+        "magic-number": false,
+        "string-literal-dup": false,
+        "doc-coverage": false,
         "oversized-type": {
             "maxMembers": 100,
             "grants": []
         },
-        "duplicate-code": { "enabled": false },
-        "prefer-typed-throw": { "enabled": false },
-        "owned-types": { "enabled": false }
+        "duplicate-code": false,
+        "prefer-typed-throw": false,
+        "owned-types": false
     }
 }

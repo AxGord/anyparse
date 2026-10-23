@@ -98,7 +98,7 @@ using StringTools;
  * `Cli` fixed-point loop's full-scope ids.
  */
 @:nullSafety(Strict)
-final class MapKeysLookup implements Check {
+final class MapKeysLookup extends RuleBase {
 
 	private static inline final KEYS_METHOD: String = 'keys';
 	private static inline final GET_METHOD: String = 'get';
@@ -112,14 +112,12 @@ final class MapKeysLookup implements Check {
 	/** An index access `m[k]` and a for-loop both have at least [receiver/iterable, key/body]. */
 	private static inline final MIN_BINARY_CHILD_COUNT: Int = 2;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'map-keys-lookup';
-	}
-
-	public function description(): String {
-		return 'a for-in over map.keys() that re-looks-up each value, replaceable with key-value iteration (for (k => v in m))';
+	public function new() {
+		super(
+			'map-keys-lookup',
+			'a for-in over map.keys() that re-looks-up each value, replaceable with key-value iteration (for (k => v in m))',
+			RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

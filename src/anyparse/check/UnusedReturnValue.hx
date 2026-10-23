@@ -65,7 +65,7 @@ import anyparse.runtime.Span;
  * to the default). The match is on the called name for every receiver form.
  */
 @:nullSafety(Strict)
-final class UnusedReturnValue implements Check implements ConfigAware implements NoAutofix {
+final class UnusedReturnValue extends RuleBase implements ConfigAware implements NoAutofix {
 
 	/**
 	 * Call names whose non-`Void` result is idiomatically discarded — in-place
@@ -95,18 +95,15 @@ final class UnusedReturnValue implements Check implements ConfigAware implements
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			'unused-return-value', 'a call whose provably non-Void result is discarded in statement position — a possibly-lost value',
+			RuleCategory.Unused
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'unused-return-value';
-	}
-
-	public function description(): String {
-		return 'a call whose provably non-Void result is discarded in statement position — a possibly-lost value';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

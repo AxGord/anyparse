@@ -34,7 +34,7 @@ import anyparse.runtime.Span;
  */
 @:nullSafety(Strict)
 @:access(anyparse.check.DuplicateCode)
-final class DuplicateCodeRenamed implements Check implements NoAutofix implements VolatileMessage implements DefaultOff
+final class DuplicateCodeRenamed extends RuleBase implements NoAutofix implements VolatileMessage implements DefaultOff
 		implements CrossFileAnchored {
 
 	private static inline final RULE_ID: String = 'duplicate-code-renamed';
@@ -56,19 +56,16 @@ final class DuplicateCodeRenamed implements Check implements NoAutofix implement
 	/** The linter's per-file "does a finding here survive" answer; null when every file's does. */
 	private var _reportable: Null<(String) -> Bool> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID,
+			'three or more consecutive statements duplicated up to a renaming of their local bindings (layout-insensitive, literal-exact)',
+			RuleCategory.Design
+		);
+	}
 
 	public function setReportable(reportable: Null<(String) -> Bool>): Void {
 		_reportable = reportable;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return
-			'three or more consecutive statements duplicated up to a renaming of their local bindings (layout-insensitive, literal-exact)';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

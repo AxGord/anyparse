@@ -105,7 +105,7 @@ using StringTools;
  * matter, which no writer of an instance field can do.
  */
 @:nullSafety(Strict)
-final class FieldInitInConstructor implements Check implements DefaultOff {
+final class FieldInitInConstructor extends RuleBase implements DefaultOff {
 
 	private static inline final MESSAGE: String =
 		'this field default is overwritten by one conditional constructor write - fold the pair into a single unconditional assignment of a conditional value';
@@ -127,14 +127,12 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 	 */
 	private final _runClaims: RenameClaims = new RenameClaims();
 
-	public function new() {}
-
-	public function id(): String {
-		return 'field-init-in-constructor';
-	}
-
-	public function description(): String {
-		return 'a field default overwritten by one conditional constructor write - foldable into one assignment of a conditional value';
+	public function new() {
+		super(
+			'field-init-in-constructor',
+			'a field default overwritten by one conditional constructor write - foldable into one assignment of a conditional value',
+			RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

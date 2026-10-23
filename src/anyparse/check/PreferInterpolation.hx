@@ -114,11 +114,17 @@ using StringTools;
  * safe and is left alone.
  */
 @:nullSafety(Strict)
-final class PreferInterpolation implements Check implements RiskyFix implements OracleRelaxable {
+final class PreferInterpolation extends RuleBase implements RiskyFix implements OracleRelaxable {
 
 	private var _oracleRelaxed: Bool = false;
 
-	public function new() {}
+	public function new() {
+		super(
+			'prefer-interpolation',
+			"a Std.string(x) call replaceable with string interpolation ('$x'), or an interpolated constant ('${0}') writable as text",
+			RuleCategory.Literals
+		);
+	}
 
 	/**
 	 * Enable RELAXED candidate selection: drop the `isSafeArg` null-safety gate, so a bare
@@ -130,14 +136,6 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	 */
 	public function setOracleRelaxed(relaxed: Bool): Void {
 		_oracleRelaxed = relaxed;
-	}
-
-	public function id(): String {
-		return 'prefer-interpolation';
-	}
-
-	public function description(): String {
-		return "a Std.string(x) call replaceable with string interpolation ('$x'), or an interpolated constant ('${0}') writable as text";
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

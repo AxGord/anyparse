@@ -203,7 +203,7 @@ private typedef ScanContext = {
  * style decision; only the hybrid arm is universal, and it is not separable from the print.
  */
 @:nullSafety(Strict)
-final class ShortenTypeRef implements Check implements DefaultOff implements RiskyFix implements GroupedFix {
+final class ShortenTypeRef extends RuleBase implements DefaultOff implements RiskyFix implements GroupedFix {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shorten-type-ref';
@@ -243,14 +243,8 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	 */
 	private static final MODIFIER_RUN_BOUNDARY: QueryNode -> Bool = c -> c.children.length > 0 || c.name != null;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a dotted type reference the file already spells shorter, or repeats often enough to import';
+	public function new() {
+		super(RULE_ID, 'a dotted type reference the file already spells shorter, or repeats often enough to import', RuleCategory.Imports);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

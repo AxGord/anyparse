@@ -80,7 +80,7 @@ using Lambda;
  * check a no-op).
  */
 @:nullSafety(Strict)
-final class SimplifyBooleanBranchAssignment implements Check {
+final class SimplifyBooleanBranchAssignment extends RuleBase {
 
 	/** An `if` with an `else` has exactly [condition, then-branch, else-branch] children. */
 	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
@@ -88,14 +88,12 @@ final class SimplifyBooleanBranchAssignment implements Check {
 	/** Fewer targets than this is `prefer-ternary-assignment`'s single-l-value case. */
 	private static inline final MIN_TARGETS: Int = 2;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'simplify-boolean-branch-assignment';
-	}
-
-	public function description(): String {
-		return 'an if/else assigning opposite boolean literals to several targets, collapsible to direct condition assignments';
+	public function new() {
+		super(
+			'simplify-boolean-branch-assignment',
+			'an if/else assigning opposite boolean literals to several targets, collapsible to direct condition assignments',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -31,16 +31,10 @@ import anyparse.runtime.Span;
  * restructure) is context-dependent.
  */
 @:nullSafety(Strict)
-final class ImpossibleCast implements Check implements NoAutofix {
+final class ImpossibleCast extends RuleBase implements NoAutofix {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'impossible-cast';
-	}
-
-	public function description(): String {
-		return 'a checked cast between two unrelated classes that always throws';
+	public function new() {
+		super('impossible-cast', 'a checked cast between two unrelated classes that always throws', RuleCategory.Types);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

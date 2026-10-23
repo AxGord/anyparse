@@ -42,16 +42,10 @@ using Lambda;
  * The autofix additionally needs `ControlFlowSupport` for the block kinds.
  */
 @:nullSafety(Strict)
-final class SelfAssignment implements Check {
+final class SelfAssignment extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'self-assignment';
-	}
-
-	public function description(): String {
-		return 'a local variable assigned to itself (x = x)';
+	public function new() {
+		super('self-assignment', 'a local variable assigned to itself (x = x)', RuleCategory.Unused);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

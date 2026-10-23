@@ -88,7 +88,7 @@ using StringTools;
  * emitted text is re-formatted by the canonical writer, so it carries no indentation of its own.
  */
 @:nullSafety(Strict)
-final class PreferLocalFunction implements Check {
+final class PreferLocalFunction extends RuleBase {
 
 	/** A binary assignment node has exactly [l-value, r-value] children. */
 	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
@@ -96,14 +96,11 @@ final class PreferLocalFunction implements Check {
 	private static inline final RULE_ID: String = 'prefer-local-function';
 	private static inline final MSG: String = 'this function literal is bound to a local — declare it as a local function';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a function literal bound to a never-reassigned local, replaceable with a local function declaration';
+	public function new() {
+		super(
+			RULE_ID, 'a function literal bound to a never-reassigned local, replaceable with a local function declaration',
+			RuleCategory.Expressions
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

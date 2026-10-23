@@ -156,7 +156,7 @@ using Lambda;
  * it — the same way it reports a hand-written bridged pair used as a seam. The finding is `Info`.
  */
 @:nullSafety(Strict)
-final class TrivialGetter implements Check implements ConfigAware implements CrossFileFix {
+final class TrivialGetter extends RuleBase implements ConfigAware implements CrossFileFix {
 
 	/**
 	 * Default cap on statement-level backing-field writes a shape-A collapse marks
@@ -185,20 +185,18 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			'trivial-getter',
+			'a property bridging a backing field through trivial accessors — (get, never)/(get, null) collapses to (default, '
+			+ 'null); (get, set) collapses to (default, set) when only the getter is trivial, or to a plain field when both are. The '
+			+ 'backing field is a private same-class field, or the property ITSELF under @:isVar, which the collapse drops with it',
+			RuleCategory.Members
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'trivial-getter';
-	}
-
-	public function description(): String {
-		return 'a property bridging a backing field through trivial accessors — (get, never)/(get, null) collapses to (default, '
-			+ 'null); (get, set) collapses to (default, set) when only the getter is trivial, or to a plain field when both are. The '
-			+ 'backing field is a private same-class field, or the property ITSELF under @:isVar, which the collapse drops with it';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

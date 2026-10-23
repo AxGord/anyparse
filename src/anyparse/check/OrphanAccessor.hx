@@ -128,7 +128,7 @@ using StringTools;
  * `@:forward` / `@:op` members reach the underlying type by rules the index does not model).
  */
 @:nullSafety(Strict)
-final class OrphanAccessor implements Check implements DefaultOff {
+final class OrphanAccessor extends RuleBase implements DefaultOff {
 
 	/**
 	 * `<file>#<from>:<to>` of every flagged accessor whose deletion `run` PROVED safe. The deletion
@@ -139,16 +139,13 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 */
 	private var _deletable: Array<String> = [];
 
-	public function new() {}
-
-	public function id(): String {
-		return 'orphan-accessor';
-	}
-
-	public function description(): String {
-		return
+	public function new() {
+		super(
+			'orphan-accessor',
 			'a get_X / set_X method whose property X declares no matching accessor slot anywhere in the inheritance chain — an accessor '
-				+ 'Haxe never calls';
+			+ 'Haxe never calls',
+			RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

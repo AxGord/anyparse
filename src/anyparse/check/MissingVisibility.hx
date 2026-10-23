@@ -97,16 +97,10 @@ using Lambda;
  * the plain direct-children scan.
  */
 @:nullSafety(Strict)
-final class MissingVisibility implements Check {
+final class MissingVisibility extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'missing-visibility';
-	}
-
-	public function description(): String {
-		return 'a class / abstract member without an explicit public or private modifier';
+	public function new() {
+		super('missing-visibility', 'a class / abstract member without an explicit public or private modifier', RuleCategory.Members);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

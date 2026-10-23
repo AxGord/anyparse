@@ -115,18 +115,12 @@ using StringTools;
  * return-type one, and an unset `instanceMethodReturns` drops only its stdlib fallback.
  */
 @:nullSafety(Strict)
-final class ComparisonToBoolean implements Check {
+final class ComparisonToBoolean extends RuleBase {
 
 	private static inline final RULE_ID: String = 'comparison-to-boolean';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a comparison against a boolean literal (x == true / x != false / true == true)';
+	public function new() {
+		super(RULE_ID, 'a comparison against a boolean literal (x == true / x != false / true == true)', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

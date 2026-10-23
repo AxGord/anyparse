@@ -34,7 +34,12 @@ import anyparse.grammar.json.JValue;
  * grammar's `Check.id()`) and a rule's option bag is rule-specific, so the
  * value stays the raw JSON tree. `LintConfig.parse` walks each entry,
  * lifting `enabled` / `severity` out and keeping every other key verbatim
- * for the owning check to read through the typed option accessors.
+ * for the owning check to read through the typed option accessors. An
+ * entry may also be `true` / `false`, the shorthand for `{"enabled": …}`.
+ *
+ * `categories` switches a whole `RuleCategory` on or off, one boolean per category id; a rule entry outranks its category's
+ * entry, and enabling a category enables its default-off members too. Raw `JValue` values for the reason `rules` has them:
+ * `LintDocuments` names an unknown id or a non-boolean value in a diagnostic instead of rejecting the document.
  *
  * `frameworks` declares which frameworks drive this project's types — each entry a root type plus
  * the member names that framework reaches by name with no call written in source. Entries stay raw
@@ -55,6 +60,8 @@ typedef ApqLintConfig = {
 	@:optional var inherit: Bool;
 
 	@:optional var rules: Map<String, JValue>;
+
+	@:optional var categories: Map<String, JValue>;
 
 	@:optional var compilerOracle: JValue;
 

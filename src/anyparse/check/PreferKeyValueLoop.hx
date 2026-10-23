@@ -97,7 +97,7 @@ using Lambda;
  * way the other member-name-matching checks spell theirs.
  */
 @:nullSafety(Strict)
-final class PreferKeyValueLoop implements Check implements DefaultOff {
+final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'prefer-keyvalue-loop';
@@ -125,14 +125,8 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	private static inline final TRAILING_COMMENT_DECLINE: String =
 		'a trailing comment on the dropped declaration\'s line would move onto the loop header';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an indexed for whose body opens by binding X[i], replaceable with for (i => v in X)';
+	public function new() {
+		super(RULE_ID, 'an indexed for whose body opens by binding X[i], replaceable with for (i => v in X)', RuleCategory.Loops);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

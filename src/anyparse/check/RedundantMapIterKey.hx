@@ -36,7 +36,7 @@ using StringTools;
  * of bug where a `=>` inside a header comment decided the shape.
  */
 @:nullSafety(Strict)
-final class RedundantMapIterKey implements Check {
+final class RedundantMapIterKey extends RuleBase {
 
 	/** This check's stable id. */
 	private static inline final RULE_ID: String = 'redundant-map-iter-key';
@@ -56,14 +56,8 @@ final class RedundantMapIterKey implements Check {
 	private static inline final UNPROVEN_MESSAGE: String =
 		'this loop discards its key, but dropping it is not proved to iterate the same values for this iterable';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a key-value for loop that discards its key (for (_ => v in m))';
+	public function new() {
+		super(RULE_ID, 'a key-value for loop that discards its key (for (_ => v in m))', RuleCategory.Loops);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

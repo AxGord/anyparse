@@ -398,6 +398,14 @@ final class Linter {
 	}
 
 	/**
+	 * Whether `check` runs under `config`: the config's word for its id or its category (`LintConfig.switchFor`),
+	 * else its own default — off for a `DefaultOff` rule.
+	 */
+	public static function enabledBy(config: LintConfig, check: Check): Bool {
+		return config.enabledFor(check.id(), !(check is DefaultOff), check.category());
+	}
+
+	/**
 	 * Every registered check that declares a `VolatileMessage`, as rule id -> its
 	 * `messageIdentity`. The map `apq lint-diff` keys its findings through.
 	 *
@@ -560,8 +568,7 @@ final class Linter {
 	 */
 	private static function passesGates(check: Check, config: LintConfig, applyEnablement: Bool): Bool {
 		final minVersion: Null<String> = check is VersionGated ? (cast check: VersionGated).minLanguageVersion() : null;
-		return (minVersion == null || config.allowsLanguageVersion(minVersion))
-			&& (!applyEnablement || config.enabledFor(check.id(), !(check is DefaultOff)));
+		return (minVersion == null || config.allowsLanguageVersion(minVersion)) && (!applyEnablement || enabledBy(config, check));
 	}
 
 	/**

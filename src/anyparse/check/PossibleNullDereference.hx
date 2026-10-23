@@ -57,17 +57,15 @@ import anyparse.runtime.Span;
  * not descended into.
  */
 @:nullSafety(Strict)
-final class PossibleNullDereference implements Check implements NoAutofix {
+final class PossibleNullDereference extends RuleBase implements NoAutofix {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'possible-null-dereference';
-	}
-
-	public function description(): String {
-		return 'a dereference of a nullable result (map[key], Array/List pop/shift, Null<T>-returning call) '
-			+ 'with no null check — a possible NPE';
+	public function new() {
+		super(
+			'possible-null-dereference',
+			'a dereference of a nullable result (map[key], Array/List pop/shift, Null<T>-returning call) '
+			+ 'with no null check — a possible NPE',
+			RuleCategory.NullSafety
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

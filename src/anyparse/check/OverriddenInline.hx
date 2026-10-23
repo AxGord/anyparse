@@ -19,20 +19,18 @@ using Lambda;
  * inline method the report holds.
  */
 @:nullSafety(Strict)
-final class OverriddenInline implements Check {
+final class OverriddenInline extends RuleBase {
 
 	/** How the inline end of a finding opens — the end `fix` edits. */
 	private static inline final INLINE_END: String = 'inline method ';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'overridden-inline';
-	}
-
-	public function description(): String {
-		return 'an inline instance method a subtype overrides through any #if branch of its extends clause, and that override; '
-			+ 'Error — the compiler rejects the pair only in a build that compiles the override; --fix drops the inline modifier';
+	public function new() {
+		super(
+			'overridden-inline',
+			'an inline instance method a subtype overrides through any #if branch of its extends clause, and that override; '
+			+ 'Error — the compiler rejects the pair only in a build that compiles the override; --fix drops the inline modifier',
+			RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -131,7 +131,7 @@ using Lambda;
  * narrowing scan).
  */
 @:nullSafety(Strict)
-final class PreferSafeNavComparison implements Check implements VersionGated {
+final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 
 	/** A binary node — a comparison or a logical operator — has exactly [left, right] children. */
 	private static inline final BINARY_CHILD_COUNT: Int = 2;
@@ -142,14 +142,11 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 	/** This check's `id()`, also stamped on every violation and read back by `fix` to select its own findings. */
 	private static inline final RULE_ID: String = 'prefer-safe-nav-comparison';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a null-check conjunction (x != null && x.f != null) replaceable with a safe-navigation comparison (x?.f != null)';
+	public function new() {
+		super(
+			RULE_ID, 'a null-check conjunction (x != null && x.f != null) replaceable with a safe-navigation comparison (x?.f != null)',
+			RuleCategory.NullSafety
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

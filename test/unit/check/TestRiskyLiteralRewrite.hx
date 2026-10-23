@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.check.Check;
+import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ParseGate;
@@ -30,6 +31,10 @@ final class TestRiskyLiteralRewrite implements Check implements RiskyFix {
 
 	public function description(): String {
 		return 'test-only: rewrite the first integer literal 1 to a configured text';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Literals;
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

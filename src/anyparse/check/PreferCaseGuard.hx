@@ -138,7 +138,7 @@ using StringTools;
  * refuses it on the next pass -- the fix is idempotent by construction.
  */
 @:nullSafety(Strict)
-final class PreferCaseGuard implements Check implements RiskyFix {
+final class PreferCaseGuard extends RuleBase implements RiskyFix {
 
 	/** An `if` with no `else` has exactly [cond, then]. */
 	private static inline final IF_WITHOUT_ELSE_CHILD_COUNT: Int = 2;
@@ -149,14 +149,8 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 	private static final RULE_ID: String = 'prefer-case-guard';
 	private static final MESSAGE: String = 'this case body is a single if; write it as a case guard';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a case whose only statement is an else-less if, convertible to a case guard';
+	public function new() {
+		super(RULE_ID, 'a case whose only statement is an else-less if, convertible to a case guard', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

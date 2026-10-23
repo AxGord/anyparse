@@ -175,7 +175,7 @@ using StringTools;
  * required seam unset makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class InlineConstant implements Check {
+final class InlineConstant extends RuleBase {
 
 	/** The `final` keyword the member host span starts at — `inline ` is inserted immediately before it. */
 	private static inline final FINAL_KEYWORD: String = 'final';
@@ -183,14 +183,10 @@ final class InlineConstant implements Check {
 	/** The `var` keyword a `static inline var` host span starts at - swapped to `final`. */
 	private static inline final VAR_KEYWORD: String = 'var';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'inline-constant';
-	}
-
-	public function description(): String {
-		return 'a static final scalar that can be inline, or a static inline var that can be final';
+	public function new() {
+		super(
+			'inline-constant', 'a static final scalar that can be inline, or a static inline var that can be final', RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

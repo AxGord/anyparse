@@ -77,7 +77,7 @@ private typedef CatchHeader = {
  * (`Exception`, a custom class, `String`, …) is left alone.
  */
 @:nullSafety(Strict)
-final class CatchDynamic implements Check implements ConfigAware implements VersionGated {
+final class CatchDynamic extends RuleBase implements ConfigAware implements VersionGated {
 
 	/** The message for a bare, untyped `catch (e)` (arm (c)) — shared by `run` and any diagnostics. */
 	private static final UNTYPED_MESSAGE: String =
@@ -86,18 +86,15 @@ final class CatchDynamic implements Check implements ConfigAware implements Vers
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			'catch-dynamic', 'a catch clause whose declared type is Dynamic or Any — prefer catch (exception:Exception)',
+			RuleCategory.Types
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'catch-dynamic';
-	}
-
-	public function description(): String {
-		return 'a catch clause whose declared type is Dynamic or Any — prefer catch (exception:Exception)';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

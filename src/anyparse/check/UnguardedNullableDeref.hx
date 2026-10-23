@@ -71,17 +71,15 @@ import anyparse.runtime.Span;
  * null dereference has no single mechanical fix.
  */
 @:nullSafety(Strict)
-final class UnguardedNullableDeref implements Check implements NoAutofix {
+final class UnguardedNullableDeref extends RuleBase implements NoAutofix {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'unguarded-nullable-deref';
-	}
-
-	public function description(): String {
-		return 'a dereference of a local bound from a nullable source (map[key] / Map.get, Null<T>-returning call) '
-			+ 'or declared Null<T>, with no null check on the path — a possible NPE';
+	public function new() {
+		super(
+			'unguarded-nullable-deref',
+			'a dereference of a local bound from a nullable source (map[key] / Map.get, Null<T>-returning call) '
+			+ 'or declared Null<T>, with no null check on the path — a possible NPE',
+			RuleCategory.NullSafety
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

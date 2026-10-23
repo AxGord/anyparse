@@ -127,7 +127,7 @@ using StringTools;
  * span, never by indent: two types in one module hold their members at the same depth.
  */
 @:nullSafety(Strict)
-final class PreferDocComment implements Check implements DefaultOff {
+final class PreferDocComment extends RuleBase implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'prefer-doc-comment';
 
@@ -137,14 +137,8 @@ final class PreferDocComment implements Check implements DefaultOff {
 	/** The block-comment closer, which a converted body must not contain. */
 	private static inline final BLOCK_CLOSE: String = '*/';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a line comment directly above a declaration, replaceable with a doc comment';
+	public function new() {
+		super(RULE_ID, 'a line comment directly above a declaration, replaceable with a doc comment', RuleCategory.Docs);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

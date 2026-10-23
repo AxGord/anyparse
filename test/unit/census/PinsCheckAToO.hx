@@ -541,6 +541,14 @@ final class PinsCheckAToO {
 			+ 'M-JSUL-UNINDEXED-NAME-ALWAYS',
 		'unit.check.JoinSingleUseLocalCheckTest#testUnconditionalFieldChainStillFlagged :: control :: M-JSUL-PATH-ALWAYS-CONDITIONAL',
 		'unit.check.JoinSingleUseLocalCheckTest#testWrittenParamSourceNotFlagged :: guard :: M-JSUL-SOURCE-NEVER-WRITTEN',
+		'unit.check.LintCategoryConfigTest#testABooleanRuleEntryIsTheEnabledShorthand :: control :: M-RULE-SHORTHAND-DROPPED',
+		'unit.check.LintCategoryConfigTest#testACategorySwitchesEveryMemberDefaultOffOnesIncluded :: control :: M-CATEGORY-IGNORED',
+		'unit.check.LintCategoryConfigTest#testANestedDocumentInheritsBothSectionsKeyByKey :: control :: M-CATEGORIES-NOT-INHERITED',
+		'unit.check.LintCategoryConfigTest#testARuleEntryOutranksItsCategory :: control :: M-CATEGORY-OUTRANKS-RULE',
+		'unit.check.LintCategoryConfigTest#testAnObjectOfOptionsEnablesItsRule :: control :: M-OPTIONS-OBJECT-INERT',
+		'unit.check.LintCategoryConfigTest#testAnUnknownCategoryOrAValueOfTheWrongShapeIsNamedAndIgnored :: control :: '
+			+ 'M-UNKNOWN-CATEGORY-SILENT',
+		'unit.check.LintCategoryConfigTest#testTheNearestDocumentNamingTheRuleOrItsCategoryDecides :: control :: M-CHAIN-WIDE-RULE-ENTRY',
 		'unit.check.LintConfigInheritanceTest#testAnUnnamedKeyFallsThroughToTheAncestor :: control :: '
 			+ 'M-REFLECTIVE-MERGE,M-HOLDERS-MERGE,M-OWNED-MERGE',
 		'unit.check.LintConfigInheritanceTest#testCompletenessStaysWithTheListItWasDeclaredFor :: control :: M-REACH-COMPLETE-FOLLOWS-LIST',

@@ -37,7 +37,7 @@ using Lambda;
  * typographic punctuation are not letters and never flag.
  */
 @:nullSafety(Strict)
-final class EnglishComments implements Check implements NoAutofix {
+final class EnglishComments extends RuleBase implements NoAutofix {
 
 	/** Lowest flagged code unit; below it (ASCII, Latin-1, Latin-extended, Greek) a char is never a hit — fast reject. */
 	private static inline final FIRST_NON_LATIN: Int = 0x0400;
@@ -57,14 +57,11 @@ final class EnglishComments implements Check implements NoAutofix {
 		{ lo: 0xAC00, hi: 0xD7AF }
 	];
 
-	public function new() {}
-
-	public function id(): String {
-		return 'english-comments';
-	}
-
-	public function description(): String {
-		return 'a comment containing a non-Latin letter (Cyrillic, CJK, Arabic, ...) — comments must be English only';
+	public function new() {
+		super(
+			'english-comments', 'a comment containing a non-Latin letter (Cyrillic, CJK, Arabic, ...) — comments must be English only',
+			RuleCategory.Docs
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

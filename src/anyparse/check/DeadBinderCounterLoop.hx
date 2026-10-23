@@ -87,7 +87,7 @@ using Lambda;
  * list are the language-specific tokens, spelled as constants.
  */
 @:nullSafety(Strict)
-final class DeadBinderCounterLoop implements Check implements DefaultOff {
+final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 
 	/** The element-count member of a container that has one. */
 	public static inline final LENGTH_MEMBER: String = 'length';
@@ -127,14 +127,11 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	/** The trailing `i++` is the counter's only write. */
 	private static inline final COUNTER_WRITES: Int = 1;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a var i = 0 counter threaded through a for-in whose binder nothing reads, replaceable with a range for';
+	public function new() {
+		super(
+			RULE_ID, 'a var i = 0 counter threaded through a for-in whose binder nothing reads, replaceable with a range for',
+			RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

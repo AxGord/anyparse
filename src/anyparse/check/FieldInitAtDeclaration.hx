@@ -301,7 +301,7 @@ using Lambda;
  * `inheritedProbe` for the residual.
  */
 @:nullSafety(Strict)
-final class FieldInitAtDeclaration implements Check {
+final class FieldInitAtDeclaration extends RuleBase {
 
 	/**
 	 * `file#field` keys already reported by `fix`'s skip diagnostic — one line per
@@ -310,14 +310,12 @@ final class FieldInitAtDeclaration implements Check {
 	 */
 	private static final skipsReported: Array<String> = [];
 
-	public function new() {}
-
-	public function id(): String {
-		return 'field-init-at-declaration';
-	}
-
-	public function description(): String {
-		return 'an instance field initialised with a context-free constant in the constructor that can move to its declaration';
+	public function new() {
+		super(
+			'field-init-at-declaration',
+			'an instance field initialised with a context-free constant in the constructor that can move to its declaration',
+			RuleCategory.Members
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

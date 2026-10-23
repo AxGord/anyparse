@@ -118,19 +118,17 @@ using StringTools;
  * wrapping a `localDeclExprKinds` node rather than as a declaration statement.
  */
 @:nullSafety(Strict)
-final class SplitVarDeclaration implements Check {
+final class SplitVarDeclaration extends RuleBase {
 
 	/** The characters a declaration keyword may be built from -- lowercase ASCII only. */
 	private static inline final KEYWORD_LETTERS: String = 'abcdefghijklmnopqrstuvwxyz';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'split-var-declaration';
-	}
-
-	public function description(): String {
-		return 'a local declaration binding several variables in one statement, splittable into one declaration per statement';
+	public function new() {
+		super(
+			'split-var-declaration',
+			'a local declaration binding several variables in one statement, splittable into one declaration per statement',
+			RuleCategory.Expressions
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

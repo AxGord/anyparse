@@ -41,7 +41,7 @@ import anyparse.runtime.Span;
  * — which the declared prover now exempts too — reaches this check only when flow narrows it.
  */
 @:nullSafety(Strict)
-final class DeadNullGuard implements Check implements RiskyFix implements ConfigAware {
+final class DeadNullGuard extends RuleBase implements RiskyFix implements ConfigAware {
 
 	/** What removing a guard whose proof the compiler's null-safety does not share would do (`NullSafetyGate`). */
 	private static inline final UNSEEN_CONSEQUENCE: String = ', so removing the guard would not compile';
@@ -49,18 +49,12 @@ final class DeadNullGuard implements Check implements RiskyFix implements Config
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super('dead-null-guard', 'a null comparison whose operand is already non-null on every path reaching it', RuleCategory.NullSafety);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'dead-null-guard';
-	}
-
-	public function description(): String {
-		return 'a null comparison whose operand is already non-null on every path reaching it';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

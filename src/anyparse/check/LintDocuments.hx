@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.LintConfig.RuleConfig;
+import anyparse.check.LintConfig.RuleSwitches;
 import anyparse.check.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.check.config.ApqLintConfig;
 import anyparse.check.config.ApqLintConfigParser;
@@ -57,7 +58,8 @@ final class LintDocuments {
 	 * every other array: each element carries its own compile directory and defines, so a
 	 * document that names its own oracles can no longer inherit a directory belonging to
 	 * somebody else's hxml. `reachConfigurationsComplete` is a claim about one such list, so a document naming its own
-	 * list claims nothing about it until it says so.
+	 * list claims nothing about it until it says so. Enablement is the one key not
+	 * folded: each document's switches are kept, nearest first (`LintDocument.switches`).
 	 */
 	public static function mergeDocuments(near: LintDocument, far: LintDocument): LintDocument {
 		final rules: Map<String, RuleConfig> = [];
@@ -65,6 +67,7 @@ final class LintDocuments {
 		for (id => rc in near.rules) rules[id] = mergeRule(rc, far.rules[id]);
 		return {
 			rules: rules,
+			switches: near.switches.concat(far.switches),
 			compilerOracles: near.compilerOracles ?? far.compilerOracles,
 			compilerOracleServer: near.compilerOracleServer ?? far.compilerOracleServer,
 			reachConfigurationsComplete: near.reachConfigurationsComplete ?? (
@@ -88,7 +91,7 @@ final class LintDocuments {
 		return new LintConfig(
 			doc.rules, doc.compilerOracles, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer,
 			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete, doc.reportSummaryThreshold,
-			doc.reflectiveClasses, doc.reflectiveMethodHolders, doc.ownedTypes
+			doc.reflectiveClasses, doc.reflectiveMethodHolders, doc.ownedTypes, doc.switches
 		);
 	}
 
@@ -105,13 +108,21 @@ final class LintDocuments {
 	public static function parseDocument(content: String, ?baseDir: String): Null<LintDocument> {
 		final config: Null<ApqLintConfig> = try ApqLintConfigParser.parse(content) catch (exception: Exception) null;
 		if (config == null) return null;
+		final drops: Array<String> = [];
 		final rules: Map<String, RuleConfig> = [];
 		final declared: Null<Map<String, JValue>> = config.rules;
 		if (declared != null) for (id => raw in declared) {
 			final rule: Null<RuleConfig> = parseRule(raw);
-			if (rule != null) rules[id] = rule;
+			if (rule != null)
+				rules[id] = rule;
+			else
+				drops.push('rules "$id" is neither true, false nor an object of options — ignored');
 		}
-		final drops: Array<String> = [];
+		final declaredCategories: Null<Map<String, JValue>> = config.categories;
+		final switches: RuleSwitches = {
+			rules: [for (id => rule in rules) id => rule.enabled == true],
+			categories: declaredCategories == null ? [] : parseCategories(declaredCategories, drops)
+		};
 		final declaredOracle: Null<JValue> = config.compilerOracle;
 		final oracles: Null<Array<OracleConfig>> = declaredOracle == null ? null : OracleDeclaration.read(declaredOracle, baseDir, drops);
 		final declaredRoots: Null<Array<String>> = config.resolutionRoots;
@@ -127,6 +138,7 @@ final class LintDocuments {
 			: OwnedTypesDeclaration.read(declaredOwnership, drops);
 		return {
 			rules: rules,
+			switches: [switches],
 			compilerOracles: oracles,
 			compilerOracleServer: config.compilerOracleServer,
 			reachConfigurationsComplete: config.reachConfigurationsComplete,
@@ -179,15 +191,15 @@ final class LintDocuments {
 	}
 
 	/**
-	 * One `rules` entry → its `RuleConfig`. `enabled` (a JSON boolean) and
-	 * `severity` (a JSON string resolved through `Severity.fromName`, an
-	 * unknown label yielding no override) are lifted out; every other key stays
-	 * in `props` verbatim for the owning check to read. A value that is not a
-	 * JSON object is not a rule config at all — null, and the caller drops the
-	 * entry, exactly as the untyped reader skipped a non-object.
+	 * One `rules` entry → its `RuleConfig`, or null when the value is not an entry at all. `true` / `false` is the
+	 * shorthand for `{"enabled": …}`; an object enables the rule unless it says `enabled` itself, lifts `severity` (resolved
+	 * through `Severity.fromName`, an unknown label yielding no override) and keeps every other key in `props` verbatim for the
+	 * owning check to read. A string is reserved for a severity shorthand and is no entry yet.
 	 */
 	private static function parseRule(raw: JValue): Null<RuleConfig> {
 		return switch raw {
+			case JBool(v):
+				{ enabled: v, props: [] };
 			case JObject(entries):
 				var enabled: Null<Bool> = null;
 				var severity: Null<Severity> = null;
@@ -204,7 +216,7 @@ final class LintDocuments {
 							props[key] = value;
 					}
 				}
-				{ enabled: enabled, severity: severity, props: props };
+				{ enabled: enabled ?? true, severity: severity, props: props };
 			case _: null;
 		};
 	}
@@ -279,6 +291,24 @@ final class LintDocuments {
 		return out;
 	}
 
+	/**
+	 * The `categories` entries → the switch each names. Only a known `RuleCategory` id with a boolean is kept: an unknown
+	 * id or any other value is dropped with a diagnostic naming it, since a misspelt category would otherwise switch
+	 * nothing and say nothing.
+	 */
+	private static function parseCategories(declared: Map<String, JValue>, drops: Array<String>): Map<String, Bool> {
+		final categories: Map<String, Bool> = [];
+		for (id => raw in declared) switch [RuleCategory.fromId(id), raw] {
+			case [null, _]:
+				drops.push('categories declares unknown category "$id" (known: ${RuleCategory.ALL.join(', ')}) — ignored');
+			case [_, JBool(on)]:
+				categories[id] = on;
+			case _:
+				drops.push('categories "$id" is neither true nor false — ignored');
+		}
+		return categories;
+	}
+
 }
 
 /**
@@ -302,6 +332,12 @@ typedef DocumentMemo = Map<String, Null<LintDocument>>;
  */
 typedef LintDocument = {
 	var rules: Map<String, RuleConfig>;
+
+	/**
+	 * What each folded document states about enablement, nearest first: one entry per document, never flattened, since
+	 * the nearest document naming a rule OR its category decides it (`LintConfig.switchFor`).
+	 */
+	var switches: Array<RuleSwitches>;
 	var ?compilerOracles: Array<OracleConfig>;
 	var ?compilerOracleServer: Bool;
 	var ?reachConfigurationsComplete: Bool;

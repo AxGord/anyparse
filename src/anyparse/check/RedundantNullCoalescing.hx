@@ -24,16 +24,13 @@ import anyparse.runtime.Span;
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
  */
 @:nullSafety(Strict)
-final class RedundantNullCoalescing implements Check {
+final class RedundantNullCoalescing extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'redundant-null-coalescing';
-	}
-
-	public function description(): String {
-		return 'a null-coalescing whose left operand is never null, or whose right operand is null';
+	public function new() {
+		super(
+			'redundant-null-coalescing', 'a null-coalescing whose left operand is never null, or whose right operand is null',
+			RuleCategory.NullSafety
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

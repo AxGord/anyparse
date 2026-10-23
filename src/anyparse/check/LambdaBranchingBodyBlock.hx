@@ -84,7 +84,7 @@ using StringTools;
  * grammar that declares no branching constructs.
  */
 @:nullSafety(Strict)
-final class LambdaBranchingBodyBlock implements Check {
+final class LambdaBranchingBodyBlock extends RuleBase {
 
 	/** The rule id, spelled once — `run`, `fix` and the registry all quote it. */
 	private static inline final RULE_ID: String = 'lambda-branching-body-braces';
@@ -92,16 +92,13 @@ final class LambdaBranchingBodyBlock implements Check {
 	/** A conditional node with this many children carries an else-branch. */
 	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return
+	public function new() {
+		super(
+			RULE_ID,
 			'an arrow lambda OUTSIDE the trailing argument slot whose body branches internally (if/else, switch) but carries no block — '
-				+ 'the braces delimit the branches from what follows the lambda';
+			+ 'the braces delimit the branches from what follows the lambda',
+			RuleCategory.Expressions
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

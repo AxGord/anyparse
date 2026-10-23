@@ -105,7 +105,7 @@ private typedef FixOptions = {
  * relative construction order, unobservable without cross-init data flow.
  */
 @:nullSafety(Strict)
-final class MemberOrder implements Check implements ConfigAware {
+final class MemberOrder extends RuleBase implements ConfigAware {
 
 	/**
 	 * The source lines a single reorder may MOVE before `fix` declines it and emits only the
@@ -126,22 +126,20 @@ final class MemberOrder implements Check implements ConfigAware {
 	 */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
-
-	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
-		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'member-order';
-	}
-
-	public function description(): String {
-		return 'type members not in canonical order (constants, properties, fields, constructor, accessors, instance methods, static '
+	public function new() {
+		super(
+			'member-order',
+			'type members not in canonical order (constants, properties, fields, constructor, accessors, instance methods, static '
 			+ 'methods; public before private; within one rank inline members lead, then initialized declarations lead init-less ones; '
 			+ 'conditional members grouped into one #if block per condition and branch shape, sorted at the rank their members share and '
 			+ 'leading it when the block holds only inline fields - or pinned to the end of their section when they span several ranks) '
-			+ 'or rank groups and conditional blocks not separated by blank lines';
+			+ 'or rank groups and conditional blocks not separated by blank lines',
+			RuleCategory.Members
+		);
+	}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -105,7 +105,7 @@ using StringTools;
  * is compiled out (the same convention `catch-dynamic` follows).
  */
 @:nullSafety(Strict)
-final class PreferTypedThrow implements Check implements DefaultOff {
+final class PreferTypedThrow extends RuleBase implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'prefer-typed-throw';
 
@@ -126,14 +126,8 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 	/** The finding message when the gate found a catch-all / String clause in scope — the rule is report-only. */
 	private static final MSG_DEGRADED: String = '$MSG_FIXABLE (report-only: $DECLINE_CATCH_IN_SCOPE)';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a throw of a raw string literal, replaceable with a typed exception';
+	public function new() {
+		super(RULE_ID, 'a throw of a raw string literal, replaceable with a typed exception', RuleCategory.Types);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

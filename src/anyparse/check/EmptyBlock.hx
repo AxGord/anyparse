@@ -42,7 +42,7 @@ using Lambda;
  * work in the condition, so the empty body is the idiom. A `for` gets no such pass.
  */
 @:nullSafety(Strict)
-final class EmptyBlock implements Check {
+final class EmptyBlock extends RuleBase {
 
 	/** An if node with both branches has children [cond, then, else]. */
 	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
@@ -54,14 +54,11 @@ final class EmptyBlock implements Check {
 	private static inline final DECLINE_THEN_WITH_ELSE: String = 'an empty then-branch with an else needs the condition inverted';
 	private static inline final DECLINE_OTHER: String = 'only an empty else and an empty no-else if are removed';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'empty-block';
-	}
-
-	public function description(): String {
-		return 'an empty control-flow block ({} with no statements) for an if / else / loop / try / catch';
+	public function new() {
+		super(
+			'empty-block', 'an empty control-flow block ({} with no statements) for an if / else / loop / try / catch',
+			RuleCategory.Expressions
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

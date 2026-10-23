@@ -97,7 +97,7 @@ using StringTools;
  * `switch` case body, scanned the same way — see the class doc above).
  */
 @:nullSafety(Strict)
-final class JoinStringAppend implements Check implements DefaultOff {
+final class JoinStringAppend extends RuleBase implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'join-string-append';
 
@@ -107,14 +107,11 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	/** Declared target types associative accumulation is sound for. */
 	private static final ACCEPTED_TARGET_TYPES: Array<String> = ['String', 'Int'];
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a run of x += e; statements (optionally led by x = e0;) on the same target, joinable into one append';
+	public function new() {
+		super(
+			RULE_ID, 'a run of x += e; statements (optionally led by x = e0;) on the same target, joinable into one append',
+			RuleCategory.Literals
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

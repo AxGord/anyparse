@@ -120,19 +120,16 @@ import anyparse.runtime.Span;
  * an if-expression form.
  */
 @:nullSafety(Strict)
-final class LoopGuard implements Check {
+final class LoopGuard extends RuleBase {
 
 	/** A guard `if` with no `else` has exactly [condition, then-branch] children. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'loop-guard';
-	}
-
-	public function description(): String {
-		return 'a loop whose body opens with an if-continue guard, liftable into — or mergeable with — a for/while … if header';
+	public function new() {
+		super(
+			'loop-guard', 'a loop whose body opens with an if-continue guard, liftable into — or mergeable with — a for/while … if header',
+			RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

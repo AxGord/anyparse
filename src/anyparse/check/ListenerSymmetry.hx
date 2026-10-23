@@ -45,16 +45,13 @@ using StringTools;
  * mechanical permutation nobody has written. `fix` yields no edits either way; its doc-comment carries the distinction and the backlog id.
  */
 @:nullSafety(Strict)
-final class ListenerSymmetry implements Check {
+final class ListenerSymmetry extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'listener-symmetry';
-	}
-
-	public function description(): String {
-		return 'an add/remove listener method missing its symmetrical twin (or the twin not declared next to it)';
+	public function new() {
+		super(
+			'listener-symmetry', 'an add/remove listener method missing its symmetrical twin (or the twin not declared next to it)',
+			RuleCategory.Design
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

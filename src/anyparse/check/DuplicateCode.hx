@@ -88,7 +88,7 @@ using Lambda;
  * findings.
  */
 @:nullSafety(Strict)
-final class DuplicateCode implements Check implements NoAutofix implements VolatileMessage implements CrossFileAnchored {
+final class DuplicateCode extends RuleBase implements NoAutofix implements VolatileMessage implements CrossFileAnchored {
 
 	/** The shortest run of consecutive statements considered a clone. */
 	private static inline final MIN_STATEMENTS: Int = 3;
@@ -152,18 +152,16 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	/** The linter's per-file "does a finding here survive" answer; null when every file's does. */
 	private var _reportable: Null<(String) -> Bool> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID,
+			'three or more consecutive statements duplicated (layout-insensitive, literal-exact) within the same file or across files',
+			RuleCategory.Design
+		);
+	}
 
 	public function setReportable(reportable: Null<(String) -> Bool>): Void {
 		_reportable = reportable;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'three or more consecutive statements duplicated (layout-insensitive, literal-exact) within the same file or across files';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

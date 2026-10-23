@@ -113,19 +113,21 @@ class LintConfigInheritanceTest extends Test {
 		#end
 	}
 
-	public function testAnOptionOnlyEntryKeepsTheAncestorEnablementAndOptions(): Void {
+	public function testAnOptionsEntryEnablesItsRuleAndKeepsTheAncestorOptions(): Void {
 		#if (sys || nodejs)
-		// `{"oversized-type": {"maxMembers": 100}}` raises one threshold. It must not
-		// re-enable a rule the ancestor switched off, nor drop the ancestor's other options.
-		final root: String = tree(
-			'{"rules": {"oversized-type": {"enabled": false, "maxMembers": 40, "severity": "error"}}}',
-			'{"rules": {"oversized-type": {"maxMembers": 100}}}'
-		);
+		// An object of options ENABLES its rule — the shorthand the config contract promises — so a nested
+		// `{"maxMembers": 100}` switches back on a rule the ancestor turned off, and only a nested
+		// `"enabled": false` keeps it off. Either way the option bags merge per key.
+		final ancestor: String = '{"rules": {"oversized-type": {"enabled": false, "maxMembers": 40, "severity": "error"}}}';
+		final root: String = tree(ancestor, '{"rules": {"oversized-type": {"maxMembers": 100}}}');
 		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
-		Assert.isFalse(config.enabledFor('oversized-type'), 'an options-only override does not re-enable the rule');
+		Assert.isTrue(config.enabledFor('oversized-type'), 'an options object enables the rule');
 		Assert.equals(100, config.intOption('oversized-type', 'maxMembers'), 'the nested option wins');
 		Assert.equals(Severity.Error, config.severityFor('oversized-type'), 'the ancestor severity survives');
 		CliFixture.removeDir(root);
+		final kept: String = tree(ancestor, '{"rules": {"oversized-type": {"enabled": false, "maxMembers": 100}}}');
+		Assert.isFalse(LintConfig.discover('$kept/nested/Probe.hx').enabledFor('oversized-type'), 'a stated false still wins');
+		CliFixture.removeDir(kept);
 		#else
 		Assert.pass('non-sys target');
 		#end

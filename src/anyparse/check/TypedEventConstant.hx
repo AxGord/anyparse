@@ -82,7 +82,7 @@ using Lambda;
  * clauses are the index's (`TypeDeclInfo.castClauses`, read by `abstractFromClauseKind` / `abstractToClauseKind`).
  */
 @:nullSafety(Strict)
-final class TypedEventConstant implements Check implements ConfigAware implements FileGated implements RiskyFix {
+final class TypedEventConstant extends RuleBase implements ConfigAware implements FileGated implements RiskyFix {
 
 	/** The rule id, also the `apqlint.json` option key. */
 	private static inline final RULE_ID: String = 'typed-event-constant';
@@ -93,19 +93,17 @@ final class TypedEventConstant implements Check implements ConfigAware implement
 	/** The linter's memoised per-file config resolver; null when run outside it. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID,
+			'a String event-type constant of an event class, used as a listener\'s or an event\'s type, that the project\'s typed '
+			+ 'event-type abstract can type — and every listener or dispatch the retype would reject, a latent bug',
+			RuleCategory.Design
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a String event-type constant of an event class, used as a listener\'s or an event\'s type, that the project\'s typed '
-			+ 'event-type abstract can type — and every listener or dispatch the retype would reject, a latent bug';
 	}
 
 	/** `needs-config` while the file's config does not declare the event base, the abstract and the listener methods. */

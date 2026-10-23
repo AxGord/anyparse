@@ -95,6 +95,9 @@ interface Check {
 	/** One-line description for `lint --help` / the rule listing. */
 	public function description(): String;
 
+	/** The subject the rule is about — what an `apqlint.json` `categories` entry and `apq lint --category` select it by. */
+	public function category(): RuleCategory;
+
 	/**
 	 * Run the check across `files` and return every violation found, in
 	 * the check's natural order. Must not throw on unparseable input.

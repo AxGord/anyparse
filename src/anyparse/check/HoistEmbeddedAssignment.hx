@@ -129,18 +129,12 @@ private typedef HoistSite = {
  * part of the declaration ahead of it, not a statement of its own.
  */
 @:nullSafety(Strict)
-final class HoistEmbeddedAssignment implements Check implements DefaultOff implements RiskyFix {
+final class HoistEmbeddedAssignment extends RuleBase implements DefaultOff implements RiskyFix {
 
 	private static inline final ID: String = 'hoist-embedded-assignment';
 
-	public function new() {}
-
-	public function id(): String {
-		return ID;
-	}
-
-	public function description(): String {
-		return 'an assignment buried inside an array / object literal — hoist it in front of the statement';
+	public function new() {
+		super(ID, 'an assignment buried inside an array / object literal — hoist it in front of the statement', RuleCategory.Expressions);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

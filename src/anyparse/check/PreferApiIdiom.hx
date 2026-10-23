@@ -87,7 +87,7 @@ using Lambda;
  * required seam, or a plugin that is no `TypeInfoProvider`, makes the rule a no-op.
  */
 @:nullSafety(Strict)
-final class PreferApiIdiom implements Check implements ConfigAware implements FileGated {
+final class PreferApiIdiom extends RuleBase implements ConfigAware implements FileGated {
 
 	/** The rule id, also the `apqlint.json` option key. */
 	private static inline final RULE_ID: String = 'prefer-api-idiom';
@@ -95,19 +95,17 @@ final class PreferApiIdiom implements Check implements ConfigAware implements Fi
 	/** The linter's memoised per-file config resolver; null when run outside it. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID,
+			'consecutive writes of every field an apqlint.json idiom declares, on one receiver of the declared type, replaceable '
+			+ 'with the declared method call (p.x = a; p.y = b; -> p.setTo(a, b))',
+			RuleCategory.Design
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'consecutive writes of every field an apqlint.json idiom declares, on one receiver of the declared type, replaceable '
-			+ 'with the declared method call (p.x = a; p.y = b; -> p.setTo(a, b))';
 	}
 
 	/** `needs-config` while the file's config declares no idiom the reader can parse. */

@@ -52,7 +52,7 @@ import anyparse.runtime.Span;
  * through `SwitchChain.seamsOf`. No language-specific kinds are named here.
  */
 @:nullSafety(Strict)
-final class PreferSwitch implements Check {
+final class PreferSwitch extends RuleBase {
 
 	/**
 	 * Appended after a branch body that does not end in one of `SELF_TERMINATING_ENDINGS`: the
@@ -66,14 +66,11 @@ final class PreferSwitch implements Check {
 	 */
 	private static final SELF_TERMINATING_ENDINGS: Array<String> = [';', '}'];
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-switch';
-	}
-
-	public function description(): String {
-		return 'an if/else-if chain testing one or more expressions against constants — clearer as a switch';
+	public function new() {
+		super(
+			'prefer-switch', 'an if/else-if chain testing one or more expressions against constants — clearer as a switch',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

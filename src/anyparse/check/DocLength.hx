@@ -40,7 +40,7 @@ using StringTools;
  * sentences are the contract and which are the essay is the whole of the work.
  */
 @:nullSafety(Strict)
-final class DocLength implements Check implements ConfigAware implements DefaultOff implements NoAutofix implements VolatileMessage {
+final class DocLength extends RuleBase implements ConfigAware implements DefaultOff implements NoAutofix implements VolatileMessage {
 
 	/** This check's `id()`, and the `rule` every finding carries. */
 	private static inline final RULE_ID: String = 'doc-length';
@@ -70,18 +70,12 @@ final class DocLength implements Check implements ConfigAware implements Default
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(RULE_ID, 'a doc block longer than the maximum number of lines the project declares', RuleCategory.Docs);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a doc block longer than the maximum number of lines the project declares';
 	}
 
 	/** Mask the block's own length; the declared maximum after it is a threshold and stays. */

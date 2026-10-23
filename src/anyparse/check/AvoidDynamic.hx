@@ -133,7 +133,7 @@ using Lambda;
  * `excludeMeta` / `boundaryCalls` are read from `apqlint.json`.
  */
 @:nullSafety(Strict)
-final class AvoidDynamic implements Check implements ConfigAware implements RiskyFix implements OracleAssisted implements GroupedFix
+final class AvoidDynamic extends RuleBase implements ConfigAware implements RiskyFix implements OracleAssisted implements GroupedFix
 		implements FileGated {
 
 	private static inline final RULE_ID: String = 'avoid-dynamic';
@@ -158,18 +158,15 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID, 'a raw Dynamic in a declared type position (field, parameter, return, type argument, or annotated local)',
+			RuleCategory.Types
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a raw Dynamic in a declared type position (field, parameter, return, type argument, or annotated local)';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -115,7 +115,7 @@ using Lambda;
  * is optional -- without it arms cannot nest an `if`-chain.
  */
 @:nullSafety(Strict)
-final class PreferSwitchExpressionAssignment implements Check {
+final class PreferSwitchExpressionAssignment extends RuleBase {
 
 	/** The finding message for the decl-pairing arm (a `var` and its following switch). */
 	private static inline final DECL_MESSAGE: String =
@@ -125,15 +125,13 @@ final class PreferSwitchExpressionAssignment implements Check {
 	private static inline final LVALUE_MESSAGE: String =
 		'this switch that assigns the same l-value in every arm can be a single switch-expression assignment';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-switch-expression-assignment';
-	}
-
-	public function description(): String {
-		return 'a switch that assigns the same target in every arm ('
-			+ 'optionally paired with its preceding local declaration), collapsible to a single switch-expression assignment';
+	public function new() {
+		super(
+			'prefer-switch-expression-assignment',
+			'a switch that assigns the same target in every arm ('
+			+ 'optionally paired with its preceding local declaration), collapsible to a single switch-expression assignment',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

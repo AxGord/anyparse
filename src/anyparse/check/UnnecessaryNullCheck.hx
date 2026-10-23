@@ -40,16 +40,10 @@ import anyparse.runtime.Span;
  * soundness caveat is the proof trusts `@:nullSafety` without a strict-null check.
  */
 @:nullSafety(Strict)
-final class UnnecessaryNullCheck implements Check {
+final class UnnecessaryNullCheck extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'unnecessary-null-check';
-	}
-
-	public function description(): String {
-		return 'a comparison against null whose operand is provably non-null';
+	public function new() {
+		super('unnecessary-null-check', 'a comparison against null whose operand is provably non-null', RuleCategory.NullSafety);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

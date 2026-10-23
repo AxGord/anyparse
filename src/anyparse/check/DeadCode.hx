@@ -36,16 +36,10 @@ import anyparse.runtime.Span;
  * no blank residue.
  */
 @:nullSafety(Strict)
-final class DeadCode implements Check {
+final class DeadCode extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'dead-code';
-	}
-
-	public function description(): String {
-		return 'unreachable code after an unconditional return / throw / break / continue';
+	public function new() {
+		super('dead-code', 'unreachable code after an unconditional return / throw / break / continue', RuleCategory.Unused);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

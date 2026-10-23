@@ -332,7 +332,7 @@ using StringTools;
  *   costs coverage, not correctness.
  */
 @:nullSafety(Strict)
-final class PreferLambdaExpressionBody implements Check {
+final class PreferLambdaExpressionBody extends RuleBase {
 
 	/** The rule id, spelled once — `run`, `fix` and the registry all quote it. */
 	private static inline final RULE_ID: String = 'prefer-lambda-expression-body';
@@ -357,15 +357,12 @@ final class PreferLambdaExpressionBody implements Check {
 	/** A collapsible statement carries exactly one child — the value the body becomes. */
 	private static inline final SINGLE_VALUE_CHILD: Int = 1;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return
-			'an arrow lambda whose block body is a single return, expression or control-flow statement, collapsible to an expression body';
+	public function new() {
+		super(
+			RULE_ID,
+			'an arrow lambda whose block body is a single return, expression or control-flow statement, collapsible to an expression body',
+			RuleCategory.Expressions
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

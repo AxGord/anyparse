@@ -37,7 +37,7 @@ import anyparse.runtime.Span;
  * grammar plugin maxComplexity seam.
  */
 @:nullSafety(Strict)
-final class Complexity implements Check implements ConfigAware implements NoAutofix implements VolatileMessage {
+final class Complexity extends RuleBase implements ConfigAware implements NoAutofix implements VolatileMessage {
 
 	/**
 	 * The complexity above which a function is flagged — the conventional checkstyle
@@ -56,18 +56,12 @@ final class Complexity implements Check implements ConfigAware implements NoAuto
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super('complexity', 'function cyclomatic complexity exceeds the threshold', RuleCategory.Design);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'complexity';
-	}
-
-	public function description(): String {
-		return 'function cyclomatic complexity exceeds the threshold';
 	}
 
 	public function messageIdentity(message: String): String {

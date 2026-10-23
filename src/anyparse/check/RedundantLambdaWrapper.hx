@@ -129,18 +129,12 @@ using Lambda;
  * declaration seams. An unset seam degrades to a refusal, never to a wrong accept.
  */
 @:nullSafety(Strict)
-final class RedundantLambdaWrapper implements Check implements DefaultOff {
+final class RedundantLambdaWrapper extends RuleBase implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'redundant-lambda-wrapper';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a lambda that only forwards its parameters to one call — x -> f(x) is f';
+	public function new() {
+		super(RULE_ID, 'a lambda that only forwards its parameters to one call — x -> f(x) is f', RuleCategory.Expressions);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

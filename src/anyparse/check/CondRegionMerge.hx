@@ -97,19 +97,16 @@ using Lambda;
  * body, statement list, a branch of another region — and works on a file the grammar cannot parse.
  */
 @:nullSafety(Strict)
-final class CondRegionMerge implements Check {
+final class CondRegionMerge extends RuleBase {
 
 	/** The rule id. */
 	private static final ID: String = 'cond-region-merge';
 
-	public function new() {}
-
-	public function id(): String {
-		return ID;
-	}
-
-	public function description(): String {
-		return 'two adjacent conditional-compilation regions whose conditions are equal or complementary - mergeable into one';
+	public function new() {
+		super(
+			ID, 'two adjacent conditional-compilation regions whose conditions are equal or complementary - mergeable into one',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

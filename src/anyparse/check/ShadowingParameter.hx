@@ -47,19 +47,13 @@ import anyparse.runtime.Span;
  * idiom, not a mistake — same rule, same reason, as for a local declaration.
  */
 @:nullSafety(Strict)
-final class ShadowingParameter implements Check implements DefaultOff {
+final class ShadowingParameter extends RuleBase implements DefaultOff {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shadowing-parameter';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a function parameter whose name is already bound by an enclosing local, binder or parameter';
+	public function new() {
+		super(RULE_ID, 'a function parameter whose name is already bound by an enclosing local, binder or parameter', RuleCategory.Naming);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -19,16 +19,10 @@ import anyparse.runtime.Span;
  * makes the check a no-op; unset `andOperatorText` disables only the autofix.
  */
 @:nullSafety(Strict)
-final class CollapsibleIf implements Check {
+final class CollapsibleIf extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'collapsible-if';
-	}
-
-	public function description(): String {
-		return 'a nested if with no else that can be merged with && (if (a) if (b) …)';
+	public function new() {
+		super('collapsible-if', 'a nested if with no else that can be merged with && (if (a) if (b) …)', RuleCategory.Control);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -103,7 +103,7 @@ using StringTools;
  * is reported for the same reason.
  */
 @:nullSafety(Strict)
-final class UnusedParameter implements Check implements ConfigAware {
+final class UnusedParameter extends RuleBase implements ConfigAware {
 
 	/** The rule id — also the `apqlint.json` key its options are read under. */
 	private static inline final RULE_ID: String = 'unused-parameter';
@@ -120,18 +120,12 @@ final class UnusedParameter implements Check implements ConfigAware {
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(RULE_ID, 'function parameter declared but never referenced in its body', RuleCategory.Unused);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'function parameter declared but never referenced in its body';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

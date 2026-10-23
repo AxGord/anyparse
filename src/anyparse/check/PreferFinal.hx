@@ -66,16 +66,10 @@ using Lambda;
  * `unused-local`.
  */
 @:nullSafety(Strict)
-final class PreferFinal implements Check {
+final class PreferFinal extends RuleBase {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'prefer-final';
-	}
-
-	public function description(): String {
-		return 'a local var never reassigned that can be final';
+	public function new() {
+		super('prefer-final', 'a local var never reassigned that can be final', RuleCategory.Expressions);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

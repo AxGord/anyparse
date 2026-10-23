@@ -166,7 +166,7 @@ private typedef Plans = {
  * The refusals, the nesting rule and the config keys: `docs/cli-query-tool.md`.
  */
 @:nullSafety(Strict)
-final class HoistCommonImport implements Check implements CrossFileFix implements ConfigAware implements DefaultOff
+final class HoistCommonImport extends RuleBase implements CrossFileFix implements ConfigAware implements DefaultOff
 		implements VolatileMessage {
 
 	/** The share of a directory's modules a statement must stand in, as a percentage. */
@@ -205,19 +205,17 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	/** The linter's memoised per-file config resolver; null when run outside it. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(
+			RULE_ID,
+			'an import most modules of a directory spell, which the directory\'s ambient source could carry — or an ambient one too '
+			+ 'few of them read, which belongs back in its readers',
+			RuleCategory.Imports
+		);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'an import most modules of a directory spell, which the directory\'s ambient source could carry — or an ambient one too '
-			+ 'few of them read, which belongs back in its readers';
 	}
 
 	public function messageIdentity(message: String): String {

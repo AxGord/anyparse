@@ -30,17 +30,15 @@ import anyparse.runtime.Span;
  * dereference has no mechanical fix (the surrounding logic is wrong).
  */
 @:nullSafety(Strict)
-final class NullDereference implements Check implements NoAutofix {
+final class NullDereference extends RuleBase implements NoAutofix {
 
-	public function new() {}
-
-	public function id(): String {
-		return 'null-dereference';
-	}
-
-	public function description(): String {
-		return 'a dereference (field / index / force-unwrap access or call) '
-			+ 'whose receiver is provably null on every path reaching it — a guaranteed null dereference';
+	public function new() {
+		super(
+			'null-dereference',
+			'a dereference (field / index / force-unwrap access or call) '
+			+ 'whose receiver is provably null on every path reaching it — a guaranteed null dereference',
+			RuleCategory.NullSafety
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

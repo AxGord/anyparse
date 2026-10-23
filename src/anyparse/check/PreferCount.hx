@@ -37,19 +37,16 @@ import anyparse.runtime.Span;
  * keeping the inserted `using Lambda;` would leave an orphaned import that still compiles.
  */
 @:nullSafety(Strict)
-final class PreferCount implements Check implements DefaultOff implements RiskyFix implements GroupedFix {
+final class PreferCount extends RuleBase implements DefaultOff implements RiskyFix implements GroupedFix {
 
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'prefer-count';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a var n = 0 counter stepped by the for loop right after it, replaceable with Lambda.count or length';
+	public function new() {
+		super(
+			RULE_ID, 'a var n = 0 counter stepped by the for loop right after it, replaceable with Lambda.count or length',
+			RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

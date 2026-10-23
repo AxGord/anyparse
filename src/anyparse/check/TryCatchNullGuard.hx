@@ -124,7 +124,7 @@ using Lambda;
  * `stringInterpIdentKind` widens the capture scan to braceless `$name` reads.
  */
 @:nullSafety(Strict)
-final class TryCatchNullGuard implements Check implements DefaultOff {
+final class TryCatchNullGuard extends RuleBase implements DefaultOff {
 
 	/** An `if` with no `else` has exactly [condition, then-branch] children. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
@@ -135,15 +135,13 @@ final class TryCatchNullGuard implements Check implements DefaultOff {
 	private static inline final MESSAGE: String =
 		'this null-defaulting try-expression and its following null guard can collapse into the catch clauses';
 
-	public function new() {}
-
-	public function id(): String {
-		return 'try-catch-null-guard';
-	}
-
-	public function description(): String {
-		return 'a declaration initialized by a try-expression defaulting to null, immediately followed by an if (x == null) '
-			+ 'return/throw guard, collapsible by moving the terminator into every catch clause';
+	public function new() {
+		super(
+			'try-catch-null-guard',
+			'a declaration initialized by a try-expression defaulting to null, immediately followed by an if (x == null) '
+			+ 'return/throw guard, collapsible by moving the terminator into every catch clause',
+			RuleCategory.Control
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

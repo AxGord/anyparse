@@ -54,7 +54,7 @@ using Lambda;
  * conservatively.
  */
 @:nullSafety(Strict)
-final class DocCoverage implements Check implements ConfigAware implements NoAutofix implements FileGated {
+final class DocCoverage extends RuleBase implements ConfigAware implements NoAutofix implements FileGated {
 
 	/** Whether an undocumented public top-level type is flagged, unless an `apqlint.json` sets `requireTypeDoc`. */
 	private static inline final RULE_ID: String = 'doc-coverage';
@@ -75,18 +75,12 @@ final class DocCoverage implements Check implements ConfigAware implements NoAut
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super(RULE_ID, 'a public API type or member without a doc comment', RuleCategory.Docs);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a public API type or member without a doc comment';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -115,7 +115,7 @@ using Lambda;
  * unannotated, else `return (e : T);`.
  */
 @:nullSafety(Strict)
-final class JoinReturn implements Check {
+final class JoinReturn extends RuleBase {
 
 	/** A single-variable declaration with an initializer projects as exactly one child: the initializer. */
 	private static inline final INIT_CHILD_COUNT: Int = 1;
@@ -123,14 +123,10 @@ final class JoinReturn implements Check {
 	/** A valued `return` node has exactly one child: the returned expression. */
 	private static inline final RETURN_VALUE_CHILD_COUNT: Int = 1;
 
-	public function new() {}
-
-	public function id(): String {
-		return 'join-return';
-	}
-
-	public function description(): String {
-		return 'a local declaration whose value is immediately returned, joinable to a single return';
+	public function new() {
+		super(
+			'join-return', 'a local declaration whose value is immediately returned, joinable to a single return', RuleCategory.Expressions
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

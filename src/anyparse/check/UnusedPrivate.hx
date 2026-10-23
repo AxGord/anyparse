@@ -116,7 +116,7 @@ using StringTools;
  * caller.
  */
 @:nullSafety(Strict)
-final class UnusedPrivate implements Check implements ConfigAware implements FrameworkAware {
+final class UnusedPrivate extends RuleBase implements ConfigAware implements FrameworkAware {
 
 	/**
 	 * The one decline sentence two gates share: a member of a macro-built type, and a private empty
@@ -157,18 +157,12 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
-	public function new() {}
+	public function new() {
+		super('unused-private', 'private field/method declared but never referenced', RuleCategory.Unused);
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
-	}
-
-	public function id(): String {
-		return 'unused-private';
-	}
-
-	public function description(): String {
-		return 'private field/method declared but never referenced';
 	}
 
 	/**

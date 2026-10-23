@@ -39,19 +39,15 @@ import anyparse.runtime.Span;
  * `using` at all.
  */
 @:nullSafety(Strict)
-final class PreferForeach implements Check implements DefaultOff {
+final class PreferForeach extends RuleBase implements DefaultOff {
 
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'prefer-foreach';
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a manual all-match for loop (returning, or setting a bool flag) replaceable with Lambda.foreach';
+	public function new() {
+		super(
+			RULE_ID, 'a manual all-match for loop (returning, or setting a bool flag) replaceable with Lambda.foreach', RuleCategory.Loops
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

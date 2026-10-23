@@ -72,7 +72,7 @@ using StringTools;
  * opt in with `"misplaced-type-doc": { "enabled": true }`.
  */
 @:nullSafety(Strict)
-final class MisplacedTypeDoc implements Check implements DefaultOff {
+final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'misplaced-type-doc';
 
@@ -86,14 +86,8 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 	/** The header decls a misplaced doc must sit between: the package statement plus at least one import. */
 	private static inline final MIN_HEADER_DECLS: Int = 2;
 
-	public function new() {}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'a doc comment stranded between the package statement and the imports';
+	public function new() {
+		super(RULE_ID, 'a doc comment stranded between the package statement and the imports', RuleCategory.Docs);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
