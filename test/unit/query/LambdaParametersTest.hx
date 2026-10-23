@@ -49,6 +49,21 @@ class LambdaParametersTest extends Test {
 	private static final SHADOWING: String = 'package app;\n\nimport lib.Box;\n\nclass Item {\n\tpublic var tag: String = "";\n}\n\n'
 		+ 'class Probe {\n\tfunction f() {\n\t\tBox.plain(n1 -> trace(n1));\n\t}\n}\n';
 
+	/** A caller declaring its own `Item`, typing a value read off a member another file writes `Box<Item>`. */
+	private static final THIRD_FILE: String = 'package app;\n\nimport lib.Box;\nimport lib.Holder;\n\nclass Item {}\n\nclass Main {\n'
+		+ '\tstatic function gen<A>(b: Box<A>, f: A -> Void): Void {}\n\n\tfunction f(h: Holder, b2: Box<Item>) {\n'
+		+ '\t\tgen(h.box, t1 -> trace(t1));\n\t\tgen(b2, t2 -> trace(t2));\n\t}\n}\n';
+
+	/** The member's file and the type it names. */
+	private static final HOLDER: Array<{ file: String, source: String }> = [
+		{ file: 'lib/Item.hx', source: 'package lib;\n\nclass Item {}\n' },
+		{ file: 'lib/Box.hx', source: 'package lib;\n\nclass Box<T> {}\n' },
+		{
+			file: 'lib/Holder.hx',
+			source: 'package lib;\n\nimport lib.Box;\nimport lib.Item;\n\nclass Holder {\n\tpublic final box: Box<Item> = null;\n}\n'
+		}
+	];
+
 	/** The std the iteration cases read: `Iterable`, an array the index holds two copies of, `Lambda`. */
 	private static final STD: Array<{ file: String, source: String }> = [
 		{
@@ -155,6 +170,17 @@ class LambdaParametersTest extends Test {
 	@:pin('control') @:killer('M-BOUND-SHADOWED-SUBSTITUTED')
 	public function testAMethodsTypeParameterShadowsItsTypesOfTheName(): Void {
 		Assert.equals('Int', typed('a14)'), '`shadow<T>` of `Box<T>` on a `Box<Item>`: its own `T`');
+	}
+
+	@:pin('control') @:killer('M-ARGUMENT-WRITTEN-ELSEWHERE')
+	public function testATypeAMemberReadCarriesIsNoArgumentTheCallerMayRead(): Void {
+		Assert.isNull(
+			ValueDoorsTest.typedIn(THIRD_FILE, 'app/Main.hx', HOLDER, 'IdentExpr', 't1)').source,
+			'`h.box` is a `Box<Item>` its declaring file writes, the caller\'s `Item` another type'
+		);
+		Assert.equals(
+			'Item', ValueDoorsTest.typedIn(THIRD_FILE, 'app/Main.hx', HOLDER, 'IdentExpr', 't2)').source, 'a `Box<Item>` the caller writes'
+		);
 	}
 
 	/** The written-source answer for the identifier starting at the first `at` of `SOURCE`. */

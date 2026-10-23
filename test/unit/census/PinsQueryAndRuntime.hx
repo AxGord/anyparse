@@ -453,6 +453,8 @@ final class PinsQueryAndRuntime {
 		'unit.query.LambdaParametersTest#testAParameterTakesTheTypeItsPositionExpects :: control :: M-LAMBDA-PARAMETER-NULL',
 		'unit.query.LambdaParametersTest#testAParameterWrittenOptionalOrWithADefaultIsNoAnswer :: control :: M-LAMBDA-OPTIONAL-TAKEN',
 		'unit.query.LambdaParametersTest#testAStaticExtensionBindsItsReceiverFirst :: control :: M-EXTENSION-PARAMETER-NULL',
+		'unit.query.LambdaParametersTest#testATypeAMemberReadCarriesIsNoArgumentTheCallerMayRead :: control :: '
+			+ 'M-ARGUMENT-WRITTEN-ELSEWHERE',
 		'unit.query.LambdaParametersTest#testATypeWrittenInTheCalleesFileIsNoAnswerWhereTheCallerHasANamesake :: control :: '
 			+ 'M-NAMESAKE-READS-ALIKE,M-LAMBDA-FOREIGN-FILE-TAKEN',
 		'unit.query.LambdaParametersTest#testTheArgumentsBeforeTheLambdaBindTheCallsTypeParameters :: control :: M-INFERRED-CELLS-UNBOUND',

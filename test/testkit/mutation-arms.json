@@ -30498,6 +30498,13 @@
 			"find": "if (!own.contains(params[i])) i]",
 			"replace": "i]",
 			"note": "a method's type parameter named like its type's is bound to the receiver's argument, so `shadow<T>(x: T, f: T -> Void)` on a `Box<Item>` given `1` types the lambda's parameter `Item`"
+		},
+		{
+			"name": "M-ARGUMENT-WRITTEN-ELSEWHERE",
+			"type": "anyparse.query.CallReturns",
+			"method": "writtenType",
+			"force": "TypingService.typeWalk(node, c.shape, NominalTypes.INDEX_HOST, c)",
+			"note": "a receiver or an argument is typed by every arc, a member read's type as its declaring file writes it, so a caller's namesake of a type it names binds the call's type parameter"
 		}
 	]
 }

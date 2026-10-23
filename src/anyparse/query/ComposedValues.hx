@@ -464,13 +464,14 @@ final class ComposedValues {
 	}
 
 	/**
-	 * The type the receiver `receiver` of a call is written with, its arguments kept and its member-transparent wrappers
-	 * peeled (`NominalTypes.memberLookupReceiverSource`: a `Null<Array<Item>>` value is an `Array<Item>` receiver), where it
-	 * names the type `typed` the nominal walk reads; null otherwise.
+	 * The type the receiver `receiver` of a call is written with in this file (`CallReturns.writtenType`: a type a member
+	 * read carries is written in its declaring file, where a name it spells may mean another type), its arguments kept and
+	 * its member-transparent wrappers peeled (`NominalTypes.memberLookupReceiverSource`: a `Null<Array<Item>>` value is an
+	 * `Array<Item>` receiver), where it names the type `typed` the nominal walk reads; null otherwise.
 	 */
 	private static function receiverSource(receiver: QueryNode, typed: String, c: IndexTyping): Null<String> {
 		final syntax: TypeSyntaxReader = c.chain.typeSyntax;
-		final written: Null<String> = TypingService.typeWalk(receiver, c.shape, NominalTypes.INDEX_HOST, c);
+		final written: Null<String> = CallReturns.writtenType(receiver, c);
 		final peeled: Null<String> = written == null
 			? null
 			: NominalTypes.memberLookupReceiverSource(written, c.shape.memberTransparentWrapperTypeNames ?? [], syntax);
