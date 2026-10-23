@@ -5,7 +5,6 @@ import anyparse.query.Cli.TestSummaryFailureLocus;
 import anyparse.query.Cli.TestSummaryHeader;
 import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.SourceText;
-import haxe.Exception;
 
 using Lambda;
 

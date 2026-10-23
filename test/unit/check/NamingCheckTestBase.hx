@@ -1,16 +1,12 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.Naming;
 import anyparse.grammar.haxe.HaxeNamingSupport;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Fixture scaffolding shared by the `naming` check test parts: the violation run

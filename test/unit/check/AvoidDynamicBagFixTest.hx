@@ -2,13 +2,9 @@ package unit.check;
 
 import anyparse.check.AvoidDynamic;
 import anyparse.check.Check.TypeOracle;
-import anyparse.check.Check.Violation;
 import anyparse.check.PositionTypeOracle;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

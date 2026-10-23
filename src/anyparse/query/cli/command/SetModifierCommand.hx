@@ -4,7 +4,6 @@ import anyparse.check.CheckScan;
 import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * `apq set-modifier` — flip visibility / add-remove modifiers at a cursor (no retype).

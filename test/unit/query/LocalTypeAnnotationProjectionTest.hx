@@ -1,10 +1,7 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.format.Text;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

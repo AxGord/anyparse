@@ -1,14 +1,10 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.cli.command.LintCommand;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `redundant-isvar` check: an `@:isVar` on a property whose physical field no accessor body,

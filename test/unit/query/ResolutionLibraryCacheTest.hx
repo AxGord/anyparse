@@ -7,8 +7,6 @@ import sys.io.File;
 import anyparse.query.Cli;
 import anyparse.query.SharedParseTier;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The PROCESS-scoped second tier behind `CachingGrammarPlugin`'s per-run parse caches: the

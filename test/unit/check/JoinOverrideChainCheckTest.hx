@@ -2,13 +2,9 @@ package unit.check;
 
 import anyparse.check.Check;
 import anyparse.check.JoinOverrideChain;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

@@ -1,10 +1,7 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.format.Json;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The 1-based line/column coordinates `apq … --json` puts in every `span`.

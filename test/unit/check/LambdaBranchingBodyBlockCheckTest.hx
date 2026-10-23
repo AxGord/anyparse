@@ -1,13 +1,9 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.LambdaBranchingBodyBlock;
 import anyparse.check.PreferLambdaExpressionBody;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `lambda-branching-body-braces` — the ADD half of the lambda-body brace policy: an arrow

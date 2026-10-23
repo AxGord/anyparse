@@ -6,7 +6,6 @@ import anyparse.query.Uses.UsesHit;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliWalk;
 import anyparse.query.format.Text;
-import haxe.Exception;
 
 using Lambda;
 

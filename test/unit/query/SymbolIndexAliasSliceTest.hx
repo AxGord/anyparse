@@ -1,9 +1,6 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `SubtypeGraph.hasSubtype` across TYPEDEF and IMPORT aliases — the walk `subtypesOf` does

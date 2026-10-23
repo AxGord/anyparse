@@ -1,14 +1,11 @@
 package unit.check;
 
 import anyparse.check.Check.CrossFileEdits;
-import anyparse.check.Check.Violation;
 import anyparse.check.Naming;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import utest.Assert;
 
 using Lambda;
 

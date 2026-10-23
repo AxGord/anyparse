@@ -6,8 +6,6 @@ import sys.FileSystem;
 #end
 import anyparse.query.Glob;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Unit coverage for `Glob.expand` — the apq input resolver. Builds a

@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ReplaceNode;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `ReplaceNode.replaceNode` — replace one node's source span, WRITER-

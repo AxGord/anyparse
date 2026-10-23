@@ -1,13 +1,10 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.Rename;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The bare arrow lambda's parameter is a BINDER, not a read of the enclosing scope.

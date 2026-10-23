@@ -1,11 +1,8 @@
 package unit.check;
 
 import anyparse.check.LoopScan;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The subtree scans `prefer-value-loop` and `prefer-keyvalue-loop` share, exercised DIRECTLY

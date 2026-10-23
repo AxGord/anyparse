@@ -7,7 +7,6 @@ import anyparse.query.cli.CliWalk.SkipEntry;
 import anyparse.runtime.EditDistance;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 #if (sys || nodejs)
 import sys.FileSystem;
 #end

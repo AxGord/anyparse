@@ -1,12 +1,9 @@
 package unit.check;
 
 import anyparse.check.NullFlowScan;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `NullFlowScan` — the gates the null-flow consumers share: the seam bundle answers null when a

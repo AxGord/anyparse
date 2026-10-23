@@ -1,0 +1,11 @@
+# Shared flags of the fixture-cache replay program (`testkit.FixtureCompileCache`), which
+# `tools/fixture-cache.sh` and `devkit.FixtureCache` build into a cache entry of their own:
+# they pass `-js <entry>` themselves, so the output line cannot live here (haxe rejects a
+# second `-js`). `tools/fixture-cache.hxml` is the leaf the compiler oracle typechecks.
+#
+# No `-cp src` and no `-lib utest`: the replay program is `test/testkit` code alone, so an
+# import an ambient source under `test/` adds has to resolve without either.
+-cp test
+-main testkit.FixtureCompileCache
+-lib hxnodejs
+-D js-es=6

@@ -5,7 +5,6 @@ import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliUsage;
 import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * `apq set-comment` — the SINGLE-FILE EDIT shape of the command seam.

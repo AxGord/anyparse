@@ -3,7 +3,6 @@ package anyparse.query.cli.command;
 import anyparse.core.TempScratch;
 import anyparse.query.ExitCode.*;
 import anyparse.runtime.ParseError;
-import haxe.Exception;
 
 /**
  * `apq probe` — aST/writer probe with inline source (no file IO).

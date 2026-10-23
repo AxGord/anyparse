@@ -6,10 +6,7 @@ import anyparse.check.EmptyStatement;
 import anyparse.check.InvertNegatedIfElse;
 import anyparse.check.PreferSwitch;
 import anyparse.check.RedundantElse;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `RegionTerminator` through every fix that moves, swaps or deletes around an if / loop body: a

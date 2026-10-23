@@ -2,14 +2,9 @@ package unit.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.ShadowingParameter;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `shadowing-parameter` check: a nested function's PARAMETER whose name an enclosing frame

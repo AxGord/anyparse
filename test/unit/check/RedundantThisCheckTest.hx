@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.RedundantThis;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `redundant-this` check: a `this.field` access reduces to bare `field`

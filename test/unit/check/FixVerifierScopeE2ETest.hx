@@ -6,10 +6,7 @@ import sys.io.File;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.PreferInline;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * End-to-end coverage of `FixVerifier.verify`'s CANDIDATE SCOPE: a risky check's

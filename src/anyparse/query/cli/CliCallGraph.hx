@@ -3,7 +3,6 @@ package anyparse.query.cli;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.cli.CliArgs;
 import anyparse.runtime.ParseError;
-import haxe.Exception;
 
 /**
  * The call graph `callees` / `callers` / `reach` / `clusters` all build.

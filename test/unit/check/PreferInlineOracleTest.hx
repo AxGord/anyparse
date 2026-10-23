@@ -4,15 +4,11 @@ package unit.check;
 import sys.FileSystem;
 import sys.io.File;
 #end
-import anyparse.check.Check.Violation;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.PreferInline;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

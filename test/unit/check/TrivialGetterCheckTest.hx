@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.TrivialGetter;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
-import utest.Assert;
 
 /**
  * The `trivial-getter` check on a READ-ONLY property: `var x(get, never)` /

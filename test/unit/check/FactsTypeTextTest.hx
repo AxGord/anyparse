@@ -1,8 +1,6 @@
 package unit.check;
 
 import anyparse.check.FactsTypeText;
-import utest.Assert;
-import utest.Test;
 
 /** `FactsTypeText.unwrapNull` over types as the compiler facts spell them. */
 @:nullSafety(Strict)

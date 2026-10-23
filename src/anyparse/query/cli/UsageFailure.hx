@@ -1,7 +1,5 @@
 package anyparse.query.cli;
 
-import haxe.Exception;
-
 /**
  * A CLI argument the run cannot use — a flag missing its value, an out-of-range
  * `--limit`, an unknown `--lang` plugin name. Its own type rather than a bare

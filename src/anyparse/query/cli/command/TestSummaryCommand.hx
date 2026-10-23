@@ -2,7 +2,6 @@ package anyparse.query.cli.command;
 
 import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.ExitCode.*;
-import haxe.Exception;
 
 /**
  * `apq test-summary` — parse utest stdout transcript into tests/assertions/failures.

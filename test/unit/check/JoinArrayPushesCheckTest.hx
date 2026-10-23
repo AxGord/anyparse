@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.JoinArrayPushes;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `join-array-pushes` check: an empty-array binding followed by a run of `a.push(e);`

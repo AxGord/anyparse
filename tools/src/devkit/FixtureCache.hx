@@ -58,7 +58,7 @@ final class FixtureCache {
 		final replay: String = '$entries/fixture-cache-$sum.js';
 		if (!FileSystem.exists(replay)) {
 			final tmp: String = '$replay.${js.Node.process.pid}.tmp';
-			final build: Result = cmd('haxe -cp test -main testkit.FixtureCompileCache -lib hxnodejs -D js-es=6 -js $tmp').at(repo).run();
+			final build: Result = cmd('haxe tools/fixture-cache-common.hxml -js $tmp').at(repo).run();
 			File.saveContent('$entries/build-$sum.log', build.out + build.err);
 			if (!build.ok) {
 				if (FileSystem.exists(tmp)) FileSystem.deleteFile(tmp);

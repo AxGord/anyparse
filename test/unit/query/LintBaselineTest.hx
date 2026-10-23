@@ -8,8 +8,6 @@ import anyparse.query.LintDiff;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.json.LintFindingJson;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Unit cover for `apq lint --baseline` — the delta a `PostToolUse` nudge reports instead of

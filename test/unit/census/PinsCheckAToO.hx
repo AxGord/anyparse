@@ -376,6 +376,7 @@ final class PinsCheckAToO {
 		'unit.check.HaxeSpawnTest#testAWedgedDriverIsKilledAtItsBound :: control :: M-DRIVER-UNBOUNDED',
 		'unit.check.HaxeSpawnTest#testTheDriverBoundScalesWithTheJobs :: control :: M-DRIVER-BOUND-IGNORES-ROUNDS',
 		'unit.check.HaxeSpawnTest#testTheDriverReadsItsJobsFromNoPipe :: control :: M-DRIVER-READS-STDIN',
+		'unit.check.HoistCommonImportTest#testABuildParsingAReceiverButNotTheStatementWithholdsIt :: control :: M-HOIST-BUILD-WITHOUT-MODULE-IGNORED',
 		'unit.check.HoistCommonImportTest#testAFieldOrUnseenSubTypeImportIsNoSecondBinder :: control :: M-IMPORT-MODULE-TAIL-UNKNOWN',
 		'unit.check.HoistCommonImportTest#testAFixedTreeIsAFixedPointOfBothDirections :: control :: M-SINK-HYSTERESIS-OFF',
 		'unit.check.HoistCommonImportTest#testANamesakePushesTheStatementToADeeperSite :: guard :: ',
@@ -383,6 +384,7 @@ final class PinsCheckAToO {
 			+ 'M-HOIST-SITE-ORDER,M-HOIST-CHAIN-INHERITED',
 		'unit.check.HoistCommonImportTest#testAReceiverAlreadyCompilingTheEntryVouchesForIt :: control :: '
 			+ 'M-HOIST-RECEIVER-EVIDENCE-BLIND,M-HOIST-TIE-NEAREST-FIRST',
+		'unit.check.HoistCommonImportTest#testAReceiverNoBuildParsesLosesNothing :: control :: M-HOIST-UNPARSED-RECEIVER-WITHHELD',
 		'unit.check.HoistCommonImportTest#testASecondRunHasNothingToDo :: guard :: ',
 		'unit.check.HoistCommonImportTest#testASinkAndARenameInOneReaderBothLand :: control :: M-SINK-WHOLE-FILE',
 		'unit.check.HoistCommonImportTest#testASinkThresholdNotBelowTheHoistOneIsIgnored :: control :: M-SINK-HYSTERESIS-OFF',
@@ -390,6 +392,7 @@ final class PinsCheckAToO {
 		'unit.check.HoistCommonImportTest#testASunkUsingKeepsItsRankBelowTheReadersOwn :: guard :: ',
 		'unit.check.HoistCommonImportTest#testCreatesTheAmbientSourceAsAWholeFile :: guard :: ',
 		'unit.check.HoistCommonImportTest#testDoesNotProposeWhatTheChainAlreadyProvides :: guard :: ',
+		'unit.check.HoistCommonImportTest#testEveryBuildParsingTheStatementVouchesForEveryReceiver :: control :: M-HOIST-BUILDS-UNASKED',
 		'unit.check.HoistCommonImportTest#testExtendingAnExistingSourceIsAnEdit :: guard :: ',
 		'unit.check.HoistCommonImportTest#testExtendsAnExistingAmbientSource :: control :: M-HOIST-NEVER-SOUND',
 		'unit.check.HoistCommonImportTest#testHoistedUsingsKeepTheirSourceOrder :: control :: M-HOIST-USINGS-SOURCE-ORDER',

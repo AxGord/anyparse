@@ -3,10 +3,7 @@ package unit.check;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.check.UsingSites;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

@@ -6,8 +6,6 @@ import sys.FileSystem;
 import anyparse.query.Cli;
 import anyparse.query.cli.CliWalk;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq lit / refs / uses` with a dotted query (`TypeName.method`,

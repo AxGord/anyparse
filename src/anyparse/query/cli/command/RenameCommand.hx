@@ -6,7 +6,6 @@ import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.Rename;
 import anyparse.query.cli.CliArgs;
 import anyparse.runtime.Span;
-import haxe.Exception;
 import anyparse.query.ExitCode.*;
 
 /**

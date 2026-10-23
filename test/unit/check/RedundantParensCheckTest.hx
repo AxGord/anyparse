@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.RedundantParens;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `redundant-parens` check. Two arms: a parenthesized expression wrapped

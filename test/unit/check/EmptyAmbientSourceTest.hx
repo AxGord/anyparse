@@ -1,12 +1,8 @@
 package unit.check;
 
 import anyparse.check.Check.CrossFileEdits;
-import anyparse.check.Check.Violation;
 import anyparse.check.EmptyAmbientSource;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `empty-ambient-source` — an ambient import source binding nothing is reported, and deleted when nothing

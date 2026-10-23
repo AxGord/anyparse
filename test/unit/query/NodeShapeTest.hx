@@ -3,8 +3,6 @@ package unit.query;
 import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `NodeShape` — the statement and call shapes the checks read off node kinds, on hand-built

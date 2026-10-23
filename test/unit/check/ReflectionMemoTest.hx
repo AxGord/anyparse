@@ -1,10 +1,7 @@
 package unit.check;
 
 import anyparse.check.ReflectionScan;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The LIFETIME half of the reflection gate — `LintScopeGateTest` pins how WIDE the scan's scope

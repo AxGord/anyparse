@@ -1,6 +1,36 @@
 {
-	"compilerOracle": "test-js.hxml",
+	"compilerOracle": [
+		{
+			"hxml": "test-js.hxml",
+			"dir": "."
+		},
+		{
+			"hxml": "bin/apq-js.hxml",
+			"dir": "."
+		},
+		{
+			"hxml": "tools/dev.hxml",
+			"dir": "."
+		},
+		{
+			"hxml": "recon.hxml",
+			"dir": "."
+		},
+		{
+			"hxml": "tools/fixture-cache.hxml",
+			"dir": "."
+		},
+		{
+			"hxml": "tools/jvm-portability.hxml",
+			"dir": "."
+		},
+		{
+			"hxml": "tools/bench-hxcpp.hxml",
+			"dir": "."
+		}
+	],
 	"compilerOracleServer": false,
+	"reachConfigurationsComplete": true,
 	"resolutionRoots": [
 		"src",
 		"test"

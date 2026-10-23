@@ -5,12 +5,9 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.grammar.haxe.HaxeLexicalRegions;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

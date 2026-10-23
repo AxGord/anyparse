@@ -1,12 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.DuplicateCase;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `duplicate-case` check: a switch branch whose pattern repeats an earlier

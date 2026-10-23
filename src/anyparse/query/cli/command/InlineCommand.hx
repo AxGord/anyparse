@@ -4,7 +4,6 @@ import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Inline;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * `apq inline` — inline a local variable into its uses.

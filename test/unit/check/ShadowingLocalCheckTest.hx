@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.ShadowingLocal;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `shadowing-local` check: a local declaration whose name an enclosing frame already binds.

@@ -7,12 +7,9 @@ import anyparse.check.AvoidDynamic;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import haxe.io.Path;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

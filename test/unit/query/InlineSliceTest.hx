@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Inline;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `Inline.inline` — scope-correct, format-preserving inline-variable.

@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UncheckedNullable;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `unchecked-nullable` check: the result of `Std.parseInt` / `Std.parseFloat`

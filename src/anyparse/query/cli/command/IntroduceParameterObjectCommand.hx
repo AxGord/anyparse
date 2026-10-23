@@ -3,7 +3,6 @@ package anyparse.query.cli.command;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * `apq introduce-parameter-object` — fold contiguous params into one object param.

@@ -1,7 +1,6 @@
 package unit.query;
 
 import anyparse.check.OracleCoverage;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
@@ -13,8 +12,6 @@ import anyparse.query.ReachProject;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import unit.QueryTestHelpers;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `MemberReach`: may the code an entry runs change member M? Each case writes the entry as a REGION

@@ -1,10 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.LintConfig;
 import anyparse.runtime.Span;
-import utest.Assert;
 
 using StringTools;
 

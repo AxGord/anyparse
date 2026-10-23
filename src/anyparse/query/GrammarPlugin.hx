@@ -2604,6 +2604,22 @@ final class RefShape {
 	public var realArithmeticKinds: Null<Array<String>>;
 
 	/**
+	 * The binary operators whose result over core value types (`coreValueTypes`) is the `boolean` type whatever their
+	 * operands — a comparison, a logical operator (Haxe 4.3.7 `$type`: `i < f`, `s == s`, `b && nb` are `Bool`); `notKind`
+	 * is their unary sibling. An abstract may overload any of them, so over another type the result is undecided.
+	 * Optional; unset types none.
+	 */
+	public var booleanOperatorKinds: Null<Array<String>>;
+
+	/**
+	 * The kinds of an anonymous structure's PLAIN fields: written with a type, readable and writable, no accessor, not
+	 * final (Haxe's short syntax, `a: Int` and `?b: String`). A structure of them alone prints as its fields and their
+	 * types, which is what an object literal typed against it is (`typer.ml`, `type_object_decl`). Optional; unset reads
+	 * none.
+	 */
+	public var plainStructureFieldKinds: Null<Array<String>>;
+
+	/**
 	 * The static extensions that test the ends of a string, as a guard over a string the analysis knows is decided:
 	 * `module` declares them (Haxe `StringTools`), `suffix` tests the end (`endsWith`), `prefix` the start
 	 * (`startsWith`). Optional; unset decides no such guard.
@@ -3586,6 +3602,9 @@ typedef CoreValueTypes = {
 	final widens: Map<String, Array<String>>;
 	final integer: String;
 	final real: String;
+
+	/** The truth-value type a comparison or a logical operator yields (`RefShape.booleanOperatorKinds`, Haxe `Bool`). */
+	@:optional final boolean: String;
 
 	/**
 	 * The largest DECIMAL literal of the `integer` type, spelled (Haxe `2147483647`): 4.3.7 types a decimal literal past it

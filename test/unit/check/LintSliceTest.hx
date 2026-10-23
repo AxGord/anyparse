@@ -1,22 +1,17 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.DeadCode;
 import anyparse.check.DuplicateImport;
-import anyparse.check.Linter;
 import anyparse.check.SelfAssignment;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.check.UnusedLocal;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
 import haxe.DynamicAccess;
 import haxe.Json;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

@@ -1,12 +1,9 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.DeclarationKey;
 import anyparse.query.DeclarationQuery;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The typing service's query cache (`TypingService`, `QueryCache`): an answer is remembered by the DECLARATION it is
@@ -69,6 +66,17 @@ class TypingServiceTest extends Test {
 		Assert.isNull(query.answer(key, compute));
 		Assert.isNull(query.answer(key, compute));
 		Assert.equals(1, asked, 'the second asking is answered from the table');
+	}
+
+	@:pin('control') @:killer('M-MEMBER-READ-BRANCHES-FIRST')
+	public function testAReadOfAMemberItsBranchesWriteDifferentlyIsUnknown(): Void {
+		final index: SymbolIndex = indexOf([
+			'p/A.hx' => 'package p;\n\nclass A {\n\t#if js\n\tpublic var m: Int = 0;\n\t#else\n\tpublic var m: String = "";\n\t#end\n'
+			+ '\tpublic var n: Int = 0;\n}\n'
+		]);
+		final a: ResolvedType = declOf(index, 'p/A.hx', 0);
+		Assert.isNull(index.typing.members.memberRead(a, 'm', []), 'which branch a build compiles is not known');
+		Assert.equals('Int', index.typing.members.memberRead(a, 'n', [])?.text, 'a member written once');
 	}
 
 	/** The `nth` type declaration of `file`, in the index's order. */

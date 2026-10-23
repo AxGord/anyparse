@@ -3,8 +3,6 @@ package unit.query;
 import anyparse.query.Cli;
 import anyparse.query.cli.command.SourceCommand;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `apq source` dedent: by default the common leading-whitespace prefix

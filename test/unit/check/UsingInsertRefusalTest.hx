@@ -1,17 +1,13 @@
 package unit.check;
 
 import anyparse.check.Check.GroupedEdit;
-import anyparse.check.Check.Violation;
 import anyparse.check.LambdaLoopScan;
 import anyparse.check.PreferStaticExtension;
 import anyparse.check.Severity;
 import anyparse.check.UsingScan;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `using`-insert seam's second refusal: the anchor byte is already covered by an accepted

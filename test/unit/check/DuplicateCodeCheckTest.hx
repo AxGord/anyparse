@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.DuplicateCode;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `duplicate-code` check: three or more consecutive statements repeated

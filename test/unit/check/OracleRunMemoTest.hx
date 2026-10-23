@@ -9,8 +9,6 @@ import anyparse.check.TypedFactsProbe;
 import anyparse.query.LintFixSafePass.SafePassOutcome;
 import anyparse.query.cli.command.LintFixDriver;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `OracleRunMemo`: inside one run, a compile of a tree the run already compiled is answered from the memo — and only a

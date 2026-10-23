@@ -1,13 +1,10 @@
 package unit.query;
 
 import anyparse.check.CheckScan;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SetModifier;
 import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

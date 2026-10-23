@@ -1,13 +1,10 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Engine;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.QueryNode;
 import anyparse.query.Selector;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Unit tests for the `--select` selector grammar (parser + matcher).

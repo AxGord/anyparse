@@ -4,7 +4,6 @@ import anyparse.query.ExitCode.*;
 import anyparse.query.ReplaceNode;
 import anyparse.query.cli.CliUsage;
 import anyparse.query.cli.PostWriteFix;
-import haxe.Exception;
 #if (sys || nodejs)
 import sys.io.File;
 #end

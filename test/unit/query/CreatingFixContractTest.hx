@@ -1,14 +1,11 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NewFile;
 import anyparse.query.cli.CliIo;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

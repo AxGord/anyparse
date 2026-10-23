@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.MemberOrder;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import utest.Assert;
-import utest.Test;
 
 /**
  * What a `member-order` finding SAYS. Its sibling `MemberOrderCheckTest` covers which member is

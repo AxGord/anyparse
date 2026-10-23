@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.RedundantBypassAccessor;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `redundant-bypass-accessor` check: a `@:bypassAccessor` on a plain-`=`

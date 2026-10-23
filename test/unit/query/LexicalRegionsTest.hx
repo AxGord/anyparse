@@ -2,8 +2,6 @@ package unit.query;
 
 import anyparse.grammar.haxe.HaxeLexicalRegions;
 import anyparse.query.LexicalRegions;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `LexicalRegions` — the byte-level scan that decides which source is code.

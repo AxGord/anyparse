@@ -1,8 +1,6 @@
 package unit.check;
 
 import anyparse.check.HaxeSpawn;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `HaxeSpawn.parallelismFor`: how many compiles of one project run at once. A compile is a single-threaded process the

@@ -3,11 +3,8 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.PreferForeach;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-foreach` check: a manual all-match `for` loop

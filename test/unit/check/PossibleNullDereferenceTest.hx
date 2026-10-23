@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.PossibleNullDereference;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `possible-null-dereference` check: a dereference of a `map[key]` result

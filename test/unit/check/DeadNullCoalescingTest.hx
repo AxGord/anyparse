@@ -1,13 +1,9 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.DeadNullCoalescing;
-import anyparse.check.Linter;
 import anyparse.check.NullSafetyGate;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `dead-null-coalescing` check: a null-coalescing `a ?? b` whose left operand is

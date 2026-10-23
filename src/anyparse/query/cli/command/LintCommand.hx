@@ -28,7 +28,6 @@ import anyparse.query.SourceText;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
-import haxe.Exception;
 import haxe.io.Path;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;

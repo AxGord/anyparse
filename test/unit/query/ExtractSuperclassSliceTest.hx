@@ -1,11 +1,8 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ExtractSuperclass;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

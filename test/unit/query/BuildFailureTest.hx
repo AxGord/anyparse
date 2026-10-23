@@ -1,8 +1,6 @@
 package unit.query;
 
 import anyparse.query.BuildFailure;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

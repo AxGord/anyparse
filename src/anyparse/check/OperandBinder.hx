@@ -64,6 +64,7 @@ final class OperandBinder {
 		element: null,
 		call: (node, b) -> b.callTier(node),
 		construction: (node, b) -> b.constructionTier(node),
+		contextual: null,
 		arithmetic: null,
 		reading: b -> b._reading
 	};

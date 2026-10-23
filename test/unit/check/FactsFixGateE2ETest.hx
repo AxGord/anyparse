@@ -7,8 +7,6 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.HaxeSpawn;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * Three `--fix` gates that decline where the run cannot type something, answered by the compiler's facts over a real

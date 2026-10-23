@@ -1,11 +1,7 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.DoubleNegation;
-import anyparse.check.Linter;
 import anyparse.check.Severity;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `double-negation` check: a not-node wrapping another (`!!x`, and `!(!x)` through any

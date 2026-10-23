@@ -1,12 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.Violation;
-import anyparse.check.Linter;
 import anyparse.check.PreferTernaryExpression;
 import anyparse.check.Severity;
 import anyparse.runtime.Span;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The `prefer-ternary-expression` check: a 2-branch `if`-EXPRESSION in value position is
