@@ -2,3 +2,11 @@
 # include path is resolved against the CWD, so build from the repo root.
 bin/apq-js-common.hxml
 -js bin/apq.js
+# Then the code-cache launcher beside it (bin/apq-launch-common.hxml) and its
+# cache, warmed through the shim so the warm run has the node flags a call
+# has. A `--cmd`, never a `--next` block: a typecheck (`haxe <hxml>
+# --no-output`, the lint oracle) skips every `--cmd`, while it would WRITE the
+# output of every block but the last. The line exits with the warm step's
+# status, forced to 0 (`|| true`, for a missing node too) — a failed launcher
+# build or warm leaves a whole engine that runs without a cache.
+--cmd haxe bin/apq-launch-common.hxml -js bin/apq-launch.js; HXQ_BIN=bin/apq.js sh bin/hxq --warm-code-cache || true

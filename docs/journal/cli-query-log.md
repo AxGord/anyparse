@@ -1780,3 +1780,7 @@ These remain open and will be answered in the phase that needs them:
 - [strategies.md](../strategies.md) — plugin contract for grammar strategies.
 - [formats.md](../formats.md) — plugin contract for formats.
 - [haxe-format-config.md](../haxe-format-config.md) — the `hxformat.json` values the Haxe writer accepts (`wrapping.*` modes and `cond` spellings), and why an unknown one is silent.
+
+## From § Launch and the code cache
+
+Readings of the code-cache launcher on its own tree (`82c29e677` + the slice, node 20.18, 16 cores, load average 30–60 with other agents running): medians of 15 interleaved runs through the `hxq` shim with `HXQ_BIN` pinned, `HXQ_CODE_CACHE=0` against the default — `--help` 199 → 111 ms, `ast` of a 2.5 KB file 223 → 129, `fmt` of a 32 KB file 329 → 199, `source --range 1:20` 201 → 108; `node -e 0` 40. `lint <file> --no-oracle` (5 runs) 13.1 s → 12.4 s, inside its own noise: that command's cost is the `resolutionRoots` re-parse, not the start. Cache 5.5 MB for a 12.5 MB engine; the warm step adds the launcher compile and one child run to `haxe bin/apq-js.hxml`. A cache warmed by `--help` alone gave `fmt` 155 ms where the mixed warm gave 136 (one quieter run), for 4 ms more on `source`. node 22.12 reads its own cache (hit) and treats node 20's as a miss.

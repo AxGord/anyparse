@@ -219,13 +219,39 @@ fi
 # run node with none.
 node_flags="${HXQ_NODE_FLAGS---max-semi-space-size=64}"
 
+# V8 code cache. A build writes the launcher `apq-launch.js` beside `apq.js`
+# (anyparse.query.cli.CodeCacheLauncher); through it a call deserializes the
+# engine's bytecode from `apq.js.v8cache` instead of compiling its
+# source. A cache that does not match the binary's content, this node or
+# these flags is never handed to V8, so the worst case is the uncached run.
+# HXQ_CODE_CACHE=0 runs the engine directly, as does a binary with no
+# launcher beside it (an older private build).
+launcher="$(dirname "$binary")/apq-launch.js"
+if [ "${HXQ_CODE_CACHE:-1}" = "0" ] || [ ! -f "$launcher" ]; then
+    launcher=""
+fi
+
+# `hxq --warm-code-cache` — the build's last step (bin/apq-js.hxml, the worker
+# builds): writes the cache from a representative run. It goes through this
+# shim so the warm run uses the node flags a call uses: V8 refuses a cache
+# made under other flags. Always exits 0 — a build never fails on its cache.
+if [ "${1:-}" = "--warm-code-cache" ]; then
+    if [ -z "$launcher" ]; then
+        echo "hxq: no code cache to warm (no $(dirname "$binary")/apq-launch.js, or HXQ_CODE_CACHE=0)" >&2
+        exit 0
+    fi
+    exec node $node_flags "$launcher" --warm "$binary"
+fi
+
 # With no user args, just run the binary (prints usage); otherwise inject
 # `--lang haxe` after the subcommand so `hxq <cmd> [opts] <file>` targets
 # the Haxe grammar.
-if [ "$#" -eq 0 ]; then
-    exec node $node_flags "$binary"
+if [ "$#" -gt 0 ]; then
+    cmd="$1"
+    shift
+    set -- "$cmd" --lang haxe "$@"
 fi
-
-cmd="$1"
-shift
-exec node $node_flags "$binary" "$cmd" --lang haxe "$@"
+if [ -n "$launcher" ]; then
+    exec node $node_flags "$launcher" "$binary" "$@"
+fi
+exec node $node_flags "$binary" "$@"

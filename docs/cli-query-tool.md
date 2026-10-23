@@ -13,6 +13,14 @@ A command-line tool over source files in any language anyparse has a grammar for
 
 Future language presets follow the same pattern: `as3q`, `pyq`, etc. Each preset is a one-line alias; the engine binary is always `apq`.
 
+## Launch and the code cache
+
+A build writes three files side by side: the engine `apq.js`, the launcher `apq-launch.js` (`anyparse.query.cli.CodeCacheLauncher`, flags in `bin/apq-launch-common.hxml`) and the V8 code cache `apq.js.v8cache`. The `hxq` shim runs the engine THROUGH the launcher whenever one sits beside the binary it picked (`HXQ_BIN` included), so a call deserializes the engine's bytecode instead of compiling its source; output, exit status and stack positions (file and line of `apq.js`) are the engine's own. `HXQ_CODE_CACHE=0` runs the engine directly, as does a binary with no launcher beside it; `APQ_CODE_CACHE_TRACE=1` prints `hit` / `miss` / `rejected` on stderr per call.
+
+- **What is handed to V8.** The cache is filed under a SHA-256 of the engine's BYTES plus its REAL PATH (V8 keeps the script name in a cache, so a hit would otherwise name, in every stack, the copy the cache was written from), the node binary's path, the node and V8 versions, platform, node flags and `NODE_OPTIONS`, and carries a SHA-256 of its payload. V8 checks a cache's source only by its LENGTH and does not verify the payload — a same-length rebuild offered the old cache runs the OLD engine's code, a damaged payload can abort the process — so a cache that does not match or does not verify is never offered: the call compiles from source and, when it ends, rewrites the cache, unless the engine changed on disk since the call read it (an old engine's call never replaces a fresh build's cache). One file holds one key; a call under other flags or another node rewrites it.
+- **Writes are a whole temporary file renamed over the cache**, so concurrent calls read the old cache or the new one, never a part.
+- **Warming.** `haxe bin/apq-js.hxml` ends with `hxq --warm-code-cache`: one child process runs `ast`, `fmt`, `source --range`, `lint --no-oracle` over a bundled fixture (V8 caches only what a run compiled) and saves the cache. It goes through the shim so the warm run has the node flags a call has — V8 refuses a cache made under other flags. The step is a `--cmd`, never a `--next` block: a typecheck (`haxe <hxml> --no-output`, the lint oracle) runs no `--cmd`, but WRITES the output of every `--next` block except the last. It exits 0 whatever happens (a warm that could not save its cache says `not warmed`), so a failed warm leaves a whole engine whose first call writes the cache. `tools/worker-build.sh` and `dev worker-build` build the launcher beside the private `apq.js` and warm it the same way.
+
 ## Exit codes
 
 `anyparse.query.ExitCode`: **0** success, **2** usage error (`EXIT_USAGE`), **1** runtime error or refusal (`EXIT_RUNTIME`). The conventions every command follows:
