@@ -30257,6 +30257,38 @@
 			"method": "memberRoot",
 			"force": "fnId",
 			"note": "a lambda or local function stays a node of its own instead of folding into the member that declares it"
+		},
+		{
+			"name": "M-GRAPH-DEPTH-SPENT-ON-LOCALS",
+			"type": "anyparse.query.graph.MemberGraphBuilder",
+			"method": "chains",
+			"find": "for (fn in folded[member] ?? [member])",
+			"replace": "for (fn in [member])",
+			"note": "a member is expanded through its own body only, so what its lambdas and local functions call is a hop further, and one hop from it draws nothing"
+		},
+		{
+			"name": "M-GRAPH-CALLER-HOP-ON-LOCALS",
+			"type": "anyparse.query.graph.MemberGraphBuilder",
+			"method": "chains",
+			"find": "final other: String = builder.memberRoot(outward ? e.to : e.from);",
+			"replace": "final other: String = outward ? e.to : e.from;",
+			"note": "the walk queues the lambda a call came from instead of its member, so the next hop inward spends itself on the edge from the member to its own lambda"
+		},
+		{
+			"name": "M-GRAPH-LOCAL-RECURSION-DRAWN",
+			"type": "anyparse.query.graph.MemberGraphBuilder",
+			"method": "link",
+			"find": "(from != to || memberRoot(from) != from)",
+			"replace": "from != to",
+			"note": "a local function calling itself is drawn as its member calling itself"
+		},
+		{
+			"name": "M-GRAPH-EXTERNAL-ID-MERGED",
+			"type": "anyparse.query.graph.CodeGraph",
+			"method": "idOf",
+			"find": "if (external) out.add('e');",
+			"replace": "",
+			"note": "an external node takes the id of a node of the scope that bears its name, so a std `String` and a root-package `String` are one node"
 		}
 	]
 }

@@ -102,6 +102,7 @@ final class GraphFixture {
 		'm_pkg_da_dAlpha_drun ==>|new| m_pkg_db_dBeta_dnew',
 		'm_pkg_da_dAlpha_drun --> m_pkg_db_dBeta_dwork',
 		'm_pkg_da_dAlpha_dstep --> m_pkg_db_dBeta_dmake',
+		'm_pkg_db_dBeta_dmake ==>|new| m_pkg_db_dBeta_dnew',
 		'm_pkg_db_dBeta_dnew --> m_pkg_db_dBeta_d_x3C_init_x3E_',
 		'm_pkg_db_dBeta_dwork --> m_pkg_db_dGamma_dtick',
 		'classDef focus stroke-width:3px',

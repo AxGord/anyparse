@@ -40,8 +40,8 @@ enum abstract GraphEdgeKind(String) to String {
 }
 
 /**
- * One node. `id` is derived from `level` and `name` alone (`CodeGraph.idOf`), so the same declaration
- * gets the same id in every graph and every run, and the id is a valid Mermaid node id as it stands.
+ * One node. `id` is derived from `level`, `name` and `external` alone (`CodeGraph.idOf`), so the same
+ * declaration gets the same id in every graph and every run, and the id is a valid Mermaid node id as it stands.
  */
 typedef GraphNode = {
 
@@ -94,7 +94,7 @@ final class CodeGraph {
 
 	/** Add the node at `level` named `name` unless the graph holds it, and answer its id; the first addition's fields stay. */
 	public function addNode(level: GraphLevel, name: String, label: String, parent: Null<String>, external: Bool): String {
-		final id: String = idOf(level, name);
+		final id: String = idOf(level, name, external);
 		if (!_nodes.exists(id)) {
 			if (parent != null && !_nodes.exists(parent)) throw new Exception('graph: parent $parent of $id is no node');
 			final added: GraphNode = {
@@ -143,9 +143,22 @@ final class CodeGraph {
 		return all;
 	}
 
-	/** The nodes `parent` holds — the top-level nodes for null — ordered by id. */
-	public function childrenOf(parent: Null<String>): Array<GraphNode> {
-		return nodes().filter(n -> n.parent == parent);
+	/**
+	 * Every node grouped by the node holding it, each group ordered by id; the top-level nodes under the
+	 * empty key, which no id is. Built once per call: a renderer walking the nesting reads it, never a
+	 * per-node scan.
+	 */
+	public function nodesByParent(): Map<String, Array<GraphNode>> {
+		final groups: Map<String, Array<GraphNode>> = [];
+		for (n in nodes()) {
+			final key: String = n.parent ?? '';
+			final group: Null<Array<GraphNode>> = groups[key];
+			if (group == null)
+				groups[key] = [n]
+			else
+				group.push(n);
+		}
+		return groups;
 	}
 
 	/** Every edge, ordered by source, then target, then kind. */
@@ -163,13 +176,15 @@ final class CodeGraph {
 	}
 
 	/**
-	 * The id of the node at `level` named `name`: the level's prefix, then the name with every character
-	 * but a letter or a digit escaped — `_` as `__`, `.` as `_d`, any other as `_x<hex>_`. Each escape
-	 * opens with `_` and is told apart by the character after it, so two names never share an id, and an
-	 * id holds nothing Mermaid reads as syntax.
+	 * The id of the node at `level` named `name`: `e` for a node outside the scope, the level's prefix, then
+	 * the name with every character but a letter or a digit escaped — `_` as `__`, `.` as `_d`, any other as
+	 * `_x<hex>_`. Each escape opens with `_` and is told apart by the character after it, so two names never
+	 * share an id, an external node never shares one with a node of the scope whose name it bears, and an id
+	 * holds nothing Mermaid reads as syntax.
 	 */
-	public static function idOf(level: GraphLevel, name: String): String {
+	public static function idOf(level: GraphLevel, name: String, external: Bool = false): String {
 		final out: StringBuf = new StringBuf();
+		if (external) out.add('e');
 		out.add(level.idPrefix());
 		for (i in 0...name.length) {
 			final c: Int = name.fastCodeAt(i);

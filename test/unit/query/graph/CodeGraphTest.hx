@@ -48,6 +48,18 @@ class CodeGraphTest extends Test {
 		}
 	}
 
+	/** An external node never shares an id with a node of the scope whose name it bears (a std `String`, a root-package one). */
+	@:killer('M-GRAPH-EXTERNAL-ID-MERGED')
+	@:pin('control')
+	public function testAnExternalNodeKeepsItsOwnId(): Void {
+		final graph: CodeGraph = new CodeGraph();
+		final own: String = graph.addNode(Type, 'String', 'String', null, false);
+		final external: String = graph.addNode(Type, 'String', 'String', null, true);
+		Assert.notEquals(own, external);
+		Assert.equals(2, graph.nodes().length);
+		Assert.notEquals(CodeGraph.idOf(Member, 'String.length'), CodeGraph.idOf(Member, 'String.length', true));
+	}
+
 	/** The level is part of the id: a package and a type of one name are two nodes. */
 	public function testTheLevelKeepsNamesApart(): Void {
 		final graph: CodeGraph = new CodeGraph();
@@ -55,7 +67,7 @@ class CodeGraphTest extends Test {
 		final type: String = graph.addNode(Type, 'a', 'a', pkg, false);
 		Assert.notEquals(pkg, type);
 		Assert.equals(2, graph.nodes().length);
-		Assert.equals(pkg, graph.addNode(Package, 'a', 'other label', null, true), 'a node is added once');
+		Assert.equals(pkg, graph.addNode(Package, 'a', 'other label', null, false), 'a node is added once');
 		Assert.equals('a', graph.node(pkg)?.label);
 	}
 

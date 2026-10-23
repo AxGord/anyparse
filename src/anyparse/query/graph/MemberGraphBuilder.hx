@@ -10,7 +10,7 @@ import anyparse.query.graph.CodeGraph.GraphEdgeKind;
  * Lifts a `CallGraph` to the member level of a `CodeGraph`: each function node folds into the member
  * that declares it — a lambda or a local function into its enclosing member, a further `#if` body into
  * its first — and nests in its type, the type in its package. An edge inside one member is dropped
- * unless the call graph drew it from a function to itself, which is recursion.
+ * unless it is the member calling itself; a local function's own recursion stays inside.
  *
  * The package of a node is its file's, as the call graph's index reads it; an external node, a call
  * target outside the scope, has a type and no package.
@@ -49,7 +49,8 @@ final class MemberGraphBuilder {
 	public function link(from: String, to: String, kind: EdgeKind, weight: Int): Void {
 		final source: String = member(from);
 		final target: String = member(to);
-		if (source == target && from != to) return;
+		// inside one member only the member's own recursion is drawn, never a local function's
+		if (source == target && (from != to || memberRoot(from) != from)) return;
 		graph.addEdge(source, target, kindOf(kind), weight);
 	}
 
@@ -75,6 +76,20 @@ final class MemberGraphBuilder {
 		return graph.addNode(Member, qualify(pkg, fn.id), label, parent, fn.isExternal);
 	}
 
+	/** Each member's call-graph id -> every function folding into it (`memberRoot`). */
+	private function foldedFunctions(): Map<String, Array<String>> {
+		final out: Map<String, Array<String>> = [];
+		for (id in _calls.nodes.keys()) {
+			final root: String = memberRoot(id);
+			final list: Null<Array<String>> = out[root];
+			if (list == null)
+				out[root] = [id]
+			else
+				list.push(id);
+		}
+		return out;
+	}
+
 	private function fnOf(id: String): FnNode {
 		final fn: Null<FnNode> = _calls.node(id);
 		if (fn == null) throw new Exception('graph: the call graph holds no function $id');
@@ -96,33 +111,36 @@ final class MemberGraphBuilder {
 	}
 
 	/**
-	 * The graph `callees` (`outward`) or `callers` draws: every edge a walk of `depth` levels from `roots` crosses, the
-	 * roots focused. Each function is expanded once, at the first level the walk reaches it; `kinds` null or empty is all.
+	 * The graph `callees` (`outward`) or `callers` draws: every edge a walk of `depth` member hops from `roots` crosses, the
+	 * roots focused. A member is expanded once, at the first hop that reaches it, through every function folding into it, so
+	 * a lambda or a local function costs no hop; `kinds` null or empty is all.
 	 */
 	public static function chains(
 		calls: CallGraph, roots: Array<String>, depth: Int, outward: Bool, kinds: Null<Array<EdgeKind>>
 	): CodeGraph {
 		final builder: MemberGraphBuilder = new MemberGraphBuilder(calls);
 		final kindFilter: Array<EdgeKind> = kinds ?? [];
-		final seen: Array<String> = [];
+		final folded: Map<String, Array<String>> = builder.foldedFunctions();
+		// a member reached -> the hop that reached it
+		final reached: Map<String, Int> = [];
 		var frontier: Array<String> = [];
 		for (root in roots) {
 			builder.focus(root);
-			if (seen.contains(root)) continue;
-			seen.push(root);
-			frontier.push(root);
+			final member: String = builder.memberRoot(root);
+			if (reached.exists(member)) continue;
+			reached[member] = 0;
+			frontier.push(member);
 		}
-		for (_ in 0...depth) {
+		for (hop in 1...depth + 1) {
 			final next: Array<String> = [];
-			for (id in frontier) for (e in (outward ? calls.outEdges(id) : calls.inEdges(id))) if (
-				kindFilter.length == 0 || kindFilter.contains(e.kind)
-			) {
+			for (member in frontier) for (fn in folded[member] ?? [member]) for (e in (
+				outward ? calls.outEdges(fn) : calls.inEdges(fn)
+			)) if (kindFilter.length == 0 || kindFilter.contains(e.kind)) {
 				builder.edge(e);
-				final other: String = outward ? e.to : e.from;
-				if (!seen.contains(other)) {
-					seen.push(other);
-					next.push(other);
-				}
+				final other: String = builder.memberRoot(outward ? e.to : e.from);
+				if (reached.exists(other)) continue;
+				reached[other] = hop;
+				next.push(other);
 			}
 			frontier = next;
 		}

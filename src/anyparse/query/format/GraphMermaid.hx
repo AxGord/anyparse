@@ -36,14 +36,15 @@ final class GraphMermaid {
 		final statements: Array<MmdStatement> = [];
 		if (caption != null) statements.push(Comment('%% ${caption.replace('\r', ' ').replace('\n', ' ')}'));
 		statements.push(Header(Flowchart(LR)));
-		for (n in graph.childrenOf(null)) statements.push(declaration(graph, n));
+		final byParent: Map<String, Array<GraphNode>> = graph.nodesByParent();
+		for (n in byParent[''] ?? []) statements.push(declaration(byParent, n));
 		for (e in graph.edges()) statements.push(Chain({
 			head: group(Id(e.from)),
 			links: [
 				{ edge: Arrow({ link: linkOf(e.kind), label: edgeLabel(e) }), target: group(Id(e.to)) }
 			]
 		}));
-		final leaves: Array<GraphNode> = graph.nodes().filter(n -> graph.childrenOf(n.id).length == 0);
+		final leaves: Array<GraphNode> = graph.nodes().filter(n -> !byParent.exists(n.id));
 		classed(statements, FOCUS_CLASS, FOCUS_STYLE, leaves.filter(n -> n.focus));
 		classed(statements, EXTERNAL_CLASS, EXTERNAL_STYLE, leaves.filter(n -> n.external));
 		return { first: statements[0], rest: statements.slice(1) };
@@ -58,12 +59,12 @@ final class GraphMermaid {
 		return { vertex: vertex, also: [] };
 	}
 
-	/** The statement declaring `n`: a subgraph of its children, or a vertex. */
-	private static function declaration(graph: CodeGraph, n: GraphNode): MmdStatement {
-		final children: Array<GraphNode> = graph.childrenOf(n.id);
-		return children.length == 0
+	/** The statement declaring `n`: a subgraph of the nodes it holds (`byParent`), or a vertex. */
+	private static function declaration(byParent: Map<String, Array<GraphNode>>, n: GraphNode): MmdStatement {
+		final children: Null<Array<GraphNode>> = byParent[n.id];
+		return children == null
 			? Chain({ head: group(vertex(n)), links: [] })
-			: Subgraph({ head: Titled({ name: n.id, title: Plain(n.label) }), body: [for (c in children) declaration(graph, c)] });
+			: Subgraph({ head: Titled({ name: n.id, title: Plain(n.label) }), body: [for (c in children) declaration(byParent, c)] });
 	}
 
 	/** `n` as a vertex: a member rounded, a type a subroutine box, a package or group a rectangle, an external node a stadium. */

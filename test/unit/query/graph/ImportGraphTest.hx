@@ -86,6 +86,34 @@ class ImportGraphTest extends Test {
 		#end
 	}
 
+	/** An import file no indexed file sits beside reaches no package, so it draws no edge — never one from the root package. */
+	public function testAnUnreachedImportFileDrawsNothing(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('importgraph', [
+			{ name: 'z/import.hx', source: 'import y.T;\n' },
+			{ name: 'y/T.hx', source: 'package y;\n\nclass T {}\n' }
+		]);
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+			final files: Array<{ file: String, source: String }> = [
+				for (name in ['z/import.hx', 'y/T.hx']) { file: '$root/$name', source: File.getContent('$root/$name') }
+			];
+			final graph: CodeGraph = ImportGraph.build(indexOf(files), Package);
+			Assert.equals('', edges(graph).join('|'));
+			Assert.equals('y', [for (n in graph.nodes()) n.name].join(','));
+		});
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** An alias import counts for the type it aliases. */
+	public function testAnAliasImportCountsForItsType(): Void {
+		final files: Array<{ file: String, source: String }> = FILES.concat([
+			{ file: 'pkg/d/Eta.hx', source: 'package pkg.d;\n\nimport pkg.a.Alpha as A;\n\nclass Eta {}\n' }
+		]);
+		Assert.isTrue(edges(ImportGraph.build(indexOf(files), Package)).contains('pkg.d -> pkg.a x1'));
+	}
+
 	/** An import joins packages or types; a member level is a caller's mistake. */
 	public function testMemberLevelIsRefused(): Void {
 		Assert.raises(() -> ImportGraph.build(indexOf(FILES), Member));

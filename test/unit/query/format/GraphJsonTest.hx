@@ -43,7 +43,7 @@ class GraphJsonTest extends Test {
 			'{',
 			'    "nodes":[',
 			'        {',
-			'            "id":"m_p_dT_dm",',
+			'            "id":"em_p_dT_dm",',
 			'            "level":"member",',
 			'            "name":"p.T.m",',
 			'            "label":"m",',
@@ -53,7 +53,7 @@ class GraphJsonTest extends Test {
 			'        },',
 			'        {"id":"t_p_dT", "level":"type", "name":"p.T", "label":"T", "external":false, "focus":false}',
 			'    ],',
-			'    "edges":[{"from":"m_p_dT_dm", "to":"m_p_dT_dm", "kind":"call", "weight":2}]',
+			'    "edges":[{"from":"em_p_dT_dm", "to":"em_p_dT_dm", "kind":"call", "weight":2}]',
 			'}',
 			''
 		].join('\n'), GraphJson.write(graph));

@@ -78,15 +78,15 @@ class GraphMermaidTest extends Test {
 		graph.markFocus(a);
 		Assert.equals([
 			'flowchart LR',
+			'em_b([b])',
 			'm_a(a)',
-			'm_b([b])',
-			'm_a --> m_b',
-			'm_a -.->|ref 3| m_b',
-			'm_b -->|2| m_a',
+			'em_b -->|2| m_a',
+			'm_a --> em_b',
+			'm_a -.->|ref 3| em_b',
 			'classDef focus stroke-width:3px',
 			'class m_a focus',
 			'classDef external stroke-dasharray:4 3',
-			'class m_b external',
+			'class em_b external',
 			''
 		].join('\n'), GraphMermaid.write(graph));
 	}
