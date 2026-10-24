@@ -1,6 +1,7 @@
 package unit.check;
 
 #if (sys || nodejs)
+import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.check.CompilerDisplayOracle;
@@ -43,6 +44,11 @@ class ExplicitTypeReturnOracleTest extends Test {
 	private static final BOXMAIN: String =
 		'class Main {\n\n\tstatic function main() {\n\t\tfinal b:Box<Int> = new Box(1);\n\t\ttrace(b.get(), b.pair(\'s\'));\n\t}\n\n}\n';
 	private static final HXML: String = '-cp .\n-main Main\n';
+
+	/** A `pkg.sub` module whose two field initializers and helper return only the oracle can type. */
+	private static final HOLDER: String = 'package pkg.sub;\n\nclass Holder {\n\tstatic final m = [\'a\' => \'b\'];\n\n'
+		+ '\tpublic final b = make();\n\n\tpublic function new() {}\n\n\tstatic function make() {\n'
+		+ '\t\treturn new Entity<String>(\'x\');\n\t}\n}\n';
 	#end
 
 	public function new() {
@@ -165,6 +171,35 @@ class ExplicitTypeReturnOracleTest extends Test {
 		// strip the whole file is reverted, so EITHER assertion failing means nothing landed.
 		Assert.isTrue(packed.indexOf('get():T') != -1, 'the class type parameter is annotated bare');
 		Assert.isTrue(packed.indexOf('pair<U>(u:U):') != -1, 'the method type parameter is annotated too');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The oracle names `haxe.ds.Map` and `pkg.Entity`; inside `pkg.sub` with no import both resolve short — `Map` through
+	 * the std's transparent root alias, `Entity` through the enclosing package — so neither is written qualified.
+	 */
+	public function testCliFixAnnotatesTheShortestResolvingSpelling(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = CliFixture.writeDir('etrshort', [
+			{ name: 'Main.hx', source: 'class Main {\n\n\tstatic function main() {\n\t\tnew pkg.sub.Holder();\n\t}\n\n}\n' },
+			{ name: 'check.hxml', source: HXML },
+			{ name: 'apqlint.json', source: '{"compilerOracle":"check.hxml"}' }
+		]);
+		FileSystem.createDirectory('$dir/pkg/sub');
+		File.saveContent('$dir/pkg/Entity.hx', 'package pkg;\n\nclass Entity<T> {\n\tpublic function new(path:String) {}\n}\n');
+		File.saveContent('$dir/pkg/sub/Holder.hx', HOLDER);
+		Cli.run(['lint', '--fix', '--rule', 'explicit-type', dir]);
+		final packed: String = File.getContent('$dir/pkg/sub/Holder.hx').replace(' ', '');
+		Assert.isTrue(packed.indexOf('m:Map<String,String>=') != -1, 'the std alias, not haxe.ds.Map: $packed');
+		Assert.isTrue(packed.indexOf('b:Entity<String>=make()') != -1, 'the enclosing package, not pkg.Entity: $packed');
+		Assert.isTrue(packed.indexOf('make():Entity<String>') != -1, 'the return type too: $packed');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

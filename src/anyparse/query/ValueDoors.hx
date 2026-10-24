@@ -48,7 +48,8 @@ final class ValueDoors {
 	/**
 	 * Whether the bare `name`, read by `ident` at `at` of the file `fi` (its tree `root`), binds none of the values 4.3.7 looks
 	 * a bare identifier up as before a type (`typer.ml` `type_ident_raise`): a local, a member of the enclosing type or one it
-	 * inherits (`MemberLookup.declarationLacksMember`), a module-level field, a constructor or value of a type of the module
+	 * inherits (`MemberLookup.declarationLacksMember`) or a build macro on it or above it may add (`AncestorTable.builtAtOrAbove`),
+	 * a module-level field, a constructor or value of a type of the module
 	 * (any member of one, read over-inclusively), anything an import or the ambient chain may bring
 	 * (`ValueNameBinding.mayImportValue`; an unbounded chain may bring anything). What a reader taking `Name.field` for a
 	 * type expression asks first (`UsingSites`).
@@ -60,7 +61,12 @@ final class ValueDoors {
 		if (fi.moduleFields.exists(f -> f.name == name) || fi.types.exists(t -> t.members.exists(m -> m.name == name))) return false;
 		final enclosing: Null<TypeDeclMatch> = TypeResolver.enclosingTypeDecl(root, at);
 		final own: Null<ResolvedType> = enclosing == null ? null : index.refs.findDeclaredType(file, enclosing.name);
-		if (enclosing != null && (own == null || !index.typing.members.declarationLacksMember(own, name))) return false;
+		// A build macro on the enclosing type, or one an ancestor applies to it (`@:autoBuild`), may add the very field.
+		if (
+			enclosing != null
+			&& (own == null || !index.typing.members.declarationLacksMember(own, name) || index.typing.ancestors.builtAtOrAbove(own))
+		)
+			return false;
 		return !index.values.mayImportValueBesideType(fi, name) && index.values.hostsOfValue(name).length == 0;
 	}
 

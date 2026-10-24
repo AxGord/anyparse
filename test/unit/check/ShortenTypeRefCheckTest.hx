@@ -186,7 +186,7 @@ class ShortenTypeRefCheckTest extends Test {
 	 */
 	public function testTheImportLandsInsideASortedBlock(): Void {
 		final out: String = applyFix(
-			inClass('import aaa.First;\nimport zzz.Last;\n\n', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n')
+			inClass('import aaa.First;\nimport zzz.Last;\n\n', '\t\tfinal a:pkg.deep.Foo = g();\n\t\tfinal b:pkg.deep.Foo = g();\n')
 		);
 		Assert.equals(
 			'package app;\n\nimport aaa.First;\nimport pkg.deep.Foo;\nimport zzz.Last;\n\n', out.substring(0, out.indexOf('class C'))
@@ -195,7 +195,7 @@ class ShortenTypeRefCheckTest extends Test {
 
 	public function testAnUnsortedBlockIsAppendedTo(): Void {
 		final out: String = applyFix(
-			inClass('import zzz.Last;\nimport aaa.First;\n\n', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n')
+			inClass('import zzz.Last;\nimport aaa.First;\n\n', '\t\tfinal a:pkg.deep.Foo = g();\n\t\tfinal b:pkg.deep.Foo = g();\n')
 		);
 		Assert.equals(
 			'package app;\n\nimport zzz.Last;\nimport aaa.First;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C'))
@@ -451,8 +451,12 @@ class ShortenTypeRefCheckTest extends Test {
 
 	/** Gate 2 — an ALIAS is not "an exact import": the alias NAME is what resolves, so that is what is printed. */
 	public function testAliasedImportPrintsTheAlias(): Void {
-		final out: String = applyFix(inClass('import pkg.deep.Foo as F;\n\n', '\t\tg(pkg.deep.Foo.make());\n'));
-		Assert.isTrue(out.indexOf('g(F.make());') != -1, 'alias printed, got: $out');
+		final out: String = applyFix(
+			inClass('import pkg.deep.Foo as F;\n\n', '\t\tfinal v:pkg.deep.Foo = g();\n\t\tg(pkg.deep.Foo.make());\n')
+		);
+		Assert.isTrue(out.indexOf('final v:F = g();') != -1, 'alias printed, got: $out');
+		// A value site asks whether anything binds `F` as a VALUE, and an import spelling the name answers "maybe".
+		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.make());') != -1, 'value site kept, got: $out');
 	}
 
 	/**
@@ -613,9 +617,12 @@ class ShortenTypeRefCheckTest extends Test {
 
 	/** The gate is the IMPORT: an enum in the resolution scope that this file does NOT import binds nothing here. */
 	public function testUnimportedEnumConstructorDoesNotShadow(): Void {
-		final src: String = enumConsumer('');
+		// Type positions: at a VALUE site any constructor of the name in scope may be what an expected type reads.
+		final src: String = 'package module;\n\nclass Clean {\n\n\tpublic function f():Void {\n'
+			+ '\t\tfinal a:module.Hash = g();\n\t\tfinal b:module.Hash = g();\n\t}\n\n}\n';
 		Assert.equals(2, enumViolations(src).length);
-		Assert.isTrue(enumApplyFix(src).indexOf('g(Hash);') != -1, 'shortened, got: ${enumApplyFix(src)}');
+		Assert.isTrue(enumApplyFix(src).indexOf('final a:Hash = g();') != -1, 'shortened, got: ${enumApplyFix(src)}');
+		Assert.equals(0, enumViolations(enumConsumer('')).length, 'the value sites stay qualified');
 	}
 
 	// --- the index proof ---

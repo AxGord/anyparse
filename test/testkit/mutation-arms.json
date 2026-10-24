@@ -31176,6 +31176,67 @@
 			"find": "if (own == null || own.length == 0) {",
 			"replace": "if (own == null || own.length >= 0) {",
 			"note": "a carried using is written after the module's own instead of above them, so it outranks them"
+		},
+		{
+			"name": "M-PRINTER-PACKAGE-CHAIN-BLIND",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "packageChainVerdict",
+			"force": "null",
+			"note": "the package chain answers nothing, so a type of an ENCLOSING package is written fully qualified although its bare name resolves to it here"
+		},
+		{
+			"name": "M-PRINTER-PACKAGE-CHAIN-FIRST-HIT",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "packageChainVerdict",
+			"find": "if (file != null && decl != null) return !decl.guarded && declaresAs(file, simple, canonical);",
+			"replace": "if (file != null && decl != null && declaresAs(file, simple, canonical)) return !decl.guarded;",
+			"note": "the chain walk steps over a NEARER package's own type of the name, so an enclosing package's path is printed short where the bare name means the nearer type"
+		},
+		{
+			"name": "M-PRINTER-PACKAGE-CHAIN-BUILTIN",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "visibleNameFor",
+			"find": "if (alwaysInScope(canonical, simple) && packageChainVerdict(canonical, simple) != false) return simple;",
+			"replace": "if (alwaysInScope(canonical, simple)) return simple;",
+			"note": "a builtin is printed short even where an enclosing package declares its own type of the name, which the compiler reaches first"
+		},
+		{
+			"name": "M-PRINTER-TRANSPARENT-ALIAS",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "declaresAs",
+			"find": "decl.aliasTargetRaw != canonical) return false;",
+			"replace": "true) return false;",
+			"note": "a transparent root alias reads as a shadow of its own target, so `haxe.ds.Map` is never printed as `Map` once the std is indexed"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-SITE-BLIND",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "valueNameFree",
+			"force": "true",
+			"note": "a value site is shortened whatever binds the short name there, so a local, a module enum constructor or an imported-beside local silently becomes what the expression reads"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-SITE-NEVER",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "valueNameFree",
+			"force": "false",
+			"note": "no value site is ever shortened, so a static call or a type argument whose short name binds nothing else stays qualified"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-DOORS-SKIPPED",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "valueNameFree",
+			"find": "&& ValueDoors.bindsNoValue(site, name, o.span, info, context.tree, context.shape, file, index);",
+			"replace": ";",
+			"note": "only the file's own text is asked, so a field the enclosing type INHERITS outranks the shortened type at a value site unseen"
+		},
+		{
+			"name": "M-VALUE-DOORS-BUILD-BLIND",
+			"type": "anyparse.query.ValueDoors",
+			"method": "bindsNoValue",
+			"find": " || index.typing.ancestors.builtAtOrAbove(own)",
+			"replace": "",
+			"note": "a build macro on the enclosing type, or an autoBuild one above it, is ignored, so a field it adds outranks a shortened type at a value site unseen"
 		}
 	]
 }
