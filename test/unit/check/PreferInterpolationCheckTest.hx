@@ -4,25 +4,19 @@ import anyparse.check.FoldStringLiterals;
 import anyparse.check.MacroGate;
 import anyparse.check.PreferInterpolation;
 import anyparse.check.Severity;
+import anyparse.query.cli.command.LintCommand;
 import anyparse.runtime.Span;
+import sys.FileSystem;
+import sys.io.File;
 
 using StringTools;
 
 /**
- * The `prefer-interpolation` check: a single-argument `Std.string(x)` is flagged `Info`
- * and rewritten to string interpolation — `'$x'` for a simple identifier whose declared
- * type is provably not itself nullable, `'${expr}'` for any other interpolation-safe
- * expression. A non-`Std` receiver, a wrong arity, and an argument whose source carries a
- * quote (which `'${ … }'` cannot wrap safely) are left alone. A nested
- * `Std.string(Std.string(x))` is flagged once (outermost only).
- *
- * `Std.string` accepts a nullable value; the interpolation form does not under
- * `@:nullSafety(Strict)` (field access never narrows), so a bare field-access argument
- * (`Std.string(o.f)`) is left alone in the default safe mode — oracle-relaxed mode
- * (`setOracleRelaxed`) admits it through the RiskyFix typecheck-and-revert pipeline.
- * See the `testFieldAccess*` /
- * `testUnannotatedLocalNotFlagged` / `testNullTypedLocalNotFlagged` /
- * `testDynamicTypedLocalNotFlagged` / `test*ParamNotFlagged` gate tests below.
+ * The `prefer-interpolation` check: a single-argument `Std.string(x)` is flagged `Info` and rewritten to string interpolation
+ * — `'$x'` for a simple identifier, `'${expr}'` for any other interpolation-safe expression — only when the argument's type is
+ * PROVEN one the concatenation prints as `Std.string` does and never null: a basic type or an enum abstract over one with no
+ * implicit call. A non-`Std` receiver, a wrong arity, an argument whose source carries a quote, and an argument of an unproven,
+ * nullable, `Dynamic`, class or converting-abstract type are left alone, in the report and in the fix alike.
  */
 class PreferInterpolationCheckTest extends Test {
 
@@ -66,7 +60,7 @@ class PreferInterpolationCheckTest extends Test {
 	}
 
 	public function testNestedFlaggedOnce(): Void {
-		Assert.equals(1, violations(wrap('Std.string(Std.string(x))')).length);
+		Assert.equals(1, violations(body('var y: Int = 1;\n\t\tvar x = Std.string(Std.string(y));')).length);
 	}
 
 	public function testFixSimpleIdent(): Void {
@@ -77,8 +71,9 @@ class PreferInterpolationCheckTest extends Test {
 		Assert.equals('<0 edits>', fixText(wrap('Std.string(o.f)')));
 	}
 
+	/** The outer call's argument is a call whose type this fixture proves nothing about, so the proven inner one is rewritten. */
 	public function testFixNested(): Void {
-		Assert.equals("'${Std.string(x)}'", fixText(wrap('Std.string(Std.string(x))')));
+		Assert.equals("'$y'", fixText(body('var y: Int = 1;\n\t\tvar x = Std.string(Std.string(y));')));
 	}
 
 	public function testFieldAccessInNullCheckedBranchNotFlagged(): Void {
@@ -172,7 +167,7 @@ class PreferInterpolationCheckTest extends Test {
 	 * that chain carries.
 	 */
 	public function testStdStringInMetadataChainStillFlagged(): Void {
-		final src: String = "class C {\n\t@:meta('a' + Std.string(g()) + 'b')\n\tvar y:Int = 0;\n}";
+		final src: String = "class C {\n\t@:meta('a' + Std.string(1 + 2) + 'b')\n\tvar y:Int = 0;\n}";
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, foldViolations(src).length);
 	}
@@ -213,15 +208,17 @@ class PreferInterpolationCheckTest extends Test {
 	}
 
 	/**
-	 * The null-safety gate holds inside interpolation blocks exactly as outside them.
-	 * The relaxed count on the SAME fixture proves the site is a reachable candidate,
-	 * so the safe-mode 0 pins the gate itself — not a descent that never got there.
+	 * The gate holds inside interpolation blocks exactly as outside them. The same shape on a field of a proven `Int` is
+	 * flagged, so the 0 on the untyped receiver pins the gate itself — not a descent that never got there.
 	 */
-	public function testFieldAccessInInterpolationBlockNotFlaggedSafeMode(): Void {
-		final src: String =
+	public function testFieldAccessInInterpolationBlockNeedsAProvenType(): Void {
+		final unknown: String =
 			"class C {\n\tfunction f(o:Holder, cond:Bool):Void {\n\t\tvar s = '${cond ? Std.string(o.f) : 'NULL'}';\n\t}\n}";
-		Assert.equals(0, violations(src).length);
-		Assert.equals(1, relaxedViolations(src).length);
+		Assert.equals(0, violations(unknown).length);
+		final typed: String = 'class Holder {\n\tpublic var f:Int = 0;\n\n\tpublic function new() {}\n}\n\n'
+			+ "class C {\n\tfunction f(o:Holder, cond:Bool):Void {\n\t\tvar s = '${cond ? Std.string(o.f) : 'NULL'}';\n\t}\n}";
+		Assert.equals(1, violations(typed).length);
+		Assert.equals("'${o.f}'", fixText(typed));
 	}
 
 	/**
@@ -257,30 +254,6 @@ class PreferInterpolationCheckTest extends Test {
 		Assert.equals(0, violations(body('var x: Int = 1;\n\t\tvar y = Std.string(/* why */ x);')).length);
 		final peel: String = "class C {\n\tfunction f(x:Int):Void {\n\t\tvar s = 'v=${Std.string(/* why */ x)}';\n\t}\n}";
 		Assert.equals(0, violations(peel).length);
-	}
-
-	/**
-	 * Oracle-relaxed mode (`setOracleRelaxed`) drops the `isSafeArg` gate: a bare
-	 * field-access argument and an unproven (unannotated) identifier become
-	 * candidates — applied only through the RiskyFix typecheck-and-revert pipeline,
-	 * which is what makes the relaxation sound.
-	 */
-	public function testOracleRelaxedFieldAccessFlagged(): Void {
-		Assert.equals(1, relaxedViolations(wrap('Std.string(o.f)')).length);
-		Assert.equals(1, relaxedViolations(body('var u = make();\n\t\tvar s: String = Std.string(u);')).length);
-	}
-
-	/** The client ShardDatabaseMigrationV1ToV2:217 shape end-to-end: relaxed run + fix. */
-	public function testOracleRelaxedFieldAccessInInterpolationBlockFixed(): Void {
-		final src: String = 'class C {\n\tfunction f(e:Entry):Void {\n\t\t'
-			+ "var s = '${!e.folder && e.cloudId != -1 ? Std.string(e.cloudId) : 'NULL'},';\n\t}\n}";
-		final check: PreferInterpolation = new PreferInterpolation();
-		check.setOracleRelaxed(true);
-		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		Assert.equals(1, vs.length);
-		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
-		Assert.equals(1, edits.length);
-		Assert.equals("'${e.cloudId}'", edits[0].text);
 	}
 
 	/**
@@ -375,13 +348,6 @@ class PreferInterpolationCheckTest extends Test {
 		return CheckFixture.violations(new FoldStringLiterals(), src);
 	}
 
-	/** The check's findings for `src` with the oracle-relaxed candidate set enabled. */
-	private function relaxedViolations(src: String): Array<Violation> {
-		final check: PreferInterpolation = new PreferInterpolation();
-		check.setOracleRelaxed(true);
-		return CheckFixture.violations(check, src);
-	}
-
 	private function fixText(src: String): String {
 		final check: PreferInterpolation = new PreferInterpolation();
 		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
@@ -399,6 +365,128 @@ class PreferInterpolationCheckTest extends Test {
 				+ '@:nullSafety(Strict) class C { function f(x:MaybeR) { var r: String = Std.string(x); } }'
 			).length
 		);
+	}
+
+	/**
+	 * A field of a loop binder over an untyped iterator is `Dynamic`; once compared with null, the null-safety checker reads
+	 * `'${row.x}'` as nullable and rejects it where `Std.string(row.x)` compiles. The report never proposes it, and the fix
+	 * pass asks the same question: the rule runs in the unverified loop with the report's own gate, never a wider one.
+	 */
+	@:pin('control')
+	@:killer('M-INTERP-REPORT-GATE-BYPASSED')
+	public function testDynamicFieldOfLoopBinderIsProposedByNeitherMode(): Void {
+		final src: String = 'import sys.db.ResultSet;\n@:nullSafety\nclass C {\n\tstatic function f(s:String):Bool\n'
+			+ '\t\treturn s.length > 0;\n\n\tstatic function g(rows:ResultSet):Bool {\n\t\tfor (row in rows)\n'
+			+ '\t\t\tif (row.x != null && f(Std.string(row.x)))\n\t\t\t\treturn true;\n\t\treturn false;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(0, LintCommand.partitionChecks([new PreferInterpolation()], true).risky.length);
+		Assert.equals(1, LintCommand.partitionChecks([new PreferInterpolation()], true).safe.length);
+	}
+
+	/** A call whose type no declaration proves plain is declined: `Dynamic` here, nullable to the null-safety checker. */
+	@:pin('control')
+	@:killer('M-INTERP-NULLITY-SKIPPED')
+	public function testUnprovenCallArgumentNotFlagged(): Void {
+		final src: String = '@:nullSafety(Strict) class C {\n\tstatic function d():Dynamic return null;\n\n'
+			+ '\tfunction f():Void {\n\t\tvar s: String = Std.string(d());\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * An abstract's `@:to String` conversion runs in a concatenation and not in `Std.string`: `'${b}'` prints `B2` where
+	 * `Std.string(b)` prints `2`. A value change with or without null safety, so only an enum abstract free of conversions
+	 * over a basic type passes.
+	 */
+	@:pin('control')
+	@:killer('M-INTERP-ENUM-CONVERSION-IGNORED')
+	public function testConversionAbstractArgumentNotFlagged(): Void {
+		final plain: String = "abstract B(Int) from Int {\n\t@:to function toS():String\n\t\treturn 'B' + this;\n}\n\n"
+			+ 'class C {\n\tfunction f(b:B):Void {\n\t\tvar s: String = Std.string(b);\n\t}\n}';
+		Assert.equals(0, violations(plain).length);
+		final enumTo: String = "enum abstract H(Int) {\n\tvar Three = 3;\n\n\t@:to function toS():String\n\t\treturn 'H' + this;\n}\n\n"
+			+ 'class C {\n\tfunction f(h:H):Void {\n\t\tvar s: String = Std.string(h);\n\t}\n}';
+		Assert.equals(0, violations(enumTo).length);
+	}
+
+	/** An enum abstract over a basic type, with no conversion of its own, prints its underlying value either way. */
+	public function testPlainEnumAbstractArgumentFlagged(): Void {
+		final src: String = 'enum abstract E(Int) to Int {\n\tvar One = 1;\n}\n\n'
+			+ 'class C {\n\tfunction f(e:E):Void {\n\t\tvar s: String = Std.string(e);\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/**
+	 * Outside the basic types and the enum abstracts over them the list is closed: a class, a plain abstract and an enum
+	 * abstract over `Dynamic` are declined, whatever they would print.
+	 */
+	@:pin('control')
+	@:killer('M-INTERP-ABSTRACT-KIND-UNCHECKED')
+	@:killer('M-INTERP-UNDERLYING-UNCHECKED')
+	public function testTypesOutsideTheListNotFlagged(): Void {
+		final use: String = '\n\nclass C {\n\tfunction f(v:V):Void {\n\t\tvar s: String = Std.string(v);\n\t}\n}';
+		Assert.equals(0, violations('class V {}$use').length);
+		Assert.equals(0, violations('abstract V(Int) from Int {}$use').length);
+		Assert.equals(0, violations('enum abstract V(Dynamic) {\n\tvar One = 1;\n}$use').length);
+	}
+
+	/** Arithmetic over proven `Int` operands is an `Int`. */
+	public function testIntArithmeticArgumentFlagged(): Void {
+		Assert.equals(1, violations(body('var i: Int = 1;\n\t\tvar s: String = Std.string(i + 1);')).length);
+	}
+
+	/**
+	 * A basic type's NAME proves nothing: a project type spelled `Float` that an import binds there, with an `@:op` member,
+	 * prints `F2` through the concatenation where `Std.string` prints `2`. Only the compiler's own type passes.
+	 */
+	@:pin('control')
+	@:killer('M-INTERP-BASIC-NAME-UNBOUND')
+	@:killer('M-INTERP-UNKNOWN-TIER-TRUSTED')
+	public function testImportedProjectTypeNamedLikeABasicTypeNotFlagged(): Void {
+		final num: String = 'package my;\n\nabstract Float(Int) from Int {\n'
+			+ '\t@:op(A + B) static function addStr(a:String, b:Float):String\n\t\treturn a + \'F\' + (cast b : Int);\n}';
+		final main: String =
+			'import my.Num.Float;\n\nclass C {\n\tfunction f():String {\n\t\tfinal v:Float = 2;\n\t\treturn Std.string(v);\n\t}\n}';
+		final files: Array<{ file: String, source: String }> = CheckFixture.withStd(main).concat([{ file: 'my/Num.hx', source: num }]);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInterpolation(), files).length);
+		// the imported module outside the lint set: the import may bind the name to anything, so nothing is proven
+		Assert.equals(0, violations(main).length);
+	}
+
+	/** The same shadow declared in the module itself, as a private type. */
+	@:pin('control')
+	@:killer('M-INTERP-BASIC-NAME-UNBOUND')
+	public function testSameModuleTypeNamedLikeABasicTypeNotFlagged(): Void {
+		final src: String = 'private abstract Bool(Int) from Int {\n\t@:op(A + B) static function addStr(a:String, b:Bool):String\n'
+			+ "\t\treturn a + 'B' + (cast b : Int);\n}\n\nclass C {\n\tfunction f():String {\n\t\tfinal v:Bool = 2;\n"
+			+ '\t\treturn Std.string(v);\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * `String` is no `StdTypes` name, so a module `String` in the file's own package or a parent one shadows the std's, and
+	 * the run that lints only the reading file holds no declaration to see it by. Such a shadow on disk declines the site;
+	 * the same file with the shadow gone is flagged, so the 0 is the shadow's.
+	 */
+	@:pin('control')
+	@:killer('M-INTERP-PACKAGE-SHADOW-UNREAD')
+	public function testPackageShadowOutsideTheLintSetNotFlagged(): Void {
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		final root: String = '${tmp != null && tmp.length > 0 ? tmp : '/tmp'}/anyparse_interp_shadow_${Sys.time()}';
+		final shadow: String = 'abstract String(std.String) from std.String {\n'
+			+ '\t@:op(A + B) static function add(a:std.String, b:String):std.String\n\t\treturn a + "S" + (cast b : std.String);\n}';
+		final use: String = 'class M {\n\tfunction f():Void {\n\t\tfinal v:String = "x";\n\t\ttrace(Std.string(v));\n\t}\n}';
+		for (dir in ['$root/b', '$root/c/d']) FileSystem.createDirectory(dir);
+		File.saveContent('$root/b/String.hx', 'package b;\n\n$shadow');
+		File.saveContent('$root/c/String.hx', 'package c;\n\n$shadow');
+		final own: String = 'package b;\n\n$use';
+		final parent: String = 'package c.d;\n\n$use';
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInterpolation(), [{ file: '$root/b/M.hx', source: own }]).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInterpolation(), [{ file: '$root/c/d/M.hx', source: parent }]).length);
+		FileSystem.deleteFile('$root/b/String.hx');
+		FileSystem.deleteFile('$root/c/String.hx');
+		Assert.equals(1, CheckFixture.violationsIn(new PreferInterpolation(), [{ file: '$root/b/M.hx', source: own }]).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferInterpolation(), [{ file: '$root/c/d/M.hx', source: parent }]).length);
+		for (dir in ['$root/c/d', '$root/c', '$root/b', root]) FileSystem.deleteDirectory(dir);
 	}
 
 }

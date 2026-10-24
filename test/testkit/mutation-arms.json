@@ -9865,9 +9865,9 @@
 			"name": "M-INTERP-NULLITY-SKIPPED",
 			"type": "anyparse.check.PreferInterpolation",
 			"method": "isSafeArg",
-			"find": "return nullity.ofBinding(bindingFrom) != Unproven;",
+			"find": "return typeName != null && printsPlain(typeName, arg, ctx);",
 			"replace": "return true;",
-			"note": "any annotated identifier is interpolation-safe, a typedef of `Null<…>` included"
+			"note": "any argument is interpolation-safe, whatever type it has or lacks"
 		},
 		{
 			"name": "M-TOSTRING-RETURN-TRUSTED",
@@ -31237,6 +31237,61 @@
 			"find": " || index.typing.ancestors.builtAtOrAbove(own)",
 			"replace": "",
 			"note": "a build macro on the enclosing type, or an autoBuild one above it, is ignored, so a field it adds outranks a shortened type at a value site unseen"
+		},
+		{
+			"name": "M-INTERP-REPORT-GATE-BYPASSED",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "run",
+			"find": "scanSource(entry.file, entry.source, plugin, false, false, index, gate)",
+			"replace": "scanSource(entry.file, entry.source, plugin, true, false, index, gate)",
+			"note": "the report runs with the gate the fix-side re-find skips, so it names every Std.string call whatever its argument"
+		},
+		{
+			"name": "M-INTERP-ENUM-CONVERSION-IGNORED",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "convertsNothing",
+			"find": "!t.members.exists(m -> m.isImplicitCall || m.operatorOverloads.length > 0)",
+			"replace": "true",
+			"note": "an enum abstract whose @:to or @:op member runs in the concatenation passes the gate"
+		},
+		{
+			"name": "M-INTERP-ABSTRACT-KIND-UNCHECKED",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "printsPlain",
+			"find": "t.kind == enumKind",
+			"replace": "true",
+			"note": "any abstract over a basic type passes the gate, not only an enum abstract"
+		},
+		{
+			"name": "M-INTERP-UNDERLYING-UNCHECKED",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "printsPlain",
+			"find": "basic.contains(underlying)",
+			"replace": "true",
+			"note": "an enum abstract over any type passes the gate, Dynamic included"
+		},
+		{
+			"name": "M-INTERP-BASIC-NAME-UNBOUND",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "printsPlain",
+			"find": "decls.foreach(r -> isCoreDeclaration(r, shape))",
+			"replace": "true",
+			"note": "a basic type name passes by its spelling, whatever declaration it binds to there"
+		},
+		{
+			"name": "M-INTERP-UNKNOWN-TIER-TRUSTED",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "printsPlain",
+			"find": "case Unknown: return false;",
+			"replace": "case Unknown: [];",
+			"note": "a name an unindexed import may bind reads as the compiler built-in"
+		},
+		{
+			"name": "M-INTERP-PACKAGE-SHADOW-UNREAD",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "shadowedOnDisk",
+			"force": "false",
+			"note": "a module of a basic type name in the file package chain, outside the run, no longer declines the site"
 		}
 	]
 }
