@@ -31120,7 +31120,7 @@
 			"name": "M-MODMOVE-USING-LOST-DROPPED",
 			"type": "anyparse.query.ModuleMove",
 			"method": "usingRefusals",
-			"find": "lost[p.move.to] = missing;",
+			"find": "lost[target] = missing;",
 			"replace": "{}",
 			"note": "a using the module's old ambient chain gave is not carried into it"
 		},
@@ -31160,6 +31160,22 @@
 			"find": "if (!exists(entry))",
 			"replace": "if (false)",
 			"note": "a declared text root that does not exist is skipped in silence"
+		},
+		{
+			"name": "M-MODMOVE-USING-ORDER-BLIND",
+			"type": "anyparse.query.ModuleMove",
+			"method": "usingRefusals",
+			"find": "!= before.join(",
+			"replace": "== before.join(",
+			"note": "a lost using is carried exactly when its carried place would reorder the using list, refused when it would not"
+		},
+		{
+			"name": "M-MODMOVE-USING-CARRY-APPENDED",
+			"type": "anyparse.query.ModuleMove",
+			"method": "withImports",
+			"find": "if (own == null || own.length == 0) {",
+			"replace": "if (true) {",
+			"note": "a carried using is written after the module's own instead of above them, so it outranks them"
 		}
 	]
 }

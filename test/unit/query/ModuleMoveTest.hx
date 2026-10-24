@@ -379,6 +379,41 @@ class ModuleMoveTest extends Test {
 		}
 	}
 
+	@:pin('control')
+	@:killer('M-MODMOVE-USING-CARRY-APPENDED')
+	public function testACarriedUsingKeepsItsPlaceBeforeTheModulesOwn(): Void {
+		final a: String = 'package p;\n\nusing p.Own;\n\nclass A {\n\tpublic static function f(): Int return 3.twice();\n}\n';
+		final own: String = 'package p;\n\nclass Own {\n\tpublic static function twice(n: Int): Int return n * 10;\n}\n';
+		final tools: String = 'package p;\n\nclass Tools {\n\tpublic static function twice(n: Int): Int return n * 2;\n}\n';
+		final out: ModuleMoveOutcome = moved([move('src/p/A.hx', 'src/s/A.hx')], [
+			file('src/p/A.hx', a),
+			file('src/p/Own.hx', own),
+			file('src/p/Tools.hx', tools),
+			file('src/p/import.hx', 'using p.Tools;\n')
+		]);
+		Assert.equals(
+			'package s;\n\nusing p.Tools;\nusing p.Own;\n\nclass A {\n\tpublic static function f(): Int return 3.twice();\n}\n',
+			textOf(out, 'src/s/A.hx')
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-USING-ORDER-BLIND')
+	public function testAUsingOrderNoCarryReproducesIsRefused(): Void {
+		final a: String = 'package p;\n\nclass A {\n\tpublic static function f(): Int return 3.twice();\n}\n';
+		final tools: String = 'package p;\n\nclass Tools {\n\tpublic static function twice(n: Int): Int return n * 2;\n}\n';
+		final other: String = 'package other;\n\nclass Other {\n\tpublic static function twice(n: Int): Int return n * 100;\n}\n';
+		final reasons: Array<String> = refused([move('src/p/A.hx', 'src/s/A.hx')], [
+			file('src/p/A.hx', a),
+			file('src/p/Tools.hx', tools),
+			file('src/other/Other.hx', other),
+			file('src/p/import.hx', 'using p.Tools;\nusing other.Other;\n'),
+			file('src/s/import.hx', 'using other.Other;\n')
+		]);
+		Assert.equals(1, reasons.length);
+		Assert.isTrue(reasons[0].contains('order'), reasons[0]);
+	}
+
 	private static inline function move(from: String, to: String): ModuleRelocation {
 		return { from: from, to: to };
 	}

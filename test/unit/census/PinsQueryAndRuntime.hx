@@ -1189,6 +1189,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.MetaElementSpanSliceTest#testRemoveConditionalModifierRegionStillTakesTheMember :: control :: '
 			+ 'M-META-ELEMENT-ANY-COND-REGION',
 		'unit.query.MetaElementSpanSliceTest#testRemoveModifierStillTakesTheMemberDoc :: control :: M-CUT-DOC-KEPT-BY-ANY-PREFIX',
+		'unit.query.ModuleMoveTest#testACarriedUsingKeepsItsPlaceBeforeTheModulesOwn :: control :: M-MODMOVE-USING-CARRY-APPENDED',
 		'unit.query.ModuleMoveTest#testADeclarationWithAnUnknownKeyIsRefused :: control :: M-MODMOVE-DECL-UNKNOWN-KEY',
 		'unit.query.ModuleMoveTest#testADeclaredSortedListTakesTheRewrittenEntryToItsPlaceInTheRightPart :: control :: M-MODMOVE-LIST-UNSORTED,M-MODMOVE-LIST-ONE-PART',
 		'unit.query.ModuleMoveTest#testADeclaredTextFileAndARegistryFollowTheModule :: control :: M-MODMOVE-TEXT-FILES-SKIPPED',
@@ -1206,6 +1207,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.ModuleMoveTest#testARegistryGlobWhoseReachTheMoveChangesIsRefused :: control :: M-MODMOVE-GLOB-BLIND',
 		'unit.query.ModuleMoveTest#testASamePackageReaderGainsTheImportItsPackageNoLongerGives :: control :: M-MODMOVE-REPAIR-OFF',
 		'unit.query.ModuleMoveTest#testASortedImportRunStaysSorted :: control :: M-MODMOVE-RUNS-UNSORTED',
+		'unit.query.ModuleMoveTest#testAUsingOrderNoCarryReproducesIsRefused :: control :: M-MODMOVE-USING-ORDER-BLIND',
 		'unit.query.ModuleMoveTest#testAWholeModuleConditionalRegionGetsItsImportInsideTheRegion :: control :: M-MODMOVE-AT-IGNORED',
 		'unit.query.ModuleMoveTest#testAnAmbientUsingTheModuleLeavesIsCarried :: control :: M-MODMOVE-USING-LOST-DROPPED',
 		'unit.query.ModuleMoveTest#testAnAmbientUsingTheNewDirectoryAddsIsRefused :: control :: M-MODMOVE-USING-GAIN-BLIND',

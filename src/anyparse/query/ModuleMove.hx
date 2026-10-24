@@ -9,6 +9,7 @@ import anyparse.query.ModuleMoveBindings.BindingProbe;
 import anyparse.query.ModulePathTokens.ModuleRename;
 import anyparse.query.ModulePathTokens.TextEdit;
 import anyparse.query.MoveSymbol.MoveChange;
+import anyparse.query.SymbolIndex.AmbientImportGroup;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
@@ -76,6 +77,12 @@ private typedef PlannedMove = {
 	final rename: ModuleRename;
 	final oldPackage: String;
 	final info: FileInfo;
+}
+
+/** A module's `using` statements in Haxe's ranking order: its ambient chain's, outermost first, then its own. */
+private typedef UsingOrder = {
+	final chain: Array<String>;
+	final own: Array<String>;
 }
 
 /**
@@ -560,14 +567,16 @@ final class ModuleMove {
 	}
 
 	/**
-	 * `text` (the module `info` indexes) with `lines` written into its import run, and every plain import of a sub-type of
-	 * one of the `modules` it imports removed — the module import binds it already.
+	 * `text` (the module `info` indexes) with `importLines` written into its import run, every plain import of a sub-type of
+	 * one of the `modules` it imports removed (the module import binds it already), and `usingLines` written directly above
+	 * the module's own first `using` — where they rank below it, as the ambient chain they replace did.
 	 */
 	private static function withImports(
-		text: String, lines: Array<String>, modules: Array<String>, info: Null<FileInfo>, plugin: GrammarPlugin
+		text: String, importLines: Array<String>, usingLines: Array<String>, modules: Array<String>, info: Null<FileInfo>,
+		plugin: GrammarPlugin
 	): String {
 		final edits: Array<{ span: Span, text: String }> = [];
-		final insert: Null<{ span: Span, text: String }> = MoveSymbol.carriedImportEdit(text, lines, plugin);
+		final insert: Null<{ span: Span, text: String }> = MoveSymbol.carriedImportEdit(text, importLines, plugin);
 		if (insert != null) edits.push(insert);
 		final shape: RefShape = plugin.refShape();
 		if (info != null)
@@ -576,7 +585,18 @@ final class ModuleMove {
 					isSubTypeOf(imp.raw, p, shape)
 				))
 					edits.push({ span: wholeLine(text, imp.span), text: '' });
-		return CanonicalEdit.applyEdits(text, edits);
+		final imported: String = CanonicalEdit.applyEdits(text, edits);
+		if (usingLines.length == 0) return imported;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, imported);
+		final own: Null<Array<ImportLine>> = tree == null
+			? null
+			: ImportOrder.usingLinesOf(imported, ImportOrder.headerRootOf(tree, imported, plugin));
+		if (own == null || own.length == 0) {
+			final append: Null<{ span: Span, text: String }> = MoveSymbol.carriedImportEdit(imported, usingLines, plugin);
+			return append == null ? imported : CanonicalEdit.applyEdits(imported, [append]);
+		}
+		final at: Int = imported.lastIndexOf('\n', own[0].chunkFrom - 1) + 1;
+		return (imported.substring(0, at) + usingLines.join('\n')) + '\n${imported.substring(at)}';
 	}
 
 	/** Whether `pkg` is a dotted package path the grammar accepts — each segment an identifier matching `packageSegmentPattern`. */
@@ -587,9 +607,10 @@ final class ModuleMove {
 	}
 
 	/**
-	 * One refusal per relocated module whose `using` set — its own statements and its ambient chain's, each relocated path
-	 * read under its new name — GAINS a module after the move (that module's extensions could take over a call). A module
-	 * the set LOSES is recorded in `lost` under the module's new path, to be written into it explicitly.
+	 * One refusal per relocated module whose ORDERED `using` list — the ambient chain's outermost first, then its own, each
+	 * relocated path read under its new name — the move changes beyond repair: a module the list GAINS (its extensions could
+	 * take over a call), or a lost one that written just above the module's own `using`s would not stand where it stood (the
+	 * later `using` wins a method two of them define). A repairable loss is recorded in `lost` under the module's new path.
 	 */
 	private static function usingRefusals(
 		planned: Array<PlannedMove>, pre: SymbolIndex, post: SymbolIndex, lost: Map<String, Array<String>>
@@ -600,33 +621,47 @@ final class ModuleMove {
 			final was: Null<FileInfo> = pre.fileInfo(p.move.from);
 			final now: Null<FileInfo> = post.fileInfo(p.move.to);
 			if (was == null || now == null) continue;
-			final before: Array<String> = usingsOf(was, path -> ModulePathTokens.rewrite(path, renames));
-			final after: Array<String> = usingsOf(now, path -> path);
+			final b: UsingOrder = usingsOf(was, path -> ModulePathTokens.rewrite(path, renames));
+			final a: UsingOrder = usingsOf(now, path -> path);
+			final before: Array<String> = b.chain.concat(b.own);
+			final after: Array<String> = a.chain.concat(a.own);
+			if (before.join('\n') == after.join('\n')) continue;
+			final target: String = p.move.to;
 			final gained: Array<String> = after.filter(u -> !before.contains(u));
-			if (gained.length > 0)
+			if (gained.length > 0) {
 				out.push(
-					'${p.move.to} gains `using ${gained.join(', ')}` through its new ambient chain — its extensions could take over a call '
+					'$target gains `using ${gained.join(', ')}` through its new ambient chain — its extensions could take over a call '
 					+ 'the module makes; move it where the chain does not change, or drop that `using` from the chain first'
 				);
+				continue;
+			}
 			final missing: Array<String> = before.filter(u -> !after.contains(u));
-			if (missing.exists(u -> u.startsWith('#')))
-				out.push('${p.move.to} loses a conditionally compiled `using` it cannot carry');
-			else if (missing.length > 0)
-				lost[p.move.to] = missing;
+			final carried: Array<String> = a.chain.concat(missing).concat(a.own);
+			if (missing.exists(u -> u.startsWith('#')) || carried.join('\n') != before.join('\n'))
+				out.push(
+					'$target loses `using ${missing.join(', ')}`, and written into the module it would not keep its order among the '
+					+ '`using`s still in force — the later one wins a method both define; move it where its ambient chain is kept'
+				);
+			else
+				lost[target] = missing;
 		}
 		return out;
 	}
 
-	/** The `using` statements in force in `info` — its own and its ambient chain's — paths through `mapped`, a guarded one `#`-marked. */
-	private static function usingsOf(info: FileInfo, mapped: (String) -> String): Array<String> {
-		final out: Array<String> = [];
-		final all: Array<ImportInfo> = info.imports.copy();
-		for (g in info.ambientImports) for (imp in g.imports) all.push(imp);
-		for (imp in all) if (imp.kind == ImportKind.Using) {
-			final key: String = (imp.guarded ? '#' : '') + mapped(imp.raw);
-			if (!out.contains(key)) out.push(key);
-		}
-		return out;
+	/**
+	 * The `using` statements in force in `info`, in the order Haxe ranks them — its ambient chain outermost first, then its
+	 * own in source order — paths through `mapped`, a guarded one `#`-marked; `chain` and `own` apart.
+	 */
+	private static function usingsOf(info: FileInfo, mapped: (String) -> String): UsingOrder {
+		final keyOf: (ImportInfo) -> String = imp -> (imp.guarded ? '#' : '') + mapped(imp.raw);
+		final groups: Array<AmbientImportGroup> = info.ambientImports.copy();
+		groups.reverse();
+		return {
+			chain: [
+				for (g in groups) for (imp in g.imports) if (imp.kind == ImportKind.Using) keyOf(imp)
+			],
+			own: [for (imp in info.imports) if (imp.kind == ImportKind.Using) keyOf(imp)]
+		};
 	}
 
 	/** The statements importing `imports` and bringing `usings` into scope, or the first path the grammar cannot spell one for. */
@@ -773,13 +808,17 @@ final class ModuleMove {
 		final oldPathOf: Map<String, String> = [for (old => now in newPathOf) now => old];
 		final infoOf: Map<String, FileInfo> = [for (fi in post.allFiles()) fi.file => fi];
 		for (file in [for (f in byFile.keys()) f].concat([for (f in lost.keys()) if (!byFile.exists(f)) f])) {
-			final lines: Array<String> = switch repairLines(byFile[file] ?? [], lost[file] ?? [], plugin.refShape()) {
+			final importLines: Array<String> = switch repairLines(byFile[file] ?? [], [], plugin.refShape()) {
+				case Left(path): return '$file: the grammar declares no statement spelling to write $path';
+				case Right(l): l;
+			};
+			final usingLines: Array<String> = switch repairLines([], lost[file] ?? [], plugin.refShape()) {
 				case Left(path): return '$file: the grammar declares no statement spelling to write $path';
 				case Right(l): l;
 			};
 			final key: String = oldPathOf[file] ?? file;
-			texts[key] = withImports(texts[key] ?? '', lines, byFile[file] ?? [], infoOf[file], plugin);
-			for (line in lines) imports.push('$file: $line');
+			texts[key] = withImports(texts[key] ?? '', importLines, usingLines, byFile[file] ?? [], infoOf[file], plugin);
+			for (line in importLines.concat(usingLines)) imports.push('$file: $line');
 		}
 		return null;
 	}
