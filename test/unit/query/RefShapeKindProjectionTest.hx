@@ -134,19 +134,24 @@ final class RefShapeKindProjectionTest extends Test {
 	];
 
 	/**
-	 * Slots whose token-shaped string is an EMISSION template, not text any parse captures.
+	 * Slots whose token-shaped string is an EMISSION template or a PATTERN, not text any parse captures.
 	 *
-	 * `enumAbstractSyntax.head` is the whole list: it carries `{name}` / `{under}` holes a fixer
-	 * fills, so no source slice can ever contain it verbatim and a capture probe would be asserting
-	 * the wrong thing. What owns it is the check that emits it
-	 * (`unit.check.PreferEnumAbstractCheckTest`, over the produced fix text) — recorded here so the
-	 * census admits the slot by ADDRESS and a second template slot cannot join it in silence.
+	 * `enumAbstractSyntax.head` carries `{name}` / `{under}` holes a fixer fills; `importLineTemplate` / `usingLineTemplate`
+	 * carry the `%` a module relocation fills with a path, and `packageSegmentPattern` is the regex it checks a package
+	 * segment against — no source slice contains any of them verbatim, so a capture probe would assert the wrong thing.
+	 * What owns each is its emitter (`unit.check.PreferEnumAbstractCheckTest`, `unit.query.ModuleMoveTest`), recorded here
+	 * so the census admits the slot by ADDRESS and another template slot cannot join in silence.
 	 *
 	 * Addressed by `<field>#<slot>` and not by field: an exemption naming `enumAbstractSyntax` WHOLE
 	 * also freed the same structure's `bodyOpen: '{'`, a real token the parser does capture — a
 	 * template by a field it merely shares, and probed by nothing for it.
 	 */
-	private static final TEMPLATE_SLOTS: Array<String> = ['enumAbstractSyntax#head'];
+	private static final TEMPLATE_SLOTS: Array<String> = [
+		'enumAbstractSyntax#head',
+		'importLineTemplate#',
+		'packageSegmentPattern#',
+		'usingLineTemplate#'
+	];
 
 	/**
 	 * Per grammar, one probe per token-bearing slot: the smallest source that can carry the
@@ -699,6 +704,14 @@ final class RefShapeKindProjectionTest extends Test {
 				names: NAME_IS,
 				before: 'class C { function f() { return ',
 				after: ' x; } }'
+			},
+			{
+				field: 'grantsPrivateAccessMetaName',
+				slot: '',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
 			},
 			{
 				field: 'tuplePatternDelimiters',
