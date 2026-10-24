@@ -271,15 +271,19 @@ class ModuleMoveTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-MODMOVE-SUBTYPE-KEPT')
-	public function testTheImportAReaderGainsReplacesItsSubTypeImportsOfThatModule(): Void {
+	@:killer('M-MODMOVE-MAIN-TYPE-WIDENED')
+	public function testAReaderNamingAModulesTypesOneByOneGainsItsMainTypeTheSameWay(): Void {
 		final a: String = 'package pkg;\n\nclass A {}\n\ntypedef Sub = { var x: Int; }\n';
 		final user: String = 'package pkg;\n\nimport pkg.A.Sub;\n\nclass User {\n\tvar a: A;\n\tvar s: Sub;\n}\n';
 		final out: ModuleMoveOutcome = moved(
 			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
 			[file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
 		);
-		Assert.equals('package pkg;\n\nimport pkg.sub.A;\n\nclass User {\n\tvar a: A;\n\tvar s: Sub;\n}\n', textOf(out, 'src/pkg/User.hx'));
+		Assert.equals(
+			'package pkg;\n\nimport pkg.sub.A.A;\nimport pkg.sub.A.Sub;\n\nclass User {\n\tvar a: A;\n\tvar s: Sub;\n}\n',
+			textOf(out, 'src/pkg/User.hx')
+		);
+		Assert.same(['src/pkg/User.hx: import pkg.sub.A.A;'], out.imports);
 	}
 
 	@:pin('control')
@@ -414,6 +418,164 @@ class ModuleMoveTest extends Test {
 		Assert.isTrue(reasons[0].contains('order'), reasons[0]);
 	}
 
+	@:pin('control')
+	@:killer('M-MODMOVE-QUALIFIED-BLIND')
+	public function testAQualifiedSubTypeInATypePositionIsWrittenInFull(): Void {
+		final spawn: String =
+			'package pkg;\n\nclass Spawn {\n\tpublic static function run(): Run return null;\n}\n\ntypedef Run = { var out: String; }\n';
+		final user: String =
+			'package pkg;\n\nclass User {\n\tfunction f(): String {\n\t\tfinal r: Spawn.Run = Spawn.run();\n\t\treturn r.out;\n\t}\n}\n';
+		final out: ModuleMoveOutcome = moved(
+			[move('src/pkg/Spawn.hx', 'src/pkg/sub/Spawn.hx')],
+			[file('src/pkg/Spawn.hx', spawn), file('src/pkg/User.hx', user)]
+		);
+		Assert.equals(
+			'package pkg;\n\nimport pkg.sub.Spawn;\n\nclass User {\n\tfunction f(): String {\n'
+			+ '\t\tfinal r: pkg.sub.Spawn.Run = Spawn.run();\n\t\treturn r.out;\n\t}\n}\n',
+			textOf(out, 'src/pkg/User.hx')
+		);
+		Assert.same(['src/pkg/User.hx: import pkg.sub.Spawn;'], out.imports);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-QUALIFIED-BLIND')
+	public function testAQualifiedSubTypeInAnExpressionIsWrittenInFull(): Void {
+		final tool: String = 'package pkg;\n\nclass Tool {}\n\nclass Helper {\n\tpublic static function go(): Int return 1;\n}\n';
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function f(): Int return Tool.Helper.go();\n}\n';
+		final user: String = 'package pkg;\n\nclass User {\n\tpublic static function g(): Int return Tool.Helper.go();\n}\n';
+		final out: ModuleMoveOutcome = moved(
+			[
+				move('src/pkg/Tool.hx', 'src/pkg/sub/Tool.hx'),
+				move('src/pkg/A.hx', 'src/other/A.hx')
+			],
+			[
+				file('src/pkg/Tool.hx', tool),
+				file('src/pkg/A.hx', a),
+				file('src/pkg/User.hx', user)
+			]
+		);
+		Assert.equals(
+			'package other;\n\nclass A {\n\tpublic static function f(): Int return pkg.sub.Tool.Helper.go();\n}\n',
+			textOf(out, 'src/other/A.hx')
+		);
+		Assert.equals(
+			'package pkg;\n\nclass User {\n\tpublic static function g(): Int return pkg.sub.Tool.Helper.go();\n}\n',
+			textOf(out, 'src/pkg/User.hx')
+		);
+		Assert.same([], out.imports);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-QUALIFIED-BLIND')
+	public function testAQualifiedSubTypeTheNewPackageWouldResolveDifferentlyIsRefused(): Void {
+		final a: String = 'package p;\n\nclass A {\n\tvar s: Mod.Sub;\n}\n';
+		final mod: String = 'package q;\n\nclass Mod {}\n\ntypedef Sub = { var x: Int; }\n';
+		final reasons: Array<String> = refused([move('src/p/A.hx', 'src/q/A.hx')], [file('src/p/A.hx', a), file('src/q/Mod.hx', mod)]);
+		Assert.equals(1, reasons.length);
+		Assert.isTrue(reasons[0].contains('Mod.Sub'), reasons[0]);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-SHADOW-BLIND')
+	public function testAQualifiedSubTypeWhoseFullPathALocalNameShadowsIsRefused(): Void {
+		final tool: String = 'package pkg;\n\nclass Tool {}\n\nclass Helper {\n\tpublic static function go(): Int return 1;\n}\n';
+		final user: String = 'package pkg;\n\nclass User {\n\tpublic static function g(pkg: Int): Int return Tool.Helper.go() + pkg;\n}\n';
+		final reasons: Array<String> = refused(
+			[move('src/pkg/Tool.hx', 'src/pkg/sub/Tool.hx')],
+			[file('src/pkg/Tool.hx', tool), file('src/pkg/User.hx', user)]
+		);
+		Assert.equals(1, reasons.length);
+		Assert.isTrue(reasons[0].contains('"pkg" is also a name this file declares'), reasons[0]);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-IMPORTS-APPENDED')
+	public function testImportsAReaderGainsTakeTheirSortedPlaces(): Void {
+		final a: String = 'package pkg;\n\nclass A {}\n';
+		final m: String = 'package pkg;\n\nclass M {}\n';
+		final user: String = 'package pkg;\n\nimport haxe.ds.StringMap;\nimport zz.Q;\n\nclass User {\n\tvar a: A;\n\tvar m: M;\n}\n';
+		final out: ModuleMoveOutcome = moved([move('src/pkg/A.hx', 'src/aa/A.hx'), move('src/pkg/M.hx', 'src/pkg/sub/M.hx')], [
+			file('src/pkg/A.hx', a),
+			file('src/pkg/M.hx', m),
+			file('src/zz/Q.hx', 'package zz;\n\nclass Q {}\n'),
+			file('src/pkg/User.hx', user)
+		]);
+		Assert.equals(
+			'package pkg;\n\nimport aa.A;\nimport haxe.ds.StringMap;\nimport pkg.sub.M;\nimport zz.Q;\n\nclass User {\n\tvar a: A;\n'
+			+ '\tvar m: M;\n}\n',
+			textOf(out, 'src/pkg/User.hx')
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-UNREADABLE-ACCEPTED')
+	public function testANameAnImportOutsideTheScopeMayBindIsRefused(): Void {
+		final a: String = 'package pkg;\n\nclass A {}\n';
+		final user: String = 'package pkg;\n\nimport zz.Q;\n\nclass User {\n\tvar a: A;\n}\n';
+		final reasons: Array<String> = refused(
+			[move('src/pkg/A.hx', 'src/aa/A.hx')],
+			[file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
+		);
+		Assert.equals(1, reasons.length);
+		Assert.isTrue(reasons[0].contains('"A"') && reasons[0].contains('cannot'), reasons[0]);
+	}
+
+	@:pin('guard')
+	public function testANameOnlyALibraryCouldBindKeepsItsUnreadableMeaning(): Void {
+		final a: String = 'package pkg;\n\nimport zz.Q;\n\nclass A {\n\tvar t: Thing;\n}\n';
+		final out: ModuleMoveOutcome = moved([move('src/pkg/A.hx', 'src/aa/A.hx')], [file('src/pkg/A.hx', a)]);
+		Assert.equals('package aa;\n\nimport zz.Q;\n\nclass A {\n\tvar t: Thing;\n}\n', textOf(out, 'src/aa/A.hx'));
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-MEMBER-BLIND')
+	public function testAStaticFieldOfAnImportedModuleStaysWhenTheSameNamedModuleMoves(): Void {
+		final out: ModuleMoveOutcome = moved([move('src/p/Mod.hx', 'src/p/sub/Mod.hx')], staticFieldShape());
+		Assert.isFalse(out.changes.exists(c -> c.file == 'src/p/Main.hx'), [for (c in out.changes) c.file].join(', '));
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-MEMBER-BLIND')
+	public function testAStaticFieldOfAnImportedModuleStaysWhenItsReaderMoves(): Void {
+		final out: ModuleMoveOutcome = moved([move('src/p/Main.hx', 'src/q/Main.hx')], staticFieldShape());
+		Assert.equals(
+			'package q;\n\nimport a.Mod;\n\nclass Main {\n\tstatic function main(): Void {\n\t\ttrace(Mod.Sub.go());\n\t}\n}\n',
+			textOf(out, 'src/q/Main.hx')
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-MEMBER-BLIND')
+	public function testAnEnumConstructorALibraryModuleNamesAsASubTypeIsABareName(): Void {
+		final expr: String = 'package pkg;\n\nenum Expr {\n\tField(name: String);\n\tConst(v: Int);\n}\n';
+		final user: String = 'package pkg;\n\nclass User {\n\tstatic function main(): Void {\n\t\ttrace(Expr.Field(\'x\'));\n\t}\n}\n';
+		final std: String = 'package haxe.macro;\n\ntypedef Expr = { var pos: Int; }\n\ntypedef Field = { var name: String; }\n';
+		final out: ModuleMoveOutcome = moved(
+			[move('src/pkg/Expr.hx', 'src/pkg/sub/Expr.hx')],
+			[file('src/pkg/Expr.hx', expr), file('src/pkg/User.hx', user)],
+			null, null, null, null,
+			[file('std/haxe/macro/Expr.hx', std)]
+		);
+		Assert.equals(
+			'package pkg;\n\nimport pkg.sub.Expr;\n\nclass User {\n\tstatic function main(): Void {\n\t\ttrace(Expr.Field(\'x\'));\n\t}\n'
+			+ '}\n',
+			textOf(out, 'src/pkg/User.hx')
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-MEMBER-AFTER-BLIND')
+	public function testASpellingWhoseHeadComesToBindAMemberIsWrittenInFull(): Void {
+		final out: ModuleMoveOutcome = moved([move('src/p/x/R.hx', 'src/p/y/R.hx')], [
+			file('src/p/Mod.hx', 'package p;\n\nclass Mod {}\n\nclass Sub {\n\tpublic static function go(): Int return 1;\n}\n'),
+			file('src/p/y/Mod.hx', 'package p.y;\n\nclass Mod {\n\tpublic static final Sub: Int = 2;\n}\n'),
+			file('src/p/x/R.hx', 'package p.x;\n\nclass R {\n\tpublic static function f(): Int return Mod.Sub.go();\n}\n')
+		]);
+		Assert.equals(
+			'package p.y;\n\nclass R {\n\tpublic static function f(): Int return p.Mod.Sub.go();\n}\n', textOf(out, 'src/p/y/R.hx')
+		);
+	}
+
 	private static inline function move(from: String, to: String): ModuleRelocation {
 		return { from: from, to: to };
 	}
@@ -424,11 +586,13 @@ class ModuleMoveTest extends Test {
 
 	private static function run(
 		moves: Array<ModuleRelocation>, files: Array<{ file: String, source: String }>, ?texts: Array<{ file: String, source: String }>,
-		?registries: Array<TypePathRegistry>, ?lists: Array<Array<SortedListPart>>, ?mirrors: Array<TestMirror>
+		?registries: Array<TypePathRegistry>, ?lists: Array<Array<SortedListPart>>, ?mirrors: Array<TestMirror>,
+		?library: Array<{ file: String, source: String }>
 	): ModuleMoveResult {
 		return ModuleMove.run({
 			moves: moves,
 			scopeFiles: files,
+			libraryFiles: library ?? [],
 			textFiles: texts ?? [],
 			registries: registries ?? [],
 			sortedLists: lists ?? [],
@@ -438,9 +602,10 @@ class ModuleMoveTest extends Test {
 
 	private static function moved(
 		moves: Array<ModuleRelocation>, files: Array<{ file: String, source: String }>, ?texts: Array<{ file: String, source: String }>,
-		?registries: Array<TypePathRegistry>, ?lists: Array<Array<SortedListPart>>, ?mirrors: Array<TestMirror>
+		?registries: Array<TypePathRegistry>, ?lists: Array<Array<SortedListPart>>, ?mirrors: Array<TestMirror>,
+		?library: Array<{ file: String, source: String }>
 	): ModuleMoveOutcome {
-		return switch run(moves, files, texts, registries, lists, mirrors) {
+		return switch run(moves, files, texts, registries, lists, mirrors, library) {
 			case Moved(outcome): outcome;
 			case Refused(reasons):
 				Assert.fail('expected the move, got refused: ${reasons.join(' | ')}');
@@ -471,6 +636,22 @@ class ModuleMoveTest extends Test {
 		if (change != null) return change.newSource;
 		Assert.fail('no change for $path among ${[for (c in out.changes) c.file].join(', ')}');
 		return '';
+	}
+
+	/** `a.Mod` holds a static field `Sub`; `p.Mod` sits beside a type `Sub`; `p.Main` imports `a.Mod` and reads `Mod.Sub` — the field. */
+	private static function staticFieldShape(): Array<{ file: String, source: String }> {
+		return [
+			file(
+				'src/a/Mod.hx',
+				'package a;\n\nclass Mod {\n\tpublic static final Sub: Helper = new Helper();\n}\n\nclass Helper {\n'
+				+ '\tpublic function new() {}\n\n\tpublic function go(): String return \'field\';\n}\n'
+			),
+			file('src/p/Mod.hx', 'package p;\n\nclass Mod {}\n\nclass Sub {\n\tpublic static function go(): String return \'type\';\n}\n'),
+			file(
+				'src/p/Main.hx',
+				'package p;\n\nimport a.Mod;\n\nclass Main {\n\tstatic function main(): Void {\n\t\ttrace(Mod.Sub.go());\n\t}\n}\n'
+			)
+		];
 	}
 
 }

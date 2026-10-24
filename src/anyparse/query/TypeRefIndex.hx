@@ -30,6 +30,12 @@ using Lambda;
 @:allow(anyparse.query.MemberLookup)
 final class TypeRefIndex {
 
+	/** `moduleRefRank` of a module a package wildcard supplies. */
+	private static inline final BY_WILDCARD: Int = -1;
+
+	/** `moduleRefRank` of a module the file cannot name by its simple name. */
+	private static inline final OUT_OF_REACH: Int = 0x7fffffff;
+
 	/** What a simple type name written in a file binds to, tier by tier in the compiler's order — the one reading of a bare name. */
 	public final names: TypeNameBinding;
 
@@ -232,8 +238,10 @@ final class TypeRefIndex {
 	/**
 	 * Every decl the MODULE-RELATIVE form `Mod.Sub` names FROM `fromFile` — a sub-module type
 	 * qualified by its own module's name, which Haxe accepts wherever the MODULE itself can be
-	 * named. That is `moduleRefInScope`, a strictly narrower rule than the one a bare type name
-	 * goes through, and the difference is measured rather than assumed.
+	 * named: from its own package or a sub-package of it, the nearest package declaring the type
+	 * winning (4.3.7: from `a.b.c`, `a.b.Mod.Sub` beats `a.Mod.Sub`, and `a.Mod.Sub` answers when
+	 * `a.b.Mod` holds no `Sub`), or through a package wildcard (`moduleRefInScope`), whose rank
+	 * against the package lookup is not read here, so a wildcard match stays beside the nearest one.
 	 *
 	 * `resolveQualifiedRefAll` cannot answer this form and must not: it matches the ROOT-relative
 	 * `pkg.Mod.Sub` and is deliberately context-free, while `Mod.Sub` names different types from
@@ -244,18 +252,19 @@ final class TypeRefIndex {
 		final dot: Int = raw.lastIndexOf('.');
 		final simple: String = raw.substr(dot + 1);
 		final prefix: String = raw.substring(0, dot);
-		final matches: Array<ResolvedType> = [];
+		final matches: Array<{ found: ResolvedType, rank: Int }> = [];
 		final seen: Array<String> = [];
-		for (r in named(simple)) if (
-			!r.type.isMain && SourceText.lastSegment(r.file.module) == prefix && moduleRefInScope(fromFile, r.file)
-		) {
+		for (r in named(simple)) if (!r.type.isMain && SourceText.lastSegment(r.file.module) == prefix) {
+			final rank: Int = moduleRefRank(fromFile, r.file);
 			final key: String = '${r.file.file}#${r.type.name}';
-			if (!seen.contains(key)) {
+			if (rank != OUT_OF_REACH && !seen.contains(key)) {
 				seen.push(key);
-				matches.push({ file: r.file, type: r.type });
+				matches.push({ found: { file: r.file, type: r.type }, rank: rank });
 			}
 		}
-		return matches;
+		var nearest: Int = OUT_OF_REACH;
+		for (m in matches) if (m.rank >= 0 && m.rank < nearest) nearest = m.rank;
+		return [for (m in matches) if (m.rank == nearest || m.rank == BY_WILDCARD) m.found];
 	}
 
 	/**
@@ -425,27 +434,21 @@ final class TypeRefIndex {
 	}
 
 	/**
-	 * Whether the MODULE of `fi` can be named by its own simple name from `fromFile` — the
-	 * visibility a module-relative `Mod.Sub` reference needs, which is NOT the one a bare TYPE
-	 * name needs, so the simple-name binding (`names`) cannot stand in for it. Compiled on 4.3.7: same package
-	 * resolves and `import pkg.*;` resolves, while BOTH `import pkg.Mod;` and `using pkg.Mod;`
-	 * fail with `Type not found : Mod` — a module import puts the module's TYPES in simple-name
-	 * scope, but the qualifier of `Mod.Sub` is read as a module PATH, which only the package
-	 * itself or a wildcard over it supplies.
-	 *
-	 * A ROOT-package module needs no arm: its own import path already IS `Mod.Sub`, so the
-	 * root-relative match in `resolveQualifiedRefAll` answers it and the fallback never runs.
+	 * How far `fi`'s module is from where `fromFile` can name it by its simple name: 0 from its own package, `n` from the
+	 * `n`-th sub-package below it, `BY_WILDCARD` through a package wildcard of the file or its ambient chain (a membership
+	 * question with no precedence read: the two lists answer as a union), else `OUT_OF_REACH`.
 	 */
-	private static function moduleRefInScope(fromFile: FileInfo, fi: FileInfo): Bool {
-		if (fi.pkg == fromFile.pkg) return true;
+	private static function moduleRefRank(fromFile: FileInfo, fi: FileInfo): Int {
+		if (fi.pkg == fromFile.pkg) return 0;
+		if (fi.pkg == '' || fromFile.pkg.startsWith('${fi.pkg}.')) {
+			final below: String = fi.pkg == '' ? fromFile.pkg : fromFile.pkg.substr(fi.pkg.length + 1);
+			return below.split('.').length;
+		}
 		final wild: String = '${fi.pkg}.*';
 		inline function supplies(imports: Array<ImportInfo>): Bool {
 			return imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == wild);
 		}
-		// An ambient source's wildcard supplies the qualifier exactly as the file's own would, and
-		// this is a membership question with no precedence in it — a module either can be named by
-		// its simple name here or cannot — so the two lists answer as a union.
-		return supplies(fromFile.imports) || fromFile.ambientImports.exists(g -> supplies(g.imports));
+		return supplies(fromFile.imports) || fromFile.ambientImports.exists(g -> supplies(g.imports)) ? BY_WILDCARD : OUT_OF_REACH;
 	}
 
 }

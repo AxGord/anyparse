@@ -3623,6 +3623,14 @@ final class RefShape {
 	public var typeNamesUpperInitial: Null<Bool>;
 
 	/**
+	 * Whether a qualified sub-type spelling `Mod.Sub` resolves by MODULE PATH only — the module `Mod` looked up in the
+	 * writer's package, then in each parent package, then at the top level — and never through an import of `Mod` (Haxe).
+	 * A module relocation then owes such a spelling its full path wherever the writer's package no longer reaches the
+	 * module. Optional; unset → a qualified spelling resolves like the bare name it starts with.
+	 */
+	public var qualifiedSubTypeByModulePath: Null<Bool>;
+
+	/**
 	 * The pattern one package segment must match (Haxe: a lower-case or `_` initial). Optional; unset → any identifier.
 	 */
 	public var packageSegmentPattern: Null<String>;
