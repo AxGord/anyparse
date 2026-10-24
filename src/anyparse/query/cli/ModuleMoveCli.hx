@@ -2,6 +2,7 @@ package anyparse.query.cli;
 
 import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig;
+import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.ConfigFinder.ConfigChain;
 import anyparse.query.ExitCode.*;
 import anyparse.query.ModuleMove.ModuleMoveOutcome;
@@ -10,6 +11,7 @@ import anyparse.query.ModuleMove.ModuleRelocation;
 import anyparse.query.ModulePathTokens.ModuleRename;
 import anyparse.query.MoveDeclaration.MoveDeclarationData;
 import anyparse.query.MoveSymbol.MoveChange;
+import anyparse.query.cli.command.LintCommand;
 import anyparse.query.cli.command.MoveCommand;
 import haxe.ds.Either;
 import haxe.io.Path;
@@ -88,9 +90,16 @@ final class ModuleMoveCli {
 		final strayModules: Array<String> = textPaths.filter(p -> p.endsWith(ext));
 		final textFiles: Array<{ file: String, source: String }> = readAll(textPaths.filter(p -> !p.endsWith(ext)));
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(opts.lang));
+		// The library sources names resolve to — `resolutionLibs` and the std, read as `lint` reads them; without them a
+		// name an import of a library module may bind cannot be read, and the move refuses it.
+		final config: LintConfig = LintConfig.discover(opts.moves[0].from);
+		final resolution: Null<ResolutionScope> = LintCommand.resolutionThunk(
+			scopeFiles, [], config.resolutionLibs(), config.resolutionStd()
+		);
 		final result: ModuleMoveResult = ModuleMove.run({
 			moves: opts.moves,
 			scopeFiles: scopeFiles,
+			libraryFiles: resolution == null ? [] : resolution.sources().library.entries(),
 			textFiles: textFiles,
 			registries: declaration.registries,
 			sortedLists: declaration.sortedLists,

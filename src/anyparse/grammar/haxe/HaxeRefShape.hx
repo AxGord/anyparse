@@ -1228,6 +1228,7 @@ final class HaxeRefShape {
 		table.importLineTemplate = 'import %;';
 		table.usingLineTemplate = 'using %;';
 		table.typeNamesUpperInitial = true;
+		table.qualifiedSubTypeByModulePath = true;
 		table.packageSegmentPattern = '^[a-z_][A-Za-z0-9_]*$';
 		table.publicModifierKind = 'Public';
 		table.classDeclKinds = ['ClassDecl', 'AbstractClassDecl'];

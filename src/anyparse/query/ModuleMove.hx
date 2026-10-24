@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.DeclaredSortedLists.SortedListPart;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.ImportOrder.ImportLine;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.ModuleMoveBindings.BindingDrift;
@@ -42,6 +43,13 @@ typedef TestMirror = {
 typedef ModuleMoveRequest = {
 	final moves: Array<ModuleRelocation>;
 	final scopeFiles: Array<{ file: String, source: String }>;
+
+	/**
+	 * The library sources a name may resolve to (the project's declared libraries and the std): read to place every name,
+	 * never rewritten.
+	 */
+	final libraryFiles: Array<{ file: String, source: String }>;
+
 	final textFiles: Array<{ file: String, source: String }>;
 	final registries: Array<TypePathRegistry>;
 	final sortedLists: Array<Array<SortedListPart>>;
@@ -110,9 +118,8 @@ final class ModuleMove {
 	/** The relocation `request` describes, read through `plugin`. */
 	public static function run(request: ModuleMoveRequest, plugin: GrammarPlugin): ModuleMoveResult {
 		final sourceOf: Map<String, String> = [for (e in request.scopeFiles) e.file => e.source];
-		final pre: SymbolIndex = IndexScope.over(request.scopeFiles, plugin);
-		ModuleMoveBindings.attachVirtualAmbient(pre, plugin);
-		final skipped: Null<String> = ScopeFiles.unparsedRefusal('move', pre.skippedFiles());
+		final pre: SymbolIndex = indexWith(request.scopeFiles, request.libraryFiles, plugin);
+		final skipped: Null<String> = ScopeFiles.unparsedRefusal('move', pre.skippedFiles().filter(f -> sourceOf.exists(f)));
 		if (skipped != null) return Refused([skipped]);
 		final planned: Array<PlannedMove> = switch planAll(withMirrors(request.moves, request.mirrors, sourceOf), pre, sourceOf, plugin) {
 			case Left(reasons): return Refused(reasons);
@@ -125,15 +132,18 @@ final class ModuleMove {
 			case Left(reasons): return Refused(reasons);
 			case Right(t): t;
 		};
-		// Phase 2: every name keeps its meaning — repaired by an import where one restores it, refused where none does.
-
+		// Phase 2: every bare name keeps its meaning — repaired by an import where one restores it, refused where none does.
+		// Then a qualified sub-type spelling read by module path, which no import changes, is written in full where the move
+		// changes its reading — last, so it reads the imports phase 2 wrote, which could turn its head into a member access.
 		final probes: Array<BindingProbe> = bindingProbes(request.scopeFiles, planned, newPathOf, plugin);
 		final imports: Array<String> = [];
-		switch repairBindings(request.scopeFiles, texts, planned, probes, pre, plugin, imports) {
+		switch repairBindings(request.scopeFiles, request.libraryFiles, texts, planned, probes, pre, plugin, imports) {
 			case Left(found):
 				return Refused(found);
 			case Right(_):
 		}
+		final unqualified: Array<String> = qualifySpellings(request.scopeFiles, request.libraryFiles, texts, planned, pre, plugin);
+		if (unqualified.length > 0) return Refused(unqualified);
 		// Phase 3: the result parses, and the declared texts follow.
 		return switch changesOf(request, texts, newPathOf, renames, plugin) {
 			case Left(reasons): Refused(reasons);
@@ -404,19 +414,96 @@ final class ModuleMove {
 	}
 
 	/**
+	 * Write in full (`pkg.Mod.Sub`), in `texts`, every qualified sub-type spelling whose module-path reading the move changes
+	 * (`ModuleMoveBindings.qualifiedDrifts`) — the one spelling of it no import affects. Every spelling no full path reads as
+	 * before, and every full path whose first segment a name of the file would shadow, is a refusal.
+	 */
+	private static function qualifySpellings(
+		files: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>, texts: Map<String, String>,
+		planned: Array<PlannedMove>, pre: SymbolIndex, plugin: GrammarPlugin
+	): Array<String> {
+		final shape: RefShape = plugin.refShape();
+		final reasons: Array<String> = [];
+		if (shape.qualifiedSubTypeByModulePath != true) return reasons;
+		final newPathOf: Map<String, String> = [for (p in planned) p.move.from => p.move.to];
+		final oldPathOf: Map<String, String> = [for (p in planned) p.move.to => p.move.from];
+		final relocated: Array<String> = [for (p in planned) SourceText.lastSegment(p.rename.oldPath)];
+		final scanned: Array<{ before: String, after: String }> = spellingReaders(files, newPathOf, relocated);
+		if (scanned.length == 0) return reasons;
+		final edits: Map<String, Array<TextEdit>> = [];
+		for (d in ModuleMoveBindings.qualifiedDrifts(
+			pre, postIndex(files, library, texts, newPathOf, plugin), scanned, [for (p in planned) p.rename.oldPath => p.rename.newPath],
+			relocated, plugin, [for (e in files) e.file => e.source],
+			[for (e in files) newPathOf[e.file] ?? e.file => texts[e.file] ?? e.source]
+		)) {
+			final full: String = d.qualified ?? '';
+			if (full == '') {
+				reasons.push(
+					'${d.file}: ${d.spelling} reads ${d.before} before the move and ${d.after} after it, and no full path gives it back'
+				);
+				continue;
+			}
+			final key: String = oldPathOf[d.file] ?? d.file;
+			final list: Array<TextEdit> = edits[key] ?? [];
+			list.push({ span: new Span(d.at, d.at + d.head.length), text: full });
+			edits[key] = list;
+		}
+		for (file => list in edits) for (r in writeFullPaths(file, list, texts, plugin)) reasons.push(r);
+		return reasons;
+	}
+
+	/**
+	 * The modules whose qualified sub-type spellings a relocation may change, under their old and new paths: every relocated
+	 * one, and every other one writing a relocated module's name before a dot.
+	 */
+	private static function spellingReaders(
+		files: Array<{ file: String, source: String }>, newPathOf: Map<String, String>, relocated: Array<String>
+	): Array<{ before: String, after: String }> {
+		final out: Array<{ before: String, after: String }> = [];
+		for (e in files) {
+			final moved: Null<String> = newPathOf[e.file];
+			if (moved != null || relocated.exists(r -> e.source.indexOf('$r.') >= 0)) out.push({ before: e.file, after: moved ?? e.file });
+		}
+		return out;
+	}
+
+	/**
+	 * Apply `edits` — first names replaced by full module paths — to `file`'s text in `texts`; one refusal per full path whose
+	 * first segment is also a name the file declares, where it may read as a member access.
+	 */
+	private static function writeFullPaths(
+		file: String, edits: Array<TextEdit>, texts: Map<String, String>, plugin: GrammarPlugin
+	): Array<String> {
+		final text: String = texts[file] ?? '';
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, text);
+		final binders: Array<String> = tree == null ? [] : binderNames(tree, plugin.refShape().declHostKinds);
+		final reasons: Array<String> = [];
+		for (e in edits) {
+			final head: String = e.text.split('.')[0];
+			if (binders.contains(head))
+				reasons.push(
+					'$file:${lineOf(text, e.span.from)} needs ${e.text} written in full, and "$head" is also a name this file declares — '
+					+ 'the full path may read as a member access on it; qualify it differently first'
+				);
+		}
+		texts[file] = ModulePathTokens.apply(text, sorted(edits));
+		return reasons;
+	}
+
+	/**
 	 * Compare every probed name before and after, and every relocated module's `using` set; write the import each drifted
-	 * name's old meaning needs (dropping the sub-type imports of the same module it makes redundant) and the `using` each
+	 * name's old meaning needs (`exactRepair`, each at its sorted place) and the `using` each
 	 * relocated module lost, compare again, and answer every difference that remains — `Right` when none does. `imports`
 	 * collects what was written.
 	 */
 	private static function repairBindings(
-		files: Array<{ file: String, source: String }>, texts: Map<String, String>, planned: Array<PlannedMove>,
-		probes: Array<BindingProbe>, pre: SymbolIndex, plugin: GrammarPlugin, imports: Array<String>
+		files: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>, texts: Map<String, String>,
+		planned: Array<PlannedMove>, probes: Array<BindingProbe>, pre: SymbolIndex, plugin: GrammarPlugin, imports: Array<String>
 	): Either<Array<String>, Bool> {
 		final newPathOf: Map<String, String> = [for (p in planned) p.move.from => p.move.to];
 		final renamed: Map<String, String> = [for (p in planned) p.rename.oldPath => p.rename.newPath];
 		final before: Map<String, String> = [for (e in files) e.file => e.source];
-		final post: SymbolIndex = postIndex(files, texts, newPathOf, plugin);
+		final post: SymbolIndex = postIndex(files, library, texts, newPathOf, plugin);
 		final first: Array<BindingDrift> = driftsIn(post, files, texts, newPathOf, probes, pre, renamed, plugin, before);
 		final reasons: Array<String> = [for (d in first) if (d.repair == null) describeDrift(d)];
 		final lost: Map<String, Array<String>> = [];
@@ -425,7 +512,7 @@ final class ModuleMove {
 		if (first.length == 0 && !lost.keys().hasNext()) return Right(true);
 		final unwritten: Null<String> = writeRepairs(texts, repairsByFile(first), lost, newPathOf, post, plugin, imports);
 		if (unwritten != null) return Left([unwritten]);
-		final again: SymbolIndex = postIndex(files, texts, newPathOf, plugin);
+		final again: SymbolIndex = postIndex(files, library, texts, newPathOf, plugin);
 		final second: Array<String> = [
 			for (d in driftsIn(again, files, texts, newPathOf, probes, pre, renamed, plugin, before)) describeDrift(d)
 		];
@@ -435,19 +522,33 @@ final class ModuleMove {
 
 	/** The index of the tree after the relocation: every module under its new path, with its rewritten text. */
 	private static function postIndex(
-		files: Array<{ file: String, source: String }>, texts: Map<String, String>, newPathOf: Map<String, String>, plugin: GrammarPlugin
+		files: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>, texts: Map<String, String>,
+		newPathOf: Map<String, String>, plugin: GrammarPlugin
 	): SymbolIndex {
-		final index: SymbolIndex = IndexScope.over([
+		return indexWith([
 			for (e in files) { file: newPathOf[e.file] ?? e.file, source: texts[e.file] ?? e.source }
-		], plugin);
+		], library, plugin);
+	}
+
+	/**
+	 * The index over `files` read with `library` (resolution only,
+	 * `ModuleMoveRequest.libraryFiles`), its virtual ambient chains attached.
+	 */
+	private static function indexWith(
+		files: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>, plugin: GrammarPlugin
+	): SymbolIndex {
+		final index: SymbolIndex = IndexScope.over(files.concat(library), plugin, [for (e in library) e.file]);
 		ModuleMoveBindings.attachVirtualAmbient(index, plugin);
 		return index;
 	}
 
 	/** One drift as a refusal line. */
 	private static function describeDrift(d: BindingDrift): String {
-		return '${d.file}: "${d.name}" means ${d.before} before the move and ${d.after} after it'
-			+ (d.repair == null ? ', and no import gives it back' : ' even with import ${d.repair}');
+		return d.before == ModuleMoveBindings.UNKNOWN || d.after == ModuleMoveBindings.UNKNOWN
+			? '${d.file}: what "${d.name}" means cannot be read ${d.before == ModuleMoveBindings.UNKNOWN ? 'before' : 'after'} the '
+				+ 'move — an import or ambient source the analysed set does not hold may bind it; analyse that module too'
+			: '${d.file}: "${d.name}" means ${d.before} before the move and ${d.after} after it'
+				+ (d.repair == null ? ', and no import gives it back' : ' even with import ${d.repair}');
 	}
 
 	/** `edits` in ascending order of their start. */
@@ -481,17 +582,6 @@ final class ModuleMove {
 		if (rest.length == 0 || rest.indexOf('.') >= 0 || !SourceText.isIdentifier(rest)) return false;
 		final initial: Int = rest.fastCodeAt(0);
 		return shape.typeNamesUpperInitial != true || (initial >= 'A'.code && initial <= 'Z'.code);
-	}
-
-	/** `span` widened to its whole line, newline included, when nothing else shares the line; else `span` itself. */
-	private static function wholeLine(text: String, span: Span): Span {
-		var from: Int = span.from;
-		while (from > 0 && (text.charAt(from - 1) == ' ' || text.charAt(from - 1) == '\t')) from--;
-		var to: Int = span.to;
-		while (to < text.length && (text.charAt(to) == ' ' || text.charAt(to) == '\t')) to++;
-		final lineStart: Bool = from == 0 || text.charAt(from - 1) == '\n';
-		final lineEnd: Bool = to >= text.length || text.charAt(to) == '\n';
-		return lineStart && lineEnd ? new Span(from, to < text.length ? to + 1 : to) : span;
 	}
 
 	/** Every relocation of `moves` planned against the analysed set `pre`, or every reason one cannot be. */
@@ -567,25 +657,26 @@ final class ModuleMove {
 	}
 
 	/**
-	 * `text` (the module `info` indexes) with `importLines` written into its import run, every plain import of a sub-type of
-	 * one of the `modules` it imports removed (the module import binds it already), and `usingLines` written directly above
-	 * the module's own first `using` — where they rank below it, as the ambient chain they replace did.
+	 * `text` with `importLines` (importing `paths`, one each) written each at its sorted place in the import run that orders
+	 * it (`MoveSymbol.importAnchor`), the rest where `MoveSymbol.carriedImportEdit` seats them, and `usingLines` written
+	 * directly above the module's own first `using` — where they rank below it, as the ambient chain they replace did.
 	 */
 	private static function withImports(
-		text: String, importLines: Array<String>, usingLines: Array<String>, modules: Array<String>, info: Null<FileInfo>,
-		plugin: GrammarPlugin
+		text: String, paths: Array<String>, importLines: Array<String>, usingLines: Array<String>, plugin: GrammarPlugin
 	): String {
-		final edits: Array<{ span: Span, text: String }> = [];
-		final insert: Null<{ span: Span, text: String }> = MoveSymbol.carriedImportEdit(text, importLines, plugin);
-		if (insert != null) edits.push(insert);
-		final shape: RefShape = plugin.refShape();
-		if (info != null)
-			for (imp in info.imports)
-				if (!imp.guarded && imp.kind == ImportKind.Import && imp.alias == null && modules.exists(p ->
-					isSubTypeOf(imp.raw, p, shape)
-				))
-					edits.push({ span: wholeLine(text, imp.span), text: '' });
-		final imported: String = CanonicalEdit.applyEdits(text, edits);
+		var imported: String = text;
+		final unplaced: Array<String> = [];
+		for (i => line in importLines) {
+			final anchor: ImportAnchor = MoveSymbol.importAnchor(imported, plugin, paths[i]);
+			if (anchor.order < 0)
+				unplaced.push(line);
+			else
+				imported = CanonicalEdit.applyEdits(imported, [
+					{ span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}$line\n${anchor.trail}' }
+				]);
+		}
+		final insert: Null<{ span: Span, text: String }> = MoveSymbol.carriedImportEdit(imported, unplaced, plugin);
+		if (insert != null) imported = CanonicalEdit.applyEdits(imported, [insert]);
 		if (usingLines.length == 0) return imported;
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, imported);
 		final own: Null<Array<ImportLine>> = tree == null
@@ -808,7 +899,10 @@ final class ModuleMove {
 		final oldPathOf: Map<String, String> = [for (old => now in newPathOf) now => old];
 		final infoOf: Map<String, FileInfo> = [for (fi in post.allFiles()) fi.file => fi];
 		for (file in [for (f in byFile.keys()) f].concat([for (f in lost.keys()) if (!byFile.exists(f)) f])) {
-			final importLines: Array<String> = switch repairLines(byFile[file] ?? [], [], plugin.refShape()) {
+			final paths: Array<String> = [
+				for (p in byFile[file] ?? []) exactRepair(p, infoOf[file], post, plugin.refShape())
+			];
+			final importLines: Array<String> = switch repairLines(paths, [], plugin.refShape()) {
 				case Left(path): return '$file: the grammar declares no statement spelling to write $path';
 				case Right(l): l;
 			};
@@ -817,10 +911,23 @@ final class ModuleMove {
 				case Right(l): l;
 			};
 			final key: String = oldPathOf[file] ?? file;
-			texts[key] = withImports(texts[key] ?? '', importLines, usingLines, byFile[file] ?? [], infoOf[file], plugin);
+			texts[key] = withImports(texts[key] ?? '', paths, importLines, usingLines, plugin);
 			for (line in importLines.concat(usingLines)) imports.push('$file: $line');
 		}
 		return null;
+	}
+
+	/**
+	 * The import path restoring a drifted name: `repair` itself, except that a module's MAIN type (`repair` naming a module of
+	 * `post`) is imported by its own sub-type path (`pkg.Mod.Mod`) where the file (`info`) already imports that module's types
+	 * one by one — a plain module import would bind every other type of it too.
+	 */
+	private static function exactRepair(repair: String, info: Null<FileInfo>, post: SymbolIndex, shape: RefShape): String {
+		if (info == null || !post.allFiles().exists(fi -> fi.module == repair)) return repair;
+		final oneByOne: Bool = info.imports.exists(
+			imp -> !imp.guarded && imp.kind == ImportKind.Import && imp.alias == null && isSubTypeOf(imp.raw, repair, shape)
+		);
+		return oneByOne ? '$repair.${SourceText.lastSegment(repair)}' : repair;
 	}
 
 }
