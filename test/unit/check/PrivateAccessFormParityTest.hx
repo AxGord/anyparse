@@ -349,18 +349,17 @@ class PrivateAccessFormParityTest extends Test {
 	}
 
 	/**
-	 * A private constructor another package builds through a waiver, spelled qualified (`new pkg.A()`), stays; the same
-	 * declaration with nothing constructing it is still reported — the control.
+	 * A private constructor its own class builds by a qualified `new pkg.A()` stays — the construction scan reads past the
+	 * qualifier; the same class with no construction is still reported (the control).
 	 */
 	@:pin('control')
 	@:killer('M-QUALIFIED-CONSTRUCTION-UNSEEN')
 	public function testAQualifiedConstructionKeepsThePrivateConstructor(): Void {
-		final decl: String = 'package pkg;\n\nclass A {\n\n\tprivate function new() {}\n\n\tpublic static function make(): A {\n'
-			+ '\t\treturn null;\n\t}\n\n}\n';
 		for (built in [true, false]) {
-			final body: String = built ? 'final a: pkg.A = @:privateAccess new pkg.A();\n\t\treturn a != null;' : 'return true;';
-			final reacher: String = 'package other;\n\nclass B {\n\n\tpublic static function reach(): Bool {\n\t\t$body\n\t}\n\n}\n';
-			final files: Array<SourceFile> = [{ file: DECL_FILE, source: decl }, { file: REACH_FILE, source: reacher }];
+			final made: String = built ? 'new pkg.A()' : 'null';
+			final decl: String = 'package pkg;\n\nclass A {\n\n\tprivate function new() {}\n\n\tpublic static function make(): A {\n'
+				+ '\t\treturn $made;\n\t}\n\n}\n';
+			final files: Array<SourceFile> = [{ file: DECL_FILE, source: decl }];
 			final found: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files, scoped(files))
 				.filter(v -> v.file == DECL_FILE);
 			Assert.equals(built ? 0 : 1, found.length, 'built=$built: ${[for (v in found) v.message]}');
