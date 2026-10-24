@@ -1,5 +1,8 @@
 package anyparse.check;
 
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.IfExpressionChain;
+import anyparse.check.scan.PurityScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
@@ -8,9 +11,6 @@ import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.check.scan.CheckScan;
-import anyparse.check.scan.IfExpressionChain;
-import anyparse.check.scan.PurityScan;
 
 /**
  * Flags an `if` / `else if` / … / `else` chain whose EVERY branch is the SAME call differing in

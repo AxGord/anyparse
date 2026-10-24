@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.scan.ConstantFieldScan;
+import anyparse.check.scan.ReflectionScan;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
@@ -9,8 +11,6 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.check.scan.ConstantFieldScan;
-import anyparse.check.scan.ReflectionScan;
 
 using Lambda;
 using StringTools;

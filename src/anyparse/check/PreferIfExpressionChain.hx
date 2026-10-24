@@ -1,5 +1,10 @@
 package anyparse.check;
 
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.IfExpressionChain;
+import anyparse.check.scan.NegationScan;
+import anyparse.check.scan.OperatorSelection;
+import anyparse.check.scan.SwitchChain;
 import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
@@ -8,11 +13,6 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.check.scan.CheckScan;
-import anyparse.check.scan.IfExpressionChain;
-import anyparse.check.scan.NegationScan;
-import anyparse.check.scan.OperatorSelection;
-import anyparse.check.scan.SwitchChain;
 
 using Lambda;
 

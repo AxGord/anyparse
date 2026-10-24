@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.ConstantFieldScan;
+import anyparse.check.scan.ReflectionScan;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
@@ -9,8 +11,6 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.check.scan.ConstantFieldScan;
-import anyparse.check.scan.ReflectionScan;
 
 using StringTools;
 

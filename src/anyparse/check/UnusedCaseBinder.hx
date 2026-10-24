@@ -1,13 +1,13 @@
 package anyparse.check;
 
+import anyparse.check.scan.CasePatternScan;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
 import anyparse.query.PatternNameScope;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.check.scan.CasePatternScan;
-import anyparse.check.scan.CheckScan;
-import anyparse.check.scan.RunScan;
 
 using Lambda;
 

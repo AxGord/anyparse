@@ -1,5 +1,8 @@
 package anyparse.check;
 
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.IfExpressionChain;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
@@ -10,9 +13,6 @@ import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.check.scan.CheckScan;
-import anyparse.check.scan.IfExpressionChain;
-import anyparse.check.scan.RunScan;
 
 using StringTools;
 

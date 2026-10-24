@@ -1,13 +1,13 @@
 package anyparse.check;
 
 import anyparse.check.Check.FixEdit;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.NegationScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.check.scan.CheckScan;
-import anyparse.check.scan.NegationScan;
 
 /** The trailing `if` a guard rewrite inverts: the statement, its condition and its braced then-branch. */
 typedef GuardedIf = {

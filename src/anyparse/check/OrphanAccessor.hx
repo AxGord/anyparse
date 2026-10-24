@@ -1,6 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.ReflectionScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
@@ -8,9 +11,6 @@ import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.check.scan.CheckScan;
-import anyparse.check.scan.ReflectionScan;
-import anyparse.check.scan.RunScan;
 
 using Lambda;
 using StringTools;
