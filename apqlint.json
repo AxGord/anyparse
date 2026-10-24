@@ -205,6 +205,14 @@
 						"select": "FinalMember:BASELINE >> ArrayExpr"
 					}
 				]
+			},
+			{
+				"parts": [
+					{
+						"file": "test/unit/query/LexicalRegionsSeamTest.hx",
+						"select": "FnMember:testNoGrammarAgnosticModuleNamesOneGrammar >> FinalStmt:allowed >> ArrayExpr"
+					}
+				]
 			}
 		],
 		"mirrors": [
