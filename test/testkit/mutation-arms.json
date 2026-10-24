@@ -30857,7 +30857,7 @@
 			"type": "anyparse.query.RawSourceScan",
 			"method": "accessGrantMatches",
 			"find": "return emitters != null && ",
-			"replace": "return false && ",
+			"replace": "return emitters != null && false && ",
 			"note": "a member a macro reification spells counts only where a privileged file spells it, so a macro expanded under a grant or a waiver loses its target"
 		},
 		{
