@@ -30790,6 +30790,75 @@
 			"find": "final byCategory: Null<Bool> = category == null ? null : level.categories[category];",
 			"replace": "final byCategory: Null<Bool> = category == null || Lambda.exists(_switches, l -> l.rules[id] != null) ? null : level.categories[category];",
 			"note": "a rule entry anywhere in the chain outranks a category entry anywhere in it, so a nested category no longer overrides an outer config's entry for one of its rules"
+		},
+		{
+			"name": "M-SAFE-BLAME-UNSAID",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "compilerLines",
+			"force": "'apq lint --fix: $errors\\n'",
+			"note": "a revert notice no longer names the files the compiler blamed, so a revert caused through a file the run never wrote cannot be diagnosed"
+		},
+		{
+			"name": "M-SAFE-BAN-OFF",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "isBanned",
+			"force": "false",
+			"note": "an edit the safe-pass net took back is offered again by the follow-up round, which re-applies it and reverts it a second time"
+		},
+		{
+			"name": "M-SAFE-BISECT-OFF",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "bisectFiles",
+			"force": "[changed.copy()]",
+			"note": "a safe pass the compiler fails through a file the run never wrote is reverted whole again, every innocent edit with it"
+		},
+		{
+			"name": "M-SAFE-SPLIT-OFF",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "splitFile",
+			"find": "final rules: Array<String> = seat.splitRules(file);",
+			"replace": "final rules: Array<String> = [];",
+			"note": "a culprit file goes back whole, so the import fix beside the poisoning edit in the same file is lost"
+		},
+		{
+			"name": "M-SAFE-BISECT-NO-FALLBACK",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "bisectFiles",
+			"find": "throw new IsolationStop('bisecting the ${units.length} written unit(s) isolated no culprit within $budget typecheck(s)');",
+			"replace": "return [];",
+			"note": "a bisection that exhausts its search names no culprit instead of falling back to the whole wave with its reason"
+		},
+		{
+			"name": "M-SAFE-PLACE-SKIPPED",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "settle",
+			"find": "restore(whole);",
+			"replace": "",
+			"note": "a culprit the net reverts whole is left on disk at the last candidate an isolation probe wrote, while the run reports the tree back to a green build"
+		},
+		{
+			"name": "M-SAFE-LATER-UNBANNED",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "splitFile",
+			"find": "rules: later,",
+			"replace": "rules: [for (rule in later) if (!rules.contains(rule)) rule],",
+			"note": "keeping a culprit's first pass discards its later passes, but a rule that also landed in the first pass is neither named nor banned, so the follow-up round re-applies its later edit"
+		},
+		{
+			"name": "M-SAFE-INTERACTION-PINNED",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "bisectFiles",
+			"find": "for (i in failers) if (probes.green(keepOf(kept.concat([i])), []))",
+			"replace": "for (i in failers) if (false)",
+			"note": "when two files break the build only together, the bisection names the half it never proved and splits and bans its innocent files"
+		},
+		{
+			"name": "M-SAFE-PROBES-UNCAPPED",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "isolate",
+			"find": "final probes: IsolationProbes = new IsolationProbes(seat, cap, known);",
+			"replace": "final probes: IsolationProbes = new IsolationProbes(seat, 1 << 30, known);",
+			"note": "the isolation spends typechecks without a run budget, hours of project-wide builds on a wave of splittable culprits"
 		}
 	]
 }

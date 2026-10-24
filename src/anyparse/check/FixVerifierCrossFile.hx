@@ -24,7 +24,7 @@ using Lambda;
  * Edit sets that share a file form one COMPONENT and are judged together: their spans are relative to
  * the same original sources, so they combine without re-resolution, and a component that builds costs
  * one typecheck per covering configuration however many renames it carries. A rejected component is
- * bisected over its edit sets with the per-file loop's own search (`FixVerifier.isolateFailers`), the
+ * bisected over its edit sets with the per-file loop's own search (`FailerBisect.isolateFailers`), the
  * complement confirm-typechecked before anything is kept.
  *
  * Coverage is asked per component before anything is written: every file it edits must be compiled by
@@ -191,8 +191,8 @@ final class FixVerifierCrossFile {
 			return settled;
 		}
 		final spent: Array<Int> = [0];
-		final failers: Null<Array<Int>> = FixVerifier.isolateFailers(
-			n, 2 * FixVerifier.ceilLog2(n), indices -> attempt(indices)?.match(Confirmed) == true, spent
+		final failers: Null<Array<Int>> = FailerBisect.isolateFailers(
+			n, FailerBisect.searchBudget(n), indices -> attempt(indices)?.match(Confirmed) == true, spent
 		);
 		final safe: Array<Int> = failers == null ? [] : [for (i in all) if (!failers.contains(i)) i];
 		if (safe.length > 0 && attempt(safe)?.match(Confirmed) == true) return keep(safe);

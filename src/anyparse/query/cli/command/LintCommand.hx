@@ -91,6 +91,9 @@ typedef LintOpts = {
 	var includeInfo: Bool;
 	var fix: Bool;
 	var noOracle: Bool;
+
+	/** `--fix-probes` — the typechecks the `--fix` safe-pass net may spend isolating culprits in one run. */
+	var fixProbes: Int;
 	var failOn: Null<Severity>;
 	var format: String;
 	var ruleFilters: Array<String>;
@@ -305,7 +308,7 @@ final class LintCommand implements CliCommand {
 				() ->
 					LintFixDriver.runLintFix(
 						files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles),
-						o.noOracle, o.range, o.verbose
+						o.noOracle, o.range, o.verbose, o.fixProbes
 					)
 			);
 		}
@@ -370,6 +373,7 @@ final class LintCommand implements CliCommand {
 			includeInfo: false,
 			fix: false,
 			noOracle: false,
+			fixProbes: LintFixSafePass.PROBE_CAP,
 			failOn: null,
 			format: FORMAT_TEXT,
 			ruleFilters: [],
@@ -1099,6 +1103,9 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('                    distinct apqlint.json chain (config, default-off and\n');
 		CliIo.sysPrint('                    languageVersion resolved); nothing is linted\n');
 		CliIo.sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
+		CliIo.sysPrint('  --fix-probes <n>  With --fix: the typechecks the safe-pass net may spend in one\n');
+		CliIo.sysPrint('                    run isolating the edits that broke the build (default 32);\n');
+		CliIo.sysPrint('                    past it the safe pass is reverted whole\n');
 		CliIo.sysPrint('  --fail-on <sev>   Exit non-zero if a finding at-or-above <sev> exists\n');
 		CliIo.sysPrint('                    (error|warning|info)\n');
 		CliIo.sysPrint('  --no-oracle       Skip the compiler-oracle typecheck (a PROJECT-WIDE build\n');
@@ -1161,6 +1168,7 @@ final class LintCommand implements CliCommand {
 		var includeInfo: Bool = false;
 		var fix: Bool = false;
 		var noOracle: Bool = false;
+		var fixProbes: Int = LintFixSafePass.PROBE_CAP;
 		var failOn: Null<Severity> = null;
 		var format: String = FORMAT_TEXT;
 		final ruleFilters: Array<String> = [];
@@ -1191,6 +1199,13 @@ final class LintCommand implements CliCommand {
 					fix = true;
 				case '--no-oracle':
 					noOracle = true;
+				case '--fix-probes':
+					final count: Null<Int> = Std.parseInt(CliArgs.expectValue(args, ++i, a));
+					if (count == null || count < 0) {
+						CliIo.stderr('apq lint: --fix-probes expects a count of typechecks, 0 or more\n');
+						return lintParseExit(EXIT_USAGE);
+					}
+					fixProbes = count;
 				case '--verbose':
 					verbose = true;
 				case '--explain-long':
@@ -1252,6 +1267,7 @@ final class LintCommand implements CliCommand {
 			includeInfo: includeInfo,
 			fix: fix,
 			noOracle: noOracle,
+			fixProbes: fixProbes,
 			failOn: failOn,
 			format: format,
 			ruleFilters: ruleFilters,

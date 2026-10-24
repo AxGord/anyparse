@@ -14,7 +14,6 @@ import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Outcome of a risky-fix verification pass. `baseline` is the typecheck of the
@@ -283,7 +282,7 @@ private enum EntryVerdict {
  *
  * Rollback granularity is PER-EDIT by default, and per-GROUP for a check that opts
  * into `GroupedFix`: when the full set fails, the edits are bisected
- * (`isolateFailers` — binary-split group testing) so one unsafe edit among N no
+ * (`FailerBisect.isolateFailers` — binary-split group testing) so one unsafe edit among N no
  * longer reverts the safe others. The bisect walks UNITS rather than raw edits —
  * one unit per ungrouped edit, one per group — so edits a check declared
  * inseparable (an `import` and the rewrites that need it) are kept or dropped
@@ -565,7 +564,7 @@ final class FixVerifier {
 	 * Otherwise the full set is written and typechecked by every covering configuration first:
 	 * `Confirmed` from all of them keeps it (`Applied`); `Unavailable` (an oracle cannot run) or a
 	 * `Rejected` with fewer than two UNITS reverts the whole file (`Reverted`). A multi-unit `Rejected` is
-	 * BISECTED — `isolateFailers` isolates the failing UNITS by binary search (each
+	 * BISECTED — `FailerBisect.isolateFailers` isolates the failing UNITS by binary search (each
 	 * probe re-canonicalises from the ORIGINAL `before` with that subset's edits),
 	 * the safe complement is confirm-typechecked and written, and only the failing
 	 * units revert (`Partial`).
@@ -677,9 +676,9 @@ final class FixVerifier {
 		// and every attempt costs one, including a probe the writer refused before any compiler
 		// ran, while `spawns` counts only what a compiler was launched for and is what
 		// `oracleInvocations` reports.
-		final searchBudget: Int = 2 * ceilLog2(n);
+		final searchBudget: Int = FailerBisect.searchBudget(n);
 		final spent: Array<Int> = [0];
-		// `isolateFailers` reads a BOOLEAN oracle, and a probe that could not build a
+		// `FailerBisect.isolateFailers` reads a BOOLEAN oracle, and a probe that could not build a
 		// candidate still has an honest answer for the question the bisect asks — "can this
 		// subset be applied and still build?" — which is no. So it counts as a failure and
 		// the search CONTINUES: the complement it settles on is confirm-typechecked before
@@ -701,7 +700,7 @@ final class FixVerifier {
 					false;
 			};
 		}
-		final failers: Null<Array<Int>> = isolateFailers(n, searchBudget, probe, spent);
+		final failers: Null<Array<Int>> = FailerBisect.isolateFailers(n, searchBudget, probe, spent);
 		final refusal: Null<String> = uncanonical;
 		// The full-set typecheck plus every probe that produced a candidate, across every covering
 		// configuration — read HERE because the confirm below spends more, and only the seats that
@@ -838,76 +837,11 @@ final class FixVerifier {
 		return [for (i in flat) { span: edits[i].span, text: edits[i].text }];
 	}
 
-	/**
-	 * Isolate the failing UNIT indices among `[0, count)` by binary-split group
-	 * testing. A unit is one edit, or one `GroupedFix` group — the search is
-	 * index-agnostic either way, `verifyEntry` owns the mapping (`unitsOf`).
-	 * `probe(indices)` is true when that SUBSET (canonicalised from the ORIGINAL
-	 * source with exactly those units' edits) typechecks. Precondition: the FULL set
-	 * is known to fail, so no probe re-establishes it. Returns the sorted failer
-	 * indices whose removal makes the complement pass, or null when the probe budget
-	 * is exhausted (the caller falls back to a whole-file revert). `spent[0]` receives
-	 * the probe count.
-	 */
-	private static function isolateFailers(count: Int, budget: Int, probe: Array<Int> -> Bool, spent: Array<Int>): Null<Array<Int>> {
-		spent[0] = 0;
-		return try bisectRec([for (i in 0...count) i], probe, budget, spent) catch (_: BudgetExceeded) null;
-	}
-
-	/**
-	 * Recurse over a KNOWN-FAILING index block. A singleton is the failer. Otherwise
-	 * split in half and probe each: recurse into a failing half, keep a passing one.
-	 * When BOTH halves pass alone yet the block fails, the failure is a cross-half
-	 * interaction (e.g. a failing pair straddling the split) — keep the passing left
-	 * half and treat the right as the failers; the caller's confirm validates the
-	 * whole complement.
-	 */
-	private static function bisectRec(indices: Array<Int>, probe: Array<Int> -> Bool, budget: Int, spent: Array<Int>): Array<Int> {
-		if (indices.length <= 1) return indices;
-		final mid: Int = indices.length >> 1;
-		final left: Array<Int> = indices.slice(0, mid);
-		final right: Array<Int> = indices.slice(mid);
-		final leftPasses: Bool = countedProbe(left, probe, budget, spent);
-		final rightPasses: Bool = countedProbe(right, probe, budget, spent);
-		if (leftPasses && rightPasses) return right.copy();
-		final failers: Array<Int> = [];
-		if (!leftPasses) for (i in bisectRec(left, probe, budget, spent)) failers.push(i);
-		if (!rightPasses) for (i in bisectRec(right, probe, budget, spent)) failers.push(i);
-		return failers;
-	}
-
-	/** One budget-guarded probe; the call that would exceed `budget` throws `BudgetExceeded`. */
-	private static function countedProbe(indices: Array<Int>, probe: Array<Int> -> Bool, budget: Int, spent: Array<Int>): Bool {
-		if (spent[0] >= budget) throw new BudgetExceeded();
-		spent[0]++;
-		return probe(indices);
-	}
-
-	/** Smallest `k` with `2^k >= n` (the integer ceil of log2), for `n >= 1`. */
-	private static function ceilLog2(n: Int): Int {
-		var k: Int = 0;
-		var v: Int = 1;
-		while (v < n) {
-			v <<= 1;
-			k++;
-		}
-		return k;
-	}
-
 	/** The flat edits `check` proposes for `own` in `source`: a `RiskyArm`'s risky arm, every other check's `fix`. */
 	private static function flatFix(
 		check: Check, source: String, own: Array<Violation>, plugin: GrammarPlugin, index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return check is RiskyArm ? (cast check: RiskyArm).riskyFix(source, own, plugin, index) : check.fix(source, own, plugin, index);
-	}
-
-}
-
-/** Internal control-flow signal: the bisect probe budget was exhausted. */
-private class BudgetExceeded extends Exception {
-
-	public function new() {
-		super('fix-verifier bisect budget exceeded');
 	}
 
 }
