@@ -5,6 +5,8 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.query.IndexScope;
+import anyparse.query.InertRegions;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
 import anyparse.query.ModuleScan;
 import anyparse.query.OccurrenceScan;
@@ -15,6 +17,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
+import anyparse.query.ValueDoors;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -36,6 +39,13 @@ private typedef Occurrence = {
 	 * `Macro-time bodies` gate.
 	 */
 	var macroBody: Bool;
+
+	/**
+	 * The static-access chain node when the occurrence is written in a VALUE position (an expression), null in a type
+	 * position. A value lookup tries locals, fields, module-level values and constructors before a type, so the short name
+	 * there needs its own freedom proof (`valueNameFree`).
+	 */
+	var valueSite: Null<QueryNode>;
 }
 
 /**
@@ -71,6 +81,12 @@ private typedef ScanContext = {
 	var macroKind: Null<String>;
 	var comments: Array<Span>;
 	var tree: QueryNode;
+
+	/** The path spans of every type-position node, filled by the scan — a name spelled there reads a type, never a value. */
+	var typeSpans: Array<Span>;
+
+	/** Every byte that cannot bind a name — comments and literal string TEXT (`InertRegions`). */
+	var inert: Array<Span>;
 }
 
 /**
@@ -127,8 +143,8 @@ private typedef ScanContext = {
  * parameter, return, anonymous-field and enum-constructor-parameter annotations alike, each
  * generic component on its own. A static-access chain in expression position
  * (`sys.FileSystem.exists(…)`) is the one shape the grammar spreads over several nodes; the path
- * is rebuilt from it and gated on a lower-initial receiver chain whose root resolves to no value
- * binding.
+ * is rebuilt from it, gated on a receiver chain whose root binds no value, and — being a VALUE position — shortened only
+ * where nothing binds the short name as a value there (`valueNameFree`: a value lookup outranks every type route).
  *
  * ## Gates — fail closed
  *
@@ -413,6 +429,7 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 		// Re-bind: a null-check does not narrow into an anonymous-structure literal.
 		final scoped: QueryNode = tree;
 		final shape: RefShape = plugin.refShape();
+		final lexical: Array<LexRegion> = plugin.lexicalRegions(source);
 		final context: ScanContext = {
 			source: source,
 			shape: shape,
@@ -421,31 +438,26 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 			opaqueKinds: shape.opaqueKinds ?? [],
 			functionKinds: shape.functionKinds ?? [],
 			macroKind: shape.macroModifierKind,
-			comments: SourceComments.collectCommentRegions(plugin.lexicalRegions(source)),
-			tree: scoped
+			comments: SourceComments.collectCommentRegions(lexical),
+			tree: scoped,
+			typeSpans: [],
+			inert: InertRegions.of(scoped, lexical, shape)
 		};
 		final occurrences: Array<Occurrence> = [];
 		scan(refsTree, context, false, false, false, occurrences);
 		final printer: TypeRefPrinter = printerFor(source, scoped, plugin, index, path);
 		final plans: Array<PathPlan> = [];
+		final file: String = path;
 		for (path in distinctPaths(occurrences)) {
-			final targets: Array<Span> = [];
-			// The two counts both import gates read, each over the SURVIVING occurrences — the ones
-			// THIS call will rewrite: how many there are (the threshold), and how many of those sit
-			// outside a macro-time body (the `Macro-time bodies` gate). Two things deliberately stay
-			// WHOLE-file: `targets`, which is the finding set the fix path filters against `wanted`
-			// itself, and `owned` below — the freeness exemption has to cover every byte range the
-			// file still spells as this path, suppressed ones included, or a suppressed occurrence's
-			// own last segment would veto the import by construction.
-			var survivingUses: Int = 0;
-			var runtimeUses: Int = 0;
-			for (o in occurrences) if (o.path == path && !o.conditional) {
-				targets.push(o.span);
-				if (wanted == null || wanted.contains(spanKey(o.span))) {
-					survivingUses++;
-					if (!o.macroBody) runtimeUses++;
-				}
-			}
+			final mine: Array<Occurrence> = rewritable(path, occurrences, context, index, file);
+			// `targets` stays WHOLE-file — the finding set the fix path filters against `wanted` itself — while the two
+			// counts both import gates read are taken over the SURVIVING occurrences, the ones THIS call will rewrite: how
+			// many there are (the threshold), and how many sit outside a macro-time body (the `Macro-time bodies` gate). A
+			// value site whose short name something else may bind is in neither: it is left as written.
+			final targets: Array<Span> = [for (o in mine) o.span];
+			final surviving: Array<Occurrence> = mine.filter(o -> wanted == null || wanted.contains(spanKey(o.span)));
+			final survivingUses: Int = surviving.length;
+			final runtimeUses: Int = surviving.filter(o -> !o.macroBody).length;
 			if (targets.length == 0) continue;
 			final proven: Bool = printer.resolvePath(path) != null;
 			// An import is promised to the PRINTER here, and the printer is source-driven: it cannot
@@ -455,18 +467,64 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 			// neither the import nor the simple name (claiming the name would keep a path whose
 			// findings DID survive qualified for a collision nobody will write).
 			final importable: Bool = proven && runtimeUses > 0 && survivingUses >= IMPORT_THRESHOLD;
+			// `owned` is WHOLE-file too: the freeness exemption has to cover every byte range the file still spells as this
+			// path, suppressed ones included, or a suppressed occurrence's own last segment would veto the import.
 			final owned: Null<Array<Span>> = importable ? [for (o in occurrences) if (o.path == path) o.span] : null;
 			final printed: PrintedTypeRef = printer.print(path, owned);
 			if (printed.text == path) continue;
-			plans.push({
+			final kept: Array<Span> = keptTargets(printed.text, path, mine, context, index, file);
+			if (kept.length > 0) plans.push({
 				path: path,
 				text: printed.text,
 				importPath: printed.importPath,
 				proven: proven,
-				targets: targets
+				targets: kept
 			});
 		}
 		return { printer: printer, plans: plans };
+	}
+
+	/**
+	 * The occurrences of `path` this call may rewrite: outside `#if`, and — at a value site — only where the short name
+	 * binds nothing but the type (`valueNameFree`).
+	 */
+	private static function rewritable(
+		path: String, occurrences: Array<Occurrence>, context: ScanContext, index: Null<SymbolIndex>, file: String
+	): Array<Occurrence> {
+		final simple: String = SourceText.lastSegment(path);
+		return occurrences.filter(
+			o -> o.path == path && !o.conditional && (o.valueSite == null || valueNameFree(simple, o, context, index, file))
+		);
+	}
+
+	/**
+	 * The spans of `mine` to rewrite to `text`: all of them, unless `text` is an ALIAS spelling whose head is neither the
+	 * path's simple name nor its own head — a name `rewritable` never asked about, so each value site asks again for it.
+	 */
+	private static function keptTargets(
+		text: String, path: String, mine: Array<Occurrence>, context: ScanContext, index: Null<SymbolIndex>, file: String
+	): Array<Span> {
+		final head: String = text.split('.')[0];
+		return head == SourceText.lastSegment(path) || head == path.split('.')[0] ? [for (o in mine) o.span] : [
+			for (o in mine) if (o.valueSite == null || valueNameFree(head, o, context, index, file)) o.span
+		];
+	}
+
+	/**
+	 * Whether the short name `name` may replace the static-access chain of the value site `o`: no CODE byte of the file
+	 * outside a type position, a comment and a member access spells it — so no local, parameter or field of this file declares
+	 * it, the half `ValueDoors.bindsNoValue` cannot ask at a site that writes no identifier yet — and that predicate finds no
+	 * value either: a member the enclosing type declares or inherits, a module-level field or constructor of the module,
+	 * anything an import may bring. Without an index, or for a file it does not hold, nothing is proven.
+	 */
+	private static function valueNameFree(name: String, o: Occurrence, context: ScanContext, index: Null<SymbolIndex>, file: String): Bool {
+		final site: Null<QueryNode> = o.valueSite;
+		final info: Null<FileInfo> = index?.fileInfo(file);
+		if (index == null || info == null || site == null) return false;
+		final source: String = context.source;
+		return !OccurrenceScan.referencedUnqualifiedInRange(
+				source, name, 0, source.length, context.typeSpans.concat(context.inert), context.comments
+			) && ValueDoors.bindsNoValue(site, name, o.span, info, context.tree, context.shape, file, index);
 	}
 
 	/** A printer over `source` with the file's plain-import map and the run's resolution index. */
@@ -548,13 +606,14 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 		final name: Null<String> = node.name;
 		if (name == null) return null;
 		if (context.typeKinds.contains(node.kind)) {
-			if (name.indexOf('.') == -1 || !SourceText.isUpperInitial(SourceText.lastSegment(name))) return null;
 			final span: Null<Span> = pathSpanOf(node, name, context);
-			return span == null ? null : {
+			if (span != null) context.typeSpans.push(span);
+			return name.indexOf('.') == -1 || !SourceText.isUpperInitial(SourceText.lastSegment(name)) || span == null ? null : {
 				path: name,
 				span: span,
 				conditional: conditional,
-				macroBody: macroBody
+				macroBody: macroBody,
+				valueSite: null
 			};
 		}
 		if (node.kind != context.shape.fieldAccessKind || underUpperField || !SourceText.isUpperInitial(name)) return null;
@@ -569,7 +628,8 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 				path: path,
 				span: span,
 				conditional: conditional,
-				macroBody: macroBody
+				macroBody: macroBody,
+				valueSite: node
 			}
 		else
 			null;

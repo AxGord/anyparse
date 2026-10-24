@@ -31207,6 +31207,28 @@
 			"find": "decl.aliasTargetRaw != canonical) return false;",
 			"replace": "true) return false;",
 			"note": "a transparent root alias reads as a shadow of its own target, so `haxe.ds.Map` is never printed as `Map` once the std is indexed"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-SITE-BLIND",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "valueNameFree",
+			"force": "true",
+			"note": "a value site is shortened whatever binds the short name there, so a local, a module enum constructor or an imported-beside local silently becomes what the expression reads"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-SITE-NEVER",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "valueNameFree",
+			"force": "false",
+			"note": "no value site is ever shortened, so a static call or a type argument whose short name binds nothing else stays qualified"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-DOORS-SKIPPED",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "valueNameFree",
+			"find": "&& ValueDoors.bindsNoValue(site, name, o.span, info, context.tree, context.shape, file, index);",
+			"replace": ";",
+			"note": "only the file's own text is asked, so a field the enclosing type INHERITS outranks the shortened type at a value site unseen"
 		}
 	]
 }

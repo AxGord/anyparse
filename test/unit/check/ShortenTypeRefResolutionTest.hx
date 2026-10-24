@@ -12,7 +12,8 @@ import anyparse.query.CanonicalEdit;
 class ShortenTypeRefResolutionTest extends Test {
 
 	/** The enclosing-package type every consumer below sits under. */
-	private static inline final ENTITY_SOURCE: String = 'package pkg;\n\nclass Entity<T> {\n\tpublic function new(path:String) {}\n}\n';
+	private static inline final ENTITY_SOURCE: String =
+		'package pkg;\n\nclass Entity<T> {\n\tpublic function new(path:String) {}\n\n\tpublic static function make():String {\n\t\treturn \'pkg\';\n\t}\n}\n';
 
 	@:pin('control')
 	@:killer('M-PRINTER-PACKAGE-CHAIN-BLIND')
@@ -43,6 +44,68 @@ class ShortenTypeRefResolutionTest extends Test {
 	public function testEnclosingPackageMapShadowsTheBuiltin(): Void {
 		final shadow: Array<{ file: String, source: String }> = [{ file: 'pkg/Map.hx', source: 'package pkg;\n\nclass Map<K, V> {}\n' }];
 		Assert.equals(0, violations(holder('\tstatic final m:haxe.ds.Map<String, String> = null;\n'), shadow).length);
+	}
+
+	// --- a VALUE position: a value of the short name outranks the type ---
+
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-SITE-BLIND')
+	public function testALocalOfTheShortNameKeepsTheValueSiteQualified(): Void {
+		final src: String = holder(
+			'\tpublic static function f(y:Dynamic):Bool {\n\t\tfinal Entity:String = \'local\';\n\t\ttrace(Entity);\n'
+			+ '\t\treturn Std.isOfType(y, pkg.Entity);\n\t}\n'
+		);
+		Assert.equals(0, violations(src, []).length);
+	}
+
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-SITE-BLIND')
+	public function testAModuleEnumConstructorKeepsTheValueSiteQualified(): Void {
+		final src: String = 'package pkg.sub;\n\nenum K {\n\tEntity;\n}\n\nclass Holder {\n'
+			+ '\tpublic static function f(y:Dynamic):Bool {\n\t\treturn Std.isOfType(y, pkg.Entity);\n\t}\n}\n';
+		Assert.equals(0, violations(src, []).length);
+	}
+
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-SITE-BLIND')
+	public function testALocalStructureKeepsTheStaticCallQualified(): Void {
+		final src: String = holder(
+			'\tpublic static function f():String {\n\t\tfinal Entity = {make: () -> \'local\'};\n'
+			+ '\t\treturn pkg.Entity.make() + Entity.make();\n\t}\n'
+		);
+		Assert.equals(0, violations(src, []).length);
+	}
+
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-DOORS-SKIPPED')
+	public function testAnInheritedFieldKeepsTheValueSiteQualified(): Void {
+		final base: Array<{ file: String, source: String }> = [
+			{
+				file: 'pkg/Base.hx',
+				source: 'package pkg;\n\nclass Base {\n\tpublic var Entity:String = \'\';\n\n\tpublic function new() {}\n}\n'
+			}
+		];
+		final src: String = 'package pkg.sub;\n\nclass Holder extends Base {\n'
+			+ '\tpublic function f(y:Dynamic):Bool {\n\t\treturn Std.isOfType(y, pkg.Entity);\n\t}\n}\n';
+		Assert.equals(0, violations(src, base).length);
+	}
+
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-SITE-BLIND')
+	public function testAnImportedTypeDoesNotOutrankALocalAtAValueSite(): Void {
+		final src: String = 'package pkg.sub;\n\nimport pkg.Entity;\n\nclass Holder {\n\tpublic static function f(y:Dynamic):Bool {\n'
+			+ '\t\tfinal Entity:String = \'local\';\n\t\ttrace(Entity);\n\t\treturn Std.isOfType(y, pkg.Entity);\n\t}\n}\n';
+		Assert.equals(0, violations(src, []).length);
+	}
+
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-SITE-NEVER')
+	public function testAFreeValueSiteShortens(): Void {
+		final src: String = holder(
+			'\tpublic static function f(y:Dynamic):Bool {\n\t\treturn Std.isOfType(y, pkg.Entity) && pkg.Entity.make() != \'\';\n\t}\n'
+		);
+		final out: String = applyFix(src, []);
+		Assert.isTrue(out.indexOf('return Std.isOfType(y, Entity) && Entity.make() != \'\';') != -1, 'shortened, got: $out');
 	}
 
 	/** A `pkg.sub.Holder` module whose class body is `members`, with no import. */

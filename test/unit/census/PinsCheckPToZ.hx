@@ -405,6 +405,12 @@ final class PinsCheckPToZ {
 		'unit.check.ShadowingParameterCheckTest#testFixRenamesATypedParameterAfterItsWrittenType :: control :: '
 			+ 'M-SHADOWING-PARAM-NO-RENAME',
 		'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
+		'unit.check.ShortenTypeRefResolutionTest#testAFreeValueSiteShortens :: control :: M-SHORTEN-VALUE-SITE-NEVER',
+		'unit.check.ShortenTypeRefResolutionTest#testALocalOfTheShortNameKeepsTheValueSiteQualified :: control :: M-SHORTEN-VALUE-SITE-BLIND',
+		'unit.check.ShortenTypeRefResolutionTest#testALocalStructureKeepsTheStaticCallQualified :: control :: M-SHORTEN-VALUE-SITE-BLIND',
+		'unit.check.ShortenTypeRefResolutionTest#testAModuleEnumConstructorKeepsTheValueSiteQualified :: control :: M-SHORTEN-VALUE-SITE-BLIND',
+		'unit.check.ShortenTypeRefResolutionTest#testAnImportedTypeDoesNotOutrankALocalAtAValueSite :: control :: M-SHORTEN-VALUE-SITE-BLIND',
+		'unit.check.ShortenTypeRefResolutionTest#testAnInheritedFieldKeepsTheValueSiteQualified :: control :: M-SHORTEN-VALUE-DOORS-SKIPPED',
 		'unit.check.ShortenTypeRefResolutionTest#testEnclosingPackageTypeShortensWithNoImport :: control :: M-PRINTER-PACKAGE-CHAIN-BLIND',
 		'unit.check.ShortenTypeRefResolutionTest#testStdMapShortensThroughTheRootAlias :: control :: M-PRINTER-TRANSPARENT-ALIAS',
 		'unit.check.SimplifyBooleanReturnChainCheckTest#testCommentInAFlatChainIsNotDropped :: control :: M-RETURN-CHAIN-COMMENT-ADMITTED',
