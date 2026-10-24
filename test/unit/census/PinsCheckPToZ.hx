@@ -143,6 +143,9 @@ final class PinsCheckPToZ {
 		'unit.check.PreferInlineCheckTest#testSubtypeExtendingThroughALaterBranchSkips :: control :: M-SUPERTYPES-FIRST-WRITTEN-ONLY',
 		'unit.check.PreferInterpolationCheckTest#testConstantAfterAShorthandReadBracesTheRead :: control :: '
 			+ 'M-INTERP-CONSTANT-BLOCK-IGNORED',
+		'unit.check.PreferInterpolationCheckTest#testConversionAbstractArgumentNotFlagged :: control :: M-INTERP-ENUM-CONVERSION-IGNORED',
+		'unit.check.PreferInterpolationCheckTest#testDynamicFieldOfLoopBinderIsProposedByNeitherMode :: control :: '
+			+ 'M-INTERP-REPORT-GATE-BYPASSED',
 		'unit.check.PreferInterpolationCheckTest#testEveryInterpolatedConstantKindBecomesItsPrintedText :: control :: '
 			+ 'M-CONSTANT-NEGATIVE-ZERO-SIGNED',
 		'unit.check.PreferInterpolationCheckTest#testInterpolatedConstantBecomesText :: control :: '
@@ -152,6 +155,9 @@ final class PinsCheckPToZ {
 		'unit.check.PreferInterpolationCheckTest#testTargetDependentConstantsKeepTheirBlock :: control :: '
 			+ 'M-CONSTANT-DECIMAL-RANGE-UNCHECKED,M-CONSTANT-FLOAT-ADMITTED,M-CONSTANT-HEX-RANGE-UNCHECKED',
 		'unit.check.PreferInterpolationCheckTest#testTypedefOfNullArgumentNotFlagged :: control :: M-INTERP-NULLITY-SKIPPED',
+		'unit.check.PreferInterpolationCheckTest#testTypesOutsideTheListNotFlagged :: control :: '
+			+ 'M-INTERP-ABSTRACT-KIND-UNCHECKED,M-INTERP-UNDERLYING-UNCHECKED',
+		'unit.check.PreferInterpolationCheckTest#testUnprovenCallArgumentNotFlagged :: control :: M-INTERP-NULLITY-SKIPPED',
 		'unit.check.PreferKeyValueLoopCheckTest#testASiblingLoopsBinderIsNoClash :: control :: M-REACH-UNDECLARED-BUILTIN',
 		'unit.check.PreferKeyValueLoopCheckTest#testConstructorCallIsReportOnly :: control :: M-ELEMENT-LOOP-NEW-EXPR',
 		'unit.check.PreferKeyValueLoopCheckTest#testIndexOnlyLoopLeftToValueLoop :: control :: M-KV-NOOPENER-INDEX-ONLY',

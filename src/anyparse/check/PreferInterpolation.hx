@@ -1,7 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.Check.OracleRelaxable;
-import anyparse.check.Check.RiskyFix;
 import anyparse.check.MacroGate.CallRef;
 import anyparse.check.MacroGate.MacroIndex;
 import anyparse.query.DeclaredNullity;
@@ -11,8 +9,8 @@ import anyparse.query.SourceText;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypingService;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -58,33 +56,13 @@ using StringTools;
  * visits — deferring would leave the call flagged by nobody. An annotation argument
  * (`metaKinds`) is the same hole spelled differently.
  *
- * ## Not equivalence-preserving for every argument
+ * ## A proven type only
  *
- * `Std.string` accepts `Null<Dynamic>` and never rejects a nullable argument; the
- * interpolation form compiles to a `+`-concatenation that DOES, under
- * `@:nullSafety(Strict)`, reject a nullable operand — and field access never narrows
- * (a preceding `obj.field != null` guard does not make `obj.field` provably non-null to
- * the checker), so rewriting `Std.string(obj.field)` to `'${obj.field}'` can turn
- * working code into a null-safety compile error. A bare field access (`Std.string(o.f)`)
- * is therefore left alone unconditionally. A simple-identifier argument (a local /
- * parameter) is rewritten only when its resolved declaration is provably not itself
- * nullable — a known nominal type (unannotated / inferred locals are conservatively
- * skipped, their type being unknown) that is not `Null<…>` / `Dynamic` / `Any`, not an
- * optional parameter (`?p`), and not a default-null parameter (`p: T = null`). Any other
- * argument shape (a call, a binary expression, …) keeps the pre-existing
- * `interpolationSafe`-gated braced rewrite.
- *
- * ## Oracle-relaxed candidate set (`RiskyFix` + `OracleRelaxable`)
- *
- * That gate exists only to keep the rewrite COMPILE-safe under `@:nullSafety(Strict)`;
- * the value is never at stake (`'${x}'` compiles to the same conversion, and a `null`
- * prints `null` either way). With a compiler oracle configured (`apqlint.json`
- * `compilerOracle`), `Cli.applyLintFixes` moves this check into the verified `RiskyFix`
- * path and widens the candidate set (`setOracleRelaxed`): the `isSafeArg` gate drops, so
- * a bare field access and an unproven identifier become candidates — every edit is then
- * applied through the typecheck-and-revert pipeline, never unverified. Without an oracle
- * the check stays in the unverified safe loop with the gate ON (the `OracleRelaxable`
- * carve-out in `Cli.partitionChecks`), byte-identical to its pre-seam behavior.
+ * The concatenation the interpolation compiles to is not `Std.string`: under null safety it rejects an operand the
+ * checker reads as nullable (a `Dynamic` field it saw compared with null), and an abstract's `@:to` / `@:op` member runs
+ * in it and changes the text. So an argument is rewritten only when its type is PROVEN one of a positive list — a basic
+ * type, or an enum abstract over one with no implicit call (`isSafeArg`) — with or without null safety. The gate is the
+ * same in the report and in the fix, so `--fix` never tries a site the report did not name.
  *
  * ## An interpolated constant
  *
@@ -108,15 +86,11 @@ using StringTools;
  * `Std` and member `string` are matched on node names, not kinds. The interpolation
  * descent needs `RefShape.stringInterpBlockKind` — a grammar without it keeps the walk
  * stopping at string literals. The outermost matching call is flagged and not descended
- * into, so a nested `Std.string(Std.string(x))` yields one non-overlapping fix. The
- * identifier-safety gate degrades gracefully when `plugin` is not a `TypeInfoProvider`
- * (no declared-type map, treated as empty) — a simple identifier is then never proven
- * safe and is left alone.
+ * into, so a nested `Std.string(Std.string(x))` yields one non-overlapping fix. A
+ * `plugin` that is not a `TypeInfoProvider` proves no type, so no argument passes the gate.
  */
 @:nullSafety(Strict)
-final class PreferInterpolation extends RuleBase implements RiskyFix implements OracleRelaxable {
-
-	private var _oracleRelaxed: Bool = false;
+final class PreferInterpolation extends RuleBase {
 
 	public function new() {
 		super(
@@ -124,18 +98,6 @@ final class PreferInterpolation extends RuleBase implements RiskyFix implements 
 			"a Std.string(x) call replaceable with string interpolation ('$x'), or an interpolated constant ('${0}') writable as text",
 			RuleCategory.Literals
 		);
-	}
-
-	/**
-	 * Enable RELAXED candidate selection: drop the `isSafeArg` null-safety gate, so a bare
-	 * field access (`Std.string(o.f)`) and an identifier without a provably non-null
-	 * declaration also become candidates. Set by `Cli.applyLintFixes` ONLY when this check
-	 * runs as a verified `RiskyFix` (a compiler oracle is configured), so the extra
-	 * candidates are always applied through the typecheck-and-revert pipeline, never
-	 * unverified.
-	 */
-	public function setOracleRelaxed(relaxed: Bool): Void {
-		_oracleRelaxed = relaxed;
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -147,7 +109,7 @@ final class PreferInterpolation extends RuleBase implements RiskyFix implements 
 			// No whitelist: `concatFoldingMacros` claims a target folds a `+` chain, and every rewrite here changes the TEXT
 			// of a literal, which no such claim covers.
 			final gate: Null<MacroGate> = support == null ? null : new MacroGate(macros, [], entry.file, support);
-			final matches: Null<Array<ScanMatch>> = scanSource(entry.file, entry.source, plugin, _oracleRelaxed, false, index, gate);
+			final matches: Null<Array<ScanMatch>> = scanSource(entry.file, entry.source, plugin, false, false, index, gate);
 			if (matches == null) continue;
 			for (m in matches) violations.push({
 				file: entry.file,
@@ -188,8 +150,7 @@ final class PreferInterpolation extends RuleBase implements RiskyFix implements 
 	 * outer call does not stop `run`'s walk, so `run` may have flagged an inner call the
 	 * relaxed re-scan would otherwise hide behind its outer match) — over-collection is
 	 * harmless there, `fix` selects by the violations' own non-overlapping spans. A `run`
-	 * scan never collects nested matches, oracle-relaxed or not: its matches ARE the
-	 * findings, and nested ones would overlap.
+	 * scan never collects nested matches: its matches ARE the findings, and nested ones would overlap.
 	 */
 	private static function scanSource(
 		file: String, source: String, plugin: GrammarPlugin, relaxed: Bool, collectNested: Bool, index: () -> Null<SymbolIndex>,
@@ -201,14 +162,21 @@ final class PreferInterpolation extends RuleBase implements RiskyFix implements 
 		final parsed: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (parsed == null) return null;
 		final tree: QueryNode = parsed;
-		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		var resolver: Null<(QueryNode) -> Null<String>> = null;
+		final typeOf: (QueryNode) -> Null<String> = node -> {
+			final read: Null<(QueryNode) -> Null<String>> = resolver ?? CheckScan.typeNominalResolver(source, plugin, tree, file, index());
+			resolver = read;
+			return read == null ? null : read(node);
+		};
 		final matches: Array<ScanMatch> = [];
 		scan(matches, {
 			source: source,
 			root: tree,
 			seams: seams,
 			shape: plugin.refShape(),
-			nullity: DeclaredNullity.of(file, tree, source, plugin.refShape(), relaxed ? null : provider, plugin.typeSyntax, index),
+			file: file,
+			typeOf: typeOf,
+			index: index,
 			relaxed: relaxed,
 			collectNested: collectNested,
 			gate: gate,
@@ -250,8 +218,7 @@ final class PreferInterpolation extends RuleBase implements RiskyFix implements 
 		final seams: Seams = ctx.seams;
 		final arg: Null<QueryNode> = matchArg(node, seams.callKind, seams.fieldAccessKind, seams.identKind);
 		if (
-			arg != null && !deferredToFold(chain, inMeta || inString, ctx.source, seams, ctx.shape)
-			&& (ctx.relaxed || isSafeArg(arg, ctx.root, seams.fieldAccessKind, seams.identKind, ctx.shape, ctx.nullity))
+			arg != null && !deferredToFold(chain, inMeta || inString, ctx.source, seams, ctx.shape) && (ctx.relaxed || isSafeArg(arg, ctx))
 			&& flagMatch(out, ctx, node, arg, sole) && !ctx.collectNested
 		)
 			return;
@@ -343,39 +310,59 @@ final class PreferInterpolation extends RuleBase implements RiskyFix implements 
 	}
 
 	/**
-	 * Whether `arg` is safe to rewrite into an interpolation under
-	 * `@:nullSafety(Strict)` — `Std.string` accepts a nullable value; the
-	 * interpolation's underlying `+`-concatenation does not, so an argument that
-	 * is not provably non-null must be left alone.
-	 *
-	 * A bare field access (`fieldAccessKind`) never narrows and is always refused,
-	 * guard or not. A simple identifier (`identKind`) is safe only when it resolves
-	 * (via the scope resolver) to a local / parameter declaration whose written type
-	 * RESOLVES to one excluding null (`DeclaredNullity` — so a typedef of `Null<…>`,
-	 * a type parameter, `Dynamic`, an unresolvable name all keep the conservative
-	 * default, as do an unresolved binding and an unannotated declaration) and that is
-	 * not an optional parameter (`?p`) or a default-null parameter (`p: T = null`).
-	 * Any other argument shape (a call, a binary expression, …) is left to the
-	 * pre-existing `interpolationSafe`-gated braced rewrite, unaffected by this gate.
-	 * The whole gate is bypassed in oracle-relaxed mode (`setOracleRelaxed`).
+	 * Whether `arg` provably prints the same through the interpolation's concatenation as through `Std.string`, and is
+	 * accepted wherever a `String` is — a POSITIVE list, decided by the type the argument provably has (`printsPlain`). An
+	 * argument of no proven type is declined: the null-safety checker reads a `Dynamic` operand it saw compared with null
+	 * as nullable in a concatenation, while `Std.string` takes any value. An identifier that is an optional parameter
+	 * (`?p`) or a default-null one (`p: T = null`) holds null whatever its written type, and is declined first.
 	 */
-	private static function isSafeArg(
-		arg: QueryNode, root: QueryNode, fieldAccessKind: String, identKind: String, shape: RefShape, nullity: DeclaredNullity
-	): Bool {
-		if (arg.kind == fieldAccessKind) return false;
-		if (arg.kind != identKind) return true;
-		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(arg, root, shape);
-		if (bindingFrom == null) return false;
-		final optionalParamKind: Null<String> = shape.optionalParamKind;
-		if (optionalParamKind != null && TypeResolver.bindingIsOptionalParam(root, bindingFrom, optionalParamKind)) return false;
-		final paramKinds: Null<Array<String>> = shape.paramKinds;
-		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
-		if (
-			paramKinds != null && nullLiteralKind != null
-			&& TypeResolver.bindingIsNullInitialised(root, bindingFrom, paramKinds, nullLiteralKind)
-		)
-			return false;
-		return nullity.ofBinding(bindingFrom) != Unproven;
+	private static function isSafeArg(arg: QueryNode, ctx: ScanCtx): Bool {
+		final shape: RefShape = ctx.shape;
+		if (arg.kind == ctx.seams.identKind) {
+			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(arg, ctx.root, shape);
+			if (bindingFrom == null) return false;
+			final optionalParamKind: Null<String> = shape.optionalParamKind;
+			if (optionalParamKind != null && TypeResolver.bindingIsOptionalParam(ctx.root, bindingFrom, optionalParamKind)) return false;
+			final paramKinds: Null<Array<String>> = shape.paramKinds;
+			final nullLiteralKind: Null<String> = shape.nullLiteralKind;
+			if (
+				paramKinds != null && nullLiteralKind != null
+				&& TypeResolver.bindingIsNullInitialised(ctx.root, bindingFrom, paramKinds, nullLiteralKind)
+			)
+				return false;
+		}
+		final typeName: Null<String> = ctx.typeOf(arg);
+		return typeName != null && printsPlain(typeName, arg, ctx);
+	}
+
+	/**
+	 * Whether a value of the type `typeName` names, read at `at`, is one the concatenation prints as `Std.string` does and
+	 * that is never null: a basic type (`RefShape.nonNullableTypeNames` and the string literals' type), or an enum abstract
+	 * over one that declares no implicit call. An abstract's `@:to` or `@:op` member runs in a concatenation and not in
+	 * `Std.string`, so it changes the text; every candidate the name binds to must pass.
+	 */
+	private static function printsPlain(typeName: String, at: QueryNode, ctx: ScanCtx): Bool {
+		final shape: RefShape = ctx.shape;
+		final basic: Array<String> = basicTypeNames(shape);
+		if (basic.contains(typeName)) return true;
+		final enumKind: Null<String> = shape.enumAbstractDeclKind;
+		final index: Null<SymbolIndex> = ctx.index();
+		final span: Null<Span> = at.span;
+		if (enumKind == null || index == null || span == null) return false;
+		final decls: Null<Array<ResolvedType>> = DeclaredNullity.bindingOf(typeName, ctx.file, span.from, index);
+		return decls != null && decls.length > 0 && decls.foreach(r -> {
+			final t: TypeDeclInfo = r.type;
+			final underlying: Null<String> = t.underlyingRaw;
+			t.kind == enumKind && !t.guarded && !t.hasBuild && underlying != null && basic.contains(underlying)
+				&& !t.members.exists(m -> m.isImplicitCall || m.operatorOverloads.length > 0);
+		});
+	}
+
+	/** The basic type names a value of which prints alike either way and is never null: the value types and the string type. */
+	private static function basicTypeNames(shape: RefShape): Array<String> {
+		final text: Null<String> = TypingService.stringType(shape);
+		final values: Array<String> = shape.nonNullableTypeNames ?? [];
+		return text == null ? values : values.concat([text]);
 	}
 
 	/**
@@ -519,12 +506,19 @@ private typedef ScanCtx = {
 	final root: QueryNode;
 	final seams: Seams;
 	final shape: RefShape;
-	final nullity: DeclaredNullity;
+
+	/** The path of the file scanned: where an argument's type name is bound (`printsPlain`). */
+	final file: String;
+
+	/** The nominal type an expression provably has (`CheckScan.typeNominalResolver`), built when first asked; null when unproven. */
+	final typeOf: (QueryNode) -> Null<String>;
+
+	/** The index an argument's type name is bound in. */
+	final index: () -> Null<SymbolIndex>;
 
 	/**
-	 * True to bypass the `isSafeArg` null-safety gate: the `run` of an oracle-relaxed
-	 * check (`setOracleRelaxed`), and every `fix`-side re-find — there the violations
-	 * already passed whatever gate their `run` applied.
+	 * True to bypass the `isSafeArg` gate: the `fix`-side re-find, whose violations already passed the gate of the `run`
+	 * that reported them.
 	 */
 	final relaxed: Bool;
 
