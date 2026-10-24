@@ -405,6 +405,8 @@ final class PinsCheckPToZ {
 		'unit.check.ShadowingParameterCheckTest#testFixRenamesATypedParameterAfterItsWrittenType :: control :: '
 			+ 'M-SHADOWING-PARAM-NO-RENAME',
 		'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
+		'unit.check.ShortenTypeRefResolutionTest#testEnclosingPackageTypeShortensWithNoImport :: control :: M-PRINTER-PACKAGE-CHAIN-BLIND',
+		'unit.check.ShortenTypeRefResolutionTest#testStdMapShortensThroughTheRootAlias :: control :: M-PRINTER-TRANSPARENT-ALIAS',
 		'unit.check.SimplifyBooleanReturnChainCheckTest#testCommentInAFlatChainIsNotDropped :: control :: M-RETURN-CHAIN-COMMENT-ADMITTED',
 		'unit.check.SimplifyBooleanReturnChainCheckTest#testNegatedConjunctionGuardRegroups :: control :: '
 			+ 'M-GUARD-CHAIN-NEGATED-RUN-DROPPED',

@@ -30952,6 +30952,37 @@
 			"find": "|| fi.types.exists(t -> _traits.buildClosureSpells(t.name, file, name));",
 			"replace": ";",
 			"note": "a grantee whose class a build macro builds no longer counts as reaching what the macro emits"
+		},
+		{
+			"name": "M-PRINTER-PACKAGE-CHAIN-BLIND",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "packageChainVerdict",
+			"force": "null",
+			"note": "the package chain answers nothing, so a type of an ENCLOSING package is written fully qualified although its bare name resolves to it here"
+		},
+		{
+			"name": "M-PRINTER-PACKAGE-CHAIN-FIRST-HIT",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "packageChainVerdict",
+			"find": "if (file != null && decl != null) return !decl.guarded && declaresAs(file, simple, canonical);",
+			"replace": "if (file != null && decl != null && declaresAs(file, simple, canonical)) return !decl.guarded;",
+			"note": "the chain walk steps over a NEARER package's own type of the name, so an enclosing package's path is printed short where the bare name means the nearer type"
+		},
+		{
+			"name": "M-PRINTER-PACKAGE-CHAIN-BUILTIN",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "visibleNameFor",
+			"find": "if (alwaysInScope(canonical, simple) && packageChainVerdict(canonical, simple) != false) return simple;",
+			"replace": "if (alwaysInScope(canonical, simple)) return simple;",
+			"note": "a builtin is printed short even where an enclosing package declares its own type of the name, which the compiler reaches first"
+		},
+		{
+			"name": "M-PRINTER-TRANSPARENT-ALIAS",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "declaresAs",
+			"find": "decl.aliasTargetRaw != canonical) return false;",
+			"replace": "true) return false;",
+			"note": "a transparent root alias reads as a shadow of its own target, so `haxe.ds.Map` is never printed as `Map` once the std is indexed"
 		}
 	]
 }

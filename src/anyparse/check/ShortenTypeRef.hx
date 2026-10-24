@@ -92,9 +92,9 @@ private typedef ScanContext = {
  *
  * ## ARM 2 — plain over-qualification
  *
- * A dotted path written where the short name is ALREADY visible: an exact `import`, an alias,
- * a type declared in this module, the MAIN type of a same-package module, or an always-in-scope
- * builtin. `TypeRefPrinter` owns that judgement, `shadowedLocally` included — so a path kept
+ * A dotted path whose short name RESOLVES here to the same type: an import, an alias, this module, the MAIN type of a
+ * module in this package or an enclosing one, a builtin or its transparent root alias (`Map` for `haxe.ds.Map`).
+ * `TypeRefPrinter` owns that judgement, `shadowedLocally` included — so a path kept
  * long BECAUSE the short name is taken (`pkg.sub.Listing` in a file whose bare
  * `Listing` means `other.Listing`, any name a wildcard / `using` binds, or
  * a name a `#if`-GUARDED import claims for a different path) is left exactly as written. No
@@ -218,7 +218,7 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 	private static inline final IMPORT_THRESHOLD: Int = 2;
 
 	/** The finding message when the short name is ALREADY reachable — the rewrite needs no import. */
-	private static inline final MSG_FIXABLE: String = 'an over-qualified type reference - the file already spells this type shorter';
+	private static inline final MSG_FIXABLE: String = 'an over-qualified type reference - the short name resolves to the same type here';
 
 	/** The finding message when the rewrite comes WITH a fresh import (the add-import arm). */
 	private static inline final MSG_IMPORTABLE: String =
@@ -244,7 +244,10 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 	private static final MODIFIER_RUN_BOUNDARY: QueryNode -> Bool = c -> c.children.length > 0 || c.name != null;
 
 	public function new() {
-		super(RULE_ID, 'a dotted type reference the file already spells shorter, or repeats often enough to import', RuleCategory.Imports);
+		super(
+			RULE_ID, 'a dotted type reference whose short name resolves to the same type here, or that repeats often enough to import',
+			RuleCategory.Imports
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

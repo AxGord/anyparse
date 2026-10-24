@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -478,8 +479,8 @@ final class TypeRefPrinter {
 	 * The name to write when `canonical` is ALREADY visible in this file, else null. Covers, in
 	 * order: an always-in-scope builtin / root-package type, an exact plain import, an alias
 	 * whose target is this path, a type declared in this module, and the main type of a module
-	 * in this package. See the class doc for why a same-package SUB-module type is deliberately
-	 * NOT here.
+	 * in this package or, through `packageChainVerdict`, in an enclosing one. A same-package
+	 * SUB-module type is deliberately NOT here: it needs an import.
 	 *
 	 * `shadowedLocally` gates the WHOLE set, not just the builtin arm: Haxe's own resolution
 	 * order (module type, then import / alias, then same package, then top level) means a
@@ -490,13 +491,16 @@ final class TypeRefPrinter {
 	private function visibleNameFor(canonical: String, simple: String): Null<String> {
 		for (alias => target in _aliasTargets) if (target == canonical) return alias;
 		if (shadowedLocally(canonical, simple)) return null;
-		if (alwaysInScope(canonical, simple)) return simple;
+		// A builtin is reached LAST, after every enclosing package, so a nearer package's own type of the name outranks it.
+		if (alwaysInScope(canonical, simple) && packageChainVerdict(canonical, simple) != false) return simple;
 		if (_importMap[simple] == canonical) return simple;
 		if (moduleImportBinds(canonical, simple)) return simple;
 		final root: Null<QueryNode> = _root;
 		if (root != null && ModuleScan.declaresTypeNamed(root, simple) && canonical == moduleLocalPathOf(simple)) return simple;
 		final pkg: Null<String> = _pkg;
-		return pkg != null && canonical == (pkg == '' ? simple : '$pkg.$simple') ? simple : null;
+		return pkg != null && canonical == (pkg == '' ? simple : '$pkg.$simple') || packageChainVerdict(canonical, simple) == true
+			? simple
+			: null;
 	}
 
 	/**
@@ -707,8 +711,7 @@ final class TypeRefPrinter {
 		if (root != null && ModuleScan.declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) != canonical) return true;
 		if (_pkg != null && packageDeclaresOtherType(canonical, simple)) return true;
 		final index: Null<SymbolIndex> = _index;
-		if (index != null && index.refs.declaringFiles(simple).exists(f -> f.pkg == '' && ModuleScan.pathOfTypeIn(f, simple) != canonical))
-			return true;
+		if (index != null && index.refs.declaringFiles(simple).exists(f -> f.pkg == '' && !declaresAs(f, simple, canonical))) return true;
 		// An EXPLICIT import or a module-local declaration that binds `simple` to `canonical`
 		// OUTRANKS a bulk import in Haxe's own resolution order (verified against the compiler:
 		// `import q.*;` + `import p.Foo;` resolves a bare `Foo` to `p.Foo`, and a module-local
@@ -855,7 +858,33 @@ final class TypeRefPrinter {
 		final index: Null<SymbolIndex> = _index;
 		final pkg: Null<String> = _pkg;
 		return index != null && pkg != null
-			&& index.refs.declaringFiles(simple).exists(f -> f.pkg == pkg && ModuleScan.pathOfTypeIn(f, simple) != canonical);
+			&& index.refs.declaringFiles(simple).exists(f -> f.pkg == pkg && !declaresAs(f, simple, canonical));
+	}
+
+	/**
+	 * What the bare `simple` means through the PACKAGE CHAIN — this file's package, then each enclosing package, then the
+	 * root, nearest first, where only a module's MAIN type answers (verified on 4.3.7: from `a.b.c`, `a.b.E` outranks `a.E`,
+	 * which outranks a root `E`, and a secondary `E` of an `a.b` module binds nothing). True when the first binding on the
+	 * chain IS `canonical`, false when it is another type (or a `#if`-guarded one, whose other branches nothing here models),
+	 * null when nothing on the chain is known to bind the name — always the answer without an index, except for `canonical`
+	 * in this file's own package, which the compiler looks up first.
+	 */
+	private function packageChainVerdict(canonical: String, simple: String): Null<Bool> {
+		final pkg: Null<String> = _pkg;
+		if (pkg == null) return null;
+		final index: Null<SymbolIndex> = _index;
+		final declarers: Array<FileInfo> = index == null ? [] : index.refs.declaringFiles(simple);
+		var prefix: String = pkg;
+		while (true) {
+			final module: String = prefix == '' ? simple : '$prefix.$simple';
+			final file: Null<FileInfo> = declarers.find(f -> f.module == module);
+			final decl: Null<TypeDeclInfo> = file?.types.find(t -> t.name == simple && t.isMain);
+			if (file != null && decl != null) return !decl.guarded && declaresAs(file, simple, canonical);
+			// An unindexed path that IS `canonical` proves a main type only in this file's own package (see `visibleNameFor`).
+			if (module == canonical) return prefix == pkg ? true : null;
+			if (prefix == '') return null;
+			prefix = SourceText.parentPath(prefix);
+		}
 	}
 
 	/**
@@ -890,6 +919,21 @@ final class TypeRefPrinter {
 	 */
 	public static function importsOnly(importMap: Map<String, String>): TypeRefPrinter {
 		return new TypeRefPrinter(null, null, importMap, null, null, null);
+	}
+
+	/**
+	 * Whether `file`'s type `simple` IS `canonical`: declared at that path, or a plain `typedef` re-pointing at `canonical`
+	 * with its OWN type parameters in order — a transparent alias such as the std top-level
+	 * `typedef Map<K, V> = haxe.ds.Map<K, V>`, through which the alias name and `canonical` are one type. The alias target
+	 * has to be written fully qualified: a short one resolves in the DECLARING file's scope, which this printer does not model.
+	 */
+	private static function declaresAs(file: FileInfo, simple: String, canonical: String): Bool {
+		if (ModuleScan.pathOfTypeIn(file, simple) == canonical) return true;
+		final decl: Null<TypeDeclInfo> = file.types.find(t -> t.name == simple);
+		final written: Null<String> = decl?.aliasTargetWritten;
+		if (decl == null || written == null || decl.aliasTargetRaw != canonical) return false;
+		final params: Array<String> = decl.typeParamNames;
+		return written.replace(' ', '') == (params.length == 0 ? canonical : '$canonical<${params.join(',')}>');
 	}
 
 }
