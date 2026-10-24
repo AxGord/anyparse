@@ -31174,7 +31174,7 @@
 			"type": "anyparse.query.ModuleMove",
 			"method": "withImports",
 			"find": "if (own == null || own.length == 0) {",
-			"replace": "if (true) {",
+			"replace": "if (own == null || own.length >= 0) {",
 			"note": "a carried using is written after the module's own instead of above them, so it outranks them"
 		}
 	]
