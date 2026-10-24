@@ -31065,11 +31065,11 @@
 			"note": "a module not on disk keeps an empty ambient chain"
 		},
 		{
-			"name": "M-MODMOVE-SUBTYPE-KEPT",
+			"name": "M-MODMOVE-MAIN-TYPE-WIDENED",
 			"type": "anyparse.query.ModuleMove",
 			"method": "isSubTypeOf",
 			"force": "false",
-			"note": "a sub-type import the written module import makes redundant is kept"
+			"note": "a reader importing a module's types one by one gains the whole-module import for its main type, which binds every other type of it too"
 		},
 		{
 			"name": "M-MODMOVE-DEST-OVERWRITE",
@@ -31292,6 +31292,61 @@
 			"method": "shadowedOnDisk",
 			"force": "false",
 			"note": "a module of a basic type name in the file package chain, outside the run, no longer declines the site"
+		},
+		{
+			"name": "M-MODMOVE-QUALIFIED-BLIND",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "qualifiedDrifts",
+			"force": "[]",
+			"note": "a qualified sub-type spelling the move takes out of its module path's reach keeps its spelling, as if an import restored it"
+		},
+		{
+			"name": "M-MODMOVE-UNREADABLE-ACCEPTED",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "drifts",
+			"find": "then.key != UNKNOWN || !projectTypes.exists(use.name)",
+			"replace": "true",
+			"note": "a name the index cannot read on either side is taken to keep its meaning, even where a moved project type could be the one it binds"
+		},
+		{
+			"name": "M-MODMOVE-IMPORTS-APPENDED",
+			"type": "anyparse.query.ModuleMove",
+			"method": "withImports",
+			"find": "if (anchor.order < 0)",
+			"replace": "if (true)",
+			"note": "the imports a reader gains are appended past its import run instead of each at its sorted place"
+		},
+		{
+			"name": "M-MODMOVE-MEMBER-BLIND",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "headReading",
+			"find": "member = true;",
+			"replace": "{}",
+			"note": "a head binding a type that declares the sub-type's name as a member (a static field, an enum constructor) is read by module path, so the member access is rewritten or its head left uncompared"
+		},
+		{
+			"name": "M-MODMOVE-MEMBER-AFTER-BLIND",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "spellingDrift",
+			"find": "headReading(sides.post, after, s.head, s.sub, at)",
+			"replace": "ByModulePath",
+			"note": "a module-path spelling whose head comes to bind a type declaring the sub-type's name stays unqualified, so it turns into a member access"
+		},
+		{
+			"name": "M-REF-MODULE-PARENTS-BLIND",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "moduleRefRank",
+			"find": "if (fi.pkg == '' || fromFile.pkg.startsWith('${fi.pkg}.')) {",
+			"replace": "if (false) {",
+			"note": "a module-relative Mod.Sub reaches a module of the writer's own package only, never one of a package above it"
+		},
+		{
+			"name": "M-REF-MODULE-NEAREST-LOST",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "moduleRelativeRefAll",
+			"find": "m.rank == nearest || m.rank == BY_WILDCARD",
+			"replace": "true",
+			"note": "every package above the writer that declares Mod.Sub answers, not the nearest one the compiler picks"
 		}
 	]
 }

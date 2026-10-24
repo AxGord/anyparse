@@ -1076,6 +1076,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.MetaElementSpanSliceTest',
 		'unit.query.ModifierKindSeamTest',
 		'unit.query.ModuleMoveTest',
+		'unit.query.ModuleRelativeRefTest',
 		'unit.query.MonomorphsTest',
 		'unit.query.MoveCanonicalOutputSliceTest',
 		'unit.query.MoveElementsSliceTest',
