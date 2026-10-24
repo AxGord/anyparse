@@ -45,7 +45,8 @@ take them off `node bin/test.js --list-classes`.
 | package | mirrors | layer |
 |---|---|---|
 | `unit.grammar.haxe` | `anyparse/grammar/haxe` (+ `checkstyle`, `format`) | 1, 3 — the Haxe grammar, its trivia and its writer |
-| `unit.check` | `anyparse/check` (+ `config`) | 1 — the analysis/check framework and every rule |
+| `unit.check` | `anyparse/check` | 1 — the analysis/check framework and every rule |
+| `unit.check.<sub>` | `anyparse/check/<sub>` (`scan`, `facts`, `config`, …) | 1 — one test package per `check` subpackage (below) |
 | `unit.query` | `anyparse/query` (+ `format`) | 1 — the hxq engine: ops, addressing, symbol index, resolution |
 | `unit.cli` | `anyparse/query/Cli` | **6 — end-to-end**: a test that drives `Cli.run` on a temp file |
 | `unit.format` | `anyparse/format` (+ `wrap`, `comment`, `text`, `binary`) | 1, 3 |
@@ -57,13 +58,15 @@ take them off `node bin/test.js --list-classes`.
 
 `unit.miniblock` and `unit.miniblockstrict` carry no test class: they are the mini grammars the Star-primitive tests parse. Neither does `unit.census`: it holds the hand-kept lists the root's parity tests compare with the generated registry (the pin census parts `Pins*`, the arm census parts `DeclaredArms*`, `DeferredArms`) and their shared failure message (`CensusDiff`) — data cut into parts small enough to keep growing under the `oversized-type` line limit, each part's doc saying which entries it takes and how to add one.
 
+**Tests mirror the `check` subpackages, one level deeper than elsewhere.** `src/anyparse/check` is cut by what a module IS — the source scanners several rules share (`scan`), the typed-facts pipeline (`facts`), the `apqlint.json` declarations (`config`), and, as the cut proceeds, the compiler-oracle plumbing and the rule categories — and a test whose subject is a module of `anyparse.check.<sub>` lives in `unit.check.<sub>` (`test/unit/check/<sub>/`), so `APQ_TEST=unit.check.scan.` runs exactly that subpackage's tests. A test whose subject stays in the root — a rule, `Linter`, `FixVerifier`, an invariant over the whole roster — stays in `unit.check`. Relocation is the tool's job: `hxq move` carries a module's own `<Module>Test` / `<Module>CheckTest` with it through the `mirrors` declaration of `apqlint.json`'s `move` section, and every other test of the module is named on the same command line with its own `--to` (`docs/cli-query-tool.md` § "`apq move` — the module form").
+
 **The root is the residue, and it is named.** Suite hygiene (`DeadTestGuardTest`, `TestDiscoveryParityTest`, `PinCensusParityTest`, `ArmCensusParityTest`, `MutationArmsTest`, `MutationArmAddressTest`, `ProseClaimCensusTest` — they read `test/` and the registries themselves), `DiscoveryOnlyProbeTest` (the pin that no hand-written line may name), the fixtures that assert two packages AGREE (`LexicalRegionAgreementTest`, `ExtensionMethodsExtractionTest`, `SpanModeProbe` — moving one to either side would name a side), plus the helper modules shared across packages (`SourceTree`, `BuildDefines`, `CheckFixture`, `QueryTestHelpers`, `SeamEdit`).
 
 **What the layout buys.** `APQ_TEST` is a substring filter over the fully-qualified name, so the package prefix IS a selector: `APQ_TEST=unit.check. node bin/test.js` runs every check test and nothing else; `unit.cli.` runs the end-to-end layer alone. `apqlint.json` discovery folds the whole chain nearest-first, so a package may carry its own config relaxing a key for that family only.
 
 **A rule test runs the rule the way `lint` does — through `unit.CheckFixture`.** `violations` / `violationsIn` read through `Linter.collect` (reification gate, suppression, and the per-file gates when the test hands a resolver) on a `CachingGrammarPlugin` run host; `edits` / `fixRun` / `fixOf` / `fixIn` / `fixedSource` hand `fix` that host and the REPORT index of the run's files, as `LintFixDriver` does (`fixIn` is the multi-file `fixOf`, and refuses a finding of a file other than the one it fixes); no production fix path passes no index, so a test does not pin the index-less answer; `index` is the one door to a `SymbolIndex` (`IndexScope.over`). A bare `check.run(files, new HaxeQueryPlugin())` checks a configuration production never runs: no host, so `IndexScope.resolutionIndexOf` is null, and no gates. Call the raw `Check.run` only in a test that pins the raw contract itself (`ReificationGateTest`), and say so where you do; a test that goes red on the fixture path is a finding about the rule or the test, never a reason to fall back to the raw call silently.
 
-**Where a new test class goes.** Ask which `src/anyparse/<pkg>` module it names in its assertions; that is its package. A class exercising two packages at once belongs in the root as integration — and the doc comment says which two, because the root is the one bucket nothing else explains.
+**Where a new test class goes.** Ask which `src/anyparse/<pkg>` module it names in its assertions; that is its package (inside `check`, its subpackage). A class exercising two packages at once belongs in the root as integration — and the doc comment says which two, because the root is the one bucket nothing else explains.
 
 ## Layer 2: Golden file tests
 
