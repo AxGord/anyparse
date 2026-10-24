@@ -59,7 +59,9 @@
 				"anyparse.check.HoistCommonImport",
 				"anyparse.query.MoveSymbol",
 				"anyparse.query.DependencyCarry",
-				"anyparse.query.GuardedImportCarry"
+				"anyparse.query.GuardedImportCarry",
+				"anyparse.query.ModuleMove",
+				"anyparse.query.ModuleMoveBindings"
 			],
 			"why": "an import statement is read through the name-resolution layer (what a name means) or edited by the import tier; every other consumer asks TypeNameBinding / ImportBindings / TypeRefIndex instead of decoding the statement again"
 		},
@@ -114,6 +116,108 @@
 			"why": "the index host (CachingGrammarPlugin as SymbolIndexHost) builds and memoises every index once per run, and IndexScope is the one door onto it: a rule names the scope its question needs (report / resolution / widest / over an explicit file set) and asks there; a consumer building its own picks its own scope and pays a rebuild"
 		}
 	],
+	"move": {
+		"scope": [
+			"src",
+			"test",
+			"tools/src"
+		],
+		"text": [
+			"README.md",
+			"docs",
+			"tools",
+			"bin",
+			"test-js.hxml",
+			"test-js-common.hxml",
+			"recon.hxml",
+			"haxelib.json"
+		],
+		"textExclude": [
+			"docs/journal",
+			"docs/archive",
+			"docs/decisions.md",
+			"tools/typer-facts"
+		],
+		"textExtensions": [
+			"md",
+			"sh",
+			"txt",
+			"hxml",
+			"json"
+		],
+		"registries": [
+			{
+				"file": "test/testkit/mutation-arms.json",
+				"keys": [
+					"arms.type"
+				]
+			},
+			{
+				"file": "apqlint.json",
+				"keys": [
+					"ownedTypes.types",
+					"ownedTypes.members",
+					"ownedTypes.owners"
+				]
+			}
+		],
+		"sortedLists": [
+			{
+				"parts": [
+					{
+						"file": "test/unit/TestDiscoveryParityTest.hx",
+						"select": "FinalMember:REGISTERED_CLASSES >> ArrayExpr"
+					}
+				]
+			},
+			{
+				"parts": [
+					{
+						"file": "test/unit/TestDiscoveryParityTest.hx",
+						"select": "FinalMember:EXPECTED_BASE_CLASSES >> ArrayExpr"
+					}
+				]
+			},
+			{
+				"parts": [
+					{
+						"file": "test/unit/census/PinsCheckAToO.hx",
+						"select": "FinalMember:PINS >> ArrayExpr"
+					},
+					{
+						"file": "test/unit/census/PinsCheckPToZ.hx",
+						"select": "FinalMember:PINS >> ArrayExpr"
+					},
+					{
+						"file": "test/unit/census/PinsGrammarAndCli.hx",
+						"select": "FinalMember:PINS >> ArrayExpr"
+					},
+					{
+						"file": "test/unit/census/PinsQueryAndRuntime.hx",
+						"select": "FinalMember:PINS >> ArrayExpr"
+					}
+				]
+			},
+			{
+				"parts": [
+					{
+						"file": "test/unit/ProseClaimCensusTest.hx",
+						"select": "FinalMember:BASELINE >> ArrayExpr"
+					}
+				]
+			}
+		],
+		"mirrors": [
+			{
+				"source": "src/anyparse",
+				"test": "test/unit",
+				"suffixes": [
+					"Test",
+					"CheckTest"
+				]
+			}
+		]
+	},
 	"rules": {
 		"explicit-local-type": true,
 		"anon-type-dup": true,

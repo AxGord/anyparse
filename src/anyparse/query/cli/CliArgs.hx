@@ -346,6 +346,15 @@ final class CliArgs {
 		return { plugin: plugin, paths: expanded.paths, singleFile: expanded.singleFile };
 	}
 
+	/** The source-file extension the grammar plugin `--lang lang` reads — the inverse of `langOfPath`, Haxe's for any other. */
+	public static function sourceExtensionOf(lang: String): String {
+		return switch lang {
+			case JSON_LANG: JSON_EXTENSION;
+			case MERMAID_LANG: MERMAID_EXTENSIONS[0];
+			case _: '.hx';
+		};
+	}
+
 	/** The `--lang` a lower-cased file path's extension selects, `lang` for an extension no data grammar claims. */
 	private static function langOfPath(lower: String, lang: String): String {
 		if (lower.endsWith(JSON_EXTENSION)) return JSON_LANG;
