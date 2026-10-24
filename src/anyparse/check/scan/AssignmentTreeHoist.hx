@@ -7,10 +7,6 @@ import anyparse.check.scan.IfExpressionChain.IfChain;
 import anyparse.check.scan.IfExpressionChain.TernaryTail;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ShapeVocab;
-import anyparse.runtime.Span;
-
-using Lambda;
-using StringTools;
 
 /**
  * Recursive assignment-tree hoist machinery shared by `prefer-if-expression-assignment` and

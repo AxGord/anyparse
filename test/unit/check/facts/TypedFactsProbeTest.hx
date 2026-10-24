@@ -3,12 +3,9 @@ package unit.check.facts;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.facts.FactsTypeTree;
 import anyparse.check.facts.TypedFactsProbe;
-import anyparse.query.CompilerFacts;
 import anyparse.query.FactSites;
-import anyparse.runtime.Span;
 import haxe.io.Path;
 import sys.io.File;
-import unit.cli.CliFixture;
 
 using Lambda;
 

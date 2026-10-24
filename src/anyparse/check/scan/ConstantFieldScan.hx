@@ -2,10 +2,6 @@ package anyparse.check.scan;
 
 import anyparse.query.MemberKinds;
 import anyparse.query.StringFold.StringFoldSupport;
-import anyparse.runtime.Span;
-
-using Lambda;
-using StringTools;
 
 /**
  * The seams and scans the CONSTANT-FIELD pair of checks share — `inline-constant` (`static final`

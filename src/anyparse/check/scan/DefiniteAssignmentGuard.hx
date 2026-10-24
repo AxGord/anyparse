@@ -3,9 +3,6 @@ package anyparse.check.scan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
-import anyparse.runtime.Span;
-
-using Lambda;
 
 /**
  * The compiler-free half of `lint --fix`'s revert net: whether an edit set would leave a local

@@ -2,8 +2,6 @@ package anyparse.check.scan;
 
 import anyparse.query.SymbolIndex;
 
-using StringTools;
-
 /**
  * The VALUE a `case` pattern denotes, as a key two patterns share exactly when the language
  * compares them equal — or null when the value cannot be PROVED. The switch rules (`SwitchChain`,

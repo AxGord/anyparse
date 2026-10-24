@@ -6,8 +6,6 @@ import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding.Tier;
 
-using Lambda;
-
 /**
  * What a check may assume about ONE operator occurrence: whether the operator it is looking at
  * is the language's own, a type's overload of it, or something the analysis cannot pin.

@@ -2,9 +2,6 @@ package anyparse.check.scan;
 
 import anyparse.query.ElementSpan;
 import anyparse.query.SourceText;
-import anyparse.runtime.Span;
-
-using StringTools;
 
 /**
  * The RAW-SOURCE geometry of a property head: where its `(read, write)` accessor clause is, what

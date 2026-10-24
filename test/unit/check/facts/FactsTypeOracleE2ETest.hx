@@ -8,9 +8,6 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.HaxeSpawn;
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.query.Cli;
-import unit.cli.CliFixture;
-
-using StringTools;
 
 /**
  * The oracle-assisted `--fix` phase typed by the compiler's facts, end to end over a real compile of two configurations:

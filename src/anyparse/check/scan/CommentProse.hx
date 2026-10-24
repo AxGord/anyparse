@@ -2,9 +2,6 @@ package anyparse.check.scan;
 
 import anyparse.format.comment.CommentDirective;
 
-using StringTools;
-using Lambda;
-
 /**
  * The PROSE JUDGE behind `prefer-doc-comment`'s content gates: whether one `//` comment
  * line is English documentation, as opposed to commented-out code, a tooling directive, a

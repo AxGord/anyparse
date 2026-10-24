@@ -1,7 +1,6 @@
 package unit.check.scan;
 
 import anyparse.check.scan.DefiniteAssignmentGuard;
-import anyparse.runtime.Span;
 
 /**
  * `DefiniteAssignmentGuard` — the compiler-free half of `lint --fix`'s revert net.

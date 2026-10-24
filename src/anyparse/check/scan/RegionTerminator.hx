@@ -1,9 +1,5 @@
 package anyparse.check.scan;
 
-import anyparse.runtime.Span;
-
-using StringTools;
-
 /**
  * The terminator a statement-position conditional-compilation region owns although its PARENT's
  * span holds it. A region whose last branch ends unterminated (`else #if d b() #else c() #end;`)

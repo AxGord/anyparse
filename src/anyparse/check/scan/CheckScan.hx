@@ -20,10 +20,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.ParseError;
-import anyparse.runtime.Span;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * Shared scan helpers for the `run` / `fix` paths of the analysis checks.

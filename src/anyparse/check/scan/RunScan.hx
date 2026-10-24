@@ -6,7 +6,6 @@ import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
-import anyparse.runtime.Span;
 import haxe.Exception;
 
 /**

@@ -5,7 +5,6 @@ import anyparse.check.Severity;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.RunScan;
 import anyparse.query.GrammarPlugin;
-import anyparse.runtime.Span;
 import haxe.Exception;
 
 /** One report entry, as `Check.run` receives it. */

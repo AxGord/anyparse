@@ -4,8 +4,6 @@ import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.SymbolIndex;
 
-using Lambda;
-
 /**
  * The member renames one `apq lint --fix` PASS has already accepted, so a rename decided later in
  * that pass can see them.

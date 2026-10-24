@@ -14,7 +14,6 @@ import anyparse.check.PreferTernaryReturn;
 import anyparse.check.ReturnReassignTernary;
 import anyparse.check.SimplifyNegatedCompound;
 import anyparse.query.GrammarPlugin;
-import anyparse.runtime.Span;
 import unit.cli.CliFixture;
 
 using Lambda;

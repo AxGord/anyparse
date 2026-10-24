@@ -8,10 +8,6 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
 import anyparse.query.TypeResolver;
-import anyparse.runtime.Span;
-
-using Lambda;
-using StringTools;
 
 /**
  * The case-PATTERN scan the two case-arm rules share — `unused-case-binder` (a

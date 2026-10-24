@@ -11,10 +11,6 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.SameItems;
-import anyparse.runtime.Span;
-
-using Lambda;
-using StringTools;
 
 /**
  * The null facts holding at one visited node's entry, queried by a consumer.

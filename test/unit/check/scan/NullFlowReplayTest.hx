@@ -6,7 +6,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefsCache;
 import anyparse.query.TypeInfoProvider;
-import anyparse.runtime.Span;
 
 using Lambda;
 

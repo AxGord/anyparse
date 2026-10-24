@@ -11,10 +11,6 @@ import anyparse.query.SourceComments;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
-import anyparse.runtime.Span;
-
-using Lambda;
-using StringTools;
 
 /**
  * The shared scanner / renderer behind BOTH switch checks: `prefer-switch` (an `if` /

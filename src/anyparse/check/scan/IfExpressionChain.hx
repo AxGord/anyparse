@@ -5,10 +5,6 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
 import anyparse.query.ShapeVocab;
-import anyparse.runtime.Span;
-
-using Lambda;
-using StringTools;
 
 /**
  * A recognised `if / else if / … / else` CHAIN of single-statement branches: the

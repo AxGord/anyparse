@@ -4,12 +4,8 @@ import anyparse.check.Check.OracleType;
 import anyparse.check.ExplicitType;
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.check.facts.FactsTypeSpelling;
-import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
 import anyparse.query.FactText;
-import anyparse.runtime.Span;
-
-using StringTools;
 
 /**
  * `FactsTypeOracle` over hand-written facts files: it answers a type only when every configuration that typed the

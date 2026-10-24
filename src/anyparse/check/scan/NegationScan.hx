@@ -2,7 +2,6 @@ package anyparse.check.scan;
 
 import anyparse.check.scan.CheckScan.NegationSeams;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
-import anyparse.runtime.Span;
 
 /**
  * The condition-NEGATION helpers the inverting checks share — `guard-continue`,

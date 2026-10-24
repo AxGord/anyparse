@@ -7,7 +7,6 @@ import anyparse.check.InvertNegatedIfElse;
 import anyparse.check.JoinStringAppend;
 import anyparse.check.RedundantToString;
 import anyparse.check.SimplifyNegatedCompound;
-import anyparse.runtime.Span;
 import unit.cli.CliFixture;
 
 using Lambda;

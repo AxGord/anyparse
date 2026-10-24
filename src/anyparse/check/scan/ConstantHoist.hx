@@ -15,10 +15,6 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.Span;
-
-using Lambda;
-using StringTools;
 
 /**
  * The `naming` autofix's constant-HOIST arm, factored out of the check that drives it.

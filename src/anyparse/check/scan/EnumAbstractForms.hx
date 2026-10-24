@@ -1,9 +1,5 @@
 package anyparse.check.scan;
 
-import anyparse.runtime.Span;
-
-using Lambda;
-
 /**
  * The enum abstracts a grammar does NOT project under its own `RefShape.enumAbstractDeclKind`
  * — the two Haxe spellings that reach the same type through a leading annotation instead of the

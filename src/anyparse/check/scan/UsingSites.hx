@@ -8,10 +8,7 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.StdTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.ValueDoors;
-import anyparse.runtime.Span;
 import haxe.Exception;
-
-using Lambda;
 
 /**
  * Whether a `using` takes part in the accesses `recv.name` one source writes — the one answer `unused-import`,

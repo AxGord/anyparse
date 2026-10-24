@@ -14,10 +14,6 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
-import anyparse.runtime.Span;
-
-using StringTools;
-using Lambda;
 
 /**
  * The parameter list a call or a construction selects, for the operand binder (`OperandBinder.argumentType`, which hands

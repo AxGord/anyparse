@@ -14,10 +14,6 @@ import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
 import anyparse.query.TypingService;
-import anyparse.runtime.Span;
-
-using StringTools;
-using Lambda;
 
 /**
  * What the declared type of an operand binds to, for ONE file — every type bound in the scope of the

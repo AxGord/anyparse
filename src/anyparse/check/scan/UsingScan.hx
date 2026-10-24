@@ -4,10 +4,6 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ModuleScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.Span;
-
-using Lambda;
-using StringTools;
 
 /**
  * The `using`-declaration helpers the static-extension checks share — `dead-binder-counter-loop`,

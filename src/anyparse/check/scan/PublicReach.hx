@@ -4,10 +4,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.Span;
 import haxe.Exception;
-
-using StringTools;
 
 /**
  * The whole-project REACH evidence a fix needs before it may act on the claim "nothing outside

@@ -5,9 +5,6 @@ import anyparse.query.StdlibPurity;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
-import anyparse.runtime.Span;
-
-using Lambda;
 
 /**
  * Whether an expression subtree can be evaluated once — or DROPPED — without changing what the

@@ -5,9 +5,6 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
-import anyparse.runtime.Span;
-
-using Lambda;
 
 /**
  * The subtree scans the COLLECTION-LOOP rewrite rules share — `prefer-keyvalue-loop` (an indexed `for` whose body opens

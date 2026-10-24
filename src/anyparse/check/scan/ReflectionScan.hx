@@ -6,8 +6,6 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 
-using Lambda;
-
 /**
  * The one scan behind every "is this name reached by reflection" gate in the check layer, and the
  * containment test the interpolated half of its answer takes.

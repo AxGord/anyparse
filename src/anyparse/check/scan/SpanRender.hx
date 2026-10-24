@@ -1,10 +1,5 @@
 package anyparse.check.scan;
 
-import anyparse.runtime.Span;
-
-using Lambda;
-using StringTools;
-
 /**
  * Renders a source span as ONE LINE of display text for a finding's message: a whitespace run
  * BETWEEN tokens collapses to a single space, whitespace INSIDE a token — a string or regex
