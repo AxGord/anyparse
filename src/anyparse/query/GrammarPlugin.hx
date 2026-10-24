@@ -3588,6 +3588,37 @@ final class RefShape {
 	 */
 	public var parenOpaqueSubtreeKinds: Null<Array<String>>;
 
+	/**
+	 * The metadata tag by which a declaration GRANTS its own private members to another type or package (Haxe `@:allow`),
+	 * the opposite direction of `takesPrivateAccessMetaName`. A module relocation reads both: a grant naming a PACKAGE
+	 * reaches the modules under it, so a module leaving that package loses access no rewrite can restore. Optional; unset →
+	 * the grammar has no such grant.
+	 */
+	public var grantsPrivateAccessMetaName: Null<String>;
+
+	/**
+	 * How the grammar spells a statement importing the module path `%` (Haxe `import %;`) — what an op writes when it ADDS
+	 * an import. Optional; unset → an op that would add one refuses instead.
+	 */
+	public var importLineTemplate: Null<String>;
+
+	/**
+	 * How the grammar spells a statement bringing `%`'s static extensions into scope (Haxe `using %;`). Optional; unset →
+	 * an op that would add one refuses instead.
+	 */
+	public var usingLineTemplate: Null<String>;
+
+	/**
+	 * Whether a TYPE name begins upper-case and a package segment never does (Haxe's convention, which the compiler leans
+	 * on to read `a.b.C.d` as package, type, member). Optional; unset → every identifier may name a type.
+	 */
+	public var typeNamesUpperInitial: Null<Bool>;
+
+	/**
+	 * The pattern one package segment must match (Haxe: a lower-case or `_` initial). Optional; unset → any identifier.
+	 */
+	public var packageSegmentPattern: Null<String>;
+
 	public function new(
 		identKind: String, declHostKinds: Array<String>, moduleValueDeclKinds: Array<String>, scopeKinds: Array<String>,
 		writeParentKinds: Array<String>, selfScopeDeclKinds: Array<String>

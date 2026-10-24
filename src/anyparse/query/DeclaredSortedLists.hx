@@ -78,6 +78,32 @@ final class DeclaredSortedLists {
 		return Right(out);
 	}
 
+	/**
+	 * The content of an element written as one quoted literal, or several joined by `+`, none carrying an escape or an
+	 * interpolation; null for any other element.
+	 */
+	public static function plainContent(literal: String): Null<String> {
+		final buf: StringBuf = new StringBuf();
+		var i: Int = 0;
+		final n: Int = literal.length;
+		while (true) {
+			while (i < n && literal.isSpace(i)) i++;
+			if (i >= n) return null;
+			final q: String = literal.charAt(i);
+			if (q != "'" && q != '"') return null;
+			final close: Int = literal.indexOf(q, i + 1);
+			if (close < 0) return null;
+			final piece: String = literal.substring(i + 1, close);
+			if (piece.indexOf('\\') >= 0 || piece.indexOf('$') >= 0) return null;
+			buf.add(piece);
+			i = close + 1;
+			while (i < n && literal.isSpace(i)) i++;
+			if (i >= n) return buf.toString();
+			if (literal.charAt(i) != '+') return null;
+			i++;
+		}
+	}
+
 	/** `parts` named for a diagnostic. */
 	private static function describe(parts: Array<SortedListPart>): String {
 		return [for (p in parts) '${p.file} (${p.select})'].join(' + ');
@@ -131,32 +157,6 @@ final class DeclaredSortedLists {
 			sep: sep,
 			trail: trail
 		});
-	}
-
-	/**
-	 * The content of an element written as one quoted literal, or several joined by `+`, none carrying an escape or an
-	 * interpolation; null for any other element.
-	 */
-	private static function plainContent(literal: String): Null<String> {
-		final buf: StringBuf = new StringBuf();
-		var i: Int = 0;
-		final n: Int = literal.length;
-		while (true) {
-			while (i < n && literal.isSpace(i)) i++;
-			if (i >= n) return null;
-			final q: String = literal.charAt(i);
-			if (q != "'" && q != '"') return null;
-			final close: Int = literal.indexOf(q, i + 1);
-			if (close < 0) return null;
-			final piece: String = literal.substring(i + 1, close);
-			if (piece.indexOf('\\') >= 0 || piece.indexOf('$') >= 0) return null;
-			buf.add(piece);
-			i = close + 1;
-			while (i < n && literal.isSpace(i)) i++;
-			if (i >= n) return buf.toString();
-			if (literal.charAt(i) != '+') return null;
-			i++;
-		}
 	}
 
 	/** Whether `text` is whitespace only. */

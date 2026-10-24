@@ -134,11 +134,13 @@ final class ModuleMoveBindings {
 		return decl.type.isMain ? module : '$module.${decl.type.name}';
 	}
 
-	/** The occurrences of `names` written bare in code in `text` (none for a missing text). */
+	/** The occurrences of `names` written bare in code — interpolation holes included — in `text` (none for a missing text). */
 	private static function occurrencesIn(
 		text: Null<String>, names: Array<String>, plugin: GrammarPlugin
 	): Array<{ name: String, at: Int }> {
-		return text == null ? [] : ModulePathTokens.bareUpperNames(text, plugin.lexicalRegions(text)).filter(o -> names.contains(o.name));
+		if (text == null) return [];
+		final upper: Bool = plugin.refShape().typeNamesUpperInitial == true;
+		return ModulePathTokens.bareNames(text, ModulePathTokens.inertSpans(text, plugin), upper).filter(o -> names.contains(o.name));
 	}
 
 }

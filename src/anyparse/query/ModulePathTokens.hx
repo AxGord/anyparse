@@ -106,19 +106,20 @@ final class ModulePathTokens {
 	}
 
 	/**
-	 * Every upper-initial identifier written in CODE in `source` and not reached through a dot — the simple names whose
-	 * meaning a relocation can change (a type, or the module a `Mod.Sub` path starts from) — each occurrence with its
-	 * offset, in document order.
+	 * Every identifier written as CODE in `source` and not reached through a dot — the simple names whose meaning a
+	 * relocation can change (a type, or the module a `Mod.Sub` path starts from) — each occurrence with its offset, in
+	 * document order. `inert` are the spans that are not code (comments and literal TEXT: an interpolation hole inside a
+	 * string IS code), sorted by start; `upperOnly` keeps the upper-initial ones, for a grammar whose type names are.
 	 */
-	public static function bareUpperNames(source: String, regions: Array<LexRegion>): Array<{ name: String, at: Int }> {
+	public static function bareNames(source: String, inert: Array<Span>, upperOnly: Bool): Array<{ name: String, at: Int }> {
 		final out: Array<{ name: String, at: Int }> = [];
-		var regionIdx: Int = 0;
+		var maskIdx: Int = 0;
 		var i: Int = 0;
 		final n: Int = source.length;
 		while (i < n) {
-			while (regionIdx < regions.length && regions[regionIdx].to <= i) regionIdx++;
-			if (regionIdx < regions.length && i >= regions[regionIdx].from) {
-				i = regions[regionIdx].to;
+			while (maskIdx < inert.length && inert[maskIdx].to <= i) maskIdx++;
+			if (maskIdx < inert.length && i >= inert[maskIdx].from) {
+				i = inert[maskIdx].to;
 				continue;
 			}
 			final c: Int = source.fastCodeAt(i);
@@ -128,7 +129,36 @@ final class ModulePathTokens {
 			}
 			final start: Int = i;
 			while (i < n && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
-			if (c >= 'A'.code && c <= 'Z'.code && !dotBefore(source, start)) out.push({ name: source.substring(start, i), at: start });
+			if ((!upperOnly || (c >= 'A'.code && c <= 'Z'.code)) && !dotBefore(source, start))
+				out.push({ name: source.substring(start, i), at: start });
+		}
+		return out;
+	}
+
+	/**
+	 * The spans of `source` that are not code — its comments and the TEXT of its literals, an interpolation hole left out
+	 * (`InertRegions`) — sorted by start; the whole literals when the source does not parse.
+	 */
+	public static function inertSpans(source: String, plugin: GrammarPlugin): Array<Span> {
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		final out: Array<Span> = tree == null
+			? [for (r in regions) new Span(r.from, r.to)]
+			: InertRegions.of(tree, regions, plugin.refShape());
+		out.sort((a, b) -> a.from - b.from);
+		return out;
+	}
+
+	/**
+	 * Every string literal of `source` whose content IS the package `pkg` or ends with `.<its last segment>` — a package
+	 * name held as a value, which code joins to a module name at run time (`pk + '.A'`) out of any token rewrite's sight.
+	 */
+	public static function stringsNamingPackage(source: String, regions: Array<LexRegion>, pkg: String): Array<Int> {
+		final last: String = '.${pkg.substr(pkg.lastIndexOf('.') + 1)}';
+		final out: Array<Int> = [];
+		for (r in regions) if (r.kind == LexRegionKind.StringLit && r.to - r.from >= 2) {
+			final content: String = source.substring(r.from + 1, r.to - 1);
+			if (content == pkg || content.endsWith(last)) out.push(r.from);
 		}
 		return out;
 	}

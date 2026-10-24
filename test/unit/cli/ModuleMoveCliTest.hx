@@ -71,15 +71,18 @@ class ModuleMoveCliTest extends Test {
 
 	@:pin('control')
 	@:killer('M-MODMOVE-CLI-ROLLBACK-OFF')
+	@:killer('M-MODMOVE-CLI-DIR-LEFT')
 	public function testVerifyPutsEveryFileBackWhenTheMoveBreaksTheBuild(): Void {
 		#if (sys || nodejs)
-		final owner: String = 'package pkg;\n\nclass Owner {\n\t@:allow(pkg) static function secret(): Int return 1;\n}\n';
+		// `Owner` lives on a classpath the scope does not index, so no binding check can see the move lose it — the case
+		// only the build can catch.
+		final owner: String = 'package pkg;\n\nclass Owner {\n\tpublic static function secret(): Int return 1;\n}\n';
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function f(): Int return Owner.secret();\n}\n';
 		final dir: String = project([
 			{ name: 'apqlint.json', source: '{"compilerOracle": "build.hxml", "move": {"scope": ["src"]}}' },
-			{ name: 'build.hxml', source: '-cp src\npkg.A\npkg.Owner\n' },
+			{ name: 'build.hxml', source: '-cp src\n-cp lib\npkg.A\n' },
 			{ name: 'src/pkg/A.hx', source: a },
-			{ name: 'src/pkg/Owner.hx', source: owner }
+			{ name: 'lib/pkg/Owner.hx', source: owner }
 		]);
 		var rc: Int = 0;
 		final printed: String = CliFixture.captureStderr(() ->
@@ -91,7 +94,32 @@ class ModuleMoveCliTest extends Test {
 		#end
 		Assert.equals(a, File.getContent('$dir/src/pkg/A.hx'), 'the original is restored');
 		Assert.isFalse(FileSystem.exists('$dir/src/other/A.hx'), 'the copy is removed');
-		Assert.equals(owner, File.getContent('$dir/src/pkg/Owner.hx'));
+		Assert.isFalse(FileSystem.exists('$dir/src/other'), 'and the directory the write created');
+		Assert.equals(owner, File.getContent('$dir/lib/pkg/Owner.hx'));
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-CLI-TEXT-ROOT-MISSING')
+	public function testADeclaredTextRootThatDoesNotExistRefuses(): Void {
+		#if (sys || nodejs)
+		final dir: String = project([
+			{ name: 'apqlint.json', source: '{"move": {"scope": ["src"], "text": ["tool.sh"]}}' },
+			{ name: 'src/pkg/A.hx', source: A }
+		]);
+		var rc: Int = 0;
+		final printed: String = CliFixture.captureStderr(() ->
+			rc = Cli.run(['move', '$dir/src/pkg/A.hx', '--to', '$dir/src/pkg/sub', '--write'])
+		);
+		Assert.notEquals(0, rc, 'the move is refused');
+		#if nodejs
+		Assert.isTrue(printed.contains('declares text'), printed);
+		#end
+		Assert.equals(A, File.getContent('$dir/src/pkg/A.hx'), 'the original stays');
+		Assert.isFalse(FileSystem.exists('$dir/src/pkg/sub'), 'nothing is written');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

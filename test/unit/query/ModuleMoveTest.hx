@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.query.DeclaredSortedLists.SortedListPart;
 import anyparse.query.ModuleMove;
+import anyparse.query.MoveDeclaration;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
 
@@ -279,6 +280,103 @@ class ModuleMoveTest extends Test {
 			[file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
 		);
 		Assert.equals('package pkg;\n\nimport pkg.sub.A;\n\nclass User {\n\tvar a: A;\n\tvar s: Sub;\n}\n', textOf(out, 'src/pkg/User.hx'));
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-SORTED-GUARD-OFF')
+	public function testAnUndeclaredSortedListTheMoveWouldUnsortIsRefused(): Void {
+		final a: String = 'package pkg;\n\nclass A {}\n';
+		final b: String = 'package pkg;\n\nclass B {}\n';
+		final reg: String = "package reg;\n\nclass Reg {\n\tpublic static final ALL: Array<String> = ['pkg.A', 'pkg.B'];\n}\n";
+		final reasons: Array<String> = refused(
+			[move('src/pkg/A.hx', 'src/pkg/zz/A.hx')],
+			[file('src/pkg/A.hx', a), file('src/pkg/B.hx', b), file('src/reg/Reg.hx', reg)]
+		);
+		Assert.equals(1, reasons.length);
+		Assert.isTrue(reasons[0].contains('src/reg/Reg.hx:4 holds a sorted list the move would leave unsorted'), reasons[0]);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-HOLES-MASKED')
+	public function testANameInAnInterpolationHoleIsProbedLikeCode(): Void {
+		final a: String = "package p;\n\nclass A {\n\tpublic static function f(): String return 'v=${Helper.x}';\n}\n";
+		final helper: String = 'package p;\n\nclass Helper {\n\tpublic static final x: Int = 1;\n}\n';
+		final namesake: String = 'package p.q;\n\nclass Helper {\n\tpublic static final x: Int = 2;\n}\n';
+		final reader: String = "package r;\n\nimport p.*;\n\nclass Reader {\n\tstatic function g(): String return '${A.f()}';\n}\n";
+		final out: ModuleMoveOutcome = moved([move('src/p/A.hx', 'src/p/q/A.hx')], [
+			file('src/p/A.hx', a),
+			file('src/p/Helper.hx', helper),
+			file('src/p/q/Helper.hx', namesake),
+			file('src/r/Reader.hx', reader)
+		]);
+		Assert.isTrue(textOf(out, 'src/p/q/A.hx').contains('import p.Helper;'), 'the hole keeps reading p.Helper');
+		Assert.isTrue(textOf(out, 'src/r/Reader.hx').contains('import p.q.A;'), 'a reader naming A only in a hole gains its import');
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-USING-GAIN-BLIND')
+	public function testAnAmbientUsingTheNewDirectoryAddsIsRefused(): Void {
+		final a: String = 'package p;\n\nclass A {\n\tpublic static function f(): Int return 3.twice();\n}\n';
+		final tools: String = 'package p.q;\n\nclass Tools3 {\n\tpublic static function twice(n: Int): Int return n * 3;\n}\n';
+		final reasons: Array<String> = refused([move('src/p/A.hx', 'src/p/q/A.hx')], [
+			file('src/p/A.hx', a),
+			file('src/p/q/Tools3.hx', tools),
+			file('src/p/q/import.hx', 'using p.q.Tools3;\n')
+		]);
+		Assert.equals(1, reasons.length);
+		Assert.isTrue(reasons[0].contains('gains `using p.q.Tools3`'), reasons[0]);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-USING-LOST-DROPPED')
+	public function testAnAmbientUsingTheModuleLeavesIsCarried(): Void {
+		final a: String = 'package p;\n\nclass A {\n\tpublic static function f(): Int return 3.twice();\n}\n';
+		final tools: String = 'package p;\n\nclass Tools {\n\tpublic static function twice(n: Int): Int return n * 2;\n}\n';
+		final out: ModuleMoveOutcome = moved([move('src/p/A.hx', 'src/s/A.hx')], [
+			file('src/p/A.hx', a),
+			file('src/p/Tools.hx', tools),
+			file('src/p/import.hx', 'using p.Tools;\n')
+		]);
+		Assert.equals(
+			'package s;\n\nusing p.Tools;\n\nclass A {\n\tpublic static function f(): Int return 3.twice();\n}\n',
+			textOf(out, 'src/s/A.hx')
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-GRANT-BLIND')
+	public function testAPackageGrantTheModuleLeavesIsRefused(): Void {
+		final a: String = 'package p;\n\nclass A {\n\tpublic static function f(): Int return Helper.secret();\n}\n';
+		final helper: String = 'package p;\n\nclass Helper {\n\t@:allow(p) static function secret(): Int return 1;\n}\n';
+		final reasons: Array<String> =
+			refused([move('src/p/A.hx', 'src/s/A.hx')], [file('src/p/A.hx', a), file('src/p/Helper.hx', helper)]);
+		Assert.equals(1, reasons.length);
+		Assert.isTrue(reasons[0].contains('src/p/Helper.hx:4 grants package p private access, and p.A leaves it'), reasons[0]);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-PACKAGE-VALUE-BLIND')
+	public function testAPackageNameHeldAsAValueIsRefused(): Void {
+		final a: String = 'package p;\n\nclass A {}\n';
+		final user: String = "package other;\n\nclass User {\n\tstatic final PK: String = 'p';\n"
+			+ "\tstatic function f(): Dynamic return Type.resolveClass(PK + '.A');\n}\n";
+		final reasons: Array<String> = refused(
+			[move('src/p/A.hx', 'src/p/q/A.hx')],
+			[file('src/p/A.hx', a), file('src/other/User.hx', user)]
+		);
+		Assert.equals(1, reasons.length);
+		Assert.isTrue(reasons[0].contains('src/other/User.hx:4 composes a path from "p"'), reasons[0]);
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-DECL-UNKNOWN-KEY')
+	public function testADeclarationWithAnUnknownKeyIsRefused(): Void {
+		switch MoveDeclaration.read('{"move": {"scope": ["src"], "txt": ["docs"]}}', '/project') {
+			case Left(message):
+				Assert.isTrue(message.contains('declares unknown key "txt"'), message);
+			case Right(_):
+				Assert.fail('a misspelt key must not be dropped in silence');
+		}
 	}
 
 	private static inline function move(from: String, to: String): ModuleRelocation {

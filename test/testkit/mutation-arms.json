@@ -30932,6 +30932,72 @@
 			"find": "CliIo.writeFiles(state.restore);",
 			"replace": "",
 			"note": "a move the build rejects is not put back"
+		},
+		{
+			"name": "M-MODMOVE-SORTED-GUARD-OFF",
+			"type": "anyparse.query.ModuleMove",
+			"method": "unsortedListRefusals",
+			"force": "[]",
+			"note": "an undeclared sorted list the rewrite unsorts is written unsorted"
+		},
+		{
+			"name": "M-MODMOVE-HOLES-MASKED",
+			"type": "anyparse.query.ModulePathTokens",
+			"method": "inertSpans",
+			"force": "[for (r in plugin.lexicalRegions(source)) new Span(r.from, r.to)]",
+			"note": "a name inside an interpolation hole is masked with its string and never probed"
+		},
+		{
+			"name": "M-MODMOVE-USING-GAIN-BLIND",
+			"type": "anyparse.query.ModuleMove",
+			"method": "usingRefusals",
+			"force": "[]",
+			"note": "a using the new ambient chain adds is not refused, and a lost one is not carried"
+		},
+		{
+			"name": "M-MODMOVE-USING-LOST-DROPPED",
+			"type": "anyparse.query.ModuleMove",
+			"method": "usingRefusals",
+			"find": "lost[p.move.to] = missing;",
+			"replace": "{}",
+			"note": "a using the module's old ambient chain gave is not carried into it"
+		},
+		{
+			"name": "M-MODMOVE-GRANT-BLIND",
+			"type": "anyparse.query.ModuleMove",
+			"method": "grantRefusals",
+			"force": "[]",
+			"note": "a package-level private-access grant the module leaves is not refused"
+		},
+		{
+			"name": "M-MODMOVE-PACKAGE-VALUE-BLIND",
+			"type": "anyparse.query.ModulePathTokens",
+			"method": "stringsNamingPackage",
+			"force": "[]",
+			"note": "a package name held as a string value is not refused"
+		},
+		{
+			"name": "M-MODMOVE-DECL-UNKNOWN-KEY",
+			"type": "anyparse.query.MoveDeclaration",
+			"method": "unknownKey",
+			"force": "null",
+			"note": "a misspelt key of the move declaration is dropped in silence"
+		},
+		{
+			"name": "M-MODMOVE-CLI-DIR-LEFT",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "rollback",
+			"find": "for (d in state.dirs)",
+			"replace": "for (d in ([]: Array<String>))",
+			"note": "a rolled-back move leaves the directory its write created"
+		},
+		{
+			"name": "M-MODMOVE-CLI-TEXT-ROOT-MISSING",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "textFilesOf",
+			"find": "if (!exists(entry))",
+			"replace": "if (false)",
+			"note": "a declared text root that does not exist is skipped in silence"
 		}
 	]
 }

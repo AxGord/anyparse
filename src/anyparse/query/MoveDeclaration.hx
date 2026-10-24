@@ -61,17 +61,29 @@ final class MoveDeclaration {
 		final section: Dynamic = Reflect.field(root, KEY);
 		if (section == null) return Right(null);
 		final at: (String) -> String = p -> Path.isAbsolute(p) ? Path.normalize(p) : Path.normalize(Path.join([baseDir, p]));
+		final unknown: Null<String> = unknownKey(section, KEY, [
+			'scope',
+			'text',
+			'textExclude',
+			'textExtensions',
+			'registries',
+			'sortedLists',
+			'mirrors'
+		]);
+		if (unknown != null) return Left(unknown);
 		return try Right({
 			scope: strings(section, 'scope').map(at),
 			text: strings(section, 'text').map(at),
 			textExclude: strings(section, 'textExclude').map(at),
 			textExtensions: strings(section, 'textExtensions'),
 			registries: [
-				for (r in objects(section, 'registries')) { file: at(string(r, 'registries', 'file')), keys: strings(r, 'keys') }
+				for (r in objects(
+					section, 'registries', ['file', 'keys']
+				)) { file: at(string(r, 'registries', 'file')), keys: strings(r, 'keys') }
 			],
 			sortedLists: [
-				for (list in objects(section, 'sortedLists')) [
-					for (part in objects(list, 'parts'))
+				for (list in objects(section, 'sortedLists', ['parts'])) [
+					for (part in objects(list, 'parts', ['file', 'select']))
 						{
 							file: at(string(part, 'sortedLists.parts', 'file')),
 							select: string(part, 'sortedLists.parts', 'select')
@@ -79,7 +91,7 @@ final class MoveDeclaration {
 				]
 			],
 			mirrors: [
-				for (m in objects(section, 'mirrors'))
+				for (m in objects(section, 'mirrors', ['source', 'test', 'suffixes']))
 					{
 						source: at(string(m, 'mirrors', 'source')),
 						test: at(string(m, 'mirrors', 'test')),
@@ -100,14 +112,21 @@ final class MoveDeclaration {
 		];
 	}
 
-	/** The object array at `key` of `node` (empty when absent); throws naming the key when it is anything else. */
-	private static function objects(node: Dynamic, key: String): Array<Dynamic> {
+	/**
+	 * The object array at `key` of `node` (empty when absent), each object carrying only `allowed` keys; throws naming the
+	 * key when it is anything else.
+	 */
+	private static function objects(node: Dynamic, key: String, allowed: Array<String>): Array<Dynamic> {
 		final value: Dynamic = Reflect.field(node, key);
 		if (value == null) return [];
 		if (!Std.isOfType(value, Array)) throw new Exception('"$KEY.$key" is not an array of objects');
 		final items: Array<Dynamic> = value;
-		for (item in items) if (item == null || !Reflect.isObject(item) || Std.isOfType(item, String) || Std.isOfType(item, Array))
-			throw new Exception('"$KEY.$key" holds a non-object');
+		for (item in items) {
+			if (item == null || !Reflect.isObject(item) || Std.isOfType(item, String) || Std.isOfType(item, Array))
+				throw new Exception('"$KEY.$key" holds a non-object');
+			final unknown: Null<String> = unknownKey(item, '$KEY.$key', allowed);
+			if (unknown != null) throw new Exception(unknown);
+		}
 		return items;
 	}
 
@@ -116,6 +135,13 @@ final class MoveDeclaration {
 		final value: Dynamic = Reflect.field(node, key);
 		if (!Std.isOfType(value, String)) throw new Exception('an entry of "$KEY.$owner" has no string "$key"');
 		return value;
+	}
+
+	/** The diagnostic for the first key of `node` outside `allowed` (`label` naming where it sits), or null when there is none. */
+	private static function unknownKey(node: Dynamic, label: String, allowed: Array<String>): Null<String> {
+		for (field in Reflect.fields(node)) if (!allowed.contains(field))
+			return '"$label" declares unknown key "$field" (known: ${allowed.join(', ')})';
+		return null;
 	}
 
 }

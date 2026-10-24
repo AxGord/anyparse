@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.DeclaredSortedLists.SortedListPart;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImportOrder.ImportLine;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.ModuleMoveBindings.BindingDrift;
@@ -9,6 +10,7 @@ import anyparse.query.ModulePathTokens.ModuleRename;
 import anyparse.query.ModulePathTokens.TextEdit;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.TypePathRegistries.TypePathMove;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
@@ -117,10 +119,10 @@ final class ModuleMove {
 			case Right(t): t;
 		};
 		// Phase 2: every name keeps its meaning — repaired by an import where one restores it, refused where none does.
-		final renamed: Map<String, String> = [for (r in renames) r.oldPath => r.newPath];
+
 		final probes: Array<BindingProbe> = bindingProbes(request.scopeFiles, planned, newPathOf, plugin);
 		final imports: Array<String> = [];
-		switch repairBindings(request.scopeFiles, texts, newPathOf, probes, pre, renamed, plugin, imports) {
+		switch repairBindings(request.scopeFiles, texts, planned, probes, pre, plugin, imports) {
 			case Left(found):
 				return Refused(found);
 			case Right(_):
@@ -136,6 +138,16 @@ final class ModuleMove {
 				imports: imports
 			});
 		};
+	}
+
+	/** Whether the package `pkg` holds the module path `module` (directly or in a sub-package). */
+	private static inline function covers(pkg: String, module: String): Bool {
+		return module.startsWith('$pkg.');
+	}
+
+	/** `template` (a `RefShape` statement spelling, `%` for the path) applied to `path`, or null when the grammar has none. */
+	private static inline function statementOf(template: Null<String>, path: String): Null<String> {
+		return template?.replace('%', path);
 	}
 
 	/** `moves` plus, for each declared mirror, the moved module's own test when the analysed set holds it. */
@@ -184,7 +196,7 @@ final class ModuleMove {
 		final rel: Null<String> = relativeTo(Path.directory(m.to), root);
 		if (rel == null || rel == '') return Left('${m.to} is not in a package under the source root $root');
 		final pkg: String = rel.split('/').join('.');
-		if (!~/^[a-z_][A-Za-z0-9_]*(\.[a-z_][A-Za-z0-9_]*)*$/.match(pkg)) return Left('${m.to}: "$pkg" is not a package path');
+		if (!isPackagePath(pkg, plugin.refShape())) return Left('${m.to}: "$pkg" is not a package path');
 		if (pkg == info.pkg) return Left('${m.from} is already in package $pkg');
 		if (sourceOf.exists(m.to) || moves.count(o -> o.to == m.to) > 1) return Left('${m.to} already exists');
 		final module: String = Path.withoutExtension(Path.withoutDirectory(m.from));
@@ -217,7 +229,7 @@ final class ModuleMove {
 	 * cannot be proven.
 	 */
 	private static function rewriteModule(
-		file: String, source: String, renames: Array<ModuleRename>, mover: Null<PlannedMove>, plugin: GrammarPlugin
+		file: String, source: String, renames: Array<ModuleRename>, mover: Null<PlannedMove>, plugin: GrammarPlugin, declared: Array<Span>
 	): Either<Array<String>, String> {
 		final tokens: Array<TextEdit> = ModulePathTokens.edits(source, renames);
 		if (tokens.length == 0 && mover == null) return Right(source);
@@ -236,6 +248,7 @@ final class ModuleMove {
 					+ 'also a name this file declares — the path may read as a member access on it; qualify it differently first'
 				);
 		}
+		for (r in unsortedListRefusals(file, source, tree, renames, declared, plugin)) reasons.push(r);
 		final runs: Array<TextEdit> = resortedRuns(source, tree, renames, plugin);
 		final edits: Array<TextEdit> = tokens.filter(e -> !runs.exists(r -> e.span.from >= r.span.from && e.span.to <= r.span.to));
 		for (r in runs) edits.push(r);
@@ -306,22 +319,32 @@ final class ModuleMove {
 	}
 
 	/**
-	 * A string literal that ends with a relocated module's OLD package (`'pkg.sub.'`, `'pkg/sub/'`) composes a module path
-	 * at run time, which the relocation cannot follow — one refusal per such literal.
+	 * A string literal that ends with a relocated module's OLD package (`'pkg.sub.'`, `'pkg/sub/'`), or that IS that package
+	 * held as a value (`'pkg.sub'`, `'….sub'`), composes a module path at run time, which the relocation cannot follow —
+	 * one refusal per such literal.
 	 */
 	private static function compositionRefusals(
 		files: Array<{ file: String, source: String }>, planned: Array<PlannedMove>, plugin: GrammarPlugin
 	): Array<String> {
-		final prefixes: Array<String> = [];
-		for (p in planned)
-			for (prefix in ['${p.oldPackage}.', '${ModulePathTokens.slashPath(p.oldPackage)}/'])
-				if (!prefixes.contains(prefix)) prefixes.push(prefix);
+		final packages: Array<String> = [];
+		for (p in planned) if (!packages.contains(p.oldPackage)) packages.push(p.oldPackage);
+		final prefixes: Array<String> = [
+			for (pkg in packages) for (prefix in ['$pkg.', '${ModulePathTokens.slashPath(pkg)}/']) prefix
+		];
+		final lastSegments: Array<String> = [for (pkg in packages) pkg.substr(pkg.lastIndexOf('.') + 1)];
 		final out: Array<String> = [];
-		for (e in files) if (prefixes.exists(prefix -> e.source.indexOf(prefix) >= 0)) {
+		for (e in files) if (lastSegments.exists(s -> e.source.indexOf(s) >= 0)) {
 			final regions: Array<LexRegion> = plugin.lexicalRegions(e.source);
-			for (prefix in prefixes) for (at in ModulePathTokens.stringsEndingWith(e.source, regions, prefix))
+			final at: Array<{ offset: Int, what: String }> = [
+				for (prefix in prefixes) for (o in ModulePathTokens.stringsEndingWith(
+					e.source, regions, prefix
+				)) { offset: o, what: prefix }
+			];
+			for (pkg in packages) for (o in ModulePathTokens.stringsNamingPackage(e.source, regions, pkg))
+				at.push({ offset: o, what: pkg });
+			for (a in at)
 				out.push(
-					'${e.file}:${lineOf(e.source, at)} composes a path from "$prefix" at run time — a module leaving that package '
+					'${e.file}:${lineOf(e.source, a.offset)} composes a path from "${a.what}" at run time — a module leaving that package '
 					+ 'is not followed by it; spell the full path or move the composition first'
 				);
 		}
@@ -356,6 +379,7 @@ final class ModuleMove {
 	private static function bindingProbes(
 		files: Array<{ file: String, source: String }>, planned: Array<PlannedMove>, newPathOf: Map<String, String>, plugin: GrammarPlugin
 	): Array<BindingProbe> {
+		final upper: Bool = plugin.refShape().typeNamesUpperInitial == true;
 		final declared: Array<String> = [];
 		for (p in planned) for (t in p.info.types) if (!declared.contains(t.name)) declared.push(t.name);
 		final out: Array<BindingProbe> = [];
@@ -363,7 +387,7 @@ final class ModuleMove {
 			final moved: Bool = newPathOf.exists(e.file);
 			if (!moved && !declared.exists(name -> e.source.indexOf(name) >= 0)) continue;
 			final names: Array<String> = [];
-			for (o in ModulePathTokens.bareUpperNames(e.source, plugin.lexicalRegions(e.source))) if (
+			for (o in ModulePathTokens.bareNames(e.source, ModulePathTokens.inertSpans(e.source, plugin), upper)) if (
 				(moved || declared.contains(o.name)) && !names.contains(o.name)
 			)
 				names.push(o.name);
@@ -373,38 +397,33 @@ final class ModuleMove {
 	}
 
 	/**
-	 * Compare every probed name before and after; write the import each drifted name's old meaning needs (dropping the
-	 * sub-type imports of the same module it makes redundant), compare again, and answer every drift that remains — `Right`
-	 * when none does. `imports` collects what was written.
+	 * Compare every probed name before and after, and every relocated module's `using` set; write the import each drifted
+	 * name's old meaning needs (dropping the sub-type imports of the same module it makes redundant) and the `using` each
+	 * relocated module lost, compare again, and answer every difference that remains — `Right` when none does. `imports`
+	 * collects what was written.
 	 */
 	private static function repairBindings(
-		files: Array<{ file: String, source: String }>, texts: Map<String, String>, newPathOf: Map<String, String>,
-		probes: Array<BindingProbe>, pre: SymbolIndex, renamed: Map<String, String>, plugin: GrammarPlugin, imports: Array<String>
+		files: Array<{ file: String, source: String }>, texts: Map<String, String>, planned: Array<PlannedMove>,
+		probes: Array<BindingProbe>, pre: SymbolIndex, plugin: GrammarPlugin, imports: Array<String>
 	): Either<Array<String>, Bool> {
+		final newPathOf: Map<String, String> = [for (p in planned) p.move.from => p.move.to];
+		final renamed: Map<String, String> = [for (p in planned) p.rename.oldPath => p.rename.newPath];
 		final before: Map<String, String> = [for (e in files) e.file => e.source];
 		final post: SymbolIndex = postIndex(files, texts, newPathOf, plugin);
 		final first: Array<BindingDrift> = driftsIn(post, files, texts, newPathOf, probes, pre, renamed, plugin, before);
-		if (first.length == 0) return Right(true);
-		final unrepaired: Array<String> = [for (d in first) if (d.repair == null) describeDrift(d)];
-		if (unrepaired.length > 0) return Left(unrepaired);
-		final oldPathOf: Map<String, String> = [for (old => now in newPathOf) now => old];
-		final byFile: Map<String, Array<String>> = [];
-		for (d in first) {
-			final paths: Array<String> = byFile[d.file] ?? [];
-			final repair: String = d.repair ?? '';
-			if (!paths.contains(repair)) paths.push(repair);
-			byFile[d.file] = paths;
-		}
-		final infoOf: Map<String, FileInfo> = [for (fi in post.allFiles()) fi.file => fi];
-		for (file => paths in byFile) {
-			final key: String = oldPathOf[file] ?? file;
-			texts[key] = withImports(texts[key] ?? '', paths, infoOf[file], plugin);
-			for (p in paths) imports.push('$file: import $p;');
-		}
-		final second: Array<BindingDrift> = driftsIn(
-			postIndex(files, texts, newPathOf, plugin), files, texts, newPathOf, probes, pre, renamed, plugin, before
-		);
-		return second.length == 0 ? Right(true) : Left([for (d in second) describeDrift(d)]);
+		final reasons: Array<String> = [for (d in first) if (d.repair == null) describeDrift(d)];
+		final lost: Map<String, Array<String>> = [];
+		for (r in usingRefusals(planned, pre, post, lost)) reasons.push(r);
+		if (reasons.length > 0) return Left(reasons);
+		if (first.length == 0 && !lost.keys().hasNext()) return Right(true);
+		final unwritten: Null<String> = writeRepairs(texts, repairsByFile(first), lost, newPathOf, post, plugin, imports);
+		if (unwritten != null) return Left([unwritten]);
+		final again: SymbolIndex = postIndex(files, texts, newPathOf, plugin);
+		final second: Array<String> = [
+			for (d in driftsIn(again, files, texts, newPathOf, probes, pre, renamed, plugin, before)) describeDrift(d)
+		];
+		for (r in usingRefusals(planned, pre, again, [])) second.push(r);
+		return second.length == 0 ? Right(true) : Left(second);
 	}
 
 	/** The index of the tree after the relocation: every module under its new path, with its rewritten text. */
@@ -445,11 +464,16 @@ final class ModuleMove {
 		return ModuleMoveBindings.drifts(pre, post, probes, renamed, plugin, before, after);
 	}
 
-	/** Whether `path` imports a sub-type of the module `module` — `module.Sub`, upper-initial — which `import module;` binds. */
-	private static function isSubTypeOf(path: String, module: String): Bool {
+	/**
+	 * Whether `path` imports a sub-type of the module `module` — `module.Sub` — which `import module;` binds; under a grammar
+	 * whose type names are upper-initial (`shape.typeNamesUpperInitial`), `Sub` must be one.
+	 */
+	private static function isSubTypeOf(path: String, module: String, shape: RefShape): Bool {
 		if (!path.startsWith('$module.')) return false;
 		final rest: String = path.substr(module.length + 1);
-		return rest.indexOf('.') < 0 && rest.length > 0 && rest.charAt(0) == rest.charAt(0).toUpperCase() && rest.charAt(0) != '_';
+		if (rest.length == 0 || rest.indexOf('.') >= 0 || !SourceText.isIdentifier(rest)) return false;
+		final initial: Int = rest.fastCodeAt(0);
+		return shape.typeNamesUpperInitial != true || (initial >= 'A'.code && initial <= 'Z'.code);
 	}
 
 	/** `span` widened to its whole line, newline included, when nothing else shares the line; else `span` itself. */
@@ -489,13 +513,17 @@ final class ModuleMove {
 		final renames: Array<ModuleRename> = [for (p in planned) p.rename];
 		final reasons: Array<String> = [];
 		final texts: Map<String, String> = [];
-		for (e in request.scopeFiles) switch rewriteModule(e.file, e.source, renames, planned.find(p -> p.move.from == e.file), plugin) {
+		final declared: Map<String, Array<Span>> = declaredListSpans(request, plugin);
+		for (e in request.scopeFiles) switch rewriteModule(
+			e.file, e.source, renames, planned.find(p -> p.move.from == e.file), plugin, declared[e.file] ?? []
+		) {
 			case Left(found):
 				for (r in found) reasons.push(r);
 			case Right(text):
 				texts[e.file] = text;
 		}
 		for (r in compositionRefusals(request.scopeFiles, planned, plugin)) reasons.push(r);
+		for (r in grantRefusals(request.scopeFiles, planned, plugin)) reasons.push(r);
 		final textOf: Map<String, String> = [for (e in request.textFiles) e.file => e.source];
 		for (r in registryRefusals(request.registries, textOf, planned)) reasons.push(r);
 		if (reasons.length > 0) return Left(reasons);
@@ -532,18 +560,228 @@ final class ModuleMove {
 	}
 
 	/**
-	 * `text` (the module `info` indexes) with an import of each of `paths` written into its import run, and every plain
-	 * import of a sub-type of one of them removed — the module import binds it already.
+	 * `text` (the module `info` indexes) with `lines` written into its import run, and every plain import of a sub-type of
+	 * one of the `modules` it imports removed — the module import binds it already.
 	 */
-	private static function withImports(text: String, paths: Array<String>, info: Null<FileInfo>, plugin: GrammarPlugin): String {
+	private static function withImports(
+		text: String, lines: Array<String>, modules: Array<String>, info: Null<FileInfo>, plugin: GrammarPlugin
+	): String {
 		final edits: Array<{ span: Span, text: String }> = [];
-		final insert: Null<{ span: Span, text: String }> = MoveSymbol.carriedImportEdit(text, [for (p in paths) 'import $p;'], plugin);
+		final insert: Null<{ span: Span, text: String }> = MoveSymbol.carriedImportEdit(text, lines, plugin);
 		if (insert != null) edits.push(insert);
+		final shape: RefShape = plugin.refShape();
 		if (info != null)
 			for (imp in info.imports)
-				if (!imp.guarded && imp.kind == ImportKind.Import && imp.alias == null && paths.exists(p -> isSubTypeOf(imp.raw, p)))
+				if (!imp.guarded && imp.kind == ImportKind.Import && imp.alias == null && modules.exists(p ->
+					isSubTypeOf(imp.raw, p, shape)
+				))
 					edits.push({ span: wholeLine(text, imp.span), text: '' });
 		return CanonicalEdit.applyEdits(text, edits);
+	}
+
+	/** Whether `pkg` is a dotted package path the grammar accepts — each segment an identifier matching `packageSegmentPattern`. */
+	private static function isPackagePath(pkg: String, shape: RefShape): Bool {
+		final pattern: Null<String> = shape.packageSegmentPattern;
+		final segment: Null<EReg> = pattern == null ? null : new EReg(pattern, '');
+		return pkg.split('.').foreach(s -> SourceText.isIdentifier(s) && (segment == null || segment.match(s)));
+	}
+
+	/**
+	 * One refusal per relocated module whose `using` set — its own statements and its ambient chain's, each relocated path
+	 * read under its new name — GAINS a module after the move (that module's extensions could take over a call). A module
+	 * the set LOSES is recorded in `lost` under the module's new path, to be written into it explicitly.
+	 */
+	private static function usingRefusals(
+		planned: Array<PlannedMove>, pre: SymbolIndex, post: SymbolIndex, lost: Map<String, Array<String>>
+	): Array<String> {
+		final renames: Array<ModuleRename> = [for (p in planned) p.rename];
+		final out: Array<String> = [];
+		for (p in planned) {
+			final was: Null<FileInfo> = pre.fileInfo(p.move.from);
+			final now: Null<FileInfo> = post.fileInfo(p.move.to);
+			if (was == null || now == null) continue;
+			final before: Array<String> = usingsOf(was, path -> ModulePathTokens.rewrite(path, renames));
+			final after: Array<String> = usingsOf(now, path -> path);
+			final gained: Array<String> = after.filter(u -> !before.contains(u));
+			if (gained.length > 0)
+				out.push(
+					'${p.move.to} gains `using ${gained.join(', ')}` through its new ambient chain — its extensions could take over a call '
+					+ 'the module makes; move it where the chain does not change, or drop that `using` from the chain first'
+				);
+			final missing: Array<String> = before.filter(u -> !after.contains(u));
+			if (missing.exists(u -> u.startsWith('#')))
+				out.push('${p.move.to} loses a conditionally compiled `using` it cannot carry');
+			else if (missing.length > 0)
+				lost[p.move.to] = missing;
+		}
+		return out;
+	}
+
+	/** The `using` statements in force in `info` — its own and its ambient chain's — paths through `mapped`, a guarded one `#`-marked. */
+	private static function usingsOf(info: FileInfo, mapped: (String) -> String): Array<String> {
+		final out: Array<String> = [];
+		final all: Array<ImportInfo> = info.imports.copy();
+		for (g in info.ambientImports) for (imp in g.imports) all.push(imp);
+		for (imp in all) if (imp.kind == ImportKind.Using) {
+			final key: String = (imp.guarded ? '#' : '') + mapped(imp.raw);
+			if (!out.contains(key)) out.push(key);
+		}
+		return out;
+	}
+
+	/** The statements importing `imports` and bringing `usings` into scope, or the first path the grammar cannot spell one for. */
+	private static function repairLines(imports: Array<String>, usings: Array<String>, shape: RefShape): Either<String, Array<String>> {
+		final out: Array<String> = [];
+		for (pair in [
+			{ paths: imports, template: shape.importLineTemplate },
+			{ paths: usings, template: shape.usingLineTemplate }
+		]) for (p in pair.paths) {
+			final line: Null<String> = statementOf(pair.template, p);
+			if (line == null) return Left(p);
+			out.push(line);
+		}
+		return Right(out);
+	}
+
+	/**
+	 * One refusal per array literal of `tree` whose string entries were in an order before the rename and are not after it
+	 * — a sorted list the project did not declare (`move.sortedLists`), which a rewrite in place would leave unsorted. A
+	 * declared one (`declared`, its spans in this file) is re-sorted instead.
+	 */
+	private static function unsortedListRefusals(
+		file: String, source: String, tree: QueryNode, renames: Array<ModuleRename>, declared: Array<Span>, plugin: GrammarPlugin
+	): Array<String> {
+		final kind: Null<String> = plugin.refShape().arrayLiteralKind;
+		final out: Array<String> = [];
+		if (kind == null) return out;
+		final stack: Array<QueryNode> = [tree];
+		while (stack.length > 0) {
+			final node: QueryNode = stack.pop() ?? tree;
+			for (c in node.children) stack.push(c);
+			final found: Null<Span> = node.span;
+			if (node.kind != kind || found == null || node.children.length < 2) continue;
+			final span: Span = found;
+			if (declared.exists(d -> d.from == span.from && d.to == span.to)) continue;
+			final entries: Array<String> = [];
+			for (c in node.children) {
+				final cs: Null<Span> = c.span;
+				final content: Null<String> = cs == null ? null : DeclaredSortedLists.plainContent(source.substring(cs.from, cs.to));
+				if (content == null) break;
+				entries.push(content);
+			}
+			if (entries.length != node.children.length) continue;
+			final order: Int = ImportOrder.orderOf(entries);
+			if (order >= 0 && !ImportOrder.sortedUnder([for (e in entries) ModulePathTokens.rewrite(e, renames)], order))
+				out.push(
+					'$file:${lineOf(source, span.from)} holds a sorted list the move would leave unsorted — declare it in the "move" '
+					+ 'section\'s "sortedLists" so it is re-sorted'
+				);
+		}
+		return out;
+	}
+
+	/** Per file, the spans of the declared sorted-list parts it holds, read off its text before the move. */
+	private static function declaredListSpans(request: ModuleMoveRequest, plugin: GrammarPlugin): Map<String, Array<Span>> {
+		final sourceOf: Map<String, String> = [for (e in request.scopeFiles) e.file => e.source];
+		final out: Map<String, Array<Span>> = [];
+		for (parts in request.sortedLists) for (part in parts) {
+			final source: Null<String> = sourceOf[part.file];
+			final tree: Null<QueryNode> = source == null ? null : ParseGate.parseOrNull(plugin, source);
+			if (source == null || tree == null) continue;
+			switch Address.resolve(tree, source, plugin, { select: part.select }) {
+				case Ok(_, node) if (node?.span != null):
+					final spans: Array<Span> = out[part.file] ?? [];
+					spans.push(node?.span ?? new Span(0, 0));
+					out[part.file] = spans;
+				case _:
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * One refusal per private-access grant (`RefShape.takesPrivateAccessMetaName` / `grantsPrivateAccessMetaName`) that names
+	 * a PACKAGE holding a relocated module's old path and not its new one — the module leaves the grant's reach, which no
+	 * rewrite of its path restores.
+	 */
+	private static function grantRefusals(
+		files: Array<{ file: String, source: String }>, planned: Array<PlannedMove>, plugin: GrammarPlugin
+	): Array<String> {
+		final shape: RefShape = plugin.refShape();
+		final tags: Array<String> = [
+			for (t in [shape.takesPrivateAccessMetaName, shape.grantsPrivateAccessMetaName]) if (t != null) t
+		];
+		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
+		final out: Array<String> = [];
+		for (e in files) if (tags.exists(t -> e.source.indexOf(t) >= 0)) {
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, e.source);
+			if (tree != null)
+				for (grant in grantedPaths(tree, e.source, tags, metaKinds))
+					for (p in planned)
+						if (
+							isPackagePath(grant.path, shape) && covers(grant.path, p.rename.oldPath)
+							&& !covers(grant.path, p.rename.newPath)
+						)
+							out.push(
+								'${e.file}:${lineOf(e.source, grant.at)} grants package ${grant.path} private access, and '
+								+ '${p.rename.oldPath} leaves it for ${p.rename.newPath}'
+								+ ' — the grant would no longer reach it; name the module in it first'
+							);
+		}
+		return out;
+	}
+
+	/** Every argument path of a grant metadata (`tags`, on a node of `metaKinds`) in `tree`, with where it is written. */
+	private static function grantedPaths(
+		tree: QueryNode, source: String, tags: Array<String>, metaKinds: Array<String>
+	): Array<{ path: String, at: Int }> {
+		final out: Array<{ path: String, at: Int }> = [];
+		final stack: Array<QueryNode> = [tree];
+		while (stack.length > 0) {
+			final node: QueryNode = stack.pop() ?? tree;
+			for (c in node.children) stack.push(c);
+			final name: Null<String> = node.name;
+			if (name == null || !metaKinds.contains(node.kind) || !tags.contains(name)) continue;
+			for (c in node.children) {
+				final span: Null<Span> = c.span;
+				if (span != null) out.push({ path: source.substring(span.from, span.to).trim(), at: span.from });
+			}
+		}
+		return out;
+	}
+
+	/** The repair imports of `drifts`, per file, each once. */
+	private static function repairsByFile(drifts: Array<BindingDrift>): Map<String, Array<String>> {
+		final out: Map<String, Array<String>> = [];
+		for (d in drifts) {
+			final paths: Array<String> = out[d.file] ?? [];
+			final repair: String = d.repair ?? '';
+			if (!paths.contains(repair)) paths.push(repair);
+			out[d.file] = paths;
+		}
+		return out;
+	}
+
+	/**
+	 * Write into `texts` (keyed by OLD path) each file's repair imports (`byFile`) and lost `using` statements (`lost`), both
+	 * keyed by NEW path; `imports` collects the lines. The refusal when the grammar spells no such statement, else null.
+	 */
+	private static function writeRepairs(
+		texts: Map<String, String>, byFile: Map<String, Array<String>>, lost: Map<String, Array<String>>, newPathOf: Map<String, String>,
+		post: SymbolIndex, plugin: GrammarPlugin, imports: Array<String>
+	): Null<String> {
+		final oldPathOf: Map<String, String> = [for (old => now in newPathOf) now => old];
+		final infoOf: Map<String, FileInfo> = [for (fi in post.allFiles()) fi.file => fi];
+		for (file in [for (f in byFile.keys()) f].concat([for (f in lost.keys()) if (!byFile.exists(f)) f])) {
+			final lines: Array<String> = switch repairLines(byFile[file] ?? [], lost[file] ?? [], plugin.refShape()) {
+				case Left(path): return '$file: the grammar declares no statement spelling to write $path';
+				case Right(l): l;
+			};
+			final key: String = oldPathOf[file] ?? file;
+			texts[key] = withImports(texts[key] ?? '', lines, byFile[file] ?? [], infoOf[file], plugin);
+			for (line in lines) imports.push('$file: $line');
+		}
+		return null;
 	}
 
 }

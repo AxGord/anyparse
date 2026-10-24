@@ -197,6 +197,14 @@
 						"select": "FinalMember:PINS >> ArrayExpr"
 					}
 				]
+			},
+			{
+				"parts": [
+					{
+						"file": "test/unit/ProseClaimCensusTest.hx",
+						"select": "FinalMember:BASELINE >> ArrayExpr"
+					}
+				]
 			}
 		],
 		"mirrors": [
