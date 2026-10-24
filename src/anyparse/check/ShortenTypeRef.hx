@@ -1,6 +1,6 @@
 package anyparse.check;
 
-import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
@@ -72,6 +72,12 @@ private typedef FilePlan = {
 	var plans: Array<PathPlan>;
 }
 
+/** The per-file `apqlint.json` options: the add-import threshold and whether value positions are rewritten at all. */
+private typedef RuleOptions = {
+	var importMinUses: Int;
+	var valuePositions: Bool;
+}
+
 /** The immutable inputs the occurrence scan reads, threaded through the recursion. */
 private typedef ScanContext = {
 	var source: String;
@@ -120,8 +126,9 @@ private typedef ScanContext = {
  *
  * ## ARM 3 — add the import (the printer's route 2)
  *
- * A path with NO short form in scope that this call SHORTENS at least `IMPORT_THRESHOLD` times —
- * outside `#if`, and surviving suppression on a fix path — whose simple name nothing else in the
+ * A path with NO short form in scope that this call SHORTENS at least `importMinUses` times (default 2) —
+ * outside `#if`, surviving suppression on a fix path, and counted per RESOLVED type, so
+ * a hybrid and its module-qualified path add up — whose simple name nothing else in the
  * file binds: the fix adds `import <path>;`, placed by `ImportOrder` so an already-sorted block
  * keeps its sort, and shortens those occurrences.
  *
@@ -158,10 +165,12 @@ private typedef ScanContext = {
  *    at that path, means unproven — the finding stays, the edit does not, and arm 3 is not even
  *    offered (an unproven path never receives the freeness exemption, so it never promises an
  *    import).
- *  - **Conditional compilation.** An occurrence inside a `#if … #end` region is never rewritten
- *    and never counted toward the import threshold: what is in scope there depends on the build,
- *    which neither the import map nor the index models — and the house preference is to keep a
- *    guarded `new haxe.Exception(…)` fully qualified anyway. It IS exempted from the freeness
+ *  - **Conditional compilation.** An occurrence inside a `#if … #end` region never counts toward
+ *    the import threshold, and is rewritten only to a spelling that needs NO fresh import — one
+ *    the file reaches through an unconditional import, this module, the package chain or a
+ *    builtin, which means the same in every build (a `#if`-guarded import of the name already
+ *    vetoes it). A spelling riding on an import this call adds waits for the next pass, which
+ *    finds the import in place. It IS exempted from the freeness
  *    scan, since it is still the path's own text. The test is the DIRECTIVE, not a node kind —
  *    every conditional region opens with `#if` whichever of the grammar's dozen positional
  *    conditional ctors projects it (`opensConditionalRegion`).
@@ -212,28 +221,33 @@ private typedef ScanContext = {
  * breaks, and with no `compilerOracle` configured the rule stays report-only wholesale. This is
  * also what makes true the claim `TypeRefPrinter` makes about all of its callers.
  *
- * ## Default OFF — opt-in
+ * ## Default ON for type positions — value positions opt-in
  *
- * A `DefaultOff` marker: dropped from the default set and from a bare `lint … --all` report
- * unless a project opts in via `apqlint.json`
- * (`"rules": { "shorten-type-ref": { "enabled": true } }`), or an explicit
- * `--rule shorten-type-ref` selects it. How qualified a type reference should be is a project
- * style decision; only the hybrid arm is universal, and it is not separable from the print.
+ * Every type position is on by default, the add-import arm included. A static-access chain in a
+ * VALUE position is skipped wholesale unless the project opts in with
+ * `"shorten-type-ref": { "valuePositions": true }`; `importMinUses` overrides the add-import
+ * threshold.
  */
 @:nullSafety(Strict)
-final class ShortenTypeRef extends RuleBase implements DefaultOff implements RiskyFix implements GroupedFix {
+final class ShortenTypeRef extends RuleBase implements ConfigAware implements RiskyFix implements GroupedFix {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shorten-type-ref';
 
 	/**
 	 * How many occurrences a path must be SHORTENED at before ADDING an import for it is worth
-	 * the line. One is a wash — the import trades a qualified use for an import line plus a bare
-	 * name — so the add-import arm starts at the second. Counted over the occurrences the CALL
+	 * the line, unless the project's `importMinUses` says otherwise. One is a wash — the import trades a qualified use for
+	 * an import line plus a bare name — so the add-import arm starts at the second. Counted over the occurrences the CALL
 	 * rewrites, never over the ones the file merely holds: outside `#if`, and, on a fix path,
 	 * surviving suppression. An occurrence left qualified buys nothing towards the line.
 	 */
-	private static inline final IMPORT_THRESHOLD: Int = 2;
+	private static inline final DEFAULT_IMPORT_MIN_USES: Int = 2;
+
+	/** The `apqlint.json` option overriding `DEFAULT_IMPORT_MIN_USES`. */
+	private static inline final IMPORT_MIN_USES_KEY: String = 'importMinUses';
+
+	/** The `apqlint.json` option that opts VALUE positions (static-access chains) in; type positions are always on. */
+	private static inline final VALUE_POSITIONS_KEY: String = 'valuePositions';
 
 	/** The finding message when the short name is ALREADY reachable — the rewrite needs no import. */
 	private static inline final MSG_FIXABLE: String = 'an over-qualified type reference - the short name resolves to the same type here';
@@ -261,6 +275,9 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 	 */
 	private static final MODIFIER_RUN_BOUNDARY: QueryNode -> Bool = c -> c.children.length > 0 || c.name != null;
 
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {
 		super(
 			RULE_ID, 'a dotted type reference whose short name resolves to the same type here, or that repeats often enough to import',
@@ -268,11 +285,15 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 		);
 	}
 
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
+
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final plan: Null<FilePlan> = planFor(entry.source, plugin, index, null, entry.file);
+			final plan: Null<FilePlan> = planFor(entry.source, plugin, index, null, entry.file, optionsFor(entry.file));
 			if (plan == null) continue;
 			for (path in plan.plans) for (target in path.targets) violations.push({
 				file: entry.file,
@@ -350,7 +371,8 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 		// the empty `wanted` has already returned above — it exists for a caller that hands in
 		// violations it built itself.
 		final scope: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
-		final plan: Null<FilePlan> = planFor(source, plugin, scope, wanted, violations[0].file);
+		final file: String = violations[0].file;
+		final plan: Null<FilePlan> = planFor(source, plugin, scope, wanted, file, optionsFor(file));
 		if (plan == null) return [];
 		// One bucket can serve SEVERAL paths (the printer merges imports landing on one anchor), so
 		// the group is the bucket and every path in it binds its own rewrites to that same unit.
@@ -363,12 +385,21 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 					{ span: target, text: path.text, group: groupOf(byPath, path.importPath) }
 		];
 		// Every promised import belongs to a path that contributed rewrites above: `planFor` was
-		// handed `wanted`, so it only promised one for a path with at least `IMPORT_THRESHOLD`
+		// handed `wanted`, so it only promised one for a path with at least `importMinUses`
 		// SURVIVING targets, and such a path always comes back with a changed spelling — so each of
 		// those targets is one of the edits just built. With no rewrites there are no imports
 		// either, which is why the empty case needs no early-out of its own.
 		for (group => importEdit in importEdits) edits.push({ span: importEdit.span, text: importEdit.text, group: group });
 		return edits;
+	}
+
+	/** The options `file`'s own project declares, each defaulted when it declares none. */
+	private function optionsFor(file: String): RuleOptions {
+		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
+		return {
+			importMinUses: config.intOption(RULE_ID, IMPORT_MIN_USES_KEY) ?? DEFAULT_IMPORT_MIN_USES,
+			valuePositions: config.boolOption(RULE_ID, VALUE_POSITIONS_KEY) ?? false
+		};
 	}
 
 	/**
@@ -413,13 +444,17 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 	 * both import gates, and those gates count the occurrences THIS call will rewrite — so a
 	 * promised import always belongs to a plan this rule will act on.
 	 *
+	 * A `#if` occurrence never counts towards an import, and is rewritten only to a spelling that needs NO fresh import:
+	 * that one resolves the same in every build, while one riding on the import this call adds waits for the next pass,
+	 * which finds the import already in the file. A value site is skipped wholesale unless `options` opts value positions in.
+	 *
 	 * `wanted` is the caller's surviving findings as `spanKey`s, or null for "every occurrence
 	 * counts". `run` reports the whole file and passes null; a fix path was handed a SUBSET
 	 * (`Linter.collect` drops the quoted and the suppressed) and passes it, because an import
 	 * promised to the printer here can no longer be taken back at the emit site.
 	 */
 	private static function planFor(
-		source: String, plugin: GrammarPlugin, index: Null<SymbolIndex>, wanted: Null<Array<String>>, path: String
+		source: String, plugin: GrammarPlugin, index: Null<SymbolIndex>, wanted: Null<Array<String>>, path: String, options: RuleOptions
 	): Null<FilePlan> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		// The type-refs projection is the same tree PLUS one `TypeRef` node per nominal in a
@@ -450,17 +485,23 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 		final printer: TypeRefPrinter = printerFor(source, scoped, plugin, index, path);
 		final plans: Array<PathPlan> = [];
 		final file: String = path;
-		for (path in distinctPaths(occurrences)) {
-			final mine: Array<Occurrence> = rewritable(path, occurrences, context, index, file);
+		final resolved: Map<String, String> = resolvedTypes(occurrences, printer);
+		for (path in distinctTypes(occurrences, resolved)) {
+			final simple: String = SourceText.lastSegment(path);
+			final eligible: Array<Occurrence> = occurrences.filter(
+				o ->
+					resolved[o.path] == path
+					&& (o.valueSite == null || options.valuePositions && valueNameFree(simple, o, context, index, file))
+			);
+			final unguarded: Array<Occurrence> = eligible.filter(o -> !o.conditional);
 			// `targets` stays WHOLE-file — the finding set the fix path filters against `wanted` itself — while the two
 			// counts both import gates read are taken over the SURVIVING occurrences, the ones THIS call will rewrite: how
 			// many there are (the threshold), and how many sit outside a macro-time body (the `Macro-time bodies` gate). A
 			// value site whose short name something else may bind is in neither: it is left as written.
-			final targets: Array<Span> = [for (o in mine) o.span];
-			final surviving: Array<Occurrence> = mine.filter(o -> wanted == null || wanted.contains(spanKey(o.span)));
+			final surviving: Array<Occurrence> = unguarded.filter(o -> wanted == null || wanted.contains(spanKey(o.span)));
 			final survivingUses: Int = surviving.length;
 			final runtimeUses: Int = surviving.filter(o -> !o.macroBody).length;
-			if (targets.length == 0) continue;
+			if (eligible.length == 0) continue;
 			final proven: Bool = printer.resolvePath(path) != null;
 			// An import is promised to the PRINTER here, and the printer is source-driven: it cannot
 			// know that a caller dropped this path's findings on the way in. `wanted` is that
@@ -468,13 +509,13 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 			// the rewrites that will actually pay for it — a path with no surviving target claims
 			// neither the import nor the simple name (claiming the name would keep a path whose
 			// findings DID survive qualified for a collision nobody will write).
-			final importable: Bool = proven && runtimeUses > 0 && survivingUses >= IMPORT_THRESHOLD;
+			final importable: Bool = proven && runtimeUses > 0 && survivingUses >= options.importMinUses;
 			// `owned` is WHOLE-file too: the freeness exemption has to cover every byte range the file still spells as this
 			// path, suppressed ones included, or a suppressed occurrence's own last segment would veto the import.
-			final owned: Null<Array<Span>> = importable ? [for (o in occurrences) if (o.path == path) o.span] : null;
+			final owned: Null<Array<Span>> = importable ? [for (o in occurrences) if (resolved[o.path] == path) o.span] : null;
 			final printed: PrintedTypeRef = printer.print(path, owned);
-			if (printed.text == path) continue;
-			final kept: Array<Span> = keptTargets(printed.text, path, mine, context, index, file);
+			final mine: Array<Occurrence> = printed.importPath == null ? eligible : unguarded;
+			final kept: Array<Span> = keptTargets(printed.text, mine, context, index, file);
 			if (kept.length > 0) plans.push({
 				path: path,
 				text: printed.text,
@@ -487,28 +528,23 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 	}
 
 	/**
-	 * The occurrences of `path` this call may rewrite: outside `#if`, and — at a value site — only where the short name
-	 * binds nothing but the type (`valueNameFree`).
-	 */
-	private static function rewritable(
-		path: String, occurrences: Array<Occurrence>, context: ScanContext, index: Null<SymbolIndex>, file: String
-	): Array<Occurrence> {
-		final simple: String = SourceText.lastSegment(path);
-		return occurrences.filter(
-			o -> o.path == path && !o.conditional && (o.valueSite == null || valueNameFree(simple, o, context, index, file))
-		);
-	}
-
-	/**
-	 * The spans of `mine` to rewrite to `text`: all of them, unless `text` is an ALIAS spelling whose head is neither the
-	 * path's simple name nor its own head — a name `rewritable` never asked about, so each value site asks again for it.
+	 * The spans of `mine` to rewrite to `text`: every occurrence not already spelled `text`, except a value site whose
+	 * rewrite is an ALIAS spelling whose head is neither the path's simple name nor its own head — a name `planFor` never
+	 * asked about, so that value site asks again for it.
 	 */
 	private static function keptTargets(
-		text: String, path: String, mine: Array<Occurrence>, context: ScanContext, index: Null<SymbolIndex>, file: String
+		text: String, mine: Array<Occurrence>, context: ScanContext, index: Null<SymbolIndex>, file: String
 	): Array<Span> {
 		final head: String = text.split('.')[0];
-		return head == SourceText.lastSegment(path) || head == path.split('.')[0] ? [for (o in mine) o.span] : [
-			for (o in mine) if (o.valueSite == null || valueNameFree(head, o, context, index, file)) o.span
+		return [
+			for (o in mine)
+				if (
+					o.path != text && (
+						o.valueSite == null || head == SourceText.lastSegment(o.path) || head == o.path.split('.')[0]
+						|| valueNameFree(head, o, context, index, file)
+					)
+				)
+					o.span
 		];
 	}
 
@@ -537,10 +573,24 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 		return TypeRefPrinter.forFile(path, source, tree, provider != null ? provider.importMap(source, path) : [], plugin, index);
 	}
 
-	/** The written paths of `occurrences`, deduplicated, in first-seen order — the plan's iteration order. */
-	private static function distinctPaths(occurrences: Array<Occurrence>): Array<String> {
+	/**
+	 * Each written path of `occurrences` mapped to the type `printer` resolves it to — the resolver, not the spelling, says
+	 * which occurrences are one type, so a hybrid and its module-qualified path count together. An unproven path maps to
+	 * itself.
+	 */
+	private static function resolvedTypes(occurrences: Array<Occurrence>, printer: TypeRefPrinter): Map<String, String> {
+		final out: Map<String, String> = [];
+		for (o in occurrences) if (!out.exists(o.path)) out[o.path] = printer.resolvePath(o.path) ?? o.path;
+		return out;
+	}
+
+	/** The resolved types of `occurrences` (`resolved` maps a written path to its type), deduplicated, in first-seen order. */
+	private static function distinctTypes(occurrences: Array<Occurrence>, resolved: Map<String, String>): Array<String> {
 		final out: Array<String> = [];
-		for (occurrence in occurrences) if (!out.contains(occurrence.path)) out.push(occurrence.path);
+		for (occurrence in occurrences) {
+			final type: String = resolved[occurrence.path] ?? occurrence.path;
+			if (!out.contains(type)) out.push(type);
+		}
 		return out;
 	}
 
@@ -559,9 +609,8 @@ final class ShortenTypeRef extends RuleBase implements DefaultOff implements Ris
 	 *    resolution, keeps being scanned.
 	 *
 	 * A `#if … #end` region is NOT skipped — it is FLAGGED. Its occurrences are exempted from the
-	 * printer's short-name freeness scan (they are still the path's own text) but never rewritten
-	 * and never counted toward the import threshold, since what is in scope inside a region
-	 * depends on the build, which neither the import map nor the index models.
+	 * printer's short-name freeness scan (they are still the path's own text), never counted toward the import
+	 * threshold, and rewritten only to a spelling that needs no fresh import (the `Conditional compilation` gate).
 	 *
 	 * A `macro` FUNCTION body is flagged the same way, and for one narrower purpose: its occurrences
 	 * are still rewritable, but they do not entitle the path to a module-level import (see the

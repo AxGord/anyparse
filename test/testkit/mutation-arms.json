@@ -2390,10 +2390,10 @@
 		{
 			"name": "M-SHORTEN-IMPORT-THRESHOLD-ONE",
 			"type": "anyparse.check.ShortenTypeRef",
-			"method": "IMPORT_THRESHOLD",
+			"method": "DEFAULT_IMPORT_MIN_USES",
 			"kind": "FinalMember",
-			"find": "IMPORT_THRESHOLD: Int = 2;",
-			"replace": "IMPORT_THRESHOLD: Int = 1;",
+			"find": "DEFAULT_IMPORT_MIN_USES: Int = 2;",
+			"replace": "DEFAULT_IMPORT_MIN_USES: Int = 1;",
 			"note": "one surviving occurrence is enough to buy an import line, so the wash the threshold exists to refuse is written anyway"
 		},
 		{
@@ -31237,6 +31237,70 @@
 			"find": " || index.typing.ancestors.builtAtOrAbove(own)",
 			"replace": "",
 			"note": "a build macro on the enclosing type, or an autoBuild one above it, is ignored, so a field it adds outranks a shortened type at a value site unseen"
+		},
+		{
+			"name": "M-SHORTEN-GUARDED-NEVER",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "planFor",
+			"find": "printed.importPath == null ? eligible : unguarded;",
+			"replace": "unguarded;",
+			"note": "a `#if` occurrence is never rewritten, so a short name an unconditional import already binds stays qualified inside every guarded region"
+		},
+		{
+			"name": "M-SHORTEN-GUARDED-RIDES-FRESH-IMPORT",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "planFor",
+			"find": "printed.importPath == null ? eligible : unguarded;",
+			"replace": "eligible;",
+			"note": "a `#if` occurrence is shortened on the strength of an import the same call is only now adding, so it is rewritten in the pass that cannot yet see that import"
+		},
+		{
+			"name": "M-SHORTEN-VALUE-POSITIONS-ALWAYS",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "planFor",
+			"find": "options.valuePositions && valueNameFree",
+			"replace": "valueNameFree",
+			"note": "value positions are rewritten and counted toward an import although the project never opted them in"
+		},
+		{
+			"name": "M-SHORTEN-IMPORT-MIN-USES-IGNORED",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "optionsFor",
+			"find": "config.intOption(RULE_ID, IMPORT_MIN_USES_KEY) ?? DEFAULT_IMPORT_MIN_USES",
+			"replace": "DEFAULT_IMPORT_MIN_USES",
+			"note": "the project's importMinUses is ignored, so an import is bought at the default count whatever the project declared"
+		},
+		{
+			"name": "M-SHORTEN-IMPORT-CHAIN-CONFLICT-BLIND",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "canAddImport",
+			"find": " || packageChainVerdict(canonical, simple) == false",
+			"replace": "",
+			"note": "a fresh import takes a simple name an enclosing package's own type already holds, so the bare name stops meaning that type"
+		},
+		{
+			"name": "M-SHORTEN-IMPORT-BUILTIN-BLIND",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "canAddImport",
+			"find": "builtin != null && builtin != canonical || ",
+			"replace": "",
+			"note": "a fresh import takes a builtin's simple name, so the bare name stops meaning the standard type"
+		},
+		{
+			"name": "M-SHORTEN-IMPORT-QUALIFIED-TAIL-VETOES",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "canAddImport",
+			"find": ": !OccurrenceScan.referencedUnqualifiedInRange(source, simple, 0, source.length, exempt, inert);",
+			"replace": ": !OccurrenceScan.referencedInRange(source, simple, 0, source.length, exempt);",
+			"note": "a qualified tail of the simple name (another package's type written in full, a metadata path, a member access) vetoes the import as if it were a rival binding"
+		},
+		{
+			"name": "M-SHORTEN-COUNT-BY-SPELLING",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "resolvedTypes",
+			"find": "out[o.path] = printer.resolvePath(o.path) ?? o.path;",
+			"replace": "out[o.path] = o.path;",
+			"note": "occurrences are grouped by how they are spelled, so a hybrid and the module-qualified path of the same type each fall short of the import threshold"
 		}
 	]
 }

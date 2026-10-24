@@ -2,6 +2,7 @@ package unit.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.GroupedEdit;
+import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.ShortenTypeRef;
 import anyparse.query.CachingGrammarPlugin;
@@ -365,21 +366,30 @@ class ShortenTypeRefCheckTest extends Test {
 
 	// --- conditional compilation ---
 
-	public function testConditionalRegionIsNotRewritten(): Void {
+	/**
+	 * A spelling that needs no fresh import — here the short name an unconditional import already binds — means the same in
+	 * every build, so a `#if` occurrence takes it too.
+	 */
+	@:pin('control')
+	@:killer('M-SHORTEN-GUARDED-NEVER')
+	public function testConditionalRegionTakesAnImportFreeSpelling(): Void {
 		final src: String = 'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n\t\t#if debug\n'
 			+ '\t\tfinal v:pkg.deep.Sub = g();\n\t\t#end\n\t}\n\n}\n';
-		Assert.equals(0, violations(src).length);
+		Assert.equals(1, violations(src).length);
+		Assert.equals('\t\tfinal v:Sub = g();', annotationLine(applyFix(src)));
 	}
 
 	/**
 	 * An EXPRESSION-position `#if` projects as `ConditionalExpr`, not the `Conditional` that
-	 * `RefShape.conditionalMemberKind` names — which is why the skip tests the `#if` DIRECTIVE
-	 * rather than a kind.
+	 * `RefShape.conditionalMemberKind` names — which is why the region test reads the `#if`
+	 * DIRECTIVE rather than a kind. Its occurrence does not count, so one plain use buys no import.
 	 */
-	public function testConditionalExpressionRegionIsNotRewritten(): Void {
-		final src: String = 'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n'
-			+ '\t\tfinal x = #if debug { final v:pkg.deep.Sub = g(); v; } #else 0 #end;\n\t}\n\n}\n';
+	public function testConditionalExpressionRegionDoesNotCountTowardTheThreshold(): Void {
+		final src: String = inClass(
+			'', '\t\tfinal w:pkg.deep.Foo = g();\n\t\tfinal x = #if debug { final v:pkg.deep.Foo = g(); v; } #else 0 #end;\n'
+		);
 		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
 	}
 
 	/**
@@ -418,6 +428,84 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') != -1, 'import added, got: $out');
 		Assert.isTrue(out.indexOf('g(Foo.a());') != -1 && out.indexOf('g(Foo.b());') != -1, 'plain uses shortened, got: $out');
 		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.c());') != -1, 'the guarded use stays qualified, got: $out');
+	}
+
+	/**
+	 * A guarded occurrence of a path that is only now BUYING its import stays qualified: the short name rides on a line this
+	 * very call adds. The next pass finds the import in place and shortens it like any import-free spelling.
+	 */
+	@:pin('control')
+	@:killer('M-SHORTEN-GUARDED-RIDES-FRESH-IMPORT')
+	public function testAGuardedOccurrenceWaitsForTheImportItsPathBuys(): Void {
+		final src: String = inClass(
+			'',
+			'\t\tfinal a:pkg.deep.Foo = g();\n\t\tfinal b:pkg.deep.Foo = g();\n\t\t#if debug\n\t\tfinal c:pkg.deep.Foo = g();\n\t\t#end\n'
+		);
+		final once: String = applyFix(src);
+		Assert.isTrue(once.indexOf('import pkg.deep.Foo;') != -1 && once.indexOf('final b:Foo = g();') != -1, 'import added, got: $once');
+		Assert.isTrue(once.indexOf('final c:pkg.deep.Foo = g();') != -1, 'the guarded use waits, got: $once');
+		final twice: String = applyFix(once);
+		Assert.isTrue(twice.indexOf('final c:Foo = g();') != -1, 'the next pass shortens it, got: $twice');
+		Assert.equals(twice, applyFix(twice));
+	}
+
+	/** Any code byte spelling the simple name refuses the import, inside a `#if` branch too. */
+	public function testAGuardedLocalOfTheShortNameRefusesTheImport(): Void {
+		final src: String = inClass(
+			'',
+			'\t\tfinal a:pkg.deep.Foo = g();\n\t\tfinal b:pkg.deep.Foo = g();\n\t\t#if debug\n\t\tfinal Foo:Int = 1;\n\t\ttrace(Foo);\n'
+			+ '\t\t#end\n'
+		);
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * An import binds a SIMPLE name, so a qualified tail of the name — another package's type written in full, a metadata
+	 * path, a member access — is no rival and leaves the import free; it stays exactly as written.
+	 */
+	@:pin('control')
+	@:killer('M-SHORTEN-IMPORT-QUALIFIED-TAIL-VETOES')
+	public function testAQualifiedTailOfTheNameDoesNotVetoTheImport(): Void {
+		final src: String = inClass(
+			'@:access(other.Foo)\n',
+			'\t\tfinal a:pkg.deep.Foo = g();\n\t\tfinal b:pkg.deep.Foo = g();\n\t\tfinal o:other.Foo = g();\n\t\ttrace(o.Foo);\n'
+		);
+		final out: String = applyFix(src);
+		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') != -1 && out.indexOf('final b:Foo = g();') != -1, 'import added, got: $out');
+		Assert.isTrue(out.indexOf('final o:other.Foo = g();') != -1 && out.indexOf('@:access(other.Foo)') != -1, 'tails kept, got: $out');
+	}
+
+	/** The resolver decides what counts as ONE type: the hybrid `pkg.deep.Sub` and its module-qualified path are two uses. */
+	@:pin('control')
+	@:killer('M-SHORTEN-COUNT-BY-SPELLING')
+	public function testTwoSpellingsOfOneTypeCountTogether(): Void {
+		final out: String = applyFix(inClass('', '\t\tfinal a:pkg.deep.Sub = g();\n\t\tfinal b:pkg.deep.Mod.Sub = g();\n'));
+		Assert.isTrue(out.indexOf('import pkg.deep.Mod.Sub;') != -1, 'one import for both spellings, got: $out');
+		Assert.isTrue(out.indexOf('final a:Sub = g();') != -1 && out.indexOf('final b:Sub = g();') != -1, 'both shortened, got: $out');
+	}
+
+	// --- options ---
+
+	/** Out of the box only TYPE positions are rewritten: a static-access chain is neither reported nor counted toward an import. */
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-POSITIONS-ALWAYS')
+	public function testValuePositionsAreOffByDefault(): Void {
+		final src: String = inClass('import pkg.deep.Foo;\n\n', '\t\tg(pkg.deep.Foo.make());\n\t\tfinal v:pkg.deep.Foo = g();\n');
+		final vs: Array<Violation> = optionViolations(src, '{}');
+		Assert.equals(1, vs.length);
+		final out: String = optionFix(src, '{}');
+		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.make());') != -1 && out.indexOf('final v:Foo = g();') != -1, 'type site only, got: $out');
+		Assert.equals(0, optionViolations(inClass('', '\t\tg(pkg.deep.Foo.make());\n\t\tfinal v:pkg.deep.Foo = g();\n'), '{}').length);
+	}
+
+	@:pin('control')
+	@:killer('M-SHORTEN-IMPORT-MIN-USES-IGNORED')
+	public function testImportMinUsesRaisesTheThreshold(): Void {
+		final config: String = '{"rules":{"shorten-type-ref":{"importMinUses":3}}}';
+		final two: String = '\t\tfinal a:pkg.deep.Foo = g();\n\t\tfinal b:pkg.deep.Foo = g();\n';
+		Assert.equals(0, optionViolations(inClass('', two), config).length);
+		final out: String = optionFix(inClass('', '$two\t\tfinal c:pkg.deep.Foo = g();\n'), config);
+		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') != -1 && out.indexOf('final c:Foo = g();') != -1, 'three buy it, got: $out');
 	}
 
 	// --- conflict gates ---
@@ -629,7 +717,7 @@ class ShortenTypeRefCheckTest extends Test {
 
 	public function testWithoutAResolutionIndexTheRunIsReportOnly(): Void {
 		final src: String = consumer('import pkg.deep.Mod.Sub;\n\n', 'pkg.deep.Sub');
-		final check: ShortenTypeRef = new ShortenTypeRef();
+		final check: ShortenTypeRef = valueRule();
 		// A bare plugin carries no resolution scope, so nothing PROVES which declaration
 		// `pkg.deep.Sub` names — the finding stands, the rewrite does not.
 		final files: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
@@ -673,7 +761,7 @@ class ShortenTypeRefCheckTest extends Test {
 	public function testProvenAndUnprovenComponentsAreIndependent(): Void {
 		final src: String = consumer('import pkg.deep.Mod.Sub;\nimport pkg.deep.Foo;\n\n', 'Map<pkg.deep.Sub, pkg.deep.Foo>');
 		final report: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
-		final check: ShortenTypeRef = new ShortenTypeRef();
+		final check: ShortenTypeRef = valueRule();
 		// Only `pkg/deep/Mod.hx` joins the scope, so `pkg.deep.Foo` resolves to no declaration.
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({
@@ -773,12 +861,12 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.isTrue(ids.contains('shorten-type-ref'));
 	}
 
-	public function testIsDefaultOff(): Void {
-		Assert.isTrue(new ShortenTypeRef() is DefaultOff);
+	public function testIsOnByDefault(): Void {
+		Assert.isFalse(new ShortenTypeRef() is DefaultOff);
 	}
 
 	public function testSkipParseNoCrash(): Void {
-		Assert.equals(0, CheckFixture.violations(new ShortenTypeRef(), 'class Bad { function f() { final v:').length);
+		Assert.equals(0, CheckFixture.violations(valueRule(), 'class Bad { function f() { final v:').length);
 	}
 
 	/** A consumer in `package app;` carrying `imports` verbatim and one local annotated `annotation`. */
@@ -845,7 +933,7 @@ class ShortenTypeRefCheckTest extends Test {
 
 	private function enumViolations(src: String): Array<Violation> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'module/Clean.hx', source: src }];
-		return CheckFixture.violationsIn(new ShortenTypeRef(), report, enumPlugin(report));
+		return CheckFixture.violationsIn(valueRule(), report, enumPlugin(report));
 	}
 
 	private function enumApplyFix(src: String): String {
@@ -855,7 +943,7 @@ class ShortenTypeRefCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
-		return CheckFixture.violationsIn(new ShortenTypeRef(), report, scopedPlugin(report));
+		return CheckFixture.violationsIn(valueRule(), report, scopedPlugin(report));
 	}
 
 	private function applyFix(src: String): String {
@@ -863,12 +951,24 @@ class ShortenTypeRefCheckTest extends Test {
 		return applyFixWith(src, scopedPlugin(report), report);
 	}
 
+	/** The findings of a rule reading the project config `json` for `src`. */
+	private function optionViolations(src: String, json: String): Array<Violation> {
+		final report: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
+		return CheckFixture.violationsIn(configuredRule(json), report, scopedPlugin(report));
+	}
+
+	/** `src` after one fix by a rule reading the project config `json`. */
+	private function optionFix(src: String, json: String): String {
+		final report: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
+		return CanonicalEdit.applyEdits(src, CheckFixture.fixRun(configuredRule(json), report, scopedPlugin(report)).edits);
+	}
+
 	/** The grouped edits for `src`, routed through `Linter.collect` the way every fix path is, so
 	* the reification and inline-suppression gates apply before the check sees its own findings. */
 	private function suppressedEdits(src: String): Array<GroupedEdit> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
 		final plugin: CachingGrammarPlugin = scopedPlugin(report);
-		final check: ShortenTypeRef = new ShortenTypeRef();
+		final check: ShortenTypeRef = valueRule();
 		return check.fixGrouped(src, Linter.collect(report, plugin, [check]), plugin);
 	}
 
@@ -878,7 +978,19 @@ class ShortenTypeRefCheckTest extends Test {
 	}
 
 	private function applyFixWith(src: String, plugin: CachingGrammarPlugin, report: Array<{ file: String, source: String }>): String {
-		return CanonicalEdit.applyEdits(src, CheckFixture.fixRun(new ShortenTypeRef(), report, plugin).edits);
+		return CanonicalEdit.applyEdits(src, CheckFixture.fixRun(valueRule(), report, plugin).edits);
+	}
+
+	/** The rule with VALUE positions opted in, so the static-access fixtures exercise their gates; type positions need no option. */
+	private static function valueRule(): ShortenTypeRef {
+		return configuredRule('{"rules":{"shorten-type-ref":{"valuePositions":true}}}');
+	}
+
+	/** The rule reading `json` as every file's project config. */
+	private static function configuredRule(json: String): ShortenTypeRef {
+		final rule: ShortenTypeRef = new ShortenTypeRef();
+		rule.setConfigResolver(_ -> LintConfig.parse(json));
+		return rule;
 	}
 
 }

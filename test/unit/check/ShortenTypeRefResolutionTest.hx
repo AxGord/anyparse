@@ -1,5 +1,6 @@
 package unit.check;
 
+import anyparse.check.LintConfig;
 import anyparse.check.ShortenTypeRef;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
@@ -23,6 +24,11 @@ class ShortenTypeRefResolutionTest extends Test {
 		},
 		{ file: 'pkg/Auto.hx', source: 'package pkg;\n\n@:autoBuild(pkg.Builder.build())\ninterface Auto {}\n' },
 		{ file: 'pkg/SBase.hx', source: 'package pkg;\n\n@:autoBuild(pkg.Builder.build())\nclass SBase {\n\tpublic function new() {}\n}\n' }
+	];
+
+	/** Library types whose simple names an enclosing package (`Entity`), a builtin (`Date`) or nothing (`Gadget`) already holds. */
+	private static final LIB_DEEP: Array<{ file: String, source: String }> = [
+		for (name in ['Entity', 'Date', 'Gadget']) { file: 'lib/deep/$name.hx', source: 'package lib.deep;\n\nclass $name {}\n' }
 	];
 
 	@:pin('control')
@@ -151,6 +157,40 @@ class ShortenTypeRefResolutionTest extends Test {
 		Assert.isTrue(out.indexOf('trace(Entity.make());') != -1, 'shortened, got: $out');
 	}
 
+	// --- the add-import arm takes a name only where nothing else reaches it without an import ---
+
+	/** `Gadget` is the positive control: the same fixture still buys its import, so the refusal is the name, not the arm. */
+	@:pin('control')
+	@:killer('M-SHORTEN-IMPORT-CHAIN-CONFLICT-BLIND')
+	public function testAnEnclosingPackageTypeOfTheNameRefusesTheImport(): Void {
+		final out: String = applyFix(holder(twice('lib.deep.Entity') + twice('lib.deep.Gadget')), LIB_DEEP);
+		Assert.equals(-1, out.indexOf('import lib.deep.Entity;'), 'pkg.Entity holds the name, got: $out');
+		Assert.isTrue(out.indexOf('public final e0:lib.deep.Entity') != -1, 'kept qualified, got: $out');
+		Assert.isTrue(out.indexOf('import lib.deep.Gadget;') != -1 && out.indexOf('public final g0:Gadget') != -1, 'control, got: $out');
+	}
+
+	@:pin('control')
+	@:killer('M-SHORTEN-IMPORT-BUILTIN-BLIND')
+	public function testABuiltinOfTheNameRefusesTheImport(): Void {
+		final out: String = applyFix(holder(twice('lib.deep.Date') + twice('lib.deep.Gadget')), LIB_DEEP);
+		Assert.equals(-1, out.indexOf('import lib.deep.Date;'), 'the std Date holds the name, got: $out');
+		Assert.isTrue(out.indexOf('import lib.deep.Gadget;') != -1, 'control, got: $out');
+	}
+
+	/** `X.X` written inside a class `X` of another module: the bare name means the enclosing class, never the root module's type. */
+	@:pin('guard')
+	public function testAModuleQualifiedSelfNameStaysQualified(): Void {
+		final root: Array<{ file: String, source: String }> = [{ file: 'X.hx', source: 'class X {\n\tpublic function new() {}\n}\n' }];
+		final src: String = 'package pkg;\n\nclass X {\n\tpublic final a:X.X = null;\n\tpublic final b:X.X = null;\n}\n';
+		Assert.equals(0, violationsAt('pkg/X.hx', src, root).length);
+	}
+
+	/** Two fields typed `path`, named after its last segment. */
+	private function twice(path: String): String {
+		final name: String = path.charAt(path.lastIndexOf('.') + 1).toLowerCase();
+		return '\tpublic final ${name}0:$path = null;\n\tpublic final ${name}1:$path = null;\n';
+	}
+
 	/** A `pkg.sub.Holder` carrying `imports`, the metadata `meta` and the heritage `heritage`, calling `pkg.Entity.make()` twice. */
 	private function builtHolder(imports: String, meta: String, heritage: String): String {
 		return 'package pkg.sub;\n\n${imports}${meta}class Holder$heritage {\n\tpublic function new() {}\n\n'
@@ -184,13 +224,25 @@ class ShortenTypeRefResolutionTest extends Test {
 	}
 
 	private function violations(src: String, extra: Array<{ file: String, source: String }>): Array<Violation> {
-		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/sub/Holder.hx', source: src }];
-		return CheckFixture.violationsIn(new ShortenTypeRef(), report, plugin(report, extra));
+		return violationsAt('pkg/sub/Holder.hx', src, extra);
+	}
+
+	/** The findings for `src` written as the module `file`. */
+	private function violationsAt(file: String, src: String, extra: Array<{ file: String, source: String }>): Array<Violation> {
+		final report: Array<{ file: String, source: String }> = [{ file: file, source: src }];
+		return CheckFixture.violationsIn(valueRule(), report, plugin(report, extra));
 	}
 
 	private function applyFix(src: String, extra: Array<{ file: String, source: String }>): String {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/sub/Holder.hx', source: src }];
-		return CanonicalEdit.applyEdits(src, CheckFixture.fixRun(new ShortenTypeRef(), report, plugin(report, extra)).edits);
+		return CanonicalEdit.applyEdits(src, CheckFixture.fixRun(valueRule(), report, plugin(report, extra)).edits);
+	}
+
+	/** The rule with VALUE positions opted in, so the value-site pins exercise their gates. */
+	private static function valueRule(): ShortenTypeRef {
+		final rule: ShortenTypeRef = new ShortenTypeRef();
+		rule.setConfigResolver(_ -> LintConfig.parse('{"rules":{"shorten-type-ref":{"valuePositions":true}}}'));
+		return rule;
 	}
 
 }

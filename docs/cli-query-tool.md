@@ -717,6 +717,8 @@ Some languages let a module receive imports it does not spell: Haxe's per-direct
 
 **What the ops do with one.** An ambient source is an ordinary `.hx` file to every walker, so `importers` lists it, `rename --scope` rewrites the statement's last segment in it, and `move` repoints its path — each verified on a tree whose only importer of the moved type is an ambient source. The type-aware printer needs nothing added: `importMap` takes the file's path, so `shorten-type-ref` shortens through an ambient binding without adding an import, and declines to shorten a type whose simple name the chain binds to another declaration.
 
+**`shorten-type-ref`** (default ON for type positions) rewrites a dotted type reference to the shortest spelling that resolves to the same declaration here, and adds `import <path>;` for a path the file shortens at least `importMinUses` times (default 2) outside `#if` — only where nothing else can mean the simple name: no import or alias of it, no type of this module, of this or an enclosing package, of the root or a builtin, no type parameter, and no code byte anywhere in the file, `#if` branches included. A `#if` occurrence is rewritten only to a spelling that needs no fresh import, so one riding on the import a pass adds is taken by the next pass. A static-access chain in a VALUE position is skipped unless the project sets `"valuePositions": true`.
+
 ### One reading of a simple type name — `TypeNameBinding`
 
 What a bare type name written in a file binds to has ONE implementation: `TypeNameBinding`, owned by the index's
