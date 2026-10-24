@@ -86,6 +86,11 @@ final class PinsGrammarAndCli {
 		'unit.cli.LintRangeCliTest#testAnOddCommentOnlyWriteAcrossTwoRegionsAppliesNoFix :: control :: M-POST-WRITE-FIX-HULL',
 		'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
 		'unit.cli.LintRangeCliTest#testWriteFixLintsEachChangedRegionAndNotTheCodeBetween :: control :: M-POST-WRITE-FIX-HULL',
+		'unit.cli.ModuleMoveCliTest#testADeclaredTextRootThatDoesNotExistRefuses :: control :: M-MODMOVE-CLI-TEXT-ROOT-MISSING',
+		'unit.cli.ModuleMoveCliTest#testARefusalWritesNothing :: guard :: ',
+		'unit.cli.ModuleMoveCliTest#testTheWriteRelocatesTheModuleRewritesItsReadersAndDeletesTheOriginal :: control :: '
+			+ 'M-MODMOVE-CLI-ORIGINAL-KEPT',
+		'unit.cli.ModuleMoveCliTest#testVerifyPutsEveryFileBackWhenTheMoveBreaksTheBuild :: control :: M-MODMOVE-CLI-ROLLBACK-OFF,M-MODMOVE-CLI-DIR-LEFT',
 		'unit.cli.MoveElementsCliTest#testTheDryRunPrintsTheDigestAndWritesNothing :: control :: M-MOVE-ELEMENTS-DRY-RUN-UNROUTED',
 		'unit.cli.ResolutionScopeCliTest#testCrossingSuperNeedsRootsThatMatch :: control :: M-FIAD-ROOTS-MATCH-IGNORED',
 		'unit.core.BreakCommitsReplacedTest#testAnUntouchedSiblingIsShared :: control :: M-OFFER-COPIES-WHOLE',

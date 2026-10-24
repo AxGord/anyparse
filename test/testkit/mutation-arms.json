@@ -30954,6 +30954,230 @@
 			"note": "a grantee whose class a build macro builds no longer counts as reaching what the macro emits"
 		},
 		{
+			"name": "M-MODMOVE-PACKAGE-KEPT",
+			"type": "anyparse.query.ModuleMove",
+			"method": "packageEdit",
+			"find": "text: newPackage",
+			"replace": "text: mover.oldPackage",
+			"note": "a relocated module keeps its old package statement"
+		},
+		{
+			"name": "M-MODMOVE-TOKENS-NONE",
+			"type": "anyparse.query.ModulePathTokens",
+			"method": "edits",
+			"force": "[]",
+			"note": "no spelling of a relocated module path is rewritten"
+		},
+		{
+			"name": "M-MODMOVE-DOTTED-UNBOUNDED",
+			"type": "anyparse.query.ModulePathTokens",
+			"method": "occurrences",
+			"find": "if (after >= 0 && SourceText.isIdentChar(after)) continue;",
+			"replace": "",
+			"note": "a module path is matched as a prefix of a longer name, so pkg.AB follows pkg.A"
+		},
+		{
+			"name": "M-MODMOVE-TEXT-FILES-SKIPPED",
+			"type": "anyparse.query.ModuleMove",
+			"method": "changesOf",
+			"find": "final text: String = ModulePathTokens.rewrite(e.source, renames);",
+			"replace": "final text: String = e.source;",
+			"note": "declared text files and registries keep the old module path"
+		},
+		{
+			"name": "M-MODMOVE-REPAIR-OFF",
+			"type": "anyparse.query.ModuleMove",
+			"method": "repairBindings",
+			"force": "Right(true)",
+			"note": "no name is compared before and after, so no import is written and no drift refuses"
+		},
+		{
+			"name": "M-MODMOVE-DRIFTS-NONE",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "drifts",
+			"force": "[]",
+			"note": "every name reads as keeping its meaning"
+		},
+		{
+			"name": "M-MODMOVE-AT-IGNORED",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "meaning",
+			"find": "tierOf(name, info, at)",
+			"replace": "tierOf(name, info)",
+			"note": "a name is resolved with no use site, so a statement inside a conditional region never decides it"
+		},
+		{
+			"name": "M-MODMOVE-RUNS-UNSORTED",
+			"type": "anyparse.query.ModuleMove",
+			"method": "resortedRuns",
+			"force": "[]",
+			"note": "a sorted import run is rewritten in place and left unsorted"
+		},
+		{
+			"name": "M-MODMOVE-GLOB-BLIND",
+			"type": "anyparse.query.TypePathRegistries",
+			"method": "globRefusals",
+			"force": "[]",
+			"note": "a registry glob whose reach the move flips is not refused"
+		},
+		{
+			"name": "M-MODMOVE-LIST-UNSORTED",
+			"type": "anyparse.query.DeclaredSortedLists",
+			"method": "resort",
+			"force": "Right([])",
+			"note": "a declared sorted list keeps a rewritten entry where it was"
+		},
+		{
+			"name": "M-MODMOVE-LIST-ONE-PART",
+			"type": "anyparse.query.DeclaredSortedLists",
+			"method": "distribute",
+			"find": "for (i => bound in bounds) if (bound != null && compare(bound, e.content) <= 0) target = i;",
+			"replace": "for (i => bound in bounds) if (false) target = i;",
+			"note": "every entry is assigned to the first part, whatever range it falls in"
+		},
+		{
+			"name": "M-MODMOVE-MIRROR-OFF",
+			"type": "anyparse.query.ModuleMove",
+			"method": "withMirrors",
+			"force": "moves",
+			"note": "a relocated module leaves its mirrored test behind"
+		},
+		{
+			"name": "M-MODMOVE-COMPOSE-BLIND",
+			"type": "anyparse.query.ModulePathTokens",
+			"method": "stringsEndingWith",
+			"force": "[]",
+			"note": "a path composed from the old package at run time is not refused"
+		},
+		{
+			"name": "M-MODMOVE-SHADOW-BLIND",
+			"type": "anyparse.query.ModuleMove",
+			"method": "binderNames",
+			"force": "[]",
+			"note": "a qualified path whose head a local name shadows is rewritten as a module path"
+		},
+		{
+			"name": "M-MODMOVE-AMBIENT-DISK-ONLY",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "attachVirtualAmbient",
+			"find": "fi.ambientImports = groups;",
+			"replace": "",
+			"note": "a module not on disk keeps an empty ambient chain"
+		},
+		{
+			"name": "M-MODMOVE-SUBTYPE-KEPT",
+			"type": "anyparse.query.ModuleMove",
+			"method": "isSubTypeOf",
+			"force": "false",
+			"note": "a sub-type import the written module import makes redundant is kept"
+		},
+		{
+			"name": "M-MODMOVE-DEST-OVERWRITE",
+			"type": "anyparse.query.ModuleMove",
+			"method": "plan",
+			"find": "if (sourceOf.exists(m.to) || moves.count(o -> o.to == m.to) > 1) return Left('${m.to} already exists');",
+			"replace": "",
+			"note": "a relocation onto an existing module is not refused"
+		},
+		{
+			"name": "M-MODMOVE-CLI-ORIGINAL-KEPT",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "write",
+			"find": "for (r in removed) if (!CliIo.deletePath(r))",
+			"replace": "for (r in removed) if (false && !CliIo.deletePath(r))",
+			"note": "a written relocation leaves the original module in place"
+		},
+		{
+			"name": "M-MODMOVE-CLI-ROLLBACK-OFF",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "rollback",
+			"find": "CliIo.writeFiles(state.restore);",
+			"replace": "",
+			"note": "a move the build rejects is not put back"
+		},
+		{
+			"name": "M-MODMOVE-SORTED-GUARD-OFF",
+			"type": "anyparse.query.ModuleMove",
+			"method": "unsortedListRefusals",
+			"force": "[]",
+			"note": "an undeclared sorted list the rewrite unsorts is written unsorted"
+		},
+		{
+			"name": "M-MODMOVE-HOLES-MASKED",
+			"type": "anyparse.query.ModulePathTokens",
+			"method": "inertSpans",
+			"force": "[for (r in plugin.lexicalRegions(source)) new Span(r.from, r.to)]",
+			"note": "a name inside an interpolation hole is masked with its string and never probed"
+		},
+		{
+			"name": "M-MODMOVE-USING-GAIN-BLIND",
+			"type": "anyparse.query.ModuleMove",
+			"method": "usingRefusals",
+			"force": "[]",
+			"note": "a using the new ambient chain adds is not refused, and a lost one is not carried"
+		},
+		{
+			"name": "M-MODMOVE-USING-LOST-DROPPED",
+			"type": "anyparse.query.ModuleMove",
+			"method": "usingRefusals",
+			"find": "lost[target] = missing;",
+			"replace": "{}",
+			"note": "a using the module's old ambient chain gave is not carried into it"
+		},
+		{
+			"name": "M-MODMOVE-GRANT-BLIND",
+			"type": "anyparse.query.ModuleMove",
+			"method": "grantRefusals",
+			"force": "[]",
+			"note": "a package-level private-access grant the module leaves is not refused"
+		},
+		{
+			"name": "M-MODMOVE-PACKAGE-VALUE-BLIND",
+			"type": "anyparse.query.ModulePathTokens",
+			"method": "stringsNamingPackage",
+			"force": "[]",
+			"note": "a package name held as a string value is not refused"
+		},
+		{
+			"name": "M-MODMOVE-DECL-UNKNOWN-KEY",
+			"type": "anyparse.query.MoveDeclaration",
+			"method": "unknownKey",
+			"force": "null",
+			"note": "a misspelt key of the move declaration is dropped in silence"
+		},
+		{
+			"name": "M-MODMOVE-CLI-DIR-LEFT",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "rollback",
+			"find": "for (d in state.dirs)",
+			"replace": "for (d in ([]: Array<String>))",
+			"note": "a rolled-back move leaves the directory its write created"
+		},
+		{
+			"name": "M-MODMOVE-CLI-TEXT-ROOT-MISSING",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "textFilesOf",
+			"find": "if (!exists(entry))",
+			"replace": "if (false)",
+			"note": "a declared text root that does not exist is skipped in silence"
+		},
+		{
+			"name": "M-MODMOVE-USING-ORDER-BLIND",
+			"type": "anyparse.query.ModuleMove",
+			"method": "usingRefusals",
+			"find": "!= before.join(",
+			"replace": "== before.join(",
+			"note": "a lost using is carried exactly when its carried place would reorder the using list, refused when it would not"
+		},
+		{
+			"name": "M-MODMOVE-USING-CARRY-APPENDED",
+			"type": "anyparse.query.ModuleMove",
+			"method": "withImports",
+			"find": "if (own == null || own.length == 0) {",
+			"replace": "if (own == null || own.length >= 0) {",
+			"note": "a carried using is written after the module's own instead of above them, so it outranks them"
+		},
+		{
 			"name": "M-PRINTER-PACKAGE-CHAIN-BLIND",
 			"type": "anyparse.query.TypeRefPrinter",
 			"method": "packageChainVerdict",

@@ -1222,6 +1222,11 @@ final class HaxeRefShape {
 		];
 		table.interfaceDeclKinds = ['InterfaceDecl'];
 		table.packageDeclKind = 'PackageDecl';
+		table.grantsPrivateAccessMetaName = '@:allow';
+		table.importLineTemplate = 'import %;';
+		table.usingLineTemplate = 'using %;';
+		table.typeNamesUpperInitial = true;
+		table.packageSegmentPattern = '^[a-z_][A-Za-z0-9_]*$';
 		table.publicModifierKind = 'Public';
 		table.classDeclKinds = ['ClassDecl', 'AbstractClassDecl'];
 		table.typeValueTypeNames = [

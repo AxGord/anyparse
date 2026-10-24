@@ -49,7 +49,7 @@ final class MoveCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runMove(args);
+		return ModuleMoveCli.isModuleForm(args) ? ModuleMoveCli.run(args) : runMove(args);
 	}
 
 	public function usage(): Void {
@@ -220,6 +220,23 @@ final class MoveCommand implements CliCommand {
 		CliIo.sysPrint('any scope file that does not parse, or any rewritten file that fails to\n');
 		CliIo.sysPrint('re-parse — naming that file and the line and column the parse stopped at.\n');
 		CliIo.sysPrint('The write is atomic (all changed files or none).\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Module form: apq move <file>... --to <dir> [<file>... --to <dir>]... [--scope <dir>]...\n');
+		CliIo.sysPrint('  [--write] [--verify] [--no-mirror]\n');
+		CliIo.sysPrint('Relocates WHOLE modules (every type, module-private ones included) to the\n');
+		CliIo.sysPrint('package <dir> spells under the same source root. Every spelling of a moved\n');
+		CliIo.sysPrint('module path is rewritten as a bounded token — imports, `using`, access\n');
+		CliIo.sysPrint('grants, qualified code, strings, comments — and so are the texts, type-path\n');
+		CliIo.sysPrint('registries and sorted lists the project declares in the "move" section of\n');
+		CliIo.sysPrint('its apqlint.json, which also names the default --scope and the test mirror\n');
+		CliIo.sysPrint('(a moved module\'s own test moves with it unless --no-mirror). Every simple\n');
+		CliIo.sysPrint('type name a moved module or a reader writes must mean the same declaration\n');
+		CliIo.sysPrint('after the move: an import restoring it is added, and a name nothing restores\n');
+		CliIo.sysPrint('refuses the move. Refused too: a path composed from the old package at run\n');
+		CliIo.sysPrint('time, a registry glob whose reach would change, a qualified path whose head\n');
+		CliIo.sysPrint('a local name shadows, an existing destination. Every reason is listed and\n');
+		CliIo.sysPrint('nothing is written. --verify typechecks every configured compilerOracle\n');
+		CliIo.sysPrint('build before and after the write and puts every file back on a failure.\n');
 	}
 
 	private static function parseMoveArgs(args: Array<String>): MoveOpts {
