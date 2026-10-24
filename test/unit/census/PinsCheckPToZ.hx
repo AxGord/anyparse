@@ -270,7 +270,8 @@ final class PinsCheckPToZ {
 			+ 'M-ELEMENT-LOOP-TYPE-CALLEE,M-ELEMENT-LOOP-NEW-EXPR',
 		'unit.check.PreferValueLoopCheckTest#testThisQualifiedCollectionNotFlagged :: control :: M-ELEMENT-LOOP-REBIND',
 		'unit.check.PrivateAccessFormParityTest#testAConstructorReachedFromAnotherFileStays :: guard :: ',
-		'unit.check.PrivateAccessFormParityTest#testAMacroExpandedUnderAPrivilegeReachesWhatItSpells :: control :: M-REIFIED-NAME-UNREAD',
+		'unit.check.PrivateAccessFormParityTest#testAMacroExpandedUnderAPrivilegeReachesWhatItSpells :: control :: '
+			+ 'M-REIFIED-NAME-UNREAD,M-BUILT-GRANTEE-UNSEEN',
 		'unit.check.PrivateAccessFormParityTest#testAPackageGrantReachesThroughAnUnindexedSuperclass :: control :: '
 			+ 'M-UNRESOLVED-SUPER-PACKAGE-GRANT',
 		'unit.check.PrivateAccessFormParityTest#testAQualifiedConstructionKeepsThePrivateConstructor :: control :: '
@@ -279,7 +280,8 @@ final class PinsCheckPToZ {
 			+ 'M-TRIVIAL-GETTER-GRANTEE-UNSEEN',
 		'unit.check.PrivateAccessFormParityTest#testASubclassCallingAnAccessorKeepsTheProperty :: control :: '
 			+ 'M-TRIVIAL-GETTER-ACCESSOR-UNSEEN',
-		'unit.check.PrivateAccessFormParityTest#testAWaivedConstructionSpellsTheConstructor :: control :: M-WAIVER-CONSTRUCTION-UNSPELLED',
+		'unit.check.PrivateAccessFormParityTest#testAWaivedConstructionSpellsTheConstructor :: control :: '
+			+ 'M-WAIVER-CONSTRUCTION-UNSPELLED,M-CTOR-PRIVILEGE-UNASKED',
 		'unit.check.PrivateAccessFormParityTest#testAWaiverReachesOnlyTheExpressionItAnnotates :: control :: M-WAIVER-WHOLE-FILE',
 		'unit.check.PrivateAccessFormParityTest#testEveryFormOfThePrivilegeStopsWhatTheTypeGrantStops :: control :: '
 			+ 'M-ACCESS-GRANT-LAST-SEGMENT,M-PRIVATE-ACCESS-UNSEEN,M-ANCESTOR-GRANT-UNSEEN',

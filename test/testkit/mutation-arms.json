@@ -30867,6 +30867,22 @@
 			"find": "while (j >= 0 && source.fastCodeAt(j) == '.'.code) {",
 			"replace": "while (false) {",
 			"note": "a qualified `new pkg.Type()` is not a construction of `Type`, so a private constructor only built that way is deleted"
+		},
+		{
+			"name": "M-CTOR-PRIVILEGE-UNASKED",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "run",
+			"find": "&& !scopeIndex.text.privilegeMayReference(c.className, plugin.refShape().constructorName ?? 'new')",
+			"replace": "&& true",
+			"note": "the constructor arm stops asking what a privilege reaches, so a private constructor built through a waived alias or referenced as `A.new` is deleted"
+		},
+		{
+			"name": "M-BUILT-GRANTEE-UNSEEN",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "privilegedFileSpells",
+			"find": "|| fi.types.exists(t -> _traits.buildClosureSpells(t.name, file, name));",
+			"replace": ";",
+			"note": "a grantee whose class a build macro builds no longer counts as reaching what the macro emits"
 		}
 	]
 }

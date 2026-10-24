@@ -401,7 +401,7 @@ final class SymbolIndexBuilder {
 			ambientImports: [],
 			ambientImportsBounded: true,
 			accessGrants: collectAccessGrants(tree, shape),
-			reifications: collectReifications(tree, shape),
+			reifications: collectReifications(tree, shape, types, basename),
 			moduleFields: moduleFieldsOf(tree, shape)
 		};
 	}
@@ -1156,38 +1156,36 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * Per named function of `tree`, every name spelled under one of its reification subtrees (`RefShape.opaqueKinds`); empty
-	 * for a grammar with none.
+	 * Per type of `tree` (the innermost declaration of `types` enclosing it, else the module `basename`), every name spelled
+	 * under one of its reification subtrees (`RefShape.opaqueKinds`); empty for a grammar with none.
 	 */
-	private static function collectReifications(tree: QueryNode, shape: RefShape): Array<Reification> {
+	private static function collectReifications(
+		tree: QueryNode, shape: RefShape, types: Array<TypeDeclInfo>, basename: String
+	): Array<Reification> {
 		final kinds: Array<String> = shape.opaqueKinds ?? [];
-		final byFunction: Map<String, Map<String, Bool>> = [];
-		if (kinds.length > 0) reificationWalk(tree, kinds, shape.functionKinds ?? [], null, byFunction);
-		final out: Array<Reification> = [];
-		for (fn => names in byFunction) {
-			final spelled: Array<String> = [for (name in names.keys()) name];
-			spelled.sort(Reflect.compare);
-			out.push({ functionName: fn, names: spelled });
-		}
-		out.sort((a, b) -> Reflect.compare(a.functionName, b.functionName));
-		return out;
-	}
-
-	/** Recursive worker of `collectReifications`: `fn` is the innermost named function enclosing `node`. */
-	private static function reificationWalk(
-		node: QueryNode, kinds: Array<String>, functionKinds: Array<String>, fn: Null<String>, out: Map<String, Map<String, Bool>>
-	): Void {
-		if (fn != null && kinds.contains(node.kind)) {
-			final names: Map<String, Bool> = out[fn] ?? [];
+		final byType: Map<String, Map<String, Bool>> = [];
+		if (kinds.length > 0) collectInto(tree, node -> {
+			final span: Null<Span> = node.span;
+			if (!kinds.contains(node.kind) || span == null) return;
+			var owner: Null<TypeDeclInfo> = null;
+			for (t in types) if (t.span.from <= span.from && span.to <= t.span.to && (owner == null || t.span.from >= owner.span.from))
+				owner = t;
+			final typeName: String = owner == null ? basename : owner.name;
+			final names: Map<String, Bool> = byType[typeName] ?? [];
 			collectInto(node, inner -> {
 				final name: Null<String> = inner.name;
 				if (name != null) names[name] = true;
 			});
-			out[fn] = names;
-			return;
+			byType[typeName] = names;
+		});
+		final out: Array<Reification> = [];
+		for (typeName => names in byType) {
+			final spelled: Array<String> = [for (name in names.keys()) name];
+			spelled.sort(Reflect.compare);
+			out.push({ typeName: typeName, names: spelled });
 		}
-		final inner: Null<String> = functionKinds.contains(node.kind) && node.name != null ? node.name : fn;
-		for (child in node.children) reificationWalk(child, kinds, functionKinds, inner, out);
+		out.sort((a, b) -> Reflect.compare(a.typeName, b.typeName));
+		return out;
 	}
 
 }

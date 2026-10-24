@@ -224,10 +224,14 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		// chain (`SubtypeGraph.subtypesOf`), so this half is the weaker of the two and the residue is
 		// exact: an UNREADABLE file that extends an alias of the owner. What is left needs the
 		// skipped file's own supertype clause, which is precisely what not parsing it withholds.
+		// A privilege reaching the class is asked by the constructor's member name: a waived
+		// `new M()` through an alias, a waived `C.new` reference and a grantee's construction
+		// spell no `new C` the raw scan can read.
 		for (c in ctorCandidates) if (
 			!index.text.skippedMayReference(c.className) && !index.subtypes.hasSubtype(c.className, c.file)
 			&& !isInstantiatedAnywhere(c.className, files) && !mentionedInStrings(c.className, reflected)
 			&& !usedAsValue(c.className, files, plugin, index) && !isAliased(c.className, scopeIndex)
+			&& !scopeIndex.text.privilegeMayReference(c.className, plugin.refShape().constructorName ?? 'new')
 		) violations.push({
 			file: c.file,
 			span: c.span,

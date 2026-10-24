@@ -629,9 +629,9 @@ typedef FileInfo = {
 	var accessGrants: Array<String>;
 
 	/**
-	 * Per function holding a reification (`RefShape.opaqueKinds`, Haxe `macro …`), every name the reification spells: code
-	 * that function emits into a caller, where it is access-checked as the caller's own. A name computed into the tree
-	 * (`$i{…}`) is not spelled, so not here.
+	 * Per type holding a reification (`RefShape.opaqueKinds`, Haxe `macro …`), every name the reification spells: code its
+	 * macros emit into a caller — directly, through a helper, a chain or a build macro — where it is access-checked as the
+	 * caller's own. A name computed into the tree (`$i{…}`) is not spelled, so not here.
 	 */
 	var reifications: Array<Reification>;
 
@@ -644,9 +644,9 @@ typedef FileInfo = {
 	var moduleFields: Array<ModuleField>;
 }
 
-/** The names one function's reifications spell (`FileInfo.reifications`). */
+/** The names one type's reifications spell (`FileInfo.reifications`). */
 typedef Reification = {
-	final functionName: String;
+	final typeName: String;
 	final names: Array<String>;
 }
 
@@ -805,8 +805,8 @@ final class SymbolIndex {
 			files, refs, subtypes, plugin.typeSyntax, plugin.refShape(), new BuildBranches(plugin, file -> sources[file])
 		);
 		paths = new MemberPathWalk(files, refs, typing.members, plugin.typeSyntax);
-		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty, refs);
 		traits = new TypeTraits(files, sources, refs);
+		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty, refs, traits);
 		final shape: RefShape = plugin.refShape();
 		values = new ValueNameBinding(
 			refs, typing.ancestors, shape.execution?.enumConstructorKinds ?? [],

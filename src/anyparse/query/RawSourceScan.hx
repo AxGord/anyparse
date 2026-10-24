@@ -34,7 +34,7 @@ final class RawSourceScan {
 	/** The access path (`pkg.Type`, a sub-type included) of every indexed declaration, by the type's simple name. */
 	private final _typePathsByName: Map<String, Array<String>> = [];
 
-	/** Per name a PROJECT reification spells, the functions whose reifications spell it (`FileInfo.reifications`). */
+	/** Per name a PROJECT reification spells, the types whose reifications spell it (`FileInfo.reifications`). */
 	private final _reifiedBy: Map<String, Array<String>> = [];
 
 	/** `grantTargetsOf`'s answer per type name once asked. */
@@ -68,6 +68,9 @@ final class RawSourceScan {
 	/** The owning index's declaration layer, walked for the supertypes a grant may name (`grantTargetsOf`). */
 	private final _refs: TypeRefIndex;
 
+	/** The owning index's trait layer, asked whether a grantee's type is built by a macro (`privilegedFileSpells`). */
+	private final _traits: TypeTraits;
+
 	/** Every retained source writing the grammar's privacy waiver in code (`waiverFilesOf`), sorted. */
 	private final _waiverFiles: Array<String>;
 
@@ -80,9 +83,10 @@ final class RawSourceScan {
 	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
 	public function new(
 		files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>,
-		refs: TypeRefIndex
+		refs: TypeRefIndex, traits: TypeTraits
 	) {
 		_refs = refs;
+		_traits = traits;
 		_files = files;
 		_skipped = skipped;
 		_sources = sources;
@@ -91,7 +95,7 @@ final class RawSourceScan {
 		_waiverFiles = waiverFilesOf(sources, plugin, thirdParty);
 		for (fi in files) if (!thirdParty.exists(fi.file)) for (r in fi.reifications) for (name in r.names) {
 			final fns: Array<String> = _reifiedBy[name] ?? [];
-			if (!fns.contains(r.functionName)) fns.push(r.functionName);
+			if (!fns.contains(r.typeName)) fns.push(r.typeName);
 			_reifiedBy[name] = fns;
 		}
 		for (fi in files) for (t in fi.types) {
@@ -123,9 +127,10 @@ final class RawSourceScan {
 	 * retained. The precise counterpart of `hasAccessGrant`, for a caller that can say what
 	 * it actually fears from a grantee rather than vetoing on the grant's existence.
 	 *
-	 * A member a project reification spells answers true when a privileged file spells the function emitting it — where
-	 * a waiver annotates, for a waiver file: a macro's output is access-checked where it lands, so a privileged caller
-	 * reaches it without spelling it. A name the macro computes (`$i{…}`) is out of reach.
+	 * A member a project reification spells answers true when a privileged file spells the type holding that reification
+	 * (where a waiver annotates, for a waiver file), or grants itself access from a type a build macro builds: a macro's
+	 * output is access-checked where it lands, so a privileged caller reaches it without spelling it — through a helper,
+	 * a chain of macros or `@:build` / `@:autoBuild` alike. A name the macro computes (`$i{…}`) is out of reach.
 	 */
 	public function accessGrantMatches(typeName: String, member: String, matches: (source:String) -> Bool): Bool {
 		for (file in privilegedFiles(typeName, member)) {
@@ -162,14 +167,6 @@ final class RawSourceScan {
 		final targets: Array<GrantTarget> = grantTargetsOf(typeName);
 		final reachable: Array<GrantTarget> = _thirdParty.exists(fi.file) ? [targets[0]] : targets;
 		return fi.accessGrants.exists(path -> reachable.exists(t -> grantReaches(path, t)));
-	}
-
-	/**
-	 * Whether a file carrying an expression-level privacy waiver (`waiverFilesOf`) spells `name` in code — the per-NAME
-	 * question a waiver allows, since it names no type. A waiver file whose source was not retained answers true.
-	 */
-	public function waiverMayReference(name: String): Bool {
-		return _waiverFiles.exists(file -> waiverFileMayReference(file, name));
 	}
 
 	/**
@@ -398,14 +395,17 @@ final class RawSourceScan {
 	}
 
 	/**
-	 * Whether the privileged `file` spells `name` where its privilege reaches: inside what a waiver annotates for a waiver
-	 * file, anywhere in the code of a file granting itself access.
+	 * Whether the privileged `file` reaches what the type `name` emits: a waiver file spells it inside what the waiver annotates,
+	 * a file granting itself access spells it anywhere in its code, or declares a type whose supertype closure carries a build
+	 * macro spelling it (`@:autoBuild(Macros.build())`).
 	 */
 	private function privilegedFileSpells(file: String, name: String): Bool {
 		if (_waiverFiles.contains(file) && waiverFileMayReference(file, name)) return true;
 		final fi: Null<FileInfo> = _files.find(f -> f.file == file);
+		if (fi == null || fi.accessGrants.length == 0) return false;
 		final src: Null<String> = _sources[file];
-		return fi != null && fi.accessGrants.length > 0 && (src == null || OccurrenceScan.referencedInRange(src, name, 0, src.length, []));
+		return src == null || OccurrenceScan.referencedInRange(src, name, 0, src.length, [])
+			|| fi.types.exists(t -> _traits.buildClosureSpells(t.name, file, name));
 	}
 
 	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */

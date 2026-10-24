@@ -268,19 +268,27 @@ class PrivateAccessFormParityTest extends Test {
 	}
 
 	/**
-	 * A waiver around `new A()` reaches `A`'s private constructor though it never writes the member name: the index answers
-	 * the constructor's name as waived there, and only there.
+	 * A private constructor another file reaches through a waiver without writing `new A` — an aliased `new M<Int>()`, a `A.new`
+	 * reference — is never called unused; the same file with no construction leaves it reported (the control).
 	 */
 	@:pin('control')
 	@:killer('M-WAIVER-CONSTRUCTION-UNSPELLED')
+	@:killer('M-CTOR-PRIVILEGE-UNASKED')
 	public function testAWaivedConstructionSpellsTheConstructor(): Void {
-		final decl: String = 'package pkg;\n\nclass A {\n\n\tprivate function new() {}\n\n}\n';
-		for (waived in [true, false]) {
-			final make: String = waived ? '@:privateAccess new A()' : 'new A()';
-			final reacher: String = 'package other;\n\nimport pkg.A;\n\nclass B {\n\n\tpublic static function reach(): Void {\n'
-				+ '\t\tfinal a: A = $make;\n\t\t@:privateAccess trace(a);\n\t}\n\n}\n';
+		final decl: String = 'package pkg;\n\nclass A<T> {\n\n\tprivate function new() {}\n\n\tpublic static function make(): A<Int> {\n'
+			+ '\t\treturn null;\n\t}\n\n}\n';
+		final shapes: Map<String, String> = [
+			'alias' => 'final a: Null<M<Int>> = @:privateAccess new M<Int>();\n\t\treturn a != null;',
+			'reference' => 'final f = @:privateAccess pkg.A.new;\n\t\treturn f != null;',
+			'none' => 'return M.make() != null;'
+		];
+		for (shape => body in shapes) {
+			final reacher: String = 'package other;\n\nimport pkg.A as M;\n\nclass B {\n\n\tpublic static function reach(): Bool {\n'
+				+ '\t\t$body\n\t}\n\n\tpublic static function waived(): Void {\n\t\t@:privateAccess trace(0);\n\t}\n\n}\n';
 			final files: Array<SourceFile> = [{ file: DECL_FILE, source: decl }, { file: REACH_FILE, source: reacher }];
-			Assert.equals(waived, CheckFixture.index(files, scoped(files)).text.waiverMayReference('new'), 'waived=$waived');
+			final found: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files, scoped(files))
+				.filter(v -> v.file == DECL_FILE);
+			Assert.equals(shape == 'none' ? 1 : 0, found.length, '$shape: ${[for (v in found) v.message]}');
 		}
 	}
 
@@ -302,24 +310,38 @@ class PrivateAccessFormParityTest extends Test {
 	}
 
 	/**
-	 * A macro's output is access-checked where it lands: a reification spelling the member, expanded in a file that holds a
-	 * superclass grant or wraps the call in a waiver, reaches it though that file never spells it.
+	 * A macro's output is access-checked where it lands: a reification spelling the member — in a helper of the macro the
+	 * privileged file calls, or in a build macro the privileged class inherits through `@:autoBuild` — reaches it though the
+	 * privileged file never spells it.
 	 */
 	@:pin('control')
 	@:killer('M-REIFIED-NAME-UNREAD')
+	@:killer('M-BUILT-GRANTEE-UNSEEN')
 	public function testAMacroExpandedUnderAPrivilegeReachesWhatItSpells(): Void {
 		final decl: String = extended(A_UNUSED);
-		final macros: String = 'package tools;\n\nimport haxe.macro.Expr;\n\nclass Macros {\n\n'
-			+ '\tpublic static macro function peek(e: Expr): Expr {\n\t\treturn macro $$e._reached;\n\t}\n\n}\n';
-		for (form in ['ancestor', 'expression']) {
-			final meta: String = form == 'ancestor' ? '@:access(base.Base)\n' : '';
-			final call: String = form == 'ancestor' ? 'tools.Macros.peek(a)' : '@:privateAccess tools.Macros.peek(a)';
-			final reacher: String = 'package other;\n\nimport pkg.A;\n\n${meta}class B {\n\n\tpublic static function reach(a: A): Int {\n'
-				+ '\t\treturn $call;\n\t}\n\n}\n';
+		final helper: String = 'package tools;\n\nimport haxe.macro.Expr;\n\nclass Macros {\n\n'
+			+ '\tpublic static macro function peek(e: Expr): Expr {\n\t\treturn build(e);\n\t}\n\n'
+			+ '\tstatic function build(e: Expr): Expr {\n\t\treturn macro $$e._reached;\n\t}\n\n}\n';
+		final builder: String = 'package tools;\n\nimport haxe.macro.Expr;\n\nclass Builder {\n\n'
+			+ '\tpublic static function build(): Array<Field> {\n\t\treturn [macro class X {\n\t\t\tfunction read(a: pkg.A) {\n'
+			+ '\t\t\t\treturn a._reached;\n\t\t\t}\n\t\t}].concat([]).map(c -> c.fields[0]);\n\t}\n\n}\n';
+		final auto: String = 'package tools;\n\n@:autoBuild(tools.Builder.build())\ninterface Auto {}\n';
+		for (form in ['ancestor', 'expression', 'autoBuild']) {
+			final meta: String = form == 'expression' ? '' : '@:access(base.Base)\n';
+			final call: String = switch form {
+				case 'ancestor': 'tools.Macros.peek(a)';
+				case 'expression': '@:privateAccess tools.Macros.peek(a)';
+				case _: '0';
+			}
+			final implementsClause: String = form == 'autoBuild' ? ' implements tools.Auto' : '';
+			final reacher: String = 'package other;\n\nimport pkg.A;\n\n${meta}class B$implementsClause {\n\n'
+				+ '\tpublic static function reach(a: A): Int {\n\t\treturn $call;\n\t}\n\n}\n';
 			final files: Array<SourceFile> = [
 				{ file: BASE_FILE, source: BASE },
 				{ file: DECL_FILE, source: decl },
-				{ file: 'tools/Macros.hx', source: macros },
+				{ file: 'tools/Macros.hx', source: helper },
+				{ file: 'tools/Builder.hx', source: builder },
+				{ file: 'tools/Auto.hx', source: auto },
 				{ file: REACH_FILE, source: reacher }
 			];
 			assertUnusedPrivateKeepsReached(files, decl, form);
