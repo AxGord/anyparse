@@ -137,7 +137,7 @@ final class BackingFieldRefs {
 		final distinctive: Bool = isDistinctiveName(field);
 		final shape: RefShape = plugin.refShape();
 		final slices: Array<CrossFileEdits> = [];
-		for (file in affectedSubtypeFiles(owner, index)) {
+		for (file in affectedSubtypeFiles(owner, field, index)) {
 			final source: Null<String> = sourceByFile[file];
 			if (source == null) return null;
 			final src: String = source;
@@ -210,9 +210,10 @@ final class BackingFieldRefs {
 	}
 
 	/**
-	 * Every report file that may reference `owner`'s backing field through inheritance: the
-	 * declaring file of each TRANSITIVE subtype of `owner` (`SubtypeGraph.subtypeFiles`), plus
-	 * every file granting itself `@:access(owner)`. Deduped, in discovery order.
+	 * Every report file that may reference `owner`'s backing field `field`: the declaring file of
+	 * each TRANSITIVE subtype of `owner` (`SubtypeGraph.subtypeFiles`), plus every file a privilege
+	 * opens it to (`RawSourceScan.privilegedFiles` — an `@:access` grant naming the type, its package
+	 * or the member, or a `@:privateAccess` waiver spelling `field`). Deduped, in discovery order.
 	 *
 	 * The closure is the index's own subtype adjacency, not a `supertypes.contains(parent)` scan
 	 * of its own. Asking the same question a second way is what broke this: the private
@@ -224,9 +225,9 @@ final class BackingFieldRefs {
 	 * attributed through `isSubtype`, whose UPWARD walk cannot resolve the alias either, so the
 	 * completeness gate now refuses the collapse instead of half-applying it.
 	 */
-	private static function affectedSubtypeFiles(owner: String, index: SymbolIndex): Array<String> {
+	private static function affectedSubtypeFiles(owner: String, field: String, index: SymbolIndex): Array<String> {
 		final out: Array<String> = index.subtypes.subtypeFiles(owner);
-		for (fi in index.allFiles()) if (fi.accessGrants.contains(owner) && !out.contains(fi.file)) out.push(fi.file);
+		for (file in index.text.privilegedFiles(owner, field)) if (!out.contains(file)) out.push(file);
 		return out;
 	}
 

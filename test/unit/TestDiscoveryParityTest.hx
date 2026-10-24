@@ -343,6 +343,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.PreferTryExpressionReturnCheckTest',
 		'unit.check.PreferTypedThrowCheckTest',
 		'unit.check.PreferValueLoopCheckTest',
+		'unit.check.PrivateAccessFormParityTest',
 		'unit.check.ReachBuildsCacheTest',
 		'unit.check.ReachDefinesProbeTest',
 		'unit.check.RedundantAscriptionTest',

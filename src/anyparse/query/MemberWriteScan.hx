@@ -96,7 +96,8 @@ final class MemberWriteScan {
 				owner, name,
 				(subtype, src, span, redeclares) ->
 					redeclares || mayReference(src, name, span.from, span.to)
-					|| scopeOf(index, plugin).text.accessGrantMatches(subtype, granted -> mayReference(granted, name, 0, granted.length))
+					|| scopeOf(index, plugin)
+						.text.accessGrantMatches(subtype, name, granted -> mayReference(granted, name, 0, granted.length))
 			);
 	}
 
@@ -105,7 +106,7 @@ final class MemberWriteScan {
 	 * `accessGrantMayWrite`'s read counterpart (see `subtypeMayReference`).
 	 */
 	public static inline function accessGrantMayReference(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
-		return scopeOf(index, plugin).text.accessGrantMatches(owner, src -> mayReference(src, name, 0, src.length));
+		return scopeOf(index, plugin).text.accessGrantMatches(owner, name, src -> mayReference(src, name, 0, src.length));
 	}
 
 	/**
@@ -129,7 +130,7 @@ final class MemberWriteScan {
 	 * grantee source is scanned, unlike a subtype's declaration slice.
 	 */
 	public static inline function accessGrantMayWrite(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
-		return scopeOf(index, plugin).text.accessGrantMatches(owner, src -> mayWrite(src, name, 0, src.length));
+		return scopeOf(index, plugin).text.accessGrantMatches(owner, name, src -> mayWrite(src, name, 0, src.length));
 	}
 
 	/**
@@ -292,7 +293,7 @@ final class MemberWriteScan {
 	 */
 	private static function subtypeReach(scope: SymbolIndex, subtype: String, name: String, src: String, span: Span): Bool {
 		return mayWrite(src, name, span.from, span.to)
-			|| scope.text.accessGrantMatches(subtype, granted -> mayWrite(granted, name, 0, granted.length));
+			|| scope.text.accessGrantMatches(subtype, name, granted -> mayWrite(granted, name, 0, granted.length));
 	}
 
 	/**

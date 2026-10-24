@@ -693,6 +693,14 @@ final class RefShapeKindProjectionTest extends Test {
 				after: ' class C {}'
 			},
 			{
+				field: 'waivesPrivacyMetaName',
+				slot: '',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: 'class C { function f() { return ',
+				after: ' x; } }'
+			},
+			{
 				field: 'tuplePatternDelimiters',
 				slot: 'open',
 				kind: 'ArrayExpr',
