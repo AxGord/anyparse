@@ -1389,6 +1389,7 @@ final class PinsQueryAndRuntime {
 		'unit.query.OrphanContinuationTest#testRefusalNamesTheClauseTheEditMade :: control :: M-ORPHAN-NEW-CLAUSE-FIRST',
 		'unit.query.OrphanContinuationTest#testSeamShapesAreJustified :: control :: M-ORPHAN-BRANCH-OPEN-NEVER,'
 			+ 'M-ORPHAN-SEAM-END-NEVER,M-ORPHAN-SEAM-END-SELF-ONLY,M-ORPHAN-SEAM-END-UNTRIMMED,M-ORPHAN-NO-CASE-ARMS',
+		'unit.query.ParenGuardSliceTest#testABlockTerminatedLeftOperandGetsThePair :: control :: M-PARENGUARD-BLOCK-LEFT-OPERAND-BARE',
 		'unit.query.PatchDocRegionSliceTest#testDeletingADocumentedRegionRefused :: control :: M-PATCH-DOC-REGION-SIBLINGS-INNER',
 		'unit.query.PatchDocRegionSliceTest#testDeletingTheDocumentedOneAboveARegionRefused :: control :: M-PATCH-DOC-REGION-OWNER-UNREAD',
 		'unit.query.PatchDocRegionSliceTest#testDeletingTheLastDocumentedMemberAloneRefused :: control :: M-PATCH-DOC-ORPHAN-UNCHECKED',

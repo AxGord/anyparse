@@ -128,11 +128,16 @@ final class PreferIsOperator extends RuleBase implements VersionGated {
 		return { span: span, text: text, holes: [new Span(0, valueText.length)] };
 	}
 
-	/** Whether the receiver of `args` is the std's type and its type argument names a type (`receiverIsStd`, `namesType`). */
+	/**
+	 * Whether the receiver of `args` is the std's type, its type argument names a type (`receiverIsStd`, `namesType`), and its
+	 * value types alike without the call's expectation (`ExpectedTypes.unifiesUnderExpectation`): the operator types its
+	 * operand with nothing expected of it, where the call expects `Dynamic`.
+	 */
 	private static function proven(args: CallArgs, proof: Proof): Bool {
 		final index: Null<SymbolIndex> = proof.index();
 		final fi: Null<FileInfo> = index?.fileInfo(proof.file);
-		return index != null && fi != null && receiverIsStd(args.receiver, index, fi, proof) && namesType(args.type, index, fi, proof);
+		return index != null && fi != null && !index.typing.expectations.unifiesUnderExpectation(args.value)
+			&& receiverIsStd(args.receiver, index, fi, proof) && namesType(args.type, index, fi, proof);
 	}
 
 	/**

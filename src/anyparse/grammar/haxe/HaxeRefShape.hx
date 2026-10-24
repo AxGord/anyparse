@@ -366,6 +366,7 @@ final class HaxeRefShape {
 		table.openSwitchSubjectTypes = ['Int', 'UInt', 'Float', 'Single', 'String'];
 		table.parenKind = 'ParenExpr';
 		table.parenDelimiters = { open: '(', close: ')' };
+		table.exprEndingCloser = '}';
 		table.macroModifierKind = 'Macro';
 		table.boolLitKind = 'BoolLit';
 		table.nonNullBoolTypeName = 'Bool';

@@ -7,6 +7,8 @@ import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.StdResolver;
+import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -62,7 +64,7 @@ class PreferIsOperatorCheckTest extends Test {
 
 	/** A wildcard over a package the run does not read may bind `Std` to a module of it. */
 	@:pin('control')
-	@:killer('M-STDBIND-UNKNOWN-TRUSTED')
+	@:killer('M-INTERP-UNKNOWN-TIER-TRUSTED')
 	public function testAnUnreadStdImportIsLeftAlone(): Void {
 		final src: String = 'import lib.*;\n\n${TYPES}class C {\n\tfunction f(v:Dynamic):Bool {\n\t\treturn Std.isOfType(v, Base);\n\t}\n}';
 		Assert.equals(0, CheckFixture.violations(new PreferIsOperator(), src).length);
@@ -157,6 +159,65 @@ class PreferIsOperatorCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('prefer-is-operator');
 		Assert.notNull(check);
 		if (check != null) Assert.equals(RuleCategory.Types, check.category());
+	}
+
+	/** A value operand ending in a `switch` or block brace takes the pair Haxe needs before the operator. */
+	@:pin('control')
+	@:killer('M-PARENGUARD-BLOCK-LEFT-OPERAND-BARE')
+	public function testABlockTerminatedValueOperandGetsThePair(): Void {
+		final src: String = 'class C {\n\tfunction f(b:Int):Void {\n\t\ttrace(Std.isOfType({\n\t\t\tb;\n\t\t}, Int));\n'
+			+ '\t\ttrace(Std.isOfType(function() {\n\t\t\treturn b;\n\t\t}, Int));\n\t}\n}';
+		final fixed: String = fixedSource(src);
+		Assert.stringContains('trace(({', fixed);
+		Assert.stringContains('trace((function() {', fixed);
+	}
+
+	/**
+	 * The std is indexed in a normal run, so `Std` binds the std's declaration; a module `Std` of the file's own package or a
+	 * parent one outside the run still shadows it, and declines the site. With the shadow gone the site is flagged.
+	 */
+	@:pin('control')
+	@:killer('M-STDBIND-BOUND-DISK-SHADOW-UNREAD')
+	@:killer('M-STDBIND-DISK-SHADOW-UNREAD')
+	public function testAStdShadowBesideAnIndexedStdIsLeftAlone(): Void {
+		final stdDir: Null<String> = StdResolver.stdDir();
+		if (stdDir == null) {
+			Assert.pass();
+			return;
+		}
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		final root: String = '${tmp != null && tmp.length > 0 ? tmp : '/tmp'}/anyparse_isop_std_${Sys.time()}';
+		final std: { file: String, source: String } = {
+			file: Path.join([stdDir, 'Std.hx']),
+			source: 'extern class Std {\n\tpublic static function isOfType(v:Dynamic, t:Dynamic):Bool;\n}\n'
+		};
+		final use: String = 'class M {\n\tfunction f(v:Dynamic):Bool {\n\t\treturn Std.isOfType(v, M);\n\t}\n}';
+		final own: Array<{ file: String, source: String }> = [{ file: '$root/a/b/M.hx', source: 'package a.b;\n\n$use' }, std];
+		final parent: Array<{ file: String, source: String }> = [{ file: '$root/c/d/M.hx', source: 'package c.d;\n\n$use' }, std];
+		for (dir in ['$root/a/b', '$root/c/d']) FileSystem.createDirectory(dir);
+		File.saveContent('$root/a/b/Std.hx', 'package a.b;\n\nclass Std {}');
+		File.saveContent('$root/c/Std.hx', 'package c;\n\nclass Std {}');
+		Assert.equals(0, CheckFixture.violationsIn(new PreferIsOperator(), own).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferIsOperator(), parent).length);
+		FileSystem.deleteFile('$root/a/b/Std.hx');
+		FileSystem.deleteFile('$root/c/Std.hx');
+		Assert.equals(1, CheckFixture.violationsIn(new PreferIsOperator(), own).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferIsOperator(), parent).length);
+		for (dir in ['$root/a/b', '$root/a', '$root/c/d', '$root/c', root]) FileSystem.deleteDirectory(dir);
+	}
+
+	/**
+	 * The call types its value against `Dynamic`, the operator against nothing, so a value unifying its arms under that
+	 * expectation — a ternary, an `if`, a `switch`, a `try`, an array literal — may compile only as the call.
+	 */
+	@:pin('control')
+	@:killer('M-ISOP-EXPECTATION-UNIFIED')
+	public function testAValueUnifiedUnderTheExpectationIsLeftAlone(): Void {
+		final src: String = 'class C {\n\tfunction f(c:Int):Void {\n\t\ttrace(Std.isOfType(c == 1 ? \'x\' : 2, String));\n'
+			+ '\t\ttrace(Std.isOfType(if (c == 1) \'x\' else 2, String));\n\t\ttrace(Std.isOfType(switch c {\n\t\t\tcase 1: \'x\';\n'
+			+ '\t\t\tcase _: 2;\n\t\t}, String));\n\t\ttrace(Std.isOfType(try \'x\' catch (e:Dynamic) 2, String));\n'
+			+ '\t\ttrace(Std.isOfType([1, \'x\'], Array));\n\t\ttrace(Std.isOfType((c == 1 ? \'x\' : 2), String));\n\t}\n}';
+		Assert.equals(0, CheckFixture.violations(new PreferIsOperator(), src).length);
 	}
 
 	/** `src` as `C.hx` after the check's fix. */

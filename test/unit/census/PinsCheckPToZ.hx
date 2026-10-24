@@ -162,14 +162,19 @@ final class PinsCheckPToZ {
 		'unit.check.PreferInterpolationCheckTest#testTypesOutsideTheListNotFlagged :: control :: '
 			+ 'M-INTERP-ABSTRACT-KIND-UNCHECKED,M-INTERP-UNDERLYING-UNCHECKED',
 		'unit.check.PreferInterpolationCheckTest#testUnprovenCallArgumentNotFlagged :: control :: M-INTERP-NULLITY-SKIPPED',
+		'unit.check.PreferIsOperatorCheckTest#testABlockTerminatedValueOperandGetsThePair :: control :: '
+			+ 'M-PARENGUARD-BLOCK-LEFT-OPERAND-BARE',
 		'unit.check.PreferIsOperatorCheckTest#testACommentInTheCallIsLeftAlone :: control :: M-ISOP-COMMENT-DROPPED',
 		'unit.check.PreferIsOperatorCheckTest#testALocalNamedStdIsLeftAlone :: control :: M-ISOP-STD-VALUE',
 		'unit.check.PreferIsOperatorCheckTest#testAProjectOlderThanTheOperatorIsNotTold :: control :: M-ISOP-VERSION-UNGATED',
 		'unit.check.PreferIsOperatorCheckTest#testAProjectStdIsLeftAlone :: control :: M-STDBIND-PROJECT-DECL-TRUSTED',
+		'unit.check.PreferIsOperatorCheckTest#testAStdShadowBesideAnIndexedStdIsLeftAlone :: control :: '
+			+ 'M-STDBIND-BOUND-DISK-SHADOW-UNREAD,M-STDBIND-DISK-SHADOW-UNREAD',
 		'unit.check.PreferIsOperatorCheckTest#testAStdShadowOutsideTheLintSetIsLeftAlone :: control :: M-STDBIND-DISK-SHADOW-UNREAD',
 		'unit.check.PreferIsOperatorCheckTest#testAValueArgumentIsLeftAlone :: control :: M-ISOP-VALUE-ARGUMENT',
+		'unit.check.PreferIsOperatorCheckTest#testAValueUnifiedUnderTheExpectationIsLeftAlone :: control :: M-ISOP-EXPECTATION-UNIFIED',
 		'unit.check.PreferIsOperatorCheckTest#testAnImportReadOnlyByTheCallStaysUsed :: guard :: ',
-		'unit.check.PreferIsOperatorCheckTest#testAnUnreadStdImportIsLeftAlone :: control :: M-STDBIND-UNKNOWN-TRUSTED',
+		'unit.check.PreferIsOperatorCheckTest#testAnUnreadStdImportIsLeftAlone :: control :: M-INTERP-UNKNOWN-TIER-TRUSTED',
 		'unit.check.PreferIsOperatorCheckTest#testCallsNamingATypeBecomeTheOperator :: control :: M-ISOP-PARENS-DROPPED',
 		'unit.check.PreferIsOperatorCheckTest#testDottedSpellingsAreDeclinedAndNestingFlagsOnce :: guard :: ',
 		'unit.check.PreferIsOperatorCheckTest#testSyntaxPositionsAreSkipped :: control :: M-ISOP-SYNTAX-POSITION-REWRITTEN',

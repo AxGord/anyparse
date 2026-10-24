@@ -179,16 +179,19 @@ final class TypeNameBinding {
 
 	/**
 	 * Whether the simple type name `name`, written in `fi` at offset `at`, binds the std's own declaration of it — what a
-	 * rewrite asks before it trades a spelled std type for a construct the compiler resolves to the std directly: every
-	 * declaration the order binds is a std file, or it binds none the index holds and no module of the name sits on disk in
-	 * the file's package or a parent one (`shadowedOnDisk`). An `Unknown` order answers false.
+	 * rewrite asks before it trades a spelled std type for something the compiler resolves to the std directly: every
+	 * declaration the order binds is the std's (`isOwn`, by default a std file), or it binds none the index holds; and no module
+	 * of the name sits on disk in the file's package or a parent one (`shadowedOnDisk`), which a narrow run never indexed and
+	 * the compiler reads ahead of the std's, whichever tier answered. An `Unknown` order answers false.
 	 */
-	public function bindsStdDeclaration(name: String, fi: FileInfo, at: Int): Bool {
-		return switch tierOf(name, fi, at) {
-			case Bound(decls): decls.foreach(r -> StdResolver.isStdFile(r.file.file));
-			case Free: !shadowedOnDisk(name, fi.pkg, fi.file);
-			case Unknown: false;
+	public function bindsStdDeclaration(name: String, fi: FileInfo, at: Int, ?isOwn: (ResolvedType) -> Bool): Bool {
+		final own: (ResolvedType) -> Bool = isOwn ?? r -> StdResolver.isStdFile(r.file.file);
+		final decls: Array<ResolvedType> = switch tierOf(name, fi, at) {
+			case Bound(found): found;
+			case Free: [];
+			case Unknown: return false;
 		};
+		return decls.foreach(own) && !shadowedOnDisk(name, fi.pkg, fi.file);
 	}
 
 	/**

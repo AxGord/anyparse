@@ -351,14 +351,14 @@ final class PreferInterpolation extends RuleBase {
 		final span: Null<Span> = at.span;
 		if (index == null || fi == null || span == null || typeName.indexOf('.') >= 0) return false;
 		final basic: Array<String> = basicTypeNames(shape);
-		// `Free`: no tier binds the name but the compiler's own; `Unknown`: a tier may bind it to a declaration not indexed
+		if (basic.contains(typeName))
+			return index.refs.names.bindsStdDeclaration(typeName, fi, span.from, r -> isCoreDeclaration(r, shape));
+		// an enum abstract over a basic type: `Unknown` may bind the name to a declaration not indexed
 		final decls: Array<ResolvedType> = switch index.refs.names.tierOf(typeName, fi, span.from) {
 			case Bound(found): found;
 			case Free: [];
 			case Unknown: return false;
 		};
-		if (basic.contains(typeName))
-			return decls.foreach(r -> isCoreDeclaration(r, shape)) && !TypeNameBinding.shadowedOnDisk(typeName, fi.pkg, ctx.file);
 		final enumKind: Null<String> = shape.enumAbstractDeclKind;
 		return enumKind != null && decls.length > 0 && decls.foreach(r -> {
 			final t: TypeDeclInfo = r.type;

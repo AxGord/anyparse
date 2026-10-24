@@ -698,6 +698,14 @@ final class RefShape {
 	public var parenDelimiters: Null<{ open: String, close: String }>;
 
 	/**
+	 * The token that, ending an expression, ends it for good: the language continues no operator, member access, call or
+	 * index after it, though this grammar's parser reads the continuation (Haxe `}` — a block, a `switch`, a braced `if` /
+	 * `try` / loop or function body). `ParenGuard` gives a splice ending with it that something continues the pair the
+	 * compiler needs. Optional; unset means every expression may be continued.
+	 */
+	public var exprEndingCloser: Null<String>;
+
+	/**
 	 * The boolean-literal node kind — lets the `constant-condition` check
 	 * recognise a literal `true` / `false` used as a condition. Optional; unset
 	 * makes the check a no-op.
