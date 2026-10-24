@@ -9,10 +9,12 @@ import anyparse.query.StdResolver;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeNameBinding.Tier;
+import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypingService;
 import anyparse.runtime.Span;
+import haxe.io.Path;
+import sys.FileSystem;
 
 using Lambda;
 using StringTools;
@@ -356,7 +358,7 @@ final class PreferInterpolation extends RuleBase {
 			case Free: [];
 			case Unknown: return false;
 		};
-		if (basic.contains(typeName)) return decls.foreach(r -> isCoreDeclaration(r, shape));
+		if (basic.contains(typeName)) return decls.foreach(r -> isCoreDeclaration(r, shape)) && !shadowedOnDisk(typeName, fi.pkg, ctx.file);
 		final enumKind: Null<String> = shape.enumAbstractDeclKind;
 		return enumKind != null && decls.length > 0 && decls.foreach(r -> {
 			final t: TypeDeclInfo = r.type;
@@ -496,6 +498,25 @@ final class PreferInterpolation extends RuleBase {
 			stringFold: stringFold,
 			metaKinds: plugin.metaShape().metaKinds
 		};
+	}
+
+	/**
+	 * Whether a module named `typeName` may sit in the package of `file` or a parent one, where the compiler reads it ahead
+	 * of the std's toplevel type and where a run that did not read it cannot see it. A name the always-imported std module
+	 * declares (`TypeNameBinding.STD_TYPE_NAMES`) is bound before any package is asked. A file whose directory does not end
+	 * in its package's path places no source root, and counts as shadowed.
+	 */
+	private static function shadowedOnDisk(typeName: String, pkg: String, file: String): Bool {
+		if (TypeNameBinding.STD_TYPE_NAMES.contains(typeName)) return false;
+		final segments: Array<String> = pkg == '' ? [] : pkg.split('.');
+		final dirs: Array<String> = Path.normalize(Path.directory(file)).split('/');
+		final rootLength: Int = dirs.length - segments.length;
+		if (rootLength < 0 || dirs.slice(rootLength).join('/') != segments.join('/')) return true;
+		final root: String = dirs.slice(0, rootLength).join('/');
+		final moduleFile: String = '$typeName.${Path.extension(file)}';
+		return [for (depth in 0...segments.length + 1) depth].exists(depth ->
+			FileSystem.exists(Path.join([root].concat(segments.slice(0, depth)).concat([moduleFile])))
+		);
 	}
 
 }

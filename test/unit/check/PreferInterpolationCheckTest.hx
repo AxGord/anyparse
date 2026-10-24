@@ -6,6 +6,8 @@ import anyparse.check.PreferInterpolation;
 import anyparse.check.Severity;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.runtime.Span;
+import sys.FileSystem;
+import sys.io.File;
 
 using StringTools;
 
@@ -458,6 +460,33 @@ class PreferInterpolationCheckTest extends Test {
 			+ "\t\treturn a + 'B' + (cast b : Int);\n}\n\nclass C {\n\tfunction f():String {\n\t\tfinal v:Bool = 2;\n"
 			+ '\t\treturn Std.string(v);\n\t}\n}';
 		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * `String` is no `StdTypes` name, so a module `String` in the file's own package or a parent one shadows the std's, and
+	 * the run that lints only the reading file holds no declaration to see it by. Such a shadow on disk declines the site;
+	 * the same file with the shadow gone is flagged, so the 0 is the shadow's.
+	 */
+	@:pin('control')
+	@:killer('M-INTERP-PACKAGE-SHADOW-UNREAD')
+	public function testPackageShadowOutsideTheLintSetNotFlagged(): Void {
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		final root: String = '${tmp != null && tmp.length > 0 ? tmp : '/tmp'}/anyparse_interp_shadow_${Sys.time()}';
+		final shadow: String = 'abstract String(std.String) from std.String {\n'
+			+ '\t@:op(A + B) static function add(a:std.String, b:String):std.String\n\t\treturn a + "S" + (cast b : std.String);\n}';
+		final use: String = 'class M {\n\tfunction f():Void {\n\t\tfinal v:String = "x";\n\t\ttrace(Std.string(v));\n\t}\n}';
+		for (dir in ['$root/b', '$root/c/d']) FileSystem.createDirectory(dir);
+		File.saveContent('$root/b/String.hx', 'package b;\n\n$shadow');
+		File.saveContent('$root/c/String.hx', 'package c;\n\n$shadow');
+		final own: String = 'package b;\n\n$use';
+		final parent: String = 'package c.d;\n\n$use';
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInterpolation(), [{ file: '$root/b/M.hx', source: own }]).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInterpolation(), [{ file: '$root/c/d/M.hx', source: parent }]).length);
+		FileSystem.deleteFile('$root/b/String.hx');
+		FileSystem.deleteFile('$root/c/String.hx');
+		Assert.equals(1, CheckFixture.violationsIn(new PreferInterpolation(), [{ file: '$root/b/M.hx', source: own }]).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferInterpolation(), [{ file: '$root/c/d/M.hx', source: parent }]).length);
+		for (dir in ['$root/c/d', '$root/c', '$root/b', root]) FileSystem.deleteDirectory(dir);
 	}
 
 }

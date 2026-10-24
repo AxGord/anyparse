@@ -31213,8 +31213,8 @@
 			"name": "M-INTERP-BASIC-NAME-UNBOUND",
 			"type": "anyparse.check.PreferInterpolation",
 			"method": "printsPlain",
-			"find": "if (basic.contains(typeName)) return decls.foreach(r -> isCoreDeclaration(r, shape));",
-			"replace": "if (basic.contains(typeName)) return true;",
+			"find": "decls.foreach(r -> isCoreDeclaration(r, shape))",
+			"replace": "true",
 			"note": "a basic type name passes by its spelling, whatever declaration it binds to there"
 		},
 		{
@@ -31224,6 +31224,13 @@
 			"find": "case Unknown: return false;",
 			"replace": "case Unknown: [];",
 			"note": "a name an unindexed import may bind reads as the compiler built-in"
+		},
+		{
+			"name": "M-INTERP-PACKAGE-SHADOW-UNREAD",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "shadowedOnDisk",
+			"force": "false",
+			"note": "a module of a basic type name in the file package chain, outside the run, no longer declines the site"
 		}
 	]
 }
