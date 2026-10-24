@@ -34,6 +34,9 @@ final class RawSourceScan {
 	/** The access path (`pkg.Type`, a sub-type included) of every indexed declaration, by the type's simple name. */
 	private final _typePathsByName: Map<String, Array<String>> = [];
 
+	/** Every name a PROJECT file spells inside a reification (`FileInfo.reifiedNames`), as a set. */
+	private final _reifiedNames: Map<String, Bool> = [];
+
 	/** `grantTargetsOf`'s answer per type name once asked. */
 	private final _grantTargets: Map<String, Array<GrantTarget>> = [];
 
@@ -86,6 +89,7 @@ final class RawSourceScan {
 		_plugin = plugin;
 		_thirdParty = thirdParty;
 		_waiverFiles = waiverFilesOf(sources, plugin, thirdParty);
+		for (fi in files) if (!thirdParty.exists(fi.file)) for (name in fi.reifiedNames) _reifiedNames[name] = true;
 		for (fi in files) for (t in fi.types) {
 			final paths: Array<String> = _typePathsByName[t.name] ?? [];
 			final path: String = fi.pkg == '' ? t.name : '${fi.pkg}.${t.name}';
@@ -114,13 +118,17 @@ final class RawSourceScan {
 	 * subtype gets. True without consulting `matches` when such a file's source was not
 	 * retained. The precise counterpart of `hasAccessGrant`, for a caller that can say what
 	 * it actually fears from a grantee rather than vetoing on the grant's existence.
+	 *
+	 * A member a project reification spells answers true whenever any file holds such a privilege: a macro's output is
+	 * access-checked where it lands, so a privileged caller reaches it without spelling it. A name the macro computes
+	 * (`$i{…}`) is out of reach.
 	 */
 	public function accessGrantMatches(typeName: String, member: String, matches: (source:String) -> Bool): Bool {
 		for (file in privilegedFiles(typeName, member)) {
 			final src: Null<String> = _sources[file];
 			if (src == null || matches(src)) return true;
 		}
-		return false;
+		return _reifiedNames.exists(member) && privilegedFiles(typeName).length > 0;
 	}
 
 	/**
@@ -373,11 +381,15 @@ final class RawSourceScan {
 	/**
 	 * Whether the grant path `path` reaches `target`: it names the target (last segment the simple name, or one of its access
 	 * paths), a member of it — any segment the simple name, for a target no declaration resolves — or a package enclosing one
-	 * of those paths.
+	 * of those paths. A target no declaration resolves has an unknown package, so any path naming no indexed type or member
+	 * of one may enclose it. Only the per-name side reads that answer: `hasAccessGrant` asks the type itself, which resolves.
 	 */
 	private function grantReaches(path: String, target: GrantTarget): Bool {
-		return path == target.name || path.endsWith('.${target.name}') || (target.unresolved && path.split('.').contains(target.name))
-			|| target.paths.exists(t -> t.startsWith('$path.') || path == t || path.startsWith('$t.'));
+		if (path == target.name || path.endsWith('.${target.name}') || (target.unresolved && path.split('.').contains(target.name)))
+			return true;
+		if (target.paths.exists(t -> t.startsWith('$path.') || path == t || path.startsWith('$t.'))) return true;
+		final dot: Int = path.lastIndexOf('.');
+		return target.unresolved && !_declaredPaths.exists(path) && (dot < 0 || !_declaredPaths.exists(path.substring(0, dot)));
 	}
 
 	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */

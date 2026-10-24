@@ -629,6 +629,13 @@ typedef FileInfo = {
 	var accessGrants: Array<String>;
 
 	/**
+	 * Every name this file spells inside a reification (`RefShape.opaqueKinds`, Haxe `macro …`): code a macro emits into a
+	 * caller, where it is access-checked as the caller's own. A name computed into the tree (`$i{…}`) is not spelled, so not
+	 * here.
+	 */
+	var reifiedNames: Array<String>;
+
+	/**
 	 * The module's module-level value declarations (`RefShape.moduleValueDeclKinds`: a function, a `var`, a `final`), each
 	 * one in source order, a conditional region's included — what a bare name in the module means, in the builds that compile
 	 * it, before any static an import brings in under it (`ValueNameBinding.moduleValuesAt`) — and

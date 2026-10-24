@@ -285,6 +285,67 @@ class PrivateAccessFormParityTest extends Test {
 	}
 
 	/**
+	 * A package grant reaches a subclass through a superclass the index does not hold (a library outside the roots): its
+	 * package is unknown, so `@:access(fw)` and `@:access(fw.display)` may enclose it, and `unused-private` keeps the member a
+	 * grantee reads while still deleting the control.
+	 */
+	@:pin('control')
+	@:killer('M-UNRESOLVED-SUPER-PACKAGE-GRANT')
+	public function testAPackageGrantReachesThroughAnUnindexedSuperclass(): Void {
+		final decl: String = 'package pkg;\n\nimport fw.display.Base;\n\nclass A extends Base {\n\n\tprivate var _reached: Int = 0;\n'
+			+ '\tprivate var _lonely: Int = 0;\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n}\n';
+		for (grant in ['fw', 'fw.display']) {
+			final reacher: String = 'package other;\n\nimport pkg.A;\n\n@:access($grant)\nclass B {\n\n\tpublic static function reach(a: A): Int {\n'
+				+ '\t\treturn a._reached;\n\t}\n\n}\n';
+			assertUnusedPrivateKeepsReached([{ file: DECL_FILE, source: decl }, { file: REACH_FILE, source: reacher }], decl, grant);
+		}
+	}
+
+	/**
+	 * A macro's output is access-checked where it lands: a reification spelling the member, expanded in a file that holds a
+	 * superclass grant or wraps the call in a waiver, reaches it though that file never spells it.
+	 */
+	@:pin('control')
+	@:killer('M-REIFIED-NAME-UNREAD')
+	public function testAMacroExpandedUnderAPrivilegeReachesWhatItSpells(): Void {
+		final decl: String = extended(A_UNUSED);
+		final macros: String = 'package tools;\n\nimport haxe.macro.Expr;\n\nclass Macros {\n\n'
+			+ '\tpublic static macro function peek(e: Expr): Expr {\n\t\treturn macro $$e._reached;\n\t}\n\n}\n';
+		for (form in ['ancestor', 'expression']) {
+			final meta: String = form == 'ancestor' ? '@:access(base.Base)\n' : '';
+			final call: String = form == 'ancestor' ? 'tools.Macros.peek(a)' : '@:privateAccess tools.Macros.peek(a)';
+			final reacher: String = 'package other;\n\nimport pkg.A;\n\n${meta}class B {\n\n\tpublic static function reach(a: A): Int {\n'
+				+ '\t\treturn $call;\n\t}\n\n}\n';
+			final files: Array<SourceFile> = [
+				{ file: BASE_FILE, source: BASE },
+				{ file: DECL_FILE, source: decl },
+				{ file: 'tools/Macros.hx', source: macros },
+				{ file: REACH_FILE, source: reacher }
+			];
+			assertUnusedPrivateKeepsReached(files, decl, form);
+		}
+	}
+
+	/**
+	 * A private constructor another package builds through a waiver, spelled qualified (`new pkg.A()`), stays; the same
+	 * declaration with nothing constructing it is still reported — the control.
+	 */
+	@:pin('control')
+	@:killer('M-QUALIFIED-CONSTRUCTION-UNSEEN')
+	public function testAQualifiedConstructionKeepsThePrivateConstructor(): Void {
+		final decl: String = 'package pkg;\n\nclass A {\n\n\tprivate function new() {}\n\n\tpublic static function make(): A {\n'
+			+ '\t\treturn null;\n\t}\n\n}\n';
+		for (built in [true, false]) {
+			final body: String = built ? 'final a: pkg.A = @:privateAccess new pkg.A();\n\t\treturn a != null;' : 'return true;';
+			final reacher: String = 'package other;\n\nclass B {\n\n\tpublic static function reach(): Bool {\n\t\t$body\n\t}\n\n}\n';
+			final files: Array<SourceFile> = [{ file: DECL_FILE, source: decl }, { file: REACH_FILE, source: reacher }];
+			final found: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files, scoped(files))
+				.filter(v -> v.file == DECL_FILE);
+			Assert.equals(built ? 0 : 1, found.length, 'built=$built: ${[for (v in found) v.message]}');
+		}
+	}
+
+	/**
 	 * Every finding and every edit the roster produces on the declaring file of `cell` under `form`, each as one line,
 	 * sorted — findings as `report:<rule>|<severity>|<from>`, edits as `edit:<rule>|<from>:<to>:<text>` whichever seam
 	 * (`fix` or `crossFileFix`) carries them, since a rule may route one rewrite through either.
@@ -337,6 +398,13 @@ class PrivateAccessFormParityTest extends Test {
 			reachEdits[id] = reach;
 		}
 		return { declEdits: declEdits, reachEdits: reachEdits };
+	}
+
+	/** `unused-private` over `files` writes no edit on `decl`'s `_reached` line and still deletes `_lonely`. */
+	private function assertUnusedPrivateKeepsReached(files: Array<SourceFile>, decl: String, label: String): Void {
+		final edits: Array<Span> = runFiles(files, decl).declEdits['unused-private'] ?? [];
+		Assert.isFalse(edits.exists(s -> overlaps(s, declarationLine(decl, REACHED))), '$label: the reached member is deleted');
+		Assert.isTrue(edits.exists(s -> overlaps(s, declarationLine(decl, LONELY))), '$label: the control is kept — vacuous');
 	}
 
 	private static inline function overlaps(a: Span, b: Span): Bool {

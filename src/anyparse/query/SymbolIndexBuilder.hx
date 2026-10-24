@@ -400,6 +400,7 @@ final class SymbolIndexBuilder {
 			ambientImports: [],
 			ambientImportsBounded: true,
 			accessGrants: collectAccessGrants(tree, shape),
+			reifiedNames: collectReifiedNames(tree, shape),
 			moduleFields: moduleFieldsOf(tree, shape)
 		};
 	}
@@ -1151,6 +1152,21 @@ final class SymbolIndexBuilder {
 		if (node.kind != shape.fieldAccessKind || head == null || name == null) return null;
 		final prefix: Null<String> = dottedPathOf(head, shape);
 		return prefix == null ? null : '$prefix.$name';
+	}
+
+	/** Every name spelled under a reification subtree of `tree` (`RefShape.opaqueKinds`), deduped; empty for a grammar with none. */
+	private static function collectReifiedNames(tree: QueryNode, shape: RefShape): Array<String> {
+		final kinds: Array<String> = shape.opaqueKinds ?? [];
+		final seen: Map<String, Bool> = [];
+		if (kinds.length > 0) collectInto(tree, n -> {
+			if (kinds.contains(n.kind)) collectInto(n, inner -> {
+				final name: Null<String> = inner.name;
+				if (name != null) seen[name] = true;
+			});
+		});
+		final out: Array<String> = [for (name in seen.keys()) name];
+		out.sort(Reflect.compare);
+		return out;
 	}
 
 }

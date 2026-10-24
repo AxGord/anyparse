@@ -859,11 +859,18 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		return false;
 	}
 
-	/** Whether the token ending just before `pos` (past whitespace) is the `new` keyword at a word boundary. */
+	/**
+	 * Whether the token ending just before `pos` (past whitespace, and past a package / module qualifier `pkg.sub.`) is the
+	 * `new` keyword at a word boundary — `new pkg.Type()` constructs `Type` as surely as `new Type()`.
+	 */
 	private static function precededByNew(source: String, pos: Int): Bool {
 		final kw: String = 'new';
-		var j: Int = pos - 1;
-		while (j >= 0 && isWhitespace(source.fastCodeAt(j))) j--;
+		var j: Int = skipWhitespaceBack(source, pos - 1);
+		while (j >= 0 && source.fastCodeAt(j) == '.'.code) {
+			j = skipWhitespaceBack(source, j - 1);
+			while (j >= 0 && SourceText.isIdentChar(source.fastCodeAt(j))) j--;
+			j = skipWhitespaceBack(source, j);
+		}
 		final start: Int = j + 1 - kw.length;
 		if (start < 0) return false;
 		for (k in 0...kw.length) if (source.fastCodeAt(start + k) != kw.fastCodeAt(k)) return false;
@@ -981,6 +988,13 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		return index == null
 			? MemberKinds.isSideEffectFree.bind(_, shape)
 			: TypeResolver.isDeletionPure.bind(_, tree, shape, RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [], index);
+	}
+
+	/** The last index at or before `j` that is not whitespace, or -1. */
+	private static function skipWhitespaceBack(source: String, j: Int): Int {
+		var at: Int = j;
+		while (at >= 0 && isWhitespace(source.fastCodeAt(at))) at--;
+		return at;
 	}
 
 }

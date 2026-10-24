@@ -270,6 +270,11 @@ final class PinsCheckPToZ {
 			+ 'M-ELEMENT-LOOP-TYPE-CALLEE,M-ELEMENT-LOOP-NEW-EXPR',
 		'unit.check.PreferValueLoopCheckTest#testThisQualifiedCollectionNotFlagged :: control :: M-ELEMENT-LOOP-REBIND',
 		'unit.check.PrivateAccessFormParityTest#testAConstructorReachedFromAnotherFileStays :: guard :: ',
+		'unit.check.PrivateAccessFormParityTest#testAMacroExpandedUnderAPrivilegeReachesWhatItSpells :: control :: M-REIFIED-NAME-UNREAD',
+		'unit.check.PrivateAccessFormParityTest#testAPackageGrantReachesThroughAnUnindexedSuperclass :: control :: '
+			+ 'M-UNRESOLVED-SUPER-PACKAGE-GRANT',
+		'unit.check.PrivateAccessFormParityTest#testAQualifiedConstructionKeepsThePrivateConstructor :: control :: '
+			+ 'M-QUALIFIED-CONSTRUCTION-UNSEEN',
 		'unit.check.PrivateAccessFormParityTest#testARewriteOfTheReachedMemberCarriesTheReachingFile :: control :: '
 			+ 'M-TRIVIAL-GETTER-GRANTEE-UNSEEN',
 		'unit.check.PrivateAccessFormParityTest#testASubclassCallingAnAccessorKeepsTheProperty :: control :: '
