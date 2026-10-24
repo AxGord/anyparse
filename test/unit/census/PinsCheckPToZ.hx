@@ -148,10 +148,13 @@ final class PinsCheckPToZ {
 			+ 'M-INTERP-REPORT-GATE-BYPASSED',
 		'unit.check.PreferInterpolationCheckTest#testEveryInterpolatedConstantKindBecomesItsPrintedText :: control :: '
 			+ 'M-CONSTANT-NEGATIVE-ZERO-SIGNED',
+		'unit.check.PreferInterpolationCheckTest#testImportedProjectTypeNamedLikeABasicTypeNotFlagged :: control :: '
+			+ 'M-INTERP-BASIC-NAME-UNBOUND,M-INTERP-UNKNOWN-TIER-TRUSTED',
 		'unit.check.PreferInterpolationCheckTest#testInterpolatedConstantBecomesText :: control :: '
 			+ 'M-FOLD-CONSTANT-AS-EXPRESSION,M-INTERP-CONSTANT-BLOCK-IGNORED',
 		'unit.check.PreferInterpolationCheckTest#testInterpolatedConstantInAnnotationNotFlagged :: control :: M-INTERP-CONSTANT-IN-META',
 		'unit.check.PreferInterpolationCheckTest#testMacroArgumentIsReportedButNotFixed :: control :: M-INTERP-MACRO-ARGUMENT-REWRITTEN',
+		'unit.check.PreferInterpolationCheckTest#testSameModuleTypeNamedLikeABasicTypeNotFlagged :: control :: M-INTERP-BASIC-NAME-UNBOUND',
 		'unit.check.PreferInterpolationCheckTest#testTargetDependentConstantsKeepTheirBlock :: control :: '
 			+ 'M-CONSTANT-DECIMAL-RANGE-UNCHECKED,M-CONSTANT-FLOAT-ADMITTED,M-CONSTANT-HEX-RANGE-UNCHECKED',
 		'unit.check.PreferInterpolationCheckTest#testTypedefOfNullArgumentNotFlagged :: control :: M-INTERP-NULLITY-SKIPPED',

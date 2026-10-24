@@ -2,13 +2,14 @@ package anyparse.check;
 
 import anyparse.check.MacroGate.CallRef;
 import anyparse.check.MacroGate.MacroIndex;
-import anyparse.query.DeclaredNullity;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
+import anyparse.query.StdResolver;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypingService;
 import anyparse.runtime.Span;
@@ -337,25 +338,47 @@ final class PreferInterpolation extends RuleBase {
 
 	/**
 	 * Whether a value of the type `typeName` names, read at `at`, is one the concatenation prints as `Std.string` does and
-	 * that is never null: a basic type (`RefShape.nonNullableTypeNames` and the string literals' type), or an enum abstract
-	 * over one that declares no implicit call. An abstract's `@:to` or `@:op` member runs in a concatenation and not in
-	 * `Std.string`, so it changes the text; every candidate the name binds to must pass.
+	 * that is never null: a basic type (`RefShape.nonNullableTypeNames` and the string literals' type) the name binds to the
+	 * compiler's own declaration of there (`isCoreDeclaration`), or an enum abstract over one that declares no implicit call.
+	 * A basic type's NAME proves nothing: a project type spelled `Float` that an import binds there runs its own `@:op`. An
+	 * abstract's `@:to` or `@:op` member runs in a concatenation and not in `Std.string`; every candidate must pass.
 	 */
 	private static function printsPlain(typeName: String, at: QueryNode, ctx: ScanCtx): Bool {
 		final shape: RefShape = ctx.shape;
-		final basic: Array<String> = basicTypeNames(shape);
-		if (basic.contains(typeName)) return true;
-		final enumKind: Null<String> = shape.enumAbstractDeclKind;
 		final index: Null<SymbolIndex> = ctx.index();
+		final fi: Null<FileInfo> = index?.fileInfo(ctx.file);
 		final span: Null<Span> = at.span;
-		if (enumKind == null || index == null || span == null) return false;
-		final decls: Null<Array<ResolvedType>> = DeclaredNullity.bindingOf(typeName, ctx.file, span.from, index);
-		return decls != null && decls.length > 0 && decls.foreach(r -> {
+		if (index == null || fi == null || span == null || typeName.indexOf('.') >= 0) return false;
+		final basic: Array<String> = basicTypeNames(shape);
+		// `Free`: no tier binds the name but the compiler's own; `Unknown`: a tier may bind it to a declaration not indexed
+		final decls: Array<ResolvedType> = switch index.refs.names.tierOf(typeName, fi, span.from) {
+			case Bound(found): found;
+			case Free: [];
+			case Unknown: return false;
+		};
+		if (basic.contains(typeName)) return decls.foreach(r -> isCoreDeclaration(r, shape));
+		final enumKind: Null<String> = shape.enumAbstractDeclKind;
+		return enumKind != null && decls.length > 0 && decls.foreach(r -> {
 			final t: TypeDeclInfo = r.type;
 			final underlying: Null<String> = t.underlyingRaw;
-			t.kind == enumKind && !t.guarded && !t.hasBuild && underlying != null && basic.contains(underlying)
-				&& !t.members.exists(m -> m.isImplicitCall || m.operatorOverloads.length > 0);
+			t.kind == enumKind && underlying != null && basic.contains(underlying) && convertsNothing(t);
 		});
+	}
+
+	/**
+	 * Whether `r` is the compiler's own declaration of a basic type: one in the std, or a root-package one with no
+	 * representation of its own — an extern class, or an abstract with no underlying type (`@:coreType`) — that declares no
+	 * implicit call.
+	 */
+	private static function isCoreDeclaration(r: ResolvedType, shape: RefShape): Bool {
+		final t: TypeDeclInfo = r.type;
+		final noRepresentation: Bool = t.isExtern || (shape.underlyingThisTypeKinds ?? []).contains(t.kind) && t.underlyingRaw == null;
+		return convertsNothing(t) && (StdResolver.isStdFile(r.file.file) || r.file.pkg == '' && noRepresentation);
+	}
+
+	/** Whether the declaration `t` is unguarded, built by no macro, and declares no member the language calls implicitly. */
+	private static function convertsNothing(t: TypeDeclInfo): Bool {
+		return !t.guarded && !t.hasBuild && !t.members.exists(m -> m.isImplicitCall || m.operatorOverloads.length > 0);
 	}
 
 	/** The basic type names a value of which prints alike either way and is never null: the value types and the string type. */

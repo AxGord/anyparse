@@ -297,7 +297,7 @@ final class DeclaredNullity {
 	 * What `head`, written in `fromFile` at offset `at`, names: a dotted path resolves as a path, a simple name tier by
 	 * tier in the compiler's own order (`TypeNameBinding`). Null when no tier provably answers.
 	 */
-	public static function bindingOf(head: String, fromFile: String, at: Int, index: SymbolIndex): Null<Array<ResolvedType>> {
+	private static function bindingOf(head: String, fromFile: String, at: Int, index: SymbolIndex): Null<Array<ResolvedType>> {
 		if (head.indexOf('.') >= 0) return index.resolveTypeRefsFrom(head, fromFile, at);
 		final fi: Null<SymbolIndex.FileInfo> = index.fileInfo(fromFile);
 		return fi == null ? null : index.refs.names.bind(head, fi, at);

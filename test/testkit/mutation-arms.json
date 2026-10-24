@@ -31188,7 +31188,7 @@
 		{
 			"name": "M-INTERP-ENUM-CONVERSION-IGNORED",
 			"type": "anyparse.check.PreferInterpolation",
-			"method": "printsPlain",
+			"method": "convertsNothing",
 			"find": "!t.members.exists(m -> m.isImplicitCall || m.operatorOverloads.length > 0)",
 			"replace": "true",
 			"note": "an enum abstract whose @:to or @:op member runs in the concatenation passes the gate"
@@ -31208,6 +31208,22 @@
 			"find": "basic.contains(underlying)",
 			"replace": "true",
 			"note": "an enum abstract over any type passes the gate, Dynamic included"
+		},
+		{
+			"name": "M-INTERP-BASIC-NAME-UNBOUND",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "printsPlain",
+			"find": "if (basic.contains(typeName)) return decls.foreach(r -> isCoreDeclaration(r, shape));",
+			"replace": "if (basic.contains(typeName)) return true;",
+			"note": "a basic type name passes by its spelling, whatever declaration it binds to there"
+		},
+		{
+			"name": "M-INTERP-UNKNOWN-TIER-TRUSTED",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "printsPlain",
+			"find": "case Unknown: return false;",
+			"replace": "case Unknown: [];",
+			"note": "a name an unindexed import may bind reads as the compiler built-in"
 		}
 	]
 }

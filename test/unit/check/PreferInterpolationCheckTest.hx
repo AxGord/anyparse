@@ -432,4 +432,32 @@ class PreferInterpolationCheckTest extends Test {
 		Assert.equals(1, violations(body('var i: Int = 1;\n\t\tvar s: String = Std.string(i + 1);')).length);
 	}
 
+	/**
+	 * A basic type's NAME proves nothing: a project type spelled `Float` that an import binds there, with an `@:op` member,
+	 * prints `F2` through the concatenation where `Std.string` prints `2`. Only the compiler's own type passes.
+	 */
+	@:pin('control')
+	@:killer('M-INTERP-BASIC-NAME-UNBOUND')
+	@:killer('M-INTERP-UNKNOWN-TIER-TRUSTED')
+	public function testImportedProjectTypeNamedLikeABasicTypeNotFlagged(): Void {
+		final num: String = 'package my;\n\nabstract Float(Int) from Int {\n'
+			+ '\t@:op(A + B) static function addStr(a:String, b:Float):String\n\t\treturn a + \'F\' + (cast b : Int);\n}';
+		final main: String =
+			'import my.Num.Float;\n\nclass C {\n\tfunction f():String {\n\t\tfinal v:Float = 2;\n\t\treturn Std.string(v);\n\t}\n}';
+		final files: Array<{ file: String, source: String }> = CheckFixture.withStd(main).concat([{ file: 'my/Num.hx', source: num }]);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInterpolation(), files).length);
+		// the imported module outside the lint set: the import may bind the name to anything, so nothing is proven
+		Assert.equals(0, violations(main).length);
+	}
+
+	/** The same shadow declared in the module itself, as a private type. */
+	@:pin('control')
+	@:killer('M-INTERP-BASIC-NAME-UNBOUND')
+	public function testSameModuleTypeNamedLikeABasicTypeNotFlagged(): Void {
+		final src: String = 'private abstract Bool(Int) from Int {\n\t@:op(A + B) static function addStr(a:String, b:Bool):String\n'
+			+ "\t\treturn a + 'B' + (cast b : Int);\n}\n\nclass C {\n\tfunction f():String {\n\t\tfinal v:Bool = 2;\n"
+			+ '\t\treturn Std.string(v);\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 }
