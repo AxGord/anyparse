@@ -4,6 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.Cli.RuleEdits;
+import anyparse.query.ConfigFinder;
 import anyparse.query.LintFixSafePass;
 
 using Lambda;
@@ -29,20 +30,33 @@ final class LintFixSafeTrail {
 	/** Per file, every rule that edited it this round, the cross-file rules included. */
 	private final _rules: Map<String, Array<String>> = [];
 
+	/** Per file, the rules whose cross-file fix touched it this round — edits no per-file pass replays. */
+	private final _crossRules: Map<String, Array<String>> = [];
+
 	/** The (file, rule) pairs a safe-pass revert took back this run. */
 	private final _banned: Array<{ file: String, rule: String }> = [];
 
 	/** The canonical text of `base` with the edits of `groups` alone applied, or null when the writer refuses them. */
 	private final _replayer: (file:String, base:String, groups:Array<RuleEdits>) -> Null<String>;
 
-	public function new(replayer: (file:String, base:String, groups:Array<RuleEdits>) -> Null<String>) {
+	/** The typechecks the net may still spend isolating culprits this run (`--fix-probes`). */
+	private var _probesLeft: Int;
+
+	public function new(replayer: (file:String, base:String, groups:Array<RuleEdits>) -> Null<String>, probeCap: Int) {
 		_replayer = replayer;
+		_probesLeft = probeCap;
+	}
+
+	/** The typechecks the net may still spend isolating culprits this run. */
+	public inline function probesLeft(): Int {
+		return _probesLeft;
 	}
 
 	/** Forget what the previous round recorded; the bans stay for the run. */
 	public function startRound(): Void {
 		_steps.clear();
 		_rules.clear();
+		_crossRules.clear();
 	}
 
 	/** Record that `rule` edited `file` this round. */
@@ -77,17 +91,22 @@ final class LintFixSafeTrail {
 				if (!isBanned(culprit.file, rule)) _banned.push({ file: culprit.file, rule: rule });
 	}
 
-	/** `ban` for files the net reverted whole: every rule that edited them this round. */
-	public function banFiles(files: Array<String>): Void {
-		ban([for (file in files) { file: file, rules: rulesOf(file), kept: null }]);
+	/** `file` gone back whole: every rule that edited it this round goes with it. */
+	public function whole(file: String): SafeCulprit {
+		return {
+			file: file,
+			rules: rulesOf(file),
+			keptRules: [],
+			kept: null
+		};
 	}
 
-	/** How many of the first-pass edits of `culprit.file` the split KEPT — the ones whose rule the compiler accepted. */
+	/** How many edits a split culprit KEPT: those of its first pass made by the rules the compiler accepted. */
 	public function keptEdits(culprit: SafeCulprit): Int {
 		final first: Null<SafeFixStep> = firstStep(culprit.file);
 		return first == null
 			? 0
-			: LintFixDriver.contributedEdits([for (group in first.groups) if (!culprit.rules.contains(group.rule)) group]).length;
+			: LintFixDriver.contributedEdits([for (group in first.groups) if (culprit.keptRules.contains(group.rule)) group]).length;
 	}
 
 	/**
@@ -101,6 +120,7 @@ final class LintFixSafeTrail {
 	): SafeBisectSeat {
 		return {
 			probe: (keep, partial) -> {
+				_probesLeft--;
 				place(
 					changed,
 					file -> if (partial.exists(file))
@@ -113,10 +133,30 @@ final class LintFixSafeTrail {
 				CompilerOracle.typecheckAll(judging);
 			},
 			splitRules: file -> splitRules(file, changed, coupled, originalOf),
+			laterRules: laterRules,
 			replay: replay,
 			rulesOf: rulesOf,
 			fixed: file -> fixedOf[file]
 		};
+	}
+
+	/**
+	 * The rules that edited `file` after its first per-file pass this round: those of every later pass and of every
+	 * cross-file fix that touched it — the edits keeping the first pass alone discards.
+	 */
+	public function laterRules(file: String): Array<String> {
+		final rules: Array<String> = (_crossRules[file] ?? []).copy();
+		final steps: Array<SafeFixStep> = _steps[file] ?? [];
+		for (i in 1...steps.length) for (group in steps[i].groups) if (!rules.contains(group.rule)) rules.push(group.rule);
+		return rules;
+	}
+
+	/** Record that `rule`'s cross-file fix touched `file` this round. */
+	public function noteCrossRule(file: String, rule: String): Void {
+		noteRule(file, rule);
+		final list: Array<String> = _crossRules[file] ?? [];
+		if (!list.contains(rule)) list.push(rule);
+		_crossRules[file] = list;
 	}
 
 	/**
@@ -167,10 +207,15 @@ final class LintFixSafeTrail {
 			final culprit: Null<SafeCulprit> = culprits.find(c -> c.file == file);
 			return culprit == null ? fixedOf[file] : culprit.kept ?? originalOf[file];
 		}
-		place(changed, target);
-		for (file in changed) if (!culprits.exists(c -> c.file == file && c.kept == null))
-			hold(files, created, originalOf, file, target(file));
-		restore([for (culprit in culprits) if (culprit.kept == null) culprit.file]);
+		final whole: Array<String> = [for (culprit in culprits) if (culprit.kept == null) culprit.file];
+		final rest: Array<String> = [for (file in changed) if (!whole.contains(file)) file];
+		place(rest, target);
+		for (file in rest) hold(files, created, originalOf, file, target(file));
+		restore(whole);
+		// A file the round created that an earlier narrowing round already dropped from the run is one `restore` no longer
+		// sees, and an isolation probe may have written it back.
+		for (file in whole) if (!originalOf.exists(file)) CliIo.deletePath(file);
+		assertOnDisk(changed, target);
 		return [for (culprit in culprits) culprit.file];
 	}
 
@@ -181,7 +226,7 @@ final class LintFixSafeTrail {
 
 	/** Record `rule` against every file one cross-file fix's slices touch. */
 	public static function noteSlices(trail: Null<LintFixSafeTrail>, slices: Array<CrossFileEdits>, rule: String): Void {
-		if (trail != null) for (slice in slices) trail.noteRule(slice.file, rule);
+		if (trail != null) for (slice in slices) trail.noteCrossRule(slice.file, rule);
 	}
 
 	/** Record a per-file pass that landed `landed` edits in `file` from `base`: the groups of `groups` whose edits it wrote. */
@@ -189,6 +234,16 @@ final class LintFixSafeTrail {
 		trail: Null<LintFixSafeTrail>, file: String, base: String, groups: Array<RuleEdits>, landed: Int
 	): Void {
 		if (trail != null && landed > 0) trail.noteStep(file, base, [for (group in groups) if (LintFixDriver.contributes(group)) group]);
+	}
+
+	/**
+	 * The cross-file fixes of `rule` that write no file a revert earlier in this run banned the rule in — keyed by the files a
+	 * fix WRITES, since its finding can sit in a file it never touches.
+	 */
+	public static function unbanned(
+		trail: Null<LintFixSafeTrail>, fixes: Array<Array<CrossFileEdits>>, rule: String
+	): Array<Array<CrossFileEdits>> {
+		return trail == null ? fixes : fixes.filter(slices -> !slices.exists(slice -> trail.isBanned(slice.file, rule)));
 	}
 
 	/** Write every file of `changed` whose `textOf` is a text and delete every one whose is null — one `writeFiles`. */
@@ -219,6 +274,22 @@ final class LintFixSafeTrail {
 		else
 			files.push({ file: file, source: text });
 		if (!originalOf.exists(file) && !created.contains(file)) created.push(file);
+	}
+
+	/**
+	 * The invariant every settled safe pass ends on: each written file holds on disk exactly the bytes of the tree the oracle
+	 * confirmed (`textOf`, null for a file that must not exist). A difference means the net reported a green tree it did not
+	 * leave behind — a fixer defect that must stop the run, never a state to carry on from.
+	 */
+	private static function assertOnDisk(changed: Array<String>, textOf: (String) -> Null<String>): Void {
+		final wrong: Array<String> = [
+			for (file in changed) if ((ConfigFinder.fileExists(file) ? CliIo.readFile(file) : null) != textOf(file)) file
+		];
+		if (wrong.length > 0)
+			throw new Exception(
+				'apq lint --fix: the safe-pass net settled on a tree the oracle confirmed, but the disk holds other bytes for '
+					+ wrong.join(', ')
+			);
 	}
 
 }

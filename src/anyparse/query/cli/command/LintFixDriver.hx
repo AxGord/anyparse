@@ -64,7 +64,8 @@ final class LintFixDriver {
 
 	private static function applyLintFixes(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, range: Null<LintRange>, verbose: Bool, oracles: Array<OracleConfig>, ?resolution: ResolutionScope
+		applyEnablement: Bool, range: Null<LintRange>, verbose: Bool, oracles: Array<OracleConfig>, probeCap: Int,
+		?resolution: ResolutionScope
 	): Int {
 		final oracleConfigured: Bool = oracles.length > 0;
 		final split: CheckPartition = LintCommand.partitionChecks(checks, oracleConfigured);
@@ -81,12 +82,12 @@ final class LintFixDriver {
 		for (entry in files) optsByFile[entry.file] = CliArgs.discoverFormatConfig(entry.file);
 		// What each safe round wrote, rule by rule, so a round the compiler rejects can be cut down to the edits it rejects —
 		// and what the net took back, so no later round of this run applies it again.
-		final trail: LintFixSafeTrail = new LintFixSafeTrail((file, base, groups) ->
+		final trail: LintFixSafeTrail = new LintFixSafeTrail((file, base, groups) -> {
 			switch CanonicalEdit.canonicalize(base, contributedEdits(groups), false, cached, optsByFile[file], contributedCarried(groups)) {
 				case Ok(text, _): text;
 				case Err(_): null;
 			}
-		);
+		}, probeCap);
 
 		// The pre-fix bytes of every file, kept so a safe pass that breaks a build which
 		// was GREEN can be undone. The passes mutate `entry.source` in place and only the
@@ -357,7 +358,10 @@ final class LintFixDriver {
 		final crossRenames: Array<Array<CrossFileEdits>> = [];
 		for (check in checks) if (check is CrossFileFix) {
 			final own: Array<Violation> = violations.filter(v -> v.rule == check.id());
-			for (rename in (cast check: CrossFileFix).crossFileFix(files, own, cached, index)) {
+			// A cross-file fix is offered nowhere a revert banned its rule: its finding sits in one file, its edits in others.
+			for (rename in LintFixSafeTrail.unbanned(
+				trail, (cast check: CrossFileFix).crossFileFix(files, own, cached, index), check.id()
+			)) {
 				crossRenames.push(rename);
 				// The ledger's "produced N edit(s) elsewhere" arm is a claim about the WHOLE rule, so it
 				// has to see this path too. `naming` fixes a non-confined member ONLY here, and a ledger
@@ -1216,26 +1220,21 @@ final class LintFixDriver {
 			LintFixSafePass.narrow(
 				errors, changedFiles, coupled, restore, CompilerOracle.typecheckAll.bind(judging), LintFixSafePass.NARROW_ROUNDS
 			),
-			changedFiles, coupled, trail.seat(changedFiles, coupled, originalOf, fixedOf, judging)
+			changedFiles, coupled, trail.seat(changedFiles, coupled, originalOf, fixedOf, judging), trail.probesLeft()
 		);
-		// `narrow` reverted whatever it could attribute; a bisection's cut is settled here; an un-isolable wave still owes
-		// the caller's own whole-wave rollback, which is the behaviour this net had before. Whatever went back is banned
-		// for the rest of the run.
-		final partialKept: Map<String, Int> = [];
-		final reverted: Array<String> = switch narrowing {
-			case Narrowed(blamed, _):
-				trail.banFiles(blamed);
-				blamed;
-			case Bisected(culprits, _):
-				trail.ban(culprits);
-				for (culprit in culprits) if (culprit.kept != null) partialKept[culprit.file] = trail.keptEdits(culprit);
-				LintFixSafeTrail.settle(culprits, changedFiles, files, originalOf, fixedOf, created, restore);
-			case WholeWave(_):
-				final all: Array<String> = changedFiles.copy();
-				restore(all);
-				trail.banFiles(all);
-				all;
+		// Every arm settles the same way, because an isolation probe may have left any written file at a candidate the
+		// oracle rejected: the files it blamed back whole, a split file at the text it kept, every other one at the round's
+		// bytes — on disk and in the run, checked against the disk. Whatever went back is banned for the rest of the run.
+		final culprits: Array<SafeCulprit> = switch narrowing {
+			case Narrowed(blamed, _): blamed.map(trail.whole);
+			case Bisected(cut, _): cut;
+			case WholeWave(_): changedFiles.map(trail.whole);
 		};
+		trail.ban(culprits);
+		final partialKept: Map<String, Int> = [
+			for (culprit in culprits) if (culprit.kept != null) culprit.file => trail.keptEdits(culprit)
+		];
+		final reverted: Array<String> = LintFixSafeTrail.settle(culprits, changedFiles, files, originalOf, fixedOf, created, restore);
 		final split: Int = partialKept.count();
 		// Every arm ends on a tree the oracle confirmed green: `Narrowed` on its
 		// last probe, `Bisected` on its confirm, `WholeWave` on the bytes the
@@ -1368,7 +1367,7 @@ final class LintFixDriver {
 	public static function runLintFix(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, range: Null<LintRange>,
-		verbose: Bool
+		verbose: Bool, probeCap: Int = LintFixSafePass.PROBE_CAP
 	): Int {
 		FmtCommand.warnCommentGuardDeclined();
 		// Said BEFORE the first write, and said in both netless arms — the flag the user passed
@@ -1379,7 +1378,9 @@ final class LintFixDriver {
 		// `--no-oracle` hands the fixer an EMPTY configuration list, which is the one spelling of
 		// "behave as if the project configured no compilerOracle" — the flag and the missing key
 		// then cannot drift apart by construction.
-		return applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, range, verbose, noOracle ? [] : oracles, resolution);
+		return applyLintFixes(
+			files, checks, plugin, resolveConfig, applyEnablement, range, verbose, noOracle ? [] : oracles, probeCap, resolution
+		);
 	}
 
 	/** Add `edits` to `file`'s tally in `editsOf` — the per-file count a reverted file's edits are taken back by. */

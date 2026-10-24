@@ -76,6 +76,7 @@ class LintFixSafeIsolateTest extends Test {
 					? OracleOutcome.Rejected(ERRORS)
 					: OracleOutcome.Confirmed,
 			splitRules: file -> file == '/p/B.hx' ? rules : [],
+			laterRules: _ -> [],
 			replay: (_, subset) -> subset.length == 0 ? null : subset.join('+'),
 			rulesOf: file -> file == '/p/B.hx' ? rules : ['import-order'],
 			fixed: file -> file == '/p/B.hx' ? rules.join('+') : 'fixed'
@@ -85,25 +86,33 @@ class LintFixSafeIsolateTest extends Test {
 				Assert.equals(1, culprits.length);
 				Assert.equals('/p/B.hx', culprits[0].file);
 				Assert.same(['poison'], culprits[0].rules);
+				Assert.same(['import-order', 'unused-import'], culprits[0].keptRules);
 				Assert.equals('import-order+unused-import', culprits[0].kept);
 			case other:
 				Assert.fail('expected Bisected, got $other');
 		}
 	}
 
-	/** A culprit a LATER pass made: the first pass alone typechecks, so the file keeps exactly that. */
-	public function testAPoisonALaterPassMadeCostsOnlyTheLaterPass(): Void {
+	/**
+	 * A culprit a LATER pass made: the first pass alone typechecks, so the file keeps exactly that — and every rule of the
+	 * discarded later passes goes back, named and banned, the one that ALSO landed in the first pass included.
+	 */
+	@:pin('control')
+	@:killer('M-SAFE-LATER-UNBANNED')
+	public function testAPoisonALaterPassMadeCostsEveryRuleOfThatPass(): Void {
 		final outcome: SafePassNarrowing = LintFixSafePass.isolate(Narrowed(['/p/B.hx'], 1), ['/p/A.hx', '/p/B.hx'], [], {
 			probe: (_, partial) -> partial.exists('/p/B.hx') ? OracleOutcome.Confirmed : OracleOutcome.Rejected(ERRORS),
-			splitRules: _ -> ['import-order'],
+			splitRules: _ -> ['drop-chain'],
+			laterRules: _ -> ['drop-chain', 'drop-late'],
 			replay: (_, subset) -> subset.join('+'),
-			rulesOf: _ -> ['import-order', 'late-rule'],
-			fixed: _ -> 'import-order+late-rule'
+			rulesOf: _ -> ['drop-chain', 'drop-late'],
+			fixed: _ -> 'drop-chain+drop-chain+drop-late'
 		});
 		switch outcome {
 			case Bisected(culprits, probes):
-				Assert.same(['late-rule'], culprits[0].rules);
-				Assert.equals('import-order', culprits[0].kept);
+				Assert.same(['drop-chain', 'drop-late'], culprits[0].rules);
+				Assert.same(['drop-chain'], culprits[0].keptRules);
+				Assert.equals('drop-chain', culprits[0].kept);
 				Assert.equals(2, probes, 'the attributing round and the one replay');
 			case other:
 				Assert.fail('expected Bisected, got $other');
@@ -167,6 +176,68 @@ class LintFixSafeIsolateTest extends Test {
 	}
 
 	/**
+	 * Two files that break the build only TOGETHER, one in each half: both halves typecheck alone, so the search cannot say
+	 * which side is at fault. Neither may be named or split — the net falls back to the whole wave, within its run budget.
+	 */
+	@:pin('control')
+	@:killer('M-SAFE-INTERACTION-PINNED')
+	public function testAnInteractionAcrossTheHalvesIsPinnedOnNeitherSide(): Void {
+		final changed: Array<String> = [for (i in 0...200) '/p/F$i.hx'];
+		var probes: Int = 0;
+		final outcome: SafePassNarrowing = LintFixSafePass.isolate(SURRENDER, changed, [], {
+			probe: (keep, partial) -> {
+				probes++;
+				final first: Bool = keep.contains('/p/F0.hx') || partial.exists('/p/F0.hx');
+				final last: Bool = keep.contains('/p/F199.hx') || partial.exists('/p/F199.hx');
+				return first && last ? OracleOutcome.Rejected(ERRORS) : OracleOutcome.Confirmed;
+			},
+			splitRules: _ -> ['r1', 'r2', 'r3'],
+			laterRules: _ -> [],
+			replay: (_, subset) -> subset.join('+'),
+			rulesOf: _ -> ['r1', 'r2', 'r3'],
+			fixed: _ -> 'r1+r2+r3'
+		});
+		switch outcome {
+			case WholeWave(why, _):
+				Assert.stringContains('interaction', why);
+			case other:
+				Assert.fail('expected WholeWave, got $other');
+		}
+		Assert.isTrue(probes <= LintFixSafePass.PROBE_CAP, 'the run stays within its probe budget: $probes');
+	}
+
+	/**
+	 * The run's typechecks are capped, not each search's: a long list of blamed files, each splittable and each costing several probes,
+	 * stop at the budget, and the narrowing stands as it was — every blamed file back whole, nothing half-settled.
+	 */
+	@:pin('control')
+	@:killer('M-SAFE-PROBES-UNCAPPED')
+	public function testTheIsolationStopsAtTheRunBudget(): Void {
+		final blamed: Array<String> = [for (i in 0...40) '/p/F$i.hx'];
+		var probes: Int = 0;
+		final outcome: SafePassNarrowing = LintFixSafePass.isolate(Narrowed(blamed, 1), ['/p/A.hx'].concat(blamed), [], {
+			probe: (keep, partial) -> {
+				probes++;
+				final poisoned: Bool = keep.exists(file -> file != '/p/A.hx')
+					|| [for (text in partial) text].exists(text -> text.contains('r2'));
+				return poisoned ? OracleOutcome.Rejected(ERRORS) : OracleOutcome.Confirmed;
+			},
+			splitRules: _ -> ['r1', 'r2', 'r3'],
+			laterRules: _ -> [],
+			replay: (_, subset) -> subset.join('+'),
+			rulesOf: _ -> ['r1', 'r2', 'r3'],
+			fixed: file -> file == '/p/A.hx' ? 'fixed' : 'r1+r2+r3'
+		});
+		switch outcome {
+			case Narrowed(files, _):
+				Assert.same(blamed, files);
+			case other:
+				Assert.fail('expected Narrowed, got $other');
+		}
+		Assert.equals(LintFixSafePass.PROBE_CAP, probes, 'the isolation spent exactly its run budget');
+	}
+
+	/**
 	 * The notice of a bisected revert says what went back — the whole file or the rules cut out of it — and, whatever the
 	 * verbosity, which files the compiler blamed and what it said: without them the revert cannot be diagnosed.
 	 */
@@ -174,11 +245,21 @@ class LintFixSafeIsolateTest extends Test {
 	@:killer('M-SAFE-BLAME-UNSAID')
 	public function testTheBisectedNoticeNamesTheCutAndWhatTheCompilerSaid(): Void {
 		final notice: String = LintFixSafePass.revertNotice(Bisected([
-			{ file: '/p/B.hx', rules: ['poison'], kept: 'kept' },
-			{ file: '/p/C.hx', rules: ['other'], kept: null }
+			{
+				file: '/p/B.hx',
+				rules: ['poison'],
+				keptRules: ['import-order'],
+				kept: 'kept'
+			},
+			{
+				file: '/p/C.hx',
+				rules: ['other'],
+				keptRules: [],
+				kept: null
+			}
 		], 5), 8, ERRORS);
 		Assert.stringContains('REVERTED 1 of 8 file(s) and part of 1 more, KEPT everything else on disk (5 extra typecheck(s)', notice);
-		Assert.stringContains('safe-fix REVERTED the poison edit(s) of /p/B.hx, KEPT its other edits', notice);
+		Assert.stringContains('safe-fix REVERTED the edits poison made in /p/B.hx, KEPT the first-pass edits of import-order', notice);
 		Assert.stringContains('safe-fix REVERTED /p/C.hx (other)', notice);
 		Assert.stringContains('the compiler blames: /p/Reader.hx', notice);
 		Assert.stringContains(ERRORS, notice);
@@ -191,6 +272,7 @@ class LintFixSafeIsolateTest extends Test {
 		return {
 			probe: probe,
 			splitRules: _ -> [],
+			laterRules: _ -> [],
 			replay: (_, _) -> null,
 			rulesOf: file -> ['rule-of-$file'],
 			fixed: _ -> null
