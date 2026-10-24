@@ -31229,6 +31229,14 @@
 			"find": "&& ValueDoors.bindsNoValue(site, name, o.span, info, context.tree, context.shape, file, index);",
 			"replace": ";",
 			"note": "only the file's own text is asked, so a field the enclosing type INHERITS outranks the shortened type at a value site unseen"
+		},
+		{
+			"name": "M-VALUE-DOORS-BUILD-BLIND",
+			"type": "anyparse.query.ValueDoors",
+			"method": "bindsNoValue",
+			"find": " || index.typing.ancestors.builtAtOrAbove(own)",
+			"replace": "",
+			"note": "a build macro on the enclosing type, or an autoBuild one above it, is ignored, so a field it adds outranks a shortened type at a value site unseen"
 		}
 	]
 }

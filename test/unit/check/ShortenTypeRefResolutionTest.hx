@@ -15,6 +15,16 @@ class ShortenTypeRefResolutionTest extends Test {
 	private static inline final ENTITY_SOURCE: String =
 		'package pkg;\n\nclass Entity<T> {\n\tpublic function new(path:String) {}\n\n\tpublic static function make():String {\n\t\treturn \'pkg\';\n\t}\n}\n';
 
+	/** A build macro's carriers: the macro module itself, an `@:autoBuild` interface and an `@:autoBuild` class. */
+	private static final MACRO_LIBRARY: Array<{ file: String, source: String }> = [
+		{
+			file: 'pkg/Builder.hx',
+			source: 'package pkg;\n\nclass Builder {\n\tpublic static function build():Array<Dynamic> {\n\t\treturn null;\n\t}\n}\n'
+		},
+		{ file: 'pkg/Auto.hx', source: 'package pkg;\n\n@:autoBuild(pkg.Builder.build())\ninterface Auto {}\n' },
+		{ file: 'pkg/SBase.hx', source: 'package pkg;\n\n@:autoBuild(pkg.Builder.build())\nclass SBase {\n\tpublic function new() {}\n}\n' }
+	];
+
 	@:pin('control')
 	@:killer('M-PRINTER-PACKAGE-CHAIN-BLIND')
 	public function testEnclosingPackageTypeShortensWithNoImport(): Void {
@@ -106,6 +116,45 @@ class ShortenTypeRefResolutionTest extends Test {
 		);
 		final out: String = applyFix(src, []);
 		Assert.isTrue(out.indexOf('return Std.isOfType(y, Entity) && Entity.make() != \'\';') != -1, 'shortened, got: $out');
+	}
+
+	// --- a build macro may add the field a value site would read ---
+
+	@:pin('control')
+	@:killer('M-VALUE-DOORS-BUILD-BLIND')
+	public function testABuildMacroOnTheClassKeepsTheValueSiteQualified(): Void {
+		Assert.equals(0, violations(builtHolder('', '@:build(pkg.Builder.build())\n', ''), MACRO_LIBRARY).length);
+	}
+
+	@:pin('control')
+	@:killer('M-VALUE-DOORS-BUILD-BLIND')
+	public function testAnAutoBuildInterfaceKeepsTheValueSiteQualified(): Void {
+		Assert.equals(0, violations(builtHolder('', '', ' implements Auto'), MACRO_LIBRARY).length);
+	}
+
+	@:pin('control')
+	@:killer('M-VALUE-DOORS-BUILD-BLIND')
+	public function testAnAutoBuildSuperclassKeepsTheValueSiteQualified(): Void {
+		Assert.equals(0, violations(builtHolder('', '', ' extends SBase'), MACRO_LIBRARY).length);
+	}
+
+	@:pin('control')
+	@:killer('M-VALUE-DOORS-BUILD-BLIND')
+	public function testABuildMacroKeepsTheImportRouteQualifiedToo(): Void {
+		Assert.equals(0, violations(builtHolder('import pkg.Entity;\n\n', '@:build(pkg.Builder.build())\n', ''), MACRO_LIBRARY).length);
+	}
+
+	@:pin('control')
+	@:killer('M-SHORTEN-VALUE-SITE-NEVER')
+	public function testTheUnbuiltTwinShortens(): Void {
+		final out: String = applyFix(builtHolder('', '', ''), MACRO_LIBRARY);
+		Assert.isTrue(out.indexOf('trace(Entity.make());') != -1, 'shortened, got: $out');
+	}
+
+	/** A `pkg.sub.Holder` carrying `imports`, the metadata `meta` and the heritage `heritage`, calling `pkg.Entity.make()` twice. */
+	private function builtHolder(imports: String, meta: String, heritage: String): String {
+		return 'package pkg.sub;\n\n${imports}${meta}class Holder$heritage {\n\tpublic function new() {}\n\n'
+			+ '\tpublic function f():Void {\n\t\ttrace(pkg.Entity.make());\n\t\ttrace(pkg.Entity.make());\n\t}\n}\n';
 	}
 
 	/** A `pkg.sub.Holder` module whose class body is `members`, with no import. */
