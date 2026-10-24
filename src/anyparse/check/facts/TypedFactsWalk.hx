@@ -1,8 +1,8 @@
-package anyparse.check;
+package anyparse.check.facts;
 
 #if macro
-import anyparse.check.TypedFactsMacro.InlineMethod;
-import anyparse.check.TypedFactsShapes.FieldRef;
+import anyparse.check.facts.TypedFactsMacro.InlineMethod;
+import anyparse.check.facts.TypedFactsShapes.FieldRef;
 import haxe.Json;
 import haxe.macro.Context;
 import haxe.macro.Expr.Position;

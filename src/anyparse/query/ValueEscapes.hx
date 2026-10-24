@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.FactsTypeTree.FactsType;
+import anyparse.check.facts.FactsTypeTree.FactsType;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.GrammarPlugin.RefShape;

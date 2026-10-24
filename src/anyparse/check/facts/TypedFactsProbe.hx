@@ -1,4 +1,4 @@
-package anyparse.check;
+package anyparse.check.facts;
 
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.LintConfig.OracleConfig;
@@ -154,11 +154,14 @@ final class TypedFactsProbe {
 
 	/** The hook's modules, by class-path-relative path, written into each compile's probe directory. */
 	private static final MACRO_FILES: Array<{ path: String, text: String }> = [
-		{ path: 'anyparse/check/TypedFactsMacro.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsMacro.hx') },
-		{ path: 'anyparse/check/TypedFactsWalk.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsWalk.hx') },
-		{ path: 'anyparse/check/TypedFactsTypeStrings.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsTypeStrings.hx') },
-		{ path: 'anyparse/check/TypedFactsShapes.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsShapes.hx') },
-		{ path: 'anyparse/check/FactsTypeText.hx', text: EmbeddedSource.text('anyparse/check/FactsTypeText.hx') }
+		{ path: 'anyparse/check/facts/TypedFactsMacro.hx', text: EmbeddedSource.text('anyparse/check/facts/TypedFactsMacro.hx') },
+		{ path: 'anyparse/check/facts/TypedFactsWalk.hx', text: EmbeddedSource.text('anyparse/check/facts/TypedFactsWalk.hx') },
+		{
+			path: 'anyparse/check/facts/TypedFactsTypeStrings.hx',
+			text: EmbeddedSource.text('anyparse/check/facts/TypedFactsTypeStrings.hx')
+		},
+		{ path: 'anyparse/check/facts/TypedFactsShapes.hx', text: EmbeddedSource.text('anyparse/check/facts/TypedFactsShapes.hx') },
+		{ path: 'anyparse/check/facts/FactsTypeText.hx', text: EmbeddedSource.text('anyparse/check/facts/FactsTypeText.hx') }
 	];
 
 	/**
@@ -271,7 +274,7 @@ final class TypedFactsProbe {
 			'-cp',
 			dir,
 			'--macro',
-			'anyparse.check.TypedFactsMacro.run(${haxe.Json.stringify(out)})'
+			'anyparse.check.facts.TypedFactsMacro.run(${haxe.Json.stringify(out)})'
 		]);
 	}
 

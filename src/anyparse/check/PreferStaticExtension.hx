@@ -5,6 +5,7 @@ import anyparse.check.StaticExtensionFacts.ExtensionFactsVerdict;
 import anyparse.check.UsingScan.UsingConflict;
 import anyparse.check.UsingScan.UsingHeader;
 import anyparse.check.UsingScan.UsingScope;
+import anyparse.check.facts.FactsTypeOracle;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;

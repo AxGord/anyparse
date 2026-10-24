@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FrameworkAware;
-import anyparse.check.FactsTypeOracle.InheritedMember;
 import anyparse.check.ReflectionScan.ReflectionSurface;
+import anyparse.check.facts.FactsTypeOracle;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;

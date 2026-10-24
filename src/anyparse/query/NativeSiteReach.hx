@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.FactsTypeTree;
+import anyparse.check.facts.FactsTypeTree;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.FactsNativeReach.NativeHand;
 

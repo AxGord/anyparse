@@ -1,7 +1,7 @@
 package anyparse.query;
 
-import anyparse.check.FactsTypeText;
-import anyparse.check.FactsTypeTree;
+import anyparse.check.facts.FactsTypeText;
+import anyparse.check.facts.FactsTypeTree;
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CompilerFacts.CallFact;

@@ -268,7 +268,6 @@ final class PinsCheckAToO {
 		'unit.check.FactsFixGateE2ETest#testANegationOnlyTheFactsTypeIsInverted :: control :: M-FOLD-FACTS-OPERAND',
 		'unit.check.FactsFixGateE2ETest#testAPrivateMemberNoSupertypeDeclaresIsDeleted :: control :: '
 			+ 'M-UNUSED-PRIVATE-CHAIN-FACTS,M-UNUSED-PRIVATE-CHAIN-DECLARED,M-UNUSED-PRIVATE-CHAIN-AUTOBUILD',
-
 		'unit.check.FactsFixGateE2ETest#testAReceiverTheFactsTypeAsANonExternClassLosesItsToString :: control :: '
 			+ 'M-TOSTRING-FACTS-CLASS,M-TOSTRING-FACTS-EXTERN,M-FACTS-ESCAPE-SHIFT',
 		'unit.check.FactsFixGateE2ETest#testAStaticImportedUnderAnotherNameKeepsTheLoopWithoutTheTruth :: control :: '
@@ -281,29 +280,6 @@ final class PinsCheckAToO {
 			+ 'M-FOLD-FACTS-OPERAND,M-FACTS-VALUE-TYPE-FLOWS',
 		'unit.check.FactsFixGateE2ETest#testWhatTheConfigurationsRecordDifferentlyKeepsEveryFixOff :: control :: '
 			+ 'M-FACTS-ALIKE-FOLD,M-FACTS-ALIKE-TOSTRING,M-FACTS-META-UNION',
-		'unit.check.FactsTypeOracleE2ETest#testAReorderedFileIsPlacedOnlyThroughTheEditsItsRunApplied :: guard :: ',
-		'unit.check.FactsTypeOracleE2ETest#testTheFactsTypeEveryDeclarationKindAndKeepTheProgram :: control :: M-ASSISTED-FACTS-FIRST,'
-			+ 'M-ASSISTED-DECLINE-CENSUS,M-EXPLICIT-TYPE-ORACLE-PARAMS,M-EXPLICIT-TYPE-ORACLE-FIELDS,M-FACTS-DYNAMIC-SOURCE',
-		'unit.check.FactsTypeOracleE2ETest#testTheFirstWriteWaitsForTheFactsCompile :: guard :: ',
-		'unit.check.FactsTypeOracleTest#testAFieldTheConfigurationsTypeApartDeclines :: control :: M-FACTS-FIELD-TYPES',
-		'unit.check.FactsTypeOracleTest#testAFinalClassIsItsOwnHome :: control :: M-ORACLE-HOME-MODIFIED-TYPE',
-		'unit.check.FactsTypeOracleTest#testARangeHoldingCodeTheTextDoesNotSpellHasNoType :: control :: M-FACTS-READ-RECORD-NAME,M-FACTS-READ-NAME,M-FACTS-RECEIVER-CALL,M-FACTS-SPELLED-CALL,M-FACTS-FOREIGN-SITE,M-FACTS-TEMP-LOCAL,M-FACTS-TEMP-ALONE,M-FACTS-VALUE-CALLEE,M-FACTTEXT-EMPTY-MENTION,M-FACTTEXT-EMPTY-CALL',
-		'unit.check.FactsTypeOracleTest#testARewriteDropsOnlyTheNodesThatReadIt :: control :: M-FACTS-MADE-FROM-ALL,M-FACTS-MADE-FROM-NONE',
-		'unit.check.FactsTypeOracleTest#testARewrittenFileIsReadAtTheTextTheCompileRead :: control :: '
-			+ 'M-FACTS-ORACLE-ORIGINAL,M-JOURNAL-SHIFT',
-		'unit.check.FactsTypeOracleTest#testASignatureTheConfigurationsTypeApartDeclines :: control :: M-FACTS-SIGNATURE-VARIANTS',
-		'unit.check.FactsTypeOracleTest#testASiteAfterNonAsciiTextIsFound :: control :: M-CODEPOINT-NATIVE',
-		'unit.check.FactsTypeOracleTest#testATypeParameterOutOfScopeDeclines :: control :: M-FACTS-SPELL-SCOPE',
-		'unit.check.FactsTypeOracleTest#testAValueIsTypedByTheFlowsAtItsRange :: control :: M-FACTS-VALUE-FLOWS,M-FACTS-ORACLE-RAW-AGREE',
-		'unit.check.FactsTypeOracleTest#testAnEditAnywhereInTheMemberDeclines :: control :: M-ORACLE-WHOLE-MEMBER',
-		'unit.check.FactsTypeOracleTest#testAnUnknownDeclines :: control :: M-FACTS-SPELL-UNKNOWN,M-FACTS-TREE-OPTIONAL',
-		'unit.check.FactsTypeOracleTest#testCodeNoConfigurationCompiledDeclines :: control :: M-FACTS-ABSENT',
-		'unit.check.FactsTypeOracleTest#testConfigurationsThatDisagreeDecline :: control :: M-FACTS-ORACLE-AGREE,M-FACTS-UNION',
-		'unit.check.FactsTypeOracleTest#testExplicitTypeSaysWhyItsStructuralFixDeclined :: control :: M-EXPLICIT-TYPE-STRUCTURAL-DECLINE',
-		'unit.check.FactsTypeOracleTest#testFactsOfAnotherMemberDecline :: control :: M-ORACLE-HOME-GUARD',
-		'unit.check.FactsTypeOracleTest#testFactsOfAnotherTextThanTheOriginalAreStale :: control :: M-FACTS-INVALIDATE-FOREIGN',
-		'unit.check.FactsTypeOracleTest#testTypesNoSourceCanSpellDecline :: control :: M-FACTS-SPELL-IMPL',
-		'unit.check.FactsTypeTextTest#testOnlyAWrapperEnclosingTheWholeTypeIsPeeled :: control :: M-FACTS-NULL-PEEL-UNMATCHED',
 		'unit.check.FieldInitAcrossSuperE2ETest#testAProvenInitCrossesSuperAndThePrefix :: control :: '
 			+ 'M-FIAD-PROVEN-NEVER,M-FRESH-ONLY-ENTRY-FACETED',
 		'unit.check.FieldInitAcrossSuperE2ETest#testAnObservableCrossingKeepsTheInit :: control :: '

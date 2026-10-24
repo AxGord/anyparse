@@ -1,4 +1,4 @@
-package anyparse.check;
+package anyparse.check.facts;
 
 #if macro
 import haxe.Json;

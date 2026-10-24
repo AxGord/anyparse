@@ -2,7 +2,7 @@ package dev;
 
 import anyparse.check.LintConfig;
 import anyparse.check.OracleGeneration;
-import anyparse.check.TypedFactsProbe;
+import anyparse.check.facts.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;

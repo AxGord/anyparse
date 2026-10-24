@@ -1,8 +1,8 @@
-package anyparse.check;
+package anyparse.check.facts;
 
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
-import anyparse.check.FactsTypeSpelling.TypeScope;
+import anyparse.check.facts.FactsTypeSpelling.TypeScope;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;

@@ -4,12 +4,12 @@ package unit.check;
 import sys.io.File;
 #end
 import anyparse.check.CompilerOracle;
-import anyparse.check.FactsTypeOracle;
 import anyparse.check.HaxeSpawn;
 import anyparse.check.LintConfig;
 import anyparse.check.PreferStaticExtension;
 import anyparse.check.StaticExtensionFacts;
-import anyparse.check.TypedFactsProbe;
+import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.facts.TypedFactsProbe;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.CompilerFacts;

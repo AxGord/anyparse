@@ -972,56 +972,6 @@ final class PinsCheckPToZ {
 		'unit.check.TypedEventConstantCheckTest#testAnAbstractWithoutBothStringConversionsMakesTheRuleInert :: control :: '
 			+ 'M-EVENT-ABSTRACT-TRUSTED',
 		'unit.check.TypedEventConstantCheckTest#testAnEventDispatchedAsAnotherClassIsALatentBug :: control :: M-EVENT-NO-MISMATCH',
-		'unit.check.TypedFactsProbeTest#testACallSiteInlineIsASpliceOfItsMethodNotAMacro :: control :: M-FACTS-CALL-SITE-INLINE',
-		'unit.check.TypedFactsProbeTest#testAConfigurationThatFailsContributesNothing :: control :: M-FACTS-DROPPED',
-		'unit.check.TypedFactsProbeTest#testAConvertedObjectOfExactlyItsClassAndAThrownException :: control :: '
-			+ 'M-FACTS-STRING-EXACT,M-FACTS-THROW-EXCEPTION,M-FACTS-EXACT-WRITTEN,M-FACTS-FLOW-EXACT',
-		'unit.check.TypedFactsProbeTest#testAFieldReadAnInlinedMethodTakesAsItsReceiverIsTheCallsReceiver :: control :: '
-			+ 'M-FACTS-INLINED-RECEIVER,M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
-		'unit.check.TypedFactsProbeTest#testAFieldReadSaysHowItsValueIsUsed :: control :: M-FACTS-USE,M-FACTS-HELD,M-FACTS-CAPTURE',
-		'unit.check.TypedFactsProbeTest#testAFieldValueStoredInALocalIsUsedAsTheLocalsReads :: control :: M-FACTS-ASSIGN-HELD,'
-			+ 'M-FACTS-ASSIGNED-NO-USE,M-FACTS-ASSIGNED-TARGET,M-FACTS-ALIAS-LINK,M-FACTS-HELD-LOCAL,M-FACTS-SUBSTITUTED-RECEIVER,'
-			+ 'M-FACTS-SUBSTITUTED-ARITY,M-FACTS-SUBSTITUTED-OWNER,M-FACTS-ASSIGN-STATEMENT,M-FACTS-ASSIGN-OWNER,M-FACTS-HELD-FLAG',
-		'unit.check.TypedFactsProbeTest#testAFileWrittenWhileTheCompileRanIsStale :: control :: '
-			+ 'M-FACTS-WRITTEN-DURING,M-FACTS-CHANGED-STALE',
-		'unit.check.TypedFactsProbeTest#testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection :: control :: '
-			+ 'M-FACTS-STALE-FOREIGN,M-FACTS-REFLECTION-PATH',
-		'unit.check.TypedFactsProbeTest#testARangeMeetingTheBodyIsItsOwnCode :: control :: M-FACTS-ABSTRACT-THIS',
-		'unit.check.TypedFactsProbeTest#testAReflectiveCallRecordsTheLiteralItsNameArgumentHolds :: control :: '
-			+ 'M-FACTS-REFL-MEMBER-NAME,M-FACTS-REFL-MEMBER-NAME-ANY,M-FACTS-REFL-MEMBER-NAME-TABLE',
-		'unit.check.TypedFactsProbeTest#testAWriteOfAValueBuiltThereAndHandedNowhereIsFresh :: control :: '
-			+ 'M-FACTS-FRESH,M-FACTS-FRESH-DISCARDED',
-		'unit.check.TypedFactsProbeTest#testAbstractOperatorsConversionsAndAccessorsAreCallsOfTheirImplementations :: control :: '
-			+ 'M-FACTS-CALL-TARGET',
-		'unit.check.TypedFactsProbeTest#testAnElementWriteIsAWriteThroughTheArrayAtItsOwnRead :: control :: M-FACTS-ELEMENT-WRITE',
-		'unit.check.TypedFactsProbeTest#testAnImplicitConstructorCallsSuperAndAnInitializerIsANode :: control :: '
-			+ 'M-FACTS-SUPER,M-FACTS-INITIALIZER',
-		'unit.check.TypedFactsProbeTest#testAnImportAliasIsATypedefAndTheStaticsOfAnEnumReadAsAType :: control :: '
-			+ 'M-FACTS-ALIAS-TYPEDEF,M-FACTS-STATICS-TYPEDEF',
-		'unit.check.TypedFactsProbeTest#testAnInlineCallIsNoCallSiteAndItsBodyKeepsTheCalleesPositions :: control :: '
-			+ 'M-FACTS-INLINE-POSITIONS,M-FACTS-SAME-FILE-INLINE',
-		'unit.check.TypedFactsProbeTest#testAnInlinedCallCarriesWhereItRanAndTheBodyItSplicedIn :: control :: '
-			+ 'M-FACTS-SPLICE-SITE,M-FACTS-SPLICE-SITE-INNERMOST,M-FACTS-SPLICE-BODY,M-FACTS-NESTED-SPLICE',
-		'unit.check.TypedFactsProbeTest#testCodeNoConfigurationCompiledIsAbsent :: control :: M-FACTS-ABSENT',
-		'unit.check.TypedFactsProbeTest#testEveryCallAndFieldAccessKind :: control :: M-FACTS-LOCAL-CALL,M-FACTS-FIELD-WRITE',
-		'unit.check.TypedFactsProbeTest#testEveryOverloadIsANodeAndACallNamesTheOneItChose :: control :: M-FACTS-OVERLOADS',
-		'unit.check.TypedFactsProbeTest#testEveryValueChannelIntoAnotherTypeIsAFlow :: control :: '
-			+ 'M-FACTS-BRANCH-LEAVES,M-FACTS-MONO-SINK,M-FACTS-CAST-ALWAYS,M-FACTS-THROW,M-FACTS-UNTYPED-ARGS,M-FACTS-REST',
-		'unit.check.TypedFactsProbeTest#testFactsOfAnotherTextAreAbsent :: control :: '
-			+ 'M-FACTS-STALE-SOURCE,M-FACTS-INVALIDATE,M-FACTS-VARIANT-RANGES',
-		'unit.check.TypedFactsProbeTest#testFlowsIntoOtherTypes :: control :: M-FACTS-FLOW-CAST,M-FACTS-TYPE-PARAMETER',
-		'unit.check.TypedFactsProbeTest#testGenericInstancesInitAndCallsThatNameNoFixedBody :: control :: '
-			+ 'M-FACTS-GENERIC,M-FACTS-INIT,M-FACTS-REASSIGNED-LOCAL,M-FACTS-FIELD-VALUE,M-FACTS-REFLECTION-INLINED,M-FACTS-REFLECT-VALUE,'
-			+ 'M-FACTS-UNTYPED-DECLARED,M-FACTS-IDENT-READ,M-FACTS-GENERIC-RANGES,M-FACTS-BUILDS',
-		'unit.check.TypedFactsProbeTest#testHierarchyIsPackageQualifiedOverTheWholeTypedSet :: control :: M-FACTS-HIERARCHY',
-		'unit.check.TypedFactsProbeTest#testLoopsAndStringConversions :: control :: M-FACTS-ITER,M-FACTS-STRING-OPERAND,M-FACTS-TYPE-TEXT',
-		'unit.check.TypedFactsProbeTest#testPositionsAreSpanUnitsPastNonAsciiText :: control :: M-CODEPOINT-NATIVE,M-FACTS-READS,M-FACTS-READ-EMIT-NAME',
-		'unit.check.TypedFactsProbeTest#testReflectionAndNativeSites :: control :: M-FACTS-REFLECT-NAME,M-FACTS-NATIVE',
-		'unit.check.TypedFactsProbeTest#testSplicedCodeIsTheCallersAndItsSiteIsUnknown :: control :: M-FACTS-INLINED-CALL,'
-			+ 'M-FACTS-INLINED-CHILD,M-FACTS-GENERATED,M-FACTS-SITE-UNKNOWN,M-FACTS-MACRO-EXPANSION,M-FACTS-SPLICE-OWN-ARGUMENTS',
-		'unit.check.TypedFactsProbeTest#testTheTableIsTheUnionOfTheConfigurations :: control :: M-FACTS-UNION',
-		'unit.check.TypedFactsProbeTest#testWhatExternCodeIsHandedAndWhatAGenericMethodIsInstantiatedAt :: control :: '
-			+ 'M-FACTS-HANDS,M-FACTS-GENS',
 		'unit.check.UnguardedNullableDerefTest#testDeclaredNullableFromANullableFieldStillFlagged :: control :: '
 			+ 'M-DECL-INIT-RECEIVER-MODE-NOMINAL',
 		'unit.check.UnguardedNullableDerefTest#testDeclaredNullableLocalFlagged :: control :: M-DECL-NULLABLE-BLIND',
@@ -1140,7 +1090,80 @@ final class PinsCheckPToZ {
 		'unit.check.UsingSitesTest#testAStaticOfATypeExpressionIsNoUse :: control :: M-USING-STATIC-RECEIVER',
 		'unit.check.UsingSitesTest#testATypeArgumentOnTheFirstParameterKeepsEveryModule :: guard :: ',
 		'unit.check.UsingSitesTest#testAValueSpelledLikeATypeIsNoTypeExpression :: control :: M-USING-STATIC-SHADOW',
-		'unit.check.UsingSitesTest#testAnAccessTheModuleBindsOrCannotBeTypedKeepsIt :: guard :: '
+		'unit.check.UsingSitesTest#testAnAccessTheModuleBindsOrCannotBeTypedKeepsIt :: guard :: ',
+		'unit.check.facts.FactsTypeOracleE2ETest#testAReorderedFileIsPlacedOnlyThroughTheEditsItsRunApplied :: guard :: ',
+		'unit.check.facts.FactsTypeOracleE2ETest#testTheFactsTypeEveryDeclarationKindAndKeepTheProgram :: control :: M-ASSISTED-FACTS-FIRST,'
+			+ 'M-ASSISTED-DECLINE-CENSUS,M-EXPLICIT-TYPE-ORACLE-PARAMS,M-EXPLICIT-TYPE-ORACLE-FIELDS,M-FACTS-DYNAMIC-SOURCE',
+		'unit.check.facts.FactsTypeOracleE2ETest#testTheFirstWriteWaitsForTheFactsCompile :: guard :: ',
+		'unit.check.facts.FactsTypeOracleTest#testAFieldTheConfigurationsTypeApartDeclines :: control :: M-FACTS-FIELD-TYPES',
+		'unit.check.facts.FactsTypeOracleTest#testAFinalClassIsItsOwnHome :: control :: M-ORACLE-HOME-MODIFIED-TYPE',
+		'unit.check.facts.FactsTypeOracleTest#testARangeHoldingCodeTheTextDoesNotSpellHasNoType :: control :: M-FACTS-READ-RECORD-NAME,M-FACTS-READ-NAME,M-FACTS-RECEIVER-CALL,M-FACTS-SPELLED-CALL,M-FACTS-FOREIGN-SITE,M-FACTS-TEMP-LOCAL,M-FACTS-TEMP-ALONE,M-FACTS-VALUE-CALLEE,M-FACTTEXT-EMPTY-MENTION,M-FACTTEXT-EMPTY-CALL',
+		'unit.check.facts.FactsTypeOracleTest#testARewriteDropsOnlyTheNodesThatReadIt :: control :: M-FACTS-MADE-FROM-ALL,M-FACTS-MADE-FROM-NONE',
+		'unit.check.facts.FactsTypeOracleTest#testARewrittenFileIsReadAtTheTextTheCompileRead :: control :: '
+			+ 'M-FACTS-ORACLE-ORIGINAL,M-JOURNAL-SHIFT',
+		'unit.check.facts.FactsTypeOracleTest#testASignatureTheConfigurationsTypeApartDeclines :: control :: M-FACTS-SIGNATURE-VARIANTS',
+		'unit.check.facts.FactsTypeOracleTest#testASiteAfterNonAsciiTextIsFound :: control :: M-CODEPOINT-NATIVE',
+		'unit.check.facts.FactsTypeOracleTest#testATypeParameterOutOfScopeDeclines :: control :: M-FACTS-SPELL-SCOPE',
+		'unit.check.facts.FactsTypeOracleTest#testAValueIsTypedByTheFlowsAtItsRange :: control :: M-FACTS-VALUE-FLOWS,M-FACTS-ORACLE-RAW-AGREE',
+		'unit.check.facts.FactsTypeOracleTest#testAnEditAnywhereInTheMemberDeclines :: control :: M-ORACLE-WHOLE-MEMBER',
+		'unit.check.facts.FactsTypeOracleTest#testAnUnknownDeclines :: control :: M-FACTS-SPELL-UNKNOWN,M-FACTS-TREE-OPTIONAL',
+		'unit.check.facts.FactsTypeOracleTest#testCodeNoConfigurationCompiledDeclines :: control :: M-FACTS-ABSENT',
+		'unit.check.facts.FactsTypeOracleTest#testConfigurationsThatDisagreeDecline :: control :: M-FACTS-ORACLE-AGREE,M-FACTS-UNION',
+		'unit.check.facts.FactsTypeOracleTest#testExplicitTypeSaysWhyItsStructuralFixDeclined :: control :: M-EXPLICIT-TYPE-STRUCTURAL-DECLINE',
+		'unit.check.facts.FactsTypeOracleTest#testFactsOfAnotherMemberDecline :: control :: M-ORACLE-HOME-GUARD',
+		'unit.check.facts.FactsTypeOracleTest#testFactsOfAnotherTextThanTheOriginalAreStale :: control :: M-FACTS-INVALIDATE-FOREIGN',
+		'unit.check.facts.FactsTypeOracleTest#testTypesNoSourceCanSpellDecline :: control :: M-FACTS-SPELL-IMPL',
+		'unit.check.facts.FactsTypeTextTest#testOnlyAWrapperEnclosingTheWholeTypeIsPeeled :: control :: M-FACTS-NULL-PEEL-UNMATCHED',
+		'unit.check.facts.TypedFactsProbeTest#testACallSiteInlineIsASpliceOfItsMethodNotAMacro :: control :: M-FACTS-CALL-SITE-INLINE',
+		'unit.check.facts.TypedFactsProbeTest#testAConfigurationThatFailsContributesNothing :: control :: M-FACTS-DROPPED',
+		'unit.check.facts.TypedFactsProbeTest#testAConvertedObjectOfExactlyItsClassAndAThrownException :: control :: '
+			+ 'M-FACTS-STRING-EXACT,M-FACTS-THROW-EXCEPTION,M-FACTS-EXACT-WRITTEN,M-FACTS-FLOW-EXACT',
+		'unit.check.facts.TypedFactsProbeTest#testAFieldReadAnInlinedMethodTakesAsItsReceiverIsTheCallsReceiver :: control :: '
+			+ 'M-FACTS-INLINED-RECEIVER,M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
+		'unit.check.facts.TypedFactsProbeTest#testAFieldReadSaysHowItsValueIsUsed :: control :: M-FACTS-USE,M-FACTS-HELD,M-FACTS-CAPTURE',
+		'unit.check.facts.TypedFactsProbeTest#testAFieldValueStoredInALocalIsUsedAsTheLocalsReads :: control :: M-FACTS-ASSIGN-HELD,'
+			+ 'M-FACTS-ASSIGNED-NO-USE,M-FACTS-ASSIGNED-TARGET,M-FACTS-ALIAS-LINK,M-FACTS-HELD-LOCAL,M-FACTS-SUBSTITUTED-RECEIVER,'
+			+ 'M-FACTS-SUBSTITUTED-ARITY,M-FACTS-SUBSTITUTED-OWNER,M-FACTS-ASSIGN-STATEMENT,M-FACTS-ASSIGN-OWNER,M-FACTS-HELD-FLAG',
+		'unit.check.facts.TypedFactsProbeTest#testAFileWrittenWhileTheCompileRanIsStale :: control :: '
+			+ 'M-FACTS-WRITTEN-DURING,M-FACTS-CHANGED-STALE',
+		'unit.check.facts.TypedFactsProbeTest#testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection :: control :: '
+			+ 'M-FACTS-STALE-FOREIGN,M-FACTS-REFLECTION-PATH',
+		'unit.check.facts.TypedFactsProbeTest#testARangeMeetingTheBodyIsItsOwnCode :: control :: M-FACTS-ABSTRACT-THIS',
+		'unit.check.facts.TypedFactsProbeTest#testAReflectiveCallRecordsTheLiteralItsNameArgumentHolds :: control :: '
+			+ 'M-FACTS-REFL-MEMBER-NAME,M-FACTS-REFL-MEMBER-NAME-ANY,M-FACTS-REFL-MEMBER-NAME-TABLE',
+		'unit.check.facts.TypedFactsProbeTest#testAWriteOfAValueBuiltThereAndHandedNowhereIsFresh :: control :: '
+			+ 'M-FACTS-FRESH,M-FACTS-FRESH-DISCARDED',
+		'unit.check.facts.TypedFactsProbeTest#testAbstractOperatorsConversionsAndAccessorsAreCallsOfTheirImplementations :: control :: '
+			+ 'M-FACTS-CALL-TARGET',
+		'unit.check.facts.TypedFactsProbeTest#testAnElementWriteIsAWriteThroughTheArrayAtItsOwnRead :: control :: M-FACTS-ELEMENT-WRITE',
+		'unit.check.facts.TypedFactsProbeTest#testAnImplicitConstructorCallsSuperAndAnInitializerIsANode :: control :: '
+			+ 'M-FACTS-SUPER,M-FACTS-INITIALIZER',
+		'unit.check.facts.TypedFactsProbeTest#testAnImportAliasIsATypedefAndTheStaticsOfAnEnumReadAsAType :: control :: '
+			+ 'M-FACTS-ALIAS-TYPEDEF,M-FACTS-STATICS-TYPEDEF',
+		'unit.check.facts.TypedFactsProbeTest#testAnInlineCallIsNoCallSiteAndItsBodyKeepsTheCalleesPositions :: control :: '
+			+ 'M-FACTS-INLINE-POSITIONS,M-FACTS-SAME-FILE-INLINE',
+		'unit.check.facts.TypedFactsProbeTest#testAnInlinedCallCarriesWhereItRanAndTheBodyItSplicedIn :: control :: '
+			+ 'M-FACTS-SPLICE-SITE,M-FACTS-SPLICE-SITE-INNERMOST,M-FACTS-SPLICE-BODY,M-FACTS-NESTED-SPLICE',
+		'unit.check.facts.TypedFactsProbeTest#testCodeNoConfigurationCompiledIsAbsent :: control :: M-FACTS-ABSENT',
+		'unit.check.facts.TypedFactsProbeTest#testEveryCallAndFieldAccessKind :: control :: M-FACTS-LOCAL-CALL,M-FACTS-FIELD-WRITE',
+		'unit.check.facts.TypedFactsProbeTest#testEveryOverloadIsANodeAndACallNamesTheOneItChose :: control :: M-FACTS-OVERLOADS',
+		'unit.check.facts.TypedFactsProbeTest#testEveryValueChannelIntoAnotherTypeIsAFlow :: control :: '
+			+ 'M-FACTS-BRANCH-LEAVES,M-FACTS-MONO-SINK,M-FACTS-CAST-ALWAYS,M-FACTS-THROW,M-FACTS-UNTYPED-ARGS,M-FACTS-REST',
+		'unit.check.facts.TypedFactsProbeTest#testFactsOfAnotherTextAreAbsent :: control :: '
+			+ 'M-FACTS-STALE-SOURCE,M-FACTS-INVALIDATE,M-FACTS-VARIANT-RANGES',
+		'unit.check.facts.TypedFactsProbeTest#testFlowsIntoOtherTypes :: control :: M-FACTS-FLOW-CAST,M-FACTS-TYPE-PARAMETER',
+		'unit.check.facts.TypedFactsProbeTest#testGenericInstancesInitAndCallsThatNameNoFixedBody :: control :: '
+			+ 'M-FACTS-GENERIC,M-FACTS-INIT,M-FACTS-REASSIGNED-LOCAL,M-FACTS-FIELD-VALUE,M-FACTS-REFLECTION-INLINED,M-FACTS-REFLECT-VALUE,'
+			+ 'M-FACTS-UNTYPED-DECLARED,M-FACTS-IDENT-READ,M-FACTS-GENERIC-RANGES,M-FACTS-BUILDS',
+		'unit.check.facts.TypedFactsProbeTest#testHierarchyIsPackageQualifiedOverTheWholeTypedSet :: control :: M-FACTS-HIERARCHY',
+		'unit.check.facts.TypedFactsProbeTest#testLoopsAndStringConversions :: control :: M-FACTS-ITER,M-FACTS-STRING-OPERAND,M-FACTS-TYPE-TEXT',
+		'unit.check.facts.TypedFactsProbeTest#testPositionsAreSpanUnitsPastNonAsciiText :: control :: M-CODEPOINT-NATIVE,M-FACTS-READS,M-FACTS-READ-EMIT-NAME',
+		'unit.check.facts.TypedFactsProbeTest#testReflectionAndNativeSites :: control :: M-FACTS-REFLECT-NAME,M-FACTS-NATIVE',
+		'unit.check.facts.TypedFactsProbeTest#testSplicedCodeIsTheCallersAndItsSiteIsUnknown :: control :: M-FACTS-INLINED-CALL,'
+			+ 'M-FACTS-INLINED-CHILD,M-FACTS-GENERATED,M-FACTS-SITE-UNKNOWN,M-FACTS-MACRO-EXPANSION,M-FACTS-SPLICE-OWN-ARGUMENTS',
+		'unit.check.facts.TypedFactsProbeTest#testTheTableIsTheUnionOfTheConfigurations :: control :: M-FACTS-UNION',
+		'unit.check.facts.TypedFactsProbeTest#testWhatExternCodeIsHandedAndWhatAGenericMethodIsInstantiatedAt :: control :: '
+			+ 'M-FACTS-HANDS,M-FACTS-GENS'
 	];
 
 }

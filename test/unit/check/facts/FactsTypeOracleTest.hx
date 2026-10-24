@@ -1,9 +1,9 @@
-package unit.check;
+package unit.check.facts;
 
 import anyparse.check.Check.OracleType;
 import anyparse.check.ExplicitType;
-import anyparse.check.FactsTypeOracle;
-import anyparse.check.FactsTypeSpelling;
+import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.facts.FactsTypeSpelling;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
 import anyparse.query.FactText;

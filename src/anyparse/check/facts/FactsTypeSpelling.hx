@@ -1,10 +1,10 @@
-package anyparse.check;
+package anyparse.check.facts;
 
 import anyparse.check.Check.OracleType;
-import anyparse.check.FactsTypeOracle.FactsDecline;
-import anyparse.check.FactsTypeTree.FactsArgument;
-import anyparse.check.FactsTypeTree.FactsField;
-import anyparse.check.FactsTypeTree.FactsType;
+import anyparse.check.facts.FactsTypeOracle.FactsDecline;
+import anyparse.check.facts.FactsTypeTree.FactsArgument;
+import anyparse.check.facts.FactsTypeTree.FactsField;
+import anyparse.check.facts.FactsTypeTree.FactsType;
 import anyparse.query.SourceText;
 
 /** The type parameters a spelled type may name: those of the type `owner` (an id) and of the method `method`. */

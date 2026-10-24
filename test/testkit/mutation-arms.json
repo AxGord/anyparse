@@ -7885,7 +7885,7 @@
 		},
 		{
 			"name": "M-FACTS-CALL-TARGET",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "fieldCall",
 			"find": "'{\"t\":${q(targetName)},\"a\":\"$kind\"$chosen,",
 			"replace": "'{\"a\":\"$kind\"$chosen,",
@@ -7893,7 +7893,7 @@
 		},
 		{
 			"name": "M-FACTS-SUPER",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "call",
 			"find": "',\"t\":' + q(c.toString() + '.new');",
 			"replace": "'';",
@@ -7901,7 +7901,7 @@
 		},
 		{
 			"name": "M-FACTS-INITIALIZER",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "classType",
 			"find": "case FVar(_, _): 'var';",
 			"replace": "case FVar(_, _): 'method';",
@@ -7909,7 +7909,7 @@
 		},
 		{
 			"name": "M-FACTS-ITER",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "add('iters', '{\"v\":${q(str(v.t))},\"i\":${q(str(it.t))},\"p\":${at(e.pos)}}');",
 			"replace": "",
@@ -7917,7 +7917,7 @@
 		},
 		{
 			"name": "M-FACTS-STRING-OPERAND",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "stringSite",
 			"find": "add('strs', '{\"o\":${q(str(operand.t))},\"p\":${at(operand.pos)}' + (exactObject(operand) ? ',\"x\":true}' : '}'));",
 			"replace": "",
@@ -7925,7 +7925,7 @@
 		},
 		{
 			"name": "M-FACTS-LOCAL-CALL",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "if (!_written.exists(v.id)) _locals[v.id] = made;",
 			"replace": "{}",
@@ -7933,7 +7933,7 @@
 		},
 		{
 			"name": "M-FACTS-FIELD-WRITE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "target",
 			"find": "fieldFact(lhs, receiver, fa, true,",
 			"replace": "fieldFact(lhs, receiver, fa, false,",
@@ -7941,7 +7941,7 @@
 		},
 		{
 			"name": "M-FACTS-REFLECT-NAME",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "reflection",
 			"find": "literal = ',\"n\":${Json.stringify(s)}';",
 			"replace": "literal = '';",
@@ -7949,7 +7949,7 @@
 		},
 		{
 			"name": "M-FACTS-NATIVE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "fieldCall",
 			"find": "add('native', '{\"w\":\"syntax\",\"n\":${q(targetName)},\"p\":$where$code${handedText(args)}}');",
 			"replace": "{}",
@@ -7957,7 +7957,7 @@
 		},
 		{
 			"name": "M-FACTS-FLOW-CAST",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "flowText(sourceType(inner), sink == '?' ? 'Dynamic' : sink, 'cast', e.pos);",
 			"replace": "",
@@ -7965,7 +7965,7 @@
 		},
 		{
 			"name": "M-FACTS-TYPE-PARAMETER",
-			"type": "anyparse.check.TypedFactsTypeStrings",
+			"type": "anyparse.check.facts.TypedFactsTypeStrings",
 			"method": "instString",
 			"find": "return isParam ? '$$$path' : path + paramString(params, depth);",
 			"replace": "return path + paramString(params, depth);",
@@ -8018,7 +8018,7 @@
 		},
 		{
 			"name": "M-FACTS-INLINE-POSITIONS",
-			"type": "anyparse.check.TypedFactsProbe",
+			"type": "anyparse.check.facts.TypedFactsProbe",
 			"method": "compileArgs",
 			"find": "defines.concat(['keep-inline-positions'])",
 			"replace": "defines",
@@ -8033,7 +8033,7 @@
 		},
 		{
 			"name": "M-FACTS-READS",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "if (!v.name.startsWith('`')) add('reads', '[${range(e.pos)},${q(localType(v))},${q(v.name)}]');",
 			"replace": "{}",
@@ -8041,7 +8041,7 @@
 		},
 		{
 			"name": "M-FACTS-BRANCH-LEAVES",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "flowInto",
 			"find": "collectLeaves(value, leaves);",
 			"replace": "leaves.push(value);",
@@ -8049,7 +8049,7 @@
 		},
 		{
 			"name": "M-FACTS-MONO-SINK",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "flowInto",
 			"find": "final sink: String = to == '?' ? 'Dynamic' : to;",
 			"replace": "final sink: String = to;",
@@ -8057,7 +8057,7 @@
 		},
 		{
 			"name": "M-FACTS-CAST-ALWAYS",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "flowText",
 			"find": "if (how != 'cast' && FactsTypeText.unwrapNull(s) == FactsTypeText.unwrapNull(d)) return;",
 			"replace": "if (FactsTypeText.unwrapNull(s) == FactsTypeText.unwrapNull(d)) return;",
@@ -8065,7 +8065,7 @@
 		},
 		{
 			"name": "M-FACTS-THROW",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "flowInto(value, 'Dynamic', 'throw', e.pos);",
 			"replace": "",
@@ -8073,7 +8073,7 @@
 		},
 		{
 			"name": "M-FACTS-UNTYPED-ARGS",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "argFlows",
 			"find": "for (a in args) flowInto(a, 'Dynamic', 'arg', a.pos);",
 			"replace": "",
@@ -8081,7 +8081,7 @@
 		},
 		{
 			"name": "M-FACTS-REST",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "argFlows",
 			"find": "if (element != null) rest = str(element);",
 			"replace": "",
@@ -8089,7 +8089,7 @@
 		},
 		{
 			"name": "M-FACTS-GENERIC",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "moduleType",
 			"find": "case KTypeParameter(_), KMacroType, KGenericBuild, KExpr(_):",
 			"replace": "case KGenericInstance(_, _), KTypeParameter(_), KMacroType, KGenericBuild, KExpr(_):",
@@ -8097,7 +8097,7 @@
 		},
 		{
 			"name": "M-FACTS-INIT",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "classType",
 			"find": "walkBody(init, '$id.__init__', 'init', id, true, '()->Void', home, 0, genericCopy);",
 			"replace": "",
@@ -8105,7 +8105,7 @@
 		},
 		{
 			"name": "M-FACTS-REASSIGNED-LOCAL",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "if (!_written.exists(v.id)) _locals[v.id] = made;",
 			"replace": "_locals[v.id] = made;",
@@ -8113,7 +8113,7 @@
 		},
 		{
 			"name": "M-FACTS-FIELD-VALUE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "calledKind",
 			"find": "'fieldValue'",
 			"replace": "kind",
@@ -8121,7 +8121,7 @@
 		},
 		{
 			"name": "M-FACTS-REFLECTION-INLINED",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "at",
 			"find": "incomplete('reflection-inlined');",
 			"replace": "",
@@ -8129,7 +8129,7 @@
 		},
 		{
 			"name": "M-FACTS-OVERLOADS",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "classType",
 			"find": "for (o in m.f.overloads.get())",
 			"replace": "for (o in new Array<ClassField>())",
@@ -8137,7 +8137,7 @@
 		},
 		{
 			"name": "M-FACTS-INLINED-CHILD",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "child",
 			"find": "if (!_inBody || !inside) nested._header += ',\"inl\":${q(id)}';",
 			"replace": "",
@@ -8145,7 +8145,7 @@
 		},
 		{
 			"name": "M-FACTS-GENERATED",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "walkBody",
 			"find": "if (fileOf(body.pos) != home) walk.flag('gen');",
 			"replace": "",
@@ -8177,7 +8177,7 @@
 		},
 		{
 			"name": "M-FACTS-DROPPED",
-			"type": "anyparse.check.TypedFactsProbe",
+			"type": "anyparse.check.facts.TypedFactsProbe",
 			"method": "finish",
 			"find": "facts.dropped.push({ name: OracleDeclaration.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });",
 			"replace": "{}",
@@ -8185,7 +8185,7 @@
 		},
 		{
 			"name": "M-FACTS-INLINED-CALL",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "spliced",
 			"find": "inlinedCall(callee, e.t, at(e.pos));",
 			"replace": "",
@@ -8193,7 +8193,7 @@
 		},
 		{
 			"name": "M-FACTS-SAME-FILE-INLINE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "walk",
 			"find": "final inside: Bool = info.file == _home && info.min >= _min && info.max <= _max;",
 			"replace": "final inside: Bool = info.file == _home;",
@@ -8209,7 +8209,7 @@
 		},
 		{
 			"name": "M-FACTS-MACRO-EXPANSION",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "spliced",
 			"find": "incomplete('macro-expansion');",
 			"replace": "",
@@ -8217,7 +8217,7 @@
 		},
 		{
 			"name": "M-FACTS-REFLECT-VALUE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "reflectionValue",
 			"find": "add('refl', '{\"t\":${q(c.toString() + '.' + cf.toString())},\"v\":true,\"p\":${at(e.pos)}}');",
 			"replace": "{}",
@@ -8225,14 +8225,14 @@
 		},
 		{
 			"name": "M-FACTS-UNTYPED-DECLARED",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "sourceType",
 			"force": "str(leaf.t)",
 			"note": "an untyped-retyped value flows at its retyped type"
 		},
 		{
 			"name": "M-FACTS-IDENT-READ",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "add('native', '{\"w\":\"ident\",\"n\":${q(identifier)},\"p\":${at(e.pos)}$rooted}');",
 			"replace": "",
@@ -8248,7 +8248,7 @@
 		},
 		{
 			"name": "M-FACTS-BUILDS",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "metaList",
 			"find": "for (p in m.params ?? []) q(haxe.macro.ExprTools.toString(p))",
 			"replace": "for (p in new Array<haxe.macro.Expr>()) q(haxe.macro.ExprTools.toString(p))",
@@ -8264,7 +8264,7 @@
 		},
 		{
 			"name": "M-FACTS-REFLECTION-PATH",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "reflectionModule",
 			"force": "StringTools.endsWith(file, 'Type.hx') || StringTools.endsWith(file, 'Reflect.hx')",
 			"note": "any Type.hx or Reflect.hx counts as the std reflection"
@@ -8383,7 +8383,7 @@
 		},
 		{
 			"name": "M-FACTS-SPLICE-SITE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "inlinedCall",
 			"find": ",\"s\":[${_site.min},${_site.max}]",
 			"replace": "",
@@ -8391,7 +8391,7 @@
 		},
 		{
 			"name": "M-FACTS-SPLICE-SITE-INNERMOST",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "enterRange",
 			"find": "_site = { min: info.min, max: info.max }",
 			"replace": "_site = { min: _min, max: _max }",
@@ -8399,7 +8399,7 @@
 		},
 		{
 			"name": "M-FACTS-SPLICE-BODY",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "inlinedCall",
 			"find": ",\"d\":$declared",
 			"replace": "",
@@ -8407,7 +8407,7 @@
 		},
 		{
 			"name": "M-FACTS-NESTED-SPLICE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "enterRange",
 			"find": "nestedSplice(e, info);",
 			"replace": "{}",
@@ -8591,7 +8591,7 @@
 		},
 		{
 			"name": "M-FACTS-EXPANSION-RECORDED",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "spliced",
 			"find": "expanded(_host.macroCallee(info.file, info.min, info.max), e.pos, _home, _site);",
 			"replace": "",
@@ -8599,7 +8599,7 @@
 		},
 		{
 			"name": "M-FACTS-EXPANSION-NESTED",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "nestedSplice",
 			"find": "expanded(expander, e.pos, splice.file, _spliceSite);",
 			"replace": "",
@@ -8607,7 +8607,7 @@
 		},
 		{
 			"name": "M-FACTS-MACRO-CALLEE",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "collectFields",
 			"find": "case FMethod(MethMacro): _macros;",
 			"replace": "case FMethod(MethMacro): null;",
@@ -8799,7 +8799,7 @@
 		},
 		{
 			"name": "M-FACTS-CALL-SITE-INLINE",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "collectFields",
 			"find": "case FMethod(MethInline | MethNormal): _inlines;",
 			"replace": "case FMethod(MethInline): _inlines;",
@@ -8807,7 +8807,7 @@
 		},
 		{
 			"name": "M-FACTS-SPLICE-OWN-ARGUMENTS",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "spliced",
 			"find": "if (at.file == _home && at.min >= _min && at.max <= _max) continue;",
 			"replace": "",
@@ -8839,7 +8839,7 @@
 		},
 		{
 			"name": "M-FACTS-ABSTRACT-THIS",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "walk",
 			"find": "final straddles: Bool = !inside && info.file == _home && info.min <= _max && info.max >= _min;",
 			"replace": "final straddles: Bool = false;",
@@ -8847,7 +8847,7 @@
 		},
 		{
 			"name": "M-FACTS-ELEMENT-WRITE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "target",
 			"find": "add('elems', '{\"r\":${q(str(array.t))},\"rp\":${at(array.pos)},\"p\":${at(lhs.pos)}}');",
 			"replace": "",
@@ -8855,7 +8855,7 @@
 		},
 		{
 			"name": "M-FACTS-USE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "fieldFact(e, receiver, fa, false, ',${useText(use)}');",
 			"replace": "fieldFact(e, receiver, fa, false, ',${useText(Value)}');",
@@ -8863,7 +8863,7 @@
 		},
 		{
 			"name": "M-FACTS-HELD",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "_aliases[v.id] = alias;",
 			"replace": "",
@@ -8871,7 +8871,7 @@
 		},
 		{
 			"name": "M-FACTS-CAPTURE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "localRead",
 			"find": "if (alias.owner != id) {",
 			"replace": "if (false) {",
@@ -8879,7 +8879,7 @@
 		},
 		{
 			"name": "M-FACTS-FRESH",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "target",
 			"find": "fresh ? ',\"fresh\":true' : ''",
 			"replace": "''",
@@ -8887,7 +8887,7 @@
 		},
 		{
 			"name": "M-FACTS-FRESH-DISCARDED",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "use == Statement && TypedFactsShapes.isFresh(rhs)",
 			"replace": "TypedFactsShapes.isFresh(rhs)",
@@ -8895,7 +8895,7 @@
 		},
 		{
 			"name": "M-FACTS-INLINED-RECEIVER",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "final called: Null<String> = receiverCall(v, e.pos, block);",
 			"replace": "final called: Null<String> = null;",
@@ -8903,7 +8903,7 @@
 		},
 		{
 			"name": "M-FACTS-RECEIVER-BLOCK",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "receiverCall",
 			"find": "return at.file != around.file || at.min != around.min || at.max != around.max",
 			"replace": "return false",
@@ -8911,7 +8911,7 @@
 		},
 		{
 			"name": "M-FACTS-RECEIVER-PARAM",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "collectFields",
 			"find": "receiver: !takes(f, INLINED_RECEIVER)",
 			"replace": "receiver: true",
@@ -9087,7 +9087,7 @@
 		},
 		{
 			"name": "M-FACTS-THROW-TEXT",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "if (!TypedFactsShapes.isString(value.t) && !thrownAsIs(value)) stringSite(value);",
 			"replace": "",
@@ -9119,7 +9119,7 @@
 		},
 		{
 			"name": "M-FACTS-HANDS",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "handed",
 			"find": "for (leaf in leaves) add('hands', '{\"t\":${q(target)},\"s\":${q(sourceType(leaf))},\"d\":${q(declared)},\"p\":${at(leaf.pos)}}');",
 			"replace": "",
@@ -9127,7 +9127,7 @@
 		},
 		{
 			"name": "M-FACTS-GENS",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "instantiated",
 			"find": "if (field != null && field.params.length > 0) add('gens', '{\"d\":${q(str(field.type))},\"s\":${q(str(applied))},\"p\":${at(p)}}');",
 			"replace": "",
@@ -9135,14 +9135,14 @@
 		},
 		{
 			"name": "M-FACTS-STRING-EXACT",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "exactObject",
 			"force": "false",
 			"note": "no converted value is an object of exactly its own class, so a fresh one runs the conversion of whatever its type may hold"
 		},
 		{
 			"name": "M-FACTS-EXACT-WRITTEN",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "exactObject",
 			"find": "_built.exists(v.id) && !_written.exists(v.id);",
 			"replace": "_built.exists(v.id);",
@@ -9150,14 +9150,14 @@
 		},
 		{
 			"name": "M-FACTS-THROW-EXCEPTION",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "thrownAsIs",
 			"force": "false",
 			"note": "a thrown exception of exactly its class is recorded as converted to a string, though the wrapping throws it as it is"
 		},
 		{
 			"name": "M-FACTS-ALIAS-TYPEDEF",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "run",
 			"find": "writer.printedAliases();",
 			"replace": "",
@@ -9165,7 +9165,7 @@
 		},
 		{
 			"name": "M-FACTS-STATICS-TYPEDEF",
-			"type": "anyparse.check.TypedFactsTypeStrings",
+			"type": "anyparse.check.facts.TypedFactsTypeStrings",
 			"method": "typeString",
 			"find": "name.endsWith('>') ? name : name + paramString(params, depth);",
 			"replace": "name + paramString(params, depth);",
@@ -9330,7 +9330,7 @@
 		},
 		{
 			"name": "M-FACTS-FLOW-EXACT",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "flowInto",
 			"find": "flowText(sourceType(value), sink, how, p, exactObject(value));",
 			"replace": "flowText(sourceType(value), sink, how, p);",
@@ -9353,7 +9353,7 @@
 		},
 		{
 			"name": "M-FACTS-TREE-OPTIONAL",
-			"type": "anyparse.check.FactsTypeTree",
+			"type": "anyparse.check.facts.FactsTypeTree",
 			"method": "functionType",
 			"find": "final optional: Bool = peek() == '?'.code && !separatorAt(_pos + 1);",
 			"replace": "final optional: Bool = peek() == '?'.code;",
@@ -9488,7 +9488,7 @@
 		},
 		{
 			"name": "M-RUNMEMO-NO-BASELINE-AHEAD",
-			"type": "anyparse.check.TypedFactsProbe",
+			"type": "anyparse.check.facts.TypedFactsProbe",
 			"method": "wanted",
 			"force": "false",
 			"note": "the facts compile no longer brings the baseline along, so the baseline asked next is a compile of its own"
@@ -9527,7 +9527,7 @@
 		},
 		{
 			"name": "M-FACTS-EARLY-DIRS-LEFT",
-			"type": "anyparse.check.TypedFactsProbe",
+			"type": "anyparse.check.facts.TypedFactsProbe",
 			"method": "abandon",
 			"find": "for (a in probe.asked) discard(a.dir);",
 			"replace": "",
@@ -10233,7 +10233,7 @@
 		},
 		{
 			"name": "M-FACTS-ORACLE-AGREE",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "agreed",
 			"find": "else if (types.length > 1)",
 			"replace": "else if (false)",
@@ -10249,7 +10249,7 @@
 		},
 		{
 			"name": "M-FACTS-ORACLE-RAW-AGREE",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "factsTypeAt",
 			"find": "return types.length == 1 ? Typed(types[0]) : Declined(FactsDecline.NoFact);",
 			"replace": "return types.length > 0 ? Typed(types[0]) : Declined(FactsDecline.NoFact);",
@@ -10257,7 +10257,7 @@
 		},
 		{
 			"name": "M-FACTS-SPELL-UNKNOWN",
-			"type": "anyparse.check.FactsTypeSpelling",
+			"type": "anyparse.check.facts.FactsTypeSpelling",
 			"method": "type",
 			"find": "case Unknown: fail(FactsDecline.Unbound);",
 			"replace": "case Unknown: 'Dynamic';",
@@ -10265,14 +10265,14 @@
 		},
 		{
 			"name": "M-FACTS-SPELL-SCOPE",
-			"type": "anyparse.check.FactsTypeSpelling",
+			"type": "anyparse.check.facts.FactsTypeSpelling",
 			"method": "inScope",
 			"force": "true",
 			"note": "every type parameter is in scope, so a parameter of another declaration is written where it names nothing"
 		},
 		{
 			"name": "M-FACTS-SPELL-IMPL",
-			"type": "anyparse.check.FactsTypeSpelling",
+			"type": "anyparse.check.facts.FactsTypeSpelling",
 			"method": "nominal",
 			"find": "if (name == 'Abstract' || name.indexOf('_Impl_') >= 0) return fail(FactsDecline.Unspellable);",
 			"replace": "",
@@ -10349,7 +10349,7 @@
 		},
 		{
 			"name": "M-FACTS-DYNAMIC-SOURCE",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "localType",
 			"find": "return Declined(FactsDecline.DynamicSource);",
 			"replace": "{}",
@@ -10419,7 +10419,7 @@
 		},
 		{
 			"name": "M-ORACLE-WHOLE-MEMBER",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "resolve",
 			"find": [
 				"return switch journal.back(site.text, site.current, member) {",
@@ -10433,14 +10433,14 @@
 		},
 		{
 			"name": "M-ORACLE-HOME-GUARD",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "sameHome",
 			"force": "true",
 			"note": "facts of any member answer for code the file now holds in another"
 		},
 		{
 			"name": "M-ORACLE-HOME-MODIFIED-TYPE",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "homeOf",
 			"find": "type = node.name ?? node.children.find(c -> c.name != null)?.name;",
 			"replace": "type = node.name;",
@@ -10448,7 +10448,7 @@
 		},
 		{
 			"name": "M-FACTS-WRITTEN-DURING",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "writtenSince",
 			"force": "false",
 			"note": "a file written while the facts compile ran is certified by a hash of the text it has now"
@@ -10479,7 +10479,7 @@
 		},
 		{
 			"name": "M-FACTS-VALUE-TYPE-FLOWS",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "typeIdAt",
 			"find": "final spelled: String = switch valueType(file, expr) {",
 			"replace": "final spelled: String = switch expressionType(file, expr) {",
@@ -10494,7 +10494,7 @@
 		},
 		{
 			"name": "M-UNUSED-PRIVATE-CHAIN-DECLARED",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "inheritedMember",
 			"find": "if (declared.fields.exists(f -> f.name == name)) return Declared(sup);",
 			"replace": "",
@@ -10502,7 +10502,7 @@
 		},
 		{
 			"name": "M-UNUSED-PRIVATE-CHAIN-AUTOBUILD",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "inheritedMember",
 			"find": "if (declared.meta.contains(AUTO_BUILD_META)) return AutoBuilt(sup);",
 			"replace": "",
@@ -10525,14 +10525,14 @@
 		},
 		{
 			"name": "M-FACTS-ESCAPE-SHIFT",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "escapedBefore",
 			"force": "false",
 			"note": "an expression in a string after an escape is typed by the fact the compiler shifted onto its range"
 		},
 		{
 			"name": "M-FOLD-FACTS-PLAIN-KINDS",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "nonOverloadingName",
 			"find": "return id != null && (builtins.contains(id) || (declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind)))",
 			"replace": "return id != null",
@@ -10540,7 +10540,7 @@
 		},
 		{
 			"name": "M-FACTS-ALIKE-FOLD",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "nonOverloadingName",
 			"find": "(declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind))",
 			"replace": "(declared != null && PLAIN_KINDS.contains(declared.kind))",
@@ -10580,7 +10580,7 @@
 		},
 		{
 			"name": "M-FACTS-FIXED-LOOP-ANY",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "callResultClosed",
 			"find": "return calls.length > 0 && calls.foreach(c -> closedResult(c.target));",
 			"replace": "return true;",
@@ -10588,7 +10588,7 @@
 		},
 		{
 			"name": "M-FACTS-CTOR-EVERY",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "constructorArgumentClosed",
 			"find": "\t\t\t\t\tcase _:\n\t\t\t\t\t\treturn false;\n",
 			"replace": "\t\t\t\t\tcase _:\n",
@@ -10596,7 +10596,7 @@
 		},
 		{
 			"name": "M-FACTS-CTOR-ARITY",
-			"type": "anyparse.check.FactsTypeOracle",
+			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "constructorArgumentClosed",
 			"find": "\t\t\t\t\tcase Named(_, _):\n\t\t\t\t\tcase Function(args, _) if (index >= args.length):\n",
 			"replace": "",
@@ -10604,7 +10604,7 @@
 		},
 		{
 			"name": "M-FACTS-CLOSED-PARAMETER",
-			"type": "anyparse.check.FactsTypeTree",
+			"type": "anyparse.check.facts.FactsTypeTree",
 			"method": "isClosed",
 			"find": "case Unknown, Parameter(_): false;",
 			"replace": "case Unknown: false;\n\t\t\tcase Parameter(_): true;",
@@ -11471,7 +11471,7 @@
 		},
 		{
 			"name": "M-FACTS-NULL-PEEL-UNMATCHED",
-			"type": "anyparse.check.FactsTypeText",
+			"type": "anyparse.check.facts.FactsTypeText",
 			"method": "closesAtEnd",
 			"force": "true",
 			"note": "a leading Null<...> is peeled off a facts type it does not enclose, mangling Null<A>->Null<B>"
@@ -13063,7 +13063,7 @@
 		},
 		{
 			"name": "M-FACTS-WALK-WRITTEN-CONSTANT",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "splicedCode",
 			"find": "return code || (e.expr.match(TConst(_)) && _host.inlineCallee(info.file, info.min, info.max) != null);",
 			"replace": "return code;",
@@ -13087,7 +13087,7 @@
 		},
 		{
 			"name": "M-FACTS-WALK-JOINED-START",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "nestedSplice",
 			"find": "final written: Null<InlineMethod> = fieldWriter(e, info);",
 			"replace": "final written: Null<InlineMethod> = null;",
@@ -13126,7 +13126,7 @@
 		},
 		{
 			"name": "M-FACTS-CALL-OPERAND",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "dynamicOperand",
 			"find": "\t: ',\"o\":${q(sourceType(first))}' + (exactObject(first) ? ',\"x\":true' : '');",
 			"replace": "\t: '';",
@@ -13134,7 +13134,7 @@
 		},
 		{
 			"name": "M-FACTS-CALL-OPERAND-LEAF",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "dynamicOperand",
 			"find": "',\"o\":${q(sourceType(first))}'",
 			"replace": "',\"o\":' + q(sourceType({\n\t\t\t\tfinal leaves: Array<TypedExpr> = [];\n\t\t\t\tTypedFactsShapes.collectLeaves(first, leaves);\n\t\t\t\tleaves[0];\n\t\t\t}))",
@@ -13142,7 +13142,7 @@
 		},
 		{
 			"name": "M-FACTS-CALL-OPERAND-EXACT",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "dynamicOperand",
 			"find": " + (exactObject(first) ? ',\"x\":true' : '')",
 			"replace": "",
@@ -13150,7 +13150,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-RECEIVER",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "reflection",
 			"find": "add('refl', '{\"t\":${q(targetName)}$literal$spelled$named$receiver,\"p\":$where}');",
 			"replace": "add('refl', '{\"t\":${q(targetName)}$literal$spelled$named,\"p\":$where}');",
@@ -13158,7 +13158,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-SELF",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "reflection",
 			"find": " + (isThis(first) ? ',\"h\":true' : '')",
 			"replace": "",
@@ -13166,7 +13166,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-EXACT",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "reflection",
 			"find": " + (exactObject(first) ? ',\"x\":true' : '')",
 			"replace": "",
@@ -13444,14 +13444,14 @@
 		},
 		{
 			"name": "M-FACTS-NATIVE-CODE",
-			"type": "anyparse.check.TypedFactsShapes",
+			"type": "anyparse.check.facts.TypedFactsShapes",
 			"method": "nativeCode",
 			"force": "''",
 			"note": "a native call records no text, so the code it pastes names nothing"
 		},
 		{
 			"name": "M-FACTS-CODE-META",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "metaList",
 			"find": "code.length == 0 ? '' : ',\"code\":' + arr(code)",
 			"replace": "''",
@@ -13723,7 +13723,7 @@
 		},
 		{
 			"name": "M-FACTS-NATIVE-HANDED",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "handedText",
 			"find": "for (a in args) TypedFactsShapes.collectLeaves(a, leaves);",
 			"replace": "",
@@ -13731,7 +13731,7 @@
 		},
 		{
 			"name": "M-FACTS-NATIVE-CHAIN",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "nativeChain",
 			"force": "false",
 			"note": "a field chain rooted at a native identifier is recorded as the bare identifier: no text, nothing handed"
@@ -13809,7 +13809,7 @@
 		},
 		{
 			"name": "M-FACTS-WALK-BLOCK-GAP",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "if (!own(ranges[i])) _site = between(exprs, ranges, i, site);",
 			"replace": "",
@@ -14209,7 +14209,7 @@
 		},
 		{
 			"name": "M-FACTS-SITE-HOLDS-OWN-CODE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "between",
 			"find": " && holdsOwnCode(exprs[index], site) ? site : outer;",
 			"replace": " ? site : outer;",
@@ -14321,7 +14321,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-FRESH",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "reflection",
 			"find": "freshStructure(first) ? ',\"o\":true' : ''",
 			"replace": "false ? ',\"o\":true' : ''",
@@ -14329,7 +14329,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-FRESH-LOCAL",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "if (objectLiteral(init)) _literals[v.id] = true;",
 			"replace": "",
@@ -14337,7 +14337,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-FRESH-WRITTEN",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "freshStructure",
 			"find": "_literals.exists(v.id) && !_written.exists(v.id);",
 			"replace": "_literals.exists(v.id);",
@@ -14345,7 +14345,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-FRESH-ANY",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "freshStructure",
 			"find": "case _: objectLiteral(e);",
 			"replace": "case _: true;",
@@ -14361,7 +14361,7 @@
 		},
 		{
 			"name": "M-FACTS-GENERIC-RECORDED",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "(generic == null ? '' : ',\"gb\":${q(generic)}')",
 			"replace": "''",
@@ -14369,7 +14369,7 @@
 		},
 		{
 			"name": "M-FACTS-GENERIC-BUILT",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "genericBuilt",
 			"find": "if (_genericBuilds[key] == built.toString()) return id;",
 			"replace": "if (_genericBuilds[key] != null) return id;",
@@ -14377,7 +14377,7 @@
 		},
 		{
 			"name": "M-FACTS-ROUNDS",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "run",
 			"find": "final earlier: Null<TypedFactsMacro> = current;",
 			"replace": "final earlier: Null<TypedFactsMacro> = null;",
@@ -14479,7 +14479,7 @@
 		},
 		{
 			"name": "M-FACTS-SPLICED-REFLECTION-FROM",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "at",
 			"find": "incomplete(from == null ? 'reflection-unattributed' : 'reflection-from:${from.id}');",
 			"replace": "incomplete('reflection-unattributed');",
@@ -14663,7 +14663,7 @@
 		},
 		{
 			"name": "M-FACTS-ASSIGN-HELD",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "walkAs(rhs, Held(into));",
 			"replace": "walk(rhs);",
@@ -14671,7 +14671,7 @@
 		},
 		{
 			"name": "M-FACTS-ASSIGNED-NO-USE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "localRead",
 			"find": "case Assigned:",
 			"replace": "case Assigned: aliasUse(alias, Value);",
@@ -14679,7 +14679,7 @@
 		},
 		{
 			"name": "M-FACTS-ASSIGNED-TARGET",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "target",
 			"find": "walkAs(lhs, Assigned);",
 			"replace": "walk(lhs);",
@@ -14687,7 +14687,7 @@
 		},
 		{
 			"name": "M-FACTS-ALIAS-LINK",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "localRead",
 			"find": "if (!alias.links.contains(other)) alias.links.push(other);",
 			"replace": "aliasUse(alias, Value);",
@@ -14695,7 +14695,7 @@
 		},
 		{
 			"name": "M-FACTS-HELD-LOCAL",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "heldValue",
 			"find": "case TField(_, _), TLocal(_): true;",
 			"replace": "case TField(_, _): true;",
@@ -14703,7 +14703,7 @@
 		},
 		{
 			"name": "M-FACTS-SUBSTITUTED-RECEIVER",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "localRead",
 			"find": "aliasUse(alias, method == null ? use : Call(method));",
 			"replace": "aliasUse(alias, use);",
@@ -14711,7 +14711,7 @@
 		},
 		{
 			"name": "M-FACTS-SUBSTITUTED-ARITY",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "substitutedReceiver",
 			"find": "substituted.arity != 0",
 			"replace": "false",
@@ -14719,7 +14719,7 @@
 		},
 		{
 			"name": "M-FACTS-SUBSTITUTED-OWNER",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "substitutedReceiver",
 			"find": "case TInst(c, _) if (TypedFactsTypeStrings.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;",
 			"replace": "case TInst(c, _): name;",
@@ -14727,7 +14727,7 @@
 		},
 		{
 			"name": "M-FACTS-ASSIGN-STATEMENT",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "use == Statement ? storedLocal(lhs, rhs) : null",
 			"replace": "storedLocal(lhs, rhs)",
@@ -14735,7 +14735,7 @@
 		},
 		{
 			"name": "M-FACTS-ASSIGN-OWNER",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "storedLocal",
 			"find": "if (_aliases[v.id]?.owner == id)",
 			"replace": "if (_aliases.exists(v.id))",
@@ -14743,7 +14743,7 @@
 		},
 		{
 			"name": "M-FACTS-HELD-FLAG",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "root",
 			"find": "',\"h\":true,'",
 			"replace": "','",
@@ -14759,7 +14759,7 @@
 		},
 		{
 			"name": "M-FACTS-HELD-THROUGH-IF",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "heldValue",
 			"find": "otherwise != null && (heldValue(then) || heldValue(otherwise));",
 			"replace": "false;",
@@ -14767,7 +14767,7 @@
 		},
 		{
 			"name": "M-FACTS-HELD-THROUGH-SWITCH",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "heldValue",
 			"find": "for (c in cases) held = held || heldValue(c.expr);",
 			"replace": "",
@@ -14775,7 +14775,7 @@
 		},
 		{
 			"name": "M-FACTS-HELD-THROUGH-PAREN",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "heldValue",
 			"find": "heldValue(inner);",
 			"replace": "false;",
@@ -14783,7 +14783,7 @@
 		},
 		{
 			"name": "M-FACTS-HELD-THROUGH-BLOCK",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "heldValue",
 			"find": "exprs.length > 0 && heldValue(exprs[exprs.length - 1]);",
 			"replace": "false;",
@@ -14791,7 +14791,7 @@
 		},
 		{
 			"name": "M-FACTS-HELD-THROUGH-TRY",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "heldValue",
 			"find": "var held: Bool = heldValue(body);",
 			"replace": "var held: Bool = false;",
@@ -14799,7 +14799,7 @@
 		},
 		{
 			"name": "M-FACTS-ASSIGN-HELD-THROUGH",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "storedLocal",
 			"find": "if (!heldValue(rhs)) return null;",
 			"replace": "if (!rhs.expr.match(TField(_, _) | TLocal(_))) return null;",
@@ -14991,7 +14991,7 @@
 		},
 		{
 			"name": "M-FACTS-KEPT-DEFAULT",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "root",
 			"find": "if (a.value == null && !_written.exists(a.v.id)) kept.push(i);",
 			"replace": "if (!_written.exists(a.v.id)) kept.push(i);",
@@ -14999,7 +14999,7 @@
 		},
 		{
 			"name": "M-FACTS-KEPT-WRITTEN",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "root",
 			"find": "if (a.value == null && !_written.exists(a.v.id)) kept.push(i);",
 			"replace": "if (a.value == null) kept.push(i);",
@@ -15007,7 +15007,7 @@
 		},
 		{
 			"name": "M-FACTS-FRESH-MAP",
-			"type": "anyparse.check.TypedFactsShapes",
+			"type": "anyparse.check.facts.TypedFactsShapes",
 			"method": "isFresh",
 			"find": "FRESH_CLASSES.contains(c.toString())",
 			"replace": "c.toString() == 'Array'",
@@ -15434,7 +15434,7 @@
 		},
 		{
 			"name": "M-FACTS-IDENTITY-CAST-VALUE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "sink == str(inner.t) ||",
 			"replace": "",
@@ -15598,7 +15598,7 @@
 		},
 		{
 			"name": "M-FACTS-ARGUMENT-USE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "walkArguments",
 			"find": "walkAs(args[i], Argument(to, handedVia, i))",
 			"replace": "walk(args[i])",
@@ -15606,7 +15606,7 @@
 		},
 		{
 			"name": "M-FACTS-PARAM-ALIAS",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "root",
 			"find": "_aliases[a.v.id] = param;",
 			"replace": "",
@@ -15614,7 +15614,7 @@
 		},
 		{
 			"name": "M-FACTS-ARGUMENT-CAST",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "|| use.match(Argument(_, _, _))",
 			"replace": "",
@@ -15654,7 +15654,7 @@
 		},
 		{
 			"name": "M-FACTS-ABSTRACT-WRAPPED-CAST",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": "|| sink == str(wrapped(inner.t))",
 			"replace": "",
@@ -16204,7 +16204,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-MEMBER-NAME",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "reflection",
 			"find": "$literal$spelled$named$receiver",
 			"replace": "$literal$named$receiver",
@@ -16212,7 +16212,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-MEMBER-NAME-ANY",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "reflection",
 			"find": "TypedFactsShapes.literalText(args[at])",
 			"replace": "TypedFactsShapes.literalText(args[args.length - 1])",
@@ -16220,7 +16220,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-MEMBER-NAME-TABLE",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "reflection",
 			"find": "final at: Null<Int> = TypedFactsShapes.NAME_ARGUMENTS[targetName];",
 			"replace": "final at: Null<Int> = TypedFactsShapes.NAME_ARGUMENTS[targetName] ?? 1;",
@@ -28145,7 +28145,7 @@
 		},
 		{
 			"name": "M-FACTS-READ-EMIT-NAME",
-			"type": "anyparse.check.TypedFactsWalk",
+			"type": "anyparse.check.facts.TypedFactsWalk",
 			"method": "visit",
 			"find": ",${q(localType(v))},${q(v.name)}]');",
 			"replace": ",${q(localType(v))},\"\"]');",

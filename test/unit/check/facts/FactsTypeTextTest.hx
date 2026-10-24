@@ -1,6 +1,6 @@
-package unit.check;
+package unit.check.facts;
 
-import anyparse.check.FactsTypeText;
+import anyparse.check.facts.FactsTypeText;
 
 /** `FactsTypeText.unwrapNull` over types as the compiler facts spell them. */
 @:nullSafety(Strict)

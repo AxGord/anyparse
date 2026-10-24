@@ -1,4 +1,4 @@
-package anyparse.check;
+package anyparse.check.facts;
 
 #if macro
 import haxe.Json;
@@ -12,7 +12,7 @@ import haxe.macro.Type;
 import haxe.macro.TypeTools;
 import sys.io.File;
 import sys.io.FileOutput;
-import anyparse.check.TypedFactsTypeStrings.*;
+import anyparse.check.facts.TypedFactsTypeStrings.*;
 
 /**
  * The compile-time half of `TypedFactsProbe`: an `onAfterTyping` hook that writes what the compiler typed as JSON Lines
@@ -33,7 +33,7 @@ final class TypedFactsMacro {
 	private static inline final VERSION: Int = 1;
 
 	/** This module: the probe itself is not the build's code. */
-	private static inline final OWN_MODULE: String = 'anyparse.check.TypedFactsMacro';
+	private static inline final OWN_MODULE: String = 'anyparse.check.facts.TypedFactsMacro';
 
 	/** Milliseconds in a second: `Date.getTime` counts the one, `Sys.time` the other. */
 	private static inline final MS_PER_SECOND: Float = 1000;

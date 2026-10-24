@@ -1,8 +1,8 @@
-package unit.check;
+package unit.check.facts;
 
-import anyparse.check.FactsTypeTree;
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.TypedFactsProbe;
+import anyparse.check.facts.FactsTypeTree;
+import anyparse.check.facts.TypedFactsProbe;
 import anyparse.query.CompilerFacts;
 import anyparse.query.FactSites;
 import anyparse.runtime.Span;

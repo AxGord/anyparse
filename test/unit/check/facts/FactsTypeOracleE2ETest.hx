@@ -1,12 +1,12 @@
-package unit.check;
+package unit.check.facts;
 
 #if (sys || nodejs)
 import sys.io.File;
 #end
 import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
-import anyparse.check.FactsTypeOracle;
 import anyparse.check.HaxeSpawn;
+import anyparse.check.facts.FactsTypeOracle;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
 

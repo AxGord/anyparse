@@ -1,11 +1,11 @@
 package dev;
 
 import anyparse.check.CheckScan;
-import anyparse.check.FactsTypeOracle;
 import anyparse.check.LintConfig;
 import anyparse.check.OracleGeneration;
 import anyparse.check.RunScan;
-import anyparse.check.TypedFactsProbe;
+import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.facts.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts.FactNode;
