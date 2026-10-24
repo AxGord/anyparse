@@ -12,6 +12,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ModuleField;
+import anyparse.query.SymbolIndex.Reification;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
@@ -400,7 +401,7 @@ final class SymbolIndexBuilder {
 			ambientImports: [],
 			ambientImportsBounded: true,
 			accessGrants: collectAccessGrants(tree, shape),
-			reifiedNames: collectReifiedNames(tree, shape),
+			reifications: collectReifications(tree, shape),
 			moduleFields: moduleFieldsOf(tree, shape)
 		};
 	}
@@ -1154,19 +1155,39 @@ final class SymbolIndexBuilder {
 		return prefix == null ? null : '$prefix.$name';
 	}
 
-	/** Every name spelled under a reification subtree of `tree` (`RefShape.opaqueKinds`), deduped; empty for a grammar with none. */
-	private static function collectReifiedNames(tree: QueryNode, shape: RefShape): Array<String> {
+	/**
+	 * Per named function of `tree`, every name spelled under one of its reification subtrees (`RefShape.opaqueKinds`); empty
+	 * for a grammar with none.
+	 */
+	private static function collectReifications(tree: QueryNode, shape: RefShape): Array<Reification> {
 		final kinds: Array<String> = shape.opaqueKinds ?? [];
-		final seen: Map<String, Bool> = [];
-		if (kinds.length > 0) collectInto(tree, n -> {
-			if (kinds.contains(n.kind)) collectInto(n, inner -> {
-				final name: Null<String> = inner.name;
-				if (name != null) seen[name] = true;
-			});
-		});
-		final out: Array<String> = [for (name in seen.keys()) name];
-		out.sort(Reflect.compare);
+		final byFunction: Map<String, Map<String, Bool>> = [];
+		if (kinds.length > 0) reificationWalk(tree, kinds, shape.functionKinds ?? [], null, byFunction);
+		final out: Array<Reification> = [];
+		for (fn => names in byFunction) {
+			final spelled: Array<String> = [for (name in names.keys()) name];
+			spelled.sort(Reflect.compare);
+			out.push({ functionName: fn, names: spelled });
+		}
+		out.sort((a, b) -> Reflect.compare(a.functionName, b.functionName));
 		return out;
+	}
+
+	/** Recursive worker of `collectReifications`: `fn` is the innermost named function enclosing `node`. */
+	private static function reificationWalk(
+		node: QueryNode, kinds: Array<String>, functionKinds: Array<String>, fn: Null<String>, out: Map<String, Map<String, Bool>>
+	): Void {
+		if (fn != null && kinds.contains(node.kind)) {
+			final names: Map<String, Bool> = out[fn] ?? [];
+			collectInto(node, inner -> {
+				final name: Null<String> = inner.name;
+				if (name != null) names[name] = true;
+			});
+			out[fn] = names;
+			return;
+		}
+		final inner: Null<String> = functionKinds.contains(node.kind) && node.name != null ? node.name : fn;
+		for (child in node.children) reificationWalk(child, kinds, functionKinds, inner, out);
 	}
 
 }

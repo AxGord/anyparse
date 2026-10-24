@@ -30856,8 +30856,8 @@
 			"name": "M-REIFIED-NAME-UNREAD",
 			"type": "anyparse.query.RawSourceScan",
 			"method": "accessGrantMatches",
-			"find": "return _reifiedNames.exists(member) && privilegedFiles(typeName).length > 0;",
-			"replace": "return false;",
+			"find": "return emitters != null && ",
+			"replace": "return false && ",
 			"note": "a member a macro reification spells counts only where a privileged file spells it, so a macro expanded under a grant or a waiver loses its target"
 		},
 		{

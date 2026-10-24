@@ -34,8 +34,8 @@ final class RawSourceScan {
 	/** The access path (`pkg.Type`, a sub-type included) of every indexed declaration, by the type's simple name. */
 	private final _typePathsByName: Map<String, Array<String>> = [];
 
-	/** Every name a PROJECT file spells inside a reification (`FileInfo.reifiedNames`), as a set. */
-	private final _reifiedNames: Map<String, Bool> = [];
+	/** Per name a PROJECT reification spells, the functions whose reifications spell it (`FileInfo.reifications`). */
+	private final _reifiedBy: Map<String, Array<String>> = [];
 
 	/** `grantTargetsOf`'s answer per type name once asked. */
 	private final _grantTargets: Map<String, Array<GrantTarget>> = [];
@@ -89,7 +89,11 @@ final class RawSourceScan {
 		_plugin = plugin;
 		_thirdParty = thirdParty;
 		_waiverFiles = waiverFilesOf(sources, plugin, thirdParty);
-		for (fi in files) if (!thirdParty.exists(fi.file)) for (name in fi.reifiedNames) _reifiedNames[name] = true;
+		for (fi in files) if (!thirdParty.exists(fi.file)) for (r in fi.reifications) for (name in r.names) {
+			final fns: Array<String> = _reifiedBy[name] ?? [];
+			if (!fns.contains(r.functionName)) fns.push(r.functionName);
+			_reifiedBy[name] = fns;
+		}
 		for (fi in files) for (t in fi.types) {
 			final paths: Array<String> = _typePathsByName[t.name] ?? [];
 			final path: String = fi.pkg == '' ? t.name : '${fi.pkg}.${t.name}';
@@ -119,16 +123,17 @@ final class RawSourceScan {
 	 * retained. The precise counterpart of `hasAccessGrant`, for a caller that can say what
 	 * it actually fears from a grantee rather than vetoing on the grant's existence.
 	 *
-	 * A member a project reification spells answers true whenever any file holds such a privilege: a macro's output is
-	 * access-checked where it lands, so a privileged caller reaches it without spelling it. A name the macro computes
-	 * (`$i{…}`) is out of reach.
+	 * A member a project reification spells answers true when a privileged file spells the function emitting it — where
+	 * a waiver annotates, for a waiver file: a macro's output is access-checked where it lands, so a privileged caller
+	 * reaches it without spelling it. A name the macro computes (`$i{…}`) is out of reach.
 	 */
 	public function accessGrantMatches(typeName: String, member: String, matches: (source:String) -> Bool): Bool {
 		for (file in privilegedFiles(typeName, member)) {
 			final src: Null<String> = _sources[file];
 			if (src == null || matches(src)) return true;
 		}
-		return _reifiedNames.exists(member) && privilegedFiles(typeName).length > 0;
+		final emitters: Null<Array<String>> = _reifiedBy[member];
+		return emitters != null && privilegedFiles(typeName).exists(file -> emitters.exists(fn -> privilegedFileSpells(file, fn)));
 	}
 
 	/**
@@ -390,6 +395,17 @@ final class RawSourceScan {
 		if (target.paths.exists(t -> t.startsWith('$path.') || path == t || path.startsWith('$t.'))) return true;
 		final dot: Int = path.lastIndexOf('.');
 		return target.unresolved && !_declaredPaths.exists(path) && (dot < 0 || !_declaredPaths.exists(path.substring(0, dot)));
+	}
+
+	/**
+	 * Whether the privileged `file` spells `name` where its privilege reaches: inside what a waiver annotates for a waiver
+	 * file, anywhere in the code of a file granting itself access.
+	 */
+	private function privilegedFileSpells(file: String, name: String): Bool {
+		if (_waiverFiles.contains(file) && waiverFileMayReference(file, name)) return true;
+		final fi: Null<FileInfo> = _files.find(f -> f.file == file);
+		final src: Null<String> = _sources[file];
+		return fi != null && fi.accessGrants.length > 0 && (src == null || OccurrenceScan.referencedInRange(src, name, 0, src.length, []));
 	}
 
 	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */

@@ -629,11 +629,11 @@ typedef FileInfo = {
 	var accessGrants: Array<String>;
 
 	/**
-	 * Every name this file spells inside a reification (`RefShape.opaqueKinds`, Haxe `macro …`): code a macro emits into a
-	 * caller, where it is access-checked as the caller's own. A name computed into the tree (`$i{…}`) is not spelled, so not
-	 * here.
+	 * Per function holding a reification (`RefShape.opaqueKinds`, Haxe `macro …`), every name the reification spells: code
+	 * that function emits into a caller, where it is access-checked as the caller's own. A name computed into the tree
+	 * (`$i{…}`) is not spelled, so not here.
 	 */
-	var reifiedNames: Array<String>;
+	var reifications: Array<Reification>;
 
 	/**
 	 * The module's module-level value declarations (`RefShape.moduleValueDeclKinds`: a function, a `var`, a `final`), each
@@ -642,6 +642,12 @@ typedef FileInfo = {
 	 * the one reading of the module-level fields an import of the module brings (`ImportBindings`).
 	 */
 	var moduleFields: Array<ModuleField>;
+}
+
+/** The names one function's reifications spell (`FileInfo.reifications`). */
+typedef Reification = {
+	final functionName: String;
+	final names: Array<String>;
 }
 
 /** One module-level value declaration of a file (`FileInfo.moduleFields`): its name, and the span of the node declaring it. */
