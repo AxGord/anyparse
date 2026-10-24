@@ -309,6 +309,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.PreferInlineCheckTest',
 		'unit.check.PreferInlineOracleTest',
 		'unit.check.PreferInterpolationCheckTest',
+		'unit.check.PreferIsOperatorCheckTest',
 		'unit.check.PreferKeyValueLoopCheckTest',
 		'unit.check.PreferLambdaExpressionBodyCheckTest',
 		'unit.check.PreferLineCommentCheckTest',

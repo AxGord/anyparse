@@ -2053,6 +2053,16 @@ final class RefShape {
 	public var isExprKind: Null<String>;
 
 	/**
+	 * The qualified static call (`Type.function`) an `isExprKind` node is the sugar of, taking the value then the type
+	 * (Haxe `Std.isOfType`): `prefer-is-operator` rewrites such a call whose second argument names a type into the
+	 * operator (`isOperatorText`). Optional; unset makes that check a no-op.
+	 */
+	public var isExprCall: Null<String>;
+
+	/** The keyword an `isExprKind` node spells between its operands (Haxe `is`). Optional; unset means no rewrite writes one. */
+	public var isOperatorText: Null<String>;
+
+	/**
 	 * Type names that, as an EARLIER catch-clause exception type, catch every thrown
 	 * value (Haxe `Dynamic` / `Any`), making any later clause unreachable. The
 	 * `unreachable-catch` check reads these. Optional; unset → only same-type and

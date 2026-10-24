@@ -31288,10 +31288,80 @@
 		},
 		{
 			"name": "M-INTERP-PACKAGE-SHADOW-UNREAD",
-			"type": "anyparse.check.PreferInterpolation",
+			"type": "anyparse.query.TypeNameBinding",
 			"method": "shadowedOnDisk",
 			"force": "false",
 			"note": "a module of a basic type name in the file package chain, outside the run, no longer declines the site"
+		},
+		{
+			"name": "M-ISOP-PARENS-DROPPED",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "fix",
+			"find": "return ParenGuard.guard(source, guarded, plugin);",
+			"replace": "return [for (e in guarded) { span: e.span, text: e.text }];",
+			"note": "the rewrite splices `x is T` bare, so `!Std.isOfType(a, B)` becomes `!a is B`, which reads `(!a) is B`"
+		},
+		{
+			"name": "M-ISOP-VALUE-ARGUMENT",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "namesType",
+			"force": "true",
+			"note": "a second argument that is a value — a `Class<T>` parameter, a static field — is rewritten into a type position that reads a type of its name"
+		},
+		{
+			"name": "M-STDBIND-PROJECT-DECL-TRUSTED",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindsStdDeclaration",
+			"find": "case Bound(decls): decls.foreach(r -> StdResolver.isStdFile(r.file.file));",
+			"replace": "case Bound(_): true;",
+			"note": "a project's own declaration of a std type name is taken for the std's, so prefer-is-operator trades a project `Std` for the operator that calls the std's"
+		},
+		{
+			"name": "M-STDBIND-UNKNOWN-TRUSTED",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindsStdDeclaration",
+			"find": "case Unknown: false;",
+			"replace": "case Unknown: true;",
+			"note": "a name an unread wildcard may bind is taken for the std's declaration"
+		},
+		{
+			"name": "M-ISOP-STD-VALUE",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "receiverIsStd",
+			"find": "span != null && ValueDoors.bindsNoValue(receiver, name, span, fi, proof.root, proof.shape, proof.file, index)",
+			"replace": "span != null",
+			"note": "a local or field named `Std` is taken for the std type"
+		},
+		{
+			"name": "M-STDBIND-DISK-SHADOW-UNREAD",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindsStdDeclaration",
+			"find": "case Free: !shadowedOnDisk(name, fi.pkg, fi.file);",
+			"replace": "case Free: true;",
+			"note": "a module of the std type's name in the file's package outside the run is not looked for on disk"
+		},
+		{
+			"name": "M-ISOP-COMMENT-DROPPED",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "rewrite",
+			"find": "if (gaps.exists(gap -> gap.indexOf('//') != -1 || gap.indexOf('/*') != -1)) return null;",
+			"replace": "",
+			"note": "a comment between the call's arguments is deleted by the rewrite"
+		},
+		{
+			"name": "M-ISOP-SYNTAX-POSITION-REWRITTEN",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "walk",
+			"find": "if (seams.opaqueKinds.contains(node.kind) || seams.metaKinds.contains(node.kind)) return;",
+			"replace": "",
+			"note": "a call inside an annotation argument or a reification, read as syntax, is rewritten"
+		},
+		{
+			"name": "M-ISOP-VERSION-UNGATED",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "minLanguageVersion",
+			"force": "'4.0'",
+			"note": "a project declaring a language older than the operator is told to write it"
 		}
 	]
 }
