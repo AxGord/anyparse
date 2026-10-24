@@ -147,6 +147,20 @@ final class TypeTraits {
 	}
 
 	/**
+	 * Whether a declaration in `typeName`'s supertype closure (itself included) sits in a file that carries a build macro and
+	 * spells `name` — the macro's type, when a grantee asks whether a build macro it inherits may emit `name`'s reifications.
+	 * A declaration whose source was not retained answers true.
+	 */
+	public function buildClosureSpells(typeName: String, fromFile: Null<String>, name: String): Bool {
+		return buildClosureAny(
+			typeName, fromFile,
+			source ->
+				source == null || MemberWriteScan.carriesBuildMacro(source)
+				&& OccurrenceScan.referencedInRange(source, name, 0, source.length, [])
+		);
+	}
+
+	/**
 	 * Whether `hit` answers true for the source of some declaration on `typeName`'s build-macro closure —
 	 * the declaration itself, then its supertypes and interfaces (`SupertypeWalk.hops`) — handed null for
 	 * one the index retains no source of. The walk `transitivelyCarriesBuildMacro` and

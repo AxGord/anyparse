@@ -6,8 +6,9 @@ import anyparse.check.OracleCoverage;
 import anyparse.check.OracleRunMemo;
 import anyparse.check.OracleServerPool;
 import anyparse.check.TypedFactsProbe;
-import anyparse.query.LintFixSafePass.SafePassOutcome;
+import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintFixDriver;
+import anyparse.query.cli.command.LintFixSafeTrail;
 import unit.cli.CliFixture;
 
 /**
@@ -65,7 +66,8 @@ final class OracleRunMemoTest extends Test {
 		final pre: OracleBaseline = CompilerOracle.judging(oracles);
 		sys.io.File.saveContent(main, OTHER);
 		final net: SafePassOutcome = LintFixDriver.reconcileSafePass(
-			[{ file: main, source: OTHER }], [main], [main => GOOD], [], pre, oracles, []
+			[{ file: main, source: OTHER }],
+			[main], [main => GOOD], [], pre, oracles, [], new LintFixSafeTrail((_, _, _) -> null, LintFixSafePass.PROBE_CAP)
 		);
 		Assert.isFalse(net.reverted, 'a green write is kept');
 		Assert.isTrue(OracleCoverage.probeAll(oracles)[0].covers(main), 'the probe names what the compile read');

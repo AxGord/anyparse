@@ -150,7 +150,7 @@ final class NamingPrivatize {
 		// An `@:autoBuild` ANCESTOR does not refuse: its generated code lands inside this type, where the
 		// member stays visible once private. The type's OWN `@:build` still does (`typeOutOfReach`).
 		if (PublicReach.typeOutOfReach(type) || PublicReach.chainOutOfReach(scope, host, type, false)) return null;
-		if (ctx.wide.allFiles().exists(fi -> fi.accessGrants.contains(owner))) return null;
+		if (ctx.wide.text.hasAccessGrant(owner)) return null;
 		if (ReflectionScan.runtimeNameFragment(ctx.fragments, name)) return null;
 		final regions: Null<Array<ReachRegion>> = allowedRegions(c, cls, owner, lex, scope);
 		if (regions == null) return null;

@@ -962,6 +962,7 @@ final class HaxeRefShape {
 		// differently gets Haxe's. Seaming it is the open item `RefShape` states; the literal in that
 		// function is where the change goes, not this table.
 		table.takesPrivateAccessMetaName = '@:access';
+		table.waivesPrivacyMetaName = '@:privateAccess';
 		table.forwardingDeclMetaName = '@:forward';
 		table.implicitConstructorDeclMetaName = '@:structInit';
 		// `@:nativeGen` is what makes a cs/java class a plain native type foreign code holds

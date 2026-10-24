@@ -1484,6 +1484,14 @@ final class RefShape {
 	public var takesPrivateAccessMetaName: Null<String>;
 
 	/**
+	 * The metadata tag that WAIVES every privacy check inside the expression it annotates (Haxe `@:privateAccess`). It names no
+	 * type, so the only questions a scan can ask of a file are whether it carries the tag and whether it then spells a member's
+	 * name — `RawSourceScan.waiverFilesOf` reads the first out of the source text, so a declarations-only parse and an unparsed file
+	 * answer it too. Optional; unset → no expression waives privacy.
+	 */
+	public var waivesPrivacyMetaName: Null<String>;
+
+	/**
 	 * The metadata tag that makes a wrapper type FORWARD member access to the type it wraps (Haxe
 	 * `@:forward` on an abstract, which republishes the underlying type's members as the wrapper's
 	 * own). A member reached on such a type is declared by neither the wrapper nor anything the

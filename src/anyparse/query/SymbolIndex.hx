@@ -622,11 +622,18 @@ typedef FileInfo = {
 	var ambientImportsBounded: Bool;
 
 	/**
-	 * Simple names of every type referenced in an `@:access(...)` metadata in
-	 * this file — types this file grants itself private access to. Drives
-	 * `hasAccessGrant`, the second gate of a cross-file-safe private-member rename.
+	 * Every argument of an `@:access(...)` metadata in this file, as the dotted path it is written — a
+	 * type, an enclosing package or a single member this file grants itself private access to.
+	 * `RawSourceScan.grantsAccessTo` is the one reading of them.
 	 */
 	var accessGrants: Array<String>;
+
+	/**
+	 * Per type holding a reification (`RefShape.opaqueKinds`, Haxe `macro …`), every name the reification spells: code its
+	 * macros emit into a caller — directly, through a helper, a chain or a build macro — where it is access-checked as the
+	 * caller's own. A name computed into the tree (`$i{…}`) is not spelled, so not here.
+	 */
+	var reifications: Array<Reification>;
 
 	/**
 	 * The module's module-level value declarations (`RefShape.moduleValueDeclKinds`: a function, a `var`, a `final`), each
@@ -635,6 +642,12 @@ typedef FileInfo = {
 	 * the one reading of the module-level fields an import of the module brings (`ImportBindings`).
 	 */
 	var moduleFields: Array<ModuleField>;
+}
+
+/** The names one type's reifications spell (`FileInfo.reifications`). */
+typedef Reification = {
+	final typeName: String;
+	final names: Array<String>;
 }
 
 /** One module-level value declaration of a file (`FileInfo.moduleFields`): its name, and the span of the node declaring it. */
@@ -792,8 +805,8 @@ final class SymbolIndex {
 			files, refs, subtypes, plugin.typeSyntax, plugin.refShape(), new BuildBranches(plugin, file -> sources[file])
 		);
 		paths = new MemberPathWalk(files, refs, typing.members, plugin.typeSyntax);
-		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty);
 		traits = new TypeTraits(files, sources, refs);
+		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty, refs, traits);
 		final shape: RefShape = plugin.refShape();
 		values = new ValueNameBinding(
 			refs, typing.ancestors, shape.execution?.enumConstructorKinds ?? [],

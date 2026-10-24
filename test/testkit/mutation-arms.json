@@ -24040,7 +24040,7 @@
 			"name": "M-PRIVATIZE-ACCESS-GRANT",
 			"type": "anyparse.check.NamingPrivatize",
 			"method": "publicKeywordIfConfined",
-			"find": "if (ctx.wide.allFiles().exists(fi -> fi.accessGrants.contains(owner))) return null;",
+			"find": "if (ctx.wide.text.hasAccessGrant(owner)) return null;",
 			"replace": "",
 			"note": "an @:access grant naming the type does not refuse"
 		},
@@ -30790,6 +30790,168 @@
 			"find": "final byCategory: Null<Bool> = category == null ? null : level.categories[category];",
 			"replace": "final byCategory: Null<Bool> = category == null || Lambda.exists(_switches, l -> l.rules[id] != null) ? null : level.categories[category];",
 			"note": "a rule entry anywhere in the chain outranks a category entry anywhere in it, so a nested category no longer overrides an outer config's entry for one of its rules"
+		},
+		{
+			"name": "M-SAFE-BLAME-UNSAID",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "compilerLines",
+			"force": "'apq lint --fix: $errors\\n'",
+			"note": "a revert notice no longer names the files the compiler blamed, so a revert caused through a file the run never wrote cannot be diagnosed"
+		},
+		{
+			"name": "M-SAFE-BAN-OFF",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "isBanned",
+			"force": "false",
+			"note": "an edit the safe-pass net took back is offered again by the follow-up round, which re-applies it and reverts it a second time"
+		},
+		{
+			"name": "M-SAFE-BISECT-OFF",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "bisectFiles",
+			"force": "[changed.copy()]",
+			"note": "a safe pass the compiler fails through a file the run never wrote is reverted whole again, every innocent edit with it"
+		},
+		{
+			"name": "M-SAFE-SPLIT-OFF",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "splitFile",
+			"find": "final rules: Array<String> = seat.splitRules(file);",
+			"replace": "final rules: Array<String> = [];",
+			"note": "a culprit file goes back whole, so the import fix beside the poisoning edit in the same file is lost"
+		},
+		{
+			"name": "M-SAFE-BISECT-NO-FALLBACK",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "bisectFiles",
+			"find": "throw new IsolationStop('bisecting the ${units.length} written unit(s) isolated no culprit within $budget typecheck(s)');",
+			"replace": "return [];",
+			"note": "a bisection that exhausts its search names no culprit instead of falling back to the whole wave with its reason"
+		},
+		{
+			"name": "M-SAFE-PLACE-SKIPPED",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "settle",
+			"find": "restore(whole);",
+			"replace": "",
+			"note": "a culprit the net reverts whole is left on disk at the last candidate an isolation probe wrote, while the run reports the tree back to a green build"
+		},
+		{
+			"name": "M-SAFE-LATER-UNBANNED",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "splitFile",
+			"find": "rules: later,",
+			"replace": "rules: [for (rule in later) if (!rules.contains(rule)) rule],",
+			"note": "keeping a culprit's first pass discards its later passes, but a rule that also landed in the first pass is neither named nor banned, so the follow-up round re-applies its later edit"
+		},
+		{
+			"name": "M-SAFE-INTERACTION-PINNED",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "bisectFiles",
+			"find": "for (i in failers) if (probes.green(keepOf(kept.concat([i])), []))",
+			"replace": "for (i in failers) if (false)",
+			"note": "when two files break the build only together, the bisection names the half it never proved and splits and bans its innocent files"
+		},
+		{
+			"name": "M-SAFE-PROBES-UNCAPPED",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "isolate",
+			"find": "final probes: IsolationProbes = new IsolationProbes(seat, cap, known);",
+			"replace": "final probes: IsolationProbes = new IsolationProbes(seat, 1 << 30, known);",
+			"note": "the isolation spends typechecks without a run budget, hours of project-wide builds on a wave of splittable culprits"
+		},
+		{
+			"name": "M-ACCESS-GRANT-LAST-SEGMENT",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "grantReaches",
+			"find": "if (target.paths.exists(t -> t.startsWith('$path.') || path == t || path.startsWith('$t.'))) return true;",
+			"replace": "",
+			"note": "an access grant counts only when its LAST segment is the type, so `@:access(pkg)` and `@:access(pkg.Type.member)` grant nothing and every confinement gate calls a reached private member confined"
+		},
+		{
+			"name": "M-PRIVATE-ACCESS-UNSEEN",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "waiverFilesOf",
+			"force": "[]",
+			"note": "no file carries a `@:privateAccess` waiver, so a member read only through one reads as unreached"
+		},
+		{
+			"name": "M-TRIVIAL-GETTER-GRANTEE-UNSEEN",
+			"type": "anyparse.check.TrivialGetter",
+			"method": "backingFieldReachedOutside",
+			"find": "|| MemberWriteScan.accessGrantMayReference(className, field, index, plugin)",
+			"replace": "",
+			"note": "trivial-getter asks the subtype graph alone again, so a backing field a grantee reads is deleted by a collapse that rewrites only the owner"
+		},
+		{
+			"name": "M-WAIVER-WHOLE-FILE",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "waivedNamesOf",
+			"find": "false, names);",
+			"replace": "true, names);",
+			"note": "every name a waiver file spells counts as waived, so a same-named local one statement past the waiver keeps a dead private member alive"
+		},
+		{
+			"name": "M-ANCESTOR-GRANT-UNSEEN",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "grantTargetsOf",
+			"force": "[{ name: typeName, paths: _typePathsByName[typeName] ?? [], unresolved: false }]",
+			"note": "a grant is held against the owner's own path alone, so `@:access(base.Base)` or `@:access(base)` stops reaching a subclass's private members"
+		},
+		{
+			"name": "M-TRIVIAL-GETTER-ACCESSOR-UNSEEN",
+			"type": "anyparse.check.TrivialGetter",
+			"method": "accessorReachedOutside",
+			"force": "false",
+			"note": "trivial-getter deletes an accessor a subtype or a grantee calls by name, guarding the backing field alone"
+		},
+		{
+			"name": "M-WAIVER-CONSTRUCTION-UNSPELLED",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "collectWaivedNames",
+			"find": "ctor != null && node.kind == ctor.newKind ? ctor.name : node.name",
+			"replace": "node.name",
+			"note": "a waived `new T()` spells the constructed type alone, so a private constructor reached only through it reads as unreached"
+		},
+		{
+			"name": "M-UNRESOLVED-SUPER-PACKAGE-GRANT",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "grantReaches",
+			"find": "return target.unresolved && !_declaredPaths.exists(path)",
+			"replace": "return false && !_declaredPaths.exists(path)",
+			"note": "a package grant over a superclass the index does not hold reaches nothing, so `@:access(fw)` over `extends fw.display.Base` no longer keeps a grantee-written private member"
+		},
+		{
+			"name": "M-REIFIED-NAME-UNREAD",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "accessGrantMatches",
+			"find": "return emitters != null && ",
+			"replace": "return emitters != null && false && ",
+			"note": "a member a macro reification spells counts only where a privileged file spells it, so a macro expanded under a grant or a waiver loses its target"
+		},
+		{
+			"name": "M-QUALIFIED-CONSTRUCTION-UNSEEN",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "precededByNew",
+			"find": "while (j >= 0 && source.fastCodeAt(j) == '.'.code) {",
+			"replace": "while (false) {",
+			"note": "a qualified `new pkg.Type()` is not a construction of `Type`, so a private constructor only built that way is deleted"
+		},
+		{
+			"name": "M-CTOR-PRIVILEGE-UNASKED",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "run",
+			"find": "&& !scopeIndex.text.privilegeMayReference(c.className, plugin.refShape().constructorName ?? 'new')",
+			"replace": "&& true",
+			"note": "the constructor arm stops asking what a privilege reaches, so a private constructor built through a waived alias or referenced as `A.new` is deleted"
+		},
+		{
+			"name": "M-BUILT-GRANTEE-UNSEEN",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "privilegedFileSpells",
+			"find": "|| fi.types.exists(t -> _traits.buildClosureSpells(t.name, file, name));",
+			"replace": ";",
+			"note": "a grantee whose class a build macro builds no longer counts as reaching what the macro emits"
 		},
 		{
 			"name": "M-MODMOVE-PACKAGE-KEPT",

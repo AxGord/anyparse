@@ -588,9 +588,9 @@ final class RefactorSupport {
 	 * Whether a private member of the type named `owner` is confined to its file —
 	 * i.e. unreachable from outside it, so an in-file analysis (rename, unused
 	 * detection) sees every possible reference. False when any file skip-parsed (it
-	 * could hide a subtype or `@:access` the index never saw), when a subtype or
-	 * `@:access` grant names the type, or when an `@:allow` can expose the member to
-	 * another type. Conservative: any doubt is false.
+	 * could hide a subtype or `@:access` the index never saw), when a subtype or `@:access` grant names
+	 * the type, when a file a superclass grant or an expression-level waiver (`@:privateAccess`) opens the type to spells the member,
+	 * or when an `@:allow` can expose the member to another type. Conservative: any doubt is false.
 	 *
 	 * `grants` asks the `@:allow` half of the MEMBER (`AllowGrants.reaching`: the member's own grants
 	 * and its type's) instead of the file: a grant written on ANOTHER member opens only that one, so
@@ -607,7 +607,7 @@ final class RefactorSupport {
 		owner: String, member: String, source: String, index: SymbolIndex, ?grants: Null<Array<String>>, ?ownerFile: String
 	): Bool {
 		return privateMemberScanIsSound(source, index, member, grants) && !index.subtypes.hasSubtype(owner, ownerFile)
-			&& !index.text.hasAccessGrant(owner);
+			&& !index.text.hasAccessGrant(owner) && !index.text.privilegeMayReference(owner, member);
 	}
 
 	/**

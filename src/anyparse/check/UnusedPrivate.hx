@@ -224,10 +224,14 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		// chain (`SubtypeGraph.subtypesOf`), so this half is the weaker of the two and the residue is
 		// exact: an UNREADABLE file that extends an alias of the owner. What is left needs the
 		// skipped file's own supertype clause, which is precisely what not parsing it withholds.
+		// A privilege reaching the class is asked by the constructor's member name: a waived
+		// `new M()` through an alias, a waived `C.new` reference and a grantee's construction
+		// spell no `new C` the raw scan can read.
 		for (c in ctorCandidates) if (
 			!index.text.skippedMayReference(c.className) && !index.subtypes.hasSubtype(c.className, c.file)
 			&& !isInstantiatedAnywhere(c.className, files) && !mentionedInStrings(c.className, reflected)
 			&& !usedAsValue(c.className, files, plugin, index) && !isAliased(c.className, scopeIndex)
+			&& !scopeIndex.text.privilegeMayReference(c.className, plugin.refShape().constructorName ?? 'new')
 		) violations.push({
 			file: c.file,
 			span: c.span,
@@ -859,11 +863,18 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		return false;
 	}
 
-	/** Whether the token ending just before `pos` (past whitespace) is the `new` keyword at a word boundary. */
+	/**
+	 * Whether the token ending just before `pos` (past whitespace, and past a package / module qualifier `pkg.sub.`) is the
+	 * `new` keyword at a word boundary — `new pkg.Type()` constructs `Type` as surely as `new Type()`.
+	 */
 	private static function precededByNew(source: String, pos: Int): Bool {
 		final kw: String = 'new';
-		var j: Int = pos - 1;
-		while (j >= 0 && isWhitespace(source.fastCodeAt(j))) j--;
+		var j: Int = skipWhitespaceBack(source, pos - 1);
+		while (j >= 0 && source.fastCodeAt(j) == '.'.code) {
+			j = skipWhitespaceBack(source, j - 1);
+			while (j >= 0 && SourceText.isIdentChar(source.fastCodeAt(j))) j--;
+			j = skipWhitespaceBack(source, j);
+		}
 		final start: Int = j + 1 - kw.length;
 		if (start < 0) return false;
 		for (k in 0...kw.length) if (source.fastCodeAt(start + k) != kw.fastCodeAt(k)) return false;
@@ -981,6 +992,13 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		return index == null
 			? MemberKinds.isSideEffectFree.bind(_, shape)
 			: TypeResolver.isDeletionPure.bind(_, tree, shape, RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [], index);
+	}
+
+	/** The last index at or before `j` that is not whitespace, or -1. */
+	private static function skipWhitespaceBack(source: String, j: Int): Int {
+		var at: Int = j;
+		while (at >= 0 && isWhitespace(source.fastCodeAt(at))) at--;
+		return at;
 	}
 
 }

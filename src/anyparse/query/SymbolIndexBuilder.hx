@@ -12,6 +12,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ModuleField;
+import anyparse.query.SymbolIndex.Reification;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
@@ -400,6 +401,7 @@ final class SymbolIndexBuilder {
 			ambientImports: [],
 			ambientImportsBounded: true,
 			accessGrants: collectAccessGrants(tree, shape),
+			reifications: collectReifications(tree, shape, types, basename),
 			moduleFields: moduleFieldsOf(tree, shape)
 		};
 	}
@@ -486,8 +488,9 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * Simple names of every type this file TAKES private access to — the arguments of every
-	 * `RefShape.takesPrivateAccessMetaName` annotation in `tree` (Haxe `@:access(pkg.Type)`). Empty
+	 * Every path this file TAKES private access through, as written — the arguments of every
+	 * `RefShape.takesPrivateAccessMetaName` annotation in `tree` (Haxe `@:access(pkg.Type)`, `@:access(pkg)`,
+	 * `@:access(pkg.Type.member)`), whole: the last segment alone names a package or a member as often as a type. Empty
 	 * when the grammar names no such tag. The opposite direction (`grantsPrivateAccessMetaName`) is
 	 * NOT collected: its arguments are unenumerable by construction, so its consumers read only
 	 * whether it is present at all.
@@ -498,8 +501,8 @@ final class SymbolIndexBuilder {
 		if (tag == null) return out;
 		collectInto(tree, n -> {
 			if (n.kind == 'MetaCall' && n.name == tag) for (c in n.children) {
-				final nm: Null<String> = c.name;
-				if (nm != null) out.push(simpleName(nm));
+				final path: Null<String> = dottedPathOf(c, shape) ?? c.name;
+				if (path != null) out.push(path);
 			}
 		});
 		return out;
@@ -1140,6 +1143,49 @@ final class SymbolIndexBuilder {
 			typeParamDefaults: [],
 			returnTypeSources: []
 		};
+	}
+
+	/** The dotted path an identifier / field-access chain `node` spells, or null for any other shape. */
+	private static function dottedPathOf(node: QueryNode, shape: RefShape): Null<String> {
+		if (node.kind == shape.identKind) return node.name;
+		final head: Null<QueryNode> = node.children[0];
+		final name: Null<String> = node.name;
+		if (node.kind != shape.fieldAccessKind || head == null || name == null) return null;
+		final prefix: Null<String> = dottedPathOf(head, shape);
+		return prefix == null ? null : '$prefix.$name';
+	}
+
+	/**
+	 * Per type of `tree` (the innermost declaration of `types` enclosing it, else the module `basename`), every name spelled
+	 * under one of its reification subtrees (`RefShape.opaqueKinds`); empty for a grammar with none.
+	 */
+	private static function collectReifications(
+		tree: QueryNode, shape: RefShape, types: Array<TypeDeclInfo>, basename: String
+	): Array<Reification> {
+		final kinds: Array<String> = shape.opaqueKinds ?? [];
+		final byType: Map<String, Map<String, Bool>> = [];
+		if (kinds.length > 0) collectInto(tree, node -> {
+			final span: Null<Span> = node.span;
+			if (!kinds.contains(node.kind) || span == null) return;
+			var owner: Null<TypeDeclInfo> = null;
+			for (t in types) if (t.span.from <= span.from && span.to <= t.span.to && (owner == null || t.span.from >= owner.span.from))
+				owner = t;
+			final typeName: String = owner == null ? basename : owner.name;
+			final names: Map<String, Bool> = byType[typeName] ?? [];
+			collectInto(node, inner -> {
+				final name: Null<String> = inner.name;
+				if (name != null) names[name] = true;
+			});
+			byType[typeName] = names;
+		});
+		final out: Array<Reification> = [];
+		for (typeName => names in byType) {
+			final spelled: Array<String> = [for (name in names.keys()) name];
+			spelled.sort(Reflect.compare);
+			out.push({ typeName: typeName, names: spelled });
+		}
+		out.sort((a, b) -> Reflect.compare(a.typeName, b.typeName));
+		return out;
 	}
 
 }

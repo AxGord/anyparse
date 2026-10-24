@@ -160,11 +160,12 @@ final class MapValueScan {
 		final report: SymbolIndex = index;
 		if (!RefactorSupport.privateMemberScanIsSound(source, report, name)) return false;
 		final scope: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
-		return !scope.text.hasAccessGrant(owner) && !scope.subtypes.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
-			if (redeclares || MemberWriteScan.carriesBuildMacro(src)) return true;
-			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, src);
-			return tree == null || !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams);
-		});
+		return !scope.text.hasAccessGrant(owner) && !scope.text.privilegeMayReference(owner, name)
+			&& !scope.subtypes.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
+				if (redeclares || MemberWriteScan.carriesBuildMacro(src)) return true;
+				final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, src);
+				return tree == null || !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams);
+			});
 	}
 
 	/**
