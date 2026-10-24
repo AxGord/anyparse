@@ -93,6 +93,9 @@ private typedef ScanContext = {
 	/** The path spans of every type-position node, filled by the scan — a name spelled there reads a type, never a value. */
 	var typeSpans: Array<Span>;
 
+	/** The bare names written in an UNGUARDED type position, filled by the scan — what lets a `#if` occurrence go short too. */
+	var shortTypeNames: Array<String>;
+
 	/** Every byte that cannot bind a name — comments and literal string TEXT (`InertRegions`). */
 	var inert: Array<Span>;
 }
@@ -166,11 +169,9 @@ private typedef ScanContext = {
  *    offered (an unproven path never receives the freeness exemption, so it never promises an
  *    import).
  *  - **Conditional compilation.** An occurrence inside a `#if … #end` region never counts toward
- *    the import threshold, and is rewritten only to a spelling that needs NO fresh import — one
- *    the file reaches through an unconditional import, this module, the package chain or a
- *    builtin, which means the same in every build (a `#if`-guarded import of the name already
- *    vetoes it). A spelling riding on an import this call adds waits for the next pass, which
- *    finds the import in place. It IS exempted from the freeness
+ *    the import threshold, and goes short only where the file already writes that short name in
+ *    an UNGUARDED type position, or in the same call that adds the import its unguarded uses
+ *    bought; otherwise it keeps its full path (`guardedTakes`). It IS exempted from the freeness
  *    scan, since it is still the path's own text. The test is the DIRECTIVE, not a node kind —
  *    every conditional region opens with `#if` whichever of the grammar's dozen positional
  *    conditional ctors projects it (`opensConditionalRegion`).
@@ -444,9 +445,8 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 	 * both import gates, and those gates count the occurrences THIS call will rewrite — so a
 	 * promised import always belongs to a plan this rule will act on.
 	 *
-	 * A `#if` occurrence never counts towards an import, and is rewritten only to a spelling that needs NO fresh import:
-	 * that one resolves the same in every build, while one riding on the import this call adds waits for the next pass,
-	 * which finds the import already in the file. A value site is skipped wholesale unless `options` opts value positions in.
+	 * A `#if` occurrence never counts towards an import and is rewritten only as `guardedTakes` allows. A value site is
+	 * skipped wholesale unless `options` opts value positions in.
 	 *
 	 * `wanted` is the caller's surviving findings as `spanKey`s, or null for "every occurrence
 	 * counts". `run` reports the whole file and passes null; a fix path was handed a SUBSET
@@ -478,6 +478,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 			comments: SourceComments.collectCommentRegions(lexical),
 			tree: scoped,
 			typeSpans: [],
+			shortTypeNames: [],
 			inert: InertRegions.of(scoped, lexical, shape)
 		};
 		final occurrences: Array<Occurrence> = [];
@@ -514,7 +515,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 			// path, suppressed ones included, or a suppressed occurrence's own last segment would veto the import.
 			final owned: Null<Array<Span>> = importable ? [for (o in occurrences) if (resolved[o.path] == path) o.span] : null;
 			final printed: PrintedTypeRef = printer.print(path, owned);
-			final mine: Array<Occurrence> = printed.importPath == null ? eligible : unguarded;
+			final mine: Array<Occurrence> = guardedTakes(printed, context) ? eligible : unguarded;
 			final kept: Array<Span> = keptTargets(printed.text, mine, context, index, file);
 			if (kept.length > 0) plans.push({
 				path: path,
@@ -525,6 +526,15 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 			});
 		}
 		return { printer: printer, plans: plans };
+	}
+
+	/**
+	 * Whether the `#if` occurrences of a path take `printed` too: when it buys the import this call adds (then they must,
+	 * the import being unconditional), or when it is a short name the file already writes in an unguarded type position.
+	 * Otherwise a guarded occurrence keeps its full path.
+	 */
+	private static function guardedTakes(printed: PrintedTypeRef, context: ScanContext): Bool {
+		return printed.importPath != null || context.shortTypeNames.contains(printed.text);
 	}
 
 	/**
@@ -609,8 +619,8 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 	 *    resolution, keeps being scanned.
 	 *
 	 * A `#if … #end` region is NOT skipped — it is FLAGGED. Its occurrences are exempted from the
-	 * printer's short-name freeness scan (they are still the path's own text), never counted toward the import
-	 * threshold, and rewritten only to a spelling that needs no fresh import (the `Conditional compilation` gate).
+	 * printer's short-name freeness scan (they are still the path's own text), never counted
+	 * toward the import threshold, and rewritten only as the `Conditional compilation` gate allows.
 	 *
 	 * A `macro` FUNCTION body is flagged the same way, and for one narrower purpose: its occurrences
 	 * are still rewritable, but they do not entitle the path to a module-level import (see the
@@ -659,6 +669,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		if (context.typeKinds.contains(node.kind)) {
 			final span: Null<Span> = pathSpanOf(node, name, context);
 			if (span != null) context.typeSpans.push(span);
+			if (!conditional && name.indexOf('.') == -1 && !context.shortTypeNames.contains(name)) context.shortTypeNames.push(name);
 			return name.indexOf('.') == -1 || !SourceText.isUpperInitial(SourceText.lastSegment(name)) || span == null ? null : {
 				path: name,
 				span: span,

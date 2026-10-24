@@ -23,7 +23,7 @@ class ShortenTypeRefCheckTest extends Test {
 	// --- helpers -------------------------------------------------------------------
 
 	/** The library module carrying a MAIN type `Mod` and a SECONDARY type `Sub` — the hybrid's subject. */
-	private static inline final MOD_SOURCE: String = 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n';
+	private static inline final MOD_SOURCE: String = 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = {};\n';
 
 	/** A second library module whose main type `Foo` is the plain over-qualification subject. */
 	private static inline final FOO_SOURCE: String = 'package pkg.deep;\n\nclass Foo {}\n';
@@ -367,16 +367,25 @@ class ShortenTypeRefCheckTest extends Test {
 	// --- conditional compilation ---
 
 	/**
-	 * A spelling that needs no fresh import — here the short name an unconditional import already binds — means the same in
-	 * every build, so a `#if` occurrence takes it too.
+	 * A `#if` occurrence goes short only where the file already writes the short name in an UNGUARDED type position. Here
+	 * the import binds it but nothing unguarded spells it, so the guarded path keeps its full form.
 	 */
 	@:pin('control')
+	@:killer('M-SHORTEN-GUARDED-WITHOUT-SHORT-USE')
+	public function testAGuardedOccurrenceWithNoUnguardedShortUseKeepsItsPath(): Void {
+		final src: String = inClass('import pkg.deep.Foo;\n\n', '\t\t#if debug\n\t\tfinal v:pkg.deep.Foo = g();\n\t\t#end\n');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** The same guarded path beside an unguarded `Foo`: the file already writes the short name, so the guarded use follows. */
+	@:pin('control')
 	@:killer('M-SHORTEN-GUARDED-NEVER')
-	public function testConditionalRegionTakesAnImportFreeSpelling(): Void {
-		final src: String = 'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n\t\t#if debug\n'
-			+ '\t\tfinal v:pkg.deep.Sub = g();\n\t\t#end\n\t}\n\n}\n';
-		Assert.equals(1, violations(src).length);
-		Assert.equals('\t\tfinal v:Sub = g();', annotationLine(applyFix(src)));
+	public function testAGuardedOccurrenceFollowsAnUnguardedShortUse(): Void {
+		final src: String = inClass(
+			'import pkg.deep.Foo;\n\n', '\t\tfinal w:Foo = g();\n\t\t#if debug\n\t\tfinal v:pkg.deep.Foo = g();\n\t\t#end\n'
+		);
+		Assert.equals('\t\tfinal v:Foo = g();', annotationLine(applyFix(src)));
 	}
 
 	/**
@@ -427,26 +436,21 @@ class ShortenTypeRefCheckTest extends Test {
 		);
 		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') != -1, 'import added, got: $out');
 		Assert.isTrue(out.indexOf('g(Foo.a());') != -1 && out.indexOf('g(Foo.b());') != -1, 'plain uses shortened, got: $out');
-		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.c());') != -1, 'the guarded use stays qualified, got: $out');
+		Assert.isTrue(out.indexOf('g(Foo.c());') != -1, 'the guarded use takes the import in the same call, got: $out');
 	}
 
-	/**
-	 * A guarded occurrence of a path that is only now BUYING its import stays qualified: the short name rides on a line this
-	 * very call adds. The next pass finds the import in place and shortens it like any import-free spelling.
-	 */
+	/** A guarded occurrence of a path whose unguarded uses buy an import goes short in the SAME call: the import is unconditional. */
 	@:pin('control')
 	@:killer('M-SHORTEN-GUARDED-RIDES-FRESH-IMPORT')
-	public function testAGuardedOccurrenceWaitsForTheImportItsPathBuys(): Void {
+	public function testAGuardedOccurrenceTakesTheImportItsPathBuys(): Void {
 		final src: String = inClass(
 			'',
 			'\t\tfinal a:pkg.deep.Foo = g();\n\t\tfinal b:pkg.deep.Foo = g();\n\t\t#if debug\n\t\tfinal c:pkg.deep.Foo = g();\n\t\t#end\n'
 		);
 		final once: String = applyFix(src);
 		Assert.isTrue(once.indexOf('import pkg.deep.Foo;') != -1 && once.indexOf('final b:Foo = g();') != -1, 'import added, got: $once');
-		Assert.isTrue(once.indexOf('final c:pkg.deep.Foo = g();') != -1, 'the guarded use waits, got: $once');
-		final twice: String = applyFix(once);
-		Assert.isTrue(twice.indexOf('final c:Foo = g();') != -1, 'the next pass shortens it, got: $twice');
-		Assert.equals(twice, applyFix(twice));
+		Assert.isTrue(once.indexOf('final c:Foo = g();') != -1, 'the guarded use goes short with it, got: $once');
+		Assert.equals(once, applyFix(once));
 	}
 
 	/** Any code byte spelling the simple name refuses the import, inside a `#if` branch too. */

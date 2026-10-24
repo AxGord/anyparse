@@ -274,6 +274,19 @@ final class ImportBindings {
 	}
 
 	/**
+	 * Every simple name `binding` brings into scope except `keep` — the module's other types, the constructors and values
+	 * of the types it imports, its module-level fields — or null when a set cannot be listed. What a caller adding the
+	 * line must check is not re-pointed in its file.
+	 */
+	public static function namesBesides(binding: Null<ImportBinding>, keep: String): Null<Array<String>> {
+		final values: Null<Array<String>> = binding?.typeValues;
+		final fields: Null<Array<String>> = binding?.fieldValues;
+		return binding == null || values == null || fields == null
+			? null
+			: [for (name in binding.types.concat(values).concat(fields)) if (name != keep) name];
+	}
+
+	/**
 	 * The reader an insert seat holding only `plugin` can build: over the host's RESOLUTION index when
 	 * the run carries one, else null — no index, no proof.
 	 */

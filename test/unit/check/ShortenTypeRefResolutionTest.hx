@@ -4,6 +4,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.ShortenTypeRef;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.cli.CliFixture;
 
 /**
  * `shorten-type-ref` decides by RESOLUTION, not by what the file already spells short: a path whose short name reaches
@@ -183,6 +184,83 @@ class ShortenTypeRefResolutionTest extends Test {
 		final root: Array<{ file: String, source: String }> = [{ file: 'X.hx', source: 'class X {\n\tpublic function new() {}\n}\n' }];
 		final src: String = 'package pkg;\n\nclass X {\n\tpublic final a:X.X = null;\n\tpublic final b:X.X = null;\n}\n';
 		Assert.equals(0, violationsAt('pkg/X.hx', src, root).length);
+	}
+
+	/**
+	 * `import z.Color;` would bind `Red` too, re-pointing the bare `Red` the
+	 * file reads through `import a.Paint;` (4.3.7: `a.Paint` became `z.Color`).
+	 */
+	@:pin('control')
+	@:killer('M-PRINTER-IMPORT-REBINDS-BLIND')
+	public function testAnImportBindingAConstructorTheFileReadsBareIsRefused(): Void {
+		final extra: Array<{ file: String, source: String }> = LIB_DEEP.concat([
+			{ file: 'a/Paint.hx', source: 'package a;\n\nenum Paint {\n\tRed;\n\tBlue;\n}\n' },
+			{ file: 'z/Color.hx', source: 'package z;\n\nenum Color {\n\tRed;\n\tGreen;\n}\n' }
+		]);
+		final src: String = 'package pkg.sub;\n\nimport a.Paint;\n\nclass Holder {\n' + twice('z.Color') + twice('lib.deep.Gadget')
+			+ '\n\tpublic static function f():Void {\n\t\ttrace(Red);\n\t}\n}\n';
+		final out: String = applyFix(src, extra);
+		Assert.equals(-1, out.indexOf('import z.Color;'), 'Red would change meaning, got: $out');
+		Assert.isTrue(out.indexOf('import lib.deep.Gadget;') != -1, 'control, got: $out');
+	}
+
+	/** `import z.Thing;` binds the module's `Helper` too, re-pointing the file's bare root `Helper` (4.3.7: `root` became `z`). */
+	@:pin('control')
+	@:killer('M-PRINTER-IMPORT-REBINDS-BLIND')
+	public function testAnImportBindingAnotherModuleTypeTheFileReadsBareIsRefused(): Void {
+		final extra: Array<{ file: String, source: String }> = LIB_DEEP.concat([
+			{ file: 'z/Thing.hx', source: 'package z;\n\nclass Thing {}\n\nclass Helper {}\n' },
+			{ file: 'Helper.hx', source: 'class Helper {}\n' }
+		]);
+		final src: String = 'package pkg.sub;\n\nclass Holder {\n' + twice('z.Thing') + twice('lib.deep.Gadget')
+			+ '\n\tpublic static function f():Void {\n\t\ttrace(Helper);\n\t}\n}\n';
+		final out: String = applyFix(src, extra);
+		Assert.equals(-1, out.indexOf('import z.Thing;'), 'Helper would change meaning, got: $out');
+		Assert.isTrue(out.indexOf('import lib.deep.Gadget;') != -1, 'control, got: $out');
+	}
+
+	/** A guarded path the package chain reaches, with no unguarded short use of the name, keeps its full form. */
+	@:pin('control')
+	@:killer('M-SHORTEN-GUARDED-WITHOUT-SHORT-USE')
+	public function testAGuardedPackageChainPathWithNoUnguardedUseKeepsItsPath(): Void {
+		Assert.equals(0, violations(holder('\t#if debug\n\tpublic final a:pkg.Entity<String> = null;\n\t#end\n'), []).length);
+	}
+
+	/**
+	 * The same shape through an AMBIENT `import.hx`: a guarded `catch (e:haxe.Exception)` the ambient import reaches stays
+	 * full until an unguarded type position writes `Exception` (the control half).
+	 */
+	@:pin('control')
+	@:killer('M-SHORTEN-GUARDED-WITHOUT-SHORT-USE')
+	public function testAGuardedPathAnAmbientImportReachesFollowsOnlyAnUnguardedShortUse(): Void {
+		#if (sys || nodejs)
+		final guarded: String = '\t\t#if debug\n\t\ttry {} catch (e:haxe.Exception) {}\n\t\t#end\n';
+		Assert.equals(0, ambientViolations(guarded).length, 'no unguarded short use');
+		Assert.equals(1, ambientViolations('\t\tfinal e0:Exception = null;\n$guarded').length, 'the guarded use follows the unguarded one');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The findings for a `pkg.Holder` whose `f` body is `body`, written to disk under an `import.hx` that imports `haxe.Exception`. */
+	private function ambientViolations(body: String): Array<Violation> {
+		#if (sys || nodejs)
+		final source: String = 'package pkg;\n\nclass Holder {\n\tpublic static function f():Void {\n$body\t}\n}\n';
+		final root: String = CliFixture.writeTree('apq_shorten_ambient', [
+			{ name: 'pkg/import.hx', source: 'import haxe.Exception;\n' },
+			{ name: 'pkg/Holder.hx', source: source }
+		]);
+		var out: Array<Violation> = [];
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+			final report: Array<{ file: String, source: String }> = [{ file: '$root/pkg/Holder.hx', source: source }];
+			out = CheckFixture.violationsIn(
+				valueRule(), report, plugin(report, [{ file: 'haxe/Exception.hx', source: 'package haxe;\n\nclass Exception {}\n' }])
+			);
+		});
+		return out;
+		#else
+		return [];
+		#end
 	}
 
 	/** Two fields typed `path`, named after its last segment. */

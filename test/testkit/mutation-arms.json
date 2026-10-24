@@ -31351,18 +31351,17 @@
 		{
 			"name": "M-SHORTEN-GUARDED-NEVER",
 			"type": "anyparse.check.ShortenTypeRef",
-			"method": "planFor",
-			"find": "printed.importPath == null ? eligible : unguarded;",
-			"replace": "unguarded;",
-			"note": "a `#if` occurrence is never rewritten, so a short name an unconditional import already binds stays qualified inside every guarded region"
+			"method": "guardedTakes",
+			"force": "false",
+			"note": "a `#if` occurrence is never rewritten, so it stays qualified beside an unguarded short use of the name and beside the import its path buys"
 		},
 		{
 			"name": "M-SHORTEN-GUARDED-RIDES-FRESH-IMPORT",
 			"type": "anyparse.check.ShortenTypeRef",
-			"method": "planFor",
-			"find": "printed.importPath == null ? eligible : unguarded;",
-			"replace": "eligible;",
-			"note": "a `#if` occurrence is shortened on the strength of an import the same call is only now adding, so it is rewritten in the pass that cannot yet see that import"
+			"method": "guardedTakes",
+			"find": "printed.importPath != null || ",
+			"replace": "",
+			"note": "a `#if` occurrence of a path that buys its import keeps the full path, so the guarded spelling ignores the unconditional import the same call adds"
 		},
 		{
 			"name": "M-SHORTEN-VALUE-POSITIONS-ALWAYS",
@@ -31411,6 +31410,21 @@
 			"find": "out[o.path] = printer.resolvePath(o.path) ?? o.path;",
 			"replace": "out[o.path] = o.path;",
 			"note": "occurrences are grouped by how they are spelled, so a hybrid and the module-qualified path of the same type each fall short of the import threshold"
+		},
+		{
+			"name": "M-SHORTEN-GUARDED-WITHOUT-SHORT-USE",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "guardedTakes",
+			"force": "true",
+			"note": "every `#if` occurrence takes the short spelling, even where nothing unguarded in the file writes that name"
+		},
+		{
+			"name": "M-PRINTER-IMPORT-REBINDS-BLIND",
+			"type": "anyparse.query.TypeRefPrinter",
+			"method": "canAddImport",
+			"find": "if (bindings != null) {",
+			"replace": "if (bindings != null && false) {",
+			"note": "a fresh import is added although it also binds a type or constructor the file already reads bare, which then silently means the imported one"
 		}
 	]
 }
