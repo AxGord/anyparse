@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.NullFlowScan.IdentOperand;
+import anyparse.check.scan.NullFlow;
+import anyparse.check.scan.RunScan;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;

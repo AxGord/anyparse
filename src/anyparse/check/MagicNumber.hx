@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.LiteralTables.LiteralTableShape;
+import anyparse.check.scan.RunScan;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

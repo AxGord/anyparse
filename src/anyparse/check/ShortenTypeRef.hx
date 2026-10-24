@@ -4,6 +4,8 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.ModuleScan;

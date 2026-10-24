@@ -65,7 +65,7 @@ final class HookProbe {
 		Sys.println('-- T470: payload text is DATA, not a command --');
 		probe(ALLOW, 'hxq comment-rewrite \'the $h of the list\' \'the front of the list\' $cli --write');
 		probe(ALLOW, 'hxq comment-rewrite \'we $g the tree\' \'we walk the tree\' $cli --write');
-		probe(ALLOW, 'hxq set-doc src/anyparse/check/NullFlow$X --select \'FnMember:x\' \'reads the $h then walks\'');
+		probe(ALLOW, 'hxq set-doc src/anyparse/check/scan/NullFlow$X --select \'FnMember:x\' \'reads the $h then walks\'');
 		probe(ALLOW, 'hxq patch $cli --select \'FnMember:x\' --write \'a $s b\'');
 		probe(ALLOW, 'hxq lit \'$h\' src/anyparse/query/ShardPlan$X --limit 3');
 		Sys.println('-- git -C is VCS inspection --');

@@ -5,7 +5,7 @@ import anyparse.check.PreferExists;
 import anyparse.check.PreferFind;
 import anyparse.check.PreferLpad;
 import anyparse.check.Severity;
-import anyparse.check.UsingScan;
+import anyparse.check.scan.UsingScan;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;

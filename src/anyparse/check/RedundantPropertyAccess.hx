@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;

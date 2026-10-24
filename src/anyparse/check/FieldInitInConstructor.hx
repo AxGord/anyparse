@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.MemberSlots.MemberRank;
+import anyparse.check.scan.ConstantHoist;
+import anyparse.check.scan.RenameClaims;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;

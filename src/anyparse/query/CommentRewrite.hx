@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.CheckScan;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.LexicalRegions.LexRegion;

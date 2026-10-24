@@ -1,7 +1,9 @@
 package anyparse.check;
 
-import anyparse.check.CaseValueKey.CaseValueSeams;
-import anyparse.check.CheckScan.NegationSeams;
+import anyparse.check.scan.CaseValueKey;
+import anyparse.check.scan.CheckScan.NegationSeams;
+import anyparse.check.scan.NegationScan;
+import anyparse.check.scan.OperatorSelection;
 import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ParenGuard;

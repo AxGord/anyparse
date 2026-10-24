@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.VersionGated;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.ParenGuard;

@@ -1,5 +1,9 @@
 package anyparse.check;
 
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RegionTerminator;
+import anyparse.check.scan.RunScan;
+import anyparse.check.scan.ScopeFrames;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.NodeShape;

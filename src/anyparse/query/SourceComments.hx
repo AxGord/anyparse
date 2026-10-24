@@ -2,8 +2,8 @@ package anyparse.query;
 
 using Lambda;
 
-import anyparse.check.CheckScan;
-import anyparse.check.CommentProse;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.CommentProse;
 import anyparse.format.comment.CommentDirective;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.LexicalRegions.LexRegion;

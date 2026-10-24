@@ -2,9 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.StaticExtensionFacts.ExtensionFactsVerdict;
-import anyparse.check.UsingScan.UsingConflict;
-import anyparse.check.UsingScan.UsingHeader;
-import anyparse.check.UsingScan.UsingScope;
+import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
+import anyparse.check.scan.SpanRender;
+import anyparse.check.scan.UsingScan;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;

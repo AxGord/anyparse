@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.SymbolIndex;

@@ -1,6 +1,6 @@
 package anyparse.check;
 
-import anyparse.check.NullFlow.NullFacts;
+import anyparse.check.scan.NullFlow.NullFacts;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;

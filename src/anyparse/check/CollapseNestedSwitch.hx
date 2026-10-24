@@ -1,6 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.CasePatternScan;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CasePatterns;
 import anyparse.query.IndexScope;

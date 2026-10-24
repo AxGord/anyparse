@@ -1,6 +1,6 @@
 package anyparse.query.cli.command;
 
-import anyparse.check.CheckScan;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;

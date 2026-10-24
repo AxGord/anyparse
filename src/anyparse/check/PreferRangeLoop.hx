@@ -1,5 +1,8 @@
 package anyparse.check;
 
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.LoopScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ShapeVocab;

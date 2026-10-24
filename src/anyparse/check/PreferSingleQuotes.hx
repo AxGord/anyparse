@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.scan.RunScan;
 import anyparse.query.ParseGate;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;

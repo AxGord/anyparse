@@ -1,5 +1,8 @@
 package anyparse.check;
 
+import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.facts.FactsTypeText;
+import anyparse.check.facts.FactsTypeTree;
 import anyparse.query.CompilerFacts;
 import anyparse.runtime.Span;
 

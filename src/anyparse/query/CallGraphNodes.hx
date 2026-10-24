@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.CheckScan;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.ParsedEntry;

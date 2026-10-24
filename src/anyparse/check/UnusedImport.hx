@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.scan.UsingSites;
 import anyparse.query.ImportBindings;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;

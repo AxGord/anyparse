@@ -1,5 +1,8 @@
 package anyparse.check;
 
+import anyparse.check.scan.ConstantFieldScan;
+import anyparse.check.scan.ReflectionScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CondRegionScan;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.ElementSpan;

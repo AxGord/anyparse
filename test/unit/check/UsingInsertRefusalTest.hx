@@ -4,7 +4,7 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.LambdaLoopScan;
 import anyparse.check.PreferStaticExtension;
 import anyparse.check.Severity;
-import anyparse.check.UsingScan;
+import anyparse.check.scan.UsingScan;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;

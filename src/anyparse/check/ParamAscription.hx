@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.FixEdit;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.MemberLookup.SupertypeProof;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;

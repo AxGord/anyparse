@@ -4,6 +4,8 @@ import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.MacroGate.CallRef;
 import anyparse.check.MacroGate.MacroIndex;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;

@@ -1,7 +1,6 @@
 package anyparse.check;
 
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.NullFlow.NullFacts;
 import anyparse.check.NullableSource.NullableSourceCfg;
 import anyparse.query.BoolExprShape;
 import anyparse.query.IndexScope;
@@ -12,6 +11,9 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.NullFlow;
+import anyparse.check.scan.RunScan;
 
 using Lambda;
 using StringTools;

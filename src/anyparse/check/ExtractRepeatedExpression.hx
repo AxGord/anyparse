@@ -2,7 +2,10 @@ package anyparse.check;
 
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.VolatileMessage;
-import anyparse.check.PurityScan.PurityCtx;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.PurityScan;
+import anyparse.check.scan.RunScan;
+import anyparse.check.scan.SpanRender;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.ShapeVocab;

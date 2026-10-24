@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.NullFlowScan.IdentOperand;
+import anyparse.check.scan.NullFlow;
+import anyparse.check.scan.RunScan;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

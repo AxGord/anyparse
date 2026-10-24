@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.scan.RunScan;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

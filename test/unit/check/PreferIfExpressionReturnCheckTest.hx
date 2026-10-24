@@ -1,8 +1,8 @@
 package unit.check;
 
-import anyparse.check.CheckScan;
 import anyparse.check.PreferIfExpressionReturn;
 import anyparse.check.Severity;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;

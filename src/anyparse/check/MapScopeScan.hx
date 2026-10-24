@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.UsingScan;
 import anyparse.runtime.Span;
 
 using StringTools;

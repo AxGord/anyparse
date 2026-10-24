@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.ReflectionMemo;
+import anyparse.check.scan.ReflectionMemo;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.AmbientImportGovernance;

@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.NativeCodeScan;
+import anyparse.check.scan.NativeCodeScan;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.FactsView.TruthSites;

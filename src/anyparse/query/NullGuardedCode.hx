@@ -1,7 +1,7 @@
 package anyparse.query;
 
-import anyparse.check.FactsTypeText;
-import anyparse.check.FactsTypeTree;
+import anyparse.check.facts.FactsTypeText;
+import anyparse.check.facts.FactsTypeTree;
 import anyparse.query.CompilerFacts.CallFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;

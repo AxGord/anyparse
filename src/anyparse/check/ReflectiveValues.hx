@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.ReflectiveReach.closure;
 import anyparse.check.ReflectiveReach.holderOf;
+import anyparse.check.scan.RunScan;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphGenerics;

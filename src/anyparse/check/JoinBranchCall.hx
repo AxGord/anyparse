@@ -1,7 +1,8 @@
 package anyparse.check;
 
-import anyparse.check.IfExpressionChain.IfChain;
-import anyparse.check.PurityScan.PurityCtx;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.IfExpressionChain;
+import anyparse.check.scan.PurityScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;

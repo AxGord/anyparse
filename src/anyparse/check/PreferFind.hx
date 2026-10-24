@@ -1,6 +1,8 @@
 package anyparse.check;
 
-import anyparse.check.UsingScan.UsingHeader;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
+import anyparse.check.scan.UsingScan;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;

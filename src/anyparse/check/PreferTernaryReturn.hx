@@ -5,6 +5,8 @@ import anyparse.check.Check.CarryingFix;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.NegatedCondition.InversionSeams;
 import anyparse.check.NegatedCondition.InversionSite;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;

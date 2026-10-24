@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.check.CheckScan;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SetModifier;

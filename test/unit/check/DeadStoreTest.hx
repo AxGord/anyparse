@@ -1,7 +1,7 @@
 package unit.check;
 
 import anyparse.check.DeadStore;
-import anyparse.check.NullFlow;
+import anyparse.check.scan.NullFlow;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ParseGate;

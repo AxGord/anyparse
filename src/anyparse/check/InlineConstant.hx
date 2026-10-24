@@ -1,7 +1,7 @@
 package anyparse.check;
 
-import anyparse.check.ConstantFieldScan.ConstantFieldSeams;
-import anyparse.check.ReflectionScan.ReflectionSurface;
+import anyparse.check.scan.ConstantFieldScan;
+import anyparse.check.scan.ReflectionScan;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;

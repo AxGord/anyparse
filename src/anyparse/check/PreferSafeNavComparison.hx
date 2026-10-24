@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.VersionGated;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.MemberKinds;

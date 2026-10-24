@@ -1,8 +1,9 @@
 package anyparse.check;
 
-import anyparse.check.AssignmentTreeHoist.LvalueRef;
-import anyparse.check.AssignmentTreeHoist.SwitchArms;
-import anyparse.check.AssignmentTreeHoist.TreeSeams;
+import anyparse.check.scan.AssignmentTreeHoist;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.IfExpressionChain;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.MemberKinds;

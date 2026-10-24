@@ -6,6 +6,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.ConfiguredTypes.OwnedMember;
 import anyparse.check.RuleDeclaration.EventSpec;
+import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;

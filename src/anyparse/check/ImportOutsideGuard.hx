@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.scan.UsingScan;
 import anyparse.query.ImportBindings;
 import anyparse.query.ImportOrder;
 import anyparse.query.IndexScope;

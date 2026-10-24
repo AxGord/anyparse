@@ -5,7 +5,7 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig;
 import anyparse.check.OracleCoverage;
 import anyparse.check.ThreadSafety;
-import anyparse.check.TypedFactsProbe;
+import anyparse.check.facts.TypedFactsProbe;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import unit.cli.CliFixture;

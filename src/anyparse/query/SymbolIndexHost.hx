@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.ReflectionMemo;
+import anyparse.check.scan.ReflectionMemo;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;

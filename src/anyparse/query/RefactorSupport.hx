@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.ReflectionMemo;
+import anyparse.check.scan.ReflectionMemo;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Refs.RefHit;

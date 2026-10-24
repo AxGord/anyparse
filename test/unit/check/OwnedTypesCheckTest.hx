@@ -2,8 +2,8 @@ package unit.check;
 
 import anyparse.check.LintConfig;
 import anyparse.check.OwnedTypes;
-import anyparse.check.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.check.Severity;
+import anyparse.check.config.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.query.StdResolver;
 
 using StringTools;

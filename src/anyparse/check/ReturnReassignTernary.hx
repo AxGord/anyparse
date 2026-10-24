@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.NegatedCondition.InversionSeams;
 import anyparse.check.NegatedCondition.InversionSite;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.NodeShape;

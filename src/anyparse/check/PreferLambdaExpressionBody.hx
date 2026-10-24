@@ -1,6 +1,8 @@
 package anyparse.check;
 
-import anyparse.check.IfExpressionChain.ShieldSeams;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.IfExpressionChain;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
