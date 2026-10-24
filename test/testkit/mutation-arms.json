@@ -21954,7 +21954,7 @@
 		},
 		{
 			"name": "M-OWNED-READER-NO-OWNERS",
-			"type": "anyparse.check.OwnedTypesDeclaration",
+			"type": "anyparse.check.config.OwnedTypesDeclaration",
 			"method": "readEntry",
 			"find": "final problem: Null<String> = if (owners.length == 0)",
 			"replace": "final problem: Null<String> = if (false)",

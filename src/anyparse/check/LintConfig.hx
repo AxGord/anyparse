@@ -2,7 +2,7 @@ package anyparse.check;
 
 import anyparse.check.LintDocuments.DocumentMemo;
 import anyparse.check.LintDocuments.LintDocument;
-import anyparse.check.OwnedTypesDeclaration.TypeOwnership;
+import anyparse.check.config.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.grammar.json.JValue;
 import anyparse.query.ConfigFinder;
 import anyparse.query.NamingPolicy.FrameworkContract;

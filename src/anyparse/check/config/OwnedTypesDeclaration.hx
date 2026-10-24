@@ -1,4 +1,4 @@
-package anyparse.check;
+package anyparse.check.config;
 
 import anyparse.grammar.json.JEntry;
 import anyparse.grammar.json.JValue;
