@@ -1,10 +1,6 @@
 package anyparse.check;
 
 import anyparse.check.Check.GroupedEdit;
-import anyparse.check.LoopScan.LoopSeams;
-import anyparse.check.PurityScan.PurityCtx;
-import anyparse.check.UsingScan.UsingHeader;
-import anyparse.check.UsingScan.UsingScope;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
@@ -20,6 +16,11 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.LoopScan;
+import anyparse.check.scan.PurityScan;
+import anyparse.check.scan.RunScan;
+import anyparse.check.scan.UsingScan;
 
 using Lambda;
 

@@ -1,7 +1,7 @@
 package unit.check;
 
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.TypedFactsProbe;
+import anyparse.check.facts.TypedFactsProbe;
 import anyparse.core.TempScratch;
 import anyparse.query.Cli;
 import anyparse.query.cli.command.LintCommand;

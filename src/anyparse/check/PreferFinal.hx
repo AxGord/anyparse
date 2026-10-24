@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.scan.RunScan;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.IndexScope;
 import anyparse.query.OccurrenceScan;

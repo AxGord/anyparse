@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.scan.CheckScan;
 import anyparse.query.BoolExprShape;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberWriteScan;

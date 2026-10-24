@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.MacroGate.CallRef;
 import anyparse.check.MacroGate.MacroIndex;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;

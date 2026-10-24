@@ -1,9 +1,7 @@
 package anyparse.check;
 
-import anyparse.check.CasePatternScan.CaseRunContext;
-import anyparse.check.CasePatternScan.CaseSeams;
-import anyparse.check.CasePatternScan.PatternBinder;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.scan.CasePatternScan;
 import anyparse.query.PatternNameScope;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

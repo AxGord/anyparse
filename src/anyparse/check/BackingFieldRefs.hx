@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.CrossFileEdits;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.CondRegionScan;
 import anyparse.query.FieldRefScan;
 import anyparse.query.OccurrenceScan;

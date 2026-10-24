@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.DynamicShape.DynCtx;
+import anyparse.check.scan.RunScan;
 import anyparse.query.ParseGate;
 import anyparse.query.Refs;
 import anyparse.query.TreePath;

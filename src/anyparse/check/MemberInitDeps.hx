@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.MemberSlots.OrderedMember;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.runtime.Span;
 

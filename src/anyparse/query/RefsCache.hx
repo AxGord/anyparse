@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.NullFlow.NullFlowVisit;
+import anyparse.check.scan.NullFlow.NullFlowVisit;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.TypeResolver.NullSafetyScope;

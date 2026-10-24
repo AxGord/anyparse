@@ -1,7 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.check.CheckScan.NegationSeams;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.NegationScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;

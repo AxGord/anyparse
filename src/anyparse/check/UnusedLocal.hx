@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.VolatileMessage;
+import anyparse.check.scan.RunScan;
 import anyparse.query.ElementSpan;
 import anyparse.query.MemberKinds;
 import anyparse.query.ModuleScan;

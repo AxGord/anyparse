@@ -1,7 +1,6 @@
 package anyparse.check;
 
-import anyparse.check.SwitchChain.ChainScope;
-import anyparse.check.SwitchChain.ChainSeams;
+import anyparse.check.scan.SwitchChain;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

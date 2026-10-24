@@ -1,7 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.UsingScan.UsingHeader;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
+import anyparse.check.scan.UsingScan;
 import anyparse.query.IndexScope;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;

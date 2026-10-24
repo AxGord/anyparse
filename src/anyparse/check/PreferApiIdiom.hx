@@ -4,7 +4,6 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.ConfiguredTypes.OwnedMember;
-import anyparse.check.PurityScan.PurityCtx;
 import anyparse.check.RuleDeclaration.IdiomSpec;
 import anyparse.query.BinderScan;
 import anyparse.query.IndexScope;
@@ -15,6 +14,9 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.PurityScan;
+import anyparse.check.scan.RunScan;
 
 using Lambda;
 

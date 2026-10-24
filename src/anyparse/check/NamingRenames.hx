@@ -1,7 +1,6 @@
 package anyparse.check;
 
 import anyparse.check.Check.CrossFileEdits;
-import anyparse.check.ReflectionScan.ScopeFile;
 import anyparse.query.AllowGrants;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
@@ -24,6 +23,9 @@ import anyparse.query.TypeResolver;
 import anyparse.query.Uses;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.ReflectionScan;
+import anyparse.check.scan.RunScan;
 
 using StringTools;
 using Lambda;

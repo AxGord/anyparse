@@ -1,7 +1,8 @@
 package anyparse.check;
 
-import anyparse.check.CasePatternScan.CaseSeams;
-import anyparse.check.PurityScan.PurityCtx;
+import anyparse.check.scan.CasePatternScan;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.PurityScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;

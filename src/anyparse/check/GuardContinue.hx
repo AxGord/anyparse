@@ -1,10 +1,13 @@
 package anyparse.check;
 
-import anyparse.check.CheckScan.NegationSeams;
 import anyparse.check.GuardScan.GuardSeams;
 import anyparse.check.GuardScan.GuardSplice;
 import anyparse.check.GuardScan.GuardedIf;
-import anyparse.check.IfExpressionChain.ShieldSeams;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.IfExpressionChain;
+import anyparse.check.scan.LoopScan;
+import anyparse.check.scan.NegationScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.BinderScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.OccurrenceScan;

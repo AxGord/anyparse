@@ -1,7 +1,9 @@
 package anyparse.check;
 
-import anyparse.check.CheckScan.NegationSeams;
-import anyparse.check.OperatorSelection.OperandTyping;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.NegationScan;
+import anyparse.check.scan.OperatorSelection;
+import anyparse.check.scan.RunScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CondRegionScan;
 import anyparse.query.ParseGate;

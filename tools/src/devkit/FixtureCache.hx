@@ -33,7 +33,7 @@ final class FixtureCache {
 	private static inline final DIGEST_LENGTH: Int = 16;
 
 	/** What a probe compile's command line holds, as the shim's `case` pattern matches it. */
-	private static inline final PROBE_PATTERN: String = '*anyparse.check.TypedFactsMacro.run\\(*|*AnyparseReachDefinesProbe.*';
+	private static inline final PROBE_PATTERN: String = '*anyparse.check.facts.TypedFactsMacro.run\\(*|*AnyparseReachDefinesProbe.*';
 
 	/** The `haxe` on `PATH`, every symlink resolved to the binary it names; null when there is none. */
 	public static function realHaxe(): Null<String> {

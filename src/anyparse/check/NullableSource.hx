@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.scan.NullFlow;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;

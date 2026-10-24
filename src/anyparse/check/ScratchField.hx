@@ -2,7 +2,10 @@ package anyparse.check;
 
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.ReflectionScan.ReflectionSurface;
+import anyparse.check.scan.AccessorClauseText;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.ReflectionScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.BinderScan;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.IndexScope;

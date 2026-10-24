@@ -1,5 +1,8 @@
 package anyparse.check;
 
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.EnumAbstractForms;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments;

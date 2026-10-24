@@ -4,6 +4,7 @@ import anyparse.check.ReflectiveReach.Capture;
 import anyparse.check.ReflectiveReach.Placement;
 import anyparse.check.ReflectiveValues.Entries;
 import anyparse.check.ReflectiveValues.StoredValue;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;

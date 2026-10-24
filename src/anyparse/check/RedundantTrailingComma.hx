@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.RunScan;
 import anyparse.query.ElementSpan;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;

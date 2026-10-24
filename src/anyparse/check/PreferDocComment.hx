@@ -1,6 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.CommentProse;
+import anyparse.check.scan.RunScan;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;

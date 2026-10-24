@@ -1,8 +1,8 @@
 package anyparse.check;
 
-import anyparse.check.CasePatternScan.CaseRunContext;
-import anyparse.check.CasePatternScan.CaseSeams;
-import anyparse.check.CasePatternScan.PatternBinder;
+import anyparse.check.scan.CasePatternScan;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
 import anyparse.query.PatternNameScope;

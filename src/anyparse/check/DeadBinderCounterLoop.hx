@@ -1,8 +1,6 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.LoopScan.LoopSeams;
-import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.IndexScope;
@@ -13,6 +11,10 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.LoopScan;
+import anyparse.check.scan.RunScan;
+import anyparse.check.scan.UsingScan;
 
 using Lambda;
 

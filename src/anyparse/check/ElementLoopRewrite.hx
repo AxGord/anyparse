@@ -1,9 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.check.LoopScan.IndexedLoopHeader;
-import anyparse.check.LoopScan.LoopFileScan;
-import anyparse.check.LoopScan.LoopSeams;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.LoopScan;
 import anyparse.query.MemberReach;
 import anyparse.query.OccurrenceScan;
 import anyparse.runtime.Span;

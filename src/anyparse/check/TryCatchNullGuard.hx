@@ -3,6 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.TryExpressionShape.TryParts;
 import anyparse.check.TryExpressionShape.TrySeams;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.IfExpressionChain;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;

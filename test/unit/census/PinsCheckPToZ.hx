@@ -367,15 +367,6 @@ final class PinsCheckPToZ {
 		'unit.check.RedundantUpcastTest#testAnOperandNamedLikeAProjectSubtypeIsNotUpcast :: control :: M-SUBTYPE-START-SIMPLE-NAME',
 		'unit.check.RedundantUpcastTest#testNamesakeSupertypeIsNotTheCastTarget :: control :: M-SUBTYPE-TARGET-SIMPLE-NAME',
 		'unit.check.RedundantUpcastTest#testUpcastFlagged :: control :: M-ISSUBTYPE-FALSE',
-		'unit.check.ReflectionMemoTest#testARewrittenScopeFileIsReRead :: control :: M-REFLECTION-MEMO-STALE',
-		'unit.check.ReflectionMemoTest#testASecondScopeIsNotAnsweredFromTheFirst :: control :: M-REFLECTION-MEMO-STALE',
-		'unit.check.ReflectionMemoTest#testTheSurfaceIsMemoisedWithinARun :: control :: M-REFLECTION-MEMO-DEAD',
-		'unit.check.RegionTerminatorFixTest#testCollapsibleIfCarriesTheTerminator :: control :: M-REGION-TERM-OFF',
-		'unit.check.RegionTerminatorFixTest#testEmptyStatementKeepsARegionTerminator :: control :: M-REGION-TERM-OFF',
-		'unit.check.RegionTerminatorFixTest#testInvertRefusesAnUnterminatedThenRegion :: control :: M-INVERT-REGION-UNGUARDED',
-		'unit.check.RegionTerminatorFixTest#testInvertSwapsTheTerminatorWithTheRegion :: control :: M-REGION-TERM-OFF',
-		'unit.check.RegionTerminatorFixTest#testPreferSwitchDoesNotDoubleTheTerminator :: guard :: ',
-		'unit.check.RegionTerminatorFixTest#testRedundantElseCarriesTheTerminator :: control :: M-REGION-TERM-OFF',
 		'unit.check.ReturnReassignTernaryCheckTest#testNegatedGuardEmitsPositiveTernary :: control :: M-RRT-NO-ORIENT,M-NEGCOND-SWAP-OFF',
 		'unit.check.ScratchFieldCheckTest#testABuildMacroDeclinesUnlessAnOracleVerifies :: control :: M-SCRATCH-MACRO-IGNORED',
 		'unit.check.ScratchFieldCheckTest#testAClosureOccurrenceIsNotReported :: control :: M-SCRATCH-CLOSURE',
@@ -982,56 +973,6 @@ final class PinsCheckPToZ {
 		'unit.check.TypedEventConstantCheckTest#testAnAbstractWithoutBothStringConversionsMakesTheRuleInert :: control :: '
 			+ 'M-EVENT-ABSTRACT-TRUSTED',
 		'unit.check.TypedEventConstantCheckTest#testAnEventDispatchedAsAnotherClassIsALatentBug :: control :: M-EVENT-NO-MISMATCH',
-		'unit.check.TypedFactsProbeTest#testACallSiteInlineIsASpliceOfItsMethodNotAMacro :: control :: M-FACTS-CALL-SITE-INLINE',
-		'unit.check.TypedFactsProbeTest#testAConfigurationThatFailsContributesNothing :: control :: M-FACTS-DROPPED',
-		'unit.check.TypedFactsProbeTest#testAConvertedObjectOfExactlyItsClassAndAThrownException :: control :: '
-			+ 'M-FACTS-STRING-EXACT,M-FACTS-THROW-EXCEPTION,M-FACTS-EXACT-WRITTEN,M-FACTS-FLOW-EXACT',
-		'unit.check.TypedFactsProbeTest#testAFieldReadAnInlinedMethodTakesAsItsReceiverIsTheCallsReceiver :: control :: '
-			+ 'M-FACTS-INLINED-RECEIVER,M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
-		'unit.check.TypedFactsProbeTest#testAFieldReadSaysHowItsValueIsUsed :: control :: M-FACTS-USE,M-FACTS-HELD,M-FACTS-CAPTURE',
-		'unit.check.TypedFactsProbeTest#testAFieldValueStoredInALocalIsUsedAsTheLocalsReads :: control :: M-FACTS-ASSIGN-HELD,'
-			+ 'M-FACTS-ASSIGNED-NO-USE,M-FACTS-ASSIGNED-TARGET,M-FACTS-ALIAS-LINK,M-FACTS-HELD-LOCAL,M-FACTS-SUBSTITUTED-RECEIVER,'
-			+ 'M-FACTS-SUBSTITUTED-ARITY,M-FACTS-SUBSTITUTED-OWNER,M-FACTS-ASSIGN-STATEMENT,M-FACTS-ASSIGN-OWNER,M-FACTS-HELD-FLAG',
-		'unit.check.TypedFactsProbeTest#testAFileWrittenWhileTheCompileRanIsStale :: control :: '
-			+ 'M-FACTS-WRITTEN-DURING,M-FACTS-CHANGED-STALE',
-		'unit.check.TypedFactsProbeTest#testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection :: control :: '
-			+ 'M-FACTS-STALE-FOREIGN,M-FACTS-REFLECTION-PATH',
-		'unit.check.TypedFactsProbeTest#testARangeMeetingTheBodyIsItsOwnCode :: control :: M-FACTS-ABSTRACT-THIS',
-		'unit.check.TypedFactsProbeTest#testAReflectiveCallRecordsTheLiteralItsNameArgumentHolds :: control :: '
-			+ 'M-FACTS-REFL-MEMBER-NAME,M-FACTS-REFL-MEMBER-NAME-ANY,M-FACTS-REFL-MEMBER-NAME-TABLE',
-		'unit.check.TypedFactsProbeTest#testAWriteOfAValueBuiltThereAndHandedNowhereIsFresh :: control :: '
-			+ 'M-FACTS-FRESH,M-FACTS-FRESH-DISCARDED',
-		'unit.check.TypedFactsProbeTest#testAbstractOperatorsConversionsAndAccessorsAreCallsOfTheirImplementations :: control :: '
-			+ 'M-FACTS-CALL-TARGET',
-		'unit.check.TypedFactsProbeTest#testAnElementWriteIsAWriteThroughTheArrayAtItsOwnRead :: control :: M-FACTS-ELEMENT-WRITE',
-		'unit.check.TypedFactsProbeTest#testAnImplicitConstructorCallsSuperAndAnInitializerIsANode :: control :: '
-			+ 'M-FACTS-SUPER,M-FACTS-INITIALIZER',
-		'unit.check.TypedFactsProbeTest#testAnImportAliasIsATypedefAndTheStaticsOfAnEnumReadAsAType :: control :: '
-			+ 'M-FACTS-ALIAS-TYPEDEF,M-FACTS-STATICS-TYPEDEF',
-		'unit.check.TypedFactsProbeTest#testAnInlineCallIsNoCallSiteAndItsBodyKeepsTheCalleesPositions :: control :: '
-			+ 'M-FACTS-INLINE-POSITIONS,M-FACTS-SAME-FILE-INLINE',
-		'unit.check.TypedFactsProbeTest#testAnInlinedCallCarriesWhereItRanAndTheBodyItSplicedIn :: control :: '
-			+ 'M-FACTS-SPLICE-SITE,M-FACTS-SPLICE-SITE-INNERMOST,M-FACTS-SPLICE-BODY,M-FACTS-NESTED-SPLICE',
-		'unit.check.TypedFactsProbeTest#testCodeNoConfigurationCompiledIsAbsent :: control :: M-FACTS-ABSENT',
-		'unit.check.TypedFactsProbeTest#testEveryCallAndFieldAccessKind :: control :: M-FACTS-LOCAL-CALL,M-FACTS-FIELD-WRITE',
-		'unit.check.TypedFactsProbeTest#testEveryOverloadIsANodeAndACallNamesTheOneItChose :: control :: M-FACTS-OVERLOADS',
-		'unit.check.TypedFactsProbeTest#testEveryValueChannelIntoAnotherTypeIsAFlow :: control :: '
-			+ 'M-FACTS-BRANCH-LEAVES,M-FACTS-MONO-SINK,M-FACTS-CAST-ALWAYS,M-FACTS-THROW,M-FACTS-UNTYPED-ARGS,M-FACTS-REST',
-		'unit.check.TypedFactsProbeTest#testFactsOfAnotherTextAreAbsent :: control :: '
-			+ 'M-FACTS-STALE-SOURCE,M-FACTS-INVALIDATE,M-FACTS-VARIANT-RANGES',
-		'unit.check.TypedFactsProbeTest#testFlowsIntoOtherTypes :: control :: M-FACTS-FLOW-CAST,M-FACTS-TYPE-PARAMETER',
-		'unit.check.TypedFactsProbeTest#testGenericInstancesInitAndCallsThatNameNoFixedBody :: control :: '
-			+ 'M-FACTS-GENERIC,M-FACTS-INIT,M-FACTS-REASSIGNED-LOCAL,M-FACTS-FIELD-VALUE,M-FACTS-REFLECTION-INLINED,M-FACTS-REFLECT-VALUE,'
-			+ 'M-FACTS-UNTYPED-DECLARED,M-FACTS-IDENT-READ,M-FACTS-GENERIC-RANGES,M-FACTS-BUILDS',
-		'unit.check.TypedFactsProbeTest#testHierarchyIsPackageQualifiedOverTheWholeTypedSet :: control :: M-FACTS-HIERARCHY',
-		'unit.check.TypedFactsProbeTest#testLoopsAndStringConversions :: control :: M-FACTS-ITER,M-FACTS-STRING-OPERAND,M-FACTS-TYPE-TEXT',
-		'unit.check.TypedFactsProbeTest#testPositionsAreSpanUnitsPastNonAsciiText :: control :: M-CODEPOINT-NATIVE,M-FACTS-READS,M-FACTS-READ-EMIT-NAME',
-		'unit.check.TypedFactsProbeTest#testReflectionAndNativeSites :: control :: M-FACTS-REFLECT-NAME,M-FACTS-NATIVE',
-		'unit.check.TypedFactsProbeTest#testSplicedCodeIsTheCallersAndItsSiteIsUnknown :: control :: M-FACTS-INLINED-CALL,'
-			+ 'M-FACTS-INLINED-CHILD,M-FACTS-GENERATED,M-FACTS-SITE-UNKNOWN,M-FACTS-MACRO-EXPANSION,M-FACTS-SPLICE-OWN-ARGUMENTS',
-		'unit.check.TypedFactsProbeTest#testTheTableIsTheUnionOfTheConfigurations :: control :: M-FACTS-UNION',
-		'unit.check.TypedFactsProbeTest#testWhatExternCodeIsHandedAndWhatAGenericMethodIsInstantiatedAt :: control :: '
-			+ 'M-FACTS-HANDS,M-FACTS-GENS',
 		'unit.check.UnguardedNullableDerefTest#testDeclaredNullableFromANullableFieldStillFlagged :: control :: '
 			+ 'M-DECL-INIT-RECEIVER-MODE-NOMINAL',
 		'unit.check.UnguardedNullableDerefTest#testDeclaredNullableLocalFlagged :: control :: M-DECL-NULLABLE-BLIND',
@@ -1142,15 +1083,171 @@ final class PinsCheckPToZ {
 			+ 'M-USING-MEMBER-FIRST-OFF,M-UNUSED-USING-NO-DOOR,M-CARRY-USING-DOOR-OFFSET',
 		'unit.check.UsingMemberFirstParityTest#testTheStdListingProvesOnlyAnUnguardedInstanceMember :: control :: '
 			+ 'M-STD-MEMBER-STATIC,M-STD-MEMBER-VIA-GUARD,M-STD-MEMBER-ANY-CANDIDATE',
-		'unit.check.UsingSitesTest#testAFieldSpelledLikeATypeIsNoTypeExpression :: control :: M-USING-STATIC-SHADOW',
-		'unit.check.UsingSitesTest#testAForwardAbstractReceiverKeepsTheModule :: control :: M-USING-FORWARD-DECIDED',
-		'unit.check.UsingSitesTest#testAModuleARivalOutranksIsUnused :: control :: M-USING-BOUND-ELSEWHERE',
-		'unit.check.UsingSitesTest#testAModuleWhoseCandidatesRejectTheReceiverIsUnused :: control :: M-USING-OFFER-OPEN',
-		'unit.check.UsingSitesTest#testARivalContestsOnlyAnAccessBothMayOffer :: control :: M-USING-OFFER-OPEN,M-USING-CONTEST-ANY',
-		'unit.check.UsingSitesTest#testAStaticOfATypeExpressionIsNoUse :: control :: M-USING-STATIC-RECEIVER',
-		'unit.check.UsingSitesTest#testATypeArgumentOnTheFirstParameterKeepsEveryModule :: guard :: ',
-		'unit.check.UsingSitesTest#testAValueSpelledLikeATypeIsNoTypeExpression :: control :: M-USING-STATIC-SHADOW',
-		'unit.check.UsingSitesTest#testAnAccessTheModuleBindsOrCannotBeTypedKeepsIt :: guard :: '
+		'unit.check.facts.FactsTypeOracleE2ETest#testAReorderedFileIsPlacedOnlyThroughTheEditsItsRunApplied :: guard :: ',
+		'unit.check.facts.FactsTypeOracleE2ETest#testTheFactsTypeEveryDeclarationKindAndKeepTheProgram :: control :: M-ASSISTED-FACTS-FIRST,'
+			+ 'M-ASSISTED-DECLINE-CENSUS,M-EXPLICIT-TYPE-ORACLE-PARAMS,M-EXPLICIT-TYPE-ORACLE-FIELDS,M-FACTS-DYNAMIC-SOURCE',
+		'unit.check.facts.FactsTypeOracleE2ETest#testTheFirstWriteWaitsForTheFactsCompile :: guard :: ',
+		'unit.check.facts.FactsTypeOracleTest#testAFieldTheConfigurationsTypeApartDeclines :: control :: M-FACTS-FIELD-TYPES',
+		'unit.check.facts.FactsTypeOracleTest#testAFinalClassIsItsOwnHome :: control :: M-ORACLE-HOME-MODIFIED-TYPE',
+		'unit.check.facts.FactsTypeOracleTest#testARangeHoldingCodeTheTextDoesNotSpellHasNoType :: control :: M-FACTS-READ-RECORD-NAME,M-FACTS-READ-NAME,M-FACTS-RECEIVER-CALL,M-FACTS-SPELLED-CALL,M-FACTS-FOREIGN-SITE,M-FACTS-TEMP-LOCAL,M-FACTS-TEMP-ALONE,M-FACTS-VALUE-CALLEE,M-FACTTEXT-EMPTY-MENTION,M-FACTTEXT-EMPTY-CALL',
+		'unit.check.facts.FactsTypeOracleTest#testARewriteDropsOnlyTheNodesThatReadIt :: control :: M-FACTS-MADE-FROM-ALL,M-FACTS-MADE-FROM-NONE',
+		'unit.check.facts.FactsTypeOracleTest#testARewrittenFileIsReadAtTheTextTheCompileRead :: control :: '
+			+ 'M-FACTS-ORACLE-ORIGINAL,M-JOURNAL-SHIFT',
+		'unit.check.facts.FactsTypeOracleTest#testASignatureTheConfigurationsTypeApartDeclines :: control :: M-FACTS-SIGNATURE-VARIANTS',
+		'unit.check.facts.FactsTypeOracleTest#testASiteAfterNonAsciiTextIsFound :: control :: M-CODEPOINT-NATIVE',
+		'unit.check.facts.FactsTypeOracleTest#testATypeParameterOutOfScopeDeclines :: control :: M-FACTS-SPELL-SCOPE',
+		'unit.check.facts.FactsTypeOracleTest#testAValueIsTypedByTheFlowsAtItsRange :: control :: M-FACTS-VALUE-FLOWS,M-FACTS-ORACLE-RAW-AGREE',
+		'unit.check.facts.FactsTypeOracleTest#testAnEditAnywhereInTheMemberDeclines :: control :: M-ORACLE-WHOLE-MEMBER',
+		'unit.check.facts.FactsTypeOracleTest#testAnUnknownDeclines :: control :: M-FACTS-SPELL-UNKNOWN,M-FACTS-TREE-OPTIONAL',
+		'unit.check.facts.FactsTypeOracleTest#testCodeNoConfigurationCompiledDeclines :: control :: M-FACTS-ABSENT',
+		'unit.check.facts.FactsTypeOracleTest#testConfigurationsThatDisagreeDecline :: control :: M-FACTS-ORACLE-AGREE,M-FACTS-UNION',
+		'unit.check.facts.FactsTypeOracleTest#testExplicitTypeSaysWhyItsStructuralFixDeclined :: control :: M-EXPLICIT-TYPE-STRUCTURAL-DECLINE',
+		'unit.check.facts.FactsTypeOracleTest#testFactsOfAnotherMemberDecline :: control :: M-ORACLE-HOME-GUARD',
+		'unit.check.facts.FactsTypeOracleTest#testFactsOfAnotherTextThanTheOriginalAreStale :: control :: M-FACTS-INVALIDATE-FOREIGN',
+		'unit.check.facts.FactsTypeOracleTest#testTypesNoSourceCanSpellDecline :: control :: M-FACTS-SPELL-IMPL',
+		'unit.check.facts.FactsTypeTextTest#testOnlyAWrapperEnclosingTheWholeTypeIsPeeled :: control :: M-FACTS-NULL-PEEL-UNMATCHED',
+		'unit.check.facts.TypedFactsProbeTest#testACallSiteInlineIsASpliceOfItsMethodNotAMacro :: control :: M-FACTS-CALL-SITE-INLINE',
+		'unit.check.facts.TypedFactsProbeTest#testAConfigurationThatFailsContributesNothing :: control :: M-FACTS-DROPPED',
+		'unit.check.facts.TypedFactsProbeTest#testAConvertedObjectOfExactlyItsClassAndAThrownException :: control :: '
+			+ 'M-FACTS-STRING-EXACT,M-FACTS-THROW-EXCEPTION,M-FACTS-EXACT-WRITTEN,M-FACTS-FLOW-EXACT',
+		'unit.check.facts.TypedFactsProbeTest#testAFieldReadAnInlinedMethodTakesAsItsReceiverIsTheCallsReceiver :: control :: '
+			+ 'M-FACTS-INLINED-RECEIVER,M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
+		'unit.check.facts.TypedFactsProbeTest#testAFieldReadSaysHowItsValueIsUsed :: control :: M-FACTS-USE,M-FACTS-HELD,M-FACTS-CAPTURE',
+		'unit.check.facts.TypedFactsProbeTest#testAFieldValueStoredInALocalIsUsedAsTheLocalsReads :: control :: M-FACTS-ASSIGN-HELD,'
+			+ 'M-FACTS-ASSIGNED-NO-USE,M-FACTS-ASSIGNED-TARGET,M-FACTS-ALIAS-LINK,M-FACTS-HELD-LOCAL,M-FACTS-SUBSTITUTED-RECEIVER,'
+			+ 'M-FACTS-SUBSTITUTED-ARITY,M-FACTS-SUBSTITUTED-OWNER,M-FACTS-ASSIGN-STATEMENT,M-FACTS-ASSIGN-OWNER,M-FACTS-HELD-FLAG',
+		'unit.check.facts.TypedFactsProbeTest#testAFileWrittenWhileTheCompileRanIsStale :: control :: '
+			+ 'M-FACTS-WRITTEN-DURING,M-FACTS-CHANGED-STALE',
+		'unit.check.facts.TypedFactsProbeTest#testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection :: control :: '
+			+ 'M-FACTS-STALE-FOREIGN,M-FACTS-REFLECTION-PATH',
+		'unit.check.facts.TypedFactsProbeTest#testARangeMeetingTheBodyIsItsOwnCode :: control :: M-FACTS-ABSTRACT-THIS',
+		'unit.check.facts.TypedFactsProbeTest#testAReflectiveCallRecordsTheLiteralItsNameArgumentHolds :: control :: '
+			+ 'M-FACTS-REFL-MEMBER-NAME,M-FACTS-REFL-MEMBER-NAME-ANY,M-FACTS-REFL-MEMBER-NAME-TABLE',
+		'unit.check.facts.TypedFactsProbeTest#testAWriteOfAValueBuiltThereAndHandedNowhereIsFresh :: control :: '
+			+ 'M-FACTS-FRESH,M-FACTS-FRESH-DISCARDED',
+		'unit.check.facts.TypedFactsProbeTest#testAbstractOperatorsConversionsAndAccessorsAreCallsOfTheirImplementations :: control :: '
+			+ 'M-FACTS-CALL-TARGET',
+		'unit.check.facts.TypedFactsProbeTest#testAnElementWriteIsAWriteThroughTheArrayAtItsOwnRead :: control :: M-FACTS-ELEMENT-WRITE',
+		'unit.check.facts.TypedFactsProbeTest#testAnImplicitConstructorCallsSuperAndAnInitializerIsANode :: control :: '
+			+ 'M-FACTS-SUPER,M-FACTS-INITIALIZER',
+		'unit.check.facts.TypedFactsProbeTest#testAnImportAliasIsATypedefAndTheStaticsOfAnEnumReadAsAType :: control :: '
+			+ 'M-FACTS-ALIAS-TYPEDEF,M-FACTS-STATICS-TYPEDEF',
+		'unit.check.facts.TypedFactsProbeTest#testAnInlineCallIsNoCallSiteAndItsBodyKeepsTheCalleesPositions :: control :: '
+			+ 'M-FACTS-INLINE-POSITIONS,M-FACTS-SAME-FILE-INLINE',
+		'unit.check.facts.TypedFactsProbeTest#testAnInlinedCallCarriesWhereItRanAndTheBodyItSplicedIn :: control :: '
+			+ 'M-FACTS-SPLICE-SITE,M-FACTS-SPLICE-SITE-INNERMOST,M-FACTS-SPLICE-BODY,M-FACTS-NESTED-SPLICE',
+		'unit.check.facts.TypedFactsProbeTest#testCodeNoConfigurationCompiledIsAbsent :: control :: M-FACTS-ABSENT',
+		'unit.check.facts.TypedFactsProbeTest#testEveryCallAndFieldAccessKind :: control :: M-FACTS-LOCAL-CALL,M-FACTS-FIELD-WRITE',
+		'unit.check.facts.TypedFactsProbeTest#testEveryOverloadIsANodeAndACallNamesTheOneItChose :: control :: M-FACTS-OVERLOADS',
+		'unit.check.facts.TypedFactsProbeTest#testEveryValueChannelIntoAnotherTypeIsAFlow :: control :: '
+			+ 'M-FACTS-BRANCH-LEAVES,M-FACTS-MONO-SINK,M-FACTS-CAST-ALWAYS,M-FACTS-THROW,M-FACTS-UNTYPED-ARGS,M-FACTS-REST',
+		'unit.check.facts.TypedFactsProbeTest#testFactsOfAnotherTextAreAbsent :: control :: '
+			+ 'M-FACTS-STALE-SOURCE,M-FACTS-INVALIDATE,M-FACTS-VARIANT-RANGES',
+		'unit.check.facts.TypedFactsProbeTest#testFlowsIntoOtherTypes :: control :: M-FACTS-FLOW-CAST,M-FACTS-TYPE-PARAMETER',
+		'unit.check.facts.TypedFactsProbeTest#testGenericInstancesInitAndCallsThatNameNoFixedBody :: control :: '
+			+ 'M-FACTS-GENERIC,M-FACTS-INIT,M-FACTS-REASSIGNED-LOCAL,M-FACTS-FIELD-VALUE,M-FACTS-REFLECTION-INLINED,M-FACTS-REFLECT-VALUE,'
+			+ 'M-FACTS-UNTYPED-DECLARED,M-FACTS-IDENT-READ,M-FACTS-GENERIC-RANGES,M-FACTS-BUILDS',
+		'unit.check.facts.TypedFactsProbeTest#testHierarchyIsPackageQualifiedOverTheWholeTypedSet :: control :: M-FACTS-HIERARCHY',
+		'unit.check.facts.TypedFactsProbeTest#testLoopsAndStringConversions :: control :: M-FACTS-ITER,M-FACTS-STRING-OPERAND,M-FACTS-TYPE-TEXT',
+		'unit.check.facts.TypedFactsProbeTest#testPositionsAreSpanUnitsPastNonAsciiText :: control :: M-CODEPOINT-NATIVE,M-FACTS-READS,M-FACTS-READ-EMIT-NAME',
+		'unit.check.facts.TypedFactsProbeTest#testReflectionAndNativeSites :: control :: M-FACTS-REFLECT-NAME,M-FACTS-NATIVE',
+		'unit.check.facts.TypedFactsProbeTest#testSplicedCodeIsTheCallersAndItsSiteIsUnknown :: control :: M-FACTS-INLINED-CALL,'
+			+ 'M-FACTS-INLINED-CHILD,M-FACTS-GENERATED,M-FACTS-SITE-UNKNOWN,M-FACTS-MACRO-EXPANSION,M-FACTS-SPLICE-OWN-ARGUMENTS',
+		'unit.check.facts.TypedFactsProbeTest#testTheTableIsTheUnionOfTheConfigurations :: control :: M-FACTS-UNION',
+		'unit.check.facts.TypedFactsProbeTest#testWhatExternCodeIsHandedAndWhatAGenericMethodIsInstantiatedAt :: control :: '
+			+ 'M-FACTS-HANDS,M-FACTS-GENS',
+		'unit.check.scan.NullFlowReplayTest#testADeclaredNullableWalkIsNeverReplayed :: control :: M-NULLFLOW-MEMO-DECLARED-BLIND',
+		'unit.check.scan.NullFlowReplayTest#testARecordingIsKeptForItsOwnSourceOnly :: control :: M-NULLFLOW-MEMO-SOURCE-BLIND',
+		'unit.check.scan.NullFlowReplayTest#testAReplayAnswersWhatTheLiveWalkAnswered :: control :: M-NULLFLOW-FROZEN-STALE',
+		'unit.check.scan.NullFlowReplayTest#testASeededWalkIsNeverReplayed :: control :: M-NULLFLOW-MEMO-SEED-BLIND',
+		'unit.check.scan.NullFlowReplayTest#testATypeSourcesWalkIsNeverReplayed :: control :: M-NULLFLOW-MEMO-TYPES-BLIND',
+		'unit.check.scan.NullFlowReplayTest#testForgetDropsTheRecording :: control :: M-NULLFLOW-MEMO-NOT-FORGOTTEN',
+		'unit.check.scan.OperandBindingTest#testAliasOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-ALIAS-BLIND',
+		'unit.check.scan.OperandBindingTest#testAmbientImportOfUnindexedTypeOutranksSamePackageClass :: control :: '
+			+ 'M-BINDING-UNINDEXED-IMPORT-FREE',
+		'unit.check.scan.OperandBindingTest#testCallToFunctionOfThisFileIsProven :: control :: M-OPERAND-LOCAL-CALL-CUT',
+		'unit.check.scan.OperandBindingTest#testConstructionIsOfTheTypeItWrites :: control :: M-OPERAND-NEW-CUT',
+		'unit.check.scan.OperandBindingTest#testDeclarationInsideTheBranchOutranksItsCapture :: control :: M-OPERAND-CASE-CAPTURE-INSIDE',
+		'unit.check.scan.OperandBindingTest#testImportOfUnindexedTypeIsNotItsIndexedNamesake :: control :: M-OPERAND-SIMPLE-NAME',
+		'unit.check.scan.OperandBindingTest#testImportOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
+		'unit.check.scan.OperandBindingTest#testJoinAppendBindsTheTarget :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
+		'unit.check.scan.OperandBindingTest#testLocalMacroIsNotTypedByItsReturn :: control :: M-OPERAND-LOCAL-MACRO',
+		'unit.check.scan.OperandBindingTest#testMacroMemberIsNotTypedByItsReturn :: control :: M-OPERAND-MACRO-RETURN',
+		'unit.check.scan.OperandBindingTest#testMemberOfBuiltinTypeIsProven :: control :: M-OPERAND-MEMBER-CUT',
+		'unit.check.scan.OperandBindingTest#testMemberReturnOfIndexedClassIsProven :: control :: M-NULLITY-RETURN-CUT',
+		'unit.check.scan.OperandBindingTest#testMemberReturnPathIsNotItsLastSegment :: control :: M-NULLITY-RETURN-LAST-SEGMENT',
+		'unit.check.scan.OperandBindingTest#testMemberReturnWithOverloadIsUnproven :: control :: M-NULLITY-RETURN-OVERLOAD',
+		'unit.check.scan.OperandBindingTest#testMemberTypeBindsInItsDeclaringFile :: control :: M-OPERAND-MEMBER-SCOPE-LOST',
+		'unit.check.scan.OperandBindingTest#testMethodTypeParameterIsNotTheSamePackageClass :: control :: M-OPERAND-METHOD-PARAMS-IGNORED',
+		'unit.check.scan.OperandBindingTest#testNegationRulesBindTheOperands :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
+		'unit.check.scan.OperandBindingTest#testNullableOverloaderIsOverloaded :: control :: M-OPERAND-WRAPPER-KEPT',
+		'unit.check.scan.OperandBindingTest#testOverloadMetaIsIndexed :: control :: M-INDEX-OVERLOAD-META',
+		'unit.check.scan.OperandBindingTest#testOverloadedSignatureIsNotItsWrittenReturn :: control :: M-OPERAND-OVERLOAD-SIGNATURE',
+		'unit.check.scan.OperandBindingTest#testSamePackageClassIsProven :: control :: M-BINDING-PACKAGE-TIER-CUT',
+		'unit.check.scan.OperandBindingTest#testShadowedStringIsNotTheBuiltin :: control :: M-TOSTRING-STRING-BINDING',
+		'unit.check.scan.OperandBindingTest#testStaticCallThroughTypeNameIsProven :: control :: M-OPERAND-STATIC-RECEIVER-CUT',
+		'unit.check.scan.OperandBindingTest#testSubTypeOfUnindexedModuleOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-MODULE-FREE',
+		'unit.check.scan.OperandBindingTest#testToStringCallReceiverBindsItsOwner :: control :: M-TOSTRING-CALL-BY-NAME',
+		'unit.check.scan.OperandBindingTest#testToStringCallReceiverOfIndexedOwnerIsProven :: control :: M-TOSTRING-CALL-CUT',
+		'unit.check.scan.OperandBindingTest#testToStringIdentReceiverOfIndexedClassIsProven :: control :: M-TOSTRING-IDENT-CUT',
+		'unit.check.scan.OperandBindingTest#testUndecidedCaptureShadowsTheOuterBinding :: control :: M-OPERAND-CASE-CAPTURE',
+		'unit.check.scan.OperandBindingTest#testWildcardOverUnindexedPackageOutranksSamePackageClass :: control :: '
+			+ 'M-BINDING-UNINDEXED-WILDCARD-FREE',
+		'unit.check.scan.OperandTypingTest#testACalleeWhoseSignatureTheCallMayNotSelectIsUnproven :: control :: '
+			+ 'M-BINDER-ARGUMENT-OVERLOAD,M-BINDER-ARGUMENT-TWIN',
+		'unit.check.scan.OperandTypingTest#testACalleesTypeParameterTypesNoLambda :: control :: M-BINDER-ARGUMENT-SCOPE',
+		'unit.check.scan.OperandTypingTest#testAFixAsksTheRunsOperatorTable :: control :: '
+			+ 'M-FOLD-FIX-REPORT-INDEX,M-PIEC-FIX-REPORT-INDEX,M-PIEC-RUN-SELECTION',
+		'unit.check.scan.OperandTypingTest#testAGuardedUsingLeavesTheExtensionUnproven :: control :: M-BINDER-EXTENSION-GUARDED-USING',
+		'unit.check.scan.OperandTypingTest#testALambdaAfterASkippableParameterIsUnproven :: control :: '
+			+ 'M-BINDER-ARGUMENT-SKIPPABLE,M-TS-SKIP-DEFAULT',
+		'unit.check.scan.OperandTypingTest#testALambdaTakesTheParameterOfACalleeDeclaredElsewhere :: control :: M-BINDER-CALLEE-MEMBER-OFF,M-BINDER-CALLEE-NEW-OFF,M-BINDER-CALLEE-INHERITED-OFF,M-BINDER-CALLEE-LOCAL-OFF,M-BINDER-OWNER-BINDINGS-OFF,M-BINDER-LOCATED-HOST-OFF',
+		'unit.check.scan.OperandTypingTest#testAStaticOfTheFieldsNameOutranksTheResolver :: control :: '
+			+ 'M-BINDER-RESOLVE-USING-SHADOW,M-USING-DECLS-AMBIENT',
+		'unit.check.scan.OperandTypingTest#testAStdIterableBindsTheElementOfWhatIsHandedToIt :: control :: M-BINDER-ITERABLE-OFF,M-BINDER-ITERABLE-ANY-TYPE',
+		'unit.check.scan.OperandTypingTest#testASupertypeStaticReadBareIsNotTheSupertypes :: control :: M-BINDER-INHERITED-STATIC',
+		'unit.check.scan.OperandTypingTest#testATypeParametersBoundIsNoReturnType :: control :: '
+			+ 'M-BINDER-RETURN-ANNOTATION,M-BINDER-LOCAL-CALL-ANNOTATION',
+		'unit.check.scan.OperandTypingTest#testAUsedAliasLeavesTheExtensionUnproven :: control :: M-USING-HOSTS-ALIAS',
+		'unit.check.scan.OperandTypingTest#testAnExtensionOfAnotherFirstParameterIsUnproven :: control :: M-BINDER-EXTENSION-FIRST-PARAM',
+		'unit.check.scan.OperandTypingTest#testAnInheritedMemberPastAnUnreadSupertypeIsUnproven :: control :: M-BINDER-CLOSURE-UNRESOLVED',
+		'unit.check.scan.OperandTypingTest#testAnOverloadTheArgumentCountSelectsTypesTheLambda :: control :: '
+			+ 'M-BINDER-OVERLOAD-SELECTED,M-BINDER-OVERLOAD-OWN-BARE,M-BINDER-CALLEE-OVERLOAD',
+		'unit.check.scan.OperandTypingTest#testAnUnreadLaterUsingLeavesTheExtensionUnproven :: control :: M-BINDER-EXTENSION-UNINDEXED',
+		'unit.check.scan.OperandTypingTest#testAnUntypedLambdaParameterTakesTheCalleesParameterType :: control :: '
+			+ 'M-BINDER-LAMBDA-PARAM-CUT,M-WALK-LAMBDA-PARAM-CUT,M-BINDER-ARGUMENT-CUT',
+		'unit.check.scan.OperandTypingTest#testEveryConcatenationUserAnswersTheSameOnTheSameOperand :: control :: '
+			+ 'M-BINDER-INITIALIZER-CUT,M-BINDER-EXTENSION-CUT,M-BINDER-RESOLVE-CUT',
+		'unit.check.scan.OperandTypingTest#testEveryEqualityUserAnswersTheSameOnTheSameOperand :: control :: M-BINDER-INITIALIZER-CUT',
+		'unit.check.scan.OperandTypingTest#testEveryExpectationTypesTheLambdaParameter :: control :: '
+			+ 'M-BINDER-LAMBDA-PARAM-CUT,M-BINDER-ANNOTATION-CUT,M-BINDER-RETURN-CUT,M-BINDER-FIELD-CUT,M-BINDER-ARGUMENT-CUT,'
+			+ 'M-GRAPH-LITERAL-ARGUMENT,M-GRAPH-LITERAL-ARMS,M-GRAPH-LITERAL-RETURN,M-GRAPH-LITERAL-LAMBDA,M-GRAPH-LITERAL-FIELD,'
+			+ 'M-TS-LAMBDA-NULL,M-BINDER-ARGUMENT-REST',
+		'unit.check.scan.OperandTypingTest#testEveryNegationFormAnswersTheSameOnTheSameOperand :: control :: '
+			+ 'M-BINDER-INITIALIZER-CUT,M-BINDER-SELF-CUT,M-BINDER-INHERITED-CUT,M-BINDER-EXTENSION-CUT,M-BINDER-RESOLVE-CUT',
+		'unit.check.scan.OperandTypingTest#testEveryTypeOfAUsedModuleBringsItsExtensions :: control :: M-USING-HOSTS-MODULE',
+		'unit.check.scan.OperandTypingTest#testTheLastUsingDeclaringTheExtensionWins :: control :: M-BINDER-EXTENSION-LAST-USING',
+		'unit.check.scan.OperandTypingTest#testTheReceiversOwnUsingOutranksTheFiles :: control :: M-BINDER-EXTENSION-ATUSING',
+		'unit.check.scan.OperandTypingTest#testWhatTheCallDoesNotBindStaysUnproven :: control :: '
+			+ 'M-BINDER-METHOD-SHADOWS-OFF,M-BINDER-ARGUMENT-OVERLOAD',
+		'unit.check.scan.ReflectionMemoTest#testARewrittenScopeFileIsReRead :: control :: M-REFLECTION-MEMO-STALE',
+		'unit.check.scan.ReflectionMemoTest#testASecondScopeIsNotAnsweredFromTheFirst :: control :: M-REFLECTION-MEMO-STALE',
+		'unit.check.scan.ReflectionMemoTest#testTheSurfaceIsMemoisedWithinARun :: control :: M-REFLECTION-MEMO-DEAD',
+		'unit.check.scan.RegionTerminatorFixTest#testCollapsibleIfCarriesTheTerminator :: control :: M-REGION-TERM-OFF',
+		'unit.check.scan.RegionTerminatorFixTest#testEmptyStatementKeepsARegionTerminator :: control :: M-REGION-TERM-OFF',
+		'unit.check.scan.RegionTerminatorFixTest#testInvertRefusesAnUnterminatedThenRegion :: control :: M-INVERT-REGION-UNGUARDED',
+		'unit.check.scan.RegionTerminatorFixTest#testInvertSwapsTheTerminatorWithTheRegion :: control :: M-REGION-TERM-OFF',
+		'unit.check.scan.RegionTerminatorFixTest#testPreferSwitchDoesNotDoubleTheTerminator :: guard :: ',
+		'unit.check.scan.RegionTerminatorFixTest#testRedundantElseCarriesTheTerminator :: control :: M-REGION-TERM-OFF',
+		'unit.check.scan.UsingSitesTest#testAFieldSpelledLikeATypeIsNoTypeExpression :: control :: M-USING-STATIC-SHADOW',
+		'unit.check.scan.UsingSitesTest#testAForwardAbstractReceiverKeepsTheModule :: control :: M-USING-FORWARD-DECIDED',
+		'unit.check.scan.UsingSitesTest#testAModuleARivalOutranksIsUnused :: control :: M-USING-BOUND-ELSEWHERE',
+		'unit.check.scan.UsingSitesTest#testAModuleWhoseCandidatesRejectTheReceiverIsUnused :: control :: M-USING-OFFER-OPEN',
+		'unit.check.scan.UsingSitesTest#testARivalContestsOnlyAnAccessBothMayOffer :: control :: M-USING-OFFER-OPEN,M-USING-CONTEST-ANY',
+		'unit.check.scan.UsingSitesTest#testAStaticOfATypeExpressionIsNoUse :: control :: M-USING-STATIC-RECEIVER',
+		'unit.check.scan.UsingSitesTest#testATypeArgumentOnTheFirstParameterKeepsEveryModule :: guard :: ',
+		'unit.check.scan.UsingSitesTest#testAValueSpelledLikeATypeIsNoTypeExpression :: control :: M-USING-STATIC-SHADOW',
+		'unit.check.scan.UsingSitesTest#testAnAccessTheModuleBindsOrCannotBeTypedKeepsIt :: guard :: '
 	];
 
 }

@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;

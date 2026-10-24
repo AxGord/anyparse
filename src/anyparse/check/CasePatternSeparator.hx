@@ -1,8 +1,9 @@
 package anyparse.check;
 
-import anyparse.check.CasePatternScan.CaseSeams;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.CasePatternScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

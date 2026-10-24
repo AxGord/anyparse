@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.LiteralTables.LiteralTableShape;
+import anyparse.check.scan.RunScan;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;

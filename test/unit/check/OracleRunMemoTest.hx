@@ -5,7 +5,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCoverage;
 import anyparse.check.OracleRunMemo;
 import anyparse.check.OracleServerPool;
-import anyparse.check.TypedFactsProbe;
+import anyparse.check.facts.TypedFactsProbe;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintFixDriver;
 import anyparse.query.cli.command.LintFixSafeTrail;

@@ -3,7 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.RiskyCrossFileEdit;
 import anyparse.check.NamingRenames.RenameRefusal;
-import anyparse.check.ReflectionScan.ReflectionSurface;
+import anyparse.check.scan.ReflectionScan;
 import anyparse.query.CrossRename;
 import anyparse.query.CrossRenameMember;
 import anyparse.query.IndexScope;

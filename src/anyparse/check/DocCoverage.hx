@@ -3,6 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 

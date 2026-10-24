@@ -1,8 +1,8 @@
 package unit.check;
 
-import anyparse.check.ReflectionScan;
 import anyparse.check.StaticReflectionReach;
 import anyparse.check.UnusedPrivate;
+import anyparse.check.scan.ReflectionScan;
 import anyparse.query.Cli;
 import anyparse.runtime.Span;
 import sys.io.File;

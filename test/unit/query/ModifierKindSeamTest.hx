@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.check.CheckScan;
+import anyparse.check.scan.CheckScan;
 import anyparse.grammar.haxe.HxCondModPrefix;
 import anyparse.grammar.haxe.HxMemberModifier;
 import anyparse.grammar.haxe.HxModifier;

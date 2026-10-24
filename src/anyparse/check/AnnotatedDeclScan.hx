@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.scan.CheckScan;
 import anyparse.runtime.Span;
 
 using Lambda;

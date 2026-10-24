@@ -5,6 +5,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.Supersedes;
 import anyparse.check.NamingRenames.RenameRefusal;
+import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;

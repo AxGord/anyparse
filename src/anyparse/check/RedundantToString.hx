@@ -1,6 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.scan.OperandBinder;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.IndexScope;

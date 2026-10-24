@@ -1,7 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.ReflectionScan.ReflectionSurface;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.ReflectionScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;

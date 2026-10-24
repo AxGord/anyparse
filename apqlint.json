@@ -71,10 +71,10 @@
 			],
 			"owners": [
 				"anyparse.query.FactsView",
-				"anyparse.check.FactsTypeOracle",
-				"anyparse.check.TypedFactsProbe",
-				"anyparse.check.FactsTypeText",
-				"anyparse.check.FactsTypeTree",
+				"anyparse.check.facts.FactsTypeOracle",
+				"anyparse.check.facts.TypedFactsProbe",
+				"anyparse.check.facts.FactsTypeText",
+				"anyparse.check.facts.FactsTypeTree",
 				"anyparse.check.StaticExtensionFacts",
 				"anyparse.query.ArgumentUses",
 				"anyparse.query.UncheckedConversions",
@@ -203,6 +203,14 @@
 					{
 						"file": "test/unit/ProseClaimCensusTest.hx",
 						"select": "FinalMember:BASELINE >> ArrayExpr"
+					}
+				]
+			},
+			{
+				"parts": [
+					{
+						"file": "test/unit/query/LexicalRegionsSeamTest.hx",
+						"select": "FnMember:testNoGrammarAgnosticModuleNamesOneGrammar >> FinalStmt:allowed >> ArrayExpr"
 					}
 				]
 			}

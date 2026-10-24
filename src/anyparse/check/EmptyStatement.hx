@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.scan.RegionTerminator;
+import anyparse.check.scan.RunScan;
 import anyparse.query.ElementSpan;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

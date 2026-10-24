@@ -13,7 +13,7 @@ import anyparse.check.OracleRunMemo;
 import anyparse.check.ReachDefinesProbe;
 import anyparse.check.Severity;
 import anyparse.check.ThreadSafety;
-import anyparse.check.TypedFactsProbe;
+import anyparse.check.facts.TypedFactsProbe;
 import anyparse.core.PhaseTimings;
 import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;

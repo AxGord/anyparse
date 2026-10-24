@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.UsingSites;
+import anyparse.check.scan.UsingSites;
 import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;

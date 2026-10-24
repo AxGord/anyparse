@@ -1,6 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.CtorFieldFold;
@@ -15,6 +14,9 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.PurityScan;
+import anyparse.check.scan.RunScan;
 
 using Lambda;
 using StringTools;

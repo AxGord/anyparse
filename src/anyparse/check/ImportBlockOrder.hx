@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.RunScan;
 import anyparse.query.ImportBindings;
 import anyparse.query.ImportOrder;
 import anyparse.query.IndexScope;

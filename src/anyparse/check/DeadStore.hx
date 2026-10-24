@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.scan.NullFlow;
+import anyparse.check.scan.RunScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.MemberKinds;

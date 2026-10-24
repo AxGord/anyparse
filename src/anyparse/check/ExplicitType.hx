@@ -5,6 +5,8 @@ import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.LiteralInfer.AnnotationSite;
+import anyparse.check.scan.EnumAbstractForms;
+import anyparse.check.scan.RunScan;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;

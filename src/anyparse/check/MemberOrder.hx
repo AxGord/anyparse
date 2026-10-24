@@ -8,6 +8,7 @@ import anyparse.check.MemberSlots.MemberRank;
 import anyparse.check.MemberSlots.OrderedMember;
 import anyparse.check.MemberSpacing.LayoutIssue;
 import anyparse.check.MemberSpacing.SpacingPolicy;
+import anyparse.check.scan.RunScan;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;

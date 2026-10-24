@@ -1,8 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.NullFlow.NullFacts;
 import anyparse.check.NullableSource.NullableSourceCfg;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.NullFlow;
+import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
