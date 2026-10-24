@@ -698,6 +698,14 @@ final class RefShape {
 	public var parenDelimiters: Null<{ open: String, close: String }>;
 
 	/**
+	 * The token that, ending an expression, ends it for good: the language continues no operator, member access, call or
+	 * index after it, though this grammar's parser reads the continuation (Haxe `}` — a block, a `switch`, a braced `if` /
+	 * `try` / loop or function body). `ParenGuard` gives a splice ending with it that something continues the pair the
+	 * compiler needs. Optional; unset means every expression may be continued.
+	 */
+	public var exprEndingCloser: Null<String>;
+
+	/**
 	 * The boolean-literal node kind — lets the `constant-condition` check
 	 * recognise a literal `true` / `false` used as a condition. Optional; unset
 	 * makes the check a no-op.
@@ -2051,6 +2059,16 @@ final class RefShape {
 	 * check a no-op.
 	 */
 	public var isExprKind: Null<String>;
+
+	/**
+	 * The qualified static call (`Type.function`) an `isExprKind` node is the sugar of, taking the value then the type
+	 * (Haxe `Std.isOfType`): `prefer-is-operator` rewrites such a call whose second argument names a type into the
+	 * operator (`isOperatorText`). Optional; unset makes that check a no-op.
+	 */
+	public var isExprCall: Null<String>;
+
+	/** The keyword an `isExprKind` node spells between its operands (Haxe `is`). Optional; unset means no rewrite writes one. */
+	public var isOperatorText: Null<String>;
 
 	/**
 	 * Type names that, as an EARLIER catch-clause exception type, catch every thrown

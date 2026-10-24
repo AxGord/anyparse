@@ -153,6 +153,22 @@ class ParenGuardSliceTest extends Test {
 		Assert.isTrue(text.contains('final b = (@:privateAccess o) * 2;'), 'metadata must take the pair - got:\n$text');
 	}
 
+	/**
+	 * Haxe ends an expression statement at the brace that closes a `switch` or a bare block, and never continues a binary
+	 * operator after it, though this grammar reads `switch c { … } + 1` as one sum. Such a capture spliced as a LEFT operand
+	 * takes the pair the compiler needs.
+	 */
+	@:pin('control')
+	@:killer('M-PARENGUARD-BLOCK-LEFT-OPERAND-BARE')
+	public function testABlockTerminatedLeftOperandGetsThePair(): Void {
+		final src: String = 'class C {\n\tfunction f(c:Int, b:Int) {\n\t\tfinal a = switch c {\n\t\t\tcase 1: 1;\n\t\t\tcase _: 2;\n'
+			+ '\t\t};\n\t\tfinal d = {\n\t\t\tb;\n\t\t};\n\t}\n}';
+		final sum: String = okText(Rewrite.rewrite(src, "final a = $A;", "final a = $A + 1;", true, new HaxeQueryPlugin()));
+		Assert.isTrue(sum.contains('final a = (switch c {'), 'expected the switch parenthesised - got:\n$sum');
+		final block: String = okText(Rewrite.rewrite(src, "final d = $A;", "final d = $A * 2;", true, new HaxeQueryPlugin()));
+		Assert.isTrue(block.contains('final d = ({'), 'expected the block parenthesised - got:\n$block');
+	}
+
 	private function okText(res: EditResult): String {
 		return switch res {
 			case Ok(text): text;

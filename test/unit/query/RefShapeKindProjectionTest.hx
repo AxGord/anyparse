@@ -128,6 +128,7 @@ final class RefShapeKindProjectionTest extends Test {
 	private static final KEYWORD_TOKEN_FIELDS: Array<String> = [
 		'constructorName',
 		'defaultVisibilityModifierText',
+		'isOperatorText',
 		'selfReferenceText',
 		'superReferenceText',
 		'wildcardPatternName'
@@ -600,6 +601,22 @@ final class RefShapeKindProjectionTest extends Test {
 				names: NAME_NONE,
 				before: 'class C { function f() { var a = (b',
 				after: '; } }'
+			},
+			{
+				field: 'exprEndingCloser',
+				slot: '',
+				kind: 'BlockExpr',
+				names: NAME_NONE,
+				before: 'class C { function f() { var a = { b; ',
+				after: '; } }'
+			},
+			{
+				field: 'isOperatorText',
+				slot: '',
+				kind: 'Is',
+				names: NAME_NONE,
+				before: 'class C { function f() { var a = b ',
+				after: ' T; } }'
 			},
 			{
 				field: 'publicDefaultMetaNames',

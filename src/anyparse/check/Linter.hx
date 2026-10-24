@@ -214,6 +214,7 @@ final class Linter {
 			new UnnecessarySafeNav(),
 			new RedundantIsCheck(),
 			new ImpossibleIsCheck(),
+			new PreferIsOperator(),
 			new UnreachableCatch(),
 			new ImpossibleCast(),
 			new RedundantUpcast(),

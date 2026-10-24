@@ -147,7 +147,9 @@ final class ParenGuard {
 				for (i in 0...sites.length) nodeAtSpan(refBuild.text, refTree, refBuild.spans[i])
 			],
 			refText: refBuild.text,
-			refPairs: refBuild.pairs
+			refPairs: refBuild.pairs,
+			closer: shape.exprEndingCloser,
+			statementKind: shape.exprStatementKind
 		};
 
 		// Fast path: the raw splice is already faithful everywhere. The same
@@ -442,7 +444,10 @@ final class ParenGuard {
 				continue;
 			}
 			final found: Null<QueryNode> = nodeAtSpan(built.text, tree, built.spans[i]);
-			out.push(found != null && sameIgnoringInserted(found, built.text, built.pairs, reference, probe.refText, probe.refPairs));
+			out.push(
+				found != null && sameIgnoringInserted(found, built.text, built.pairs, reference, probe.refText, probe.refPairs)
+				&& (wrap[i] || !continuedPastCloser(probe, built.text, tree, built.spans[i]))
+			);
 		}
 		return out;
 	}
@@ -451,6 +456,31 @@ final class ParenGuard {
 	private static function noWorse(trial: Array<Bool>, current: Array<Bool>): Bool {
 		for (i in 0...current.length) if (current[i] && !trial[i]) return false;
 		return true;
+	}
+
+	/**
+	 * Whether the bare splice at `span` ends with the grammar's expression-ending closer (`RefShape.exprEndingCloser`) and an
+	 * expression continues past it: the node holding the splice starts where the splice does and is no expression statement.
+	 * The parse probe cannot see this — the grammar reads the continuation the language refuses — so it is a verdict of its own.
+	 */
+	private static function continuedPastCloser(probe: Probe, text: String, tree: QueryNode, span: Span): Bool {
+		final closer: Null<String> = probe.closer;
+		if (closer == null || !text.substring(span.from, span.to).rtrim().endsWith(closer)) return false;
+		final holder: Null<QueryNode> = holderOf(text, tree, span);
+		final from: Null<Span> = holder?.span;
+		return holder != null && from != null && trimmedFrom(text, from) == span.from && holder.kind != probe.statementKind;
+	}
+
+	/** The node one of whose children is the outermost node covering exactly `span` (whitespace trimmed), or null. */
+	private static function holderOf(text: String, node: QueryNode, span: Span): Null<QueryNode> {
+		for (child in node.children) {
+			final own: Null<Span> = child.span;
+			if (own != null && trimmedFrom(text, own) == span.from && trimmedTo(text, own) == span.to) return node;
+			if (own != null && (own.from > span.from || own.to < span.to)) continue;
+			final hit: Null<QueryNode> = holderOf(text, child, span);
+			if (hit != null) return hit;
+		}
+		return null;
 	}
 
 	/**
@@ -553,7 +583,9 @@ private typedef Probe = {
 	allLegal: Array<Bool>,
 	refs: Array<Null<QueryNode>>,
 	refText: String,
-	refPairs: Map<String, Bool>
+	refPairs: Map<String, Bool>,
+	closer: Null<String>,
+	statementKind: Null<String>
 };
 
 /** @see `ParenGuard.enumerateSites` */

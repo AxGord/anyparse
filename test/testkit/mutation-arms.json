@@ -31274,21 +31274,21 @@
 			"name": "M-INTERP-BASIC-NAME-UNBOUND",
 			"type": "anyparse.check.PreferInterpolation",
 			"method": "printsPlain",
-			"find": "decls.foreach(r -> isCoreDeclaration(r, shape))",
-			"replace": "true",
+			"find": "r -> isCoreDeclaration(r, shape)",
+			"replace": "_ -> true",
 			"note": "a basic type name passes by its spelling, whatever declaration it binds to there"
 		},
 		{
 			"name": "M-INTERP-UNKNOWN-TIER-TRUSTED",
-			"type": "anyparse.check.PreferInterpolation",
-			"method": "printsPlain",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindsStdDeclaration",
 			"find": "case Unknown: return false;",
 			"replace": "case Unknown: [];",
-			"note": "a name an unindexed import may bind reads as the compiler built-in"
+			"note": "a name an unindexed import or wildcard may bind reads as the std's declaration"
 		},
 		{
 			"name": "M-INTERP-PACKAGE-SHADOW-UNREAD",
-			"type": "anyparse.check.PreferInterpolation",
+			"type": "anyparse.query.TypeNameBinding",
 			"method": "shadowedOnDisk",
 			"force": "false",
 			"note": "a module of a basic type name in the file package chain, outside the run, no longer declines the site"
@@ -31347,6 +31347,90 @@
 			"find": "m.rank == nearest || m.rank == BY_WILDCARD",
 			"replace": "true",
 			"note": "every package above the writer that declares Mod.Sub answers, not the nearest one the compiler picks"
+		},
+		{
+			"name": "M-ISOP-PARENS-DROPPED",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "fix",
+			"find": "return ParenGuard.guard(source, guarded, plugin);",
+			"replace": "return [for (e in guarded) { span: e.span, text: e.text }];",
+			"note": "the rewrite splices `x is T` bare, so `!Std.isOfType(a, B)` becomes `!a is B`, which reads `(!a) is B`"
+		},
+		{
+			"name": "M-ISOP-VALUE-ARGUMENT",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "namesType",
+			"force": "true",
+			"note": "a second argument that is a value — a `Class<T>` parameter, a static field — is rewritten into a type position that reads a type of its name"
+		},
+		{
+			"name": "M-STDBIND-PROJECT-DECL-TRUSTED",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindsStdDeclaration",
+			"find": "final own: (ResolvedType) -> Bool = isOwn ?? r -> StdResolver.isStdFile(r.file.file);",
+			"replace": "final own: (ResolvedType) -> Bool = _ -> true;",
+			"note": "a project's own declaration of a std type name is taken for the std's, so prefer-is-operator trades a project `Std` for the operator that calls the std's"
+		},
+		{
+			"name": "M-ISOP-STD-VALUE",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "receiverIsStd",
+			"find": "span != null && ValueDoors.bindsNoValue(receiver, name, span, fi, proof.root, proof.shape, proof.file, index)",
+			"replace": "span != null",
+			"note": "a local or field named `Std` is taken for the std type"
+		},
+		{
+			"name": "M-STDBIND-DISK-SHADOW-UNREAD",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindsStdDeclaration",
+			"find": "return decls.foreach(own) && !shadowedOnDisk(name, fi.pkg, fi.file);",
+			"replace": "return decls.foreach(own);",
+			"note": "a module of the std type's name in the file's package outside the run is not looked for on disk"
+		},
+		{
+			"name": "M-ISOP-COMMENT-DROPPED",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "rewrite",
+			"find": "if (gaps.exists(gap -> gap.indexOf('//') != -1 || gap.indexOf('/*') != -1)) return null;",
+			"replace": "",
+			"note": "a comment between the call's arguments is deleted by the rewrite"
+		},
+		{
+			"name": "M-ISOP-SYNTAX-POSITION-REWRITTEN",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "walk",
+			"find": "if (seams.opaqueKinds.contains(node.kind) || seams.metaKinds.contains(node.kind)) return;",
+			"replace": "",
+			"note": "a call inside an annotation argument or a reification, read as syntax, is rewritten"
+		},
+		{
+			"name": "M-ISOP-VERSION-UNGATED",
+			"type": "anyparse.check.PreferIsOperator",
+			"method": "minLanguageVersion",
+			"force": "'4.0'",
+			"note": "a project declaring a language older than the operator is told to write it"
+		},
+		{
+			"name": "M-STDBIND-BOUND-DISK-SHADOW-UNREAD",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindsStdDeclaration",
+			"find": "return decls.foreach(own) && !shadowedOnDisk(name, fi.pkg, fi.file);",
+			"replace": "return decls.foreach(own) && (decls.length > 0 || !shadowedOnDisk(name, fi.pkg, fi.file));",
+			"note": "the disk is asked only when no indexed declaration answered, so a run that indexes the std trusts its `Std` beside a same-package module of the name"
+		},
+		{
+			"name": "M-PARENGUARD-BLOCK-LEFT-OPERAND-BARE",
+			"type": "anyparse.query.ParenGuard",
+			"method": "continuedPastCloser",
+			"force": "false",
+			"note": "a splice ending at a block-closing brace is left bare as the left operand of an operator, which Haxe refuses to continue"
+		},
+		{
+			"name": "M-ISOP-EXPECTATION-UNIFIED",
+			"type": "anyparse.query.ExpectedTypes",
+			"method": "unifiesUnderExpectation",
+			"force": "false",
+			"note": "a ternary, if, switch, try or array literal operand is moved out of the call's Dynamic expectation, where its arms no longer need to agree"
 		}
 	]
 }

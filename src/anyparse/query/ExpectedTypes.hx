@@ -30,6 +30,7 @@ final class ExpectedTypes {
 	private final _ternaryKind: Null<String>;
 	private final _ifExprKinds: Array<String>;
 	private final _switchKinds: Array<String>;
+	private final _tryExprKinds: Array<String>;
 	private final _caseBranchKind: Null<String>;
 	private final _blockKinds: Array<String>;
 	private final _arrayLiteralKind: Null<String>;
@@ -52,6 +53,7 @@ final class ExpectedTypes {
 		_ternaryKind = shape.ternaryKind;
 		_ifExprKinds = shape.ifExpressionKinds ?? [];
 		_switchKinds = shape.switchKinds ?? [];
+		_tryExprKinds = shape.tryExpressionKinds ?? [];
 		_caseBranchKind = shape.caseBranchKind;
 		_blockKinds = [for (k in [shape.blockStmtKind, shape.exprStatementKind]) if (k != null) k];
 		_arrayLiteralKind = shape.arrayLiteralKind;
@@ -66,6 +68,20 @@ final class ExpectedTypes {
 	/** Whether `node` is a lambda of the grammar — the node `lambdaParamTypes` types the parameters of. */
 	public inline function isLambda(node: QueryNode): Bool {
 		return _lambdaKinds.contains(node.kind);
+	}
+
+	/**
+	 * Whether the type of `value` is the unification of sub-values each typed against what is expected of `value` — a
+	 * ternary's, an `if`'s, a `switch`'s or a `try`'s arms, an array or map literal's elements — directly or through
+	 * parentheses. Such a value may type where something is expected of it and fail where nothing is: 4.3.7 compiles
+	 * `Std.isOfType(c ? 'x' : 2, String)` and rejects `(c ? 'x' : 2) is String`.
+	 */
+	public function unifiesUnderExpectation(value: QueryNode): Bool {
+		final kind: String = value.kind;
+		return kind == _parenKind && value.children.length == 1
+			? unifiesUnderExpectation(value.children[0])
+			: kind == _ternaryKind || kind == _arrayLiteralKind || _ifExprKinds.contains(kind) || _switchKinds.contains(kind)
+				|| _tryExprKinds.contains(kind);
 	}
 
 	/**

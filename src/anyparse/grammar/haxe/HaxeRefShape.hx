@@ -366,6 +366,7 @@ final class HaxeRefShape {
 		table.openSwitchSubjectTypes = ['Int', 'UInt', 'Float', 'Single', 'String'];
 		table.parenKind = 'ParenExpr';
 		table.parenDelimiters = { open: '(', close: ')' };
+		table.exprEndingCloser = '}';
 		table.macroModifierKind = 'Macro';
 		table.boolLitKind = 'BoolLit';
 		table.nonNullBoolTypeName = 'Bool';
@@ -798,6 +799,8 @@ final class HaxeRefShape {
 		table.forceFieldAccessKind = 'ForceFieldAccess';
 		table.indexAccessKind = 'IndexAccess';
 		table.isExprKind = 'Is';
+		table.isExprCall = 'Std.isOfType';
+		table.isOperatorText = 'is';
 		table.nullableOperandKinds = ['Call', 'FieldAccess', 'SafeFieldAccess'];
 		table.notKind = 'Not';
 		table.blockStmtKind = 'BlockStmt';

@@ -106,7 +106,7 @@ class DocLengthCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('doc-length');
 		Assert.notNull(check);
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'doc-length is opt-in');
-		Assert.equals(195, Linter.builtins().length);
+		Assert.equals(196, Linter.builtins().length);
 	}
 
 	/** The check's findings on `src` under the `apqlint.json` document `configJson`. */
