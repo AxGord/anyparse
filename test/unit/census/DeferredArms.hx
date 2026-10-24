@@ -73,7 +73,7 @@ final class DeferredArms {
 		'M-PROJECTED-KINDS-ALT-ONLY :: anyparse.macro.QueryWalkerLowering#eachProjectedKind',
 		'M-DECL-HOST-KIND-STALE :: anyparse.grammar.haxe.HaxeRefShape#FinalMember:DECL_HOST_KINDS',
 		'M-ELLIPSIS-STMT-TOKEN-STALE :: anyparse.grammar.haxe.HxStatement#SimpleCtor:EllipsisStmt',
-		'M-NON-NULL-RHS-DROP-HEX :: anyparse.check.NullFlow#FinalMember:NON_NULL_RHS_KINDS',
+		'M-NON-NULL-RHS-DROP-HEX :: anyparse.check.scan.NullFlow#FinalMember:NON_NULL_RHS_KINDS',
 		'M-SPAWN-RUNALL-IGNORES-CWD :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 		'M-DRIVER-CANCELS-EARLIER-JOBS :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 		'M-DRIVER-NEVER-STOPS :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',

@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.scan.RunScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

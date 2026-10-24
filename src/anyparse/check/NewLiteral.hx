@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.scan.RunScan;
 import anyparse.query.NominalTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;

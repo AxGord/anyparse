@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.ExpectedType.CastScan;
 import anyparse.check.ExpectedType.CastSite;
 import anyparse.check.ExpectedType.FileTypes;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;

@@ -1,13 +1,15 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.CheckScan.NegationSeams;
-import anyparse.check.LoopScan.LoopJumpSeams;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.LoopScan;
+import anyparse.check.scan.NegationScan;
+import anyparse.check.scan.RunScan;
 
 using Lambda;
 using StringTools;

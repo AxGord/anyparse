@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.check.NullFlow;
+import anyparse.check.scan.NullFlow;
 import anyparse.grammar.haxe.HaxeQueryWalker;
 import anyparse.grammar.haxe.HaxeStringFoldSupport;
 import anyparse.query.GrammarPlugin.RefShape;

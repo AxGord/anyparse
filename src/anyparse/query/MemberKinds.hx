@@ -2,7 +2,7 @@ package anyparse.query;
 
 using Lambda;
 
-import anyparse.check.CheckScan;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 

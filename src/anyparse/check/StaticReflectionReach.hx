@@ -1,7 +1,8 @@
 package anyparse.check;
 
-import anyparse.check.ReflectionScan.ReflectionSurface;
-import anyparse.check.ReflectionScan.ScopeFile;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.NativeCodeScan;
+import anyparse.check.scan.ReflectionScan;
 import anyparse.query.CondRegionScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;

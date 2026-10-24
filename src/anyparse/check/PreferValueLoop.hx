@@ -4,14 +4,13 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.ElementLoopRewrite.BinderChoice;
 import anyparse.check.ElementLoopRewrite.ReachGate;
-import anyparse.check.LoopScan.IndexedLoopHeader;
-import anyparse.check.LoopScan.LoopFileScan;
-import anyparse.check.LoopScan.LoopSeams;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
+import anyparse.check.scan.LoopScan;
+import anyparse.check.scan.RunScan;
 
 /**
  * Flags an INDEXED `for` whose index is never anything but an index into the collection it

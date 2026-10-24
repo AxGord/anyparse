@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.FixEdit;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;

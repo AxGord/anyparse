@@ -3,8 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.MacroGate.CallRef;
 import anyparse.check.MacroGate.MacroIndex;
-import anyparse.check.OperatorSelection.OperandTyping;
-import anyparse.check.OperatorSelection.OperatorVerdict;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
@@ -15,6 +13,9 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.SameItems;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.OperatorSelection;
+import anyparse.check.scan.RunScan;
 
 using Lambda;
 using StringTools;

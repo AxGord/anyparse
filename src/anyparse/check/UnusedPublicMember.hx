@@ -4,7 +4,6 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.PublicReach.MemberRun;
 import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -14,6 +13,10 @@ import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.PublicReach;
+import anyparse.check.scan.ReflectionScan;
+import anyparse.check.scan.RunScan;
 
 using Lambda;
 using StringTools;

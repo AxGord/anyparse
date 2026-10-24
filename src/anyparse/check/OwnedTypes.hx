@@ -5,6 +5,7 @@ import anyparse.check.Check.FileGated;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.ConfiguredTypes.OwnedMember;
 import anyparse.check.config.OwnedTypesDeclaration.TypeOwnership;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.Glob;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;

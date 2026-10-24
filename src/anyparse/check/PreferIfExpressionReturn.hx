@@ -1,10 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.CheckScan.NegationSeams;
-import anyparse.check.IfExpressionChain.Carried;
-import anyparse.check.IfExpressionChain.CarrySeat;
-import anyparse.check.IfExpressionChain.IfChain;
-import anyparse.check.IfExpressionChain.TernaryTail;
 import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
@@ -14,6 +9,10 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.IfExpressionChain;
+import anyparse.check.scan.NegationScan;
+import anyparse.check.scan.RunScan;
 
 using Lambda;
 

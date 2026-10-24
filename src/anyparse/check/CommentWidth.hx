@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.VolatileMessage;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.CondRegionScan;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.ParseGate;

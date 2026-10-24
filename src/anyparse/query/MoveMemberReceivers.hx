@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.CheckScan;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.MoveMember.MovePrep;
 import anyparse.query.MoveMember.MovedMember;
 import anyparse.query.SymbolIndex.TypeDeclInfo;

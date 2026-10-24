@@ -2,7 +2,7 @@ package unit.check;
 
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
-import anyparse.check.ReflectionScan;
+import anyparse.check.scan.ReflectionScan;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.cli.command.LintCommand;
 import haxe.io.Path;
@@ -228,7 +228,7 @@ class LintScopeGateTest extends Test {
 		// alone and refused over both. `LintConfig.discover` now folds the whole chain, so this
 		// asserts INHERITANCE: revert it and the `test/` probe answers an empty scope again.
 		for (probe in [
-			'$root/src/anyparse/check/ReflectionScan.hx',
+			'$root/src/anyparse/check/scan/ReflectionScan.hx',
 			'$root/test/unit/LintScopeGateTest.hx'
 		]) {
 			final roots: Array<String> = LintConfig.discover(probe).resolutionRoots();

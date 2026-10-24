@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.scan.RunScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

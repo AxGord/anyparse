@@ -1,7 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.PublicReach.MemberRun;
-import anyparse.check.PublicReach.ReachRegion;
 import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -16,6 +14,9 @@ import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.PublicReach;
+import anyparse.check.scan.ReflectionScan;
 
 using Lambda;
 using StringTools;

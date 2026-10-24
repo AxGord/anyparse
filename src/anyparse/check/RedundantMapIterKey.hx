@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.ValueIterationProof.ValueIteration;
+import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberReach;
 import anyparse.query.NominalTypes;

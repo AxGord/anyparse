@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.IndexScope;

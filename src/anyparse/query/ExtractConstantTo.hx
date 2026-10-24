@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.ConstantFieldScan;
+import anyparse.check.scan.ConstantFieldScan;
 import anyparse.query.Address.AddressSpec;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;

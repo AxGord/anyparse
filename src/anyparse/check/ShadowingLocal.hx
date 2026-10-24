@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.FixEdit;
+import anyparse.check.scan.RunScan;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.MemberKinds;

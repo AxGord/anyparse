@@ -1,10 +1,11 @@
 package anyparse.check;
 
-import anyparse.check.CasePatternScan.CaseSeams;
-import anyparse.check.CasePatternScan.PatternBinder;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CasePatternScan;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 
 /**
  * Flags a switch arm whose body its IMMEDIATE NEIGHBOUR already carries, in the two

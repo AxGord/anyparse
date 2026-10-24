@@ -524,7 +524,7 @@
 		},
 		{
 			"name": "M-REGION-TERM-OFF",
-			"type": "anyparse.check.RegionTerminator",
+			"type": "anyparse.check.scan.RegionTerminator",
 			"method": "terminatorAt",
 			"force": "-1",
 			"note": "no region owns the terminator after its `#end`, so a fix moving the region drops it and `empty-statement` deletes it"
@@ -890,7 +890,7 @@
 		},
 		{
 			"name": "M-DECL-NULLABLE-OVERRIDES-EXISTS",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "handleDecl",
 			"find": "else if (!nullableInit && isDeclaredNullable(node, ctx))",
 			"replace": "else if (isDeclaredNullable(node, ctx))",
@@ -921,7 +921,7 @@
 		},
 		{
 			"name": "M-SAFENAV-NO-NARROW",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "safeNavChainRoot",
 			"force": "null",
 			"note": "a `?.` guard narrows nothing, so `if (u?.b != null) u.b.c()` reports its own guarded dereference again"
@@ -1029,7 +1029,7 @@
 		},
 		{
 			"name": "M-RENDER-SPAN-TOKENS",
-			"type": "anyparse.check.SpanRender",
+			"type": "anyparse.check.scan.SpanRender",
 			"method": "renderParts",
 			"force": "[]",
 			"note": "no byte is ever inside a token, so the display renderer collapses whitespace INSIDE a string literal again and a finding advertises a call the fix would not write"
@@ -1542,7 +1542,7 @@
 		},
 		{
 			"name": "M-TERMINAL-RUNGS-ANY",
-			"type": "anyparse.check.AssignmentTreeHoist",
+			"type": "anyparse.check.scan.AssignmentTreeHoist",
 			"method": "terminalTernaryRungs",
 			"force": "1",
 			"note": "every assignment r-value answers as a ternary tail, so the widened gate claims sites that belong to prefer-ternary-assignment"
@@ -2326,7 +2326,7 @@
 		},
 		{
 			"name": "M-EXISTS-GUARD-BLIND",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "collectExists",
 			"find": "final kind: String = cond.kind;\n\t\tif (kind == combineKind) {",
 			"replace": "if (true) return;\n\t\tfinal kind: String = cond.kind;\n\t\tif (kind == combineKind) {",
@@ -2433,7 +2433,7 @@
 		},
 		{
 			"name": "M-GUARDED-USING-ABSENT",
-			"type": "anyparse.check.UsingScan",
+			"type": "anyparse.check.scan.UsingScan",
 			"method": "usingScopeAt",
 			"find": "if (regions.length == 0) return UsingScope.Absent;",
 			"replace": "return UsingScope.Absent;",
@@ -2531,7 +2531,7 @@
 		},
 		{
 			"name": "M-USING-INSERT-COVERED-SILENT",
-			"type": "anyparse.check.UsingScan",
+			"type": "anyparse.check.scan.UsingScan",
 			"method": "appendUsingInsert",
 			"find": "if (insert == null) return false;",
 			"replace": "if (insert == null) return true;",
@@ -2631,7 +2631,7 @@
 		},
 		{
 			"name": "M-USING-SCOPE-EMPTY-OFFSETS-INSCOPE",
-			"type": "anyparse.check.UsingScan",
+			"type": "anyparse.check.scan.UsingScan",
 			"method": "usingScopeAt",
 			"find": "\tif (offsets.length == 0) return UsingScope.Guarded;",
 			"replace": "\tif (offsets.length == 0) return UsingScope.InScope;",
@@ -2976,7 +2976,7 @@
 		},
 		{
 			"name": "M-REFLECTION-REPORT-INDEX-DELETE",
-			"type": "anyparse.check.ReflectionScan",
+			"type": "anyparse.check.scan.ReflectionScan",
 			"method": "scopeFiles",
 			"find": "final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionSourcesOf(plugin);",
 			"replace": "final resolution: Null<Array<ScopeFile>> = null;",
@@ -2984,7 +2984,7 @@
 		},
 		{
 			"name": "M-REFLECTION-SCOPE-PROJECT-ONLY",
-			"type": "anyparse.check.ReflectionScan",
+			"type": "anyparse.check.scan.ReflectionScan",
 			"method": "scopeFiles",
 			"find": "final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionSourcesOf(plugin);",
 			"replace": "final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionProjectSourcesOf(plugin);",
@@ -3181,7 +3181,7 @@
 		},
 		{
 			"name": "M-NON-NULL-RHS-DROP-HEX",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "NON_NULL_RHS_KINDS",
 			"kind": "FinalMember",
 			"find": "\t'HexLit',\n",
@@ -3213,14 +3213,14 @@
 		},
 		{
 			"name": "M-REFLECTION-MEMO-DEAD",
-			"type": "anyparse.check.ReflectionMemo",
+			"type": "anyparse.check.scan.ReflectionMemo",
 			"method": "surfaceFor",
 			"force": "null",
 			"note": "the run-scoped memo is never consulted, so every one of the five checks sharing the reflection gate walks the whole scope again — the state before S192, and the half that makes the staleness cell beside it vacuous if nobody pins it"
 		},
 		{
 			"name": "M-REFLECTION-MEMO-STALE",
-			"type": "anyparse.check.ReflectionMemo",
+			"type": "anyparse.check.scan.ReflectionMemo",
 			"method": "surfaceFor",
 			"force": "_surface",
 			"note": "the memo answers without checking the sources it read, so a scope file a `--fix` pass has just rewritten — or a second, different scope in the same run — is answered from the earlier text: the reflective read a pass introduced stops vetoing, and the next rewrite orphans it silently"
@@ -3351,7 +3351,7 @@
 		},
 		{
 			"name": "M-REFLECTION-UNREADABLE-BLIND",
-			"type": "anyparse.check.ReflectionScan",
+			"type": "anyparse.check.scan.ReflectionScan",
 			"method": "runtimeName",
 			"find": "\t\t\t|| surface.unreadable.exists(source -> RawSourceScan.mentionsWord(source, name));",
 			"replace": "\t\t\t|| false;",
@@ -9560,7 +9560,7 @@
 		},
 		{
 			"name": "M-DSN-UNSEEN-DROPPED",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "narrowedCopy",
 			"find": "if (!seen && !out.unseen.contains(n)) out.unseen.push(n);",
 			"replace": "if (!seen && false) out.unseen.push(n);",
@@ -9568,7 +9568,7 @@
 		},
 		{
 			"name": "M-DSN-UNSEEN-ALL",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "narrowedCopy",
 			"find": "final visible: Array<String> = nonNull.copy();",
 			"replace": "final visible: Array<String> = [];",
@@ -9583,7 +9583,7 @@
 		},
 		{
 			"name": "M-DSN-JOIN-EITHER",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "unseenAfterJoin",
 			"find": "a.unseen.contains(n) || b.unseen.contains(n)",
 			"replace": "a.unseen.contains(n) && b.unseen.contains(n)",
@@ -9591,7 +9591,7 @@
 		},
 		{
 			"name": "M-DSN-RENARROW-HIDES",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "narrowedCopy",
 			"find": "final seen: Bool = visible.contains(n) || out.nonNull.contains(n) && !out.unseen.contains(n);",
 			"replace": "final seen: Bool = visible.contains(n);",
@@ -9599,7 +9599,7 @@
 		},
 		{
 			"name": "M-DSN-ASSIGN-KEEPS-UNSEEN",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "markNonNull",
 			"find": "state.unseen.remove(name);",
 			"replace": "if (false) state.unseen.remove(name);",
@@ -9653,7 +9653,7 @@
 		},
 		{
 			"name": "M-DSN-TRY-KEEPS-ALL",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "handleTry",
 			"find": "setState(state, survivor(post ?? emptyState(), kept));",
 			"replace": "setState(state, post ?? emptyState());",
@@ -9661,7 +9661,7 @@
 		},
 		{
 			"name": "M-DSN-TRY-HIDES-ALL",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "handleTry",
 			"find": "final kept: Array<String> = visibleUnwritten(state, node, ctx);",
 			"replace": "final kept: Array<String> = [];",
@@ -9669,7 +9669,7 @@
 		},
 		{
 			"name": "M-DSN-LONE-ARM-KEEPS-BODY",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "handleIf",
 			"find": [
 				"survivor(elseState, elseKept);",
@@ -9683,7 +9683,7 @@
 		},
 		{
 			"name": "M-DSN-LONE-ARM-HIDES-ALL",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "handleIf",
 			"find": "final elseKept: Array<String> = elseArm == null ? visibleIn(elseState) : visibleUnwritten(elseState, elseArm, ctx);",
 			"replace": "final elseKept: Array<String> = [];",
@@ -9691,14 +9691,14 @@
 		},
 		{
 			"name": "M-DSN-JOIN-HIDES-ALL",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "unseenAfterJoin",
 			"force": "nonNull",
 			"note": "every join hides its proof, so two live arms that each narrow visibly lose their fix"
 		},
 		{
 			"name": "M-DSN-LONE-BRANCH-KEEPS-BODY",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "handleSwitch",
 			"find": "setState(state, survivor(exitStates[0], visibleUnwritten(state, live, ctx)));",
 			"replace": "setState(state, exitStates[0]);",
@@ -9706,14 +9706,14 @@
 		},
 		{
 			"name": "M-DSN-OWNS-NONE",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "ownsVisibility",
 			"force": "false",
 			"note": "no construct keeps what its children proved, so an assignment inside a call argument loses a fix the compiler accepts"
 		},
 		{
 			"name": "M-NULLFLOW-BINDER-BLIND",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "walk",
 			"find": "final bound: Array<String> = ctx.selfScopeDeclKinds.contains(kind) ? boundNames(node, ctx) : [];",
 			"replace": "final bound: Array<String> = [];",
@@ -9721,7 +9721,7 @@
 		},
 		{
 			"name": "M-NULLFLOW-CHILD-BINDER-BLIND",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "boundNames",
 			"find": "for (c in node.children) if (ctx.binderKinds.contains(c.kind)) add(c.name);",
 			"replace": "",
@@ -9729,7 +9729,7 @@
 		},
 		{
 			"name": "M-NULLFLOW-CASE-BINDER-BLIND",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "walkBranch",
 			"find": "final bound: Array<String> = boundNames(b, ctx);",
 			"replace": "final bound: Array<String> = [];",
@@ -9737,7 +9737,7 @@
 		},
 		{
 			"name": "M-NULLFLOW-CATCH-BINDER-BLIND",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "handleTry",
 			"find": "final bound: Array<String> = ctx.selfScopeDeclKinds.contains(clause.kind) ? boundNames(clause, ctx) : [];",
 			"replace": "final bound: Array<String> = [];",
@@ -9745,7 +9745,7 @@
 		},
 		{
 			"name": "M-NULLFLOW-SHADOW-NO-RESTORE",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "unshadow",
 			"find": "if (written.contains(n)) continue;",
 			"replace": "continue;",
@@ -9753,7 +9753,7 @@
 		},
 		{
 			"name": "M-NULLFLOW-SHADOW-RESTORES-WRITTEN",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "unshadow",
 			"find": "if (written.contains(n)) continue;",
 			"replace": "",
@@ -10471,7 +10471,7 @@
 		},
 		{
 			"name": "M-FOLD-FACTS-OPERAND",
-			"type": "anyparse.check.OperatorSelection",
+			"type": "anyparse.check.scan.OperatorSelection",
 			"method": "factsProof",
 			"find": "oracle = FactsTypeOracle.forFixRun(_plugin, file, source);",
 			"replace": "oracle = null;",
@@ -10747,7 +10747,7 @@
 		},
 		{
 			"name": "M-PSE-USING-MODULE-WIDE",
-			"type": "anyparse.check.UsingScan",
+			"type": "anyparse.check.scan.UsingScan",
 			"method": "typesUsedBy",
 			"find": "for (t in fi.types) out.push(",
 			"replace": "for (t in fi.types) if (t.isMain) out.push(",
@@ -10763,7 +10763,7 @@
 		},
 		{
 			"name": "M-PSE-USING-ALIAS-HOST",
-			"type": "anyparse.check.UsingScan",
+			"type": "anyparse.check.scan.UsingScan",
 			"method": "supplied",
 			"find": "aliasedHost(t.type, t.file, index)",
 			"replace": "t.type",
@@ -10771,7 +10771,7 @@
 		},
 		{
 			"name": "M-PSE-USING-SELF-MODULE",
-			"type": "anyparse.check.UsingScan",
+			"type": "anyparse.check.scan.UsingScan",
 			"method": "usingConflict",
 			"find": "worse(verdict, supplied(module, module, method, symbols, file))",
 			"replace": "verdict",
@@ -10803,7 +10803,7 @@
 		},
 		{
 			"name": "M-OPERAND-MEMBER-SCOPE-LOST",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "boundMembers",
 			"find": "DeclaredNullity.headTierIn(written, host.file, m.declFrom, _index,",
 			"replace": "DeclaredNullity.headTierIn(written, _index.fileInfo(_file) ?? host.file, m.declFrom, _index,",
@@ -10811,14 +10811,14 @@
 		},
 		{
 			"name": "M-OPERAND-MEMBER-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "memberTier",
 			"force": "Unknown",
 			"note": "no member read or call types an operand"
 		},
 		{
 			"name": "M-OPERAND-METHOD-PARAMS-IGNORED",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "boundMembers",
 			"find": "ownParams.concat(m.typeParamNames)",
 			"replace": "ownParams",
@@ -10826,7 +10826,7 @@
 		},
 		{
 			"name": "M-OPERAND-STATIC-RECEIVER-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "receiverDecls",
 			"find": "return switch _index.refs.names.tierOf(name, fi, receiver.span?.from) {",
 			"replace": "return switch Unknown {",
@@ -10834,21 +10834,21 @@
 		},
 		{
 			"name": "M-OPERAND-LOCAL-CALL-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "localCallTier",
 			"force": "Unknown",
 			"note": "a call to a function this file declares is never typed by its return type"
 		},
 		{
 			"name": "M-OPERAND-CASE-CAPTURE",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "capturedBetween",
 			"force": "false",
 			"note": "a `case` capture between a read and the binding the walk found is not seen, so the read binds to the outer declaration"
 		},
 		{
 			"name": "M-OPERAND-CASE-CAPTURE-INSIDE",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "capturedBetween",
 			"find": "node.kind == branchKind && !inside &&",
 			"replace": "node.kind == branchKind &&",
@@ -10856,7 +10856,7 @@
 		},
 		{
 			"name": "M-OPERAND-OVERLOAD-SIGNATURE",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "typedByItsReturn",
 			"find": "return !m.hasOverloadMeta && !m.isMacro;",
 			"replace": "return !m.isMacro;",
@@ -10864,7 +10864,7 @@
 		},
 		{
 			"name": "M-OPERAND-MACRO-RETURN",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "typedByItsReturn",
 			"find": "return !m.hasOverloadMeta && !m.isMacro;",
 			"replace": "return !m.hasOverloadMeta;",
@@ -10872,7 +10872,7 @@
 		},
 		{
 			"name": "M-OPERAND-LOCAL-MACRO",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "localCallTier",
 			"find": "return if (member != null && !typedByItsReturn(member))",
 			"replace": "return if (false)",
@@ -11132,14 +11132,14 @@
 		},
 		{
 			"name": "M-SWITCH-BARE-BODY-VERBATIM",
-			"type": "anyparse.check.SwitchChain",
+			"type": "anyparse.check.scan.SwitchChain",
 			"method": "terminatedBody",
 			"force": "spanText(source, span)",
 			"note": "a case body is taken verbatim, so a branch whose `;` was elided before `else` arrives bare"
 		},
 		{
 			"name": "M-SWITCH-TERMINATED-BODY-DOUBLED",
-			"type": "anyparse.check.SwitchChain",
+			"type": "anyparse.check.scan.SwitchChain",
 			"method": "terminatedBody",
 			"find": "seams.selfTerminatingEndings.exists(ending -> text.endsWith(ending))",
 			"replace": "false",
@@ -12307,14 +12307,14 @@
 		},
 		{
 			"name": "M-NULLFLOW-VALUE-FACT-BLIND",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "indexFact",
 			"force": "null",
 			"note": "a `m[k] != null` guard or a non-null write to `m[k]` proves nothing about a re-read of the same entry"
 		},
 		{
 			"name": "M-NULLFLOW-VALUE-FACT-UNKILLED",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "killValueFacts",
 			"find": "if (state.present.exists(e -> e.value)) state.present = state.present.filter(e -> !e.value);",
 			"replace": "return;",
@@ -12322,14 +12322,14 @@
 		},
 		{
 			"name": "M-NULLFLOW-PREDICATE-BLIND",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "predicateArgs",
 			"force": "[]",
 			"note": "a true call to a non-null predicate proves nothing about its argument"
 		},
 		{
 			"name": "M-NULLFLOW-PREDICATE-UNCHECKED",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "predicateModifiers",
 			"find": "return fn.kind == shape.finalModifierMemberKind || ",
 			"replace": "return true || ",
@@ -12337,7 +12337,7 @@
 		},
 		{
 			"name": "M-NULLFLOW-PREDICATE-TYPE-UNCHECKED",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "predicateArgs",
 			"find": " && ctx.argType(arg) == written",
 			"replace": "",
@@ -14385,7 +14385,7 @@
 		},
 		{
 			"name": "M-SWITCH-VALUES-NOT-DISTINCT",
-			"type": "anyparse.check.SwitchChain",
+			"type": "anyparse.check.scan.SwitchChain",
 			"method": "distinctValues",
 			"find": "\t\tif (seen.contains(key)) return false;\n",
 			"replace": "",
@@ -14393,7 +14393,7 @@
 		},
 		{
 			"name": "M-SWITCH-UNKNOWN-VALUE-ACCEPTED",
-			"type": "anyparse.check.SwitchChain",
+			"type": "anyparse.check.scan.SwitchChain",
 			"method": "distinctValues",
 			"find": "if (value == null) return false;",
 			"replace": "if (value == null) continue;",
@@ -14401,7 +14401,7 @@
 		},
 		{
 			"name": "M-CASEVALUE-IMPLICIT-NOT-COUNTED",
-			"type": "anyparse.check.CaseValueKey",
+			"type": "anyparse.check.scan.CaseValueKey",
 			"method": "countedValue",
 			"find": ": value + 1;",
 			"replace": ": value;",
@@ -14409,7 +14409,7 @@
 		},
 		{
 			"name": "M-CASEVALUE-NAMING-UNKNOWN",
-			"type": "anyparse.check.CaseValueKey",
+			"type": "anyparse.check.scan.CaseValueKey",
 			"method": "ofMember",
 			"find": "\tif (seams.namingTypes.contains(underlying)) return STRING_PREFIX + member.name;\n",
 			"replace": "",
@@ -14417,14 +14417,14 @@
 		},
 		{
 			"name": "M-SWITCH-PATTERN-EQ-OVERLOAD-IGNORED",
-			"type": "anyparse.check.SwitchChain",
+			"type": "anyparse.check.scan.SwitchChain",
 			"method": "selectsBuiltinEq",
 			"force": "true",
 			"note": "a pattern whose declaring abstract overloads == passes gate 10, and the switch bypasses the overload the chain called"
 		},
 		{
 			"name": "M-SWITCH-DISC-EQ-OVERLOAD-IGNORED",
-			"type": "anyparse.check.SwitchChain",
+			"type": "anyparse.check.scan.SwitchChain",
 			"method": "scopeOf",
 			"find": "operandBuiltin: builtin }",
 			"replace": "operandBuiltin: _ -> true }",
@@ -14432,14 +14432,14 @@
 		},
 		{
 			"name": "M-SWITCH-ELSELESS-REFUSED",
-			"type": "anyparse.check.SwitchChain",
+			"type": "anyparse.check.scan.SwitchChain",
 			"method": "closesWithWildcard",
 			"force": "false",
 			"note": "no else-less chain may close with an empty case _, so a chain without a trailing else is never converted"
 		},
 		{
 			"name": "M-SWITCH-ELSELESS-GUARDED-ELSE",
-			"type": "anyparse.check.SwitchChain",
+			"type": "anyparse.check.scan.SwitchChain",
 			"method": "closesWithWildcard",
 			"find": "\tif (next != null && CondRegionScan.isConditionalKind(next.kind, seams.shape)) return false;\n",
 			"replace": "",
@@ -14447,7 +14447,7 @@
 		},
 		{
 			"name": "M-SWITCH-ELSELESS-ANY-HOST",
-			"type": "anyparse.check.SwitchChain",
+			"type": "anyparse.check.scan.SwitchChain",
 			"method": "closesWithWildcard",
 			"find": "return hosts.anywhere.contains(parent.kind) || (next != null && hosts.beforeAnother.contains(parent.kind));",
 			"replace": "return true;",
@@ -14455,7 +14455,7 @@
 		},
 		{
 			"name": "M-SWITCH-ELSELESS-LAST-IN-VALUE-BLOCK",
-			"type": "anyparse.check.SwitchChain",
+			"type": "anyparse.check.scan.SwitchChain",
 			"method": "closesWithWildcard",
 			"find": "(next != null && hosts.beforeAnother.contains(parent.kind))",
 			"replace": "hosts.beforeAnother.contains(parent.kind)",
@@ -14463,7 +14463,7 @@
 		},
 		{
 			"name": "M-SWITCH-FIX-REPORT-INDEX-FIRST",
-			"type": "anyparse.check.SwitchChain",
+			"type": "anyparse.check.scan.SwitchChain",
 			"method": "lazyIndexOf",
 			"find": "IndexScope.resolutionIndexOf(plugin) ?? given ?? IndexScope.report(files, plugin)",
 			"replace": "given ?? IndexScope.resolutionIndexOf(plugin) ?? IndexScope.report(files, plugin)",
@@ -14855,7 +14855,7 @@
 		},
 		{
 			"name": "M-ELSELESS-FINAL-ELSE",
-			"type": "anyparse.check.IfExpressionChain",
+			"type": "anyparse.check.scan.IfExpressionChain",
 			"method": "collectElseLess",
 			"find": " || !ifKinds.contains(elseBranch.kind)",
 			"replace": "",
@@ -22833,7 +22833,7 @@
 		},
 		{
 			"name": "M-OPERAND-NEW-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "constructionTier",
 			"find": "return at == null ? Unknown : writtenTier(node.name, at.from);",
 			"replace": "return Unknown;",
@@ -23444,7 +23444,7 @@
 		},
 		{
 			"name": "M-CONST-EXPR-NO-NAMES",
-			"type": "anyparse.check.ConstantFieldScan",
+			"type": "anyparse.check.scan.ConstantFieldScan",
 			"method": "isConstantExpression",
 			"find": "if (node.kind == seams.identKind) return name != null && isConstantName(name);",
 			"replace": "if (node.kind == seams.identKind) return false;",
@@ -23452,7 +23452,7 @@
 		},
 		{
 			"name": "M-CONST-EXPR-NO-OPERATORS",
-			"type": "anyparse.check.ConstantFieldScan",
+			"type": "anyparse.check.scan.ConstantFieldScan",
 			"method": "isConstantExpression",
 			"find": "final grouping: Bool = seams.operatorKinds.contains(node.kind) || node.kind == seams.parenKind;",
 			"replace": "final grouping: Bool = node.kind == seams.parenKind;",
@@ -23460,7 +23460,7 @@
 		},
 		{
 			"name": "M-CONST-EXPR-NO-PARENS",
-			"type": "anyparse.check.ConstantFieldScan",
+			"type": "anyparse.check.scan.ConstantFieldScan",
 			"method": "isConstantExpression",
 			"find": "final grouping: Bool = seams.operatorKinds.contains(node.kind) || node.kind == seams.parenKind;",
 			"replace": "final grouping: Bool = seams.operatorKinds.contains(node.kind);",
@@ -23468,7 +23468,7 @@
 		},
 		{
 			"name": "M-CONST-EXPR-ANY-OPERAND",
-			"type": "anyparse.check.ConstantFieldScan",
+			"type": "anyparse.check.scan.ConstantFieldScan",
 			"method": "isConstantExpression",
 			"find": "node.children.foreach(c -> isConstantExpression(c, source, seams, isConstantName))",
 			"replace": "node.children.exists(c -> isConstantExpression(c, source, seams, isConstantName))",
@@ -23476,7 +23476,7 @@
 		},
 		{
 			"name": "M-CONST-EXPR-INTERPOLATED",
-			"type": "anyparse.check.ConstantFieldScan",
+			"type": "anyparse.check.scan.ConstantFieldScan",
 			"method": "isConstantLiteral",
 			"find": "return seams.stringLiteralKinds.contains(init.kind) && fold?.literalOf(init, source) != null;",
 			"replace": "return seams.stringLiteralKinds.contains(init.kind);",
@@ -23714,7 +23714,7 @@
 		},
 		{
 			"name": "M-OPSEL-REPORT-DROPPED",
-			"type": "anyparse.check.OperatorSelection",
+			"type": "anyparse.check.scan.OperatorSelection",
 			"method": "indexes",
 			"find": "_report ?? IndexScope.report(_files, _plugin)",
 			"replace": "IndexScope.report(_files, _plugin)",
@@ -24107,7 +24107,7 @@
 		},
 		{
 			"name": "M-REACH-AUTOBUILD-IGNORED",
-			"type": "anyparse.check.PublicReach",
+			"type": "anyparse.check.scan.PublicReach",
 			"method": "chainOutOfReach",
 			"find": " || (autoBuildCounts && chain.generated)",
 			"replace": "",
@@ -24163,7 +24163,7 @@
 		},
 		{
 			"name": "M-BINDER-INITIALIZER-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "initializerOf",
 			"find": "return NominalTypes.localInitializer(use, _tree, _shape, _annotations);",
 			"replace": "return null;",
@@ -24171,35 +24171,35 @@
 		},
 		{
 			"name": "M-BINDER-SELF-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "selfTier",
 			"force": "Unknown",
 			"note": "the self reference is no longer its enclosing type, so `this.f` goes unproven"
 		},
 		{
 			"name": "M-BINDER-INHERITED-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "inheritedTier",
 			"force": "Unknown",
 			"note": "a member the enclosing type inherits, read or called bare, goes unproven"
 		},
 		{
 			"name": "M-BINDER-EXTENSION-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "extensionTier",
 			"force": "Unknown",
 			"note": "a static extension call goes unproven"
 		},
 		{
 			"name": "M-BINDER-RESOLVE-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "resolveTier",
 			"force": "Unknown",
 			"note": "an abstract's @:op(a.b) field goes unproven"
 		},
 		{
 			"name": "M-BINDER-INHERITED-STATIC",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "inheritedTier",
 			"find": "declared == null || declared.members.exists(m -> m.isStatic)",
 			"replace": "declared == null",
@@ -24207,7 +24207,7 @@
 		},
 		{
 			"name": "M-BINDER-CLOSURE-UNRESOLVED",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "declarationOf",
 			"find": "else if (_index.typing.members.declarationFreeOfExtensionTypes(owner))",
 			"replace": "else if (true)",
@@ -24255,7 +24255,7 @@
 		},
 		{
 			"name": "M-BINDER-RESOLVE-USING-SHADOW",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "resolveTier",
 			"find": "_index.typing.extensions.maySupply(fi, name)",
 			"replace": "false",
@@ -24711,7 +24711,7 @@
 		},
 		{
 			"name": "M-DEFLIT-NULL-DROPPED",
-			"type": "anyparse.check.CaseValueKey",
+			"type": "anyparse.check.scan.CaseValueKey",
 			"method": "isDefaultLiteral",
 			"find": "key == NULL_KEY || ",
 			"replace": "",
@@ -24719,7 +24719,7 @@
 		},
 		{
 			"name": "M-DEFLIT-FALSE-DROPPED",
-			"type": "anyparse.check.CaseValueKey",
+			"type": "anyparse.check.scan.CaseValueKey",
 			"method": "isDefaultLiteral",
 			"find": "key == '${BOOL_PREFIX}false' || ",
 			"replace": "",
@@ -24727,7 +24727,7 @@
 		},
 		{
 			"name": "M-DEFLIT-ZERO-DROPPED",
-			"type": "anyparse.check.CaseValueKey",
+			"type": "anyparse.check.scan.CaseValueKey",
 			"method": "isDefaultLiteral",
 			"find": "key == numberKey(0) || ",
 			"replace": "",
@@ -24735,7 +24735,7 @@
 		},
 		{
 			"name": "M-DEFLIT-EMPTY-STRING-DROPPED",
-			"type": "anyparse.check.CaseValueKey",
+			"type": "anyparse.check.scan.CaseValueKey",
 			"method": "isDefaultLiteral",
 			"find": " || key == STRING_PREFIX",
 			"replace": "",
@@ -25218,7 +25218,7 @@
 		},
 		{
 			"name": "M-BINDER-LAMBDA-PARAM-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "lambdaParamTier",
 			"force": "null",
 			"note": "an untyped lambda parameter is never typed by the function type the lambda is expected to be"
@@ -25233,35 +25233,35 @@
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "argumentType",
 			"force": "null",
 			"note": "a call argument expects no type, so a lambda passed to a member of the file types no parameter"
 		},
 		{
 			"name": "M-BINDER-ANNOTATION-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "annotationOf",
 			"force": "null",
 			"note": "a declaration or an assigned binding written with a function type expects nothing of the lambda it holds"
 		},
 		{
 			"name": "M-BINDER-RETURN-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "returnOf",
 			"force": "null",
 			"note": "a returned lambda is never typed by the function type its function writes as its result"
 		},
 		{
 			"name": "M-BINDER-FIELD-CUT",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "anonField",
 			"force": "null",
 			"note": "an object-literal field expects nothing of the lambda it holds"
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-REST",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "argumentType",
 			"find": "params.rest ? Std.int(Math.min(index, params.params.length - 1)) : index",
 			"replace": "index",
@@ -25269,7 +25269,7 @@
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-SKIPPABLE",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "argumentType",
 			"find": "written == null || bound >= params.skippableFrom",
 			"replace": "written == null",
@@ -25277,7 +25277,7 @@
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-OVERLOAD",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "memberParams",
 			"find": "if (m.hasOverloadMeta && signature == null) return null;",
 			"replace": "",
@@ -25285,7 +25285,7 @@
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-TWIN",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "selectsItsSignature",
 			"find": "owner.members.filter(o -> o.name == m.name).length == 1",
 			"replace": "true",
@@ -25293,7 +25293,7 @@
 		},
 		{
 			"name": "M-BINDER-ARGUMENT-SCOPE",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "argumentType",
 			"find": "at: callee.at,",
 			"replace": "at: call.span?.from ?? callee.at,",
@@ -25508,7 +25508,7 @@
 		},
 		{
 			"name": "M-NULLFLOW-FROZEN-STALE",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "frozenFacts",
 			"find": "if (last != null && lastFacts != null && sameReadState(last, state)) return lastFacts;",
 			"replace": "if (last != null && lastFacts != null) return lastFacts;",
@@ -25516,7 +25516,7 @@
 		},
 		{
 			"name": "M-NULLFLOW-MEMO-SEED-BLIND",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "analyze",
 			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
 			"replace": "if (cache == null || declaredNullable != null || typeSources != null) {",
@@ -25524,7 +25524,7 @@
 		},
 		{
 			"name": "M-NULLFLOW-MEMO-DECLARED-BLIND",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "analyze",
 			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
 			"replace": "if (cache == null || seed != null || typeSources != null) {",
@@ -25532,7 +25532,7 @@
 		},
 		{
 			"name": "M-NULLFLOW-MEMO-TYPES-BLIND",
-			"type": "anyparse.check.NullFlow",
+			"type": "anyparse.check.scan.NullFlow",
 			"method": "analyze",
 			"find": "if (cache == null || seed != null || declaredNullable != null || typeSources != null) {",
 			"replace": "if (cache == null || seed != null || declaredNullable != null) {",
@@ -25675,7 +25675,7 @@
 		},
 		{
 			"name": "M-ACCESSOR-STORAGELESS-TRUE",
-			"type": "anyparse.check.AccessorClauseText",
+			"type": "anyparse.check.scan.AccessorClauseText",
 			"method": "storageless",
 			"force": "true",
 			"note": "every accessor clause counts as storage-less, so a `null` / `default` slot leaves the field rules too"
@@ -25938,7 +25938,7 @@
 		},
 		{
 			"name": "M-CARRY-USING-DOOR-OFFSET",
-			"type": "anyparse.check.UsingSites",
+			"type": "anyparse.check.scan.UsingSites",
 			"method": "calledThrough",
 			"find": "at -> !mayBindThrough(from + at, raw)",
 			"replace": "at -> !mayBindThrough(at, raw)",
@@ -25994,7 +25994,7 @@
 		},
 		{
 			"name": "M-MEMBER-DOOR-SHADOW",
-			"type": "anyparse.check.UsingSites",
+			"type": "anyparse.check.scan.UsingSites",
 			"method": "siteAt",
 			"find": "!NominalTypes.shadowedByNonStdType(index, nominal) && StdTypes.declaresInstanceMember(_plugin, nominal, name)",
 			"replace": "StdTypes.declaresInstanceMember(_plugin, nominal, name)",
@@ -26691,7 +26691,7 @@
 		},
 		{
 			"name": "M-BINDER-CALLEE-MEMBER-OFF",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "calleeParams",
 			"find": ": memberCallParams(binder, callee.children[0], name, call);",
 			"replace": ": null;",
@@ -26699,7 +26699,7 @@
 		},
 		{
 			"name": "M-BINDER-CALLEE-NEW-OFF",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "calleeParams",
 			"find": "if (call.kind == binder._shape.newExprKind) return constructionParams(binder, call);",
 			"replace": "if (call.kind == binder._shape.newExprKind) return null;",
@@ -26707,7 +26707,7 @@
 		},
 		{
 			"name": "M-BINDER-CALLEE-INHERITED-OFF",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "bareCallParams",
 			"find": "? null : memberParams(binder, declared, [], 0, [], args);",
 			"replace": "? null : null;",
@@ -26715,7 +26715,7 @@
 		},
 		{
 			"name": "M-BINDER-CALLEE-LOCAL-OFF",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "bareCallParams",
 			"find": "final local: Bool = ShapeVocab.localFunctionScopeKinds(binder._shape).contains(fn.kind);",
 			"replace": "final local: Bool = false;",
@@ -26723,7 +26723,7 @@
 		},
 		{
 			"name": "M-BINDER-OWNER-BINDINGS-OFF",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "memberCallParams",
 			"find": ": memberParams(binder, declared, ownerBindings(binder, receiver, owner, declared.host), 0, [], args);",
 			"replace": ": memberParams(binder, declared, [], 0, [], args);",
@@ -26731,7 +26731,7 @@
 		},
 		{
 			"name": "M-BINDER-LOCATED-HOST-OFF",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "locatedTier",
 			"find": "final host: Null<WrittenHost> = written.host;",
 			"replace": "final host: Null<WrittenHost> = null;",
@@ -26739,7 +26739,7 @@
 		},
 		{
 			"name": "M-BINDER-METHOD-SHADOWS-OFF",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "memberParams",
 			"find": "if (!typeParams.contains(k)) k => v",
 			"replace": "k => v",
@@ -26747,7 +26747,7 @@
 		},
 		{
 			"name": "M-BINDER-CALLEE-OVERLOAD",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "memberParams",
 			"find": "final written: Null<CallSignature> = signature == m.signatures[0] ? null : signature;",
 			"replace": "final written: Null<CallSignature> = null;",
@@ -26755,7 +26755,7 @@
 		},
 		{
 			"name": "M-BINDER-ITERABLE-OFF",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "iterableBinding",
 			"find": "final iterable: Null<String> = binder._shape.iterableTypeName;",
 			"replace": "final iterable: Null<String> = null;",
@@ -26763,7 +26763,7 @@
 		},
 		{
 			"name": "M-BINDER-ITERABLE-ANY-TYPE",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "iterableBinding",
 			"find": "if (i < args.length && stdNamed(binder, path, binder._file, name))",
 			"replace": "if (i < args.length)",
@@ -28784,7 +28784,7 @@
 		},
 		{
 			"name": "M-BINDER-OVERLOAD-SELECTED",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "selectedSignature",
 			"find": "return candidates == null ? null : calls.select(candidates, passed)?.signature;",
 			"replace": "return candidates == null ? null : candidates.candidates[0].signature;",
@@ -28792,7 +28792,7 @@
 		},
 		{
 			"name": "M-BINDER-OVERLOAD-OWN-BARE",
-			"type": "anyparse.check.OperandCallees",
+			"type": "anyparse.check.scan.OperandCallees",
 			"method": "bareCallParams",
 			"find": "return member.hasOverloadMeta ? ownMemberParams(binder, member, args) : localParams(binder, fn);",
 			"replace": "return member.hasOverloadMeta ? null : localParams(binder, fn);",
@@ -28904,7 +28904,7 @@
 		},
 		{
 			"name": "M-BINDER-RETURN-ANNOTATION",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "returnOf",
 			"find": "final written: Null<String> = CallGraphNames.returnSourceOf(fn, _returns);",
 			"replace": "final written: Null<String> = [for (c in fn.children) if ((_shape.typeAnnotationKinds ?? []).contains(c.kind)) _source.substring(c.span?.from ?? 0, c.span?.to ?? 0)].pop();",
@@ -28912,7 +28912,7 @@
 		},
 		{
 			"name": "M-BINDER-LOCAL-CALL-ANNOTATION",
-			"type": "anyparse.check.OperandBinder",
+			"type": "anyparse.check.scan.OperandBinder",
 			"method": "localCallTier",
 			"find": "_declared.headTier(CallGraphNames.returnSourceOf(fn, _returns), from, _wrappers, _builtins)",
 			"replace": "_declared.headTier([for (c in fn.children) if ((_shape.typeAnnotationKinds ?? []).contains(c.kind)) _source.substring(c.span?.from ?? 0, c.span?.to ?? 0)].pop(), from, _wrappers, _builtins)",
@@ -29506,14 +29506,14 @@
 		},
 		{
 			"name": "M-USING-STATIC-RECEIVER",
-			"type": "anyparse.check.UsingSites",
+			"type": "anyparse.check.scan.UsingSites",
 			"method": "staticSite",
 			"force": "Unknown",
 			"note": "a static of the type a type expression names no longer binds first, so `Type.name(...)` keeps every `using` offering `name`"
 		},
 		{
 			"name": "M-USING-CONTEST-ANY",
-			"type": "anyparse.check.UsingSites",
+			"type": "anyparse.check.scan.UsingSites",
 			"method": "contested",
 			"force": "true",
 			"note": "any other `using` in scope contests the statement again, so redundant-import, hoist and sink refuse past a rival no access of the module shares"
@@ -29528,7 +29528,7 @@
 		},
 		{
 			"name": "M-USING-STATIC-SHADOW",
-			"type": "anyparse.check.UsingSites",
+			"type": "anyparse.check.scan.UsingSites",
 			"method": "staticSite",
 			"find": "if (!ValueDoors.bindsNoValue(recv, typeName, span, fi, tree, _plugin.refShape(), _file, index)) return Unknown;",
 			"replace": "",

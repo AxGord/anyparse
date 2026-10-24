@@ -1,6 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.CheckScan.NormalizedSpan;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
@@ -8,6 +7,8 @@ import anyparse.query.MemberKinds;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 
 using Lambda;
 using StringTools;

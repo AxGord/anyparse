@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FrameworkAware;
-import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
@@ -20,6 +19,10 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.EnumAbstractForms;
+import anyparse.check.scan.ReflectionScan;
+import anyparse.check.scan.RunScan;
 
 using Lambda;
 using StringTools;

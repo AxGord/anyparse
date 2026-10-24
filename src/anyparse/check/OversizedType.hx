@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.VolatileMessage;
-import anyparse.check.ConstantFieldScan.ConstantFieldSeams;
 import anyparse.query.CallGraph;
 import anyparse.query.Clusters;
 import anyparse.query.MemberKinds;
@@ -11,6 +10,10 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.ConstantFieldScan;
+import anyparse.check.scan.EnumAbstractForms;
+import anyparse.check.scan.RunScan;
 
 using Lambda;
 using StringTools;

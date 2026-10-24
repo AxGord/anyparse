@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.scan.RunScan;
+import anyparse.check.scan.SwitchChain;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.NodeShape;

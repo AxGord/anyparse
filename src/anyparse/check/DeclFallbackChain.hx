@@ -1,14 +1,14 @@
 package anyparse.check;
 
-import anyparse.check.AssignmentTreeHoist.LvalueRef;
-import anyparse.check.AssignmentTreeHoist.TreeSeams;
-import anyparse.check.AssignmentTreeHoist.UnitValue;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.MemberKinds;
 import anyparse.query.Refs;
 import anyparse.query.SourceText;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
+import anyparse.check.scan.AssignmentTreeHoist;
+import anyparse.check.scan.IfExpressionChain;
+import anyparse.check.scan.RunScan;
 
 /**
  * A single-variable mutable declaration whose initializer is the implicit `else` of the

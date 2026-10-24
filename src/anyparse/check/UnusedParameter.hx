@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CallSites;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;

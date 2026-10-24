@@ -10,6 +10,7 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.DynamicShape.DynCtx;
 import anyparse.check.ParamAscription.ParamVerdict;
+import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.NodeShape;
 import anyparse.query.ParseGate;

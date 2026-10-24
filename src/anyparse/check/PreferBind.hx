@@ -1,5 +1,9 @@
 package anyparse.check;
 
+import anyparse.check.scan.CasePatternScan;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.OperandBinder;
+import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;

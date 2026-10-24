@@ -1,7 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.CasePatternScan.CaseSeams;
-import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
@@ -9,6 +7,9 @@ import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CasePatternScan;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.PurityScan;
 
 using Lambda;
 using StringTools;

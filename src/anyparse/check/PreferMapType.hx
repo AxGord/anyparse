@@ -4,6 +4,7 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.MapScopeScan.Scope;
+import anyparse.check.scan.CheckScan;
 import anyparse.query.ModuleScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;

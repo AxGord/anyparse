@@ -1,12 +1,15 @@
 package anyparse.check;
 
-import anyparse.check.CheckScan.NegationSeams;
-import anyparse.check.IfExpressionChain.ShieldSeams;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.IfExpressionChain;
+import anyparse.check.scan.LoopScan;
+import anyparse.check.scan.NegationScan;
+import anyparse.check.scan.RunScan;
 
 /**
  * Flags a loop (`for` / `while` / `do … while`) whose body opens with a bare `if (g) continue;` guard — the

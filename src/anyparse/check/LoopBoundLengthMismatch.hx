@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.VolatileMessage;
-import anyparse.check.LoopScan.LoopSeams;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
@@ -14,6 +13,9 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import anyparse.check.scan.AccessorClauseText;
+import anyparse.check.scan.LoopScan;
+import anyparse.check.scan.RunScan;
 
 using StringTools;
 using Lambda;

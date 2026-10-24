@@ -4,6 +4,8 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.NegatedCondition.InversionSeams;
 import anyparse.check.NegatedCondition.InversionSite;
 import anyparse.check.NegatedCondition.Swap;
+import anyparse.check.scan.RegionTerminator;
+import anyparse.check.scan.RunScan;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;

@@ -3,6 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.RunScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;

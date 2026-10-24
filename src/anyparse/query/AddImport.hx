@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.check.UsingScan;
+import anyparse.check.scan.UsingScan;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.ImportSpelling.ImportSpelled;

@@ -1,13 +1,11 @@
 package anyparse.check;
 
-import anyparse.check.AccessorClauseText.AccessorClause;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.RiskyArm;
 import anyparse.check.Check.RiskyCrossFileEdit;
-import anyparse.check.ConstantHoist.Hoist;
 import anyparse.check.NamingPrivatize.PrivatizeCandidate;
 import anyparse.check.NamingPrivatize.Privatized;
 import anyparse.check.NamingRenames.CrossFileRename;
@@ -25,6 +23,12 @@ import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
+import anyparse.check.scan.AccessorClauseText;
+import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.ConstantHoist;
+import anyparse.check.scan.EnumAbstractForms;
+import anyparse.check.scan.RenameClaims;
+import anyparse.check.scan.RunScan;
 
 using Lambda;
 

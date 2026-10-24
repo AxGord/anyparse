@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.scan.RunScan;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.IndexScope;
