@@ -295,8 +295,8 @@ class PrivateAccessFormParityTest extends Test {
 		final decl: String = 'package pkg;\n\nimport fw.display.Base;\n\nclass A extends Base {\n\n\tprivate var _reached: Int = 0;\n'
 			+ '\tprivate var _lonely: Int = 0;\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n}\n';
 		for (grant in ['fw', 'fw.display']) {
-			final reacher: String = 'package other;\n\nimport pkg.A;\n\n@:access($grant)\nclass B {\n\n\tpublic static function reach(a: A): Int {\n'
-				+ '\t\treturn a._reached;\n\t}\n\n}\n';
+			final reacher: String = 'package other;\n\nimport pkg.A;\n\n@:access($grant)\nclass B {\n\n'
+				+ '\tpublic static function reach(a: A): Int {\n\t\treturn a._reached;\n\t}\n\n}\n';
 			assertUnusedPrivateKeepsReached([{ file: DECL_FILE, source: decl }, { file: REACH_FILE, source: reacher }], decl, grant);
 		}
 	}
