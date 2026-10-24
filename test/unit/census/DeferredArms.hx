@@ -64,7 +64,7 @@ final class DeferredArms {
 		'M-BEFORE-KW-TRAILING-DROP :: anyparse.macro.WriterFieldSepLowering#beforeKwSeparator',
 		'M-BEFORE-KW-LEADING-DROP :: anyparse.macro.WriterFieldSepLowering#beforeKwSeparator',
 		'M-BEFORE-LEADING-COMMENT-DROP :: anyparse.macro.WriterTriviaSlotLowering#buildBeforeLeadingSep',
-		'M-SHORTEN-IMPORT-THRESHOLD-ONE :: anyparse.check.ShortenTypeRef#FinalMember:IMPORT_THRESHOLD',
+		'M-SHORTEN-IMPORT-THRESHOLD-ONE :: anyparse.check.ShortenTypeRef#FinalMember:DEFAULT_IMPORT_MIN_USES',
 		'M-KWLEAD-NEVER-WORD :: anyparse.macro.WriterLoweringSupport#isWordStart',
 		'M-BLOCK-SHAPE-EQUIV-NONE :: anyparse.macro.WriterLoweringSupport#isBlockShapeEquivalentBranch',
 		'M-KWREF-BARE-BODY-BREAKS-BLIND :: anyparse.macro.WriterKwRefLowering#subStructStartsWithBareBodyBreaks',

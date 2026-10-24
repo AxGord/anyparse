@@ -29,7 +29,7 @@ imports, usings and the ambient sources that carry them.
 | `import-order` | off | a block of plain imports carrying no recognisable order, or split by a `using` |
 | `import-outside-guard` | on | an import or using declared above the #if region that guards the module's whole body |
 | `redundant-import` | on | a sub-type import already bound by a plain import of its module |
-| `shorten-type-ref` | off | a dotted type reference whose short name resolves to the same type here, or that repeats often enough to import |
+| `shorten-type-ref` | on | a dotted type reference whose short name resolves to the same type here, or that repeats often enough to import |
 | `unused-import` | on | import whose bound name is never referenced in the file |
 
 ## `docs`

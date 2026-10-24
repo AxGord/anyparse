@@ -563,7 +563,9 @@ final class TypeRefPrinter {
 	 * counting it as a foreign occurrence would veto the import by construction: the very text
 	 * being rewritten is what makes the name look taken. Omitted (the default) the scan sees the
 	 * whole source, which is the conservative reading every non-rewriting caller wants — it may
-	 * only cost the short form and fall back to the fully-qualified path.
+	 * only cost the short form and fall back to the fully-qualified path. A caller that passes
+	 * `owned` is also refused a name a builtin or the package chain already gives another type, and reads only UNQUALIFIED occurrences
+	 * as rivals. Every caller is refused a line that also binds a name the file reads bare (`ImportBindings.namesBesides`).
 	 */
 	private function canAddImport(canonical: String, simple: String, owned: Null<Array<Span>>): Bool {
 		final source: Null<String> = _source;
@@ -571,14 +573,34 @@ final class TypeRefPrinter {
 		if (!importReachesSite()) return false;
 		if (shadowedLocally(canonical, simple)) return false;
 		if (_pendingImports.exists(p -> p != canonical && SourceText.lastSegment(p) == simple)) return false;
+		// Shortening WRITTEN text takes the name only where nothing reaches it without an import: a builtin or a package-chain
+		// main type of the name would be outranked by the fresh import, which compiles but moves what the bare name means.
+		final builtin: Null<String> = ALWAYS_IN_SCOPE[simple];
+		if (owned != null && (builtin != null && builtin != canonical || packageChainVerdict(canonical, simple) == false)) return false;
 		// A mention in INERT text — a comment, or the literal text of a string / regex — is masked
 		// out: the scan asks whether anything in this file BINDS the name, and neither binds
 		// anything, while an unmasked reading refuses the import on the strength of a word in a
 		// doc-comment or an assertion message. Only the TEXT is masked: a single-quoted Haxe string
 		// interpolates, so the `Foo` of `'${Foo.x}'` or `'$Foo'` is a real reference and still
 		// vetoes (`inertRegions`).
-		final exempt: Array<Span> = (owned ?? []).concat(inertRegions(source));
-		return !OccurrenceScan.referencedInRange(source, simple, 0, source.length, exempt);
+		// An import binds a SIMPLE name, so for the shortening caller a qualified tail (`other.Foo`, `@:access(a.Foo)`,
+		// `x.Foo`) is no rival: it resolves through what precedes the dot, the reading `unused-import` takes too.
+		final inert: Array<Span> = inertRegions(source);
+		// The line binds more than `simple`: a module import brings every type of the module and every constructor of the
+		// enums it imports. Any of those the file already reads bare would silently change meaning (`ImportBindings` lists them).
+		final plugin: Null<GrammarPlugin> = _plugin;
+		final bindings: Null<ImportBindings> = plugin == null ? null : ImportBindings.forPlugin(plugin);
+		if (bindings != null) {
+			final others: Null<Array<String>> = ImportBindings.namesBesides(bindings.ofImport(canonical), simple);
+			if (others == null || others.exists(name ->
+				OccurrenceScan.referencedUnqualifiedInRange(source, name, 0, source.length, inert, inert)
+			))
+				return false;
+		}
+		final exempt: Array<Span> = (owned ?? []).concat(inert);
+		return owned == null
+			? !OccurrenceScan.referencedInRange(source, simple, 0, source.length, exempt)
+			: !OccurrenceScan.referencedUnqualifiedInRange(source, simple, 0, source.length, exempt, inert);
 	}
 
 	/**
