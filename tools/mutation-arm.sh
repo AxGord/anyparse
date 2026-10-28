@@ -361,7 +361,7 @@ render_cuts() {
         }'
     for shard in "$workroot"/render-batch.*; do
         [ -f "$shard" ] || continue
-        ( cd "$gen" && node "$apq_bin" patch --batch "$shard" ) 2> "$shard.log" &
+        ( cd "$gen" && node "$apq_bin" patch --lang haxe --batch "$shard" ) 2> "$shard.log" &
     done
     wait
     printf '%s\n' "$@" | xargs -P "$render_jobs" -I{} "$self" --diff {} "$workroot" "$gen"

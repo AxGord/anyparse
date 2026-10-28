@@ -140,7 +140,7 @@ fi
 if [ -n "$apq_pid" ]; then
     # The cache the private engine's calls read, warmed as bin/apq-js.hxml's last
     # step warms the shared one; it exits 0 whatever happens.
-    HXQ_BIN="$out/apq.js" sh "$repo/bin/hxq" --warm-code-cache >> "$out/build-apq.log" 2>&1 || true
+    HXQ_BIN="$out/apq.js" sh "$repo/bin/apq" --warm-code-cache >> "$out/build-apq.log" 2>&1 || true
     echo "apq: $out/apq.js"
 fi
 if [ -n "$test_pid" ]; then

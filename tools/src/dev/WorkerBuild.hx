@@ -62,7 +62,7 @@ final class WorkerBuild {
 		}
 		if (failed) return 1;
 		if (target != 'test') {
-			final warm: Result = cmd('sh $repo/bin/hxq --warm-code-cache').env('HXQ_BIN', '$out/apq.js').at(repo).run();
+			final warm: Result = cmd('sh $repo/bin/apq --warm-code-cache').env('HXQ_BIN', '$out/apq.js').at(repo).run();
 			File.saveContent('$out/build-apq.log', File.getContent('$out/build-apq.log') + warm.out + warm.err);
 		}
 		for (job in jobs) Sys.println('${job.name}: $out/${job.artifact}');

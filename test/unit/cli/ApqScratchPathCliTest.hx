@@ -298,9 +298,9 @@ class ApqScratchPathCliTest extends Test {
 		return spawn(engine, ['test-summary'], tmpRoot, TRANSCRIPT_ENV, transcript);
 	}
 
-	/** `node bin/apq.js stdlib-dup <scope>` under `tmpRoot`. */
+	/** `node bin/apq.js stdlib-dup --lang haxe <scope>` under `tmpRoot`. */
 	private function spawnStdlibDup(engine: String, tmpRoot: String, scope: String): js.node.ChildProcess.ChildProcessSpawnSyncResult {
-		return spawn(engine, ['stdlib-dup', scope], tmpRoot, TRANSCRIPT_ENV, null);
+		return spawn(engine, ['stdlib-dup', '--lang', 'haxe', scope], tmpRoot, TRANSCRIPT_ENV, null);
 	}
 
 	/**

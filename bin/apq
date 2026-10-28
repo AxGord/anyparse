@@ -1,0 +1,253 @@
+#!/usr/bin/env sh
+# `apq` — the launcher of the anyparse query engine. Finds the engine
+# `bin/apq.js` (or the one HXQ_BIN pins), rebuilds a stale one, and runs it
+# through the code-cache launcher. It names no language: the engine takes
+# `--lang`, or reads it off the file arguments' extensions (the grammar
+# registry, `CliArgs.grammars`) or off a document on stdin. `hxq` is the
+# Haxe preset and runs this script with `--lang haxe`.
+#
+# Engine dispatch: runs the JS build `bin/apq.js` via node. That is the
+# only engine — the CLI reaches for `js.node` to spawn processes, and the
+# neko target it once had died at module load before running a query, so
+# it was dropped rather than kept as a build nobody could use.
+#
+# Build: `haxe bin/apq-js.hxml`.
+#
+# Install (optional, for a global `apq`): symlink this script into a
+# PATH dir, e.g. `ln -s "$PWD/bin/apq" ~/.local/bin/apq`. The script
+# resolves its own real path through symlinks, so it still finds
+# `apq.js` in the repo's bin/ regardless of the symlink location.
+#
+# Stale engine: a SHARED bin/apq.js (the one next to this script) is
+# auto-rebuilt only when the caller's cwd git toplevel is the anyparse main
+# tree itself (the directory holding this bin/). From any other cwd (the client
+# tree, /tmp, ...) a stale shared engine RUNS, with a one-line stderr warning,
+# and is never rebuilt: a bare call elsewhere used to truncate the artifact
+# other processes were executing. HXQ_SHARED_REBUILD=0 turns the shared
+# rebuild off everywhere (warning instead). A worktree's OWN engine (its
+# bin/apq.js) is private and still auto-rebuilds. See the stale-build block
+# below for HXQ_QUIET / HXQ_AUTO_REBUILD.
+#
+# Usage: apq <subcommand> [options] <file>
+
+set -e
+
+# HXQ_BIN — explicit engine override, for parallel workers. Checked
+# FIRST, before any path resolution: it depends on none of it, so an
+# override skips the symlink walk and the `git rev-parse` probe below
+# entirely, and works even where the shared bin/ holds no build at all
+# (a fresh clone, or a worktree whose bin/ is empty).
+#
+# Several agents working the same repo at once all rebuild and run the
+# ONE shared bin/apq.js: each build truncates the artifact the others are
+# executing, so in practice only one agent can work at a time. With
+# HXQ_BIN each agent builds a private engine into its own workdir
+# (`tools/worker-build.sh <workdir>`) and drives every subcommand —
+# probes AND mutation ops — through it, so nobody rebuilds or races over
+# the shared binary.
+#
+# The caller owns its private build, so the stale check below is skipped
+# (HXQ_QUIET=1): the worker rebuilds when it decides to, and a private
+# engine is a deliberate snapshot. The trade-off is that the snapshot
+# goes stale the moment another agent lands a src/ change — rebuild
+# before trusting a probe.
+if [ -n "${HXQ_BIN:-}" ]; then
+    if [ ! -f "$HXQ_BIN" ]; then
+        echo "apq: HXQ_BIN=$HXQ_BIN not found" >&2
+        exit 1
+    fi
+    binary="$HXQ_BIN"
+    HXQ_QUIET=1
+else
+    # Resolve this script's real path, following symlinks (POSIX
+    # `readlink`, no `-f` — portable BSD/macOS + Linux). Without this,
+    # invoking via a symlink would make `here` the symlink's dir, not the
+    # repo bin/.
+    src="$0"
+    while [ -h "$src" ]; do
+        dir=$(cd -P "$(dirname "$src")" && pwd)
+        src=$(readlink "$src")
+        case "$src" in
+            /*) ;;
+            *) src="$dir/$src" ;;
+        esac
+    done
+    here=$(cd -P "$(dirname "$src")" && pwd)
+    # The shared engine's bin/ (the one this script lives in), kept before
+    # the worktree override below: the stale check rebuilds it only for a
+    # caller standing in its own tree.
+    shared_here="$here"
+
+    # Worktree awareness: when invoked from inside a git worktree (or
+    # clone) whose own bin/ holds a built engine, prefer THAT engine +
+    # its src/ over the symlink-resolved one above. Without this, `apq`
+    # run from a campaign worktree queries the MAIN tree's apq.js and
+    # stale-checks the MAIN src/ — silently testing the wrong parser (the
+    # worktree's grammar edits are invisible). Falls back to the
+    # symlink-resolved `here` when CWD is outside a git tree (e.g.
+    # reading a reference library), when the worktree's engine isn't
+    # built yet, or when CWD is the main tree (then $wt_top/bin == $here,
+    # no change). `|| true` keeps `set -e` happy when git is absent or
+    # CWD is not a repo.
+    wt_top=$(git rev-parse --show-toplevel 2>/dev/null || true)
+    if [ -n "$wt_top" ] && [ "$wt_top/bin" != "$here" ] && [ -f "$wt_top/bin/apq.js" ]; then
+        here="$wt_top/bin"
+    fi
+
+    # A worktree of THIS repository with no engine of its own must not fall
+    # back to the shared one: the stale check below compares the shared
+    # binary with the MAIN src/, so the fallback rebuilt bin/apq.js under
+    # every process running it (twice in one night, from agents that forgot
+    # HXQ_BIN). Such a caller wants its own build anyway — the worktree's
+    # src/ is what it edits — so refuse and say how to get one.
+    if [ -n "$wt_top" ] && [ "$wt_top/bin" != "$here" ]; then
+        wt_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+        here_common=$(git -C "$here/.." rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+        if [ -n "$wt_common" ] && [ "$wt_common" = "$here_common" ]; then
+            echo "apq: $wt_top is a worktree of $(cd -P "$here/.." && pwd) with no engine of its own;" >&2
+            echo "apq: refusing to run (and possibly rebuild) the shared $here/apq.js from here." >&2
+            echo "apq: build a private one (tools/worker-build.sh <dir>) and set HXQ_BIN=<dir>/apq.js." >&2
+            exit 1
+        fi
+    fi
+
+    js="$here/apq.js"
+
+    if [ ! -f "$js" ]; then
+        echo "apq: $js not found — run \`haxe bin/apq-js.hxml\`" >&2
+        exit 1
+    fi
+    binary="$js"
+fi
+
+# Stale-build handling: if any .hx under src/ is newer than the selected
+# binary, the user is invoking an outdated artifact. `find -newer …
+# -quit` short-circuits at the first hit (sub-50ms even on cold cache)
+# and stays silent when the repo layout doesn't match (e.g. shim copied
+# outside the source tree).
+#
+# UX (default = auto-rebuild):
+#   HXQ_QUIET=1         — skip the stale check entirely (no rebuild,
+#                         no warning). Takes precedence over the other
+#                         envs. Use when the harness is doing its own
+#                         build management.
+#   HXQ_AUTO_REBUILD=0  — opt OUT of auto-rebuild and fall back to the
+#                         legacy warn-once-per-mtime mode. Useful when
+#                         interactive feedback on the build itself is
+#                         desired (`haxe bin/apq-js.hxml` separately).
+#   HXQ_SHARED_REBUILD=0 — never rebuild the SHARED engine, from any cwd
+#                         (the main tree included); warn and run it.
+#   Otherwise: auto-rebuild runs the appropriate `haxe bin/<hxml>` and
+#   aborts on build failure. Stale results are silent regressions —
+#   defaulting to auto-rebuild keeps query output truthful without
+#   manual rebuilds between grammar edits.
+# `here` is set only on the shared-engine path above; an HXQ_BIN override
+# sets HXQ_QUIET=1, so this whole block is skipped in that case.
+src_root="${here:-}/../src"
+if [ "${HXQ_QUIET:-}" != "1" ] && [ -d "$src_root" ]; then
+    stale=$(find "$src_root" -name '*.hx' -newer "$binary" -print -quit 2>/dev/null || true)
+    if [ -n "$stale" ]; then
+        bin_name="bin/apq.js"
+        hxml_path="$here/apq-js.hxml"
+        hxml_name="bin/apq-js.hxml"
+        # Shared engine, caller outside the main tree (or HXQ_SHARED_REBUILD=0):
+        # never rebuild it, run it and say so. A private worktree engine
+        # ($here != $shared_here) keeps the normal behaviour.
+        shared_rebuild=1
+        if [ "$here" = "$shared_here" ]; then
+            if [ "${HXQ_SHARED_REBUILD:-1}" = "0" ]; then
+                shared_rebuild=0
+                why="HXQ_SHARED_REBUILD=0"
+            else
+                main_top=$(cd -P "$here/.." && pwd)
+                if [ -z "$wt_top" ] || [ "$(cd -P "$wt_top" && pwd)" != "$main_top" ]; then
+                    shared_rebuild=0
+                    why="cwd is outside $main_top"
+                fi
+            fi
+        fi
+        if [ "$shared_rebuild" = "0" ]; then
+            echo "apq: warning: src/ newer than shared $bin_name ($why): NOT rebuilding, running the STALE engine. Rebuild in $(cd -P "$here/.." && pwd) (\`haxe $hxml_name\`) or pin a private engine with HXQ_BIN." >&2
+        elif [ "${HXQ_AUTO_REBUILD:-1}" != "0" ]; then
+            # Rebuild in-process (DEFAULT). On failure print the build's
+            # stderr and bail — running a stale binary after a failed
+            # rebuild would be misleading.
+            echo "apq: src/ newer than $bin_name; auto-rebuilding ($hxml_name)..." >&2
+            echo "apq: (~11s. A CHAIN of edits pays it PER OP, because a mutation op writes src/ itself." >&2
+            echo "apq:  For a multi-step edit run the intermediate ops with HXQ_AUTO_REBUILD=0 and rebuild" >&2
+            echo "apq:  once at the end. Never HXQ_QUIET=1 for that — it disables the check entirely and a" >&2
+            echo "apq:  later verification probe then runs a stale binary and lies.)" >&2
+            if ! (cd "$here/.." && haxe "$hxml_path") >&2; then
+                echo "apq: auto-rebuild failed; aborting (set HXQ_AUTO_REBUILD=0 for warn-only mode, or HXQ_QUIET=1 to skip the check)" >&2
+                exit 1
+            fi
+        else
+            # Warn-only mode (opt-in via HXQ_AUTO_REBUILD=0), for a chain of
+            # edits that should pay ONE rebuild at the end instead of one per op.
+            #
+            # It warns EVERY time, deliberately. It used to warn once per binary
+            # mtime and then go quiet, which put the silence exactly where the
+            # danger is: in a 15-op chain you saw the warning on op 1 and nothing
+            # on op 15 — the op most likely to be the verification probe, reading
+            # a stale binary and "refuting" a fix that actually landed. One line
+            # of noise is cheap; a slice built on a lying probe is not.
+            #
+            # The marker survives, but it now decides only how LOUD the warning
+            # is: the full explanation once per binary, a single line every time
+            # after. Portable mtime: `stat` differs across BSD/macOS (`-f %m`)
+            # and GNU (`-c %Y`).
+            if mtime=$(stat -f %m "$binary" 2>/dev/null); then :
+            elif mtime=$(stat -c %Y "$binary" 2>/dev/null); then :
+            else mtime="unknown"
+            fi
+            cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/hxq"
+            marker="$cache_dir/warned"
+            last=""
+            [ -r "$marker" ] && last=$(cat "$marker" 2>/dev/null || true)
+            if [ "$last" != "$mtime" ]; then
+                echo "apq: warning: src/ has .hx files newer than $bin_name — run \`haxe $hxml_name\` to rebuild (first stale: $stale)" >&2
+                echo "apq: (HXQ_AUTO_REBUILD=0 is set, so this warns instead of rebuilding. Every later op warns too, one line, until you rebuild.)" >&2
+                mkdir -p "$cache_dir" 2>/dev/null || true
+                printf '%s' "$mtime" > "$marker" 2>/dev/null || true
+            else
+                echo "apq: warning: STILL STALE — $bin_name is older than src/, so this op ran the OLD engine" >&2
+            fi
+        fi
+    fi
+fi
+
+# Node flags. A 64 MB young generation (V8's default is 16 MB) collects less
+# often and promotes fewer short-lived objects: measured 2026-10-18 on the client corpus
+# (N37) at -1.6% on `lint --all` and -2.6% on `lint --fix` for +5% RSS
+# (1.80 -> 1.89 GB). HXQ_NODE_FLAGS replaces the default; set it empty to
+# run node with none.
+node_flags="${HXQ_NODE_FLAGS---max-semi-space-size=64}"
+
+# V8 code cache. A build writes the launcher `apq-launch.js` beside `apq.js`
+# (anyparse.query.cli.CodeCacheLauncher); through it a call deserializes the
+# engine's bytecode from `apq.js.v8cache` instead of compiling its
+# source. A cache that does not match the binary's content, this node or
+# these flags is never handed to V8, so the worst case is the uncached run.
+# HXQ_CODE_CACHE=0 runs the engine directly, as does a binary with no
+# launcher beside it (an older private build).
+launcher="$(dirname "$binary")/apq-launch.js"
+if [ "${HXQ_CODE_CACHE:-1}" = "0" ] || [ ! -f "$launcher" ]; then
+    launcher=""
+fi
+
+# `apq --warm-code-cache` — the build's last step (bin/apq-js.hxml, the worker
+# builds): writes the cache from a representative run. It goes through this
+# shim so the warm run uses the node flags a call uses: V8 refuses a cache
+# made under other flags. Always exits 0 — a build never fails on its cache.
+if [ "${1:-}" = "--warm-code-cache" ]; then
+    if [ -z "$launcher" ]; then
+        echo "apq: no code cache to warm (no $(dirname "$binary")/apq-launch.js, or HXQ_CODE_CACHE=0)" >&2
+        exit 0
+    fi
+    exec node $node_flags "$launcher" --warm "$binary"
+fi
+
+if [ -n "$launcher" ]; then
+    exec node $node_flags "$launcher" "$binary" "$@"
+fi
+exec node $node_flags "$binary" "$@"

@@ -12,7 +12,7 @@ import anyparse.query.format.json.LintTruthJson;
  * A READ-ONLY command: it reports and never writes.
  */
 @:nullSafety(Strict)
-final class LintScoreCommand implements CliCommand {
+final class LintScoreCommand implements CliCommand implements LanguageFree {
 
 	private static inline final UNLABELLED_LIMIT: Int = 20;
 

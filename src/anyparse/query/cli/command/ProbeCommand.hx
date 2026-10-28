@@ -12,7 +12,7 @@ import anyparse.runtime.ParseError;
  * see `stageProbePath` for where that lands and why it is per process.
  */
 @:nullSafety(Strict)
-final class ProbeCommand implements CliCommand {
+final class ProbeCommand implements CliCommand implements StdinDocument {
 
 	/**
 	 * Basename stem of the probe scratch slot. The temp root and this
@@ -46,7 +46,7 @@ final class ProbeCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runProbe(args);
+		return runProbe(args, ctx.readStdin);
 	}
 
 	public function usage(): Void {
@@ -104,7 +104,7 @@ final class ProbeCommand implements CliCommand {
 	 * — useful when the snippet has shell-quoting trouble or comes
 	 * from a heredoc / process substitution.
 	 */
-	private static function runProbe(args: Array<String>): Int {
+	private static function runProbe(args: Array<String>, readStdin: () -> String): Int {
 		// Bare `apq probe` → usage. Doing the check up front (before the
 		// argv walker) keeps the empty-args branch return 0, matching
 		// the convention of `apq <cmd>` (no args) elsewhere.
@@ -179,9 +179,9 @@ final class ProbeCommand implements CliCommand {
 		// also captured (we read once, write the file, then hand the bytes to
 		// runAst via --code instead of --stdin so the downstream loader sees the
 		// same source we staged).
-		final stagedSource: Null<String> = stageProbeSource(codeFinal);
+		final stagedSource: Null<String> = stageProbeSource(codeFinal, readStdin);
 		if (writerProbeMode) {
-			final source: String = stagedSource ?? (codeFinal == '-' ? CliIo.readStdin() : codeFinal);
+			final source: String = stagedSource ?? (codeFinal == '-' ? readStdin() : codeFinal);
 			final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
 			// `<probe>` is the synthetic file label — matches the byte
 			// shape `apq writer-probe` uses on real files and keeps any
@@ -200,7 +200,7 @@ final class ProbeCommand implements CliCommand {
 			['--stdin'];
 		else
 			['--code', codeFinal];
-		return AstCommand.runAst(injected.concat(forwarded));
+		return AstCommand.runAst(injected.concat(forwarded), readStdin);
 	}
 
 	/**
@@ -222,9 +222,9 @@ final class ProbeCommand implements CliCommand {
 	 * failing the probe would be the worse outcome. So does a refusal: staging
 	 * is a convenience, never the probe's job.
 	 */
-	private static function stageProbeSource(codeArg: String): Null<String> {
+	private static function stageProbeSource(codeArg: String, readStdin: () -> String): Null<String> {
 		#if (sys || nodejs)
-		final source: String = codeArg == '-' ? CliIo.readStdin() : codeArg;
+		final source: String = codeArg == '-' ? readStdin() : codeArg;
 		try {
 			// Inside the `try` on purpose: resolving the path reads the
 			// environment and the OS temp root, and a throw there would

@@ -44,7 +44,7 @@ class RuleCategoryTest extends Test {
 		final actual: String = sys.io.File.getContent('docs/lint-rules.md');
 		Assert.isTrue(
 			expected == actual,
-			'docs/lint-rules.md is stale — regenerate: node bin/apq.js lint --list-rules --format markdown > docs/lint-rules.md'
+			'docs/lint-rules.md is stale — regenerate: node bin/apq.js lint --lang haxe --list-rules --format markdown > docs/lint-rules.md'
 		);
 		#else
 		Assert.pass('non-sys target');

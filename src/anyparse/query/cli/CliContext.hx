@@ -39,9 +39,16 @@ final class CliContext {
 	 */
 	public final postWriteFix: Bool;
 
-	public function new(requireMatch: Bool, postWriteFix: Bool = false) {
+	/**
+	 * Standard input, when the dispatcher already read it to tell a document's grammar by its content — a pipe
+	 * reads once, so a command that takes its document from stdin reads it through `readStdin`, never `CliIo`.
+	 */
+	public final stdin: Null<String>;
+
+	public function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String) {
 		this.requireMatch = requireMatch;
 		this.postWriteFix = postWriteFix;
+		this.stdin = stdin;
 	}
 
 	/**
@@ -52,6 +59,11 @@ final class CliContext {
 	 */
 	public inline function emptyExit(empty: Bool): Int {
 		return empty && requireMatch ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/** Standard input: what the dispatcher already read, else read now. */
+	public function readStdin(): String {
+		return stdin ?? CliIo.readStdin();
 	}
 
 }

@@ -37,6 +37,12 @@ using StringTools;
 @:nullSafety(Strict)
 final class JsonQueryPlugin implements GrammarPlugin {
 
+	/** The `--lang` this plugin answers to. */
+	public static inline final LANG: String = 'json';
+
+	/** The file extensions (lower case, with the dot) a file of this grammar carries; the CLI routes such a file here. */
+	public static final EXTENSIONS: Array<String> = ['.json'];
+
 	/** The metavariable sigil a pattern string opens with. */
 	private static inline final METAVAR_SIGIL: String = '$';
 
@@ -45,7 +51,7 @@ final class JsonQueryPlugin implements GrammarPlugin {
 	public function new() {}
 
 	public function langName(): String {
-		return 'json';
+		return LANG;
 	}
 
 	public function parseFile(source: String): QueryNode {
@@ -176,6 +182,18 @@ final class JsonQueryPlugin implements GrammarPlugin {
 
 	public function ambientImportSites(path: String, pkg: String): Array<String> {
 		return [];
+	}
+
+	/**
+	 * Does `text` read as a JSON document by its first non-whitespace character — `{` or `[` — the content signal
+	 * the CLI goes by when a document arrives on stdin with no `--lang`. A scalar document is not recognised: a bare
+	 * string or number is as likely a fragment of any other grammar.
+	 */
+	public static function recognises(text: String): Bool {
+		var at: Int = 0;
+		while (at < text.length && JsonProjection.isSpace(text.fastCodeAt(at))) at++;
+		final first: String = text.charAt(at);
+		return first == JsonFormat.instance.mappingOpen || first == JsonFormat.instance.sequenceOpen;
 	}
 
 	/** `node` with every `"$name"` string turned into the metavariable `name`. */

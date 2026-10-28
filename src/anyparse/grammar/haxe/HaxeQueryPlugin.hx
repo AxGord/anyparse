@@ -68,6 +68,12 @@ using Lambda;
 final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider
 		implements ParsedRootProvider {
 
+	/** The `--lang` this plugin answers to. */
+	public static inline final LANG: String = 'haxe';
+
+	/** The file extensions (lower case, with the dot) a file of this grammar carries; the CLI routes such a file here. */
+	public static final EXTENSIONS: Array<String> = ['.hx'];
+
 	/**
 	 * Search-only kind-equivalence. One Haxe declaration keyword surfaces as several
 	 * position-specific `QueryNode` kinds — a `var` is module-level `VarDecl`, class-field
@@ -129,6 +135,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	private static final SELECT_KIND_EQUIVALENCE: KindEquivalence = new KindEquivalence(
 		[['ClassDecl', 'ClassForm'], ['FnMember', 'FinalModifiedMember']]
 	);
+
 
 	/**
 	 * FALLBACK table of `using`-eligible extension-method names, consulted only when `StdResolver` cannot discover the std
@@ -218,7 +225,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	public function new() {}
 
-	public function langName(): String return 'haxe';
+	public function langName(): String return LANG;
 
 	public function parseFile(source: String): QueryNode {
 		return treeFromRoot(parseRoot(source), source, false);

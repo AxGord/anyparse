@@ -32,6 +32,12 @@ using StringTools;
 @:nullSafety(Strict)
 final class MermaidQueryPlugin implements GrammarPlugin {
 
+	/** The `--lang` this plugin answers to. */
+	public static inline final LANG: String = 'mermaid';
+
+	/** The file extensions (lower case, with the dot) a file of this grammar carries; the CLI routes such a file here. */
+	public static final EXTENSIONS: Array<String> = ['.mmd', '.mermaid'];
+
 	/** The metavariable sigil a pattern node id opens with. */
 	private static inline final METAVAR_SIGIL: String = '$';
 
@@ -44,7 +50,7 @@ final class MermaidQueryPlugin implements GrammarPlugin {
 	public function new() {}
 
 	public function langName(): String {
-		return 'mermaid';
+		return LANG;
 	}
 
 	public function parseFile(source: String): QueryNode {
