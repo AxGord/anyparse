@@ -209,11 +209,10 @@ final class CliFixture {
 	/**
 	 * Everything `fn` writes to STDERR, captured rather than printed.
 	 *
-	 * The CLI's diagnostics go to fd 2 through `Sys.stderr()`, which on hxnodejs
-	 * bottoms out in `fs.writeSync` — so the capture swaps that one function for the
-	 * duration of the call and restores it on the way out, exceptions included. Node
-	 * only: on any other target the call runs and the caller gets `''`, which is why
-	 * every test using this guards its assertions with `#if nodejs`.
+	 * The CLI's diagnostics go to fd 2 through `CliIo.stderr`, which bottoms out in `fs.writeSync` — so the capture swaps that one
+	 * function for the duration of the call and restores it on the way out, exceptions included. The swap answers the count of bytes it
+	 * took, as the real call does: a writer that offers the rest of a short write again would otherwise never finish. Node only: on any
+	 * other target the call runs and the caller gets `''`, which is why every test using this guards its assertions with `#if nodejs`.
 	 */
 	public static function captureStderr(fn: () -> Void): String {
 		#if nodejs
@@ -221,7 +220,8 @@ final class CliFixture {
 		final fs: Dynamic = js.Syntax.code('require("fs")'); // noqa: avoid-dynamic
 		final original: Dynamic = fs.writeSync; // noqa: avoid-dynamic
 		fs.writeSync = js.Syntax.code(
-			'function(fd, data) { if (fd === 2) { {0}.push(String(data)); return 0; } return {1}.apply(null, arguments); }', buffer,
+			'function(fd, data, offset, length) { if (fd !== 2) return {1}.apply(null, arguments); if (typeof data === "string") { {0}.push(data); return Buffer.byteLength(data); } {0}.push(data.toString("utf8", offset, offset + length)); return length; }', // noqa: fold-adjacent-string-literals
+			buffer,
 			original
 		);
 		try fn() catch (exception: haxe.Exception) {
