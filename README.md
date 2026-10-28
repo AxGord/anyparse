@@ -222,16 +222,16 @@ non-overlapping ranges. A fragment is matched byte-exact first, then line-wise w
 indentation ignored (a multi-line fragment copied from the dedented `source --select`
 output works as-is), and must occur exactly once within the node.
 
-`add-element --sorted` inserts STRING entries into a hand-kept sorted list — a registry such as
-`TestDiscoveryParityTest`'s class list or a pin census part in `test/unit/census/` — each at its sorted position, so nobody works out
+`add-element --sorted` inserts STRING entries into a hand-kept sorted list — a list such as
+`TestDiscoveryParityTest`'s base classes — each at its sorted position, so nobody works out
 where an entry goes or edits the file with a script: `hxq add-element T.hx --sorted --select
-'FinalMember:REGISTERED_CLASSES >> ArrayExpr' "'unit.a.XTest', 'unit.b.YTest'" --write`. The address is
+'FinalMember:EXPECTED_BASE_CLASSES >> ArrayExpr' "'unit.a.XTestBase', 'unit.b.YTestBase'" --write`. The address is
 the ARRAY (as for `--append`); `<code>` is one entry or a comma list of them, split by the parser.
 Order is code-unit order (what `TestDiscovery` sorts by). Positive by construction: every element,
 existing and new, must be a constant string — a literal, or a `+` concatenation of literals (the
 spelling an over-wide entry takes) — with no escape and no `$`; the existing list must already be
 strictly ascending; an entry already present is refused. Each refusal names why and points at
-`--append`, which stays the explicit unsorted form (a declaration-ordered list such as the arm census).
+`--append`, which stays the explicit unsorted form (a declaration-ordered list).
 The file's formatting is the writer's, as for every insert op. JSON is out of reach: the only grammar
 plugin is Haxe's (`--lang haxe`). The `anyparse.grammar.json` grammar has a parser and a writer, but
 no `GrammarPlugin`: no spanned `QueryNode` projection for `--select` to address, and no canonical

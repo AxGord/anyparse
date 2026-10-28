@@ -325,7 +325,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 	/**
 	 * Byte-exact `parse -> write` check on the TRIVIA pipeline, the one
 	 * `hxq fmt` uses and the only one that carries inter-modifier
-	 * newlines. Mirror of `CondModProbe.roundTrip`; the fork fixtures'
+	 * newlines. Mirror of `CondModProbeTest.roundTrip`; the fork fixtures'
 	 * output sections are trailing-newline-terminated, so the expected
 	 * output is the input plus `'\n'`.
 	 */

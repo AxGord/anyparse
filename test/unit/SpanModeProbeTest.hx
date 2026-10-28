@@ -21,7 +21,7 @@ import utest.Test;
  * live structurally inside the AST so Reflect field ordering can no
  * longer desynchronise spans from their carrier nodes.
  */
-class SpanModeProbe extends Test {
+class SpanModeProbeTest extends Test {
 
 	public function testParseReturnsPairedRootWithSpans(): Void {
 		final source: String = 'class Foo { var x:Int; }';

@@ -19,8 +19,9 @@ package testkit;
  *  - `arms()` — every mutation arm `mutation-arms.json` declares, with the
  *    member it cuts and how.
  *
- * `unit.TestDiscoveryParityTest` pins `classNames()`, `deadTests()` and `baseClasses()` (and so `addAll`),
- * `unit.PinCensusParityTest` `pins()`, and `unit.ArmCensusParityTest` `arms()` and `deferredArms()`.
+ * `unit.TestDiscoveryParityTest` pins `deadTests()` and `baseClasses()` and that every name `classNames()` gives
+ * resolves; WHICH classes register is held by the macro itself (every `*Test` file is one), `pins()` and `arms()` by
+ * the build errors on the metadata, and `deferredArms()` is answered by `unit.MutationArmAddressTest`.
  */
 @:build(testkit.TestDiscovery.build())
 final class TestRegistry {}

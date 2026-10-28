@@ -17,7 +17,7 @@ import utest.Test;
  * decl's Concat) and splices the trailing comment INTO the inner body's
  * BodyGroup, producing `} // js\n#end` instead of `#end // js`.
  */
-class ProbeIssue344 extends Test {
+class ProbeIssue344Test extends Test {
 
 	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 

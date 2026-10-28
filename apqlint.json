@@ -165,36 +165,8 @@
 			{
 				"parts": [
 					{
-						"file": "test/unit/census/RegisteredClasses.hx",
-						"select": "FinalMember:REGISTERED_CLASSES >> ArrayExpr"
-					}
-				]
-			},
-			{
-				"parts": [
-					{
 						"file": "test/unit/TestDiscoveryParityTest.hx",
 						"select": "FinalMember:EXPECTED_BASE_CLASSES >> ArrayExpr"
-					}
-				]
-			},
-			{
-				"parts": [
-					{
-						"file": "test/unit/census/PinsCheckAToO.hx",
-						"select": "FinalMember:PINS >> ArrayExpr"
-					},
-					{
-						"file": "test/unit/census/PinsCheckPToZ.hx",
-						"select": "FinalMember:PINS >> ArrayExpr"
-					},
-					{
-						"file": "test/unit/census/PinsGrammarAndCli.hx",
-						"select": "FinalMember:PINS >> ArrayExpr"
-					},
-					{
-						"file": "test/unit/census/PinsQueryAndRuntime.hx",
-						"select": "FinalMember:PINS >> ArrayExpr"
 					}
 				]
 			},

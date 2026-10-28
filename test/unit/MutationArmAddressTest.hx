@@ -126,9 +126,8 @@ final class MutationArmAddressTest extends Test {
 	 *
 	 * `TestRegistry.deferredArms()` is the build macro saying which questions it handed
 	 * on; without this, a module quietly moving behind a conditional would move its arm
-	 * from a build error to nothing at all, silently. The census is pinned by name in
-	 * `unit.ArmCensusParityTest`; what is checked here is that every deferred arm is
-	 * one the walk above reaches.
+	 * from a build error to nothing at all, silently. What is checked here is that every
+	 * deferred arm is one the walk above reaches.
 	 */
 	@:pin('control')
 	@:killer('M-ARM-PATH-FLAT')

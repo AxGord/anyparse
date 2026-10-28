@@ -1,7 +1,6 @@
 package unit;
 
 import testkit.TestRegistry;
-import unit.census.RegisteredClasses;
 import utest.Assert;
 import utest.Test;
 
@@ -14,14 +13,14 @@ using Lambda;
  * `test/RunTests.hx` used to carry a hand-written `addCase(new X())` line and
  * an import per class. The cost was never the typing: a class whose line
  * was never added ran nowhere and said nothing, and no gate had an artifact
- * to compare against. This class is that artifact.
+ * to compare against. This class pins what discovery reports beside it.
  *
- * THE SHRINKAGE IS THE ACCEPTANCE TEST. The registered
- * NAMES are pinned, so narrowing the discovery predicate by one class turns the
- * suite red instead of quietly running one fewer, and the failure names the
- * class that vanished. That trades one silent failure for one loud chore:
- * adding a test class now needs its name in `unit.census.RegisteredClasses`,
- * which `node bin/dev.js census --write` writes, and the failure message says so.
+ * WHICH classes register is not pinned here: the build macro holds it, since
+ * every `*Test.hx` file must register exactly one class and every registered
+ * class must live in one, so narrowing the discovery predicate stops the build
+ * naming the file it dropped. A hand-kept list of the names used to mirror the
+ * registry; it caught nothing the file diff did not already show and every
+ * slice had to merge it.
  *
  * What is deliberately NOT pinned here is per-METHOD parity. utest decides
  * what a fixture is (`!isStatic` and a `test`/`spec` name prefix) and
@@ -30,11 +29,9 @@ using Lambda;
  * switch-over is in the slice report, not in a fixture that would have to be
  * regenerated on every test added.
  *
- * The other generated registries have parity classes of their own, beside this one:
- * `PinCensusParityTest` (the `@:pin` / `@:killer` metas, a SORTED census) and
- * `ArmCensusParityTest` (the arms and the deferred arms, in `mutation-arms.json`
- * DECLARATION order). Their lists live in `unit.census`, cut into parts small enough
- * to keep growing; each part's doc says which entries it takes and how to add one.
+ * The pins and the arms need no list either: `@:pin` / `@:killer` live on the
+ * fixtures, the arms in `mutation-arms.json`, and the build refuses a dangling
+ * killer, an arm nobody names and an arm whose member is gone.
  */
 @:nullSafety(Strict)
 class TestDiscoveryParityTest extends Test {
@@ -62,15 +59,6 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.TrivialGetterCheckTestBase',
 		'unit.grammar.haxe.HxTestHelpers'
 	];
-
-	public function testDiscoveryRegistersExactlyTheCensusedClasses(): Void {
-		final registered: Array<String> = TestRegistry.classNames().copy();
-		registered.sort(Reflect.compare);
-		Assert.same(
-			RegisteredClasses.REGISTERED_CLASSES, registered,
-			'a test class was added or removed: run `node bin/dev.js census --write` after rebuilding bin/test.js'
-		);
-	}
 
 	/** `Runner.addITest` throws "Cannot add the same test twice" — this fails first, and says why. */
 	public function testNoClassIsRegisteredTwice(): Void {

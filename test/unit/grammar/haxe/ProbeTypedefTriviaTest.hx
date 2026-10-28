@@ -19,7 +19,7 @@ import utest.Test;
  * and the parent Star's next `collectTrivia` drains them as leading
  * of the next decl.
  */
-class ProbeTypedefTrivia extends Test {
+class ProbeTypedefTriviaTest extends Test {
 
 	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 

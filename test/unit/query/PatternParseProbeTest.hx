@@ -14,7 +14,7 @@ import haxe.Exception;
  * Exercises Q4-Q7 from `docs/cli-query-phase0-queries.md` plus a few
  * variants that stress wildcard independence and metavar reuse.
  */
-class PatternParseProbe extends Test {
+class PatternParseProbeTest extends Test {
 
 	public function testQ4ConditionalNullGuardedCall(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();

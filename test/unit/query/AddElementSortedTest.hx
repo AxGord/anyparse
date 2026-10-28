@@ -5,8 +5,8 @@ import anyparse.query.CanonicalEdit.EditResult;
 
 /**
  * `AddElement.insertSorted` — `add-element --sorted`: string entries land at their sorted positions in
- * an array of constant strings, the shape of the hand-kept registries (`TestDiscoveryParityTest`'s class list,
- * the pin census parts in `unit.census`) agents used to edit with a script. Every accepted case asserts the whole
+ * an array of constant strings, the shape of a hand-kept sorted list (`TestDiscoveryParityTest`'s base classes)
+ * agents used to edit with a script. Every accepted case asserts the whole
  * canonical file; every refusal names why, because a refused insert must not look like a silent one.
  */
 class AddElementSortedTest extends Test {

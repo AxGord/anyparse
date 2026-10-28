@@ -1,12 +1,6 @@
 # Files every slice only appends to merge by keeping both sides (docs/testing.md § "Landing a slice").
-# A union merge keeps every line both branches added; the census lists end each entry with a comma so an append
-# never rewrites the line above it, and `node bin/dev.js census --order-only` (run by `dev land`) restores the
-# order a union may leave. The parity tests still compare the merged names with the generated registries.
+# A union merge keeps every line both branches added.
 docs/decisions.md merge=union
-test/unit/census/RegisteredClasses.hx merge=union
-test/unit/census/DeclaredArms*.hx merge=union
-test/unit/census/DeferredArms.hx merge=union
-test/unit/census/Pins*.hx merge=union
 
 # JSON forbids the trailing comma a union would need, so the arm registry merges record by record, keyed by name:
 # `dev land` passes the driver; elsewhere name it on the command line —

@@ -50,12 +50,20 @@ process.exitCode = failed;
 		for (bad in ['12', '1/2/3', 'a/1', '/1', '1/', '-1/2']) Assert.raises(() -> Shard.parseExpect(bad), UsageError, bad);
 	}
 
-	public function testThePinCountsTheQuotedLinesOfTheLiteralOnly(): Void {
-		final text: String =
-			"\t// 'not this one'\n\tpublic static final REGISTERED_CLASSES: Array<String> = [\n\t\t'a.One',\n\t\t'a.Two'\n\t];\n\t'after';\n";
-		Assert.equals(2, Shard.registeredPinCount(text));
-		Assert.isNull(Shard.registeredPinCount('final OTHER = [\n\t\'x\'\n\t];\n'), 'no literal');
-		Assert.isNull(Shard.registeredPinCount('REGISTERED_CLASSES = [\n\t];\n'), 'an empty literal reads as unreadable');
+	public function testTheFileCountTakesTestFilesInAPackageOnly(): Void {
+		TempDir.with(dir -> {
+			Assert.isNull(Shard.testFileCount(dir.file('test')), 'no test tree');
+			FileSystem.createDirectory(dir.file('test/unit/deep'));
+			for (file in [
+				'RootTest.hx',
+				'unit/ATest.hx',
+				'unit/deep/BTest.hx',
+				'unit/Helper.hx',
+				'unit/ATestBase.hx',
+				'unit/notes.txt'
+			]) File.saveContent(dir.file('test/$file'), '');
+			Assert.equals(2, Shard.testFileCount(dir.file('test')), 'a root-level file is an entry point, a helper is no test');
+		});
 	}
 
 	public function testTimingsSumEachClassSlowestFirstThenByName(): Void {
@@ -110,13 +118,13 @@ process.exitCode = failed;
 		});
 	}
 
-	public function testAProducerThatDisagreesWithThePinIsRefusedBeforeAnyShardRuns(): Void {
+	public function testAProducerThatDisagreesWithTheTestFilesIsRefusedBeforeAnyShardRuns(): Void {
 		TempDir.with(dir -> {
-			FileSystem.createDirectory(dir.file('test/unit/census'));
-			File.saveContent(dir.file('test/unit/census/RegisteredClasses.hx'), "\tREGISTERED_CLASSES = [\n\t\t'only.One',\n\t];\n");
+			FileSystem.createDirectory(dir.file('test/unit'));
+			File.saveContent(dir.file('test/unit/OnlyOneTest.hx'), '');
 			final run: Ran = runFake(dir, 'green', 2, false);
 			Assert.equals(1, run.status);
-			Assert.isTrue(run.warned.exists(l -> l.contains('RegisteredClasses lists 1.')), run.warned.join('\n'));
+			Assert.isTrue(run.warned.exists(l -> l.contains('the test tree holds 1 *Test.hx files.')), run.warned.join('\n'));
 			Assert.equals(0, run.printed.length, 'no shard ran, so nothing was measured');
 		});
 	}

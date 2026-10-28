@@ -20,11 +20,11 @@ import utest.Test;
  * The flag is gated to SimpleCtor-only inter-element slots so the existing
  * `HxConditionalMod` ParamCtor layout (issue_332 V1 / V4 — source newline
  * between `#end` and the next modifier keyword preserved) stays byte-
- * identical. `CondModProbe` is the cross-check.
+ * identical. `CondModProbeTest` is the cross-check.
  *
  * Trivia-mode `parse → write` is byte-identity on legal source — the inputs
  * here are the canonical flattened shape, so expected == input + `'\n'` on
- * the top-level fixture path (mirrors `CondModProbe.roundTrip`).
+ * the top-level fixture path (mirrors `CondModProbeTest.roundTrip`).
  */
 class HxModifierFlattenSliceTest extends Test {
 
@@ -63,7 +63,7 @@ class HxModifierFlattenSliceTest extends Test {
 	}
 
 	// -- Trivia pipeline: ConditionalMod boundary newline PRESERVED. --
-	// -- Mirrors CondModProbe.testIssue332V1 — the `forceInlineSep` flag must
+	// -- Mirrors CondModProbeTest.testIssue332V1 — the `forceInlineSep` flag must
 	// -- NOT collapse the `#end\n\tpublic` boundary (ParamCtor gate). --
 
 	public inline function testTriviaConditionalBoundaryNewlinePreserved(): Void {

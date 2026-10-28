@@ -1,7 +1,5 @@
 package dev;
 
-import dev.Census.CensusMode;
-import dev.Census.CensusRun;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Result;
@@ -10,16 +8,14 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
-using Lambda;
 using StringTools;
 
 /**
  * `dev land <branch>` — the parent's merge of a reviewed slice branch into the tree that holds this `dev.js`, as ONE
- * command: a `--no-ff` merge whose append-only files merge as their `.gitattributes` say (`docs/decisions.md` and the
- * census lists by union, `mutation-arms.json` by `dev merge-arms`), the three binaries rebuilt, a census a union left out
- * of order put back in order, the merge committed, then `tools/battery.sh` — and one verdict line. A conflict git cannot
- * resolve, a failed build or a census whose NAMES disagree with the registries aborts the merge and leaves the tree as it
- * was; a red battery leaves the merge commit for the caller to judge (docs/testing.md § "Landing a slice").
+ * command: a `--no-ff` merge whose append-only files merge as their `.gitattributes` say (`docs/decisions.md` by union,
+ * `mutation-arms.json` by `dev merge-arms`), the three binaries rebuilt, the merge committed, then `tools/battery.sh` —
+ * and one verdict line. A conflict git cannot resolve or a failed build aborts the merge and leaves the tree as it was; a
+ * red battery leaves the merge commit for the caller to judge (docs/testing.md § "Landing a slice").
  */
 @:nullSafety(Strict)
 final class Land {
@@ -32,9 +28,6 @@ final class Land {
 
 	/** What the battery may run before it is killed. */
 	private static inline final BATTERY_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
-
-	/** The census lists' directory, staged again when the census is put back in order. */
-	private static inline final CENSUS_DIR: String = 'test/unit/census';
 
 	private final _summary: Summary = new Summary();
 	private final _repo: String;
@@ -62,7 +55,6 @@ final class Land {
 			{ name: 'clean', step: clean },
 			{ name: 'merge', step: merge },
 			{ name: 'build', step: build },
-			{ name: 'census', step: census },
 			{ name: 'commit', step: commit.bind(message) },
 			{ name: 'battery', step: runBattery.bind(battery) }
 		];
@@ -116,18 +108,6 @@ final class Land {
 	private function build(): Outcome {
 		_built = true;
 		return Binaries.compile(_repo, Path.join([_logs, 'build.log']));
-	}
-
-	/** The census put back in the registries' order when a union merge left it out of order; differing NAMES fail. */
-	private function census(): Outcome {
-		final report: Array<String> = [];
-		final census: CensusRun = Census.run(_repo, Path.join([_repo, 'bin/test.js']), CensusMode.OrderOnly, report.push);
-		if (!census.ok) return Failed(report.find(l -> l.indexOf(': in sync') < 0) ?? 'the census disagrees with the registries');
-		if (census.written.length == 0) return Passed;
-		final staged: Result = git(['add', '--', CENSUS_DIR]);
-		if (!staged.ok) return Failed(staged.firstError());
-		_summary.detail('put back in order: ${census.written.join(', ')}');
-		return Passed;
 	}
 
 	/** The merge committed under `message`, or `Merge <branch>: <the branch tip's subject>`. */

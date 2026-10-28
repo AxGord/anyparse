@@ -36,7 +36,7 @@ import utest.Test;
  * so `roundTrip` appends `'\n'` to the input when computing the
  * expected output.
  */
-class CondModProbe extends Test {
+class CondModProbeTest extends Test {
 
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
