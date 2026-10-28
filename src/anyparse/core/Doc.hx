@@ -359,7 +359,7 @@ enum Doc {
 	 * SLOT INVERSION at the NON-arrow consumers. `WrapList.shapeSingleArgGlue`
 	 * reuses this ctor twice — for a sole `{`-object-literal argument
 	 * (ω-callparam-single-objectlit) and for the sole-argument outer-first probe
-	 * (ω-outer-first-wrap), and `BinaryChainEmit.emitNoThreshold` a third time for
+	 * (ω-outer-first-wrap), and `BinaryChainEmit.emitCascadePivot` a third time for
 	 * the trailing-paren operator break (ω-opadd-trailing-paren-break), and
 	 * `WrapList.shapeMultiArgCollection` a fourth for the FIT-pivot collection arg
 	 * (ω-fit-pivot-collection-arg). All four pass `breakDoc` = the GLUED /

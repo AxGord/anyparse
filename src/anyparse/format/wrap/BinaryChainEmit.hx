@@ -271,7 +271,7 @@ final class BinaryChainEmit {
 		//   - `t != lineWidth` → membership in `firing`
 		// All other cond kinds preserve their original evaluators.
 		// Non-`inline` so it can be passed as a closure into
-		// `buildBinaryThresholdTree` (Haxe forbids closure-on-inline-closure).
+		// `thresholdTree` (Haxe forbids closure-on-inline-closure).
 		function evalAt(exceeds: Bool, firing: Array<Int>): { mode: WrapMode, location: WrappingLocation } {
 			return WrapList.decideRuleWithLineLengthState(
 				rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t), 0,
@@ -327,7 +327,7 @@ final class BinaryChainEmit {
 		// per the prior decoupling slice). Thresholds still
 		// column-aware — even when the parent commits to break-mode,
 		// a `LineLengthLargerThan` rule answer can flip with column.
-		// `buildBinaryThresholdTree` handles 0/1/N thresholds via
+		// `thresholdTree` handles 0/1/N thresholds via
 		// recursion (no IfBreak split — single shape per leaf).
 		// ω-ternary-collection-hug: a breaking ternary whose sole multi-line
 		// branch is a bare collection literal (`cond ? flat : {…}`) HUGS —
@@ -353,53 +353,47 @@ final class BinaryChainEmit {
 		else if (pivotHugIdx >= 0)
 			WrapBoundary(IfLineExceeds(
 				opt.lineWidth + 1, ternaryHugShape(pivotHugIdx, items, ops, opt, evalAt, shapeAt),
-				emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt)
+				emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, [])
 			))
-		else if (extraThresholds.length == 0)
-			emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt)
-		else if (extraThresholds.length == 1)
-			emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt)
 		else
-			WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
+			emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, extraThresholds);
 	}
 
 	/**
-	 * Recursive helper that builds the `IfWidthExceeds + IfBreak` tree
-	 * for chain-emit's cascade-with-thresholds layout. Sister of
-	 * `WrapList.buildThresholdTree` but emits chain shapes
-	 * (`shape(mode, location, …)`) at each leaf instead of routing
-	 * through a delimited-list `shapeAt(mode, lead)` closure.
-	 *
-	 *  - `forcedExceeds == true` → emit a single shape at each leaf
-	 *    (no IfBreak — parent committed to break-mode regardless of
-	 *    column). Used by the `anyHardline` path.
-	 *  - `forcedExceeds == null` → enumerate `exceeds=false` /
-	 *    `exceeds=true` at each leaf and split via `Group(IfBreak(…))`
-	 *    when the resolved {mode, location} pairs differ.
-	 *
-	 * `firing` accumulates thresholds chosen as "fired" along the
-	 * brk-side recursion. No impossibility filtering — renderer's
-	 * column probe at each `IfWidthExceeds` layer is monotone, so the
-	 * impossible-state leaves are unreachable at runtime regardless.
+	 * The chain's shape on ONE side of the `exceeds` pivot: `shapeAt` of the cascade's answer, partitioned by an
+	 * `IfWidthExceeds` for each column-aware `lineLength` threshold whose two sides answer differently. `firing` holds the
+	 * thresholds already taken as reached on the way down. The renderer's column probe is monotone, so a leaf whose state
+	 * cannot occur is never rendered.
 	 */
-	private static function buildBinaryThresholdTree(
-		thresholds: Array<Int>, firing: Array<Int>, forcedExceeds: Null<Bool>,
+	private static function thresholdTree(
+		thresholds: Array<Int>, firing: Array<Int>, exceeds: Bool,
 		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
 		shapeAt: { mode: WrapMode, location: WrappingLocation } -> Doc
 	): Doc {
-		if (thresholds.length == 0) {
-			if (forcedExceeds != null) return shapeAt(evalAt(forcedExceeds, firing));
-			final rFlat: { mode: WrapMode, location: WrappingLocation } = evalAt(false, firing);
-			final rBrk: { mode: WrapMode, location: WrappingLocation } = evalAt(true, firing);
-			return sameRule(rFlat, rBrk) ? shapeAt(rFlat) : Group(IfBreak(shapeAt(rBrk), shapeAt(rFlat)));
-		}
+		final uniform: Null<{ mode: WrapMode, location: WrappingLocation }> = uniformAnswer(thresholds, firing, exceeds, evalAt);
+		if (uniform != null) return shapeAt(uniform);
 		final t: Int = thresholds[0];
 		final rest: Array<Int> = thresholds.slice(1);
-		final firingPlus: Array<Int> = firing.copy();
-		firingPlus.push(t);
-		final brk: Doc = buildBinaryThresholdTree(rest, firingPlus, forcedExceeds, evalAt, shapeAt);
-		final flat: Doc = buildBinaryThresholdTree(rest, firing, forcedExceeds, evalAt, shapeAt);
-		return IfWidthExceeds(t, brk, flat);
+		return IfWidthExceeds(
+			t, thresholdTree(rest, firing.concat([t]), exceeds, evalAt, shapeAt), thresholdTree(rest, firing, exceeds, evalAt, shapeAt)
+		);
+	}
+
+	/**
+	 * The cascade's one answer over every combination of the remaining `thresholds` on the given side of the `exceeds`
+	 * pivot, or null when two combinations answer differently.
+	 */
+	private static function uniformAnswer(
+		thresholds: Array<Int>, firing: Array<Int>, exceeds: Bool,
+		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation }
+	): Null<{ mode: WrapMode, location: WrappingLocation }> {
+		if (thresholds.length == 0) return evalAt(exceeds, firing);
+		final rest: Array<Int> = thresholds.slice(1);
+		final reached: Null<{ mode: WrapMode, location: WrappingLocation }> = uniformAnswer(
+			rest, firing.concat([thresholds[0]]), exceeds, evalAt
+		);
+		final below: Null<{ mode: WrapMode, location: WrappingLocation }> = uniformAnswer(rest, firing, exceeds, evalAt);
+		return reached != null && below != null && sameRule(reached, below) ? below : null;
 	}
 
 	/**
@@ -540,7 +534,7 @@ final class BinaryChainEmit {
 	 * - a bare paren TAIL on an add/sub chain (`a + (…)`): the leading break before the last
 	 *   operand costs a line and an indent level and saves nothing, because that operand is
 	 *   multi-line either way. This is the arm the hardline commit had cut off — the identical
-	 *   chain WITHOUT a hardline reaches `emitNoThreshold`'s ω-opadd-trailing-paren-glue and
+	 *   chain WITHOUT a hardline reaches `emitCascadePivot`'s ω-opadd-trailing-paren-glue and
 	 *   keeps its head glued, so a paren carrying a forced break (a value-`if` chain in
 	 *   `expressionIf` policy layout, a `switch`, a block) was the one shape that did not.
 	 *
@@ -571,7 +565,7 @@ final class BinaryChainEmit {
 			if (isAddSubOps(ops) && hasBareParenTail(items))
 				return IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrapAt(evalAt(false, []).location));
 		}
-		final broken: Doc = buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt);
+		final broken: Doc = thresholdTree(extraThresholds, [], true, evalAt, shapeAt);
 		return inlineMultilineBranch ? IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(items, ops)) : broken;
 	}
 
@@ -842,62 +836,53 @@ final class BinaryChainEmit {
 	}
 
 	/**
-	 * Build the chain Doc for the single-extra-threshold case (`extraThresholds
-	 * == [t]`). The renderer's column-aware `IfWidthExceeds(t, …)` probe selects
-	 * between the impossibility-filtered 3-state leaves. Split out of `emit` for
-	 * the complexity threshold; `evalAt` / `shapeAt` are passed as the same
-	 * closures `emit` uses.
+	 * Build the chain Doc around its one `exceeds` pivot (the 2-state `Group(IfBreak(…))` plus the CollapsePass-probe /
+	 * cond-wrap-unwrap tags). Column-aware `thresholds` partition each side of that pivot from inside, never wrap it: a
+	 * cascade that merely CONTAINS a `lineLength` rule must keep the pivot's rest-aware Group and markers, or its last
+	 * `exceeds` rule loses the line's trailing columns and the inner add-chain collapse. The closures are the ones `emit`
+	 * builds — `shapeNoWrapAt` renders the forced-NoWrap unwrap shape that bypasses the cascade-decided mode.
 	 */
-	private static function emitSingleThreshold(
-		t: Int, opt: WriteOptions, evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
-		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc
-	): Doc {
-		if (t < opt.lineWidth) {
-			// 3 valid states (col+w<t implies col+w<lineWidth implies !exceeds):
-			//   (firing=∅,    exceeds=no)  → rNN
-			//   (firing={t},  exceeds=no)  → rYN
-			//   (firing={t},  exceeds=yes) → rYY
-			final rNN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
-			final rYN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, [t]);
-			final rYY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, [t]);
-			if (sameRule(rNN, rYN) && sameRule(rYN, rYY)) return WrapBoundary(shapeAt(rNN));
-			// Inner IfBreak picks between exceeds-yes and exceeds-no
-			// when the column has already crossed `t`. Outer
-			// IfWidthExceeds picks the column-vs-t answer first; the
-			// flat side bypasses the IfBreak entirely (only one
-			// valid state below `t`).
-			final brk: Doc = sameRule(rYY, rYN) ? shapeAt(rYY) : Group(IfBreak(shapeAt(rYY), shapeAt(rYN)));
-			return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeAt(rNN))));
-		}
-		// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
-		//   (firing=∅,    exceeds=no)  → rNN
-		//   (firing=∅,    exceeds=yes) → rNY
-		//   (firing={t},  exceeds=yes) → rYY
-		final rNN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
-		final rNY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, []);
-		final rYY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, [t]);
-		if (sameRule(rNN, rNY) && sameRule(rNY, rYY)) return WrapBoundary(shapeAt(rNN));
-		// Outer IfBreak picks exceeds=no/yes; inner IfWidthExceeds
-		// further partitions the exceeds=yes side around `t`.
-		final brk: Doc = sameRule(rNY, rYY) ? shapeAt(rYY) : Group(IfWidthExceeds(t, shapeAt(rYY), shapeAt(rNY)));
-		return WrapBoundary(Group(IfBreak(brk, shapeAt(rNN))));
-	}
-
-	/**
-	 * Build the chain Doc for the no-extra-threshold case (the legacy 2-state
-	 * `Group(IfBreak(…))` path plus the CollapsePass-probe / cond-wrap-unwrap
-	 * tags). Split out of `emit` for the complexity threshold; the closures are
-	 * the same ones `emit` builds — `shapeNoWrapAt` renders the forced-NoWrap
-	 * unwrap shape that bypasses the cascade-decided mode.
-	 */
-	private static function emitNoThreshold(
+	private static function emitCascadePivot(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, nestSuppress: Bool, condWrapForced: Bool, restAware: Bool,
 		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
-		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, shapeNoWrapAt: (WrappingLocation) -> Doc
+		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, shapeNoWrapAt: (WrappingLocation) -> Doc, thresholds: Array<Int>
 	): Doc {
 		// noqa: complexity
+		// The flat answer at no fired threshold stands for the decisions that read one mode or location (the cond-wrap
+		// unwrap, whose forced cascade has no threshold, and the NoWrap glue's location); with no threshold it is the cascade.
 		final flat: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
-		final brk: { mode: WrapMode, location: WrappingLocation } = evalAt(true, []);
+		// ω-opbool-reeval-after-callparam (CollapsePass increment 2): an opBool
+		// chain (`&&`/`||`) whose BROKEN shape is FillLine operator-TRAILING
+		// (`AfterLast`) and that contains a function-call operand. TAG the broken
+		// branch with `CollapseBoolProbe`. The marker is render-transparent
+		// (byte-inert on its own); `CollapsePass` flips it to operator-LEADING
+		// ONLY when a contained call operand overflows at its flat column (fork
+		// `reEvaluateOpBoolAfterCallParam` — strip the call breaks, re-apply
+		// opBool with `useTrailing: false`). Gated to opBool + FillLine +
+		// AfterLast + has-call so every other chain stays byte-identical.
+		// `!nestSuppress` excludes a chain that is itself a CALL ARGUMENT
+		// (`_callArgChainNest`) or wrapped by a return-context paren
+		// (`_keepChainInParen`) — fork `reEvaluateOpBoolAfterCallParam` flips
+		// only condition / bare-value opBool chains, never a chain that is a
+		// call argument (`opbool_in_call_leading_break_preserved`, which keeps
+		// its trailing layout). At this final-IfBreak path `condWrapForced` is
+		// already false (the cond-wrap collapse takes the inc6 path above), so
+		// `nestSuppress` here means call-arg / keep-in-paren. The tag is decided
+		// per cascade answer, so a threshold that changes the broken mode or
+		// location tags only the leaves it applies to.
+		final boolReevalChain: Bool = isOpBoolOps(ops) && !nestSuppress && containsCallOperand(items);
+		function brkShapeAt(r: { mode: WrapMode, location: WrappingLocation }): Doc {
+			return boolReevalChain && r.location == AfterLast && (r.mode == FillLine || r.mode == FillLineWithLeadingBreak)
+				? CollapseBoolProbe(shapeAt(r))
+				: shapeAt(r);
+		}
+		// Each side of the `exceeds` pivot below partitions by the column-aware thresholds INSIDE it, so every probe this
+		// pivot takes (the rest-aware Group, the add-chain collapse marker, the paren-tail glue) is the one a cascade with
+		// no `lineLength` rule takes.
+		final flatSide: Doc = thresholdTree(thresholds, [], false, evalAt, shapeAt);
+		final brkSide: Doc = thresholdTree(thresholds, [], true, evalAt, brkShapeAt);
+		final flatAll: Null<{ mode: WrapMode, location: WrappingLocation }> = uniformAnswer(thresholds, [], false, evalAt);
+		final brkAll: Null<{ mode: WrapMode, location: WrappingLocation }> = uniformAnswer(thresholds, [], true, evalAt);
 		// ω-chain-keep-flat (increment-6 — CONSTRAINED probe): UNWRAP the
 		// chain to a single flat NoWrap line ONLY in the cond-wrap context
 		// (`condWrapForced` — the chain was collapsed to a forced mode
@@ -922,8 +907,8 @@ final class BinaryChainEmit {
 		// (WriterCodegen._setChainModeOverride), so flat == brk == that one break
 		// mode here — pivot the NoWrap UNWRAP shape against the forced break shape.
 		if (unwrapCandidate && isBreakMode(flat.mode))
-			return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(flat), shapeNoWrapAt(flat.location)));
-		if (sameRule(flat, brk)) return WrapBoundary(shapeAt(flat));
+			return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, flatSide, shapeNoWrapAt(flat.location)));
+		if (flatAll != null && brkAll != null && sameRule(flatAll, brkAll)) return WrapBoundary(flatSide);
 		// ω-unwrap-add-ops (inverse CollapsePass): for a pure opAddSub
 		// chain (`+`/`-` only) whose broken shape differs from its flat
 		// (NoWrap-glued) shape, TAG the broken branch with
@@ -938,7 +923,7 @@ final class BinaryChainEmit {
 		// inner ternary/call breaks. opBool / ternary chains are NOT tagged
 		// (fork never `unwrapAddOps` them).
 		if (isAddSubOps(ops)) {
-			final brkDoc: Doc = D.groupOrRestProbe(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat)), restAware);
+			final brkDoc: Doc = D.groupOrRestProbe(IfBreak(CollapseAddProbe(brkSide), flatSide), restAware);
 			// ω-opadd-trailing-paren-glue: when the chain's LAST operand leads
 			// with a bare `(` (a paren-expr operand) and operand-1 does not, pivot
 			// the committed break shape against the NoWrap glue via the natural-
@@ -1037,26 +1022,6 @@ final class BinaryChainEmit {
 				shapeNoWrapAt(flat.location)
 			));
 		}
-		// ω-opbool-reeval-after-callparam (CollapsePass increment 2): an opBool
-		// chain (`&&`/`||`) whose BROKEN shape is FillLine operator-TRAILING
-		// (`AfterLast`) and that contains a function-call operand. TAG the broken
-		// branch with `CollapseBoolProbe`. The marker is render-transparent
-		// (byte-inert on its own); `CollapsePass` flips it to operator-LEADING
-		// ONLY when a contained call operand overflows at its flat column (fork
-		// `reEvaluateOpBoolAfterCallParam` — strip the call breaks, re-apply
-		// opBool with `useTrailing: false`). Gated to opBool + FillLine +
-		// AfterLast + has-call so every other chain stays byte-identical.
-		// `!nestSuppress` excludes a chain that is itself a CALL ARGUMENT
-		// (`_callArgChainNest`) or wrapped by a return-context paren
-		// (`_keepChainInParen`) — fork `reEvaluateOpBoolAfterCallParam` flips
-		// only condition / bare-value opBool chains, never a chain that is a
-		// call argument (`opbool_in_call_leading_break_preserved`, which keeps
-		// its trailing layout). At this final-IfBreak path `condWrapForced` is
-		// already false (the cond-wrap collapse takes the inc6 path above), so
-		// `nestSuppress` here means call-arg / keep-in-paren.
-		final boolReevalTag: Bool = isOpBoolOps(ops) && brk.location == AfterLast
-			&& (brk.mode == FillLine || brk.mode == FillLineWithLeadingBreak) && !nestSuppress && containsCallOperand(items);
-		final brkShape: Doc = boolReevalTag ? CollapseBoolProbe(shapeAt(brk)) : shapeAt(brk);
 		// rest-aware pivot: a chain the caller flagged `restAware` (a ternary, or an
 		// `&&` / `||` chain, in every host context except an interpolation body or an
 		// explicit expression paren, see `lowerTernaryBranch` / `lowerInfixChain`)
@@ -1073,7 +1038,7 @@ final class BinaryChainEmit {
 		// under threshold) but subtracts the pending space and
 		// `flatTokenWidthOfRestStack(stack)` from the budget, so the whole physical
 		// line is counted.
-		final ifBreak: Doc = IfBreak(brkShape, shapeAt(flat));
+		final ifBreak: Doc = IfBreak(brkSide, flatSide);
 		return WrapBoundary(D.groupOrRestProbe(ifBreak, restAware));
 	}
 
