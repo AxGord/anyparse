@@ -51,6 +51,12 @@ final class CliIo {
 	/** Extension of the corpus fixture format — see `isHxtestPath`. */
 	private static inline final HXTEST_EXT: String = '.hxtest';
 
+	/** The file descriptor of the process's standard error. */
+	private static inline final STDERR_FD: Int = 2;
+
+	/** How long `stderr` waits before it offers a blocked write again, in milliseconds. */
+	private static inline final BLOCKED_RETRY_MS: Int = 2;
+
 	/**
 	 * Read a file as **source for parsing**. Same as `readFile` for plain
 	 * `.hx` files; auto-extracts the input section (between the 1st and
@@ -103,25 +109,47 @@ final class CliIo {
 	}
 
 	/**
-	 * Stderr sibling of the EPIPE guard: `Sys.stderr()` on nodejs is `Fs.writeSync(2, …)` — a
-	 * SYNCHRONOUS raw fd write that never touches the `process.stderr` Writable
-	 * stream object, so `Cli.main`'s `process.stderr.on('error', …)` EPIPE guard
-	 * (which only fires for an ASYNC stream write) never sees this path's
-	 * failure. A closed reader makes `Fs.writeSync` throw synchronously instead,
-	 * with the native error reachable at `exception.native` (verified: `.code`
-	 * lives there, not on the caught `Exception` wrapper itself) — caught and
-	 * handled the same way, quietly, rather than crashing with a raw stack
-	 * trace. Every other write failure still propagates.
+	 * Stderr sibling of the EPIPE guard, and the one writer of this process's stderr that survives a full pipe.
+	 *
+	 * `Sys.stderr()` on nodejs is `Fs.writeSync(2, …)` — a SYNCHRONOUS raw fd write that never touches the `process.stderr` Writable
+	 * stream object, so `Cli.main`'s `process.stderr.on('error', …)` EPIPE guard (which only fires for an ASYNC stream write) never sees
+	 * this path's failure. A closed reader makes the write throw synchronously instead, with the native error reachable at
+	 * `exception.native` (`.code` lives there, not on the caught `Exception` wrapper) — handled quietly rather than with a raw stack
+	 * trace. A pipe whose reader is slow is the other failure: the fd is non-blocking there, a full pipe answers `EAGAIN`, and the
+	 * bytes still owed are written once the reader has made room (`writeFully`). Every other write failure still propagates.
 	 */
 	public static function stderr(s: String): Void {
 		#if nodejs
-		try Sys.stderr().writeString(s) catch (exception: Exception) {
+		final bytes: js.node.Buffer = js.node.Buffer.from(s, 'utf8');
+		try writeFully(
+			bytes.length, at -> js.node.Fs.writeSync(STDERR_FD, bytes, at, bytes.length - at), () -> pause(BLOCKED_RETRY_MS)
+		) catch (exception: Exception) {
 			if (Reflect.field(exception.native, 'code') == 'EPIPE') js.Node.process.exit(0);
 			throw exception;
 		}
 		#elseif sys
 		Sys.stderr().writeString(s);
 		#end
+	}
+
+	/**
+	 * Write `total` bytes through `write` — which takes the offset of the
+	 * first byte still owed and answers how many it wrote — until all are out.
+	 * A write that throws `EAGAIN` (a full pipe, a reader that has not
+	 * caught up) calls `wait` and is asked again from the same offset, so the
+	 * bytes a failed call had already placed are never sent twice; the wait has no limit. Every write that returns must advance: one that
+	 * answers nothing is thrown at once rather than offered again, and any other failure propagates.
+	 */
+	public static function writeFully(total: Int, write: (at:Int) -> Int, wait: () -> Void): Void {
+		var at: Int = 0;
+		while (at < total) try {
+			final wrote: Int = write(at);
+			if (wrote <= 0) throw new Exception('stderr write made no progress at $at of $total');
+			at += wrote;
+		} catch (exception: Exception) {
+			if (Reflect.field(exception.native, 'code') != 'EAGAIN') throw exception;
+			wait();
+		}
 	}
 
 	public static function readFile(path: String): String {
@@ -353,6 +381,13 @@ final class CliIo {
 		return null;
 	}
 
+	/** Block this thread for `ms` milliseconds without spawning anything. */
+	private static inline function pause(ms: Int): Void {
+		#if nodejs
+		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', ms);
+		#end
+	}
+
 	private static function anyHxNewerThan(root: String, threshold: Float): Bool {
 		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) return false;
 		final stack: Array<String> = [root];
@@ -478,6 +513,7 @@ final class CliIo {
 			// already on its way out, and a cleanup that cannot finish must not replace it.
 		}
 	}
+
 	/**
 	 * Create every directory `dir` is missing, outermost first, and record each one in `created` — so the change set
 	 * owning them can take them back (`removeCreatedDirectories`). One at a time on purpose: a recursive create that

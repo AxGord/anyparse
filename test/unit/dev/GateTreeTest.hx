@@ -1,6 +1,7 @@
 package unit.dev;
 
 import dev.GateTree;
+import devkit.Result;
 import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
@@ -30,6 +31,18 @@ final class GateTreeTest extends Test {
 			Assert.equals(before, GateTree.treeState(dir.path));
 			File.saveContent(dir.file('pkg/A.hx'), 'class A { var x: Int; }');
 			Assert.notEquals(before, GateTree.treeState(dir.path));
+		});
+	}
+
+	public function testALoggedCommandKeepsStandardErrorOffThePipe(): Void {
+		TempDir.with(dir -> {
+			final errLog: String = dir.file('err.log');
+			final run: Result = GateTree.logged(['sh', '-c', 'echo out; echo "err $1" >&2', 'sh', 'a b'], errLog).run();
+			Assert.equals('out\n', run.out);
+			Assert.equals('', run.err);
+			Assert.equals('err a b\n', File.getContent(errLog));
+			Assert.isTrue(GateTree.logged(['sh', '-c', 'echo second >&2'], errLog).run().ok);
+			Assert.equals('second\n', File.getContent(errLog));
 		});
 	}
 

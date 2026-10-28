@@ -24,4 +24,9 @@ final class GateLintTest extends Test {
 		Assert.equals(report, GateLint.rebased(report, ['a/B.hx' => 'a/B.hx']));
 	}
 
+	public function testALintOfATreeWithoutAProjectAsksNoOracle(): Void {
+		Assert.same(['lint', 'src', '--all', '--format', 'json'], GateLint.lintArgs(['src'], true));
+		Assert.same(['lint', '.', '--all', '--format', 'json', '--no-oracle'], GateLint.lintArgs(['.'], false));
+	}
+
 }

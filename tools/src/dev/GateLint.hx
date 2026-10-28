@@ -28,6 +28,11 @@ final class GateLint {
 	/** The engine's build flags, which with `src` make it what it is. */
 	private static inline final ENGINE_FLAGS: String = 'bin/apq-js-common.hxml';
 
+	/** The report of the lint row's touched files in the tree, and of the same files at the base, in the logs. */
+	private static inline final TOUCHED_REPORT: String = 'lint-touched.json';
+
+	private static inline final TOUCHED_BASE_REPORT: String = 'lint-touched-base.json';
+
 	private final _gate: GateTree;
 
 	/** What the engine is built from (`engineSources`), or null when no lint is cached. */
@@ -42,14 +47,17 @@ final class GateLint {
 	public function baseLint(): Outcome {
 		return _gate.options.infra.length == 0
 			? Skipped('no --infra-tree, so INFRA gate 4 needs no base lint')
-			: saveLint(_gate.hxq(_gate.tree, lintArgs(GateTree.TREE_SCOPE)).run(), _gate.tree, _gate.log('lint-base.json'));
+			: saveLint(
+				lintCommand(_gate.tree, GateTree.TREE_SCOPE, true, _gate.log('lint-base.json')).run(), _gate.tree,
+				_gate.log('lint-base.json')
+			);
 	}
 
 	/** The infra4 row of `--baseline`: the base engine's lint of every infra tree, all at once. */
 	public function infraBaseline(): Outcome {
 		final snapshots: Array<InfraSnapshot> = _gate.infraSnapshots();
 		if (snapshots.length == 0) return Skipped('no --infra-tree');
-		final runs: Array<Result> = Pool.of(snapshots.length).map(snapshots, s -> _gate.hxq(s.tree, lintArgs(['.'])));
+		final runs: Array<Result> = Pool.of(snapshots.length).map(snapshots, s -> lintCommand(s.tree, ['.'], false, s.snapshot));
 		for (i => snapshot in snapshots) switch saveLint(runs[i], snapshot.tree, snapshot.snapshot) {
 			case Passed:
 			case other:
@@ -76,9 +84,9 @@ final class GateLint {
 			? _gate.withBaseCheckout(checkout -> lintPair(files, checkout, scope, key, null))
 			: lintPair(files, null, scope, key, cached);
 		if (!linted.match(Passed)) return linted;
-		final old: String = _gate.log('lint-touched-base.json');
+		final old: String = _gate.log(TOUCHED_BASE_REPORT);
 		File.saveContent(old, rebased(File.getContent(old), pathsNow));
-		final moved: LintMove = lintDiff(old, _gate.log('lint-touched.json'), 'lint-touched.txt');
+		final moved: LintMove = lintDiff(old, _gate.log(TOUCHED_REPORT), 'lint-touched.txt');
 		final notes: Array<String> = ['${moved.added} new on ${files.length} file(s)'];
 		final renamed: Int = [for (base => now in pathsNow) if (base != now) now].length;
 		if (renamed > 0) notes.push('$renamed moved');
@@ -110,12 +118,12 @@ final class GateLint {
 	private function lintPair(
 		files: Array<String>, checkout: Null<String>, scope: Array<String>, key: Null<String>, cached: Null<String>
 	): Outcome {
-		final commands: Array<Command> = [_gate.hxq(_gate.tree, lintArgs(files))];
-		if (checkout != null) commands.push(_gate.hxq(checkout, lintArgs(scope)));
+		final commands: Array<Command> = [lintCommand(_gate.tree, files, true, _gate.log(TOUCHED_REPORT))];
+		if (checkout != null) commands.push(lintCommand(checkout, scope, true, _gate.log(TOUCHED_BASE_REPORT)));
 		final runs: Array<Result> = Pool.of(commands.length).run(commands);
-		final now: Outcome = saveLint(runs[0], _gate.tree, _gate.log('lint-touched.json'));
+		final now: Outcome = saveLint(runs[0], _gate.tree, _gate.log(TOUCHED_REPORT));
 		if (!now.match(Passed)) return now;
-		final old: String = _gate.log('lint-touched-base.json');
+		final old: String = _gate.log(TOUCHED_BASE_REPORT);
 		if (checkout == null) {
 			File.saveContent(old, cached ?? '[]');
 			return Passed;
@@ -133,6 +141,7 @@ final class GateLint {
 				tree: checkout ?? _gate.tree,
 				scope: GateTree.TREE_SCOPE,
 				key: baseKey,
+				oracle: true,
 				snapshot: baseline.lint
 			}
 		].concat([
@@ -141,7 +150,8 @@ final class GateLint {
 					name: Path.withoutDirectory(s.tree),
 					tree: s.tree,
 					scope: ['.'],
-					key: cacheKey('tree ${s.tree} ${GateTree.treeState(s.tree)}', ['.']),
+					key: cacheKey('tree ${s.tree} ${GateTree.treeState(s.tree)} no-oracle', ['.']),
+					oracle: false,
 					snapshot: s.snapshot
 				}
 		]);
@@ -149,7 +159,8 @@ final class GateLint {
 		final misses: Array<Int> = [for (i => report in reports) if (report == null) i];
 		final runs: Array<Result> = misses.length == 0
 			? []
-			: Pool.of(misses.length).map(misses, i -> _gate.hxq(trees[i].tree, lintArgs(trees[i].scope)));
+			: Pool.of(misses.length)
+				.map(misses, i -> lintCommand(trees[i].tree, trees[i].scope, trees[i].oracle, _gate.log('infra-now-$i.json')));
 		for (j => i in misses) {
 			final now: String = _gate.log('infra-now-$i.json');
 			final linted: Outcome = saveLint(runs[j], trees[i].tree, now);
@@ -170,11 +181,21 @@ final class GateLint {
 		return moves.length == 0 ? Passed : Failed('findings moved: ${moves.join(', ')} — ${_gate.log('infra-<k>.txt')}');
 	}
 
-	/** The report of `run`, a `lint --format json` of `tree`, written to `out`; `NotRun` when it printed none. */
+	/** The report of `run`, `lintCommand`'s `lint --format json` of `tree` for `out`, written there; `NotRun` when it printed none. */
 	private function saveLint(run: Result, tree: String, out: String): Outcome {
-		if (!run.out.trim().startsWith('[')) return NotRun('lint of $tree printed no report: ${GateTree.quote(run)}');
+		if (!run.out.trim().startsWith('['))
+			return NotRun('lint of $tree printed no report: ${GateTree.quote(run)} — stderr in ${errLogOf(out)}');
 		File.saveContent(out, run.out);
 		return Passed;
+	}
+
+	/**
+	 * A `lint` of `scope` in `dir` that will report to `out`, its standard error in the file beside it (`errLogOf`): a lint
+	 * whose oracle is unavailable is chatty there, more than a pipe can be trusted to carry. `oracle` is
+	 * false for a tree that has no project to build.
+	 */
+	private function lintCommand(dir: String, scope: Array<String>, oracle: Bool, out: String): Command {
+		return _gate.hxqLogged(dir, lintArgs(scope, oracle), errLogOf(out));
 	}
 
 	/** `hxq lint-diff` of two snapshots, its report kept as `name` in the logs. */
@@ -224,6 +245,16 @@ final class GateLint {
 		return Json.stringify(records, null, '  ');
 	}
 
+	/** The arguments of a `lint --all --format json` of `scope`, with the compiler oracle unless `oracle` is false. */
+	public static function lintArgs(scope: Array<String>, oracle: Bool): Array<String> {
+		return ['lint'].concat(scope).concat(['--all', '--format', 'json']).concat(oracle ? [] : ['--no-oracle']);
+	}
+
+	/** The file the standard error of the lint reporting to `out` goes to. */
+	private static inline function errLogOf(out: String): String {
+		return Path.withExtension(out, 'err');
+	}
+
 	/**
 	 * What the engine of `gate`'s tree is built from — the committed `src` tree and its build flags — or null while either
 	 * has uncommitted changes. The sources, not the binary: two builds of one source differ in their bytes.
@@ -237,19 +268,18 @@ final class GateLint {
 			: null;
 	}
 
-	/** The arguments of a `lint --all --format json` of `scope`. */
-	private static function lintArgs(scope: Array<String>): Array<String> {
-		return ['lint'].concat(scope).concat(['--all', '--format', 'json']);
-	}
-
 }
 
-/** A tree INFRA gate 4 lints: how its row names it, what to lint, its cache entry and the snapshot it is compared with. */
+/**
+ * A tree INFRA gate 4 lints: how its row names it, what to lint and whether
+ * with the oracle, its cache entry and the snapshot it is compared with.
+ */
 typedef InfraLint = {
 	var name: String;
 	var tree: String;
 	var scope: Array<String>;
 	var key: Null<String>;
+	var oracle: Bool;
 	var snapshot: String;
 }
 

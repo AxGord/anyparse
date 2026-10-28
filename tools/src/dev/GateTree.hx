@@ -33,6 +33,9 @@ final class GateTree {
 	/** How long a quoted error may grow in a report row. */
 	private static inline final QUOTE_WIDTH: Int = 150;
 
+	/** The environment variable that pins which `apq.js` the `hxq` shim runs. */
+	private static inline final ENGINE_VAR: String = 'HXQ_BIN';
+
 	/** The characters of a commit or a digest a report row spells. */
 	private static inline final SHORT_HASH: Int = 9;
 
@@ -95,13 +98,23 @@ final class GateTree {
 
 	/** `command` run in the worktree on its engine. */
 	public function inTree(command: Command): Result {
-		return command.at(tree).env('HXQ_BIN', apq()).run();
+		return command.at(tree).env(ENGINE_VAR, apq()).run();
 	}
 
 	/** `hxq <args>` in `dir` on the worktree's engine, whatever tree it reads. */
 	public function hxq(dir: String, args: Array<String>): Command {
 		final shim: String = Path.join([tree, 'bin/hxq']);
-		return cmd('sh $shim $args').at(dir).env('HXQ_BIN', apq());
+		return cmd('sh $shim $args').at(dir).env(ENGINE_VAR, apq());
+	}
+
+	/**
+	 * `hxq <args>` as `hxq` runs it, its standard error written to the file `errLog` (truncated first) instead of a pipe.
+	 * A command that is chatty on stderr — a lint whose oracle reports every configuration unavailable — would otherwise fill
+	 * the pipe, and a writer that meets a full pipe has nowhere to put the rest.
+	 */
+	public function hxqLogged(dir: String, args: Array<String>, errLog: String): Command {
+		final shim: String = Path.join([tree, 'bin/hxq']);
+		return logged(['sh', shim].concat(args), errLog).at(dir).env(ENGINE_VAR, apq());
 	}
 
 	/** `body` over a detached checkout of the base, removed afterwards; a step that throws is `NotRun`. */
@@ -143,6 +156,11 @@ final class GateTree {
 
 	public static inline function signed(n: Int): String {
 		return n >= 0 ? '+$n' : '$n';
+	}
+
+	/** `argv` run with its standard error written to the file `errLog` (truncated first) and nothing on the error pipe. */
+	public static function logged(argv: Array<String>, errLog: String): Command {
+		return Command.of(['sh', '-c', 'exec "$$@" 2>"$$0"', errLog].concat(argv));
 	}
 
 	/**
