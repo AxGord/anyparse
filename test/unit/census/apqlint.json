@@ -1,0 +1,6 @@
+{
+	"$comment": "Every census entry ends in a comma on purpose: a union merge (.gitattributes) can then append to a list without rewriting the line above it.",
+	"rules": {
+		"redundant-trailing-comma": false
+	}
+}

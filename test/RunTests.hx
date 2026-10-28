@@ -177,6 +177,8 @@ class RunTests {
 			TestRegistry.arms();
 		else if (args.contains('--list-claims'))
 			TestRegistry.claims();
+		else if (args.contains('--list-deferred'))
+			TestRegistry.deferredArms();
 		else
 			null;
 		if (lines == null) return false;

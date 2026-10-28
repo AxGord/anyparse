@@ -29,18 +29,32 @@ final class Summary {
 
 	private final _steps: Array<Step> = [];
 
+	/** The note the step `time` is running has set so far (`detail`). */
+	private var _note: String = '';
+
 	public function new() {}
 
-	/** Record `name` as ended with `outcome` after `ms` milliseconds. */
-	public function add(name: String, outcome: Outcome, ms: Float = 0): Void {
-		_steps.push({ name: name, outcome: outcome, ms: ms });
+	/** Inside a step `time` runs: the reading its row shows when the step passes (a count, a gate line). */
+	public inline function detail(note: String): Void {
+		_note = note;
+	}
+
+	/** Record `name` as ended with `outcome` after `ms` milliseconds, with `note` shown beside a pass. */
+	public function add(name: String, outcome: Outcome, ms: Float = 0, note: String = ''): Void {
+		_steps.push({
+			name: name,
+			outcome: outcome,
+			ms: ms,
+			note: note
+		});
 	}
 
 	/** Run `step` as the step `name`, timed; a step that throws is recorded `NotRun` with the exception's message. */
 	public function time(name: String, step: () -> Outcome): Outcome {
 		final started: Float = Timer.stamp();
+		_note = '';
 		final outcome: Outcome = try step() catch (exception: Exception) NotRun(exception.message);
-		add(name, outcome, (Timer.stamp() - started) * MS_PER_SECOND);
+		add(name, outcome, (Timer.stamp() - started) * MS_PER_SECOND, _note);
 		return outcome;
 	}
 
@@ -60,7 +74,7 @@ final class Summary {
 		final rows: Array<String> = [
 			for (step in _steps) {
 				final why: String = switch step.outcome {
-					case Passed: '';
+					case Passed: step.note == '' ? '' : '  ${step.note}';
 					case Failed(why), NotRun(why), Skipped(why): '  $why';
 				};
 				'${step.name.rpad(' ', width)}  ${label(step.outcome).rpad(' ', OUTCOME_WIDTH)}  ${seconds(step.ms).lpad(' ', SECONDS_WIDTH)}$why';
@@ -103,4 +117,7 @@ typedef Step = {
 	var name: String;
 	var outcome: Outcome;
 	var ms: Float;
+
+	/** The reading a passed step shows; empty when it has none. */
+	var note: String;
 }

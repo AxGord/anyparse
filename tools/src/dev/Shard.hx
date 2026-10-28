@@ -42,8 +42,11 @@ final class Shard {
 	/** The last green run's per-class timings: the weights the next plan balances on. */
 	private static inline final WEIGHTS: String = 'bin/.suite-timings.tsv';
 
-	/** The test whose hand-maintained `REGISTERED_CLASSES` list cross-checks the runner's own class list. */
-	private static inline final PARITY_TEST: String = 'test/unit/TestDiscoveryParityTest.hx';
+	/**
+	 * The census whose `REGISTERED_CLASSES` list, the second declaration
+	 * `unit.TestDiscoveryParityTest` reads, cross-checks the runner's own class list.
+	 */
+	private static inline final PARITY_TEST: String = 'test/unit/census/RegisteredClasses.hx';
 
 	/**
 	 * What one shard may run before it is killed. The process driver bounds its own wait by its jobs' timeouts, and a
@@ -272,8 +275,8 @@ final class Shard {
 		final pin: Null<Int> = readPin(Path.join([job.repo, PARITY_TEST]));
 		if (pin != null && total != pin) {
 			job.warn('dev shard: the class-list producer printed $total classes, but');
-			job.warn('  unit.TestDiscoveryParityTest pins REGISTERED_CLASSES = $pin.');
-			job.warn('  Either discovery dropped a class, or the pin needs bumping — see $classesFile');
+			job.warn('  unit.census.RegisteredClasses lists $pin.');
+			job.warn('  Either discovery dropped a class, or the census needs `node bin/dev.js census --write` — see $classesFile');
 			return null;
 		}
 		final lists: Array<Array<String>> = [for (filter in filters) filter.split(',')];

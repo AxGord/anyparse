@@ -112,11 +112,11 @@ process.exitCode = failed;
 
 	public function testAProducerThatDisagreesWithThePinIsRefusedBeforeAnyShardRuns(): Void {
 		TempDir.with(dir -> {
-			FileSystem.createDirectory(dir.file('test/unit'));
-			File.saveContent(dir.file('test/unit/TestDiscoveryParityTest.hx'), "\tREGISTERED_CLASSES = [\n\t\t'only.One'\n\t];\n");
+			FileSystem.createDirectory(dir.file('test/unit/census'));
+			File.saveContent(dir.file('test/unit/census/RegisteredClasses.hx'), "\tREGISTERED_CLASSES = [\n\t\t'only.One',\n\t];\n");
 			final run: Ran = runFake(dir, 'green', 2, false);
 			Assert.equals(1, run.status);
-			Assert.isTrue(run.warned.exists(l -> l.contains('pins REGISTERED_CLASSES = 1.')), run.warned.join('\n'));
+			Assert.isTrue(run.warned.exists(l -> l.contains('RegisteredClasses lists 1.')), run.warned.join('\n'));
 			Assert.equals(0, run.printed.length, 'no shard ran, so nothing was measured');
 		});
 	}

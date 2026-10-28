@@ -6,8 +6,7 @@ package unit.census;
  * package (`unit.<Class>` sorts before `unit.check`) and the rule tests `unit.check.A*`..`O*`
  *
  * SORTED, in code-unit order (`TestRegistry.pins()` sorts so): a new pin goes into the part
- * whose range holds it, at its sorted place — `hxq add-element test/unit/census/PinsCheckAToO.hx --sorted
- * --select 'FinalMember:PINS >> ArrayExpr' "'<entry>'" --write`. The parts concatenate in
+ * whose range holds it, at its sorted place — `node bin/dev.js census --write` puts it there. The parts concatenate in
  * range order, so an entry in the wrong part fails the census as a misordered list.
  */
 @:nullSafety(Strict)
@@ -888,7 +887,7 @@ final class PinsCheckAToO {
 		'unit.check.OwnedTypesCheckTest#testNoDeclarationIsInert :: control :: M-OWNED-SKIP-REASON-NULL',
 		'unit.check.OwnedTypesCheckTest#testOwnersArePackageGlobs :: control :: M-OWNED-OWNERS-IGNORED',
 		'unit.check.OwnedTypesCheckTest#testTheDeclaringModuleOwnsItsType :: control :: M-OWNED-DECLARING-MODULE',
-		'unit.check.OwnedTypesCheckTest#testTheReaderNamesEveryDrop :: control :: M-OWNED-READER-NO-OWNERS,M-OWNED-PARSE'
+		'unit.check.OwnedTypesCheckTest#testTheReaderNamesEveryDrop :: control :: M-OWNED-READER-NO-OWNERS,M-OWNED-PARSE',
 	];
 
 }

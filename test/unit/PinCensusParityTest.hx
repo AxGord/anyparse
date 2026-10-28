@@ -18,8 +18,8 @@ import utest.Test;
  * The census is ALPHABETICAL by `ClassName#testMethod` (matching `TestRegistry.pins()`'s own
  * sort) and lives in `unit.census`, cut by sorted range into parts small enough to grow:
  * `PinsCheckAToO`, `PinsCheckPToZ`, `PinsGrammarAndCli`, `PinsQueryAndRuntime`, concatenated
- * in that order. A new pin goes into the part whose range holds it, with `hxq add-element
- * --sorted`. The assertion reports a computed missing/extra diff on failure
+ * in that order. A new pin goes into the part whose range holds it, placed by
+ * `node bin/dev.js census --write`. The assertion reports a computed missing/extra diff on failure
  * (`CensusDiff.diffedMsg`) instead of naming only the failing test method.
  */
 @:nullSafety(Strict)

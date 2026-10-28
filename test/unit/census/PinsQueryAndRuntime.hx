@@ -5,8 +5,7 @@ package unit.census;
  * the pins from `'unit.query.'` to the end: `unit.query` and `unit.runtime`
  *
  * SORTED, in code-unit order (`TestRegistry.pins()` sorts so): a new pin goes into the part
- * whose range holds it, at its sorted place — `hxq add-element test/unit/census/PinsQueryAndRuntime.hx --sorted
- * --select 'FinalMember:PINS >> ArrayExpr' "'<entry>'" --write`. The parts concatenate in
+ * whose range holds it, at its sorted place — `node bin/dev.js census --write` puts it there. The parts concatenate in
  * range order, so an entry in the wrong part fails the census as a misordered list.
  */
 @:nullSafety(Strict)
@@ -160,7 +159,6 @@ final class PinsQueryAndRuntime {
 		'unit.query.CallGraphTest#testDeclarationsWritingATypeDifferentlyDispatchOnEach :: control :: '
 			+ 'M-TS-DECL-EACH-MEMBER,M-TS-DECL-EACH-RETURN,M-TS-DECL-EACH-UNTYPED,M-TS-KEY-LINED',
 		'unit.query.CallGraphTest#testDynamicMethodCallIsAlsoAFunctionValueCall :: control :: M-GRAPH-DYNAMIC-METHOD',
-
 		'unit.query.CallGraphTest#testEnumConstructorSharingAStaticFunctionNameIsUnresolved :: control :: M-GRAPH-ENUM-VS-STATIC',
 		'unit.query.CallGraphTest#testEveryUsingThatDeclaresTheExtensionIsATarget :: control :: M-GRAPH-USING-ALL',
 		'unit.query.CallGraphTest#testEveryValueUseOfAFunctionIsARef :: control :: M-GRAPH-VALUE-USE,M-GRAPH-VALUE-USE-LAMBDA',
@@ -1603,7 +1601,7 @@ final class PinsQueryAndRuntime {
 		'unit.runtime.SameItemsTest#testSameLengthDifferentItemsDiffer :: control :: M-SAMEITEMS-LENGTH-ONLY',
 		'unit.runtime.SortedOffsetsTest#testAnOffsetBelowTheRangeIsNotInIt :: control :: M-SORTED-OFFSETS-LOWER-BLIND',
 		'unit.runtime.SortedOffsetsTest#testTheLowerBoundIsInclusive :: guard :: ',
-		'unit.runtime.SortedOffsetsTest#testTheUpperBoundIsExclusive :: control :: M-SORTED-OFFSETS-UPPER-BLIND'
+		'unit.runtime.SortedOffsetsTest#testTheUpperBoundIsExclusive :: control :: M-SORTED-OFFSETS-UPPER-BLIND',
 	];
 
 }
