@@ -58,6 +58,11 @@ final class Summary {
 		return outcome;
 	}
 
+	/** The steps recorded so far, in run order. */
+	public function steps(): Array<Step> {
+		return _steps.copy();
+	}
+
 	/** Whether every step passed or was skipped. */
 	public function passed(): Bool {
 		for (step in _steps) switch step.outcome {
