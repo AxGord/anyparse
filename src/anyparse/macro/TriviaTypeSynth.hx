@@ -494,8 +494,6 @@ class TriviaTypeSynth {
 	private static final shapes: Array<ShapeBuilder.ShapeResult> = [];
 	private static final defined: Map<String, Bool> = [];
 
-	private static var convertersAdded: Bool = false;
-
 	public static function arm(shape: ShapeBuilder.ShapeResult): Void {
 		if (shapes.indexOf(shape) == -1) shapes.push(shape);
 		final rootPack: Array<String> = packOf(shape.root);
@@ -519,10 +517,11 @@ class TriviaTypeSynth {
 		// (`(<T>, WriteOptions) -> Null<<T>>`) regardless of trivia
 		// propagation. One Converters class per `Context.defineModule`
 		// batch — additional `arm()` calls for the same module batch
-		// must not re-emit (Haxe rejects duplicate type defs); the
-		// `convertersAdded` flag guards repeat invocations.
-		if (!convertersAdded) {
-			convertersAdded = true;
+		// must not re-emit (Haxe rejects duplicate type defs). The guard is
+		// keyed by the synth module, so every trivia grammar of one
+		// compilation gets its own pair of classes.
+		if (!defined.exists(modulePath)) {
+			defined[modulePath] = true;
 			paired.push(TriviaPairConverters.buildConvertersClass(convertedNames, synthPack));
 			// Where the parser would put a comment that directly follows a value (`TailComments.rehome_<T>`): read by
 			// the sep-Star writer when it drops a separator the source had a comment after. Built from the paired

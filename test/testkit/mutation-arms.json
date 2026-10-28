@@ -31677,6 +31677,37 @@
 			"find": "return every > 0 && landing % every == 0 ? 'landing $landing' : null;",
 			"replace": "return null;",
 			"note": "the count of landings never asks for the full battery, so a run of quiet slices is never checked against the one-process suite"
+		},
+		{
+			"name": "M-TRIVIA-SYNTH-ONCE-PER-COMPILATION",
+			"type": "anyparse.macro.TriviaTypeSynth",
+			"method": "arm",
+			"find": "!defined.exists(modulePath)",
+			"replace": "!defined.exists(\"\") && (defined[\"\"] = true)",
+			"note": "the synth Converters / TailComments classes are emitted once per compilation, so a second trivia grammar built beside the first finds neither in its own synth module"
+		},
+		{
+			"name": "M-KW-SECOND-OVERWRITES",
+			"type": "anyparse.macro.strategy.Kw",
+			"method": "annotate",
+			"find": "if (seen)",
+			"replace": "if (false)",
+			"note": "a second @:kw on one node silently overwrites the first, dropping a keyword from the grammar"
+		},
+		{
+			"name": "M-BOM-NOT-CARRIED",
+			"type": "anyparse.runtime.ByteOrderMark",
+			"method": "carry",
+			"force": "written",
+			"note": "the written text never gets the source byte-order mark back, so a whole-file write strips it"
+		},
+		{
+			"name": "M-BOM-HAXE-SEAT",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "writeRoundTrip",
+			"find": "ByteOrderMark.carry(source, FormatterOff.restore(source, emitted, HaxeLexicalRegions.scanComments))",
+			"replace": "FormatterOff.restore(source, emitted, HaxeLexicalRegions.scanComments)",
+			"note": "the Haxe whole-file write drops the carry, so fmt and every canonicalising op strip a file byte-order mark"
 		}
 	]
 }

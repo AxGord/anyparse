@@ -55,7 +55,15 @@ class Kw implements Strategy {
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return;
+		var seen: Bool = false;
 		for (entry in meta) if (entry.name == ':kw') {
+			// One node has one keyword slot: a second `@:kw` would overwrite the first and drop a keyword from the grammar.
+			if (seen)
+				Context.fatalError(
+					'@:kw appears twice on one node — a node leads with one keyword; spell the second on the next field or ctor arg',
+					entry.pos
+				);
+			seen = true;
 			if (entry.params.length != 1) {
 				Context.fatalError('@:kw expects exactly one string argument (multi-literal kw is not implemented yet)', entry.pos);
 			}
