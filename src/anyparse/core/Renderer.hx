@@ -2501,7 +2501,7 @@ class Renderer {
 					final restWidth: Int = flatTokenWidthOfRestStack(stack, {
 						width: width,
 						col: col + pendingSpace + flatWidth,
-						exactCol: opensDelimiterAlone(breakDoc) && rendersAsMeasured(flatDoc),
+						exactCol: opensDelimiterAlone(breakDoc) && rendersAsMeasured(flatDoc, false, col + pendingSpace + flatWidth),
 						groupAsker: false
 					});
 					final fullLineCrosses: Bool = col + effPending + flatWidth + restWidth >= fireAt;
@@ -4052,8 +4052,11 @@ class Renderer {
 	 * probe that reads the rest of the line or its own threshold, which may break against a rest the asker no longer
 	 * counts. With `restProbeEnds` (a `GroupWithRestProbe` asker, `RestSibling.groupAsker`) a rest-aware group counts
 	 * as measured too: it renders flat as measured, or it breaks and ends the line before any column after it matters.
+	 * With `measuredEnd` (the column `d` ends at when it renders as measured, `-1` unknown) a `lineLength` threshold
+	 * probe whose threshold lies past it counts too: everything before it rendered as measured, so its own flat width
+	 * ends at or before `measuredEnd` and it takes its flat side.
 	 */
-	private static function rendersAsMeasured(d: Doc, restProbeEnds: Bool = false): Bool {
+	private static function rendersAsMeasured(d: Doc, restProbeEnds: Bool = false, measuredEnd: Int = -1): Bool {
 		final stack: Array<RouteEntry> = [
 			{
 				doc: d,
@@ -4079,6 +4082,13 @@ class Renderer {
 					return false;
 				case IfBreak(_, _) if (!e.grouped):
 					return false;
+				case IfWidthExceeds(n, _, fl) if (measuredEnd >= 0 && n > measuredEnd):
+					stack.push({
+						doc: fl,
+						grouped: e.grouped,
+						forceFlat: e.forceFlat,
+						hardFlat: e.hardFlat
+					});
 				case _ if (pushRouteChildren(e, stack)):
 				case _:
 					return false;

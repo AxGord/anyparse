@@ -29,6 +29,15 @@ final class ChainLineLengthRuleTest extends Test {
 	private static final AT_100: String =
 		'{"conditions": [{"cond": "lineLength >= n", "value": 100}], "type": "onePerLineAfterFirst", "location": "beforeLast"}, ';
 
+	/** A `lineLength` rule at 90 columns, past an 80-column limit: a fill once the line reaches it. */
+	private static final AT_90: String =
+		'{"conditions": [{"cond": "lineLength >= n", "value": 90}], "type": "fillLine", "location": "beforeLast"}, ';
+
+	/** The two `lineLength` rules at 160 columns a 140-column fork config leads its `+` cascade with. */
+	private static final SOFT_160: String = '{"conditions": [{"cond": "lineLength >= n", "value": 160}, {"cond": '
+		+ '"anyItemLength >= n", "value": 60}], "type": "onePerLineAfterFirst", "location": "beforeLast"}, {"conditions": '
+		+ '[{"cond": "lineLength >= n", "value": 160}], "type": "fillLine", "location": "beforeLast"}, ';
+
 	public function new(): Void {
 		super();
 	}
@@ -112,6 +121,87 @@ final class ChainLineLengthRuleTest extends Test {
 		Assert.equals(plain, HxWriteFixture.triviaWrite(src, reevalConfig(UNREACHED)));
 	}
 
+	/**
+	 * A paren holding a short `+` chain stays glued on a line a later argument list breaks, as it does without the
+	 * `lineLength` rules: the chain's threshold cannot fire on that line, so the rest of it is measured up to where the
+	 * argument list opens.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-REST-THRESHOLD-INEXACT')
+	public function testALineLengthRuleNeverOpensAGluedParen(): Void {
+		final src: String = 'class M {\n\tfunction f() {\n\t\tfor (name in names) {\n\t\t\t(((base + name) : Path).stem : Path).text = '
+			+ 'new Template(content).execute(titleArgument, applicationArgument, assetsArgument, dateArgument);\n\t\t\tx = '
+			+ '(base + name).text = new Template(content).execute(titleArgument, applicationArgument, assetsArgument, '
+			+ 'dateArgument, extraArgument);\n\t\t}\n\t}\n}';
+		final plain: String = HxWriteFixture.triviaWrite(src, forkConfig(''));
+		Assert.isTrue(plain.contains('\t(((base + name) : Path).stem : Path).text = new Template(content).execute(\n'), plain);
+		Assert.isTrue(plain.contains('\tx = (base + name).text = new Template(content).execute(\n'), plain);
+		Assert.equals(plain, HxWriteFixture.triviaWrite(src, forkConfig(SOFT_160)));
+	}
+
+	/**
+	 * A `+` chain glued so that its last operand's paren opens stays glued under the `lineLength` rules, as it does
+	 * without them, whether or not the chain sits in a paren of its own: the commit takes the side every threshold
+	 * answers not-fired, so the comprehension in the paren is not pushed past the limit and broken.
+	 */
+	@:pin('control')
+	@:killer('M-CHAIN-GLUE-THRESHOLD-FIRES')
+	@:killer('M-CHAIN-GLUE-PAREN-THRESHOLD-FIRES')
+	public function testALineLengthRuleKeepsAChainGluedToAnOpenedParen(): Void {
+		final src: String = 'class M {\n\tfunction f() {\n\t\tfor (name in names) {\n\t\t\tif (x) {\n\t\t\t\ttrace(1);\n\t\t\t\thelp = '
+			+ '(help == null ? \'\' : help + \'. \') + (\'Arguments:\'.foreground(ForegroundColour.DarkGrayColour) + \'; \' + '
+			+ '[for (a in node.args) describeArgument(a)].join(\', \'));\n\t\t\t\thelp = ((help == null ? \'\' : help + \'. \') + '
+			+ '(\'Arguments:\'.foreground(ForegroundColour.DarkGrayColour) + \'; \' + [for (a in node.args) describeArg(a)]'
+			+ '.join(\', \')));\n\t\t\t}\n\t\t}\n\t}\n}';
+		final plain: String = HxWriteFixture.triviaWrite(src, forkConfig(''));
+		Assert.isTrue(plain.contains('\thelp = (help == null ? \'\' : help + \'. \') + (\n'), plain);
+		Assert.isTrue(plain.contains('[for (a in node.args) describeArgument(a)].join(\', \')\n'), plain);
+		Assert.isTrue(plain.contains('\t(help == null ? \'\' : help + \'. \') + (\n'), plain);
+		Assert.isTrue(plain.contains('[for (a in node.args) describeArg(a)].join(\', \')\n'), plain);
+		Assert.equals(plain, HxWriteFixture.triviaWrite(src, forkConfig(SOFT_160)));
+	}
+
+	/**
+	 * An add-chain inside a broken outer add-chain collapses to one line under a `lineLength` rule past the limit, as it
+	 * does without the rule, whether or not its last operand is a paren: a threshold past the limit never fires on a
+	 * chain's flat side, and a collapse must not make it.
+	 */
+	@:pin('control')
+	@:killer('M-CHAIN-COLLAPSE-THRESHOLD-FIRES')
+	@:killer('M-CHAIN-COLLAPSE-PROBED-THRESHOLD-FIRES')
+	public function testALineLengthRuleKeepsTheInnerAddChainCollapsedPastTheLimit(): Void {
+		final src: String = 'class Main {\n\tfunction test():Void {\n\t\tfinal h:Float = Dimensions.HEADER_HEIGHT * scale + '
+			+ 'Dimensions.CELL_HEIGHT * (rowIdxLonger + firstOffsetValue - secondOffsetValue - thirdOffsetValue + 1);\n\t\t'
+			+ 'final h:Float = Dimensions.HEADER_HEIGHT * scale + Dimensions.CELL_HEIGHT * (rowIdxLonger + firstOffsetValue + '
+			+ 'secondOffsetValue - (thirdOffsetValue + 1));\n\t}\n}';
+		final plain: String = HxWriteFixture.triviaWrite(src, cascade(80, ''));
+		Assert.isTrue(plain.contains('(rowIdxLonger + firstOffsetValue - secondOffsetValue - thirdOffsetValue + 1);'), plain);
+		Assert.isTrue(plain.contains('(rowIdxLonger + firstOffsetValue + secondOffsetValue - (thirdOffsetValue + 1));'), plain);
+		Assert.equals(plain, HxWriteFixture.triviaWrite(src, cascade(80, AT_90)));
+	}
+
+	/**
+	 * A `lineLength` rule below the limit that an inner add-chain reaches, collapsed inside a broken outer add-chain,
+	 * still fires: a threshold the line can reach without exceeding the limit stays a live decision after the collapse.
+	 */
+	@:pin('control')
+	@:killer('M-CHAIN-GLUED-SIDE-DROPS-REACHED-THRESHOLD')
+	public function testAReachedLineLengthRuleBelowTheLimitStillBreaksACollapsedInnerChain(): Void {
+		final a: String = ''.lpad('a', 44);
+		final b: String = ''.lpad('b', 37);
+		final c: String = ''.lpad('c', 20);
+		final d: String = ''.lpad('d', 30);
+		final e: String = ''.lpad('e', 31);
+		final f: String = ''.lpad('f', 29);
+		final g: String = ''.lpad('g', 13);
+		final src: String = 'class M {\n\tfunction f() {\n\t\tvar s = ($a + $b + $c) + ($d + $e + $f + $g);\n\t}\n}';
+		Assert.equals(
+			'class M {\n\tfunction f() {\n\t\tvar s = ($a\n\t\t\t+ $b\n\t\t\t+ $c)\n\t\t\t+ ($d\n\t\t\t\t+ $e\n\t\t\t\t+ $f\n\t\t\t\t+ $g'
+			+ ');\n\t}\n}',
+			HxWriteFixture.triviaWrite(src, forkConfig(AT_100))
+		);
+	}
+
 	/** The opAdd and opBool cascades at `limit`: the tail, after the unreached `lineLength` rule when `unreached`. */
 	private static function config(limit: Int, unreached: Bool): String {
 		return cascade(limit, unreached ? UNREACHED : '');
@@ -122,6 +212,18 @@ final class ChainLineLengthRuleTest extends Test {
 		final rules: String = '[$prefix$TAIL]';
 		return '{"wrapping": {"maxLineLength": $limit, "opAddSubChain": {"defaultWrap": "noWrap", "rules": $rules}, '
 			+ '"opBoolChain": {"defaultWrap": "noWrap", "rules": $rules}}}';
+	}
+
+	/**
+	 * A 140-column config with a leading-break call wrap and expression wrap, whose `+` cascade is the rules `prefix`
+	 * spells, then the tail.
+	 */
+	private static function forkConfig(prefix: String): String {
+		return '{"wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": '
+			+ '[{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount '
+			+ '<= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}, "expressionWrapping": {'
+			+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], '
+			+ '"type": "noWrap"}]}, "opAddSubChain": {"defaultWrap": "noWrap", "rules": [$prefix$TAIL]}}}';
 	}
 
 	/** An opBool cascade whose exceeds answer is a trailing-operator fill, after the rules `prefix` spells. */

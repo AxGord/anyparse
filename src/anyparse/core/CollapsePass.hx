@@ -239,7 +239,7 @@ final class CollapsePass {
 		// with the original brk and double-indent the opened paren. The commit
 		// itself is WIDTH-GATED for a tagged pure-opAddSub chain — see
 		// `commitChainGlue`.
-		final glued: Null<Doc> = chainGluedIfOpens(d, decisions);
+		final glued: Null<Doc> = chainGluedIfOpens(d, decisions, width);
 		if (glued != null) return commitChainGlue(d, glued, decisions, insideBroken, width);
 
 		// COMPARE-OP-GLUE (leg 2): a never-wrap-marked binary operator Group
@@ -271,7 +271,7 @@ final class CollapsePass {
 			case WrapBoundary(IfNaturalFirstLineFitsOpenDelim(n, pivot, noWrap)):
 				final probed: Null<TaggedAddChain> = taggedAddPivot(pivot);
 				if (probed != null) {
-					if (insideBroken) return WrapBoundary(rewrite(probed.flat, decisions, true, width));
+					if (insideBroken) return WrapBoundary(rewrite(gluedSide(probed.flat, width), decisions, true, width));
 					final broke: Bool = opens(probed.marker, decisions);
 					return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(
 						n, rebuildTaggedAddPivot(probed, decisions, broke, width), rewrite(noWrap, decisions, false, width)
@@ -396,7 +396,7 @@ final class CollapsePass {
 	 * `opbool_reeval_strips_opadd_breaks`.
 	 */
 	private static function rewriteTaggedAddChain(tagged: TaggedAddChain, decisions: CollapseRun, insideBroken: Bool, width: Int): Doc {
-		if (insideBroken) return WrapBoundary(rewrite(tagged.flat, decisions, true, width));
+		if (insideBroken) return WrapBoundary(rewrite(gluedSide(tagged.flat, width), decisions, true, width));
 		final broke: Bool = opens(tagged.marker, decisions);
 		// ω-opadd-plain-fillline: a top-level tagged opAddSub chain (NOT
 		// `insideBroken`, and NOT a compare-op-glue left — that path is intercepted
@@ -991,24 +991,24 @@ final class CollapsePass {
 	 * Used on a chain's committed-glued (`flat`) branch so the inner paren
 	 * opens within the glued tail.
 	 */
-	private static function commitOpens(d: Doc, decisions: CollapseRun): Doc {
+	private static function commitOpens(d: Doc, decisions: CollapseRun, width: Int): Doc {
 		final hit: Null<Doc> = decisions._committed.get(d);
 		if (hit != null) return hit;
 		decisions.evaluations++;
-		final out: Doc = commitOpensUnmemoized(d, decisions);
+		final out: Doc = commitOpensUnmemoized(d, decisions, width);
 		decisions._committed.set(d, out);
 		return out;
 	}
 
 	/** The body of `commitOpens`, run once per node. */
-	private static function commitOpensUnmemoized(d: Doc, decisions: CollapseRun): Doc {
+	private static function commitOpensUnmemoized(d: Doc, decisions: CollapseRun, width: Int): Doc {
 		switch d {
 			case IfFullLineExceeds(_, open, _) if (isCandidate(d, decisions) && opens(d, decisions)):
-				return commitOpens(open, decisions);
+				return commitOpens(open, decisions, width);
 			case _:
 		}
-		final glued: Null<Doc> = chainGluedIfOpens(d, decisions);
-		if (glued != null) return WrapBoundary(commitOpens(glued, decisions));
+		final glued: Null<Doc> = chainGluedIfOpens(d, decisions, width);
+		if (glued != null) return WrapBoundary(commitOpens(glued, decisions, width));
 
 		// A per-binary `Group` cascade on the spine between the committed
 		// chain and the opened paren (e.g. `(paren) / 2` — the `/` is a
@@ -1034,13 +1034,13 @@ final class CollapsePass {
 			case Group(Concat(items)), GroupWithRestProbe(Concat(items)), Flatten(Concat(items)) if (subtreeOpens(d, decisions)):
 				return Concat([
 					for (it in items)
-						subtreeOpens(it, decisions) ? commitOpens(it, decisions) : Flatten(commitOpens(it, decisions))
+						subtreeOpens(it, decisions) ? commitOpens(it, decisions, width) : Flatten(commitOpens(it, decisions, width))
 				]);
 			case Group(inner), GroupWithRestProbe(inner), Flatten(inner) if (subtreeOpens(d, decisions)):
-				return commitOpens(inner, decisions);
+				return commitOpens(inner, decisions, width);
 			case _:
 		}
-		return D.mapChildren(d, child -> commitOpens(child, decisions));
+		return D.mapChildren(d, child -> commitOpens(child, decisions, width));
 	}
 
 	/**
@@ -1056,12 +1056,13 @@ final class CollapsePass {
 	 *    threshold above lineWidth; outer `IfBreak.flat` is the glued shape.
 	 * The glued branch is always the flat/no-fire side, which for the
 	 * anchor's `opAddSubChain` config (`defaultWrap: noWrap`) is the
-	 * NoWrap shape `items[0] op items[1] …`.
+	 * NoWrap shape `items[0] op items[1] …`; a flat side the cascade's
+	 * `lineLength` thresholds partition is read through `gluedSide`.
 	 */
-	private static function chainGluedIfOpens(d: Doc, decisions: CollapseRun): Null<Doc> {
+	private static function chainGluedIfOpens(d: Doc, decisions: CollapseRun, width: Int): Null<Doc> {
 		final flat: Null<Doc> = switch d {
-			case WrapBoundary(Group(IfBreak(_, fl))): fl;
-			case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(fl)): fl;
+			case WrapBoundary(Group(IfBreak(_, fl))): gluedSide(fl, width);
+			case WrapBoundary(GroupWithRestProbe(IfBreak(_, fl))) if (gluesInfixChain(gluedSide(fl, width))): gluedSide(fl, width);
 			case WrapBoundary(Group(IfWidthExceeds(_, _, fl))): fl;
 			case WrapBoundary(Group(IfFullLineExceeds(_, _, fl))): fl;
 			case _: null;
@@ -1072,6 +1073,19 @@ final class CollapsePass {
 			flat
 		else
 			null;
+	}
+
+	/**
+	 * The shape a chain's flat side settles on once a commit glues it: the side every `lineLength` threshold past
+	 * `width` (`IfWidthExceeds`) answers not-fired. Such a threshold can fire only on a line that also exceeds `width`,
+	 * which the flat side already ruled out; answered after the commit it would see the chain flat, not the paren the
+	 * commit opens or the outer chain that broke around it. A threshold at or below `width` stays a live decision.
+	 */
+	private static function gluedSide(flat: Doc, width: Int): Doc {
+		return switch flat {
+			case IfWidthExceeds(n, _, notFired) if (n > width): gluedSide(notFired, width);
+			case _: flat;
+		};
 	}
 
 	/**
@@ -1400,7 +1414,7 @@ final class CollapsePass {
 	 * the two-branch chain signature), never Haxe syntax.
 	 */
 	private static function commitChainGlue(d: Doc, glued: Doc, decisions: CollapseRun, insideBroken: Bool, width: Int): Doc {
-		final committed: Doc = WrapBoundary(commitOpens(glued, decisions));
+		final committed: Doc = WrapBoundary(commitOpens(glued, decisions, width));
 		final tagged: Null<TaggedAddChain> = insideBroken ? null : taggedAddChain(d);
 		return tagged == null
 			? committed
