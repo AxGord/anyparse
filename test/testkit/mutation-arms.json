@@ -31661,6 +31661,22 @@
 			"find": "if (inBody(version, line)) version.lines[line]",
 			"replace": "if (inBody(version, line) && carriesWords(version.lines[line])) version.lines[line].trim()",
 			"note": "body lines are compared trimmed and without punctuation-only lines, so a closing brace moved past a statement beside an added import reads as an imports-only change"
+		},
+		{
+			"name": "M-LAND-DIVERGENCE-PATH-STAYS-QUICK",
+			"type": "dev.Land",
+			"method": "fullReason",
+			"find": "for (path in changed) for (prefix in DIVERGENCE_PATHS) if (path.startsWith(prefix)) return 'touches $path';",
+			"replace": "",
+			"note": "a path where a shard and the one-process suite can diverge no longer asks for the full battery, so a slice that edits the test kit or a runtime cache lands on the quick one"
+		},
+		{
+			"name": "M-LAND-TENTH-LANDING-STAYS-QUICK",
+			"type": "dev.Land",
+			"method": "fullReason",
+			"find": "return every > 0 && landing % every == 0 ? 'landing $landing' : null;",
+			"replace": "return null;",
+			"note": "the count of landings never asks for the full battery, so a run of quiet slices is never checked against the one-process suite"
 		}
 	]
 }
