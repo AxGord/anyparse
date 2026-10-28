@@ -31617,6 +31617,43 @@
 			"method": "treeState",
 			"force": "dir",
 			"note": "an infra tree's cached lint is keyed by its path alone, so a tree that changed between gate runs is compared through the lint of what it held before"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-BY-POSITION",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "matchUnits",
+			"force": "[for (i in 0...after.units.length) i < before.units.length ? i : -1]",
+			"note": "declarations are paired by position instead of by name, so a member inserted in the middle reports every member below it as changed"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-RECORDS-IN-ORDER",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "matchUnits",
+			"find": "for (identical in [true, false])",
+			"replace": "for (identical in [false])",
+			"note": "records sharing a name path pair up in order without first matching identical ones, so a record inserted first reports every record after it as changed"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-BODY-FILTERED",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "inBody",
+			"force": "(version.owner[line] < 0 || !version.units[version.owner[line]].header) && carriesWords(version.lines[line])",
+			"note": "a body line of punctuation alone no longer counts, so a closing brace moved past a statement reads as no change and the file falls through to imports or renamed"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-RENAME-UNBOUND",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "boundEverywhere",
+			"force": "true",
+			"note": "every spelling of a renamed name counts as its binding, so a member renamed beside a same-named call on another receiver reads as a rename"
+		},
+		{
+			"name": "M-DECLARATION-DELTA-BODY-TRIMMED",
+			"type": "anyparse.query.cli.DeclarationDelta",
+			"method": "bodyLines",
+			"find": "if (inBody(version, line)) version.lines[line]",
+			"replace": "if (inBody(version, line) && carriesWords(version.lines[line])) version.lines[line].trim()",
+			"note": "body lines are compared trimmed and without punctuation-only lines, so a closing brace moved past a statement beside an added import reads as an imports-only change"
 		}
 	]
 }

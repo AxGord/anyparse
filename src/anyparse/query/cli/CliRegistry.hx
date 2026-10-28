@@ -11,6 +11,7 @@ import anyparse.query.cli.command.CalleesCommand;
 import anyparse.query.cli.command.CallersCommand;
 import anyparse.query.cli.command.CasesCommand;
 import anyparse.query.cli.command.ChangeSigCommand;
+import anyparse.query.cli.command.ChangedCommand;
 import anyparse.query.cli.command.ClustersCommand;
 import anyparse.query.cli.command.CommentRewriteCommand;
 import anyparse.query.cli.command.CondCommand;
@@ -167,6 +168,7 @@ final class CliRegistry {
 			new StdlibDupCommand(),
 			new GatesCommand(),
 			new DiffCommand(),
+			new ChangedCommand(),
 			new StripCommand(),
 			new WriterEqualsCommand(),
 			new WriterProbeCommand(),
