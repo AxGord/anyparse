@@ -119,12 +119,6 @@ final class Branches {
 		};
 	}
 
-	/** The threads a pool lease granted this process (`WF_THREADS`), or null outside a lease. */
-	public static function leased(): Null<Int> {
-		final threads: Null<Int> = Std.parseInt(Sys.getEnv('WF_THREADS') ?? '');
-		return threads != null && threads > 0 ? threads : null;
-	}
-
 	/** What `budget` leaves beside the `held` threads, at least one; null without a budget. */
 	public static function share(budget: Null<Int>, held: Int): Null<Int> {
 		return budget == null ? null : Std.int(Math.max(1, budget - held));

@@ -35,8 +35,9 @@ typedef PoolServer = {
  * `server/invalidate`d before the compile — by CONTENT, never by modification time, which the server compares in whole
  * seconds while a `--fix` run writes and verifies inside one.
  *
- * Declined with the report-mode warm path by `APQ_NO_ORACLE_SERVER`, and on a machine whose compile budget
- * (`HaxeSpawn.parallelism`) cannot hold one server per configuration at once.
+ * Declined with the report-mode warm path by `APQ_NO_ORACLE_SERVER`. A server holds its compiled project while it waits,
+ * so the machine's memory (`HaxeSpawn.resident`) bounds how many start, the first configurations first; the compile
+ * budget (`HaxeSpawn.parallelism`) bounds only how many of them compile at once.
  */
 @:nullSafety(Strict)
 final class OracleServerPool {
@@ -69,7 +70,7 @@ final class OracleServerPool {
 
 	/**
 	 * Start one server per available configuration of `oracles` and its first compile in the background. A no-op once
-	 * started, under `APQ_NO_ORACLE_SERVER`, or when the machine's compile budget cannot hold them all.
+	 * started or under `APQ_NO_ORACLE_SERVER`; only as many as the machine's memory holds, the first ones first.
 	 */
 	public function start(oracles: Array<OracleConfig>): Void {
 		PhaseTimings.time('oracle servers start', startTimed.bind(oracles));
@@ -100,9 +101,10 @@ final class OracleServerPool {
 	private function startTimed(oracles: Array<OracleConfig>): Void {
 		#if nodejs
 		if (_batch != null || EnvFlag.isSet('APQ_NO_ORACLE_SERVER')) return;
-		final usable: Array<OracleConfig> = [];
-		for (o in oracles) if (o.unavailable == null && !usable.exists(u -> keyOf(u) == keyOf(o))) usable.push(o);
-		if (usable.length == 0 || HaxeSpawn.parallelism() < usable.length) return;
+		final available: Array<OracleConfig> = [];
+		for (o in oracles) if (o.unavailable == null && !available.exists(u -> keyOf(u) == keyOf(o))) available.push(o);
+		final usable: Array<OracleConfig> = available.slice(0, HaxeSpawn.resident());
+		if (usable.length == 0) return;
 		final ports: Array<Int> = [];
 		while (ports.length < usable.length) {
 			final port: Int = PORT_BASE + Std.random(PORT_SPAN);

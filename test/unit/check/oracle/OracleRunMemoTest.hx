@@ -3,6 +3,7 @@ package unit.check.oracle;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.facts.TypedFactsProbe;
 import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.OracleRunMemo;
 import anyparse.check.oracle.OracleServerPool;
@@ -128,6 +129,39 @@ final class OracleRunMemoTest extends Test {
 		Assert.isTrue(servers.length > 0, 'the server runs');
 		Assert.notNull(driver, 'the servers have a driver');
 		if (driver != null) Assert.equals(0, ProcessProbe.outlivingKilledDriver(driver, servers).length, 'the server outlived its driver');
+		pool?.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
+		#end
+	}
+
+	/**
+	 * A run whose compile budget is smaller than its configurations still gets a warm server for each of them: a server
+	 * waits between compiles, so the machine's memory bounds how many start, not the compiles that may run at once.
+	 */
+	@:pin('control')
+	@:killer('M-POOL-SERVERS-NEED-PARALLELISM')
+	@:access(anyparse.check.oracle.OracleServerPool)
+	public function testEveryConfigurationGetsAServerBeyondTheCompileBudget(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(GOOD, BUILD);
+		if (dir == null) return;
+		sys.io.File.saveContent('$dir/other.hxml', BUILD);
+		final oracles: Array<OracleConfig> = OracleRunMemo.attach([
+			{ hxml: 'build.hxml', dir: dir, defines: [] },
+			{ hxml: 'other.hxml', dir: dir, defines: [] }
+		], new OracleRunMemo(false, () -> ['$dir/Main.hx']));
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		final declared: Null<String> = Sys.getEnv('APQ_ORACLE_PARALLEL');
+		CliFixture.always(() -> Sys.putEnv('APQ_ORACLE_PARALLEL', declared ?? ''), () -> {
+			Sys.putEnv('APQ_ORACLE_PARALLEL', '1');
+			pool?.start(oracles);
+		});
+		final servers: Int = pool == null ? 0 : [for (_ in pool._servers) 1].length;
+		Assert.equals(
+			Std.int(Math.min(2, HaxeSpawn.resident())), servers, 'a compile budget of one started no server for two configurations'
+		);
 		pool?.stop();
 		CliFixture.removeDir(dir);
 		#else

@@ -9449,10 +9449,34 @@
 		{
 			"name": "M-ORACLE-PARALLEL-HALF-THE-CORES",
 			"type": "anyparse.check.oracle.HaxeSpawn",
-			"method": "parallelismFor",
-			"find": "Math.min(cores - 1,",
-			"replace": "Math.min(cores / 2,",
+			"method": "threadsFor",
+			"find": ": cores - 1;",
+			"replace": ": Std.int(cores / 2);",
 			"note": "the compile budget is half the cores again, so a thirteen-configuration project compiles in four waves on a sixteen-core machine"
+		},
+		{
+			"name": "M-ORACLE-PARALLEL-COUNTS-SLOW-CORES",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "threadsFor",
+			"find": "fast > 0 && fast < cores ? fast : cores - 1",
+			"replace": "cores - 1",
+			"note": "the efficiency cores count as compile threads again, so every round waits on the compiles that landed on the slowest cores"
+		},
+		{
+			"name": "M-ORACLE-PARALLEL-IGNORES-LEASE",
+			"type": "anyparse.check.oracle.HaxeSpawn",
+			"method": "parallelism",
+			"find": "PoolLease.threads() ?? machineThreads()",
+			"replace": "machineThreads()",
+			"note": "a run under a pool lease takes the whole machine again, so its compiles crowd out the processes the lease was shared with"
+		},
+		{
+			"name": "M-POOL-SERVERS-NEED-PARALLELISM",
+			"type": "anyparse.check.oracle.OracleServerPool",
+			"method": "startTimed",
+			"find": "available.slice(0, HaxeSpawn.resident())",
+			"replace": "HaxeSpawn.parallelism() < available.length ? [] : available",
+			"note": "a compile budget smaller than the configurations starts no warm server at all, so every typecheck of a fix run compiles cold"
 		},
 		{
 			"name": "M-RUNMEMO-PROBE-RECOMPILES",
@@ -22396,7 +22420,7 @@
 		{
 			"name": "M-GC-MEMORY-UNCOUNTED",
 			"type": "anyparse.check.oracle.HaxeSpawn",
-			"method": "parallelismFor",
+			"method": "residentFor",
 			"find": "(tunedCollector ? GC_MEMORY : 0)",
 			"replace": "0",
 			"note": "the budget ignores the extra memory a tuned collector's compile holds, so a small machine runs more compiles than it has memory for"

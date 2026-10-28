@@ -1,6 +1,7 @@
 package anyparse.check.oracle;
 
 import anyparse.core.PhaseTimings;
+import anyparse.core.PoolLease;
 #if nodejs
 import anyparse.core.TempScratch;
 import haxe.DynamicAccess;
@@ -441,26 +442,94 @@ final class HaxeSpawn {
 	#end
 
 	/**
-	 * How many compiles of one project may run at once on this machine (`parallelismFor`). `APQ_ORACLE_PARALLEL` (a
-	 * positive integer) replaces the computed bound, for a machine the heuristic misjudges.
+	 * How many compiles of one project may run at once on this machine (`parallelismFor`) over the threads a pool lease
+	 * grants (`PoolLease`), or outside one the machine's own (`threadsFor`). `APQ_ORACLE_PARALLEL` (a positive integer)
+	 * replaces the computed bound, for a machine the heuristic misjudges.
 	 */
 	public static function parallelism(): Int {
 		final declared: Null<Int> = Std.parseInt(Sys.getEnv('APQ_ORACLE_PARALLEL') ?? '');
 		return declared != null && declared > 0
 			? declared
-			: #if nodejs parallelismFor(js.node.Os.cpus().length, js.node.Os.totalmem(), gcSetting() != null) #else 1 #end;
+			: #if nodejs parallelismFor(PoolLease.threads() ?? machineThreads(), js.node.Os.totalmem(), gcSetting() != null) #else 1 #end;
 	}
 
 	/**
-	 * The bound for a machine of `cores` cores and `memory` bytes: every core but one, at most as many compiles as the
-	 * memory holds at `COMPILE_MEMORY` each — plus `GC_MEMORY` when the compiles run under a `tunedCollector` — at most
-	 * `MAX_PARALLEL`, never fewer than one. A compile is one single-threaded process the caller only waits on, so the
-	 * cores are the budget; the knee of anyparse's own process fan-out (`docs/design-principles.md` § 2) is about parse
-	 * processes sharing a tree, not about compiles.
+	 * The bound for `threads` threads and `memory` bytes: at most a compile per thread, at most as many as the memory holds
+	 * (`residentFor`), at most `MAX_PARALLEL`, never fewer than one. A compile is one single-threaded process the caller
+	 * only waits on, so the threads are the budget; the knee of anyparse's own process fan-out (`docs/design-principles.md`
+	 * § 2) is about parse processes sharing a tree, not about compiles.
 	 */
-	public static function parallelismFor(cores: Int, memory: Float, tunedCollector: Bool): Int {
-		final perCompile: Float = COMPILE_MEMORY + (tunedCollector ? GC_MEMORY : 0);
-		return Std.int(Math.max(1, Math.min(MAX_PARALLEL, Math.min(cores - 1, memory / perCompile))));
+	public static function parallelismFor(threads: Int, memory: Float, tunedCollector: Bool): Int {
+		return Std.int(Math.max(1, Math.min(MAX_PARALLEL, Math.min(threads, residentFor(memory, tunedCollector)))));
+	}
+
+	/**
+	 * How many compiled projects `memory` bytes hold at once: `COMPILE_MEMORY` each, plus `GC_MEMORY` when they run under a
+	 * `tunedCollector`, never fewer than one. It bounds every process that keeps a compiled project, whether it compiles
+	 * now or waits warm (`OracleServerPool`).
+	 */
+	public static function residentFor(memory: Float, tunedCollector: Bool): Int {
+		return Std.int(Math.max(1, memory / (COMPILE_MEMORY + (tunedCollector ? GC_MEMORY : 0))));
+	}
+
+	/** `residentFor` this machine's memory and the collector its compiles run under. */
+	public static function resident(): Int {
+		return #if nodejs residentFor(js.node.Os.totalmem(), gcSetting() != null) #else 1 #end;
+	}
+
+	/**
+	 * The compile threads of a machine of `cores` cores, `fast` of them performance cores: the performance cores alone when
+	 * slower ones are left for the rest of the machine — a compile on an efficiency core is the slowest of its round — else
+	 * every core but one.
+	 */
+	public static inline function threadsFor(cores: Int, fast: Int): Int {
+		return fast > 0 && fast < cores ? fast : cores - 1;
+	}
+
+	/**
+	 * How many logical CPUs the Linux CPU list `list` names (`0-7,16-23`: sixteen), null for a list it cannot read. Pure.
+	 */
+	public static function cpuListCount(list: String): Null<Int> {
+		var count: Int = 0;
+		for (part in list.trim().split(',')) {
+			final bounds: Array<String> = part.split('-');
+			final low: Null<Int> = Std.parseInt(bounds[0]);
+			final high: Null<Int> = Std.parseInt(bounds[bounds.length - 1]);
+			if (bounds.length > 2 || low == null || high == null) return null;
+			final span: Int = high - low + 1;
+			if (span < 1) return null;
+			count += span;
+		}
+		return count;
+	}
+
+	/** `threadsFor` this machine: its logical CPUs, and its performance cores where it reports them. */
+	private static function machineThreads(): Int {
+		#if nodejs
+		final cores: Int = js.node.Os.cpus().length;
+		return threadsFor(cores, fastCores() ?? cores);
+		#else
+		return 1;
+		#end
+	}
+
+	/**
+	 * The logical CPUs of this machine's performance cores, null where it reports no such split: macOS names them as its
+	 * first performance level, Linux on a hybrid processor lists them under `cpu_core`.
+	 */
+	private static function fastCores(): Null<Int> {
+		return #if nodejs switch js.node.Os.platform() {
+			case 'darwin':
+				final probe: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('sysctl', ['-n', 'hw.perflevel0.logicalcpu']);
+				probe.status == 0 ? Std.parseInt(Std.string(probe.stdout).trim()) : null;
+			case 'linux':
+				try
+					cpuListCount(sys.io.File.getContent('/sys/devices/cpu_core/cpus'))
+				catch (exception: haxe.Exception)
+					null;
+			case _:
+				null;
+		} #else null #end;
 	}
 
 	/**
