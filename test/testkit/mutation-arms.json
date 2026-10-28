@@ -31624,6 +31624,22 @@
 			"method": "abortMerge",
 			"force": "false",
 			"note": "a merge in progress is never aborted, so a step that threw after the merge leaves the tree mid-merge with the staged files of the branch"
+		},
+		{
+			"name": "M-LAND-DIVERGENCE-PATH-STAYS-QUICK",
+			"type": "dev.Land",
+			"method": "fullReason",
+			"find": "for (path in changed) for (prefix in DIVERGENCE_PATHS) if (path.startsWith(prefix)) return 'touches $path';",
+			"replace": "",
+			"note": "a path where a shard and the one-process suite can diverge no longer asks for the full battery, so a slice that edits the test kit or a runtime cache lands on the quick one"
+		},
+		{
+			"name": "M-LAND-TENTH-LANDING-STAYS-QUICK",
+			"type": "dev.Land",
+			"method": "fullReason",
+			"find": "return every > 0 && landing % every == 0 ? 'landing $landing' : null;",
+			"replace": "return null;",
+			"note": "the count of landings never asks for the full battery, so a run of quiet slices is never checked against the one-process suite"
 		}
 	]
 }
