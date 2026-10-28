@@ -2,6 +2,9 @@ package devkit;
 
 import anyparse.check.HaxeSpawn.HaxeRun;
 
+using StringTools;
+using Lambda;
+
 /**
  * What one `Command` run produced: its exit `status` (null when it gave none), both streams, and `failure` — non-empty
  * only when no status could be had at all (not launched, killed by its timeout, out-wrote the stream cap).
@@ -44,6 +47,15 @@ final class Result {
 	public function check(): Result {
 		if (!ok) throw new CommandFailed(this);
 		return this;
+	}
+
+	/** The first line of either stream (or of `failure`) that reads like an error, else the first line; for one-line reports. */
+	public function firstError(): String {
+		final lines: Array<String> = '$err\n$out\n$failure'.split('\n').map(l -> l.trim()).filter(l -> l != '');
+		final error: Null<String> = lines.find(l ->
+			~/error|Error|ERROR|FAIL|fail|not found|refused|CONFLICT/.match(l) && l.indexOf('Warning') < 0
+		);
+		return error ?? lines[0] ?? 'exited $status';
 	}
 
 }

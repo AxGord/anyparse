@@ -5,8 +5,7 @@ package unit.census;
  * the pins from `'unit.check.P'` up to `'unit.cli.'`: the rule tests `unit.check.P*`..`Z*`
  *
  * SORTED, in code-unit order (`TestRegistry.pins()` sorts so): a new pin goes into the part
- * whose range holds it, at its sorted place — `hxq add-element test/unit/census/PinsCheckPToZ.hx --sorted
- * --select 'FinalMember:PINS >> ArrayExpr' "'<entry>'" --write`. The parts concatenate in
+ * whose range holds it, at its sorted place — `node bin/dev.js census --write` puts it there. The parts concatenate in
  * range order, so an entry in the wrong part fails the census as a misordered list.
  */
 @:nullSafety(Strict)
@@ -1290,7 +1289,7 @@ final class PinsCheckPToZ {
 		'unit.check.scan.UsingSitesTest#testAStaticOfATypeExpressionIsNoUse :: control :: M-USING-STATIC-RECEIVER',
 		'unit.check.scan.UsingSitesTest#testATypeArgumentOnTheFirstParameterKeepsEveryModule :: guard :: ',
 		'unit.check.scan.UsingSitesTest#testAValueSpelledLikeATypeIsNoTypeExpression :: control :: M-USING-STATIC-SHADOW',
-		'unit.check.scan.UsingSitesTest#testAnAccessTheModuleBindsOrCannotBeTypedKeepsIt :: guard :: '
+		'unit.check.scan.UsingSitesTest#testAnAccessTheModuleBindsOrCannotBeTypedKeepsIt :: guard :: ',
 	];
 
 }

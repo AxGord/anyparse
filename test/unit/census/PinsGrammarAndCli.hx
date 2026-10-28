@@ -6,8 +6,7 @@ package unit.census;
  * `unit.grammar` (with `unit.grammar.haxe`) and `unit.lowering`
  *
  * SORTED, in code-unit order (`TestRegistry.pins()` sorts so): a new pin goes into the part
- * whose range holds it, at its sorted place — `hxq add-element test/unit/census/PinsGrammarAndCli.hx --sorted
- * --select 'FinalMember:PINS >> ArrayExpr' "'<entry>'" --write`. The parts concatenate in
+ * whose range holds it, at its sorted place — `node bin/dev.js census --write` puts it there. The parts concatenate in
  * range order, so an entry in the wrong part fails the census as a misordered list.
  */
 @:nullSafety(Strict)
@@ -107,6 +106,10 @@ final class PinsGrammarAndCli {
 		'unit.core.RendererParenSiblingRestTest#testConsecutiveHeldBackSpacesAllStayOutOfTheColumn :: control :: '
 			+ 'M-PAREN-PENDING-LAST-ONLY',
 		'unit.core.RendererSharedDocTest#testProbeSearchVisitsASharedNodeOnce :: control :: M-PROBE-SEARCH-REVISITS',
+		'unit.dev.CensusTest#testAReorderIsADifference :: control :: M-CENSUS-ORDER-BLIND',
+		'unit.dev.CensusTest#testOrderOnlyRefusesANameTheRegistryLacksAndWritesNothing :: control :: M-CENSUS-ORDER-ONLY-WRITES-ANY-SET',
+		'unit.dev.MergeArmsTest#testAChangeOnOneSideWinsOverTheOthersSilence :: control :: M-MERGE-ARMS-THEIRS-LOST',
+		'unit.dev.MergeArmsTest#testAppendsOnBothSidesKeepOursFirst :: control :: M-MERGE-ARMS-APPEND-ORDER',
 		'unit.dev.ScrubGuardTest#testABackslashPathIsAMatch :: control :: M-SCRUB-PRIVATE-BACKSLASH-BLIND',
 		'unit.dev.ScrubGuardTest#testACompoundModuleAtTheTopOfASourceRootIsAMatch :: control :: M-SCRUB-PRIVATE-ROOT-MODULE-BLIND',
 		'unit.dev.ScrubGuardTest#testADottedModulePathIsAMatch :: control :: M-SCRUB-PRIVATE-DOTTED-BLIND',
@@ -618,7 +621,7 @@ final class PinsGrammarAndCli {
 		'unit.lowering.StarBlockEndedWsRewindTest#testASwallowedTerminatorBehindTrailingWhitespaceStillEndsTheStatement :: control :: '
 			+ 'M-PEB-WS-REWIND-OFF',
 		'unit.lowering.StarBlockEndedWsRewindTest#testAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
-		'unit.lowering.StarBlockEndedWsRewindTest#testTheShapeThePredicateAnswersForNeedsNoRewind :: guard :: '
+		'unit.lowering.StarBlockEndedWsRewindTest#testTheShapeThePredicateAnswersForNeedsNoRewind :: guard :: ',
 	];
 
 }

@@ -29,7 +29,7 @@ A contract lives in ONE place. When a class doc owns it (a registry's record sha
 | [`cli-query-phase0-queries.md`](cli-query-phase0-queries.md) | reference | 10 KB | `anyparse.query.Pattern` (the frozen v1 syntax) | the ten hand-written queries the v1 syntax was frozen against |
 | [`cli-query-roadmap.md`](cli-query-roadmap.md) | roadmap | 13 KB | — | the phased delivery plan of the CLI (phases 1–4 shipped; target lines are the original plan) |
 | [`roadmap.md`](roadmap.md) | roadmap | 17 KB | — | the platform's phases, deliverables and exit conditions |
-| [`decisions.md`](decisions.md) | ledger | 41 KB | — | one line per refuted hypothesis, with the merge SHA that holds the detail |
+| [`decisions.md`](decisions.md) | ledger | 41 KB | — | one line per refuted hypothesis, naming the slice (older lines: the merge SHA) that holds the detail |
 | [`journal/testing-log.md`](journal/testing-log.md) | journal | 321 KB | — | every reading and campaign narrative `testing.md` condensed, verbatim, under its origin section |
 | [`journal/cli-query-log.md`](journal/cli-query-log.md) | journal | 125 KB | — | every reading and narrative `cli-query-tool.md` condensed, verbatim, under its origin section |
 | [`journal/architecture-log.md`](journal/architecture-log.md) | journal | 11 KB | — | what `architecture.md` condensed: the `#if` raw-region census, the CLI migration chronicle, the superseded CoreIR / strategy / runtime listings |

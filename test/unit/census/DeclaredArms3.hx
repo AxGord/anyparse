@@ -4,9 +4,7 @@ package unit.census;
  * Part 3 of the arm census `unit.ArmCensusParityTest` compares with `TestRegistry.arms()`:
  * the arm NAMES in `test/testkit/mutation-arms.json` DECLARATION order, not alphabetical.
  *
- * The LAST part: a new arm is appended HERE, where the JSON puts it (`hxq add-element
- * test/unit/census/DeclaredArms3.hx --append --select 'FinalMember:ARMS >> ArrayExpr' "'<name>'" --write`;
- * regenerate from `node bin/test.js --list-arms` after a merge). When this part nears the
+ * The LAST part: a new arm is appended HERE, where the JSON puts it (`node bin/dev.js census --write` appends it). When this part nears the
  * `oversized-type` line limit, start `DeclaredArms4` and add it to the census concatenation.
  */
 @:nullSafety(Strict)
@@ -421,7 +419,6 @@ final class DeclaredArms3 {
 		'M-TS-SHADOWING-KEPT',
 		'M-TS-PATH-DECLARED-PACKAGE',
 		'M-TS-PATH-NOMINAL',
-
 		'M-TS-PATH-NULLABLE-KEYED',
 		'M-TS-ALIAS-TYPE',
 		'M-TS-STD-RETURN',
@@ -429,7 +426,6 @@ final class DeclaredArms3 {
 		'M-TS-STD-GETTER',
 		'M-TS-STD-GETTER-LOCAL',
 		'M-TS-STD-GETTER-TYPED',
-
 		'M-TS-STD-PLACEHOLDER',
 		'M-TS-NOTICE-WAIVED',
 		'M-TS-STD-AGREE',
@@ -454,7 +450,6 @@ final class DeclaredArms3 {
 		'M-TS-ALTERNATE-NEW',
 		'M-TS-DOTTED-TARGET',
 		'M-TS-DOTTED-WILDCARD',
-
 		'M-TS-LOCAL-CALL-READ',
 		'M-TS-PLACE-FRESH-STRUCT',
 		'M-TS-PLACE-FRESH-NEW',
@@ -526,7 +521,6 @@ final class DeclaredArms3 {
 		'M-TS-INFER-BARE',
 		'M-TS-DECL-EACH-MEMBER',
 		'M-TS-DECL-EACH-RETURN',
-
 		'M-TS-DECL-EACH-UNTYPED',
 		'M-TS-KEY-LINED',
 		'M-TS-CTOR-STORE-INERT',
@@ -874,7 +868,6 @@ final class DeclaredArms3 {
 		'M-PRIVATIZE-RULE-UNCHECKED',
 		'M-PRIVATIZE-INCOMPLETE-PROJECT',
 		'M-PRIVATIZE-UNCERTAIN-RUN',
-
 		'M-PRIVATIZE-TYPE-REACH',
 		'M-PRIVATIZE-CHAIN',
 		'M-PRIVATIZE-AUTOBUILD-COUNTS',
@@ -1826,7 +1819,11 @@ final class DeclaredArms3 {
 		'M-SHORTEN-IMPORT-QUALIFIED-TAIL-VETOES',
 		'M-SHORTEN-COUNT-BY-SPELLING',
 		'M-SHORTEN-GUARDED-WITHOUT-SHORT-USE',
-		'M-PRINTER-IMPORT-REBINDS-BLIND'
+		'M-PRINTER-IMPORT-REBINDS-BLIND',
+		'M-MERGE-ARMS-THEIRS-LOST',
+		'M-MERGE-ARMS-APPEND-ORDER',
+		'M-CENSUS-ORDER-BLIND',
+		'M-CENSUS-ORDER-ONLY-WRITES-ANY-SET',
 	];
 
 }

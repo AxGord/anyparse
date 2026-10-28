@@ -15,6 +15,10 @@ decided the question; it may not become a record of runs.
 
 **Where the detail is:** the named commit. Most are merges of a slice branch, so read them with
 `git log <sha>^1..<sha>^2` — `git show` on a merge prints the merge line and nothing else.
+Since PROC-1 a line names its SLICE instead (`→ PROC-1`), known while the line is written; its
+merge is `git log --merges --grep 'Merge batch/hxqb-PROC1:' --format=%H` (the id without its
+hyphen, the colon so `FB2` does not match `FB2b`). This file merges by union (`.gitattributes`),
+so two slices appending here never conflict.
 
 ---
 
@@ -5435,3 +5439,9 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - a `#if` occurrence was to be taken by the import-free branch on the next fixpoint pass, once the import it rides on is in place → no: at base every `#if` occurrence was excluded from rewriting outright; the rule now is the user's (2026-10-24): a guarded occurrence goes short only where the file already writes the short name in an unguarded type position, or in the same call that adds the import its unguarded uses bought, and keeps its full path otherwise (an import-free route alone is not enough) → `c56a75df4`
 - the add-import arm's repeats on a real tree were to be held back by the threshold or the proof → no: the freeness scan counted a QUALIFIED tail of the simple name (`@:access(a.b.Foo)`, another package's `x.y.Foo` written in full, a member access `o.Foo`) as a rival binding, although an import binds only the bare name; the shortening caller now reads unqualified occurrences only, as `unused-import` does → `c56a75df4`
 - a fresh import was to be safe once its own simple name was free → no (review round 1): `import z.Color;` also binds `Red` and `import z.Thing;` the module's `Helper`, and a file reading either bare changed meaning silently (4.3.7: `a.Paint` became `z.Color`, `root` became `z`); `canAddImport` now refuses when any other name `ImportBindings` lists for the line is read bare → `c56a75df4`
+
+## PROC-1 (2026-10-28) — the append-only files merge by themselves; the gates and the merge are one command each
+
+- `test/testkit/mutation-arms.json` was to merge by `union` like the other append-only files → no: JSON has no trailing comma, so two branches that each append an arm both rewrite the old last record's closing line, and a union of those hunks is invalid JSON; it merges record by record through `dev merge-arms` → PROC-1
+- the census lists were to be regenerated from `--list-*` when a merge conflicted on them → no: a census rewritten from the registry it checks cannot fail, so a name the merge itself lost would vanish from both silently; they merge by union and `dev land` restores only their ORDER (`census --order-only`), refusing when the names differ → PROC-1
+- the slice gate was to run every arm with `--all --fast` → no: the registry has outgrown it (thousands of arms at a whole build each is a day, not a gate); the gate runs the arms the slice added or re-encoded and every arm on a type it touched, and `--all` is a release run → PROC-1

@@ -31509,6 +31509,38 @@
 			"find": "if (bindings != null) {",
 			"replace": "if (bindings != null && false) {",
 			"note": "a fresh import is added although it also binds a type or constructor the file already reads bare, which then silently means the imported one"
+		},
+		{
+			"name": "M-MERGE-ARMS-THEIRS-LOST",
+			"type": "dev.MergeArms",
+			"method": "side",
+			"find": "Keep(other)",
+			"replace": "Keep(mine)",
+			"note": "a record only theirs changed keeps our unchanged text, so the merge driver drops the other branch's re-encoded arm without a conflict"
+		},
+		{
+			"name": "M-MERGE-ARMS-APPEND-ORDER",
+			"type": "dev.MergeArms",
+			"method": "merge",
+			"find": "while (at < result.length && added.contains(result[at].key)) at++;",
+			"replace": "at += 0;",
+			"note": "a record theirs appended lands before the one ours appended at the same place, so the merged registry and the union-merged census list disagree on the order"
+		},
+		{
+			"name": "M-CENSUS-ORDER-BLIND",
+			"type": "dev.Census",
+			"method": "delta",
+			"find": "same: declared.join('\\n') == registry.join('\\n')",
+			"replace": "same: added.length + left.length == 0",
+			"note": "a census list holding the registry's names in another order reads as in sync, so a union merge's misorder is never put back"
+		},
+		{
+			"name": "M-CENSUS-ORDER-ONLY-WRITES-ANY-SET",
+			"type": "dev.Census",
+			"method": "run",
+			"find": "mode == OrderOnly && !setMoved",
+			"replace": "mode == OrderOnly",
+			"note": "`census --order-only` rewrites lists whose NAMES differ from the registry, so `dev land` turns a name a merge lost into a regenerated census that agrees with the loss"
 		}
 	]
 }
