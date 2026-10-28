@@ -24,6 +24,7 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 import anyparse.runtime.BodySkip;
+import anyparse.runtime.ByteOrderMark;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Parser;
 import anyparse.runtime.Span;
@@ -268,7 +269,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// Before the guard, not after: restoring an `@formatter:off` region
 		// puts the source bytes back, so a comment living only inside one is
 		// present again by the time the inventory compares the two sides.
-		final written: String = FormatterOff.restore(source, emitted, HaxeLexicalRegions.scanComments);
+		final written: String = ByteOrderMark.carry(source, FormatterOff.restore(source, emitted, HaxeLexicalRegions.scanComments));
 		if (written == source || CommentInventory.guardDeclined()) return written;
 		final lost: Null<String> = CommentInventory.firstMissing(source, written, HaxeLexicalRegions.scanComments);
 		if (lost != null) throw new CommentLossException(lost);

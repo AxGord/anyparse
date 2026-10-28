@@ -2,6 +2,7 @@ package anyparse.macro;
 
 #if macro
 import anyparse.macro.MacroNames.*;
+import anyparse.runtime.ByteOrderMark;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
@@ -30,7 +31,7 @@ import haxe.macro.Expr;
 class Codegen {
 
 	/** Byte-order mark code point, skipped as whitespace by generated parsers. */
-	private static inline final BOM: Int = 0xFEFF;
+	private static inline final BOM: Int = ByteOrderMark.CODE;
 
 	public static function emit(
 		rules: Array<GeneratedRule>, rootTypePath: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo,
