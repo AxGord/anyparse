@@ -10,7 +10,7 @@ import utest.Test;
  * (Lowering.hx:1042) consumes `\n` before the lead, so no parser
  * change is needed for these shapes.
  */
-class AllmanProbe extends Test {
+class AllmanProbeTest extends Test {
 
 	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 

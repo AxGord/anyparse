@@ -58,6 +58,9 @@ typedef TestCensus = {
  * registers no fixtures for it either, and it is reported through `TestRegistry.baseClasses()` rather
  * than assumed.
  *
+ * **A file named `*Test.hx` IS a registration, both ways** (`checkTestFiles`): the files on disk are the census, so no
+ * hand-kept list mirrors the registry and a removed test shows in the diff of its own file.
+ *
  * **Scope is a whitelist on both edges, not a skip.** The walk covers every package directory under
  * the test classpath root, minus the modules asking for which would be circular (`SELF_MODULES`).
  * Root-level modules are not walked either — typing `RunTests` from inside the macro that builds its
@@ -97,6 +100,12 @@ class TestDiscovery {
 	 * point, and its name is not even a legal module path — the walk skips it wherever it sits.
 	 */
 	private static inline final AMBIENT_IMPORT_FILE: String = 'import.hx';
+
+	/**
+	 * The module-name ending that marks a test file: every module so named registers exactly one test class, and every
+	 * registered class is the main type of one, so the files on disk are the census of the suite.
+	 */
+	private static inline final TEST_MODULE_SUFFIX: String = 'Test';
 
 	/** Method-name prefixes utest treats as fixtures — `TestBuilder.isTestName`. */
 	private static final FIXTURE_PREFIXES: Array<String> = ['test', 'spec'];
@@ -138,7 +147,8 @@ class TestDiscovery {
 		final table: ArmTable = MutationArms.parse(File.getContent(armsPath));
 		for (error in table.errors) Context.error('$ARMS_FILE: $error', Context.currentPos());
 		final modules: Array<String> = [];
-		collectModules(root, [], modules);
+		final testFiles: Map<String, String> = [];
+		collectModules(root, [], modules, testFiles);
 		modules.sort(compareStrings);
 		final census: TestCensus = {
 			registered: [],
@@ -155,6 +165,7 @@ class TestDiscovery {
 			case _:
 		}
 		checkArms(table.arms, census.killers, census.deferred);
+		checkTestFiles(census.registered, testFiles);
 		census.registered.sort((a, b) -> compareStrings(qualified(a), qualified(b)));
 		census.dead.sort(compareStrings);
 		census.bases.sort(compareStrings);
@@ -197,26 +208,30 @@ class TestDiscovery {
 	}
 
 	/**
-	 * Every module under `dir` that lives in a package, as dotted paths.
+	 * Every module under `dir` that lives in a package, as dotted paths, and in `testFiles` each one whose name ends in
+	 * `TEST_MODULE_SUFFIX`, mapped to its file.
 	 *
 	 * Root-level modules (`pack` still empty) are entry points, not cases —
 	 * see the class doc.
 	 */
-	private static function collectModules(dir: String, pack: Array<String>, out: Array<String>): Void {
+	private static function collectModules(dir: String, pack: Array<String>, out: Array<String>, testFiles: Map<String, String>): Void {
 		for (entry in FileSystem.readDirectory(dir)) {
 			final full: String = Path.join([dir, entry]);
 			if (FileSystem.isDirectory(full)) {
-				collectModules(full, pack.concat([entry]), out);
+				collectModules(full, pack.concat([entry]), out, testFiles);
 			} else if (entry.endsWith('.hx') && entry != AMBIENT_IMPORT_FILE) {
-				final module: String = pack.concat([entry.substr(0, entry.length - '.hx'.length)]).join('.');
-				if (pack.length > 0)
+				final name: String = entry.substr(0, entry.length - '.hx'.length);
+				final module: String = pack.concat([name]).join('.');
+				if (pack.length > 0) {
 					out.push(module);
-				else if (!ENTRY_POINT_MODULES.contains(module))
+					if (name.endsWith(TEST_MODULE_SUFFIX)) testFiles[module] = full;
+				} else if (!ENTRY_POINT_MODULES.contains(module)) {
 					Context.error(
 						'$full is a root-level module under the test root, where only the $ENTRY_POINT_MODULES entry points live'
 						+ ' — a test class there is discovered by nobody; move it into a package (unit/), or name it an entry point',
 						Context.currentPos()
 					);
+				}
 			}
 		}
 	}
@@ -422,6 +437,33 @@ class TestDiscovery {
 					);
 			}
 		}
+	}
+
+	/**
+	 * Hold the files on disk and the registration to one count: every `*Test` module registers exactly one class, and every
+	 * registered class is the main type of a `*Test` module.
+	 *
+	 * Either half failing is a test nobody runs or a runner nobody named — and with both halves enforced, the files ARE the
+	 * census, so no hand-kept list of the registered names has to mirror them and be merged by every slice. Exactly one
+	 * holds by construction: a registered class is its module's main type, and a module has one.
+	 */
+	private static function checkTestFiles(registered: Array<ClassType>, testFiles: Map<String, String>): Void {
+		final registeredModules: Array<String> = [];
+		for (c in registered) {
+			if (!testFiles.exists(c.module))
+				Context.error(
+					'${qualified(c)} is a registered test class in a module not named *$TEST_MODULE_SUFFIX'
+					+ ' — rename the class and its file to end in $TEST_MODULE_SUFFIX, so the files on disk count the suite',
+					c.pos
+				);
+			registeredModules.push(c.module);
+		}
+		for (module => file in testFiles) if (!registeredModules.contains(module))
+			Context.error(
+				'$file is named *$TEST_MODULE_SUFFIX.hx and registers no test class — its main type must implement utest.ITest'
+				+ ' and carry a test*/spec* method; a helper or a shared base takes a name that does not end in $TEST_MODULE_SUFFIX',
+				Context.makePosition({ file: file, min: 0, max: 0 })
+			);
 	}
 
 	/**

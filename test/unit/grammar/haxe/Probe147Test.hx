@@ -18,7 +18,7 @@ import utest.Test;
  * `beforeDocCommentEmptyLines` add at that slot, leaving only the
  * intra-leading blank from `blankBeforeFinalDocCommentInLeading`.
  */
-class Probe147 extends Test {
+class Probe147Test extends Test {
 
 	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 

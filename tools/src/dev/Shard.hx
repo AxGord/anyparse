@@ -43,10 +43,13 @@ final class Shard {
 	private static inline final WEIGHTS: String = 'bin/.suite-timings.tsv';
 
 	/**
-	 * The census whose `REGISTERED_CLASSES` list, the second declaration
-	 * `unit.TestDiscoveryParityTest` reads, cross-checks the runner's own class list.
+	 * The test tree whose `*Test.hx` files the runner's class list must match one for one: the build macro
+	 * (`testkit.TestDiscovery`) registers exactly one class per such file, so another count is a binary built from another tree.
 	 */
-	private static inline final PARITY_TEST: String = 'test/unit/census/RegisteredClasses.hx';
+	private static inline final TEST_ROOT: String = 'test';
+
+	/** The file-name ending of a test module under `TEST_ROOT`. */
+	private static inline final TEST_FILE_SUFFIX: String = 'Test.hx';
 
 	/**
 	 * What one shard may run before it is killed. The process driver bounds its own wait by its jobs' timeouts, and a
@@ -143,23 +146,23 @@ final class Shard {
 	}
 
 	/**
-	 * How many names the `REGISTERED_CLASSES` literal of `text` lists — its quoted lines up to the closing `\t];` — or null
-	 * when there is no such literal or it lists none. A count a human maintains, so a producer that dropped a class
-	 * cannot agree with it by construction.
+	 * How many `*Test.hx` files sit in a package directory under `root` — a file at `root` itself is an entry point, never a
+	 * test — or null when there is no directory `root`.
 	 */
-	public static function registeredPinCount(text: String): Null<Int> {
-		final open: EReg = ~/REGISTERED_CLASSES[^=]*= *\[/;
-		var inside: Bool = false;
-		var count: Int = 0;
-		for (line in text.split('\n')) {
-			if (!inside) {
-				inside = open.match(line);
-				continue;
+	public static function testFileCount(root: String): Null<Int> {
+		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) return null;
+		function count(dir: String, nested: Bool): Int {
+			var total: Int = 0;
+			for (entry in FileSystem.readDirectory(dir)) {
+				final full: String = Path.join([dir, entry]);
+				if (FileSystem.isDirectory(full))
+					total += count(full, true);
+				else if (nested && entry.endsWith(TEST_FILE_SUFFIX))
+					total++;
 			}
-			if (line.startsWith('\t];')) break;
-			if (line.indexOf('\'') >= 0) count++;
+			return total;
 		}
-		return count == 0 ? null : count;
+		return count(root, false);
 	}
 
 	/**
@@ -251,8 +254,8 @@ final class Shard {
 
 	/**
 	 * The shard plan, written into `work` (`classes.txt`, `assigned.txt`, `shard<s>.filter`, `shard<s>.list`); null, its
-	 * refusal said on stderr, when the runner cannot list its classes, `ShardPlan` refuses, or the list disagrees with
-	 * `REGISTERED_CLASSES`.
+	 * refusal said on stderr, when the runner cannot list its classes, `ShardPlan` refuses, or the list's length is not the
+	 * number of `*Test.hx` files on disk.
 	 */
 	private static function split(job: ShardJob, work: String): Null<ShardSplit> {
 		final listed: Result = cmd('node ${job.testJs} --list-classes').at(job.repo).run();
@@ -277,11 +280,11 @@ final class Shard {
 		File.saveContent(Path.join([work, 'assigned.txt']), ShardPlan.renderLines(placements));
 		final filters: Array<String> = ShardPlan.renderFilters(placements, job.shards).split('\n').slice(0, job.shards);
 		final total: Int = [for (p in placements) p.cls => true].count();
-		final pin: Null<Int> = readPin(Path.join([job.repo, PARITY_TEST]));
-		if (pin != null && total != pin) {
+		final onDisk: Null<Int> = testFileCount(Path.join([job.repo, TEST_ROOT]));
+		if (onDisk != null && total != onDisk) {
 			job.warn('dev shard: the class-list producer printed $total classes, but');
-			job.warn('  unit.census.RegisteredClasses lists $pin.');
-			job.warn('  Either discovery dropped a class, or the census needs `node bin/dev.js census --write` — see $classesFile');
+			job.warn('  the test tree holds $onDisk *$TEST_FILE_SUFFIX files.');
+			job.warn('  ${job.testJs} was built from another tree — rebuild it (`haxe test-js.hxml`); its list is $classesFile');
 			return null;
 		}
 		final lists: Array<Array<String>> = [for (filter in filters) filter.split(',')];
@@ -293,9 +296,9 @@ final class Shard {
 			filters: filters,
 			lists: lists,
 			classes: total,
-			producerNote: pin == null
-				? 'producer count not cross-checked (REGISTERED_CLASSES unreadable)'
-				: 'producer count == REGISTERED_CLASSES ($pin)'
+			producerNote: onDisk == null
+				? 'producer count not cross-checked (no $TEST_ROOT/ tree)'
+				: 'producer count == *$TEST_FILE_SUFFIX files ($onDisk)'
 		};
 	}
 
@@ -481,12 +484,6 @@ final class Shard {
 		var ms: Int = 0;
 		for (line in File.getContent(file).split('\n')) ms += Std.parseInt(line.split('\t')[0]) ?? 0;
 		return ms;
-	}
-
-	/** The `REGISTERED_CLASSES` count of the file `path`, or null when it cannot be read. */
-	private static function readPin(path: String): Null<Int> {
-		final text: Null<String> = try File.getContent(path) catch (exception: Exception) null;
-		return text == null ? null : registeredPinCount(text);
 	}
 
 	private static function add(sum: Tally, counts: Tally): Void {

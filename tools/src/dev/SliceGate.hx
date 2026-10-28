@@ -1,7 +1,5 @@
 package dev;
 
-import dev.Census.CensusMode;
-import dev.Census.CensusRun;
 import dev.GateTree.GateOptions;
 import dev.Shard.Tally;
 import devkit.Args;
@@ -282,7 +280,7 @@ final class SliceGate {
 		return Passed;
 	}
 
-	/** The lists row: every registry's count beside the baseline's, no dead fixture, and the census in sync with them. */
+	/** The lists row: every registry's count beside the baseline's, and no dead fixture. */
 	private function listsOutcome(): Outcome {
 		final counts: Map<String, Int> = listCounts();
 		final readings: Array<String> = [
@@ -292,13 +290,8 @@ final class SliceGate {
 				was == null || was == now ? '$name $now' : '$name $now (${GateTree.signed(now - was)})';
 			}
 		];
-		final report: Array<String> = [];
-		final census: CensusRun = Census.run(_gate.tree, Path.join([_gate.tree, 'bin/test.js']), CensusMode.Check, report.push);
 		_gate.summary.detail(readings.join(' '));
-		if ((counts['dead'] ?? 0) > 0) return Failed('a fixture-named method no runner reaches: `node bin/test.js --list-dead`');
-		if (census.ok) return Passed;
-		final first: String = report.find(l -> l.indexOf(': in sync') < 0) ?? '';
-		return Failed(GateTree.clip('census $first — `node bin/dev.js census --write`'));
+		return (counts['dead'] ?? 0) > 0 ? Failed('a fixture-named method no runner reaches: `node bin/test.js --list-dead`') : Passed;
 	}
 
 	/** The corpus row of `--baseline`: the sweep the suite just wrote, saved for the gate to compare with. */

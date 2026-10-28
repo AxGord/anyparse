@@ -363,7 +363,7 @@ Relocates WHOLE modules: each `<file>` keeps its name and lands in `<dir>`, whic
 	"textExclude": ["docs/journal"],
 	"textExtensions": ["md", "sh", "txt", "hxml", "json"],
 	"registries": [{"file": "test/testkit/mutation-arms.json", "keys": ["arms.type"]}],
-	"sortedLists": [{"parts": [{"file": "test/unit/TestDiscoveryParityTest.hx", "select": "FinalMember:REGISTERED_CLASSES >> ArrayExpr"}]}],
+	"sortedLists": [{"parts": [{"file": "test/unit/TestDiscoveryParityTest.hx", "select": "FinalMember:EXPECTED_BASE_CLASSES >> ArrayExpr"}]}],
 	"mirrors": [{"source": "src/anyparse", "test": "test/unit", "suffixes": ["Test", "CheckTest"]}]
 }
 ```

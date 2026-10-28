@@ -15,7 +15,7 @@ import anyparse.grammar.json.JsonFormat;
  * StringBuf code goes away.
  */
 @:nullSafety(Strict)
-class ApqJsonSchemaProbe extends Test {
+class ApqJsonSchemaProbeTest extends Test {
 
 	public function new(): Void {
 		super();

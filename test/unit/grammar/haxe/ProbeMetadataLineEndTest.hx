@@ -13,7 +13,7 @@ import utest.Test;
  * `metadataFunctionLineEnd` policy emits the expected member-meta
  * gap shape on the same source input.
  */
-class ProbeMetadataLineEnd extends Test {
+class ProbeMetadataLineEndTest extends Test {
 
 	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final SRC: String = 'class Main {\n\t@Test @doc("a") function main() {}\n\n\t@Test\n\t@doc("b") function main() {}\n}\n';
