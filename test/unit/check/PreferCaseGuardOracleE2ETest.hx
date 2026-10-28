@@ -3,9 +3,9 @@ package unit.check;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.PreferCaseGuard;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.runtime.Span;

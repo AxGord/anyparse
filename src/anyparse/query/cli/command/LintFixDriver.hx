@@ -1,10 +1,10 @@
 package anyparse.query.cli.command;
 
 import anyparse.check.Check;
-import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.scan.DefiniteAssignmentGuard;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;

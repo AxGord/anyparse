@@ -1,10 +1,10 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.HaxeSpawn;
 import anyparse.check.ImportBlockOrder;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
+import anyparse.check.oracle.HaxeSpawn;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ImportOrder;

@@ -1,11 +1,11 @@
 package anyparse.query.cli.command;
 
-import anyparse.check.CompilerOracle;
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
-import anyparse.check.OracleCache;
-import anyparse.check.OracleDeclaration;
-import anyparse.check.OracleGeneration;
+import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.oracle.OracleCache;
+import anyparse.check.oracle.OracleDeclaration;
+import anyparse.check.oracle.OracleGeneration;
 import anyparse.query.ExitCode.*;
 import haxe.io.Path;
 

@@ -1,9 +1,9 @@
 package dev;
 
 import anyparse.check.LintConfig;
-import anyparse.check.OracleGeneration;
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.check.facts.TypedFactsProbe;
+import anyparse.check.oracle.OracleGeneration;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.RunScan;
 import anyparse.grammar.haxe.HaxeQueryPlugin;

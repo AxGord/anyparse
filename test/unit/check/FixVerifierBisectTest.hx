@@ -3,7 +3,7 @@ package unit.check;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.FailerBisect;
 import anyparse.check.FixVerifier;
-import anyparse.check.OracleCoverage;
+import anyparse.check.oracle.OracleCoverage;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 

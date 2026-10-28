@@ -1,7 +1,7 @@
 package unit.query;
 
-import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.check.scan.DefiniteAssignmentGuard;
 import anyparse.query.Cli;
 import anyparse.query.LintFixSafePass;

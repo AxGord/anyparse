@@ -1,8 +1,8 @@
 package unit.check;
 
-import anyparse.check.HaxeSpawn;
 import anyparse.check.ScratchField;
 import anyparse.check.Severity;
+import anyparse.check.oracle.HaxeSpawn;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import sys.io.File;

@@ -1,8 +1,8 @@
 package dev;
 
 import anyparse.check.LintConfig;
-import anyparse.check.OracleGeneration;
 import anyparse.check.facts.TypedFactsProbe;
+import anyparse.check.oracle.OracleGeneration;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;

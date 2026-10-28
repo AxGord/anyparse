@@ -4,8 +4,8 @@ package unit.check;
 import sys.io.File;
 #end
 import anyparse.check.Check;
-import anyparse.check.CompilerOracle;
 import anyparse.check.Severity;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;

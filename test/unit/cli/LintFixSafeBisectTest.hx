@@ -4,11 +4,11 @@ package unit.cli;
 import sys.io.File;
 #end
 import anyparse.check.Check;
-import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ExitCode;
 import anyparse.query.GrammarPlugin;

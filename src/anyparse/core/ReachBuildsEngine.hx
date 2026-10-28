@@ -11,13 +11,13 @@ final class ReachBuildsEngine {
 	/** md5 of the sources a stored answer depends on, read at compile time. */
 	public static macro function digest(): haxe.macro.Expr {
 		final modules: Array<String> = [
-			'anyparse/check/ReachDefinesProbe.hx',
-			'anyparse/check/ReachBuildsCache.hx',
+			'anyparse/check/oracle/ReachDefinesProbe.hx',
+			'anyparse/check/oracle/ReachBuildsCache.hx',
 			'anyparse/query/ReachLiveness.hx',
-			'anyparse/check/OracleCoverage.hx',
-			'anyparse/check/OracleDeclaration.hx',
-			'anyparse/check/CompilerOracle.hx',
-			'anyparse/check/OracleCache.hx'
+			'anyparse/check/oracle/OracleCoverage.hx',
+			'anyparse/check/oracle/OracleDeclaration.hx',
+			'anyparse/check/oracle/CompilerOracle.hx',
+			'anyparse/check/oracle/OracleCache.hx'
 		];
 		final sources: Array<String> = [for (m in modules) sys.io.File.getContent(haxe.macro.Context.resolvePath(m))];
 		return macro $v{haxe.crypto.Md5.encode(sources.join('\n'))};

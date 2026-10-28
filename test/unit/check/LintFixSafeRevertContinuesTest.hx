@@ -6,7 +6,7 @@ import sys.io.File;
 using StringTools;
 #end
 
-import anyparse.check.CompilerOracle;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
 

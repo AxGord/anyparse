@@ -1,9 +1,9 @@
 package unit.check;
 
 import anyparse.check.LintConfig;
-import anyparse.check.OracleDeclaration;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
+import anyparse.check.oracle.OracleDeclaration;
 import unit.cli.CliFixture;
 
 /**

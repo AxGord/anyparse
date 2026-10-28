@@ -1,9 +1,9 @@
 package anyparse.query;
 
-import anyparse.check.CompilerOracle.OracleExclusion;
-import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.FailerBisect;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.oracle.CompilerOracle.OracleExclusion;
+import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import haxe.Exception;
 
 using Lambda;

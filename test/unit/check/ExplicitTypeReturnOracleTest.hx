@@ -4,9 +4,9 @@ package unit.check;
 import sys.FileSystem;
 import sys.io.File;
 #end
-import anyparse.check.CompilerDisplayOracle;
-import anyparse.check.CompilerOracle;
 import anyparse.check.ExplicitType;
+import anyparse.check.oracle.CompilerDisplayOracle;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;

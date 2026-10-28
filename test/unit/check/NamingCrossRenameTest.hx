@@ -4,12 +4,12 @@ package unit.check;
 import sys.io.File;
 #end
 import anyparse.check.Check.RiskyCrossFileEdit;
-import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifierCrossFile;
 import anyparse.check.Naming;
 import anyparse.check.NamingCrossRename;
 import anyparse.check.NamingRenames.RenameRefusal;
 import anyparse.check.Severity;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.grammar.haxe.HaxeIdentifierCase;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;

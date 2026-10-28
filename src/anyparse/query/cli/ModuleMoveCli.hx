@@ -1,7 +1,7 @@
 package anyparse.query.cli;
 
-import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.ConfigFinder.ConfigChain;
 import anyparse.query.ExitCode.*;

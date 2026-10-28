@@ -1,6 +1,6 @@
 package devkit;
 
-import anyparse.check.HaxeSpawn;
+import anyparse.check.oracle.HaxeSpawn;
 import haxe.DynamicAccess;
 import haxe.Exception;
 

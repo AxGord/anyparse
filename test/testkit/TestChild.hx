@@ -1,10 +1,10 @@
 package testkit;
 
 #if nodejs
-import anyparse.check.HaxeSpawn.HaxeRun;
-import anyparse.check.HaxeSpawn;
+import anyparse.check.oracle.HaxeSpawn.HaxeRun;
+import anyparse.check.oracle.HaxeSpawn;
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.OracleGeneration;
+import anyparse.check.oracle.OracleGeneration;
 #end
 
 /**

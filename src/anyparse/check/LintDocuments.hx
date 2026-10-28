@@ -6,6 +6,7 @@ import anyparse.check.LintConfig.RuleSwitches;
 import anyparse.check.config.ApqLintConfig;
 import anyparse.check.config.ApqLintConfigParser;
 import anyparse.check.config.OwnedTypesDeclaration;
+import anyparse.check.oracle.OracleDeclaration;
 import anyparse.grammar.json.JValue;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import haxe.Exception;

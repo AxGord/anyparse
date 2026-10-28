@@ -3,13 +3,13 @@ package unit.check;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.CompilerOracle;
-import anyparse.check.HaxeSpawn;
 import anyparse.check.LintConfig;
 import anyparse.check.PreferStaticExtension;
 import anyparse.check.StaticExtensionFacts;
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.check.facts.TypedFactsProbe;
+import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.oracle.HaxeSpawn;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.CompilerFacts;

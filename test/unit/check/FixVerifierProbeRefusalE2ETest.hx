@@ -1,10 +1,10 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
