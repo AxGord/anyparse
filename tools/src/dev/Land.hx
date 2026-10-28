@@ -1,6 +1,7 @@
 package dev;
 
 import devkit.Args;
+import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import devkit.Summary;
@@ -15,13 +16,14 @@ using StringTools;
  * command: a `--no-ff` merge whose append-only files merge as their `.gitattributes` say (`docs/decisions.md` by union,
  * `mutation-arms.json` by `dev merge-arms`), the three binaries rebuilt, the merge committed, then `tools/battery.sh` —
  * and one verdict line. A conflict git cannot resolve or a failed build aborts the merge and leaves the tree as it was; a
- * red battery leaves the merge commit for the caller to judge (docs/testing.md § "Landing a slice").
+ * red battery leaves the merge commit for the caller to judge (docs/testing.md § "Landing a slice"). Any step after the
+ * merge that does not pass — one that threw (`not run`) as much as one that failed — aborts the merge.
  */
 @:nullSafety(Strict)
 final class Land {
 
-	public static inline final USAGE: String = 'usage: dev land <branch> [-m <message>] [--no-battery] [--allow-blast] [--snapshot] '
-		+ '[--logs <dir>] [--repo <tree>]';
+	public static inline final USAGE: String = 'usage: dev land <branch> [-m <message>] [--no-battery] [--full] [--allow-blast] '
+		+ '[--snapshot] [--logs <dir>] [--repo <tree>]';
 
 	/** The merge driver `.gitattributes` names for `test/testkit/mutation-arms.json`. */
 	private static inline final ARMS_DRIVER: String = 'anyparse-arms';
@@ -29,10 +31,18 @@ final class Land {
 	/** What the battery may run before it is killed. */
 	private static inline final BATTERY_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
 
+	/**
+	 * The threads the battery's other branches hold beside its suite (fmt, the lint's two arms, the jvm probe); what a pool
+	 * lease leaves is the suite's shard count, as in the slice gate.
+	 */
+	private static inline final BATTERY_LIGHT_THREADS: Int = 4;
+
 	private final _summary: Summary = new Summary();
 	private final _repo: String;
 	private final _branch: String;
 	private final _logs: String;
+	private final _compile: Compile;
+	private final _print: String -> Void;
 
 	/** Whether a merge of this run is in progress, so a failed step aborts it. */
 	private var _merging: Bool = false;
@@ -40,10 +50,12 @@ final class Land {
 	/** Whether this run built the binaries from a merged tree. */
 	private var _built: Bool = false;
 
-	private function new(repo: String, branch: String, logs: String) {
-		_repo = repo;
-		_branch = branch;
-		_logs = logs;
+	private function new(options: LandOptions) {
+		_repo = options.repo;
+		_branch = options.branch;
+		_logs = options.logs;
+		_compile = options.compile;
+		_print = options.print;
 	}
 
 	/**
@@ -59,27 +71,32 @@ final class Land {
 			{ name: 'battery', step: runBattery.bind(battery) }
 		];
 		var aborted: Bool = false;
-		for (s in steps) if (_summary.passed()) _summary.time(s.name, () -> {
-			final outcome: Outcome = s.step();
-			if (!outcome.match(Passed | Skipped(_)) && _merging) {
-				if (!git(['merge', '--abort']).ok)
-					_summary.add('abort', Failed('`git merge --abort` failed — the tree is still mid-merge'));
-				aborted = true;
-			}
-			return outcome;
-		});
+		for (s in steps) if (_summary.passed()) {
+			final outcome: Outcome = _summary.time(s.name, s.step);
+			if (!outcome.match(Passed | Skipped(_))) aborted = abortMerge() || aborted;
+		}
 		if (aborted && _built) _summary.time(
-			'rebuild', () -> switch Binaries.compile(_repo, Path.join([_logs, 'rebuild.log'])) {
+			'rebuild', () -> switch _compile(_repo, Path.join([_logs, 'rebuild.log'])) {
 				case Failed(why): Failed('the binaries are still the aborted merge\'s: $why');
 				case other:
 					_summary.detail('binaries rebuilt from HEAD after the abort');
 					other;
 			}
 		);
-		Sys.println(_summary.table());
+		_print(_summary.table());
 		final passed: Bool = _summary.passed();
-		Sys.println('land $_branch: ${passed ? 'PASS' : 'FAIL'} — logs $_logs');
+		_print('land $_branch: ${passed ? 'PASS' : 'FAIL'} — logs $_logs');
 		return passed ? 0 : 1;
+	}
+
+	/**
+	 * Abort the merge of this run, if one is in progress. A step that threw is as unfinished as one that failed, so the
+	 * caller asks after every step that did not pass, whichever way it ended. Answers whether a merge was aborted.
+	 */
+	private function abortMerge(): Bool {
+		if (!_merging) return false;
+		if (!git(['merge', '--abort']).ok) _summary.add('abort', Failed('`git merge --abort` failed — the tree is still mid-merge'));
+		return true;
 	}
 
 	private function clean(): Outcome {
@@ -107,7 +124,7 @@ final class Land {
 	/** `apq.js`, `test.js` and `dev.js` rebuilt from the merged tree, at once. */
 	private function build(): Outcome {
 		_built = true;
-		return Binaries.compile(_repo, Path.join([_logs, 'build.log']));
+		return _compile(_repo, Path.join([_logs, 'build.log']));
 	}
 
 	/** The merge committed under `message`, or `Merge <branch>: <the branch tip's subject>`. */
@@ -137,7 +154,9 @@ final class Land {
 		final args: Args = new Args(argv);
 		final message: Null<String> = args.option('-m');
 		final noBattery: Bool = args.flag('--no-battery');
-		final battery: Array<String> = [for (flag in ['--allow-blast', '--snapshot']) if (args.flag(flag)) flag];
+		final battery: Array<String> = batteryFlags(
+			args.flag('--allow-blast'), args.flag('--snapshot'), args.flag('--full'), Branches.leased()
+		);
 		final repo: String = Repo.resolve(args.option('--repo'));
 		final logsOption: Null<String> = args.option('--logs');
 		final branch: String = args.positionals(['<branch>'])[0];
@@ -145,7 +164,55 @@ final class Land {
 			throw new UsageError('the battery needs ANYPARSE_HXFORMAT_FORK — set it, or pass --no-battery');
 		final logs: String = logsOption ?? Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', 'anyparse-land', branch.replace('/', '-')]);
 		FileSystem.createDirectory(logs);
-		return new Land(repo, branch, logs).run(message, noBattery ? null : battery);
+		return land({
+			repo: repo,
+			branch: branch,
+			logs: logs,
+			message: message,
+			battery: noBattery ? null : battery,
+			compile: Binaries.compile,
+			print: Sys.println
+		});
 	}
 
+	/** The merge, the build and the battery of `options`; answers the exit status. */
+	public static function land(options: LandOptions): Int {
+		return new Land(options).run(options.message, options.battery);
+	}
+
+	/**
+	 * What `tools/battery.sh` is given. The monolith cross-check of the suite (`--full`) belongs to the nightly and release
+	 * run, not to every landing, so `--quick` is the default; under a pool lease (`leased` threads) the suite takes the
+	 * shards the lease leaves beside the battery's light branches, otherwise the script keeps its own count.
+	 */
+	public static function batteryFlags(allowBlast: Bool, snapshot: Bool, full: Bool, leased: Null<Int>): Array<String> {
+		final flags: Array<String> = [];
+		if (allowBlast) flags.push('--allow-blast');
+		if (snapshot) flags.push('--snapshot');
+		if (!full) flags.push('--quick');
+		final shards: Null<Int> = Branches.share(leased, BATTERY_LIGHT_THREADS);
+		if (shards != null) {
+			flags.push('-n');
+			flags.push('$shards');
+		}
+		return flags;
+	}
+
+}
+
+/** The build of the three binaries `Land` runs after the merge: the tree and the log the transcripts go to. */
+typedef Compile = (tree:String, log:String) -> Outcome;
+
+/** What a run of `Land` is given: what to merge into where, and the two seams a test replaces (the build and the output). */
+typedef LandOptions = {
+	var repo: String;
+	var branch: String;
+	var logs: String;
+	var message: Null<String>;
+
+	/** The flags `tools/battery.sh` runs with; null runs none. */
+	var battery: Null<Array<String>>;
+
+	var compile: Compile;
+	var print: String -> Void;
 }
