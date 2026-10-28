@@ -27899,7 +27899,7 @@
 		{
 			"name": "M-CHAIN-REST-PIVOT-PLAIN",
 			"type": "anyparse.format.wrap.BinaryChainEmit",
-			"method": "emitNoThreshold",
+			"method": "emitCascadePivot",
 			"find": "return WrapBoundary(D.groupOrRestProbe(ifBreak, restAware));",
 			"replace": "return WrapBoundary(Group(ifBreak));",
 			"note": "the chain pivot decides on `col + flatWidth` alone, so a chain whose physical line runs two columns over (the `;` and the space after `=`) stays glued and breaks before a nested `==`"
@@ -27907,9 +27907,9 @@
 		{
 			"name": "M-CHAIN-REST-ADD-PIVOT-PLAIN",
 			"type": "anyparse.format.wrap.BinaryChainEmit",
-			"method": "emitNoThreshold",
-			"find": "final brkDoc: Doc = D.groupOrRestProbe(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat)), restAware);",
-			"replace": "final brkDoc: Doc = Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat)));",
+			"method": "emitCascadePivot",
+			"find": "final brkDoc: Doc = D.groupOrRestProbe(IfBreak(CollapseAddProbe(brkSide), flatSide), restAware);",
+			"replace": "final brkDoc: Doc = Group(IfBreak(CollapseAddProbe(brkSide), flatSide));",
 			"note": "the tagged `+` chain pivot ignores the rest of its line, so a declaration one column over the limit spills past it unbroken"
 		},
 		{
@@ -31677,6 +31677,30 @@
 			"find": "return every > 0 && landing % every == 0 ? 'landing $landing' : null;",
 			"replace": "return null;",
 			"note": "the count of landings never asks for the full battery, so a run of quiet slices is never checked against the one-process suite"
+		},
+		{
+			"name": "M-CHAIN-THRESHOLD-WRAPS-PIVOT",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "layout",
+			"find": "emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, extraThresholds);",
+			"replace": "extraThresholds.length == 0 ? emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, []) : WrapBoundary(Group(IfBreak(thresholdTree(extraThresholds, [], true, evalAt, shapeAt), thresholdTree(extraThresholds, [], false, evalAt, shapeAt))));",
+			"note": "a cascade holding a lineLength rule wraps a plain Group around its exceeds pivot, which no longer counts the line's trailing columns nor carries the add-chain collapse marker"
+		},
+		{
+			"name": "M-CHAIN-THRESHOLD-UNIFORM-BLIND",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "uniformAnswer",
+			"find": "return reached != null && below != null && sameRule(reached, below) ? below : null;",
+			"replace": "return below;",
+			"note": "every threshold state is taken to answer as the one below it, so a lineLength rule the line reaches below the limit never fires"
+		},
+		{
+			"name": "M-CHAIN-THRESHOLD-REEVAL-UNTAGGED",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "emitCascadePivot",
+			"find": "final brkSide: Doc = thresholdTree(thresholds, [], true, evalAt, brkShapeAt);",
+			"replace": "final brkSide: Doc = thresholdTree(thresholds, [], true, evalAt, thresholds.length == 0 ? brkShapeAt : shapeAt);",
+			"note": "a cascade holding a lineLength rule never tags its trailing-operator fill for the opBool re-eval, so a chain whose call operand overflows keeps its trailing operators"
 		}
 	]
 }
