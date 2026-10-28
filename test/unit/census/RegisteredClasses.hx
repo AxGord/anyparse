@@ -480,6 +480,7 @@ final class RegisteredClasses {
 		'unit.dev.BenchAbTest',
 		'unit.dev.CensusTest',
 		'unit.dev.CloneCensusTest',
+		'unit.dev.DecisionTest',
 		'unit.dev.JvmProbeTest',
 		'unit.dev.LintWarnTest',
 		'unit.dev.MergeArmsTest',

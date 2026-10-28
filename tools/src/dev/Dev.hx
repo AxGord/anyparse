@@ -23,6 +23,7 @@ final class Dev {
 		{ name: 'land', main: Land.main, usage: Land.USAGE },
 		{ name: 'census', main: Census.main, usage: Census.USAGE },
 		{ name: 'merge-arms', main: MergeArms.main, usage: MergeArms.USAGE },
+		{ name: 'decision', main: Decision.main, usage: Decision.USAGE },
 		{ name: 'tmp-lifecycle', main: Tmp.main, usage: Tmp.USAGE },
 		{ name: 'fixture-cache', main: FixtureCacheCli.main, usage: FixtureCacheCli.USAGE },
 		{ name: 'jvm-portability', main: JvmProbe.main, usage: JvmProbe.USAGE },

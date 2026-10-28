@@ -20,6 +20,13 @@ merge is `git log --merges --grep 'Merge batch/hxqb-PROC1:' --format=%H` (the id
 hyphen, the colon so `FB2` does not match `FB2b`). This file merges by union (`.gitattributes`),
 so two slices appending here never conflict.
 
+**How a line gets here:** `node bin/dev.js decision --slice <ID> "<what was tried → why not>"` —
+the only writer. It appends ONE line `- <text> → <ID>` without opening the file, and refuses a
+text over 300 characters, one spanning several lines, or a slice that is not an id; the
+`decisions` row of `dev slice-gate` holds every line a slice adds to the same shape. The file is
+append-only and far too large to read: find a topic with `grep -n '<key>' docs/decisions.md`,
+and never `Read`, `Edit` or `cat` it whole. The older, longer lines stay as they were written.
+
 ---
 
 - `interfaceRequires` was to be priced as the cost of the widest index per candidate → a CPU
@@ -5445,3 +5452,6 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - `test/testkit/mutation-arms.json` was to merge by `union` like the other append-only files → no: JSON has no trailing comma, so two branches that each append an arm both rewrite the old last record's closing line, and a union of those hunks is invalid JSON; it merges record by record through `dev merge-arms` → PROC-1
 - the census lists were to be regenerated from `--list-*` when a merge conflicted on them → no: a census rewritten from the registry it checks cannot fail, so a name the merge itself lost would vanish from both silently; they merge by union and `dev land` restores only their ORDER (`census --order-only`), refusing when the names differ → PROC-1
 - the slice gate was to run every arm with `--all --fast` → no: the registry has outgrown it (thousands of arms at a whole build each is a day, not a gate); the gate runs the arms the slice added or re-encoded and every arm on a type it touched, and `--all` is a release run → PROC-1
+- a long decision was to be wrapped to the width of the older lines → no: the recent lines are one unwrapped line each, and a continuation line is exactly what the gate cannot attribute to a slice, so `dev decision` writes one line and refuses more → DOC-0
+- `dev decision` was to append with `sys.io.File.append` → no: on node it writes from offset 0, over the head of the file (a scratch ledger lost its first bytes); it appends through `Fs.appendFileSync` → DOC-0
+- the size column of docs/README.md was to get the ledger's current size → no: an append-only file outgrows any reading within a slice (it said 41 KB at 894 KB), so the row says append-only → DOC-0

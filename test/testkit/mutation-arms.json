@@ -31541,6 +31541,61 @@
 			"find": "mode == OrderOnly && !setMoved",
 			"replace": "mode == OrderOnly",
 			"note": "`census --order-only` rewrites lists whose NAMES differ from the registry, so `dev land` turns a name a merge lost into a regenerated census that agrees with the loss"
+		},
+		{
+			"name": "M-DECISION-APPEND-GLUED",
+			"type": "dev.Decision",
+			"method": "append",
+			"find": "if (last[0] != '\\n'.code) lead = '\\n';",
+			"replace": "lead = '';",
+			"note": "a ledger that does not end in a newline gets the new decision glued onto its last line"
+		},
+		{
+			"name": "M-DECISION-APPEND-BLANK",
+			"type": "dev.Decision",
+			"method": "append",
+			"find": "if (last[0] != '\\n'.code) lead = '\\n';",
+			"replace": "lead = '\\n';",
+			"note": "every append opens with a newline, so a ledger that already ends in one gains a blank line before each decision"
+		},
+		{
+			"name": "M-DECISION-NO-LENGTH-LIMIT",
+			"type": "dev.Decision",
+			"method": "problem",
+			"find": "if (text.length > MAX_TEXT)",
+			"replace": "if (false)",
+			"note": "a decision of any length is accepted, by the command and by the slice gate alike, and the ledger grows back into paragraphs"
+		},
+		{
+			"name": "M-DECISION-MULTILINE",
+			"type": "dev.Decision",
+			"method": "problem",
+			"find": "if (text.indexOf('\\n') >= 0 || text.indexOf('\\r') >= 0)",
+			"replace": "if (false)",
+			"note": "a text spanning several lines is appended, so one decision becomes a line plus continuations the gate cannot attribute"
+		},
+		{
+			"name": "M-DECISION-ANY-SLICE",
+			"type": "dev.Decision",
+			"method": "problem",
+			"find": "if (!SLICE_ID.match(slice))",
+			"replace": "if (false)",
+			"note": "an empty slice id or a commit SHA is accepted as the slice, so a line names no slice anyone can find the merge of"
+		},
+		{
+			"name": "M-DECISION-GATE-NO-ARROW",
+			"type": "dev.Decision",
+			"method": "entryProblem",
+			"find": "arrow < 0 ? 'does not end with `→ <ID>`'",
+			"replace": "arrow < 0 ? null",
+			"note": "the slice gate passes an added ledger line that names no slice at all"
+		},
+		{
+			"name": "M-DECISION-GATE-SEES-NOTHING",
+			"type": "dev.Decision",
+			"method": "addedLines",
+			"force": "[]",
+			"note": "the slice gate finds no line added to the ledger, so the decisions row passes whatever a slice wrote there"
 		}
 	]
 }

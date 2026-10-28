@@ -168,6 +168,7 @@ final class SliceGate {
 		gate('arms', armsOutcome.bind(base, touched, extraArms, noArms));
 		gate('infra4', () -> infraOutcome(base, touched, baseline));
 		gate('scrub', scrubOutcome.bind(base));
+		gate('decisions', decisionsOutcome.bind(base, touched));
 		gate('frozen', () -> frozenOutcome(baseline));
 		gate('porcelain', () -> {
 			final dirty: Array<String> = git(['status', '--porcelain']).split('\n').filter(l -> l != '');
@@ -364,6 +365,23 @@ final class SliceGate {
 			return NotRun('no token list — set ANYPARSE_SCRUB_LIST (or ANYPARSE_SCRUB_PRIVATE_ROOTS)');
 		_summary.detail('tree and $base..HEAD clean'.replace(base, short(base)));
 		return tree.ok && range.ok ? Passed : Failed(quote(tree.ok ? range : tree));
+	}
+
+	/**
+	 * The decisions row: every line the slice added to `docs/decisions.md` has the shape `dev decision` writes — one line,
+	 * one sentence, ending `→ <ID>`; the first that does not is quoted.
+	 */
+	private function decisionsOutcome(base: String, touched: Array<String>): Outcome {
+		final ledger: String = Decision.LEDGER;
+		if (!touched.contains(ledger)) return Skipped('$ledger untouched');
+		final shown: Result = cmd('git -C $_tree show $base:$ledger').run();
+		final added: Array<String> = Decision.addedLines(shown.ok ? shown.out : '', File.getContent(Path.join([_tree, ledger])));
+		for (line in added) {
+			final why: Null<String> = Decision.entryProblem(line);
+			if (why != null) return Failed(clip('$why: $line'));
+		}
+		_summary.detail('${added.length} new line(s)');
+		return Passed;
 	}
 
 	/** The frozen row: every tree recorded by `--frozen` still has the `git diff` it had at the baseline. */

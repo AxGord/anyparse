@@ -6,7 +6,7 @@ Every file under `docs/` has ONE of five roles, and the role decides what may be
 |---|---|---|---|
 | **reference** | a contract: what a component, gate or command proves, its rules, how to run it — current tense, short | agents, every session | never — a reading belongs in the commit message and the journal |
 | **journal** | readings of one tree at one moment, slice narratives, campaign tables — moved verbatim out of a reference, under the heading they were written for | nobody by default; `git log -S` and the ledger's citations | yes, stamped with the tree they measured |
-| **ledger** | one line per refuted hypothesis: what → why not → the commit with the detail | anyone about to have the same idea | the SHA only |
+| **ledger** | one line per refuted hypothesis: what → why not → the slice with the detail | anyone about to have the same idea | the slice id only |
 | **roadmap** | phases, deliverables, exit conditions | the session boundary | counts go stale within a slice — the authoritative counts are the gates' own output |
 | **archive** | closed slice histories, kept whole | nobody by default | yes, cold |
 
@@ -29,7 +29,7 @@ A contract lives in ONE place. When a class doc owns it (a registry's record sha
 | [`cli-query-phase0-queries.md`](cli-query-phase0-queries.md) | reference | 10 KB | `anyparse.query.Pattern` (the frozen v1 syntax) | the ten hand-written queries the v1 syntax was frozen against |
 | [`cli-query-roadmap.md`](cli-query-roadmap.md) | roadmap | 13 KB | — | the phased delivery plan of the CLI (phases 1–4 shipped; target lines are the original plan) |
 | [`roadmap.md`](roadmap.md) | roadmap | 17 KB | — | the platform's phases, deliverables and exit conditions |
-| [`decisions.md`](decisions.md) | ledger | 41 KB | — | one line per refuted hypothesis, naming the slice (older lines: the merge SHA) that holds the detail |
+| [`decisions.md`](decisions.md) | ledger | append-only | `tools/src/dev/Decision.hx` (`dev decision`, its only writer; the `decisions` row of `dev slice-gate`) | one line per refuted hypothesis, naming the slice (older lines: the merge SHA) that holds the detail; too large to read whole — `grep -n` it |
 | [`journal/testing-log.md`](journal/testing-log.md) | journal | 321 KB | — | every reading and campaign narrative `testing.md` condensed, verbatim, under its origin section |
 | [`journal/cli-query-log.md`](journal/cli-query-log.md) | journal | 125 KB | — | every reading and narrative `cli-query-tool.md` condensed, verbatim, under its origin section |
 | [`journal/architecture-log.md`](journal/architecture-log.md) | journal | 11 KB | — | what `architecture.md` condensed: the `#if` raw-region census, the CLI migration chronicle, the superseded CoreIR / strategy / runtime listings |
@@ -44,6 +44,6 @@ A contract lives in ONE place. When a class doc owns it (a registry's record sha
 
 - A rule, a command, what a gate proves → the reference that owns the component; if a class doc already states it, link the class instead of restating. The split: an API's contract (what a class, field or handler does, its arguments, its refusals) lives in the code at the API; the architectural picture (how the pieces fit, the pipeline, the invariants, why) lives here. Where the two disagree, the code is the behaviour — fix the doc and put the refutation in `decisions.md`.
 - A number, a duration, a tree SHA, a "measured on …" → the commit message, and the journal under the reference section it was taken for (`## From § <heading>`).
-- "We tried X, measured Y, so no" → one line in `decisions.md`.
+- "We tried X, measured Y, so no" → one line in `decisions.md`, appended by `node bin/dev.js decision --slice <ID> "<text>"` (never an edit of the file).
 - A phase boundary → `roadmap.md`.
 - A comment in code → an invariant, a contract, or a non-obvious "why", in one to three sentences; `doc-measurement-claim` and `doc-length` are the lint half of that rule (`cli-query-tool.md` § "The report-only rules that read comments").
