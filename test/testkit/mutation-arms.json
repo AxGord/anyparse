@@ -31596,6 +31596,43 @@
 			"method": "addedLines",
 			"force": "[]",
 			"note": "the slice gate finds no line added to the ledger, so the decisions row passes whatever a slice wrote there"
+		},
+		{
+			"name": "M-BRANCHES-SHARE-WHOLE",
+			"type": "devkit.Branches",
+			"method": "share",
+			"force": "budget",
+			"note": "the suite's shards and the arms' jobs take the whole lease beside the rows already holding threads, so the slice gate oversubscribes the lease it runs under"
+		},
+		{
+			"name": "M-GATE-RENAME-UNPAIRED",
+			"type": "dev.GateTree",
+			"method": "changedPaths",
+			"find": "if (cells.length == 3 && cells[0].startsWith('R')) {",
+			"replace": "if (false) {",
+			"note": "a renamed file is no longer paired with its path at the base, so the lint row compares it with nothing and every finding it carries reads as new"
+		},
+		{
+			"name": "M-GATE-REBASE-NONE",
+			"type": "dev.GateLint",
+			"method": "rebased",
+			"force": "report",
+			"note": "a moved file's findings at the base keep their old path, so the lint row sees none of them at the new path and reports every one as new"
+		},
+		{
+			"name": "M-BRANCHES-FOREIGN-REPORT",
+			"type": "devkit.Branches",
+			"method": "reportOf",
+			"find": "return left.run == id ? left : null;",
+			"replace": "return left;",
+			"note": "a report an earlier run's orphaned branch left under the same name is read as this run's, so a branch that died without reporting shows the old run's verdict"
+		},
+		{
+			"name": "M-GATE-TREE-STATE-BLIND",
+			"type": "dev.GateTree",
+			"method": "treeState",
+			"force": "dir",
+			"note": "an infra tree's cached lint is keyed by its path alone, so a tree that changed between gate runs is compared through the lint of what it held before"
 		}
 	]
 }

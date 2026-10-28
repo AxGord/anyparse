@@ -34,7 +34,7 @@ final class Shard {
 		+ '[--timings <tsv>] [--repo <tree>]';
 
 	/** The shard count when `-n` names none. */
-	private static inline final DEFAULT_SHARDS: Int = 4;
+	public static inline final DEFAULT_SHARDS: Int = 4;
 
 	/** The prefix `devkit.TmpLifecycle` claims this tool's work directory under, and sweeps it by. */
 	private static inline final WORK_PREFIX: String = 'apq-suite-shard';
@@ -95,7 +95,6 @@ final class Shard {
 		// a private runner's engine sits beside it: the shards' own `hxq` calls must not fall back to the shared one
 		final sibling: String = Path.join([Path.directory(FileSystem.fullPath(testJs)), 'apq.js']);
 		if ((Sys.getEnv('HXQ_BIN') ?? '') == '' && testJs != own && FileSystem.exists(sibling)) Sys.putEnv('HXQ_BIN', sibling);
-		final home: String = Sys.getEnv('XDG_CACHE_HOME') ?? Path.join([Sys.getEnv('HOME') ?? '', '.cache']);
 		return run({
 			repo: repo,
 			testJs: testJs,
@@ -105,9 +104,7 @@ final class Shard {
 			planOnly: planOnly,
 			keep: keep,
 			timings: timings,
-			fixtureCache: nonEmptyEnv('APQ_SUITE_NO_FIXTURE_CACHE') != null
-				? null
-				: nonEmptyEnv('APQ_SUITE_FIXTURE_CACHE') ?? Path.join([home, 'anyparse/fixture-cache']),
+			fixtureCache: fixtureCacheOfEnv(),
 			print: Sys.println,
 			warn: line -> Sys.stderr().writeString('$line\n')
 		});
@@ -128,6 +125,13 @@ final class Shard {
 		};
 		release(dirs, work, keep, status, job.warn);
 		return status;
+	}
+
+	/** The fixture-cache store the shards replay their probe compiles from, as the environment names it; null when it says not to. */
+	public static function fixtureCacheOfEnv(): Null<String> {
+		if (nonEmptyEnv('APQ_SUITE_NO_FIXTURE_CACHE') != null) return null;
+		final home: String = Sys.getEnv('XDG_CACHE_HOME') ?? Path.join([Sys.getEnv('HOME') ?? '', '.cache']);
+		return nonEmptyEnv('APQ_SUITE_FIXTURE_CACHE') ?? Path.join([home, 'anyparse/fixture-cache']);
 	}
 
 	/** `<tests>/<assertions>`, two counts and one slash, or a `UsageError`. */
@@ -229,6 +233,7 @@ final class Shard {
 			else
 				'fixture cache: ${FixtureCache.tally(tally) ?? ''}'
 		);
+		handTotals(job, sum);
 		if (verdict.partial) job.warn('dev shard: the totals above are a SUM OF WHAT RAN, not a total — at least one shard did not finish');
 		if (sum.failures != 0 || sum.errors != 0) verdict.red = true;
 		final parity: String = crossCheck(job, work, sum, verdict) ?? 'counts not cross-checked (class parity OK: ${split.classes} placed; ${split.producerNote})';
@@ -308,6 +313,12 @@ final class Shard {
 		if (why == null) return bindir;
 		job.warn(why);
 		return null;
+	}
+
+	/** Hand `sum` to the job's `counted`, when it asks for the totals. */
+	private static function handTotals(job: ShardJob, sum: Tally): Void {
+		final counted: Null<Tally -> Void> = job.counted;
+		if (counted != null) counted(sum);
 	}
 
 	/** Save shard `s`'s transcript, print its line (and its first failure), record what is wrong; answers its counts. */
@@ -542,6 +553,9 @@ typedef ShardJob = {
 
 	/** Where a refusal, a reason or an advisory goes (stderr). */
 	var warn: String -> Void;
+
+	/** Handed the run's totals once every shard has ended — a sum of what ran when a shard did not finish. */
+	var ?counted: Tally -> Void;
 }
 
 /** A shard plan as the run uses it: each shard's `APQ_TEST` value and its tokens, the class total, the producer check. */
