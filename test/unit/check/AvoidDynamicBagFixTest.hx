@@ -2,7 +2,7 @@ package unit.check;
 
 import anyparse.check.AvoidDynamic;
 import anyparse.check.Check.TypeOracle;
-import anyparse.check.PositionTypeOracle;
+import anyparse.check.oracle.PositionTypeOracle;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 

@@ -1,11 +1,11 @@
 package unit.check;
 
 import anyparse.check.Check.FindingData;
-import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig;
-import anyparse.check.OracleCoverage;
 import anyparse.check.ThreadSafety;
 import anyparse.check.facts.TypedFactsProbe;
+import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.oracle.OracleCoverage;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import unit.cli.CliFixture;

@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.oracle.HaxeSpawn;
 import anyparse.query.HaxelibResolver;
 import haxe.io.Path;
 
@@ -241,7 +242,7 @@ final class LibraryBuild {
 
 	/** What `haxe -version` answers (`4.3.7`), or '' when it cannot be run. */
 	private static function compilerVersion(): String {
-		final run: HaxeSpawn.HaxeRun = HaxeSpawn.run(['-version'], null, VERSION_BUFFER);
+		final run: anyparse.check.oracle.HaxeSpawn.HaxeRun = HaxeSpawn.run(['-version'], null, VERSION_BUFFER);
 		final text: String = (run.out.trim() == '' ? run.err : run.out).trim();
 		final cut: Int = text.indexOf('+');
 		return cut < 0 ? text : text.substring(0, cut);

@@ -1,8 +1,8 @@
 package anyparse.query.cli.command;
 
 import anyparse.check.Check;
-import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.Cli.RuleEdits;
 import anyparse.query.ConfigFinder;
 import anyparse.query.LintFixSafePass;

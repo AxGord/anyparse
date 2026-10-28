@@ -3,8 +3,8 @@ package unit.check;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.CompilerOracle;
-import anyparse.check.HaxeSpawn;
+import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.oracle.HaxeSpawn;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
 

@@ -1,6 +1,6 @@
 package unit;
 
-import anyparse.check.OracleCoverage;
+import anyparse.check.oracle.OracleCoverage;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;

@@ -165,7 +165,7 @@
 			{
 				"parts": [
 					{
-						"file": "test/unit/TestDiscoveryParityTest.hx",
+						"file": "test/unit/census/RegisteredClasses.hx",
 						"select": "FinalMember:REGISTERED_CLASSES >> ArrayExpr"
 					}
 				]

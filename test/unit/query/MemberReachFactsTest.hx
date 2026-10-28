@@ -1,9 +1,9 @@
 package unit.query;
 
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.OracleCoverage;
-import anyparse.check.ReachDefinesProbe;
 import anyparse.check.facts.TypedFactsProbe;
+import anyparse.check.oracle.OracleCoverage;
+import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;

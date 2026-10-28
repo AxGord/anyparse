@@ -1,7 +1,7 @@
 package unit.check;
 
 import anyparse.check.ExplicitLocalType;
-import anyparse.check.PositionTypeOracle;
+import anyparse.check.oracle.PositionTypeOracle;
 import anyparse.query.CanonicalEdit;
 
 /**

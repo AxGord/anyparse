@@ -352,14 +352,6 @@ final class PinsCheckAToO {
 		'unit.check.GuardReturnCheckTest#testSingleStatementThenNotFlagged :: control :: M-GUARD-MIN-THEN-IGNORED',
 		'unit.check.GuardReturnCheckTest#testUnbracedCompoundThenNotFlagged :: control :: M-GUARD-UNBRACED-THEN',
 		'unit.check.GuardReturnCheckTest#testUnprovableOrderedNotFlagged :: control :: M-GUARD-UNCLEAN-INVERSION-REPORTED',
-		'unit.check.HaxeSpawnTest#testACancelledShellJobTakesItsChildrenWithIt :: control :: M-DRIVER-KILLS-ONLY-THE-SHELL',
-		'unit.check.HaxeSpawnTest#testAFailureEndsTheJobsDeclaredAfterIt :: control :: M-DRIVER-NEVER-STOPS',
-		'unit.check.HaxeSpawnTest#testAJobPastItsTimeoutIsKilled :: control :: M-DRIVER-NO-TIMEOUT',
-		'unit.check.HaxeSpawnTest#testAKilledParentTakesItsJobsWithIt :: control :: M-DRIVER-OUTLIVES-ITS-PARENT',
-		'unit.check.HaxeSpawnTest#testASignalledDriverTakesItsJobsWithIt :: control :: M-DRIVER-SIGNAL-ORPHANS',
-		'unit.check.HaxeSpawnTest#testAWedgedDriverIsKilledAtItsBound :: control :: M-DRIVER-UNBOUNDED',
-		'unit.check.HaxeSpawnTest#testTheDriverBoundScalesWithTheJobs :: control :: M-DRIVER-BOUND-IGNORES-ROUNDS',
-		'unit.check.HaxeSpawnTest#testTheDriverReadsItsJobsFromNoPipe :: control :: M-DRIVER-READS-STDIN',
 		'unit.check.HoistCommonImportBuildsE2ETest#testALiveBuildThatDoesNotAnswerHoldsAndSaysSo :: control :: '
 			+ 'M-HELD-NOTE-LOST-WITH-FACTS,M-HOIST-HELD-UNSAID',
 		'unit.check.HoistCommonImportBuildsE2ETest#testANoOracleRunHoistsWhatTheStoredBuildsVouchForAndHoldsWithoutThem :: control :: '
@@ -714,118 +706,6 @@ final class PinsCheckAToO {
 		'unit.check.OracleAssistedRefusalTest#testAnAssistedRefusalIsReported :: control :: '
 			+ 'M-ASSISTED-REFUSAL-SILENT,M-ASSISTED-REFUSAL-LEDGER-NONE',
 		'unit.check.OracleBatchRevertReasonTest#testTheBatchBlamesTheFileTheCompilerNames :: control :: M-BLAMES-BASENAME',
-		'unit.check.OracleCacheTest#testAFingerprintReadsItsSourcesThroughTheMemo :: control :: M-ORACLE-CACHE-MEMO-UNREAD',
-		'unit.check.OracleCacheTest#testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft :: control :: '
-			+ 'M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT',
-		'unit.check.OracleCacheTest#testFingerprintsSharingOneWalkEqualTheirOwn :: control :: M-ORACLE-CACHE-WALK-FIRST-ONLY',
-		'unit.check.OracleCacheTest#testHxmlArgsReadTheLinesAsTheCompilerDoes :: control :: M-HXML-SPLIT-LAST-SPACE,M-HXML-QUOTES-KEPT',
-		'unit.check.OracleCacheTest#testHxmlRefsReadsCpLibAndIncludes :: control :: M-HXML-SPLIT-LAST-SPACE',
-		'unit.check.OracleConfigListE2ETest#testAConfigurationWithAnUnknownCompiledSetStillVetoesAnEdit :: control :: '
-			+ 'M-ORACLE-UNKNOWN-COVERAGE-NO-VETO',
-		'unit.check.OracleConfigListE2ETest#testARedBaselineExcludesItsConfigurationRatherThanThePhase :: control :: '
-			+ 'M-ORACLE-RED-BASELINE-STOPS-THE-PHASE',
-		'unit.check.OracleConfigListE2ETest#testARedConfigurationWhoseErrorLineMovesIsNamedOnce :: control :: '
-			+ 'M-ORACLE-EXCLUSIONS-KEYED-BY-SENTENCE',
-		'unit.check.OracleConfigListE2ETest#testASafeOnlyRunNamesTheConfigurationItsNetRanWithout :: control :: '
-			+ 'M-ORACLE-EXCLUSIONS-UNNAMED',
-		'unit.check.OracleConfigListE2ETest#testASeededProbeAnswersOnlyForItsOwnConfiguration :: control :: '
-			+ 'M-ORACLE-COVERAGE-PAIRED-BY-INDEX',
-		'unit.check.OracleConfigListE2ETest#testAnEditTheSecondConfigurationRejectsIsReverted :: control :: '
-			+ 'M-ORACLE-FIRST-CONFIGURATION-IS-ENOUGH',
-		'unit.check.OracleConfigListE2ETest#testAnUnknownCompiledSetExcludesItsConfigurationRatherThanThePhase :: control :: '
-			+ 'M-ORACLE-UNKNOWN-COVERAGE-STOPS-THE-PHASE',
-		'unit.check.OracleConfigListE2ETest#testTheDisplayServerAnswersForTheConfigurationItServes :: control :: '
-			+ 'M-DISPLAY-ORACLE-DROPS-DEFINES',
-		'unit.check.OracleDirTest#testASingleTypecheckRunsInTheDeclaredDir :: control :: M-SPAWN-RUN-IGNORES-CWD',
-		'unit.check.OracleDirTest#testOverlappedTypechecksRunInTheDeclaredDir :: control :: M-SPAWN-RUNALL-IGNORES-CWD',
-		'unit.check.OracleDirTest#testTheDisplayServerWarmsInTheDeclaredDir :: control :: M-DISPLAY-IGNORES-DIR',
-		'unit.check.OracleDirTest#testTheFingerprintReadsTheClasspathUnderTheDeclaredDir :: control :: M-ORACLE-CACHE-IGNORES-DIR',
-		'unit.check.OracleDirTest#testTheProbesRunInTheDeclaredDir :: control :: M-SPAWN-RUN-IGNORES-CWD',
-		'unit.check.OracleGcTest#testATunedCollectorCostsMemory :: guard :: M-GC-MEMORY-UNCOUNTED',
-		'unit.check.OracleGcTest#testEveryKindOfSpawnRunsUnderTheDefault :: control :: '
-			+ 'M-GC-RUN-INHERITS,M-GC-DRIVER-INHERITS,M-GC-PENDING-INHERITS',
-		'unit.check.OracleGcTest#testTheCallersOwnSettingStaysAndOffAddsNothing :: guard :: M-GC-INHERITED-OVERRIDDEN,M-GC-OFF-IGNORED',
-		'unit.check.OracleGcTest#testTheParameters :: guard :: M-GC-OFF-IGNORED,M-GC-EMPTY-DECLARED-OFF,M-GC-INHERITED-OVERRIDDEN',
-		'unit.check.OracleGenerationTest#testAChangedCommandRegenerates :: control :: M-GENERATE-NEVER-STALE-BY-COMMAND',
-		'unit.check.OracleGenerationTest#testAChangedInputRegeneratesAndAnUnchangedOneDoesNot :: control :: '
-			+ 'M-GENERATE-NEVER-STALE-BY-INPUT',
-		'unit.check.OracleGenerationTest#testACommandThatWritesItsOwnInputIsUsable :: control :: M-GENERATE-SHARE-JUDGES-STALENESS',
-		'unit.check.OracleGenerationTest#testADevLibraryIsTrackedThroughItsRepositoryDirectory :: control :: '
-			+ 'M-GENERATE-REPO-DIR-FROM-NAME',
-		'unit.check.OracleGenerationTest#testADirectoryInputIsHashedByItsContent :: control :: M-GENERATE-DIRECTORY-INPUT-CONSTANT',
-		'unit.check.OracleGenerationTest#testAFailedGenerationIsUnavailableNeverTheStaleHxml :: control :: '
-			+ 'M-GENERATE-FAILURE-USES-THE-STALE-HXML',
-		'unit.check.OracleGenerationTest#testAFileNamedByTwoGenerationsIsReadOnce :: control :: M-GENERATE-HASH-MEMO-UNUSED',
-		'unit.check.OracleGenerationTest#testAGenerationThatKeepsGoingStaleIsUnavailable :: control :: M-GENERATE-REJUDGE-UNBOUNDED',
-		'unit.check.OracleGenerationTest#testAHalfWrittenOwnerIsNotTakenOver :: control :: M-GENERATE-OWNERLESS-ABANDONED-AT-ONCE',
-		'unit.check.OracleGenerationTest#testAJobWithoutAStartTimeIsLeftAlone :: control :: M-GENERATE-ENDJOB-PID-ONLY',
-		'unit.check.OracleGenerationTest#testALeftoverTakeoverClaimIsCleared :: control :: M-GENERATE-CLAIM-NEVER-CLEARED',
-		'unit.check.OracleGenerationTest#testALibrarySwitchedDuringTheGenerationIsSeenNextRun :: control :: '
-			+ 'M-GENERATE-IMPLICIT-HASHED-AFTER-THE-RUN',
-		'unit.check.OracleGenerationTest#testALiveReaderDoesNotBlockACurrentGeneration :: control :: '
-			+ 'M-GENERATE-READERS-EXCLUDE-EACH-OTHER',
-		'unit.check.OracleGenerationTest#testALiveReaderHoldsOffARegeneration :: control :: M-GENERATE-WRITER-IGNORES-READERS',
-		'unit.check.OracleGenerationTest#testALockHeldByALiveRunMakesTheConfigurationUnavailable :: control :: M-GENERATE-LOCK-IGNORED',
-		'unit.check.OracleGenerationTest#testAMarkerInTheOutputTreeDoesNotHoldTheState :: control :: '
-			+ 'M-GENERATE-STATE-IN-OUTPUT-DIR,M-GENERATE-STATE-ROOT-FROM-HXML',
-		'unit.check.OracleGenerationTest#testAMissingHxmlRegenerates :: control :: M-GENERATE-TRUSTS-A-MISSING-HXML',
-		'unit.check.OracleGenerationTest#testARacedGenerationDoesNotVerifyFixes :: control :: M-GENERATE-RACED-VERIFIES-FIXES',
-		'unit.check.OracleGenerationTest#testAReadOnlyRootIsUnavailableNotACrash :: control :: M-GENERATE-READ-ONLY-ROOT-THROWS',
-		'unit.check.OracleGenerationTest#testARecordOfAnOlderSchemeIsStale :: control :: M-GENERATE-FORMAT-UNCHECKED',
-		'unit.check.OracleGenerationTest#testAReusedPidDoesNotHoldTheLock :: control :: M-GENERATE-PID-ALONE',
-		'unit.check.OracleGenerationTest#testAStaleGenerationRunsWithoutItsOldRecord :: control :: M-GENERATE-RECORD-OUTLIVES-THE-RUN',
-		'unit.check.OracleGenerationTest#testATakeOverEndsTheJobTheDeadRunLeft :: control :: M-GENERATE-TAKEOVER-LEAVES-THE-JOB',
-		'unit.check.OracleGenerationTest#testATopLevelHxmlKeepsItsStateInItsOwnProject :: control :: M-GENERATE-STATE-ROOT-FROM-HXML',
-		'unit.check.OracleGenerationTest#testATreeAnotherCommandRegeneratedIsUnavailableAtOnce :: control :: '
-			+ 'M-GENERATE-RIVAL-COMMAND-RETRIED',
-		'unit.check.OracleGenerationTest#testATreeWipedAfterItWasJudgedIsRegeneratedBeforeTheCompile :: control :: '
-			+ 'M-GENERATE-SHARE-WITHOUT-REJUDGE',
-		'unit.check.OracleGenerationTest#testAnAbandonedLockIsTakenOver :: control :: M-GENERATE-LOCK-NEVER-RECOVERED',
-		'unit.check.OracleGenerationTest#testAnEmptyOrMissingInputIsNeverSilentlyConstant :: control :: '
-			+ 'M-GENERATE-EMPTY-INPUTS-NEVER,M-GENERATE-MISSING-INPUT-SILENT',
-		'unit.check.OracleGenerationTest#testAnEntryWithNoInputsRegeneratesOncePerRunAndIsUsable :: control :: '
-			+ 'M-GENERATE-SHARE-JUDGES-STALENESS',
-		'unit.check.OracleGenerationTest#testAnHxmlTheGenerationWritesIsNotARacedInput :: control :: M-GENERATE-PRODUCED-INCLUDE-IS-INPUT',
-		'unit.check.OracleGenerationTest#testAnHxmlTwoCommandsGenerateIsDropped :: control :: M-GENERATE-RIVAL-COMMANDS-KEPT',
-		'unit.check.OracleGenerationTest#testAnIncludeOutsideTheHxmlTreeIsAnInput :: control :: M-GENERATE-PRODUCED-BY-ROOT',
-		'unit.check.OracleGenerationTest#testAnInputEditedDuringTheGenerationIsSeenNextRun :: control :: '
-			+ 'M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN',
-		'unit.check.OracleGenerationTest#testAnotherRunsGenerationMovesTheSnapshot :: control :: M-GENERATE-EPOCH-UNOBSERVED',
-		'unit.check.OracleGenerationTest#testEntriesSharingACommandMergeTheirInputs :: control :: M-GENERATE-FIRST-ENTRY-INPUTS',
-		'unit.check.OracleGenerationTest#testEveryConfigOverOneTreeMeetsOneLock :: control :: '
-			+ 'M-GENERATE-STATE-BY-CONFIG-ROOT,M-GENERATE-STATE-BY-SPELLING,M-GENERATE-STATE-IN-OUTPUT-DIR',
-		'unit.check.OracleGenerationTest#testGenerationsAreWaitedOnInLockOrder :: control :: M-GENERATE-ORDER-BY-KEY',
-		'unit.check.OracleGenerationTest#testOnlyOneRunTakesOverADeadLock :: control :: M-GENERATE-TAKEOVER-UNVERIFIED',
-		'unit.check.OracleGenerationTest#testTheGenerationStateIgnoresItself :: control :: '
-			+ 'M-GENERATE-IGNORE-OVERWRITTEN,M-GENERATE-STATE-NOT-IGNORED',
-		'unit.check.OracleGenerationTest#testTheGenerationStateIsSharedAcrossTempDirectories :: control :: M-GENERATE-STATE-IN-TMPDIR',
-		'unit.check.OracleGenerationTest#testTheLibraryStateTheHxmlNamesIsAnInput :: control :: '
-			+ 'M-GENERATE-IGNORES-LIBRARY-STATE,M-GENERATE-TEMPLATES-UNTRACKED',
-		'unit.check.OracleGenerationTest#testTheOracleRunCountsTheUnavailable :: control :: M-ORACLE-SUMMARY-SILENT',
-		'unit.check.OracleGenerationTest#testTheStateDirectoryIsNoInput :: control :: M-GENERATE-STATE-DIR-HASHED',
-		'unit.check.OracleGenerationTest#testTwoRunsOverTwoStaleGenerationsDoNotDeadlock :: control :: '
-			+ 'M-GENERATE-SHARED-HELD-INTO-PHASE-TWO',
-		'unit.check.OracleGenerationTest#testTwoSpellingsOfOneHxmlAreOneClaim :: control :: M-GENERATE-RIVAL-BY-SPELLING',
-		'unit.check.OracleParallelVerdictTest#testTheOverlappedVerdictIsTheFirstFailureInDeclaredOrder :: control :: '
-			+ 'M-DRIVER-CANCELS-EARLIER-JOBS',
-		'unit.check.OracleParallelismTest#testMemoryTheCapAndOneBoundTheBudget :: guard :: ',
-		'unit.check.OracleParallelismTest#testTheBudgetIsEveryCoreButOne :: control :: M-ORACLE-PARALLEL-HALF-THE-CORES',
-		'unit.check.OracleRunMemoTest#testACompileWhoseInputMovedIsNotFiled :: control :: M-RUNMEMO-FILES-A-MOVED-INPUT',
-		'unit.check.OracleRunMemoTest#testAConfigurationOutsideARunIsAlwaysCompiled :: guard :: ',
-		'unit.check.OracleRunMemoTest#testARejectedBaselineQuotesThePlainCompile :: control :: M-RUNMEMO-QUOTES-THE-VERBOSE-STREAMS',
-		'unit.check.OracleRunMemoTest#testASourceTheFingerprintCannotSeeIsAlwaysCompiled :: control :: M-RUNMEMO-TRUSTS-UNSEEN-SOURCES',
-		'unit.check.OracleRunMemoTest#testAVerdictIsReusedForTheSameContentOnly :: control :: M-RUNMEMO-KEY-IGNORES-CONTENT',
-		'unit.check.OracleRunMemoTest#testAWarmRejectionIsCompiledAgainCold :: control :: M-POOL-TRUSTS-WARM-RED',
-		'unit.check.OracleRunMemoTest#testAWarmServerDiesWithItsDriver :: control :: M-POOL-SERVER-UNTETHERED',
-		'unit.check.OracleRunMemoTest#testAWarmServerReadsATreeRewrittenWithinTheSecond :: control :: M-POOL-NO-INVALIDATE',
-		'unit.check.OracleRunMemoTest#testTheCoverageProbeReusesTheBaselineCompile :: control :: M-RUNMEMO-PROBE-RECOMPILES',
-		'unit.check.OracleRunMemoTest#testTheFactsCompileBringsTheBaselineAlong :: control :: M-RUNMEMO-NO-BASELINE-AHEAD',
-		'unit.check.OracleRunMemoTest#testTheSafeWriteNetCompilesTheTreeTheCoverageProbeAsksAbout :: control :: M-SAFE-NET-PLAIN',
-		'unit.check.OracleRunWiringTest#testAFixRunGivenEveryRuleStartsTheFactsEarly :: control :: M-FACTS-NEVER-EARLY',
-		'unit.check.OracleRunWiringTest#testALintRunCompilesEachTreeOnce :: control :: M-RUNMEMO-NOT-ATTACHED',
-		'unit.check.OracleRunWiringTest#testAReportANarrowedOrAnOracleLessRunAsksOnDemand :: guard :: ',
-		'unit.check.OracleRunWiringTest#testAnEditReachedThroughALibraryIsCompiled :: control :: M-RUNMEMO-WRITTEN-UNHASHED',
-		'unit.check.OracleRunWiringTest#testUnaskedEarlyFactsLeaveNothingBehind :: control :: M-FACTS-EARLY-DIRS-LEFT',
 		'unit.check.OrphanAccessorCheckTest#testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion :: control :: '
 			+ 'M-ORPHAN-UNREADABLE-REPORT-SCOPE,M-ORPHAN-FIX-UNREADABLE-BLIND',
 		'unit.check.OrphanAccessorCheckTest#testAnUnreadableProjectFileSpellingNothingLeavesTheDeletionAvailable :: control :: '

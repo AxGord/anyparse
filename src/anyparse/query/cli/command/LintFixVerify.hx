@@ -1,16 +1,16 @@
 package anyparse.query.cli.command;
 
 import anyparse.check.Check;
-import anyparse.check.CompilerDisplayOracle;
-import anyparse.check.CompilerOracle;
-import anyparse.check.CompilerServer;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
-import anyparse.check.OracleCache;
-import anyparse.check.OracleCoverage;
-import anyparse.check.OracleDeclaration;
 import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.oracle.CompilerDisplayOracle;
+import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.oracle.CompilerServer;
+import anyparse.check.oracle.OracleCache;
+import anyparse.check.oracle.OracleCoverage;
+import anyparse.check.oracle.OracleDeclaration;
 import anyparse.core.EnvFlag;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;

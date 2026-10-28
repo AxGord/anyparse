@@ -3,12 +3,12 @@ package unit.cli;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.CompilerOracle;
 import anyparse.check.ExplicitLocalType;
 import anyparse.check.LintConfig;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
+import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.cli.command.LintFixDriver;
 
 /**

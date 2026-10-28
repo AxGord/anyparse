@@ -3,10 +3,10 @@ package unit.check.facts;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.CompilerDisplayOracle;
-import anyparse.check.CompilerOracle;
-import anyparse.check.HaxeSpawn;
 import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.oracle.CompilerDisplayOracle;
+import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.oracle.HaxeSpawn;
 import anyparse.query.Cli;
 
 /**

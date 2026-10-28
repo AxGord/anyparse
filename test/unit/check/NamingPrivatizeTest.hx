@@ -3,10 +3,10 @@ package unit.check;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.CompilerOracle;
 import anyparse.check.Naming;
 import anyparse.check.NamingPrivatize;
 import anyparse.check.NamingRenames.RenameRefusal;
+import anyparse.check.oracle.CompilerOracle;
 import anyparse.grammar.haxe.HaxeNamingSupport;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;

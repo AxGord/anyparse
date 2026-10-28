@@ -3,8 +3,8 @@ package unit.check;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.query.cli.command.LintFixVerify;
 import unit.cli.CliFixture;
 

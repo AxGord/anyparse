@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.check.OracleCoverage;
+import anyparse.check.oracle.OracleCoverage;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;

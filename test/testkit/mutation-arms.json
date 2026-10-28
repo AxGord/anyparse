@@ -3701,7 +3701,7 @@
 		},
 		{
 			"name": "M-ORACLE-FIRST-CONFIGURATION-IS-ENOUGH",
-			"type": "anyparse.check.CompilerOracle",
+			"type": "anyparse.check.oracle.CompilerOracle",
 			"method": "typecheckAll",
 			"find": "final asked: Array<OracleConfig> = cut < 0 ? oracles : oracles.slice(0, cut + 1);",
 			"replace": "final asked: Array<OracleConfig> = [oracles[0]];",
@@ -3709,7 +3709,7 @@
 		},
 		{
 			"name": "M-ORACLE-RED-BASELINE-STOPS-THE-PHASE",
-			"type": "anyparse.check.CompilerOracle",
+			"type": "anyparse.check.oracle.CompilerOracle",
 			"method": "judging",
 			"find": "verdict: green.length == 0 ? failing : Confirmed",
 			"replace": "verdict: excluded.length == 0 ? Confirmed : failing",
@@ -3717,7 +3717,7 @@
 		},
 		{
 			"name": "M-ORACLE-COVERAGE-PAIRED-BY-INDEX",
-			"type": "anyparse.check.OracleCoverage",
+			"type": "anyparse.check.oracle.OracleCoverage",
 			"method": "probedOnce",
 			"find": "return [for (oracle in oracles) probedFor(memo, oracle)];",
 			"replace": "return [for (i in 0...oracles.length) i < memo.probes.length ? memo.probes[i].coverage : probedFor(memo, oracles[i])];",
@@ -3725,7 +3725,7 @@
 		},
 		{
 			"name": "M-ORACLE-UNKNOWN-COVERAGE-STOPS-THE-PHASE",
-			"type": "anyparse.check.OracleCoverage",
+			"type": "anyparse.check.oracle.OracleCoverage",
 			"method": "usable",
 			"find": "stop: configs.length == 0 ? first : null",
 			"replace": "stop: first",
@@ -3765,7 +3765,7 @@
 		},
 		{
 			"name": "M-GENERATE-NEVER-STALE-BY-INPUT",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "staleness",
 			"find": "for (input in inputs) if (hashIn(recordedInputs, input) != hashOf(input, memo)) return '$input changed';",
 			"replace": "",
@@ -3773,7 +3773,7 @@
 		},
 		{
 			"name": "M-GENERATE-NEVER-STALE-BY-COMMAND",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "staleness",
 			"find": "if (record.command != group.generate.command) return 'its generate command changed';",
 			"replace": "",
@@ -3781,7 +3781,7 @@
 		},
 		{
 			"name": "M-GENERATE-TRUSTS-A-MISSING-HXML",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "staleness",
 			"find": [
 				"for (hxml in group.hxmls) if (!sys.FileSystem.exists(hxml)) return '$hxml is missing';",
@@ -3795,7 +3795,7 @@
 		},
 		{
 			"name": "M-GENERATE-FAILURE-USES-THE-STALE-HXML",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "ready",
 			"find": "if (failure != null) out.unavailable = failure;",
 			"replace": "",
@@ -3803,7 +3803,7 @@
 		},
 		{
 			"name": "M-SPAWN-RUN-IGNORES-CWD",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "exec",
 			"find": "if (cwd != null) Reflect.setField(options, 'cwd', cwd);",
 			"replace": "",
@@ -3811,7 +3811,7 @@
 		},
 		{
 			"name": "M-SPAWN-RUNALL-IGNORES-CWD",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "const opts = { cwd: j.cwd == null ? undefined : j.cwd,",
@@ -3820,7 +3820,7 @@
 		},
 		{
 			"name": "M-DRIVER-CANCELS-EARLIER-JOBS",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "for (let k = i + 1; k < jobs.length; k++)",
@@ -3829,7 +3829,7 @@
 		},
 		{
 			"name": "M-ORACLE-CACHE-IGNORES-DIR",
-			"type": "anyparse.check.OracleCache",
+			"type": "anyparse.check.oracle.OracleCache",
 			"method": "scanned",
 			"find": "final root: String = cwd ?? Sys.getCwd();",
 			"replace": "final root: String = Sys.getCwd();",
@@ -3837,7 +3837,7 @@
 		},
 		{
 			"name": "M-DISPLAY-IGNORES-DIR",
-			"type": "anyparse.check.CompilerServer",
+			"type": "anyparse.check.oracle.CompilerServer",
 			"method": "connect",
 			"find": "if (cwd != null) Reflect.setField(opts, 'cwd', cwd);",
 			"replace": "",
@@ -3845,7 +3845,7 @@
 		},
 		{
 			"name": "M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "writeRecord",
 			"find": "inputs: inputs,",
 			"replace": "inputs: hashAll(group.inputs ?? [], []),",
@@ -3853,7 +3853,7 @@
 		},
 		{
 			"name": "M-GENERATE-RECORD-OUTLIVES-THE-RUN",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "claim",
 			"find": "deleteRecord(group);",
 			"replace": "",
@@ -3861,7 +3861,7 @@
 		},
 		{
 			"name": "M-GENERATE-DIRECTORY-INPUT-CONSTANT",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "hashOf",
 			"find": "listTree(path, '', lines, 0, memo);",
 			"replace": "",
@@ -3869,7 +3869,7 @@
 		},
 		{
 			"name": "M-GENERATE-FIRST-ENTRY-INPUTS",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "groupsOf",
 			"find": "held.inputs = mine == null || theirs == null ? null : theirs.concat([for (input in mine) if (!theirs.contains(input)) input]);",
 			"replace": "",
@@ -3877,21 +3877,21 @@
 		},
 		{
 			"name": "M-GENERATE-LOCK-IGNORED",
-			"type": "anyparse.check.OracleGenerationLock",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
 			"method": "living",
 			"note": "every lock holder reads as dead, so a live run's exclusive hold is taken over and its tree regenerated under it",
 			"force": "false"
 		},
 		{
 			"name": "M-GENERATE-LOCK-NEVER-RECOVERED",
-			"type": "anyparse.check.OracleGenerationLock",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
 			"method": "living",
 			"note": "a lock left by a dead run is waited for as if its owner lived, so one crashed run makes every later one unavailable",
 			"force": "true"
 		},
 		{
 			"name": "M-GENERATE-EMPTY-INPUTS-NEVER",
-			"type": "anyparse.check.OracleDeclaration",
+			"type": "anyparse.check.oracle.OracleDeclaration",
 			"method": "generateInputs",
 			"find": "if (inputs == null || inputs.length == 0) return null;",
 			"replace": "if (inputs == null) return null;",
@@ -3899,7 +3899,7 @@
 		},
 		{
 			"name": "M-GENERATE-MISSING-INPUT-SILENT",
-			"type": "anyparse.check.OracleDeclaration",
+			"type": "anyparse.check.oracle.OracleDeclaration",
 			"method": "generateInputs",
 			"find": "drops.push('compilerOracle[$index] \"generateInputs\" names $input, which does not exist — kept, it counts once created');",
 			"replace": "{}",
@@ -3907,7 +3907,7 @@
 		},
 		{
 			"name": "M-DRIVER-NEVER-STOPS",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": " if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);",
@@ -3916,7 +3916,7 @@
 		},
 		{
 			"name": "M-DRIVER-KILLS-ONLY-THE-SHELL",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "if (group) process.kill(-c.pid, 'SIGKILL'); else c.kill();",
@@ -3925,7 +3925,7 @@
 		},
 		{
 			"name": "M-DRIVER-NO-TIMEOUT",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": " if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);",
@@ -3934,7 +3934,7 @@
 		},
 		{
 			"name": "M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT",
-			"type": "anyparse.check.OracleCache",
+			"type": "anyparse.check.oracle.OracleCache",
 			"method": "storeIfUnchanged",
 			"find": "if (after == null || after.fingerprint != fingerprint || !readsHashed(",
 			"replace": "if (after == null || !readsHashed(",
@@ -3942,14 +3942,14 @@
 		},
 		{
 			"name": "M-GENERATE-IGNORES-LIBRARY-STATE",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "implicitInputs",
 			"force": "[]",
 			"note": "the library state the generated hxml names is not an input, so a haxelib version or dev-path switch leaves an hxml naming the old library paths current"
 		},
 		{
 			"name": "M-GENERATE-READERS-EXCLUDE-EACH-OTHER",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "hold",
 			"note": "every run takes every generation exclusively, so one agent's long --fix run blocks every other lint over a tree nobody regenerates",
 			"find": ": OracleGenerationLock.holdShared(\n\t\t\t\tlock, run.me, run.deadline",
@@ -3957,7 +3957,7 @@
 		},
 		{
 			"name": "M-GENERATE-WRITER-IGNORES-READERS",
-			"type": "anyparse.check.OracleGenerationLock",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
 			"method": "holdExclusive",
 			"find": "if (others.length == 0) return null;",
 			"replace": "return null;",
@@ -3965,7 +3965,7 @@
 		},
 		{
 			"name": "M-GENERATE-OWNERLESS-ABANDONED-AT-ONCE",
-			"type": "anyparse.check.OracleGenerationLock",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
 			"method": "writerOf",
 			"find": "abandoned: now - modified(writer) > OWNERLESS_GRACE",
 			"replace": "abandoned: true",
@@ -3973,7 +3973,7 @@
 		},
 		{
 			"name": "M-GENERATE-TAKEOVER-UNVERIFIED",
-			"type": "anyparse.check.OracleGenerationLock",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
 			"method": "takeOver",
 			"find": "final same: Bool = current != null && current.identity == stale.identity;",
 			"replace": "final same: Bool = current != null;",
@@ -3981,7 +3981,7 @@
 		},
 		{
 			"name": "M-GENERATE-PID-ALONE",
-			"type": "anyparse.check.OracleGenerationLock",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
 			"method": "living",
 			"find": "return signalable && (start == '' || startTime(pid) == start);",
 			"replace": "return signalable;",
@@ -3989,7 +3989,7 @@
 		},
 		{
 			"name": "M-DRIVER-SIGNAL-ORPHANS",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); drop(); process.exit(1); });",
@@ -3998,7 +3998,7 @@
 		},
 		{
 			"name": "M-GENERATE-REPO-DIR-FROM-NAME",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "repositoryDir",
 			"find": "final dev: Null<String> = libraries.devs[library];",
 			"replace": "final dev: Null<String> = null;",
@@ -4006,7 +4006,7 @@
 		},
 		{
 			"name": "M-GENERATE-IMPLICIT-HASHED-AFTER-THE-RUN",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "record",
 			"find": [
 				"hashIn(s.implicitBefore, path) ?? hashOf(path, after)",
@@ -4020,7 +4020,7 @@
 		},
 		{
 			"name": "M-GENERATE-HASH-MEMO-UNUSED",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "hashOf",
 			"find": "if (held != null) return held;",
 			"replace": "",
@@ -4028,7 +4028,7 @@
 		},
 		{
 			"name": "M-GENERATE-TEMPLATES-UNTRACKED",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "collectHxml",
 			"find": "['haxelib.json', 'include.xml', 'templates/haxe']",
 			"replace": "['haxelib.json', 'include.xml']",
@@ -4036,7 +4036,7 @@
 		},
 		{
 			"name": "M-ORACLE-CACHE-MEMO-UNREAD",
-			"type": "anyparse.check.OracleCache",
+			"type": "anyparse.check.oracle.OracleCache",
 			"method": "walkDir",
 			"find": "final held: Null<String> = memo?.get(full);",
 			"replace": "final held: Null<String> = null;",
@@ -4044,7 +4044,7 @@
 		},
 		{
 			"name": "M-GENERATE-PRODUCED-INCLUDE-IS-INPUT",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "claim",
 			"find": "if (!isProduced(group, held.path)) held.path",
 			"replace": "if (true) held.path",
@@ -4052,7 +4052,7 @@
 		},
 		{
 			"name": "M-GENERATE-SHARED-HELD-INTO-PHASE-TWO",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "prepare",
 			"note": "a run keeps its shared holds while it waits for exclusive ones, so two runs that each find two generations stale wait for each other until the deadline and each loses a configuration",
 			"find": "OracleGenerationLock.dropShared(lock, run.me);",
@@ -4060,7 +4060,7 @@
 		},
 		{
 			"name": "M-GENERATE-CLAIM-NEVER-CLEARED",
-			"type": "anyparse.check.OracleGenerationLock",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
 			"method": "takeOver",
 			"find": "if (claimAbandoned(claim)) {",
 			"replace": "if (false) {",
@@ -4068,7 +4068,7 @@
 		},
 		{
 			"name": "M-GENERATE-TAKEOVER-LEAVES-THE-JOB",
-			"type": "anyparse.check.OracleGenerationLock",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
 			"method": "takeOver",
 			"find": "endJob(Path.join([dir, 'writer', 'job']));",
 			"replace": "",
@@ -4076,7 +4076,7 @@
 		},
 		{
 			"name": "M-GENERATE-FORMAT-UNCHECKED",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "staleness",
 			"find": "if (record.format != FORMAT_TAG) return 'its generation was recorded by an older engine';",
 			"replace": "",
@@ -4084,7 +4084,7 @@
 		},
 		{
 			"name": "M-GENERATE-PRODUCED-BY-ROOT",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "isProduced",
 			"find": "final tree: String = Path.directory(hxml);",
 			"replace": "final tree: String = Path.directory(Path.directory(hxml));",
@@ -4092,7 +4092,7 @@
 		},
 		{
 			"name": "M-DRIVER-OUTLIVES-ITS-PARENT",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "setInterval(() => { if (process.ppid !== parent) { killAll(); drop(); process.exit(1); } }, 500).unref();",
@@ -4101,7 +4101,7 @@
 		},
 		{
 			"name": "M-GENERATE-SHARE-WITHOUT-REJUDGE",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "share",
 			"find": "if (observe(group, judged) == seen) continue;",
 			"replace": "continue;",
@@ -4109,7 +4109,7 @@
 		},
 		{
 			"name": "M-GENERATE-REJUDGE-UNBOUNDED",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "prepare",
 			"find": "refuse(run, group, 'it went stale again $attempts time(s) while this run waited — another run keeps moving it');",
 			"replace": "",
@@ -4117,7 +4117,7 @@
 		},
 		{
 			"name": "M-GENERATE-STATE-IN-TMPDIR",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "stateDir",
 			"find": "return Path.join([home, STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
 			"replace": "return Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
@@ -4125,7 +4125,7 @@
 		},
 		{
 			"name": "M-GENERATE-STATE-DIR-HASHED",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "listTree",
 			"find": "for (entry in entries) if (entry != STATE_DIR) {",
 			"replace": "for (entry in entries) if (true) {",
@@ -4133,7 +4133,7 @@
 		},
 		{
 			"name": "M-GENERATE-STATE-NOT-IGNORED",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "prepare",
 			"find": "sys.io.File.saveContent(ignore, '*\\n')",
 			"replace": "sys.io.File.saveContent(ignore, '')",
@@ -4141,7 +4141,7 @@
 		},
 		{
 			"name": "M-GENERATE-IGNORE-OVERWRITTEN",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "prepare",
 			"find": " && !sys.FileSystem.exists(ignore)",
 			"replace": "",
@@ -4149,7 +4149,7 @@
 		},
 		{
 			"name": "M-GENERATE-ORDER-BY-KEY",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "lockOrder",
 			"find": "ordered.sort((a, b) -> Reflect.compare(lockDir(a), lockDir(b)));",
 			"replace": "ordered.sort((a, b) -> Reflect.compare(a.key, b.key));",
@@ -4157,7 +4157,7 @@
 		},
 		{
 			"name": "M-GENERATE-ENDJOB-PID-ONLY",
-			"type": "anyparse.check.OracleGenerationLock",
+			"type": "anyparse.check.oracle.OracleGenerationLock",
 			"method": "endJob",
 			"find": "if (pid == null || start == '' || !living(pid, start)) return;",
 			"replace": "if (pid == null || !living(pid, start)) return;",
@@ -4165,7 +4165,7 @@
 		},
 		{
 			"name": "M-GENERATE-SHARE-JUDGES-STALENESS",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "share",
 			"find": "if (observe(group, judged) == seen) continue;",
 			"replace": "if (staleness(group, judged) == null) continue;",
@@ -4173,7 +4173,7 @@
 		},
 		{
 			"name": "M-GENERATE-RIVAL-COMMAND-RETRIED",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "share",
 			"find": "if (rival == null)",
 			"replace": "if (true)",
@@ -4181,14 +4181,14 @@
 		},
 		{
 			"name": "M-GENERATE-RIVAL-COMMANDS-KEPT",
-			"type": "anyparse.check.OracleDeclaration",
+			"type": "anyparse.check.oracle.OracleDeclaration",
 			"method": "withoutRivalCommands",
 			"force": "[for (entry in entries) entry.config]",
 			"note": "an hxml two different generate commands of one config claim is kept, so both commands run into one tree and one configuration is always unavailable"
 		},
 		{
 			"name": "M-GENERATE-READ-ONLY-ROOT-THROWS",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "hold",
 			"find": "catch (exception: Exception) 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: '\n\t\t\t+ exception.message;",
 			"replace": "catch (exception: Exception) throw exception;",
@@ -4196,7 +4196,7 @@
 		},
 		{
 			"name": "M-GENERATE-STATE-BY-CONFIG-ROOT",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "stateDir",
 			"find": "return Path.join([home, STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
 			"replace": "return Path.join([absolute(Sys.getCwd(), group.generate.root), STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
@@ -4204,7 +4204,7 @@
 		},
 		{
 			"name": "M-GENERATE-STATE-BY-SPELLING",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "stateDir",
 			"find": "group.hxmls.map(OracleDeclaration.realPath)",
 			"replace": "group.hxmls.copy()",
@@ -4212,7 +4212,7 @@
 		},
 		{
 			"name": "M-GENERATE-STATE-IN-OUTPUT-DIR",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "stateDir",
 			"find": "ConfigFinder.projectRoot(declaring)",
 			"replace": "ConfigFinder.projectRoot(Path.directory(hxmls[0]))",
@@ -4220,7 +4220,7 @@
 		},
 		{
 			"name": "M-GENERATE-STATE-ROOT-FROM-HXML",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "stateDir",
 			"find": "ConfigFinder.projectRoot(declaring)",
 			"replace": "ConfigFinder.projectRoot(Path.directory(Path.directory(hxmls[0])))",
@@ -4228,7 +4228,7 @@
 		},
 		{
 			"name": "M-GENERATE-RIVAL-BY-SPELLING",
-			"type": "anyparse.check.OracleDeclaration",
+			"type": "anyparse.check.oracle.OracleDeclaration",
 			"method": "withoutRivalCommands",
 			"find": "realPath(entry.config.hxml)",
 			"replace": "entry.config.hxml",
@@ -4236,7 +4236,7 @@
 		},
 		{
 			"name": "M-GENERATE-EPOCH-UNOBSERVED",
-			"type": "anyparse.check.OracleGeneration",
+			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "observe",
 			"find": "return [epoch, written]",
 			"replace": "return [written]",
@@ -6907,7 +6907,7 @@
 		},
 		{
 			"name": "M-DEFINES-ONE-ARM",
-			"type": "anyparse.check.ReachDefinesProbe",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
 			"method": "parse",
 			"find": "if (arms != 1 || early == null || all == null) return null;",
 			"replace": "if (early == null || all == null) return null;",
@@ -6915,7 +6915,7 @@
 		},
 		{
 			"name": "M-DEFINES-EARLY",
-			"type": "anyparse.check.ReachDefinesProbe",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
 			"method": "parse",
 			"find": "defined: early,",
 			"replace": "defined: all,",
@@ -6923,7 +6923,7 @@
 		},
 		{
 			"name": "M-DEFINES-TYPES",
-			"type": "anyparse.check.ReachDefinesProbe",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
 			"method": "macroSource",
 			"find": "if (named != null) Sys.println(",
 			"replace": "if (false) Sys.println(",
@@ -6931,7 +6931,7 @@
 		},
 		{
 			"name": "M-DEFINES-IMPL",
-			"type": "anyparse.check.ReachDefinesProbe",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
 			"method": "macroSource",
 			"find": "case KAbstractImpl(_) | KGenericInstance(_, _): null;",
 			"replace": "case KGenericInstance(_, _): null;",
@@ -6939,7 +6939,7 @@
 		},
 		{
 			"name": "M-SPAWN-ORDER",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "runAllTimed",
 			"find": "if (answer != null && answer.length == jobs.length) return answer;",
 			"replace": "if (answer != null && answer.length == jobs.length) return [for (k in 0...answer.length) answer[answer.length - 1 - k]];",
@@ -9448,7 +9448,7 @@
 		},
 		{
 			"name": "M-ORACLE-PARALLEL-HALF-THE-CORES",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "parallelismFor",
 			"find": "Math.min(cores - 1,",
 			"replace": "Math.min(cores / 2,",
@@ -9456,7 +9456,7 @@
 		},
 		{
 			"name": "M-RUNMEMO-PROBE-RECOMPILES",
-			"type": "anyparse.check.OracleCoverage",
+			"type": "anyparse.check.oracle.OracleCoverage",
 			"method": "rememberedTimed",
 			"find": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];",
 			"replace": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) null];",
@@ -9464,7 +9464,7 @@
 		},
 		{
 			"name": "M-RUNMEMO-KEY-IGNORES-CONTENT",
-			"type": "anyparse.check.OracleRunMemo",
+			"type": "anyparse.check.oracle.OracleRunMemo",
 			"method": "key",
 			"find": "\\n$fingerprint'",
 			"replace": "'",
@@ -9472,7 +9472,7 @@
 		},
 		{
 			"name": "M-RUNMEMO-QUOTES-THE-VERBOSE-STREAMS",
-			"type": "anyparse.check.CompilerOracle",
+			"type": "anyparse.check.oracle.CompilerOracle",
 			"method": "plainRetries",
 			"find": "final retried: Array<Int> = [for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0) k];",
 			"replace": "final retried: Array<Int> = [];",
@@ -9480,7 +9480,7 @@
 		},
 		{
 			"name": "M-RUNMEMO-FILES-A-MOVED-INPUT",
-			"type": "anyparse.check.OracleRunMemo",
+			"type": "anyparse.check.oracle.OracleRunMemo",
 			"method": "file",
 			"find": "before != after || ",
 			"replace": "",
@@ -9495,7 +9495,7 @@
 		},
 		{
 			"name": "M-PENDING-RUNS-IN-FOREGROUND",
-			"type": "anyparse.check.PendingRuns",
+			"type": "anyparse.check.oracle.PendingRuns",
 			"method": "await",
 			"find": "final answer: Array<HaxeRun> = pid == null ? HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound) : collect(pid);",
 			"replace": "final answer: Array<HaxeRun> = HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound);",
@@ -9503,7 +9503,7 @@
 		},
 		{
 			"name": "M-PENDING-CANCEL-LEAVES-JOBS",
-			"type": "anyparse.check.PendingRuns",
+			"type": "anyparse.check.oracle.PendingRuns",
 			"method": "cancel",
 			"find": "if (pid != null) try",
 			"replace": "if (pid == -1) try",
@@ -9535,7 +9535,7 @@
 		},
 		{
 			"name": "M-RUNMEMO-WRITTEN-UNHASHED",
-			"type": "anyparse.check.OracleRunMemo",
+			"type": "anyparse.check.oracle.OracleRunMemo",
 			"method": "fingerprints",
 			"find": "written = written ?? writtenDigest(_written());",
 			"replace": "written = '';",
@@ -9543,7 +9543,7 @@
 		},
 		{
 			"name": "M-RUNMEMO-TRUSTS-UNSEEN-SOURCES",
-			"type": "anyparse.check.OracleRunMemo",
+			"type": "anyparse.check.oracle.OracleRunMemo",
 			"method": "judgeReads",
 			"find": "final inside: Bool = read.length > 0 && ",
 			"replace": "final inside: Bool = true || read.length > 0 && ",
@@ -9551,7 +9551,7 @@
 		},
 		{
 			"name": "M-PENDING-JOBS-FILE-KEPT",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "+ \"if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}\"",
@@ -12903,7 +12903,7 @@
 		},
 		{
 			"name": "M-DEFINES-VALUES-STABLE",
-			"type": "anyparse.check.ReachDefinesProbe",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
 			"method": "parse",
 			"find": "if (value != null && finalValues[d] == value) values[d] = value;",
 			"replace": "if (value != null) values[d] = value;",
@@ -12911,7 +12911,7 @@
 		},
 		{
 			"name": "M-DEFINES-VALUES-MACRO",
-			"type": "anyparse.check.ReachDefinesProbe",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
 			"method": "macroSource",
 			"find": "'\\t\\tvalues(\\'$EARLY_VALUE_PREFIX\\');',",
 			"replace": "",
@@ -15877,7 +15877,7 @@
 		},
 		{
 			"name": "M-ORACLE-CACHE-WALK-FIRST-ONLY",
-			"type": "anyparse.check.OracleCache",
+			"type": "anyparse.check.oracle.OracleCache",
 			"method": "mergeDir",
 			"find": "if (!walks.exists(dir)) {",
 			"replace": "if (!walks.keys().hasNext()) {",
@@ -16620,14 +16620,14 @@
 		},
 		{
 			"name": "M-POOL-NO-INVALIDATE",
-			"type": "anyparse.check.OracleServerPool",
+			"type": "anyparse.check.oracle.OracleServerPool",
 			"method": "moved",
 			"force": "[]",
 			"note": "the pool tells a server nothing moved, so a text the run rewrote within the second the server last compiled is answered as it was"
 		},
 		{
 			"name": "M-POOL-TRUSTS-WARM-RED",
-			"type": "anyparse.check.CompilerOracle",
+			"type": "anyparse.check.oracle.CompilerOracle",
 			"method": "warmFirst",
 			"find": "if (warm[k]?.status != 0) k];",
 			"replace": "if (warm[k] == null) k];",
@@ -17126,7 +17126,7 @@
 		},
 		{
 			"name": "M-TETHER-IGNORES-EOF",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "TETHER",
 			"kind": "FinalMember",
 			"find": "process.stdin.on(\"end\", end); process.stdin.on(\"close\", end); process.stdin.on(\"error\", end); process.stdin.resume();",
@@ -17135,7 +17135,7 @@
 		},
 		{
 			"name": "M-POOL-SERVER-UNTETHERED",
-			"type": "anyparse.check.OracleServerPool",
+			"type": "anyparse.check.oracle.OracleServerPool",
 			"method": "startTimed",
 			"find": "cwd: usable[i].dir, tethered: true }",
 			"replace": "cwd: usable[i].dir, tethered: false }",
@@ -17143,7 +17143,7 @@
 		},
 		{
 			"name": "M-DISPLAY-SERVER-UNTETHERED",
-			"type": "anyparse.check.CompilerDisplayOracle",
+			"type": "anyparse.check.oracle.CompilerDisplayOracle",
 			"method": "start",
 			"find": "cwd: null, tethered: true }",
 			"replace": "cwd: null, tethered: false }",
@@ -22317,7 +22317,7 @@
 		},
 		{
 			"name": "M-HXML-SPLIT-LAST-SPACE",
-			"type": "anyparse.check.OracleCache",
+			"type": "anyparse.check.oracle.OracleCache",
 			"method": "hxmlArgs",
 			"find": "line.indexOf(' ')",
 			"replace": "line.lastIndexOf(' ')",
@@ -22325,7 +22325,7 @@
 		},
 		{
 			"name": "M-HXML-QUOTES-KEPT",
-			"type": "anyparse.check.OracleCache",
+			"type": "anyparse.check.oracle.OracleCache",
 			"method": "unquote",
 			"force": "s",
 			"note": "an hxml argument keeps the quotes the compiler drops, so `-cp \"src\"` names a directory called `\"src\"`"
@@ -22340,14 +22340,14 @@
 		},
 		{
 			"name": "M-COMPILEDIR-PROBE-BLIND",
-			"type": "anyparse.check.OracleDeclaration",
+			"type": "anyparse.check.oracle.OracleDeclaration",
 			"method": "relativeClasspaths",
 			"force": "[]",
 			"note": "the compile-dir probe reads no classpath, so every nested hxml compiles from its own directory even where its classpaths resolve from the config's"
 		},
 		{
 			"name": "M-GC-RUN-INHERITS",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "exec",
 			"find": "maxBuffer: maxBuffer, env: childEnv() }",
 			"replace": "maxBuffer: maxBuffer }",
@@ -22355,7 +22355,7 @@
 		},
 		{
 			"name": "M-GC-DRIVER-INHERITS",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "runAllTimed",
 			"find": "env: childEnv(),",
 			"replace": "",
@@ -22363,7 +22363,7 @@
 		},
 		{
 			"name": "M-GC-PENDING-INHERITS",
-			"type": "anyparse.check.PendingRuns",
+			"type": "anyparse.check.oracle.PendingRuns",
 			"method": "new",
 			"find": "{ stdio: 'ignore', env: HaxeSpawn.childEnv() }",
 			"replace": "{ stdio: 'ignore' }",
@@ -22371,7 +22371,7 @@
 		},
 		{
 			"name": "M-GC-INHERITED-OVERRIDDEN",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "gcParams",
 			"find": "if (!taken.contains(paramName(p))) p",
 			"replace": "p",
@@ -22379,7 +22379,7 @@
 		},
 		{
 			"name": "M-GC-OFF-IGNORED",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "gcParams",
 			"find": "asked == GC_OFF ? [] : ",
 			"replace": "",
@@ -22387,7 +22387,7 @@
 		},
 		{
 			"name": "M-GC-EMPTY-DECLARED-OFF",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "gcParams",
 			"find": "declared == null || declared.trim() == ''",
 			"replace": "declared == null",
@@ -22395,7 +22395,7 @@
 		},
 		{
 			"name": "M-GC-MEMORY-UNCOUNTED",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "parallelismFor",
 			"find": "(tunedCollector ? GC_MEMORY : 0)",
 			"replace": "0",
@@ -22403,7 +22403,7 @@
 		},
 		{
 			"name": "M-DRIVER-READS-STDIN",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "runAllTimed",
 			"find": "stdio: ['ignore', 'pipe', 'pipe'],",
 			"replace": "input: haxe.Json.stringify(jobs),",
@@ -22411,7 +22411,7 @@
 		},
 		{
 			"name": "M-DRIVER-UNBOUNDED",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "runAllTimed",
 			"find": "timeout: limit,",
 			"replace": "",
@@ -22419,7 +22419,7 @@
 		},
 		{
 			"name": "M-DRIVER-BOUND-IGNORES-ROUNDS",
-			"type": "anyparse.check.HaxeSpawn",
+			"type": "anyparse.check.oracle.HaxeSpawn",
 			"method": "driverBound",
 			"find": "rounds * longest",
 			"replace": "longest",
@@ -22427,7 +22427,7 @@
 		},
 		{
 			"name": "M-PENDING-UNBOUNDED",
-			"type": "anyparse.check.PendingRuns",
+			"type": "anyparse.check.oracle.PendingRuns",
 			"method": "collectTimed",
 			"find": "if (Date.now().getTime() - _started > _bound) {",
 			"replace": "if (false) {",
@@ -29859,7 +29859,7 @@
 		},
 		{
 			"name": "M-DEFINES-PARSED-DROPPED",
-			"type": "anyparse.check.ReachDefinesProbe",
+			"type": "anyparse.check.oracle.ReachDefinesProbe",
 			"method": "parse",
 			"find": "parsed: OracleCoverage.parsedPaths(transcript)",
 			"replace": "parsed: []",
@@ -29955,7 +29955,7 @@
 		},
 		{
 			"name": "M-REACH-STORE-OFF",
-			"type": "anyparse.check.ReachBuildsCache",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
 			"method": "store",
 			"find": "if (before == null || builds == null) return;",
 			"replace": "if (before == null || builds == null || oracles.length > 0) return;",
@@ -29963,7 +29963,7 @@
 		},
 		{
 			"name": "M-REACH-KEY-UNCHECKED",
-			"type": "anyparse.check.ReachBuildsCache",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
 			"method": "loadFrom",
 			"find": "return now == null || now.key != text(record['key']) ? null : buildsOf(record);",
 			"replace": "return now == null ? null : buildsOf(record);",
@@ -29971,7 +29971,7 @@
 		},
 		{
 			"name": "M-REACH-GENERATION-UNCHECKED",
-			"type": "anyparse.check.ReachBuildsCache",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
 			"method": "keyOf",
 			"find": "if (OracleGeneration.staleness(group, hashes) != null) return null;",
 			"replace": "if (OracleGeneration.staleness(group, hashes) == '') return null;",
@@ -29979,7 +29979,7 @@
 		},
 		{
 			"name": "M-REACH-LIBRARY-UNCHECKED",
-			"type": "anyparse.check.ReachBuildsCache",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
 			"method": "buildsOf",
 			"find": "if (OracleCache.md5(read) != text(entry['hash'])) return null;",
 			"replace": "if (false) return null;",
@@ -29987,7 +29987,7 @@
 		},
 		{
 			"name": "M-REACH-HASHED-UNCHECKED",
-			"type": "anyparse.check.ReachBuildsCache",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
 			"method": "store",
 			"find": "for (i in 0...oracles.length) if (!OracleCache.readsHashed(key.bases[i], configurations[i].parsed, key.hashed[i])) return;",
 			"replace": "for (i in 0...oracles.length) if (false && !OracleCache.readsHashed(key.bases[i], configurations[i].parsed, key.hashed[i])) return;",
@@ -29995,7 +29995,7 @@
 		},
 		{
 			"name": "M-ORACLE-VERDICT-READS-UNCHECKED",
-			"type": "anyparse.check.OracleCache",
+			"type": "anyparse.check.oracle.OracleCache",
 			"method": "storeIfUnchanged",
 			"find": "|| !readsHashed(cwd ?? Sys.getCwd(), parsed, after.hashed)) return false;",
 			"replace": ") return false;",
@@ -30003,7 +30003,7 @@
 		},
 		{
 			"name": "M-REACH-RECORD-SHAPE-UNCHECKED",
-			"type": "anyparse.check.ReachBuildsCache",
+			"type": "anyparse.check.oracle.ReachBuildsCache",
 			"method": "texts",
 			"find": "return items != null && items.foreach(item -> item is String) ? cast items : null;",
 			"replace": "return items != null ? cast items : null;",

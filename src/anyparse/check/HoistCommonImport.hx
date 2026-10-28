@@ -6,6 +6,7 @@ import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.VolatileMessage;
+import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.scan.UsingSites;
 import anyparse.query.AddImport;
 import anyparse.query.CanonicalEdit.EditResult;

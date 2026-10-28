@@ -4,9 +4,9 @@ package unit.check;
 import sys.io.File;
 #end
 import anyparse.check.AvoidDynamic;
-import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
-import anyparse.check.OracleCoverage;
+import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.oracle.OracleCoverage;
 import unit.cli.CliFixture;
 
 /**

@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.LintDocuments.DocumentMemo;
+import anyparse.check.oracle.OracleCoverage;
 import haxe.Exception;
 import haxe.io.Path;
 

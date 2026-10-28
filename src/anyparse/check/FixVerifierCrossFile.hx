@@ -2,12 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.RiskyArm;
 import anyparse.check.Check.RiskyCrossFileEdit;
-import anyparse.check.CompilerOracle.OracleExclusion;
-import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.OracleCoverage.OracleCoverageMemo;
-import anyparse.check.OracleCoverage.UsableCoverage;
+import anyparse.check.oracle.CompilerOracle.CompilerOracle;
+import anyparse.check.oracle.CompilerOracle.OracleExclusion;
+import anyparse.check.oracle.CompilerOracle.OracleOutcome;
+import anyparse.check.oracle.OracleCoverage.OracleCoverage;
+import anyparse.check.oracle.OracleCoverage.OracleCoverageMemo;
+import anyparse.check.oracle.OracleCoverage.UsableCoverage;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
