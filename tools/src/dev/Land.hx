@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.core.PoolLease;
 import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
@@ -199,7 +200,7 @@ final class Land {
 			allowBlast: args.flag('--allow-blast'),
 			snapshot: args.flag('--snapshot'),
 			full: args.flag('--full'),
-			leased: Branches.leased(),
+			leased: PoolLease.threads(),
 			cache: cacheDir(Sys.getEnv),
 			every: FULL_EVERY
 		};

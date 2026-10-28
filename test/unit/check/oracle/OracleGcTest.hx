@@ -79,7 +79,7 @@ final class OracleGcTest extends Test {
 	public function testATunedCollectorCostsMemory(): Void {
 		Assert.equals(5, HaxeSpawn.parallelismFor(16, 10 * GIB, false), 'ten GiB hold five compiles at two each');
 		Assert.equals(4, HaxeSpawn.parallelismFor(16, 10 * GIB, true), 'and four at two and a half');
-		Assert.equals(15, HaxeSpawn.parallelismFor(16, 64 * GIB, true), 'the cores still bound a big machine');
+		Assert.equals(15, HaxeSpawn.parallelismFor(15, 64 * GIB, true), 'the threads still bound a big machine');
 	}
 
 	#if (sys || nodejs)

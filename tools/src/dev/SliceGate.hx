@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.core.PoolLease;
 import dev.GateTree.GateOptions;
 import dev.Shard.Tally;
 import devkit.Args;
@@ -79,7 +80,7 @@ final class SliceGate {
 		final self: String = keepSelf();
 		if (!build()) return finish(title);
 		final infra: Int = _gate.options.infra.length;
-		fanOut(self, BASELINE_BRANCHES, BASELINE_ROWS, Branches.share(Branches.leased(), infra == 0 ? 0 : 1 + infra));
+		fanOut(self, BASELINE_BRANCHES, BASELINE_ROWS, Branches.share(PoolLease.threads(), infra == 0 ? 0 : 1 + infra));
 		final digests: Array<FrozenTree> = [for (dir in _gate.options.frozen) { dir: dir, digest: GateTree.diffDigest(dir) }];
 		gate('frozen', () -> {
 			if (digests.length == 0) return Skipped('no --frozen');
@@ -109,7 +110,7 @@ final class SliceGate {
 			'slice-gate ${_gate.tree} @ $head base ${GateTree.short(_gate.base)}: ${_gate.touched.length} file(s) touched';
 		final self: String = keepSelf();
 		if (!build()) return finish(title);
-		fanOut(self, GATE_BRANCHES, GATE_ROWS, Branches.share(Branches.leased(), lightThreads()));
+		fanOut(self, GATE_BRANCHES, GATE_ROWS, Branches.share(PoolLease.threads(), lightThreads()));
 		gate('decisions', decisionsOutcome);
 		gate('frozen', frozenOutcome);
 		gate('porcelain', () -> {
