@@ -36,6 +36,10 @@ The classes (`HxFormatWrappingSection`) — each takes the same rules object:
 `ternaryExpression`, `functionSignature`, `anonFunctionSignature`,
 `metadataCallParameter`, `typeParameter`, `expressionWrapping`, `implementsExtends`.
 
+`opBoolChain` and `opAddSubChain` default to one cascade: a chain that fits stays on one line, and a chain that does
+not puts every operator at the head of its own line. A chain inside a `conditionWrapping` paren that broke keeps its
+own cascade; haxe-formatter instead repacks such a chain to the condition's fill mode, and hxq deliberately does not.
+
 `mapWrap` governs a MAP literal — a bracket list whose FIRST element is a `=>` arrow
 (`[k => v, …]`) — and `arrayWrap` governs an ordinary array literal, matching the fork's
 split between `mapLiteralWrapping` and `arrayLiteralWrapping`. A COMPREHENSION

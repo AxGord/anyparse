@@ -251,9 +251,10 @@ final class DependencyCarry {
 		final srcAt: Int = src.imp.span.from;
 		final bound: Array<String> = [
 			for (name in names)
-				if (src.names.contains(name) && !providers.exists(o ->
-					o.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name)
-				))
+				if (
+					src.names.contains(name)
+					&& !providers.exists(o -> o.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name))
+				)
 					name
 		];
 		if (bound.length == 0) return [];

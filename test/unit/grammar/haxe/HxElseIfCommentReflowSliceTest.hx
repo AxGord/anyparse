@@ -95,7 +95,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '\t\t\t// a fairly long trailing note that pushes the glued head line past the configured limit\n\t\tif ('
 		+ 'subject is Bitmap && subject.parent != null && somethingElseEntirely.isReady) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
 	private static final WIDE_GLUED: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
-		+ '\t\t} else if (subject is Bitmap && subject.parent != null && somethingElseEntirely.isReady) { // a fairly long trailing note '
+		+ '\t\t} else if (subject is Bitmap\n\t\t\t&& subject.parent != null\n'
+		+ '\t\t\t&& somethingElseEntirely.isReady) { // a fairly long trailing note '
 		+ 'that pushes the glued head line past the configured limit\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
 	private static final WIDE_COND_OPENED: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
 		+ '\t\t} else if (\n' + '\t\t\tsubject is Bitmap && subject.parent != null && somethingElseEntirely.isReady\n'

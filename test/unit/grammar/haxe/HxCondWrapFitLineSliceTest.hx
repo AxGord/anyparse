@@ -25,7 +25,7 @@ final class HxCondWrapFitLineSliceTest extends Test {
 
 	public function testWrappedCondForcesBodyNextLine(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tif (\n'
-			+ '\t\t\tcounterLocalDeleted > counterLocalUpdated && counterLocalDeleted > counterCloudDeleted\n'
+			+ '\t\t\tcounterLocalDeleted > counterLocalUpdated\n\t\t\t&& counterLocalDeleted > counterCloudDeleted\n'
 			+ '\t\t\t&& counterLocalDeleted > counterCloudUpdatedNotSynced\n\t\t)\n\t\t\treturn ACTION_ONE;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}

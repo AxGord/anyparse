@@ -320,9 +320,10 @@ final class NamingCrossRename {
 			final found: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(
 				entry.source, name, ctx.plugin, 0, entry.source.length, []
 			);
-			if (found == null || found.exists(occ ->
-				occ.kind == OccurrenceClass.StringLiteral || occ.kind == OccurrenceClass.DirectiveComment
-			))
+			if (
+				found == null
+				|| found.exists(occ -> occ.kind == OccurrenceClass.StringLiteral || occ.kind == OccurrenceClass.DirectiveComment)
+			)
 				return true;
 		}
 		return false;

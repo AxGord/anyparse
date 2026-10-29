@@ -1054,9 +1054,10 @@ final class FactsView {
 		final roots: Array<Null<String>> = [for (t in typed) rootOf(t)];
 		for (fi in _scope.index.allFiles())
 			for (t in fi.types)
-				if (t.name == type && !CallGraphNames.selfAlias(t) && t.members.exists(m ->
-					m.name == name
-				) && !roots.contains(declaredId(fi, t)))
+				if (
+					t.name == type && !CallGraphNames.selfAlias(t) && t.members.exists(m -> m.name == name)
+					&& !roots.contains(declaredId(fi, t))
+				)
 					return null;
 		return owners;
 	}

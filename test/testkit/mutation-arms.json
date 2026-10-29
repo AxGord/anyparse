@@ -1389,16 +1389,16 @@
 			"name": "M-WILDCARD-RIVAL-ORDER-BLIND",
 			"type": "anyparse.query.DependencyCarry",
 			"method": "wildcardBareReferences",
-			"find": "if (src.names.contains(name) && !providers.exists(o ->\no.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name)\n))",
-			"replace": "if (src.names.contains(name))",
+			"find": "src.names.contains(name)\n&& !providers.exists(o -> o.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name))",
+			"replace": "src.names.contains(name)",
 			"note": "a later wildcard import providing the same name no longer wins, so a caller that never meant the source module is repointed too"
 		},
 		{
 			"name": "M-WILDCARD-BINDS-BLIND",
 			"type": "anyparse.query.DependencyCarry",
 			"method": "wildcardBareReferences",
-			"find": "if (src.names.contains(name) && !providers.exists(o ->",
-			"replace": "if (!providers.exists(o ->",
+			"find": "src.names.contains(name)\n&& !providers.exists(o -> o.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name))",
+			"replace": "true\n&& !providers.exists(o -> o.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name))",
 			"note": "the source wildcard is credited with names it does not bind, so a bare call resolved through some other import is repointed at the destination"
 		},
 		{
@@ -16055,8 +16055,8 @@
 			"name": "M-FACTS-QUALIFY-SITELESS",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "qualify",
-			"find": "if (at == null || declared.exists(",
-			"replace": "if (at != null && declared.exists(",
+			"find": "at == null\n|| declared.exists(d -> CallGraphNames.normalizePath(d.file) == site && d.span.from <= at.from && at.to <= d.span.to)",
+			"replace": "at != null\n&& declared.exists(d -> CallGraphNames.normalizePath(d.file) == site && d.span.from <= at.from && at.to <= d.span.to)",
 			"note": "(soundness) a constructor read as one of the types sharing its name loses the run of its field initializers"
 		},
 		{
@@ -16838,8 +16838,8 @@
 			"name": "M-LOOPBOUND-VECTOR-IMPORT",
 			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
 			"method": "isFixedLengthType",
-			"find": "if (typeName == SourceText.lastSegment(path) && ctx.tree.children.exists(c ->",
-			"replace": "if (typeName == SourceText.lastSegment(path) || false && ctx.tree.children.exists(c ->",
+			"find": "typeName == SourceText.lastSegment(path)\n&& ctx.tree.children.exists(c -> ctx.seams.modulePathKinds.contains(c.kind) && c.name == path)",
+			"replace": "typeName == SourceText.lastSegment(path)\n|| false && ctx.tree.children.exists(c -> ctx.seams.modulePathKinds.contains(c.kind) && c.name == path)",
 			"note": "any type spelled `Vector` is read as the fixed-length one, OpenFL's growable `Vector` included"
 		},
 		{
@@ -25670,7 +25670,7 @@
 			"name": "M-SWALLOW-OUTCOME-STMT-LIST",
 			"type": "anyparse.check.common.types.SwallowedException",
 			"method": "readAfter",
-			"find": "scan.statementListKinds.contains(ancestors[k].kind) && ",
+			"find": " && scan.statementListKinds.contains(ancestors[k].kind)",
 			"replace": "",
 			"note": "a read in the other arm of the branch the try sits in counts, though it follows the try in the text and on no path"
 		},
@@ -27956,7 +27956,7 @@
 			"name": "M-CHAIN-REST-UNSET",
 			"type": "anyparse.macro.WriterPrattLowering",
 			"method": "lowerInfixChain",
-			"find": "final _restAware: Bool = !opt._keepChainInParen;",
+			"find": "final _restAware: Bool = !opt._keepChainInParen && !_condWrapForced;",
 			"replace": "final _restAware: Bool = false;",
 			"note": "no `&&` / `+` chain is rest-aware, so every one-or-two-column overrun breaks inside an operand or not at all"
 		},
@@ -27964,7 +27964,7 @@
 			"name": "M-CHAIN-REST-IN-KEPT-PAREN",
 			"type": "anyparse.macro.WriterPrattLowering",
 			"method": "lowerInfixChain",
-			"find": "final _restAware: Bool = !opt._keepChainInParen;",
+			"find": "final _restAware: Bool = !opt._keepChainInParen && !_condWrapForced;",
 			"replace": "final _restAware: Bool = true;",
 			"note": "a chain inside a paren that owns the wrap counts the paren's rest too, so it breaks where the paren should open first"
 		},
@@ -29655,8 +29655,8 @@
 			"name": "M-TERNARY-MLB-INLINE-NONE",
 			"type": "anyparse.format.wrap.BinaryChainEmit",
 			"method": "hardlineChainShape",
-			"find": "return inlineMultilineBranch ? IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(items, ops)) : broken;",
-			"replace": "return broken;",
+			"find": "if (inlineMultilineBranch) return IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(items, ops));",
+			"replace": "if (false) return broken;",
 			"note": "the inline verdict is never read, so `ternaryMultilineBranch: inline` breaks the ternary like `break`"
 		},
 		{
@@ -30366,30 +30366,6 @@
 			"find": "final nullAware: Bool = nullLiteral != null && refName != sc.formatInfo.anyType;",
 			"replace": "final nullAware: Bool = false;",
 			"note": "a ByName field stops reading the format's null literal as an absent key, so a config the fork itself writes fails to parse on every file"
-		},
-		{
-			"name": "M-CHAIN-OVERRIDE-DROPS-RULES",
-			"type": "anyparse.macro.WriterOptFanout",
-			"method": "overrideChainModeField",
-			"find": "if (!_wantsFit) _rules.push(",
-			"replace": "if (false) _rules.push(",
-			"note": "the condition-wrap override throws the chain's rules away, so the operator side is the section default instead of the matched rule's location"
-		},
-		{
-			"name": "M-CHAIN-OVERRIDE-DROPS-CONDITIONS",
-			"type": "anyparse.macro.WriterOptFanout",
-			"method": "overrideChainModeField",
-			"find": "_rules.push({ conditions: _conds,",
-			"replace": "_rules.push({ conditions: [],",
-			"note": "the condition-wrap override keeps the rules but not their conditions, so the first rule answers the operator side whether it matches or not"
-		},
-		{
-			"name": "M-CHAIN-OVERRIDE-REJUDGES-EXCEEDS",
-			"type": "anyparse.macro.WriterOptFanout",
-			"method": "overrideChainModeField",
-			"find": "if (_c.cond == anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength)",
-			"replace": "if (false)",
-			"note": "the condition-wrap override leaves `exceedsMaxLineLength` to the chain's own width inside the wrapped condition, so a chain the overflow put on its own line can still match a rule that wants the line to fit and take its location"
 		},
 		{
 			"name": "M-RULE-LOCATION-FALLS-TO-DEFAULT",
@@ -32167,6 +32143,86 @@
 			"find": "if (h.kind == RefKind.Decl || h.bindingSpan != null) ",
 			"replace": "",
 			"note": "every occurrence the value walk sees counts as the reader's own value, so a type position or a static receiver outside the value's scope stops drifting and the reader loses the import it needs"
+		},
+		{
+			"name": "M-CHAIN-FITS-ONE-LINE",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultOpBoolChainWrap",
+			"find": "{ mode: WrapMode.NoWrap, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }] },",
+			"replace": "{ mode: WrapMode.OnePerLineAfterFirst, location: WrappingLocation.BeforeLast, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }] },",
+			"note": "a chain that fits is laid one operator per line, so the default no longer keeps a fitting chain on one line"
+		},
+		{
+			"name": "M-CHAIN-BREAK-PACKS",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultOpBoolChainWrap",
+			"find": "mode: WrapMode.OnePerLineAfterFirst,",
+			"replace": "mode: WrapMode.FillLine,",
+			"note": "an overflowing chain packs its operands up to the limit and leaves the rest on a ragged last line instead of breaking at every operator"
+		},
+		{
+			"name": "M-CHAIN-HUG-LAST",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hardlineChainShape",
+			"find": "if (!hugsLast) return broken;",
+			"replace": "return broken;",
+			"note": "a chain whose only multi-line operand is the last one breaks before it instead of hugging it, so `a && xs.foreach(t -> {` moves the call to its own line"
+		},
+		{
+			"name": "M-RULE-MATCH-IGNORED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "decideRuleWithLineLengthState",
+			"find": "return { mode: rule.mode, location: rule.location ?? WrappingLocation.AfterLast };",
+			"replace": "return { mode: rules.defaultMode, location: fallback };",
+			"note": "a matched rule answers the section default, so neither its mode nor its operator side reaches the chain"
+		},
+		{
+			"name": "M-RULE-CONDITIONS-IGNORED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "matchesWithLineLengthState",
+			"find": "if (!ok) return false;",
+			"replace": "if (false) return false;",
+			"note": "every rule matches whatever its conditions say, so the first rule of a cascade answers for every list and chain"
+		},
+		{
+			"name": "M-GLUE-COMMENT-AFTER-DELIM",
+			"type": "anyparse.core.Renderer",
+			"method": "naturalGluableStep",
+			"find": "s.ltrim().startsWith('//') ? null : DocMeasure.lastCharIsOpenDelim(s)",
+			"replace": "DocMeasure.lastCharIsOpenDelim(s)",
+			"note": "a line comment after an open delimiter ends the natural first line on the comment, so a chain stops hugging `xs.foreach(t -> { // why`"
+		},
+		{
+			"name": "M-CHAIN-FORCE-KEEPS-OWN-RULES",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "setChainModeOverrideField",
+			"find": "_c.opAddSubChainWrap = _addSub;",
+			"replace": "",
+			"note": "a forcing site (interpolation body, switch subject, expression paren in a condition) leaves `+` / `-` chains on their own cascade, so they break inside `${…}` and in a switch subject"
+		},
+		{
+			"name": "M-CONDWRAP-REPACKS",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitCondWrapSingleRef",
+			"find": "_setCondWrapChainMode(opt, _chainOvr)",
+			"replace": "_setChainModeOverride(opt, _chainOvr)",
+			"note": "an if / while condition that breaks repacks its chains to the condition's fill mode again (haxe-formatter collapseChainWraps), so a chain in it no longer breaks at every operator"
+		},
+		{
+			"name": "M-CONDWRAP-FOR-REPACKS",
+			"type": "anyparse.macro.WriterCondWrapLowering",
+			"method": "spliceCondWrapEnd",
+			"find": "_setCondWrapChainMode(opt, _chainOvr)",
+			"replace": "_setChainModeOverride(opt, _chainOvr)",
+			"note": "a for head that breaks repacks the chain in it to the condition's fill mode again, so the chain no longer breaks at every operator"
+		},
+		{
+			"name": "M-HUG-ANY-FIRST-LINE",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hardlineChainShape",
+			"find": "IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, broken, glued)",
+			"replace": "glued",
+			"note": "the chain hugs its last operand whenever the glued first line fits, so a  line inside that operand glues the chain to it"
 		}
 	]
 }

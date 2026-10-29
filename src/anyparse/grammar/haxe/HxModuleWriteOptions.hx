@@ -827,11 +827,11 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_inEnumAbstract: Bool,
 
 	/**
-	 * `Null<WrapMode>` forcing `BinaryChainEmit.emit`'s cascade to a single mode. Set by the runtime
-	 * `_setChainModeOverride(opt, mode)` helper at `@:fmt(condWrap('<knob>'))` sites before the inner
-	 * cond Ref writeCall evaluates: it swaps `opBoolChainWrap` and `opAddSubChainWrap` for a fresh
-	 * `{rules: [], defaultMode: mode}` cascade so the chain dispatch sees the override transparently.
-	 * The mode derives from `opt.<condKnob>.defaultMode`; `NoWrap` / unmappable modes leave it `null`.
+	 * The chain mode the enclosing site set, `null` when none did. `_setChainModeOverride(opt, mode)` FORCES it — both
+	 * chain cascades become that one mode — for a string-interpolation body and a `switch` subject (`NoWrap`) and an
+	 * expression paren inside a condition (its `expressionWrapping` mode). `_setCondWrapChainMode(opt, mode)` only RECORDS
+	 * a condition wrap's non-`NoWrap` mode, which a chain inside reads as "the condition supplies my continuation indent"
+	 * while its own cascade still decides its layout.
 	 */
 	_chainModeOverride: Null<WrapMode>,
 	_callArgChainNest: Bool,

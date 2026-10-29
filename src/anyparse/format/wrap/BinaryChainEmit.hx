@@ -566,7 +566,16 @@ final class BinaryChainEmit {
 				return IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrapAt(evalAt(false, []).location));
 		}
 		final broken: Doc = thresholdTree(extraThresholds, [], true, evalAt, shapeAt);
-		return inlineMultilineBranch ? IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(items, ops)) : broken;
+		if (inlineMultilineBranch) return IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(items, ops));
+		// Only the LAST operand breaks and the cascade keeps a fitting chain on one line: the chain hugs that operand
+		// (`a && xs.exists(x -> {`, `|| [`) when the glued line up to its break fits and ends at a delimiter the operand
+		// opened, rather than counting the operand's own break as the chain's overflow. A break of another kind (a line
+		// comment, a `#if` line) keeps the broken chain, whose nest indents the operand's continuation.
+		final hugsLast: Bool = isChainOps(ops) && !items.slice(0, items.length - 1).exists(item -> WrapList.flatLength(item) < 0)
+			&& evalAt(false, []).mode == NoWrap;
+		if (!hugsLast) return broken;
+		final glued: Doc = shapeNoWrap(items, ops);
+		return IfFirstLineExceeds(opt.lineWidth, broken, IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, broken, glued));
 	}
 
 	private static function shape(
@@ -903,9 +912,8 @@ final class BinaryChainEmit {
 		//    the chain instead of gluing to operand-1's `(`).
 		final unwrapCandidate: Bool = condWrapForced && isChainOps(ops) && !leadingOperandOpensDelim(items[0])
 			&& laterOperandContainsArrow(items);
-		// `condWrapForced` forces the chain rules to {rules:[], defaultMode:FLWLB}
-		// (WriterCodegen._setChainModeOverride), so flat == brk == that one break
-		// mode here — pivot the NoWrap UNWRAP shape against the forced break shape.
+		// A cascade whose flat answer is itself a break mode lays the chain out
+		// broken even where it fits — pivot the NoWrap UNWRAP shape against it.
 		if (unwrapCandidate && isBreakMode(flat.mode))
 			return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, flatSide, shapeNoWrapAt(flat.location)));
 		if (flatAll != null && brkAll != null && sameRule(flatAll, brkAll)) return WrapBoundary(flatSide);

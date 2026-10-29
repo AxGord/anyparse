@@ -145,24 +145,20 @@ final class HxOpAddTrailingParenGlueSliceTest extends Test {
 	}
 
 	/**
-	 * Gate discrimination for `hasBareParenTail` on the HARDLINE path: the same ladder as a Div
-	 * NUMERATOR (`a + (ladder) / d`) leads with `(` but does not END with its `)`, so the tail is not
-	 * a bare paren and the chain keeps its leading break. Dropping the `endsWithCloseDelim` conjunct
-	 * makes this input glue, so the conjunct is load-bearing here and not merely inherited
-	 * from the hardline-free sibling. Source is written ALREADY BROKEN because the flat spelling of
-	 * this shape is not a writer fixed point (a pre-existing, unrelated non-idempotence); this layout
-	 * re-formats to itself.
+	 * A Div whose NUMERATOR is a broken paren ladder (`a + (ladder) / d`) is not a bare paren tail, but it is the only
+	 * operand that breaks and its glued line ends at the `(` it opened, so the chain hugs it like any other multi-line last
+	 * operand. Source is written ALREADY BROKEN; the hugged layout re-formats to itself.
 	 */
-	public function testHardlineParenDivTailDoesNotGlue(): Void {
+	public function testHardlineParenDivTailHugs(): Void {
 		final src: String = 'class Sample {\n\tfunction run() {\n\t\tbadgeContainer.offset = baselineTextExtent\n'
 			+ '\t\t\t+ (\n\t\t\t\tif (packed)\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_LOWEST_SPACING\n'
 			+ '\t\t\t\telse if (linked)\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_TOGGLE_LOWEST_SPACING\n'
 			+ '\t\t\t\telse\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_CELL_EXTENT\n\t\t\t) / scaleDivisorValue;\n\t}\n}';
 		Assert.equals(
-			'class Sample {\n\n\tfunction run() {\n\t\tbadgeContainer.offset = baselineTextExtent\n'
-			+ '\t\t\t+ (\n\t\t\t\tif (packed)\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_LOWEST_SPACING\n'
-			+ '\t\t\t\telse if (linked)\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_TOGGLE_LOWEST_SPACING\n'
-			+ '\t\t\t\telse\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_CELL_EXTENT\n\t\t\t) / scaleDivisorValue;\n\t}\n\n}',
+			'class Sample {\n\n\tfunction run() {\n\t\tbadgeContainer.offset = baselineTextExtent + (\n'
+			+ '\t\t\tif (packed)\n\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_LOWEST_SPACING\n'
+			+ '\t\t\telse if (linked)\n\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_TOGGLE_LOWEST_SPACING\n'
+			+ '\t\t\telse\n\t\t\t\tBoundaries.NODE_PACK_MESH_CELL_EXTENT\n\t\t) / scaleDivisorValue;\n\t}\n\n}',
 			triviaWrite(src, CFG)
 		);
 	}

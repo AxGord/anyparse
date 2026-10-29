@@ -235,9 +235,9 @@ class CondRegionKindDerivationTest extends Test {
 			'the marker scan found ${marked.length} tagged terminal(s) - below $MIN_RAW_TERMINALS the assertion below is vacuous'
 		);
 		final unmarked: Array<String> = [
-			for (terminal => pattern in terminalPatterns()) if (!marked.contains(terminal) && directives.exists(directive ->
-				pattern.indexOf(directive) != -1
-			))
+			for (terminal => pattern in terminalPatterns()) if (
+				!marked.contains(terminal) && directives.exists(directive -> pattern.indexOf(directive) != -1)
+			)
 				terminal
 		];
 		Assert.equals(

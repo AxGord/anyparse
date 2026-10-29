@@ -665,8 +665,8 @@ final class WriterPrattLowering {
 			// `_callArgChainNest` so only the OUTERMOST chain consumes it
 			// — leaf operands / nested chains (written via `makeWriteCall`,
 			// which threads this same `opt`) keep their own Nest.
-			// `_chainModeOverride` is deliberately NOT cleared: condWrap
-			// collapses every chain in the condition. Safe to read both
+			// `_chainModeOverride` is deliberately NOT cleared: it marks
+			// every chain in the condition. Safe to read both
 			// fields directly: only Haxe declares `||`/`&&`/`+`/`-` chain
 			// infix (HxModuleWriteOptions carries the fields).
 			// `_condWrapForced` distinguishes the cond-wrap collapse
@@ -691,13 +691,13 @@ final class WriterPrattLowering {
 			final _chainNestSuppress: Bool = _condWrapForced || opt._callArgChainNest || _keepChainInParen;
 			// omega-chain-rest-width: the chain pivot and its fill group count the
 			// whole physical line (the trailing `;` / `)` and the space after `=`),
-			// except inside a paren that owns the wrap. Neither a string
-			// interpolation nor a condition wrap needs a gate of its own: the first
-			// collapses the chain to a groupless NoWrap shape, the second breaks its
-			// `(` before the chain, which then has nothing after it on its line
-			// (measured: no output moves in the suite, client or anyparse). Read before
-			// the re-bind below clears `_keepChainInParen`.
-			final _restAware: Bool = !opt._keepChainInParen;
+			// except inside a paren that owns the wrap — an expression paren, or a
+			// condition wrap, whose own probe decides whether its `(` breaks; a
+			// glued condition's tail (`) { // note`) is not the chain's to answer.
+			// A string interpolation needs no gate: it collapses the chain to a
+			// groupless NoWrap shape. Read before the re-bind below clears
+			// `_keepChainInParen`.
+			final _restAware: Bool = !opt._keepChainInParen && !_condWrapForced;
 			$headDecl;
 			final opt = $clearOptExpr;
 			final _leafOpen: Array<Bool> = [];

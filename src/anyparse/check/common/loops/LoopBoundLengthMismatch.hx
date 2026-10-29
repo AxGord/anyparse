@@ -280,9 +280,10 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		if (typeName == null) return false;
 		for (path in ctx.seams.fixedTypes) {
 			if (typeName == path) return true;
-			if (typeName == SourceText.lastSegment(path) && ctx.tree.children.exists(c ->
-				ctx.seams.modulePathKinds.contains(c.kind) && c.name == path
-			))
+			if (
+				typeName == SourceText.lastSegment(path)
+				&& ctx.tree.children.exists(c -> ctx.seams.modulePathKinds.contains(c.kind) && c.name == path)
+			)
 				return true;
 		}
 		return false;

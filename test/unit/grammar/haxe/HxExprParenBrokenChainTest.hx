@@ -42,10 +42,10 @@ final class HxExprParenBrokenChainTest extends Test {
 	private static final TERM: String = '(aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbb)';
 
 	/** An array the compiled defaults break one item per line, inside a parenthesised chain that has to open. */
-	private static final ARRAY_OPERAND: String = 'class M {\n\tfunction f() {\n\t\tvar v = (\n\t\t\tbaseValue\n\t\t\t\t+ [\n'
-		+ '\t\t\t\t\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n\t\t\t\t\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n'
-		+ '\t\t\t\t\tccccccccccccccccccccccccccccccccccccccccc,\n\t\t\t\t\tdddddddddddddddddddddddddd\n'
-		+ '\t\t\t\t].length\n\t\t) * factorValue;\n\t}\n}';
+	private static final ARRAY_OPERAND: String = 'class M {\n\tfunction f() {\n\t\tvar v = (\n\t\t\tbaseValue + [\n'
+		+ '\t\t\t\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n\t\t\t\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n'
+		+ '\t\t\t\tccccccccccccccccccccccccccccccccccccccccc,\n\t\t\t\tdddddddddddddddddddddddddd\n'
+		+ '\t\t\t].length\n\t\t) * factorValue;\n\t}\n}';
 
 	public function new(): Void {
 		super();

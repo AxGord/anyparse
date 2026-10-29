@@ -1238,25 +1238,39 @@ final class WriterOptFanout {
 	}
 
 	/**
-	 * ω-chain-fillline-in-condwrap — opt-fanout shim for the
-	 * `@:fmt(condWrap('<knob>'))` site. Forces `BinaryChainEmit.emit`'s
-	 * cascade to a single mode by swapping `opBoolChainWrap` and
-	 * `opAddSubChainWrap` for `_overrideChainMode`'s copy, every rule's mode forced to `mode` — the
-	 * chain dispatch reads those fields by name and sees the override
-	 * transparently, no `BinaryChainEmit` signature change. Idempotent:
-	 * returns `o` unchanged when `mode == null` (no allocation on the
-	 * default path) or when the override already matches. Consumed at
-	 * `HxIfStmt.cond` / `HxWhileStmt.cond` writer call sites to mirror
-	 * haxe-formatter's `collapseChainWraps` post-pass output shape
-	 * (chains inside an active cond-wrap collapse from `OnePerLine` to
-	 * `FillLine`-like packing). Emitted only when the opt typedef
-	 * declares `_chainModeOverride:Null<WrapMode>` AND carries both
-	 * `opBoolChainWrap` and `opAddSubChainWrap` (currently
-	 * `HxModuleWriteOptions` only).
+	 * The two chain-mode shims. `forceRules` builds `_setChainModeOverride`, for a site that forces ONE mode on every chain
+	 * below it — a string-interpolation body and a `switch` subject (`NoWrap`), an expression paren inside a condition (its
+	 * `expressionWrapping` mode): it swaps both chain cascades for `_overrideChainMode` copies, even when `_chainModeOverride`
+	 * already holds the mode. Without it, `_setCondWrapChainMode` only records a condition wrap's mode, so a chain inside the
+	 * condition knows its `(` supplies the indent and keeps its OWN cascade — haxe-formatter's `collapseChainWraps` repack is
+	 * deliberately not reproduced. A null mode returns `o` without allocating.
 	 */
-	private static function setChainModeOverrideField(optionsCT: ComplexType): Field {
+	private static function setChainModeOverrideField(optionsCT: ComplexType, forceRules: Bool): Field {
+		final body: Expr = forceRules
+			? macro {
+				if (mode == null) return o;
+				final _mode: anyparse.format.wrap.WrapMode = mode;
+				// Read every `o` field BEFORE the clone line: on the fusion
+				// path `_c` and `o` are the SAME record, so a read after a
+				// write would see the new value.
+				final _bool: anyparse.format.wrap.WrapRules = _overrideChainMode(o.opBoolChainWrap, _mode);
+				final _addSub: anyparse.format.wrap.WrapRules = _overrideChainMode(o.opAddSubChainWrap, _mode);
+				final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+				_c._chainModeOverride = _mode;
+				_c.opBoolChainWrap = _bool;
+				_c.opAddSubChainWrap = _addSub;
+				return _c;
+			}
+			: macro {
+				if (mode == null) return o;
+				final _mode: anyparse.format.wrap.WrapMode = mode;
+				if (o._chainModeOverride == _mode) return o;
+				final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+				_c._chainModeOverride = _mode;
+				return _c;
+			};
 		return {
-			name: '_setChainModeOverride',
+			name: forceRules ? '_setChainModeOverride' : '_setCondWrapChainMode',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
 				args: [
@@ -1265,62 +1279,7 @@ final class WriterOptFanout {
 					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
-				expr: macro {
-					if (mode == null) return o;
-					final _mode: anyparse.format.wrap.WrapMode = mode;
-					if (o._chainModeOverride == _mode) return o;
-					// Read every `o` field BEFORE the clone line: on the fusion
-					// path `_c` and `o` are the SAME record, so a read after a
-					// write would see the new value.
-					final _bool: anyparse.format.wrap.WrapRules = _overrideChainMode(o.opBoolChainWrap, _mode);
-					final _addSub: anyparse.format.wrap.WrapRules = _overrideChainMode(o.opAddSubChainWrap, _mode);
-					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._chainModeOverride = _mode;
-					// Mode override forces chain layout to the cond-wrap mode (the fork's
-					// `collapseChainWraps` post-pass); the operator side stays the one the
-					// chain's own matched rule gives it (`_overrideChainMode`).
-					_c.opBoolChainWrap = _bool;
-					_c.opAddSubChainWrap = _addSub;
-					return _c;
-				}
-			}),
-			pos: Context.currentPos()
-		};
-	}
-
-	/**
-	 * The cascade a condition wrap installs on a chain: the rules kept with their conditions and
-	 * `location`, only the MODE forced to `mode`, so the rule that matches still places the
-	 * operator and `defaultLocation` still answers only when none does — haxe-formatter's
-	 * `collapseChainWraps` collapses the breaks, never the rule it chose. The wrap fires only on an
-	 * overflowing line, so `exceedsMaxLineLength` is settled here as true: a rule that wants the
-	 * line to fit drops out, the condition that wants it to overflow is met.
-	 *
-	 * Sister to `setChainModeOverrideField`, emitted whenever that helper is.
-	 */
-	private static function overrideChainModeField(): Field {
-		return {
-			name: '_overrideChainMode',
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [
-					{ name: 'r', type: macro :anyparse.format.wrap.WrapRules },
-					{ name: 'mode', type: macro :anyparse.format.wrap.WrapMode }
-				],
-				ret: macro :anyparse.format.wrap.WrapRules,
-				expr: macro {
-					final _rules: Array<anyparse.format.wrap.WrapRule> = [];
-					for (_r in r.rules) {
-						var _wantsFit: Bool = false;
-						final _conds: Array<anyparse.format.wrap.WrapCondition> = [];
-						for (_c in _r.conditions) if (_c.cond == anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength)
-							_wantsFit = _wantsFit || _c.value == 0;
-						else
-							_conds.push(_c);
-						if (!_wantsFit) _rules.push({ conditions: _conds, mode: mode, location: _r.location });
-					}
-					return { rules: _rules, defaultMode: mode, defaultLocation: r.defaultLocation };
-				}
+				expr: body
 			}),
 			pos: Context.currentPos()
 		};
@@ -1424,20 +1383,15 @@ final class WriterOptFanout {
 		// Gated on BOTH brace knobs being present on the opt typedef.
 		if (optionsHasField(optionsTypePath, 'dropSingleStmtBraces') && optionsHasField(optionsTypePath, 'singleStmtBraceSymmetry'))
 			fields.push(clearBracePolicyField(optionsCT));
-		// ω-chain-fillline-in-condwrap: opt-fanout helper for
-		// `@:fmt(condWrap)` site. Forces `BinaryChainEmit.emit`'s
-		// cascade to a single mode by swapping `opBoolChainWrap` /
-		// `opAddSubChainWrap` for a copy whose every rule takes that
-		// mode (`_overrideChainMode`). Sister to `_setAnonFnBody` —
-		// idempotent, null-mode short-circuit avoids allocation on
-		// the default path. Emitted only when the opt typedef
-		// declares `_chainModeOverride:Null<WrapMode>` AND carries
-		// both `opBoolChainWrap` and `opAddSubChainWrap`.
+		// The chain-mode channel: `_setChainModeOverride` (+ `_overrideChainMode`) forces one mode on every chain below a site,
+		// `_setCondWrapChainMode` only records a condition wrap's mode. Emitted when the opt typedef declares
+		// `_chainModeOverride:Null<WrapMode>` AND carries both `opBoolChainWrap` and `opAddSubChainWrap`.
 		if (
 			optionsHasField(optionsTypePath, '_chainModeOverride') && optionsHasField(optionsTypePath, 'opBoolChainWrap')
 			&& optionsHasField(optionsTypePath, 'opAddSubChainWrap')
 		) {
-			fields.push(setChainModeOverrideField(optionsCT));
+			fields.push(setChainModeOverrideField(optionsCT, true));
+			fields.push(setChainModeOverrideField(optionsCT, false));
 			fields.push(overrideChainModeField());
 		}
 		// ω-callarg-chain-nest: opt-fanout helper pair for the
@@ -1654,6 +1608,40 @@ final class WriterOptFanout {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._ssbChainSuppress = v;
 					return _c;
+				}
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * The cascade `_setChainModeOverride` installs on a chain: the rules kept with their conditions and `location`, only the
+	 * MODE forced to `mode`, so the rule that matches still places the operator and `defaultLocation` still answers only when
+	 * none does. A rule that wants the line to fit (`exceedsMaxLineLength` 0) drops out and the condition that wants it to
+	 * overflow is met. Sister to `setChainModeOverrideField`, emitted whenever that helper is.
+	 */
+	private static function overrideChainModeField(): Field {
+		return {
+			name: '_overrideChainMode',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'r', type: macro :anyparse.format.wrap.WrapRules },
+					{ name: 'mode', type: macro :anyparse.format.wrap.WrapMode }
+				],
+				ret: macro :anyparse.format.wrap.WrapRules,
+				expr: macro {
+					final _rules: Array<anyparse.format.wrap.WrapRule> = [];
+					for (_r in r.rules) {
+						var _wantsFit: Bool = false;
+						final _conds: Array<anyparse.format.wrap.WrapCondition> = [];
+						for (_c in _r.conditions) if (_c.cond == anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength)
+							_wantsFit = _wantsFit || _c.value == 0;
+						else
+							_conds.push(_c);
+						if (!_wantsFit) _rules.push({ conditions: _conds, mode: mode, location: _r.location });
+					}
+					return { rules: _rules, defaultMode: mode, defaultLocation: r.defaultLocation };
 				}
 			}),
 			pos: Context.currentPos()

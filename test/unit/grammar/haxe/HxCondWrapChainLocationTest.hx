@@ -6,9 +6,9 @@ import utest.Test;
 /**
  * Operator placement of a `&&` chain, inside a wrapped `if` condition and outside one, read the way
  * haxe-formatter reads it: the FIRST rule whose conditions match supplies the location, a matched rule
- * that names none is `afterLast`, and `defaultLocation` answers only when no rule matches. The
- * condition wrap forces one mode on the chain but keeps that answer. Every expected text is the
- * fork's own output for the same source and config.
+ * that names none is `afterLast`, and `defaultLocation` answers only when no rule matches. A chain
+ * inside a wrapped condition takes its own cascade, so the answer is the same there. Every expected
+ * text is the fork's own output for the same source and config.
  */
 @:nullSafety(Strict)
 class HxCondWrapChainLocationTest extends Test {
@@ -25,7 +25,7 @@ class HxCondWrapChainLocationTest extends Test {
 	/**
 	 * The matched rule's `beforeLast` wins over `defaultLocation: afterLast` and over a later located rule that does not match.
 	 */
-	@:pin('control') @:killer('M-CHAIN-OVERRIDE-DROPS-RULES')
+	@:pin('control') @:killer('M-RULE-MATCH-IGNORED')
 	public function testTheMatchedRuleLocationWins(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\tif (\n\t\t\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\t\t\t&& '
@@ -46,7 +46,7 @@ class HxCondWrapChainLocationTest extends Test {
 	/**
 	 * A located rule that does not match leaves the placement to `defaultLocation`, inside the condition as outside.
 	 */
-	@:pin('control') @:killer('M-CHAIN-OVERRIDE-DROPS-CONDITIONS')
+	@:pin('control') @:killer('M-RULE-CONDITIONS-IGNORED')
 	public function testAnUnmatchedLocatedRuleLeavesTheDefaultLocation(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\tif (\n\t\t\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaa &&\n'
@@ -66,7 +66,7 @@ class HxCondWrapChainLocationTest extends Test {
 	/**
 	 * A matched rule that names no location is `afterLast`, even when an earlier rule that does not match names one.
 	 */
-	@:pin('control') @:killer('M-CHAIN-OVERRIDE-DROPS-CONDITIONS')
+	@:pin('control') @:killer('M-RULE-CONDITIONS-IGNORED')
 	public function testAMatchedRuleWithoutALocationIsAfterLast(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\tif (\n\t\t\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaa &&\n'
@@ -113,11 +113,10 @@ class HxCondWrapChainLocationTest extends Test {
 	}
 
 	/**
-	 * Inside a wrapped condition the line overflowed — that is why it wrapped — so a nested `||` chain
-	 * is judged as on an overflowing line: the `exceedsMaxLineLength` rule matches and its `beforeLast`
-	 * leads the continuation, not the `afterLast` of the "fits" rules ahead of it.
+	 * A nested `||` chain that overflows inside a wrapped condition matches the `exceedsMaxLineLength` rule, whose
+	 * `beforeLast` leads the continuation rather than the `afterLast` of the "fits" rules ahead of it.
 	 */
-	@:pin('control') @:killer('M-CHAIN-OVERRIDE-REJUDGES-EXCEEDS')
+	@:pin('guard')
 	public function testAWrappedConditionJudgesItsChainsAsOverflowing(): Void {
 		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4, "trailingWhitespace": false}, "wrapping": {'
 			+ '"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['

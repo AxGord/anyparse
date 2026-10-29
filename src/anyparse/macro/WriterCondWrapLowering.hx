@@ -132,7 +132,7 @@ final class WriterCondWrapLowering {
 			final _condRules: anyparse.format.wrap.WrapRules = $condKnobAccess;
 			final _condMode: anyparse.format.wrap.WrapMode = _condRules.defaultMode;
 			final _chainOvr: Null<anyparse.format.wrap.WrapMode> = _condMode == anyparse.format.wrap.WrapMode.NoWrap ? null : _condMode;
-			final opt = _setChainModeOverride(opt, _chainOvr);
+			final opt = _setCondWrapChainMode(opt, _chainOvr);
 			anyparse.format.wrap.WrapList.emitCondition($v{leadStr}, $v{trailStr}, $innerDoc, opt, $condKnobAccess);
 		});
 	}

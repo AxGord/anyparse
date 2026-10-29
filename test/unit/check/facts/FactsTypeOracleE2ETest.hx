@@ -47,9 +47,9 @@ class FactsTypeOracleE2ETest extends Test {
 	private static final RACED: String = 'abstract Meters(Float) to Float {\n' + '\tpublic function new(f:Float)\n' + '\t\tthis = f;\n'
 		+ '\n' + '\t@:from static function fromInt(i:Int):Meters\n' + '\t\treturn new Meters(i * 100.0);\n' + '}\n' + '\n'
 		+ '@:build(Slow.build())\n' + 'class Main {\n' + '\tpublic static function big():Int\n' + '\t\treturn 7;\n' + '\n'
-		+ '\tpublic static function main() {\n' + '\t\tvar r = new Meters(1.5\n' + '\t\t\t+ [\n'
-		+ '\t\t\t\t(0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0),\n'
-		+ '\t\t\t\t(0), (0), (0), (0)\n' + '\t\t\t].length);\n' + '\t\tSys.println((r : Float));\n' + '\t\tvar r = big();\n'
+		+ '\tpublic static function main() {\n' + '\t\tvar r = new Meters(1.5 + [\n'
+		+ '\t\t\t(0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0),\n'
+		+ '\t\t\t(0), (0), (0)\n' + '\t\t].length);\n' + '\t\tSys.println((r : Float));\n' + '\t\tvar r = big();\n'
 		+ '\t\tSys.println((r : Float));\n' + '\t}\n' + '}\n';
 	private static final SLOW: String = 'import haxe.macro.Context;\n' + 'import haxe.macro.Expr;\n' + '\n' + 'class Slow {\n'
 		+ '\tpublic static macro function build():Array<Field> {\n'

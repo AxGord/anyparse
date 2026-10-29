@@ -609,11 +609,14 @@ final class ShadowingLocal extends RuleBase {
 			return Declined('a nested function in its scope declares a parameter "$name", which the rename would have to tell apart');
 		final frameSpan: Null<Span> = frame.span;
 		final regions: Array<LexRegion> = site.plugin.lexicalRegions(site.source);
-		if (frameSpan == null || regions.exists(
-			r ->
-				r.kind == LexRegionKind.StringLit && r.from >= frameSpan.from && r.to <= frameSpan.to
-				&& SourceText.mentionsIdent(site.source, new Span(r.from, r.to), name)
-		))
+		if (
+			frameSpan == null
+			|| regions.exists(
+				r ->
+					r.kind == LexRegionKind.StringLit && r.from >= frameSpan.from && r.to <= frameSpan.to
+					&& SourceText.mentionsIdent(site.source, new Span(r.from, r.to), name)
+			)
+		)
 			return Declined('"$name" occurs in a string in its scope, which no resolver reads');
 		if (site.claimed.exists(c -> c.name == newName && c.scope.from < frameSpan.to && frameSpan.from < c.scope.to))
 			return Declined('another declaration of this pass takes "$newName" in an overlapping scope — the next pass renames this one');

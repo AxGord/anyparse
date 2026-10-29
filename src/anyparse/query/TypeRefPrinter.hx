@@ -592,9 +592,10 @@ final class TypeRefPrinter {
 		final bindings: Null<ImportBindings> = plugin == null ? null : ImportBindings.forPlugin(plugin);
 		if (bindings != null) {
 			final others: Null<Array<String>> = ImportBindings.namesBesides(bindings.ofImport(canonical), simple);
-			if (others == null || others.exists(name ->
-				OccurrenceScan.referencedUnqualifiedInRange(source, name, 0, source.length, inert, inert)
-			))
+			if (
+				others == null
+				|| others.exists(name -> OccurrenceScan.referencedUnqualifiedInRange(source, name, 0, source.length, inert, inert))
+			)
 				return false;
 		}
 		final exempt: Array<Span> = (owned ?? []).concat(inert);

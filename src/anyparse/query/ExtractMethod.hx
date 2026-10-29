@@ -560,10 +560,9 @@ final class ExtractMethod {
 			case 1: '${bindKeyword(returnVars[0])} ${returnVars[0].name}: $retType = $call;';
 			case _:
 				final tmp: String = freshReturnName(tree, sel.fromOffset, returnVars, name);
-				'final $tmp: $retType = $call;\n'
-					+ [
-						for (k => r in returnVars) '${bindKeyword(r)} ${r.name}: ${returnTypes[k]} = $tmp.${r.name};'
-					].join('\n');
+				'final $tmp: $retType = $call;\n' + [
+					for (k => r in returnVars) '${bindKeyword(r)} ${r.name}: ${returnTypes[k]} = $tmp.${r.name};'
+				].join('\n');
 		};
 		final after: Int = ElementSpan.declEditSpan(source, tree, host.node, hostSpan, regions).to;
 		return CanonicalEdit.canonicalize(source, [

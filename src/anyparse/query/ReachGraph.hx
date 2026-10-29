@@ -1430,11 +1430,13 @@ final class ReachGraph {
 				final indexOperator: Bool = indexKind != null && m.operatorOverloads.contains(indexKind);
 				if (indexOperator || (indexMeta != null && m.implicitCallMetas.contains(indexMeta))) add(IndexMember);
 				// a conversion or a field-name fallback: any annotation that is neither an operator nor an index access
-				if (m.isImplicitCall && (
-					m.isImplicitConversion || m.implicitCallMetas.exists(meta ->
-						meta != indexMeta && meta != _scope.shape.operatorOverloadMetaName
+				if (
+					m.isImplicitCall && (
+						m.isImplicitConversion || m.implicitCallMetas.exists(meta ->
+							meta != indexMeta && meta != _scope.shape.operatorOverloadMetaName
+						)
 					)
-				))
+				)
 					add(Always);
 			}
 			if (t.constructsFromLiteral) out.push({

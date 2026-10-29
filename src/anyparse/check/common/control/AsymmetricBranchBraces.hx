@@ -333,10 +333,9 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 			)
 				link.children[b]
 		];
-		return braced.length == before.length
-			&& [
-				for (i => block in braced) block.children.length == 1 && block.children[0].kind == before[i].kind
-			].foreach(ok -> ok);
+		return braced.length == before.length && [
+			for (i => block in braced) block.children.length == 1 && block.children[0].kind == before[i].kind
+		].foreach(ok -> ok);
 	}
 
 	/**

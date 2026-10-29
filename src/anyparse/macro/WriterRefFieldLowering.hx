@@ -1486,7 +1486,7 @@ final class WriterRefFieldLowering {
 			// the universal default `expressionWrappingWrap`
 			// (`{rules: [], defaultMode: NoWrap}` → false).
 			final _parenCond: Bool = anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null;
-			final opt = _setParenInCondition(_setChainModeOverride(opt, _chainOvr), _parenCond, opt);
+			final opt = _setParenInCondition(_setCondWrapChainMode(opt, _chainOvr), _parenCond, opt);
 			// ω-condition-wrap-keep: when the cond paren is force-broken
 			// (source newline after `(` + Keep mode → `emitCondition`
 			// returns `brkShape`), the `brkShape`'s `Nest(cols, condDoc)`

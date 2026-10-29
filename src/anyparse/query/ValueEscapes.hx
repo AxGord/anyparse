@@ -585,9 +585,12 @@ final class ValueEscapes {
 		for (fi in _scope.index.allFiles())
 			for (t in fi.types)
 				for (m in t.members)
-					if (functionKinds.contains(m.kind) && m.returnNominal == classType && m.paramTypeSources.exists(
-						p -> p != null && NominalTypes.outerNominalOf(StringTools.trim(p), _scope.plugin.typeSyntax) == stringType
-					) && !producers.contains(m.name))
+					if (
+						functionKinds.contains(m.kind) && m.returnNominal == classType
+						&& m.paramTypeSources.exists(
+							p -> p != null && NominalTypes.outerNominalOf(StringTools.trim(p), _scope.plugin.typeSyntax) == stringType
+						) && !producers.contains(m.name)
+					)
 						producers.push(m.name);
 		if (producers.length == 0) return true;
 		final folding: Null<StringFoldSupport> = _scope.plugin.stringFoldSupport();

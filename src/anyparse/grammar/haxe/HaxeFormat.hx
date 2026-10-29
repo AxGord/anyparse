@@ -448,6 +448,13 @@ final class HaxeFormat implements TextFormat {
 	}
 
 	/**
+	 * Default `WrapRules` cascade for `+` / `-` chains — the same cascade as `defaultOpBoolChainWrap`, a fresh struct per call.
+	 */
+	public static inline function defaultOpAddSubChainWrap(): WrapRules {
+		return defaultOpBoolChainWrap();
+	}
+
+	/**
 	 * Default `WrapRules` cascade for `HxObjectLit.fields` — ported
 	 * verbatim from haxe-formatter's `wrapping.objectLiteral` rule set
 	 * in `resources/default-hxformat.json` (AxGord fork). Returned as a
@@ -827,137 +834,14 @@ final class HaxeFormat implements TextFormat {
 	}
 
 	/**
-	 * Default `WrapRules` cascade for `||` / `&&` chains.
-	 *
-	 * **Pivot (slice ω-drop-soft-thresholds):** anyparse-core defaults
-	 * adopt **one hard limit** (`lineWidth`) and drop fork's two leading
-	 * soft-threshold rules (`lineLength >= 140 → OnePerLineAfterFirst`
-	 * and `lineLength >= 140 → FillLine`). Soft thresholds are a
-	 * Haxe-formatter author's stylistic choice (wrap proactively well
-	 * short of the hard limit), not universal truth — JSON / AS3 / future
-	 * grammars inherit anyparse-core defaults and should not pay the
-	 * per-cascade `IfWidthExceeds(140, …)` render-probe cost or carry a
-	 * Haxe-specific aesthetic. Users who want fork-style aesthetic for
-	 * Haxe load a custom `hxformat.json` that re-introduces the
-	 * `wrapping.opBoolChain.lineLength` rules.
-	 *
-	 * Rules (first-match):
-	 *  1. `itemCount <= 3` + `!exceeds` → NoWrap
-	 *  2. `totalItemLength <= 120` + `!exceeds` → NoWrap
-	 *  3. `itemCount >= 4` → OnePerLineAfterFirst
-	 *  4. `exceeds` → FillLine
-	 *
-	 * `defaultMode: NoWrap` preserves the cascade-level fallback for
-	 * the rare case where no rule matches (only possible when the
-	 * chain is exactly 0/1 items, which the engine short-circuits).
-	 *
-	 * Rule 4 mode is `FillLine` so a chain that exceeds the hard limit
-	 * but has < 4 items packs Wadler-style rather than collapsing to
-	 * one-per-line. Rule 3 fires first for ≥ 4 items.
-	 *
-	 * `location: BeforeLast` on every wrapping rule mirrors fork's
-	 * per-rule setting and shields each rule from the cascade-level
-	 * `defaultLocation: AfterLast` fallback.
-	 *
-	 * Divergence from upstream `default-hxformat.json wrapping.opBoolChain`:
-	 * rules 1, 2 (`lineLength >= 140`) intentionally absent. Slice
-	 * ω-drop-soft-thresholds confirmed Δ pass = 0 across all 3 corpus
-	 * buckets (ws / sl / idn) on the AxGord fork fixtures — the dropped
-	 * rules were redundant with rules 3 / 4 on the existing corpus and
-	 * carried real per-cascade `IfWidthExceeds(140, …)` probe overhead.
+	 * Default `WrapRules` cascade for `||` / `&&` chains: a chain that fits stays on one line, and one that does not puts
+	 * every operator at the head of its own line — no soft threshold and no half-packed line. A broken `if (` / `while (`
+	 * condition does not override it.
 	 */
 	public static function defaultOpBoolChainWrap(): WrapRules {
 		return {
 			rules: [
-				{
-					mode: WrapMode.NoWrap,
-					conditions: [
-						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
-						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
-					]
-				},
-				{
-					mode: WrapMode.NoWrap,
-					conditions: [
-						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 120 },
-						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
-					]
-				},
-				{
-					mode: WrapMode.OnePerLineAfterFirst,
-					location: WrappingLocation.BeforeLast,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }]
-				},
-				{
-					mode: WrapMode.FillLine,
-					location: WrappingLocation.BeforeLast,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
-				}
-			],
-			defaultMode: WrapMode.NoWrap
-		};
-	}
-
-	/**
-	 * Default `WrapRules` cascade for `+` / `-` chains.
-	 *
-	 * **Pivot (slice ω-drop-soft-thresholds):** sister of
-	 * `defaultOpBoolChainWrap` — anyparse-core defaults adopt **one
-	 * hard limit** and drop fork's two leading soft-threshold rules
-	 * (`lineLength >= 160 → OnePerLineAfterFirst` and `lineLength >= 160
-	 * → FillLine`). Rationale identical: soft thresholds bias plugin
-	 * grammars toward Haxe-formatter aesthetic; users opt in via
-	 * custom `hxformat.json`.
-	 *
-	 * Rules (first-match):
-	 *  1. `itemCount <= 3` + `!exceeds` → NoWrap
-	 *  2. `totalItemLength <= 120` + `!exceeds` → NoWrap
-	 *  3. `itemCount >= 4` → OnePerLineAfterFirst
-	 *  4. `exceeds` → OnePerLineAfterFirst
-	 *
-	 * `defaultMode: NoWrap` preserves the cascade-level fallback.
-	 *
-	 * Diverges from `defaultOpBoolChainWrap` only in rule 4 mode
-	 * (`OnePerLineAfterFirst` vs `FillLine`) — matches fork's
-	 * per-cascade choice and anyparse's pre-cascade behaviour for
-	 * `+` / `-`.
-	 *
-	 * `location: BeforeLast` on every wrapping rule mirrors fork's
-	 * per-rule setting and shields each rule from the cascade-level
-	 * `defaultLocation: AfterLast` fallback.
-	 *
-	 * Divergence from upstream `default-hxformat.json wrapping.opAddSubChain`:
-	 * rules 1, 2 (`lineLength >= 160`) intentionally absent. The dropped
-	 * rule 2 (`exceeds → FillLine`) was the sole source of Wadler-style
-	 * packing for `+` / `-` chains — long string-concat throws (e.g.
-	 * issue_179) now apply rule 3 / 4 (one operand per line) when they
-	 * exceed the hard limit. Slice ω-drop-soft-thresholds confirmed
-	 * Δ pass = 0 across all 3 corpus buckets; issue_179 stays in the
-	 * existing fail bucket as fork-divergence-by-design with a shifted
-	 * byte-diff signature (see project memory).
-	 */
-	public static function defaultOpAddSubChainWrap(): WrapRules {
-		return {
-			rules: [
-				{
-					mode: WrapMode.NoWrap,
-					conditions: [
-						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
-						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
-					]
-				},
-				{
-					mode: WrapMode.NoWrap,
-					conditions: [
-						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 120 },
-						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
-					]
-				},
-				{
-					mode: WrapMode.OnePerLineAfterFirst,
-					location: WrappingLocation.BeforeLast,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }]
-				},
+				{ mode: WrapMode.NoWrap, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }] },
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
 					location: WrappingLocation.BeforeLast,

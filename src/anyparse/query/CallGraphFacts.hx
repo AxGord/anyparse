@@ -250,9 +250,10 @@ final class CallGraphFacts {
 			if (e.kind == Contains || answered(g, key, typed, e)) continue;
 			// an edge of no site is no reading of one declaration's code but a run of the node's own — a constructor's of its
 			// type's field initializers (`ConstructorWiring`): it is the qualified node's too
-			if (at == null || declared.exists(d ->
-				CallGraphNames.normalizePath(d.file) == site && d.span.from <= at.from && at.to <= d.span.to
-			)) g.indexEdge({
+			if (
+				at == null
+				|| declared.exists(d -> CallGraphNames.normalizePath(d.file) == site && d.span.from <= at.from && at.to <= d.span.to)
+			) g.indexEdge({
 				from: key,
 				to: e.to,
 				kind: e.kind,
@@ -312,9 +313,10 @@ final class CallGraphFacts {
 			final field: String = SourceText.lastSegment(nodeId);
 			final kinds: Array<String> = typed.fields.find(f -> f.name == field)?.kinds ?? [];
 			// a macro function in every build runs in no program; one a build may replace is a value there
-			if (n == null || n.kind != METHOD_KIND || n.overloadIndex > 0 || (
-				kinds.length > 0 && kinds.foreach(k -> k == CompilerFacts.MACRO_FIELD_KIND)
-			))
+			if (
+				n == null || n.kind != METHOD_KIND || n.overloadIndex > 0
+				|| (kinds.length > 0 && kinds.foreach(k -> k == CompilerFacts.MACRO_FIELD_KIND))
+			)
 				continue;
 			final name: String = view.graphMember(id, field);
 			final graphId: String = '$type.$name';
