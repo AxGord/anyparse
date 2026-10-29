@@ -1,6 +1,9 @@
 package anyparse.check.oracle;
 
+import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.query.TypingService;
+import anyparse.query.TypingService.Resolution;
 import haxe.io.Path;
 
 /**
@@ -136,6 +139,22 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	}
 
 	/**
+	 * Where the compiler says the declaration of the name at offset `bytePos` of `file` is written (`--display …@position`),
+	 * or null when it names none — an error, an empty list, no server. Read-only against the warm server, like `typeAt`.
+	 */
+	public function positionAt(file: String, bytePos: Int): Null<TypeReplyPosition> {
+		invocations++;
+		#if nodejs
+		final forms: Array<String> = pathForms(file);
+		for (form in forms) {
+			final pos: Null<TypeReplyPosition> = parsePositionResponse(connectRun(['--display', '$form@$bytePos@position']) ?? '');
+			if (pos != null) return pos;
+		}
+		#end
+		return null;
+	}
+
+	/**
 	 * Start a warm display server for `hxml` (run from `cwd`) under the configuration's `defines`
 	 * and return a handle, or null when one could not be brought up — no `haxe`, no free port
 	 * after several tries, or a non-nodejs target. A returned handle MUST be `stop`ped to reap
@@ -202,26 +221,17 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 		final pAt: Int = head.indexOf('p="');
 		if (pAt < 0) return null;
 		final endQuote: Int = head.indexOf('"', pAt + 3);
-		if (endQuote < 0) return null;
-		final payload: String = head.substring(pAt + 3, endQuote).htmlUnescape();
-		final byLine: Bool = payload.lastIndexOf(': lines ') > payload.lastIndexOf(': characters ');
-		final marker: String = byLine ? ': lines ' : ': characters ';
-		final at: Int = payload.lastIndexOf(marker);
-		if (at < 0) return null;
-		final colon: Int = payload.lastIndexOf(':', at - 1);
-		if (colon < 0) return null;
-		final line: Null<Int> = Std.parseInt(payload.substring(colon + 1, at));
-		final dash: Int = payload.indexOf('-', at + marker.length);
-		if (line == null || dash < 0) return null;
-		final first: Null<Int> = Std.parseInt(payload.substring(at + marker.length, dash));
-		final last: Null<Int> = Std.parseInt(payload.substring(dash + 1));
-		return first == null || last == null ? null : {
-			file: payload.substring(0, colon),
-			line: line,
-			first: first,
-			last: last,
-			byLine: byLine
-		};
+		return endQuote < 0 ? null : parsePositionText(head.substring(pAt + 3, endQuote).htmlUnescape());
+	}
+
+	/**
+	 * The first `<pos>` of a `--display …@position` reply — where the declaration of the name asked about is written — or
+	 * null when the reply carries none (an error line, an empty `<list>`). PURE: no process, unit-testable.
+	 */
+	public static function parsePositionResponse(raw: String): Null<TypeReplyPosition> {
+		final open: Int = raw.indexOf('<pos>');
+		final close: Int = open < 0 ? -1 : raw.indexOf('</pos>', open);
+		return close < 0 ? null : parsePositionText(raw.substring(open + '<pos>'.length, close).htmlUnescape());
 	}
 
 	/**
@@ -253,6 +263,67 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 		final n: Int = source.length;
 		for (i in 0...n) if (source.fastCodeAt(i) == '\n'.code) out.push(i + 1);
 		return out;
+	}
+
+	/**
+	 * The declaration of `index` the compiler's position `pos` names: a type declared in the indexed file the position's
+	 * path is (or ends with — the longest such), whose declaration holds the position and whose name the text there is.
+	 * `Unknown` for any other position — a member, a local, a file outside the index. PURE: no process.
+	 */
+	public static function declarationAt(index: SymbolIndex, pos: TypeReplyPosition): Resolution {
+		var file: Null<FileInfo> = null;
+		// the longest indexed path the reply's ends with: `a/b/Mod.hx` before a toplevel `Mod.hx`
+		for (f in index.allFiles()) if (
+			(pos.file == f.file || pos.file.endsWith('/${f.file}')) && (file == null || f.file.length > file.file.length)
+		)
+			file = f;
+		final source: Null<String> = file == null ? null : index.sourceOf(file.file);
+		if (file == null || source == null || pos.byLine) return Resolution.Unknown;
+		final starts: Array<Int> = lineStarts(source);
+		if (pos.line < 1 || pos.line > starts.length) return Resolution.Unknown;
+		final from: Int = starts[pos.line - 1] + pos.first - 1;
+		final named: String = source.substring(from, starts[pos.line - 1] + pos.last - 1);
+		final host: FileInfo = file;
+		final found: Array<TypeDeclInfo> = host.types.filter(t -> t.name == named && t.span.from <= from && from < t.span.to);
+		return found.length == 1 ? Declared({ file: host, type: found[0] }) : Resolution.Unknown;
+	}
+
+	/**
+	 * What the name at offset `at` of the indexed `file` denotes: `TypingService.resolveAt`, and where that is `Unknown`, the
+	 * declaration `oracle` names there (`positionAt`, `declarationAt`) — the compiler as the answer of last resort, never a
+	 * second opinion over a resolved name. Without an oracle, the resolver's answer.
+	 */
+	public static function resolveAt(
+		oracle: Null<CompilerDisplayOracle>, index: SymbolIndex, plugin: GrammarPlugin, file: String, at: Int
+	): Resolution {
+		final own: Resolution = TypingService.resolveAt(index, plugin, file, at);
+		final pos: Null<TypeReplyPosition> = oracle == null || own.match(Declared(_)) ? null : oracle.positionAt(file, at);
+		return pos == null ? own : declarationAt(index, pos);
+	}
+
+	/**
+	 * A position as the compiler spells one — `<file>:<line>: characters <a>-<b>` (1-based columns on one line) or
+	 * `<file>:<line>: lines <a>-<b>` (whole lines) — or null in any other form. PURE.
+	 */
+	private static function parsePositionText(payload: String): Null<TypeReplyPosition> {
+		final byLine: Bool = payload.lastIndexOf(': lines ') > payload.lastIndexOf(': characters ');
+		final marker: String = byLine ? ': lines ' : ': characters ';
+		final at: Int = payload.lastIndexOf(marker);
+		if (at < 0) return null;
+		final colon: Int = payload.lastIndexOf(':', at - 1);
+		if (colon < 0) return null;
+		final line: Null<Int> = Std.parseInt(payload.substring(colon + 1, at));
+		final dash: Int = payload.indexOf('-', at + marker.length);
+		if (line == null || dash < 0) return null;
+		final first: Null<Int> = Std.parseInt(payload.substring(at + marker.length, dash));
+		final last: Null<Int> = Std.parseInt(payload.substring(dash + 1));
+		return first == null || last == null ? null : {
+			file: payload.substring(0, colon),
+			line: line,
+			first: first,
+			last: last,
+			byLine: byLine
+		};
 	}
 
 	#if nodejs

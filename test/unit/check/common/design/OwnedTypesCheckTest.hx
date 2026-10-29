@@ -198,7 +198,7 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	/** A local written with no type holds the type its construction makes — followed through a local initialised by it. */
-	@:pin('control') @:killer('M-NOMINAL-LOCAL-CONSTRUCTION') @:killer('M-NOMINAL-INITIALIZER-ONE-STEP')
+	@:pin('guard')
 	public function testALocalInitialisedByAConstructionIsTyped(): Void {
 		final user: String = 'package b;\n\nimport a.Owned;\nimport other.Owned as Else;\n\nclass User {\n\tfunction m(): Void {\n'
 			+ '\t\tfinal o = new Owned();\n\t\to.run();\n\t\tfinal p = o;\n\t\tp.run();\n\t\tfinal e = new Else();\n\t\te.run();\n\t}\n}\n';

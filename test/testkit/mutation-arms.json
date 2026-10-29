@@ -28227,8 +28227,8 @@
 			"name": "M-NOMINAL-BLIND-PARAMS",
 			"type": "anyparse.query.NominalTypes",
 			"method": "pathReceiverMemberTypeSource",
-			"find": "return !answerableType(blind, index.typeSyntax) || CallGraphNames.mentionsTypeName(blind, params, index.typeSyntax)",
-			"replace": "return !answerableType(blind, index.typeSyntax)",
+			"find": "!answerableType(blind, index.typeSyntax) || CallGraphNames.mentionsTypeName(blind, params, index.typeSyntax)",
+			"replace": "!answerableType(blind, index.typeSyntax)",
 			"note": "the package-blind walk answers a member written with its type's parameter unsubstituted"
 		},
 		{
@@ -31325,28 +31325,20 @@
 			"note": "a head binding a type that declares the sub-type's name as a member (a static field, an enum constructor) is read by module path, so the member access is rewritten or its head left uncompared"
 		},
 		{
-			"name": "M-MODMOVE-MEMBER-AFTER-BLIND",
-			"type": "anyparse.query.ModuleMoveBindings",
-			"method": "spellingDrift",
-			"find": "headReading(sides.post, after, s.head, s.sub, at)",
-			"replace": "ByModulePath",
-			"note": "a module-path spelling whose head comes to bind a type declaring the sub-type's name stays unqualified, so it turns into a member access"
-		},
-		{
 			"name": "M-REF-MODULE-PARENTS-BLIND",
-			"type": "anyparse.query.TypeRefIndex",
-			"method": "moduleRefRank",
-			"find": "if (fi.pkg == '' || fromFile.pkg.startsWith('${fi.pkg}.')) {",
-			"replace": "if (false) {",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "moduleRelative",
+			"find": "if (scope == '') break;",
+			"replace": "break;",
 			"note": "a module-relative Mod.Sub reaches a module of the writer's own package only, never one of a package above it"
 		},
 		{
 			"name": "M-REF-MODULE-NEAREST-LOST",
-			"type": "anyparse.query.TypeRefIndex",
-			"method": "moduleRelativeRefAll",
-			"find": "m.rank == nearest || m.rank == BY_WILDCARD",
-			"replace": "true",
-			"note": "every package above the writer that declares Mod.Sub answers, not the nearest one the compiler picks"
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "moduleRelative",
+			"find": "for (m in asked) {",
+			"replace": "asked.reverse();\n\t\tfor (m in asked) {",
+			"note": "the farthest package declaring Mod.Sub answers, not the nearest one the compiler picks"
 		},
 		{
 			"name": "M-ISOP-PARENS-DROPPED",
@@ -32238,6 +32230,70 @@
 			"find": "if (held != null) return Held(held);",
 			"replace": "",
 			"note": "a run under its caller's lease asks the pool for more, so a waiter queued ahead of it for the threads it holds waits for ever"
+		},
+		{
+			"name": "M-RESOLVE-VALUE-FALLS-THROUGH",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "moduleRelative",
+			"find": "if (asValue || found.match(Bound(_))) return found;",
+			"replace": "if (found.match(Bound(_))) return found;",
+			"note": "a value-position Mod.Sub passes the nearest module lacking Sub to a farther one, which 4.3.7 never reaches"
+		},
+		{
+			"name": "M-RESOLVE-WILDCARDS-UNASKED",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "moduleRelative",
+			"find": "for (w in order.wildcards) {",
+			"replace": "for (w in order.wildcards.slice(0, 0)) {",
+			"note": "a module-relative Mod.Sub ignores the package wildcards, which 4.3.7 asks before the package chain"
+		},
+		{
+			"name": "M-RESOLVE-HYBRID-OFF",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "dottedTierOf",
+			"find": ": importedByPackage(split.module, fi, at) ?? tierIn(",
+			"replace": ": tierIn(",
+			"note": "a p.Sub naming the sub-type an import of p.M brings is read as module p.Sub alone"
+		},
+		{
+			"name": "M-MEMBER-READ-SPELLED-OFF",
+			"type": "anyparse.query.MemberLookup",
+			"method": "memberRead",
+			"find": "final local: Null<String> = reader == null ? written : _refs.spelledIn(written, host.file, reader, scope, _typeSyntax);",
+			"replace": "final local: Null<String> = written;",
+			"note": "a member read hands its declaring file's type text to the reading file unrespelled, where a namesake takes its place"
+		},
+		{
+			"name": "M-MODMOVE-VALUE-HEAD-BLIND",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "readingOf",
+			"find": "if (!asValue) return",
+			"replace": "if (true) return",
+			"note": "an expression head Mod.Sub is read as a type position, which passes a nearer module lacking Sub"
+		},
+		{
+			"name": "M-RESOLVE-HEAD-MEMBER-BLIND",
+			"type": "anyparse.query.TypingService",
+			"method": "resolve",
+			"find": "else if (asValue && headMayReadMember(file, spelling, at))",
+			"replace": "else if (false)",
+			"note": "a value-position Mod.Sub whose head binds a type with a member Sub is read as a module path"
+		},
+		{
+			"name": "M-SWEEP-FIX-RESULT-IGNORED",
+			"type": "dev.TrapFixSweep",
+			"method": "verdictOf",
+			"find": "else if (!fixed)",
+			"replace": "else if (false)",
+			"note": "an engine lint --fix that failed reads as a fix that changed nothing"
+		},
+		{
+			"name": "M-ORACLE-RESOLVE-NO-ORACLE-DROPPED",
+			"type": "anyparse.check.oracle.CompilerDisplayOracle",
+			"method": "resolveAt",
+			"find": "return pos == null ? own : declarationAt(index, pos);",
+			"replace": "return pos == null ? Resolution.Unknown : declarationAt(index, pos);",
+			"note": "without an oracle the resolver's own declaration is dropped"
 		}
 	]
 }

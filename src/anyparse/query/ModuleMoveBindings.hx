@@ -5,6 +5,10 @@ import anyparse.query.SymbolIndex.AmbientImportGroup;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeNameBinding.NameTarget;
+import anyparse.query.TypingService.NamePosition;
+import anyparse.runtime.Span;
+
+using Lambda;
 
 /** The simple names one file's meaning is compared on, and where the file lives before and after the relocation. */
 typedef BindingProbe = {
@@ -198,8 +202,11 @@ final class ModuleMoveBindings {
 				});
 				continue;
 			}
+			final typed: Array<Span> = typeRefSpans(textAfter[f.after], plugin);
 			for (i => s in was) {
-				final drift: Null<QualifiedDrift> = spellingDrift(f.after, s, now[i].at, before, after, sides);
+				final at: Int = now[i].at;
+				final asValue: Bool = !typed.exists(span -> span.from <= at && at < span.to);
+				final drift: Null<QualifiedDrift> = spellingDrift(f.after, s, at, before, after, sides, asValue);
 				if (drift != null) out.push(drift);
 			}
 		}
@@ -221,15 +228,16 @@ final class ModuleMoveBindings {
 	 * The drift of the spelling `s` of `file` (its first name at `at` after the move; `before` / `after` the file's index
 	 * records), or null when it keeps its reading: a member access before the move is the bare name's to compare (`drifts`),
 	 * and a spelling the index places nowhere on either side is no sub-type it knows; a module-path reading must name the same
-	 * type after the move (`TypeRefIndex.resolveTypeRefAll`), by module path still. Its full path is the module of the one
-	 * type it named before (under its new path), when the index after the move finds the sub-type there.
+	 * type after the move (`readingOf`: in a type position or, `asValue`, as an expression's head), by module path still. Its
+	 * full path is the module of the one type it named before (under its new path), when the index after the move finds the
+	 * sub-type there.
 	 */
 	private static function spellingDrift(
-		file: String, s: SubTypeSpelling, at: Int, before: FileInfo, after: FileInfo, sides: QualifiedSides
+		file: String, s: SubTypeSpelling, at: Int, before: FileInfo, after: FileInfo, sides: QualifiedSides, asValue: Bool
 	): Null<QualifiedDrift> {
 		final written: String = '${s.head}.${s.sub}';
-		final was: Array<ResolvedType> = sides.pre.refs.resolveTypeRefAll(written, before, s.at);
-		final now: Array<ResolvedType> = sides.post.refs.resolveTypeRefAll(written, after, at);
+		final was: Array<ResolvedType> = readingOf(sides.pre, before, written, s.at, asValue);
+		final now: Array<ResolvedType> = readingOf(sides.post, after, written, at, asValue);
 		if (was.length == 0 && now.length == 0) return null;
 		final mapped: (String) -> String = module -> sides.renamed[module] ?? module;
 		final wasKey: String = declsKey(was, mapped);
@@ -245,20 +253,16 @@ final class ModuleMoveBindings {
 			qualified: qualified
 		};
 		final nowhere: String = 'nothing the analysed set holds';
-		return switch [
-			headReading(sides.pre, before, s.head, s.sub, s.at),
-			headReading(sides.post, after, s.head, s.sub, at)
-		] {
-			case [AsMember, _]:
+		// a type position reads by module path whatever the head binds; a value's reading after the move asks the head itself
+		return switch asValue ? headReading(sides.pre, before, s.head, s.sub, s.at) : ByModulePath {
+			case AsMember:
 				null;
-			case [Unreadable, _]:
+			case Unreadable:
 				drift('a member of what "${s.head}" binds or a module path, which the index cannot tell', nowhere, null);
-			case [ByModulePath, ByModulePath] if (wasKey == declsKey(now, module -> module)):
+			case ByModulePath if (wasKey == declsKey(now, module -> module)):
 				null;
-			case [ByModulePath, ByModulePath]:
+			case ByModulePath:
 				drift(was.length == 0 ? nowhere : wasKey, now.length == 0 ? nowhere : declsKey(now, module -> module), full);
-			case [ByModulePath, _]:
-				drift(wasKey, 'a member of what "${s.head}" binds there, or a reading the index cannot tell', full);
 		};
 	}
 
@@ -388,6 +392,33 @@ final class ModuleMoveBindings {
 				names, tree, plugin.refShape()
 			)) for (h in hits) if (h.kind == RefKind.Decl || h.bindingSpan != null) SourceText.identTokenOffset(source, h.span, name)
 		];
+	}
+
+	/**
+	 * What `written` (`Mod.Sub`), at offset `at` of `info`, names: in a type position every declaration the resolution reads
+	 * it as (`TypeRefIndex.resolveTypeRefAll`); read as an expression's head (`asValue`), the one declaration
+	 * `TypingService.resolve` names there — the first module the order finds ends the search — or none.
+	 */
+	private static function readingOf(index: SymbolIndex, info: FileInfo, written: String, at: Int, asValue: Bool): Array<ResolvedType> {
+		if (!asValue) return index.refs.resolveTypeRefAll(written, info, at);
+		return switch index.typing.resolve(info, written, at, ValuePosition) {
+			case Declared(decl): [decl];
+			case Unknown: [];
+		};
+	}
+
+	/** The spans of `text`'s type references (`TypeRefShape.typeRefKinds`): where a spelling is read in a type position. */
+	private static function typeRefSpans(text: Null<String>, plugin: GrammarPlugin): Array<Span> {
+		final out: Array<Span> = [];
+		if (text == null) return out;
+		final kinds: Array<String> = plugin.typeRefShape().typeRefKinds;
+		function walk(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
+			if (span != null && kinds.contains(node.kind)) out.push(span);
+			for (c in node.children) walk(c);
+		}
+		walk(plugin.parseFileTypeRefs(text));
+		return out;
 	}
 
 }

@@ -1,0 +1,167 @@
+{
+	"about": "Name-resolution traps: each a mini project and the positions where a written name is asked. `expect` is the declaration Haxe 4.3.7 names there (`--display <file>@<offset>@position`, as `<file>#<Type>`), null where it names no type declaration of the project (an error, a value, a type outside). `TypingService.resolveAt` may answer it or Unknown, never another; `answered` probes must answer it. Checked by unit.query.ResolveTrapsTest, the compiler's answers included.",
+	"traps": [
+		{
+			"name": "module-relative-head-stops-at-the-nearest-module",
+			"files": {
+				"a/Mod.hx": ["package a;", "class Mod {}", "class Sub { public function new() {} public static function id(): Int return 1; }"],
+				"a/b/Mod.hx": ["package a.b;", "class Mod {}"]
+			},
+			"probes": [
+				{ "file": "a/b/c/Main.hx", "text": ["package a.b.c;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub", "answered": true },
+				{ "file": "a/b/c/Main.hx", "text": ["package a.b.c;", "class Main { static function main() { new Mod.Sub(); } }"], "at": " Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub", "answered": true },
+				{ "file": "a/b/c/Main.hx", "text": ["package a.b.c;", "class Main { static function main() { Mod.Sub.id(); } }"], "at": " Mod.Sub", "offset": 5, "expect": null }
+			]
+		},
+		{
+			"name": "a-wildcard-outranks-the-package-chain",
+			"files": {
+				"z/Mod.hx": ["package z;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"],
+				"a/Mod.hx": ["package a;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"]
+			},
+			"probes": [
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "import z.*;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": "z/Mod.hx#Sub", "answered": true },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "import z.*;", "class Main { static function main() { Mod.Sub.id(); } }"], "at": " Mod.Sub", "offset": 5, "expect": "z/Mod.hx#Sub", "answered": true },
+				{ "file": "a/Main.hx", "text": ["package a;", "import z.*;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": "z/Mod.hx#Sub", "answered": true },
+				{ "file": "a/Main.hx", "text": ["package a;", "import z.*;", "class Main { static function main() { Mod.Sub.id(); } }"], "at": " Mod.Sub", "offset": 5, "expect": "z/Mod.hx#Sub", "answered": true },
+				{ "file": "a/Main.hx", "text": ["package a;", "import z.*;", "class Main { static function main() { var m: Mod = null; } }"], "at": " Mod =", "offset": 1, "expect": "z/Mod.hx#Mod", "answered": true }
+			]
+		},
+		{
+			"name": "the-last-wildcard-is-asked-first",
+			"files": {
+				"y/Mod.hx": ["package y;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"],
+				"z/Mod.hx": ["package z;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"]
+			},
+			"probes": [
+				{ "file": "q/Main.hx", "text": ["package q;", "import y.*;", "import z.*;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": "z/Mod.hx#Sub", "answered": true },
+				{ "file": "q/Main.hx", "text": ["package q;", "import y.*;", "import z.*;", "class Main { static function main() { Mod.Sub.id(); } }"], "at": " Mod.Sub", "offset": 5, "expect": "z/Mod.hx#Sub", "answered": true }
+			]
+		},
+		{
+			"name": "a-type-position-passes-a-module-lacking-the-sub-type",
+			"files": {
+				"z/Mod.hx": ["package z;", "class Mod {}"],
+				"a/Mod.hx": ["package a;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"]
+			},
+			"probes": [
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "import z.*;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub", "answered": true },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "import z.*;", "class Main { static function main() { Mod.Sub.id(); } }"], "at": " Mod.Sub", "offset": 5, "expect": null }
+			]
+		},
+		{
+			"name": "a-wildcard-reaches-the-sub-type",
+			"files": {
+				"a/Mod.hx": ["package a;", "class Mod {}", "class Sub { public function new() {} }"]
+			},
+			"probes": [
+				{ "file": "q/Main.hx", "text": ["package q;", "import a.*;", "class Main { static function main() { final s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub", "answered": true },
+				{ "file": "q/Main.hx", "text": ["package q;", "import a.*;", "class Main { static function main() { new Mod.Sub(); } }"], "at": " Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub", "answered": true }
+			]
+		},
+		{
+			"name": "an-import-never-names-the-module-of-a-module-relative-path",
+			"files": {
+				"a/Mod.hx": ["package a;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"],
+				"z/Mod.hx": ["package z;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"]
+			},
+			"probes": [
+				{ "file": "q/Main.hx", "text": ["package q;", "import a.Mod;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": null },
+				{ "file": "q/Main.hx", "text": ["package q;", "import a.Mod;", "class Main { static function main() { Mod.Sub.id(); } }"], "at": " Mod.Sub", "offset": 5, "expect": null },
+				{ "file": "q/Main.hx", "text": ["package q;", "import a.Mod as M;", "class Main { static function main() { var s: M.Sub = null; } }"], "at": " M.Sub", "offset": 3, "expect": null },
+				{ "file": "q/Main.hx", "text": ["package q;", "import a.Mod as M;", "class Main { static function main() { M.Sub.id(); } }"], "at": " M.Sub", "offset": 3, "expect": null },
+				{ "file": "q/Main.hx", "text": ["package q;", "import z.Mod.Sub;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": null },
+				{ "file": "q/Main.hx", "text": ["package q;", "import z.Mod.Sub;", "class Main { static function main() { var s: Sub = null; } }"], "at": ": Sub", "offset": 2, "expect": "z/Mod.hx#Sub", "answered": true },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "import z.Mod;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub", "answered": true },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "import z.Mod;", "class Main { static function main() { Mod.Sub.id(); } }"], "at": " Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub", "answered": true },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "import z.Mod.Sub;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub", "answered": true }
+			]
+		},
+		{
+			"name": "a-member-the-head-reads-is-a-value-before-a-module",
+			"files": {
+				"a/Mod.hx": ["package a;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"],
+				"z/Mod.hx": ["package z;", "class Mod { public static var Sub = 1; }"]
+			},
+			"probes": [
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "class Main { static function main() { var s: Mod.Sub = null; } }", "class Mod { public static var Sub = 1; }"], "at": " Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub", "answered": true },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "class Main { static function main() { trace(Mod.Sub); } }", "class Mod { public static var Sub = 1; }"], "at": "(Mod.Sub", "offset": 5, "expect": null },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "class Main { static function main() { var m: Mod.Mod = null; } }"], "at": " Mod.Mod", "offset": 5, "expect": "a/Mod.hx#Mod", "answered": true },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "class Main { static function main() { trace(Mod.Sub); } }", "class Mod {}"], "at": "(Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub", "answered": true },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "import z.Mod;", "class Main { static function main() { trace(Mod.Sub); } }"], "at": "(Mod.Sub", "offset": 5, "expect": null },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "import z.Mod;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub", "answered": true }
+			]
+		},
+		{
+			"name": "the-toplevel-module-is-the-farthest",
+			"files": {
+				"Mod.hx": ["class Mod {}", "class Sub { public static function id(): Int return 1; }"],
+				"a/b/Mod.hx": ["package a.b;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"]
+			},
+			"probes": [
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": "a/b/Mod.hx#Sub", "answered": true },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "class Main { static function main() { Mod.Sub.id(); } }"], "at": " Mod.Sub", "offset": 5, "expect": "a/b/Mod.hx#Sub", "answered": true },
+				{ "file": "q/Main.hx", "text": ["package q;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": "Mod.hx#Sub", "answered": true },
+				{ "file": "q/Main.hx", "text": ["package q;", "class Main { static function main() { Mod.Sub.id(); } }"], "at": " Mod.Sub", "offset": 5, "expect": "Mod.hx#Sub", "answered": true }
+			]
+		},
+		{
+			"name": "a-private-sub-type-is-out-of-reach",
+			"files": {
+				"a/Mod.hx": ["package a;", "class Mod {}", "private class Sub { public static function id(): Int return 1; }"]
+			},
+			"probes": [
+				{ "file": "a/Main.hx", "text": ["package a;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": null },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "class Main { static function main() { var s: Mod.Sub = null; } }"], "at": " Mod.Sub", "offset": 5, "expect": null }
+			]
+		},
+		{
+			"name": "a-value-shadows-the-head",
+			"files": {
+				"a/Mod.hx": ["package a;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"]
+			},
+			"probes": [
+				{ "file": "a/Main.hx", "text": ["package a;", "class Main { static function main() { final Mod = { Sub: 1 }; trace(Mod.Sub); } }"], "at": "(Mod.Sub", "offset": 5, "expect": null },
+				{ "file": "a/b/Main.hx", "text": ["package a.b;", "class Main { static function main() { Mod.Sub.id(); } }", "class Other { var Mod: Int; }"], "at": " Mod.Sub", "offset": 5, "expect": "a/Mod.hx#Sub" }
+			]
+		},
+		{
+			"name": "a-package-path-names-an-imported-sub-type",
+			"files": {
+				"p/M.hx": ["package p;", "class M {}", "typedef Sub = {}", "class Other {}"]
+			},
+			"probes": [
+				{ "file": "app/Main.hx", "text": ["package app;", "import p.M.Sub;", "class Main { static var x: p.Sub; }"], "at": ": p.Sub", "offset": 4, "expect": "p/M.hx#Sub", "answered": true },
+				{ "file": "app/Main.hx", "text": ["package app;", "class Main { static var x: p.Sub; }"], "at": ": p.Sub", "offset": 4, "expect": null },
+				{ "file": "app/Main.hx", "text": ["package app;", "import p.M;", "class Main { static var x: p.Other; }"], "at": ": p.Other", "offset": 4, "expect": "p/M.hx#Other", "answered": true },
+				{ "file": "app/Main.hx", "text": ["package app;", "import p.M.Other;", "class Main { static var x: p.Other; }"], "at": ": p.Other", "offset": 4, "expect": "p/M.hx#Other", "answered": true }
+			]
+		},
+		{
+			"name": "a-full-path-names-its-module",
+			"files": {
+				"a/Mod.hx": ["package a;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"],
+				"a/b/Mod.hx": ["package a.b;", "class Mod {}", "class Sub { public static function id(): Int return 1; }"]
+			},
+			"probes": [
+				{ "file": "q/Main.hx", "text": ["package q;", "class Main { static function main() { var s: a.Mod.Sub = null; } }"], "at": " a.Mod.Sub", "offset": 7, "expect": "a/Mod.hx#Sub", "answered": true },
+				{ "file": "q/Main.hx", "text": ["package q;", "class Main { static function main() { a.b.Mod.Sub.id(); } }"], "at": " a.b.Mod.Sub", "offset": 9, "expect": "a/b/Mod.hx#Sub", "answered": true },
+				{ "file": "q/Main.hx", "text": ["package q;", "class Main { static function main() { var m: a.b.Mod = null; } }"], "at": " a.b.Mod", "offset": 5, "expect": "a/b/Mod.hx#Mod", "answered": true }
+			]
+		},
+		{
+			"name": "a-simple-name-in-the-compilers-order",
+			"files": {
+				"a/X.hx": ["package a;", "class X {}"],
+				"b/X.hx": ["package b;", "class X {}"],
+				"c/Y.hx": ["package c;", "class Y {}"],
+				"m/Y.hx": ["package m;", "class Y {}"]
+			},
+			"probes": [
+				{ "file": "m/n/Main.hx", "text": ["package m.n;", "import a.X;", "import b.X;", "class Main { static var x: X; }"], "at": ": X", "offset": 2, "expect": "b/X.hx#X", "answered": true },
+				{ "file": "m/n/Main.hx", "text": ["package m.n;", "import c.*;", "class Main { static var y: Y; }"], "at": ": Y", "offset": 2, "expect": "c/Y.hx#Y", "answered": true },
+				{ "file": "m/n/Main.hx", "text": ["package m.n;", "import a.X;", "class Main { static var x: X; }", "class X {}"], "at": ": X", "offset": 2, "expect": "m/n/Main.hx#X", "answered": true }
+			]
+		}
+	]
+}

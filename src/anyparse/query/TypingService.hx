@@ -3,7 +3,12 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.CoreValueTypes;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ResolvedType;
+import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.runtime.Span;
+
+using Lambda;
 
 /**
  * The typing service of one run scope: the ONE place a typing question is asked, over the declarations the
@@ -75,6 +80,9 @@ final class TypingService {
 	 */
 	public final inference: InferencePolicy;
 
+	/** The name -> declaration layer every name question of the service is answered through (`resolve`). */
+	private final _refs: TypeRefIndex;
+
 	/**
 	 * Built by the owning `SymbolIndex` over its immutable declaration tables, its grammar's `shape` and which branches the
 	 * run's builds compile (`builds`).
@@ -84,6 +92,7 @@ final class TypingService {
 		builds: BuildBranches
 	) {
 		this.builds = builds;
+		_refs = refs;
 		ancestors = new AncestorTable(refs, cache, typeSyntax, shape.rawDynamicTypeName);
 		casts = new AbstractCasts(refs, ancestors, cache, typeSyntax, shape, builds);
 		unification = new Unification(ancestors, cache, refs, casts, shape);
@@ -94,6 +103,45 @@ final class TypingService {
 		extensions = new StaticExtensions(refs, cache, ancestors, members, structural);
 		expectations = new ExpectedTypes(shape);
 		inference = new HaxeInferencePolicy(casts, refs, ancestors, structural, typeSyntax, shape);
+	}
+
+	/**
+	 * BODY: the declaration the name `spelling`, written at offset `at` of `file` in a type position or read as a value
+	 * (`position`), denotes — or `Unknown` when no tier of the resolution order provably names one declaration of the index:
+	 * a type outside it, a tier nothing here reads, a name the compiler resolves to no type. THE question every rule and op
+	 * asks of a written name; the order is `TypeNameBinding`'s (`tierOf`, `dottedTierOf`), and a value position takes the
+	 * caller's word that the name's head binds no value (`resolveAt` asks it).
+	 */
+	public function resolve(file: FileInfo, spelling: String, at: Int, position: NamePosition): Resolution {
+		final asValue: Bool = position == ValuePosition;
+		final tier: Tier = if (spelling.indexOf('.') < 0)
+			_refs.names.tierOf(spelling, file, at)
+		else if (asValue && headMayReadMember(file, spelling, at))
+			Tier.Unknown
+		else
+			_refs.names.dottedTierOf(spelling, file, asValue, at);
+		final one: Null<ResolvedType> = switch tier {
+			case Bound(decls): TypeRefIndex.oneDeclaration(decls);
+			case Unknown, Free: null;
+		};
+		return one == null ? Resolution.Unknown : Declared(one);
+	}
+
+	/**
+	 * Whether the head of `Head.member`, read as a value in `file` at `at`, may read `member` as a field: the type the bare head
+	 * binds (`TypeNameBinding.tierOf`, the file's own types and imports included) declares or inherits a member of that name, or
+	 * may (4.3.7: an imported `Mod`'s static `Sub` wins over a module `Mod` holding a type `Sub`), or what it binds is unread.
+	 * False for any longer path, whose head is a package.
+	 */
+	private function headMayReadMember(file: FileInfo, spelling: String, at: Int): Bool {
+		final dot: Int = spelling.indexOf('.');
+		if (spelling.indexOf('.', dot + 1) >= 0) return false;
+		final member: String = spelling.substr(dot + 1);
+		return switch _refs.names.tierOf(spelling.substr(0, dot), file, at) {
+			case Bound(decls): decls.exists(d -> !members.declarationLacksMember(d, member));
+			case Unknown: true;
+			case Free: false;
+		};
 	}
 
 	/**
@@ -166,6 +214,33 @@ final class TypingService {
 		final binary: Bool = (shape.arithmeticKinds ?? []).contains(kind) || (shape.booleanOperatorKinds ?? []).contains(kind)
 			|| shape.execution?.compoundAssignOperators?.exists(kind) == true;
 		return binary && node.children.length == 2 || (kind == shape.negationKind || kind == shape.notKind) && node.children.length == 1;
+	}
+
+	/**
+	 * `resolve` asked of the name written at offset `at` of the indexed `file`, read with `plugin`: a type reference
+	 * (`TypeRefShape.typeRefKinds`) in a type position, an identifier or a path of field reads over one as a value — whose
+	 * head must bind no value (`ValueDoors.bindsNoValue`). `Unknown` for any other node and a file the index does not hold.
+	 */
+	public static function resolveAt(index: SymbolIndex, plugin: GrammarPlugin, file: String, at: Int): Resolution {
+		final fi: Null<FileInfo> = index.fileInfo(file);
+		final source: Null<String> = index.sourceOf(file);
+		if (fi == null || source == null) return Resolution.Unknown;
+		final root: QueryNode = plugin.parseFileTypeRefs(source);
+		final shape: RefShape = plugin.refShape();
+		final node: Null<QueryNode> = innermostAt(root, at);
+		final name: Null<String> = node?.name;
+		if (node == null || name == null) return Resolution.Unknown;
+		if (plugin.typeRefShape().typeRefKinds.contains(node.kind)) return index.typing.resolve(fi, name, at, TypePosition);
+		final identKind: Null<String> = shape.identKind;
+		final fieldKind: Null<String> = shape.fieldAccessKind;
+		final path: Null<Array<String>> = identKind == null || fieldKind == null ? null : NominalTypes.pathOf(node, identKind, fieldKind);
+		var head: QueryNode = node;
+		while (head.kind != identKind && head.children.length == 1) head = head.children[0];
+		final headSpan: Null<Span> = head.span;
+		if (path == null || headSpan == null) return Resolution.Unknown;
+		return ValueDoors.bindsNoValue(head, path[0], headSpan, fi, root, shape, file, index)
+			? index.typing.resolve(fi, path.join('.'), at, ValuePosition)
+			: Resolution.Unknown;
 	}
 
 	/**
@@ -287,6 +362,39 @@ final class TypingService {
 		}
 		return arithmetic(node, operands, ctx);
 	}
+
+	/** The deepest node of `node`'s tree whose span holds offset `at`, or null when none does. */
+	private static function innermostAt(node: QueryNode, at: Int): Null<QueryNode> {
+		final span: Null<Span> = node.span;
+		if (span != null && (at < span.from || at >= span.to)) return null;
+		for (c in node.children) {
+			final inner: Null<QueryNode> = innermostAt(c, at);
+			if (inner != null) return inner;
+		}
+		return span == null ? null : node;
+	}
+
+}
+
+/** Where a name is written, as `TypingService.resolve` reads it. */
+enum NamePosition {
+
+	/** A type reference: an annotation, a type argument, a supertype, a construction's type. */
+	TypePosition;
+
+	/** An expression reading the name as a value, or as the head of a path of field reads (`Mod.Sub.f()`). */
+	ValuePosition;
+
+}
+
+/** What a written name denotes (`TypingService.resolve`): the compiler's answer, or none — never another one. */
+enum Resolution {
+
+	/** The one declaration of the index the name denotes. */
+	Declared(decl: ResolvedType);
+
+	/** Nothing proves one declaration of the index: a type outside it, a tier nothing here reads, a name naming no type. */
+	Unknown;
 
 }
 

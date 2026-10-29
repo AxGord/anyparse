@@ -590,9 +590,10 @@ final class MemberLookup {
 	 * optional-value type (`Null<T>`, 4.3.7; a class or interface field keeps `T`). Null when the member has no written type,
 	 * or its type names a parameter of the declaring type or of the member itself that nothing written here binds, or the
 	 * declarations of it the run's builds may compile (`BuildBranches.declarations`) write it differently: the compiler's
-	 * answer or none.
+	 * answer or none. With a `reader`, the file the answer is handed to, a name of the written type that file reads as another
+	 * declaration is spelled by its path (`TypeRefIndex.spelledIn`), and one that cannot be is no answer.
 	 */
-	public function memberRead(start: ResolvedType, member: String, args: Array<String>): Null<MemberReading> {
+	public function memberRead(start: ResolvedType, member: String, args: Array<String>, ?reader: FileInfo): Null<MemberReading> {
 		final found: Null<DeclaredMember> = declaredMember(start, member);
 		final live: Array<MemberInfo> = found == null ? [] : _builds.declarations(found.host, member);
 		final first: Null<MemberInfo> = live[0];
@@ -606,7 +607,10 @@ final class MemberLookup {
 		)
 			return null;
 		final host: ResolvedType = found.host;
-		final bound: Null<String> = _ancestors.boundType(start, host, args, written, first.declFrom, first.typeParamNames);
+		final scope: Array<String> = first.typeParamNames.concat(host.type.typeParamNames);
+		final local: Null<String> = reader == null ? written : _refs.spelledIn(written, host.file, reader, scope, _typeSyntax);
+		if (local == null) return null;
+		final bound: Null<String> = _ancestors.boundType(start, host, args, local, first.declFrom, first.typeParamNames);
 		return bound == null ? null : {
 			text: first.optional ? NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax) : bound,
 			host: host,

@@ -201,7 +201,7 @@ class CrossRenameMemberSliceTest extends Test {
 	/**
 	 * The MODULE-RELATIVE spelling of a sub-module type — `Mod.Sub`, legal wherever the module is
 	 * in simple-name scope — is a third spelling beside the bare and the root-relative one, and
-	 * it resolves only FROM the reading file (`TypeRefIndex.moduleRelativeRefAll`). Annotation
+	 * it resolves only FROM the reading file (`TypeNameBinding.dottedTierOf`). Annotation
 	 * and `new` forms both rename. The visibility rule is the MODULE's, not a bare type
 	 * name's, and it is narrower: compiled on 4.3.7, `import pkg.*;` reaches `Mod.Sub` while
 	 * `import pkg.Mod;` does NOT (`Type not found : Mod`). Both arms are asserted here, alongside

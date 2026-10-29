@@ -255,26 +255,6 @@ final class NominalTypes {
 	}
 
 	/**
-	 * The simple name of the type whose member the last segment of `path` reads on the package-blind walk of
-	 * `pathFinalMemberTypeSource` — the type each intermediate member's written type reduces to, from `rootType` on — or
-	 * null when a link does not resolve.
-	 */
-	private static function pathFinalHost(
-		path: Array<String>, rootType: String, index: SymbolIndex, wrappers: Array<String>
-	): Null<String> {
-		var current: String = rootType;
-		for (i in 1...path.length - 1) {
-			final memberType: Null<String> = index.typing.members.memberTypeSourceOf(current, path[i]);
-			final nominal: Null<String> = memberType == null
-				? null
-				: outerNominalOf(memberLookupReceiverSource(memberType, wrappers, index.typeSyntax), index.typeSyntax);
-			if (nominal == null) return null;
-			current = nominal;
-		}
-		return current;
-	}
-
-	/**
 	 * The verbatim declared type SOURCE of a receiver path's final member, for a value / `this` /
 	 * static-TYPE-name root. Resolves PACKAGE-SAFE FIRST via the import- and inheritance-aware
 	 * `MemberPathWalk.resolvePathFinalMemberTypeSource` (so an import-correct intermediate type's
@@ -315,13 +295,17 @@ final class NominalTypes {
 			final blind: Null<String> = pathFinalMemberTypeSource(path, start, index, wrappers);
 			if (!substituteTypeArgs || blind == null) return blind;
 			// the substituting caller types a value: a written type that is no one type (`#if` inside it) is no answer there, nor
-			// is one naming a parameter of the member's declaring type or of the member, which this walk never substitutes
+			// is one naming a parameter of the member's declaring type or of the member, which this walk never substitutes, nor
+			// one a declaring file writes with a name the asking file reads as another type
 			final host: Null<String> = pathFinalHost(path, start, index, wrappers);
-			final params: Array<String> = host == null ? [] : [
-				for (d in index.typing.members.memberDeclarationsOf(host, path[path.length - 1]))
-					for (p in d.type.typeParamNames.concat(d.member.typeParamNames)) p
+			final declarations: Array<MemberDeclaration> = host == null
+				? []
+				: index.typing.members.memberDeclarationsOf(host, path[path.length - 1]);
+			final params: Array<String> = [
+				for (d in declarations) for (p in d.type.typeParamNames.concat(d.member.typeParamNames)) p
 			];
-			return !answerableType(blind, index.typeSyntax) || CallGraphNames.mentionsTypeName(blind, params, index.typeSyntax)
+			final alike: Bool = index.refs.readsAlikeFromEach(blind, declarations.map(d -> d.file), fromFile, params, index.typeSyntax);
+			return !alike || !answerableType(blind, index.typeSyntax) || CallGraphNames.mentionsTypeName(blind, params, index.typeSyntax)
 				? null
 				: blind;
 		}
@@ -639,6 +623,47 @@ final class NominalTypes {
 	}
 
 	/**
+	 * The type name `receiver` names as the receiver of a TYPE-qualified static call `T.m(…)` — the one shape where the
+	 * receiver is not a VALUE at all, so asking it for a type answers null. Three conditions, all of them needed: the receiver
+	 * is a bare identifier, it is upper-initial (the language's own convention for a type reference — a lower-case receiver is
+	 * a value whose type did not resolve, and guessing there would name a package segment), and it names no value binding in
+	 * scope; a file of `index` declares the name. Null for any other receiver.
+	 */
+	public static function staticReceiverName(receiver: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex): Null<String> {
+		final identKind: Null<String> = shape.identKind;
+		final name: Null<String> = receiver.name;
+		final span: Null<Span> = receiver.span;
+		return if (identKind == null || receiver.kind != identKind || name == null || span == null)
+			null
+		else if (!SourceText.isUpperInitial(name) || TypeResolver.resolveBindingFrom(name, span, root, shape) != null)
+			null
+		else if (index.refs.declaringFiles(name).length == 0)
+			null
+		else
+			name;
+	}
+
+	/**
+	 * The simple name of the type whose member the last segment of `path` reads on the package-blind walk of
+	 * `pathFinalMemberTypeSource` — the type each intermediate member's written type reduces to, from `rootType` on — or
+	 * null when a link does not resolve.
+	 */
+	private static function pathFinalHost(
+		path: Array<String>, rootType: String, index: SymbolIndex, wrappers: Array<String>
+	): Null<String> {
+		var current: String = rootType;
+		for (i in 1...path.length - 1) {
+			final memberType: Null<String> = index.typing.members.memberTypeSourceOf(current, path[i]);
+			final nominal: Null<String> = memberType == null
+				? null
+				: outerNominalOf(memberLookupReceiverSource(memberType, wrappers, index.typeSyntax), index.typeSyntax);
+			if (nominal == null) return null;
+			current = nominal;
+		}
+		return current;
+	}
+
+	/**
 	 * The simple name of the one of `types` (simple name to standard path) `iterable`'s type resolves to, when the file
 	 * does not rebind it and the iterable is not a local written in its scope — the gates `valueIterationProvable`'s doc
 	 * gives — or null.
@@ -713,27 +738,6 @@ final class NominalTypes {
 		if (span == null || method == null) return null;
 		final binding: Null<QueryNode> = TypeResolver.bindingNodeFrom(method, span, root, shape);
 		return binding != null && !(shape.memberDeclKinds ?? []).contains(binding.kind) ? null : TypeResolver.enclosingTypeDecl(root, span);
-	}
-
-	/**
-	 * The type name `receiver` names as the receiver of a TYPE-qualified static call `T.m(…)` — the one shape where the
-	 * receiver is not a VALUE at all, so asking it for a type answers null. Three conditions, all of them needed: the receiver
-	 * is a bare identifier, it is upper-initial (the language's own convention for a type reference — a lower-case receiver is
-	 * a value whose type did not resolve, and guessing there would name a package segment), and it names no value binding in
-	 * scope; a file of `index` declares the name. Null for any other receiver.
-	 */
-	public static function staticReceiverName(receiver: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex): Null<String> {
-		final identKind: Null<String> = shape.identKind;
-		final name: Null<String> = receiver.name;
-		final span: Null<Span> = receiver.span;
-		return if (identKind == null || receiver.kind != identKind || name == null || span == null)
-			null
-		else if (!SourceText.isUpperInitial(name) || TypeResolver.resolveBindingFrom(name, span, root, shape) != null)
-			null
-		else if (index.refs.declaringFiles(name).length == 0)
-			null
-		else
-			name;
 	}
 
 	private static function expressionNominalWalk(

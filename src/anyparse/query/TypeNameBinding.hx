@@ -178,6 +178,27 @@ final class TypeNameBinding {
 	}
 
 	/**
+	 * The resolution order's answer for the DOTTED type path `raw` written in `fi` (at offset `at` when the caller knows
+	 * where), read in a type position or, `asValue`, as the head of an expression (`Mod.Sub.f()`). Each reading was compiled
+	 * first on 4.3.7 (the resolution traps, `ResolveTrapsTest`):
+	 *
+	 *  - led by a package (`p.Mod`, `p.Mod.Sub`): the module the path names, and its type; a `p.Sub` no module is named by
+	 *    binds a type an import of the file brings whose package is `p` and whose name is `Sub`, ahead of a module `p.Sub`;
+	 *  - led by a module (`Mod.Sub`, `moduleRelative`): the modules named `Mod` in the order the compiler asks them, never the
+	 *    file's own types nor an import of `Mod`.
+	 */
+	public function dottedTierOf(raw: String, fi: FileInfo, asValue: Bool, ?at: Int): Tier {
+		final split: Null<ImportPath> = splitPath(raw);
+		if (split == null || split.rest.length > 1) return Free;
+		final rest: Array<String> = split.rest;
+		if (split.module.indexOf('.') < 0) return rest.length == 1 ? moduleRelative(split.module, rest[0], fi, asValue, at) : Free;
+		final files: Array<FileInfo> = tables().modules[split.module] ?? [];
+		return rest.length == 1
+			? tierIn(files, rest[0], fi, split.module)
+			: importedByPackage(split.module, fi, at) ?? tierIn(files, SourceText.lastSegment(split.module), fi, split.module);
+	}
+
+	/**
 	 * Whether the simple type name `name`, written in `fi` at offset `at`, binds the std's own declaration of it — what a
 	 * rewrite asks before it trades a spelled std type for something the compiler resolves to the std directly: every
 	 * declaration the order binds is the std's (`isOwn`, by default a std file), or it binds none the index holds; and no module
@@ -528,6 +549,79 @@ final class TypeNameBinding {
 		final split: Null<ImportPath> = splitPath(path);
 		_importPaths[path] = split;
 		return split;
+	}
+
+	/**
+	 * `Mod.Sub` written in `fi`: the first module named `module` that declares a visible `sub`, asked in the compiler's order —
+	 * the package wildcards (the file's own last first, then the ambient chain's), the file's package, each parent, the
+	 * toplevel. In a type position a module declaring no visible `sub` hands the question on; read as a value (`asValue`)
+	 * the first module found ends it — where the head itself reads no member `sub`, which `TypingService.resolve` asks
+	 * first. `Unknown` where a module the order asks may be one nothing here reads: a skipped file, a module of a
+	 * package the index does not list, a `#if`-guarded wildcard the use is not inside.
+	 */
+	private function moduleRelative(module: String, sub: String, fi: FileInfo, asValue: Bool, at: Null<Int>): Tier {
+
+		if (_skipped.exists(f -> f == '$module.hx' || f.endsWith('/$module.hx'))) return Unknown;
+		final order: StatementOrder = orderOf(fi, at);
+		final asked: Array<{ path: String, guarded: Bool, listed: Bool }> = [
+			for (w in order.wildcards) {
+				final pkg: String = SourceText.parentPath(w.raw);
+				{ path: '$pkg.$module', guarded: w.guarded && !coGuarded(w, fi, order.use), listed: tables().packages.exists(pkg) }
+			}
+		];
+		var scope: String = fi.pkg;
+		while (true) {
+			asked.push({ path: scope == '' ? module : '$scope.$module', guarded: false, listed: true });
+			if (scope == '') break;
+			scope = SourceText.parentPath(scope);
+		}
+		for (m in asked) {
+			final files: Array<FileInfo> = tables().modules[m.path] ?? [];
+			if (files.length == 0) {
+				// a module the std holds, or a package nothing here lists may, which may declare `sub`
+				final std: Null<Bool> = StdTypes.declaresModule(SourceText.parentPath(m.path), module);
+				if (std == true || std == null && !m.listed) return Unknown;
+				continue;
+			}
+			if (m.guarded) return Unknown;
+			final found: Tier = tierIn(files, sub, fi, m.path);
+			if (asValue || found.match(Bound(_))) return found;
+		}
+		return Free;
+	}
+
+	/**
+	 * The type named `name` the module `module`, whose indexed files are `files`, declares where `fi` may name it: a non-private
+	 * one, a private one only from the module itself. `Unknown` for a module the index does not hold that a skipped file may be.
+	 */
+	private function tierIn(files: Array<FileInfo>, name: String, fi: FileInfo, module: String): Tier {
+		if (files.length == 0) return _skipped.exists(f -> f.endsWith('/${module.split('.').join('/')}.hx')) ? Unknown : Free;
+		final decls: Array<ResolvedType> = [
+			for (f in files) for (t in f.types) if (t.name == name && (!t.isPrivate || f.module == fi.module)) { file: f, type: t }
+		];
+		return decls.length > 0 ? Bound(decls) : Free;
+	}
+
+	/**
+	 * What `p.Sub` binds through the file's imports (4.3.7 matches an imported type by its package and name, so an import of
+	 * `p.M` or of `p.M.Sub` makes `p.Sub` name the sub-type `Sub` of `p.M`): `Bound` to the type an explicit import or `using`
+	 * of `fi` or its ambient chain brings, `Unknown` where one may bring it unread (a module the index does not hold in
+	 * package `p`, a `#if`-guarded statement the use is not inside); null when none does.
+	 */
+	private function importedByPackage(path: String, fi: FileInfo, at: Null<Int>): Null<Tier> {
+		final pkg: String = SourceText.parentPath(path);
+		final name: String = SourceText.lastSegment(path);
+		final order: StatementOrder = orderOf(fi, at);
+		for (imp in order.explicit) if (imp.kind != ImportKind.Alias) {
+			final split: Null<ImportPath> = importPathOf(imp.raw);
+			if (split == null || SourceText.parentPath(split.module) != pkg) continue;
+			final types: Null<Array<ResolvedType>> = importedTypes(imp.raw);
+			if (types == null) return Unknown;
+			final named: Array<ResolvedType> = types.filter(t -> t.type.name == name);
+			if (named.length == 0) continue;
+			return imp.guarded && !coGuarded(imp, fi, order.use) ? Unknown : Bound(named);
+		}
+		return null;
 	}
 
 	/**

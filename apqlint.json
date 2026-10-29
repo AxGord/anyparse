@@ -114,6 +114,48 @@
 				"anyparse.query.IndexScope"
 			],
 			"why": "the index host (CachingGrammarPlugin as SymbolIndexHost) builds and memoises every index once per run, and IndexScope is the one door onto it: a rule names the scope its question needs (report / resolution / widest / over an explicit file set) and asks there; a consumer building its own picks its own scope and pays a rebuild"
+		},
+		{
+			"members": [
+				"anyparse.query.TypeRefIndex.plainImportPathOf",
+				"anyparse.query.TypeRefIndex.plainImports",
+				"anyparse.query.TypeRefIndex.wildcardPackages",
+				"anyparse.query.TypeRefIndex.aliasTargets",
+				"anyparse.query.TypeRefIndex.bindsUnderGuard",
+				"anyparse.query.TypeRefIndex.declaringFiles",
+				"anyparse.query.TypeRefIndex.declsNamed",
+				"anyparse.query.TypeRefIndex.resolvedDeclsNamed",
+				"anyparse.query.ModuleScan.pathOfTypeIn",
+				"anyparse.query.ModuleScan.isMainTypeIn",
+				"anyparse.query.ModuleScan.declaresTypeNamed",
+				"anyparse.query.TypeNameBinding.shadowedOnDisk",
+				"anyparse.query.TypeNameBinding.STD_TYPE_NAMES",
+				"anyparse.query.TypeNameBinding.AMBIENT_TYPE_NAMES",
+				"anyparse.query.StdTypes.moduleTypes",
+				"anyparse.query.StdTypes.declaresModule"
+			],
+			"owners": [
+				"anyparse.query.TypingService",
+				"anyparse.query.TypeNameBinding",
+				"anyparse.query.ValueNameBinding",
+				"anyparse.query.TypeRefIndex",
+				"anyparse.query.ImportBindings",
+				"anyparse.query.SymbolIndex",
+				"anyparse.query.SymbolIndexBuilder",
+				"anyparse.query.StdTypes",
+				"anyparse.query.ModuleScan",
+				"anyparse.query.AncestorTable",
+				"anyparse.query.AbstractCasts",
+				"anyparse.query.Unification",
+				"anyparse.query.MemberLookup",
+				"anyparse.query.CallSelection",
+				"anyparse.query.StructuralTypes",
+				"anyparse.query.StaticExtensions",
+				"anyparse.query.NominalTypes",
+				"anyparse.query.ValueDoors",
+				"anyparse.query.HaxeInferencePolicy"
+			],
+			"why": "what a name written in a file denotes is answered by the typing layer alone (TypingService.resolve over TypeNameBinding / TypeRefIndex / ImportBindings): the import and module tables, the package chain, the on-disk module lookup and the std name lists are its primitives, and a rule or an op reading them decides a name's meaning a second time"
 		}
 	],
 	"move": {

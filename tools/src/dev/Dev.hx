@@ -30,6 +30,7 @@ final class Dev {
 		{ name: 'fixture-cache', main: FixtureCacheCli.main, usage: FixtureCacheCli.USAGE },
 		{ name: 'jvm-portability', main: JvmProbe.main, usage: JvmProbe.USAGE },
 		{ name: 'typer-conformance', main: TyperConformance.main, usage: TyperConformance.USAGE },
+		{ name: 'trap-fix-sweep', main: TrapFixSweep.main, usage: TrapFixSweep.USAGE },
 		{ name: 'edge-diff', main: EdgeDiff.main, usage: EdgeDiff.USAGE },
 		{ name: 'parse-prof', main: ParseProf.run, usage: ParseProf.USAGE },
 		{ name: 'prof-top', main: ProfTop.main, usage: ProfTop.USAGE },

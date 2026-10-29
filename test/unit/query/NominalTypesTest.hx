@@ -6,6 +6,8 @@ import anyparse.query.SymbolIndex;
 import haxe.Exception;
 import unit.QueryTestHelpers;
 
+using Lambda;
+
 /**
  * The structural typer's arcs (`NominalTypes`), each read as the compiler types it (Haxe 4.3.7) and answering null where
  * the walk cannot say exactly: the deep walk's literal, construction and abstract-`this` arcs, its SOURCE mode
@@ -166,9 +168,10 @@ class NominalTypesTest extends Test {
 	@:pin('control') @:killer('M-ANCESTOR-ARGS-OFF') @:killer('M-MEMBER-READ-HOST-ARGS') @:killer('M-NOMINAL-SELF-PARAMS')
 	public function testAnInheritedMemberReadsThroughItsChainsArguments(): Void {
 		final text: String = 'package p;\n\nclass Base<T> {\n\tpublic var item: T;\n}\n\nclass Mid<U> extends Base<Array<U>> {}\n\n'
-			+ 'class Leaf extends Mid<String> {\n\tfunction probeBare() return item;\n\tfunction probeThis() return this.item;\n}\n\nclass '
-			+ 'Own<V> {\n\tvar v: V;\n\tfunction probeOwn() return v;\n\tfunction probeOwnThis() return this.v;\n\tfunction probeOwnSelf() return this;\n}\n\nclass C {\n\tvar '
-			+ 'leaf: Leaf;\n\tvar mid: Mid<Int>;\n\tfunction probePath() return leaf.item;\n\tfunction probeArgs() return mid.item;\n}\n';
+			+ 'class Leaf extends Mid<String> {\n\tfunction probeBare() return item;\n\tfunction probeThis() return this.item;\n}\n\n'
+			+ 'class Own<V> {\n\tvar v: V;\n\tfunction probeOwn() return v;\n\tfunction probeOwnThis() return this.v;\n'
+			+ '\tfunction probeOwnSelf() return this;\n}\n\nclass C {\n\tvar leaf: Leaf;\n\tvar mid: Mid<Int>;\n'
+			+ '\tfunction probePath() return leaf.item;\n\tfunction probeArgs() return mid.item;\n}\n';
 		Assert.equals('Array', nominalIn(text, 'probeBare'), 'a bare read in the subclass');
 		Assert.equals('Array<String>', sourceIn(text, 'probeThis'), 'off this');
 		Assert.equals('Array<String>', sourceIn(text, 'probePath'), 'off a Leaf');
@@ -248,8 +251,8 @@ class NominalTypesTest extends Test {
 		];
 		final reader: String = 'package p;\n\nimport a.Holder;\n\nclass C {\n\tvar h: Holder;\n\tfunction probeHolder() return h;\n}\n';
 		Assert.isNull(sourceAmong(reader, holder, 'probeHolder'), 'a default the reading file does not see');
-		final seeing: String = 'package p;\n\nimport a.Holder;\nimport b.Hidden;\n\nclass C {\n\tvar h: Holder;\n'
-			+ '\tfunction probeHolder() return h;\n}\n';
+		final seeing: String =
+			'package p;\n\nimport a.Holder;\nimport b.Hidden;\n\nclass C {\n\tvar h: Holder;\n\tfunction probeHolder() return h;\n}\n';
 		Assert.equals('Holder<Hidden>', sourceAmong(seeing, holder, 'probeHolder'), 'one it sees the same');
 		final branches: String = 'package p;\n\nclass Item {}\n\n#if a\nclass K<T = Item> {}\n#else\nclass K<T = String> {}\n#end\n\n'
 			+ '#if a\nclass L<T = Item> {}\n#else\nclass L<T = Item> {}\n#end\n\nclass C {\n\tvar k: K;\n\tvar l: L;\n'
@@ -294,8 +297,8 @@ class NominalTypesTest extends Test {
 	 */
 	@:pin('control') @:killer('M-NOMINAL-REIFIED') @:killer('M-NOMINAL-REIFIED-NOMINAL') @:killer('M-REIFIED-REOPEN')
 	public function testAnExpressionInsideAReificationIsNotTypedAsCode(): Void {
-		final text: String = 'package p;\n\nclass C {\n\tvar n: Int;\n\tfunction f() {\n\t\tn;\n\t\t5;\n'
-			+ '\t\treturn macro { n; 5; $$v{n}; };\n\t}\n}\n';
+		final text: String =
+			'package p;\n\nclass C {\n\tvar n: Int;\n\tfunction f() {\n\t\tn;\n\t\t5;\n\t\treturn macro { n; 5; $$v{n}; };\n\t}\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final root: QueryNode = plugin.parseFile(text);
 		final chain: ChainTypeContext = {
@@ -468,6 +471,54 @@ class NominalTypesTest extends Test {
 		Assert.equals('String', nominalIn(text, 'probeWidened'), 'the own signature takes a widened argument');
 	}
 
+	/**
+	 * A member read through an element of a field declared in another file is typed by the declaring file's reading of the
+	 * element type, not by a namesake the reading file declares: the field's written type reaches the reading file spelled by
+	 * the path of what it names where it is written (`TypeRefIndex.spelledIn`).
+	 */
+	@:pin('control') @:killer('M-MEMBER-READ-SPELLED-OFF')
+	public function testAnElementOfAFieldDeclaredElsewhereKeepsItsDeclaringFilesType(): Void {
+		final others: Array<{ file: String, source: String }> = STD.concat([
+			{ file: 'lib/Item.hx', source: 'package lib;\n\nclass Item {\n\tpublic var tag: Int;\n}\n' },
+			{ file: 'lib/Holder.hx', source: 'package lib;\n\nclass Holder {\n\tpublic var items: Array<Item>;\n}\n' }
+		]);
+		final text: String = 'package p;\n\nimport lib.Holder;\n\nclass Item {\n\tpublic var tag: String;\n}\n\nclass C {\n'
+			+ '\tfunction probeLoop(h: Holder) {\n\t\tfor (y in h.items) return y.tag;\n\t}\n\n\tfunction probeIndex(h: Holder) {\n'
+			+ '\t\tfinal z = h.items[0];\n\t\treturn z.tag;\n\t}\n\n\tfunction probeElement(h: Holder) return h.items[0].tag;\n}\n';
+		Assert.same(
+			{
+				loop: 'Int',
+				local: 'Int',
+				loopSource: 'Int',
+				localSource: 'Int'
+			},
+			{
+				loop: nominalAmong(text, others, 'probeLoop'),
+				local: nominalAmong(text, others, 'probeIndex'),
+				loopSource: sourceAmong(text, others, 'probeLoop'),
+				localSource: sourceAmong(text, others, 'probeIndex')
+			},
+			'a loop element and a local holding an element read, in both currencies'
+		);
+		Assert.notEquals('String', nominalAmong(text, others, 'probeElement'), 'an element read is never the namesake\'s');
+	}
+
+	/**
+	 * A local written with no type and initialised — directly or through another local — by a construction of a generic type
+	 * written with no argument is that type's nominal: the deep walk leaves such a construction untyped (its arguments are
+	 * monomorphs), so the construction the initializer chain ends in answers.
+	 */
+	@:pin('control') @:killer('M-NOMINAL-LOCAL-CONSTRUCTION') @:killer('M-NOMINAL-INITIALIZER-ONE-STEP')
+	public function testALocalHoldingAGenericConstructionIsItsNominal(): Void {
+		final text: String = 'package p;\n\nclass Box<T> {\n\tpublic function new() {}\n}\n\nclass C {\n'
+			+ '\tfunction probeDirect() {\n\t\tfinal b = new Box();\n\t\treturn b;\n\t}\n\n'
+			+ '\tfunction probeChained() {\n\t\tfinal b = new Box();\n\t\tfinal c = b;\n\t\treturn c;\n\t}\n}\n';
+		Assert.same(
+			{ direct: 'Box', chained: 'Box' },
+			{ direct: nominalIn(text, 'probeDirect'), chained: nominalIn(text, 'probeChained') }
+		);
+	}
+
 	private static function nominal(fn: String): Null<String> {
 		final at: Probe = probeIn(SOURCE, fn);
 		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);
@@ -524,14 +575,14 @@ class NominalTypesTest extends Test {
 	/** The value the expression body of the function `fn` under `node` returns. */
 	private static function returnedBy(node: QueryNode, fn: String): Null<QueryNode> {
 		if (node.kind == 'FnMember' && node.name == fn) {
-			// an expression body returns its expression; a block, what its `return` does
+			// an expression body returns its expression; a block, what its own `return` does, else the first one nested in it
 			final body: Null<QueryNode> = Lambda.find(node.children, c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
 			final ret: Null<QueryNode> = if (body == null)
 				null
 			else if (body.kind == 'ExprBody')
 				body.children[0]
 			else
-				Lambda.find(body.children, c -> c.kind == 'ReturnStmt');
+				body.children.find(c -> c.kind == 'ReturnStmt') ?? nestedReturn(body);
 			return ret == null ? null : ret.children[0];
 		}
 		for (c in node.children) {
@@ -545,6 +596,15 @@ class NominalTypesTest extends Test {
 	private static function construction(text: String, fn: String): Null<WrittenConstruction> {
 		final at: Probe = probeIn(text, fn);
 		return NominalTypes.writtenConstruction(at.node, at.plugin.refShape(), text);
+	}
+
+	/** The first `return` statement nested in `node`, in document order. */
+	private static function nestedReturn(node: QueryNode): Null<QueryNode> {
+		for (c in node.children) {
+			final hit: Null<QueryNode> = c.kind == 'ReturnStmt' ? c : nestedReturn(c);
+			if (hit != null) return hit;
+		}
+		return null;
 	}
 
 }

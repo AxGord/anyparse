@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using Lambda;
@@ -29,12 +30,6 @@ using Lambda;
 @:nullSafety(Strict)
 @:allow(anyparse.query.MemberLookup)
 final class TypeRefIndex {
-
-	/** `moduleRefRank` of a module a package wildcard supplies. */
-	private static inline final BY_WILDCARD: Int = -1;
-
-	/** `moduleRefRank` of a module the file cannot name by its simple name. */
-	private static inline final OUT_OF_REACH: Int = 0x7fffffff;
 
 	/** What a simple type name written in a file binds to, tier by tier in the compiler's order — the one reading of a bare name. */
 	public final names: TypeNameBinding;
@@ -142,21 +137,23 @@ final class TypeRefIndex {
 
 	/**
 	 * Every declaration `raw` resolves to from `fromFile` (see `resolveTypeRef`), written at offset `at` of it when the caller
-	 * knows where. A simple name is bound by `names` — the compiler's resolution order, empty wherever no tier provably
-	 * answers; a dotted one matches on import path, the module-relative `Mod.Sub` as the fallback.
+	 * knows where, read in a type position: by `names`, the compiler's resolution order — `tierOf` for a simple name,
+	 * `dottedTierOf` for a dotted one — empty wherever no tier provably answers.
 	 */
 	public function resolveTypeRefAll(raw: String, fromFile: FileInfo, ?at: Int): Array<ResolvedType> {
-		if (raw.indexOf('.') < 0) return names.bind(raw, fromFile, at) ?? [];
-		final qualified: Array<ResolvedType> = resolveQualifiedRefAll(raw);
-		return qualified.length > 0 ? qualified : moduleRelativeRefAll(raw, fromFile);
+		final tier: Tier = raw.indexOf('.') < 0 ? names.tierOf(raw, fromFile, at) : names.dottedTierOf(raw, fromFile, false, at);
+		return switch tier {
+			case Bound(decls): decls;
+			case Unknown, Free: [];
+		};
 	}
 
 	/**
 	 * Every decl a QUALIFIED type reference names, matched on import path. Needs no referring
 	 * file: a dotted path means the same thing from everywhere, which is what lets a caller
 	 * holding a full module path (the `using`-conflict scan) resolve with no context at all.
-	 * The one dotted form it cannot answer — the module-relative `Mod.Sub` — is exactly the one
-	 * that DOES depend on the referring file; `moduleRelativeRefAll` owns it.
+	 * The dotted forms that DO depend on the referring file — the module-relative
+	 * `Mod.Sub`, a `p.Sub` an import names — are `TypeNameBinding.dottedTierOf`'s.
 	 */
 	public function resolveQualifiedRefAll(raw: String): Array<ResolvedType> {
 		final simple: String = SourceText.lastSegment(raw);
@@ -227,44 +224,57 @@ final class TypeRefIndex {
 		if (written == null) return false;
 		for (d in written.descendants()) switch d.shape {
 			case Nominal(path, _) if (!skip.contains(path)):
-				final there: Array<ResolvedType> = resolveTypeRefAll(path, from);
-				final here: Array<ResolvedType> = resolveTypeRefAll(path, to);
-				if (there.length != here.length || !there.foreach(r -> here.exists(h -> AncestorTable.same(r, h)))) return false;
+				if (!nameReadsAlike(path, from, to)) return false;
 			case _:
 		}
 		return true;
 	}
 
 	/**
-	 * Every decl the MODULE-RELATIVE form `Mod.Sub` names FROM `fromFile` — a sub-module type
-	 * qualified by its own module's name, which Haxe accepts wherever the MODULE itself can be
-	 * named: from its own package or a sub-package of it, the nearest package declaring the type
-	 * winning (4.3.7: from `a.b.c`, `a.b.Mod.Sub` beats `a.Mod.Sub`, and `a.Mod.Sub` answers when
-	 * `a.b.Mod` holds no `Sub`), or through a package wildcard (`moduleRefInScope`), whose rank
-	 * against the package lookup is not read here, so a wildcard match stays beside the nearest one.
-	 *
-	 * `resolveQualifiedRefAll` cannot answer this form and must not: it matches the ROOT-relative
-	 * `pkg.Mod.Sub` and is deliberately context-free, while `Mod.Sub` names different types from
-	 * different files. So this runs only as `resolveTypeRefAll`'s FALLBACK, after the root-relative
-	 * match found nothing — it can turn a 0-match into a match, never change one.
+	 * The written type `text`, read in the file `from`, spelled so the file `to` reads each of its type names as `from`
+	 * does (`readsAlike`): a name `to` reads otherwise is written as the path of the one declaration it names in `from`
+	 * (`TypeNameBinding.canonicalPath`), `skip` (the type parameters in scope) left alone. What a typed answer carries
+	 * from the file declaring it into the file asking. Null when such a name cannot be spelled so: it names no single
+	 * declaration of the index in `from`, a private one, or one whose path `to` reads as another.
 	 */
-	private function moduleRelativeRefAll(raw: String, fromFile: FileInfo): Array<ResolvedType> {
-		final dot: Int = raw.lastIndexOf('.');
-		final simple: String = raw.substr(dot + 1);
-		final prefix: String = raw.substring(0, dot);
-		final matches: Array<{ found: ResolvedType, rank: Int }> = [];
-		final seen: Array<String> = [];
-		for (r in named(simple)) if (!r.type.isMain && SourceText.lastSegment(r.file.module) == prefix) {
-			final rank: Int = moduleRefRank(fromFile, r.file);
-			final key: String = '${r.file.file}#${r.type.name}';
-			if (rank != OUT_OF_REACH && !seen.contains(key)) {
-				seen.push(key);
-				matches.push({ found: { file: r.file, type: r.type }, rank: rank });
-			}
+	public function spelledIn(text: String, from: FileInfo, to: FileInfo, skip: Array<String>, syntax: TypeSyntaxReader): Null<String> {
+		if (from.file == to.file) return text;
+		final written: Null<TypeSyntax> = syntax(text);
+		if (written == null) return null;
+		final edits: Array<{ at: Int, length: Int, path: String }> = [];
+		for (d in written.descendants()) switch d.shape {
+			case Nominal(path, _) if (!skip.contains(path) && !nameReadsAlike(path, from, to)):
+				final there: Array<ResolvedType> = resolveTypeRefAll(path, from);
+				final named: Null<ResolvedType> = there.length == 1 && !there[0].type.isPrivate ? there[0] : null;
+				final canonical: Null<String> = named == null ? null : TypeNameBinding.canonicalPath(named);
+				if (named == null || canonical == null || !d.text.startsWith(path)) return null;
+				final here: Array<ResolvedType> = resolveTypeRefAll(canonical, to);
+				if (here.length != 1 || !AncestorTable.same(here[0], named)) return null;
+				edits.push({ at: d.span.from, length: path.length, path: canonical });
+			case _:
 		}
-		var nearest: Int = OUT_OF_REACH;
-		for (m in matches) if (m.rank >= 0 && m.rank < nearest) nearest = m.rank;
-		return [for (m in matches) if (m.rank == nearest || m.rank == BY_WILDCARD) m.found];
+		var out: String = text;
+		edits.sort((a, b) -> b.at - a.at);
+		for (e in edits) out = out.substr(0, e.at) + e.path + out.substr(e.at + e.length);
+		return out;
+	}
+
+	/**
+	 * Whether the written type `text` reads in the indexed file `to` as in each of the files `writers` writing it
+	 * (`readsAlike`); true for a file the index does not hold, which no name of the index is read in.
+	 */
+	public function readsAlikeFromEach(
+		text: String, writers: Array<FileInfo>, to: String, skip: Array<String>, syntax: TypeSyntaxReader
+	): Bool {
+		final reader: Null<FileInfo> = _files.find(f -> f.file == to);
+		return reader == null || writers.foreach(w -> readsAlike(text, w, reader, skip, syntax));
+	}
+
+	/** Whether the type name `path` resolves in the file `to` to the declarations it resolves to in `from`. */
+	private function nameReadsAlike(path: String, from: FileInfo, to: FileInfo): Bool {
+		final there: Array<ResolvedType> = resolveTypeRefAll(path, from);
+		final here: Array<ResolvedType> = resolveTypeRefAll(path, to);
+		return there.length == here.length && there.foreach(r -> here.exists(h -> AncestorTable.same(r, h)));
 	}
 
 	/**
@@ -431,24 +441,6 @@ final class TypeRefIndex {
 				return true;
 		}
 		return false;
-	}
-
-	/**
-	 * How far `fi`'s module is from where `fromFile` can name it by its simple name: 0 from its own package, `n` from the
-	 * `n`-th sub-package below it, `BY_WILDCARD` through a package wildcard of the file or its ambient chain (a membership
-	 * question with no precedence read: the two lists answer as a union), else `OUT_OF_REACH`.
-	 */
-	private static function moduleRefRank(fromFile: FileInfo, fi: FileInfo): Int {
-		if (fi.pkg == fromFile.pkg) return 0;
-		if (fi.pkg == '' || fromFile.pkg.startsWith('${fi.pkg}.')) {
-			final below: String = fi.pkg == '' ? fromFile.pkg : fromFile.pkg.substr(fi.pkg.length + 1);
-			return below.split('.').length;
-		}
-		final wild: String = '${fi.pkg}.*';
-		inline function supplies(imports: Array<ImportInfo>): Bool {
-			return imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == wild);
-		}
-		return supplies(fromFile.imports) || fromFile.ambientImports.exists(g -> supplies(g.imports)) ? BY_WILDCARD : OUT_OF_REACH;
 	}
 
 }

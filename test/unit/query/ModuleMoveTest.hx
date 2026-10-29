@@ -527,15 +527,13 @@ class ModuleMoveTest extends Test {
 		Assert.equals('package aa;\n\nimport zz.Q;\n\nclass A {\n\tvar t: Thing;\n}\n', textOf(out, 'src/aa/A.hx'));
 	}
 
-	@:pin('control')
-	@:killer('M-MODMOVE-MEMBER-BLIND')
+	@:pin('guard')
 	public function testAStaticFieldOfAnImportedModuleStaysWhenTheSameNamedModuleMoves(): Void {
 		final out: ModuleMoveOutcome = moved([move('src/p/Mod.hx', 'src/p/sub/Mod.hx')], staticFieldShape());
 		Assert.isFalse(out.changes.exists(c -> c.file == 'src/p/Main.hx'), [for (c in out.changes) c.file].join(', '));
 	}
 
-	@:pin('control')
-	@:killer('M-MODMOVE-MEMBER-BLIND')
+	@:pin('guard')
 	public function testAStaticFieldOfAnImportedModuleStaysWhenItsReaderMoves(): Void {
 		final out: ModuleMoveOutcome = moved([move('src/p/Main.hx', 'src/q/Main.hx')], staticFieldShape());
 		Assert.equals(
@@ -564,7 +562,7 @@ class ModuleMoveTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-MODMOVE-MEMBER-AFTER-BLIND')
+	@:killer('M-MODMOVE-VALUE-HEAD-BLIND')
 	public function testASpellingWhoseHeadComesToBindAMemberIsWrittenInFull(): Void {
 		final out: ModuleMoveOutcome = moved([move('src/p/x/R.hx', 'src/p/y/R.hx')], [
 			file('src/p/Mod.hx', 'package p;\n\nclass Mod {}\n\nclass Sub {\n\tpublic static function go(): Int return 1;\n}\n'),
@@ -633,6 +631,28 @@ class ModuleMoveTest extends Test {
 			Assert.equals(user.replace('package pkg;\n', 'package pkg;\n\nimport pkg.sub.A;\n'), textOf(out, 'src/pkg/User.hx'));
 			Assert.same(['src/pkg/User.hx: import pkg.sub.A;'], out.imports);
 		}
+	}
+
+	/**
+	 * Read as an expression's head, `Mod.Sub` stops at the first module named `Mod` the order finds (4.3.7: `Class<a.b.Mod>
+	 * has no field Sub`), so a move bringing a `Mod` lacking `Sub` nearer to a reader changes what the reader's expression
+	 * names even where a type position would still pass it: the expression is written in full.
+	 */
+	@:pin('control')
+	@:killer('M-MODMOVE-VALUE-HEAD-BLIND')
+	public function testAModuleMovedNearerToAnExpressionHeadIsWrittenAroundInFull(): Void {
+		final mod: String = 'package a;\n\nclass Mod {}\n\nclass Sub {\n\tpublic static function id(): Int return 1;\n}\n';
+		final far: String = 'package x;\n\nclass Mod {}\n';
+		final main: String = 'package a.b.c;\n\nclass Main {\n\tstatic function main() {\n\t\ttrace(Mod.Sub.id());\n\t}\n}\n';
+		final out: ModuleMoveOutcome = moved([move('src/x/Mod.hx', 'src/a/b/Mod.hx')], [
+			file('src/a/Mod.hx', mod),
+			file('src/x/Mod.hx', far),
+			file('src/a/b/c/Main.hx', main)
+		]);
+		Assert.equals(
+			'package a.b.c;\n\nclass Main {\n\tstatic function main() {\n\t\ttrace(a.Mod.Sub.id());\n\t}\n}\n',
+			textOf(out, 'src/a/b/c/Main.hx')
+		);
 	}
 
 	private static inline function move(from: String, to: String): ModuleRelocation {

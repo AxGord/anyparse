@@ -132,7 +132,7 @@ final class MemberPathWalk {
 		if (current == null) return null;
 		final last: ResolvedType = current;
 		final member: String = memberPath[memberPath.length - 1];
-		return substitute ? _members.memberRead(last, member, args)?.text : _members.memberTypeSource(last, member);
+		return substitute ? _members.memberRead(last, member, args, origin)?.text : _members.memberTypeSource(last, member);
 	}
 
 }
