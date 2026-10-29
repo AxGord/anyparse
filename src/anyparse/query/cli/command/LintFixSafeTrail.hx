@@ -112,7 +112,8 @@ final class LintFixSafeTrail {
 	/**
 	 * The IO a bisection of this round runs through: a probe puts its candidate on disk — `keep` at the bytes the round
 	 * left (`fixedOf`), `partial` at the given texts, every other written file at its pre-round bytes (`originalOf`), a
-	 * file with no bytes on that side deleted — and typechecks it over `judging`.
+	 * file with no bytes on that side deleted — and typechecks it over `judging`. A candidate the disk refuses is a probe
+	 * that could not run: the isolation stops on it like on a silent oracle, so the caller still settles the disk.
 	 */
 	public function seat(
 		changed: Array<String>, coupled: Array<Array<String>>, originalOf: Map<String, String>, fixedOf: Map<String, String>,
@@ -121,16 +122,19 @@ final class LintFixSafeTrail {
 		return {
 			probe: (keep, partial) -> {
 				_probesLeft--;
-				place(
-					changed,
-					file -> if (partial.exists(file))
-						partial[file]
-					else if (keep.contains(file))
-						fixedOf[file]
-					else
-						originalOf[file]
-				);
-				CompilerOracle.typecheckAll(judging);
+				try {
+					place(
+						changed,
+						file -> if (partial.exists(file))
+							partial[file]
+						else if (keep.contains(file))
+							fixedOf[file]
+						else
+							originalOf[file]
+					);
+					CompilerOracle.typecheckAll(judging);
+				} catch (failure: WriteFailure)
+					Unavailable('its candidate could not be put on disk: ${failure.message}');
 			},
 			splitRules: file -> splitRules(file, changed, coupled, originalOf),
 			laterRules: laterRules,
@@ -214,7 +218,7 @@ final class LintFixSafeTrail {
 		restore(whole);
 		// A file the round created that an earlier narrowing round already dropped from the run is one `restore` no longer
 		// sees, and an isolation probe may have written it back.
-		for (file in whole) if (!originalOf.exists(file)) CliIo.deletePath(file);
+		for (file in whole) if (!originalOf.exists(file)) remove(file);
 		assertOnDisk(changed, target);
 		return [for (culprit in culprits) culprit.file];
 	}
@@ -246,17 +250,25 @@ final class LintFixSafeTrail {
 		return trail == null ? fixes : fixes.filter(slices -> !slices.exists(slice -> trail.isBanned(slice.file, rule)));
 	}
 
-	/** Write every file of `changed` whose `textOf` is a text and delete every one whose is null — one `writeFiles`. */
+	/**
+	 * Write every file of `changed` whose `textOf` is a text and delete every one whose is null — one `writeFiles`. A file
+	 * that will not go is a `WriteFailure` like one that will not be written: the tree is not the one asked for.
+	 */
 	private static function place(changed: Array<String>, textOf: (String) -> Null<String>): Void {
 		final writes: Array<{ path: String, content: String }> = [];
 		for (file in changed) {
 			final text: Null<String> = textOf(file);
 			if (text == null)
-				CliIo.deletePath(file)
+				remove(file)
 			else
 				writes.push({ path: file, content: text });
 		}
 		CliIo.writeFiles(writes);
+	}
+
+	/** Delete `file`, or fail the write set it belongs to when the filesystem keeps it. */
+	private static function remove(file: String): Void {
+		if (!CliIo.deletePath(file)) throw new WriteFailure(file, 'the file could not be deleted');
 	}
 
 	/** Make the run hold `file` at `text`, or drop it when `text` is null; a held file with no pre-round bytes is one the run created. */
@@ -278,18 +290,16 @@ final class LintFixSafeTrail {
 
 	/**
 	 * The invariant every settled safe pass ends on: each written file holds on disk exactly the bytes of the tree the oracle
-	 * confirmed (`textOf`, null for a file that must not exist). A difference means the net reported a green tree it did not
-	 * leave behind — a fixer defect that must stop the run, never a state to carry on from.
+	 * confirmed (`textOf`, null for a file that must not exist). A write or a delete that fails throws on its own
+	 * (`CliIo.writeFiles`, `remove`), so a difference here is a disk that changed under the run — another writer — a fact
+	 * about the environment, hence a `WriteFailure`: one line and `EXIT_RUNTIME`, not a stack.
 	 */
 	private static function assertOnDisk(changed: Array<String>, textOf: (String) -> Null<String>): Void {
 		final wrong: Array<String> = [
 			for (file in changed) if ((ConfigFinder.fileExists(file) ? CliIo.readFile(file) : null) != textOf(file)) file
 		];
-		if (wrong.length > 0)
-			throw new Exception(
-				'apq lint --fix: the safe-pass net settled on a tree the oracle confirmed, but the disk holds other bytes for '
-					+ wrong.join(', ')
-			);
+		final reason: String = 'the safe-pass net settled on a tree the oracle confirmed, but the disk holds other bytes there';
+		if (wrong.length > 0) throw new WriteFailure(wrong.join(', '), reason);
 	}
 
 }

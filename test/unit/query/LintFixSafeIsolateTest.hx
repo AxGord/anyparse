@@ -137,13 +137,14 @@ class LintFixSafeIsolateTest extends Test {
 	}
 
 	/**
-	 * Every file breaks the build on its own: the search exhausts its budget and the net falls back to the whole-wave
-	 * revert — fail closed — saying both why the narrowing surrendered and why the bisection could not help.
+	 * Every file of a large wave breaks the build on its own: the search exhausts what is left of the run's budget and the
+	 * net falls back to the whole-wave revert — fail closed — saying both why the narrowing surrendered and why the
+	 * bisection could not help, and which flag raises the budget.
 	 */
 	@:pin('control')
 	@:killer('M-SAFE-BISECT-NO-FALLBACK')
 	public function testABisectionThatCannotIsolateFallsBackToTheWholeWave(): Void {
-		final changed: Array<String> = [for (name in 'ABCDEFGH'.split('')) '/p/$name.hx'];
+		final changed: Array<String> = [for (i in 0...200) '/p/F$i.hx'];
 		var probes: Int = 0;
 		final outcome: SafePassNarrowing = LintFixSafePass.isolate(
 			SURRENDER, changed, [], seat((keep, _) -> {
@@ -154,12 +155,15 @@ class LintFixSafeIsolateTest extends Test {
 		switch outcome {
 			case WholeWave(why, errors):
 				Assert.stringContains('the compiler blames no file this run wrote', why);
-				Assert.stringContains('isolated no culprit within ${FailerBisect.searchBudget(changed.length)} typecheck(s)', why);
+				Assert.stringContains(
+					'isolated no culprit within the ${LintFixSafePass.PROBE_CAP} typecheck(s) left of the run budget', why
+				);
+				Assert.stringContains('--fix-probes', why);
 				Assert.equals(ERRORS, errors);
 			case other:
 				Assert.fail('expected WholeWave, got $other');
 		}
-		Assert.isTrue(probes <= FailerBisect.searchBudget(changed.length), 'the search stops at its budget: $probes');
+		Assert.isTrue(probes <= LintFixSafePass.PROBE_CAP, 'the search stops at the run budget: $probes');
 	}
 
 	/** An oracle that stops answering mid-bisection proves nothing about any half: the whole wave goes back. */
@@ -169,7 +173,7 @@ class LintFixSafeIsolateTest extends Test {
 		);
 		switch outcome {
 			case WholeWave(why, _):
-				Assert.stringContains('the oracle could not re-run (spawn failed)', why);
+				Assert.stringContains('a probe could not run (spawn failed)', why);
 			case other:
 				Assert.fail('expected WholeWave, got $other');
 		}
@@ -265,6 +269,33 @@ class LintFixSafeIsolateTest extends Test {
 		Assert.stringContains(ERRORS, notice);
 		final narrowed: String = LintFixSafePass.revertNotice(Narrowed(['/p/Reader.hx'], 1), 3, ERRORS);
 		Assert.stringContains('the compiler blames: /p/Reader.hx', narrowed);
+	}
+
+	/**
+	 * Two culprits in opposite halves of a large wave: one search's own budget covers a single failer, so the second one used to
+	 * cost the whole wave while the run still had typechecks to spend. The search now spends what is left of the run's budget,
+	 * and only the two culprits go back.
+	 */
+	@:pin('control')
+	@:killer('M-SAFE-BISECT-OWN-BUDGET')
+	public function testTwoCulpritsInOppositeHalvesOfALargeWaveAreBothIsolated(): Void {
+		final changed: Array<String> = [for (i in 0...200) '/p/F$i.hx'];
+		final culprits: Array<String> = ['/p/F99.hx', '/p/F100.hx'];
+		var probes: Int = 0;
+		final outcome: SafePassNarrowing = LintFixSafePass.isolate(
+			SURRENDER, changed, [], seat((keep, _) -> {
+				probes++;
+				return keep.exists(file -> culprits.contains(file)) ? OracleOutcome.Rejected(ERRORS) : OracleOutcome.Confirmed;
+			})
+		);
+		switch outcome {
+			case Bisected(cut, spent):
+				Assert.same(culprits, [for (culprit in cut) culprit.file]);
+				Assert.equals(probes, spent);
+			case other:
+				Assert.fail('expected Bisected, got $other');
+		}
+		Assert.isTrue(probes <= LintFixSafePass.PROBE_CAP, 'the run stays within its probe budget: $probes');
 	}
 
 	/** A seat whose files cannot be split, answering every probe through `probe`. */

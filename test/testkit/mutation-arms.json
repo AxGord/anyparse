@@ -30848,8 +30848,8 @@
 			"name": "M-SAFE-BISECT-NO-FALLBACK",
 			"type": "anyparse.query.LintFixSafePass",
 			"method": "bisectFiles",
-			"find": "throw new IsolationStop('bisecting the ${units.length} written unit(s) isolated no culprit within $budget typecheck(s)');",
-			"replace": "return [];",
+			"find": "if (failers == null)",
+			"replace": "if (failers == null) return [];\n\t\tif (false)",
 			"note": "a bisection that exhausts its search names no culprit instead of falling back to the whole wave with its reason"
 		},
 		{
@@ -32104,6 +32104,46 @@
 			"find": "case status:",
 			"replace": "case status if (!allowBlast):",
 			"note": "--allow-blast also waives a lint-diff that could not compare its snapshots, so a missing or malformed base reads as a passed blast gate"
+		},
+		{
+			"name": "M-SAFE-BISECT-OWN-BUDGET",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "bisectFiles",
+			"find": "final budget: Int = probes.left();",
+			"replace": "final budget: Int = FailerBisect.searchBudget(units.length);",
+			"note": "the file bisection keeps a budget that covers one failer exactly, so a second culprit in the other half of a large wave reverts the whole wave while the run still has typechecks to spend"
+		},
+		{
+			"name": "M-SAMEPATH-DOT-SEGMENT",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "samePath",
+			"find": "final x: String = Path.normalize(a);",
+			"replace": "final x: String = a;",
+			"note": "a compiler path spelled from the current directory (`./p/A.hx`, a `-cp .` project) matches no file the run wrote, so the net never attributes there"
+		},
+		{
+			"name": "M-SAFE-PROBE-WRITE-ESCAPES",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "seat",
+			"find": "catch (failure: WriteFailure)",
+			"replace": "catch (failure: UsageFailure)",
+			"note": "a candidate the disk refuses escapes the isolation as a WriteFailure, so the settle never runs and the disk stays on a candidate the oracle may have rejected"
+		},
+		{
+			"name": "M-SAFE-DELETE-REFUSAL-IGNORED",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "remove",
+			"find": "if (!CliIo.deletePath(file)) throw new WriteFailure(file, 'the file could not be deleted');",
+			"replace": "CliIo.deletePath(file);",
+			"note": "a file the filesystem refuses to delete is taken as gone, so a probe compiles a candidate that still holds it"
+		},
+		{
+			"name": "M-SAFE-SETTLE-RAW-EXCEPTION",
+			"type": "anyparse.query.cli.command.LintFixSafeTrail",
+			"method": "assertOnDisk",
+			"find": "throw new WriteFailure(wrong.join(', '), reason);",
+			"replace": "throw new Exception('cannot write ' + wrong.join(', ') + ': ' + reason);",
+			"note": "a settled tree the disk does not hold stops the run with a bare exception: a raw stack, no summary line, not EXIT_RUNTIME"
 		}
 	]
 }

@@ -118,6 +118,19 @@ class LintFixSafePassRevertTest extends Test {
 		Assert.equals(0, LintFixSafePass.implicated('Array.hx:2: characters 1-2 : boom', ['/tmp/p/src/ROArray.hx'], []).length);
 	}
 
+	/**
+	 * A project compiled with `-cp .` gets its positions spelled `./p/Holder.hx`, which no path the run wrote ends with: the
+	 * blamed file must still be found, or the net never attributes on such a project and bisects or reverts every time.
+	 */
+	@:pin('control')
+	@:killer('M-SAMEPATH-DOT-SEGMENT')
+	public function testACompilerPathSpelledFromTheCurrentDirectoryFindsTheFileTheRunWrote(): Void {
+		final errors: String = './p/Holder.hx:7: characters 2-8 : Unknown identifier : drop';
+		Assert.same(['/tmp/root/p/Holder.hx'], LintFixSafePass.implicated(errors, ['/tmp/root/p/Holder.hx', '/tmp/root/p/Reader.hx'], []));
+		Assert.isTrue(LintFixSafePass.blames(errors, '/tmp/root/p/Holder.hx'));
+		Assert.isFalse(LintFixSafePass.blames(errors, '/tmp/root/q/Holder.hx'), 'still segment-aligned: another Holder.hx is not blamed');
+	}
+
 	public function testAnImplicatedFilePullsInEveryFileItsCrossFileFixCommittedWith(): Void {
 		// A cross-file rename is committed whole; reverting half of it leaves the tree worse than
 		// reverting all of it, so the whole component goes back together.

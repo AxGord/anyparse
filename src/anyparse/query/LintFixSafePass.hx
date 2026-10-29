@@ -5,6 +5,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.CompilerOracle.OracleExclusion;
 import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import haxe.Exception;
+import haxe.io.Path;
 
 using Lambda;
 
@@ -403,13 +404,13 @@ final class LintFixSafePass {
 	}
 
 	/**
-	 * Whether two spellings name one file: equal after separator normalisation, or one a
-	 * segment-aligned suffix of the other. Suffix rather than basename, because the compiler's
-	 * relative path carries enough of the tree to tell two same-named files apart.
+	 * Whether two spellings name one file: equal once normalised, or one a segment-aligned suffix of the other. Suffix rather
+	 * than basename, because the compiler's relative path carries enough of the tree to tell two same-named files apart; and
+	 * normalised, because a `-cp .` compiler spells its positions `./p/A.hx`, which no written path ends with.
 	 */
 	private static function samePath(a: String, b: String): Bool {
-		final x: String = a.replace('\\', '/');
-		final y: String = b.replace('\\', '/');
+		final x: String = Path.normalize(a);
+		final y: String = Path.normalize(b);
 		return x == y || suffixSegment(x, y) || suffixSegment(y, x);
 	}
 
@@ -442,6 +443,8 @@ final class LintFixSafePass {
 	 * by binary-split group testing (`FailerBisect`): a probe keeps a subset of units at the round's bytes and every other
 	 * written file at its pre-round bytes. The complement of the failers must typecheck, and each failer must turn it red on
 	 * its own. One unit needs no probe: the wave failed and the tree without it is the one the pre-write verdict judged.
+	 * The search may spend whatever is left of the run's budget: the per-search budget covers ONE failer exactly, so a second
+	 * one in the other half of a large wave cost the whole wave while the run still had typechecks to spend.
 	 */
 	private static function bisectFiles(
 		changed: Array<String>, coupled: Array<Array<String>>, probes: IsolationProbes
@@ -451,12 +454,15 @@ final class LintFixSafePass {
 		function keepOf(indices: Array<Int>): Array<String> {
 			return [for (i in indices) for (file in units[i]) file];
 		}
-		final budget: Int = FailerBisect.searchBudget(units.length);
+		final budget: Int = probes.left();
 		final failers: Null<Array<Int>> = FailerBisect.isolateFailers(
 			units.length, budget, indices -> probes.green(keepOf(indices), []), [0]
 		);
 		if (failers == null)
-			throw new IsolationStop('bisecting the ${units.length} written unit(s) isolated no culprit within $budget typecheck(s)');
+			throw new IsolationStop(
+				'bisecting the ${units.length} written unit(s) isolated no culprit within the $budget typecheck(s) left of the run budget'
+					+ ' — raise it with --fix-probes <n>'
+			);
 		final kept: Array<Int> = [for (i in 0...units.length) if (!failers.contains(i)) i];
 		if (kept.length == 0) return units;
 		if (!probes.green(keepOf(kept), [])) throw new IsolationStop('the files the bisection kept still do not typecheck together');
@@ -624,6 +630,11 @@ private class IsolationProbes {
 		for (verdict in known) _verdicts[keyOf(verdict.keep, [])] = verdict.green;
 	}
 
+	/** How many typechecks the run's budget still allows. */
+	public inline function left(): Int {
+		return _cap - spent;
+	}
+
 	/**
 	 * Whether the tree with `keep` at the round's bytes, `partial` at the given
 	 * texts and every other written file at its pre-round bytes typechecks.
@@ -638,7 +649,7 @@ private class IsolationProbes {
 		final verdict: Bool = switch _seat.probe(keep, partial) {
 			case Confirmed: true;
 			case Rejected(_): false;
-			case Unavailable(reason): throw new IsolationStop('the oracle could not re-run ($reason)');
+			case Unavailable(reason): throw new IsolationStop('a probe could not run ($reason)');
 		};
 		_verdicts[key] = verdict;
 		return verdict;
