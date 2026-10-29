@@ -18,7 +18,7 @@ using StringTools;
  * command: the branch's single commit is applied on top of the checked-out branch (`git cherry-pick --no-commit`), so the
  * history stays linear, its append-only files merging as their `.gitattributes` say (`docs/decisions.md` by union,
  * `mutation-arms.json` by `dev merge-arms`), the three binaries rebuilt, the commit made with a `Slice: <ID>` trailer, then
- * `tools/battery.sh` (quick, or in full when the commit brings in a path where a shard and the one-process suite can
+ * `dev battery` (quick, or in full when the commit brings in a path where a shard and the one-process suite can
  * diverge, or the number of the landing, counted over every landing that runs the battery, is a multiple of ten — the
  * battery row says which) — and one verdict line. A branch that does not carry exactly one commit over the checked-out one
  * is refused; a conflict git cannot resolve or a failed build rolls the tree back to where it was; a red battery leaves the
@@ -60,7 +60,7 @@ final class Land {
 		'src/anyparse/query/Shard',
 		'src/anyparse/query/cli/TestTranscript.hx',
 		'test/RunTests.hx',
-		'tools/battery.sh',
+		'tools/src/dev/Battery.hx',
 		'src/anyparse/query/SharedParseTier.hx',
 		'src/anyparse/query/FormatConfigDiscovery.hx',
 		'src/anyparse/grammar/haxe/HaxeQueryPlugin.hx',
@@ -239,7 +239,7 @@ final class Land {
 	}
 
 	/**
-	 * `tools/battery.sh` over the landed tree, or a skip when there is no `request` (`--no-battery`). Quick or full is
+	 * `dev battery` over the landed tree, or a skip when there is no `request` (`--no-battery`). Quick or full is
 	 * decided here, from what the commit brought in and the count of landings, and the row names why.
 	 */
 	private function runBattery(request: Null<BatteryRequest>): Outcome {
@@ -286,7 +286,7 @@ final class Land {
 			message: message,
 			battery: noBattery ? null : request,
 			compile: Binaries.compile,
-			exec: runScript,
+			exec: execBattery,
 			merged: mergedPaths,
 			print: Sys.println
 		});
@@ -303,14 +303,17 @@ final class Land {
 		return name.startsWith('hxqb-') ? name.substr('hxqb-'.length) : name;
 	}
 
-	/** `tools/battery.sh` with `flags` over `tree`, its output kept at `log`. */
-	public static function runScript(flags: Array<String>, tree: String, log: String): Outcome {
-		final run: Result = cmd('tools/battery.sh $flags').at(tree).timeout(BATTERY_TIMEOUT_MS).run();
+	/** `dev battery` with `flags` over `tree`, its output kept at `log`. */
+	public static function execBattery(flags: Array<String>, tree: String, log: String): Outcome {
+		final run: Result = cmd('node bin/dev.js battery $flags').at(tree).timeout(BATTERY_TIMEOUT_MS).run();
 		File.saveContent(log, run.out + run.err);
 		return run.ok ? Passed : Failed('${run.firstError()} — $log');
 	}
 
-	/** The battery's snapshot directory as `tools/battery.sh` spells its default, given the environment `env` reads. */
+	/**
+	 * The battery's snapshot directory, which also keeps the count of landings: `$ANYPARSE_BLAST_CACHE`,
+	 * else `anyparse-blast-cache` under the home directory, given the environment `env` reads.
+	 */
 	public static function cacheDir(env: String -> Null<String>): String {
 		return env('ANYPARSE_BLAST_CACHE') ?? Path.join([env('HOME') ?? '', 'anyparse-blast-cache']);
 	}
@@ -339,9 +342,9 @@ final class Land {
 	}
 
 	/**
-	 * What `tools/battery.sh` is given. The monolith cross-check of the suite is not run at every landing, so `--quick`
+	 * What `dev battery` is given. The monolith cross-check of the suite is not run at every landing, so `--quick`
 	 * is the default (`fullReason` says when it is not); under a pool lease (`leased` threads) the suite takes the shards the
-	 * lease leaves beside the battery's light branches, otherwise the script keeps its own count.
+	 * lease leaves beside the battery's light branches, otherwise the battery keeps its own count.
 	 */
 	public static function batteryFlags(allowBlast: Bool, snapshot: Bool, full: Bool, leased: Null<Int>): Array<String> {
 		final flags: Array<String> = [];
@@ -376,7 +379,7 @@ typedef BatteryRequest = {
 
 /** The paths a merge brought into the tree, or null when they cannot be read. */
 typedef MergedPaths = (tree:String) -> Null<Array<String>>;
-/** The run of `tools/battery.sh`: its flags, the tree it runs over and the log it leaves. */
+/** The run of `dev battery`: its flags, the tree it runs over and the log it leaves. */
 typedef BatteryExec = (flags:Array<String>, tree:String, log:String) -> Outcome;
 /** What a run of `Land` is given: what to merge into where, and the two seams a test replaces (the build and the output). */
 typedef LandOptions = {

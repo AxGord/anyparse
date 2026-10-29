@@ -96,15 +96,14 @@ final class GateTree {
 		return gitIn(tree, args);
 	}
 
+	/** `hxq <args>` in `dir` on the worktree's engine, whatever tree it reads. */
+	public inline function hxq(dir: String, args: Array<String>): Command {
+		return shim(tree, dir, args);
+	}
+
 	/** `command` run in the worktree on its engine. */
 	public function inTree(command: Command): Result {
 		return command.at(tree).env(ENGINE_VAR, apq()).run();
-	}
-
-	/** `hxq <args>` in `dir` on the worktree's engine, whatever tree it reads. */
-	public function hxq(dir: String, args: Array<String>): Command {
-		final shim: String = Path.join([tree, 'bin/hxq']);
-		return cmd('sh $shim $args').at(dir).env(ENGINE_VAR, apq());
 	}
 
 	/**
@@ -156,6 +155,12 @@ final class GateTree {
 
 	public static inline function signed(n: Int): String {
 		return n >= 0 ? '+$n' : '$n';
+	}
+
+	/** The `hxq` shim of `tree` run in `dir` with `args`, pinned to the engine `tree` built: no staleness probe, no rebuild. */
+	public static function shim(tree: String, dir: String, args: Array<String>): Command {
+		final shim: String = Path.join([tree, 'bin/hxq']);
+		return cmd('sh $shim $args').at(dir).env(ENGINE_VAR, Path.join([tree, 'bin/apq.js']));
 	}
 
 	/** `argv` run with its standard error written to the file `errLog` (truncated first) and nothing on the error pipe. */

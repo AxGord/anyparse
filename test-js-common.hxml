@@ -2,7 +2,7 @@
 # bin/apq-js-common.hxml, the output line cannot live here: haxe rejects
 # a second `-js` with "Error: Multiple targets", so a later `-js` on the
 # command line cannot retarget an hxml that already names an output.
-# `test-js.hxml` writes the shared `bin/test.js`; `tools/worker-build.sh`
+# `test-js.hxml` writes the shared `bin/test.js`; `dev worker-build`
 # passes a per-worker `-js <workdir>/test.js` instead.
 -cp src
 -cp test

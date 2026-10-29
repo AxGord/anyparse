@@ -3,7 +3,7 @@
 # `-js` with "Error: Multiple targets", so an hxml that already names an
 # output cannot be retargeted by a later `-js` on the command line. Each
 # leaf supplies its own: `bin/apq-js.hxml` writes the shared
-# `bin/apq.js`, while `tools/worker-build.sh` passes a per-worker
+# `bin/apq.js`, while `dev worker-build` passes a per-worker
 # `-js <workdir>/apq.js` so parallel agents never race over one artifact.
 -cp src
 -main anyparse.query.Cli

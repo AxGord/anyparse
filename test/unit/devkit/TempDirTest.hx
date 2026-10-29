@@ -12,7 +12,7 @@ import utest.Test;
 using StringTools;
 
 /**
- * `TempDir` — a directory of the run's own, stamped the way `tools/tmp-lifecycle.sh` reads an owner, and gone once its
+ * `TempDir` — a directory of the run's own, stamped the way `devkit.TmpLifecycle` reads an owner, and gone once its
  * owner is done with it, by return or by throw.
  */
 @:nullSafety(Strict)

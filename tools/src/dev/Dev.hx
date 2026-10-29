@@ -23,6 +23,7 @@ final class Dev {
 		{ name: 'mutation-check', main: MutationCheck.main, usage: MutationCheck.USAGE },
 		{ name: 'slice-gate', main: SliceGate.main, usage: SliceGate.USAGE },
 		{ name: 'land', main: Land.main, usage: Land.USAGE },
+		{ name: 'battery', main: Battery.main, usage: Battery.USAGE },
 		{ name: 'merge-arms', main: MergeArms.main, usage: MergeArms.USAGE },
 		{ name: 'decision', main: Decision.main, usage: Decision.USAGE },
 		{ name: 'tmp-lifecycle', main: Tmp.main, usage: Tmp.USAGE },

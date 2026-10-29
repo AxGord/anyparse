@@ -37,7 +37,7 @@ final class LintDiffCommand implements CliCommand implements LanguageFree {
 	#if (sys || nodejs)
 	/**
 	 * `apq lint-diff --old <a.json> --new <b.json>` — the blast-radius gate
-	 * `tools/battery.sh` runs once per compared tree.
+	 * `dev battery` runs once per compared tree.
 	 *
 	 * Both arguments are `apq lint --format json` snapshots; the comparison is a
 	 * MULTISET diff over `(file, rule, severity, message)` — over the identity
@@ -52,7 +52,7 @@ final class LintDiffCommand implements CliCommand implements LanguageFree {
 	 * snapshots disagree (the blast radius moved — a slice that adds code expects
 	 * this), 2 means the comparison could not run at all (a snapshot missing,
 	 * unreadable or malformed, or the flags wrong). Collapsing them would let
-	 * `battery.sh --allow-blast` — reached for exactly when movement is expected —
+	 * `dev battery --allow-blast` — reached for exactly when movement is expected —
 	 * silently accept a broken baseline as a passed gate.
 	 */
 	private static function runLintDiff(args: Array<String>): Int {

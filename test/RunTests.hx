@@ -36,7 +36,7 @@ class RunTests {
 		// SAME names under one shared `$TMPDIR` and delete each other's files mid-test. A private
 		// temp root per process is what keeps them apart. A COMPLETED run leaves nothing at
 		// all where the old scheme accumulated; an INTERRUPTED one leaves one claimed directory
-		// holding whatever fixtures were live, and `tmp-lifecycle.sh` reaps that once this pid
+		// holding whatever fixtures were live, and `devkit.TmpLifecycle` reaps that once this pid
 		// is gone.
 		final scratch: String = CliFixture.isolateTempDir();
 		final runner: Runner = new Runner();
@@ -131,7 +131,7 @@ class RunTests {
 		// the quiet reporter prints no row for a passing test — so a green
 		// transcript used to carry NO countable test count at all: `apq
 		// test-summary` read `0 tests / 0 assertions` off one and
-		// `tools/suite-shard.sh` hard-failed on that zero. Emit the total here,
+		// the shard runner hard-failed on that zero. Emit the total here,
 		// counted off the runner's own completion events rather than off
 		// `runner.length`, so a run that dies mid-way prints neither this line
 		// nor utest's block and the transcript stays visibly UNCOUNTABLE instead

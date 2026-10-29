@@ -16,7 +16,7 @@ final class Tmp {
 
 	public static inline final USAGE: String = 'usage: dev tmp-lifecycle [--list | --sweep]';
 
-	/** The listing's column widths, as `tools/tmp-lifecycle.sh --list` prints them. */
+	/** The listing's column widths, as `dev tmp-lifecycle --list` prints them. */
 	private static inline final OWNER_WIDTH: Int = 10;
 
 	private static inline final STATE_WIDTH: Int = 9;

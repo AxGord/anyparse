@@ -42,7 +42,7 @@ set -e
 # ONE shared bin/apq.js: each build truncates the artifact the others are
 # executing, so in practice only one agent can work at a time. With
 # HXQ_BIN each agent builds a private engine into its own workdir
-# (`tools/worker-build.sh <workdir>`) and drives every subcommand —
+# (`node bin/dev.js worker-build <workdir>`) and drives every subcommand —
 # probes AND mutation ops — through it, so nobody rebuilds or races over
 # the shared binary.
 #
@@ -106,7 +106,7 @@ else
         if [ -n "$wt_common" ] && [ "$wt_common" = "$here_common" ]; then
             echo "apq: $wt_top is a worktree of $(cd -P "$here/.." && pwd) with no engine of its own;" >&2
             echo "apq: refusing to run (and possibly rebuild) the shared $here/apq.js from here." >&2
-            echo "apq: build a private one (tools/worker-build.sh <dir>) and set HXQ_BIN=<dir>/apq.js." >&2
+            echo "apq: build a private one (node bin/dev.js worker-build <dir>) and set HXQ_BIN=<dir>/apq.js." >&2
             exit 1
         fi
     fi

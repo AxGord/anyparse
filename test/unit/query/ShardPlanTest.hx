@@ -8,7 +8,7 @@ import testkit.TestRegistry;
 using Lambda;
 
 /**
- * Unit cover for `apq shard-plan` — the split `tools/suite-shard.sh` used to carry as awk blocks.
+ * Unit cover for `apq shard-plan` — the split the shard runner once carried as awk blocks.
  *
  * The gates are the point. Every one of them exists because its absence is
  * SILENT: a registration the old text extractor could not name became a

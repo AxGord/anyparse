@@ -17,8 +17,9 @@ using StringTools;
  * and, after an hxq op that WROTE, lints what it wrote and answers the findings THIS edit added (`apq lint --baseline`
  * against a per-session, per-file-set snapshot) as the hook's `additionalContext`. It shows, never fixes, never blocks,
  * and stays silent whenever it cannot tell which tree the op wrote into or that tree has no engine of its own — a nudge
- * from another tree's engine is the phantom-findings hazard `HXQ_BIN` exists to avoid. The why of each step is the
- * hook's own header.
+ * from another tree's engine is the phantom-findings hazard `HXQ_BIN` exists to avoid. The tree an op
+ * wrote into is read off EVIDENCE in the command and its output (an absolute path under a registered
+ * worktree, or a pinned `HXQ_BIN=`), never off the payload's `cwd`, which is the session's.
  */
 @:nullSafety(Strict)
 final class LintWarn {

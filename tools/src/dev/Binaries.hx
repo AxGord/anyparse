@@ -17,7 +17,16 @@ final class Binaries {
 
 	/** Build the three binaries of `tree`, every transcript written to `log`; a failure quotes the first one's error. */
 	public static function compile(tree: String, log: String): Outcome {
-		final runs: Array<Result> = Pool.of(HXMLS.length).map(HXMLS, hxml -> cmd('haxe $hxml').at(tree));
+		return compileWith(tree, log, []);
+	}
+
+	/**
+	 * `compile`, with each build file of `typechecks` typechecked beside the three (`--no-output`: it writes nothing) — the gate
+	 * of a file no binary reaches.
+	 */
+	public static function compileWith(tree: String, log: String, typechecks: Array<String>): Outcome {
+		final builds: Array<Array<String>> = [for (hxml in HXMLS) [hxml]].concat([for (hxml in typechecks) [hxml, '--no-output']]);
+		final runs: Array<Result> = Pool.of(builds.length).map(builds, words -> cmd('haxe $words').at(tree));
 		File.saveContent(log, [for (run in runs) run.out + run.err].join('\n'));
 		final failed: Null<Result> = runs.find(run -> !run.ok);
 		return failed == null ? Passed : Failed('${failed.command}: ${failed.firstError()}');

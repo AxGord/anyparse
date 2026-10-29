@@ -10,8 +10,8 @@ using StringTools;
 
 /**
  * The scratch directories this project's tools claim under the temp root, and the sweep that reclaims the ones no live
- * run owns: the Haxe twin of `tools/tmp-lifecycle.sh` — same prefixes, owner stamp, keep marker and predicate, each
- * overridable by the same environment variable. Every uncertainty resolves toward KEEPING a directory; the rationale
+ * run owns: the prefixes, the owner stamp, the keep marker and the sweep predicate, each overridable by
+ * an environment variable (`TMPL_*`). Every uncertainty resolves toward KEEPING a directory; the rationale
  * is `docs/testing.md` § "Scratch directories".
  */
 @:nullSafety(Strict)
@@ -173,7 +173,7 @@ final class TmpLifecycle {
 		return claim(prefix);
 	}
 
-	/** The configuration the environment gives, as `tools/tmp-lifecycle.sh` reads it. */
+	/** The configuration the environment gives: `TMPDIR` and the `TMPL_*` overrides. */
 	public static function fromEnv(): TmpLifecycle {
 		return new TmpLifecycle(
 			defaultRoot(), ~/[ \t\n]+/g.split(env('TMPL_PREFIXES', PREFIXES)).filter(p -> p != ''), env('TMPL_STAMP', TempDir.STAMP),

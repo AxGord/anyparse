@@ -5,7 +5,7 @@ import anyparse.query.LintDiff;
 import anyparse.query.format.json.LintFindingJson;
 
 /**
- * Unit cover for `apq lint-diff` — the blast-radius gate `tools/battery.sh`
+ * Unit cover for `apq lint-diff` — the blast-radius gate `dev battery`
  * runs once per compared tree.
  *
  * Every case here is a pair of hand-written `apq lint --format json` reports

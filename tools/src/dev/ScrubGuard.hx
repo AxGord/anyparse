@@ -12,7 +12,7 @@ using Lambda;
 using StringTools;
 
 /**
- * `dev scrub-guard [--list PATH] [--private-root DIR]... [--range A..B] [--quiet]` — fails when text a downstream project
+ * `dev scrub-guard [--list PATH] [--private-root DIR]... [--range A..B | --pre-push] [--quiet]` — fails when text a downstream project
  * must not see published is about to enter the repository.
  *
  * The token list is NOT part of this repository, by design: a list of the names to keep out would itself publish them.
@@ -36,7 +36,8 @@ using StringTools;
 @:nullSafety(Strict)
 final class ScrubGuard {
 
-	public static inline final USAGE: String = 'usage: dev scrub-guard [--list PATH] [--private-root DIR]... [--range A..B] [--quiet]';
+	public static inline final USAGE: String =
+		'usage: dev scrub-guard [--list PATH] [--private-root DIR]... [--range A..B | --pre-push] [--quiet]';
 
 	/** How many leading bytes of a file are looked at for a NUL before it counts as binary. */
 	private static inline final BINARY_PROBE: Int = 8192;
@@ -47,7 +48,10 @@ final class ScrubGuard {
 	/** Directory names a project keeps its modules under, which say nothing about the project. */
 	private static final SOURCE_ROOT_NAMES: Array<String> = ['src', 'source', 'lib', 'test', 'tests'];
 
-	/** Run the subcommand over `argv`; answers the exit status. */
+	/**
+	 * Run the subcommand over `argv`; answers the exit status. `--pre-push` reads git's pre-push
+	 * lines on stdin and scans what each pushed ref publishes (`tools/hooks/pre-push-scrub.sh`).
+	 */
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final quiet: Bool = args.flag('--quiet');
@@ -57,7 +61,9 @@ final class ScrubGuard {
 			? given
 			: (Sys.getEnv('ANYPARSE_SCRUB_PRIVATE_ROOTS') ?? '').split(':').filter(root -> root != '');
 		final range: Null<String> = args.option('--range');
+		final prePush: Bool = args.flag('--pre-push');
 		args.done();
+		if (prePush && range != null) throw new UsageError('pass --range or --pre-push, not both');
 		if ((list == null || list == '') && roots.length == 0) {
 			Sys.stderr().writeString(
 				'scrub-guard: no token list (--list / ANYPARSE_SCRUB_LIST) and no private root '
@@ -78,13 +84,36 @@ final class ScrubGuard {
 			rules = loadRules(sys.io.File.getContent(list));
 		}
 		final privates: Array<PathIndex> = [for (root in roots) new PathIndex(privateFiles(root))];
+		if (prePush) return pushed(js.Syntax.code("require('fs').readFileSync(0, 'utf8')"), rules, privates, quiet);
 		final rows: Array<String> = range == null
 			? scanTree(rules, Sys.getCwd(), privates)
 			: scanRange(range, rules, Sys.getCwd(), privates);
-		if (!quiet && rows.length > 0) Sys.println(rows.join('\n'));
-		final also: String = roots.length > 0 ? ' and ${roots.length} private root(s)' : '';
-		Sys.stderr().writeString('scrub-guard: ${rows.length} match(es) of ${rules.length} rule(s)$also\n');
+		report(rows, rules, privates, quiet);
 		return rows.length > 0 ? 1 : 0;
+	}
+
+	/**
+	 * The ranges a push of git's pre-push `stdin` publishes, read in `root`: a deleted ref none; an updated one from the remote's
+	 * commit; a new one from below the oldest commit no remote-tracking ref holds — a null range when that commit is a root.
+	 */
+	public static function pushRanges(stdin: String, root: String): Array<PushRange> {
+		final zero: EReg = ~/^0+$/;
+		final ranges: Array<PushRange> = [];
+		for (line in stdin.split('\n')) {
+			final fields: Array<String> = ~/\s+/g.split(line.trim());
+			if (fields.length < 4 || zero.match(fields[1])) continue;
+			final local: String = fields[0];
+			final sha: String = fields[1];
+			if (!zero.match(fields[3])) {
+				ranges.push({ local: local, remote: fields[2], range: '${fields[3]}..$sha' });
+				continue;
+			}
+			final unheld: Array<String> = cmd('git rev-list $sha --not --remotes').at(root).lines();
+			if (unheld.length == 0) continue;
+			final parent: devkit.Result = cmd('git rev-parse --verify --quiet ${unheld[unheld.length - 1]}^').at(root).run();
+			ranges.push({ local: local, remote: fields[2], range: parent.ok ? '${parent.out.trim()}..$sha' : null });
+		}
+		return ranges;
 	}
 
 	/** The rules of a filter-repo replace-text file: the left-hand side of every line, in file order. */
@@ -244,6 +273,45 @@ final class ScrubGuard {
 			size--;
 		}
 		return out;
+	}
+
+	/**
+	 * The `--pre-push` run: git's pre-push `stdin` (`<local ref> <local sha> <remote ref> <remote sha>` per line), each pushed
+	 * range scanned as `--range` scans it (`pushRanges`). A ref reaching a root commit no remote holds has no range and refuses
+	 * the push. Answers the exit status.
+	 */
+	private static function pushed(stdin: String, rules: Array<Rule>, privates: Array<PathIndex>, quiet: Bool): Int {
+		final root: String = Sys.getCwd();
+		final refused: Array<String> = [];
+		var status: Int = 0;
+		for (push in pushRanges(stdin, root)) {
+			final range: Null<String> = push.range;
+			if (range == null) {
+				final local: String = push.local;
+				Sys.stderr().writeString(
+					'pre-push-scrub: $local reaches a root commit no remote holds; run `node bin/dev.js scrub-guard` on that tree by hand\n'
+				);
+				status = 1;
+				continue;
+			}
+			final rows: Array<String> = scanRange(range, rules, root, privates);
+			report(rows, rules, privates, quiet);
+			if (rows.length <= 0) continue;
+			status = 1;
+			refused.push(push.remote);
+		}
+		if (status != 0) {
+			final what: String = refused.length == 0 ? 'the refs above' : refused.join(' ');
+			Sys.stderr().writeString('pre-push-scrub: refusing the push of $what: scrub the matches above first\n');
+		}
+		return status;
+	}
+
+	/** Print the match `rows` (unless `quiet`) and the count line on stderr. */
+	private static function report(rows: Array<String>, rules: Array<Rule>, privates: Array<PathIndex>, quiet: Bool): Void {
+		if (!quiet && rows.length > 0) Sys.println(rows.join('\n'));
+		final also: String = privates.length > 0 ? ' and ${privates.length} private root(s)' : '';
+		Sys.stderr().writeString('scrub-guard: ${rows.length} match(es) of ${rules.length} rule(s)$also\n');
 	}
 
 	/** The offset of every match of `rule` in `data`, non-overlapping, left to right. */
@@ -433,4 +501,11 @@ final class PathIndex {
 		return same != null && same.exists(held -> held == path || held.endsWith('/$path'));
 	}
 
+}
+
+/** One ref of a push: its local and remote names and the commits it publishes, or a null range when no remote holds a base. */
+typedef PushRange = {
+	var local: String;
+	var remote: String;
+	var range: Null<String>;
 }

@@ -21,7 +21,7 @@ import sys.io.File;
 final class CliFixture {
 
 	/**
-	 * The scratch-directory prefix this suite claims, and the one `tools/tmp-lifecycle.sh`
+	 * The scratch-directory prefix this suite claims, and the one `devkit.TmpLifecycle`
 	 * must list in `TMPL_PREFIXES` for an orphaned root to be reaped.
 	 */
 	private static inline final SCRATCH_PREFIX: String = 'apq-suite';
@@ -125,8 +125,8 @@ final class CliFixture {
 	 * `removeDir` deletes whatever it is handed, recursively. Handed the wrong path it is an
 	 * `rm -rf` with no undo, and the wrong path is one edit away: while probing this very seam
 	 * the runner's teardown was pointed at `repoRoot()` for a single build, and that run
-	 * deleted the whole worktree it was running in. `tools/tmp-lifecycle.sh` already refuses a
-	 * path outside its shape out loud rather than skipping it quietly (`tmpl_is_ours`); this is
+	 * deleted the whole worktree it was running in. `devkit.TmpLifecycle` already refuses a
+	 * path outside its shape out loud rather than skipping it quietly (`refusal`); this is
 	 * the same predicate on this side of the boundary — a basename of `apq-suite.` plus
 	 * `mktemp`'s six characters, sitting under a directory of its own.
 	 */
@@ -158,7 +158,7 @@ final class CliFixture {
 	 * records by an hxml+cwd hash under the same directory. One root covers every producer,
 	 * including the ones not written yet.
 	 *
-	 * The root is CLAIMED the way `tools/tmp-lifecycle.sh` claims one — `apq-suite.XXXXXX`
+	 * The root is CLAIMED the way `devkit.TmpLifecycle` claims one — `apq-suite.XXXXXX`
 	 * plus a `.apq-owner` stamp naming this pid — so the case the caller's teardown cannot
 	 * reach, a SIGKILLed run, is swept by the tool that already owns that job for the other
 	 * four scratch producers. Without that shape this would be the project's fifth scratch
@@ -167,7 +167,7 @@ final class CliFixture {
 	public static function isolateTempDir(): String {
 		final dir: String = makeScratchRoot(TempScratch.root());
 		#if nodejs
-		// The stamp `tools/tmp-lifecycle.sh` reads. Its sweep removes a claimed directory
+		// The stamp `devkit.TmpLifecycle` reads. Its sweep removes a claimed directory
 		// whose owner pid is gone and whose entries have been untouched for the grace
 		// window, so the one case the caller's teardown cannot reach — a SIGKILLed run — is
 		// covered by the tool that already owns that job for the other four scratch producers.
@@ -191,7 +191,7 @@ final class CliFixture {
 	 * with an assert-and-bail prologue whose `return` is a drift guard passing while guarding
 	 * nothing — the one outcome a guard must not have, and it would have been copied
 	 * here. The suite is documented to run with the cwd set to the tree it was built from
-	 * (`tools/worker-build.sh`), so a cwd that cannot see the tree is a broken invocation, not a
+	 * (`dev worker-build`), so a cwd that cannot see the tree is a broken invocation, not a
 	 * configuration to tolerate.
 	 */
 	public static function repoRoot(): String {
@@ -241,7 +241,7 @@ final class CliFixture {
 	 * fails rather than adopting an existing entry, which a `createDirectory` on a
 	 * predictable name would silently do (hxnodejs swallows `EEXIST` whenever the path
 	 * stats as a directory, symlinks followed). The name is `mktemp -d`'s exactly because
-	 * `tools/tmp-lifecycle.sh` will only ever remove `<prefix>.` plus six characters.
+	 * `devkit.TmpLifecycle` will only ever remove `<prefix>.` plus six characters.
 	 */
 	private static function makeScratchRoot(root: String): String {
 		#if nodejs

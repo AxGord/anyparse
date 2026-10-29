@@ -183,7 +183,7 @@ final class StdlibDupCommand implements CliCommand {
 	 * Remove a work directory THIS run resolved; `--work` means the caller owns it.
 	 *
 	 * A per-process directory with nothing reaping it would be a leak where the shared one
-	 * was merely wrong: `tools/tmp-lifecycle.sh` only sweeps a claimed `<prefix>.XXXXXX`
+	 * was merely wrong: `devkit.TmpLifecycle` only sweeps a claimed `<prefix>.XXXXXX`
 	 * name, which this is not, so the run that creates it is the only thing that can
 	 * destroy it. A failure to remove is reported, never fatal — the findings are already
 	 * out.

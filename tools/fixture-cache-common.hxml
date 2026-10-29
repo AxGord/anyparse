@@ -1,6 +1,6 @@
 # Shared flags of the fixture-cache replay program (`testkit.FixtureCompileCache`), which
-# `tools/fixture-cache.sh` and `devkit.FixtureCache` build into a cache entry of their own:
-# they pass `-js <entry>` themselves, so the output line cannot live here (haxe rejects a
+# `devkit.FixtureCache` builds into a cache entry of its own:
+# it passes `-js <entry>` itself, so the output line cannot live here (haxe rejects a
 # second `-js`). `tools/fixture-cache.hxml` is the leaf the compiler oracle typechecks.
 #
 # No `-cp src` and no `-lib utest`: the replay program is `test/testkit` code alone, so an

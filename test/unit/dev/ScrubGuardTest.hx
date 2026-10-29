@@ -84,6 +84,36 @@ final class ScrubGuardTest extends Test {
 		});
 	}
 
+	public function testAPushPublishesFromTheRemoteOrFromBelowWhatNoRemoteHolds(): Void {
+		TempDir.with(dir -> {
+			final root: String = dir.file('repo');
+			FileSystem.createDirectory(root);
+			cmd('git init -q $root').check();
+			File.saveContent('$root/a.txt', 'one\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'first');
+			final first: String = cmd('git -C $root rev-parse HEAD').lines()[0];
+			File.saveContent('$root/a.txt', 'two\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'second');
+			final second: String = cmd('git -C $root rev-parse HEAD').lines()[0];
+			final zero: String = '0000000000000000000000000000000000000000';
+			final newRef: String = 'refs/heads/x $second refs/heads/x $zero\n';
+			Assert.same(
+				[{ local: 'refs/heads/x', remote: 'refs/heads/x', range: null }],
+				ScrubGuard.pushRanges(newRef, root), 'no remote holds a base'
+			);
+			cmd('git -C $root update-ref refs/remotes/origin/main $first').check();
+			Assert.same([{ local: 'refs/heads/x', remote: 'refs/heads/x', range: '$first..$second' }], ScrubGuard.pushRanges(newRef, root));
+			Assert.same([
+				{ local: 'refs/heads/main', remote: 'refs/heads/main', range: '$first..$second' }
+			], ScrubGuard.pushRanges('refs/heads/main $second refs/heads/main $first\n', root));
+			Assert.same([], ScrubGuard.pushRanges('(delete) $zero refs/heads/gone $first\n', root), 'a deleted ref publishes nothing');
+			cmd('git -C $root update-ref refs/remotes/origin/main $second').check();
+			Assert.same([], ScrubGuard.pushRanges(newRef, root), 'every pushed commit is held already');
+		});
+	}
+
 	/**
 	 * A path that names a file of a private tree is a match, numbered by the tree and never printed: a `./` or `../`
 	 * lead, or any longer lead, is dropped and an extension other than `.hx` counts, while a bare name, a module named

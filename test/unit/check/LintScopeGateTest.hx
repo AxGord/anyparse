@@ -211,7 +211,7 @@ class LintScopeGateTest extends Test {
 	 * arms fix, which is what pins the literal as the discriminator.
 	 *
 	 * The assertion is COVERAGE, and over EVERY config that governs a linted file: the roots must
-	 * span what the project's own gate lints (`tools/battery.sh` runs
+	 * span what the project's own gate lints (`dev battery` runs
 	 * `hxq lint --format json --all src test`), since a narrower root leaves the same hole one
 	 * directory smaller — dropping `test` surfaces `unused-public-member` false positives across
 	 * `src/` that the full scope suppresses. Declaring the roots only in the ROOT

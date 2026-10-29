@@ -120,8 +120,7 @@ final class TestSummaryCommand implements CliCommand implements LanguageFree {
 		// A transcript that carries no REPORT is a read failure, not a green empty
 		// run. `0 tests / 0 assertions / 0 failures / 0 errors` is what every quiet
 		// utest log printed once the per-test rows went away, and it reads exactly
-		// like "counted, fine" — the only reader that ever noticed was
-		// `tools/suite-shard.sh`, and only because it happens to refuse a zero.
+		// like "counted, fine" — the only reader that ever noticed was the shard runner, and only because it happens to refuse a zero.
 		//
 		// The question is whether a report was FOUND, never whether its numbers are
 		// zero: utest's "No tests executed." run and a tink suite that ran nothing

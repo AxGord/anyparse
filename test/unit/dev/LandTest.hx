@@ -105,7 +105,7 @@ final class LandTest extends Test {
 			'src/anyparse/runtime/Parser.hx',
 			'src/anyparse/query/cli/TestTranscript.hx',
 			'test/RunTests.hx',
-			'tools/battery.sh'
+			'tools/src/dev/Battery.hx'
 		]) Assert.notNull(Land.fullReason(['docs/a.md', path], 1, false, Land.FULL_EVERY), path);
 		for (path in [
 			'docs/testing.md',
@@ -152,13 +152,9 @@ final class LandTest extends Test {
 		Assert.isTrue(run.output.indexOf('battery full: touches test/testkit/Old.hx') >= 0, run.output);
 	}
 
-	public function testTheSnapshotDirectoryIsTheOneTheBatteryScriptDefaultsTo(): Void {
+	public function testTheSnapshotDirectoryDefaultsUnderHome(): Void {
 		Assert.equals('/x/cache', Land.cacheDir(name -> name == 'ANYPARSE_BLAST_CACHE' ? '/x/cache' : '/home/u'));
 		Assert.equals('/home/u/anyparse-blast-cache', Land.cacheDir(name -> name == 'HOME' ? '/home/u' : null));
-		Assert.isTrue(
-			File.getContent('tools/battery.sh').indexOf("${ANYPARSE_BLAST_CACHE:-$HOME/anyparse-blast-cache}") >= 0,
-			'the script no longer spells the default the landing counts under'
-		);
 	}
 
 	@:pin('control')

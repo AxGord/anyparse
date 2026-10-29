@@ -13,7 +13,7 @@ using StringTools;
 
 /**
  * The `haxe` shim that puts `testkit.FixtureCompileCache` in front of the probe compiles of a suite run, and the upkeep
- * of the store it replays from — the Haxe twin of `tools/fixture-cache.sh`. The store outlives a run; why replaying from
+ * of the store it replays from (`dev fixture-cache shim|prune|tally`). The store outlives a run; why replaying from
  * it stays sound is the class doc of `FixtureCompileCache` (the key is every input by content), and what a kept store
  * adds is a compiler install that may change between runs, so the shim's stamp names the binary by its resolved path,
  * `-version`, size and mtime.

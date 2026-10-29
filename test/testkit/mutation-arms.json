@@ -32096,6 +32096,14 @@
 			"find": "'for (const s of [process.stdout, process.stderr]) if (s._handle && s._handle.setBlocking) s._handle.setBlocking(true)'",
 			"replace": "''",
 			"note": "the runner's streams stay asynchronous, so a transcript read through a pipe loses its tail at the exit utest ends the run with"
+		},
+		{
+			"name": "M-BATTERY-BLAST-EXIT2-WAIVED",
+			"type": "dev.Battery",
+			"method": "blastOutcome",
+			"find": "case status:",
+			"replace": "case status if (!allowBlast):",
+			"note": "--allow-blast also waives a lint-diff that could not compare its snapshots, so a missing or malformed base reads as a passed blast gate"
 		}
 	]
 }

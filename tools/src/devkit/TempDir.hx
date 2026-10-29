@@ -6,13 +6,13 @@ import haxe.io.Path;
 
 /**
  * A scratch directory of this run's own under the temp root (`mkdtemp`, so no other process can have named it first),
- * stamped with this process's pid the way `tools/tmp-lifecycle.sh` reads it: a run SIGKILLed before `dispose` leaves a
+ * stamped with this process's pid the way `devkit.TmpLifecycle` reads it: a run SIGKILLed before `dispose` leaves a
  * directory the next sweep reclaims. Owned by whoever created it — nothing process-wide keeps a list of them.
  */
 @:nullSafety(Strict)
 final class TempDir {
 
-	/** The basename prefix `tools/tmp-lifecycle.sh` knows this tool's directories by. */
+	/** The basename prefix `devkit.TmpLifecycle` knows this tool's directories by. */
 	public static inline final PREFIX: String = 'apq-dev';
 
 	/** The owner stamp the sweep reads (`TMPL_STAMP`). */

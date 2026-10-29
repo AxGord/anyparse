@@ -38,7 +38,7 @@ import js.node.fs.Stats;
  *   written by a whitelisted compile, because no whitelisted path leads there.
  *
  * `dev mutation-check` and `dev shard` share one store kept across runs, renewing
- * an entry on every hit and dropping one unused for a week (`tools/fixture-cache.sh`). A cache that outlives a run
+ * an entry on every hit and dropping one unused for a week (`dev fixture-cache prune`). A cache that outlives a run
  * outlives the compiler install it recorded, so that runner's stamp names the binary by path, version, size and mtime.
  */
 @:nullSafety(Strict)
@@ -172,7 +172,7 @@ final class FixtureCompileCache {
 				note(dir, 'armed');
 				return spawn(real, cwd, args);
 			}
-			// a hit renews the entry, so a cache that outlives one run ages out by disuse (`tools/fixture-cache.sh`)
+			// a hit renews the entry, so a cache that outlives one run ages out by disuse (`dev fixture-cache prune`)
 			try Fs.utimesSync(entry, Date.now(), Date.now()) catch (exception: Exception) {} // noqa: swallowed-exception
 			note(dir, 'hit');
 			forward(callerLog, hit.reached);

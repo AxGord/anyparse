@@ -1,6 +1,5 @@
 package unit.devkit;
 
-import devkit.Cmd.cmd;
 import devkit.TempDir;
 import devkit.TmpLifecycle;
 import haxe.io.Path;
@@ -13,9 +12,7 @@ import utest.Test;
 
 /**
  * `TmpLifecycle` — which scratch directories a sweep may take: a claimed name directly under the root, no keep marker,
- * no live owner, and silent for the grace period (the legacy one when unstamped). Every case is also put to the shell
- * library `tools/tmp-lifecycle.sh` the remaining shell tools source, so the two predicates cannot drift apart while both
- * exist.
+ * no live owner, and silent for the grace period (the legacy one when unstamped).
  */
 @:nullSafety(Strict)
 final class TmpLifecycleTest extends Test {
@@ -45,7 +42,7 @@ final class TmpLifecycleTest extends Test {
 		});
 	}
 
-	public function testTheSweepPredicateAgreesWithTheShellLibrary(): Void {
+	public function testTheSweepTakesTheOrphansAndNothingElse(): Void {
 		TempDir.with(dir -> {
 			final dirs: TmpLifecycle = lifecycle(dir.path);
 			final now: Int = TmpLifecycle.now();
@@ -117,7 +114,6 @@ final class TmpLifecycleTest extends Test {
 			for (c in cases) {
 				final path: String = '${dir.path}/${c.name}';
 				Assert.equals(c.orphan, dirs.isOrphan(path, now), c.name);
-				Assert.equals(c.orphan, shellSaysOrphan(dir.path, path), '${c.name}, as tools/tmp-lifecycle.sh reads it');
 			}
 			Assert.equals(3, dirs.sweep(now));
 			Assert.same(['apq-x.keep03', 'apq-x.live02', 'apq-x.young4', 'apq-y.legcy6'], [
@@ -148,18 +144,6 @@ final class TmpLifecycleTest extends Test {
 		final when: Date = Date.fromTime(at * MS_PER_SECOND);
 		for (name in FileSystem.readDirectory(path)) Fs.utimesSync('$path/$name', when, when);
 		Fs.utimesSync(path, when, when);
-	}
-
-	/** `tmpl_is_orphan` of the shell library over `dir`, with the scratch root and prefixes this test uses. */
-	private static function shellSaysOrphan(root: String, dir: String): Bool {
-		final script: String = '. tools/tmp-lifecycle.sh && tmpl_is_orphan "$$1"';
-		return cmd('bash -c $script probe $dir')
-			.env('TMPDIR', root)
-			.env('TMPL_PREFIXES', 'apq-x apq-y')
-			.env('TMPL_GRACE_SECONDS', '$GRACE')
-			.env('TMPL_LEGACY_SECONDS', '$LEGACY')
-			.run()
-			.ok;
 	}
 
 }
