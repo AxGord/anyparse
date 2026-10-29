@@ -31645,9 +31645,9 @@
 		{
 			"name": "M-LAND-NOT-RUN-KEEPS-MERGE",
 			"type": "dev.Land",
-			"method": "abortMerge",
+			"method": "rollback",
 			"force": "false",
-			"note": "a merge in progress is never aborted, so a step that threw after the merge leaves the tree mid-merge with the staged files of the branch"
+			"note": "a pick in progress is never rolled back, so a step that threw after it, or a conflicted pick, leaves the tree mid-pick with the staged files of the branch"
 		},
 		{
 			"name": "M-DECLARATION-DELTA-BY-POSITION",
@@ -31690,8 +31690,8 @@
 			"name": "M-LAND-DIVERGENCE-PATH-STAYS-QUICK",
 			"type": "dev.Land",
 			"method": "fullReason",
-			"find": "for (path in changed) for (prefix in DIVERGENCE_PATHS) if (path.startsWith(prefix)) return 'touches $path';",
-			"replace": "",
+			"find": "if (path.startsWith(prefix)) return 'touches $path';",
+			"replace": "{}",
 			"note": "a path where a shard and the one-process suite can diverge no longer asks for the full battery, so a slice that edits the test kit or a runtime cache lands on the quick one"
 		},
 		{
@@ -31701,6 +31701,70 @@
 			"find": "return every > 0 && landing % every == 0 ? 'landing $landing' : null;",
 			"replace": "return null;",
 			"note": "the count of landings never asks for the full battery, so a run of quiet slices is never checked against the one-process suite"
+		},
+		{
+			"name": "M-LAND-COMMIT-LOSES-AUTHOR",
+			"type": "dev.Land",
+			"method": "commit",
+			"find": "git(['commit', '-F', file, '--author', author, '--date', date])",
+			"replace": "git(['commit', '-F', file])",
+			"note": "the landed commit is made under whoever runs the landing, so a slice's author and date are replaced by the parent's"
+		},
+		{
+			"name": "M-LAND-NO-SLICE-TRAILER",
+			"type": "dev.Land",
+			"method": "commit",
+			"find": "'Slice: ${sliceId(_branch)}'",
+			"replace": "'Slice: $_branch'",
+			"note": "the trailer names the branch instead of the slice id, so a search for a slice by `Slice: <ID>` finds nothing"
+		},
+		{
+			"name": "M-LAND-ANY-NUMBER-OF-COMMITS",
+			"type": "dev.Land",
+			"method": "shape",
+			"find": "if (ahead.length > 1)",
+			"replace": "if (false)",
+			"note": "a branch of several commits is accepted and only its tip is picked, so the rest of the slice is silently left behind"
+		},
+		{
+			"name": "M-LAND-ARMS-REGISTRY-ASKS-FULL",
+			"type": "dev.Land",
+			"method": "fullReason",
+			"find": "if (!DIVERGENCE_EXEMPT.contains(path))",
+			"replace": "if (true)",
+			"note": "the arm registry is not exempt, so nearly every slice that adds an arm lands on the full battery"
+		},
+		{
+			"name": "M-LAND-ROLLBACK-RESETS-HARD",
+			"type": "dev.Land",
+			"method": "rollback",
+			"find": "git(['reset', '--merge', _before])",
+			"replace": "git(['reset', '--hard', _before])",
+			"note": "a rollback discards every change of the tree, so what the user edited in a tracked file while the binaries were built is lost"
+		},
+		{
+			"name": "M-LAND-ROLLBACK-IGNORES-MOVED-HEAD",
+			"type": "dev.Land",
+			"method": "rollback",
+			"find": "if (git(['rev-parse', 'HEAD']).out.trim() != _before)",
+			"replace": "if (false)",
+			"note": "a rollback resets to the commit the pick began at even when the user committed meanwhile, taking their commit off the branch"
+		},
+		{
+			"name": "M-LAND-LANDED-AGAIN-PASSES",
+			"type": "dev.Land",
+			"method": "shape",
+			"find": "landed == null ? Passed",
+			"replace": "true ? Passed",
+			"note": "a branch landed already passes the branch check, so a second landing builds the tree and fails at an empty commit"
+		},
+		{
+			"name": "M-LAND-LANDED-BY-PATCH-PASSES",
+			"type": "dev.Land",
+			"method": "landedAs",
+			"find": "if (line.startsWith('- ')) return 'a commit with the same patch';",
+			"replace": "{}",
+			"note": "a branch whose patch the checked-out branch holds under a commit without the trailer is landed a second time"
 		},
 		{
 			"name": "M-TRIVIA-SYNTH-ONCE-PER-COMPILATION",

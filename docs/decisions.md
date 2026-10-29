@@ -15,10 +15,12 @@ decided the question; it may not become a record of runs.
 
 **Where the detail is:** the named commit. Most are merges of a slice branch, so read them with
 `git log <sha>^1..<sha>^2` — `git show` on a merge prints the merge line and nothing else.
-Since PROC-1 a line names its SLICE instead (`→ PROC-1`), known while the line is written; its
-merge is `git log --merges --grep 'Merge batch/hxqb-PROC1:' --format=%H` (the id without its
-hyphen, the colon so `FB2` does not match `FB2b`). This file merges by union (`.gitattributes`),
-so two slices appending here never conflict.
+Since PROC-1 a line names its SLICE instead (`→ PROC-1`), known while the line is written. A slice
+landed since LAND-2 is ONE linear commit carrying a `Slice: <ID>` trailer:
+`git log --grep '^Slice: PROC-1$' --format=%H` (the whole id, so `FB2` does not match `FB2b`). A
+slice landed before it is a merge: `git log --merges --grep 'Merge batch/hxqb-PROC1:' --format=%H`
+(the id without its hyphen, the colon so `FB2` does not match `FB2b`). This file merges by union
+(`.gitattributes`), so two slices appending here never conflict.
 
 **How a line gets here:** `node bin/dev.js decision --slice <ID> "<what was tried → why not>"` —
 the only writer. It appends ONE line `- <text> → <ID>` without opening the file, and refuses a
@@ -5461,3 +5463,4 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - type_parameter_detection shares the chain-threshold pivot defect → no: our lineLength probe is col + chain width, the fork's calcLineLength the whole line; IfLineExceeds there aligns its && break, the fixture still fails on block indent and `};` → W7
 - scratch-field rewriting reads of a parameter alias to the parameter itself (hypothesis c) → not needed: join-single-use-local already folds that alias after the scratch-field fix (a setter repro ends as return value;) → R3
 - a suite transcript read through a pipe equals one redirected to a file → no: utest ends the run with process.exit and a macOS pipe is written async, so the tail was lost (2 of the full sweep's arms read MISMATCH); the runner now writes its streams blocking → TOOLS-5
+- land as a --no-ff merge (a merge commit per slice, found by its subject) → the history reads worse than one linear commit per slice; land now cherry-picks the branch's single commit and adds a Slice: <ID> trailer, a branch of several commits is refused → LAND-2

@@ -13,15 +13,19 @@ import utest.Test;
 using StringTools;
 
 /**
- * `dev land` over a scratch repository: a step after the merge that does not pass — one that threw as much as one that
- * failed — takes the merge back, and the battery's flags follow the lease.
+ * `dev land` over a scratch repository: a slice of one commit lands on `main` linearly with its `Slice` trailer, a step after
+ * the pick that does not pass — one that threw as much as one that failed — takes it back, and the battery's flags follow
+ * the lease.
  */
 @:nullSafety(Strict)
 final class LandTest extends Test {
 
+	/** The slice branch of the scratch repository; its id, `S1`, is what the trailer names. */
+	private static inline final BRANCH: String = 'batch/hxqb-S1';
+
 	@:pin('control')
 	@:killer('M-LAND-NOT-RUN-KEEPS-MERGE')
-	public function testABuildThatThrewTakesTheMergeBack(): Void {
+	public function testABuildThatThrewTakesThePickBack(): Void {
 		final run: Landing = landing(() -> throw 'the compiler could not be started');
 		Assert.equals(1, run.status);
 		Assert.isTrue(run.output.indexOf('not run') >= 0);
@@ -31,7 +35,7 @@ final class LandTest extends Test {
 		Assert.isFalse(run.merged);
 	}
 
-	public function testABuildThatFailedTakesTheMergeBack(): Void {
+	public function testABuildThatFailedTakesThePickBack(): Void {
 		final run: Landing = landing(() -> Failed('no good'));
 		Assert.equals(1, run.status);
 		Assert.isFalse(run.merging);
@@ -39,7 +43,7 @@ final class LandTest extends Test {
 		Assert.isFalse(run.merged);
 	}
 
-	public function testAGreenBuildLeavesTheMergeCommitted(): Void {
+	public function testAGreenBuildLeavesThePickCommitted(): Void {
 		final run: Landing = landing(() -> Passed);
 		Assert.equals(0, run.status);
 		Assert.equals(1, run.builds);
@@ -157,31 +161,195 @@ final class LandTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-LAND-COMMIT-LOSES-AUTHOR')
+	public function testASliceLandsAsOneLinearCommitOnTopOfMain(): Void {
+		final run: Landing = landing(() -> Passed);
+		Assert.equals(0, run.status);
+		Assert.isTrue(run.merged);
+		Assert.equals(1, run.parents);
+		Assert.equals(2, run.commits);
+		Assert.equals('land', run.author);
+	}
+
+	public function testMainThatMovedOnTakesTheSliceWithoutAMergeCommit(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, { onMain: [{ path: 'c.txt', content: 'c\n' }], read: ['c.txt'] });
+		Assert.equals(0, run.status);
+		Assert.isTrue(run.merged);
+		Assert.equals(1, run.parents);
+		Assert.equals(3, run.commits);
+		Assert.equals('c\n', run.files['c.txt']);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-NO-SLICE-TRAILER')
+	public function testTheCommitCarriesASliceTrailerNamingTheBranchsSlice(): Void {
+		final run: Landing = landing(() -> Passed);
+		Assert.isTrue(run.message.startsWith('side\n'), run.message);
+		Assert.isTrue(run.message.endsWith('\n\nSlice: S1'), run.message);
+	}
+
+	public function testASliceTrailerTheMessageHasIsKept(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, { sideMessage: 'side\n\nSlice: OTHER' });
+		Assert.equals('side\n\nSlice: OTHER', run.message);
+	}
+
+	public function testTheMessageAskedForReplacesTheBranchsOwn(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, { message: 'asked for' });
+		Assert.equals('asked for\n\nSlice: S1', run.message);
+	}
+
+	public function testTheSliceIdIsTheBranchNameWithoutItsPrefix(): Void {
+		Assert.equals('LAND-2', Land.sliceId('batch/hxqb-LAND-2'));
+		Assert.equals('FB2b', Land.sliceId('hxqb-FB2b'));
+		Assert.equals('odd', Land.sliceId('feature/odd'));
+		Assert.equals('plain', Land.sliceId('plain'));
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-ANY-NUMBER-OF-COMMITS')
+	public function testABranchOfSeveralCommitsIsRefusedAndMainStaysPut(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, { moreCommits: [{ path: 'c.txt', content: 'c\n' }] });
+		Assert.equals(1, run.status);
+		Assert.isTrue(run.output.indexOf('carries 2 commits') >= 0, run.output);
+		Assert.isFalse(run.moved);
+		Assert.equals('', run.dirty);
+		Assert.equals(0, run.builds);
+	}
+
+	public function testABranchMainAlreadyHoldsIsRefused(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, { preLanded: true });
+		Assert.equals(1, run.status);
+		Assert.isTrue(run.output.indexOf('has no commit the checked-out branch lacks') >= 0, run.output);
+		Assert.isFalse(run.moved);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-NOT-RUN-KEEPS-MERGE')
+	public function testAConflictTakesThePickBackWithNothingLeftHanging(): Void {
+		final run: Landing = landing(
+			() -> Passed, 'a.txt', null, null, { onMain: [{ path: 'a.txt', content: 'main\n' }], read: ['a.txt'] }
+		);
+		Assert.equals(1, run.status);
+		Assert.isTrue(run.output.indexOf('git could not merge a.txt') >= 0, run.output);
+		Assert.isFalse(run.merging);
+		Assert.isFalse(run.moved);
+		Assert.equals('', run.dirty);
+		Assert.equals('main\n', run.files['a.txt']);
+		Assert.equals(0, run.builds);
+	}
+
+	public function testAnAppendOnlyFileBothSidesAppendedToKeepsBothLines(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, {
+			attributes: 'notes.md merge=union\n',
+			base: [{ path: 'notes.md', content: 'x\n' }],
+			onSide: [{ path: 'notes.md', content: 'x\nside\n' }],
+			onMain: [{ path: 'notes.md', content: 'x\nmain\n' }],
+			read: ['notes.md']
+		});
+		Assert.equals(0, run.status);
+		Assert.equals('x\nmain\nside\n', run.files['notes.md']);
+	}
+
+	public function testTheArmRegistryDriverIsNamedWhenThePickMerges(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, {
+			attributes: 'arms.json merge=anyparse-arms\n',
+			base: [
+				{ path: 'arms.json', content: 'x\n' },
+				{ path: 'bin/dev.js', content: "require('fs').writeFileSync(process.argv[4], 'by the driver\\n');\n" }
+			],
+			onSide: [{ path: 'arms.json', content: 'side\n' }],
+			onMain: [{ path: 'arms.json', content: 'main\n' }],
+			read: ['arms.json']
+		});
+		Assert.equals(0, run.status);
+		Assert.equals('by the driver\n', run.files['arms.json']);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-ARMS-REGISTRY-ASKS-FULL')
+	public function testTheArmRegistryAloneAsksForNoFullBattery(): Void {
+		Assert.isNull(Land.fullReason(['test/testkit/mutation-arms.json', 'docs/a.md'], 1, false, Land.FULL_EVERY));
+		Assert.equals(
+			'touches test/testkit/Extra.hx',
+			Land.fullReason(['test/testkit/mutation-arms.json', 'test/testkit/Extra.hx'], 1, false, Land.FULL_EVERY)
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-ROLLBACK-RESETS-HARD')
+	public function testARollbackKeepsWhatTheUserEditedMeanwhile(): Void {
+		final run: Landing = landing(
+			() -> Failed('no good'), 'b.txt', null, null,
+			{ during: repo -> File.saveContent('$repo/a.txt', 'user edit\n'), read: ['a.txt'] }
+		);
+		Assert.equals(1, run.status);
+		Assert.equals('user edit\n', run.files['a.txt']);
+		Assert.equals('M a.txt', run.dirty);
+		Assert.isFalse(run.merged);
+		Assert.isFalse(run.merging);
+		Assert.isFalse(run.moved);
+	}
+
+	public function testARollbackRefusedForAFileOfThePickLeavesTheTreeToTheUser(): Void {
+		final run: Landing = landing(
+			() -> Failed('no good'), 'b.txt', null, null,
+			{ during: repo -> File.saveContent('$repo/b.txt', 'user edit\n'), read: ['b.txt'] }
+		);
+		Assert.equals(1, run.status);
+		Assert.equals('user edit\n', run.files['b.txt']);
+		Assert.isTrue(run.output.indexOf('`git reset --merge` refused') >= 0, run.output);
+		Assert.isTrue(run.output.indexOf('b.txt') >= 0, run.output);
+		Assert.equals(1, run.builds);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-ROLLBACK-IGNORES-MOVED-HEAD')
+	public function testARollbackNeverResetsAHeadThatMovedMeanwhile(): Void {
+		final run: Landing = landing(
+			() -> Failed('no good'), 'b.txt', null, null,
+			{ during: repo -> git(repo, ['commit', '-q', '--allow-empty', '-m', 'the user commits']) }
+		);
+		Assert.equals(1, run.status);
+		Assert.isTrue(run.output.indexOf('HEAD moved since the pick began') >= 0, run.output);
+		Assert.equals(2, run.commits);
+		Assert.equals('the user commits', run.message);
+		Assert.equals(1, run.builds);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-LANDED-AGAIN-PASSES')
+	public function testABranchLandedAlreadyIsRefusedBeforeTheBuild(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, { again: true });
+		Assert.equals(0, run.status);
+		Assert.equals(1, run.againStatus);
+		Assert.isTrue(run.againOutput.indexOf('`batch/hxqb-S1` is landed already as ') >= 0, run.againOutput);
+		Assert.equals(1, run.builds);
+		Assert.equals(2, run.commits);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-LANDED-BY-PATCH-PASSES')
+	public function testABranchWhosePatchMainHoldsWithNoTrailerIsRefused(): Void {
+		final run: Landing = landing(() -> Passed, 'b.txt', null, null, { handPicked: true });
+		Assert.equals(1, run.status);
+		Assert.isTrue(run.output.indexOf('is landed already as a commit with the same patch') >= 0, run.output);
+		Assert.equals(0, run.builds);
+	}
+
 	/**
-	 * A repository whose `side` branch adds a file, landed on `main` with `build` standing in for the compiler: the first
-	 * call is the build after the merge, the second the rebuild after an abort.
+	 * A repository whose `batch/hxqb-S1` branch adds a file in one commit, landed on `main` with `build` standing in for the
+	 * compiler: the first call is the build after the pick, the second the rebuild after a rollback. `setup` shapes the
+	 * repository further.
 	 */
-	private static function landing(build: () -> Outcome, added: String = 'b.txt', ?battery: Battery, ?renameFrom: String): Landing {
+	private static function landing(
+		build: () -> Outcome, added: String = 'b.txt', ?battery: Battery, ?renameFrom: String, ?setup: Setup
+	): Landing {
+		final shape: Setup = setup ?? {};
 		return TempDir.with(dir -> {
 			final repo: String = dir.file('repo');
-			FileSystem.createDirectory(repo);
-			git(repo, ['init', '-q', '-b', 'main']);
-			File.saveContent('$repo/a.txt', 'a\n');
-			if (renameFrom != null) {
-				makeDirectories(Path.directory('$repo/$renameFrom'));
-				File.saveContent('$repo/$renameFrom', 'moved\n');
-			}
-			git(repo, ['add', '.']);
-			git(repo, ['commit', '-q', '-m', 'base']);
-			git(repo, ['checkout', '-q', '-b', 'side']);
-			makeDirectories(Path.directory('$repo/$added'));
-			if (renameFrom == null)
-				File.saveContent('$repo/$added', 'b\n');
-			else
-				git(repo, ['mv', renameFrom, added]);
-			git(repo, ['add', '.']);
-			git(repo, ['commit', '-q', '-m', 'side']);
-			git(repo, ['checkout', '-q', 'main']);
+			scaffold(repo, added, renameFrom, shape);
+			final headBefore: String = cmd('git -C $repo rev-parse HEAD').run().out.trim();
 			final logs: String = dir.file('logs');
 			FileSystem.createDirectory(logs);
 			final printed: Array<String> = [];
@@ -194,20 +362,21 @@ final class LandTest extends Test {
 			}
 			final red: Bool = battery != null && battery.fails == true;
 			final unreadable: Bool = battery != null && battery.unreadable == true;
-			final status: Int = Land.land({
+			final request: Null<BatteryRequest> = battery == null ? null : {
+				allowBlast: false,
+				snapshot: false,
+				full: battery.full,
+				leased: null,
+				cache: cache,
+				every: Land.FULL_EVERY
+			};
+			function go(): Int return Land.land({
 				repo: repo,
-				branch: 'side',
+				branch: BRANCH,
 				logs: logs,
-				message: null,
-				battery: battery == null ? null : {
-					allowBlast: false,
-					snapshot: false,
-					full: battery.full,
-					leased: null,
-					cache: cache,
-					every: Land.FULL_EVERY
-				},
-				compile: (tree, log) -> ++builds == 1 ? build() : Passed,
+				message: shape.message,
+				battery: request,
+				compile: (tree, log) -> ++builds == 1 ? interfere(shape.during, repo, build) : Passed,
 				exec: (words, tree, log) -> {
 					flags.push(words);
 					return red ? Failed('the battery is red') : Passed;
@@ -215,17 +384,36 @@ final class LandTest extends Test {
 				merged: tree -> unreadable ? null : Land.mergedPaths(tree),
 				print: line -> printed.push(line)
 			});
+			final status: Int = go();
+			final firstLines: Int = printed.length;
+			final againStatus: Int = shape.again == true ? go() : 0;
 			{
 				status: status,
+				againStatus: againStatus,
+				againOutput: printed.slice(firstLines).join('\n'),
 				output: printed.join('\n'),
 				flags: flags,
 				tallied: FileSystem.exists('$cache/landings'),
 				builds: builds,
-				merging: cmd('git -C $repo rev-parse -q --verify MERGE_HEAD').run().ok,
+				merging: cmd('git -C $repo rev-parse -q --verify CHERRY_PICK_HEAD').run().ok
+					|| cmd('git -C $repo rev-parse -q --verify MERGE_HEAD').run().ok,
 				dirty: cmd('git -C $repo status --porcelain').run().out.trim(),
-				merged: FileSystem.exists('$repo/b.txt')
+				merged: FileSystem.exists('$repo/b.txt'),
+				moved: cmd('git -C $repo rev-parse HEAD').run().out.trim() != headBefore,
+				parents: cmd('git -C $repo rev-list --parents -n 1 HEAD').run().out.trim().split(' ').length - 1,
+				commits: Std.parseInt(cmd('git -C $repo rev-list --count HEAD').run().out.trim()) ?? -1,
+				message: cmd('git -C $repo log -1 --format=%B').run().out.trim(),
+				author: cmd('git -C $repo log -1 --format=%an').run().out.trim(),
+				files: [for (path in shape.read ?? []) path => File.getContent('$repo/$path')]
 			};
 		});
+	}
+
+	private static function write(repo: String, edits: Array<Edit>): Void {
+		for (edit in edits) {
+			makeDirectories(Path.directory('$repo/${edit.path}'));
+			File.saveContent('$repo/${edit.path}', edit.content);
+		}
 	}
 
 	private static function git(repo: String, words: Array<String>): Void {
@@ -234,6 +422,54 @@ final class LandTest extends Test {
 
 	private static function makeDirectories(path: String): Void {
 		js.Syntax.code("require('fs').mkdirSync({0}, { recursive: true })", path);
+	}
+
+	/**
+	 * `main` with a base commit and the branch `batch/hxqb-S1` with the
+	 * one commit `added` (a rename of `renameFrom`); `shape` adds more.
+	 */
+	private static function scaffold(repo: String, added: String, renameFrom: Null<String>, shape: Setup): Void {
+		FileSystem.createDirectory(repo);
+		git(repo, ['init', '-q', '-b', 'main']);
+		File.saveContent('$repo/a.txt', 'a\n');
+		if (renameFrom != null) {
+			makeDirectories(Path.directory('$repo/$renameFrom'));
+			File.saveContent('$repo/$renameFrom', 'moved\n');
+		}
+		if (shape.attributes != null) File.saveContent('$repo/.gitattributes', shape.attributes);
+		write(repo, shape.base ?? []);
+		git(repo, ['add', '.']);
+		git(repo, ['commit', '-q', '-m', 'base']);
+		git(repo, ['checkout', '-q', '-b', BRANCH]);
+		makeDirectories(Path.directory('$repo/$added'));
+		if (renameFrom == null)
+			File.saveContent('$repo/$added', 'b\n');
+		else
+			git(repo, ['mv', renameFrom, added]);
+		write(repo, shape.onSide ?? []);
+		git(repo, ['add', '.']);
+		git(repo, ['commit', '-q', '-m', shape.sideMessage ?? 'side']);
+		for (edit in shape.moreCommits ?? []) {
+			write(repo, [edit]);
+			git(repo, ['add', '.']);
+			git(repo, ['commit', '-q', '-m', 'more']);
+		}
+		git(repo, ['checkout', '-q', 'main']);
+		if (shape.preLanded == true) git(repo, ['merge', '-q', '--ff-only', BRANCH]);
+		if (shape.handPicked == true) {
+			git(repo, ['commit', '-q', '--allow-empty', '-m', 'main moved']);
+			git(repo, ['cherry-pick', BRANCH]);
+		}
+		if (shape.onMain == null) return;
+		write(repo, shape.onMain);
+		git(repo, ['add', '.']);
+		git(repo, ['commit', '-q', '-m', 'main moved']);
+	}
+
+	/** `build`, after `during` — what the user does to the tree while the binaries are being built — has run in `repo`. */
+	private static function interfere(during: Null<(repo:String) -> Void>, repo: String, build: () -> Outcome): Outcome {
+		if (during != null) during(repo);
+		return build();
 	}
 
 }
@@ -252,6 +488,26 @@ private typedef Landing = {
 	var merging: Bool;
 	var dirty: String;
 	var merged: Bool;
+
+	/** Whether `main` is at another commit than before the run. */
+	var moved: Bool;
+
+	/** The parents of the commit `main` ends at. */
+	var parents: Int;
+
+	/** The commits `main` ends with. */
+	var commits: Int;
+
+	/** The message and the author of the head commit. */
+	var message: String;
+	var author: String;
+
+	/** The status and the output of a second landing of the same branch right after the first. */
+	var againStatus: Int;
+	var againOutput: String;
+
+	/** The contents, after the run, of the paths the setup asked to read. */
+	var files: Map<String, String>;
 }
 
 /** The battery a landing asks for: whether in full, and the landings the count already holds. */
@@ -264,4 +520,43 @@ private typedef Battery = {
 
 	/** Whether the paths of the merge cannot be read. */
 	@:optional var unreadable: Bool;
+}
+
+/** One file written whole. */
+private typedef Edit = {
+	var path: String;
+	var content: String;
+}
+
+/** What a scratch repository holds beside the one commit of the branch. */
+private typedef Setup = {
+	/** The text of `.gitattributes`. */
+	@:optional var attributes: String;
+
+	/** Files in the base commit, and files the branch's commit writes beside its own. */
+	@:optional var base: Array<Edit>;
+	@:optional var onSide: Array<Edit>;
+
+	/** One more commit on the branch per edit. */
+	@:optional var moreCommits: Array<Edit>;
+
+	/** One commit on `main` after the branch point. */
+	@:optional var onMain: Array<Edit>;
+
+	/** Whether `main` already holds the branch's patch as a commit of its own, made by hand, with no trailer. */
+	@:optional var handPicked: Bool;
+
+	/** Whether `main` already holds the branch's commit. */
+	@:optional var preLanded: Bool;
+
+	/** The message of the branch's commit, and the `-m` of the landing. */
+	@:optional var sideMessage: String;
+	@:optional var message: String;
+
+	/** What the user does in the repository while the binaries are built, and whether the branch is landed a second time. */
+	@:optional var during: (repo:String) -> Void;
+	@:optional var again: Bool;
+
+	/** The paths whose contents the run reports. */
+	@:optional var read: Array<String>;
 }

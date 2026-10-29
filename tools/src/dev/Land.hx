@@ -14,14 +14,16 @@ import sys.io.File;
 using StringTools;
 
 /**
- * `dev land <branch>` — the parent's merge of a reviewed slice branch into the tree that holds this `dev.js`, as ONE
- * command: a `--no-ff` merge whose append-only files merge as their `.gitattributes` say (`docs/decisions.md` by union,
- * `mutation-arms.json` by `dev merge-arms`), the three binaries rebuilt, the merge committed, then `tools/battery.sh` (quick,
- * or in full when the merge brings in a path where a shard and the one-process suite can diverge, or the number of the
- * landing, counted over every landing that runs the battery, is a multiple of ten — the battery row says which) — and one
- * verdict line. A conflict git cannot resolve or a failed build aborts the merge and leaves the tree as it was; a red battery
- * leaves the merge commit for the caller to judge (docs/testing.md § "Landing a slice"). Any step after the merge that does
- * not pass — one that threw (`not run`) as much as one that failed — aborts the merge.
+ * `dev land <branch>` — the parent's landing of a reviewed slice branch in the tree that holds this `dev.js`, as ONE
+ * command: the branch's single commit is applied on top of the checked-out branch (`git cherry-pick --no-commit`), so the
+ * history stays linear, its append-only files merging as their `.gitattributes` say (`docs/decisions.md` by union,
+ * `mutation-arms.json` by `dev merge-arms`), the three binaries rebuilt, the commit made with a `Slice: <ID>` trailer, then
+ * `tools/battery.sh` (quick, or in full when the commit brings in a path where a shard and the one-process suite can
+ * diverge, or the number of the landing, counted over every landing that runs the battery, is a multiple of ten — the
+ * battery row says which) — and one verdict line. A branch that does not carry exactly one commit over the checked-out one
+ * is refused; a conflict git cannot resolve or a failed build rolls the tree back to where it was; a red battery leaves the
+ * commit for the caller to judge (docs/testing.md § "Landing a slice"). Any step after the pick that does not pass — one
+ * that threw (`not run`) as much as one that failed — rolls it back.
  */
 @:nullSafety(Strict)
 final class Land {
@@ -66,6 +68,9 @@ final class Land {
 		'src/anyparse/runtime/'
 	];
 
+	/** The paths under `DIVERGENCE_PATHS` that bring in no divergence: the arm registry is data, no runner or cache reads it. */
+	private static final DIVERGENCE_EXEMPT: Array<String> = ['test/testkit/mutation-arms.json'];
+
 	private final _summary: Summary = new Summary();
 	private final _repo: String;
 	private final _branch: String;
@@ -75,10 +80,13 @@ final class Land {
 	private final _merged: MergedPaths;
 	private final _print: String -> Void;
 
-	/** Whether a merge of this run is in progress, so a failed step aborts it. */
-	private var _merging: Bool = false;
+	/** Whether the pick of this run has begun, so a failed step rolls the tree back. */
+	private var _picking: Bool = false;
 
-	/** Whether this run built the binaries from a merged tree. */
+	/** The commit the checked-out branch was at when the pick began: the only place a rollback may go back to. */
+	private var _before: String = '';
+
+	/** Whether this run built the binaries from the picked tree. */
 	private var _built: Bool = false;
 
 	private function new(options: LandOptions) {
@@ -92,13 +100,14 @@ final class Land {
 	}
 
 	/**
-	 * Every step in turn, each only while the ones before it passed; answers the exit status. A merge a failed step aborts
-	 * leaves binaries built from the merged tree behind (they are not tracked), so they are rebuilt from HEAD.
+	 * Every step in turn, each only while the ones before it passed; answers the exit status. A pick a failed step rolls
+	 * back leaves binaries built from the picked tree behind (they are not tracked), so they are rebuilt from HEAD.
 	 */
 	private function run(message: Null<String>, battery: Null<BatteryRequest>): Int {
 		final steps: Array<{ name: String, step: () -> Outcome }> = [
 			{ name: 'clean', step: clean },
-			{ name: 'merge', step: merge },
+			{ name: 'branch', step: shape },
+			{ name: 'pick', step: pick },
 			{ name: 'build', step: build },
 			{ name: 'commit', step: commit.bind(message) },
 			{ name: 'battery', step: runBattery.bind(battery) }
@@ -106,13 +115,13 @@ final class Land {
 		var aborted: Bool = false;
 		for (s in steps) if (_summary.passed()) {
 			final outcome: Outcome = _summary.time(s.name, s.step);
-			if (!outcome.match(Passed | Skipped(_))) aborted = abortMerge() || aborted;
+			if (!outcome.match(Passed | Skipped(_))) aborted = rollback() || aborted;
 		}
 		if (aborted && _built) _summary.time(
 			'rebuild', () -> switch _compile(_repo, Path.join([_logs, 'rebuild.log'])) {
-				case Failed(why): Failed('the binaries are still the aborted merge\'s: $why');
+				case Failed(why): Failed('the binaries are still the rolled-back pick\'s: $why');
 				case other:
-					_summary.detail('binaries rebuilt from HEAD after the abort');
+					_summary.detail('binaries rebuilt from HEAD after the rollback');
 					other;
 			}
 		);
@@ -123,13 +132,23 @@ final class Land {
 	}
 
 	/**
-	 * Abort the merge of this run, if one is in progress. A step that threw is as unfinished as one that failed, so the
-	 * caller asks after every step that did not pass, whichever way it ended. Answers whether a merge was aborted.
+	 * Roll back the pick of this run, if one has begun. The tree is the user's and keeps changing while the steps run, so
+	 * `git reset --merge` takes back only what the pick staged and a conflicted pick leaves, and refuses — leaving the tree to
+	 * its owner — when the user edited a file of the pick; when HEAD is no longer where the pick began nothing is touched.
+	 * A step that threw is as unfinished as one that failed, so the caller asks after every step that did not pass, whichever
+	 * way it ended. Answers whether the pick was rolled back.
 	 */
-	private function abortMerge(): Bool {
-		if (!_merging) return false;
-		if (!git(['merge', '--abort']).ok) _summary.add('abort', Failed('`git merge --abort` failed — the tree is still mid-merge'));
-		return true;
+	private function rollback(): Bool {
+		if (!_picking) return false;
+		_picking = false;
+		if (git(['rev-parse', 'HEAD']).out.trim() != _before) {
+			_summary.add('rollback', Failed('HEAD moved since the pick began — not rolled back, the tree is as it is'));
+			return false;
+		}
+		final reset: Result = git(['reset', '--merge', _before]);
+		if (reset.ok) return true;
+		_summary.add('rollback', Failed('`git reset --merge` refused: ${reset.firstError()} — the tree is as it is'));
+		return false;
 	}
 
 	private function clean(): Outcome {
@@ -137,42 +156,91 @@ final class Land {
 		return dirty.length == 0 ? Passed : Failed('the tree has uncommitted changes, first `${dirty[0]}`');
 	}
 
-	/** `git merge --no-ff --no-commit` with the arm registry's driver named; a conflict it leaves fails the step. */
-	private function merge(): Outcome {
+	/**
+	 * The branch carries exactly one commit the checked-out one lacks, and it is not a merge: a history of one commit per
+	 * slice is what makes a landing a plain pick, and a branch of several is for its author to squash.
+	 */
+	private function shape(): Outcome {
+		if (!git(['rev-parse', '-q', '--verify', '$_branch^{commit}']).ok) return Failed('no branch `$_branch` here');
+		final ahead: Array<String> = git(['rev-list', '--parents', 'HEAD..$_branch']).lines();
+		if (ahead.length == 0) return Failed('`$_branch` has no commit the checked-out branch lacks');
+		if (ahead.length > 1)
+			return Failed(
+				'`$_branch` carries ${ahead.length} commits over the checked-out branch, a landing takes one — squash it first '
+				+ '(`git reset --soft $$(git merge-base HEAD $_branch) && git commit`)'
+			);
+		if (ahead[0].split(' ').length != 2) return Failed('the commit of `$_branch` is a merge or a root — a landing takes a plain one');
+		final landed: Null<String> = landedAs();
+		return landed == null ? Passed : Failed('`$_branch` is landed already as $landed');
+	}
+
+	/**
+	 * The commit of the checked-out branch that landed the branch's commit, or null: one carrying this slice's `Slice`
+	 * trailer, or — for a landing made without the trailer — one with the same patch. A landing makes a new commit, so the
+	 * branch is never an ancestor of the branch it landed on.
+	 */
+	private function landedAs(): Null<String> {
+		final id: String = sliceId(_branch);
+		for (sha in git(['log', 'HEAD', '--fixed-strings', '--grep', 'Slice: $id', '--format=%h']).lines()) {
+			final slices: Array<String> = git(['log', '-1', '--format=%(trailers:key=Slice,valueonly)', sha]).lines().map(l -> l.trim());
+			if (slices.contains(id)) return sha;
+		}
+		for (line in git(['cherry', 'HEAD', _branch]).lines()) if (line.startsWith('- ')) return 'a commit with the same patch';
+		return null;
+	}
+
+	/** `git cherry-pick --no-commit` of the branch's commit with the arm registry's driver named; a conflict it leaves fails the step. */
+	private function pick(): Outcome {
 		final dev: String = Path.join([_repo, 'bin/dev.js']);
+		_before = git(['rev-parse', 'HEAD']).out.trim();
+		_picking = true;
 		final run: Result = git([
 			'-c',
 			'merge.$ARMS_DRIVER.driver=node $dev merge-arms %O %A %B',
-			'merge',
-			'--no-ff',
+			'cherry-pick',
 			'--no-commit',
 			_branch
 		]);
-		_merging = git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']).ok;
 		if (run.ok) return Passed;
 		final unmerged: Array<String> = git(['diff', '--name-only', '--diff-filter=U']).lines();
 		return Failed(unmerged.length > 0 ? 'git could not merge ${unmerged.join(', ')}' : run.firstError());
 	}
 
-	/** `apq.js`, `test.js` and `dev.js` rebuilt from the merged tree, at once. */
+	/** `apq.js`, `test.js` and `dev.js` rebuilt from the picked tree, at once. */
 	private function build(): Outcome {
 		_built = true;
 		return _compile(_repo, Path.join([_logs, 'build.log']));
 	}
 
-	/** The merge committed under `message`, or `Merge <branch>: <the branch tip's subject>`. */
+	/**
+	 * The pick committed under `message`, or the message of the branch's commit, with the author and date of that commit and
+	 * a `Slice: <ID>` trailer unless the message names a slice already.
+	 */
 	private function commit(message: Null<String>): Outcome {
-		final subject: String = message ?? 'Merge $_branch: ${git(['log', '-1', '--format=%s', _branch]).out.trim()}';
-		final commit: Result = git(['commit', '--no-edit', '-m', subject]);
+		final file: String = Path.join([_logs, 'commit-message.txt']);
+		File.saveContent(file, '${(message ?? git(['log', '-1', '--format=%B', _branch]).out).trim()}\n');
+		final trailer: Result = git([
+			'interpret-trailers',
+			'--in-place',
+			'--if-exists',
+			'doNothing',
+			'--trailer',
+			'Slice: ${sliceId(_branch)}',
+			file
+		]);
+		if (!trailer.ok) return Failed(trailer.firstError());
+		final author: String = git(['log', '-1', '--format=%an <%ae>', _branch]).out.trim();
+		final date: String = git(['log', '-1', '--format=%aI', _branch]).out.trim();
+		final commit: Result = git(['commit', '-F', file, '--author', author, '--date', date]);
 		if (!commit.ok) return Failed(commit.firstError());
-		_merging = false;
+		_picking = false;
 		_summary.detail(git(['rev-parse', '--short', 'HEAD']).out.trim());
 		return Passed;
 	}
 
 	/**
-	 * `tools/battery.sh` over the merged tree, or a skip when there is no `request` (`--no-battery`). Quick or full is
-	 * decided here, from what the merge brought in and the count of landings, and the row names why.
+	 * `tools/battery.sh` over the landed tree, or a skip when there is no `request` (`--no-battery`). Quick or full is
+	 * decided here, from what the commit brought in and the count of landings, and the row names why.
 	 */
 	private function runBattery(request: Null<BatteryRequest>): Outcome {
 		if (request == null) return Skipped('--no-battery');
@@ -224,9 +292,15 @@ final class Land {
 		});
 	}
 
-	/** The merge, the build and the battery of `options`; answers the exit status. */
+	/** The pick, the build and the battery of `options`; answers the exit status. */
 	public static function land(options: LandOptions): Int {
 		return new Land(options).run(options.message, options.battery);
+	}
+
+	/** The slice id a branch carries: its name past the last `/`, without the `hxqb-` prefix (`batch/hxqb-LAND-2` is `LAND-2`). */
+	public static function sliceId(branch: String): String {
+		final name: String = branch.substr(branch.lastIndexOf('/') + 1);
+		return name.startsWith('hxqb-') ? name.substr('hxqb-'.length) : name;
 	}
 
 	/** `tools/battery.sh` with `flags` over `tree`, its output kept at `log`. */
@@ -242,22 +316,25 @@ final class Land {
 	}
 
 	/**
-	 * The paths the merge commit of `tree` changes against its first parent — both sides of a rename — or null when git
+	 * The paths the commit at the head of `tree` changes against its parent — both sides of a rename — or null when git
 	 * cannot say.
 	 */
 	public static function mergedPaths(tree: String): Null<Array<String>> {
-		final diff: Result = cmd('git -C $tree diff --name-only --no-renames HEAD^1 HEAD').run();
+		final diff: Result = cmd('git -C $tree diff --name-only --no-renames HEAD~1 HEAD').run();
 		return diff.ok ? diff.lines() : null;
 	}
 
 	/**
-	 * Why a landing runs the battery in full, or null when quick will do: it was asked for, the merge brought in a path
+	 * Why a landing runs the battery in full, or null when quick will do: it was asked for, the commit brought in a path
 	 * where a shard and the one-process suite can diverge, its paths are unknown, or it is the `every`-th landing.
 	 */
 	public static function fullReason(changed: Null<Array<String>>, landing: Int, asked: Bool, every: Int): Null<String> {
 		if (asked) return '--full';
 		if (changed == null) return 'the merged paths are unknown';
-		for (path in changed) for (prefix in DIVERGENCE_PATHS) if (path.startsWith(prefix)) return 'touches $path';
+		for (path in changed)
+			if (!DIVERGENCE_EXEMPT.contains(path))
+				for (prefix in DIVERGENCE_PATHS)
+					if (path.startsWith(prefix)) return 'touches $path';
 		return every > 0 && landing % every == 0 ? 'landing $landing' : null;
 	}
 
