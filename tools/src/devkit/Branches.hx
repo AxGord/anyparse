@@ -1,5 +1,7 @@
 package devkit;
 
+import devkit.Lease.Ask;
+import devkit.Lease.LeaseMode;
 import devkit.Summary;
 import haxe.Json;
 import sys.FileSystem;
@@ -122,6 +124,40 @@ final class Branches {
 	/** What `budget` leaves beside the `held` threads, at least one; null without a budget. */
 	public static function share(budget: Null<Int>, held: Int): Null<Int> {
 		return budget == null ? null : Std.int(Math.max(1, budget - held));
+	}
+
+	/**
+	 * `command` of each of `branches` as `mode` runs it. Under `Own` each branch takes a lease of its own: the threads
+	 * `demand` names for its rows (none at 0), and the one branch it answers null for, the heavy one, from `Lease.HEAVY_MIN`
+	 * up to what the budget leaves beside the others (`share`); a branch's threads go back to the pool as it ends. Under
+	 * `Held` and `Unpooled` the command is as it was: the caller splits a held lease with `share` and `light`.
+	 */
+	public static function leased(
+		mode: LeaseMode, branches: Array<Array<String>>, demand: Array<String> -> Null<Int>, command: Array<String> -> Command,
+		label: String
+	): Array<String> -> Command {
+		return switch mode {
+			case Own(_, budget):
+				final rest: Int = share(budget, light(branches, demand)) ?? 1;
+				rows -> {
+					final threads: Null<Int> = demand(rows);
+					final ask: Null<Ask> = if (threads == null)
+						{ min: Std.int(Math.min(Lease.HEAVY_MIN, rest)), max: rest }
+					else if (threads > 0)
+						{ min: threads, max: threads }
+					else
+						null;
+					Lease.take(mode, command(rows), ask, '$label ${rows.join(',')}');
+				};
+			case Held(_), Unpooled: command;
+		};
+	}
+
+	/** The threads every branch of `branches` but the heavy one holds, as `demand` names them. */
+	public static function light(branches: Array<Array<String>>, demand: Array<String> -> Null<Int>): Int {
+		var held: Int = 0;
+		for (rows in branches) held += demand(rows) ?? 0;
+		return held;
 	}
 
 }

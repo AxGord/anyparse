@@ -1,10 +1,13 @@
 package dev;
 
+import anyparse.core.PoolLease;
 import dev.Shard.Tally;
 import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
+import devkit.Lease;
+import devkit.Lease.LeaseMode;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
@@ -88,11 +91,15 @@ final class Battery {
 	private final _readings: Map<String, Int> = [];
 	private final _plan: BatteryPlan;
 
+	/** Where the build's and the branches' threads come from; a branch's own process takes none. */
+	private final _mode: LeaseMode;
+
 	/** Whether this branch's suite step ended green: the corpus step reads a sweep only a green suite wrote. */
 	private var _suiteGreen: Bool = false;
 
-	private function new(plan: BatteryPlan) {
+	private function new(plan: BatteryPlan, mode: LeaseMode) {
 		_plan = plan;
+		_mode = mode;
 	}
 
 	/** `hxq <args>` in the tree, on the engine the build just made. */
@@ -117,7 +124,7 @@ final class Battery {
 		final self: String = workFile('dev.js');
 		File.copy(FileSystem.fullPath(js.Node.__filename), self);
 		final built: Outcome = _summary.time(
-			'build (parallel)', () -> Binaries.compileWith(_plan.repo, workFile('build.log'), [RECON_HXML])
+			'build (parallel)', () -> Binaries.compileWith(_plan.repo, workFile('build.log'), [RECON_HXML], _mode)
 		);
 		if (!built.match(Passed)) {
 			Sys.println(File.getContent(workFile('build.log')));
@@ -143,7 +150,8 @@ final class Battery {
 				.env(ENGINE_VAR, Path.join([_plan.repo, 'bin/apq.js']))
 				.timeout(BRANCH_TIMEOUT_MS);
 		final order: Array<String> = [for (rows in BRANCHES) for (row in rows) row];
-		for (name => value in Branches.run(_plan.run, BRANCHES, order, command, branchReport, _summary)) _readings[name] = value;
+		final leased: Array<String> -> Command = Branches.leased(_mode, BRANCHES, branchThreads, command, 'battery ${_plan.head}');
+		for (name => value in Branches.run(_plan.run, BRANCHES, order, leased, branchReport, _summary)) _readings[name] = value;
 		final span: Float = Timer.stamp() - parallel;
 		for (rows in BRANCHES) {
 			final log: String = '${branchReport(rows)}.log';
@@ -237,7 +245,7 @@ final class Battery {
 		final status: Int = Shard.run({
 			repo: _plan.repo,
 			testJs: Path.join([_plan.repo, 'bin/test.js']),
-			shards: _plan.shards,
+			shards: _plan.ownLease ? PoolLease.threads() ?? _plan.shards : _plan.shards,
 			verify: !_plan.quick,
 			expect: null,
 			planOnly: false,
@@ -444,6 +452,11 @@ final class Battery {
 		return workFile('branch-${rows[0].replace(' ', '-')}.json');
 	}
 
+	/** The threads every branch but the suite's holds while the battery runs — what a held lease's suite leaves them. */
+	public static inline function lightThreads(): Int {
+		return Branches.light(BRANCHES, branchThreads);
+	}
+
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final rows: Null<String> = args.option('--rows');
@@ -452,7 +465,7 @@ final class Battery {
 			args.done();
 			if (planFile == null) throw new UsageError('--rows needs --plan');
 			final plan: BatteryPlan = Json.parse(File.getContent(planFile));
-			return new Battery(plan).runBranch(rows.split(','));
+			return new Battery(plan, Unpooled).runBranch(rows.split(','));
 		}
 		final shards: Int = shardCount(args.option('-n') ?? args.option('--shards') ?? '${Shard.DEFAULT_SHARDS}');
 		final baseOption: Null<String> = args.option('--base');
@@ -480,6 +493,7 @@ final class Battery {
 		final base: Null<String> = baseOption ?? newestBase(cache);
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
 		final work: String = dirs.claimAfterSweep(WORK_PREFIX, repo);
+		final mode: LeaseMode = Lease.ofEnvironment();
 		final plan: BatteryPlan = {
 			repo: repo,
 			work: work,
@@ -493,9 +507,10 @@ final class Battery {
 			allowBlast: allowBlast,
 			client: noClient ? null : clientOf(clientOption ?? Sys.getEnv('ANYPARSE_CLIENT_TREE')),
 			jvmSkip: jvmSkip(repo, base, jvm ? true : noJvm ? false : null),
-			run: Branches.newRunId()
+			run: Branches.newRunId(),
+			ownLease: mode.match(Own(_, _))
 		};
-		final status: Int = try new Battery(plan).drive() catch (exception: haxe.Exception) {
+		final status: Int = try new Battery(plan, mode).drive() catch (exception: haxe.Exception) {
 			Sys.stderr().writeString('dev battery: logs kept in $work\n');
 			throw exception;
 		};
@@ -620,6 +635,18 @@ final class Battery {
 		return lines;
 	}
 
+	/**
+	 * The threads the branch running `rows` holds: null for the suite's, which takes what the others leave; the two
+	 * lints of the lint branch; one for each other.
+	 */
+	private static function branchThreads(rows: Array<String>): Null<Int> {
+		return switch rows[0] {
+			case 'suite': null;
+			case 'oracle': 2;
+			case _: 1;
+		};
+	}
+
 	/** The shard count `text` names; anything but a positive integer is a usage error. */
 	private static function shardCount(text: String): Int {
 		final shards: Null<Int> = Std.parseInt(text);
@@ -681,6 +708,9 @@ typedef BatteryPlan = {
 
 	/** The id the branches' reports carry (`Branches.newRunId`). */
 	var run: String;
+
+	/** Whether each branch takes its own lease of the pool: the suite then runs as many shards as its lease granted. */
+	var ownLease: Bool;
 }
 
 /** One lint the blast step compares with its base snapshot: the snapshot's label and the tree its paths are under. */

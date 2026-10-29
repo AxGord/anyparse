@@ -111,6 +111,14 @@ final class CommandTest extends Test {
 		});
 	}
 
+	public function testAPrefixRunsTheCommandWithItsDirectoryAndEnvironment(): Void {
+		TempDir.with(dir -> {
+			final shown: String = cmd('$_node -e $SHOW_ENV').env('DEVKIT_PROBE', 'v').at(dir.path).under(['env', 'UNUSED=1']).text();
+			Assert.equals('v|${js.node.Fs.realpathSync(dir.path)}', shown);
+		});
+		Assert.raises(() -> cmd('$_node -e $PRINT_XY').pipe(cmd('$_node -e $UPPER')).under(['env']));
+	}
+
 	public function testInputAndPipes(): Void {
 		Assert.equals('AB\nCD', cmd('$_node -e $UPPER').input('ab\ncd').text());
 		final lines: Array<String> = cmd('$_node -e $PRINT_XY').pipe(cmd('$_node -e $UPPER')).lines();

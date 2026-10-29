@@ -32223,6 +32223,21 @@
 			"find": "IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, broken, glued)",
 			"replace": "glued",
 			"note": "the chain hugs its last operand whenever the glued first line fits, so a  line inside that operand glues the chain to it"
+		},
+		{
+			"name": "M-BRANCHES-LIGHT-NONE",
+			"type": "devkit.Branches",
+			"method": "light",
+			"force": "0",
+			"note": "the light branches hold nothing in the reckoning, so the heavy branch asks the pool for the whole budget beside the leases the lint and the probes take, and the gate's branches oversubscribe the machine"
+		},
+		{
+			"name": "M-LEASE-NEST-UNDER-HELD",
+			"type": "devkit.Lease",
+			"method": "modeOf",
+			"find": "if (held != null) return Held(held);",
+			"replace": "",
+			"note": "a run under its caller's lease asks the pool for more, so a waiter queued ahead of it for the threads it holds waits for ever"
 		}
 	]
 }

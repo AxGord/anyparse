@@ -4,6 +4,7 @@ import anyparse.core.PoolLease;
 import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
+import devkit.Lease;
 import devkit.Result;
 import devkit.Summary;
 import devkit.Tally;
@@ -39,12 +40,6 @@ final class Land {
 
 	/** What the battery may run before it is killed. */
 	private static inline final BATTERY_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
-
-	/**
-	 * The threads the battery's other branches hold beside its suite (fmt, the lint's two arms, the jvm probe); what a pool
-	 * lease leaves is the suite's shard count, as in the slice gate.
-	 */
-	private static inline final BATTERY_LIGHT_THREADS: Int = 4;
 
 	/** Where, under the battery's snapshot directory, the landings are counted. */
 	private static inline final TALLY_DIR: String = 'landings';
@@ -285,7 +280,7 @@ final class Land {
 			logs: logs,
 			message: message,
 			battery: noBattery ? null : request,
-			compile: Binaries.compile,
+			compile: (tree, log) -> Binaries.compileWith(tree, log, [], Lease.ofEnvironment()),
 			exec: execBattery,
 			merged: mergedPaths,
 			print: Sys.println
@@ -344,14 +339,15 @@ final class Land {
 	/**
 	 * What `dev battery` is given. The monolith cross-check of the suite is not run at every landing, so `--quick`
 	 * is the default (`fullReason` says when it is not); under a pool lease (`leased` threads) the suite takes the shards the
-	 * lease leaves beside the battery's light branches, otherwise the battery keeps its own count.
+	 * lease leaves beside the battery's light branches; otherwise the battery
+	 * sizes it, from its own count or from the lease its suite's branch takes.
 	 */
 	public static function batteryFlags(allowBlast: Bool, snapshot: Bool, full: Bool, leased: Null<Int>): Array<String> {
 		final flags: Array<String> = [];
 		if (allowBlast) flags.push('--allow-blast');
 		if (snapshot) flags.push('--snapshot');
 		if (!full) flags.push('--quick');
-		final shards: Null<Int> = Branches.share(leased, BATTERY_LIGHT_THREADS);
+		final shards: Null<Int> = Branches.share(leased, Battery.lightThreads());
 		if (shards != null) {
 			flags.push('-n');
 			flags.push('$shards');

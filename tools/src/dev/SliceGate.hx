@@ -7,6 +7,8 @@ import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
+import devkit.Lease;
+import devkit.Lease.LeaseMode;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
@@ -25,8 +27,9 @@ using StringTools;
  * and a verdict, a failed row quoting its first error (docs/testing.md § "The slice gate"). `--baseline`, run once on the
  * untouched worktree, records what the gates later compare with: the base commit, the suite and registry counts, the
  * corpus snapshot, the whole-tree lint, the infra trees' lint and the frozen trees' diff digests. The rows run as
- * branches at once (`devkit.Branches`, each branch a `--rows` process of this tool) inside the threads a pool lease
- * grants. Everything it writes goes to `<worktree>-logs/slice-gate/`, never into the worktree.
+ * branches at once (`devkit.Branches`, each branch a `--rows` process of this tool): a run its caller gave a pool lease
+ * splits that lease among them, and a run without one, inside a workflow, lets the build and each branch take a lease of
+ * their own (`devkit.Lease`). Everything it writes goes to `<worktree>-logs/slice-gate/`, never into the worktree.
  */
 @:nullSafety(Strict)
 final class SliceGate {
@@ -42,16 +45,15 @@ final class SliceGate {
 
 	/**
 	 * The branches of a gate run, all at once, each running its rows in order: `corpus` reads the sweep `suite` wrote,
-	 * and `arms` follows them so the two heavy rows take the same threads one after the other.
+	 * and `arms` follows them so the two heavy rows take the same threads one after the other; the three short rows share
+	 * one branch, so they hold one thread between them.
 	 */
 	private static final GATE_BRANCHES: Array<Array<String>> = [
 		['suite', 'corpus', 'arms'],
-		['lists'],
-		['fmt'],
+		['lists', 'fmt', 'scrub'],
 		['lint'],
 		['jvm'],
-		['infra4'],
-		['scrub']
+		['infra4']
 	];
 
 	/** The branches' rows in table order; `decisions`, `frozen` and `porcelain` follow, once every branch has ended. */
@@ -69,9 +71,13 @@ final class SliceGate {
 	private final _gate: GateTree;
 	private final _lint: GateLint;
 
-	private function new(options: GateOptions) {
+	/** Where the build's and the branches' threads come from. */
+	private final _mode: LeaseMode;
+
+	private function new(options: GateOptions, mode: LeaseMode) {
 		_gate = new GateTree(options);
 		_lint = new GateLint(_gate);
+		_mode = mode;
 	}
 
 	/** The `--baseline` run: build, then record every reading the gate compares with. */
@@ -79,8 +85,7 @@ final class SliceGate {
 		final title: String = 'slice-gate --baseline ${_gate.tree} @ ${GateTree.short(_gate.base)}';
 		final self: String = keepSelf();
 		if (!build()) return finish(title);
-		final infra: Int = _gate.options.infra.length;
-		fanOut(self, BASELINE_BRANCHES, BASELINE_ROWS, Branches.share(PoolLease.threads(), infra == 0 ? 0 : 1 + infra));
+		fanOut(self, BASELINE_BRANCHES, BASELINE_ROWS);
 		final digests: Array<FrozenTree> = [for (dir in _gate.options.frozen) { dir: dir, digest: GateTree.diffDigest(dir) }];
 		gate('frozen', () -> {
 			if (digests.length == 0) return Skipped('no --frozen');
@@ -110,7 +115,7 @@ final class SliceGate {
 			'slice-gate ${_gate.tree} @ $head base ${GateTree.short(_gate.base)}: ${_gate.touched.length} file(s) touched';
 		final self: String = keepSelf();
 		if (!build()) return finish(title);
-		fanOut(self, GATE_BRANCHES, GATE_ROWS, Branches.share(PoolLease.threads(), lightThreads()));
+		fanOut(self, GATE_BRANCHES, GATE_ROWS);
 		gate('decisions', decisionsOutcome);
 		gate('frozen', frozenOutcome);
 		gate('porcelain', () -> {
@@ -156,14 +161,23 @@ final class SliceGate {
 		return self;
 	}
 
-	/** Run `branches` at once as `--rows` processes of `self`, the heavy rows on `threads`, their rows in `order`. */
-	private function fanOut(self: String, branches: Array<Array<String>>, order: Array<String>, threads: Null<Int>): Void {
+	/**
+	 * Run `branches` at once as `--rows` processes of `self`, their rows in `order`: under a held lease the heavy rows take
+	 * what the lease leaves beside the others' `demand`, and without one each branch takes its own lease of the pool.
+	 */
+	private function fanOut(self: String, branches: Array<Array<String>>, order: Array<String>): Void {
+		final threads: Null<Int> = switch _mode {
+			case Held(held): Branches.share(held, Branches.light(branches, demand));
+			case _: null;
+		};
 		final command: Array<String> -> Command = rows ->
 			Command.of(['node', self, 'slice-gate'].concat(branchArgs(rows, threads)))
 				.at(_gate.tree)
 				.env('HXQ_BIN', _gate.apq())
 				.timeout(BRANCH_TIMEOUT_MS);
-		for (name => value in Branches.run(_gate.options.run, branches, order, command, branchReport, _gate.summary))
+		final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)}';
+		final leased: Array<String> -> Command = Branches.leased(_mode, branches, demand, command, label);
+		for (name => value in Branches.run(_gate.options.run, branches, order, leased, branchReport, _gate.summary))
 			_readings[name] = value;
 	}
 
@@ -186,22 +200,38 @@ final class SliceGate {
 	}
 
 	/**
-	 * The threads the rows beside the suite and the arms hold for most of a gate run: fmt, the two lints of the lint
-	 * row, the jvm probe, and a lint per tree INFRA gate 4 reads.
+	 * The threads the branch running `rows` holds: null for the heavy one (the suite and the arms), which takes what the
+	 * others leave; one for the short rows; the lint row's two lints; the jvm probe; a lint per tree INFRA gate 4 reads beside
+	 * the base tree's, which a `--baseline` run lints in its own row — each 0 when its rows will skip.
 	 */
-	private function lightThreads(): Int {
-		var threads: Int = 1;
-		if (_gate.touched.exists(f -> f.endsWith('.hx'))) threads += 2;
-		if (_gate.jvmMoved()) threads++;
+	private function demand(rows: Array<String>): Null<Int> {
+		final recording: Bool = _gate.options.baseline;
+		final infra: Int = _gate.options.infra.length;
+		return switch rows[0] {
+			case 'suite': null;
+			case 'lists': recording ? 0 : 1;
+			case 'lint': recording ? Std.int(Math.min(1, infra)) : touchedLints();
+			case 'jvm': _gate.jvmMoved() ? 1 : 0;
+			case 'infra4': recording ? infra : infraLints();
+			case _: 0;
+		};
+	}
+
+	/** The lints the lint row of a gate run holds at once: the touched files' at the base and now, when it lints any. */
+	private function touchedLints(): Int {
+		return _gate.touched.exists(f -> f.endsWith('.hx')) ? 2 : 0;
+	}
+
+	/** The lints INFRA gate 4 of a gate run holds at once: the base tree's and one per infra tree, when rule code moved. */
+	private function infraLints(): Int {
 		final baseline: Null<Baseline> = _gate.baseline;
-		if (_gate.ruleCodeMoved() && baseline != null) threads += 1 + baseline.infra.length;
-		return threads;
+		return _gate.ruleCodeMoved() && baseline != null ? 1 + baseline.infra.length : 0;
 	}
 
 	/** The build every gate needs: both binaries and the developer CLI, at once. A failure ends the run. */
 	private function build(): Bool {
 		final outcome: Outcome = _gate.summary.time(
-			'build', () -> switch Binaries.compile(_gate.tree, _gate.log('build.log')) {
+			'build', () -> switch Binaries.compileWith(_gate.tree, _gate.log('build.log'), [], _mode) {
 				case Failed(why): Failed(GateTree.clip(why));
 				case other: other;
 			}
@@ -390,7 +420,7 @@ final class SliceGate {
 		final allow: Array<String> = args.options('--allow');
 		final logsOption: Null<String> = args.option('--logs');
 		final rows: Null<String> = args.option('--rows');
-		final threads: Null<Int> = Std.parseInt(args.option('--threads') ?? '');
+		final threads: Null<Int> = Std.parseInt(args.option('--threads') ?? '') ?? (rows == null ? null : PoolLease.threads());
 		final run: String = args.option('--run') ?? Branches.newRunId();
 		final tree: String = FileSystem.fullPath(args.positionals(['<worktree>'])[0]);
 		if (!FileSystem.exists(Path.join([tree, 'tools/dev.hxml']))) throw new UsageError('$tree is not an anyparse tree');
@@ -409,7 +439,7 @@ final class SliceGate {
 			noArms: noArms,
 			threads: threads != null && threads > 0 ? threads : null,
 			run: run
-		});
+		}, rows == null ? Lease.ofEnvironment() : Unpooled);
 		if (rows != null) return gate.runBranch(rows.split(','));
 		return baseline ? gate.recordBaseline() : gate.check();
 	}

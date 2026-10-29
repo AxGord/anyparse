@@ -2,6 +2,7 @@ package unit.devkit;
 
 import devkit.Branches;
 import devkit.Command;
+import devkit.Lease.LeaseMode;
 import devkit.Summary;
 import devkit.TempDir;
 import haxe.io.Path;
@@ -30,6 +31,34 @@ final class BranchesTest extends Test {
 		Assert.equals(6, Branches.share(10, 4));
 		Assert.equals(1, Branches.share(3, 5));
 		Assert.isNull(Branches.share(null, 4));
+	}
+
+	@:pin('control')
+	@:killer('M-BRANCHES-LIGHT-NONE')
+	public function testEachBranchTakesItsOwnLeaseAndTheHeavyOneWhatTheOthersLeave(): Void {
+		final branches: Array<Array<String>> = [['heavy', 'next'], ['lint'], ['short'], ['skipped']];
+		final demand: Array<String> -> Null<Int> = rows -> {
+			switch rows[0] {
+				case 'heavy': null;
+				case 'lint': 2;
+				case 'short': 1;
+				case _: 0;
+			}
+		};
+		final command: Array<String> -> Command = rows -> Command.of(['node', 'dev.js', rows.join(',')]);
+		final threadsOf: (LeaseMode, Array<String>) -> String = (mode, rows) -> {
+			final argv: Array<String> = Branches.leased(mode, branches, demand, command, 'gate')(rows).argv;
+			return argv[0] == 'node' ? 'none' : argv[argv.indexOf('--threads') + 1];
+		};
+		final pool: LeaseMode = Own('/p/scripts/wf-run', 10);
+		Assert.equals(3, Branches.light(branches, demand));
+		Assert.equals('2-7', threadsOf(pool, ['heavy', 'next']));
+		Assert.equals('2', threadsOf(pool, ['lint']));
+		Assert.equals('1', threadsOf(pool, ['short']));
+		Assert.equals('none', threadsOf(pool, ['skipped']), 'a branch whose rows skip takes no lease');
+		Assert.equals('1', threadsOf(Own('/p/scripts/wf-run', 4), ['heavy', 'next']), 'the heavy branch never takes less than one');
+		Assert.equals('none', threadsOf(Held(10), ['heavy', 'next']), 'a held lease is split by the caller');
+		Assert.equals('none', threadsOf(Unpooled, ['lint']));
 	}
 
 	@:pin('control')

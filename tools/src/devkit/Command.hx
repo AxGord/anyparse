@@ -86,6 +86,17 @@ final class Command {
 		return new Command(argv, _cwd, _env, _timeout, _input, _upstream, true);
 	}
 
+	/**
+	 * This command run by the program `prefix` names, `prefix` laid before this argument vector — a wrapper such as a lease or
+	 * a nice level, which runs what follows it. Everything else of the command is kept; a pipeline is refused, since a
+	 * prefix would run only its last stage.
+	 */
+	public function under(prefix: Array<String>): Command {
+		if (_upstream != null) throw new Exception('`${toString()}` is a pipeline, and a prefix would run only its last stage');
+		if (prefix.length == 0) throw new Exception('a prefix needs a program to run');
+		return new Command(prefix.concat(argv), _cwd, _env, _timeout, _input, _upstream, _tethered);
+	}
+
 	/** This command with `text` as its standard input. */
 	public function input(text: String): Command {
 		if (_upstream != null) throw new Exception('`${toString()}` already reads a pipe');
